@@ -77,6 +77,10 @@ vp hooks status                # dispatcher と 3 つの hook が見える
   ratchet の 11 本すべてで diagnostics が増えて `fence-check` が落ちるため。加えて、並列 4 で
   `test-all` + `fence-check` + `engine-typecheck` を同時に回した時、32GB のマシンで `test-all` と
   `engine-typecheck` が SIGKILL（exit 137）された。engine-typecheck を外した 3 並列では通っている。
+- `fence-check` は `verify` の中に入れた。pre-push と CI が同じ 1 本を呼ぶ。typecheck 11 本 + engine lint で
+  実測 20 秒で、pre-push に載せられる重さだった（「任せる判断」の「既定は CI のみ」はこれで上書き）。
+- `syncpack`・`gitleaks`・`audit` はこの slice では入れていない。バージョン表は catalog が担い、secret の検査と
+  依存の監査は CI の仕事として slice 05 で扱う。
 - `packages/env` の daemon は verify の前に要る（slice 03）。CI では cargo を入れるか、そのテストを skip するかを
   slice 05 で決める。
 - `test-all` は pi の `bash test.sh` のまま。`vp test` への載せ替えは、隔離環境（`env -i` の allowlist）と e2e の
@@ -94,7 +98,7 @@ slice 03 のすべてに加えて、`packages/**` のファイルが 1 つも整
 
 ## 任せる判断
 
-- `fence:check` を pre-push に回すか CI だけか（`tsc` を何分も回すので既定は CI のみ、文書化する）。
+- `fence:check` の置き場所 — 実装では `verify` の中に入れ、pre-push と CI の両方が同じ 1 本を呼ぶ（実測 20 秒）。
 - `specs/**` と `docs/**` に `no-comments` と decision plugin を効かせるか（既定: markdown には効かせない）。
 
 ## この設計をひっくり返す feedback
