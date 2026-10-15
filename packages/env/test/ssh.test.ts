@@ -48,6 +48,13 @@ const sshd =
 		? undefined
 		: (which("sshd") ?? (existsSync("/usr/sbin/sshd") ? "/usr/sbin/sshd" : undefined));
 
+/**
+ * The login-shell launch (`exec "$SHELL" -lc 'exec "$0" "$@"'`) is POSIX syntax and reads .profile or
+ * .zprofile. An account shell like fish cannot run it, so the login-shell test only applies to POSIX
+ * account shells.
+ */
+const posixAccountShell = /(?:^|\/)(?:sh|bash|dash|ksh|zsh)$/.test(userInfo().shell ?? "");
+
 async function freePort(): Promise<number> {
 	return new Promise((resolve) => {
 		const server = createServer().listen(0, "127.0.0.1", () => {
@@ -218,30 +225,34 @@ describe.skipIf(sshd === undefined)("SSH bootstrap", () => {
 		}
 	}, 60_000);
 
-	it("starts the daemon through the login shell only when asked", async () => {
-		// The login shell is the account's shell: sh and bash read .profile, zsh (the macOS default) reads .zprofile.
-		writeFileSync(join(home, ".profile"), "export PI_ENV_LOGIN=yes\n");
-		writeFileSync(join(home, ".zprofile"), "export PI_ENV_LOGIN=yes\n");
-		const login = async (loginShell: boolean) => {
-			const { connection } = await connectSsh({ ...target, binary: daemon, loginShell });
-			try {
-				const env = new RemoteExecutionEnv({ connection, id: "pi-env:test", cwd: home });
-				const output: string[] = [];
-				getOrThrow(
-					await env.exec(
-						["sh", "-c", 'printf "%s" "$PI_ENV_LOGIN"'],
-						{ onOutput: (text) => output.push(text) },
-						context,
-					),
-				);
-				return output.join("");
-			} finally {
-				connection.close();
-			}
-		};
-		expect(await login(false)).toBe("");
-		expect(await login(true)).toBe("yes");
-	}, 60_000);
+	it.skipIf(!posixAccountShell)(
+		"starts the daemon through the login shell only when asked",
+		async () => {
+			// The login shell is the account's shell: sh and bash read .profile, zsh (the macOS default) reads .zprofile.
+			writeFileSync(join(home, ".profile"), "export PI_ENV_LOGIN=yes\n");
+			writeFileSync(join(home, ".zprofile"), "export PI_ENV_LOGIN=yes\n");
+			const login = async (loginShell: boolean) => {
+				const { connection } = await connectSsh({ ...target, binary: daemon, loginShell });
+				try {
+					const env = new RemoteExecutionEnv({ connection, id: "pi-env:test", cwd: home });
+					const output: string[] = [];
+					getOrThrow(
+						await env.exec(
+							["sh", "-c", 'printf "%s" "$PI_ENV_LOGIN"'],
+							{ onOutput: (text) => output.push(text) },
+							context,
+						),
+					);
+					return output.join("");
+				} finally {
+					connection.close();
+				}
+			};
+			expect(await login(false)).toBe("");
+			expect(await login(true)).toBe("yes");
+		},
+		60_000,
+	);
 
 	it("connects lazily and reports a failed start as the error of the operation", async () => {
 		const lazyTarget = { ...target, knownHostsFile: join(root, "lazy_known_hosts") };

@@ -2,14 +2,15 @@
 
 ## 次に着手するエージェントへ
 
-`specs/msa/` の続きをやる。2026-10-15 時点の状況: **Phase A、slice 1 の途中。**
+`specs/msa/` の続きをやる。2026-10-15 時点の状況: **Phase A、slice 3 を実装中**（slice 1・2 は PR 済み。
+slice 3 は `pnpm install` / `pnpm run build` / テストの確認まで進んでいる）。
 
 1. まず `slices/01-fence.md` を読み、それを片付けるまで他のことを触らない。fence（どの設定がどのパスを支配するか）
    が再構築全体の可否を決める。fence が成立していれば、以降の slice は機械的作業になる。
 2. slice 1 の後は順番どおり: `02-delete-npm-machinery`、`03-pnpm-catalog`、`04-vp-check-strict-ratchet`、
    `05-ci-hooks-claude-docs`、`06-clean-clone-green`、`07-identity-rename`、`08-upstream-drill`。
    Phase B/C（オーケストレーター・worker・projects）は slice 8 より前に始めない。
-3. 着手前に `npm install --ignore-scripts`（slice 3 以降は `pnpm install`）と `npm run hydrate:model-data` を実行する。
+3. 着手前に `pnpm install` を実行する（slice 3 以降）。モデルデータの再生成は `pnpm run hydrate:model-data`。
    hydrate しないと typecheck が通らない状態がある。
 4. 作業を終える前にこの節（状況・再開位置・TODO）を更新する。
 
