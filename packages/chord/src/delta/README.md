@@ -27,17 +27,17 @@ const replica = applyImmutable(prepared.base, prepared.ops);
 
 ## Mutation rights
 
-| Value | May it be mutated? |
-| --- | --- |
-| Root passed to `track()`, `prepareReplace()`, `replicatedState()`, or `replace()` | No. Ownership moved to the tracker. |
-| `change.state` and handles read from it | Yes, only while that change is open. After `prepare()`, `abort()`, or another adoption, every use throws. Writes through a handle whose element was removed from the draft are ignored. |
-| External value after assigning or inserting it into a draft | Yes. The draft stored a validated clone. |
-| `tracker.value`, `prepared.base`, retained older revisions | No. |
-| `prepared.value`, `prepared.ops`, op tuples, paths, permutations, payloads | No. Payloads may be the same objects as parts of `prepared.value`. |
-| `applyImmutable()` / `applyImmutableBatches()` inputs and result | No. The result shares containers with both inputs. |
-| Values from replicated state and cells (`value`, listener values, in-process handles) | No. In-process consumers may share the provider's containers. |
-| Mutable replica passed to `apply()` | Only through `apply()`, with batches it owns exclusively. Code that edits it between batches breaks convergence. |
-| Batch passed to `apply()` | Consumed. `apply()` adopts payload containers into the replica. Use a detached copy for exactly one replica and never touch it again. |
+| Value                                                                                 | May it be mutated?                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Root passed to `track()`, `prepareReplace()`, `replicatedState()`, or `replace()`     | No. Ownership moved to the tracker.                                                                                                                                                     |
+| `change.state` and handles read from it                                               | Yes, only while that change is open. After `prepare()`, `abort()`, or another adoption, every use throws. Writes through a handle whose element was removed from the draft are ignored. |
+| External value after assigning or inserting it into a draft                           | Yes. The draft stored a validated clone.                                                                                                                                                |
+| `tracker.value`, `prepared.base`, retained older revisions                            | No.                                                                                                                                                                                     |
+| `prepared.value`, `prepared.ops`, op tuples, paths, permutations, payloads            | No. Payloads may be the same objects as parts of `prepared.value`.                                                                                                                      |
+| `applyImmutable()` / `applyImmutableBatches()` inputs and result                      | No. The result shares containers with both inputs.                                                                                                                                      |
+| Values from replicated state and cells (`value`, listener values, in-process handles) | No. In-process consumers may share the provider's containers.                                                                                                                           |
+| Mutable replica passed to `apply()`                                                   | Only through `apply()`, with batches it owns exclusively. Code that edits it between batches breaks convergence.                                                                        |
+| Batch passed to `apply()`                                                             | Consumed. `apply()` adopts payload containers into the replica. Use a detached copy for exactly one replica and never touch it again.                                                   |
 
 ## Replaying batches
 
@@ -154,15 +154,15 @@ Array mutators: `push`, `pop`, `shift`, `unshift`, `splice`, `reverse`, `sort`,
 
 Paths contain object keys and non-negative integer array indices.
 
-| Tuple | Meaning |
-| --- | --- |
-| `["r", value]` | Replace the complete value. |
-| `["s", path, value]` | Set an object property or array element. |
-| `["d", path]` | Delete an object property or remove an array element. |
-| `["a", path, text]` | Append to a string. |
-| `["t", path, count]` | Remove `count` UTF-16 code units from a string's front. |
-| `["p", path, index, remove, items]` | Splice an array. |
-| `["m", path, permutation]` | Reorder an array: `new[i] = old[permutation[i]]`. |
+| Tuple                               | Meaning                                                 |
+| ----------------------------------- | ------------------------------------------------------- |
+| `["r", value]`                      | Replace the complete value.                             |
+| `["s", path, value]`                | Set an object property or array element.                |
+| `["d", path]`                       | Delete an object property or remove an array element.   |
+| `["a", path, text]`                 | Append to a string.                                     |
+| `["t", path, count]`                | Remove `count` UTF-16 code units from a string's front. |
+| `["p", path, index, remove, items]` | Splice an array.                                        |
+| `["m", path, permutation]`          | Reorder an array: `new[i] = old[permutation[i]]`.       |
 
 Batches are exact but not canonical. The same change may use different tuples,
 and large edit sets may fold into a region splice, an ancestor `s`, or `r`.

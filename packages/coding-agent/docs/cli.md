@@ -29,23 +29,23 @@ pi --mode json "Inspect this repository" > events.jsonl
 
 With terminal stdin and stdout, Pi opens the terminal UI unless `--print`, `--mode json`, or `--mode rpc` selects another interface. When either stream is redirected and neither JSON nor RPC mode is selected, Pi uses print mode. See [CLI Integration](cli-integration.md) for choosing between interactive, print, JSON, RPC, and SDK integration.
 
-| Input | Behavior |
-|---|---|
-| `message` | Provide an initial prompt |
-| `@path` | Include a text file or image in the first prompt |
-| Piped stdin | Prepend its contents to the first prompt |
-| `--` | Stop option parsing so a prompt can begin with `-` |
+| Input       | Behavior                                           |
+| ----------- | -------------------------------------------------- |
+| `message`   | Provide an initial prompt                          |
+| `@path`     | Include a text file or image in the first prompt   |
+| Piped stdin | Prepend its contents to the first prompt           |
+| `--`        | Stop option parsing so a prompt can begin with `-` |
 
 Pi resolves `@path` from the current working directory. The working directory also controls project configuration, resource discovery, and session grouping.
 
 `--print` controls whether Pi runs once and exits. `--mode` selects the output interface. `--mode text` does not force one-shot execution when stdin and stdout are terminals; use `--print` for that behavior.
 
-| Option | Behavior |
-|---|---|
-| `-p`, `--print` | Run the supplied prompts, write the final assistant text to stdout, then exit |
-| `--mode text` | Select text output; still open the terminal UI when stdin and stdout are terminals |
-| `--mode json` | Run the supplied prompts, write JSONL events to stdout, then exit |
-| `--mode rpc` | Read JSONL commands from stdin and write responses and events to stdout until shutdown |
+| Option                      | Behavior                                                                                |
+| --------------------------- | --------------------------------------------------------------------------------------- |
+| `-p`, `--print`             | Run the supplied prompts, write the final assistant text to stdout, then exit           |
+| `--mode text`               | Select text output; still open the terminal UI when stdin and stdout are terminals      |
+| `--mode json`               | Run the supplied prompts, write JSONL events to stdout, then exit                       |
+| `--mode rpc`                | Read JSONL commands from stdin and write responses and events to stdout until shutdown  |
 | `--export <input> [output]` | Export a session file to HTML and exit; derive the destination when `output` is omitted |
 
 RPC mode rejects `@file` arguments. JSON and RPC modes reserve stdout for protocol records. See [JSON Event Stream](json.md) and [RPC Protocol](rpc.md).
@@ -137,23 +137,23 @@ pi --tools read,bash,codemode,'mcp__radius__*'
 
 The MCP resource tools (`list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource`) count as MCP tools. To remove MCP tools, use `--exclude-tools 'mcp__*'` or [`--no-mcp`](#resource-options).
 
-| Built-in | Purpose |
-|---|---|
-| `read` | Read text files and supported images |
-| `bash` | Run shell commands |
-| `powershell` | Run PowerShell commands on Windows |
-| `edit` | Apply exact text replacements to an existing file |
-| `write` | Create or overwrite a file |
-| `grep` | Search file contents |
-| `find` | Find paths using glob patterns |
-| `ls` | List directory contents |
+| Built-in     | Purpose                                           |
+| ------------ | ------------------------------------------------- |
+| `read`       | Read text files and supported images              |
+| `bash`       | Run shell commands                                |
+| `powershell` | Run PowerShell commands on Windows                |
+| `edit`       | Apply exact text replacements to an existing file |
+| `write`      | Create or overwrite a file                        |
+| `grep`       | Search file contents                              |
+| `find`       | Find paths using glob patterns                    |
+| `ls`         | List directory contents                           |
 
 Built-in extensions add two more tools. They are off by default; the MCP extension turns them on when an MCP server needs them (see [MCP](mcp.md#exposure)). To enable them yourself, name them in `--tools` or `defaultTools`.
 
-| Built-in extension | Purpose |
-|---|---|
-| `codemode` | Run JavaScript that calls the other tools, for example in parallel with `Promise.allSettled`; only the script's output reaches the model |
-| `tool_search` | Search tools that are not declared to the model (`codemode` and `deferred` exposure, such as MCP tools) and declare the matches for the next call |
+| Built-in extension | Purpose                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codemode`         | Run JavaScript that calls the other tools, for example in parallel with `Promise.allSettled`; only the script's output reaches the model          |
+| `tool_search`      | Search tools that are not declared to the model (`codemode` and `deferred` exposure, such as MCP tools) and declare the matches for the next call |
 
 ### Enable codemode
 
@@ -257,12 +257,12 @@ See [Pi Packages](packages.md) for source formats, filtering, installation, and 
 
 ### Common tasks
 
-| Task | Command |
-|---|---|
-| Install a package | `pi install <source>` |
-| List configured packages | `pi list` |
-| Remove a package and its settings entry | `pi remove <source>` |
-| Configure which package resources load | `pi config` |
+| Task                                    | Command               |
+| --------------------------------------- | --------------------- |
+| Install a package                       | `pi install <source>` |
+| List configured packages                | `pi list`             |
+| Remove a package and its settings entry | `pi remove <source>`  |
+| Configure which package resources load  | `pi config`           |
 
 Add `--local` or `-l` to `install`, `remove`, `uninstall`, or `config` to use project settings instead of global settings.
 
@@ -270,13 +270,13 @@ Add `--local` or `-l` to `install`, `remove`, `uninstall`, or `config` to use pr
 
 Running `pi update` without a target updates Pi itself.
 
-| Task | Command |
-|---|---|
-| Update Pi | `pi update` |
-| Update all installed packages | `pi update --extensions` |
-| Update one installed package | `pi update <source>` |
-| Refresh model catalogs | `pi update --models` |
-| Update Pi and all installed packages | `pi update --all` |
+| Task                                 | Command                  |
+| ------------------------------------ | ------------------------ |
+| Update Pi                            | `pi update`              |
+| Update all installed packages        | `pi update --extensions` |
+| Update one installed package         | `pi update <source>`     |
+| Refresh model catalogs               | `pi update --models`     |
+| Update Pi and all installed packages | `pi update --all`        |
 
 Add `--force` to reinstall Pi when the selected update includes Pi.
 
@@ -298,19 +298,19 @@ pi auth check --provider openai --json
 
 Authentication commands require `--provider <provider>` or `--model <model>`. See [Providers](providers.md) for supported methods.
 
-| Command | Description |
-|---|---|
-| `pi auth check` | Print `ready`, `not_ready`, or `invalid`; exit with status `0`, `1`, or `2`, respectively |
-| `pi auth print-api-key` | Print the resolved API key |
-| `pi auth print-bearer-token` | Print a resolved OAuth bearer token |
+| Command                      | Description                                                                               |
+| ---------------------------- | ----------------------------------------------------------------------------------------- |
+| `pi auth check`              | Print `ready`, `not_ready`, or `invalid`; exit with status `0`, `1`, or `2`, respectively |
+| `pi auth print-api-key`      | Print the resolved API key                                                                |
+| `pi auth print-bearer-token` | Print a resolved OAuth bearer token                                                       |
 
-| Option | Applies to | Description |
-|---|---|---|
-| `--provider <provider>` | All | Resolve credentials for a provider |
-| `--model <model>` | All | Resolve credentials from a model; may be combined with `--provider` |
-| `--json` | `auth check` | Write the structured result as JSON |
-| `--credentials` | `auth check` | Emit the resolved credential when ready |
-| `--no-refresh` | `auth check` | Do not refresh expired OAuth credentials; refresh is the default |
+| Option                    | Applies to           | Description                                                                  |
+| ------------------------- | -------------------- | ---------------------------------------------------------------------------- |
+| `--provider <provider>`   | All                  | Resolve credentials for a provider                                           |
+| `--model <model>`         | All                  | Resolve credentials from a model; may be combined with `--provider`          |
+| `--json`                  | `auth check`         | Write the structured result as JSON                                          |
+| `--credentials`           | `auth check`         | Emit the resolved credential when ready                                      |
+| `--no-refresh`            | `auth check`         | Do not refresh expired OAuth credentials; refresh is the default             |
 | `--min-expiry <duration>` | `print-bearer-token` | Require remaining token lifetime using `ms`, `s`, `m`, or `h`, such as `30m` |
 
 Credential-printing commands write secrets to stdout.
@@ -319,14 +319,14 @@ Credential-printing commands write secrets to stdout.
 
 These commands work outside a session, so agents can run them through `bash`. See [MCP Servers](mcp.md).
 
-| Command | Description |
-|---|---|
-| `pi mcp add <server> [options] -- <command> [args...]` | Add or replace a stdio server in `mcp.json`; `--env KEY=VALUE` (repeatable) and `--cwd <dir>` set its environment and working directory. Arguments after the command are passed to it |
-| `pi mcp add <server> [options] --url <url>` | Add or replace a streamable HTTP server; `--header KEY=VALUE` (repeatable), `--bearer-token-env-var <NAME>` (sends `Authorization: Bearer ${NAME}`), `--oauth-client-id`, `--oauth-client-secret`, `--oauth-callback-port`, and `--oauth-client-name` configure authentication |
-| `pi mcp remove <server>` | Remove a server from `mcp.json`; stored OAuth credentials are kept |
-| `pi mcp list [--json]` | Connect to every enabled server and print its state, tools, and errors; exit with `1` when a config entry is invalid or an enabled server is not connected |
-| `pi mcp login <server> [--timeout <seconds>]` | Sign in to an OAuth server: open the authorization page and wait for the browser; a terminal also accepts the pasted redirect URL. `--timeout` limits the whole sign-in, including requests to the authorization server (default 300 seconds) |
-| `pi mcp logout <server>` | Delete the stored OAuth credentials of a server |
+| Command                                                | Description                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pi mcp add <server> [options] -- <command> [args...]` | Add or replace a stdio server in `mcp.json`; `--env KEY=VALUE` (repeatable) and `--cwd <dir>` set its environment and working directory. Arguments after the command are passed to it                                                                                          |
+| `pi mcp add <server> [options] --url <url>`            | Add or replace a streamable HTTP server; `--header KEY=VALUE` (repeatable), `--bearer-token-env-var <NAME>` (sends `Authorization: Bearer ${NAME}`), `--oauth-client-id`, `--oauth-client-secret`, `--oauth-callback-port`, and `--oauth-client-name` configure authentication |
+| `pi mcp remove <server>`                               | Remove a server from `mcp.json`; stored OAuth credentials are kept                                                                                                                                                                                                             |
+| `pi mcp list [--json]`                                 | Connect to every enabled server and print its state, tools, and errors; exit with `1` when a config entry is invalid or an enabled server is not connected                                                                                                                     |
+| `pi mcp login <server> [--timeout <seconds>]`          | Sign in to an OAuth server: open the authorization page and wait for the browser; a terminal also accepts the pasted redirect URL. `--timeout` limits the whole sign-in, including requests to the authorization server (default 300 seconds)                                  |
+| `pi mcp logout <server>`                               | Delete the stored OAuth credentials of a server                                                                                                                                                                                                                                |
 
 `add` and `remove` change `~/.pi/agent/mcp.json`, or `.pi/mcp.json` in the current directory with `--local` (`-l`). `add` also takes `--exposure <mode>` (see [Exposure](mcp.md#exposure)) and `--description <text>` and does not connect; run `pi mcp list` to check the server.
 

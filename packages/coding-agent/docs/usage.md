@@ -30,12 +30,12 @@ Pi does not ask before every tool call. Review commands and changed files, and u
 
 You can send more input while Pi is working:
 
-| What you want | Action |
-|---|---|
-| Adjust the current task | Type a message and press `Enter` |
-| Add work after the current task | Type a message and press `Alt+Enter` |
-| Return queued messages to the editor | Press `Alt+Up` |
-| Stop the current task | Press `Escape` |
+| What you want                        | Action                               |
+| ------------------------------------ | ------------------------------------ |
+| Adjust the current task              | Type a message and press `Enter`     |
+| Add work after the current task      | Type a message and press `Alt+Enter` |
+| Return queued messages to the editor | Press `Alt+Up`                       |
+| Stop the current task                | Press `Escape`                       |
 
 A message sent with `Enter` waits until the current response and its tool calls finish, then guides the next response. A follow-up sent with `Alt+Enter` waits until Pi finishes the current task. Aborting returns queued messages to the editor.
 

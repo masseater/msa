@@ -5,20 +5,20 @@ import type { ConversationId } from "./types.ts";
  * and code that formats an error must not fail for the value it formats.
  */
 export function errorMessage(error: unknown): string {
-	if (error instanceof Error) return error.message;
-	try {
-		return String(error);
-	} catch {
-		return Object.prototype.toString.call(error);
-	}
+  if (error instanceof Error) return error.message;
+  try {
+    return String(error);
+  } catch {
+    return Object.prototype.toString.call(error);
+  }
 }
 
 /** A transaction read a table after its first table write. Read every required row before writing. */
 export class ReadAfterWrite extends Error {
-	constructor(method: string) {
-		super(`Tx.${method}() cannot read tables after the first table write`);
-		this.name = "ReadAfterWrite";
-	}
+  constructor(method: string) {
+    super(`Tx.${method}() cannot read tables after the first table write`);
+    this.name = "ReadAfterWrite";
+  }
 }
 
 /**
@@ -27,10 +27,10 @@ export class ReadAfterWrite extends Error {
  * fatal like any other.
  */
 export class StorageRequestError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "StorageRequestError";
-	}
+  constructor(message: string) {
+    super(message);
+    this.name = "StorageRequestError";
+  }
 }
 
 /**
@@ -39,19 +39,19 @@ export class StorageRequestError extends Error {
  * `snapshot()` throws). `cause` is that first error. Reopen the Session; reopening recovers from what was committed.
  */
 export class SessionFailed extends Error {
-	constructor(cause: unknown) {
-		super("Session failed after a storage error; close and reopen it", { cause });
-		this.name = "SessionFailed";
-	}
+  constructor(cause: unknown) {
+    super("Session failed after a storage error; close and reopen it", { cause });
+    this.name = "SessionFailed";
+  }
 }
 
 /** A submission reached a busy conversation and was not admitted. */
 export class ConversationBusy extends Error {
-	readonly conversationId: ConversationId;
+  readonly conversationId: ConversationId;
 
-	constructor(conversationId: ConversationId) {
-		super(`Conversation ${conversationId} is busy`);
-		this.name = "ConversationBusy";
-		this.conversationId = conversationId;
-	}
+  constructor(conversationId: ConversationId) {
+    super(`Conversation ${conversationId} is busy`);
+    this.name = "ConversationBusy";
+    this.conversationId = conversationId;
+  }
 }

@@ -54,4 +54,19 @@ const restrictedImports = {
   patterns: [...requiredStackPatterns],
 };
 
-export { requiredStack, restrictedImports };
+const generated = [
+  "**/dist/**",
+  "**/models.generated.ts",
+  "**/*.models.ts",
+  "packages/ai/src/providers/data/**",
+  "packages/coding-agent/src/core/export-html/template.css",
+  "packages/coding-agent/src/core/export-html/template.html",
+  "packages/coding-agent/src/core/export-html/template.js",
+  "packages/coding-agent/src/core/export-html/vendor/**",
+  "packages/coding-agent/examples/extensions/doom-overlay/doom/build/**",
+  "pnpm-lock.yaml",
+];
+
+const engine = ["packages/**", "scripts/**", ".pi/**"];
+
+export { engine, generated, requiredStack, restrictedImports };

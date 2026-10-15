@@ -12,38 +12,40 @@ import type { CodemodeMode } from "../../core/settings-manager.ts";
 import { createCodemodeToolDefinition } from "./tool.ts";
 
 export interface CodemodeExtensionOptions {
-	/** Overrides the `codemode.mode` setting. */
-	mode?: CodemodeMode;
-	/** Overrides the `codemode.inlineBudget` setting. */
-	inlineBudget?: number;
-	/** Expose the model catalog and classifiers to scripts as `models`. Default: `true`. */
-	models?: boolean;
+  /** Overrides the `codemode.mode` setting. */
+  mode?: CodemodeMode;
+  /** Overrides the `codemode.inlineBudget` setting. */
+  inlineBudget?: number;
+  /** Expose the model catalog and classifiers to scripts as `models`. Default: `true`. */
+  models?: boolean;
 }
 
 function readMode(pi: ExtensionAPI): CodemodeMode {
-	return pi.getSettings().codemode?.mode === "only" ? "only" : SETTINGS_DEFAULTS.codemode.mode;
+  return pi.getSettings().codemode?.mode === "only" ? "only" : SETTINGS_DEFAULTS.codemode.mode;
 }
 
 function readInlineBudget(pi: ExtensionAPI): number | undefined {
-	const budget = pi.getSettings().codemode?.inlineBudget;
-	return typeof budget === "number" && Number.isFinite(budget) && budget >= 0 ? budget : undefined;
+  const budget = pi.getSettings().codemode?.inlineBudget;
+  return typeof budget === "number" && Number.isFinite(budget) && budget >= 0 ? budget : undefined;
 }
 
 export function createCodemodeExtension(options: CodemodeExtensionOptions = {}): ExtensionFactory {
-	return (pi) => {
-		pi.registerTool({
-			...createCodemodeToolDefinition({
-				appendEntry: (customType, data) => pi.appendEntry(customType, data),
-				models: options.models ?? true,
-				getToolNamespace: (name) => pi.getAllTools().find((tool) => tool.name === name)?.namespace,
-				getToolGuidelines: () =>
-					new Map(pi.getAllTools().map((tool) => [tool.name, tool.promptGuidelines ?? []] as const)),
-				getMode: () => options.mode ?? readMode(pi),
-				getInlineBudget: () => options.inlineBudget ?? readInlineBudget(pi),
-			}),
-			defaultActive: false,
-		});
-	};
+  return (pi) => {
+    pi.registerTool({
+      ...createCodemodeToolDefinition({
+        appendEntry: (customType, data) => pi.appendEntry(customType, data),
+        models: options.models ?? true,
+        getToolNamespace: (name) => pi.getAllTools().find((tool) => tool.name === name)?.namespace,
+        getToolGuidelines: () =>
+          new Map(
+            pi.getAllTools().map((tool) => [tool.name, tool.promptGuidelines ?? []] as const),
+          ),
+        getMode: () => options.mode ?? readMode(pi),
+        getInlineBudget: () => options.inlineBudget ?? readInlineBudget(pi),
+      }),
+      defaultActive: false,
+    });
+  };
 }
 
 export default createCodemodeExtension();

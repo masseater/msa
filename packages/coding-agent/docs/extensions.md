@@ -71,20 +71,20 @@ Automatic retries, recovery, compaction, or queued work can continue afterward.
 
 ## Choose an integration point
 
-| Capability | Main API |
-|---|---|
-| Observe or modify lifecycle behavior | `pi.on()` |
-| Add a model-callable operation | `pi.registerTool()` |
-| Add a `/` command | `pi.registerCommand()` |
-| Add a shortcut or CLI flag | `pi.registerShortcut()` or `pi.registerFlag()` |
-| Send user or custom messages | `pi.sendUserMessage()` or `pi.sendMessage()` |
-| Persist non-context session data | `pi.appendEntry()` |
-| Change active tools, model, or thinking level | Session control methods on `pi` |
-| Add a model provider | `pi.registerProvider()` |
-| Add an MCP server | `pi.registerMcpServer()` |
-| Route each request to a model | [`pi.registerVirtualModel()`](virtual-models.md) |
-| Add terminal rendering | Renderer registration and `ctx.ui` |
-| Communicate with another extension | `pi.events` |
+| Capability                                    | Main API                                         |
+| --------------------------------------------- | ------------------------------------------------ |
+| Observe or modify lifecycle behavior          | `pi.on()`                                        |
+| Add a model-callable operation                | `pi.registerTool()`                              |
+| Add a `/` command                             | `pi.registerCommand()`                           |
+| Add a shortcut or CLI flag                    | `pi.registerShortcut()` or `pi.registerFlag()`   |
+| Send user or custom messages                  | `pi.sendUserMessage()` or `pi.sendMessage()`     |
+| Persist non-context session data              | `pi.appendEntry()`                               |
+| Change active tools, model, or thinking level | Session control methods on `pi`                  |
+| Add a model provider                          | `pi.registerProvider()`                          |
+| Add an MCP server                             | `pi.registerMcpServer()`                         |
+| Route each request to a model                 | [`pi.registerVirtualModel()`](virtual-models.md) |
+| Add terminal rendering                        | Renderer registration and `ctx.ui`               |
+| Communicate with another extension            | `pi.events`                                      |
 
 Use the exported declarations in [`extensions/types.ts`](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/core/extensions/types.ts) for exact event, context, tool, and result types.
 
@@ -226,12 +226,12 @@ Session replacement invalidates the old context. Capture only plain data before 
 
 Choose storage based on how state participates in the conversation:
 
-| State | Storage |
-|---|---|
-| Tool state that follows the active branch | Tool-result `details` |
-| Durable data excluded from model context | `pi.appendEntry()` |
-| Custom content stored and sent to the model | `pi.sendMessage()` |
-| Data outside one session | External storage |
+| State                                       | Storage               |
+| ------------------------------------------- | --------------------- |
+| Tool state that follows the active branch   | Tool-result `details` |
+| Durable data excluded from model context    | `pi.appendEntry()`    |
+| Custom content stored and sent to the model | `pi.sendMessage()`    |
+| Data outside one session                    | External storage      |
 
 Reconstruct branch-sensitive state from `ctx.sessionManager.getBranch()` during `session_start`.
 Do not rebuild it from every file entry because abandoned branches represent alternative histories.

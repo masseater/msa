@@ -4,10 +4,10 @@ RPC mode runs Pi as a long-lived subprocess controlled through JSON records on s
 
 For an in-process Node.js or Bun integration, prefer the [SDK](sdk.md). For a subprocess-based TypeScript integration, prefer the exported `RpcClient`, which starts Pi, correlates responses, exposes typed command methods, and delivers events to listeners.
 
-| Interface | Process boundary | Control model | Best fit |
-|---|---|---|---|
-| [SDK](sdk.md) | In process | Direct TypeScript methods and events | Node.js or Bun hosts that want complete API access |
-| RPC | Child process | JSONL commands, responses, and events | Other languages, isolated processes, IDEs, or custom clients |
+| Interface     | Process boundary | Control model                         | Best fit                                                     |
+| ------------- | ---------------- | ------------------------------------- | ------------------------------------------------------------ |
+| [SDK](sdk.md) | In process       | Direct TypeScript methods and events  | Node.js or Bun hosts that want complete API access           |
+| RPC           | Child process    | JSONL commands, responses, and events | Other languages, isolated processes, IDEs, or custom clients |
 
 ## Start RPC mode
 
@@ -23,12 +23,12 @@ RPC mode rejects `@file` prompt arguments. Send prompts through the [`prompt`](r
 
 The protocol has four record families:
 
-| Direction | Record | Purpose |
-|---|---|---|
-| stdin | Command | Ask Pi to prompt, inspect state, change configuration, or manage the session |
-| stdout | `response` | Report whether one command succeeded and return any command data |
-| stdout | Session event | Stream run, message, tool, queue, compaction, and retry activity |
-| Both | Extension UI record | Forward supported extension interactions between Pi and the client |
+| Direction | Record              | Purpose                                                                      |
+| --------- | ------------------- | ---------------------------------------------------------------------------- |
+| stdin     | Command             | Ask Pi to prompt, inspect state, change configuration, or manage the session |
+| stdout    | `response`          | Report whether one command succeeded and return any command data             |
+| stdout    | Session event       | Stream run, message, tool, queue, compaction, and retry activity             |
+| Both      | Extension UI record | Forward supported extension interactions between Pi and the client           |
 
 See [RPC Commands](rpc-commands.md), [JSON Event Stream](json.md), and [RPC Extension UI](rpc-extension-ui.md) for the canonical record definitions.
 
@@ -75,13 +75,24 @@ Subscribe before sending a prompt to avoid missing a fast completion. `RpcClient
 A failed command returns one response with `success: false`:
 
 ```json
-{"id":"req-3","type":"response","command":"set_model","success":false,"error":"Model not found: invalid/model"}
+{
+  "id": "req-3",
+  "type": "response",
+  "command": "set_model",
+  "success": false,
+  "error": "Model not found: invalid/model"
+}
 ```
 
 Malformed JSON produces a parse response without a request ID:
 
 ```json
-{"type":"response","command":"parse","success":false,"error":"Failed to parse command: Unexpected token..."}
+{
+  "type": "response",
+  "command": "parse",
+  "success": false,
+  "error": "Failed to parse command: Unexpected token..."
+}
 ```
 
 A success response only covers command handling. Provider failures and aborts after a prompt is accepted appear in the message and event stream.

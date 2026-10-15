@@ -25,14 +25,14 @@ bytes           raw payload, the remaining length - 9 - jsonLength bytes
 All integers are big-endian. A frame is at most 16 MiB; larger transfers are split by the client. A request whose JSON
 does not parse gets an `EINVAL` error; framing errors end the connection.
 
-| type | name | direction | meaning |
-|---|---|---|---|
-| 1 | request | client → daemon | `json.op` names the operation |
-| 2 | result | daemon → client | success of request `id`; the request is finished |
-| 3 | error | daemon → client | failure of request `id`; the request is finished |
-| 4 | event | daemon → client | progress of a running request (`exec` and `pty` output, `watch` changes), not finishing it |
-| 5 | cancel | client → daemon | cancel request `id`; see below |
-| 6 | ping | both | liveness; the receiver ignores it |
+| type | name    | direction       | meaning                                                                                    |
+| ---- | ------- | --------------- | ------------------------------------------------------------------------------------------ |
+| 1    | request | client → daemon | `json.op` names the operation                                                              |
+| 2    | result  | daemon → client | success of request `id`; the request is finished                                           |
+| 3    | error   | daemon → client | failure of request `id`; the request is finished                                           |
+| 4    | event   | daemon → client | progress of a running request (`exec` and `pty` output, `watch` changes), not finishing it |
+| 5    | cancel  | client → daemon | cancel request `id`; see below                                                             |
+| 6    | ping    | both            | liveness; the receiver ignores it                                                          |
 
 Errors are `{ code, message, syscall?, path? }`. `code` is a Node-style error code (`ENOENT`, `EISDIR`,
 `ERR_FS_EISDIR`, ...) or one of the execution codes `shell_unavailable`, `spawn_error`, `timeout`, `aborted`, `unknown`.
@@ -78,25 +78,25 @@ check it first.
 
 File operations take `{ path }` (and the listed fields) and return `{}` unless noted:
 
-| op | fields | result |
-|---|---|---|
-| `lstat` | | `info` |
-| `realpath` | | `{ path }` |
-| `write` | `append`, `parents?` (default true), `keep?`, payload | creates missing parents like Node's recursive `mkdir`, opens like `writeFile` (`w`) or `appendFile` (`a`), writes the payload; with `keep`, `{ handle }` for `writeChunk` |
-| `writeChunk` | `handle`, payload | appends to a kept write handle; after a failed chunk, later chunks fail with `EBADF` |
-| `truncate` | `size` | |
-| `fsync` | | |
-| `rename` | `to` | |
-| `mkdir` | `recursive` | |
-| `rm` | `recursive`, `force` | Node `fs.rm` semantics |
-| `mkdtemp` | (`path` is the prefix) | `{ path }` |
-| `open` | `noFollow`, `mode?` | `{ handle, info }` for `openBinaryReader`: nonblocking, regular files only. With `mode: "read"`, Node's `open(path, "r")` of any file, blocking: `{ handle, stat }` or `{ handle, statError }` |
-| `pread` | `handle`, `offset?`, `length` | payload; without `offset`, one read at the current position |
-| `fstat` | `handle` | `info` |
-| `scanLines` | `handle`, `startLine`, `endLine?` | `LineScan` |
-| `opendir` | | `{ handle }` |
-| `readdir` | `handle`, `max` | `{ entries, done }` |
-| `close` | `handle` | |
+| op           | fields                                                | result                                                                                                                                                                                         |
+| ------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lstat`      |                                                       | `info`                                                                                                                                                                                         |
+| `realpath`   |                                                       | `{ path }`                                                                                                                                                                                     |
+| `write`      | `append`, `parents?` (default true), `keep?`, payload | creates missing parents like Node's recursive `mkdir`, opens like `writeFile` (`w`) or `appendFile` (`a`), writes the payload; with `keep`, `{ handle }` for `writeChunk`                      |
+| `writeChunk` | `handle`, payload                                     | appends to a kept write handle; after a failed chunk, later chunks fail with `EBADF`                                                                                                           |
+| `truncate`   | `size`                                                |                                                                                                                                                                                                |
+| `fsync`      |                                                       |                                                                                                                                                                                                |
+| `rename`     | `to`                                                  |                                                                                                                                                                                                |
+| `mkdir`      | `recursive`                                           |                                                                                                                                                                                                |
+| `rm`         | `recursive`, `force`                                  | Node `fs.rm` semantics                                                                                                                                                                         |
+| `mkdtemp`    | (`path` is the prefix)                                | `{ path }`                                                                                                                                                                                     |
+| `open`       | `noFollow`, `mode?`                                   | `{ handle, info }` for `openBinaryReader`: nonblocking, regular files only. With `mode: "read"`, Node's `open(path, "r")` of any file, blocking: `{ handle, stat }` or `{ handle, statError }` |
+| `pread`      | `handle`, `offset?`, `length`                         | payload; without `offset`, one read at the current position                                                                                                                                    |
+| `fstat`      | `handle`                                              | `info`                                                                                                                                                                                         |
+| `scanLines`  | `handle`, `startLine`, `endLine?`                     | `LineScan`                                                                                                                                                                                     |
+| `opendir`    |                                                       | `{ handle }`                                                                                                                                                                                   |
+| `readdir`    | `handle`, `max`                                       | `{ entries, done }`                                                                                                                                                                            |
+| `close`      | `handle`                                              |                                                                                                                                                                                                |
 
 `listFiles { path, hidden?, gitignore?, exclude?, maxEntries?, maxBytes?, timeoutMs? }` lists the tree below the
 directory `path` (feature `listFiles`): files, directories and symbolic links, which are not followed; other kinds of

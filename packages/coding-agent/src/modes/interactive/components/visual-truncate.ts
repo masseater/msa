@@ -6,10 +6,10 @@
 import { type Component, Text, truncateToWidth } from "@earendil-works/pi-tui";
 
 export interface VisualTruncateResult {
-	/** The visual lines to display */
-	visualLines: string[];
-	/** Number of visual lines that were skipped (hidden) */
-	skippedCount: number;
+  /** The visual lines to display */
+  visualLines: string[];
+  /** Number of visual lines that were skipped (hidden) */
+  skippedCount: number;
 }
 
 /**
@@ -26,39 +26,41 @@ export interface VisualTruncateResult {
  * @returns The truncated visual lines and count of skipped lines
  */
 export function truncateToVisualLines(
-	text: string,
-	maxVisualLines: number,
-	width: number,
-	paddingX: number = 0,
-	keep: "start" | "end" = "end",
+  text: string,
+  maxVisualLines: number,
+  width: number,
+  paddingX: number = 0,
+  keep: "start" | "end" = "end",
 ): VisualTruncateResult {
-	if (!text) {
-		return { visualLines: [], skippedCount: 0 };
-	}
+  if (!text) {
+    return { visualLines: [], skippedCount: 0 };
+  }
 
-	// Create a temporary Text component to render and get visual lines
-	const tempText = new Text(text, paddingX, 0);
-	const allVisualLines = tempText.render(width);
+  // Create a temporary Text component to render and get visual lines
+  const tempText = new Text(text, paddingX, 0);
+  const allVisualLines = tempText.render(width);
 
-	if (allVisualLines.length <= maxVisualLines) {
-		return { visualLines: allVisualLines, skippedCount: 0 };
-	}
+  if (allVisualLines.length <= maxVisualLines) {
+    return { visualLines: allVisualLines, skippedCount: 0 };
+  }
 
-	const truncatedLines =
-		keep === "start" ? allVisualLines.slice(0, maxVisualLines) : allVisualLines.slice(-maxVisualLines);
-	const skippedCount = allVisualLines.length - maxVisualLines;
+  const truncatedLines =
+    keep === "start"
+      ? allVisualLines.slice(0, maxVisualLines)
+      : allVisualLines.slice(-maxVisualLines);
+  const skippedCount = allVisualLines.length - maxVisualLines;
 
-	return { visualLines: truncatedLines, skippedCount };
+  return { visualLines: truncatedLines, skippedCount };
 }
 
 export interface VisualLinePreviewOptions {
-	/** Styled text; may contain newlines. */
-	text: string;
-	maxVisualLines: number;
-	/** Which visual lines to keep. The hint goes before kept end lines and after kept start lines. */
-	keep: "start" | "end";
-	/** Styled hint line for the given number of hidden visual lines. */
-	formatHint: (hidden: number) => string;
+  /** Styled text; may contain newlines. */
+  text: string;
+  maxVisualLines: number;
+  /** Which visual lines to keep. The hint goes before kept end lines and after kept start lines. */
+  keep: "start" | "end";
+  /** Styled hint line for the given number of hidden visual lines. */
+  formatHint: (hidden: number) => string;
 }
 
 /**
@@ -67,32 +69,32 @@ export interface VisualLinePreviewOptions {
  * Caches its lines per width, since it renders on every frame for every result in the transcript.
  */
 export class VisualLinePreview implements Component {
-	private options: VisualLinePreviewOptions;
-	private cachedWidth: number | undefined;
-	private cachedLines: string[] | undefined;
+  private options: VisualLinePreviewOptions;
+  private cachedWidth: number | undefined;
+  private cachedLines: string[] | undefined;
 
-	constructor(options: VisualLinePreviewOptions) {
-		this.options = options;
-	}
+  constructor(options: VisualLinePreviewOptions) {
+    this.options = options;
+  }
 
-	render(width: number): string[] {
-		if (this.cachedLines === undefined || this.cachedWidth !== width) {
-			const { text, maxVisualLines, keep, formatHint } = this.options;
-			const preview = truncateToVisualLines(text, maxVisualLines, width, 0, keep);
-			const lines = preview.visualLines;
-			if (preview.skippedCount > 0) {
-				const hint = truncateToWidth(formatHint(preview.skippedCount), width, "...");
-				this.cachedLines = keep === "start" ? [...lines, hint] : [hint, ...lines];
-			} else {
-				this.cachedLines = lines;
-			}
-			this.cachedWidth = width;
-		}
-		return this.cachedLines;
-	}
+  render(width: number): string[] {
+    if (this.cachedLines === undefined || this.cachedWidth !== width) {
+      const { text, maxVisualLines, keep, formatHint } = this.options;
+      const preview = truncateToVisualLines(text, maxVisualLines, width, 0, keep);
+      const lines = preview.visualLines;
+      if (preview.skippedCount > 0) {
+        const hint = truncateToWidth(formatHint(preview.skippedCount), width, "...");
+        this.cachedLines = keep === "start" ? [...lines, hint] : [hint, ...lines];
+      } else {
+        this.cachedLines = lines;
+      }
+      this.cachedWidth = width;
+    }
+    return this.cachedLines;
+  }
 
-	invalidate(): void {
-		this.cachedWidth = undefined;
-		this.cachedLines = undefined;
-	}
+  invalidate(): void {
+    this.cachedWidth = undefined;
+    this.cachedLines = undefined;
+  }
 }

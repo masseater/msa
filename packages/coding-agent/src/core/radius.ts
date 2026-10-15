@@ -1,4 +1,7 @@
-import { DEFAULT_RADIUS_GATEWAY, normalizeRadiusGatewayUrl } from "@earendil-works/pi-ai/providers/radius-config";
+import {
+  DEFAULT_RADIUS_GATEWAY,
+  normalizeRadiusGatewayUrl,
+} from "@earendil-works/pi-ai/providers/radius-config";
 
 export const RADIUS_PROVIDER_ID = "radius";
 export const ENV_RADIUS_GATEWAY = "PI_RADIUS_GATEWAY";
@@ -7,5 +10,5 @@ export const RADIUS_MCP_URL = `${normalizeRadiusGatewayUrl(DEFAULT_RADIUS_GATEWA
 
 /** Radius gateway origin, honoring the `PI_RADIUS_GATEWAY` override. */
 export function getRadiusGatewayUrl(): string {
-	return normalizeRadiusGatewayUrl(process.env[ENV_RADIUS_GATEWAY] ?? DEFAULT_RADIUS_GATEWAY);
+  return normalizeRadiusGatewayUrl(process.env[ENV_RADIUS_GATEWAY] ?? DEFAULT_RADIUS_GATEWAY);
 }

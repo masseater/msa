@@ -11,12 +11,13 @@ import { Agent } from "@earendil-works/pi-agent-core";
 import { createModels } from "@earendil-works/pi-ai";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import { McpClient, StdioTransport } from "@earendil-works/pi-mcp";
+
 import { createCodemodeTool, createMcpTools, createNestedToolRunner } from "./tools.ts";
 
 const [command, ...args] = process.argv.slice(2);
 if (!command) {
-	console.error("Usage: main.ts <mcp server command> [args...]");
-	process.exit(1);
+  console.error("Usage: main.ts <mcp server command> [args...]");
+  process.exit(1);
 }
 
 const models = createModels();
@@ -28,23 +29,25 @@ const client = new McpClient({ name: "pi-agent-example", version: "1.0.0" });
 await client.connect(new StdioTransport({ command, args }));
 
 try {
-	const agent = new Agent({
-		initialState: { systemPrompt: "You are a helpful assistant.", model },
-		streamFn: models.streamSimple.bind(models),
-	});
-	const mcpTools = await createMcpTools(client, "mcp");
-	// The model can call the MCP tools directly or batch them in one codemode script.
-	agent.state.tools = [...mcpTools, createCodemodeTool(mcpTools, createNestedToolRunner(agent))];
+  const agent = new Agent({
+    initialState: { systemPrompt: "You are a helpful assistant.", model },
+    streamFn: models.streamSimple.bind(models),
+  });
+  const mcpTools = await createMcpTools(client, "mcp");
+  // The model can call the MCP tools directly or batch them in one codemode script.
+  agent.state.tools = [...mcpTools, createCodemodeTool(mcpTools, createNestedToolRunner(agent))];
 
-	agent.subscribe((event) => {
-		if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-			process.stdout.write(event.assistantMessageEvent.delta);
-		} else if (event.type === "tool_execution_start") {
-			console.log(`\n[${event.toolName}]`);
-		}
-	});
-	await agent.prompt("Use codemode to list what the MCP tools can do, then summarize it in two sentences.");
-	console.log();
+  agent.subscribe((event) => {
+    if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+      process.stdout.write(event.assistantMessageEvent.delta);
+    } else if (event.type === "tool_execution_start") {
+      console.log(`\n[${event.toolName}]`);
+    }
+  });
+  await agent.prompt(
+    "Use codemode to list what the MCP tools can do, then summarize it in two sentences.",
+  );
+  console.log();
 } finally {
-	await client.close();
+  await client.close();
 }

@@ -1,75 +1,75 @@
 {
-	"name": "@earendil-works/chord",
-	"version": "1.2.0",
-	"description": "Typed host runtime for plugins, contracts, replicated state, and RPC over JSON links",
-	"type": "module",
-	"main": "./dist/index.js",
-	"types": "./dist/index.d.ts",
-	"exports": {
-		".": {
-			"source": "./src/index.ts",
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js"
-		},
-		"./context": {
-			"source": "./src/context/index.ts",
-			"types": "./dist/context/index.d.ts",
-			"import": "./dist/context/index.js"
-		},
-		"./output": {
-			"source": "./src/output.ts",
-			"types": "./dist/output.d.ts",
-			"import": "./dist/output.js"
-		},
-		"./delta": {
-			"source": "./src/delta/index.ts",
-			"types": "./dist/delta/index.d.ts",
-			"import": "./dist/delta/index.js"
-		},
-		"./node": {
-			"source": "./src/node.ts",
-			"types": "./dist/node.d.ts",
-			"import": "./dist/node.js"
-		},
-		"./package.json": "./package.json"
-	},
-	"sideEffects": false,
-	"files": [
-		"dist",
-		"docs",
-		"README.md",
-		"CHANGELOG.md",
-		"src/delta/README.md"
-	],
-	"scripts": {
-		"clean": "shx rm -rf dist",
-		"build": "tsc -p tsconfig.build.json",
-		"test": "vitest --run"
-	},
-	"keywords": [
-		"application",
-		"plugins",
-		"rpc",
-		"contracts",
-		"state"
-	],
-	"author": "Earendil Works",
-	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
-		"directory": "packages/chord"
-	},
-	"engines": {
-		"node": ">=22.19.0"
-	},
-	"dependencies": {
-		"typebox": "1.3.27"
-	},
-	"devDependencies": {
-		"@types/ws": "8.18.2",
-		"shx": "catalog:",
-		"vitest": "4.1.11",
-		"ws": "8.21.0"
-	}
+  "name": "@earendil-works/chord",
+  "version": "1.2.0",
+  "description": "Typed host runtime for plugins, contracts, replicated state, and RPC over JSON links",
+  "keywords": [
+    "application",
+    "contracts",
+    "plugins",
+    "rpc",
+    "state"
+  ],
+  "license": "MIT",
+  "author": "Earendil Works",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/earendil-works/pi.git",
+    "directory": "packages/chord"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "src/delta/README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./context": {
+      "source": "./src/context/index.ts",
+      "types": "./dist/context/index.d.ts",
+      "import": "./dist/context/index.js"
+    },
+    "./output": {
+      "source": "./src/output.ts",
+      "types": "./dist/output.d.ts",
+      "import": "./dist/output.js"
+    },
+    "./delta": {
+      "source": "./src/delta/index.ts",
+      "types": "./dist/delta/index.d.ts",
+      "import": "./dist/delta/index.js"
+    },
+    "./node": {
+      "source": "./src/node.ts",
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "clean": "shx rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "typebox": "1.3.27"
+  },
+  "devDependencies": {
+    "@types/ws": "8.18.2",
+    "shx": "catalog:",
+    "vitest": "4.1.11",
+    "ws": "8.21.0"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
 }

@@ -14,12 +14,17 @@
  */
 import { DurableObject } from "cloudflare:workers";
 import quickjsWasmImport from "quickjs-wasi/quickjs.wasm";
+
 import {
-	DEFAULT_INTERRUPT_BUDGET,
-	InlineCodemodeSandbox,
-	type InlineCodemodeSandboxOptions,
+  DEFAULT_INTERRUPT_BUDGET,
+  InlineCodemodeSandbox,
+  type InlineCodemodeSandboxOptions,
 } from "./runtime/inline.ts";
-import { type CodemodeRemoteExchange, type CodemodeRemoteRequest, serveCodemodeRemote } from "./runtime/remote.ts";
+import {
+  type CodemodeRemoteExchange,
+  type CodemodeRemoteRequest,
+  serveCodemodeRemote,
+} from "./runtime/remote.ts";
 import type { CodemodeWasmModule } from "./wasm.ts";
 
 export * from "./portable.ts";
@@ -35,8 +40,10 @@ export const DEFAULT_REMOTE_MEMORY_LIMIT_BYTES = 32 * 1024 * 1024;
 export const cloudflareQuickJSWasm: CodemodeWasmModule = quickjsWasm;
 
 /** `InlineCodemodeSandbox` with the QuickJS module Wrangler bundled. */
-export function createInlineCodemodeSandbox(options: Omit<InlineCodemodeSandboxOptions, "wasm"> = {}) {
-	return new InlineCodemodeSandbox({ ...options, wasm: quickjsWasm });
+export function createInlineCodemodeSandbox(
+  options: Omit<InlineCodemodeSandboxOptions, "wasm"> = {},
+) {
+  return new InlineCodemodeSandbox({ ...options, wasm: quickjsWasm });
 }
 
 /**
@@ -59,17 +66,17 @@ export function createInlineCodemodeSandbox(options: Omit<InlineCodemodeSandboxO
  *     }
  */
 export class CodemodeSandboxDurableObject<Env = unknown> extends DurableObject<Env> {
-	/** Interrupt polls per execution; the client may only ask for less. See `InlineCodemodeSandboxOptions`. */
-	protected maxInterruptBudget: number = DEFAULT_INTERRUPT_BUDGET;
-	/** VM memory per execution; the client may only ask for less. */
-	protected maxMemoryLimitBytes: number = DEFAULT_REMOTE_MEMORY_LIMIT_BYTES;
+  /** Interrupt polls per execution; the client may only ask for less. See `InlineCodemodeSandboxOptions`. */
+  protected maxInterruptBudget: number = DEFAULT_INTERRUPT_BUDGET;
+  /** VM memory per execution; the client may only ask for less. */
+  protected maxMemoryLimitBytes: number = DEFAULT_REMOTE_MEMORY_LIMIT_BYTES;
 
-	/** Called by `RemoteCodemodeSandbox` over RPC. Resolves when the script has settled or was stopped. */
-	execute(request: CodemodeRemoteRequest, exchange: CodemodeRemoteExchange): Promise<void> {
-		return serveCodemodeRemote(request, exchange, {
-			wasm: quickjsWasm,
-			maxInterruptBudget: this.maxInterruptBudget,
-			maxMemoryLimitBytes: this.maxMemoryLimitBytes,
-		});
-	}
+  /** Called by `RemoteCodemodeSandbox` over RPC. Resolves when the script has settled or was stopped. */
+  execute(request: CodemodeRemoteRequest, exchange: CodemodeRemoteExchange): Promise<void> {
+    return serveCodemodeRemote(request, exchange, {
+      wasm: quickjsWasm,
+      maxInterruptBudget: this.maxInterruptBudget,
+      maxMemoryLimitBytes: this.maxMemoryLimitBytes,
+    });
+  }
 }

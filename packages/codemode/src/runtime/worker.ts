@@ -11,29 +11,33 @@
  * or embedded-module string specifier as `workerUrl`.
  */
 import { parentPort, workerData } from "node:worker_threads";
+
 import { isHostToWorkerMessage, type WorkerData, type WorkerToHostMessage } from "./protocol.ts";
 import { startVm } from "./vm.ts";
 
 function post(message: WorkerToHostMessage): void {
-	parentPort?.postMessage(message);
+  parentPort?.postMessage(message);
 }
 
 async function main(data: WorkerData): Promise<void> {
-	const interrupt = new Int32Array(data.interrupt);
-	// The VM lives until the host terminates the worker, so the session is never disposed.
-	const session = await startVm({
-		data,
-		wasm: data.wasm,
-		post,
-		shouldInterrupt: () => Atomics.load(interrupt, 0) !== 0,
-	});
-	parentPort?.on("message", (message: unknown) => {
-		if (isHostToWorkerMessage(message)) session.deliver(message);
-	});
+  const interrupt = new Int32Array(data.interrupt);
+  // The VM lives until the host terminates the worker, so the session is never disposed.
+  const session = await startVm({
+    data,
+    wasm: data.wasm,
+    post,
+    shouldInterrupt: () => Atomics.load(interrupt, 0) !== 0,
+  });
+  parentPort?.on("message", (message: unknown) => {
+    if (isHostToWorkerMessage(message)) session.deliver(message);
+  });
 }
 
 if (parentPort) {
-	main(workerData as WorkerData).catch((error: unknown) => {
-		post({ type: "crash", message: error instanceof Error ? `${error.name}: ${error.message}` : String(error) });
-	});
+  main(workerData as WorkerData).catch((error: unknown) => {
+    post({
+      type: "crash",
+      message: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+    });
+  });
 }

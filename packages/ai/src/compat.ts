@@ -40,24 +40,33 @@ import { openAIResponsesApi } from "./api/openai-responses.lazy.ts";
 import { piMessagesApi } from "./api/pi-messages.lazy.ts";
 import { getEnvApiKey } from "./env-api-keys.ts";
 import type { ModelsApiStreamOptions } from "./models.ts";
-import { builtinModels, getBuiltinModel, getBuiltinModels, getBuiltinProviders } from "./providers/all.ts";
+import {
+  builtinModels,
+  getBuiltinModel,
+  getBuiltinModels,
+  getBuiltinProviders,
+} from "./providers/all.ts";
 
 export type { BuiltinProvider } from "./providers/all.ts";
 
-import { createFauxCore, type FauxProviderRegistration, type RegisterFauxProviderOptions } from "./providers/faux.ts";
+import {
+  createFauxCore,
+  type FauxProviderRegistration,
+  type RegisterFauxProviderOptions,
+} from "./providers/faux.ts";
 import type {
-	Api,
-	ApiStreamOptions,
-	AssistantMessage,
-	AssistantMessageEventStream,
-	Context,
-	Model,
-	ProviderStreamOptions,
-	ProviderStreams,
-	SimpleStreamOptions,
-	StreamFunction,
-	StreamOptions,
-	TranscriptContext,
+  Api,
+  ApiStreamOptions,
+  AssistantMessage,
+  AssistantMessageEventStream,
+  Context,
+  Model,
+  ProviderStreamOptions,
+  ProviderStreams,
+  SimpleStreamOptions,
+  StreamFunction,
+  StreamOptions,
+  TranscriptContext,
 } from "./types.ts";
 import { normalizeContext } from "./utils/transcript.ts";
 
@@ -71,123 +80,131 @@ export const getModels = getBuiltinModels;
 export const getProviders = getBuiltinProviders;
 
 export type ApiStreamFunction = (
-	model: Model<Api>,
-	context: TranscriptContext,
-	options?: StreamOptions,
+  model: Model<Api>,
+  context: TranscriptContext,
+  options?: StreamOptions,
 ) => AssistantMessageEventStream;
 
 export type ApiStreamSimpleFunction = (
-	model: Model<Api>,
-	context: TranscriptContext,
-	options?: SimpleStreamOptions,
+  model: Model<Api>,
+  context: TranscriptContext,
+  options?: SimpleStreamOptions,
 ) => AssistantMessageEventStream;
 
-export interface ApiProvider<TApi extends Api = Api, TOptions extends StreamOptions = StreamOptions> {
-	api: TApi;
-	stream: StreamFunction<TApi, TOptions>;
-	streamSimple: StreamFunction<TApi, SimpleStreamOptions>;
+export interface ApiProvider<
+  TApi extends Api = Api,
+  TOptions extends StreamOptions = StreamOptions,
+> {
+  api: TApi;
+  stream: StreamFunction<TApi, TOptions>;
+  streamSimple: StreamFunction<TApi, SimpleStreamOptions>;
 }
 
 interface ApiProviderInternal {
-	api: Api;
-	stream: ApiStreamFunction;
-	streamSimple: ApiStreamSimpleFunction;
+  api: Api;
+  stream: ApiStreamFunction;
+  streamSimple: ApiStreamSimpleFunction;
 }
 
 type RegisteredApiProvider = {
-	provider: ApiProviderInternal;
-	sourceId?: string;
+  provider: ApiProviderInternal;
+  sourceId?: string;
 };
 
 const apiProviderRegistry = new Map<string, RegisteredApiProvider>();
 
 function wrapStream<TApi extends Api, TOptions extends StreamOptions>(
-	api: TApi,
-	stream: StreamFunction<TApi, TOptions>,
+  api: TApi,
+  stream: StreamFunction<TApi, TOptions>,
 ): ApiStreamFunction {
-	return (model, context, options) => {
-		if (model.api !== api) {
-			throw new Error(`Mismatched api: ${model.api} expected ${api}`);
-		}
-		return stream(model as Model<TApi>, context, options as TOptions);
-	};
+  return (model, context, options) => {
+    if (model.api !== api) {
+      throw new Error(`Mismatched api: ${model.api} expected ${api}`);
+    }
+    return stream(model as Model<TApi>, context, options as TOptions);
+  };
 }
 
 function wrapStreamSimple<TApi extends Api>(
-	api: TApi,
-	streamSimple: StreamFunction<TApi, SimpleStreamOptions>,
+  api: TApi,
+  streamSimple: StreamFunction<TApi, SimpleStreamOptions>,
 ): ApiStreamSimpleFunction {
-	return (model, context, options) => {
-		if (model.api !== api) {
-			throw new Error(`Mismatched api: ${model.api} expected ${api}`);
-		}
-		return streamSimple(model as Model<TApi>, context, options);
-	};
+  return (model, context, options) => {
+    if (model.api !== api) {
+      throw new Error(`Mismatched api: ${model.api} expected ${api}`);
+    }
+    return streamSimple(model as Model<TApi>, context, options);
+  };
 }
 
 export function registerApiProvider<TApi extends Api, TOptions extends StreamOptions>(
-	provider: ApiProvider<TApi, TOptions>,
-	sourceId?: string,
+  provider: ApiProvider<TApi, TOptions>,
+  sourceId?: string,
 ): void {
-	apiProviderRegistry.set(provider.api, {
-		provider: {
-			api: provider.api,
-			stream: wrapStream(provider.api, provider.stream),
-			streamSimple: wrapStreamSimple(provider.api, provider.streamSimple),
-		},
-		sourceId,
-	});
+  apiProviderRegistry.set(provider.api, {
+    provider: {
+      api: provider.api,
+      stream: wrapStream(provider.api, provider.stream),
+      streamSimple: wrapStreamSimple(provider.api, provider.streamSimple),
+    },
+    sourceId,
+  });
 }
 
 export function getApiProvider(api: Api): ApiProviderInternal | undefined {
-	return apiProviderRegistry.get(api)?.provider;
+  return apiProviderRegistry.get(api)?.provider;
 }
 
 export function getApiProviders(): ApiProviderInternal[] {
-	return Array.from(apiProviderRegistry.values(), (entry) => entry.provider);
+  return Array.from(apiProviderRegistry.values(), (entry) => entry.provider);
 }
 
 export function unregisterApiProviders(sourceId: string): void {
-	for (const [api, entry] of apiProviderRegistry.entries()) {
-		if (entry.sourceId === sourceId) {
-			apiProviderRegistry.delete(api);
-		}
-	}
+  for (const [api, entry] of apiProviderRegistry.entries()) {
+    if (entry.sourceId === sourceId) {
+      apiProviderRegistry.delete(api);
+    }
+  }
 }
 
 function clearApiProviders(): void {
-	apiProviderRegistry.clear();
+  apiProviderRegistry.clear();
 }
 
-export function registerFauxProvider(options: RegisterFauxProviderOptions = {}): FauxProviderRegistration {
-	const core = createFauxCore(options);
-	const sourceId = `faux-provider-${Math.random().toString(36).slice(2, 10)}`;
-	registerApiProvider({ api: core.api, stream: core.stream, streamSimple: core.streamSimple }, sourceId);
-	return {
-		api: core.api,
-		models: core.models,
-		getModel: core.getModel,
-		state: core.state,
-		setResponses: core.setResponses,
-		appendResponses: core.appendResponses,
-		getPendingResponseCount: core.getPendingResponseCount,
-		unregister() {
-			unregisterApiProviders(sourceId);
-		},
-	};
+export function registerFauxProvider(
+  options: RegisterFauxProviderOptions = {},
+): FauxProviderRegistration {
+  const core = createFauxCore(options);
+  const sourceId = `faux-provider-${Math.random().toString(36).slice(2, 10)}`;
+  registerApiProvider(
+    { api: core.api, stream: core.stream, streamSimple: core.streamSimple },
+    sourceId,
+  );
+  return {
+    api: core.api,
+    models: core.models,
+    getModel: core.getModel,
+    state: core.state,
+    setResponses: core.setResponses,
+    appendResponses: core.appendResponses,
+    getPendingResponseCount: core.getPendingResponseCount,
+    unregister() {
+      unregisterApiProviders(sourceId);
+    },
+  };
 }
 
 const BUILTIN_APIS: [Api, ProviderStreams][] = [
-	["anthropic-messages", anthropicMessagesApi()],
-	["openai-completions", openAICompletionsApi()],
-	["openai-responses", openAIResponsesApi()],
-	["openai-codex-responses", openAICodexResponsesApi()],
-	["azure-openai-responses", azureOpenAIResponsesApi()],
-	["google-generative-ai", googleGenerativeAIApi()],
-	["google-vertex", googleVertexApi()],
-	["mistral-conversations", mistralConversationsApi()],
-	["bedrock-converse-stream", bedrockConverseStreamApi()],
-	["pi-messages", piMessagesApi()],
+  ["anthropic-messages", anthropicMessagesApi()],
+  ["openai-completions", openAICompletionsApi()],
+  ["openai-responses", openAIResponsesApi()],
+  ["openai-codex-responses", openAICodexResponsesApi()],
+  ["azure-openai-responses", azureOpenAIResponsesApi()],
+  ["google-generative-ai", googleGenerativeAIApi()],
+  ["google-vertex", googleVertexApi()],
+  ["mistral-conversations", mistralConversationsApi()],
+  ["bedrock-converse-stream", bedrockConverseStreamApi()],
+  ["pi-messages", piMessagesApi()],
 ];
 
 const builtinApiProviderInstances = new Map<Api, ReturnType<typeof getApiProvider>>();
@@ -198,18 +215,18 @@ const builtinApiProviderInstances = new Map<Api, ReturnType<typeof getApiProvide
  * already registered an override for a builtin api id.
  */
 export function registerBuiltInApiProviders(): void {
-	for (const [api, streams] of BUILTIN_APIS) {
-		if (!getApiProvider(api)) {
-			registerApiProvider({ api, stream: streams.stream, streamSimple: streams.streamSimple });
-		}
-		builtinApiProviderInstances.set(api, getApiProvider(api));
-	}
+  for (const [api, streams] of BUILTIN_APIS) {
+    if (!getApiProvider(api)) {
+      registerApiProvider({ api, stream: streams.stream, streamSimple: streams.streamSimple });
+    }
+    builtinApiProviderInstances.set(api, getApiProvider(api));
+  }
 }
 
 export function resetApiProviders(): void {
-	clearApiProviders();
-	builtinApiProviderInstances.clear();
-	registerBuiltInApiProviders();
+  clearApiProviders();
+  builtinApiProviderInstances.clear();
+  registerBuiltInApiProviders();
 }
 
 registerBuiltInApiProviders();
@@ -218,85 +235,98 @@ const compatModels = builtinModels();
 const AMBIENT_AUTH_MARKER = "<authenticated>";
 
 function hasExplicitApiKey(apiKey: string | undefined): apiKey is string {
-	return typeof apiKey === "string" && apiKey.trim().length > 0;
+  return typeof apiKey === "string" && apiKey.trim().length > 0;
 }
 
 function withEnvApiKey<TOptions extends StreamOptions>(
-	model: Model<Api>,
-	options: TOptions | undefined,
+  model: Model<Api>,
+  options: TOptions | undefined,
 ): TOptions | undefined {
-	if (hasExplicitApiKey(options?.apiKey)) return options;
-	const apiKey = getEnvApiKey(model.provider, options?.env);
-	if (!apiKey || apiKey === AMBIENT_AUTH_MARKER) return options;
-	return { ...options, apiKey } as TOptions;
+  if (hasExplicitApiKey(options?.apiKey)) return options;
+  const apiKey = getEnvApiKey(model.provider, options?.env);
+  if (!apiKey || apiKey === AMBIENT_AUTH_MARKER) return options;
+  return { ...options, apiKey } as TOptions;
 }
 
 function hasResolvedCloudflareAuth(options: StreamOptions | undefined): boolean {
-	return hasExplicitApiKey(options?.apiKey) || typeof options?.headers?.["cf-aig-authorization"] === "string";
+  return (
+    hasExplicitApiKey(options?.apiKey) ||
+    typeof options?.headers?.["cf-aig-authorization"] === "string"
+  );
 }
 
 function getBuiltinProviderForModel(model: Model<Api>) {
-	if (getApiProvider(model.api) !== builtinApiProviderInstances.get(model.api)) return undefined;
-	const provider = compatModels.getProvider(model.provider);
-	return provider?.getModels().some((candidate) => candidate.api === model.api) ? provider : undefined;
+  if (getApiProvider(model.api) !== builtinApiProviderInstances.get(model.api)) return undefined;
+  const provider = compatModels.getProvider(model.provider);
+  return provider?.getModels().some((candidate) => candidate.api === model.api)
+    ? provider
+    : undefined;
 }
 
 function resolveApiProvider(api: Api) {
-	const provider = getApiProvider(api);
-	if (!provider) {
-		throw new Error(`No API provider registered for api: ${api}`);
-	}
-	return provider;
+  const provider = getApiProvider(api);
+  if (!provider) {
+    throw new Error(`No API provider registered for api: ${api}`);
+  }
+  return provider;
 }
 
 export function stream<TApi extends Api>(
-	model: Model<TApi>,
-	context: Context,
-	options?: ProviderStreamOptions,
+  model: Model<TApi>,
+  context: Context,
+  options?: ProviderStreamOptions,
 ): AssistantMessageEventStream {
-	const transcript = normalizeContext(context);
-	const builtinProvider = getBuiltinProviderForModel(model);
-	if (builtinProvider) {
-		if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
-			return compatModels.stream(model, transcript, options as ModelsApiStreamOptions<TApi> | undefined);
-		}
-		return builtinProvider.stream(model, transcript, withEnvApiKey(model, options) as ApiStreamOptions<TApi>);
-	}
-	const provider = resolveApiProvider(model.api);
-	return provider.stream(model, transcript, withEnvApiKey(model, options) as StreamOptions);
+  const transcript = normalizeContext(context);
+  const builtinProvider = getBuiltinProviderForModel(model);
+  if (builtinProvider) {
+    if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
+      return compatModels.stream(
+        model,
+        transcript,
+        options as ModelsApiStreamOptions<TApi> | undefined,
+      );
+    }
+    return builtinProvider.stream(
+      model,
+      transcript,
+      withEnvApiKey(model, options) as ApiStreamOptions<TApi>,
+    );
+  }
+  const provider = resolveApiProvider(model.api);
+  return provider.stream(model, transcript, withEnvApiKey(model, options) as StreamOptions);
 }
 
 export async function complete<TApi extends Api>(
-	model: Model<TApi>,
-	context: Context,
-	options?: ProviderStreamOptions,
+  model: Model<TApi>,
+  context: Context,
+  options?: ProviderStreamOptions,
 ): Promise<AssistantMessage> {
-	const s = stream(model, context, options);
-	return s.result();
+  const s = stream(model, context, options);
+  return s.result();
 }
 
 export function streamSimple<TApi extends Api>(
-	model: Model<TApi>,
-	context: Context,
-	options?: SimpleStreamOptions,
+  model: Model<TApi>,
+  context: Context,
+  options?: SimpleStreamOptions,
 ): AssistantMessageEventStream {
-	const transcript = normalizeContext(context);
-	const builtinProvider = getBuiltinProviderForModel(model);
-	if (builtinProvider) {
-		if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
-			return compatModels.streamSimple(model, transcript, options);
-		}
-		return builtinProvider.streamSimple(model, transcript, withEnvApiKey(model, options));
-	}
-	const provider = resolveApiProvider(model.api);
-	return provider.streamSimple(model, transcript, withEnvApiKey(model, options));
+  const transcript = normalizeContext(context);
+  const builtinProvider = getBuiltinProviderForModel(model);
+  if (builtinProvider) {
+    if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
+      return compatModels.streamSimple(model, transcript, options);
+    }
+    return builtinProvider.streamSimple(model, transcript, withEnvApiKey(model, options));
+  }
+  const provider = resolveApiProvider(model.api);
+  return provider.streamSimple(model, transcript, withEnvApiKey(model, options));
 }
 
 export async function completeSimple<TApi extends Api>(
-	model: Model<TApi>,
-	context: Context,
-	options?: SimpleStreamOptions,
+  model: Model<TApi>,
+  context: Context,
+  options?: SimpleStreamOptions,
 ): Promise<AssistantMessage> {
-	const s = streamSimple(model, context, options);
-	return s.result();
+  const s = streamSimple(model, context, options);
+  return s.result();
 }

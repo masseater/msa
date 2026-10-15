@@ -6,11 +6,11 @@ Follow the main [Quickstart](quickstart.md) to install and authenticate Pi. Use 
 
 ## Choose native Windows or WSL
 
-| Environment | Command environment | Use it when |
-|---|---|---|
-| Native Windows with Git Bash | Git Bash for the built-in `bash` tool and `!` commands | Your files and development tools primarily live on Windows |
+| Environment                               | Command environment                                                      | Use it when                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Native Windows with Git Bash              | Git Bash for the built-in `bash` tool and `!` commands                   | Your files and development tools primarily live on Windows        |
 | Native Windows with the `powershell` tool | PowerShell for model tool calls; Bash remains available for `!` commands | The task depends on PowerShell modules or Windows-native commands |
-| WSL | Linux Bash and tools inside the selected WSL distribution | Your files and toolchain already live in Linux or WSL |
+| WSL                                       | Linux Bash and tools inside the selected WSL distribution                | Your files and toolchain already live in Linux or WSL             |
 
 ## Use Git Bash on native Windows
 

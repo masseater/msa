@@ -119,22 +119,22 @@ See the focused examples for [models](../examples/sdk/02-custom-model.ts), [tool
 
 ## Examples
 
-| Example | Purpose |
-|---|---|
-| [Minimal](../examples/sdk/01-minimal.ts) | Create, prompt, observe, and dispose a session |
-| [Custom model](../examples/sdk/02-custom-model.ts) | Select a model and thinking level |
-| [System prompt](../examples/sdk/03-custom-prompt.ts) | Replace or append to the system prompt |
-| [Skills](../examples/sdk/04-skills.ts) | Discover, filter, and add skills |
-| [Tools](../examples/sdk/05-tools.ts) | Select built-in tools and their working directory |
-| [Extensions](../examples/sdk/06-extensions.ts) | Load file-based and inline extensions |
-| [Context files](../examples/sdk/07-context-files.ts) | Add or replace project instructions |
-| [Prompt templates](../examples/sdk/08-prompt-templates.ts) | Add file-style prompt templates |
-| [Credentials](../examples/sdk/09-api-keys-and-oauth.ts) | Configure credential and model storage |
-| [Settings](../examples/sdk/10-settings.ts) | Supply file-backed or in-memory settings |
-| [Sessions](../examples/sdk/11-sessions.ts) | Control session persistence and restoration |
-| [Full control](../examples/sdk/12-full-control.ts) | Replace default discovery and state services |
-| [Session runtime](../examples/sdk/13-session-runtime.ts) | Replace the active session safely |
-| [Codemode and MCP](../examples/sdk/14-codemode-mcp.ts) | Add the `codemode`, `tool_search`, and MCP extensions |
+| Example                                                    | Purpose                                               |
+| ---------------------------------------------------------- | ----------------------------------------------------- |
+| [Minimal](../examples/sdk/01-minimal.ts)                   | Create, prompt, observe, and dispose a session        |
+| [Custom model](../examples/sdk/02-custom-model.ts)         | Select a model and thinking level                     |
+| [System prompt](../examples/sdk/03-custom-prompt.ts)       | Replace or append to the system prompt                |
+| [Skills](../examples/sdk/04-skills.ts)                     | Discover, filter, and add skills                      |
+| [Tools](../examples/sdk/05-tools.ts)                       | Select built-in tools and their working directory     |
+| [Extensions](../examples/sdk/06-extensions.ts)             | Load file-based and inline extensions                 |
+| [Context files](../examples/sdk/07-context-files.ts)       | Add or replace project instructions                   |
+| [Prompt templates](../examples/sdk/08-prompt-templates.ts) | Add file-style prompt templates                       |
+| [Credentials](../examples/sdk/09-api-keys-and-oauth.ts)    | Configure credential and model storage                |
+| [Settings](../examples/sdk/10-settings.ts)                 | Supply file-backed or in-memory settings              |
+| [Sessions](../examples/sdk/11-sessions.ts)                 | Control session persistence and restoration           |
+| [Full control](../examples/sdk/12-full-control.ts)         | Replace default discovery and state services          |
+| [Session runtime](../examples/sdk/13-session-runtime.ts)   | Replace the active session safely                     |
+| [Codemode and MCP](../examples/sdk/14-codemode-mcp.ts)     | Add the `codemode`, `tool_search`, and MCP extensions |
 
 <a id="exports"></a>
 

@@ -8,8 +8,10 @@ import { lazyApi } from "./lazy.ts";
  * and built output.
  */
 const importNodeOnlyApi = (specifier: string): Promise<unknown> => {
-	const runtimeSpecifier = import.meta.url.endsWith(".js") ? specifier.replace(/\.ts$/, ".js") : specifier;
-	return import(runtimeSpecifier);
+  const runtimeSpecifier = import.meta.url.endsWith(".js")
+    ? specifier.replace(/\.ts$/, ".js")
+    : specifier;
+  return import(runtimeSpecifier);
 };
 
 let bedrockModuleOverride: ProviderStreams | undefined;
@@ -20,11 +22,12 @@ let bedrockModuleOverride: ProviderStreams | undefined;
  * build registers a statically imported module instead.
  */
 export function setBedrockProviderModule(module: ProviderStreams): void {
-	bedrockModuleOverride = module;
+  bedrockModuleOverride = module;
 }
 
 export const bedrockConverseStreamApi = (): ProviderStreams =>
-	lazyApi(
-		async () =>
-			bedrockModuleOverride ?? ((await importNodeOnlyApi("./bedrock-converse-stream.ts")) as ProviderStreams),
-	);
+  lazyApi(
+    async () =>
+      bedrockModuleOverride ??
+      ((await importNodeOnlyApi("./bedrock-converse-stream.ts")) as ProviderStreams),
+  );

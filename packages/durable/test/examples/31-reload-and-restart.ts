@@ -5,11 +5,23 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { type ToolResultMessage, Type } from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
-import { createRegistry, defineExtension, defineTool, Harness, ToolResultEntry } from "../../src/index.ts";
+import {
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxToolCall,
+} from "@earendil-works/pi-ai/providers/faux";
+
+import {
+  createRegistry,
+  defineExtension,
+  defineTool,
+  Harness,
+  ToolResultEntry,
+} from "../../src/index.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -18,54 +30,65 @@ const context = BACKGROUND_CONTEXT;
 let started = (): void => {};
 let gate = Promise.resolve();
 function loadVersioned(version: string) {
-	return defineExtension({
-		name: "versioned",
-		tools: [
-			defineTool({
-				name: "version",
-				description: "Report the tool's code version",
-				parameters: Type.Object({}),
-				execute: async () => {
-					started();
-					await gate;
-					return { output: [{ type: "text", text: version }] };
-				},
-			}),
-		],
-	});
+  return defineExtension({
+    name: "versioned",
+    tools: [
+      defineTool({
+        name: "version",
+        description: "Report the tool's code version",
+        parameters: Type.Object({}),
+        execute: async () => {
+          started();
+          await gate;
+          return { output: [{ type: "text", text: version }] };
+        },
+      }),
+    ],
+  });
 }
 
 const faux = fauxProvider();
 const models = createModels();
 models.setProvider(faux.provider);
-const callVersion = () => fauxAssistantMessage(fauxToolCall("version", {}), { stopReason: "toolUse" });
-faux.setResponses([callVersion(), fauxAssistantMessage("Done."), callVersion(), fauxAssistantMessage("Done.")]);
+const callVersion = () =>
+  fauxAssistantMessage(fauxToolCall("version", {}), { stopReason: "toolUse" });
+faux.setResponses([
+  callVersion(),
+  fauxAssistantMessage("Done."),
+  callVersion(),
+  fauxAssistantMessage("Done."),
+]);
 
 const directory = await mkdtemp(join(tmpdir(), "pi-durable-reload-"));
 const open = async (registry: ReturnType<typeof createRegistry>) =>
-	Harness.open(await openNodeSqliteStorage(join(directory, "session.sqlite")), { models, registry }, context);
+  Harness.open(
+    await openNodeSqliteStorage(join(directory, "session.sqlite")),
+    { models, registry },
+    context,
+  );
 
 // First process.
 let registry = createRegistry();
 registry.install(loadVersioned("v1"));
 let harness = await open(registry);
 let root = await harness.root(context, {
-	// Selected by name. The name is what is stored, never the code.
-	agent: { model: { provider: "faux", modelId: "faux-1" }, extensions: [loadVersioned("v1")] },
+  // Selected by name. The name is what is stored, never the code.
+  agent: { model: { provider: "faux", modelId: "faux-1" }, extensions: [loadVersioned("v1")] },
 });
 const lastResult = async () => {
-	const page = await root.entries({}, 10, undefined, context);
-	const result = page.items.find((entry) => ToolResultEntry.is(entry))?.model?.[0] as ToolResultMessage;
-	return result.content.map((part) => (part.type === "text" ? part.text : "")).join("");
+  const page = await root.entries({}, 10, undefined, context);
+  const result = page.items.find((entry) => ToolResultEntry.is(entry))
+    ?.model?.[0] as ToolResultMessage;
+  return result.content.map((part) => (part.type === "text" ? part.text : "")).join("");
 };
 
 // The file changes while a call runs: the running call finishes on v1, the next call uses v2.
 let release = (): void => {};
 gate = new Promise((resolve) => {
-	release = resolve;
+  release = resolve;
 });
 const running = new Promise<void>((resolve) => {
-	started = resolve;
+  started = resolve;
 });
 const submission = await root.submit({ type: "input", content: "Which version?" }, context);
 await running;

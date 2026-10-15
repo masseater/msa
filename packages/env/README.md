@@ -10,9 +10,19 @@ while the Durable worker, its storage and credentials stay local.
   ([docs/semantics.md](docs/semantics.md)).
 
 ```ts
-import { acceptHostKey, connectSsh, RemoteExecutionEnv, scanHostKey, sshConnection } from "@earendil-works/pi-env";
+import {
+  acceptHostKey,
+  connectSsh,
+  RemoteExecutionEnv,
+  scanHostKey,
+  sshConnection,
+} from "@earendil-works/pi-env";
 
-const target = { host: "gpu-box", knownHostsFile: "/data/ssh/known_hosts", hostKeyAlias: "pi-env-gpu" };
+const target = {
+  host: "gpu-box",
+  knownHostsFile: "/data/ssh/known_hosts",
+  hostKeyAlias: "pi-env-gpu",
+};
 // Once: show the host's key fingerprint to the owner, who compares it out of band and accepts it.
 const { lines, fingerprints } = await scanHostKey(target);
 await acceptHostKey(target, lines);
@@ -25,7 +35,11 @@ const env = new RemoteExecutionEnv({ connection, id: "pi-env:gpu", cwd: "/home/m
 // Or lazily: nothing happens until the first operation, which detects, deploys and connects. A failure (no network,
 // untrusted host key) is that operation's error, and the next operation tries again.
 const lazy = sshConnection(target);
-const lazyEnv = new RemoteExecutionEnv({ connection: lazy.connection, id: "pi-env:gpu", cwd: "/home/me/project" });
+const lazyEnv = new RemoteExecutionEnv({
+  connection: lazy.connection,
+  id: "pi-env:gpu",
+  cwd: "/home/me/project",
+});
 ```
 
 The package ships the daemon for every supported remote system in `bin/`. `ssh` runs with `BatchMode`, strict host-key

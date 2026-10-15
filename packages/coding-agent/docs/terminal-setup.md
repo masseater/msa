@@ -6,15 +6,15 @@ Pi uses extended-key protocols so terminals can distinguish combinations such as
 
 ## Troubleshooting
 
-| Symptom | Start here |
-|---|---|
-| `Shift+Enter` submits instead of inserting a line | Your terminal's section below; for tmux, see [Run Pi in tmux](tmux.md) |
-| `Alt+Enter` does not queue a follow-up | [WezTerm](#wezterm), [Alacritty](#alacritty), or [Windows Terminal](#windows-terminal) |
-| Fullscreen scrolling is unusually slow | [iTerm2](#iterm2) |
-| Links work but show no hover preview | [Ghostty](#ghostty) |
-| Inline images or colors are not detected | [Override detected capabilities](#override-detected-capabilities) |
-| An IME candidate window appears in the wrong place | [WezTerm](#wezterm) or [IntelliJ IDEA](#intellij-idea-integrated-terminal) |
-| Modified keys fail only inside tmux | [Run Pi in tmux](tmux.md) |
+| Symptom                                            | Start here                                                                             |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `Shift+Enter` submits instead of inserting a line  | Your terminal's section below; for tmux, see [Run Pi in tmux](tmux.md)                 |
+| `Alt+Enter` does not queue a follow-up             | [WezTerm](#wezterm), [Alacritty](#alacritty), or [Windows Terminal](#windows-terminal) |
+| Fullscreen scrolling is unusually slow             | [iTerm2](#iterm2)                                                                      |
+| Links work but show no hover preview               | [Ghostty](#ghostty)                                                                    |
+| Inline images or colors are not detected           | [Override detected capabilities](#override-detected-capabilities)                      |
+| An IME candidate window appears in the wrong place | [WezTerm](#wezterm) or [IntelliJ IDEA](#intellij-idea-integrated-terminal)             |
+| Modified keys fail only inside tmux                | [Run Pi in tmux](tmux.md)                                                              |
 
 Use `/hotkeys` to inspect Pi's active shortcuts. See [Keybindings](keybindings.md) to change them.
 
@@ -208,11 +208,11 @@ pi
 
 Pi automatically detects OSC 8 hyperlinks, inline image protocols, and truecolor support. A terminal proxy or multiplexer can make that detection inaccurate.
 
-| Capability | Environment variable | Setting |
-|---|---|---|
-| Hyperlinks | `PI_HYPERLINKS=1\|0\|auto` | `terminal.hyperlinks: true\|false\|"auto"` |
+| Capability    | Environment variable                          | Setting                                             |
+| ------------- | --------------------------------------------- | --------------------------------------------------- |
+| Hyperlinks    | `PI_HYPERLINKS=1\|0\|auto`                    | `terminal.hyperlinks: true\|false\|"auto"`          |
 | Inline images | `PI_IMAGE_PROTOCOL=kitty\|iterm2\|none\|auto` | `terminal.images: "kitty"\|"iterm2"\|false\|"auto"` |
-| Truecolor | `PI_TRUE_COLOR=1\|0\|auto` | `terminal.trueColor: true\|false\|"auto"` |
+| Truecolor     | `PI_TRUE_COLOR=1\|0\|auto`                    | `terminal.trueColor: true\|false\|"auto"`           |
 
 Settings take precedence over environment variables. An unset value or `auto` preserves automatic detection.
 
@@ -222,12 +222,12 @@ Only force a capability supported by the complete terminal path. Unsupported esc
 
 Pi reports its state with the [Program Status Protocol (OSC 7501)](https://www.superlogical.com/rex/docs/build/program-status), so terminals and agent dashboards can show whether it is working, waiting for you, done, or failed:
 
-| State | When |
-|---|---|
-| `working` | An agent run or compaction is in progress. The message is the session name. |
-| `blocked` | An extension dialog or login waits for you. The message is the dialog title. |
-| `done` | A run finished. The message is the session name. |
-| `error` | A run ended with an error that is not retried. The message is the first line of the error. |
-| `idle` | Pi started, or you cancelled the run. |
+| State     | When                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------ |
+| `working` | An agent run or compaction is in progress. The message is the session name.                |
+| `blocked` | An extension dialog or login waits for you. The message is the dialog title.               |
+| `done`    | A run finished. The message is the session name.                                           |
+| `error`   | A run ended with an error that is not retried. The message is the first line of the error. |
+| `idle`    | Pi started, or you cancelled the run.                                                      |
 
 Reports never contain prompts or model output. Pi sends them only after the terminal answers the protocol's support query; tmux and screen do not forward them. Set `PI_PROGRAM_STATUS=1` to send reports without asking, or `PI_PROGRAM_STATUS=0` to turn them off.

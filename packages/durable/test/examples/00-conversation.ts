@@ -2,6 +2,7 @@
 // Run from packages/durable:
 //   node --conditions=source --experimental-strip-types test/examples/00-conversation.ts
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+
 import { createSession, MemoryStorage } from "../../src/index.ts";
 
 // MemoryStorage keeps everything in memory; other storage backends keep it on disk.
@@ -15,7 +16,10 @@ const context = BACKGROUND_CONTEXT;
 // transaction `tx`; everything it writes is saved together when the callback
 // returns, or discarded if it throws.
 // "ownerless" means no task created this conversation.
-const standalone = await session.commit((tx) => tx.createConversation({ ownership: { kind: "ownerless" } }), context);
+const standalone = await session.commit(
+  (tx) => tx.createConversation({ ownership: { kind: "ownerless" } }),
+  context,
+);
 console.log("standalone conversation:", standalone);
 
 await session.close(context);

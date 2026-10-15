@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-import { createCanvas } from "canvas";
 import { mkdirSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+
+import { createCanvas } from "canvas";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

@@ -5,18 +5,18 @@ env conformance suite and `test/differential.test.ts` check each rule below.
 
 ## Split of work
 
-| Concern | Where |
-|---|---|
-| Path resolution: `~` (remote home), `file://`, relative to `cwd`; on Windows drive-relative paths against the remote's working directories | client, the remote system's `path` rules |
-| Abort checkpoints of each method | client, as `NodeExecutionEnv` |
-| Error code mapping (`ENOENT` → `not_found`, ...) | client, as `NodeExecutionEnv`'s `toFileError` |
-| `readFile`'s read sizes, size limit and decoding (`StringDecoder`, byte-order mark kept) over the daemon's `open(path, "r")` | client |
-| `writeFile` in 512 KiB writes with an abort check before each; `appendFile` without checks | client, over one open file |
-| Line reader | client, positional reads and Durable's `StreamDecoder` |
-| Watching: snapshots, native events, polling | daemon, a port of Durable's `NodeFileWatcher` |
-| Timeout validation, result precedence (callback error, timeout, abort, spill failure, exit code) | client |
-| System calls, processes, spill files, line scans | daemon |
-| Command output decoding: per stream, WHATWG UTF-8, only a leading byte-order mark dropped | daemon (`encoding_rs`) |
+| Concern                                                                                                                                    | Where                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| Path resolution: `~` (remote home), `file://`, relative to `cwd`; on Windows drive-relative paths against the remote's working directories | client, the remote system's `path` rules               |
+| Abort checkpoints of each method                                                                                                           | client, as `NodeExecutionEnv`                          |
+| Error code mapping (`ENOENT` → `not_found`, ...)                                                                                           | client, as `NodeExecutionEnv`'s `toFileError`          |
+| `readFile`'s read sizes, size limit and decoding (`StringDecoder`, byte-order mark kept) over the daemon's `open(path, "r")`               | client                                                 |
+| `writeFile` in 512 KiB writes with an abort check before each; `appendFile` without checks                                                 | client, over one open file                             |
+| Line reader                                                                                                                                | client, positional reads and Durable's `StreamDecoder` |
+| Watching: snapshots, native events, polling                                                                                                | daemon, a port of Durable's `NodeFileWatcher`          |
+| Timeout validation, result precedence (callback error, timeout, abort, spill failure, exit code)                                           | client                                                 |
+| System calls, processes, spill files, line scans                                                                                           | daemon                                                 |
+| Command output decoding: per stream, WHATWG UTF-8, only a leading byte-order mark dropped                                                  | daemon (`encoding_rs`)                                 |
 
 ## Rules the standard libraries do not follow
 

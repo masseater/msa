@@ -42,74 +42,74 @@ export const DEFAULT_INTERRUPT_BUDGET = 100_000;
 export const INLINE_MAX_STACK_SIZE = 256 * 1024;
 
 export interface InlineCodemodeSandboxOptions extends CodemodeSandboxBaseOptions {
-	/**
-	 * Compiled `quickjs-wasi/quickjs.wasm`. On Cloudflare, import it with Wrangler's `CompiledWasm`
-	 * rule (`@earendil-works/pi-codemode/cloudflare` does this); on Node, `loadQuickJSWasm()`.
-	 */
-	wasm: CodemodeWasmModule | Promise<CodemodeWasmModule>;
-	/**
-	 * Interrupt polls an execution may use before it fails with `kind: "timeout"`. The only limit on
-	 * a script that computes without awaiting a tool. Default: {@link DEFAULT_INTERRUPT_BUDGET}.
-	 */
-	interruptBudget?: number;
+  /**
+   * Compiled `quickjs-wasi/quickjs.wasm`. On Cloudflare, import it with Wrangler's `CompiledWasm`
+   * rule (`@earendil-works/pi-codemode/cloudflare` does this); on Node, `loadQuickJSWasm()`.
+   */
+  wasm: CodemodeWasmModule | Promise<CodemodeWasmModule>;
+  /**
+   * Interrupt polls an execution may use before it fails with `kind: "timeout"`. The only limit on
+   * a script that computes without awaiting a tool. Default: {@link DEFAULT_INTERRUPT_BUDGET}.
+   */
+  interruptBudget?: number;
 }
 
 export function inlineLauncher(
-	wasm: CodemodeWasmModule | Promise<CodemodeWasmModule>,
-	interruptBudget: number = DEFAULT_INTERRUPT_BUDGET,
+  wasm: CodemodeWasmModule | Promise<CodemodeWasmModule>,
+  interruptBudget: number = DEFAULT_INTERRUPT_BUDGET,
 ): VmLauncher {
-	return async (data, events) => {
-		let module: CodemodeWasmModule;
-		try {
-			module = await wasm;
-		} catch (error) {
-			throw new Error(`Failed to load QuickJS: ${errorMessage(error)}`);
-		}
-		let stopped = false;
-		let settled = false;
-		let polls = 0;
-		let exhausted = false;
-		const session = await startVm({
-			data,
-			wasm: module,
-			maxStackSize: INLINE_MAX_STACK_SIZE,
-			interruptBudget,
-			shouldInterrupt: () => {
-				if (stopped || settled || exhausted) return true;
-				if (++polls <= interruptBudget) return false;
-				exhausted = true;
-				return true;
-			},
-			post: (message) => {
-				const terminal = message.type === "done" || message.type === "crash";
-				// Only the first terminal message counts: a crash caused by interrupting a settled VM is noise.
-				if (terminal && settled) return;
-				if (terminal) settled = true;
-				queueMicrotask(() => {
-					if (stopped) return;
-					// The interrupt surfaces as a crash or a failed done; report what caused it instead.
-					if (exhausted && (message.type === "done" || message.type === "crash")) {
-						events.failure({
-							kind: "timeout",
-							message: `Execution exceeded its interrupt budget of ${interruptBudget}`,
-						});
-						return;
-					}
-					events.message(message);
-				});
-			},
-		});
-		return {
-			post: (message) => {
-				if (!stopped) session.deliver(message);
-			},
-			stop: async () => {
-				if (stopped) return;
-				stopped = true;
-				session.dispose();
-			},
-		};
-	};
+  return async (data, events) => {
+    let module: CodemodeWasmModule;
+    try {
+      module = await wasm;
+    } catch (error) {
+      throw new Error(`Failed to load QuickJS: ${errorMessage(error)}`);
+    }
+    let stopped = false;
+    let settled = false;
+    let polls = 0;
+    let exhausted = false;
+    const session = await startVm({
+      data,
+      wasm: module,
+      maxStackSize: INLINE_MAX_STACK_SIZE,
+      interruptBudget,
+      shouldInterrupt: () => {
+        if (stopped || settled || exhausted) return true;
+        if (++polls <= interruptBudget) return false;
+        exhausted = true;
+        return true;
+      },
+      post: (message) => {
+        const terminal = message.type === "done" || message.type === "crash";
+        // Only the first terminal message counts: a crash caused by interrupting a settled VM is noise.
+        if (terminal && settled) return;
+        if (terminal) settled = true;
+        queueMicrotask(() => {
+          if (stopped) return;
+          // The interrupt surfaces as a crash or a failed done; report what caused it instead.
+          if (exhausted && (message.type === "done" || message.type === "crash")) {
+            events.failure({
+              kind: "timeout",
+              message: `Execution exceeded its interrupt budget of ${interruptBudget}`,
+            });
+            return;
+          }
+          events.message(message);
+        });
+      },
+    });
+    return {
+      post: (message) => {
+        if (!stopped) session.deliver(message);
+      },
+      stop: async () => {
+        if (stopped) return;
+        stopped = true;
+        session.dispose();
+      },
+    };
+  };
 }
 
 /**
@@ -120,7 +120,7 @@ export function inlineLauncher(
  * thread that must stay responsive (such as a Durable Object that serves a session).
  */
 export class InlineCodemodeSandbox extends CodemodeSandboxBase {
-	constructor(options: InlineCodemodeSandboxOptions) {
-		super(options, inlineLauncher(options.wasm, options.interruptBudget));
-	}
+  constructor(options: InlineCodemodeSandboxOptions) {
+    super(options, inlineLauncher(options.wasm, options.interruptBudget));
+  }
 }

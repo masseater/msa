@@ -40,8 +40,8 @@ import type { FetchFunction } from "../types.ts";
  * late.
  */
 export interface AiBinding {
-	aiGatewayLogId: string | null;
-	fetch?(input: Request | string | URL, init?: RequestInit): Promise<Response>;
+  aiGatewayLogId: string | null;
+  fetch?(input: Request | string | URL, init?: RequestInit): Promise<Response>;
 }
 
 /**
@@ -78,13 +78,13 @@ export const CLOUDFLARE_GATEWAY_BINDING_AUTH_SENTINEL = "cloudflare-gateway-bind
  * ```
  */
 export function createAiBindingFetch(binding: AiBinding): FetchFunction {
-	// `fetch` is optional on the type, so its presence is checked here — early, rather than as a
-	// confusing failure on the first inference request.
-	if (typeof binding.fetch !== "function") {
-		throw new TypeError("createAiBindingFetch: the AI binding does not expose fetch()");
-	}
-	// Bound eagerly: `fetch` is a mutable property, so the narrowing above would not survive into
-	// the returned closure.
-	const bindingFetch = binding.fetch.bind(binding);
-	return (input, init) => bindingFetch(input, init);
+  // `fetch` is optional on the type, so its presence is checked here — early, rather than as a
+  // confusing failure on the first inference request.
+  if (typeof binding.fetch !== "function") {
+    throw new TypeError("createAiBindingFetch: the AI binding does not expose fetch()");
+  }
+  // Bound eagerly: `fetch` is a mutable property, so the narrowing above would not survive into
+  // the returned closure.
+  const bindingFetch = binding.fetch.bind(binding);
+  return (input, init) => bindingFetch(input, init);
 }

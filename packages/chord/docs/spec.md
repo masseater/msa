@@ -3,24 +3,25 @@
 This document specifies the runtime in `src`. Where it and the code disagree, the disagreement is a bug. [Known limitations and decisions](#12-known-limitations-and-decisions) lists what the runtime does not do yet and the choices the sections below leave open.
 
 Hard constraints:
+
 - Chord's runtime depends only on its own `delta` module (tracker, applyImmutable, encoder/decoder, diff) and Node/browser built-ins plus `typebox` for schemas. No other Pi packages.
 - Built-in plugins are trusted, loaded from source in-process. The plugin loader uses dynamic `import()` with a cache-busting query (owner-approved exception, `TODO(loader)`: replace with an isolating, evicting loader; old module copies leak; TUI plugins need isolation).
 - Hot reload is required. Host restart only for Chord/runtime code changes or host-level crash recovery.
 
 ## 1. Concepts
 
-| Term | Meaning |
-| --- | --- |
-| facet | A plugin's code for one host (surface): it serves object types (`defineFacet`). |
-| object type | Name + contract. `remote` (addressable from other hosts; schemas for input, variant state members, method args/results) or `local` (host-only; members may be anything, including functions and native objects, but must be listed in the contract: `method`, `opaque` or a state schema). |
-| factory | `(input, principal, self) => implementation`. Synchronous. Registered with `host.serve(type, factory, options)` from a plugin facet. |
-| object | One instance of an object type. Stable identity per `(type, canonicalInput, principalKey)`. Owns cells, resources, references, listeners, tasks, registrations. Survives reloads. |
-| implementation | The object's code: what a factory run returns (methods + state members; `variant` for remote types). Immutable, per code version. |
-| reference | What `get` returns: a late-bound claim on an object, never the object or its implementation. An object lives while referenced. |
-| principal | App-defined. Stamped by links. In-host code acts as the `host` principal. |
-| root | One short Chord call tree, admitted at trusted ingress (link request without root, UI event, timer, `host.root`). Carries `{ rootId, codeVersion }`. |
-| code version | One committed set of implementations/registrations per host (server-issued id). |
-| code holder | Long-lived execution that is NOT a root: Durable phases/tool runs, browsers, `self.task` loops. Every Chord call they make starts a fresh short root. |
+| Term           | Meaning                                                                                                                                                                                                                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| facet          | A plugin's code for one host (surface): it serves object types (`defineFacet`).                                                                                                                                                                                                            |
+| object type    | Name + contract. `remote` (addressable from other hosts; schemas for input, variant state members, method args/results) or `local` (host-only; members may be anything, including functions and native objects, but must be listed in the contract: `method`, `opaque` or a state schema). |
+| factory        | `(input, principal, self) => implementation`. Synchronous. Registered with `host.serve(type, factory, options)` from a plugin facet.                                                                                                                                                       |
+| object         | One instance of an object type. Stable identity per `(type, canonicalInput, principalKey)`. Owns cells, resources, references, listeners, tasks, registrations. Survives reloads.                                                                                                          |
+| implementation | The object's code: what a factory run returns (methods + state members; `variant` for remote types). Immutable, per code version.                                                                                                                                                          |
+| reference      | What `get` returns: a late-bound claim on an object, never the object or its implementation. An object lives while referenced.                                                                                                                                                             |
+| principal      | App-defined. Stamped by links. In-host code acts as the `host` principal.                                                                                                                                                                                                                  |
+| root           | One short Chord call tree, admitted at trusted ingress (link request without root, UI event, timer, `host.root`). Carries `{ rootId, codeVersion }`.                                                                                                                                       |
+| code version   | One committed set of implementations/registrations per host (server-issued id).                                                                                                                                                                                                            |
+| code holder    | Long-lived execution that is NOT a root: Durable phases/tool runs, browsers, `self.task` loops. Every Chord call they make starts a fresh short root.                                                                                                                                      |
 
 ## 2. Contracts
 
@@ -28,26 +29,26 @@ Contracts are runtime values for every type (shipped bundles have no TypeScript;
 
 ```ts
 export const Chat = remote("pi.chat", {
-	version: 1,                                   // contract version: a plain number, bumped only on breaking changes
-	input: Type.Object({ session: Type.String(), conversation: Type.Number() }),
-	host: hostFamily("session:", "session"),       // where its objects live: `session:` + input.session
-	variants: {
-		viewer: { state: { view: ViewSchema } },
-		participant: {
-			state: { view: ViewSchema },
-			methods: { send: method(SendSchema, Type.Object({ submissionId: Type.Number() })) },
-		},
-	},
+  version: 1, // contract version: a plain number, bumped only on breaking changes
+  input: Type.Object({ session: Type.String(), conversation: Type.Number() }),
+  host: hostFamily("session:", "session"), // where its objects live: `session:` + input.session
+  variants: {
+    viewer: { state: { view: ViewSchema } },
+    participant: {
+      state: { view: ViewSchema },
+      methods: { send: method(SendSchema, Type.Object({ submissionId: Type.Number() })) },
+    },
+  },
 });
 
 export const Index = local("pi.index", {
-	version: 1,
-	input: Type.Object({ session: Type.String() }),
-	members: {
-		search: method(Type.Object({ query: Type.String() }), Type.Array(Hit)),
-		onChange: method(Type.Function([Change], Type.Void()), Unsubscribe),   // non-JSON allowed for locals
-		harness: opaque("pi.durable-harness@1"),                               // native object, by name+version
-	},
+  version: 1,
+  input: Type.Object({ session: Type.String() }),
+  members: {
+    search: method(Type.Object({ query: Type.String() }), Type.Array(Hit)),
+    onChange: method(Type.Function([Change], Type.Void()), Unsubscribe), // non-JSON allowed for locals
+    harness: opaque("pi.durable-harness@1"), // native object, by name+version
+  },
 });
 ```
 
@@ -78,36 +79,62 @@ and the normal coverage/adapter checks; state-version and migration checks are u
 Factories are synchronous; returning a promise throws. A declaration has a name only if something of it survives a reload and must be found again: state (its value) and resources (the open value), plus listeners (a kept subscription). Names are strings, unique per object per declaration kind (a repeated name is `invalid/duplicate`); kinds have separate names. Derivations and tasks have no names: a reload makes new ones. References are identified by their address.
 
 ```ts
-host.serve(StatusStore, ({ session }, _host, self) => {
-	const status = self.state("status", StatusSchema, { running: false, tasks: 0 },  // schema required, initial value
-		{ version: 2, migrate: (old, from) => upgrade(old, from) });                     // per cell; default version 1
-	const errors = self.state("errors", Type.Array(Type.String()), []);
-	const catalog = self.get(Catalog, {});                         // reference; identity = canonical address (+ at)
-	const watch = self.resource("watch", {
-		version: 1, deps: [catalog], exclusive: false,
-		open: async ({ signal }) => openWatch(session, signal),
-		close: async (w) => w.close(),
-	});
-	self.on("changes", watch, (w) => w.events, (event, ctx) => status.change(ctx, (d) => { d.tasks = event.tasks; }));
-	self.task(async (ctx) => { /* loop until ctx.signal aborts */ });
-	const visible = self.derive([status], (s) => project(s));      // synchronous
-	self.register(Routes, { "GET /status": handler });              // registry keys are the registry's own keys; `lifetime: "host"` objects only
-	return { status: visible, errors, report: (args, ctx) => { status.replace(ctx, args); } };  // exposed state = what is returned
-}, {
-	linger: 30_000,                                                  // with lifetime "referenced" (the default) only
-});
+host.serve(
+  StatusStore,
+  ({ session }, _host, self) => {
+    const status = self.state(
+      "status",
+      StatusSchema,
+      { running: false, tasks: 0 }, // schema required, initial value
+      { version: 2, migrate: (old, from) => upgrade(old, from) },
+    ); // per cell; default version 1
+    const errors = self.state("errors", Type.Array(Type.String()), []);
+    const catalog = self.get(Catalog, {}); // reference; identity = canonical address (+ at)
+    const watch = self.resource("watch", {
+      version: 1,
+      deps: [catalog],
+      exclusive: false,
+      open: async ({ signal }) => openWatch(session, signal),
+      close: async (w) => w.close(),
+    });
+    self.on(
+      "changes",
+      watch,
+      (w) => w.events,
+      (event, ctx) =>
+        status.change(ctx, (d) => {
+          d.tasks = event.tasks;
+        }),
+    );
+    self.task(async (ctx) => {
+      /* loop until ctx.signal aborts */
+    });
+    const visible = self.derive([status], (s) => project(s)); // synchronous
+    self.register(Routes, { "GET /status": handler }); // registry keys are the registry's own keys; `lifetime: "host"` objects only
+    return {
+      status: visible,
+      errors,
+      report: (args, ctx) => {
+        status.replace(ctx, args);
+      },
+    }; // exposed state = what is returned
+  },
+  {
+    linger: 30_000, // with lifetime "referenced" (the default) only
+  },
+);
 ```
 
-| Declaration | Survives reload | Notes |
-| --- | --- | --- |
-| `state(name, schema, initial \| { init }, { version?, migrate? })` | same cell and value (`initial` ignored, `init` not run); migrated when its version rises; a cell the reload adds runs `init` at prepare (gated objects: at the gate) | Schema required (no TypeScript at runtime). `change(ctx, draft => void)`, `replace(ctx, value)`, `value`, `subscribe`. Writes through `change` touch only mutated paths. Private state is a cell the implementation does not return. `init(ctx)` (may be async) gives the first value, see activation |
-| `get(type, input, { at? })` | kept if declared again (same address) | returns a reference |
-| `resource(name, { version, deps?, exclusive?, open, close? })` | kept unless `version`, `deps` or `exclusive` change; a kept resource adopts the new declaration (its `close`) at commit | `open` runs at prepare (non-exclusive) or at the gate (exclusive); returns a resource whose `.value` is the open value; a replaced resource closes with its own declaration's `close` |
-| `on(name, source, [select,] handler)` | same subscription while source and `select` (identity or source text) are unchanged; `handler` swapped | each event starts a fresh root in the current code version; `select` is not re-run for a kept subscription. State sources deliver their current value at start and after every reload that replaced them |
-| `task(fn)` | restarted with new code at commit: the old run is aborted via ctx.signal, and the new one starts once it finished (at most `taskStopDeadline`, default 5 s, then anyway, reported) | a code holder; calls inside start fresh roots |
-| `derive(sources, fn)` | a new derivation, computed at commit | synchronous fn |
-| `register(registry, { key: value })` | value swapped at commit | `lifetime: "host"` objects only |
-| `expose(resource)` | follows the resource | a local member (usually `opaque`) whose reference value is the resource's value once live |
+| Declaration                                                        | Survives reload                                                                                                                                                                    | Notes                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `state(name, schema, initial \| { init }, { version?, migrate? })` | same cell and value (`initial` ignored, `init` not run); migrated when its version rises; a cell the reload adds runs `init` at prepare (gated objects: at the gate)               | Schema required (no TypeScript at runtime). `change(ctx, draft => void)`, `replace(ctx, value)`, `value`, `subscribe`. Writes through `change` touch only mutated paths. Private state is a cell the implementation does not return. `init(ctx)` (may be async) gives the first value, see activation |
+| `get(type, input, { at? })`                                        | kept if declared again (same address)                                                                                                                                              | returns a reference                                                                                                                                                                                                                                                                                   |
+| `resource(name, { version, deps?, exclusive?, open, close? })`     | kept unless `version`, `deps` or `exclusive` change; a kept resource adopts the new declaration (its `close`) at commit                                                            | `open` runs at prepare (non-exclusive) or at the gate (exclusive); returns a resource whose `.value` is the open value; a replaced resource closes with its own declaration's `close`                                                                                                                 |
+| `on(name, source, [select,] handler)`                              | same subscription while source and `select` (identity or source text) are unchanged; `handler` swapped                                                                             | each event starts a fresh root in the current code version; `select` is not re-run for a kept subscription. State sources deliver their current value at start and after every reload that replaced them                                                                                              |
+| `task(fn)`                                                         | restarted with new code at commit: the old run is aborted via ctx.signal, and the new one starts once it finished (at most `taskStopDeadline`, default 5 s, then anyway, reported) | a code holder; calls inside start fresh roots                                                                                                                                                                                                                                                         |
+| `derive(sources, fn)`                                              | a new derivation, computed at commit                                                                                                                                               | synchronous fn                                                                                                                                                                                                                                                                                        |
+| `register(registry, { key: value })`                               | value swapped at commit                                                                                                                                                            | `lifetime: "host"` objects only                                                                                                                                                                                                                                                                       |
+| `expose(resource)`                                                 | follows the resource                                                                                                                                                               | a local member (usually `opaque`) whose reference value is the resource's value once live                                                                                                                                                                                                             |
 
 State members of an implementation may be cells, derivations, or state members of references the object holds (they are defined once the object is live). `cell.replace(ctx, value, { diff? })` publishes a structural diff when the new value shares containers with the old one (or `diff: true`), else `r`. Facet `setup` receives `{ serve, name, root, registry, signal }` of its host; `signal` aborts once this run of the facet is no longer installed (a committed reload replaced or removed it, the reload that loaded it aborted, or the host closed).
 
@@ -136,10 +163,10 @@ Inside the factory, placeholders must not be used (`resource.value` and an `init
 
 `serve(type, factory, { lifetime })`:
 
-| `lifetime` | Created | Ends | `linger` |
-| --- | --- | --- | --- |
-| `"referenced"` (default) | at the first `get` of its address | after the last reference is released, plus `linger` | allowed (default 0) |
-| `"host"` | when its facet loads (or at `serve`); loading waits until it is live | when the host closes, or a reload removes its facet | refused |
+| `lifetime`               | Created                                                              | Ends                                                | `linger`            |
+| ------------------------ | -------------------------------------------------------------------- | --------------------------------------------------- | ------------------- |
+| `"referenced"` (default) | at the first `get` of its address                                    | after the last reference is released, plus `linger` | allowed (default 0) |
+| `"host"`                 | when its facet loads (or at `serve`); loading waits until it is live | when the host closes, or a reload removes its facet | refused             |
 
 - `"host"` is refused at `serve` for remote types, for an input that does not accept `{}`, and together with `linger`;
   the types (`ServeOptionsFor`) refuse the same at compile time, where such an input is one with a required field.

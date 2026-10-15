@@ -13,27 +13,27 @@ let draining = false;
 
 /** Runs `task` after everything enqueued before it. Tasks must not throw (report instead). */
 export function enqueue(task: () => void): void {
-	queue.push(task);
-	drain();
+  queue.push(task);
+  drain();
 }
 
 /** Delivers nothing until `fn` returns, then everything it enqueued, in order. */
 export function holdPublications<T>(fn: () => T): T {
-	held++;
-	try {
-		return fn();
-	} finally {
-		held--;
-		drain();
-	}
+  held++;
+  try {
+    return fn();
+  } finally {
+    held--;
+    drain();
+  }
 }
 
 function drain(): void {
-	if (draining || held > 0) return;
-	draining = true;
-	try {
-		for (let task = queue.shift(); task !== undefined; task = queue.shift()) task();
-	} finally {
-		draining = false;
-	}
+  if (draining || held > 0) return;
+  draining = true;
+  try {
+    for (let task = queue.shift(); task !== undefined; task = queue.shift()) task();
+  } finally {
+    draining = false;
+  }
 }

@@ -4,13 +4,13 @@ For a built-in provider, start with `/login`, then choose a model with `/model`.
 
 ## Choose a connection
 
-| What you have | Recommended setup |
-|---|---|
-| A supported subscription | Sign in through `/login` |
-| A provider API key | Store it through `/login` or set its environment variable |
-| A local GGUF model | Connect Pi to the llama.cpp router |
-| An OpenAI-, Anthropic-, or Google-compatible endpoint | Add it to `models.json` |
-| A provider with a custom protocol or authentication flow | Build or install a provider extension |
+| What you have                                            | Recommended setup                                         |
+| -------------------------------------------------------- | --------------------------------------------------------- |
+| A supported subscription                                 | Sign in through `/login`                                  |
+| A provider API key                                       | Store it through `/login` or set its environment variable |
+| A local GGUF model                                       | Connect Pi to the llama.cpp router                        |
+| An OpenAI-, Anthropic-, or Google-compatible endpoint    | Add it to `models.json`                                   |
+| A provider with a custom protocol or authentication flow | Build or install a provider extension                     |
 
 Browse the [model catalog](https://pi.dev/models) for current providers, model IDs, capabilities, context limits, and pricing. Pi starts with its bundled catalog and can overlay newer catalog data from pi.dev. Cached catalog data remains available offline; run `pi update --models` to force a refresh.
 
@@ -54,9 +54,7 @@ Use [`models.json`](configuration.md#agent-directory) when an endpoint speaks an
       "baseUrl": "http://localhost:11434/v1",
       "api": "openai-completions",
       "apiKey": "ollama",
-      "models": [
-        { "id": "qwen2.5-coder:7b" }
-      ]
+      "models": [{ "id": "qwen2.5-coder:7b" }]
     }
   }
 }
@@ -131,14 +129,14 @@ Compatibility settings should describe verified differences in the endpoint's re
 
 Classifier models do not chat. They answer typed questions about JSON state: pick one of several choices, answer yes or no, or give a score, each with probabilities. Pi includes TypeSafe's Jev model from these providers, Cloudflare's Clef and Clef Flash models from Workers AI, and OpenAI's GPT-6 Luna through the [Decisions API](https://developers.openai.com/api/docs/guides/decisions):
 
-| Provider | Model IDs | Authentication |
-|---|---|---|
-| `typesafe` | `jev-latest` | `TYPESAFE_API_KEY` |
-| `openrouter` | `typesafe/jev-1.13`, `~typesafe/jev-latest` | `OPENROUTER_API_KEY` or `/login` |
+| Provider                | Model IDs                                                          | Authentication                                   |
+| ----------------------- | ------------------------------------------------------------------ | ------------------------------------------------ |
+| `typesafe`              | `jev-latest`                                                       | `TYPESAFE_API_KEY`                               |
+| `openrouter`            | `typesafe/jev-1.13`, `~typesafe/jev-latest`                        | `OPENROUTER_API_KEY` or `/login`                 |
 | `cloudflare-workers-ai` | `typesafe/jev`, `@cf/cloudflare/clef`, `@cf/cloudflare/clef-flash` | `CLOUDFLARE_API_KEY` and `CLOUDFLARE_ACCOUNT_ID` |
-| `vercel-ai-gateway` | `typesafe-ai/jev` | `AI_GATEWAY_API_KEY` |
-| `opencode` | `jev-1.13`, `jev-1.13-free` | `OPENCODE_API_KEY` |
-| `openai` | `gpt-6-luna` | `OPENAI_API_KEY` |
+| `vercel-ai-gateway`     | `typesafe-ai/jev`                                                  | `AI_GATEWAY_API_KEY`                             |
+| `opencode`              | `jev-1.13`, `jev-1.13-free`                                        | `OPENCODE_API_KEY`                               |
+| `openai`                | `gpt-6-luna`                                                       | `OPENAI_API_KEY`                                 |
 
 Chat models on a [llama.cpp router](llama-cpp.md#classification) are also listed as classifier models.
 

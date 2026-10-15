@@ -68,14 +68,14 @@ Project skills can instruct the model to run scripts or modify files. Review unf
 
 The Agent Skills specification defines these fields:
 
-| Field | Purpose |
-|---|---|
-| `name` | Command and display name |
-| `description` | Routing description shown to the model |
-| `license` | License name or bundled license file |
-| `compatibility` | Environment requirements |
-| `metadata` | Additional key-value metadata |
-| `allowed-tools` | Experimental pre-approved tool list |
+| Field                      | Purpose                                       |
+| -------------------------- | --------------------------------------------- |
+| `name`                     | Command and display name                      |
+| `description`              | Routing description shown to the model        |
+| `license`                  | License name or bundled license file          |
+| `compatibility`            | Environment requirements                      |
+| `metadata`                 | Additional key-value metadata                 |
+| `allowed-tools`            | Experimental pre-approved tool list           |
 | `disable-model-invocation` | Hide the skill from automatic model selection |
 
 Names use lowercase letters, numbers, and hyphens, with no leading, trailing, or consecutive hyphens. They can contain at most 64 characters; descriptions can contain at most 1024.

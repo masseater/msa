@@ -56,14 +56,23 @@ const context = BACKGROUND_CONTEXT;
 const models = createModels();
 models.setProvider(openaiProvider()); // reads OPENAI_API_KEY
 
-const harness = await Harness.open(new MemoryStorage(), { models, registry: createRegistry() }, context);
-const root = await harness.root(context, { agent: { model: { provider: "openai", modelId: "gpt-6-sol" } } });
+const harness = await Harness.open(
+  new MemoryStorage(),
+  { models, registry: createRegistry() },
+  context,
+);
+const root = await harness.root(context, {
+  agent: { model: { provider: "openai", modelId: "gpt-6-sol" } },
+});
 
-const submission = await root.submit({ type: "input", content: "What is the capital of France?" }, context);
+const submission = await root.submit(
+  { type: "input", content: "What is the capital of France?" },
+  context,
+);
 const settled = await submission.wait(context);
 if (settled.status === "done" && settled.type === "input") {
-	const answer = await root.commit((tx) => tx.entry(AssistantEntry, settled.answer), context);
-	console.log(answer?.model?.[0]);
+  const answer = await root.commit((tx) => tx.entry(AssistantEntry, settled.answer), context);
+  console.log(answer?.model?.[0]);
 }
 await harness.close(context);
 ```
@@ -107,7 +116,11 @@ Use SQLite or JSONL storage to keep conversations across restarts:
 ```typescript
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 
-const harness = await Harness.open(await openNodeSqliteStorage("./session.sqlite"), { models, registry }, context);
+const harness = await Harness.open(
+  await openNodeSqliteStorage("./session.sqlite"),
+  { models, registry },
+  context,
+);
 const root = await harness.root(context); // the same root as last time
 harness.resume(); // continue any run the last process left unfinished
 ```
@@ -117,9 +130,15 @@ Work interrupted by a crash or close stays pending. `resume()` starts the task s
 A retried submission with the same `requestId` returns the existing submission instead of submitting twice:
 
 ```typescript
-const submission = await root.submit({ type: "input", content: "Hello", requestId: "greeting-1" }, context);
+const submission = await root.submit(
+  { type: "input", content: "Hello", requestId: "greeting-1" },
+  context,
+);
 // After a restart: the same request ID finds the same submission.
-const again = await root.submit({ type: "input", content: "Hello", requestId: "greeting-1" }, context);
+const again = await root.submit(
+  { type: "input", content: "Hello", requestId: "greeting-1" },
+  context,
+);
 // again.id === submission.id
 ```
 
@@ -130,13 +149,24 @@ const again = await root.submit({ type: "input", content: "Hello", requestId: "g
 Code the Harness runs, other than its built-in tasks, comes in named extensions installed in a registry your process owns:
 
 ```typescript
-import { createRegistry, defineExtension, defineTool, hook, section, ToolTask } from "@earendil-works/pi-durable";
+import {
+  createRegistry,
+  defineExtension,
+  defineTool,
+  hook,
+  section,
+  ToolTask,
+} from "@earendil-works/pi-durable";
 import { CodingTools } from "@earendil-works/pi-durable/tools";
 
 const Coding = defineExtension({
-	name: "coding",
-	sections: [section("preamble", () => "You are a concise coding assistant.", { tag: false })],
-	hooks: [hook(ToolTask, { beforeTool: (call) => (isDangerous(call) ? { block: "Needs approval" } : undefined) })],
+  name: "coding",
+  sections: [section("preamble", () => "You are a concise coding assistant.", { tag: false })],
+  hooks: [
+    hook(ToolTask, {
+      beforeTool: (call) => (isDangerous(call) ? { block: "Needs approval" } : undefined),
+    }),
+  ],
 });
 
 const registry = createRegistry();
@@ -167,13 +197,13 @@ Define your own tool with a TypeBox schema. `defineTool()` types `args` from `pa
 import { Type } from "@earendil-works/pi-ai";
 
 const count = defineTool({
-	name: "count",
-	description: "Count from 1 to n",
-	parameters: Type.Object({ n: Type.Number() }),
-	execute: async (args, api) => {
-		for (let i = 1; i <= args.n; i++) api.output(`${i}\n`);
-		return {};
-	},
+  name: "count",
+  description: "Count from 1 to n",
+  parameters: Type.Object({ n: Type.Number() }),
+  execute: async (args, api) => {
+    for (let i = 1; i <= args.n; i++) api.output(`${i}\n`);
+    return {};
+  },
 });
 registry.install(defineExtension({ name: "count", tools: [count] }));
 ```
@@ -184,15 +214,18 @@ A result has three channels: `output` for the model, `structuredOutput` for prog
 
 ```typescript
 const lines = defineTool({
-	name: "lines",
-	description: "Count the lines of a file",
-	parameters: Type.Object({ path: Type.String() }),
-	structuredOutputSchema: Type.Object({ lines: Type.Number() }),
-	execute: async (args, api, context) => {
-		const text = await readText(api, args.path, context);
-		const count = text.split("\n").length;
-		return { output: [{ type: "text", text: `${count} lines` }], structuredOutput: { lines: count } };
-	},
+  name: "lines",
+  description: "Count the lines of a file",
+  parameters: Type.Object({ path: Type.String() }),
+  structuredOutputSchema: Type.Object({ lines: Type.Number() }),
+  execute: async (args, api, context) => {
+    const text = await readText(api, args.path, context);
+    const count = text.split("\n").length;
+    return {
+      output: [{ type: "text", text: `${count} lines` }],
+      structuredOutput: { lines: count },
+    };
+  },
 });
 ```
 
@@ -201,10 +234,18 @@ A missing, undeclared, or invalid `structuredOutput` turns a nested call's resul
 A later extension's tool with the same name replaces an earlier one where both are selected, and `wrapTool()` decorates whichever tool won:
 
 ```typescript
-const Venv = defineExtension({ name: "venv", tools: [createBashTool({ commandPrefix: "source .venv/bin/activate" })] });
+const Venv = defineExtension({
+  name: "venv",
+  tools: [createBashTool({ commandPrefix: "source .venv/bin/activate" })],
+});
 const Timing = defineExtension({
-	name: "timing",
-	wraps: [wrapTool(createBashTool(), (bash) => ({ ...bash, execute: (args, api, ctx) => timed(() => bash.execute(args, api, ctx)) }))],
+  name: "timing",
+  wraps: [
+    wrapTool(createBashTool(), (bash) => ({
+      ...bash,
+      execute: (args, api, ctx) => timed(() => bash.execute(args, api, ctx)),
+    })),
+  ],
 });
 ```
 
@@ -214,15 +255,17 @@ A tool calls another tool with `api.executeTool()`, as a code mode script or an 
 
 ```typescript
 const testsPass = defineTool({
-	name: "tests_pass",
-	description: "Run the test suite and say whether it passed",
-	parameters: Type.Object({}),
-	execute: async (_args, api, context) => {
-		const run = await api.executeTool("bash", { command: "npm test" }, context, { progress: false });
-		// Absent when bash did not finish, for example on a timeout.
-		const exitCode = (run.structuredOutput as { exitCode: number } | undefined)?.exitCode;
-		return { output: [{ type: "text", text: exitCode === 0 ? "passed" : "failed" }] };
-	},
+  name: "tests_pass",
+  description: "Run the test suite and say whether it passed",
+  parameters: Type.Object({}),
+  execute: async (_args, api, context) => {
+    const run = await api.executeTool("bash", { command: "npm test" }, context, {
+      progress: false,
+    });
+    // Absent when bash did not finish, for example on a timeout.
+    const exitCode = (run.structuredOutput as { exitCode: number } | undefined)?.exitCode;
+    return { output: [{ type: "text", text: exitCode === 0 ? "passed" : "failed" }] };
+  },
 });
 ```
 
@@ -264,7 +307,11 @@ A task that its creator awaits only in memory, and that the creator never resume
 import { CodemodeSandbox } from "@earendil-works/pi-codemode";
 import { createCodemodeExtension } from "@earendil-works/pi-durable/codemode";
 
-registry.install(createCodemodeExtension({ sandbox: new CodemodeSandbox({ memoryLimitBytes: 256 * 1024 * 1024 }) }));
+registry.install(
+  createCodemodeExtension({
+    sandbox: new CodemodeSandbox({ memoryLimitBytes: 256 * 1024 * 1024 }),
+  }),
+);
 ```
 
 The extension also adds a `codemode` prompt section listing the tools scripts can call, as TypeScript declarations within a token budget; scripts find the others with `searchTools()`, `describeTool()`, and `describeNamespace()`. Group tools by name prefix with `namespaces: [{ name, description, prefix }]`, for example an MCP server's `mcp__github__`. The result reads like the coding agent's: a header, the script's output, and on failure the calls already made; text past `max_output_tokens` is cut, with the full text in a temp file. Scripts also get `models.*`: the model catalog, `models.classify()`, and `models.generateImages()`, which run as nested calls of internal tools (`models: false` turns them off). On Cloudflare, pass a `RemoteCodemodeSandbox` instead. Closing the sandbox while a script runs (for example when shutting down) is not an outcome: the script resumes with the next process's sandbox. A failed nested call rejects in the script with its error text, unless the tool declares a schema and returned its own value with the error: `tools.bash` resolves with `{ output, exitCode, ... }` also for a nonzero exit, so scripts check `exitCode`. `store(key, value)` and `load(key)` keep JSON values per conversation; a fork sees them as they were at its entry.
@@ -287,16 +334,16 @@ Each conversation stores what it runs with in its `pi.agent` document. `configur
 
 ```typescript
 await root.configure(
-	{
-		model: { provider: "openai", modelId: "gpt-6-sol" },
-		thinkingLevel: "high",
-		extensions: { remove: [Coding] }, // edits the host default; an array selects exactly these, in order
-		tools: [readTool, bashTool], // an array enables exactly these; { remove: [...] } drops some
-		modelTools: [readTool], // of those, offer the model only read; tools may still call bash
-		instructions: "Only read; never edit files.",
-		cwd: "/work/repo",
-	},
-	context,
+  {
+    model: { provider: "openai", modelId: "gpt-6-sol" },
+    thinkingLevel: "high",
+    extensions: { remove: [Coding] }, // edits the host default; an array selects exactly these, in order
+    tools: [readTool, bashTool], // an array enables exactly these; { remove: [...] } drops some
+    modelTools: [readTool], // of those, offer the model only read; tools may still call bash
+    instructions: "Only read; never edit files.",
+    cwd: "/work/repo",
+  },
+  context,
 );
 await root.configure({ tools: null }, context); // null clears a field back to the host default
 const agent = await root.agent(context); // resolved: model, extensions, tools, sections, cwd
@@ -309,23 +356,27 @@ Extensions and tools are passed as objects and stored by name, so a stored name 
 Run policy shared by every conversation is passed as `settings`. It is read at every use and never stored, so getters make it live, for example backed by a settings file:
 
 ```typescript
-const harness = await Harness.open(storage, {
-	models,
-	registry,
-	settings: {
-		extensions: [CodingTools, Coding], // default selection; absent: every installed extension
-		stream: { timeoutMs: 120_000 },
-		retry: { maxRetries: 3 },
-		compaction: { reserveTokens: 16384 },
-		progress: { partialIntervalMs: 100, outputIntervalMs: 100 },
-		toolExecution: "parallel",
-		contextRetentionMs: 600_000, // idle conversations keep their context in memory this long (checked lazily where timers cannot be unreferenced)
-		documentRetentionMs: 600_000, // loaded documents nothing observes stay in memory this long after their last use; observed ones always
-		get followUpMode() {
-			return userSettings.followUpMode;
-		},
-	},
-}, context);
+const harness = await Harness.open(
+  storage,
+  {
+    models,
+    registry,
+    settings: {
+      extensions: [CodingTools, Coding], // default selection; absent: every installed extension
+      stream: { timeoutMs: 120_000 },
+      retry: { maxRetries: 3 },
+      compaction: { reserveTokens: 16384 },
+      progress: { partialIntervalMs: 100, outputIntervalMs: 100 },
+      toolExecution: "parallel",
+      contextRetentionMs: 600_000, // idle conversations keep their context in memory this long (checked lazily where timers cannot be unreferenced)
+      documentRetentionMs: 600_000, // loaded documents nothing observes stay in memory this long after their last use; observed ones always
+      get followUpMode() {
+        return userSettings.followUpMode;
+      },
+    },
+  },
+  context,
+);
 ```
 
 ## Environment
@@ -335,11 +386,15 @@ const harness = await Harness.open(storage, {
 ```typescript
 import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 
-const harness = await Harness.open(storage, {
-	models,
-	registry,
-	env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? process.cwd() }),
-}, context);
+const harness = await Harness.open(
+  storage,
+  {
+    models,
+    registry,
+    env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? process.cwd() }),
+  },
+  context,
+);
 ```
 
 A throw from `env` becomes the call's error result. Without an environment, the built-in tools fail with an error result. A fresh environment object per call is fine: `edit` and `write` serialize changes to one file by the environment's `id` and path. A custom `ExecutionEnv` sets `id` so that equal ids see the same files at the same paths, for example one id per container.
@@ -348,11 +403,15 @@ Hosts can use the environment directly too, for example to show a project's file
 
 ```typescript
 const status = { stdout: "", stderr: "" };
-await env.exec(["git", "status", "--porcelain=v2", "-z"], {
-	onOutput: (text, _context, { stream }) => {
-		status[stream] += text;
-	},
-}, context);
+await env.exec(
+  ["git", "status", "--porcelain=v2", "-z"],
+  {
+    onOutput: (text, _context, { stream }) => {
+      status[stream] += text;
+    },
+  },
+  context,
+);
 ```
 
 Abort the context to stop one call; `cleanup()` is for shutting the environment down. A custom environment can check itself with `registerEnvConformance()` from `@earendil-works/pi-durable/testing`, like storage below.
@@ -360,7 +419,11 @@ Abort the context to stop one call; `cleanup()` is for shutting the environment 
 Some environments also implement the optional `listFiles()`: the files and directories below a directory at any depth, as `fd` lists them, skipping what git ignores and stopping at bounds with `truncated`. `NodeExecutionEnv` does not; pi-env's `RemoteExecutionEnv` and `LocalExecutionEnv` do. Callers fall back to their own walk when the method is missing or fails with `not_supported`:
 
 ```typescript
-const listing = await env.listFiles?.(".", { exclude: ["node_modules"], maxEntries: 50_000 }, context);
+const listing = await env.listFiles?.(
+  ".",
+  { exclude: ["node_modules"], maxEntries: 50_000 },
+  context,
+);
 ```
 
 ## Reload
@@ -382,10 +445,10 @@ Everything a UI needs is committed state. `viewState()` returns the conversation
 ```typescript
 const view = await root.viewState(context);
 view.subscribe((value) => {
-	// value.entries: the active transcript
-	// value.docs["pi.live"]: the running generation (streamed partial, retry, deferred) and tool calls (output, details)
-	// value.docs["pi.inbox"], value.docs["pi.usage"], value.docs["pi.agent"], value.docs["pi.provider"]
-	render(value);
+  // value.entries: the active transcript
+  // value.docs["pi.live"]: the running generation (streamed partial, retry, deferred) and tool calls (output, details)
+  // value.docs["pi.inbox"], value.docs["pi.usage"], value.docs["pi.agent"], value.docs["pi.provider"]
+  render(value);
 });
 // later: view.dispose();
 ```
@@ -396,7 +459,7 @@ view.subscribe((value) => {
 const watch = await root.watch(context);
 render(watch.value); // the state at attachment
 watch.start(async (value, ops) => {
-	await send(ops); // for example to a remote client that applies them
+  await send(ops); // for example to a remote client that applies them
 });
 // later: await watch.stop();
 ```
@@ -413,7 +476,10 @@ A conversation is busy while a run is working on an input. Submitting to a busy 
 await root.submit({ type: "input", content: "Also run the tests" }, context); // follow-up (default)
 await root.submit({ type: "input", content: "Use pnpm, not npm", whenBusy: "steer" }, context);
 await root.submit({ type: "input", content: "Only if idle", whenBusy: "reject" }, context); // throws ConversationBusy
-await root.submit({ type: "write", entry: { kind: "app.note", data: "user opened a file" } }, context);
+await root.submit(
+  { type: "write", entry: { kind: "app.note", data: "user opened a file" } },
+  context,
+);
 ```
 
 - **Steers** are placed after the current tool round and join the running work.
@@ -428,12 +494,12 @@ An input is placed as a `pi.user` entry. To show it as something else, give it a
 
 ```typescript
 await root.submit(
-	{
-		type: "input",
-		content: "ann: can you check the build?",
-		entry: { kind: "chat.mention", data: { author: "ann", text: "can you check the build?" } },
-	},
-	context,
+  {
+    type: "input",
+    content: "ann: can you check the build?",
+    entry: { kind: "chat.mention", data: { author: "ann", text: "can you check the build?" } },
+  },
+  context,
 );
 // placed as { kind: "chat.mention", data: { author: "ann", ... }, model: [{ role: "user", content: "ann: can you check the build?" }] }
 ```
@@ -445,7 +511,7 @@ It behaves like any other input: it starts a run, steers, follows up, or rejects
 `reset()` starts a new context. The model no longer sees older entries, but they stay in storage:
 
 ```typescript
-await root.reset(undefined, context);                                  // start from nothing
+await root.reset(undefined, context); // start from nothing
 await root.reset("We were fixing the flaky login test. Continue.", context); // start from a handoff note
 ```
 
@@ -459,8 +525,10 @@ Compaction shrinks what the model sees: it summarizes older entries and appends 
 const id = await root.compact("Keep the failing test names", context); // manual, with optional instructions
 const { outcome } = (await harness.waitForTask(id, context)).state;
 if (outcome.status === "completed" && outcome.result.submissionId !== undefined) {
-	const placed = await (await harness.submission(outcome.result.submissionId, context))!.wait(context);
-	console.log(placed.status); // "done", or "unanswered" with reason "stale"
+  const placed = await (await harness.submission(outcome.result.submissionId, context))!.wait(
+    context,
+  );
+  console.log(placed.status); // "done", or "unanswered" with reason "stale"
 }
 ```
 
@@ -495,7 +563,7 @@ import { watchEvents } from "@earendil-works/pi-durable";
 const stream = await watchEvents(harness, root.id, context);
 initialize(stream.snapshot); // entries, run, in-flight generation, tools, compactions, inbox, agent, usage
 stream.start(async (events) => {
-	for (const event of events) console.log(JSON.stringify(event));
+  for (const event of events) console.log(JSON.stringify(event));
 });
 ```
 
@@ -509,11 +577,15 @@ Hooks let extensions observe or adjust the built-in tasks, in the conversations 
 import { GenerationTask, hook, ToolTask } from "@earendil-works/pi-durable";
 
 const Guard = defineExtension({
-	name: "guard",
-	hooks: [
-		hook(ToolTask, { beforeTool: (call) => (call.name === "bash" ? { block: "bash is disabled here" } : undefined) }),
-		hook(GenerationTask, { onYield: (answer) => (needsMoreWork(answer) ? { continue: "Keep going." } : undefined) }),
-	],
+  name: "guard",
+  hooks: [
+    hook(ToolTask, {
+      beforeTool: (call) => (call.name === "bash" ? { block: "bash is disabled here" } : undefined),
+    }),
+    hook(GenerationTask, {
+      onYield: (answer) => (needsMoreWork(answer) ? { continue: "Keep going." } : undefined),
+    }),
+  ],
 });
 ```
 
@@ -539,31 +611,39 @@ A conversation can be **owned** by a task. A subagent tool creates its child ins
 
 ```typescript
 const Subagent: Extension = defineExtension({
-	name: "subagent",
-	tools: [
-		defineTool({
-			name: "subagent",
-			description: "Delegate a self-contained task to a subagent and get its answer back.",
-			parameters: Type.Object({ task: Type.String() }),
-			replay: "safe", // a rerun after a crash finds the same child and submission
-			execute: async (args, api, context) => {
-				const child = await api.commit(async (tx) => {
-					// The ownership index remembers the child, so a rerun reuses it.
-					const existing = (await tx.scanConversations({ ownerTaskId: api.taskId }, 1)).items[0];
-					if (existing !== undefined) return existing.id;
-					// Starts as a copy of this conversation's agent: model, extensions, tools, cwd.
-					const created = await tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } });
-					// A cheaper model, and no subagents of its own.
-					await configure(tx, created.id, { model: haiku, extensions: { remove: [Subagent] } });
-					return created.id;
-				}, context);
-				await api.details({ conversationId: child }, context); // lets a UI attach to the child
-				const request = { type: "input", content: args.task, requestId: `subagent:${api.taskId}` } as const;
-				const settled = await (await (await api.conversation(child, context))!.submit(request, context)).wait(context);
-				return { output: [{ type: "text", text: settled.status }] };
-			},
-		}),
-	],
+  name: "subagent",
+  tools: [
+    defineTool({
+      name: "subagent",
+      description: "Delegate a self-contained task to a subagent and get its answer back.",
+      parameters: Type.Object({ task: Type.String() }),
+      replay: "safe", // a rerun after a crash finds the same child and submission
+      execute: async (args, api, context) => {
+        const child = await api.commit(async (tx) => {
+          // The ownership index remembers the child, so a rerun reuses it.
+          const existing = (await tx.scanConversations({ ownerTaskId: api.taskId }, 1)).items[0];
+          if (existing !== undefined) return existing.id;
+          // Starts as a copy of this conversation's agent: model, extensions, tools, cwd.
+          const created = await tx.createConversation({
+            ownership: { kind: "task", taskId: api.taskId },
+          });
+          // A cheaper model, and no subagents of its own.
+          await configure(tx, created.id, { model: haiku, extensions: { remove: [Subagent] } });
+          return created.id;
+        }, context);
+        await api.details({ conversationId: child }, context); // lets a UI attach to the child
+        const request = {
+          type: "input",
+          content: args.task,
+          requestId: `subagent:${api.taskId}`,
+        } as const;
+        const settled = await (
+          await (await api.conversation(child, context))!.submit(request, context)
+        ).wait(context);
+        return { output: [{ type: "text", text: settled.status }] };
+      },
+    }),
+  ],
 });
 ```
 
@@ -612,10 +692,16 @@ decide: async (task, runtime, context) => {
 ```typescript
 const graph = await harness.taskGraph(context);
 graph.subscribe((value) => {
-	for (const node of Object.values(value.tasks)) {
-		const status = node.state.status === "waiting" ? `waiting on ${node.state.on.join(", ")}` : node.state.status;
-		console.log(`${node.id} ${node.kind} ${status}`, node.owner ?? `conversation ${node.conversationId}`);
-	}
+  for (const node of Object.values(value.tasks)) {
+    const status =
+      node.state.status === "waiting"
+        ? `waiting on ${node.state.on.join(", ")}`
+        : node.state.status;
+    console.log(
+      `${node.id} ${node.kind} ${status}`,
+      node.owner ?? `conversation ${node.conversationId}`,
+    );
+  }
 });
 ```
 
@@ -629,16 +715,16 @@ Documents are typed JSON objects committed together with entries. Define one, an
 import { defineDoc } from "@earendil-works/pi-durable";
 
 const Todos = defineDoc<{ items: string[] }>({
-	kind: "app.todos",
-	version: 1,
-	scope: "conversation",
-	history: "latest", // or "rewindable" to read old values with snapshotAsOf()
-	fork: "initial", // what a fork starts with: "initial", "current", or "asOf"
-	initial: () => ({ items: [] }),
+  kind: "app.todos",
+  version: 1,
+  scope: "conversation",
+  history: "latest", // or "rewindable" to read old values with snapshotAsOf()
+  fork: "initial", // what a fork starts with: "initial", "current", or "asOf"
+  initial: () => ({ items: [] }),
 });
 
 await root.commit(async (tx) => {
-	(await tx.doc(Todos, root.id)).items.push("write docs");
+  (await tx.doc(Todos, root.id)).items.push("write docs");
 }, context);
 console.log(await harness.snapshot(Todos, root.id, context));
 ```
@@ -655,12 +741,12 @@ const usage = await harness.usage(context); // { models: { "openai/gpt-6-sol": U
 
 ## Storage
 
-| Backend | Import | Notes |
-|---|---|---|
-| Memory | `MemoryStorage` from the package root | Nothing is persisted. |
-| SQLite | `openNodeSqliteStorage(file)` from `@earendil-works/pi-durable/storage/sqlite/node` | One database file. WAL mode with `synchronous = NORMAL`: commits survive process crashes; the newest may be lost on power or host failure. |
-| JSONL | `openNodeJsonlStorage(directory, context)` from `@earendil-works/pi-durable/storage/jsonl/node` | Append-only files in one directory. Pass `{ fsync: true }` to flush before each commit marker. Keeps the whole history in memory too, so memory grows with it; use SQLite for long-running agents. |
-| Cloudflare Durable Object | `openDurableObjectSqliteStorage(ctx.storage)` from `@earendil-works/pi-durable/storage/sqlite/cloudflare` | The SQLite storage of one SQLite-backed Durable Object; commits are its storage transactions. |
+| Backend                   | Import                                                                                                    | Notes                                                                                                                                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Memory                    | `MemoryStorage` from the package root                                                                     | Nothing is persisted.                                                                                                                                                                              |
+| SQLite                    | `openNodeSqliteStorage(file)` from `@earendil-works/pi-durable/storage/sqlite/node`                       | One database file. WAL mode with `synchronous = NORMAL`: commits survive process crashes; the newest may be lost on power or host failure.                                                         |
+| JSONL                     | `openNodeJsonlStorage(directory, context)` from `@earendil-works/pi-durable/storage/jsonl/node`           | Append-only files in one directory. Pass `{ fsync: true }` to flush before each commit marker. Keeps the whole history in memory too, so memory grows with it; use SQLite for long-running agents. |
+| Cloudflare Durable Object | `openDurableObjectSqliteStorage(ctx.storage)` from `@earendil-works/pi-durable/storage/sqlite/cloudflare` | The SQLite storage of one SQLite-backed Durable Object; commits are its storage transactions.                                                                                                      |
 
 One process owns a storage at a time; there is no cross-process locking. The portable SQLite and JSONL cores (`/storage/sqlite`, `/storage/jsonl`) run without Node APIs, for example on Bun or in Cloudflare Durable Objects, given an asynchronous `SqliteDatabase` facade or a `FileSystem` from `@earendil-works/pi-durable/env`.
 
@@ -668,8 +754,8 @@ SQLite adapters implement promise-based `exec`, `run`, `get`, `all`, `transactio
 
 ```typescript
 await database.transaction(async (transaction) => {
-	await transaction.exec("CREATE TABLE example (value TEXT)");
-	await transaction.run("INSERT INTO example (value) VALUES (?)", "stored atomically");
+  await transaction.exec("CREATE TABLE example (value TEXT)");
+  await transaction.run("INSERT INTO example (value) VALUES (?)", "stored atomically");
 });
 ```
 
@@ -680,12 +766,12 @@ import { registerStorageConformance } from "@earendil-works/pi-durable/testing";
 import { describe, expect, it } from "vitest";
 
 registerStorageConformance({ describe, expect, it }, "My Storage", async (use) => {
-	const storage = await openMyStorage();
-	try {
-		await use(storage);
-	} finally {
-		await closeMyStorage(storage);
-	}
+  const storage = await openMyStorage();
+  try {
+    await use(storage);
+  } finally {
+    await closeMyStorage(storage);
+  }
 });
 ```
 
@@ -703,7 +789,7 @@ Three rules decide what an error does:
 
 ```typescript
 harness.closed.then((end) => {
-	if (end.reason === "failed") reopen(end.error);
+  if (end.reason === "failed") reopen(end.error);
 });
 ```
 
@@ -717,26 +803,26 @@ Runnable examples live in [`test/examples`](test/examples). Run one from this pa
 node --conditions=source --experimental-strip-types test/examples/14-chat.ts
 ```
 
-| Example | Shows |
-|---|---|
-| [14-chat](test/examples/14-chat.ts) | One question and answer |
-| [16-real-model](test/examples/16-real-model.ts) | Streaming an answer from OpenAI |
-| [17-coding-tools](test/examples/17-coding-tools.ts) | A tool-using turn on JSONL storage |
-| [18-print](test/examples/18-print.ts) | Print mode: submit a prompt, print the answer |
-| [19-json](test/examples/19-json.ts) | JSON mode: agent events or raw view operations, on SQLite, JSONL, or memory |
-| [20-inbox](test/examples/20-inbox.ts) | Steers, follow-ups, writes, and withdrawal while busy |
-| [21-late-join](test/examples/21-late-join.ts) | Attaching a view and an event stream mid-run |
-| [22-subagent-foreground](test/examples/22-subagent-foreground.ts) | A replay-safe subagent tool whose child the call owns, with the child's events under the call |
-| [23-subagent-background](test/examples/23-subagent-background.ts) | Persistent subagents: spawn, steer, stop, list, answers reported back, restart-safe |
-| [24-child-tasks](test/examples/24-child-tasks.ts) | A checkout that owns and waits for four payments: failFast, abort, restart |
-| [25-compaction](test/examples/25-compaction.ts) | A long chat compacted in the background, manually, and after a context overflow |
-| [26-coding-agent](test/examples/26-coding-agent.ts) | CodingTools, live settings from a settings object, an environment that follows the conversation's directory |
-| [27-plan-mode](test/examples/27-plan-mode.ts) | A read-only plan mode as an extension with its own document, switched with `configure()` |
-| [28-reviewer](test/examples/28-reviewer.ts) | A reviewer conversation with its own model, extensions, tools, directory, and review loop |
-| [29-sandbox-per-conversation](test/examples/29-sandbox-per-conversation.ts) | An environment per conversation, looked up from an app document |
-| [30-tool-override](test/examples/30-tool-override.ts) | A same-name bash for some conversations, and a wrapper that times whichever bash won |
-| [31-reload-and-restart](test/examples/31-reload-and-restart.ts) | Reloading an extension mid-call, and stored choices surviving a restart |
-| [00](test/examples/00-conversation.ts)–[13](test/examples/13-recovery.ts) | The layers underneath: sessions, documents, forks, watches, the Harness, agent configuration, reload, extension state, tasks, recovery |
+| Example                                                                     | Shows                                                                                                                                  |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| [14-chat](test/examples/14-chat.ts)                                         | One question and answer                                                                                                                |
+| [16-real-model](test/examples/16-real-model.ts)                             | Streaming an answer from OpenAI                                                                                                        |
+| [17-coding-tools](test/examples/17-coding-tools.ts)                         | A tool-using turn on JSONL storage                                                                                                     |
+| [18-print](test/examples/18-print.ts)                                       | Print mode: submit a prompt, print the answer                                                                                          |
+| [19-json](test/examples/19-json.ts)                                         | JSON mode: agent events or raw view operations, on SQLite, JSONL, or memory                                                            |
+| [20-inbox](test/examples/20-inbox.ts)                                       | Steers, follow-ups, writes, and withdrawal while busy                                                                                  |
+| [21-late-join](test/examples/21-late-join.ts)                               | Attaching a view and an event stream mid-run                                                                                           |
+| [22-subagent-foreground](test/examples/22-subagent-foreground.ts)           | A replay-safe subagent tool whose child the call owns, with the child's events under the call                                          |
+| [23-subagent-background](test/examples/23-subagent-background.ts)           | Persistent subagents: spawn, steer, stop, list, answers reported back, restart-safe                                                    |
+| [24-child-tasks](test/examples/24-child-tasks.ts)                           | A checkout that owns and waits for four payments: failFast, abort, restart                                                             |
+| [25-compaction](test/examples/25-compaction.ts)                             | A long chat compacted in the background, manually, and after a context overflow                                                        |
+| [26-coding-agent](test/examples/26-coding-agent.ts)                         | CodingTools, live settings from a settings object, an environment that follows the conversation's directory                            |
+| [27-plan-mode](test/examples/27-plan-mode.ts)                               | A read-only plan mode as an extension with its own document, switched with `configure()`                                               |
+| [28-reviewer](test/examples/28-reviewer.ts)                                 | A reviewer conversation with its own model, extensions, tools, directory, and review loop                                              |
+| [29-sandbox-per-conversation](test/examples/29-sandbox-per-conversation.ts) | An environment per conversation, looked up from an app document                                                                        |
+| [30-tool-override](test/examples/30-tool-override.ts)                       | A same-name bash for some conversations, and a wrapper that times whichever bash won                                                   |
+| [31-reload-and-restart](test/examples/31-reload-and-restart.ts)             | Reloading an extension mid-call, and stored choices surviving a restart                                                                |
+| [00](test/examples/00-conversation.ts)–[13](test/examples/13-recovery.ts)   | The layers underneath: sessions, documents, forks, watches, the Harness, agent configuration, reload, extension state, tasks, recovery |
 
 Examples that call OpenAI need `OPENAI_API_KEY`; most use the faux provider otherwise.
 
