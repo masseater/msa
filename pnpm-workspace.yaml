@@ -13,8 +13,8 @@ catalog:
   "@anthropic-ai/sandbox-runtime": 0.0.26
   "@anthropic-ai/sdk": 0.129.0
   "@aws-sdk/client-bedrock-runtime": 3.1127.0
-  "@biomejs/biome": 2.3.5
-  "@biomejs/wasm-nodejs": 2.3.5
+  "@commitlint/cli": 21.2.3
+  "@commitlint/config-conventional": 21.2.3
   "@google/genai": 2.21.0
   "@silvia-odwyer/photon": 0.3.3
   "@silvia-odwyer/photon-node": 0.3.4
@@ -35,13 +35,13 @@ catalog:
   cross-spawn: 7.0.6
   diff: 8.0.4
   esbuild: 0.28.2
+  eslint-plugin-no-comments: 1.2.1
   get-east-asian-width: 1.6.0
   grok-mermaid: 0.2.3
   highlight.js: 10.7.3
   hosted-git-info: 9.0.3
   http-proxy-agent: 9.1.0
   https-proxy-agent: 9.1.0
-  husky: 9.1.7
   ignore: 7.0.8
   jiti: 2.7.0
   marked: 18.0.11
@@ -60,6 +60,10 @@ catalog:
   vitest-evals: 0.15.0
   ws: 8.21.0
   yaml: 2.9.0
+
+catalogs:
+  stack:
+    vite-plus: 1.1.0
 
 overrides:
   protobufjs: 7.6.6

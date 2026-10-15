@@ -2,8 +2,9 @@
 
 ## 次に着手するエージェントへ
 
-`specs/msa/` の続きをやる。2026-10-15 時点の状況: **Phase A、slice 3 を実装中**（slice 1・2 は PR 済み。
-slice 3 は `pnpm install` / `pnpm run build` / テストの確認まで進んでいる）。
+`specs/msa/` の続きをやる。2026-10-15 時点の状況: **Phase A、slice 4 まで PR 済み**（masseater/msa の PR #1〜#4 が
+open。stacked ブランチ `rebase/01-…` 〜 `rebase/04-…` で、`main` にはまだ入っていない）。次は slice 5
+（`05-ci-hooks-claude-docs`）。
 
 1. まず `slices/01-fence.md` を読み、それを片付けるまで他のことを触らない。fence（どの設定がどのパスを支配するか）
    が再構築全体の可否を決める。fence が成立していれば、以降の slice は機械的作業になる。
@@ -53,12 +54,12 @@ msa を **単一ツールチェーン・単一ゲート** のリポジトリに�
 
 ## 実測ベースライン（2026-10-15、msa @ `4a5d3729`、`main` == upstream `main`）
 
-fence の入力になる数字。`npm run fence:counts` で再現できる。
+fence の入力になる数字。`pnpm run fence:counts` で再現できる。
 
 | 項目 | 値 |
 | --- | --- |
 | `packages/*/src` | 174,587 LOC / 673 ファイル（`packages/*/test` は 198,162 LOC / 644 `.test.ts`） |
-| `tsc --noEmit -p tsconfig.json` | `npm ci --ignore-scripts` 直後から 0 errors（`npm run hydrate:model-data` の有無を問わず） |
+| `tsc --noEmit -p tsconfig.json` | クリーンな install 直後から 0 errors（`pnpm run hydrate:model-data` の有無を問わず） |
 | strict フラグを 1 つずつ足した時 | `exactOptionalPropertyTypes` 1081 ・`noUncheckedIndexedAccess` 1713 ・`noPropertyAccessFromIndexSignature` 2217 ・`noUnusedLocals` 22 ・`noImplicitReturns` 20 ・`noImplicitOverride` 11 ・`allowUnreachableCode:false` 4 ・他 0 |
 | テンプレートの oxlint categories（11 中 4 package で測定） | 55,665 errors / 436 rules |
 | `-D correctness -D suspicious`（同範囲） | 1,022 errors |
@@ -72,11 +73,14 @@ fence の入力になる数字。`npm run fence:counts` で再現できる。
 
 | パス | formatter / linter | TypeScript | plugin・rule |
 | --- | --- | --- | --- |
-| `apps/**`, `libs/**`, `tools/**`, `*.config.ts`, `specs/**`（msa のコード） | `vp check`（oxfmt + oxlint、全 category、`denyWarnings`） | `tsconfig.base.json`（テンプレート strict + pi の `erasableSyntaxOnly`/`verbatimModuleSyntax`） | `no-comments`、`@r_masseater/oxlint-plugin-decision`、`fallow` — 全部 |
-| `packages/**`（vendored pi engine） | oxfmt は pi の流儀（tabs・width 3・120 桁・`sortImports` off）、oxlint は `correctness` + `suspicious` のみ | emit は pi の `tsconfig.build.json`、strict フラグは **ratchet** | `no-comments` off、decision plugin off、`fallow` 除外 |
+| `apps/**`, `libs/**`, `tools/**`, `infra/**`, `vite.config*.ts`（msa のコード） | `vp check`（oxfmt + oxlint の `correctness`・`suspicious`・`perf`・`pedantic`・`nursery`、`denyWarnings`） | `tsconfig.base.json`（テンプレート strict + pi の `erasableSyntaxOnly`/`verbatimModuleSyntax`。msa の最初の package で作る） | `no-comments`。decision plugin は msa のコードが現れてから |
+| `specs/**`, `docs/**`, `*.md` | oxfmt のみ（prose lint は入れていない） | — | `no-comments` と decision plugin は適用しない |
+| `packages/**`（vendored pi engine） | `vp fmt` は触らない（整形は upstream のまま）。lint は `vite.config.engine.ts` で `correctness` + `suspicious` を測り **ratchet** | emit は pi の `tsconfig.build.json`、strict フラグは **ratchet** | `no-comments` off、decision plugin off、`fallow` 除外 |
+| `scripts/**`, `.pi/**`, `.github/**`, pi の root config・docs | `vp check` の対象外（upstream の持ち物） | — | — |
 
-ratchet の規則: `tools/fence-counts.baseline.json` が strict フラグごとの error 数を記録する。`fence:check` は
-どれかの数が **増えたら** 失敗する。数が減るのは自由（手を入れた vendored ファイルは、その機会に厳しくする）。
+ratchet の規則: `tools/fence-counts.baseline.json` が strict フラグごとの error 数と engine の oxlint error 数を
+記録する。`pnpm run fence:check` はどれかの数が **増えたら** 失敗する。数が減るのは自由（手を入れた vendored
+ファイルは、その機会に厳しくする）。詳細と実測は `docs/toolchain-fence.md`。
 
 ## slice 一覧
 
@@ -87,7 +91,7 @@ ratchet の規則: `tools/fence-counts.baseline.json` が strict フラグごと
 | 1 | [fence](slices/01-fence.md) | どの設定がどのパスを支配するかの確定、upstream の接ぎ目、実測ベースラインの記録 | — |
 | 2 | [delete-npm-machinery](slices/02-delete-npm-machinery.md) | publish / release / nix / コミュニティ機構の削除。workflow 13 本 → 2 本 | 1 |
 | 3 | [pnpm-catalog](slices/03-pnpm-catalog.md) | package manager 1 つ、lockfile 1 つ、宣言的なバージョン固定 | 2 |
-| 4 | [vp-check-strict-ratchet](slices/04-vp-check-strict-ratchet.md) | `vp check` が fmt + lint + typecheck。biome / husky の削除、ratchet の常設化 | 3 |
+| 4 | [vp-check-strict-ratchet](slices/04-vp-check-strict-ratchet.md) | fmt と lint の入口が `vp check` 1 つ。biome / husky の削除、ratchet の常設化（strict フラグ + engine lint） | 3 |
 | 5 | [ci-hooks-claude-docs](slices/05-ci-hooks-claude-docs.md) | `vp run verify` が唯一のゲート。hook と CI がそれだけを呼び、docs が msa を語る | 4 |
 | 6 | [clean-clone-green](slices/06-clean-clone-green.md) | 他人の clone が手作業なしでグリーン | 5 |
 | 7 | [identity-rename](slices/07-identity-rename.md) | harness が msa を名乗る（`msa` bin、`.msa` config ディレクトリ） | 6 |
@@ -107,10 +111,8 @@ projects の CLI / RPC / TUI 面、evals。
 
 ## 未確定（unknown）
 
-- `vp` が emit 型（web でない）の monorepo build を回せるか。slice 3 の葉 package（`chord`・`telemetry`・`tui`）
-  での spike で決着させる。回せない場合は `tsc -p tsconfig.build.json` を build の権威のまま残し、`vp` のタスク
-  として呼ぶだけにする。
-- `vp` 同梱の vitest が、既存の alias 設定のまま pi の 644 test ファイルを回せるか。同じ spike で見る。
+- `vp` 同梱の vitest が、既存の alias 設定のまま pi の 644 test ファイルを回せるか。slice 4 では載せ替えず
+  （`test-all` は `bash test.sh` のまま）、テストの入口を 1 つにする作業として slice 5 以降に送った。
 - 手を入れた後の upstream 取り込みコスト。slice 8 で実測する。爆発するなら、製品コードを増やす前に
   pinned snapshot + patch ディレクトリ方式へ切り替える。
 - Claude Agent SDK と pi が 1 つの Node プロセスで同居できるか。Phase B の最初の probe（`slices/08-upstream-drill.md`

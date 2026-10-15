@@ -1,55 +1,60 @@
 {
-	"name": "pi-monorepo",
-	"private": true,
-	"type": "module",
-	"devEngines": {
-		"packageManager": {
-			"name": "pnpm",
-			"version": "12.10.1",
-			"onFail": "download"
-		}
-	},
-	"scripts": {
-		"clean": "pnpm -r --if-present run clean",
-		"build": "pnpm -r --workspace-concurrency=1 --if-present run build",
-		"build:offline": "pnpm --filter @earendil-works/pi-ai run build:offline && pnpm -r --workspace-concurrency=1 --if-present --filter '!@earendil-works/pi-ai' run build",
-		"build:native:darwin": "pnpm --filter @earendil-works/pi-tui run build:native:darwin",
-		"build:native:linux": "pnpm --filter @earendil-works/pi-tui run build:native:linux",
-		"build:native:win32": "pnpm --filter @earendil-works/pi-tui run build:native:win32",
-		"check": "node scripts/biome-check.mjs --write && pnpm run check:ts-imports && pnpm run check:entry-graphs && tsc --noEmit && pnpm run check:browser-smoke",
-		"check:browser-smoke": "node scripts/check-browser-smoke.mjs",
-		"fence:counts": "node tools/fence-counts.mjs --write",
-		"fence:check": "node tools/fence-counts.mjs",
-		"check:ts-imports": "node scripts/check-ts-relative-imports.mjs",
-		"check:entry-graphs": "node scripts/check-entry-graphs.mjs",
-		"generate:models": "pnpm --filter @earendil-works/pi-ai run generate-models",
-		"hydrate:model-data": "pnpm --filter @earendil-works/pi-ai run hydrate-model-data",
-		"check:model-data": "pnpm --filter @earendil-works/pi-ai run check:model-data",
-		"generate:model-catalog": "pnpm --filter @earendil-works/pi-ai run generate-model-catalog",
-		"eval": "pnpm --filter @earendil-works/pi-evals run eval --",
-		"profile:tui": "node scripts/profile-coding-agent-node.mjs --mode tui",
-		"profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",
-		"test": "pnpm run test:scripts && pnpm -r --if-present run test",
-		"test:scripts": "node --test scripts/*.test.mjs scripts/*.test.ts",
-		"test:mcp-conformance": "node packages/coding-agent/test/mcp-conformance/run.ts",
-		"prepare": "husky"
-	},
-	"devDependencies": {
-		"@anthropic-ai/sandbox-runtime": "catalog:",
-		"@biomejs/biome": "catalog:",
-		"@biomejs/wasm-nodejs": "catalog:",
-		"@types/node": "catalog:",
-		"esbuild": "catalog:",
-		"husky": "catalog:",
-		"shx": "catalog:",
-		"typescript": "catalog:",
-		"yaml": "catalog:"
-	},
-	"engines": {
-		"node": ">=22.19.0"
-	},
-	"version": "0.0.3",
-	"overrides": {
-		"protobufjs": "7.6.6"
-	}
+  "name": "pi-monorepo",
+  "version": "0.0.3",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "pnpm -r --if-present run clean",
+    "build": "pnpm -r --workspace-concurrency=1 --if-present run build",
+    "build:offline": "pnpm --filter @earendil-works/pi-ai run build:offline && pnpm -r --workspace-concurrency=1 --if-present --filter '!@earendil-works/pi-ai' run build",
+    "build:native:darwin": "pnpm --filter @earendil-works/pi-tui run build:native:darwin",
+    "build:native:linux": "pnpm --filter @earendil-works/pi-tui run build:native:linux",
+    "build:native:win32": "pnpm --filter @earendil-works/pi-tui run build:native:win32",
+    "check:browser-smoke": "node scripts/check-browser-smoke.mjs",
+    "check:ts-imports": "node scripts/check-ts-relative-imports.mjs",
+    "check:entry-graphs": "node scripts/check-entry-graphs.mjs",
+    "fence:counts": "node tools/fence-counts.mjs --write",
+    "fence:check": "node tools/fence-counts.mjs",
+    "generate:models": "pnpm --filter @earendil-works/pi-ai run generate-models",
+    "hydrate:model-data": "pnpm --filter @earendil-works/pi-ai run hydrate-model-data",
+    "check:model-data": "pnpm --filter @earendil-works/pi-ai run check:model-data",
+    "generate:model-catalog": "pnpm --filter @earendil-works/pi-ai run generate-model-catalog",
+    "eval": "pnpm --filter @earendil-works/pi-evals run eval --",
+    "profile:tui": "node scripts/profile-coding-agent-node.mjs --mode tui",
+    "profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",
+    "test": "pnpm run test:scripts && pnpm -r --if-present run test",
+    "test:scripts": "node --test scripts/*.test.mjs scripts/*.test.ts",
+    "test:mcp-conformance": "node packages/coding-agent/test/mcp-conformance/run.ts",
+    "prepare": "vp config --no-agent"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sandbox-runtime": "catalog:",
+    "@commitlint/cli": "catalog:",
+    "@commitlint/config-conventional": "catalog:",
+    "@types/node": "catalog:",
+    "esbuild": "catalog:",
+    "eslint-plugin-no-comments": "catalog:",
+    "shx": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:stack",
+    "yaml": "catalog:"
+  },
+  "overrides": {
+    "protobufjs": "7.6.6"
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.10.1",
+      "onFail": "download"
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
 }
