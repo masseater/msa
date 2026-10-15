@@ -28,12 +28,12 @@ pi -e npm:@example/pi-tools
 
 ## Choose a source
 
-| Source | Example | Behavior |
-|---|---|---|
-| npm | `npm:@example/pi-tools@1.0.0` | Installed under the Pi npm directory |
-| git | `git:github.com/example/pi-tools@v1` | Cloned and reconciled to the selected ref |
-| URL | `https://github.com/example/pi-tools` | Treated as a git source |
-| Local | `./pi-tools` | Loaded from the resolved path without copying |
+| Source | Example                               | Behavior                                      |
+| ------ | ------------------------------------- | --------------------------------------------- |
+| npm    | `npm:@example/pi-tools@1.0.0`         | Installed under the Pi npm directory          |
+| git    | `git:github.com/example/pi-tools@v1`  | Cloned and reconciled to the selected ref     |
+| URL    | `https://github.com/example/pi-tools` | Treated as a git source                       |
+| Local  | `./pi-tools`                          | Loaded from the resolved path without copying |
 
 Versioned npm specifications are pinned. Git tags and commits are also pinned; package updates reconcile the checkout but do not move a configured ref.
 

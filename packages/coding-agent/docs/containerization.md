@@ -6,12 +6,12 @@ You can isolate the complete Pi process or keep Pi on the host and route selecte
 
 ## Choose an isolation method
 
-| Method | Where Pi runs | What is isolated | Credential handling | Best for |
-|---|---|---|---|---|
-| Plain Docker | Container | Pi, built-in tools, `!` commands, and extensions | Credentials passed into the container | A straightforward local container boundary |
-| Docker Sandboxes | Managed sandbox | Pi, built-in tools, `!` commands, and extensions | Provider credentials remain on the host and are substituted by the proxy | Managed local isolation without exposing the real provider key |
-| OpenShell | Local or remote sandbox | Pi, built-in tools, `!` commands, and extensions | Policy-controlled credentials and inference routing | Filesystem, process, network, and credential policies |
-| Gondolin extension | Host | Built-in tools and `!` commands | Stored Pi credentials remain on the host, but commands inherit host environment variables | A local micro-VM for tool execution while retaining the host interface |
+| Method             | Where Pi runs           | What is isolated                                 | Credential handling                                                                       | Best for                                                               |
+| ------------------ | ----------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Plain Docker       | Container               | Pi, built-in tools, `!` commands, and extensions | Credentials passed into the container                                                     | A straightforward local container boundary                             |
+| Docker Sandboxes   | Managed sandbox         | Pi, built-in tools, `!` commands, and extensions | Provider credentials remain on the host and are substituted by the proxy                  | Managed local isolation without exposing the real provider key         |
+| OpenShell          | Local or remote sandbox | Pi, built-in tools, `!` commands, and extensions | Policy-controlled credentials and inference routing                                       | Filesystem, process, network, and credential policies                  |
+| Gondolin extension | Host                    | Built-in tools and `!` commands                  | Stored Pi credentials remain on the host, but commands inherit host environment variables | A local micro-VM for tool execution while retaining the host interface |
 
 The method changes where extensions run. When the complete Pi process runs inside an isolated environment, its extensions run there too. When host Pi delegates built-in tools through Gondolin, other extension tools still run on the host unless they also delegate their work.
 

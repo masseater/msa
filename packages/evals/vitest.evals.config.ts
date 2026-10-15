@@ -1,14 +1,20 @@
 import { defineConfig, mergeConfig } from "vitest/config";
+
 import { testBaseConfig, workspaceSourcePaths } from "../../vite.config.ts";
 import { evalConfig } from "./src/vitest-evals.ts";
 
 const localConfig = mergeConfig(
-	testBaseConfig,
-	defineConfig({
-		resolve: {
-			alias: [{ find: /^@earendil-works\/pi-coding-agent$/, replacement: workspaceSourcePaths.codingAgentIndex }],
-		},
-	}),
+  testBaseConfig,
+  defineConfig({
+    resolve: {
+      alias: [
+        {
+          find: /^@earendil-works\/pi-coding-agent$/,
+          replacement: workspaceSourcePaths.codingAgentIndex,
+        },
+      ],
+    },
+  }),
 );
 
 export default mergeConfig(localConfig, evalConfig);

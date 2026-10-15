@@ -21,11 +21,11 @@ The session picker lets you search, rename, and delete sessions. It can also sho
 
 Pi stores entries as a tree, so returning to an earlier point does not erase the branch you leave.
 
-| Action | Result | Use it when |
-|---|---|---|
-| `/tree` | Moves within the current session file | Related alternatives should stay together |
-| `/fork` | Creates a new session from an earlier user message | The alternative should become separate work |
-| `/clone` | Copies the active branch into a new session | You want a separate copy of the current state |
+| Action   | Result                                             | Use it when                                   |
+| -------- | -------------------------------------------------- | --------------------------------------------- |
+| `/tree`  | Moves within the current session file              | Related alternatives should stay together     |
+| `/fork`  | Creates a new session from an earlier user message | The alternative should become separate work   |
+| `/clone` | Copies the active branch into a new session        | You want a separate copy of the current state |
 
 In `/tree`, select a user message to put its text back in the editor. Edit and submit it to create another branch. Selecting an assistant response or another entry continues after that entry with an empty editor.
 

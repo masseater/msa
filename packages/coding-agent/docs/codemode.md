@@ -19,20 +19,20 @@ The result starts with `Script completed` or `Script failed`, the wall time, and
 
 ## Globals
 
-| Global | Purpose |
-|---|---|
-| `tools.<name>(args)` | Call a tool. See [Call tools](#call-tools). |
-| `text(value)` | Add a text item to the output. Strings are added as is, other values as JSON. |
-| `image(value)` | Add an image to the output: a base64 `data:` URL, an `{ image_url }` object, or an image block `{ type: "image", data, mimeType }` such as those returned by MCP tools and `models.generateImages()`. Remote URLs are not supported. PNG, JPEG, GIF, and WebP are accepted. Each image is also saved to a temp file, and the result names the path before the image. |
-| `console.log(...)` | Add a line to the `<console_output>` block after the other output. Arguments are joined with spaces; `info`, `warn`, `error`, and `debug` do the same. |
-| `return value` | A top-level `return` adds the value like `text()`. |
-| `exit()` | End the script successfully. |
-| `store(key, value)` / `load(key)` | Keep small JSON values across `codemode` calls. See [Store values](#store-values). |
-| `ALL_TOOLS` | Every callable tool as `{ name, description }`, including tools the description does not list. |
-| `searchTools(query, { limit?, namespace? })` | Rank callable tools by relevance (BM25, default limit 8). Resolves to `{ name, description }[]`. |
-| `describeTool(name)` | Resolves to a tool's description and TypeScript declaration, or `undefined`. |
-| `describeNamespace(name)` | Resolves to `{ name, description?, instructions?, tools }` for a namespace such as an MCP server, or `undefined`. |
-| `models` | List and run non-LLM models. See [Models](#models). |
+| Global                                       | Purpose                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tools.<name>(args)`                         | Call a tool. See [Call tools](#call-tools).                                                                                                                                                                                                                                                                                                                          |
+| `text(value)`                                | Add a text item to the output. Strings are added as is, other values as JSON.                                                                                                                                                                                                                                                                                        |
+| `image(value)`                               | Add an image to the output: a base64 `data:` URL, an `{ image_url }` object, or an image block `{ type: "image", data, mimeType }` such as those returned by MCP tools and `models.generateImages()`. Remote URLs are not supported. PNG, JPEG, GIF, and WebP are accepted. Each image is also saved to a temp file, and the result names the path before the image. |
+| `console.log(...)`                           | Add a line to the `<console_output>` block after the other output. Arguments are joined with spaces; `info`, `warn`, `error`, and `debug` do the same.                                                                                                                                                                                                               |
+| `return value`                               | A top-level `return` adds the value like `text()`.                                                                                                                                                                                                                                                                                                                   |
+| `exit()`                                     | End the script successfully.                                                                                                                                                                                                                                                                                                                                         |
+| `store(key, value)` / `load(key)`            | Keep small JSON values across `codemode` calls. See [Store values](#store-values).                                                                                                                                                                                                                                                                                   |
+| `ALL_TOOLS`                                  | Every callable tool as `{ name, description }`, including tools the description does not list.                                                                                                                                                                                                                                                                       |
+| `searchTools(query, { limit?, namespace? })` | Rank callable tools by relevance (BM25, default limit 8). Resolves to `{ name, description }[]`.                                                                                                                                                                                                                                                                     |
+| `describeTool(name)`                         | Resolves to a tool's description and TypeScript declaration, or `undefined`.                                                                                                                                                                                                                                                                                         |
+| `describeNamespace(name)`                    | Resolves to `{ name, description?, instructions?, tools }` for a namespace such as an MCP server, or `undefined`.                                                                                                                                                                                                                                                    |
+| `models`                                     | List and run non-LLM models. See [Models](#models).                                                                                                                                                                                                                                                                                                                  |
 
 ## Call tools
 
@@ -147,7 +147,11 @@ const results = await Promise.all(
         sentiment: {
           type: "choice",
           instructions: "How does the user feel about the product?",
-          criteria: { positive: "Satisfied or happy", negative: "Unhappy or frustrated", neutral: "Neither" },
+          criteria: {
+            positive: "Satisfied or happy",
+            negative: "Unhappy or frustrated",
+            neutral: "Neither",
+          },
         },
         urgency: {
           type: "score",
@@ -160,7 +164,11 @@ const results = await Promise.all(
 );
 return results.map((result, i) =>
   result.stopReason === "stop"
-    ? { message: messages[i], sentiment: result.answers.sentiment.choice, urgency: result.answers.urgency.score }
+    ? {
+        message: messages[i],
+        sentiment: result.answers.sentiment.choice,
+        urgency: result.answers.urgency.score,
+      }
     : { message: messages[i], error: result.errorMessage },
 );
 ```

@@ -6,14 +6,14 @@ Start with `ctx.ui` methods from an [extension](extensions.md#interact-with-the-
 
 ## Choose an integration point
 
-| Need | Use |
-|---|---|
+| Need                                         | Use                                                      |
+| -------------------------------------------- | -------------------------------------------------------- |
 | Select, confirm, input, or multi-line editor | `ctx.ui.select()`, `confirm()`, `input()`, or `editor()` |
-| Non-blocking feedback | `ctx.ui.notify()` or `setStatus()` |
-| Persistent content near the editor | `ctx.ui.setWidget()` |
-| Replace the header, footer, or editor | The corresponding `ctx.ui` component factory |
-| Temporary interactive screen or overlay | `ctx.ui.custom()` |
-| Custom rendering for a tool or session entry | An extension renderer |
+| Non-blocking feedback                        | `ctx.ui.notify()` or `setStatus()`                       |
+| Persistent content near the editor           | `ctx.ui.setWidget()`                                     |
+| Replace the header, footer, or editor        | The corresponding `ctx.ui` component factory             |
+| Temporary interactive screen or overlay      | `ctx.ui.custom()`                                        |
+| Custom rendering for a tool or session entry | An extension renderer                                    |
 
 These APIs receive Pi’s active theme and keybindings where needed. Do not create a second terminal renderer inside an extension.
 

@@ -1,23 +1,23 @@
 {
-	"name": "@earendil-works/pi-evals",
-	"version": "1.2.0",
-	"private": true,
-	"type": "module",
-	"scripts": {
-		"clean": "shx rm -rf .eval",
-		"eval": "vp run eval:host && vp run eval:docs",
-		"eval:host": "vitest run --config vitest.evals.config.ts --project host",
-		"eval:docs": "node --experimental-strip-types src/cli.ts",
-		"test": "vitest run --config vitest.test.config.ts"
-	},
-	"devDependencies": {
-		"@earendil-works/pi-ai": "workspace:*",
-		"@earendil-works/pi-coding-agent": "workspace:*",
-		"@types/node": "catalog:",
-		"@vitest-evals/core": "0.15.0",
-		"autoevals": "0.3.0",
-		"shx": "catalog:",
-		"vitest": "4.1.11",
-		"vitest-evals": "0.15.0"
-	}
+  "name": "@earendil-works/pi-evals",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "shx rm -rf .eval",
+    "eval": "vp run eval:host && vp run eval:docs",
+    "eval:host": "vitest run --config vitest.evals.config.ts --project host",
+    "eval:docs": "node --experimental-strip-types src/cli.ts",
+    "test": "vitest run --config vitest.test.config.ts"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "workspace:*",
+    "@earendil-works/pi-coding-agent": "workspace:*",
+    "@types/node": "catalog:",
+    "@vitest-evals/core": "0.15.0",
+    "autoevals": "0.3.0",
+    "shx": "catalog:",
+    "vitest": "4.1.11",
+    "vitest-evals": "0.15.0"
+  }
 }

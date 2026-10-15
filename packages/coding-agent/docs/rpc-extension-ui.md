@@ -176,13 +176,13 @@ Responses are sent for dialog methods only (`select`, `confirm`, `input`, `edito
 ### Value response (select, input, editor)
 
 ```json
-{"type": "extension_ui_response", "id": "uuid-1", "value": "Allow"}
+{ "type": "extension_ui_response", "id": "uuid-1", "value": "Allow" }
 ```
 
 ### Confirmation response (confirm)
 
 ```json
-{"type": "extension_ui_response", "id": "uuid-2", "confirmed": true}
+{ "type": "extension_ui_response", "id": "uuid-2", "confirmed": true }
 ```
 
 ### Cancellation response (any dialog)
@@ -190,7 +190,7 @@ Responses are sent for dialog methods only (`select`, `confirm`, `input`, `edito
 Dismiss any dialog method. The extension receives `undefined` (for select/input/editor) or `false` (for confirm).
 
 ```json
-{"type": "extension_ui_response", "id": "uuid-3", "cancelled": true}
+{ "type": "extension_ui_response", "id": "uuid-3", "cancelled": true }
 ```
 
 ## Example

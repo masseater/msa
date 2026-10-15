@@ -24,11 +24,11 @@ Convert each option from the recipe command into one preset line:
 - Add `load-on-startup = true` so the router loads the model when it starts.
 - Replace short model-file options with their long preset keys:
 
-| Recipe option | Preset key |
-|---|---|
-| `-hf` | `hf-repo` |
-| `-hff` | `hf-file` |
-| `-hfrd` | `hf-repo-draft` |
+| Recipe option        | Preset key         |
+| -------------------- | ------------------ |
+| `-hf`                | `hf-repo`          |
+| `-hff`               | `hf-file`          |
+| `-hfrd`              | `hf-repo-draft`    |
 | `--spec-draft-model` | `spec-draft-model` |
 
 For example, this recipe command:

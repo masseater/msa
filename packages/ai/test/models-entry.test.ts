@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
@@ -28,10 +29,10 @@ const preload = `data:text/javascript,${encodeURIComponent(`
 `)}`;
 
 describe("lightweight models entry", () => {
-	it.each([sourceEntry, "@earendil-works/pi-ai/models"])(
-		"runs a faux completion without TypeBox, catalogs, or SDKs through %s",
-		(entry) => {
-			const script = `
+  it.each([sourceEntry, "@earendil-works/pi-ai/models"])(
+    "runs a faux completion without TypeBox, catalogs, or SDKs through %s",
+    (entry) => {
+      const script = `
 				import assert from "node:assert/strict";
 				import { createModels, createProvider } from ${JSON.stringify(entry)};
 				import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
@@ -46,13 +47,17 @@ describe("lightweight models entry", () => {
 				assert.equal(response.stopReason, "stop");
 				assert.deepEqual(response.content, [{ type: "text", text: "OK" }]);
 			`;
-			const result = spawnSync(process.execPath, ["--import", preload, "--input-type=module", "--eval", script], {
-				cwd: packageRoot,
-				encoding: "utf8",
-				timeout: 10_000,
-			});
-			expect(result.error).toBeUndefined();
-			expect(result.status, result.stderr).toBe(0);
-		},
-	);
+      const result = spawnSync(
+        process.execPath,
+        ["--import", preload, "--input-type=module", "--eval", script],
+        {
+          cwd: packageRoot,
+          encoding: "utf8",
+          timeout: 10_000,
+        },
+      );
+      expect(result.error).toBeUndefined();
+      expect(result.status, result.stderr).toBe(0);
+    },
+  );
 });

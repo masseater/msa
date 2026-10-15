@@ -3,28 +3,7 @@ import { fileURLToPath } from "node:url";
 import { presets as effectPresets } from "@effect/tsgo/oxlint-presets";
 import { defineConfig } from "vite-plus";
 
-import { restrictedImports } from "./lint.config.ts";
-
-const enginePaths = ["packages/**", "scripts/**"];
-const generatedPaths = [
-  "**/dist/**",
-  "**/models.generated.ts",
-  "**/*.models.ts",
-  "packages/ai/src/providers/data/**",
-];
-const excludedPaths = [
-  ".github/**",
-  ".pi/**",
-  "AGENTS.md",
-  "LICENSE",
-  "README.md",
-  "pi-test.bat",
-  "pi-test.ps1",
-  "pi-test.sh",
-  "test.sh",
-  "tsconfig.base.json",
-  "tsconfig.json",
-];
+import { engine, generated, restrictedImports } from "./lint.config.ts";
 
 type Rules = Readonly<Record<string, "error">>;
 
@@ -117,12 +96,12 @@ export const testBaseConfig = {
 export default defineConfig({
   staged: { "*": "vp check --fix" },
   fmt: {
-    ignorePatterns: [...excludedPaths, ...enginePaths, ...generatedPaths, "pnpm-lock.yaml"],
+    ignorePatterns: generated,
     sortImports: true,
     sortPackageJson: true,
   },
   lint: {
-    ignorePatterns: [...excludedPaths, ...enginePaths, ...generatedPaths],
+    ignorePatterns: [...generated, ...engine],
     plugins: ["oxc", "import", "promise", "node", "jsdoc", "effecttsgo"],
     categories: {
       correctness: "error",

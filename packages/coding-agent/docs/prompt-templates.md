@@ -13,6 +13,7 @@ Create `~/.pi/agent/prompts/review.md`:
 description: Review staged git changes
 argument-hint: "[focus]"
 ---
+
 Review the staged changes. Focus on ${1:-correctness, security, and error handling}.
 ```
 
@@ -37,14 +38,14 @@ Pi expands the template before the resulting text enters the agent. Extensions r
 
 Templates support these substitutions:
 
-| Syntax | Result |
-|---|---|
-| `$1`, `$2`, … | One positional argument |
-| `$@` or `$ARGUMENTS` | All arguments joined with spaces |
-| `${1:-default}` | First argument, or a default value |
-| `${@:-default}` | All arguments, or a default value |
-| `${@:N}` | Arguments starting at position `N` |
-| `${@:N:L}` | `L` arguments starting at position `N` |
+| Syntax               | Result                                 |
+| -------------------- | -------------------------------------- |
+| `$1`, `$2`, …        | One positional argument                |
+| `$@` or `$ARGUMENTS` | All arguments joined with spaces       |
+| `${1:-default}`      | First argument, or a default value     |
+| `${@:-default}`      | All arguments, or a default value      |
+| `${@:N}`             | Arguments starting at position `N`     |
+| `${@:N:L}`           | `L` arguments starting at position `N` |
 
 Arguments follow shell-like quoting, so `/review "API compatibility"` supplies one argument containing a space.
 

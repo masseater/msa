@@ -287,9 +287,7 @@
           },
           {
             "type": "object",
-            "required": [
-              "source"
-            ],
+            "required": ["source"],
             "properties": {
               "source": {
                 "type": "string"
@@ -769,15 +767,7 @@
   "additionalProperties": true,
   "$defs": {
     "ModelThinkingLevel": {
-      "enum": [
-        "off",
-        "minimal",
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-        "max"
-      ]
+      "enum": ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
     }
   }
 }

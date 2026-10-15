@@ -42,7 +42,7 @@ const ansiRegex = new RegExp(`(?:${OSC_START}[\\s\\S]*?${ST})|${CSI_START}${CSI_
 // Unfinished sequence at the end of the text: OSC without its ST (a trailing ESC may start ESC\),
 // or CSI without its final byte.
 const unfinishedAnsiAtEndRegex = new RegExp(
-	`(?:${OSC_START}(?:[^\\u0007\\u009C\\u001B]|\\u001B(?!\\\\))*|${CSI_START})$`,
+  `(?:${OSC_START}(?:[^\\u0007\\u009C\\u001B]|\\u001B(?!\\\\))*|${CSI_START})$`,
 );
 
 // Longest unfinished sequence held back while streaming. Longer ones are processed as-is.
@@ -53,30 +53,30 @@ const MAX_PENDING_ANSI_LENGTH = 256;
  * unfinished escape sequence that should be prepended to the next chunk.
  */
 export function splitIncompleteAnsiSuffix(value: string): { complete: string; pending: string } {
-	if (!value.includes("\u001B") && !value.includes("\u009B")) {
-		return { complete: value, pending: "" };
-	}
-	const windowStart = Math.max(0, value.length - MAX_PENDING_ANSI_LENGTH);
-	const match = unfinishedAnsiAtEndRegex.exec(value.slice(windowStart));
-	if (!match) {
-		return { complete: value, pending: "" };
-	}
-	const splitAt = windowStart + match.index;
-	return { complete: value.slice(0, splitAt), pending: value.slice(splitAt) };
+  if (!value.includes("\u001B") && !value.includes("\u009B")) {
+    return { complete: value, pending: "" };
+  }
+  const windowStart = Math.max(0, value.length - MAX_PENDING_ANSI_LENGTH);
+  const match = unfinishedAnsiAtEndRegex.exec(value.slice(windowStart));
+  if (!match) {
+    return { complete: value, pending: "" };
+  }
+  const splitAt = windowStart + match.index;
+  return { complete: value.slice(0, splitAt), pending: value.slice(splitAt) };
 }
 
 export function stripAnsi(value: string): string {
-	if (typeof value !== "string") {
-		throw new TypeError(`Expected a \`string\`, got \`${typeof value}\``);
-	}
+  if (typeof value !== "string") {
+    throw new TypeError(`Expected a \`string\`, got \`${typeof value}\``);
+  }
 
-	// Fast path: ANSI codes require ESC (7-bit) or CSI (8-bit) introducer
-	if (!value.includes("\u001B") && !value.includes("\u009B")) {
-		return value;
-	}
+  // Fast path: ANSI codes require ESC (7-bit) or CSI (8-bit) introducer
+  if (!value.includes("\u001B") && !value.includes("\u009B")) {
+    return value;
+  }
 
-	// Even though the regex is global, we don't need to reset the `.lastIndex`
-	// because unlike `.exec()` and `.test()`, `.replace()` does it automatically
-	// and doing it manually has a performance penalty.
-	return value.replace(ansiRegex, "");
+  // Even though the regex is global, we don't need to reset the `.lastIndex`
+  // because unlike `.exec()` and `.test()`, `.replace()` does it automatically
+  // and doing it manually has a performance penalty.
+  return value.replace(ansiRegex, "");
 }

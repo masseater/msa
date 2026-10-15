@@ -4,16 +4,17 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { Type } from "@earendil-works/pi-ai";
 import { createModels } from "@earendil-works/pi-ai/models";
+
 import {
-	AgentDoc,
-	createRegistry,
-	defineExtension,
-	defineTool,
-	Harness,
-	type HarnessSettings,
-	MemoryStorage,
-	section,
-	type ToolRegistration,
+  AgentDoc,
+  createRegistry,
+  defineExtension,
+  defineTool,
+  Harness,
+  type HarnessSettings,
+  MemoryStorage,
+  section,
+  type ToolRegistration,
 } from "../../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -22,13 +23,13 @@ const context = BACKGROUND_CONTEXT;
 type AppTool = ToolRegistration & { readonly snippet?: string };
 
 function exampleTool(name: string, description: string): AppTool {
-	const tool = defineTool({
-		name,
-		description,
-		parameters: Type.Object({ path: Type.String() }),
-		execute: async (args) => ({ output: [{ type: "text", text: `${name} ${args.path}` }] }),
-	});
-	return { ...tool, snippet: `Use ${name} for files.` };
+  const tool = defineTool({
+    name,
+    description,
+    parameters: Type.Object({ path: Type.String() }),
+    execute: async (args) => ({ output: [{ type: "text", text: `${name} ${args.path}` }] }),
+  });
+  return { ...tool, snippet: `Use ${name} for files.` };
 }
 
 const read = exampleTool("read", "Read a file");
@@ -38,8 +39,10 @@ const Files = defineExtension<AppTool>({ name: "files", tools: [read, write] });
 const Search = defineExtension<AppTool>({ name: "search", tools: [grep] });
 // Sections see the offered tools as app tools, so one can render their snippets.
 const Snippets = defineExtension<AppTool>({
-	name: "snippets",
-	sections: [section("tool_snippets", (input) => input.agent.tools.map((tool) => tool.snippet).join("\n"))],
+  name: "snippets",
+  sections: [
+    section("tool_snippets", (input) => input.agent.tools.map((tool) => tool.snippet).join("\n")),
+  ],
 });
 
 const registry = createRegistry<AppTool>();
@@ -51,13 +54,17 @@ registry.install(Snippets);
 // A getter makes a value live, such as one backed by the app's settings file.
 let timeoutMs = 60_000;
 const settings: HarnessSettings = {
-	get stream() {
-		return { timeoutMs };
-	},
-	retry: { maxRetries: 5 },
-	toolExecution: "sequential",
+  get stream() {
+    return { timeoutMs };
+  },
+  retry: { maxRetries: 5 },
+  toolExecution: "sequential",
 };
-const harness = await Harness.open(new MemoryStorage(), { models: createModels(), registry, settings }, context);
+const harness = await Harness.open(
+  new MemoryStorage(),
+  { models: createModels(), registry, settings },
+  context,
+);
 const root = await harness.root(context);
 
 // A new conversation stores no choices and follows the host: every installed
@@ -69,12 +76,12 @@ console.log("default tools:", await tools());
 // commit per call. Extensions and tools are passed as objects and stored by
 // name, so a typo cannot slip in.
 await root.configure(
-	{
-		model: { provider: "anthropic", modelId: "claude-sonnet-4-5" },
-		thinkingLevel: "high",
-		tools: [write, read],
-	},
-	context,
+  {
+    model: { provider: "anthropic", modelId: "claude-sonnet-4-5" },
+    thinkingLevel: "high",
+    tools: [write, read],
+  },
+  context,
 );
 console.log("stored:", await harness.snapshot(AgentDoc, root.id, context));
 const agent = await root.agent(context);

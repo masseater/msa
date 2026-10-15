@@ -12,50 +12,50 @@ Contracts are runtime values described with [TypeBox](https://github.com/sinclai
 
 ## Entry points
 
-| Import | Contents | Runs in |
-|--------|----------|---------|
-| `@earendil-works/chord` | Contracts (`local`, `remote`, `method`, `opaque`), declarations (through the factory's `self`: `state`, `derive`, `resource`, `on`, `task`), hosts (`createHost`, `defineFacet`, `defineRegistry`), links (`memoryLinkPair`, `ipcLink`, `webSocketLink`, `acceptWebSockets`), errors (`ChordError`, `isChordError`, `forbidden`, `invalid`). Also the shared base: `Context`, `JsonValue`, `JsonRepresentation`, `Draft`, `copyJson`, `isJsonValue`, and `replicatedState` with its types. | Node and browsers |
-| `@earendil-works/chord/node` | Child host processes: `createHostManager`, `forkDriver`, `childControl`, `processLock`; the facet module loader `nodeLoader`. | Node |
-| `@earendil-works/chord/context` | Explicit cancellation and invocation values: `BACKGROUND_CONTEXT`, `withCancel`, `withAbortSignal`, `withoutAbortSignal`, `withContextValue`, `awaitWithContext`. | Node and browsers |
-| `@earendil-works/chord/delta` | The transactional JSON tracker, structural diff, immutable apply, and the wire encoder/decoder for operation batches. | Node and browsers |
-| `@earendil-works/chord/output` | Bounded output streams and paced progress: `OutputBuffer` (head or tail window of a stream, `OutputLimits`, `OutputSkip`), `boundOutput`, `sanitizeOutput`, `utf8ByteLength`, and `Progress` (adaptive commits of a changing value). | Node and browsers |
+| Import                          | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Runs in           |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- |
+| `@earendil-works/chord`         | Contracts (`local`, `remote`, `method`, `opaque`), declarations (through the factory's `self`: `state`, `derive`, `resource`, `on`, `task`), hosts (`createHost`, `defineFacet`, `defineRegistry`), links (`memoryLinkPair`, `ipcLink`, `webSocketLink`, `acceptWebSockets`), errors (`ChordError`, `isChordError`, `forbidden`, `invalid`). Also the shared base: `Context`, `JsonValue`, `JsonRepresentation`, `Draft`, `copyJson`, `isJsonValue`, and `replicatedState` with its types. | Node and browsers |
+| `@earendil-works/chord/node`    | Child host processes: `createHostManager`, `forkDriver`, `childControl`, `processLock`; the facet module loader `nodeLoader`.                                                                                                                                                                                                                                                                                                                                                              | Node              |
+| `@earendil-works/chord/context` | Explicit cancellation and invocation values: `BACKGROUND_CONTEXT`, `withCancel`, `withAbortSignal`, `withoutAbortSignal`, `withContextValue`, `awaitWithContext`.                                                                                                                                                                                                                                                                                                                          | Node and browsers |
+| `@earendil-works/chord/delta`   | The transactional JSON tracker, structural diff, immutable apply, and the wire encoder/decoder for operation batches.                                                                                                                                                                                                                                                                                                                                                                      | Node and browsers |
+| `@earendil-works/chord/output`  | Bounded output streams and paced progress: `OutputBuffer` (head or tail window of a stream, `OutputLimits`, `OutputSkip`), `boundOutput`, `sanitizeOutput`, `utf8ByteLength`, and `Progress` (adaptive commits of a changing value).                                                                                                                                                                                                                                                       | Node and browsers |
 
 ## Quick start
 
 ```ts
-import { Type } from "typebox";
 import { createHost, hostNamed, method, remote } from "@earendil-works/chord";
+import { Type } from "typebox";
 
 // contract.ts: shared by provider and consumers
 export const Counter = remote("demo.counter", {
-	version: 1,
-	input: Type.Object({ name: Type.String() }),
-	host: hostNamed("server"), // where its objects live; callers never name a host
-	variants: {
-		default: {
-			state: { count: Type.Number() },
-			methods: { increment: method(Type.Object({ by: Type.Number() })) },
-		},
-	},
+  version: 1,
+  input: Type.Object({ name: Type.String() }),
+  host: hostNamed("server"), // where its objects live; callers never name a host
+  variants: {
+    default: {
+      state: { count: Type.Number() },
+      methods: { increment: method(Type.Object({ by: Type.Number() })) },
+    },
+  },
 });
 
 const host = createHost({ name: "server", self: { kind: "server" } });
 
 host.serve(Counter, ({ name }, _principal, self) => {
-	const count = self.state("count", Type.Number(), 0);
-	return {
-		variant: "default",
-		count,
-		increment: async ({ by }, ctx) => {
-			count.change(ctx, (n) => n + by);
-		},
-	};
+  const count = self.state("count", Type.Number(), 0);
+  return {
+    variant: "default",
+    count,
+    increment: async ({ by }, ctx) => {
+      count.change(ctx, (n) => n + by);
+    },
+  };
 });
 
 await host.root(async (ctx) => {
-	const clicks = await ctx.get(Counter, { name: "clicks" }); // ready, with its state; released when this root ends
-	clicks.count.subscribe((n) => console.log("count", n));
-	await clicks.increment({ by: 2 }, ctx); // logs 0, then 2
+  const clicks = await ctx.get(Counter, { name: "clicks" }); // ready, with its state; released when this root ends
+  clicks.count.subscribe((n) => console.log("count", n));
+  await clicks.increment({ by: 2 }, ctx); // logs 0, then 2
 });
 ```
 
@@ -107,8 +107,8 @@ import { replicatedState } from "@earendil-works/chord";
 const initial = { output: "", count: 0 };
 const status = replicatedState(initial); // transfers ownership of initial
 status.change(context, (draft) => {
-	draft.output += "done\n";
-	draft.count += 1;
+  draft.output += "done\n";
+  draft.count += 1;
 });
 ```
 

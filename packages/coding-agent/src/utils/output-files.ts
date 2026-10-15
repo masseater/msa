@@ -16,19 +16,26 @@ const OUTPUT_FILE_MODE = 0o600;
 
 /** A new, unused path: `<dir>/<prefix>-<random hex><extension>`. `extension` includes the dot. */
 function createOutputFilePath(prefix: string, extension: string): string {
-	return join(tmpdir(), `${prefix}-${randomBytes(8).toString("hex")}${extension}`);
+  return join(tmpdir(), `${prefix}-${randomBytes(8).toString("hex")}${extension}`);
 }
 
 /** Write `data` to a new output file and return its path. */
-export async function writeOutputFile(prefix: string, extension: string, data: string | Uint8Array): Promise<string> {
-	const path = createOutputFilePath(prefix, extension);
-	// `wx` never follows a link someone else placed at the path.
-	await writeFile(path, data, { mode: OUTPUT_FILE_MODE, flag: "wx" });
-	return path;
+export async function writeOutputFile(
+  prefix: string,
+  extension: string,
+  data: string | Uint8Array,
+): Promise<string> {
+  const path = createOutputFilePath(prefix, extension);
+  // `wx` never follows a link someone else placed at the path.
+  await writeFile(path, data, { mode: OUTPUT_FILE_MODE, flag: "wx" });
+  return path;
 }
 
 /** Open a new output file for streamed output. */
-export function createOutputFileStream(prefix: string, extension: string): { path: string; stream: WriteStream } {
-	const path = createOutputFilePath(prefix, extension);
-	return { path, stream: createWriteStream(path, { mode: OUTPUT_FILE_MODE, flags: "wx" }) };
+export function createOutputFileStream(
+  prefix: string,
+  extension: string,
+): { path: string; stream: WriteStream } {
+  const path = createOutputFilePath(prefix, extension);
+  return { path, stream: createWriteStream(path, { mode: OUTPUT_FILE_MODE, flags: "wx" }) };
 }

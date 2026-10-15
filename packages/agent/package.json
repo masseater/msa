@@ -1,49 +1,49 @@
 {
-	"name": "@earendil-works/pi-agent-core",
-	"version": "1.2.0",
-	"description": "General-purpose agent with transport abstraction, state management, and attachment support",
-	"type": "module",
-	"main": "./dist/index.js",
-	"types": "./dist/index.d.ts",
-	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js"
-		},
-		"./package.json": "./package.json"
-	},
-	"files": [
-		"dist",
-		"README.md"
-	],
-	"scripts": {
-		"clean": "shx rm -rf dist",
-		"build": "tsc -p tsconfig.build.json",
-		"test": "vitest --run"
-	},
-	"dependencies": {
-		"@earendil-works/pi-ai": "workspace:*",
-		"typebox": "1.3.27"
-	},
-	"keywords": [
-		"ai",
-		"agent",
-		"llm",
-		"transport",
-		"state-management"
-	],
-	"author": "Mario Zechner",
-	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
-		"directory": "packages/agent"
-	},
-	"engines": {
-		"node": ">=22.19.0"
-	},
-	"devDependencies": {
-		"@types/node": "catalog:",
-		"vitest": "4.1.11"
-	}
+  "name": "@earendil-works/pi-agent-core",
+  "version": "1.2.0",
+  "description": "General-purpose agent with transport abstraction, state management, and attachment support",
+  "keywords": [
+    "agent",
+    "ai",
+    "llm",
+    "state-management",
+    "transport"
+  ],
+  "license": "MIT",
+  "author": "Mario Zechner",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/earendil-works/pi.git",
+    "directory": "packages/agent"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "clean": "shx rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "workspace:*",
+    "typebox": "1.3.27"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
 }

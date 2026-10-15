@@ -10,13 +10,13 @@ The package provides a transport-neutral client core, stdio and Streamable HTTP 
 import { McpClient, StdioTransport } from "@earendil-works/pi-mcp";
 
 const transport = new StdioTransport({
-	command: "npx",
-	args: ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
+  command: "npx",
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "/workspace"],
 });
 const client = new McpClient({
-	name: "my-client",
-	version: "1.0.0",
-	roots: [{ uri: "file:///workspace", name: "workspace" }],
+  name: "my-client",
+  version: "1.0.0",
+  roots: [{ uri: "file:///workspace", name: "workspace" }],
 });
 
 await client.connect(transport);
@@ -39,17 +39,21 @@ import { toLlmContent } from "@earendil-works/pi-mcp";
 import { Type } from "typebox";
 
 const tools: AgentTool[] = (await client.listTools()).map((tool) => ({
-	// Providers allow at most 64 characters of [A-Za-z0-9_-].
-	name: `mcp_${tool.name}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64),
-	label: tool.title ?? tool.name,
-	description: tool.description ?? tool.name,
-	// Providers require an object schema, and some reject one without `properties`.
-	parameters: Type.Unsafe({ ...tool.inputSchema, type: "object", properties: tool.inputSchema.properties ?? {} }),
-	execute: async (_toolCallId, params, signal) => {
-		const result = await client.callTool(tool.name, params as Record<string, unknown>, { signal });
-		// MCP reports tool failures in the result instead of as a protocol error.
-		return { content: toLlmContent(result), details: undefined, isError: result.isError === true };
-	},
+  // Providers allow at most 64 characters of [A-Za-z0-9_-].
+  name: `mcp_${tool.name}`.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64),
+  label: tool.title ?? tool.name,
+  description: tool.description ?? tool.name,
+  // Providers require an object schema, and some reject one without `properties`.
+  parameters: Type.Unsafe({
+    ...tool.inputSchema,
+    type: "object",
+    properties: tool.inputSchema.properties ?? {},
+  }),
+  execute: async (_toolCallId, params, signal) => {
+    const result = await client.callTool(tool.name, params as Record<string, unknown>, { signal });
+    // MCP reports tool failures in the result instead of as a protocol error.
+    return { content: toLlmContent(result), details: undefined, isError: result.isError === true };
+  },
 }));
 ```
 
@@ -62,45 +66,45 @@ The [mcp-codemode example](https://github.com/earendil-works/pi/tree/main/packag
 ```typescript
 import { McpClient, StreamableHttpTransport } from "@earendil-works/pi-mcp";
 import {
-	adaptOAuthProvider,
-	authorizeMcp,
-	McpOAuthAuthorizationRequiredError,
-	McpOAuthProvider,
-	OAuthCallbackServer,
+  adaptOAuthProvider,
+  authorizeMcp,
+  McpOAuthAuthorizationRequiredError,
+  McpOAuthProvider,
+  OAuthCallbackServer,
 } from "@earendil-works/pi-mcp/oauth";
 
 const serverUrl = "https://mcp.example.com/mcp";
 const callback = await OAuthCallbackServer.listen();
 let authorizationUrl: URL | undefined;
 const oauth = new McpOAuthProvider({
-	serverUrl,
-	redirectUrl: callback.redirectUrl,
-	clientMetadata: { client_name: "My MCP client" },
-	onRedirect: (url) => {
-		authorizationUrl = url;
-	},
+  serverUrl,
+  redirectUrl: callback.redirectUrl,
+  clientMetadata: { client_name: "My MCP client" },
+  onRedirect: (url) => {
+    authorizationUrl = url;
+  },
 });
 
 const connect = () => {
-	const client = new McpClient({ name: "my-client", version: "1.0.0" });
-	return {
-		client,
-		connected: client.connect(
-			new StreamableHttpTransport({ url: serverUrl, authProvider: adaptOAuthProvider(oauth) }),
-		),
-	};
+  const client = new McpClient({ name: "my-client", version: "1.0.0" });
+  return {
+    client,
+    connected: client.connect(
+      new StreamableHttpTransport({ url: serverUrl, authProvider: adaptOAuthProvider(oauth) }),
+    ),
+  };
 };
 
 const first = connect();
 try {
-	await first.connected;
+  await first.connected;
 } catch (error) {
-	if (!(error instanceof McpOAuthAuthorizationRequiredError)) throw error;
-	const state = await oauth.state();
-	const result = callback.waitForCallback(state);
-	// Open authorizationUrl in the user's browser here.
-	const { code } = await result;
-	await authorizeMcp(oauth, { serverUrl, authorizationCode: code });
+  if (!(error instanceof McpOAuthAuthorizationRequiredError)) throw error;
+  const state = await oauth.state();
+  const result = callback.waitForCallback(state);
+  // Open authorizationUrl in the user's browser here.
+  const { code } = await result;
+  await authorizeMcp(oauth, { serverUrl, authorizationCode: code });
 }
 
 const { client, connected } = connect();

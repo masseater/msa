@@ -6,12 +6,12 @@ Use `shellPath` to choose the Bash executable and `shellCommandPrefix` to run se
 
 ## Understand which shell Pi uses
 
-| Command source | Shell |
-|---|---|
-| Model calls the built-in `bash` tool | Pi's resolved Bash executable |
-| You enter `!command` or `!!command` | The same resolved Bash executable |
-| Model calls the optional `powershell` tool | PowerShell 7 (`pwsh.exe`) or Windows PowerShell |
-| An extension provides or replaces a shell tool | The operations implemented by that extension |
+| Command source                                 | Shell                                           |
+| ---------------------------------------------- | ----------------------------------------------- |
+| Model calls the built-in `bash` tool           | Pi's resolved Bash executable                   |
+| You enter `!command` or `!!command`            | The same resolved Bash executable               |
+| Model calls the optional `powershell` tool     | PowerShell 7 (`pwsh.exe`) or Windows PowerShell |
+| An extension provides or replaces a shell tool | The operations implemented by that extension    |
 
 Pi normally invokes Bash with `bash -c`. On Unix systems, it uses `/bin/bash`, then `bash` on `PATH`, and finally `sh` when Bash is unavailable. Native Windows first checks the configured path, then Git Bash, then `bash.exe` on `PATH`.
 

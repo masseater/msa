@@ -73,15 +73,15 @@ npm run update:model-catalog-pin
 
 This monorepo contains the Pi CLI and its supporting libraries.
 
-| Package | Description |
-|---------|-------------|
-| **[@earendil-works/chord](packages/chord)** | Typed host runtime for hot-reloadable plugins, contracts, replicated state, and RPC over JSON links |
-| **[@earendil-works/pi-telemetry](packages/telemetry)** | Vendor-neutral telemetry contracts, reference adapter, conformance tests, and typed schemas |
-| **[@earendil-works/pi-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.) |
-| **[@earendil-works/pi-durable](packages/durable)** | Durable conversation, task, and document runtime |
-| **[@earendil-works/pi-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
-| **[@earendil-works/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI |
-| **[@earendil-works/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
+| Package                                                      | Description                                                                                         |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| **[@earendil-works/chord](packages/chord)**                  | Typed host runtime for hot-reloadable plugins, contracts, replicated state, and RPC over JSON links |
+| **[@earendil-works/pi-telemetry](packages/telemetry)**       | Vendor-neutral telemetry contracts, reference adapter, conformance tests, and typed schemas         |
+| **[@earendil-works/pi-ai](packages/ai)**                     | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.)                                    |
+| **[@earendil-works/pi-durable](packages/durable)**           | Durable conversation, task, and document runtime                                                    |
+| **[@earendil-works/pi-agent-core](packages/agent)**          | Agent runtime with tool calling and state management                                                |
+| **[@earendil-works/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI                                                                        |
+| **[@earendil-works/pi-tui](packages/tui)**                   | Terminal UI library with differential rendering                                                     |
 
 For Slack/chat automation and workflows see [earendil-works/pi-chat](https://github.com/earendil-works/pi-chat).
 

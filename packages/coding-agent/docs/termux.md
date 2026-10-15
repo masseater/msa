@@ -78,7 +78,7 @@ The Termux clipboard API supports text only. Pi's clipboard-paste shortcut inser
 
 Pi detects that it is running in Termux, but it cannot infer how you want it to interact with Android. Add only the environment details relevant to your work to `~/.pi/agent/AGENTS.md`:
 
-````markdown
+```markdown
 # Termux environment
 
 - Pi runs in Termux on Android.
@@ -86,7 +86,7 @@ Pi detects that it is running in Termux, but it cannot infer how you want it to 
 - Open URLs with `termux-open-url "https://example.com"`.
 - Open files with `termux-open <path>`.
 - Do not access shared storage unless the task requires it.
-````
+```
 
 Run `/reload` after changing the file during an active session.
 

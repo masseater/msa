@@ -36,38 +36,38 @@ Chord builds applications out of **objects** that live in several processes (a s
 ## Quick start
 
 ```ts
-import { Type } from "typebox";
 import { createHost, method, remote } from "@earendil-works/chord";
+import { Type } from "typebox";
 
 // contract.ts: shared by provider and consumers
 export const Counter = remote("demo.counter", {
-	version: 1,
-	input: Type.Object({ name: Type.String() }),
-	variants: {
-		default: {
-			state: { count: Type.Number() },
-			methods: { increment: method(Type.Object({ by: Type.Number() })) },
-		},
-	},
+  version: 1,
+  input: Type.Object({ name: Type.String() }),
+  variants: {
+    default: {
+      state: { count: Type.Number() },
+      methods: { increment: method(Type.Object({ by: Type.Number() })) },
+    },
+  },
 });
 
 const host = createHost({ name: "server", self: { kind: "server" } });
 
 host.serve(Counter, ({ name }, _principal, self) => {
-	const count = self.state("count", Type.Number(), 0);
-	return {
-		variant: "default",
-		count,
-		increment: async ({ by }, ctx) => {
-			count.change(ctx, (n) => n + by);
-		},
-	};
+  const count = self.state("count", Type.Number(), 0);
+  return {
+    variant: "default",
+    count,
+    increment: async ({ by }, ctx) => {
+      count.change(ctx, (n) => n + by);
+    },
+  };
 });
 
 await host.root(async (ctx) => {
-	const clicks = await ctx.get(Counter, { name: "clicks" });  // ready, with its state; released when this root ends
-	clicks.count.subscribe((n) => console.log("count", n));
-	await clicks.increment({ by: 2 }, ctx);  // logs 0, then 2
+  const clicks = await ctx.get(Counter, { name: "clicks" }); // ready, with its state; released when this root ends
+  clicks.count.subscribe((n) => console.log("count", n));
+  await clicks.increment({ by: 2 }, ctx); // logs 0, then 2
 });
 ```
 
@@ -81,21 +81,21 @@ Remote types can be reached from other hosts. Everything that crosses the wire h
 
 ```ts
 export const Chat = remote("pi.chat", {
-	version: 1,
-	input: Type.Object({ session: Type.String(), conversation: Type.Number() }),
-	host: hostFamily("session:", "session"),  // lives on `session:S1` for `{ session: "S1", … }`
-	variants: {
-		viewer: {
-			state: { view: ConversationViewSchema },
-		},
-		participant: {
-			state: { view: ConversationViewSchema },
-			methods: {
-				send: method(SendInputSchema, Type.Object({ submissionId: Type.Number() })),
-				stop: method(),  // no arguments, no result: `chat.stop(ctx)`
-			},
-		},
-	},
+  version: 1,
+  input: Type.Object({ session: Type.String(), conversation: Type.Number() }),
+  host: hostFamily("session:", "session"), // lives on `session:S1` for `{ session: "S1", … }`
+  variants: {
+    viewer: {
+      state: { view: ConversationViewSchema },
+    },
+    participant: {
+      state: { view: ConversationViewSchema },
+      methods: {
+        send: method(SendInputSchema, Type.Object({ submissionId: Type.Number() })),
+        stop: method(), // no arguments, no result: `chat.stop(ctx)`
+      },
+    },
+  },
 });
 ```
 
@@ -118,13 +118,13 @@ Local types are reachable only inside their host. Their members may be anything:
 
 ```ts
 export const Index = local("pi.index", {
-	version: 1,
-	input: Type.Object({ session: Type.String() }),
-	members: {
-		search: method(Type.Object({ query: Type.String() }), Type.Array(HitSchema)),
-		onChange: method(Type.Function([ChangeSchema], Type.Void()), UnsubscribeSchema),
-		harness: opaque("pi.durable-harness@1"),
-	},
+  version: 1,
+  input: Type.Object({ session: Type.String() }),
+  members: {
+    search: method(Type.Object({ query: Type.String() }), Type.Array(HitSchema)),
+    onChange: method(Type.Function([ChangeSchema], Type.Void()), UnsubscribeSchema),
+    harness: opaque("pi.durable-harness@1"),
+  },
 });
 ```
 
@@ -139,24 +139,27 @@ Every bundle carries its own copy of each contract it was built against. When a 
 > A consumer built against version M binds to a provider at version N if **N = M and the provider's description covers the consumer's**. Otherwise the provider must offer an adapter in `accepts[M]`, or binding fails with `contract_mismatch`.
 
 "Covers" means the provider still offers everything the consumer was built against:
+
 - every member exists with the same kind;
 - methods accept everything the consumer can send (new arguments must be optional) and return at least what it expects (extra result fields are fine);
 - state values fit the consumer's schema;
 - opaque members have the same name and version.
 
-| Change | Version | Result |
-| --- | --- | --- |
-| Add a method, an optional argument, a result field, a state field | keep | binds |
+| Change                                                              | Version  | Result                                                |
+| ------------------------------------------------------------------- | -------- | ----------------------------------------------------- |
+| Add a method, an optional argument, a result field, a state field   | keep     | binds                                                 |
 | Remove or rename a member; make an argument required; change a type | **bump** | old consumers need `accepts`, or must be reloaded too |
-| Same shape, different meaning (`query` is now a regular expression) | **bump** | as above; undetectable, so it's on you |
-| Forgot to bump on a breaking shape change | keep | refused: "consumer needs member `search`" |
+| Same shape, different meaning (`query` is now a regular expression) | **bump** | as above; undetectable, so it's on you                |
+| Forgot to bump on a breaking shape change                           | keep     | refused: "consumer needs member `search`"             |
 
 ```ts
 // version 2 changed what `search` means; old consumers keep working through an adapter
 host.serve(Index, indexFactory, {
-	accepts: {
-		1: (current) => ({ search: ({ query }, ctx) => current.search({ query: escapeRegExp(query) }, ctx) }),
-	},
+  accepts: {
+    1: (current) => ({
+      search: ({ query }, ctx) => current.search({ query: escapeRegExp(query) }, ctx),
+    }),
+  },
 });
 ```
 
@@ -180,36 +183,36 @@ A reload runs the factory again over the same object. Declarations that keep som
 
 ```ts
 host.serve(StatusStore, ({ session }, _host, self) => {
-	const status = self.state("status", StatusSchema, { running: false, tasks: 0 });
-	const errors = self.state("errors", Type.Array(Type.String()), []);
-	const catalog = self.get(Catalog, {});
-	const db = self.resource("db", {
-		version: 1,
-		open: async ({ signal }) => openSqlite(statusPath(session), { signal }),
-		close: async (db) => db.close(),
-	});
-	self.on("catalogChanges", catalog.rows, (rows, ctx) => errors.replace(ctx, checkRows(rows)));
-	self.task(async (ctx) => {
-		while (!ctx.signal.aborted) {
-			await sleep(10_000, ctx.signal);
-			await db.value.run("INSERT INTO history VALUES (?)", [JSON.stringify(status.value)]);
-		}
-	});
-	const summary = self.derive([status, errors], (s, e) => ({ ...s, failing: e.length > 0 }));
-	return { summary, report: reportMethod(status) };  // exposed state is what the implementation returns
+  const status = self.state("status", StatusSchema, { running: false, tasks: 0 });
+  const errors = self.state("errors", Type.Array(Type.String()), []);
+  const catalog = self.get(Catalog, {});
+  const db = self.resource("db", {
+    version: 1,
+    open: async ({ signal }) => openSqlite(statusPath(session), { signal }),
+    close: async (db) => db.close(),
+  });
+  self.on("catalogChanges", catalog.rows, (rows, ctx) => errors.replace(ctx, checkRows(rows)));
+  self.task(async (ctx) => {
+    while (!ctx.signal.aborted) {
+      await sleep(10_000, ctx.signal);
+      await db.value.run("INSERT INTO history VALUES (?)", [JSON.stringify(status.value)]);
+    }
+  });
+  const summary = self.derive([status, errors], (s, e) => ({ ...s, failing: e.length > 0 }));
+  return { summary, report: reportMethod(status) }; // exposed state is what the implementation returns
 });
 ```
 
-| Declaration | What it is | On reload |
-| --- | --- | --- |
-| `self.state(name, schema, initial \| { init }, { version?, migrate? })` | an observable JSON cell; the schema is required | same cell and value (`init` does not run); migrated when its version rises |
-| `self.get(Type, input, { at? })` | a reference to another object; its identity is the address | kept if declared again, otherwise released |
-| `self.resource(name, { version, deps?, exclusive?, open, close? })` | a connection, watch, socket, port | kept; reopened only if `version`, `deps` or `exclusive` change |
-| `self.on(name, source, handler)` or `self.on(name, source, select, handler)` | reacts to state or to an event source | the same subscription, with the new handler, as long as the source and `select` are unchanged |
-| `self.task(async (ctx) => ...)` | long-running background work | the old run is aborted through `ctx.signal`; the new code starts once it finished (at most `taskStopDeadline`, default 5 s) |
-| `self.derive(sources, fn)` | live projection of state; `fn` is synchronous | a new derivation, computed when the reload commits |
-| `self.register(Registry, { key: value })` | an entry in a registry | replaced at commit |
-| `self.expose(resource)` | a member backed by a resource (local types) | follows the resource |
+| Declaration                                                                  | What it is                                                 | On reload                                                                                                                   |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `self.state(name, schema, initial \| { init }, { version?, migrate? })`      | an observable JSON cell; the schema is required            | same cell and value (`init` does not run); migrated when its version rises                                                  |
+| `self.get(Type, input, { at? })`                                             | a reference to another object; its identity is the address | kept if declared again, otherwise released                                                                                  |
+| `self.resource(name, { version, deps?, exclusive?, open, close? })`          | a connection, watch, socket, port                          | kept; reopened only if `version`, `deps` or `exclusive` change                                                              |
+| `self.on(name, source, handler)` or `self.on(name, source, select, handler)` | reacts to state or to an event source                      | the same subscription, with the new handler, as long as the source and `select` are unchanged                               |
+| `self.task(async (ctx) => ...)`                                              | long-running background work                               | the old run is aborted through `ctx.signal`; the new code starts once it finished (at most `taskStopDeadline`, default 5 s) |
+| `self.derive(sources, fn)`                                                   | live projection of state; `fn` is synchronous              | a new derivation, computed when the reload commits                                                                          |
+| `self.register(Registry, { key: value })`                                    | an entry in a registry                                     | replaced at commit                                                                                                          |
+| `self.expose(resource)`                                                      | a member backed by a resource (local types)                | follows the resource                                                                                                        |
 
 Names are strings: declaring one twice in a run fails (`invalid/duplicate`). Each kind has its own names, so a cell and a resource may share one.
 
@@ -224,19 +227,19 @@ A name you no longer declare is released, closed or stopped, after the old code 
 ```ts
 // wrong: reset on every reload
 host.serve(Visits, (_, _p, self) => {
-	let visits = 0;
-	return { hit: async (ctx) => ++visits };
+  let visits = 0;
+  return { hit: async (ctx) => ++visits };
 });
 
 // right
 host.serve(Visits, (_, _p, self) => {
-	const visits = self.state("visits", Type.Number(), 0);
-	return {
-		hit: async (ctx) => {
-			visits.change(ctx, (n) => n + 1);
-			return visits.value;
-		},
-	};
+  const visits = self.state("visits", Type.Number(), 0);
+  return {
+    hit: async (ctx) => {
+      visits.change(ctx, (n) => n + 1);
+      return visits.value;
+    },
+  };
 });
 ```
 
@@ -244,7 +247,7 @@ host.serve(Visits, (_, _p, self) => {
 
 ## Activation
 
-The factory is synchronous, but activation isn't. `self.get` and `self.resources` only *declare*; the slow work happens afterwards:
+The factory is synchronous, but activation isn't. `self.get` and `self.resources` only _declare_; the slow work happens afterwards:
 
 ```text
 get(Index, { session: "S1" })
@@ -257,23 +260,29 @@ get(Index, { session: "S1" })
 
 ```ts
 host.serve(Index, ({ session }, _host, self) => {
-	const db = self.resource("db", { version: 1, open: () => openSqlite(indexPath(session)), close: (db) => db.close() });
-	return {
-		search: async ({ query }, ctx) => db.value.all("SELECT entryId, text FROM fts WHERE fts MATCH ?", [query]),
-	};
+  const db = self.resource("db", {
+    version: 1,
+    open: () => openSqlite(indexPath(session)),
+    close: (db) => db.close(),
+  });
+  return {
+    search: async ({ query }, ctx) =>
+      db.value.all("SELECT entryId, text FROM fts WHERE fts MATCH ?", [query]),
+  };
 });
 
 host.serve(Chat, ({ session, conversation }, principal, self) => {
-	const index = self.get(Index, { session });  // a placeholder until Index is live
-	return {
-		variant: "participant",
-		find: async ({ query }, ctx) => index.search({ query }, ctx),  // only ever runs once Chat (and Index) are live
-		// ...
-	};
+  const index = self.get(Index, { session }); // a placeholder until Index is live
+  return {
+    variant: "participant",
+    find: async ({ query }, ctx) => index.search({ query }, ctx), // only ever runs once Chat (and Index) are live
+    // ...
+  };
 });
 ```
 
 **Rules:**
+
 - Inside the factory, never use what you declared: `db.value` and `index.someState.value` throw `not_ready`, and calling a reference throws. Use them in methods, listeners, tasks and `init`.
 - **The object goes live only with its references ready**: live, and (for a remote reference) every state member of its variant hydrated. The same holds for state it forwards or derives from a remote reference it holds some other way: it goes live once that state has its value. A reference that is not ready after the host's `readyTimeout` (default 60 s) fails the activation with `unavailable/ready_timeout`; a reference cycle across hosts ends that way instead of hanging.
 - **Concurrent `get`s** of one address share one activation, so the database opens once.
@@ -299,10 +308,10 @@ whole load before announcing control readiness would deadlock. Defer the whole b
 
 ```ts
 // Connect the upstream link first; its outgoing references can queue until the parent accepts it.
-await worker.load(workerFacets, { awaitHostObjects: false });  // also supported by install
-const harness = await worker.get(Harness, {});        // local bootstrap only; no upstream dependency
-announceControlReady();                               // parent can now accept the worker link
-await worker.ready();                                 // every host object live, including upstream references
+await worker.load(workerFacets, { awaitHostObjects: false }); // also supported by install
+const harness = await worker.get(Harness, {}); // local bootstrap only; no upstream dependency
+announceControlReady(); // parent can now accept the worker link
+await worker.ready(); // every host object live, including upstream references
 harness.release();
 ```
 
@@ -317,12 +326,16 @@ To hand out a native object a resource opens (a local type's `opaque` member), e
 
 ```ts
 host.serve(Harness, (_, _host, self) => {
-	const durable = self.resource("durable", { version: 1, open: () => DurableHarness.open(storage), close: (h) => h.close() });
-	return { harness: self.expose(durable) };  // contract member: harness: opaque<DurableHarness>("pi.durable-harness@1")
+  const durable = self.resource("durable", {
+    version: 1,
+    open: () => DurableHarness.open(storage),
+    close: (h) => h.close(),
+  });
+  return { harness: self.expose(durable) }; // contract member: harness: opaque<DurableHarness>("pi.durable-harness@1")
 });
 
 const harness = await ctx.get(Harness, {});
-harness.harness.resume();  // the DurableHarness itself
+harness.harness.resume(); // the DurableHarness itself
 ```
 
 ## Principals and variants
@@ -332,20 +345,30 @@ request can act as.
 
 ```ts
 type Principal =
-	| { kind: "owner"; access: "local" | "relay" }
-	| { kind: "guest"; id: string; name: string; session: string; mode: "view" | "full"; revision: number }
-	| { kind: "worker"; session: string; generation: number }
-	| { kind: "server" }   // the parent's own requests, as a worker sees them
-	| { kind: "host" };    // a host's own code
+  | { kind: "owner"; access: "local" | "relay" }
+  | {
+      kind: "guest";
+      id: string;
+      name: string;
+      session: string;
+      mode: "view" | "full";
+      revision: number;
+    }
+  | { kind: "worker"; session: string; generation: number }
+  | { kind: "server" } // the parent's own requests, as a worker sees them
+  | { kind: "host" }; // a host's own code
 
 const host = createHost<Principal>({
-	name: "server",
-	self: { kind: "host" },
-	principalKey: (p) =>
-		p.kind === "owner" ? `owner:${p.access}` :
-		p.kind === "guest" ? `guest:${p.id}:r${p.revision}` :
-		p.kind === "worker" ? `worker:${p.session}:${p.generation}` :
-		p.kind,
+  name: "server",
+  self: { kind: "host" },
+  principalKey: (p) =>
+    p.kind === "owner"
+      ? `owner:${p.access}`
+      : p.kind === "guest"
+        ? `guest:${p.id}:r${p.revision}`
+        : p.kind === "worker"
+          ? `worker:${p.session}:${p.generation}`
+          : p.kind,
 });
 ```
 
@@ -365,28 +388,29 @@ const host = createHost<Principal>({
 
 ```ts
 host.serve(Chat, ({ session, conversation }, principal, self) => {
-	if (!canView(principal, session)) throw forbidden();
-	const c = self.get(Conversation, { session, conversation });  // as host: one shared instance
-	if (!canSend(principal)) return { variant: "viewer", view: c.view };
-	const author = authorOf(principal);
-	return {
-		variant: "participant",
-		view: c.view,
-		send: async (input, ctx) => c.submit(input, author, ctx),
-		stop: async (ctx) => {
-			await c.stop(author, ctx);
-		},
-	};
+  if (!canView(principal, session)) throw forbidden();
+  const c = self.get(Conversation, { session, conversation }); // as host: one shared instance
+  if (!canSend(principal)) return { variant: "viewer", view: c.view };
+  const author = authorOf(principal);
+  return {
+    variant: "participant",
+    view: c.view,
+    send: async (input, ctx) => c.submit(input, author, ctx),
+    stop: async (ctx) => {
+      await c.stop(author, ctx);
+    },
+  };
 });
 ```
 
 ```ts
-const chat = await ctx.get(Chat, { session: "S1", conversation: 1 });  // on session:S1
-if (chat.variant === "participant") showComposer(chat.send);  // narrows: `send` exists only there
+const chat = await ctx.get(Chat, { session: "S1", conversation: 1 }); // on session:S1
+if (chat.variant === "participant") showComposer(chat.send); // narrows: `send` exists only there
 else showReadOnly();
 ```
 
 **What a variant doesn't do:**
+
 - **It isn't complete authorization.** Methods still check their arguments: that a submission belongs to this conversation, or a session ID to this principal.
 - **It doesn't cover flags that change while you hold the object.** Those are state, for example `you: { canDraw: boolean }`.
 - **Revocation** is `host.invalidatePrincipal(match)`. It force-disposes matching objects, here and over links, and their references become `gone`. A new `get` runs the factory with the new grants.
@@ -395,22 +419,24 @@ Local types have no variants. Their only callers are inside the host, acting as 
 
 ## References
 
-| Where | API | Released |
-| --- | --- | --- |
-| a factory | `self.get(Type, input)`: synchronous; the object goes live after it is ready | with the object (or its replaced declaration) |
-| a call | `await ctx.get(Type, input, { state? })` | when the call settles |
-| outside Chord | `await host.get(Type, input, { signal?, state? })` | `ref.release()` |
-| a UI runtime | `host.hold(Type, input)`: synchronous, possibly `loading` | `ref.release()` |
+| Where         | API                                                                          | Released                                      |
+| ------------- | ---------------------------------------------------------------------------- | --------------------------------------------- |
+| a factory     | `self.get(Type, input)`: synchronous; the object goes live after it is ready | with the object (or its replaced declaration) |
+| a call        | `await ctx.get(Type, input, { state? })`                                     | when the call settles                         |
+| outside Chord | `await host.get(Type, input, { signal?, state? })`                           | `ref.release()`                               |
+| a UI runtime  | `host.hold(Type, input)`: synchronous, possibly `loading`                    | `ref.release()`                               |
 
 ```ts
-const chat = await ctx.get(Chat, input);  // ready: live, every state member of its variant hydrated
-chat.status;  // "loading" | "live" | "released" | "gone"
-chat.variant;  // the current variant; a multi-variant reference narrows on it
-chat.shape;  // { variant, members, contract }
-const send = chat.send;  // a stable function: always dispatches to the current code
-chat.view.value;  // the current value, typed T
+const chat = await ctx.get(Chat, input); // ready: live, every state member of its variant hydrated
+chat.status; // "loading" | "live" | "released" | "gone"
+chat.variant; // the current variant; a multi-variant reference narrows on it
+chat.shape; // { variant, members, contract }
+const send = chat.send; // a stable function: always dispatches to the current code
+chat.view.value; // the current value, typed T
 chat.view.subscribe((v) => render(v));
-chat.onStatus((status, error) => { if (status === "gone") reconnect(error); });
+chat.onStatus((status, error) => {
+  if (status === "gone") reconnect(error);
+});
 chat.release();
 ```
 
@@ -431,19 +457,19 @@ chat.release();
 const todos = self.state("todos", Type.Array(TodoSchema), []);
 
 todos.change(ctx, (draft) => {
-	draft.push({ id: "t1", text: "Write docs", done: false });
+  draft.push({ id: "t1", text: "Write docs", done: false });
 });
 todos.change(ctx, (draft) => {
-	draft[0].done = true;
+  draft[0].done = true;
 });
 todos.replace(ctx, []);
 
-todos.value;  // immutable
+todos.value; // immutable
 todos.subscribe((value) => render(value));
 
 // mirroring an external immutable store: subscribers get a diff, not the whole value
-view.replace(ctx, conversation.view);                    // diffs when the new value reuses old containers
-view.replace(ctx, rebuilt, { diff: true });              // always diff
+view.replace(ctx, conversation.view); // diffs when the new value reuses old containers
+view.replace(ctx, rebuilt, { diff: true }); // always diff
 ```
 
 - A `change` is atomic: one revision, or nothing if the callback throws.
@@ -456,8 +482,14 @@ view.replace(ctx, rebuilt, { diff: true });              // always diff
 **A cell whose first value comes from a source** declares `{ init }` instead of an initial value:
 
 ```ts
-const db = self.resource("db", { version: 1, open: () => openSqlite(path), close: (db) => db.close() });
-const notes = self.state("notes", Type.Array(NoteSchema), { init: () => db.value.all("SELECT * FROM notes") });
+const db = self.resource("db", {
+  version: 1,
+  open: () => openSqlite(path),
+  close: (db) => db.close(),
+});
+const notes = self.state("notes", Type.Array(NoteSchema), {
+  init: () => db.value.all("SELECT * FROM notes"),
+});
 ```
 
 `init(ctx)` runs once the resources are open and the references live, before the object goes live, so no method,
@@ -493,6 +525,7 @@ send: async (input, ctx) => {
 ```
 
 A **root** is a short tree of calls, started at ingress:
+
 - by a link, for a request that arrives without one;
 - by `host.root(fn)`, for timers and scripts;
 - by each event delivered to a listener (`self.on`);
@@ -521,13 +554,13 @@ answer: async ({ id, value }, ctx) => {
 
 An object lives while it's **referenced**, and every reference has an owner:
 
-| Owner | Acquired with | Released when |
-| --- | --- | --- |
-| another object | `self.get` | that object is disposed, or no longer declares it |
-| a call | `ctx.get` | the call settles |
-| a connection | a remote host's `get` | release, disconnect, revocation |
-| the host | `lifetime: "host"` | host shutdown (or a reload removing its facet) |
-| UI | `useObject` | unmount |
+| Owner          | Acquired with         | Released when                                     |
+| -------------- | --------------------- | ------------------------------------------------- |
+| another object | `self.get`            | that object is disposed, or no longer declares it |
+| a call         | `ctx.get`             | the call settles                                  |
+| a connection   | a remote host's `get` | release, disconnect, revocation                   |
+| the host       | `lifetime: "host"`    | host shutdown (or a reload removing its facet)    |
+| UI             | `useObject`           | unmount                                           |
 
 - **Disposal** runs after the last reference is released, plus `linger`. Tasks are aborted, listeners removed, resources closed in reverse order (every close runs, and errors are collected), then the object's own references are released, which can dispose further objects.
 - **A resource's `close` may still use the objects its object references.** That holds for host shutdown and revocation too: `host.close()` and `invalidatePrincipal` dispose referrers before what they reference, and close links last. Bound remote calls in `close` with a signal: a call over a link that is already down waits for a reconnect.
@@ -535,8 +568,8 @@ An object lives while it's **referenced**, and every reference has an owner:
 - **References must not form cycles.** Inside one host this is checked at `get`.
 
 ```ts
-host.serve(Conversation, conversationFactory, { linger: 30_000 });  // switching back quickly doesn't reopen its watch
-host.serve(Index, indexFactory, { lifetime: "host" });              // one object from load to host shutdown
+host.serve(Conversation, conversationFactory, { linger: 30_000 }); // switching back quickly doesn't reopen its watch
+host.serve(Index, indexFactory, { lifetime: "host" }); // one object from load to host shutdown
 ```
 
 **`lifetime: "host"`** is for local types with an empty input (or only defaults): the type has exactly one object,
@@ -551,24 +584,28 @@ required field and together with `linger`; `serve` checks the same at runtime, f
 export const Routes = defineRegistry<RouteHandler>("http.routes", { conflict: "error" });
 
 // contribute (only from `lifetime: "host"` objects)
-host.serve(Downloads, (_, _host, self) => {
-	const blobs = self.get(Blobs, {});
-	self.register(Routes, {
-		"GET /download": async (request, who, ctx) => {
-			const file = await blobs.find({ id: request.query.id }, ctx);
-			if (!canView(who, file.session)) return forbidden();
-			return stream(file, ctx);
-		},
-	});
-	return {};
-}, { lifetime: "host" });
+host.serve(
+  Downloads,
+  (_, _host, self) => {
+    const blobs = self.get(Blobs, {});
+    self.register(Routes, {
+      "GET /download": async (request, who, ctx) => {
+        const file = await blobs.find({ id: request.query.id }, ctx);
+        if (!canView(who, file.session)) return forbidden();
+        return stream(file, ctx);
+      },
+    });
+    return {};
+  },
+  { lifetime: "host" },
+);
 
 // consume: a request sees the table of its own code version
 server.on("request", (req, res) =>
-	host.root(async (ctx) => {
-		const route = host.registry(Routes).get(`${req.method} ${pathOf(req)}`, ctx);
-		return route ? route(req, principalOf(req), ctx) : notFound(res);
-	}),
+  host.root(async (ctx) => {
+    const route = host.registry(Routes).get(`${req.method} ${pathOf(req)}`, ctx);
+    return route ? route(req, principalOf(req), ctx) : notFound(res);
+  }),
 );
 ```
 
@@ -592,19 +629,20 @@ plugins/chat/
 ```ts
 // plugins/chat/worker.ts
 import { defineFacet } from "@earendil-works/chord";
+
 import { Chat, Conversation } from "./contract.ts";
 
 export default defineFacet((host) => {
-	host.serve(Conversation, conversationFactory, { linger: 30_000 });
-	host.serve(Chat, chatFactory);
+  host.serve(Conversation, conversationFactory, { linger: 30_000 });
+  host.serve(Chat, chatFactory);
 });
 ```
 
 ```ts
 // a host loads the plugins' facets for its kind
 await host.load([
-	new URL("../plugins/chat/worker.ts", import.meta.url),
-	new URL("../plugins/status/worker.ts", import.meta.url),
+  new URL("../plugins/chat/worker.ts", import.meta.url),
+  new URL("../plugins/status/worker.ts", import.meta.url),
 ]);
 ```
 
@@ -614,17 +652,17 @@ The facet's `setup` argument is its host, scoped to what a plugin needs: `serve`
 
 ```ts
 export default defineFacet((host) => {
-	host.serve(Sessions, sessionsFactory);
-	tools.register("rename_session", (args) =>
-		host.root(async (ctx) => (await ctx.get(Sessions, {})).rename(args, ctx)),
-	);
+  host.serve(Sessions, sessionsFactory);
+  tools.register("rename_session", (args) =>
+    host.root(async (ctx) => (await ctx.get(Sessions, {})).rename(args, ctx)),
+  );
 });
 ```
 
 ## Hot reload
 
 ```ts
-await host.reload([new URL("../plugins/chat/worker.ts", import.meta.url)]);  // or reload every changed plugin
+await host.reload([new URL("../plugins/chat/worker.ts", import.meta.url)]); // or reload every changed plugin
 ```
 
 ### What happens
@@ -645,20 +683,27 @@ Bug fixes, new methods, new cells, new resources and registration changes all sw
 // v1: { running, tasks } where tasks counted phases
 // v2: tasks counts tasks, and usage is new
 host.serve(StatusStore, ({ session }, _host, self) => {
-	const status = self.state("status", StatusV2, { running: false, tasks: 0, usage: emptyUsage() }, {
-		version: 2,
-		migrate: (old, from) => (from < 2 ? { running: old.running, tasks: 0, usage: emptyUsage() } : old),
-	});
-	return {
-		status,
-		report: async (s, ctx) => {
-			status.replace(ctx, s);
-		},
-	};
+  const status = self.state(
+    "status",
+    StatusV2,
+    { running: false, tasks: 0, usage: emptyUsage() },
+    {
+      version: 2,
+      migrate: (old, from) =>
+        from < 2 ? { running: old.running, tasks: 0, usage: emptyUsage() } : old,
+    },
+  );
+  return {
+    status,
+    report: async (s, ctx) => {
+      status.replace(ctx, s);
+    },
+  };
 });
 ```
 
 At the gate, for each live `StatusStore`:
+
 1. **Roots already inside finish.** Their re-entrant calls are let in.
 2. **Old roots that haven't touched it yet get `upgrade_conflict`** instead of old code over migrated state. They retry as a new root.
 3. **`migrate` runs** on a private copy, and the result is validated against the new schema.
@@ -668,6 +713,7 @@ If the roots inside don't finish within the deadline (5 s), the reload is **abor
 
 The version belongs to the cell (default 1); other cells of the object are not migrated. The runtime compares each
 cell's schema and version between old and new code:
+
 - unchanged: compatible;
 - version raised: migrate (without `migrate`, the value is kept and must fit the new schema);
 - schema changed **without** a raised version, or a lowered version: the reload is refused.
@@ -677,8 +723,17 @@ A change of meaning with an identical schema needs a bump too. Nothing can detec
 ### Resources
 
 ```ts
-const db = self.resource("db", { version: 2, open: () => openSqlite(path, { wal: true }), close: (db) => db.close() });  // 1 → 2: reopen
-const port = self.resource("port", { version: 1, exclusive: true, open: () => listen(8787), close: (s) => s.close() });
+const db = self.resource("db", {
+  version: 2,
+  open: () => openSqlite(path, { wal: true }),
+  close: (db) => db.close(),
+}); // 1 → 2: reopen
+const port = self.resource("port", {
+  version: 1,
+  exclusive: true,
+  open: () => listen(8787),
+  close: (s) => s.close(),
+});
 ```
 
 - A reload keeps a resource's open value unless its `version`, `deps` or `exclusive` change: `open` doesn't run
@@ -690,12 +745,12 @@ const port = self.resource("port", { version: 1, exclusive: true, open: () => li
 
 ### Contract changes
 
-| Change | What happens |
-| --- | --- |
-| Additive, same version | reloads; consumers keep working |
-| Breaking, version bumped, with `accepts[old]` | reloads; old consumers go through the adapter |
-| Breaking, without an adapter | refused, unless the consumers reload in the same batch |
-| Breaking, version not bumped | refused: "consumer needs member …" |
+| Change                                        | What happens                                           |
+| --------------------------------------------- | ------------------------------------------------------ |
+| Additive, same version                        | reloads; consumers keep working                        |
+| Breaking, version bumped, with `accepts[old]` | reloads; old consumers go through the adapter          |
+| Breaking, without an adapter                  | refused, unless the consumers reload in the same batch |
+| Breaking, version not bumped                  | refused: "consumer needs member …"                     |
 
 The host's own **reference to a `lifetime: "host"` object** is a lifecycle pin, not an old-version consumer. When a reload replaces
 its provider, that reference adopts the new contract at commit; it does not require an `accepts` adapter for itself.
@@ -714,24 +769,24 @@ On the server, `host.reload(serverFacets, { remote: { "session:": workerFacets }
 ```ts
 // server
 const server = createHost<Principal>({ name: "server", self: { kind: "host" }, principalKey });
-server.accept(webSocketLink(wss, { principal: (req) => authenticate(req) }));  // stamps owner or guest from cookies
+server.accept(webSocketLink(wss, { principal: (req) => authenticate(req) })); // stamps owner or guest from cookies
 server.route("session:", {
-	authorize: (principal, host) => canReach(principal, host),  // before resolving or spawning
-	resolve: (host) => workers.ensure(host),  // a link to the worker, spawned if needed
-	principal: (host) => workers.principal(host),  // what the worker acts as when it calls the server
+  authorize: (principal, host) => canReach(principal, host), // before resolving or spawning
+  resolve: (host) => workers.ensure(host), // a link to the worker, spawned if needed
+  principal: (host) => workers.principal(host), // what the worker acts as when it calls the server
 });
 
 // worker
 const worker = createHost<Principal>({
-	name: `session:${id}`,
-	self: { kind: "host" },
-	principalKey,
-	upstream: { link: ipcLink(process), principal: { kind: "server" } },  // the server's own requests act as this
+  name: `session:${id}`,
+  self: { kind: "host" },
+  principalKey,
+  upstream: { link: ipcLink(process), principal: { kind: "server" } }, // the server's own requests act as this
 });
 
 // anywhere
-const chat = await ctx.get(Chat, { session: "S1", conversation: 1 });  // browser → server → worker session:S1
-const sessions = self.get(Sessions, {});  // `hostNamed("server")`: worker → server, acting as worker{S1}
+const chat = await ctx.get(Chat, { session: "S1", conversation: 1 }); // browser → server → worker session:S1
+const sessions = self.get(Sessions, {}); // `hostNamed("server")`: worker → server, acting as worker{S1}
 ```
 
 - **The server relays** between its children: worker to worker, and browser to worker.
@@ -751,6 +806,7 @@ const sessions = self.get(Sessions, {});  // `hostNamed("server")`: worker → s
   ```ts
   host.connect(webSocketLink(socket), { onProtocolMismatch: () => location.reload() });
   ```
+
 - **Browsers** don't take part in commits. They learn about new code through shape and `reset` messages, and an incompatible contract makes their calls fail with `upgrade_required`.
 
 ## Durable
@@ -758,57 +814,70 @@ const sessions = self.get(Sessions, {});  // `hostNamed("server")`: worker → s
 A worker's host provides the Durable Harness as a local object of lifetime `"host"`. A Durable phase isn't a root: it's pinned to its registry snapshot by Durable itself. Each Chord call a hook or tool makes starts a fresh short root.
 
 ```ts
-host.serve(Harness, (_, _host, self) => {
-	const durable = self.resource("durable", {
-		version: 1,
-		open: () => DurableHarness.open(storage, { models, registry: durableRegistry(host, Extensions) }),  // a reader over the code version tables
-		close: (h) => h.close(),
-	});
-	return { conversation: (id: number) => durable.value.conversation(id) };
-}, { lifetime: "host" });
+host.serve(
+  Harness,
+  (_, _host, self) => {
+    const durable = self.resource("durable", {
+      version: 1,
+      open: () =>
+        DurableHarness.open(storage, { models, registry: durableRegistry(host, Extensions) }), // a reader over the code version tables
+      close: (h) => h.close(),
+    });
+    return { conversation: (id: number) => durable.value.conversation(id) };
+  },
+  { lifetime: "host" },
+);
 
 // a plugin contributes a Durable extension like any registration
-host.serve(Guard, (_, _host, self) => {
-	self.register(Extensions, {
-		guard: defineExtension({
-			name: "guard",
-			hooks: [hook(ToolTask, { beforeTool: (call) => (isDangerous(call) ? { block: "Needs approval" } : undefined) })],
-		}),
-	});
-	return {};
-}, { lifetime: "host" });
+host.serve(
+  Guard,
+  (_, _host, self) => {
+    self.register(Extensions, {
+      guard: defineExtension({
+        name: "guard",
+        hooks: [
+          hook(ToolTask, {
+            beforeTool: (call) => (isDangerous(call) ? { block: "Needs approval" } : undefined),
+          }),
+        ],
+      }),
+    });
+    return {};
+  },
+  { lifetime: "host" },
+);
 ```
 
 A reload changing the guard: Durable phases already running keep the old snapshot, the next phase uses the new one, and there's never a phase without a guard.
 
 ## Errors
 
-| Code | Meaning |
-| --- | --- |
-| `forbidden` | The factory or a method refused this principal |
-| `invalid` | Input, arguments or a result failed validation |
-| `not_ready` | A declared resource or reference was used inside a factory, or state read before its reference's first hydration |
-| `not_in_variant` | The member doesn't exist in the variant you have |
-| `released` | The reference was released |
-| `gone` | The object was forced away while referenced. Call `get` again. |
-| `contract_mismatch` | The provider's contract doesn't cover the consumer's, and no adapter exists |
-| `upgrade_conflict` | An old root reached an object migrated meanwhile. Retry as a new root. |
-| `superseded` | The root's code version is no longer available on this host. Retry. |
-| `upgrade_required` | A browser's contract is outdated. Reload its web facets. |
-| `unavailable` | The target host can't be reached or started; reason `ready_timeout`: a reference was not ready within `readyTimeout` |
-| `aborted` | The call's `ctx` was cancelled |
+| Code                | Meaning                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `forbidden`         | The factory or a method refused this principal                                                                       |
+| `invalid`           | Input, arguments or a result failed validation                                                                       |
+| `not_ready`         | A declared resource or reference was used inside a factory, or state read before its reference's first hydration     |
+| `not_in_variant`    | The member doesn't exist in the variant you have                                                                     |
+| `released`          | The reference was released                                                                                           |
+| `gone`              | The object was forced away while referenced. Call `get` again.                                                       |
+| `contract_mismatch` | The provider's contract doesn't cover the consumer's, and no adapter exists                                          |
+| `upgrade_conflict`  | An old root reached an object migrated meanwhile. Retry as a new root.                                               |
+| `superseded`        | The root's code version is no longer available on this host. Retry.                                                  |
+| `upgrade_required`  | A browser's contract is outdated. Reload its web facets.                                                             |
+| `unavailable`       | The target host can't be reached or started; reason `ready_timeout`: a reference was not ready within `readyTimeout` |
+| `aborted`           | The call's `ctx` was cancelled                                                                                       |
 
 ## Rules of thumb
 
-| Do | Not |
-| --- | --- |
-| Keep reloadable state in cells | Closure variables (lost on reload) |
+| Do                                                                              | Not                                                                             |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Keep reloadable state in cells                                                  | Closure variables (lost on reload)                                              |
 | Bump the cell's version, with `migrate`, when a cell's shape or meaning changes | Changing a schema without a bump (refused) or a meaning without a bump (silent) |
-| Bump the contract version on breaking changes; add `accepts` for old consumers | Renaming or removing members at the same version (refused) |
-| Do slow setup in a resource's `open` | Awaiting inside the factory (it's synchronous) |
-| Do side effects in resources, listeners, tasks and registrations | Effects in the factory body (they run during prepare) |
-| Use `ctx.get` inside methods | `self.get` inside methods (a new reference per call) |
-| Keep roots short; long waits are state | Awaiting a human inside a method |
-| Check arguments in methods | Treating the variant as all of authorization |
-| Pass `ctx` everywhere | Starting background work with the caller's `ctx` (use a task) |
-| Treat state values as immutable | Mutating what you read |
+| Bump the contract version on breaking changes; add `accepts` for old consumers  | Renaming or removing members at the same version (refused)                      |
+| Do slow setup in a resource's `open`                                            | Awaiting inside the factory (it's synchronous)                                  |
+| Do side effects in resources, listeners, tasks and registrations                | Effects in the factory body (they run during prepare)                           |
+| Use `ctx.get` inside methods                                                    | `self.get` inside methods (a new reference per call)                            |
+| Keep roots short; long waits are state                                          | Awaiting a human inside a method                                                |
+| Check arguments in methods                                                      | Treating the variant as all of authorization                                    |
+| Pass `ctx` everywhere                                                           | Starting background work with the caller's `ctx` (use a task)                   |
+| Treat state values as immutable                                                 | Mutating what you read                                                          |

@@ -26,6 +26,7 @@ browser. Finally we will add background work, plugins, and hot reload.
 asking for it again.
 
 <!-- example:01 -->
+
 ```ts
 const host = createHost({ self: "server", name: "todo-server" });
 assert.equal(host.name, "todo-server");
@@ -56,11 +57,12 @@ can reach it. The input `{ list: "family" }` identifies which list we want;
 it is not an argument to `label`.
 
 <!-- example:02-contract -->
+
 ```ts
 const TodoLabel = local("tutorial.todos", {
-	version: 1,
-	input: Type.Object({ list: Type.String() }),
-	members: { label: method(undefined, Type.String()) },
+  version: 1,
+  input: Type.Object({ list: Type.String() }),
+  members: { label: method(undefined, Type.String()) },
 });
 ```
 
@@ -75,12 +77,13 @@ caller identity, and the code version for nested calls. Pass it to methods you
 call from that root.
 
 <!-- example:02-call -->
+
 ```ts
 const host = createHost({ self: "server" });
 host.serve(TodoLabel, ({ list }) => ({ label: () => `Todos for ${list}` }));
 const result = await host.root(async (ctx) => {
-	const todos = await ctx.get(TodoLabel, { list: "family" });
-	return todos.label(ctx);
+  const todos = await ctx.get(TodoLabel, { list: "family" });
+  return todos.label(ctx);
 });
 assert.equal(result, "Todos for family");
 ```
@@ -115,20 +118,21 @@ keeps its value. `self.derive(sources, fn)` declares a derivation; it has no
 name, because it holds nothing a reload must keep.
 
 <!-- example:03-contract -->
+
 ```ts
 const Todo = Type.Object({ text: Type.String(), done: Type.Boolean() });
 const Rows = Type.Array(Todo);
 const TodoStore = local("tutorial.todos", {
-	version: 1,
-	input: Type.Object({ list: Type.String() }),
-	members: {
-		label: method(undefined, Type.String()),
-		rows: Rows,
-		openCount: Type.Number(),
-		add: method(Type.Object({ text: Type.String() })),
-		finish: method(Type.Object({ index: Type.Integer() })),
-		reset: method(Rows),
-	},
+  version: 1,
+  input: Type.Object({ list: Type.String() }),
+  members: {
+    label: method(undefined, Type.String()),
+    rows: Rows,
+    openCount: Type.Number(),
+    add: method(Type.Object({ text: Type.String() })),
+    finish: method(Type.Object({ index: Type.Integer() })),
+    reset: method(Rows),
+  },
 });
 ```
 
@@ -139,34 +143,35 @@ context; changing the cell updates its readers and its derived count together.
 `add`, `finish` and `reset` declare no result, so they return nothing.
 
 <!-- example:03-factory -->
+
 ```ts
 /** The store's factory; `options` versions its rows (section 9). */
 const todoStore =
-	(options?: StateOptions<Static<typeof Rows>>): Factory<typeof TodoStore> =>
-	({ list }, _principal, self) => {
-		const rows = self.state("rows", Rows, [], options);
-		const openCount = self.derive([rows], (todos) => todos.filter((todo) => !todo.done).length);
-		return {
-			label: () => `Todos for ${list}`,
-			rows,
-			openCount,
-			add: ({ text }, ctx) => {
-				rows.change(ctx, (draft) => {
-					draft.push({ text, done: false });
-				});
-			},
-			finish: ({ index }, ctx) => {
-				rows.change(ctx, (draft) => {
-					const todo = draft[index];
-					if (!todo) throw invalid("args", "No such todo");
-					todo.done = true;
-				});
-			},
-			reset: (next, ctx) => {
-				rows.replace(ctx, next, { diff: true });
-			},
-		};
-	};
+  (options?: StateOptions<Static<typeof Rows>>): Factory<typeof TodoStore> =>
+  ({ list }, _principal, self) => {
+    const rows = self.state("rows", Rows, [], options);
+    const openCount = self.derive([rows], (todos) => todos.filter((todo) => !todo.done).length);
+    return {
+      label: () => `Todos for ${list}`,
+      rows,
+      openCount,
+      add: ({ text }, ctx) => {
+        rows.change(ctx, (draft) => {
+          draft.push({ text, done: false });
+        });
+      },
+      finish: ({ index }, ctx) => {
+        rows.change(ctx, (draft) => {
+          const todo = draft[index];
+          if (!todo) throw invalid("args", "No such todo");
+          todo.done = true;
+        });
+      },
+      reset: (next, ctx) => {
+        rows.replace(ctx, next, { diff: true });
+      },
+    };
+  };
 const todoFactory = todoStore();
 ```
 
@@ -182,6 +187,7 @@ values normally publish a whole-value replacement. Either way, subscribers
 receive the same resulting value.
 
 <!-- example:03-call -->
+
 ```ts
 const host = createHost({ self: "server", dev: true });
 host.serve(TodoStore, todoFactory);
@@ -189,9 +195,9 @@ const todos = await host.get(TodoStore, { list: "family" });
 const counts: (number | undefined)[] = [];
 const stop = todos.openCount.subscribe((value) => counts.push(value));
 await host.root(async (ctx) => {
-	await todos.add({ text: "Buy milk" }, ctx);
-	await todos.finish({ index: 0 }, ctx);
-	await todos.reset([], ctx);
+  await todos.add({ text: "Buy milk" }, ctx);
+  await todos.finish({ index: 0 }, ctx);
+  await todos.reset([], ctx);
 });
 assert.deepEqual(counts, [0, 1, 0]);
 assert.deepEqual(todos.rows.value, []);
@@ -227,30 +233,31 @@ JSON state and cannot be sent over a link. `self.expose` connects that member
 to a declared resource, without reading the resource during the factory.
 
 <!-- example:04-database -->
+
 ```ts
 const Database = local("tutorial.database", {
-	version: 1,
-	input: Type.Object({}),
-	members: { db: opaque<{ saved: string[] }>("tutorial.database@1") },
+  version: 1,
+  input: Type.Object({}),
+  members: { db: opaque<{ saved: string[] }>("tutorial.database@1") },
 });
 const SavedTodos = local("tutorial.saved-todos", {
-	version: 1,
-	input: Type.Object({ list: Type.String() }),
-	members: { add: method(Type.Object({ text: Type.String() })) },
+  version: 1,
+  input: Type.Object({ list: Type.String() }),
+  members: { add: method(Type.Object({ text: Type.String() })) },
 });
 const host = createHost({ self: "server" });
 let opens = 0;
 const closed = Promise.withResolvers<void>();
 host.serve(Database, (_input, _principal, self) => {
-	const db = self.resource("db", {
-		version: 1,
-		open: async () => {
-			opens++;
-			return { saved: [] as string[] };
-		},
-		close: () => closed.resolve(),
-	});
-	return { db: self.expose(db) };
+  const db = self.resource("db", {
+    version: 1,
+    open: async () => {
+      opens++;
+      return { saved: [] as string[] };
+    },
+    close: () => closed.resolve(),
+  });
+  return { db: self.expose(db) };
 });
 ```
 
@@ -262,21 +269,22 @@ Now declare `SavedTodos` as an object that holds both the store and the database
 Its editing method uses these dependencies only after activation.
 
 <!-- example:04-saving -->
+
 ```ts
 host.serve(TodoStore, todoFactory);
 host.serve(
-	SavedTodos,
-	({ list }, _principal, self) => {
-		const database = self.get(Database, {});
-		const todos = self.get(TodoStore, { list });
-		return {
-			add: async ({ text }, ctx) => {
-				database.db!.saved.push(text);
-				await todos.add({ text }, ctx);
-			},
-		};
-	},
-	{ linger: 0 },
+  SavedTodos,
+  ({ list }, _principal, self) => {
+    const database = self.get(Database, {});
+    const todos = self.get(TodoStore, { list });
+    return {
+      add: async ({ text }, ctx) => {
+        database.db!.saved.push(text);
+        await todos.add({ text }, ctx);
+      },
+    };
+  },
+  { linger: 0 },
 );
 ```
 
@@ -284,6 +292,7 @@ An outside consumer holds a `SavedTodos` reference. We also hold `Database`
 directly so we can inspect what was saved.
 
 <!-- example:04-call -->
+
 ```ts
 const saved = await host.get(SavedTodos, { list: "family" });
 const database = await host.get(Database, {});
@@ -335,39 +344,40 @@ A remote contract also says where its objects live: `host: hostNamed("server")`
 puts every `Todos` object on the host named `server`. Section 6 uses that.
 
 <!-- example:05-views -->
+
 ```ts
 const Todos = remote("tutorial.todo-view", {
-	version: 1,
-	input: Type.Object({ list: Type.String() }),
-	host: hostNamed("server"),
-	variants: {
-		viewer: { state: { rows: Rows } },
-		editor: {
-			state: { rows: Rows },
-			methods: { add: method(Type.Object({ text: Type.String() })) },
-		},
-	},
+  version: 1,
+  input: Type.Object({ list: Type.String() }),
+  host: hostNamed("server"),
+  variants: {
+    viewer: { state: { rows: Rows } },
+    editor: {
+      state: { rows: Rows },
+      methods: { add: method(Type.Object({ text: Type.String() })) },
+    },
+  },
 });
 
 /** Who may ask: the owner, a guest, or the server's own code. */
 type Principal = "owner" | "guest" | "server";
 
 function serveViews(api: Pick<Host<Principal>, "serve">): void {
-	api.serve(Todos, ({ list }, principal, self) => {
-		if (list !== "family") throw forbidden("This list is not shared");
-		const store = self.get(TodoStore, { list });
-		if (principal === "guest") {
-			return { variant: "viewer", rows: store.rows };
-		}
-		return {
-			variant: "editor",
-			rows: store.rows,
-			add: ({ text }, ctx) => {
-				if (text.trim().length === 0) throw invalid("args", "A todo needs text");
-				return store.add({ text }, ctx);
-			},
-		};
-	});
+  api.serve(Todos, ({ list }, principal, self) => {
+    if (list !== "family") throw forbidden("This list is not shared");
+    const store = self.get(TodoStore, { list });
+    if (principal === "guest") {
+      return { variant: "viewer", rows: store.rows };
+    }
+    return {
+      variant: "editor",
+      rows: store.rows,
+      add: ({ text }, ctx) => {
+        if (text.trim().length === 0) throw invalid("args", "A todo needs text");
+        return store.add({ text }, ctx);
+      },
+    };
+  });
 }
 ```
 
@@ -381,8 +391,13 @@ applications should use stable identity, connection provenance, and grant
 revision, not display names.
 
 <!-- example:05-call -->
+
 ```ts
-const host = createHost<Principal>({ name: "server", self: "server", principalKey: (principal) => principal });
+const host = createHost<Principal>({
+  name: "server",
+  self: "server",
+  principalKey: (principal) => principal,
+});
 host.serve(TodoStore, todoFactory);
 serveViews(host);
 const owner = await host.get(Todos, { list: "family" }, { principal: "owner" });
@@ -392,7 +407,9 @@ assert.equal(guest.variant, "viewer");
 await host.root((ctx) => owner.add({ text: "Buy milk" }, ctx), { principal: "owner" });
 assert.deepEqual(guest.rows.value, [{ text: "Buy milk", done: false }]);
 // @ts-expect-error A viewer has no add: TypeScript refuses it, and so does the provider.
-await assert.rejects(guest.add({ text: "Not allowed" }), (error) => isChordError(error, "not_in_variant"));
+await assert.rejects(guest.add({ text: "Not allowed" }), (error) =>
+  isChordError(error, "not_in_variant"),
+);
 await assert.rejects(owner.add({ text: " " }), (error) => isChordError(error, "invalid"));
 ```
 
@@ -431,6 +448,7 @@ own requests act as (`upstream: { link, principal }`, or `connect(link, {
 principal })`).
 
 <!-- example:06 -->
+
 ```ts
 const server = createHost<Principal>({ self: "server", name: "server" });
 server.serve(TodoStore, todoFactory);
@@ -438,17 +456,17 @@ serveViews(server);
 const [down, up] = memoryLinkPair();
 server.accept(down, { principal: "owner", kind: "client" });
 const browser = createHost({
-	self: "browser",
-	name: "browser",
-	kind: "client",
-	upstream: { link: up, principal: "server" },
+  self: "browser",
+  name: "browser",
+  kind: "client",
+  upstream: { link: up, principal: "server" },
 });
 const todos = await browser.get(Todos, { list: "family" });
 assert.ok(todos.variant === "editor");
 assert.deepEqual(todos.rows.value, []);
 const updated = Promise.withResolvers<void>();
 const stop = todos.rows.subscribe((rows) => {
-	if (rows.length === 1) updated.resolve();
+  if (rows.length === 1) updated.resolve();
 });
 await browser.root((ctx) => todos.add({ text: "Buy milk" }, ctx));
 await updated.promise;
@@ -496,11 +514,12 @@ then waits for shutdown. The promises make those events deterministic in a
 test; they are not stored application state.
 
 <!-- example:07 -->
+
 ```ts
 const Activity = local("tutorial.activity", {
-	version: 1,
-	input: Type.Object({}),
-	members: { seen: Type.Number() },
+  version: 1,
+  input: Type.Object({}),
+  members: { seen: Type.Number() },
 });
 const host = createHost({ self: "server" });
 host.serve(TodoStore, todoFactory);
@@ -508,22 +527,22 @@ const observed = Promise.withResolvers<void>();
 const seeded = Promise.withResolvers<void>();
 const stopped = Promise.withResolvers<void>();
 host.serve(Activity, (_input, _principal, self) => {
-	const todos = self.get(TodoStore, { list: "family" });
-	const seen = self.state("seen", Type.Number(), 0);
-	self.on("rows", todos.rows, (rows, ctx) => {
-		seen.replace(ctx, rows?.length ?? 0);
-		if (rows?.length === 1) observed.resolve();
-	});
-	self.task(async (ctx) => {
-		await todos.add({ text: "Review the list" }, ctx);
-		seeded.resolve();
-		await new Promise<void>((resolve) => {
-			if (ctx.signal.aborted) resolve();
-			else ctx.signal.addEventListener("abort", () => resolve(), { once: true });
-		});
-		stopped.resolve();
-	});
-	return { seen };
+  const todos = self.get(TodoStore, { list: "family" });
+  const seen = self.state("seen", Type.Number(), 0);
+  self.on("rows", todos.rows, (rows, ctx) => {
+    seen.replace(ctx, rows?.length ?? 0);
+    if (rows?.length === 1) observed.resolve();
+  });
+  self.task(async (ctx) => {
+    await todos.add({ text: "Review the list" }, ctx);
+    seeded.resolve();
+    await new Promise<void>((resolve) => {
+      if (ctx.signal.aborted) resolve();
+      else ctx.signal.addEventListener("abort", () => resolve(), { once: true });
+    });
+    stopped.resolve();
+  });
+  return { seen };
 });
 const activity = await host.get(Activity, {});
 await Promise.all([seeded.promise, observed.promise]);
@@ -568,36 +587,37 @@ screen asks for it. That keeps our menu contribution present. Objects of the
 default lifetime, `"referenced"`, are still created only when referenced.
 
 <!-- example:08 -->
+
 ```ts
 const Actions = defineRegistry<(ctx: Ctx) => Promise<number>>("tutorial.actions");
 const Menu = local("tutorial.menu", { version: 1, input: Type.Object({}) });
 let click: (() => Promise<number>) | undefined;
 const storeFacet: Facet = {
-	name: "todo-store",
-	...defineFacet((api) => api.serve(TodoStore, todoFactory)),
+  name: "todo-store",
+  ...defineFacet((api) => api.serve(TodoStore, todoFactory)),
 };
 const menuFacet: Facet = {
-	name: "todo-menu",
-	...defineFacet(
-		(api) => {
-			api.serve(
-				Menu,
-				(_input, _principal, self) => {
-					const todos = self.get(TodoStore, { list: "family" });
-					self.register(Actions, {
-						addSample: async (ctx) => {
-							await todos.add({ text: "Try plugins" }, ctx);
-							return todos.openCount.value;
-						},
-					});
-					return {};
-				},
-				{ lifetime: "host" },
-			);
-			click = () => api.root((ctx) => api.registry(Actions).get("addSample", ctx)!(ctx));
-		},
-		{ uses: [TodoStore] },
-	),
+  name: "todo-menu",
+  ...defineFacet(
+    (api) => {
+      api.serve(
+        Menu,
+        (_input, _principal, self) => {
+          const todos = self.get(TodoStore, { list: "family" });
+          self.register(Actions, {
+            addSample: async (ctx) => {
+              await todos.add({ text: "Try plugins" }, ctx);
+              return todos.openCount.value;
+            },
+          });
+          return {};
+        },
+        { lifetime: "host" },
+      );
+      click = () => api.root((ctx) => api.registry(Actions).get("addSample", ctx)!(ctx));
+    },
+    { uses: [TodoStore] },
+  ),
 };
 const host = createHost({ self: "server" });
 await host.load([menuFacet, storeFacet], { awaitHostObjects: false });
@@ -649,15 +669,16 @@ cell declaration. This test deliberately pauses one caller to show what an
 old root sees; application methods should not pause like this.
 
 <!-- example:09-compatible -->
+
 ```ts
 const host = createHost({ self: "server" });
 const facet = (label: string): Facet => ({
-	name: "todos",
-	setup: (api) =>
-		api.serve(TodoStore, (input, principal, self) => ({
-			...todoFactory(input, principal, self),
-			label: () => label,
-		})),
+  name: "todos",
+  setup: (api) =>
+    api.serve(TodoStore, (input, principal, self) => ({
+      ...todoFactory(input, principal, self),
+      label: () => label,
+    })),
 });
 await host.load([facet("Original")]);
 const todos = await host.get(TodoStore, { list: "family" });
@@ -665,10 +686,10 @@ await todos.add({ text: "Buy milk" });
 const entered = Promise.withResolvers<void>();
 const resume = Promise.withResolvers<void>();
 const oldRoot = host.root(async (ctx) => {
-	const first = await todos.label(ctx);
-	entered.resolve();
-	await resume.promise; // Test-only pause: pin an old caller during reload.
-	return [first, await todos.label(ctx)];
+  const first = await todos.label(ctx);
+  entered.resolve();
+  await resume.promise; // Test-only pause: pin an old caller during reload.
+  return [first, await todos.label(ctx)];
 });
 await entered.promise;
 const compatible = await host.reload([facet("Updated")]);
@@ -692,24 +713,28 @@ independently of the contract version. A **migration** (`migrate`) converts an
 old value of that cell to the new representation.
 
 <!-- example:09-migrate -->
+
 ```ts
 const events: string[] = [];
 const stopEvents = todos.rows.events((event) => events.push(event.type));
 const migrated = await host.reload([
-	{
-		name: "todos",
-		setup: (api) =>
-			api.serve(
-				TodoStore,
-				todoStore({
-					version: 2,
-					migrate: (old, from) => {
-						assert.equal(from, 1);
-						return (old as Static<typeof Rows>).map((todo) => ({ ...todo, text: todo.text.toUpperCase() }));
-					},
-				}),
-			),
-	},
+  {
+    name: "todos",
+    setup: (api) =>
+      api.serve(
+        TodoStore,
+        todoStore({
+          version: 2,
+          migrate: (old, from) => {
+            assert.equal(from, 1);
+            return (old as Static<typeof Rows>).map((todo) => ({
+              ...todo,
+              text: todo.text.toUpperCase(),
+            }));
+          },
+        }),
+      ),
+  },
 ]);
 assert.equal(migrated.gated.length, 1);
 assert.deepEqual(todos.rows.value, [{ text: "BUY MILK", done: false }]);
@@ -739,31 +764,32 @@ contract version 2. The provider's `accepts[1]` adapter builds the implementatio
 that version-1 consumers still expect.
 
 <!-- example:09-contract -->
+
 ```ts
 // Remove label from the new provider's contract: it is now called heading.
 const { label: _label, ...members } = TodoStore.def.members;
 const RenamedStore = local("tutorial.todos", {
-	version: 2,
-	input: TodoStore.def.input,
-	members: { ...members, heading: method(undefined, Type.String()) },
+  version: 2,
+  input: TodoStore.def.input,
+  members: { ...members, heading: method(undefined, Type.String()) },
 });
 await host.reload([
-	{
-		name: "todos",
-		setup: (api) =>
-			api.serve(
-				RenamedStore,
-				(input, principal, self) => {
-					const { label, ...implementation } = todoStore({ version: 2 })(input, principal, self);
-					return { ...implementation, heading: label };
-				},
-				{
-					accepts: {
-						1: (current) => ({ ...current, label: current.heading }),
-					},
-				},
-			),
-	},
+  {
+    name: "todos",
+    setup: (api) =>
+      api.serve(
+        RenamedStore,
+        (input, principal, self) => {
+          const { label, ...implementation } = todoStore({ version: 2 })(input, principal, self);
+          return { ...implementation, heading: label };
+        },
+        {
+          accepts: {
+            1: (current) => ({ ...current, label: current.heading }),
+          },
+        },
+      ),
+  },
 ]);
 assert.equal(await todos.label(), "Todos for family");
 const newer = await host.get(RenamedStore, { list: "family" });
@@ -792,19 +818,20 @@ fake facet when you want to test delegation without a real database or service.
 Here the fake records what the editing view sends to the store.
 
 <!-- example:10 -->
+
 ```ts
 const host = createHost<Principal>({ name: "server", self: "server", dev: true });
 const received: string[] = [];
 const fake: Facet = {
-	name: "fake-store",
-	...defineFacet((api: FacetApi) => {
-		api.serve(TodoStore, (input, principal, self) => ({
-			...todoFactory(input, principal, self),
-			add: ({ text }) => {
-				received.push(text);
-			},
-		}));
-	}),
+  name: "fake-store",
+  ...defineFacet((api: FacetApi) => {
+    api.serve(TodoStore, (input, principal, self) => ({
+      ...todoFactory(input, principal, self),
+      add: ({ text }) => {
+        received.push(text);
+      },
+    }));
+  }),
 };
 await host.load([fake]);
 serveViews(host);
@@ -839,13 +866,14 @@ screen should not lose its data merely because a button click finishes. Use
 `ctx.get` for the first lifetime and `host.get` for the second.
 
 <!-- example:11 -->
+
 ```ts
 const host = createHost({ self: "server" });
 host.serve(TodoStore, todoFactory);
 const screen = await host.get(TodoStore, { list: "family" });
 await host.root(async (ctx) => {
-	const temporary = await ctx.get(TodoStore, { list: "family" });
-	await temporary.add({ text: "Keep roots short" }, ctx);
+  const temporary = await ctx.get(TodoStore, { list: "family" });
+  await temporary.add({ text: "Keep roots short" }, ctx);
 }); // The temporary reference is released here; screen still holds the store.
 assert.equal(screen.openCount.value, 1);
 screen.release(); // No reference remains; without persistence, disposal loses these rows.
@@ -887,30 +915,33 @@ from `@earendil-works/chord`. `assert` expresses expected values; `it` and
 tutorial's source-matching check, not by the application.
 
 <!-- example:imports -->
+
 ```ts
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+
 import { type Static, Type } from "typebox";
 import { it, onTestFinished } from "vitest";
+
 import {
-	type Ctx,
-	createHost,
-	defineFacet,
-	defineRegistry,
-	type Facet,
-	type FacetApi,
-	type Factory,
-	forbidden,
-	type Host,
-	hostNamed,
-	invalid,
-	isChordError,
-	local,
-	memoryLinkPair,
-	method,
-	opaque,
-	remote,
-	type StateOptions,
+  type Ctx,
+  createHost,
+  defineFacet,
+  defineRegistry,
+  type Facet,
+  type FacetApi,
+  type Factory,
+  forbidden,
+  type Host,
+  hostNamed,
+  invalid,
+  isChordError,
+  local,
+  memoryLinkPair,
+  method,
+  opaque,
+  remote,
+  type StateOptions,
 } from "../src/index.ts";
 ```
 

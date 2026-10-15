@@ -6,9 +6,9 @@ Scripts use `tools`, `ALL_TOOLS`, `text`, `image`, `exit`, `store`, and `load`, 
 
 The package runs in two kinds of environments. Each has its own sandbox class, but they share one API, one script environment, and one result format:
 
-| Environment | Sandbox | Import from | Where scripts run |
-| --- | --- | --- | --- |
-| Node and Bun | `CodemodeSandbox` | `@earendil-works/pi-codemode` | a worker thread per execution |
+| Environment                            | Sandbox                 | Import from                            | Where scripts run                                |
+| -------------------------------------- | ----------------------- | -------------------------------------- | ------------------------------------------------ |
+| Node and Bun                           | `CodemodeSandbox`       | `@earendil-works/pi-codemode`          | a worker thread per execution                    |
 | Cloudflare Workers and Durable Objects | `RemoteCodemodeSandbox` | `@earendil-works/pi-codemode/portable` | a Durable Object in a separately deployed Worker |
 
 See [Usage on Node and Bun](#usage-on-node-and-bun) and [Usage on Cloudflare Workers](#usage-on-cloudflare-workers). A third sandbox, `InlineCodemodeSandbox`, runs scripts on the calling thread for other runtimes, or on Cloudflare when blocking the caller is acceptable.
@@ -19,16 +19,16 @@ See [Usage on Node and Bun](#usage-on-node-and-bun) and [Usage on Cloudflare Wor
 import { CodemodeSandbox } from "@earendil-works/pi-codemode";
 
 const sandbox = new CodemodeSandbox({
-	timeoutMs: 60_000,
-	tools: [
-		{
-			name: "read",
-			execute: async (args, { signal }) => {
-				const { path } = args as { path: string };
-				return await readFile(path, "utf8");
-			},
-		},
-	],
+  timeoutMs: 60_000,
+  tools: [
+    {
+      name: "read",
+      execute: async (args, { signal }) => {
+        const { path } = args as { path: string };
+        return await readFile(path, "utf8");
+      },
+    },
+  ],
 });
 
 const result = await sandbox.execute(`
@@ -66,10 +66,10 @@ Hosts that limit concurrency can track actual worker lifetime with `onWorkerStar
 ```ts
 const workers = new Set<Promise<void>>();
 const sandbox = new CodemodeSandbox({
-	onWorkerStarted(exited) {
-		workers.add(exited);
-		void exited.then(() => workers.delete(exited));
-	},
+  onWorkerStarted(exited) {
+    workers.add(exited);
+    void exited.then(() => workers.delete(exited));
+  },
 });
 ```
 
@@ -84,8 +84,8 @@ To enforce an admission limit, pass `acquireWorker()`. It runs synchronously aft
 ```ts
 const result = await sandbox.execute(`store("runs", (load("runs") ?? 0) + 1)`, { store: saved });
 if (result.ok) {
-	for (const key of result.storeWrites.delete) delete saved[key];
-	Object.assign(saved, result.storeWrites.set);
+  for (const key of result.storeWrites.delete) delete saved[key];
+  Object.assign(saved, result.storeWrites.set);
 }
 ```
 
@@ -111,11 +111,11 @@ By default `CodemodeSandbox` loads `quickjs-wasi/quickjs.wasm` from the installe
 import { CodemodeSandbox, loadQuickJSWasm } from "@earendil-works/pi-codemode";
 
 const sandbox = new CodemodeSandbox({
-	tools,
-	// Compiled once per path and cached.
-	wasm: loadQuickJSWasm(pathToQuickJSWasm),
-	// A file of your build containing `import "@earendil-works/pi-codemode/worker";`
-	workerUrl: new URL("./codemode-worker.js", import.meta.url),
+  tools,
+  // Compiled once per path and cached.
+  wasm: loadQuickJSWasm(pathToQuickJSWasm),
+  // A file of your build containing `import "@earendil-works/pi-codemode/worker";`
+  workerUrl: new URL("./codemode-worker.js", import.meta.url),
 });
 ```
 
@@ -127,11 +127,11 @@ additional build entrypoint and pass its relative source path as a string, for e
 
 `CodemodeSandbox` needs Node or Bun. It runs each script in a worker thread and reads the QuickJS binary from disk. Cloudflare Workers have neither, and they cannot compile WebAssembly at runtime. Two other sandboxes have the same API, the same script environment, and the same `CodemodeResult`. Only where the VM runs differs:
 
-| Sandbox | Where the VM runs | Use it for |
-| --- | --- | --- |
-| `CodemodeSandbox` | a worker thread | Node and Bun |
-| `RemoteCodemodeSandbox` | another isolate, usually a Durable Object in a separate Worker | a Durable Object that runs an agent session |
-| `InlineCodemodeSandbox` | the calling thread | anywhere else with WebAssembly, when blocking the caller is acceptable |
+| Sandbox                 | Where the VM runs                                              | Use it for                                                             |
+| ----------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `CodemodeSandbox`       | a worker thread                                                | Node and Bun                                                           |
+| `RemoteCodemodeSandbox` | another isolate, usually a Durable Object in a separate Worker | a Durable Object that runs an agent session                            |
+| `InlineCodemodeSandbox` | the calling thread                                             | anywhere else with WebAssembly, when blocking the caller is acceptable |
 
 Import the last two from `@earendil-works/pi-codemode/portable`, which has no Node imports. On Cloudflare, `@earendil-works/pi-codemode/cloudflare` adds the deployable Durable Object and the QuickJS module compiled by Wrangler.
 
@@ -153,20 +153,20 @@ A complete setup is in [`examples/cloudflare`](https://github.com/earendil-works
 export { CodemodeSandboxDurableObject as CodemodeSandbox } from "@earendil-works/pi-codemode/cloudflare";
 
 export default {
-	fetch: () => new Response("Not found", { status: 404 }),
+  fetch: () => new Response("Not found", { status: 404 }),
 };
 ```
 
 ```jsonc
 // sandbox/wrangler.jsonc
 {
-	"name": "pi-codemode-sandbox",
-	"main": "src/index.ts",
-	"compatibility_date": "2026-04-22",
-	"workers_dev": false,
-	"preview_urls": false,
-	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["CodemodeSandbox"] }],
-	"limits": { "cpu_ms": 60000 }
+  "name": "pi-codemode-sandbox",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-22",
+  "workers_dev": false,
+  "preview_urls": false,
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CodemodeSandbox"] }],
+  "limits": { "cpu_ms": 60000 },
 }
 ```
 
@@ -192,14 +192,14 @@ import type { CodemodeSandboxDurableObject } from "@earendil-works/pi-codemode/c
 import { RemoteCodemodeSandbox } from "@earendil-works/pi-codemode/portable";
 
 interface Env {
-	CODEMODE_SANDBOX: DurableObjectNamespace<CodemodeSandboxDurableObject>;
+  CODEMODE_SANDBOX: DurableObjectNamespace<CodemodeSandboxDurableObject>;
 }
 
 // Before: new CodemodeSandbox({ tools, timeoutMs: 60_000 })
 const sandbox = new RemoteCodemodeSandbox({
-	tools,
-	timeoutMs: 60_000,
-	remote: () => env.CODEMODE_SANDBOX.getByName(sessionId),
+  tools,
+  timeoutMs: 60_000,
+  remote: () => env.CODEMODE_SANDBOX.getByName(sessionId),
 });
 const result = await sandbox.execute(code, { signal, store });
 ```
@@ -214,8 +214,8 @@ Run both Workers locally with `wrangler dev -c agent/wrangler.jsonc -c sandbox/w
 ### Limits on Cloudflare
 
 - **Interrupt budget.** While a script computes without calling a tool, no timer can run, and `Date.now()` does not advance. A script that never yields is limited only by the interrupt budget, not by `timeoutMs`. QuickJS polls an interrupt handler while it runs, and the sandbox counts the polls. Past the budget, the execution fails with `kind: "timeout"`.
-   - The default `DEFAULT_INTERRUPT_BUDGET` of 100,000 polls is about 2 seconds of a tight loop on an Apple M-series laptop and about 10 seconds on Cloudflare.
-   - Keep the budget below the Worker's `cpu_ms` limit (30 seconds by default). Hitting that limit resets the object instead of failing one script.
+  - The default `DEFAULT_INTERRUPT_BUDGET` of 100,000 polls is about 2 seconds of a tight loop on an Apple M-series laptop and about 10 seconds on Cloudflare.
+  - Keep the budget below the Worker's `cpu_ms` limit (30 seconds by default). Hitting that limit resets the object instead of failing one script.
 - **Memory.** Each VM may use up to 32 MiB by default. All VMs in one isolate share its 128 MB.
 - **Changing the limits.** The Durable Object caps every request at its own limits, whatever the client asks for. To change them, subclass it in the sandbox Worker:
 
@@ -223,8 +223,8 @@ Run both Workers locally with `wrangler dev -c agent/wrangler.jsonc -c sandbox/w
 import { CodemodeSandboxDurableObject } from "@earendil-works/pi-codemode/cloudflare";
 
 export class CodemodeSandbox extends CodemodeSandboxDurableObject {
-	protected maxInterruptBudget = 200_000;
-	protected maxMemoryLimitBytes = 64 * 1024 * 1024;
+  protected maxInterruptBudget = 200_000;
+  protected maxMemoryLimitBytes = 64 * 1024 * 1024;
 }
 ```
 
@@ -270,42 +270,45 @@ To give an `Agent` a codemode tool, expose its other tools to the sandbox and wr
 ```ts
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import {
-	type CodemodeJsonSchema,
-	CodemodeSandbox,
-	type CodemodeTool,
-	renderDeclarations,
+  type CodemodeJsonSchema,
+  CodemodeSandbox,
+  type CodemodeTool,
+  renderDeclarations,
 } from "@earendil-works/pi-codemode";
 import { Type } from "typebox";
 
 const sandboxTools: CodemodeTool[] = agentTools.map((tool) => ({
-	name: tool.name,
-	description: tool.description,
-	inputSchema: tool.parameters as CodemodeJsonSchema,
-	outputSchema: (tool.outputSchema as CodemodeJsonSchema | undefined) ?? { type: "string" },
-	execute: async (args, { signal }) => {
-		const result = await tool.execute("nested", args as never, signal);
-		if (tool.outputSchema && result.structuredContent !== undefined) return result.structuredContent;
-		return result.content.map((block) => (block.type === "text" ? block.text : "")).join("\n");
-	},
+  name: tool.name,
+  description: tool.description,
+  inputSchema: tool.parameters as CodemodeJsonSchema,
+  outputSchema: (tool.outputSchema as CodemodeJsonSchema | undefined) ?? { type: "string" },
+  execute: async (args, { signal }) => {
+    const result = await tool.execute("nested", args as never, signal);
+    if (tool.outputSchema && result.structuredContent !== undefined)
+      return result.structuredContent;
+    return result.content.map((block) => (block.type === "text" ? block.text : "")).join("\n");
+  },
 }));
 
 const codemodeTool: AgentTool = {
-	name: "codemode",
-	label: "Codemode",
-	description: `Run JavaScript that calls tools as \`await tools.<name>(args)\`. Output with text() or return.\n\n${renderDeclarations({ tools: sandboxTools })}`,
-	parameters: Type.Object({ code: Type.String() }),
-	execute: async (_toolCallId, { code }, signal) => {
-		const sandbox = new CodemodeSandbox({ tools: sandboxTools });
-		try {
-			const result = await sandbox.execute(code, { signal });
-			const content = [...result.output];
-			if (result.ok && result.value !== undefined) content.push({ type: "text", text: JSON.stringify(result.value) });
-			if (!result.ok) content.push({ type: "text", text: result.error.stack ?? result.error.message });
-			return { content, details: undefined, isError: !result.ok };
-		} finally {
-			await sandbox.close();
-		}
-	},
+  name: "codemode",
+  label: "Codemode",
+  description: `Run JavaScript that calls tools as \`await tools.<name>(args)\`. Output with text() or return.\n\n${renderDeclarations({ tools: sandboxTools })}`,
+  parameters: Type.Object({ code: Type.String() }),
+  execute: async (_toolCallId, { code }, signal) => {
+    const sandbox = new CodemodeSandbox({ tools: sandboxTools });
+    try {
+      const result = await sandbox.execute(code, { signal });
+      const content = [...result.output];
+      if (result.ok && result.value !== undefined)
+        content.push({ type: "text", text: JSON.stringify(result.value) });
+      if (!result.ok)
+        content.push({ type: "text", text: result.error.stack ?? result.error.message });
+      return { content, details: undefined, isError: !result.ok };
+    } finally {
+      await sandbox.close();
+    }
+  },
 };
 ```
 
@@ -327,15 +330,17 @@ The run declares its own tools and globals, and the host answers every call itse
 
 ```ts
 const run = sandbox.start(code, {
-	startedAt: Date.now(),
-	seed: 7,
-	tools: [{ name: "read", description: "Read a file" }],
-	onStarted: (fingerprint) => {}, // what the VM is: engine versions, prelude hash, limits
-	onCall: (call) => {
-		// call.id is the VM's own number for the call, in the order the script made them.
-		void readFile(call.args).then((text) => run.deliver(nextResult++, Date.now(), call.id, { ok: true, value: text }));
-	},
-	onIdle: (seq, issued) => {}, // after result `seq` (0: the first run), `issued` calls in total
+  startedAt: Date.now(),
+  seed: 7,
+  tools: [{ name: "read", description: "Read a file" }],
+  onStarted: (fingerprint) => {}, // what the VM is: engine versions, prelude hash, limits
+  onCall: (call) => {
+    // call.id is the VM's own number for the call, in the order the script made them.
+    void readFile(call.args).then((text) =>
+      run.deliver(nextResult++, Date.now(), call.id, { ok: true, value: text }),
+    );
+  },
+  onIdle: (seq, issued) => {}, // after result `seq` (0: the first run), `issued` calls in total
 });
 const result = await run.result;
 ```
@@ -346,11 +351,11 @@ A run has no deadline unless `timeoutMs` is given. Result numbers must run 1, 2,
 
 `execute()` never rejects for script failures. `result.error.kind` is one of:
 
-| kind      | meaning                                                                     |
-| --------- | --------------------------------------------------------------------------- |
-| `script`  | the script threw or failed to parse; `stack` points at `codemode.js:<line>` |
-| `timeout` | the deadline expired or the interrupt budget ran out; VM shutdown was requested |
-| `aborted` | `options.signal` fired or `close()` was called; VM shutdown was requested |
+| kind      | meaning                                                                                            |
+| --------- | -------------------------------------------------------------------------------------------------- |
+| `script`  | the script threw or failed to parse; `stack` points at `codemode.js:<line>`                        |
+| `timeout` | the deadline expired or the interrupt budget ran out; VM shutdown was requested                    |
+| `aborted` | `options.signal` fired or `close()` was called; VM shutdown was requested                          |
 | `sandbox` | the VM or its transport failed, for example a wasm trap, a missing worker file, or a failed remote |
 
 `result.output` holds the text and image items in the order the script produced them, also for failed executions. The host keeps all of it until the script ends, so output is limited to `MAX_OUTPUT_CHARS` (16 Mi) characters of text and base64 image data and `MAX_OUTPUT_ITEMS` (100000) items. Past either limit the script fails with a `RangeError`, even if it catches the error. `result.calls` lists every tool call with `status: "ok" | "error" | "cancelled"`. A call that is still running when the script returns (not awaited) is aborted through the tool's `signal` and reported as `cancelled`.

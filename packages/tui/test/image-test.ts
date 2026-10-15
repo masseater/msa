@@ -1,11 +1,12 @@
 import { readFileSync } from "fs";
+
 import { Image } from "../src/components/image.ts";
 import { Spacer } from "../src/components/spacer.ts";
 import { Text } from "../src/components/text.ts";
-import { ProcessTerminal } from "../src/terminal.ts";
 import { getCapabilities, getImageDimensions } from "../src/terminal-image.ts";
-import type { TUI } from "../src/tui.ts";
+import { ProcessTerminal } from "../src/terminal.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import type { TUI } from "../src/tui.ts";
 
 const testImagePath = process.argv[2] || "/tmp/test-image.png";
 
@@ -14,11 +15,11 @@ console.log("Loading image from:", testImagePath);
 
 let imageBuffer: Buffer;
 try {
-	imageBuffer = readFileSync(testImagePath);
+  imageBuffer = readFileSync(testImagePath);
 } catch (_e) {
-	console.error(`Failed to load image: ${testImagePath}`);
-	console.error("Usage: node test/image-test.ts [path-to-image.png]");
-	process.exit(1);
+  console.error(`Failed to load image: ${testImagePath}`);
+  console.error("Usage: node test/image-test.ts [path-to-image.png]");
+  process.exit(1);
 }
 
 const base64Data = imageBuffer.toString("base64");
@@ -34,23 +35,29 @@ tui.addChild(new Text("Image Rendering Test", 1, 1));
 tui.addChild(new Spacer(1));
 
 if (dims) {
-	tui.addChild(
-		new Image(base64Data, "image/png", { fallbackColor: (s) => `\x1b[33m${s}\x1b[0m` }, { maxWidthCells: 60 }, dims),
-	);
+  tui.addChild(
+    new Image(
+      base64Data,
+      "image/png",
+      { fallbackColor: (s) => `\x1b[33m${s}\x1b[0m` },
+      { maxWidthCells: 60 },
+      dims,
+    ),
+  );
 } else {
-	tui.addChild(new Text("Could not parse image dimensions", 1, 0));
+  tui.addChild(new Text("Could not parse image dimensions", 1, 0));
 }
 
 tui.addChild(new Spacer(1));
 tui.addChild(new Text("Press Ctrl+C to exit", 1, 0));
 
 const editor = {
-	handleInput(data: string) {
-		if (data.charCodeAt(0) === 3) {
-			tui.stop();
-			process.exit(0);
-		}
-	},
+  handleInput(data: string) {
+    if (data.charCodeAt(0) === 3) {
+      tui.stop();
+      process.exit(0);
+    }
+  },
 };
 
 tui.setFocus(editor as any);
