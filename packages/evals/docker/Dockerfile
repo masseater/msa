@@ -29,8 +29,7 @@ RUN chmod -R go-rwx \
       /repo/packages/evals/evals \
       /repo/packages/evals/docker \
     && chmod go-rwx \
-      /repo/vitest.base.ts \
-      /repo/packages/evals/vitest.evals.config.ts \
+      /repo/packages/evals/vitest.container.config.ts \
     && mkdir -p /run/pi-eval-secrets \
     && chmod 0700 /run/pi-eval-secrets
 ENTRYPOINT ["node", "--experimental-strip-types", "docker/entrypoint.ts"]

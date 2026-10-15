@@ -1,8 +1,8 @@
 import { defineConfig, mergeConfig } from "vitest/config";
-import baseConfig, { workspaceSourcePaths } from "../../vitest.base.ts";
+import { testBaseConfig, workspaceSourcePaths } from "../../vite.config.ts";
 
 export default mergeConfig(
-	baseConfig,
+	testBaseConfig,
 	defineConfig({
 		test: {
 			include: ["test/**/*.test.ts"],

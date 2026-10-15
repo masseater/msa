@@ -81,4 +81,4 @@ for name in CI GITHUB_ACTIONS; do
 done
 
 echo "Running tests without API keys in isolated home: $test_root/home"
-env -i "${test_env[@]}" pnpm test
+env -i "${test_env[@]}" vp run test

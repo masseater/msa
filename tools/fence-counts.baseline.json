@@ -13,6 +13,5 @@
     "noUncheckedSideEffectImports": 0,
     "allowUnreachableCode": 4,
     "allowUnusedLabels": 0
-  },
-  "engineLintErrors": 1635
+  }
 }
