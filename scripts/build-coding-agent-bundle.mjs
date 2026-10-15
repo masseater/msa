@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { isBuiltin } from "node:module";
+import { createRequire, isBuiltin } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -10,6 +10,11 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 const codingAgentDir = join(repoRoot, "packages", "coding-agent");
 const aiDistDir = join(repoRoot, "packages", "ai", "dist");
+// https-proxy-agent is declared by packages/ai. Resolve it from there instead of the repo root so the
+// bundle works with pnpm's isolated node_modules, where the root has no hoisted copy.
+const httpsProxyAgentDir = dirname(
+	createRequire(join(repoRoot, "packages", "ai", "package.json")).resolve("https-proxy-agent"),
+);
 const codingAgentDistDir = join(codingAgentDir, "dist");
 const bundleDir = join(codingAgentDistDir, "bundle");
 const banner = {
@@ -69,7 +74,7 @@ const httpsProxyAgentNamedExportPlugin = {
 			() => ({
 				contents: 'export { HttpsProxyAgent } from "https-proxy-agent";',
 				loader: "js",
-				resolveDir: repoRoot,
+				resolveDir: httpsProxyAgentDir,
 			}),
 		);
 	},

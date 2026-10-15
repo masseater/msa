@@ -66,6 +66,30 @@ pre-push ではなく独立したコマンドにしている。
 | `noUncheckedSideEffectImports` | 0 |
 | `allowUnusedLabels` | 0 |
 
+## 依存バージョンの持ち方
+
+- `packages/**` — upstream の literal な exact pin のまま。upstream が上げたバージョンがそのまま効く。catalog に
+  移すと `package.json` の bump が無視され、upstream の更新が静かに効かなくなる。
+- msa のコードと root の開発ツール — `catalog:`（house の `catalogMode: prefer` に従う）。
+- pnpm の isolated `node_modules` では、宣言していない依存は解決できない。upstream は npm の hoist に依存して
+  `@smithy/types` を宣言せずに import していたので、`packages/ai` の dependencies に足した（同じ理由の漏れが
+  出たら、その都度その package に宣言を足す。`node-linker=hoisted` では隠さない）。
+
+hoist 前提だった箇所の修正（upstream を取り込むたびに戻っていないか見る）:
+
+| 場所 | 直した内容 |
+| --- | --- |
+| `packages/ai/package.json` | `@smithy/types` を dependencies に宣言（import しているのに未宣言だった） |
+| `scripts/build-coding-agent-bundle.mjs` | `https-proxy-agent` を repo root ではなく `packages/ai` から resolve するようにした |
+| `packages/coding-agent/package.json` | `copy-binary-assets` の `photon_rs_bg.wasm` を root の hoist 前提パスから自パッケージの `node_modules` 相対に変えた |
+| `packages/env/test/ssh.test.ts` | login-shell 起動のテストを POSIX なアカウントシェルの時だけ実行するようにした（下記） |
+
+`packages/env` の login-shell 起動（`exec "$SHELL" -lc 'exec "$0" "$@"'`）は POSIX 構文で、`.profile`/`.zprofile`
+を読む前提。アカウントシェルが fish だと `$@` が解釈できず exit 127 になる（masseater のマシンが該当。実測:
+`fish -lc 'exec "$0" "$@"' /bin/echo ok` → `fish: $@ is not supported` / exit 127）。product 側の対応（fish の
+`$argv` を出す、`config.fish` を読む）は Phase B 以降。今はテストを POSIX シェルの時だけ実行し、理由をコメントに
+残している。upstream に投げる候補。
+
 ## base config を 2 つ持つ理由
 
 1 つの base では、engine の `dist/` emit と msa コードの house 流 `noEmit` を両立できない。

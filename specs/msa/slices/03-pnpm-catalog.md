@@ -37,6 +37,36 @@ npm は推移的依存をすべて hoist するが pnpm はしない。宣言し
 `pnpm install --frozen-lockfile && pnpm -r run build && pnpm -r run test` が通ることを示す。それから残りを変換する。
 「`vp` が web でない emit 型 monorepo を回せるか」はここで白黒つける。
 
+## 実測で分かったこと（この slice の実装中に判明）
+
+- pnpm の isolated link が、upstream の hoist 前提を 3 箇所で露呈させた（すべて「宣言漏れ」または「root からの
+  解決」で、`node-linker=hoisted` には逃げずに直した）:
+  - `packages/ai` が `@smithy/types` を import しているのに宣言していない → dependencies に追加
+  - `scripts/build-coding-agent-bundle.mjs` が `https-proxy-agent` を repo root から resolve していた →
+    `packages/ai` から resolve するように変更
+  - `packages/coding-agent` の `copy-binary-assets` が `../../node_modules/...` を見ていた →
+    自パッケージの `node_modules` 相対に変更
+- `packages/env` のテストは Rust の daemon（`packages/env/daemon/target/debug/pi-env`）を必要とする。
+  `pnpm --filter @earendil-works/pi-env run build:daemon`（要 cargo）を先に走らせないと 6 ファイルが落ちる。
+  これは slice 05 の `verify` の依存に入れる。
+- login-shell 起動のテストは、アカウントシェルが POSIX でないと落ちる。このマシンのシェルは fish で、
+  `fish -lc 'exec "$0" "$@"'` が exit 127 になるため、テスト側で POSIX シェルの時だけ実行するようにした
+  （詳細と実測は `docs/toolchain-fence.md`）。
+- 移行後のゲート（すべて実測）:
+  - `pnpm install` → 280 packages、`allowBuilds` は canvas と esbuild のみ true
+  - `pnpm run check` → biome + 残したチェック + tsc --noEmit が緑
+  - `pnpm run build` → 11 package をトポロジカル順で build し、`dist/bundle/cli.js --version` = 1.2.0
+  - `bash test.sh` → 11 package すべて緑（テストファイル: coding-agent 294 + 6 skip、ai 145 + 27 skip、
+    durable 60 + 2 skip、chord 44、env 5 + 1 skip、codemode 6、evals 6、mcp 5、agent 4、telemetry 2、tui は node:test）
+  - `bash pi-test.sh --version` → 1.2.0
+  - `pnpm ls -r --depth -1` と workspace の symlink が `link:packages/*` を指す
+- upstream の `check` の一部（`check:ts-imports`）はどの package manager でも動くので残した。
+
+## spike の結果（`vp` が emit 型 monorepo を回せるか）
+
+slice 04 で確かめる。slice 03 の時点では `pnpm -r --workspace-concurrency=1 --if-present run build` が
+全 11 package を正しい順序で build でき、`bundle/cli.js --version` が 1.2.0 を返すことを確認している。
+
 ## 人が実行・確認できるもの
 
 ```bash

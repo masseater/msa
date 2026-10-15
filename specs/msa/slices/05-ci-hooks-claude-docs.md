@@ -10,6 +10,9 @@ pi ではなく msa を語る。
 - `.github/workflows/verify.yml`（house テンプレートから）: `voidzero-dev/setup-vp` に `--frozen-lockfile`、
   push 時は `vp exec commitlint --from/--to`、`vp run --log grouped verify`、Vite Task の cache。
   定期実行が要るものが無ければ、workflow はこの 1 本だけ。
+- `verify` の依存には、slice 03 で判明した `packages/env` の Rust daemon build
+  （`pnpm --filter @earendil-works/pi-env run build:daemon`、要 cargo）を含める。CI ランナーに cargo を用意するか、
+  そのテストを CI では skip するかをここで決める。
 - `ci.yml`（置き換えられる側）と、残っている pi の workflow を削除。
 - `.claude/settings.json`: `SessionStart`（install）、`PreToolUse`（`block-pnpm`・`fallow-gate`）、
   `Stop` = `vp run verify`。モデルを使う Stop agent 4 つと `cc-jev-teacher` marketplace は外す（web app の

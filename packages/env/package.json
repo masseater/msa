@@ -44,8 +44,8 @@
 		"node": ">=22.19.0"
 	},
 	"dependencies": {
-		"@earendil-works/chord": "1.2.0",
-		"@earendil-works/pi-durable": "1.2.0"
+		"@earendil-works/chord": "workspace:*",
+		"@earendil-works/pi-durable": "workspace:*"
 	},
 	"devDependencies": {
 		"shx": "0.3.4",
