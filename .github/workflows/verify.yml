@@ -45,6 +45,10 @@ jobs:
           commits="$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE_SHA...$HEAD_SHA" --jq .total_commits)"
           git fetch --no-tags --depth="$((commits + 1))" origin "$HEAD_SHA"
           vp exec commitlint --from "$BEFORE_SHA" --to "$HEAD_SHA" --verbose
+      - if: github.event_name == 'push'
+        run: vp run gitleaks
+        env:
+          GITLEAKS_BASE: ${{ github.event.before }}
       - name: Hydrate model data
         run: vp run hydrate:model-data
       - run: vp run --log grouped verify

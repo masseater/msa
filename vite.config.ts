@@ -161,15 +161,7 @@ export default defineConfig({
     tasks: {
       verify: {
         command: "vp check",
-        dependsOn: [
-          "engine-checks",
-          "fence-check",
-          "syncpack",
-          "fallow-all",
-          "gitleaks",
-          "audit",
-          "test-all",
-        ],
+        dependsOn: ["engine-checks", "fence-check", "syncpack", "fallow-all", "audit", "test-all"],
       },
       "engine-checks": {
         command:
@@ -179,7 +171,8 @@ export default defineConfig({
       "fallow-all": "vp run -r fallow",
       syncpack: "syncpack lint",
       gitleaks: {
-        command: "go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --no-banner",
+        command:
+          'go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --no-banner --log-opts="$(git rev-parse -q --verify "$GITLEAKS_BASE" || echo origin/main)..HEAD"',
         cache: false,
       },
       audit: {
