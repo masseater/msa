@@ -41,17 +41,51 @@ house の `vite.config.ts` は Vite/Vitest の世代を抱えている。pi は 
 次に最大の `packages/ai` で試す。同梱の Vitest が回せないなら、pi の vitest を catalog から使ったまま `vp test` が
 それを包む形にする（入口はどちらでも 1 つ）。
 
+→ この slice では `vp test` に載せ替えず、`test-all` = `bash test.sh` のままにした。理由は「実測で分かったこと」。
+`vp test` の検証は、テストの入口を 1 つにする作業として slice 05 以降に送る。
+
 ## 人が実行・確認できるもの
 
 ```bash
 cd ~/ghq/github.com/masseater/msa
-vp check                       # oxfmt + oxlint + typecheck、木全体
+vp check                       # oxfmt + oxlint（msa のパス）
 vp run verify                  # hook と CI が呼ぶ唯一のゲート
 vp exec commitlint --from main --to HEAD
 printf 'nope' > /tmp/m && vp exec commitlint --edit /tmp/m   # 失敗するはず
-npm run fence:check            # ratchet は満たしたまま
+pnpm run fence:check           # ratchet は満たしたまま
 test ! -e biome.json && test ! -d .husky && echo old-tooling-gone
+vp hooks status                # dispatcher と 3 つの hook が見える
 ```
+
+## 実測で分かったこと
+
+- oxfmt は pi の整形を再現できない。`fmt.overrides` で pi の流儀（tabs・width 3・120 桁・`sortImports: false`）を
+  与えても `packages/**` + `scripts/**` の 143 ファイルが差分になり、CSS 風のテンプレート 1 件はパースに失敗した。
+  engine は `vp fmt` の対象外にし、`git diff --stat -- packages` が空であることを fence の証明にした（整形の持ち主は
+  upstream のまま）。
+- engine の oxlint はグリーンにできない。`correctness` + `suspicious` で 1,635 errors。上位は `no-underscore-dangle`
+  895・`no-shadow` 217・`block-scoped-var` 148・`no-control-regex` 111 で、pi の既存の書き方と衝突するルール。
+  ルールを削らずにそのまま測り、`fence-counts` の ratchet に 1 行として足した（増えたら落ちる）。
+- msa 側の oxlint は `style` と `restriction` を落とした。`tools/fence-counts.mjs` と config に対して
+  `no-magic-numbers`・`no-ternary`・`node/no-sync`・`sort-vars` などが 59 errors 出る。house のそれらのルールは
+  app のコード向けで、house 自身も config 用の overrides を持つ。`correctness`・`suspicious`・`perf`・`pedantic`・
+  `nursery` と `no-comments` は効かせている。
+- `no-comments`（error）が効くので msa のコードからコメントが消える。`tools/fence-counts.mjs` の説明は
+  `docs/toolchain-fence.md` に移した。`vp check --fix` は lint の autofix も走らせるので、整形だけ直したい時は
+  `vp fmt` を使う。
+- `engine-typecheck`（`tsc --noEmit -p tsconfig.json`）は verify から外した。flag 無しの config が壊れていれば、
+  ratchet の 11 本すべてで diagnostics が増えて `fence-check` が落ちるため。加えて、並列 4 で
+  `test-all` + `fence-check` + `engine-typecheck` を同時に回した時、32GB のマシンで `test-all` と
+  `engine-typecheck` が SIGKILL（exit 137）された。engine-typecheck を外した 3 並列では通っている。
+- `packages/env` の daemon は verify の前に要る（slice 03）。CI では cargo を入れるか、そのテストを skip するかを
+  slice 05 で決める。
+- `test-all` は pi の `bash test.sh` のまま。`vp test` への載せ替えは、隔離環境（`env -i` の allowlist）と e2e の
+  有効化条件（endpoint/auth の env があると e2e が起きる）を失うので、別の作業にした。
+- husky を外した後、`core.hooksPath` が `.husky/_` のままだと `vp config` は dispatcher を入れずに黙って飛ばす。
+  `git config --unset core.hooksPath` してから `vp hooks enable` する。
+- 依存: `vite-plus@1.1.0`（house の `catalogs.stack`）・`eslint-plugin-no-comments@1.2.1`・
+  `@commitlint/cli@21.2.3`・`@commitlint/config-conventional@21.2.3` を root の devDeps に追加。`@biomejs/*` と
+  `husky` を削除。
 
 ## グリーンを保つもの
 

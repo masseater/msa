@@ -1,6 +1,6 @@
 {
-  "commit": "4a5d37291",
-  "measuredAt": "2026-10-15T10:25:05.435Z",
+  "commit": "13df959ad",
+  "measuredAt": "2026-10-15T11:07:54.259Z",
   "flags": {
     "exactOptionalPropertyTypes": 1081,
     "noUncheckedIndexedAccess": 1713,
@@ -13,5 +13,6 @@
     "noUncheckedSideEffectImports": 0,
     "allowUnreachableCode": 4,
     "allowUnusedLabels": 0
-  }
+  },
+  "engineLintErrors": 1635
 }
