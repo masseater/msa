@@ -69,7 +69,7 @@
 		"quickjs-wasi": "3.6.2"
 	},
 	"devDependencies": {
-		"shx": "0.3.4",
+		"shx": "catalog:",
 		"vitest": "4.1.11"
 	}
 }

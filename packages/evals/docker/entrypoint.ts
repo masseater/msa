@@ -25,9 +25,9 @@ function assertDirectoryEntries(path: string, expectedEntries: readonly string[]
 }
 
 function assertWorkspace(): void {
-	assertDirectoryEntries("/repo", ["node_modules", "package.json", "packages", "vitest.base.ts"]);
+	assertDirectoryEntries("/repo", ["node_modules", "package.json", "packages"]);
 	assertDirectoryEntries("/repo/packages", ["evals"]);
-	assertDirectoryEntries("/repo/packages/evals", ["docker", "evals", "package.json", "src", "vitest.evals.config.ts"]);
+	assertDirectoryEntries("/repo/packages/evals", ["docker", "evals", "package.json", "src", "vitest.container.config.ts"]);
 	const codingAgentDir = "/repo/node_modules/@earendil-works/pi-coding-agent";
 	for (const name of ["package.json", "dist/index.js"]) {
 		if (!existsSync(join(codingAgentDir, name))) throw new Error(`Installed coding-agent is missing ${name}.`);
@@ -93,8 +93,7 @@ for (const path of [
 	evalRoot,
 	"/repo/packages/evals/src",
 	"/repo/packages/evals/docker",
-	"/repo/packages/evals/vitest.evals.config.ts",
-	"/repo/vitest.base.ts",
+	"/repo/packages/evals/vitest.container.config.ts",
 ]) {
 	assertRootOnly(path);
 	assertSandboxCannotRead(path);
@@ -130,12 +129,12 @@ for (const evalFile of evalFiles) {
 }
 
 const commandArgs = discover
-	? [vitestCli, "list", "--config", "vitest.evals.config.ts", ...vitestArgs, "--json=/artifacts/discovered-tests.json"]
+	? [vitestCli, "list", "--config", "vitest.container.config.ts", ...vitestArgs, "--json=/artifacts/discovered-tests.json"]
 	: [
 			vitestCli,
 			"run",
 			"--config",
-			"vitest.evals.config.ts",
+			"vitest.container.config.ts",
 			...vitestArgs,
 			"--reporter=vitest-evals/reporter",
 			"--reporter=json",
