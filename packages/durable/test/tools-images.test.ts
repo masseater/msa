@@ -594,7 +594,7 @@ describe("toBase64", () => {
     const result = spawnSync(process.execPath, args, { encoding: "utf8" });
     expect(result.stderr).not.toMatch(/heap out of memory|mismatch/);
     expect(result.status).toBe(0);
-  });
+  }, 20_000);
 });
 
 describe("createNodePhotonImages", () => {

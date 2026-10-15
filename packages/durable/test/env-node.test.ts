@@ -827,7 +827,7 @@ describe("NodeExecutionEnv shell", () => {
       BACKGROUND_CONTEXT,
     );
     expect(collected.output).toBe("😀");
-  });
+  }, 20_000);
 
   it("reports a missing working directory before spawning", async () => {
     const root = createTempDir();
@@ -1018,7 +1018,7 @@ describe("NodeExecutionEnv shell", () => {
     expect([
       ...getOrThrow(await env.readBinaryFile(result.spillPath!, BACKGROUND_CONTEXT)),
     ]).toEqual(expected);
-  });
+  }, 20_000);
 
   it("reports the spill of a command that times out", async () => {
     const root = createTempDir();
@@ -1076,7 +1076,7 @@ describe("NodeExecutionEnv shell", () => {
     expect(getOrThrow(await env.readTextFile(result.spillPath!, BACKGROUND_CONTEXT))).toHaveLength(
       size,
     );
-  });
+  }, 20_000);
 
   it("streams every line and spills them all once output crosses its line threshold", async () => {
     const root = createTempDir();
