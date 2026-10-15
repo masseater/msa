@@ -2,8 +2,9 @@
 
 ## 次に着手するエージェントへ
 
-`specs/msa/` の続きをやる。2026-10-15 時点の状況: **Phase A、slice 4 を実装中**（slice 1・2・3 は PR 済み。
-`main` にはまだ入っていない。stacked ブランチ `rebase/01-…` 〜 `rebase/04-…`）。
+`specs/msa/` の続きをやる。2026-10-15 時点の状況: **Phase A、slice 4 まで PR 済み**（masseater/msa の PR #1〜#4 が
+open。stacked ブランチ `rebase/01-…` 〜 `rebase/04-…` で、`main` にはまだ入っていない）。次は slice 5
+（`05-ci-hooks-claude-docs`）。
 
 1. まず `slices/01-fence.md` を読み、それを片付けるまで他のことを触らない。fence（どの設定がどのパスを支配するか）
    が再構築全体の可否を決める。fence が成立していれば、以降の slice は機械的作業になる。
@@ -72,7 +73,8 @@ fence の入力になる数字。`pnpm run fence:counts` で再現できる。
 
 | パス | formatter / linter | TypeScript | plugin・rule |
 | --- | --- | --- | --- |
-| `apps/**`, `libs/**`, `tools/**`, `infra/**`, `vite.config*.ts`, `specs/**`, `docs/**`（msa のコード） | `vp check`（oxfmt + oxlint の `correctness`・`suspicious`・`perf`・`pedantic`・`nursery`、`denyWarnings`） | `tsconfig.base.json`（テンプレート strict + pi の `erasableSyntaxOnly`/`verbatimModuleSyntax`。msa の最初の package で作る） | `no-comments`。decision plugin は msa のコードが現れてから |
+| `apps/**`, `libs/**`, `tools/**`, `infra/**`, `vite.config*.ts`（msa のコード） | `vp check`（oxfmt + oxlint の `correctness`・`suspicious`・`perf`・`pedantic`・`nursery`、`denyWarnings`） | `tsconfig.base.json`（テンプレート strict + pi の `erasableSyntaxOnly`/`verbatimModuleSyntax`。msa の最初の package で作る） | `no-comments`。decision plugin は msa のコードが現れてから |
+| `specs/**`, `docs/**`, `*.md` | oxfmt のみ（prose lint は入れていない） | — | `no-comments` と decision plugin は適用しない |
 | `packages/**`（vendored pi engine） | `vp fmt` は触らない（整形は upstream のまま）。lint は `vite.config.engine.ts` で `correctness` + `suspicious` を測り **ratchet** | emit は pi の `tsconfig.build.json`、strict フラグは **ratchet** | `no-comments` off、decision plugin off、`fallow` 除外 |
 | `scripts/**`, `.pi/**`, `.github/**`, pi の root config・docs | `vp check` の対象外（upstream の持ち物） | — | — |
 
