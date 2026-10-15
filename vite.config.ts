@@ -190,7 +190,7 @@ export default defineConfig({
       "test-all": {
         command: "bash test.sh",
         cache: false,
-        dependsOn: ["daemon-build", "engine-checks", "fence-check"],
+        dependsOn: ["build", "daemon-build", "engine-checks", "fence-check"],
       },
     },
   },
