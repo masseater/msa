@@ -956,6 +956,10 @@ export class SettingsManager {
     return this.settings.branchSummary?.skipPrompt ?? SETTINGS_DEFAULTS.branchSummary.skipPrompt;
   }
 
+  getGoalEvaluatorModel(): string | undefined {
+    return this.settings.goal?.evaluatorModel;
+  }
+
   getRetryEnabled(): boolean {
     return this.settings.retry?.enabled ?? SETTINGS_DEFAULTS.retry.enabled;
   }

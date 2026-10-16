@@ -265,6 +265,16 @@ export const SettingsSchema = Type.Object(
     compaction: Type.Optional(CompactionSettingsSchema),
     branchSummary: Type.Optional(BranchSummarySettingsSchema),
     retry: Type.Optional(RetrySettingsSchema),
+    goal: Type.Optional(
+      Type.Object({
+        evaluatorModel: Type.Optional(
+          Type.String({
+            description:
+              'Model that judges /goal conditions, as "provider/id". Default: the strongest small model (haiku, flash, mini, lite, small) of the working model\'s provider, or the working model.',
+          }),
+        ),
+      }),
+    ),
     hideThinkingBlock: Type.Optional(
       Type.Boolean({ default: SETTINGS_DEFAULTS.hideThinkingBlock }),
     ),

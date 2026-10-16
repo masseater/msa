@@ -108,6 +108,7 @@ import {
   FooterDataProvider,
   type ReadonlyFooterDataProvider,
 } from "../../core/footer-data-provider.ts";
+import { describeGoalEntry, describeGoalStatus } from "../../core/goal.ts";
 import { configureHttpDispatcher, formatHttpIdleTimeoutMs } from "../../core/http-dispatcher.ts";
 import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.ts";
 import type { McpHttpServerConfig } from "../../core/mcp-servers.ts";
@@ -524,6 +525,7 @@ export class InteractiveMode {
   private version: string;
   private isInitialized = false;
   private onInputCallback?: (text: string) => void;
+  private goalTicker: ReturnType<typeof setInterval> | undefined;
   private pendingUserInputs: string[] = [];
   private activeStatusIndicator: StatusIndicator | undefined = undefined;
   private activeWorkingIndicatorEmbedded = false;
@@ -2178,6 +2180,7 @@ export class InteractiveMode {
       this.renderer.setWheelScrollLines(this.settingsManager.getFullscreenWheelScrollLines());
     }
     this.footer.setSession(this.session);
+    this.updateGoalTicker();
     this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
     this.footerDataProvider.setCwd(this.sessionManager.getCwd());
     this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
@@ -3976,6 +3979,41 @@ export class InteractiveMode {
         this.ui.requestRender();
         break;
       }
+
+      case "goal_changed":
+        this.updateGoalTicker();
+        this.ui.requestRender();
+        break;
+
+      case "goal_status": {
+        const goal = event.goal;
+        const now = Date.now();
+        this.chatContainer.addChild(new Spacer(1));
+        const [heading = "", ...rest] = describeGoalStatus(goal, now);
+        this.chatContainer.addChild(
+          new ThemedText(
+            () =>
+              [
+                goal ? theme.fg("accent", theme.bold(heading)) : theme.fg("muted", heading),
+                ...rest.map((line) => theme.fg("muted", line)),
+              ].join("\n"),
+            this.outputPad,
+            0,
+          ),
+        );
+        this.ui.requestRender();
+        break;
+      }
+    }
+  }
+
+  /** Re-render the footer every second while a goal is active, for its elapsed time. */
+  private updateGoalTicker(): void {
+    if (this.session.goal) {
+      this.goalTicker ??= setInterval(() => this.ui.requestRender(), 1000);
+    } else if (this.goalTicker) {
+      clearInterval(this.goalTicker);
+      this.goalTicker = undefined;
     }
   }
 
@@ -4037,6 +4075,14 @@ export class InteractiveMode {
   }
 
   private addCustomEntryToChat(entry: Extract<SessionEntry, { type: "custom" }>): void {
+    const goalLine = describeGoalEntry(entry);
+    if (goalLine) {
+      this.chatContainer.addChild(new Spacer(1));
+      this.chatContainer.addChild(
+        new ThemedText(() => theme.fg(goalLine.tone, goalLine.text), this.outputPad, 0),
+      );
+      return;
+    }
     const renderer = this.session.extensionRunner.getEntryRenderer(entry.customType);
     if (!renderer) {
       return;
@@ -7454,6 +7500,8 @@ export class InteractiveMode {
     this.clearExtensionTerminalInputListeners();
     this.footer.dispose();
     this.footerDataProvider.dispose();
+    if (this.goalTicker) clearInterval(this.goalTicker);
+    this.goalTicker = undefined;
     if (this.unsubscribe) {
       this.unsubscribe();
     }

@@ -125,7 +125,11 @@ function truncateForSummary(text: string, maxChars: number): string {
  * summarization request larger than the context it summarizes. Visible text,
  * tool calls, and tool results record what happened.
  */
-export function serializeConversation(messages: Message[]): string {
+export function serializeConversation(
+  messages: Message[],
+  truncateToolResult: (text: string) => string = (text) =>
+    truncateForSummary(text, TOOL_RESULT_MAX_CHARS),
+): string {
   const parts: string[] = [];
 
   for (const msg of messages) {
@@ -154,7 +158,7 @@ export function serializeConversation(messages: Message[]): string {
     } else if (msg.role === "toolResult") {
       const content = contentText(msg.content, "");
       if (content) {
-        parts.push(`[Tool result]: ${truncateForSummary(content, TOOL_RESULT_MAX_CHARS)}`);
+        parts.push(`[Tool result]: ${truncateToolResult(content)}`);
       }
     }
   }

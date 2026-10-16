@@ -6,6 +6,7 @@ import type { AgentSession } from "../../../core/agent-session.ts";
 import { areExperimentalFeaturesEnabled } from "../../../core/experimental.ts";
 import type { ContextUsage } from "../../../core/extensions/types.ts";
 import type { ReadonlyFooterDataProvider } from "../../../core/footer-data-provider.ts";
+import { describeGoalIndicator } from "../../../core/goal.ts";
 import {
   addUsageToTotals,
   createUsageTotals,
@@ -308,6 +309,17 @@ export class FooterComponent implements Component {
 
     const pwdLine = truncateToWidth(theme.fg("dim", pwd), width, theme.fg("dim", "..."));
     const lines = [pwdLine, dimStatsLeft + dimRemainder];
+
+    const goal = this.session.goal;
+    if (goal) {
+      lines.push(
+        truncateToWidth(
+          theme.fg("accent", describeGoalIndicator(goal, Date.now())),
+          width,
+          theme.fg("dim", "..."),
+        ),
+      );
+    }
 
     // Add extension statuses on a single line, sorted by key alphabetically
     const extensionStatuses = this.footerData.getExtensionStatuses();
