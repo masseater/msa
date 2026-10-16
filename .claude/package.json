@@ -1,0 +1,17 @@
+{
+  "name": "claude-harness",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fallow": "fallow --skip dupes --fail-on-issues --quiet --format compact && fallow dupes --fail-on-issues --quiet --format compact && fallow security --fail-on-issues --quiet"
+  },
+  "dependencies": {
+    "@effect/platform-node": "catalog:",
+    "@yarnpkg/parsers": "catalog:",
+    "effect": "catalog:stack"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}

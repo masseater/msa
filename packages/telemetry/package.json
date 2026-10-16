@@ -38,7 +38,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "vitest": "4.1.11"
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">=22.19.0"

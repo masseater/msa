@@ -64,7 +64,7 @@
       "name": "vite-plus",
       "enablers": ["vite-plus"],
       "entryPoints": ["vite.config.ts", "tools/**/*.ts"],
-      "toolingDependencies": ["eslint-plugin-no-comments"],
+      "toolingDependencies": ["@ast-grep/cli", "eslint-plugin-no-comments"],
     },
     {
       "name": "syncpack-ts",

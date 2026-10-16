@@ -63,11 +63,11 @@
     "test": "vitest --run"
   },
   "dependencies": {
-    "quickjs-wasi": "3.6.2"
+    "quickjs-wasi": "catalog:"
   },
   "devDependencies": {
     "shx": "catalog:",
-    "vitest": "4.1.11"
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">=22.19.0"

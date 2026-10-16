@@ -20,12 +20,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep
-          sudo ln -s $(which fdfind) /usr/local/bin/fd
+          sudo ln -s "$(which fdfind)" /usr/local/bin/fd
       - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
           cache: true
           run-install: |
             - args: ['--frozen-lockfile']
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: false
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
         with:
           toolchain: 1.96.0
@@ -52,18 +55,21 @@ jobs:
       - name: Hydrate model data
         run: vp run hydrate:model-data
       - run: vp run --log grouped verify
+        env:
+          GH_TOKEN: ${{ github.token }}
 
-  mcp-conformance:
+  autofix:
+    needs: verify
+    if: failure()
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      actions: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
-        with:
-          cache: true
-          run-install: |
-            - args: ['--frozen-lockfile']
-      - run: vp run test:mcp-conformance
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.ref_name }}
+          HEAD_SHA: ${{ github.sha }}
+          FAILED_RUN_ID: ${{ github.run_id }}
+        run: >-
+          gh workflow run autofix.yml --repo "$GITHUB_REPOSITORY" --ref "$HEAD_BRANCH"
+          -f run_id="$FAILED_RUN_ID" -f branch="$HEAD_BRANCH" -f sha="$HEAD_SHA"

@@ -1,0 +1,17 @@
+name: up-to-date
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  up-to-date:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"

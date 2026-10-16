@@ -25,10 +25,11 @@
     "profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",
     "test:scripts": "node --test scripts/*.test.mjs scripts/*.test.ts",
     "test:mcp-conformance": "node packages/coding-agent/test/mcp-conformance/run.ts",
-    "prepare": "vp config --no-agent && effect-tsgo patch --no-typescript --oxlint"
+    "prepare": "vp config --no-agent && effect-tsgo patch --no-typescript --oxlint && skills experimental_install --force"
   },
   "devDependencies": {
     "@anthropic-ai/sandbox-runtime": "catalog:",
+    "@ast-grep/cli": "catalog:",
     "@commitlint/cli": "catalog:",
     "@commitlint/config-conventional": "catalog:",
     "@effect/platform-node": "catalog:",
@@ -39,6 +40,7 @@
     "eslint-plugin-no-comments": "catalog:",
     "fallow": "catalog:stack",
     "shx": "catalog:",
+    "skills": "catalog:",
     "syncpack": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:stack",

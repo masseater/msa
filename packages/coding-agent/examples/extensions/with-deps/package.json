@@ -9,10 +9,10 @@
     "check": "echo 'nothing to check'"
   },
   "dependencies": {
-    "ms": "2.1.3"
+    "ms": "catalog:"
   },
   "devDependencies": {
-    "@types/ms": "2.1.0"
+    "@types/ms": "catalog:"
   },
   "pi": {
     "extensions": [
