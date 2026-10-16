@@ -8,7 +8,7 @@
 
 import { Container, Text } from "@msa/tui";
 
-import { keyHint } from "../../../modes/interactive/components/keybinding-hints.ts";
+import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
 import {
   getLanguageFromPath,
   highlightCode,
@@ -127,14 +127,11 @@ function formatWriteCall(
         highlightCode(replaceTabs(normalizeDisplayText(fileContent)), lang))
       : normalizeDisplayText(fileContent).split("\n");
     const lines = trimTrailingEmptyLines(renderedLines);
-    const totalLines = lines.length;
-    const maxLines = options.expanded ? lines.length : 10;
-    const displayLines = lines.slice(0, maxLines);
-    const remaining = lines.length - maxLines;
-    text += `\n\n${displayLines.map((line) => (lang ? line : theme.fg("toolOutput", replaceTabs(line)))).join("\n")}`;
-    if (remaining > 0) {
-      text += `${theme.fg("muted", `\n... (${remaining} more lines, ${totalLines} total,`)} ${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`;
-    }
+    // Count source lines: a highlighted blank line is not empty, so `lines` may keep a trailing one.
+    const count = normalizeDisplayText(fileContent).replace(/\n+$/, "").split("\n").length;
+    text += options.expanded
+      ? `\n\n${lines.map((line) => (lang ? line : theme.fg("toolOutput", replaceTabs(line)))).join("\n")}`
+      : `\n${expandHint(`${count} ${count === 1 ? "line" : "lines"}`)}`;
   }
 
   return text;

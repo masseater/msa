@@ -12,7 +12,7 @@ import type { ImageContent, TextContent } from "@msa/ai";
 import { Text } from "@msa/tui";
 
 import { getReadmePath } from "../../../config.ts";
-import { keyHint, keyText } from "../../../modes/interactive/components/keybinding-hints.ts";
+import { expandHint, keyText } from "../../../modes/interactive/components/keybinding-hints.ts";
 import {
   getLanguageFromPath,
   highlightCode,
@@ -147,7 +147,7 @@ function formatReadResult(
   const remaining = lines.length - maxLines;
   let text = `\n${displayLines.map((line) => (lang ? replaceTabs(line) : theme.fg("toolOutput", replaceTabs(line)))).join("\n")}`;
   if (remaining > 0) {
-    text += `${theme.fg("muted", `\n... (${remaining} more lines,`)} ${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`;
+    text += `\n${expandHint(`${remaining} more lines`)}`;
   }
 
   const truncation = result.details?.truncation;

@@ -20,7 +20,7 @@ To include files or images:
 
 ## Follow msa's work
 
-msa shows each tool call and result while it works. Press `Ctrl+O` to expand or collapse tool output. Press `Ctrl+T` to show or hide thinking blocks.
+msa shows each tool call and result while it works, collapsed to a line or two. Click a tool or a thinking block to open it, press `Ctrl+O` to expand or collapse every tool, and `Ctrl+T` to show or hide every thinking block.
 
 The startup header lists the instructions and resources msa loaded. The editor border indicates the current thinking level. The footer updates as the model uses context and reports usage.
 

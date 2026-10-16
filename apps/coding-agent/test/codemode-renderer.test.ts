@@ -102,24 +102,33 @@ describe("codemode renderer", () => {
     expect(text).toBe("The @options line must be followed by JavaScript source");
   });
 
-  it("limits collapsed output to wrapped lines, not logical lines", () => {
+  it("collapses to the latest call and one row of output", () => {
     const text = render(
       {
         content: [
           { type: "text", text: "Script completed\nWall time 0.1 seconds\nOutput:\n" },
-          { type: "text", text: "x".repeat(1000) },
+          { type: "text", text: `${"x".repeat(1000)}\nsecond line` },
         ],
-        details: { calls: [], fullOutputPath: "/tmp/out.txt" },
+        details: {
+          calls: [
+            { id: "call/1", name: "read", args: '{"path":"a"}', status: "ok", durationMs: 5 },
+            { id: "call/2", name: "grep", args: '{"pattern":"b"}', status: "ok", durationMs: 5 },
+          ],
+          fullOutputPath: "/tmp/out.txt",
+        },
       },
       false,
       false,
-      50,
+      80,
     );
-    const lines = text.split("\n");
-    expect(lines).toHaveLength(7);
-    expect(lines.slice(0, 5)).toEqual(Array(5).fill("x".repeat(50)));
-    expect(lines[5]).toMatch(/^\.\.\. \(15 more lines,/);
-    expect(lines[6]).toBe("Full output: /tmp/out.txt");
+    const lines = text.split("\n").filter(Boolean);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("grep");
+    expect(lines[0]).toContain("+1 earlier calls");
+    expect(lines[0]).not.toContain("read");
+    expect(lines[1]).toMatch(/^2 lines \(.* to expand\) {2}x+/);
+    expect(lines[1]!.length).toBeLessThanOrEqual(80);
+    expect(text).not.toContain("second line");
   });
 
   // #10708

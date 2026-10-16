@@ -327,6 +327,40 @@ describe("ToolExecutionComponent parity", () => {
     expect(render(false)).toContain("Took 4.2s");
   });
 
+  test("bash collapses to the command's first line and the output's last line until expanded", () => {
+    const component = new ToolExecutionComponent(
+      "bash",
+      "tool-bash-collapsed",
+      { command: "echo start\necho middle\necho end" },
+      {},
+      createBashToolDefinition(process.cwd(), { exposeSessionEnvironment: false }),
+      createFakeTui(),
+      process.cwd(),
+    );
+    component.updateResult(
+      {
+        content: [{ type: "text", text: "start\nmiddle\nend" }],
+        isError: false,
+        durationMs: 1_000,
+      },
+      false,
+    );
+    const collapsed = stripAnsi(component.render(120).join("\n"))
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    expect(collapsed).toEqual([
+      expect.stringMatching(/^\$ echo start \(\+2 lines\)$/),
+      expect.stringMatching(/^3 lines, Took 1\.0s \(.* to expand\) {2}end$/),
+    ]);
+
+    component.setExpanded(true);
+    const expanded = stripAnsi(component.render(120).join("\n"));
+    expect(expanded).toContain("echo middle");
+    expect(expanded).toContain("middle\nend".split("\n")[0]);
+    expect(expanded).not.toContain("to expand");
+  });
+
   test("does not duplicate built-in headers when passed the active built-in definition", () => {
     const component = new ToolExecutionComponent(
       "read",
@@ -566,15 +600,13 @@ describe("ToolExecutionComponent parity", () => {
 
     const collapsed = stripAnsi(component.render(120).join("\n"));
     expect(collapsed).toContain("custom_tool");
-    expect(collapsed).toContain("line-10");
-    expect(collapsed).not.toContain("line-11");
-    expect(collapsed).toContain("5 more lines");
-    expect(collapsed).toContain("to expand");
+    expect(collapsed).toMatch(/15 lines \(.* to expand\) {2}line-1\b/);
+    expect(collapsed).not.toContain("line-2");
 
     component.setExpanded(true);
     const expanded = stripAnsi(component.render(120).join("\n"));
     expect(expanded).toContain("line-15");
-    expect(expanded).not.toContain("more lines");
+    expect(expanded).not.toContain("to expand");
   });
 
   test("trims trailing blank display lines from write previews", () => {
@@ -587,6 +619,8 @@ describe("ToolExecutionComponent parity", () => {
       createFakeTui(),
       process.cwd(),
     );
+    expect(stripAnsi(component.render(120).join("\n"))).toMatch(/2 lines \(.* to expand\)/);
+    component.setExpanded(true);
     const rendered = stripAnsi(component.render(120).join("\n"));
     expect(rendered).toContain("one");
     expect(rendered).toContain("two");
