@@ -2,7 +2,7 @@
 
 This reference lists user-configurable settings, their types, defaults, and purposes. Project settings override agent-directory settings. Resource lists are combined. See [Configuration](configuration.md) for file locations and trust behavior.
 
-Add `"$schema": "https://pi.dev/schemas/settings.schema.json"` to `settings.json` for editor validation and completion.
+Add `"$schema": "https://raw.githubusercontent.com/masseater/msa/main/packages/coding-agent/schemas/settings.schema.json"` to `settings.json` for editor validation and completion.
 
 ## Model and thinking
 
@@ -164,9 +164,9 @@ The built-in extensions are named `builtin:mcp`, `builtin:llama.cpp`, `builtin:c
 
 ## Updates, telemetry, and warnings
 
-| Setting                        | Type    | Default | Description                                                                                                          |
-| ------------------------------ | ------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
-| `collapseChangelog`            | boolean | `false` | Show a condensed changelog after an update.                                                                          |
-| `enableInstallTelemetry`       | boolean | `true`  | Enable anonymous install/update reporting and selected provider attribution headers. Does not control update checks. |
-| `enableAnalytics`              | boolean | `false` | Opt in to analytics data sharing. Currently used only by the experimental first-run setup.                           |
-| `warnings.anthropicExtraUsage` | boolean | `true`  | Warn when Anthropic subscription authentication may use paid extra usage.                                            |
+| Setting                        | Type    | Default | Description                                                                                         |
+| ------------------------------ | ------- | ------- | --------------------------------------------------------------------------------------------------- |
+| `collapseChangelog`            | boolean | `false` | Show a condensed changelog after an update.                                                         |
+| `enableInstallTelemetry`       | boolean | `true`  | Send attribution headers to OpenRouter, NVIDIA NIM, and Cloudflare. Does not control update checks. |
+| `enableAnalytics`              | boolean | `false` | Opt in to analytics data sharing. Currently used only by the experimental first-run setup.          |
+| `warnings.anthropicExtraUsage` | boolean | `true`  | Warn when Anthropic subscription authentication may use paid extra usage.                           |

@@ -131,7 +131,6 @@ import {
 import type { FullscreenExitOutput, TuiMode } from "../../core/settings-manager.ts";
 import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
-import { isInstallTelemetryEnabled } from "../../core/telemetry.ts";
 import { withBuiltInRenderers } from "../../core/tools/renderers/index.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
@@ -155,7 +154,6 @@ import { getCwdRelativePath } from "../../utils/paths.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { loadAllHighlightLanguages } from "../../utils/syntax-highlight.ts";
 import { ensureTool, type ToolStatus } from "../../utils/tools-manager.ts";
-import { getMsaUserAgent } from "../../utils/user-agent.ts";
 import { checkForNewMsaVersion, type LatestMsaRelease } from "../../utils/version-check.ts";
 import { reportBug } from "./bug-report.ts";
 import { createChatViewport } from "./chat-viewport.ts";
@@ -1407,39 +1405,18 @@ export class InteractiveMode {
     const entries = parseChangelog(changelogPath);
 
     if (!lastVersion) {
-      // Fresh install - record the version, send telemetry, don't show changelog
+      // Fresh install - record the version, don't show changelog
       this.settingsManager.setLastChangelogVersion(VERSION);
-      this.reportInstallTelemetry(VERSION);
       return undefined;
     }
 
     const newEntries = getNewEntries(entries, lastVersion);
     if (newEntries.length > 0) {
       this.settingsManager.setLastChangelogVersion(VERSION);
-      this.reportInstallTelemetry(VERSION);
       return newEntries.map((e) => normalizeChangelogLinks(e.content, e)).join("\n\n");
     }
 
     return undefined;
-  }
-
-  private reportInstallTelemetry(version: string): void {
-    if (process.env.MSA_OFFLINE) {
-      return;
-    }
-
-    if (!isInstallTelemetryEnabled(this.settingsManager)) {
-      return;
-    }
-
-    void fetch(`https://pi.dev/api/report-install?version=${encodeURIComponent(version)}`, {
-      headers: {
-        "User-Agent": getMsaUserAgent(version),
-      },
-      signal: AbortSignal.timeout(5000),
-    })
-      .then(() => undefined)
-      .catch(() => undefined);
   }
 
   private getMarkdownThemeWithSettings(): MarkdownTheme {

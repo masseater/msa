@@ -12,7 +12,8 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import { SettingsSchema } from "../src/core/settings-schema.ts";
 import { validateThemeJson } from "../src/modes/interactive/theme/theme-schema.ts";
 
-const schemaBaseUrl = "https://pi.dev/schemas";
+const schemaBaseUrl =
+  "https://raw.githubusercontent.com/masseater/msa/main/packages/coding-agent/schemas";
 const temporaryDirectories: string[] = [];
 const renderedSchemas = await renderConfigSchemas();
 
