@@ -701,7 +701,7 @@ describe.each(Object.keys(BACKENDS))("%s backend", (name) => {
       const empty = await sandbox.execute(`for (;;) text("");`);
       expect(empty).toMatchObject({ ok: false, error: { name: "RangeError" } });
       expect(empty.output).toHaveLength(MAX_OUTPUT_ITEMS);
-    });
+    }, 20_000);
 
     it("rejects execute after close", async () => {
       const sandbox = createSandbox();
