@@ -136,7 +136,6 @@ export default defineConfig({
     },
   },
   run: {
-    cache: true,
     tasks: {
       verify: {
         command: "vp check",
