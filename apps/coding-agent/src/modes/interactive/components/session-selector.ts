@@ -16,6 +16,7 @@ import {
 
 import { KeybindingsManager } from "../../../core/keybindings.ts";
 import type { SessionInfo, SessionListProgress } from "../../../core/session-manager.ts";
+import { toErrorMessage } from "../../../utils/errors.ts";
 import { abbreviateHomePath, canonicalizePath as _canonicalizePath } from "../../../utils/paths.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
@@ -713,7 +714,7 @@ async function deleteSessionFile(
     await unlink(sessionPath);
     return { ok: true, method: "unlink" };
   } catch (err) {
-    const unlinkError = err instanceof Error ? err.message : String(err);
+    const unlinkError = toErrorMessage(err);
     const trashErrorHint = getTrashErrorHint();
     const error = trashErrorHint ? `${unlinkError} (${trashErrorHint})` : unlinkError;
     return { ok: false, method: "unlink", error };
@@ -1043,7 +1044,7 @@ export class SessionSelectorComponent extends Container implements Focusable {
       }
       if (scope !== this.scope) return;
 
-      const message = err instanceof Error ? err.message : String(err);
+      const message = toErrorMessage(err);
       this.header.setLoading(false);
       this.header.setStatusMessage(
         { type: "error", message: `Failed to load sessions: ${message}` },

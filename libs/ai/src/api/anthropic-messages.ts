@@ -39,6 +39,7 @@ import type {
   ToolResultMessage,
 } from "../types.ts";
 import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.ts";
+import { toErrorMessage } from "../utils/errors.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import {
@@ -572,7 +573,7 @@ async function* iterateAnthropicEvents(
       }
       yield event;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       throw new Error(
         `Could not parse Anthropic SSE event ${sse.event}: ${message}; data=${sse.data}; raw=${sse.raw.join("\\n")}`,
       );

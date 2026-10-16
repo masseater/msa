@@ -1,4 +1,5 @@
 import type { Tool } from "../types.ts";
+import { toErrorMessage } from "../utils/errors.ts";
 
 interface JsonSchemaObject {
   [key: string]: unknown;
@@ -306,7 +307,7 @@ export function resolveGrammarConstrainedSampling(
       inputProperty: inferGrammarInputProperty(tool),
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = toErrorMessage(error);
     throw new Error(`Tool "${tool.name}" cannot use grammar constrained sampling: ${message}.`);
   }
 }

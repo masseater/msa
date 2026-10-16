@@ -58,6 +58,7 @@ import {
 } from "@msa/ai/compat";
 
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
+import { toErrorMessage } from "../utils/errors.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { processImage } from "../utils/image-process.ts";
 import { sleep } from "../utils/sleep.ts";
@@ -1744,7 +1745,7 @@ export class AgentSession {
           this._extensionRunner.emitError({
             extensionPath: sourceInfo.path,
             event: "prepare_loadout",
-            error: error instanceof Error ? error.message : String(error),
+            error: toErrorMessage(error),
             stack: error instanceof Error ? error.stack : undefined,
           });
         }
@@ -2326,7 +2327,7 @@ export class AgentSession {
       this._extensionRunner.emitError({
         extensionPath: `command:${commandName}`,
         event: "command",
-        error: err instanceof Error ? err.message : String(err),
+        error: toErrorMessage(err),
       });
       return true;
     }
@@ -2357,7 +2358,7 @@ export class AgentSession {
       this._extensionRunner.emitError({
         extensionPath: skill.filePath,
         event: "skill_expansion",
-        error: err instanceof Error ? err.message : String(err),
+        error: toErrorMessage(err),
       });
       return text; // Return original on error
     }
@@ -3217,7 +3218,7 @@ export class AgentSession {
       });
       return compactionResult;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       const aborted = this._compactionAbortController.signal.aborted || cancelledByExtension;
       const errorMessage = aborted ? undefined : `Compaction failed: ${message}`;
       this._clearManualCompactionState();
@@ -3755,7 +3756,7 @@ export class AgentSession {
             runner.emitError({
               extensionPath: "<runtime>",
               event: "send_message",
-              error: err instanceof Error ? err.message : String(err),
+              error: toErrorMessage(err),
             });
           });
         },
@@ -3764,7 +3765,7 @@ export class AgentSession {
             runner.emitError({
               extensionPath: "<runtime>",
               event: "send_user_message",
-              error: err instanceof Error ? err.message : String(err),
+              error: toErrorMessage(err),
             });
           });
         },

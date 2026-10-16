@@ -8,6 +8,7 @@ import type {
   ImagesFunction,
   ImagesOptions,
 } from "../../types.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 
 interface OpenRouterImagesProviderModule {
   generateImages: typeof generateImagesOpenRouterFunction;
@@ -22,7 +23,7 @@ function createLazyLoadErrorImages(model: ImageModel<ImageApi>, error: unknown):
     model: model.id,
     output: [],
     stopReason: "error",
-    errorMessage: error instanceof Error ? error.message : String(error),
+    errorMessage: toErrorMessage(error),
     timestamp: Date.now(),
   };
 }

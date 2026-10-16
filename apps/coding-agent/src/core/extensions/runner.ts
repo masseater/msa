@@ -13,6 +13,7 @@ import {
 import type { KeyId } from "@msa/tui";
 
 import { type Theme, theme } from "../../modes/interactive/theme/theme.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import type { CacheWarmingAction } from "../cache-warmer.ts";
 import type { ResourceDiagnostic } from "../diagnostics.ts";
 import type { KeybindingsConfig } from "../keybindings.ts";
@@ -341,7 +342,7 @@ export async function emitProjectTrustEvent(
         errors.push({
           extensionPath: ext.path,
           event: event.type,
-          error: error instanceof Error ? error.message : String(error),
+          error: toErrorMessage(error),
           stack: error instanceof Error ? error.stack : undefined,
         });
       }
@@ -502,7 +503,7 @@ export class ExtensionRunner {
         this.emitError({
           extensionPath,
           event: "register_provider",
-          error: err instanceof Error ? err.message : String(err),
+          error: toErrorMessage(err),
           stack: err instanceof Error ? err.stack : undefined,
         });
       }
@@ -519,7 +520,7 @@ export class ExtensionRunner {
         this.emitError({
           extensionPath,
           event: "register_provider",
-          error: err instanceof Error ? err.message : String(err),
+          error: toErrorMessage(err),
           stack: err instanceof Error ? err.stack : undefined,
         });
       }
@@ -536,7 +537,7 @@ export class ExtensionRunner {
         this.emitError({
           extensionPath,
           event: "register_virtual_model",
-          error: err instanceof Error ? err.message : String(err),
+          error: toErrorMessage(err),
           stack: err instanceof Error ? err.stack : undefined,
         });
       }
@@ -1111,7 +1112,7 @@ export class ExtensionRunner {
           this.emitError({
             extensionPath: ext.path,
             event: baseEvent.type,
-            error: err instanceof Error ? err.message : String(err),
+            error: toErrorMessage(err),
             stack: err instanceof Error ? err.stack : undefined,
           });
         }
@@ -1124,7 +1125,7 @@ export class ExtensionRunner {
           this.emitError({
             extensionPath: ext.path,
             event: baseEvent.type,
-            error: `Invalid boundary entries: ${err instanceof Error ? err.message : String(err)}`,
+            error: `Invalid boundary entries: ${toErrorMessage(err)}`,
             stack: err instanceof Error ? err.stack : undefined,
           });
         }
@@ -1161,7 +1162,7 @@ export class ExtensionRunner {
             }
           }
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toErrorMessage(err);
           const stack = err instanceof Error ? err.stack : undefined;
           this.emitError({
             extensionPath: ext.path,
@@ -1190,7 +1191,7 @@ export class ExtensionRunner {
           this.emitError({
             extensionPath: ext.path,
             event: event.type,
-            error: err instanceof Error ? err.message : String(err),
+            error: toErrorMessage(err),
             stack: err instanceof Error ? err.stack : undefined,
           });
         }
@@ -1226,7 +1227,7 @@ export class ExtensionRunner {
           currentMessage = handlerResult.message;
           modified = true;
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toErrorMessage(err);
           const stack = err instanceof Error ? err.stack : undefined;
           this.emitError({
             extensionPath: ext.path,
@@ -1278,7 +1279,7 @@ export class ExtensionRunner {
             modified = true;
           }
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toErrorMessage(err);
           const stack = err instanceof Error ? err.stack : undefined;
           this.emitError({
             extensionPath: ext.path,
@@ -1338,7 +1339,7 @@ export class ExtensionRunner {
           }
           return handlerResult;
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toErrorMessage(err);
           const stack = err instanceof Error ? err.stack : undefined;
           this.emitError({
             extensionPath: ext.path,
@@ -1378,7 +1379,7 @@ export class ExtensionRunner {
           if (!returned) continue;
           currentMessages = restoreSystemMessages(currentMessages, visibleSnapshot, returned);
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toErrorMessage(err);
           const stack = err instanceof Error ? err.stack : undefined;
           this.emitError({
             extensionPath: ext.path,
@@ -1411,7 +1412,7 @@ export class ExtensionRunner {
             });
           }
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toErrorMessage(err);
           const stack = err instanceof Error ? err.stack : undefined;
           this.emitError({
             extensionPath: ext.path,
@@ -1445,7 +1446,7 @@ export class ExtensionRunner {
             currentPayload = handlerResult;
           }
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toErrorMessage(err);
           const stack = err instanceof Error ? err.stack : undefined;
           this.emitError({
             extensionPath: ext.path,
@@ -1476,7 +1477,7 @@ export class ExtensionRunner {
           };
           await handler(event, ctx);
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toErrorMessage(err);
           const stack = err instanceof Error ? err.stack : undefined;
           this.emitError({
             extensionPath: ext.path,
@@ -1528,7 +1529,7 @@ export class ExtensionRunner {
             }
           }
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toErrorMessage(err);
           const stack = err instanceof Error ? err.stack : undefined;
           this.emitError({
             extensionPath: ext.path,
@@ -1579,7 +1580,7 @@ export class ExtensionRunner {
             );
           }
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const message = toErrorMessage(err);
           const stack = err instanceof Error ? err.stack : undefined;
           this.emitError({
             extensionPath: ext.path,
@@ -1625,7 +1626,7 @@ export class ExtensionRunner {
           this.emitError({
             extensionPath: ext.path,
             event: "input",
-            error: err instanceof Error ? err.message : String(err),
+            error: toErrorMessage(err),
             stack: err instanceof Error ? err.stack : undefined,
           });
         }

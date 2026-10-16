@@ -28,6 +28,7 @@ import {
   LIST_MCP_RESOURCES_TOOL,
   READ_MCP_RESOURCE_TOOL,
 } from "../../core/mcp-servers.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import type { McpExposure } from "./config.ts";
 import { limitMcpContent, type McpToolDetails, toModelContent, toToolExposure } from "./tools.ts";
 
@@ -190,10 +191,6 @@ function stringArgument(params: unknown, key: string): string | undefined {
   return value.trim() || undefined;
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 async function jsonResult(
   tool: string,
   server: string | undefined,
@@ -271,7 +268,7 @@ export function createMcpResourceToolDefinitions(options: {
       const server = servers[index].name;
       if (result.status === "fulfilled")
         items.push(...result.value.filter(visible).map((item) => listed(server, item)));
-      else errors.push({ server, error: errorMessage(result.reason) });
+      else errors.push({ server, error: toErrorMessage(result.reason) });
     });
     return { [key]: items, ...(errors.length > 0 ? { errors } : {}) };
   };

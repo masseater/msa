@@ -18,6 +18,7 @@ import type { KeybindingsManager } from "../../core/keybindings.ts";
 import { DynamicBorder } from "../../modes/interactive/components/dynamic-border.ts";
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import type { LlamaModelInfo, LlamaProgress } from "./client.ts";
 import type { HuggingFaceModel } from "./huggingface.ts";
 
@@ -239,7 +240,7 @@ class HuggingFaceSearch extends Container implements Focusable {
     } catch (error) {
       if (this.closed || request.signal.aborted || this.query !== query) return;
       this.results = [];
-      this.status = error instanceof Error ? error.message : String(error);
+      this.status = toErrorMessage(error);
       this.filterResults();
     } finally {
       if (this.request === request) this.request = undefined;
@@ -514,7 +515,7 @@ export async function showLlamaUi(
     void run(view).then(
       () => done(),
       (error: unknown) => {
-        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+        ctx.ui.notify(toErrorMessage(error), "error");
         done();
       },
     );

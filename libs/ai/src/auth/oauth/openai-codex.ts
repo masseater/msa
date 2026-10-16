@@ -13,6 +13,7 @@ if (typeof process !== "undefined" && (process.versions?.node || process.version
   });
 }
 
+import { toErrorMessage } from "../../utils/errors.ts";
 import { getProviderEnvValue } from "../../utils/provider-env.ts";
 import type {
   LoginOptions,
@@ -190,9 +191,7 @@ async function refreshAccessToken(refreshToken: string, signal: AbortSignal): Pr
       signal,
     });
   } catch (error) {
-    throw new Error(
-      `OpenAI Codex token refresh error: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    throw new Error(`OpenAI Codex token refresh error: ${toErrorMessage(error)}`);
   }
 
   return readTokenResponse(response, "refresh");

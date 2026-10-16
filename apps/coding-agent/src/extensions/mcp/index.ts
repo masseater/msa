@@ -41,6 +41,7 @@ import type {
 } from "../../core/extensions/types.ts";
 import { mcpNamespace } from "../../core/mcp-servers.ts";
 import type { ModelRegistry } from "../../core/model-registry.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import { openBrowser } from "../../utils/open-browser.ts";
 import { CODEMODE_TOOL_NAME } from "../codemode/tool.ts";
 import { TOOL_SEARCH_TOOL_NAME } from "../tool-search/tool.ts";
@@ -126,10 +127,6 @@ const EXPOSURE_DESCRIPTIONS: Record<Exclude<McpExposure, "hidden">, string> = {
   deferred: "not declared until tool_search loads them, then called directly; no codemode needed",
   direct: "declared to the model like built-in tools",
 };
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function firstLine(text: string): string {
   return text.split("\n", 1)[0] ?? "";
@@ -725,7 +722,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         try {
           updateConfig(entry, patch);
         } catch (error) {
-          return `Could not update ${entry.override ?? entry.source}: ${errorMessage(error)}`;
+          return `Could not update ${entry.override ?? entry.source}: ${toErrorMessage(error)}`;
         }
       }
       server.entry = { ...entry, config: { ...entry.config, ...patch } };
@@ -756,14 +753,14 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         );
       } catch (error) {
         if (error instanceof runtime.McpSignInCancelledError) return "Sign-in cancelled.";
-        return `Sign-in failed: ${errorMessage(error)}`;
+        return `Sign-in failed: ${toErrorMessage(error)}`;
       }
       // The challenge that asked for this sign-in (for example for more scope) is answered.
       connection.challenge = undefined;
       try {
         await connection.reconnect();
       } catch (error) {
-        return `Signed in, but ${errorMessage(error)}`;
+        return `Signed in, but ${toErrorMessage(error)}`;
       }
       return undefined;
     };
@@ -790,7 +787,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         await ready;
         return undefined;
       } catch (error) {
-        return errorMessage(error);
+        return toErrorMessage(error);
       }
     };
 
@@ -1047,7 +1044,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         ensureDiscoveryActive(ctx);
         emitChange();
       };
-      void track(ready.then(finish, (error: unknown) => finish(errorMessage(error))));
+      void track(ready.then(finish, (error: unknown) => finish(toErrorMessage(error))));
     };
 
     const runAction = async (
@@ -1250,7 +1247,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         .catch((error: unknown) => {
           // The session may have been disposed meanwhile, which makes ctx stale.
           try {
-            ctx.ui.notify(`MCP failed to load: ${errorMessage(error)}`, "error");
+            ctx.ui.notify(`MCP failed to load: ${toErrorMessage(error)}`, "error");
           } catch {}
         });
     });
@@ -1350,7 +1347,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           return;
         }
       } catch (error) {
-        ctx.ui.notify(`MCP failed to load: ${errorMessage(error)}`, "error");
+        ctx.ui.notify(`MCP failed to load: ${toErrorMessage(error)}`, "error");
         return;
       }
       if (signal.aborted) return;

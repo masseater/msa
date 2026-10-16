@@ -10,6 +10,7 @@
 import type { AgentMessage } from "@msa/agent-core";
 import type { Api, AssistantMessage, Model } from "@msa/ai/compat";
 
+import { toErrorMessage } from "../utils/errors.ts";
 import { sleep } from "../utils/sleep.ts";
 import { serializeConversation } from "./compaction/utils.ts";
 import { convertToLlm } from "./messages.ts";
@@ -510,7 +511,7 @@ export class GoalLoop {
         this.host.changed();
         return false;
       }
-      const reason = error instanceof Error ? error.message : String(error);
+      const reason = toErrorMessage(error);
       return this.pause(goal, `Goal evaluation failed: ${reason}`);
     }
     goal.evaluating = false;

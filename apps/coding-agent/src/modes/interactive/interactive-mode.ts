@@ -141,6 +141,7 @@ import {
   readClipboardFilePaths,
   readClipboardText,
 } from "../../utils/clipboard.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import { parseGitUrl } from "../../utils/git.ts";
 import { ensurePngTranscoder } from "../../utils/image-convert.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
@@ -1522,7 +1523,7 @@ export class InteractiveMode {
   }
 
   private async handleFatalRuntimeError(prefix: string, error: unknown): Promise<never> {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = toErrorMessage(error);
     this.showError(`${prefix}: ${message}`);
     const extensionHint = this.getCrashExtensionHint(error);
     if (extensionHint) {
@@ -1706,9 +1707,7 @@ export class InteractiveMode {
         if (matchesKey(data, shortcutStr as KeyId)) {
           // Run handler async, don't block input
           Promise.resolve(shortcut.handler(createContext())).catch((err) => {
-            this.showError(
-              `Shortcut handler error: ${err instanceof Error ? err.message : String(err)}`,
-            );
+            this.showError(`Shortcut handler error: ${toErrorMessage(err)}`);
           });
           return true;
         }
@@ -2605,9 +2604,7 @@ export class InteractiveMode {
         this.ui.requestRender();
       }
     } catch (error) {
-      this.showError(
-        `Failed to paste from clipboard: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      this.showError(`Failed to paste from clipboard: ${toErrorMessage(error)}`);
     }
   }
 
@@ -4081,7 +4078,7 @@ export class InteractiveMode {
         void this.maybeWarnAboutAnthropicSubscriptionAuth(result.model);
       }
     } catch (error) {
-      this.showError(error instanceof Error ? error.message : String(error));
+      this.showError(toErrorMessage(error));
     }
   }
 
@@ -4328,9 +4325,9 @@ export class InteractiveMode {
       this.compactionQueuedMessages = queuedMessages;
       this.updatePendingMessagesDisplay();
       this.showError(
-        `Failed to send queued message${queuedMessages.length > 1 ? "s" : ""}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to send queued message${queuedMessages.length > 1 ? "s" : ""}: ${toErrorMessage(
+          error,
+        )}`,
       );
     };
 
@@ -4679,7 +4676,7 @@ export class InteractiveMode {
       this.updateEditorBorderColor();
       this.showStatus(persist ? `Default thinking level: ${level}` : `Thinking level: ${level}`);
     } catch (error) {
-      this.showError(error instanceof Error ? error.message : String(error));
+      this.showError(toErrorMessage(error));
     }
   }
 
@@ -4719,7 +4716,7 @@ export class InteractiveMode {
         this.showStatus(`Model: ${model.id}`);
         void this.maybeWarnAboutAnthropicSubscriptionAuth(model);
       } catch (error) {
-        this.showError(error instanceof Error ? error.message : String(error));
+        this.showError(toErrorMessage(error));
       }
       return;
     }
@@ -4755,7 +4752,7 @@ export class InteractiveMode {
       this.showWarning(
         timedOut
           ? "Model refresh timed out; searching cached models."
-          : `Could not refresh model catalogs: ${error instanceof Error ? error.message : String(error)}`,
+          : `Could not refresh model catalogs: ${toErrorMessage(error)}`,
       );
     } finally {
       clearTimeout(timeout);
@@ -4824,9 +4821,7 @@ export class InteractiveMode {
       this.autoTrustOnReloadCwd = undefined;
       return true;
     } catch (error) {
-      this.showWarning(
-        `Could not save project trust after reload: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      this.showWarning(`Could not save project trust after reload: ${toErrorMessage(error)}`);
       return false;
     }
   }
@@ -4871,7 +4866,7 @@ export class InteractiveMode {
           void this.maybeWarnAboutAnthropicSubscriptionAuth(model);
         } catch (error) {
           done();
-          this.showError(error instanceof Error ? error.message : String(error));
+          this.showError(toErrorMessage(error));
         }
       };
       const defaultProvider = this.settingsManager.getDefaultProvider();
@@ -5010,7 +5005,7 @@ export class InteractiveMode {
           selector.setRefreshStatus(
             timedOut
               ? "Model refresh timed out; showing cached models."
-              : `Could not refresh model catalogs: ${error instanceof Error ? error.message : String(error)}`,
+              : `Could not refresh model catalogs: ${toErrorMessage(error)}`,
             "warning",
           );
           this.ui.requestRender();
@@ -5053,7 +5048,7 @@ export class InteractiveMode {
             this.editor.setText(result.selectedText ?? "");
             this.showStatus("Forked to new session");
           } catch (error: unknown) {
-            this.showError(error instanceof Error ? error.message : String(error));
+            this.showError(toErrorMessage(error));
           }
         },
         () => {
@@ -5083,7 +5078,7 @@ export class InteractiveMode {
       this.editor.setText("");
       this.showStatus("Cloned to new session");
     } catch (error: unknown) {
-      this.showError(error instanceof Error ? error.message : String(error));
+      this.showError(toErrorMessage(error));
     }
   }
 
@@ -5203,7 +5198,7 @@ export class InteractiveMode {
             this.showStatus("Navigated to selected point");
             void this.flushCompactionQueue({ willRetry: false });
           } catch (error) {
-            this.showError(error instanceof Error ? error.message : String(error));
+            this.showError(toErrorMessage(error));
           } finally {
             if (showingSummaryIndicator) {
               this.clearStatusIndicator("branchSummary");
@@ -5231,7 +5226,7 @@ export class InteractiveMode {
           await copyToClipboard(text);
           this.showStatus("Copied selected message to clipboard");
         } catch (error) {
-          this.showError(error instanceof Error ? error.message : String(error));
+          this.showError(toErrorMessage(error));
         }
       };
       return { component: selector, focus: selector };
@@ -5403,7 +5398,7 @@ export class InteractiveMode {
       if (!reloadBoxDismissed) {
         this.editorSlot.show(previousEditor);
       }
-      this.showError(`Reload failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.showError(`Reload failed: ${toErrorMessage(error)}`);
     }
   }
 
@@ -5554,7 +5549,7 @@ export class InteractiveMode {
         this.showStatus("Copied last agent message to clipboard");
       }
     } catch (error) {
-      this.showError(error instanceof Error ? error.message : String(error));
+      this.showError(toErrorMessage(error));
     }
   }
 

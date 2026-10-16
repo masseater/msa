@@ -7,6 +7,7 @@ import { access, readFile } from "fs/promises";
 
 import * as Diff from "diff";
 
+import { toErrorMessage } from "../../utils/errors.ts";
 import { splitBom } from "../../utils/text.ts";
 import { resolveToCwd } from "./path-utils.ts";
 
@@ -567,7 +568,7 @@ export async function computeEditsDiff(
     // Generate the diff
     return generateDiffString(baseContent, newContent);
   } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) };
+    return { error: toErrorMessage(err) };
   }
 }
 

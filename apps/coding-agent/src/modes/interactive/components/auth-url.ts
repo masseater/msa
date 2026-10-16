@@ -1,6 +1,7 @@
 import { Container, hyperlink, Text, type TUI } from "@msa/tui";
 
 import { copyToClipboard } from "../../../utils/clipboard.ts";
+import { toErrorMessage } from "../../../utils/errors.ts";
 import { theme } from "../theme/theme.ts";
 import { keyHint } from "./keybinding-hints.ts";
 
@@ -36,7 +37,7 @@ export class AuthUrlComponent extends Container {
       await copyToClipboard(this.url);
       this.setHint(theme.fg("success", "Copied URL to clipboard"));
     } catch (error) {
-      this.setHint(theme.fg("error", error instanceof Error ? error.message : String(error)));
+      this.setHint(theme.fg("error", toErrorMessage(error)));
     }
   }
 }

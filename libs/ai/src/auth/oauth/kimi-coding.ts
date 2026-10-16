@@ -6,6 +6,7 @@
  * https://api.kimi.com/coding as an `Authorization: Bearer` header.
  */
 
+import { toErrorMessage } from "../../utils/errors.ts";
 import { getProviderEnvValue } from "../../utils/provider-env.ts";
 import { sleep } from "../../utils/sleep.ts";
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
@@ -190,7 +191,7 @@ async function pollForToken(
         } catch (error) {
           return {
             status: "failed",
-            message: error instanceof Error ? error.message : String(error),
+            message: toErrorMessage(error),
           };
         }
       }

@@ -13,6 +13,8 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 
+import { toErrorMessage } from "../utils/errors.ts";
+
 function getEnv(): NodeJS.ProcessEnv {
   if (process.platform !== "linux" || Object.keys(process.env).length > 0) {
     return process.env;
@@ -948,7 +950,7 @@ export class DefaultPackageManager implements PackageManager {
       await operation();
       this.emitProgress({ type: "complete", action, source });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = toErrorMessage(error);
       this.emitProgress({ type: "error", action, source, message: errorMessage });
       throw error;
     }

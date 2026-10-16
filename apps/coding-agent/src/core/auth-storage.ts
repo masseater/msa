@@ -12,6 +12,7 @@ import lockfile from "proper-lockfile";
 
 import { getAgentDir } from "../config.ts";
 import { raceWithAbortSignal } from "../utils/abort.ts";
+import { toErrorMessage } from "../utils/errors.ts";
 import { getFileRevision, normalizePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { isCommandConfigValue, resolveConfigValue } from "./resolve-config-value.ts";
@@ -222,9 +223,7 @@ export class ReadOnlyAuthStorage implements CredentialStore {
         this.data = {};
         return this.data;
       }
-      throw new Error(
-        `Failed to read auth.json: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new Error(`Failed to read auth.json: ${toErrorMessage(error)}`);
     }
 
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {

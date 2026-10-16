@@ -88,6 +88,7 @@ import {
   stopThemeWatcher,
 } from "./modes/interactive/theme/theme.ts";
 import { handleConfigCommand, handlePackageCommand } from "./package-manager-cli.ts";
+import { toErrorMessage } from "./utils/errors.ts";
 import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
 import { cleanupWindowsSelfUpdateQuarantine } from "./utils/windows-self-update.ts";
 
@@ -378,7 +379,7 @@ function validateSessionIdFlags(parsed: Args): void {
   try {
     assertValidSessionId(parsed.sessionId);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = toErrorMessage(error);
     console.error(chalk.red(`Error: ${message}`));
     process.exit(1);
   }
@@ -388,7 +389,7 @@ function openSessionOrExit(path: string, sessionDir?: string): SessionManager {
   try {
     return SessionManager.open(path, sessionDir);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = toErrorMessage(error);
     console.error(chalk.red(`Error: ${message}`));
     process.exit(1);
   }
@@ -403,7 +404,7 @@ function forkSessionOrExit(
   try {
     return SessionManager.forkFrom(sourcePath, cwd, sessionDir, { id: sessionId });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = toErrorMessage(error);
     console.error(chalk.red(`Error: ${message}`));
     process.exit(1);
   }

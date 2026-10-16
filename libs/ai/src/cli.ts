@@ -6,6 +6,7 @@ import { createInterface } from "node:readline";
 
 import type { AuthPrompt, OAuthCredential, Provider } from "./index.ts";
 import { builtinProviders } from "./providers/all.ts";
+import { toErrorMessage } from "./utils/errors.ts";
 
 const AUTH_FILE = "auth.json";
 const PROVIDERS = builtinProviders().filter(
@@ -130,6 +131,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error("Error:", error instanceof Error ? error.message : String(error));
+  console.error("Error:", toErrorMessage(error));
   process.exit(1);
 });

@@ -11,6 +11,7 @@ import { defaultModelPerProvider } from "../../core/model-resolver.ts";
 import { CredentialSynchronizationError } from "../../core/model-runtime.ts";
 import { RADIUS_MCP_URL, RADIUS_PROVIDER_ID } from "../../core/radius.ts";
 import { addMcpServerConfig, loadMcpConfig } from "../../extensions/mcp/config.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
 import {
@@ -105,9 +106,6 @@ function llamaCppPostLoginGuidance(actionLabel: string, loadedModelCount: number
     : `${actionLabel}. Use /model to select a loaded llama.cpp model, or /llama to manage models.`;
 }
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
-
 /** What the login flow needs from the interactive mode that hosts it. */
 export interface LoginFlowHost {
   readonly ui: TUI;
@@ -199,7 +197,7 @@ export class LoginFlow {
     try {
       providerOptions = await this.getLogoutProviderOptions();
     } catch (error) {
-      host.showError(`Could not read stored credentials: ${errorMessage(error)}`);
+      host.showError(`Could not read stored credentials: ${toErrorMessage(error)}`);
       return;
     }
     if (providerOptions.length === 0) {
@@ -232,8 +230,8 @@ export class LoginFlow {
           } catch (error: unknown) {
             host.showError(
               error instanceof CredentialSynchronizationError
-                ? `Credentials removed for ${providerOption.name}, but local model state could not be synchronized: ${errorMessage(error)}`
-                : `Logout failed: ${errorMessage(error)}`,
+                ? `Credentials removed for ${providerOption.name}, but local model state could not be synchronized: ${toErrorMessage(error)}`
+                : `Logout failed: ${toErrorMessage(error)}`,
             );
           }
         },
@@ -454,7 +452,7 @@ export class LoginFlow {
               await host.session.setModel(selectedModel, { persist: true });
             } catch (error: unknown) {
               selectedModel = undefined;
-              selectionError = `${actionLabel}, but selecting its default model failed: ${errorMessage(error)}. Use /model to select a model.`;
+              selectionError = `${actionLabel}, but selecting its default model failed: ${toErrorMessage(error)}. Use /model to select a model.`;
             }
           }
         }
@@ -505,7 +503,7 @@ export class LoginFlow {
       })
       .catch((error: unknown) => {
         host.showWarning(
-          `${actionLabel}, but its model catalog could not be refreshed: ${errorMessage(error)}`,
+          `${actionLabel}, but its model catalog could not be refreshed: ${toErrorMessage(error)}`,
         );
       })
       .finally(() => clearTimeout(timeout));
@@ -560,7 +558,7 @@ export class LoginFlow {
       }
     } catch (error: unknown) {
       host.editorSlot.restoreEditor();
-      const message = errorMessage(error);
+      const message = toErrorMessage(error);
       if (error instanceof CredentialSynchronizationError) {
         host.showError(
           `${actionLabel}, but local model state could not be synchronized: ${message}`,
@@ -692,7 +690,7 @@ export class LoginFlow {
           try {
             addMcpServerConfig(mcpPath, name, config);
           } catch (error: unknown) {
-            host.showError(`Could not update ${mcpPath}: ${errorMessage(error)}`);
+            host.showError(`Could not update ${mcpPath}: ${toErrorMessage(error)}`);
             return;
           }
           // The MCP extension reads mcp.json when the session starts.

@@ -39,6 +39,7 @@ import {
   mcpNamespace,
   validateMcpServerConfig,
 } from "../../core/mcp-servers.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 
 export type {
   McpExposure,
@@ -96,7 +97,7 @@ function readConfigFile(path: string, scope: "global" | "project", state: McpCon
   try {
     parsed = JSON.parse(readFileSync(path, "utf8"));
   } catch (error) {
-    errors.push(`${path}: ${error instanceof Error ? error.message : String(error)}`);
+    errors.push(`${path}: ${toErrorMessage(error)}`);
     return;
   }
   if (!isRecord(parsed) || (parsed.mcpServers !== undefined && !isRecord(parsed.mcpServers))) {

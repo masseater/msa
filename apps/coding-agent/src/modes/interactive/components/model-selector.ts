@@ -11,6 +11,7 @@ import {
 } from "@msa/tui";
 
 import type { ModelRuntime } from "../../../core/model-runtime.ts";
+import { toErrorMessage } from "../../../utils/errors.ts";
 import { refreshModelCatalogs } from "../model-catalog-refresh.ts";
 import { getModelSelectorSearchText } from "../model-search.ts";
 import { theme } from "../theme/theme.ts";
@@ -222,7 +223,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
       this.refreshStatusMessage = "";
       this.errorMessage = timedOut
         ? "Model refresh timed out; showing cached models."
-        : `Could not refresh model catalogs: ${error instanceof Error ? error.message : String(error)}`;
+        : `Could not refresh model catalogs: ${toErrorMessage(error)}`;
       this.updateList();
       this.tui.requestRender();
     } finally {

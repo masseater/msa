@@ -14,6 +14,7 @@ import chalk from "chalk";
 import { APP_NAME, CONFIG_DIR_NAME } from "../../config.ts";
 import { validateMcpServerConfig } from "../../core/mcp-servers.ts";
 import { ProjectTrustStore } from "../../core/trust-manager.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import { openBrowser } from "../../utils/open-browser.ts";
 import {
   addMcpServerConfig,
@@ -106,10 +107,6 @@ interface ServerReport {
   /** Whether the server offers resources. They are not listed: listing every one can take long. */
   resources?: true;
   error?: string;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function describeTransport(entry: McpServerEntry): string {
@@ -408,7 +405,7 @@ function add(
   try {
     replaced = addMcpServerConfig(path, name, validated);
   } catch (addError) {
-    error(`Could not update ${path}: ${errorMessage(addError)}`);
+    error(`Could not update ${path}: ${toErrorMessage(addError)}`);
     return 1;
   }
   log(`${replaced ? "Replaced" : "Added"} ${scope} MCP server "${name}" in ${path}.`);
@@ -451,7 +448,7 @@ function remove(
   try {
     removed = removeMcpServerConfig(path, name);
   } catch (removeError) {
-    error(`Could not update ${path}: ${errorMessage(removeError)}`);
+    error(`Could not update ${path}: ${toErrorMessage(removeError)}`);
     return 1;
   }
   if (removed) {
@@ -603,7 +600,7 @@ async function login(
     error(
       signInError instanceof McpSignInCancelledError
         ? `Sign-in to MCP server "${name}" was cancelled or not completed within ${Math.round(timeoutMs / 1000)} seconds.`
-        : `Sign-in to MCP server "${name}" failed: ${errorMessage(signInError)}`,
+        : `Sign-in to MCP server "${name}" failed: ${toErrorMessage(signInError)}`,
     );
     return 1;
   }
@@ -611,7 +608,7 @@ async function login(
   try {
     await connection.reconnect();
   } catch (connectError) {
-    error(`Signed in, but ${errorMessage(connectError)}`);
+    error(`Signed in, but ${toErrorMessage(connectError)}`);
     return 1;
   }
   log(`Signed in to MCP server "${name}" (${connection.tools.length} tools).`);
