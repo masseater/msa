@@ -563,7 +563,7 @@ export class LoginFlow {
         host.showError(
           `${actionLabel}, but local model state could not be synchronized: ${message}`,
         );
-      } else if (message === LOGIN_CANCELLED) {
+      } else if (dialog.signal.aborted || message === LOGIN_CANCELLED) {
         onBack?.();
       } else if (method === "oauth") {
         host.showError(`Failed to login to ${providerName}: ${message}`);
