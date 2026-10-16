@@ -17,20 +17,13 @@ import {
   str,
   toolTimerText,
 } from "../../core/tools/render-utils.ts";
-import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
-import { VisualLinePreview } from "../../modes/interactive/components/visual-truncate.ts";
+import { expandHint } from "../../modes/interactive/components/keybinding-hints.ts";
+import { collapsedOutput, SingleLine } from "../../modes/interactive/components/visual-truncate.ts";
 import { highlightCode, type Theme } from "../../modes/interactive/theme/theme.ts";
 import type { CodemodeNestedCall, CodemodeToolDetails } from "./tool.ts";
 
-const CODE_PREVIEW_LINES = 10;
-const CALL_PREVIEW_COUNT = 8;
-const OUTPUT_PREVIEW_LINES = 5;
 const COLLAPSED_ARGS_CHARS = 80;
 const SCRIPT_HEADER = /^Script (completed|failed)\nWall time [\d.]+ seconds\nOutput:\n$/;
-
-function expandHint(theme: Theme, hidden: number, noun: string): string {
-  return `${theme.fg("muted", `... (${hidden} more ${noun},`)} ${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`;
-}
 
 function formatDuration(ms: number | undefined): string {
   if (ms === undefined) return "";
@@ -85,21 +78,18 @@ export const codemodeRenderers: Pick<
       component.addChild(new Text(`${title} ${theme.fg("error", "[invalid arg]")}`, 0, 0));
       return component;
     }
-    component.addChild(new Text(title, 0, 0));
-    if (code) {
-      const highlighted = highlightCode(
-        replaceTabs(code.replace(/\r/g, "").trimEnd()),
-        "javascript",
-      ).join("\n");
+    const source = code.replace(/\r/g, "").trimEnd();
+    if (!context.expanded) {
+      const lines = source ? source.split("\n").length : 0;
       component.addChild(
-        context.expanded
-          ? new Text(highlighted, 0, 0)
-          : new VisualLinePreview({
-              text: highlighted,
-              maxVisualLines: CODE_PREVIEW_LINES,
-              keep: "start",
-              formatHint: (hidden) => expandHint(theme, hidden, "lines"),
-            }),
+        new SingleLine(lines > 0 ? `${title} ${expandHint(`${lines} lines of code`)}` : title),
+      );
+      return component;
+    }
+    component.addChild(new Text(title, 0, 0));
+    if (source) {
+      component.addChild(
+        new Text(highlightCode(replaceTabs(source), "javascript").join("\n"), 0, 0),
       );
     }
     return component;
@@ -109,15 +99,14 @@ export const codemodeRenderers: Pick<
     const component = (context.lastComponent as Container | undefined) ?? new Container();
     component.clear();
     const calls = result.details?.calls ?? [];
-    if (calls.length > 0) {
-      const shown = options.expanded ? calls : calls.slice(-CALL_PREVIEW_COUNT);
-      const lines = shown.map((call) => formatCall(call, theme, options.expanded));
-      if (shown.length < calls.length) {
-        lines.unshift(
-          `${theme.fg("muted", `... (${calls.length - shown.length} earlier calls,`)} ${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`,
-        );
-      }
-      // Collapsed rows hide earlier calls, so the total covers every call.
+    if (calls.length > 0 && !options.expanded) {
+      // Collapsed: the latest call, which shows what the script is doing now.
+      const earlier = calls.length - 1;
+      const more = earlier > 0 ? `  ${theme.fg("muted", `+${earlier} earlier calls`)}` : "";
+      component.addChild(new Spacer(1));
+      component.addChild(new SingleLine(`${formatCall(calls.at(-1)!, theme, false)}${more}`));
+    } else if (calls.length > 0) {
+      const lines = calls.map((call) => formatCall(call, theme, true));
       const priced = calls.filter((call) => call.cost);
       if (priced.length > 1) {
         const total = priced.reduce((sum, call) => sum + (call.cost ?? 0), 0);
@@ -137,6 +126,11 @@ export const codemodeRenderers: Pick<
           { ...result, content: hasHeader ? rest : result.content },
           context.showImages,
         ).trim();
+    if (output && !options.expanded) {
+      component.addChild(new Spacer(1));
+      component.addChild(collapsedOutput(output, "first", timerText));
+      return component;
+    }
     if (output) {
       const color = context.isError ? "error" : "toolOutput";
       const styled = replaceTabs(output)
@@ -144,23 +138,7 @@ export const codemodeRenderers: Pick<
         .map((line) => theme.fg(color, line))
         .join("\n");
       component.addChild(new Spacer(1));
-      if (options.expanded) {
-        component.addChild(new Text(styled, 0, 0));
-      } else {
-        // Limit wrapped lines, not logical ones: script output is often one long JSON line.
-        component.addChild(
-          new VisualLinePreview({
-            text: styled,
-            maxVisualLines: OUTPUT_PREVIEW_LINES,
-            keep: "start",
-            formatHint: (hidden) => expandHint(theme, hidden, "lines"),
-          }),
-        );
-        // The collapsed preview hides the truncation notice at the end, so name the file here.
-        const fullOutputPath = result.details?.fullOutputPath;
-        if (fullOutputPath)
-          component.addChild(new Text(theme.fg("muted", `Full output: ${fullOutputPath}`), 0, 0));
-      }
+      component.addChild(new Text(styled, 0, 0));
     }
     if (timerText) {
       component.addChild(new Spacer(1));

@@ -9,6 +9,7 @@
 import { Box, Container, Spacer, Text } from "@msa/tui";
 
 import { renderDiff } from "../../../modes/interactive/components/diff.ts";
+import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
 import type { Theme } from "../../../modes/interactive/theme/theme.ts";
 import type { ToolDefinition } from "../../extensions/types.ts";
 import {
@@ -102,12 +103,20 @@ function formatEditCall(args: RenderableEditArgs | undefined, theme: Theme, cwd:
   const pathDisplay = renderToolPath(str(args?.file_path ?? args?.path), theme, cwd);
   return `${theme.fg("toolTitle", theme.bold("edit"))} ${pathDisplay}`;
 }
+/** A diff as `+3 -1 lines`, from its `+12 text` / `-12 text` rows. */
+function summarizeDiff(diff: string): string {
+  const rows = diff.split("\n");
+  const added = rows.filter((row) => /^\+\s*\d/.test(row)).length;
+  const removed = rows.filter((row) => /^-\s*\d/.test(row)).length;
+  return `+${added} -${removed} lines`;
+}
 function formatEditResult(
   args: RenderableEditArgs | undefined,
   preview: EditPreview | undefined,
   result: EditToolResultLike,
   theme: Theme,
   isError: boolean,
+  expanded: boolean,
 ): string | undefined {
   const rawPath = str(args?.file_path ?? args?.path);
   const previewDiff = preview && !("error" in preview) ? preview.diff : undefined;
@@ -125,7 +134,9 @@ function formatEditResult(
 
   const resultDiff = result.details?.diff;
   if (resultDiff && resultDiff !== previewDiff) {
-    return renderDiff(resultDiff, { filePath: rawPath ?? undefined });
+    return expanded
+      ? renderDiff(resultDiff, { filePath: rawPath ?? undefined })
+      : expandHint(summarizeDiff(resultDiff));
   }
 
   return undefined;
@@ -152,6 +163,7 @@ function buildEditCallComponent(
   theme: Theme,
   cwd: string,
   outputPad: number,
+  expanded: boolean,
 ): EditCallRenderComponent {
   component.setBgFn(getEditHeaderBg(component.preview, component.settledError, theme));
   component.setPaddingX(outputPad);
@@ -165,7 +177,9 @@ function buildEditCallComponent(
   const body =
     "error" in component.preview
       ? theme.fg("error", component.preview.error)
-      : renderDiff(component.preview.diff);
+      : expanded
+        ? renderDiff(component.preview.diff)
+        : expandHint(summarizeDiff(component.preview.diff));
   component.addChild(new Spacer(1));
   component.addChild(new Text(body, 0, 0));
   return component;
@@ -222,6 +236,7 @@ export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
       theme,
       context.cwd,
       context.outputPad,
+      context.expanded,
     );
   },
   renderResult(result, _options, theme, context) {
@@ -253,6 +268,7 @@ export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
           theme,
           context.cwd,
           context.outputPad,
+          context.expanded,
         );
       }
     }
@@ -263,6 +279,7 @@ export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
       typedResult,
       theme,
       context.isError,
+      context.expanded,
     );
     const component = (context.lastComponent as Container | undefined) ?? new Container();
     component.clear();

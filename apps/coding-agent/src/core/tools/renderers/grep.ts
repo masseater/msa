@@ -8,12 +8,12 @@
 
 import { Text } from "@msa/tui";
 
-import { keyHint } from "../../../modes/interactive/components/keybinding-hints.ts";
 import type { Theme } from "../../../modes/interactive/theme/theme.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
 import type { GrepToolDetails } from "../grep.ts";
 import { getTextOutput, invalidArgText, shortenPath, str } from "../render-utils.ts";
 import { DEFAULT_MAX_BYTES, formatSize } from "../truncate.ts";
+import { formatListResult } from "./list-output.ts";
 
 function formatGrepCall(
   args: { pattern: string; path?: string; glob?: string; limit?: number } | undefined,
@@ -43,31 +43,15 @@ function formatGrepResult(
   theme: Theme,
   showImages: boolean,
 ): string {
-  const output = getTextOutput(result, showImages).trim();
-  let text = "";
-  if (output) {
-    const lines = output.split("\n");
-    const maxLines = options.expanded ? lines.length : 15;
-    const displayLines = lines.slice(0, maxLines);
-    const remaining = lines.length - maxLines;
-    text += `\n${displayLines.map((line) => theme.fg("toolOutput", line)).join("\n")}`;
-    if (remaining > 0) {
-      text += `${theme.fg("muted", `\n... (${remaining} more lines,`)} ${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`;
-    }
-  }
-
   const matchLimit = result.details?.matchLimitReached;
   const truncation = result.details?.truncation;
-  const linesTruncated = result.details?.linesTruncated;
-  if (matchLimit || truncation?.truncated || linesTruncated) {
-    const warnings: string[] = [];
-    if (matchLimit) warnings.push(`${matchLimit} matches limit`);
-    if (truncation?.truncated)
-      warnings.push(`${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit`);
-    if (linesTruncated) warnings.push("some lines truncated");
-    text += `\n${theme.fg("warning", `[Truncated: ${warnings.join(", ")}]`)}`;
-  }
-  return text;
+  const warnings: string[] = [];
+  if (matchLimit) warnings.push(`${matchLimit} matches limit`);
+  if (truncation?.truncated)
+    warnings.push(`${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit`);
+  if (result.details?.linesTruncated) warnings.push("some lines truncated");
+  const output = getTextOutput(result, showImages).trim();
+  return formatListResult(output, warnings, options.expanded, "lines", theme);
 }
 
 export const grepRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> = {

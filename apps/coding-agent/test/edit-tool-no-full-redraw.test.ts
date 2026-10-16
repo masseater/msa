@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 
 import { Container, type Terminal, Text, type TUI, TuiMainScreen } from "@msa/tui";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -114,6 +115,7 @@ describe("edit tool TUI rendering", () => {
       tui,
       process.cwd(),
     );
+    component.setExpanded(true);
     root.addChild(component);
     tui.addChild(root);
     tui.start();
@@ -202,6 +204,11 @@ describe("edit tool TUI rendering", () => {
     await waitForRender();
     await waitForRender();
 
+    const collapsed = stripVTControlCharacters(component.render(80).join("\n"));
+    expect(collapsed).toMatch(/\+2 -2 lines \(.* to expand\)/);
+    expect(collapsed).not.toContain("line 50 changed");
+
+    component.setExpanded(true);
     const rendered = component.render(80).join("\n");
     expect(rendered).toContain("line 50 changed");
     expect(rendered).toContain("line 150 changed");

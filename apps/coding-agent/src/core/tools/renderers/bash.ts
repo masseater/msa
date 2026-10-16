@@ -8,8 +8,10 @@
 
 import { Container, Spacer, Text } from "@msa/tui";
 
-import { keyHint } from "../../../modes/interactive/components/keybinding-hints.ts";
-import { VisualLinePreview } from "../../../modes/interactive/components/visual-truncate.ts";
+import {
+  collapsedOutput,
+  SingleLine,
+} from "../../../modes/interactive/components/visual-truncate.ts";
 import { theme } from "../../../modes/interactive/theme/theme.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
 import type { BashToolDetails } from "../bash.ts";
@@ -22,18 +24,25 @@ import {
 } from "../render-utils.ts";
 import { DEFAULT_MAX_BYTES, formatSize } from "../truncate.ts";
 
-const BASH_PREVIEW_LINES = 5;
 export const BASH_UPDATE_THROTTLE_MS = 100;
+/** The command; collapsed, only its first line and how many lines follow. */
 function formatShellCall(
   args: { command?: string; timeout?: number } | undefined,
   prompt: string,
+  expanded: boolean,
 ): string {
   const command = str(args?.command);
   const timeout = args?.timeout as number | undefined;
   const timeoutSuffix = timeout ? theme.fg("muted", ` (timeout ${timeout}s)`) : "";
-  const commandDisplay =
-    command === null ? invalidArgText(theme) : command ? command : theme.fg("toolOutput", "...");
-  return theme.fg("toolTitle", theme.bold(`${prompt} ${commandDisplay}`)) + timeoutSuffix;
+  if (command === null)
+    return theme.fg("toolTitle", theme.bold(`${prompt} ${invalidArgText(theme)}`));
+  if (!command)
+    return theme.fg("toolTitle", theme.bold(`${prompt} ${theme.fg("toolOutput", "...")}`));
+  const lines = command.trimEnd().split("\n");
+  const shown = expanded ? lines.join("\n") : lines[0];
+  const more =
+    !expanded && lines.length > 1 ? theme.fg("muted", ` (+${lines.length - 1} lines)`) : "";
+  return theme.fg("toolTitle", theme.bold(`${prompt} ${shown}`)) + more + timeoutSuffix;
 }
 function rebuildBashResultRenderComponent(
   component: Container,
@@ -57,27 +66,18 @@ function rebuildBashResultRenderComponent(
     }
   }
 
+  if (!options.expanded) {
+    component.addChild(new Spacer(1));
+    component.addChild(collapsedOutput(output, "last", timerText));
+    return;
+  }
+
   if (output) {
     const styledOutput = output
       .split("\n")
       .map((line) => theme.fg("toolOutput", line))
       .join("\n");
-
-    if (options.expanded) {
-      component.addChild(new Text(`\n${styledOutput}`, 0, 0));
-    } else {
-      component.addChild(new Spacer(1));
-      component.addChild(
-        new VisualLinePreview({
-          text: styledOutput,
-          maxVisualLines: BASH_PREVIEW_LINES,
-          keep: "end",
-          formatHint: (hidden) =>
-            theme.fg("muted", `... (${hidden} earlier lines,`) +
-            ` ${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`,
-        }),
-      );
-    }
+    component.addChild(new Text(`\n${styledOutput}`, 0, 0));
   }
 
   if (truncation?.truncated || fullOutputPath) {
@@ -109,10 +109,15 @@ export function createShellRenderers(
   return {
     renderCall(args, _theme, context) {
       startToolTimer(context);
-      const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-      text.setText(
-        formatShellCall(args as { command?: string; timeout?: number } | undefined, prompt),
+      const call = formatShellCall(
+        args as { command?: string; timeout?: number } | undefined,
+        prompt,
+        context.expanded,
       );
+      if (!context.expanded) return new SingleLine(call);
+      const text =
+        context.lastComponent instanceof Text ? context.lastComponent : new Text("", 0, 0);
+      text.setText(call);
       return text;
     },
     renderResult(result, options, _theme, context) {
