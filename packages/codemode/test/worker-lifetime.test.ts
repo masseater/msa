@@ -1,4 +1,4 @@
-import { execFile, spawnSync } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Worker } from "node:worker_threads";
@@ -225,27 +225,54 @@ const runtimes = [
   },
 ];
 
+/** Run the fixture and return its stdout lines; without `untilExit`, stop it after the first line. */
+function runFixture(command: string, args: string[], untilExit: boolean): Promise<string[]> {
+  if (untilExit) {
+    return promisify(execFile)(command, args, { timeout: 20000 }).then(({ stdout }) =>
+      stdout.trim().split(/\r?\n/),
+    );
+  }
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["ignore", "pipe", "inherit"] });
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+      const newline = stdout.indexOf("\n");
+      if (newline === -1) return;
+      child.kill();
+      resolve([stdout.slice(0, newline).trim()]);
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (!stdout.includes("\n")) reject(new Error(`${command} exited with ${code} before output`));
+    });
+  });
+}
+
 describe.each(runtimes)("$name process lifetime", ({ name, command, available }) => {
   // #10748: verify both prompt cancellation and, on Node, prompt process exit with a real worker.
-  // Bun 1.4.0's pending terminate() keeps the process alive even after unref(), independently of codemode.
+  // Bun 1.4's pending terminate() keeps the process alive until the worker's script finishes
+  // (seconds, longer under load), independently of codemode, so on Bun only the result is awaited.
   it.skipIf(!available).each(["abort", "timeout", "close"] as const)(
     name === "Node"
       ? "exits promptly after %s with a real worker"
       : "settles %s promptly with a real worker",
     async (how) => {
       const fixture = fileURLToPath(new URL("./fixtures/worker-process-exit.ts", import.meta.url));
-      const { stdout } = await promisify(execFile)(command, [fixture, how], { timeout: 20000 });
-      const lines = stdout.trim().split(/\r?\n/);
-      expect(lines).toHaveLength(2);
+      const lines = await runFixture(command, [fixture, how], name === "Node");
       const result = JSON.parse(lines[0]) as { type: string; kind: string; elapsedMs: number };
-      const exit = JSON.parse(lines[1]) as { type: string; elapsedMs: number };
       expect(result).toMatchObject({
         type: "result",
         kind: how === "timeout" ? "timeout" : "aborted",
       });
-      expect(exit.type).toBe("exit");
       expect(result.elapsedMs).toBeLessThan(1000);
-      if (name === "Node") expect(exit.elapsedMs - result.elapsedMs).toBeLessThan(1000);
+      if (name === "Node") {
+        expect(lines).toHaveLength(2);
+        const exit = JSON.parse(lines[1]) as { type: string; elapsedMs: number };
+        expect(exit.type).toBe("exit");
+        expect(exit.elapsedMs - result.elapsedMs).toBeLessThan(1000);
+      }
     },
     25000,
   );
