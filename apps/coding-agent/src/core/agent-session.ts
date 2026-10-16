@@ -15,6 +15,7 @@
 
 import { readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 import {
   type AfterToolCallContext,
@@ -61,7 +62,6 @@ import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { processImage } from "../utils/image-process.ts";
-import { sleep } from "../utils/sleep.ts";
 import { normalizeToolResultImages } from "../utils/tool-result-images.ts";
 import { formatNoApiKeyFoundMessage, formatNoModelSelectedMessage } from "./auth-guidance.ts";
 import { type BashResult, executeBashWithOperations } from "./bash-executor.ts";
@@ -4172,7 +4172,7 @@ export class AgentSession {
     // Wait with exponential backoff (abortable)
     this._retryAbortController = new AbortController();
     try {
-      await sleep(delayMs, this._retryAbortController.signal);
+      await delay(delayMs, undefined, { signal: this._retryAbortController.signal });
     } catch {
       // Aborted during sleep - emit end event so UI can clean up
       this._finishCancelledRetry();

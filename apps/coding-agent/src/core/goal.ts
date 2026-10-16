@@ -7,11 +7,12 @@
  * session restores an unfinished one.
  */
 
+import { setTimeout as delay } from "node:timers/promises";
+
 import type { AgentMessage } from "@msa/agent-core";
 import type { Api, AssistantMessage, Model } from "@msa/ai/compat";
 
 import { toErrorMessage } from "../utils/errors.ts";
-import { sleep } from "../utils/sleep.ts";
 import { serializeConversation } from "./compaction/utils.ts";
 import { convertToLlm } from "./messages.ts";
 import type { SessionEntry } from "./session-manager.ts";
@@ -471,7 +472,7 @@ export class GoalLoop {
       );
       this.host.record({ event: "waiting", condition: goal.condition, reason: error, delayMs });
       try {
-        await sleep(delayMs, signal);
+        await delay(delayMs, undefined, { signal });
       } catch {
         return false;
       }
