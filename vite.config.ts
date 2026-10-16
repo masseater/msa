@@ -45,50 +45,50 @@ export const workspaceSourcePaths = {
 export const testBaseConfig = {
   resolve: {
     alias: [
-      { find: /^@earendil-works\/chord$/u, replacement: workspaceSourcePaths.chordIndex },
+      { find: /^@msa\/chord$/u, replacement: workspaceSourcePaths.chordIndex },
       {
-        find: /^@earendil-works\/chord\/context$/u,
+        find: /^@msa\/chord\/context$/u,
         replacement: workspaceSourcePaths.chordContext,
       },
-      { find: /^@earendil-works\/chord\/delta$/u, replacement: workspaceSourcePaths.chordDelta },
-      { find: /^@earendil-works\/chord\/node$/u, replacement: workspaceSourcePaths.chordNode },
+      { find: /^@msa\/chord\/delta$/u, replacement: workspaceSourcePaths.chordDelta },
+      { find: /^@msa\/chord\/node$/u, replacement: workspaceSourcePaths.chordNode },
       {
-        find: /^@earendil-works\/pi-telemetry$/u,
+        find: /^@msa\/telemetry$/u,
         replacement: workspaceSourcePaths.telemetryIndex,
       },
       {
-        find: /^@earendil-works\/pi-telemetry\/testing$/u,
+        find: /^@msa\/telemetry\/testing$/u,
         replacement: workspaceSourcePaths.telemetryTesting,
       },
-      { find: /^@earendil-works\/pi-mcp$/u, replacement: workspaceSourcePaths.mcpIndex },
-      { find: /^@earendil-works\/pi-mcp\/oauth$/u, replacement: workspaceSourcePaths.mcpOAuth },
-      { find: /^@earendil-works\/pi-mcp\/testing$/u, replacement: workspaceSourcePaths.mcpTesting },
-      { find: /^@earendil-works\/pi-ai$/u, replacement: workspaceSourcePaths.aiIndex },
-      { find: /^@earendil-works\/pi-ai\/compat$/u, replacement: workspaceSourcePaths.aiCompat },
-      { find: /^@earendil-works\/pi-ai\/oauth$/u, replacement: workspaceSourcePaths.aiOAuth },
+      { find: /^@msa\/mcp$/u, replacement: workspaceSourcePaths.mcpIndex },
+      { find: /^@msa\/mcp\/oauth$/u, replacement: workspaceSourcePaths.mcpOAuth },
+      { find: /^@msa\/mcp\/testing$/u, replacement: workspaceSourcePaths.mcpTesting },
+      { find: /^@msa\/ai$/u, replacement: workspaceSourcePaths.aiIndex },
+      { find: /^@msa\/ai\/compat$/u, replacement: workspaceSourcePaths.aiCompat },
+      { find: /^@msa\/ai\/oauth$/u, replacement: workspaceSourcePaths.aiOAuth },
       {
-        find: /^@earendil-works\/pi-ai\/utils\/(.+)$/u,
+        find: /^@msa\/ai\/utils\/(.+)$/u,
         replacement: `${workspaceSourcePaths.aiUtils}/$1.ts`,
       },
       {
-        find: /^@earendil-works\/pi-ai\/api\/(.+)$/u,
+        find: /^@msa\/ai\/api\/(.+)$/u,
         replacement: `${workspaceSourcePaths.aiApi}/$1.ts`,
       },
       {
-        find: /^@earendil-works\/pi-ai\/providers\/(.+)$/u,
+        find: /^@msa\/ai\/providers\/(.+)$/u,
         replacement: `${workspaceSourcePaths.aiProviders}/$1.ts`,
       },
-      { find: /^@earendil-works\/pi-agent-core$/u, replacement: workspaceSourcePaths.agentIndex },
-      { find: /^@earendil-works\/pi-codemode$/u, replacement: workspaceSourcePaths.codemodeIndex },
+      { find: /^@msa\/agent-core$/u, replacement: workspaceSourcePaths.agentIndex },
+      { find: /^@msa\/codemode$/u, replacement: workspaceSourcePaths.codemodeIndex },
       {
-        find: /^@earendil-works\/pi-codemode\/declarations$/u,
+        find: /^@msa\/codemode\/declarations$/u,
         replacement: workspaceSourcePaths.codemodeDeclarations,
       },
       {
-        find: /^@earendil-works\/pi-codemode\/source$/u,
+        find: /^@msa\/codemode\/source$/u,
         replacement: workspaceSourcePaths.codemodeSource,
       },
-      { find: /^@earendil-works\/pi-tui$/u, replacement: workspaceSourcePaths.tuiIndex },
+      { find: /^@msa\/tui$/u, replacement: workspaceSourcePaths.tuiIndex },
     ],
   },
 };
@@ -187,7 +187,7 @@ export default defineConfig({
         cache: false,
       },
       "daemon-build": {
-        command: "vp run --filter @earendil-works/pi-env build:daemon",
+        command: "vp run --filter @msa/env build:daemon",
         cache: false,
       },
       test: {

@@ -1,5 +1,5 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import type { AgentTool } from "@msa/agent-core";
+import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -26,8 +26,8 @@ describe("AgentSession actionable boundaries", () => {
     const requests: string[] = [];
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("turn_end", (event) => {
+        (msa) => {
+          msa.on("turn_end", (event) => {
             observedIds.push(event.messageEntryId);
             if (handled) return;
             handled = true;
@@ -78,15 +78,15 @@ describe("AgentSession actionable boundaries", () => {
       const requests: string[] = [];
       const harness = await createHarness({
         extensionFactories: [
-          (pi) => {
-            pi.on("turn_end", () => {
+          (msa) => {
+            msa.on("turn_end", () => {
               if (handled) return;
               handled = true;
               if (queueKind === "steering" || queueKind === "both") {
-                pi.sendUserMessage("queued steering", { deliverAs: "steer" });
+                msa.sendUserMessage("queued steering", { deliverAs: "steer" });
               }
               if (queueKind === "follow-up" || queueKind === "both") {
-                pi.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
+                msa.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
               }
               return {
                 entries: [{ type: "compaction", summary: "exact handoff", firstKeptEntryId: null }],
@@ -136,8 +136,8 @@ describe("AgentSession actionable boundaries", () => {
       models: [{ id: "faux-1", contextWindow: 2_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
       extensionFactories: [
-        (pi) => {
-          pi.on("turn_end", (event, ctx) => {
+        (msa) => {
+          msa.on("turn_end", (event, ctx) => {
             if (handled) return;
             handled = true;
             const user = [...ctx.sessionManager.getBranch()]
@@ -153,7 +153,7 @@ describe("AgentSession actionable boundaries", () => {
               continue: true,
             };
           });
-          pi.on("session_before_compact", (event) => ({
+          msa.on("session_before_compact", (event) => ({
             compaction: {
               summary: "older history summary",
               firstKeptEntryId: event.preparation.firstKeptEntryId,
@@ -196,8 +196,8 @@ describe("AgentSession actionable boundaries", () => {
       models: [{ id: "faux-1", contextWindow: 2_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
       extensionFactories: [
-        (pi) => {
-          pi.on("turn_end", () => {
+        (msa) => {
+          msa.on("turn_end", () => {
             if (handled) return;
             handled = true;
             return {
@@ -213,7 +213,7 @@ describe("AgentSession actionable boundaries", () => {
               continue: true,
             };
           });
-          pi.on("session_before_compact", (event) => ({
+          msa.on("session_before_compact", (event) => ({
             compaction: {
               summary: "older history summary",
               firstKeptEntryId: event.preparation.firstKeptEntryId,
@@ -244,8 +244,8 @@ describe("AgentSession actionable boundaries", () => {
     const snapshots: string[] = [];
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("turn_end", () => {
+        (msa) => {
+          msa.on("turn_end", () => {
             if (handled) return;
             handled = true;
             return {
@@ -280,8 +280,8 @@ describe("AgentSession actionable boundaries", () => {
     const requests: string[] = [];
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("agent_before_settle", () => {
+        (msa) => {
+          msa.on("agent_before_settle", () => {
             if (requested) return;
             requested = true;
             return {
@@ -328,11 +328,11 @@ describe("AgentSession actionable boundaries", () => {
     const requests: string[] = [];
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("agent_end", () => {
+        (msa) => {
+          msa.on("agent_end", () => {
             if (!firstRun) return;
             firstRun = false;
-            pi.sendMessage(
+            msa.sendMessage(
               {
                 customType: "agent-end-context",
                 content: "queued after agent end",
@@ -341,7 +341,7 @@ describe("AgentSession actionable boundaries", () => {
               { triggerTurn: false },
             );
           });
-          pi.on("agent_before_settle", (event) => {
+          msa.on("agent_before_settle", (event) => {
             if (continued) return;
             continued = true;
             expect(JSON.stringify(event.context.pendingMessages)).toContain(
@@ -377,11 +377,11 @@ describe("AgentSession actionable boundaries", () => {
     const requests: string[] = [];
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("agent_before_settle", () => {
+        (msa) => {
+          msa.on("agent_before_settle", () => {
             if (handled) return;
             handled = true;
-            pi.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
+            msa.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
             return {
               entries: [
                 {
@@ -423,20 +423,20 @@ describe("AgentSession actionable boundaries", () => {
     const lifecycle: string[] = [];
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("agent_start", () => {
+        (msa) => {
+          msa.on("agent_start", () => {
             lifecycle.push("start");
           });
-          pi.on("agent_settled", (_event, ctx) => {
+          msa.on("agent_settled", (_event, ctx) => {
             lifecycle.push(`settled-first:${ctx.isIdle()}`);
             if (triggered) return;
             triggered = true;
-            pi.sendMessage(
+            msa.sendMessage(
               { customType: "settled-trigger", content: "start later", display: false },
               { triggerTurn: true },
             );
           });
-          pi.on("agent_settled", (_event, ctx) => {
+          msa.on("agent_settled", (_event, ctx) => {
             lifecycle.push(`settled-second:${ctx.isIdle()}`);
           });
         },
@@ -468,8 +468,8 @@ describe("AgentSession actionable boundaries", () => {
     const harness = await createHarness({
       tools: [tool],
       extensionFactories: [
-        (pi) => {
-          pi.on("turn_end", (event, ctx) => {
+        (msa) => {
+          msa.on("turn_end", (event, ctx) => {
             const user = [...ctx.sessionManager.getBranch()]
               .reverse()
               .find((entry) => entry.type === "message" && entry.message.role === "user");
@@ -503,8 +503,8 @@ describe("AgentSession actionable boundaries", () => {
     let turnEnds = 0;
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("turn_end", (event) => {
+        (msa) => {
+          msa.on("turn_end", (event) => {
             turnEnds++;
             expect(event.outcome).toBe("error");
             return { entries: [{ type: "custom", customType: "failure-boundary", data: true }] };
@@ -532,8 +532,8 @@ describe("AgentSession actionable boundaries", () => {
       models: [{ id: "faux-1", contextWindow: 10_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 300 } },
       extensionFactories: [
-        (pi) => {
-          pi.on("message_end", (event) => {
+        (msa) => {
+          msa.on("message_end", (event) => {
             if (event.message.role !== "assistant") return;
             return {
               message: {
@@ -542,7 +542,7 @@ describe("AgentSession actionable boundaries", () => {
               },
             };
           });
-          pi.on("turn_end", (event) => {
+          msa.on("turn_end", (event) => {
             if (handled) return;
             handled = true;
             return {
@@ -569,8 +569,8 @@ describe("AgentSession actionable boundaries", () => {
       models: [{ id: "faux-1", contextWindow: 5_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
       extensionFactories: [
-        (pi) => {
-          pi.on("message_end", (event) => {
+        (msa) => {
+          msa.on("message_end", (event) => {
             if (event.message.role !== "assistant") return;
             return {
               message: {
@@ -579,7 +579,7 @@ describe("AgentSession actionable boundaries", () => {
               },
             };
           });
-          pi.on("turn_end", (_event, ctx) => {
+          msa.on("turn_end", (_event, ctx) => {
             if (handled) return;
             handled = true;
             const user = [...ctx.sessionManager.getBranch()]
@@ -659,11 +659,11 @@ describe("AgentSession actionable boundaries", () => {
     const requests: string[] = [];
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("agent_before_settle", () => {
+        (msa) => {
+          msa.on("agent_before_settle", () => {
             if (handled) return;
             handled = true;
-            pi.sendMessage(
+            msa.sendMessage(
               {
                 customType: "pending-boundary",
                 content: "persist before continue",
@@ -698,11 +698,11 @@ describe("AgentSession actionable boundaries", () => {
     let handled = false;
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("agent_before_settle", (_event, ctx) => {
+        (msa) => {
+          msa.on("agent_before_settle", (_event, ctx) => {
             if (handled) return;
             handled = true;
-            pi.sendUserMessage("still queued", { deliverAs: "followUp" });
+            msa.sendUserMessage("still queued", { deliverAs: "followUp" });
             const targets = ctx.sessionManager
               .getBranch()
               .flatMap((entry) =>
@@ -739,8 +739,8 @@ describe("AgentSession actionable boundaries", () => {
     const release = deferred();
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("agent_before_settle", async () => {
+        (msa) => {
+          msa.on("agent_before_settle", async () => {
             started.resolve();
             await release.promise;
             return {
@@ -826,8 +826,8 @@ describe("durable length recovery", () => {
       settings: { compaction: { keepRecentTokens: 1, reserveTokens: 0 } },
       tools: [tool],
       extensionFactories: [
-        (pi) => {
-          pi.on("session_before_compact", (event) => ({
+        (msa) => {
+          msa.on("session_before_compact", (event) => ({
             compaction: {
               summary: "recovered input",
               firstKeptEntryId: event.preparation.firstKeptEntryId,
@@ -874,22 +874,22 @@ describe("durable length recovery", () => {
       models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 100 }],
       settings: { compaction: { keepRecentTokens: 1, reserveTokens: 0 } },
       extensionFactories: [
-        (pi) => {
-          pi.on("session_before_compact", (event) => ({
+        (msa) => {
+          msa.on("session_before_compact", (event) => ({
             compaction: {
               summary: "recovered input",
               firstKeptEntryId: event.preparation.firstKeptEntryId,
               tokensBefore: event.preparation.tokensBefore,
             },
           }));
-          pi.on("agent_end", (event) => {
+          msa.on("agent_end", (event) => {
             if (
               queued ||
               !event.messages.some((message) => getMessageText(message) === "first recovered")
             )
               return;
             queued = true;
-            pi.sendUserMessage("distinct follow-up", { deliverAs: "followUp" });
+            msa.sendUserMessage("distinct follow-up", { deliverAs: "followUp" });
           });
         },
       ],
@@ -948,8 +948,8 @@ describe("durable length recovery", () => {
       models: [{ id: "faux-1", contextWindow: 1_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
       extensionFactories: [
-        (pi) => {
-          pi.on("session_before_compact", () => ({ cancel: true }));
+        (msa) => {
+          msa.on("session_before_compact", () => ({ cancel: true }));
         },
       ],
     });
@@ -990,8 +990,8 @@ describe("durable length recovery", () => {
       models: [{ id: "faux-1", contextWindow: 1_000, maxTokens: 100 }],
       settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
       extensionFactories: [
-        (pi) => {
-          pi.on("turn_end", (event) => {
+        (msa) => {
+          msa.on("turn_end", (event) => {
             if (replaced || event.outcome !== "error") return;
             replaced = true;
             overflowId = event.messageEntryId;
@@ -1005,7 +1005,7 @@ describe("durable length recovery", () => {
               ],
             };
           });
-          pi.on("session_before_compact", (event) => ({
+          msa.on("session_before_compact", (event) => ({
             compaction: {
               summary: "recovered overflow",
               firstKeptEntryId: event.preparation.firstKeptEntryId,
@@ -1041,11 +1041,11 @@ describe("durable length recovery", () => {
     const harness = await createHarness({
       settings: { retry: { enabled: true, maxRetries: 2, baseDelayMs: 1 } },
       extensionFactories: [
-        (pi) => {
-          pi.on("turn_end", (event) => {
+        (msa) => {
+          msa.on("turn_end", (event) => {
             if (queued || event.outcome !== "error") return;
             queued = true;
-            pi.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
+            msa.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
           });
         },
       ],

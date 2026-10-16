@@ -1,7 +1,7 @@
 {
-  "name": "@earendil-works/pi-durable",
+  "name": "@msa/durable",
   "version": "1.2.0",
-  "description": "Durable conversation, task, and document runtime for Pi",
+  "description": "Durable conversation, task, and document runtime for msa",
   "keywords": [
     "agents",
     "conversations",
@@ -12,7 +12,7 @@
   "author": "Earendil Works",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/earendil-works/pi.git",
+    "url": "git+https://github.com/masseater/msa.git",
     "directory": "packages/durable"
   },
   "files": [
@@ -126,7 +126,7 @@
   "scripts": {
     "clean": "shx rm -rf dist",
     "build": "tsc -p tsconfig.build.json",
-    "test": "vitest --run && PI_DURABLE_DOCUMENT_RETENTION_MS=0 vitest --run",
+    "test": "vitest --run && MSA_DURABLE_DOCUMENT_RETENTION_MS=0 vitest --run",
     "bench:storage": "vitest bench --config vitest.benchmark.config.ts",
     "bench:storage:memory": "node --conditions=source --experimental-strip-types test/storage-memory.ts",
     "bench:tool-output": "node --conditions=source --experimental-strip-types --expose-gc test/tool-output-bench.ts",
@@ -139,9 +139,9 @@
     "bench:codemode": "node --conditions=source --experimental-strip-types test/codemode-bench.ts"
   },
   "dependencies": {
-    "@earendil-works/chord": "workspace:*",
-    "@earendil-works/pi-ai": "workspace:*",
-    "@earendil-works/pi-codemode": "workspace:*",
+    "@msa/ai": "workspace:*",
+    "@msa/chord": "workspace:*",
+    "@msa/codemode": "workspace:*",
     "@silvia-odwyer/photon": "catalog:",
     "diff": "catalog:",
     "typebox": "catalog:"

@@ -1,5 +1,5 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import type { AgentTool } from "@msa/agent-core";
+import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -27,8 +27,8 @@ describe("#5998 blocked tool termination", () => {
     const harness = await createHarness({
       tools: [echoTool],
       extensionFactories: [
-        (pi) => {
-          pi.on("tool_call", async () => ({
+        (msa) => {
+          msa.on("tool_call", async () => ({
             block: true,
             reason: "Blocked by terminating policy",
             terminate: true,

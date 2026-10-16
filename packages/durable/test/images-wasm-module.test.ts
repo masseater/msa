@@ -2,8 +2,8 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
-import { createPhotonImages } from "@earendil-works/pi-durable/images";
-import { DEFAULT_IMAGE_LIMITS } from "@earendil-works/pi-durable/tools";
+import { createPhotonImages } from "@msa/durable/images";
+import { DEFAULT_IMAGE_LIMITS } from "@msa/durable/tools";
 import { expect, it } from "vitest";
 
 it("createPhotonImages takes a compiled WebAssembly module, as Cloudflare Workers pass it", async () => {

@@ -15,7 +15,7 @@ afterEach(() => {
 
 describe("strict model generation", () => {
   it("fails before mutating generated data when an Individual model loses tool support", () => {
-    const fixtureRoot = mkdtempSync(join(tmpdir(), "pi-generate-models-"));
+    const fixtureRoot = mkdtempSync(join(tmpdir(), "msa-generate-models-"));
     temporaryRoots.push(fixtureRoot);
     const isolatedPackageRoot = join(fixtureRoot, "package");
     mkdirSync(isolatedPackageRoot);

@@ -19,14 +19,14 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Workspace package name -> its source root, so cross-package imports are followed. */
 const WORKSPACE = {
-  "@earendil-works/chord": "packages/chord/src",
-  "@earendil-works/pi-ai": "packages/ai/src",
-  "@earendil-works/pi-durable": "packages/durable/src",
-  "@earendil-works/pi-agent-core": "packages/agent/src",
-  "@earendil-works/pi-codemode": "packages/codemode/src",
-  "@earendil-works/pi-telemetry": "packages/telemetry/src",
-  "@earendil-works/pi-mcp": "packages/mcp/src",
-  "@earendil-works/pi-tui": "packages/tui/src",
+  "@msa/chord": "packages/chord/src",
+  "@msa/ai": "packages/ai/src",
+  "@msa/durable": "packages/durable/src",
+  "@msa/agent-core": "packages/agent/src",
+  "@msa/codemode": "packages/codemode/src",
+  "@msa/telemetry": "packages/telemetry/src",
+  "@msa/mcp": "packages/mcp/src",
+  "@msa/tui": "packages/tui/src",
 };
 
 /**
@@ -73,7 +73,7 @@ const BUDGETS = {
   },
   "packages/durable": {
     ".": {
-      // Tool argument validation reaches TypeBox; provider-session creation reaches pi-ai's lean UUID utility; the
+      // Tool argument validation reaches TypeBox; provider-session creation reaches msa-ai's lean UUID utility; the
       // memory and SQLite storages share scan order and cursor handling. Values from Chord's root (copyJson,
       // replicatedState) reach its host runtime through the root barrel.
       maxFiles: 66,

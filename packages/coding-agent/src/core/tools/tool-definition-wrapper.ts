@@ -1,4 +1,4 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AgentTool } from "@msa/agent-core";
 
 import type { ExtensionToolContext, ToolDefinition } from "../extensions/types.ts";
 

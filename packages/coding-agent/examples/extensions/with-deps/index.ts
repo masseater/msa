@@ -5,13 +5,13 @@
  * Requires: npm install in this directory
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@msa/coding-agent";
 import ms from "ms";
 import { Type } from "typebox";
 
-export default function (pi: ExtensionAPI) {
+export default function (msa: ExtensionAPI) {
   // Register a tool that uses ms
-  pi.registerTool({
+  msa.registerTool({
     name: "parse_duration",
     label: "Parse Duration",
     description:

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { getModel } from "@earendil-works/pi-ai/compat";
+import { getModel } from "@msa/ai/compat";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -19,7 +19,7 @@ describe("AgentSession dynamic tool registration", () => {
   beforeEach(() => {
     tempDir = join(
       tmpdir(),
-      `pi-dynamic-tool-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `msa-dynamic-tool-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     agentDir = join(tempDir, "agent");
     mkdirSync(agentDir, { recursive: true });
@@ -43,8 +43,8 @@ describe("AgentSession dynamic tool registration", () => {
       agentDir,
       settingsManager,
       extensionFactories: [
-        (pi) => {
-          pi.registerTool(
+        (msa) => {
+          msa.registerTool(
             createBashTool(tempDir, {
               spawnHook: (ctx) => {
                 sessionEnv = ctx.env;
@@ -52,7 +52,7 @@ describe("AgentSession dynamic tool registration", () => {
               },
             }),
           );
-          pi.registerTool({
+          msa.registerTool({
             ...createBashTool(tempDir, {
               exposeSessionEnvironment: false,
               spawnHook: (ctx) => {
@@ -81,26 +81,26 @@ describe("AgentSession dynamic tool registration", () => {
 
     const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash")!;
     expect(session.systemPrompt).toContain(
-      "You can inspect PI_* environment variables for current model and session details.",
+      "You can inspect MSA_* environment variables for current model and session details.",
     );
     await bashTool.execute("bash-env", { command: "printf ok" });
     expect(sessionEnv).toMatchObject({
-      PI_SESSION_ID: session.sessionId,
-      PI_SESSION_FILE: session.sessionFile,
-      PI_PROVIDER: model.provider,
-      PI_MODEL: model.id,
-      PI_REASONING_LEVEL: session.thinkingLevel,
+      MSA_SESSION_ID: session.sessionId,
+      MSA_SESSION_FILE: session.sessionFile,
+      MSA_PROVIDER: model.provider,
+      MSA_MODEL: model.id,
+      MSA_REASONING_LEVEL: session.thinkingLevel,
     });
 
     const optedOutBashTool = session.agent.state.tools.find(
       (tool) => tool.name === "bash_without_session_env",
     )!;
     await optedOutBashTool.execute("bash-no-env", { command: "printf ok" });
-    expect(optedOutEnv).not.toHaveProperty("PI_SESSION_ID");
-    expect(optedOutEnv).not.toHaveProperty("PI_SESSION_FILE");
-    expect(optedOutEnv).not.toHaveProperty("PI_PROVIDER");
-    expect(optedOutEnv).not.toHaveProperty("PI_MODEL");
-    expect(optedOutEnv).not.toHaveProperty("PI_REASONING_LEVEL");
+    expect(optedOutEnv).not.toHaveProperty("MSA_SESSION_ID");
+    expect(optedOutEnv).not.toHaveProperty("MSA_SESSION_FILE");
+    expect(optedOutEnv).not.toHaveProperty("MSA_PROVIDER");
+    expect(optedOutEnv).not.toHaveProperty("MSA_MODEL");
+    expect(optedOutEnv).not.toHaveProperty("MSA_REASONING_LEVEL");
 
     session.dispose();
   });
@@ -114,9 +114,9 @@ describe("AgentSession dynamic tool registration", () => {
       agentDir,
       settingsManager,
       extensionFactories: [
-        (pi) => {
-          pi.on("session_start", () => {
-            pi.registerTool({
+        (msa) => {
+          msa.on("session_start", () => {
+            msa.registerTool({
               name: "dynamic_tool",
               label: "Dynamic Tool",
               description: "Tool registered from session_start",
@@ -228,9 +228,9 @@ describe("AgentSession dynamic tool registration", () => {
       agentDir,
       settingsManager,
       extensionFactories: [
-        (pi) => {
-          pi.on("session_start", () => {
-            pi.registerTool({
+        (msa) => {
+          msa.on("session_start", () => {
+            msa.registerTool({
               name: "hidden_tool",
               label: "Hidden Tool",
               description: "Description should not appear in available tools",

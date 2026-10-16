@@ -14,7 +14,7 @@ describe("extensions discovery", () => {
   let extensionsDir: string;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-ext-test-"));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "msa-ext-test-"));
     extensionsDir = path.join(tempDir, "extensions");
     fs.mkdirSync(extensionsDir);
   });
@@ -24,15 +24,15 @@ describe("extensions discovery", () => {
   });
 
   const extensionCode = `
-		export default function(pi) {
-			pi.registerCommand("test", { handler: async () => {} });
+		export default function(msa) {
+			msa.registerCommand("test", { handler: async () => {} });
 		}
 	`;
 
   const extensionCodeWithTool = (toolName: string) => `
 		import { Type } from "typebox";
-		export default function(pi) {
-			pi.registerTool({
+		export default function(msa) {
+			msa.registerTool({
 				name: "${toolName}",
 				label: "${toolName}",
 				description: "Test tool",
@@ -56,14 +56,14 @@ describe("extensions discovery", () => {
     ]);
   });
 
-  it("loads the coding-agent entrypoint without rewriting pi-ai provider subpaths", async () => {
+  it("loads the coding-agent entrypoint without rewriting msa-ai provider subpaths", async () => {
     fs.writeFileSync(
       path.join(extensionsDir, "coding-agent-import.ts"),
       `
-				import { getAgentDir } from "@earendil-works/pi-coding-agent";
+				import { getAgentDir } from "@msa/coding-agent";
 				void getAgentDir;
-				export default function(pi) {
-					pi.registerCommand("test", { handler: async () => {} });
+				export default function(msa) {
+					msa.registerCommand("test", { handler: async () => {} });
 				}
 			`,
     );
@@ -76,20 +76,20 @@ describe("extensions discovery", () => {
 
   it("does not infer package ownership from ancestor manifests", async () => {
     // Regression for #9863.
-    const dependencyDir = path.join(tempDir, "node_modules", "@earendil-works", "pi-coding-agent");
+    const dependencyDir = path.join(tempDir, "node_modules", "@msa", "coding-agent");
     fs.mkdirSync(dependencyDir, { recursive: true });
     fs.writeFileSync(
       path.join(tempDir, "package.json"),
       JSON.stringify({
         name: "application",
         type: "module",
-        dependencies: { "@earendil-works/pi-coding-agent": "1.0.0" },
+        dependencies: { "@msa/coding-agent": "1.0.0" },
       }),
     );
     fs.writeFileSync(
       path.join(dependencyDir, "package.json"),
       JSON.stringify({
-        name: "@earendil-works/pi-coding-agent",
+        name: "@msa/coding-agent",
         type: "module",
         exports: "./index.js",
       }),
@@ -101,9 +101,9 @@ describe("extensions discovery", () => {
     fs.writeFileSync(
       path.join(extensionsDir, "compiled-esm-extension.js"),
       `
-				import { physicalDependency } from "@earendil-works/pi-coding-agent";
-				export default function(pi) {
-					if (physicalDependency) pi.registerCommand("physical-dependency", { handler: async () => {} });
+				import { physicalDependency } from "@msa/coding-agent";
+				export default function(msa) {
+					if (physicalDependency) msa.registerCommand("physical-dependency", { handler: async () => {} });
 				}
 			`,
     );
@@ -116,14 +116,14 @@ describe("extensions discovery", () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it("keeps the type-only pi-ai OAuth compatibility barrel resolvable", async () => {
+  it("keeps the type-only msa-ai OAuth compatibility barrel resolvable", async () => {
     fs.writeFileSync(
       path.join(extensionsDir, "oauth-import.ts"),
       `
-				import * as oauth from "@earendil-works/pi-ai/oauth";
+				import * as oauth from "@msa/ai/oauth";
 				void oauth;
-				export default function(pi) {
-					pi.registerCommand("test", { handler: async () => {} });
+				export default function(msa) {
+					msa.registerCommand("test", { handler: async () => {} });
 				}
 			`,
     );
@@ -182,7 +182,7 @@ describe("extensions discovery", () => {
     expect(result.extensions[0].path).toContain("index.ts");
   });
 
-  it("discovers subdirectory with package.json pi field", async () => {
+  it("discovers subdirectory with package.json msa field", async () => {
     const subdir = path.join(extensionsDir, "my-package");
     const srcDir = path.join(subdir, "src");
     fs.mkdirSync(subdir);
@@ -192,7 +192,7 @@ describe("extensions discovery", () => {
       path.join(subdir, "package.json"),
       JSON.stringify({
         name: "my-package",
-        pi: {
+        msa: {
           extensions: ["./src/main.ts"],
         },
       }),
@@ -206,7 +206,7 @@ describe("extensions discovery", () => {
     expect(result.extensions[0].path).toContain("main.ts");
   });
 
-  it("keeps package.json pi extension entries with leading tilde package-relative", async () => {
+  it("keeps package.json msa extension entries with leading tilde package-relative", async () => {
     const subdir = path.join(extensionsDir, "tilde-package");
     const directExtensionPath = path.join(subdir, "~entry.ts");
     const slashExtensionPath = path.join(subdir, "~", "entry.ts");
@@ -217,7 +217,7 @@ describe("extensions discovery", () => {
       path.join(subdir, "package.json"),
       JSON.stringify({
         name: "tilde-package",
-        pi: {
+        msa: {
           extensions: ["~entry.ts", "~/entry.ts"],
         },
       }),
@@ -240,7 +240,7 @@ describe("extensions discovery", () => {
       path.join(subdir, "package.json"),
       JSON.stringify({
         name: "my-package",
-        pi: {
+        msa: {
           extensions: ["./ext1.ts", "./ext2.ts"],
         },
       }),
@@ -252,7 +252,7 @@ describe("extensions discovery", () => {
     expect(result.extensions).toHaveLength(2);
   });
 
-  it("package.json with pi field takes precedence over index.ts", async () => {
+  it("package.json with msa field takes precedence over index.ts", async () => {
     const subdir = path.join(extensionsDir, "my-package");
     fs.mkdirSync(subdir);
     fs.writeFileSync(path.join(subdir, "index.ts"), extensionCodeWithTool("from-index"));
@@ -261,7 +261,7 @@ describe("extensions discovery", () => {
       path.join(subdir, "package.json"),
       JSON.stringify({
         name: "my-package",
-        pi: {
+        msa: {
           extensions: ["./custom.ts"],
         },
       }),
@@ -277,7 +277,7 @@ describe("extensions discovery", () => {
     expect(result.extensions[0].tools.has("from-index")).toBe(false);
   });
 
-  it("ignores package.json without pi field, falls back to index.ts", async () => {
+  it("ignores package.json without msa field, falls back to index.ts", async () => {
     const subdir = path.join(extensionsDir, "my-package");
     fs.mkdirSync(subdir);
     fs.writeFileSync(path.join(subdir, "index.ts"), extensionCode);
@@ -337,7 +337,7 @@ describe("extensions discovery", () => {
     fs.writeFileSync(path.join(subdir2, "entry.ts"), extensionCode);
     fs.writeFileSync(
       path.join(subdir2, "package.json"),
-      JSON.stringify({ pi: { extensions: ["./entry.ts"] } }),
+      JSON.stringify({ msa: { extensions: ["./entry.ts"] } }),
     );
 
     const result = await discoverAndLoadExtensions([], tempDir, tempDir);
@@ -353,7 +353,7 @@ describe("extensions discovery", () => {
     fs.writeFileSync(
       path.join(subdir, "package.json"),
       JSON.stringify({
-        pi: {
+        msa: {
           extensions: ["./exists.ts", "./missing.ts"],
         },
       }),
@@ -423,14 +423,14 @@ describe("extensions discovery", () => {
 
   it("registers message and entry renderers", async () => {
     const extCode = `
-			export default function(pi) {
-				pi.registerMarkdownTransformer((markdown) => {
+			export default function(msa) {
+				msa.registerMarkdownTransformer((markdown) => {
 					return markdown;
 				});
-				pi.registerMessageRenderer("my-custom-type", (message, options, theme) => {
+				msa.registerMessageRenderer("my-custom-type", (message, options, theme) => {
 					return null; // Use default rendering
 				});
-				pi.registerEntryRenderer("my-entry-type", (entry, options, theme) => {
+				msa.registerEntryRenderer("my-entry-type", (entry, options, theme) => {
 					return null;
 				});
 			}
@@ -448,7 +448,7 @@ describe("extensions discovery", () => {
 
   it("reports error when extension throws during initialization", async () => {
     const extCode = `
-			export default function(pi) {
+			export default function(msa) {
 				throw new Error("Initialization failed!");
 			}
 		`;
@@ -463,8 +463,8 @@ describe("extensions discovery", () => {
 
   it("reports error when extension has no default export", async () => {
     const extCode = `
-			export function notDefault(pi) {
-				pi.registerCommand("test", { handler: async () => {} });
+			export function notDefault(msa) {
+				msa.registerCommand("test", { handler: async () => {} });
 			}
 		`;
     fs.writeFileSync(path.join(extensionsDir, "no-default.ts"), extCode);
@@ -497,10 +497,10 @@ describe("extensions discovery", () => {
 
   it("loads extension with event handlers", async () => {
     const extCode = `
-			export default function(pi) {
-				pi.on("agent_start", async () => {});
-				pi.on("tool_call", async (event) => undefined);
-				pi.on("agent_end", async () => {});
+			export default function(msa) {
+				msa.on("agent_start", async () => {});
+				msa.on("tool_call", async (event) => undefined);
+				msa.on("agent_end", async () => {});
 			}
 		`;
     fs.writeFileSync(path.join(extensionsDir, "with-handlers.ts"), extCode);
@@ -516,8 +516,8 @@ describe("extensions discovery", () => {
 
   it("loads extension with shortcuts", async () => {
     const extCode = `
-			export default function(pi) {
-				pi.registerShortcut("ctrl+t", {
+			export default function(msa) {
+				msa.registerShortcut("ctrl+t", {
 					description: "Test shortcut",
 					handler: async (ctx) => {},
 				});
@@ -534,8 +534,8 @@ describe("extensions discovery", () => {
 
   it("loads extension with flags", async () => {
     const extCode = `
-			export default function(pi) {
-				pi.registerFlag("my-flag", {
+			export default function(msa) {
+				msa.registerFlag("my-flag", {
 					description: "My custom flag",
 					handler: async (value) => {},
 				});

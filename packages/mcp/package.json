@@ -1,7 +1,7 @@
 {
-  "name": "@earendil-works/pi-mcp",
+  "name": "@msa/mcp",
   "version": "1.2.0",
-  "description": "Standalone Model Context Protocol client for pi and other applications",
+  "description": "Standalone Model Context Protocol client for msa and other applications",
   "keywords": [
     "client",
     "mcp",
@@ -11,7 +11,7 @@
   "author": "Earendil Works",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/earendil-works/pi.git",
+    "url": "git+https://github.com/masseater/msa.git",
     "directory": "packages/mcp"
   },
   "files": [

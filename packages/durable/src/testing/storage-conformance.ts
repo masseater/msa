@@ -1,6 +1,6 @@
-import type { JsonValue } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Op } from "@earendil-works/chord/delta";
+import type { JsonValue } from "@msa/chord";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import type { Op } from "@msa/chord/delta";
 
 import { idFromNumber } from "../ids.ts";
 import {

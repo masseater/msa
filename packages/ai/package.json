@@ -1,5 +1,5 @@
 {
-  "name": "@earendil-works/pi-ai",
+  "name": "@msa/ai",
   "version": "1.2.0",
   "description": "Unified LLM API with automatic model discovery and provider configuration",
   "keywords": [
@@ -16,11 +16,11 @@
   "author": "Mario Zechner",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/earendil-works/pi.git",
+    "url": "git+https://github.com/masseater/msa.git",
     "directory": "packages/ai"
   },
   "bin": {
-    "pi-ai": "dist/cli.js"
+    "msa-ai": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -85,8 +85,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "catalog:",
     "@aws-sdk/client-bedrock-runtime": "catalog:",
-    "@earendil-works/pi-telemetry": "workspace:*",
     "@google/genai": "catalog:",
+    "@msa/telemetry": "workspace:*",
     "@smithy/node-http-handler": "catalog:",
     "@smithy/types": "4.19.0",
     "http-proxy-agent": "catalog:",

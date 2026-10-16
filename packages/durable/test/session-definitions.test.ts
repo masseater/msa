@@ -1,4 +1,4 @@
-import type { Draft } from "@earendil-works/chord";
+import type { Draft } from "@msa/chord";
 import {
   type ConversationId,
   createSession,
@@ -15,7 +15,7 @@ import {
   type TaskId,
   type Tx,
   type TypedEntry,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { idFromNumber } from "../src/ids.ts";

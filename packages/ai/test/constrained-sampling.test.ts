@@ -278,7 +278,7 @@ describe("constrained tool sampling", () => {
       messages: [
         {
           role: "assistant",
-          api: "pi-messages",
+          api: "msa-messages",
           provider: "radius",
           model: "gpt-other",
           content: [

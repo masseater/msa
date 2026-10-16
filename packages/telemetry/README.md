@@ -1,6 +1,6 @@
-# @earendil-works/pi-telemetry
+# @msa/telemetry
 
-Vendor-neutral telemetry contracts and typed schema utilities for pi packages.
+Vendor-neutral telemetry contracts and typed schema utilities for msa packages.
 
 This package provides:
 
@@ -10,7 +10,7 @@ This package provides:
 - serializable schema definitions with inferred TypeScript types;
 - no exporter, global current-span state, or dependency on a telemetry backend.
 
-Applications can use the in-memory reference or provide an adapter for OpenTelemetry, Sentry, logs, or another backend. Pi packages pass telemetry contexts explicitly and define their domain schemas separately.
+Applications can use the in-memory reference or provide an adapter for OpenTelemetry, Sentry, logs, or another backend. msa packages pass telemetry contexts explicitly and define their domain schemas separately.
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ Applications can use the in-memory reference or provide an adapter for OpenTelem
 - [Typed Schemas](#typed-schemas)
   - [Start and Completion Attributes](#start-and-completion-attributes)
 - [Schema Metadata](#schema-metadata)
-- [Pi Package Integration](#pi-package-integration)
+- [msa Package Integration](#msa-package-integration)
 - [Security and Portability](#security-and-portability)
 - [API Reference](#api-reference)
 - [Development](#development)
@@ -33,7 +33,7 @@ Applications can use the in-memory reference or provide an adapter for OpenTelem
 ## Installation
 
 ```bash
-npm install @earendil-works/pi-telemetry
+npm install @msa/telemetry
 ```
 
 ## Telemetry Concepts
@@ -66,7 +66,7 @@ A span is diagnostic data, not business state. Recording it must not change whet
 A `TelemetryContext` starts a span around a callback. The callback receives a `TelemetrySpan`, which is also the explicit parent context for child spans.
 
 ```typescript
-import { NOOP_TELEMETRY_CONTEXT, type TelemetryContext } from "@earendil-works/pi-telemetry";
+import { NOOP_TELEMETRY_CONTEXT, type TelemetryContext } from "@msa/telemetry";
 
 async function loadAccount(
   accountId: string,
@@ -126,14 +126,14 @@ An adapter implements `TelemetryContext` and bridges the generic API to its back
 - ignore calls made after settlement;
 - ignore a failed recording call atomically, suppress backend failures, and still execute the business callback exactly once.
 
-Adapters may activate backend-native ambient context internally for automatic instrumentation, but pi code always propagates the parent through `TelemetryContext` arguments. Exporter buffering, flushing, sampling, backend IDs, and backend-specific context objects belong to the adapter. Use the [adapter conformance suite](#adapter-conformance) to check these observable semantics.
+Adapters may activate backend-native ambient context internally for automatic instrumentation, but msa code always propagates the parent through `TelemetryContext` arguments. Exporter buffering, flushing, sampling, backend IDs, and backend-specific context objects belong to the adapter. Use the [adapter conformance suite](#adapter-conformance) to check these observable semantics.
 
 ## No-op Context
 
 Use `NOOP_TELEMETRY_CONTEXT` when telemetry is optional:
 
 ```typescript
-import { NOOP_TELEMETRY_CONTEXT } from "@earendil-works/pi-telemetry";
+import { NOOP_TELEMETRY_CONTEXT } from "@msa/telemetry";
 
 const result = await NOOP_TELEMETRY_CONTEXT.startSpan({ name: "example.operation" }, () =>
   runOperation(),
@@ -152,7 +152,7 @@ The no-op context:
 `InMemoryTelemetryContext` is the backend-neutral reference implementation. It is useful for tests, local diagnostics, and applications that intentionally want process-local capture without an exporter:
 
 ```typescript
-import { InMemoryTelemetryContext } from "@earendil-works/pi-telemetry";
+import { InMemoryTelemetryContext } from "@msa/telemetry";
 
 const telemetry = new InMemoryTelemetryContext();
 
@@ -173,13 +173,13 @@ The adapter is safe to use as an ordinary `TelemetryContext`, but storage is unb
 
 ## Adapter Conformance
 
-`@earendil-works/pi-telemetry/testing` exports a runner-independent conformance suite modeled as grouped cases. A fixture supplies a fresh context and converts its backend's finished spans into normalized `RecordedTelemetrySpan` snapshots:
+`@msa/telemetry/testing` exports a runner-independent conformance suite modeled as grouped cases. A fixture supplies a fresh context and converts its backend's finished spans into normalized `RecordedTelemetrySpan` snapshots:
 
 ```typescript
 import {
   createTelemetryAdapterConformance,
   type TelemetryAdapterFixture,
-} from "@earendil-works/pi-telemetry/testing";
+} from "@msa/telemetry/testing";
 import { describe, it } from "vitest";
 
 const conformance = createTelemetryAdapterConformance(async () => {
@@ -209,7 +209,7 @@ The suite checks synchronous single admission, result and rejection identity, au
 The low-level span API intentionally accepts open names and attribute bags so adapters remain generic. Domain packages can define closed, serializable schemas and infer exact TypeScript types from them.
 
 ```typescript
-import { createTypedSpanStarter, defineTelemetrySchema } from "@earendil-works/pi-telemetry";
+import { createTypedSpanStarter, defineTelemetrySchema } from "@msa/telemetry";
 
 export const EXAMPLE_TELEMETRY_SCHEMA = defineTelemetrySchema({
   version: 1,
@@ -305,7 +305,7 @@ Attributes do not end the span. Returning, resolving, throwing, or rejecting fro
 A starter can compose multiple independently versioned schemas:
 
 ```typescript
-import { AGENT_TELEMETRY_SCHEMAS } from "@earendil-works/pi-agent-core";
+import { AGENT_TELEMETRY_SCHEMAS } from "@msa/agent-core";
 
 const startAgentSpan = createTypedSpanStarter(telemetryContext, AGENT_TELEMETRY_SCHEMAS);
 ```
@@ -341,13 +341,13 @@ Parent metadata is descriptive schema data:
 
 Adapters do not need to understand schema objects. Instrumentation helpers and tests use them to keep emitted names and attributes consistent.
 
-## Pi Package Integration
+## msa Package Integration
 
 Package ownership is intentionally split:
 
-- `@earendil-works/pi-telemetry` owns the vendor-neutral contract, no-op and in-memory reference contexts, schema utilities, and adapter conformance suite;
-- `@earendil-works/pi-ai` accepts and propagates `telemetryContext` in provider request options but owns no telemetry schema;
-- `@earendil-works/pi-agent-core` owns and exports the pi AI-request and harness schemas, their combined readonly schema tuple, and typed span helpers.
+- `@msa/telemetry` owns the vendor-neutral contract, no-op and in-memory reference contexts, schema utilities, and adapter conformance suite;
+- `@msa/ai` accepts and propagates `telemetryContext` in provider request options but owns no telemetry schema;
+- `@msa/agent-core` owns and exports the msa AI-request and harness schemas, their combined readonly schema tuple, and typed span helpers.
 
 ```typescript
 import {
@@ -356,10 +356,10 @@ import {
   HARNESS_TELEMETRY_SCHEMA,
   startAiSpan,
   startHarnessSpan,
-} from "@earendil-works/pi-agent-core";
+} from "@msa/agent-core";
 ```
 
-The pi schemas use pi-owned `pi.ai.*`, `pi.harness.*`, and `pi.session.*` names. Adapters may translate them to backend conventions without changing the emitted pi vocabulary.
+The msa schemas use msa-owned `msa.ai.*`, `msa.harness.*`, and `msa.session.*` names. Adapters may translate them to backend conventions without changing the emitted msa vocabulary.
 
 ## Security and Portability
 

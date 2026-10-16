@@ -2,9 +2,9 @@ import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
-import type { Context, JsonValue } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { registerStorageConformance } from "@earendil-works/pi-durable/testing";
+import type { Context, JsonValue } from "@msa/chord";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import { registerStorageConformance } from "@msa/durable/testing";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { err, FileError, type FileSystem, type Result } from "../src/env/index.ts";
@@ -38,7 +38,7 @@ afterEach(async () => {
   tempDirectories.clear();
 });
 
-async function tempDirectory(prefix = "pi-durable-jsonl-"): Promise<string> {
+async function tempDirectory(prefix = "msa-durable-jsonl-"): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), prefix));
   tempDirectories.add(directory);
   return directory;
@@ -142,7 +142,7 @@ registerStorageConformance({ describe, expect, it }, "JsonlStorage", async (use)
 );
 
 registerStorageConformance({ describe, expect, it }, "JsonlStorage across reopen", async (use) => {
-  const directory = await tempDirectory("pi-durable-jsonl-conformance-");
+  const directory = await tempDirectory("msa-durable-jsonl-conformance-");
   const current = await JsonlStorage.open(
     directory,
     new NodeExecutionEnv({ cwd: directory }),

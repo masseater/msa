@@ -5,7 +5,7 @@
  * Multiple questions: tab bar navigation between questions
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@msa/coding-agent";
 import {
   Editor,
   type EditorTheme,
@@ -14,7 +14,7 @@ import {
   Text,
   visibleWidth,
   wrapTextWithAnsi,
-} from "@earendil-works/pi-tui";
+} from "@msa/tui";
 import { Type } from "typebox";
 
 // Types
@@ -86,8 +86,8 @@ function errorResult(
   };
 }
 
-export default function questionnaire(pi: ExtensionAPI) {
-  pi.registerTool({
+export default function questionnaire(msa: ExtensionAPI) {
+  msa.registerTool({
     name: "questionnaire",
     label: "Questionnaire",
     description:

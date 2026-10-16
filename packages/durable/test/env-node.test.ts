@@ -5,7 +5,7 @@ import { homedir, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FileError, getOrThrow, type ShellExecOptions } from "../src/env/index.ts";
@@ -15,7 +15,10 @@ const tempDirs: string[] = [];
 const chmodRestorePaths: string[] = [];
 
 function createTempDir(): string {
-  const dir = join(tmpdir(), `pi-durable-env-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const dir = join(
+    tmpdir(),
+    `msa-durable-env-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
   mkdirSync(dir, { recursive: true });
   tempDirs.push(dir);
   return dir;
@@ -131,7 +134,7 @@ class FailingSpillExecutionEnv extends NodeExecutionEnv {
     options: Parameters<NodeExecutionEnv["createTempFile"]>[0],
     context: Parameters<NodeExecutionEnv["createTempFile"]>[1],
   ) {
-    if (options?.prefix === "pi-output-") {
+    if (options?.prefix === "msa-output-") {
       return { ok: true as const, value: join(this.cwd, "missing", "spill.log") };
     }
     return super.createTempFile(options, context);
@@ -194,8 +197,8 @@ describe("NodeExecutionEnv filesystem", () => {
   it("expands home-relative paths and file URLs", async () => {
     const root = createTempDir();
     const env = new NodeExecutionEnv({ cwd: root });
-    expect(getOrThrow(await env.absolutePath("~/pi-node-env-test", BACKGROUND_CONTEXT))).toBe(
-      join(homedir(), "pi-node-env-test"),
+    expect(getOrThrow(await env.absolutePath("~/msa-node-env-test", BACKGROUND_CONTEXT))).toBe(
+      join(homedir(), "msa-node-env-test"),
     );
     const filePath = join(root, "file with spaces.txt");
     expect(
@@ -661,10 +664,10 @@ describe("NodeExecutionEnv shell", () => {
 
   it.each([
     ["a missing override preserves the base value", undefined, "x:/stale/parent.jsonl"],
-    ["an empty override shadows the base value", { PI_SESSION_FILE: "" }, "x:"],
+    ["an empty override shadows the base value", { MSA_SESSION_FILE: "" }, "x:"],
     [
       "a string override replaces the base value",
-      { PI_SESSION_FILE: "/sessions/current.jsonl" },
+      { MSA_SESSION_FILE: "/sessions/current.jsonl" },
       "x:/sessions/current.jsonl",
     ],
   ] as const)(
@@ -674,14 +677,14 @@ describe("NodeExecutionEnv shell", () => {
       const env = new NodeExecutionEnv({
         cwd: root,
         shellEnv: {
-          PI_SESSION_FILE: "/stale/parent.jsonl",
-          PI_CODING_AGENT: "true",
-          PI_NODE_ENV_PRESERVED_TEST: "preserved",
+          MSA_SESSION_FILE: "/stale/parent.jsonl",
+          MSA_CODING_AGENT: "true",
+          MSA_NODE_ENV_PRESERVED_TEST: "preserved",
         },
       });
       const collected = await collectShellOutput(
         env,
-        `printf '%s:%s|%s|%s' "\${PI_SESSION_FILE+x}" "\${PI_SESSION_FILE-}" "$PI_CODING_AGENT" "$PI_NODE_ENV_PRESERVED_TEST"`,
+        `printf '%s:%s|%s|%s' "\${MSA_SESSION_FILE+x}" "\${MSA_SESSION_FILE-}" "$MSA_CODING_AGENT" "$MSA_NODE_ENV_PRESERVED_TEST"`,
         { env: overrides },
         BACKGROUND_CONTEXT,
       );
@@ -692,9 +695,9 @@ describe("NodeExecutionEnv shell", () => {
 
   it("can replace rather than inherit the default shell environment", async () => {
     const root = createTempDir();
-    const inheritedKey = "PI_NODE_ENV_INHERITED_TEST";
-    const configuredKey = "PI_NODE_ENV_CONFIGURED_TEST";
-    const explicitKey = "PI_NODE_ENV_EXPLICIT_TEST";
+    const inheritedKey = "MSA_NODE_ENV_INHERITED_TEST";
+    const configuredKey = "MSA_NODE_ENV_CONFIGURED_TEST";
+    const explicitKey = "MSA_NODE_ENV_EXPLICIT_TEST";
     const previousInherited = process.env[inheritedKey];
     process.env[inheritedKey] = "host";
     try {

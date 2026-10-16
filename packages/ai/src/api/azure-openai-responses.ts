@@ -13,13 +13,13 @@ import type {
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
-import { getPiUserAgent } from "../utils/pi-user-agent.ts";
 import { retryProviderRequest } from "../utils/provider-retry.ts";
 import {
   getDeclaredTools,
   resolveTranscript,
   resolveTranscriptTools,
 } from "../utils/transcript.ts";
+import { getMsaUserAgent } from "../utils/user-agent.ts";
 import {
   type AzureEndpointOptions,
   resolveAzureConfig,
@@ -191,7 +191,7 @@ function createClient(
   apiKey: string,
   options?: AzureOpenAIResponsesOptions,
 ) {
-  const headers = { "User-Agent": getPiUserAgent(), ...model.headers };
+  const headers = { "User-Agent": getMsaUserAgent(), ...model.headers };
 
   if (options?.headers) {
     Object.assign(headers, options.headers);

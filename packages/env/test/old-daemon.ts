@@ -4,7 +4,7 @@
  * <hex>`.
  */
 const token = process.argv[process.argv.indexOf("--token") + 1];
-process.stdout.write(`PI-ENV ${token}\n`);
+process.stdout.write(`MSA-ENV ${token}\n`);
 
 function send(type: number, id: number, json: Record<string, unknown>): void {
   const body = Buffer.from(JSON.stringify(json), "utf8");

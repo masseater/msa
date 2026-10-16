@@ -1,15 +1,7 @@
-import type { Context, Draft } from "@earendil-works/chord";
-import type {
-  AssistantMessage,
-  Message,
-  ModelThinkingLevel,
-  SimpleStreamOptions,
-} from "@earendil-works/pi-ai";
-import {
-  calculateContextTokens,
-  estimateMessageTokens,
-} from "@earendil-works/pi-ai/utils/estimate";
-import { isRetryableAssistantError, retryDelayMs } from "@earendil-works/pi-ai/utils/retry";
+import type { AssistantMessage, Message, ModelThinkingLevel, SimpleStreamOptions } from "@msa/ai";
+import { calculateContextTokens, estimateMessageTokens } from "@msa/ai/utils/estimate";
+import { isRetryableAssistantError, retryDelayMs } from "@msa/ai/utils/retry";
+import type { Context, Draft } from "@msa/chord";
 
 import { CompactionEntry } from "../entries.ts";
 import { defineTask } from "../tasks.ts";
@@ -127,7 +119,7 @@ export const CompactionTask = defineTask<
   CompactionResult,
   CompactionHooks
 >({
-  name: "pi.compaction",
+  name: "msa.compaction",
   version: 1,
   initial: () => ({ phase: "select" }),
   phases: {

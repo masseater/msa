@@ -1,4 +1,4 @@
-import type { JsonValue } from "@earendil-works/chord";
+import type { JsonValue } from "@msa/chord";
 import {
   type ConversationId,
   defineDoc,
@@ -8,7 +8,7 @@ import {
   ReadAfterWrite,
   type TaskId,
   type TaskRecord,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { describe, expect, it } from "vitest";
 
 import { idFromNumber } from "../src/ids.ts";

@@ -1,5 +1,5 @@
-import type { AssistantMessage } from "@earendil-works/pi-ai";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AssistantMessage } from "@msa/ai";
+import type { ExtensionAPI } from "@msa/coding-agent";
 
 function isAssistantMessage(message: unknown): message is AssistantMessage {
   if (!message || typeof message !== "object") return false;
@@ -7,14 +7,14 @@ function isAssistantMessage(message: unknown): message is AssistantMessage {
   return role === "assistant";
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (msa: ExtensionAPI) {
   let agentStartMs: number | null = null;
 
-  pi.on("agent_start", () => {
+  msa.on("agent_start", () => {
     agentStartMs = Date.now();
   });
 
-  pi.on("agent_end", (event, ctx) => {
+  msa.on("agent_end", (event, ctx) => {
     if (!ctx.hasUI) return;
     if (agentStartMs === null) return;
 

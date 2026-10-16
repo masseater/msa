@@ -50,7 +50,7 @@ describe("extension factory cache", () => {
   function fixture(name: string) {
     const root = join(
       tmpdir(),
-      `pi-extension-cache-${name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `msa-extension-cache-${name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     const cwd = join(root, "project");
     const agentDir = join(root, "agent");

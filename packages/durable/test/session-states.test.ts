@@ -1,4 +1,4 @@
-import { defineDoc, defineDocFamily } from "@earendil-works/pi-durable";
+import { defineDoc, defineDocFamily } from "@msa/durable";
 import { describe, expect, it } from "vitest";
 
 import {

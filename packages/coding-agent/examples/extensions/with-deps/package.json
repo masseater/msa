@@ -1,5 +1,5 @@
 {
-  "name": "pi-extension-with-deps",
+  "name": "msa-extension-with-deps",
   "version": "1.2.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
   "devDependencies": {
     "@types/ms": "catalog:"
   },
-  "pi": {
+  "msa": {
     "extensions": [
       "./index.ts"
     ]

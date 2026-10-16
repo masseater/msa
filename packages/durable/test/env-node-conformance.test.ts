@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { getOrThrow, type WatchChange } from "../src/env/index.ts";
@@ -37,7 +37,7 @@ registerEnvConformance(
   { describe, expect, it },
   "NodeExecutionEnv conformance",
   async (use) => {
-    const cwd = mkdtempSync(join(tmpdir(), "pi-durable-env-conformance-"));
+    const cwd = mkdtempSync(join(tmpdir(), "msa-durable-env-conformance-"));
     try {
       await use(new NodeExecutionEnv({ cwd }));
     } finally {
@@ -52,7 +52,7 @@ registerEnvConformance(
   { describe, expect, it },
   "NodeExecutionEnv conformance with polling watches",
   async (use) => {
-    const cwd = mkdtempSync(join(tmpdir(), "pi-durable-env-conformance-"));
+    const cwd = mkdtempSync(join(tmpdir(), "msa-durable-env-conformance-"));
     try {
       await use(new NodeExecutionEnv({ cwd, watch: { mode: "polling", pollIntervalMs: 100 } }));
     } finally {
@@ -64,7 +64,7 @@ registerEnvConformance(
 
 describe("NodeExecutionEnv watch limits", () => {
   it("refuses a tree over the directory budget and stops with an error when one grows past it", async () => {
-    const cwd = mkdtempSync(join(tmpdir(), "pi-durable-env-watch-"));
+    const cwd = mkdtempSync(join(tmpdir(), "msa-durable-env-watch-"));
     try {
       const env = new NodeExecutionEnv({ cwd, watch: { maxDirectories: 3 } });
       getOrThrow(await env.createDir("tree/a/b", undefined, context));
@@ -101,7 +101,7 @@ describe("NodeExecutionEnv watch limits", () => {
 describe("NodeExecutionEnv readers", () => {
   const dirs: string[] = [];
   const tempDir = (): string => {
-    const dir = mkdtempSync(join(tmpdir(), "pi-durable-env-readers-"));
+    const dir = mkdtempSync(join(tmpdir(), "msa-durable-env-readers-"));
     dirs.push(dir);
     return dir;
   };

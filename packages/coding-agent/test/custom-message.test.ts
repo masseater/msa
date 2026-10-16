@@ -1,4 +1,4 @@
-import { Text } from "@earendil-works/pi-tui";
+import { Text } from "@msa/tui";
 import { describe, expect, test } from "vitest";
 
 import type { MessageRenderer, MessageRenderOptions } from "../src/core/extensions/types.ts";

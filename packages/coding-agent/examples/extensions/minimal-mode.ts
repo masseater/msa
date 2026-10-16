@@ -11,14 +11,14 @@
  * - Minimal: Shows only tool call, no output (this extension's collapsed mode)
  *
  * Usage:
- *   pi -e ./minimal-mode.ts
+ *   msa -e ./minimal-mode.ts
  *
  * Then use ctrl+o to toggle between minimal (collapsed) and full (expanded) views.
  */
 
 import { homedir } from "os";
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@msa/coding-agent";
 import {
   createBashToolDefinition,
   createEditToolDefinition,
@@ -28,8 +28,8 @@ import {
   createReadToolDefinition,
   createWriteToolDefinition,
   formatReadLineRange,
-} from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+} from "@msa/coding-agent";
+import { Text } from "@msa/tui";
 
 /**
  * Shorten a path by replacing home directory with ~
@@ -54,13 +54,13 @@ function createBuiltInTools(cwd: string) {
   };
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (msa: ExtensionAPI) {
   const tools = createBuiltInTools(process.cwd());
 
   // =========================================================================
   // Read Tool
   // =========================================================================
-  pi.registerTool({
+  msa.registerTool({
     ...tools.read,
 
     renderCall(args, theme, _context) {
@@ -96,7 +96,7 @@ export default function (pi: ExtensionAPI) {
   // =========================================================================
   // Bash Tool
   // =========================================================================
-  pi.registerTool({
+  msa.registerTool({
     ...tools.bash,
 
     renderCall(args, theme, _context) {
@@ -136,7 +136,7 @@ export default function (pi: ExtensionAPI) {
   // =========================================================================
   // Write Tool
   // =========================================================================
-  pi.registerTool({
+  msa.registerTool({
     ...tools.write,
 
     renderCall(args, theme, _context) {
@@ -173,7 +173,7 @@ export default function (pi: ExtensionAPI) {
   // =========================================================================
   // Edit Tool
   // =========================================================================
-  pi.registerTool({
+  msa.registerTool({
     ...tools.edit,
     renderShell: "default",
 
@@ -210,7 +210,7 @@ export default function (pi: ExtensionAPI) {
   // =========================================================================
   // Find Tool
   // =========================================================================
-  pi.registerTool({
+  msa.registerTool({
     ...tools.find,
 
     renderCall(args, theme, _context) {
@@ -259,7 +259,7 @@ export default function (pi: ExtensionAPI) {
   // =========================================================================
   // Grep Tool
   // =========================================================================
-  pi.registerTool({
+  msa.registerTool({
     ...tools.grep,
 
     renderCall(args, theme, _context) {
@@ -312,7 +312,7 @@ export default function (pi: ExtensionAPI) {
   // =========================================================================
   // Ls Tool
   // =========================================================================
-  pi.registerTool({
+  msa.registerTool({
     ...tools.ls,
 
     renderCall(args, theme, _context) {

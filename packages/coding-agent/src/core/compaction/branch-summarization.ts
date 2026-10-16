@@ -5,10 +5,10 @@
  * a summary of the branch being left so context isn't lost.
  */
 
-import type { AgentMessage, StreamFn } from "@earendil-works/pi-agent-core";
-import type { RetryCallbacks, RetryPolicy } from "@earendil-works/pi-ai";
-import { contentText, normalizeContext } from "@earendil-works/pi-ai";
-import type { Model, SimpleStreamOptions, Usage } from "@earendil-works/pi-ai/compat";
+import type { AgentMessage, StreamFn } from "@msa/agent-core";
+import type { RetryCallbacks, RetryPolicy } from "@msa/ai";
+import { contentText, normalizeContext } from "@msa/ai";
+import type { Model, SimpleStreamOptions, Usage } from "@msa/ai/compat";
 
 import {
   convertToLlm,
@@ -209,7 +209,7 @@ export function prepareBranchEntries(
 
   // First pass: collect file ops from ALL entries (even if they don't fit in token budget)
   // This ensures we capture cumulative file tracking from nested branch summaries
-  // Only extract from pi-generated summaries (fromHook !== true), not extension-generated ones
+  // Only extract from msa-generated summaries (fromHook !== true), not extension-generated ones
   for (const entry of entries) {
     if (entry.type === "branch_summary" && !entry.fromHook && entry.details) {
       const details = entry.details as BranchSummaryDetails;

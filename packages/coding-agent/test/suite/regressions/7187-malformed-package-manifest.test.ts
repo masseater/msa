@@ -11,7 +11,7 @@ import { createHarness } from "../harness.ts";
 describe("issue #7187 malformed package manifest", () => {
   it("ignores invalid resource fields without dropping valid fields", async () => {
     const harness = await createHarness();
-    const tempDir = mkdtempSync(join(tmpdir(), "pi-7187-"));
+    const tempDir = mkdtempSync(join(tmpdir(), "msa-7187-"));
     const agentDir = join(tempDir, "agent");
     try {
       const packageDir = join(agentDir, "npm", "node_modules", "bad-package");
@@ -26,7 +26,7 @@ describe("issue #7187 malformed package manifest", () => {
         JSON.stringify({
           name: "bad-package",
           version: "1.0.0",
-          pi: {
+          msa: {
             skills: "./skills",
             prompts: ["./prompts"],
           },

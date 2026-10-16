@@ -1,9 +1,9 @@
+import { createModels } from "@msa/ai/models";
+import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
 // A chat turn.
 // Run from packages/durable:
 //   node --conditions=source --experimental-strip-types test/examples/14-chat.ts
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import {
   AssistantEntry,
@@ -35,7 +35,7 @@ const root = await harness.root(context, {
 });
 
 // submit() durably admits user input and returns a Submission. The built-in
-// pi.generation task prepares the system prompt from the agent's sections,
+// msa.generation task prepares the system prompt from the agent's sections,
 // calls the model, and appends the answer; wait() resolves once the input is
 // answered or has failed.
 const capital = await root.submit({ type: "input", content: "Capital of France?" }, context);

@@ -1,7 +1,7 @@
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile, writeFile as fsWriteFile } from "fs/promises";
 
-import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AgentTool } from "@msa/agent-core";
 import { type Static, Type } from "typebox";
 
 import { splitBom } from "../../utils/text.ts";

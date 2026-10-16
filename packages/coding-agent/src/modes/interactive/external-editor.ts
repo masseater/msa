@@ -15,7 +15,7 @@ export type ExternalEditorResult = { status: "complete"; content: string } | { s
 export async function editInExternalEditor(
   options: ExternalEditorOptions,
 ): Promise<ExternalEditorResult> {
-  const directory = mkdtempSync(join(tmpdir(), "pi-editor-"));
+  const directory = mkdtempSync(join(tmpdir(), "msa-editor-"));
   const filePath = join(directory, "prompt.md");
   try {
     writeFileSync(filePath, options.content, "utf-8");

@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { type OAuthChallenge, OAuthIssuerMismatchError } from "@earendil-works/pi-mcp/oauth";
+import { type OAuthChallenge, OAuthIssuerMismatchError } from "@msa/mcp/oauth";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { InMemoryAuthStorageBackend } from "../src/core/auth-storage.ts";
@@ -26,9 +26,9 @@ describe("MCP OAuth refresh", () => {
   async function signedIn() {
     const server = await startOAuthMcpServer();
     cleanups.push(server.close);
-    const lockDir = mkdtempSync(join(tmpdir(), "pi-mcp-refresh-"));
+    const lockDir = mkdtempSync(join(tmpdir(), "msa-mcp-refresh-"));
     cleanups.push(() => rmSync(lockDir, { recursive: true, force: true }));
-    // Stores sharing the credential file and lock directory stand in for separate pi processes.
+    // Stores sharing the credential file and lock directory stand in for separate msa processes.
     const backend = new InMemoryAuthStorageBackend();
     const process = () => {
       const store = new McpOAuthCredentialStore(backend, lockDir).forServer("test", server.url);
@@ -220,7 +220,7 @@ describe("MCP OAuth client ID metadata documents", () => {
     expect(server.authorizations[0].get("client_id")).toBe("client-1");
   });
 
-  it("uses pi's document when authorization responses name their issuer", async () => {
+  it("uses msa's document when authorization responses name their issuer", async () => {
     const { server, store, signIn } = await startServer({ cimd: true, issParameter: true });
     await signIn(cimd);
     const [authorization] = server.authorizations;

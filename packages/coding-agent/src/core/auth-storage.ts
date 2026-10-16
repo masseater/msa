@@ -1,18 +1,13 @@
 /**
  * CredentialStore implementation backed by auth.json.
- * Provider auth orchestration belongs to ModelRuntime and pi-ai Models.
+ * Provider auth orchestration belongs to ModelRuntime and msa-ai Models.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { setTimeout as sleep } from "timers/promises";
 
-import type {
-  AuthOperationOptions,
-  Credential,
-  CredentialInfo,
-  CredentialStore,
-} from "@earendil-works/pi-ai";
+import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "@msa/ai";
 import lockfile from "proper-lockfile";
 
 import { getAgentDir } from "../config.ts";
@@ -24,7 +19,7 @@ import { isCommandConfigValue, resolveConfigValue } from "./resolve-config-value
 type AuthStorageData = Record<string, Credential>;
 
 // On Windows, a just-removed lock directory can stay "delete pending" while another process
-// (antivirus, indexer, another pi checking the lock) still has it open. mkdir then fails with
+// (antivirus, indexer, another msa checking the lock) still has it open. mkdir then fails with
 // EPERM until that handle closes. Retry this briefly so real permission errors still fail fast.
 const MAX_EPERM_RETRIES = 5;
 

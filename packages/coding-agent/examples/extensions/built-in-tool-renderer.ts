@@ -22,7 +22,7 @@
  *   toggled the tool output open (via ctrl+e or clicking)
  *
  * Usage:
- *   pi -e ./built-in-tool-renderer.ts
+ *   msa -e ./built-in-tool-renderer.ts
  */
 
 import type {
@@ -30,21 +30,21 @@ import type {
   EditToolDetails,
   ExtensionAPI,
   ReadToolDetails,
-} from "@earendil-works/pi-coding-agent";
+} from "@msa/coding-agent";
 import {
   createBashToolDefinition,
   createEditToolDefinition,
   createReadToolDefinition,
   createWriteToolDefinition,
-} from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+} from "@msa/coding-agent";
+import { Text } from "@msa/tui";
 
-export default function (pi: ExtensionAPI) {
+export default function (msa: ExtensionAPI) {
   const cwd = process.cwd();
 
   // --- Read tool: show path and line count ---
   const originalRead = createReadToolDefinition(cwd);
-  pi.registerTool({
+  msa.registerTool({
     ...originalRead,
 
     renderCall(args, theme, _context) {
@@ -96,7 +96,7 @@ export default function (pi: ExtensionAPI) {
 
   // --- Bash tool: show command and exit code ---
   const originalBash = createBashToolDefinition(cwd);
-  pi.registerTool({
+  msa.registerTool({
     ...originalBash,
 
     renderCall(args, theme, _context) {
@@ -148,7 +148,7 @@ export default function (pi: ExtensionAPI) {
 
   // --- Edit tool: show path and diff stats ---
   const originalEdit = createEditToolDefinition(cwd);
-  pi.registerTool({
+  msa.registerTool({
     ...originalEdit,
 
     renderCall(args, theme, _context) {
@@ -205,7 +205,7 @@ export default function (pi: ExtensionAPI) {
 
   // --- Write tool: show path and size ---
   const originalWrite = createWriteToolDefinition(cwd);
-  pi.registerTool({
+  msa.registerTool({
     ...originalWrite,
 
     renderCall(args, theme, _context) {

@@ -651,7 +651,7 @@ host, because installation is not a rollback transaction.
 
 For real plugin files, default-export `defineFacet(...)`. Node hosts configure
 `createHost({ loader: nodeLoader })`, with `nodeLoader` imported from
-`@earendil-works/chord/node`, then pass module URLs to `load` and `reload`.
+`@msa/chord/node`, then pass module URLs to `load` and `reload`.
 The in-memory facet objects here avoid filesystem setup. Built-in facets are
 trusted in-process code, not a sandbox; the current Node loader keeps old module
 copies in memory, so repeated loading has that limitation.
@@ -910,7 +910,7 @@ explicit load/save policy.
 
 These are the shared imports from `test/tutorial.test.ts`. The relative
 path is correct from that test directory; applications import the same names
-from `@earendil-works/chord`. `assert` expresses expected values; `it` and
+from `@msa/chord`. `assert` expresses expected values; `it` and
 `onTestFinished` come from the test runner; `readFileSync` is used by the
 tutorial's source-matching check, not by the application.
 

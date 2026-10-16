@@ -6,14 +6,14 @@ import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import {
   STORAGE_MEMORY_SCALES,
   STORAGE_READ_BENCHMARKS,
   type StorageBenchmarkScale,
   seedStorageBenchmark,
   storageBenchmarkPrimaryRecordCount,
-} from "@earendil-works/pi-durable/testing";
+} from "@msa/durable/testing";
 
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";
@@ -136,7 +136,7 @@ async function runWorker(
   if (backend === "memory") {
     storage = new MemoryStorage();
   } else {
-    directory = await mkdtemp(join(tmpdir(), `pi-durable-${backend}-memory-`));
+    directory = await mkdtemp(join(tmpdir(), `msa-durable-${backend}-memory-`));
     path = join(directory, backend === "sqlite" ? "storage.sqlite" : "storage");
     storage =
       backend === "sqlite"

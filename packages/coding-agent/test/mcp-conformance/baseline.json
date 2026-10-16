@@ -7,7 +7,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -21,7 +21,7 @@
         "passing": [
           "authorization-request",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "token-request",
           "valid-bearer-token"
         ],
@@ -30,11 +30,11 @@
     },
     "2025-06-18": {
       "initialize": {
-        "passing": ["mcp-client-initialization", "pi-client"],
+        "passing": ["mcp-client-initialization", "msa-client"],
         "failing": []
       },
       "tools_call": {
-        "passing": ["pi-client", "tool-add-numbers", "wire-schema-valid"],
+        "passing": ["msa-client", "tool-add-numbers", "wire-schema-valid"],
         "failing": []
       },
       "auth/token-endpoint-auth-basic": {
@@ -42,7 +42,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -63,7 +63,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -84,7 +84,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -103,15 +103,15 @@
     },
     "2025-11-25": {
       "initialize": {
-        "passing": ["mcp-client-initialization", "pi-client"],
+        "passing": ["mcp-client-initialization", "msa-client"],
         "failing": []
       },
       "tools_call": {
-        "passing": ["pi-client", "tool-add-numbers", "wire-schema-valid"],
+        "passing": ["msa-client", "tool-add-numbers", "wire-schema-valid"],
         "failing": []
       },
       "elicitation-sep1034-client-defaults": {
-        "passing": ["pi-client"],
+        "passing": ["msa-client"],
         "failing": [
           "client-elicitation-sep1034-boolean-default",
           "client-elicitation-sep1034-enum-default",
@@ -126,7 +126,7 @@
           "client-sse-graceful-reconnect",
           "client-sse-last-event-id",
           "client-sse-retry-timing",
-          "pi-client"
+          "msa-client"
         ],
         "failing": []
       },
@@ -135,7 +135,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -151,7 +151,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -167,7 +167,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -183,7 +183,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -199,7 +199,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -215,7 +215,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -232,7 +232,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -249,7 +249,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -266,7 +266,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -292,14 +292,14 @@
           "scope-retry-limit",
           "token-request"
         ],
-        "failing": ["pi-client"]
+        "failing": ["msa-client"]
       },
       "auth/token-endpoint-auth-basic": {
         "passing": [
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -320,7 +320,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -341,7 +341,7 @@
           "authorization-request",
           "authorization-server-metadata",
           "client-registration",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -361,7 +361,7 @@
         "passing": [
           "authorization-request",
           "authorization-server-metadata",
-          "pi-client",
+          "msa-client",
           "pkce-code-challenge-sent",
           "pkce-code-verifier-sent",
           "pkce-s256-method-used",
@@ -380,7 +380,7 @@
           "json-schema-2020-12-client-additionalProperties-preserved",
           "json-schema-2020-12-client-echo-completed",
           "json-schema-2020-12-client-tool-found",
-          "pi-client",
+          "msa-client",
           "sep-2106-client-anchor-keyword-preserved",
           "sep-2106-client-composition-keywords-preserved",
           "sep-2106-client-conditional-keywords-preserved",

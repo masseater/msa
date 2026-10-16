@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { getModel } from "@earendil-works/pi-ai/compat";
+import { getModel } from "@msa/ai/compat";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -31,7 +31,7 @@ describe("defaultTools setting", () => {
   beforeEach(() => {
     tempDir = join(
       tmpdir(),
-      `pi-default-tools-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `msa-default-tools-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     agentDir = join(tempDir, "agent");
     mkdirSync(agentDir, { recursive: true });
@@ -96,8 +96,8 @@ describe("defaultTools setting", () => {
 
   it("activates an inactive extension tool with +name", async () => {
     const session = await createSession(["+inactive_tool", "-write"], {}, [
-      (pi) => {
-        pi.registerTool({
+      (msa) => {
+        msa.registerTool({
           name: "inactive_tool",
           label: "Inactive Tool",
           description: "Extension tool registered inactive",
@@ -127,16 +127,16 @@ describe("defaultTools setting", () => {
         ],
       },
       [
-        (pi) => {
-          pi.registerTool({
+        (msa) => {
+          msa.registerTool({
             name: "static_tool",
             label: "Static Tool",
             description: "Statically registered extension tool",
             parameters: Type.Object({}),
             execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),
           });
-          pi.on("session_start", () => {
-            pi.registerTool({
+          msa.on("session_start", () => {
+            msa.registerTool({
               name: "dynamic_tool",
               label: "Dynamic Tool",
               description: "Dynamically registered extension tool",
@@ -177,8 +177,8 @@ describe("defaultTools setting", () => {
   });
 
   it("applies +name and -name tool options to the default selection", async () => {
-    const inactiveTool: InlineExtension = (pi) => {
-      pi.registerTool({
+    const inactiveTool: InlineExtension = (msa) => {
+      msa.registerTool({
         name: "inactive_tool",
         label: "Inactive Tool",
         description: "Extension tool registered inactive",
@@ -186,7 +186,7 @@ describe("defaultTools setting", () => {
         execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),
         defaultActive: false,
       });
-      pi.registerTool({
+      msa.registerTool({
         name: "active_tool",
         label: "Active Tool",
         description: "Extension tool registered active",
@@ -225,8 +225,8 @@ describe("defaultTools setting", () => {
   });
 
   describe("reload", () => {
-    const inactiveTool: InlineExtension = (pi) => {
-      pi.registerTool({
+    const inactiveTool: InlineExtension = (msa) => {
+      msa.registerTool({
         name: "inactive_tool",
         label: "Inactive Tool",
         description: "Extension tool registered inactive",
@@ -333,8 +333,8 @@ describe("defaultTools setting", () => {
 
   // #10785
   describe("resume", () => {
-    const extensionTools: InlineExtension = (pi) => {
-      pi.registerTool({
+    const extensionTools: InlineExtension = (msa) => {
+      msa.registerTool({
         name: "inactive_tool",
         label: "Inactive Tool",
         description: "Extension tool registered inactive",
@@ -342,7 +342,7 @@ describe("defaultTools setting", () => {
         execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),
         defaultActive: false,
       });
-      pi.registerTool({
+      msa.registerTool({
         name: "active_tool",
         label: "Active Tool",
         description: "Extension tool registered active",

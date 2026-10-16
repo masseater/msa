@@ -1,4 +1,4 @@
-import type { Usage } from "@earendil-works/pi-ai";
+import type { Usage } from "@msa/ai";
 
 import type { AgentSessionEvent } from "../core/agent-session.ts";
 

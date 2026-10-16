@@ -19,7 +19,6 @@ import type {
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
-import { getPiUserAgent } from "../utils/pi-user-agent.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 import { retryProviderRequest } from "../utils/provider-retry.ts";
 import {
@@ -27,6 +26,7 @@ import {
   resolveTranscript,
   resolveTranscriptTools,
 } from "../utils/transcript.ts";
+import { getMsaUserAgent } from "../utils/user-agent.ts";
 import { createGrammarToolInputProperties } from "./constrained-sampling.ts";
 import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.ts";
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
@@ -87,13 +87,13 @@ function detectSessionAffinityFormat(
 
 /**
  * Resolve cache retention preference.
- * Defaults to "short" and uses PI_CACHE_RETENTION for backward compatibility.
+ * Defaults to "short" and uses MSA_CACHE_RETENTION for backward compatibility.
  */
 function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEnv): CacheRetention {
   if (cacheRetention) {
     return cacheRetention;
   }
-  if (getProviderEnvValue("PI_CACHE_RETENTION", env) === "long") {
+  if (getProviderEnvValue("MSA_CACHE_RETENTION", env) === "long") {
     return "long";
   }
   return "short";
@@ -325,7 +325,7 @@ function createClient(
   sessionId?: string,
 ) {
   const compat = getCompat(model);
-  const headers: ProviderHeaders = { "User-Agent": getPiUserAgent(), ...model.headers };
+  const headers: ProviderHeaders = { "User-Agent": getMsaUserAgent(), ...model.headers };
   if (model.provider === "github-copilot") {
     const hasImages = hasCopilotVisionInput(context.messages);
     const copilotHeaders = buildCopilotDynamicHeaders({

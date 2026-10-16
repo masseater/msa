@@ -11,7 +11,7 @@ import {
   fauxToolCall,
   type Context as ModelContext,
   Type,
-} from "@earendil-works/pi-ai";
+} from "@msa/ai";
 import {
   type AgentEvent,
   type Conversation,
@@ -24,7 +24,7 @@ import {
   MemoryStorage,
   type SubmissionDraft,
   watchEvents,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { describe, expect, it } from "vitest";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
@@ -91,12 +91,12 @@ function requestLog(requests: string[][], reply: AssistantMessage): FauxResponse
 /** Kind, application data, and model text of each entry, skipping system entries. */
 function transcript(entries: readonly EntryRecord[]): unknown[][] {
   return entries
-    .filter((entry) => entry.kind !== "pi.system")
+    .filter((entry) => entry.kind !== "msa.system")
     .map((entry) => {
       const message = entry.model?.[0];
       const text =
         message === undefined || message.role === "toolResult" ? undefined : textOf(message);
-      const data = entry.data === undefined || entry.kind.startsWith("pi.") ? [] : [entry.data];
+      const data = entry.data === undefined || entry.kind.startsWith("msa.") ? [] : [entry.data];
       return [entry.kind, ...data, ...(text === undefined ? [] : [text])];
     });
 }
@@ -129,31 +129,31 @@ describe("input entries", () => {
     const entries = await allEntries(root);
     expect(transcript(entries)).toEqual([
       ["chat.mention", { author: "ann", text: "hi" }, "ann: hi"],
-      ["pi.assistant", "hi ann"],
+      ["msa.assistant", "hi ann"],
     ]);
     const placed = entries.find((entry) => entry.kind === "chat.mention")!;
     expect(placed.model).toEqual([{ role: "user", content: "ann: hi", timestamp: 42 }]);
     expect(settled).toMatchObject({ status: "done", entry: placed.id, answer: entries.at(-1)!.id });
     expect(requests).toEqual([["user:ann: hi"]]);
-    // The context of a fork at the input is the same as for a pi.user entry.
+    // The context of a fork at the input is the same as for a msa.user entry.
     const view = await root.context(context, { at: placed.id });
     expect(view.messages.filter((message) => message.role !== "system")).toEqual(placed.model);
     await harness.close(context);
   });
 
-  it("rejects an input entry whose kind is not a non-empty string or starts with pi., writing nothing", async () => {
+  it("rejects an input entry whose kind is not a non-empty string or starts with msa., writing nothing", async () => {
     const setup = chatSetup();
     const { harness, root } = await openChat(new MemoryStorage(), setup);
     const before = (await allEntries(root)).length;
-    for (const kind of [123, "", "pi.user", "pi.compaction"]) {
+    for (const kind of [123, "", "msa.user", "msa.compaction"]) {
       const draft = { type: "input", content: "x", entry: { kind } } as unknown as SubmissionDraft;
       await expect(root.submit(draft, context)).rejects.toThrow("An input entry's kind must be");
     }
     expect((await allEntries(root)).length).toBe(before);
     expect(await harness.snapshot(LiveDoc, root.id, context)).toEqual({});
-    // Writes keep their kinds: reset() writes pi.reset.
+    // Writes keep their kinds: reset() writes msa.reset.
     await root.reset(undefined, context);
-    expect((await allEntries(root)).at(-1)?.kind).toBe("pi.reset");
+    expect((await allEntries(root)).at(-1)?.kind).toBe("msa.reset");
     await harness.close(context);
   });
 
@@ -246,15 +246,15 @@ describe("input entries", () => {
     await followUp.wait(context);
     const entries = await allEntries(root);
     expect(transcript(entries)).toEqual([
-      ["pi.user", "a"],
-      ["pi.assistant"],
-      ["pi.tool-result"],
+      ["msa.user", "a"],
+      ["msa.assistant"],
+      ["msa.tool-result"],
       ["chat.mention", { author: "ann", text: "s" }, "s"],
-      ["pi.assistant", "after tools"],
+      ["msa.assistant", "after tools"],
       ["p2.input", "f"],
-      ["pi.assistant", "follow-up"],
+      ["msa.assistant", "follow-up"],
     ]);
-    const answers = entries.filter((entry) => entry.kind === "pi.assistant");
+    const answers = entries.filter((entry) => entry.kind === "msa.assistant");
     const placed = (kind: string) => entries.find((entry) => entry.kind === kind)!.id;
     expect(await input.status(context)).toMatchObject({ status: "done", answer: answers[1]!.id });
     expect(await steer.status(context)).toMatchObject({
@@ -323,8 +323,8 @@ describe("data-only writes", () => {
     expect(settled.status).toBe("done");
     expect(await inboxItems(harness, root)).toEqual([]);
     expect(transcript(await allEntries(root))).toEqual([
-      ["pi.user", "a"],
-      ["pi.assistant"],
+      ["msa.user", "a"],
+      ["msa.assistant"],
       ["chat.message", { author: "bob", text: "lunch?" }],
     ]);
     await waitFor(() => events.some((event) => event.type === "entry_appended"));
@@ -341,11 +341,11 @@ describe("data-only writes", () => {
     gate.resolve();
     await input.wait(context);
     expect(transcript(await allEntries(root))).toEqual([
-      ["pi.user", "a"],
-      ["pi.assistant"],
+      ["msa.user", "a"],
+      ["msa.assistant"],
       ["chat.message", { author: "bob", text: "lunch?" }],
-      ["pi.tool-result"],
-      ["pi.assistant", "done"],
+      ["msa.tool-result"],
+      ["msa.assistant", "done"],
     ]);
     expect(requests).toEqual([
       ["system:", "user:a"],
@@ -372,10 +372,10 @@ describe("data-only writes", () => {
     await input.wait(context);
     const settled = await chat.wait(context);
     const entries = await allEntries(root);
-    const reset = entries.find((entry) => entry.kind === "pi.reset")!;
+    const reset = entries.find((entry) => entry.kind === "msa.reset")!;
     expect(settled.status === "done" && settled.entry).toBeGreaterThan(reset.id);
     expect((await root.context(context)).entries.map((entry) => entry.kind)).toEqual([
-      "pi.reset",
+      "msa.reset",
       "chat.message",
     ]);
     // Once the reset is placed, display-only writes go in at once again.
@@ -413,14 +413,14 @@ describe("data-only writes", () => {
     await second.wait(context);
     expect(requests[1]).toEqual(["system:", "user:a", "assistant:one", "user:b"]);
     const kinds = (await allEntries(root)).map((entry) => entry.kind);
-    // The unchanged prompt adds no second pi.system entry.
+    // The unchanged prompt adds no second msa.system entry.
     expect(kinds).toEqual([
-      "pi.user",
-      "pi.system",
-      "pi.assistant",
-      "pi.user",
+      "msa.user",
+      "msa.system",
+      "msa.assistant",
+      "msa.user",
       "chat.message",
-      "pi.assistant",
+      "msa.assistant",
     ]);
     await harness.close(context);
   });
@@ -451,17 +451,19 @@ describe("data-only writes", () => {
     // The next input places the waiting mention first.
     const g = await root.submit({ type: "input", content: "g" }, context);
     await g.wait(context);
-    expect(transcript(await allEntries(root)).filter(([kind]) => kind !== "pi.assistant")).toEqual([
-      ["pi.user", "a"],
-      ["note", "n"],
-      ["chat.mention", { author: "ann", text: "f" }, "f"],
-      ["pi.user", "g"],
-    ]);
+    expect(transcript(await allEntries(root)).filter(([kind]) => kind !== "msa.assistant")).toEqual(
+      [
+        ["msa.user", "a"],
+        ["note", "n"],
+        ["chat.mention", { author: "ann", text: "f" }, "f"],
+        ["msa.user", "g"],
+      ],
+    );
     await harness.close(context);
   });
 
   it("keeps a queued input's entry across reopen and places it as that entry", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pi-durable-input-entries-"));
+    const directory = await mkdtemp(join(tmpdir(), "msa-durable-input-entries-"));
     const path = join(directory, "session.sqlite");
     try {
       const setup = chatSetup();
@@ -511,7 +513,7 @@ describe("data-only writes", () => {
       },
       context,
     );
-    const target = (await allEntries(root)).find((entry) => entry.kind === "pi.user")!;
+    const target = (await allEntries(root)).find((entry) => entry.kind === "msa.user")!;
     const edit = await root.submit(
       { type: "write", entry: { kind: "redact", edits: [{ target: target.id, action: "omit" }] } },
       context,
@@ -526,13 +528,13 @@ describe("data-only writes", () => {
     first.release();
     await followUp.wait(context);
     expect(transcript(await allEntries(root))).toEqual([
-      ["pi.user", "a"],
+      ["msa.user", "a"],
       ["note", "n"],
-      ["pi.assistant", "first"],
+      ["msa.assistant", "first"],
       ["note", "m"],
       ["redact"],
-      ["pi.user", "f"],
-      ["pi.assistant", "second"],
+      ["msa.user", "f"],
+      ["msa.assistant", "second"],
     ]);
     expect(await input.status(context)).toMatchObject({ status: "done" });
     await harness.close(context);

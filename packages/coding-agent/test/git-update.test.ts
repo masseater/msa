@@ -248,13 +248,13 @@ describe("DefaultPackageManager git update", () => {
         managerWithPaths.parseSource(gitSource),
         "temporary",
       );
-      const extensionFile = join(cachedDir, "pi-extensions", "session-breakdown.ts");
+      const extensionFile = join(cachedDir, "msa-extensions", "session-breakdown.ts");
 
       rmSync(cachedDir, { recursive: true, force: true });
-      mkdirSync(join(cachedDir, "pi-extensions"), { recursive: true });
+      mkdirSync(join(cachedDir, "msa-extensions"), { recursive: true });
       writeFileSync(
         join(cachedDir, "package.json"),
-        JSON.stringify({ pi: { extensions: ["./pi-extensions"] } }, null, 2),
+        JSON.stringify({ msa: { extensions: ["./msa-extensions"] } }, null, 2),
       );
       writeFileSync(extensionFile, "// stale");
 
@@ -291,7 +291,7 @@ describe("DefaultPackageManager git update", () => {
       expect(executedCommands).toContain(
         "git fetch --prune --no-tags origin +refs/heads/main:refs/remotes/origin/main",
       );
-      expect(getFileContent(cachedDir, "pi-extensions/session-breakdown.ts")).toBe("// fresh");
+      expect(getFileContent(cachedDir, "msa-extensions/session-breakdown.ts")).toBe("// fresh");
     });
   });
 });

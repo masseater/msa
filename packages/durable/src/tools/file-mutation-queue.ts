@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@msa/chord";
 
 import { type ExecutionEnv, getOrThrow } from "../env/index.ts";
 

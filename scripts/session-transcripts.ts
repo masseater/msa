@@ -4,7 +4,7 @@
  * optionally spawns subagents to analyze patterns.
  *
  * Usage: node scripts/session-transcripts.ts [--analyze] [--output <dir>] [cwd]
- *   --analyze      Spawn pi subagents to analyze each transcript file
+ *   --analyze      Spawn msa subagents to analyze each transcript file
  *   --output <dir> Output directory for transcript files (defaults to ./session-transcripts)
  *   cwd            Working directory to extract sessions for (defaults to current)
  */
@@ -82,7 +82,7 @@ interface JsonEvent {
 
 function runSubagent(prompt: string, cwd: string): Promise<{ success: boolean }> {
   return new Promise((resolve) => {
-    const child = spawn("pi", ["--mode", "json", "--tools", "read,write", "-p", prompt], {
+    const child = spawn("msa", ["--mode", "json", "--tools", "read,write", "-p", prompt], {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -139,7 +139,7 @@ function runSubagent(prompt: string, cwd: string): Promise<{ success: boolean }>
     });
 
     child.on("error", (err) => {
-      console.error(chalk.red(`  Failed to spawn pi: ${err.message}`));
+      console.error(chalk.red(`  Failed to spawn msa: ${err.message}`));
       resolve({ success: false });
     });
   });
@@ -167,7 +167,7 @@ async function main() {
   const cwd = resolve(cwdArg || process.cwd());
 
   mkdirSync(outputDir, { recursive: true });
-  const sessionsBase = join(homedir(), ".pi/agent/sessions");
+  const sessionsBase = join(homedir(), ".msa/agent/sessions");
   const sessionDirName = cwdToSessionDir(cwd);
   const sessionDir = join(sessionsBase, sessionDirName);
 
@@ -253,12 +253,12 @@ async function main() {
   console.log(`\nCreated ${outputFiles.length} transcript file(s) in ${outputDir}`);
 
   if (!analyzeFlag) {
-    console.log("\nRun with --analyze to spawn pi subagents for pattern analysis.");
+    console.log("\nRun with --analyze to spawn msa subagents for pattern analysis.");
     return;
   }
 
   // Find AGENTS.md files to compare against
-  const globalAgentsMd = join(homedir(), ".pi/agent/AGENTS.md");
+  const globalAgentsMd = join(homedir(), ".msa/agent/AGENTS.md");
   const localAgentsMd = join(cwd, "AGENTS.md");
   const agentsMdFiles = [globalAgentsMd, localAgentsMd].filter(existsSync);
   const agentsMdSection =

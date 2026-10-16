@@ -1,5 +1,5 @@
-import type { Context } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import type { Context } from "@msa/chord";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import {
   type CommitPublication,
   type ConversationId,
@@ -12,7 +12,7 @@ import {
   MemoryStorage,
   type Seq,
   type StorageWrite,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 
 import { SessionImpl } from "../src/session/session.ts";
 

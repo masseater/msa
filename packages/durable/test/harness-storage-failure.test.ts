@@ -1,7 +1,7 @@
 import { runInNewContext } from "node:vm";
 
-import type { Context } from "@earendil-works/chord";
-import { createModels } from "@earendil-works/pi-ai";
+import { createModels } from "@msa/ai";
+import type { Context } from "@msa/chord";
 import {
   createRegistry,
   defineExtension,
@@ -13,7 +13,7 @@ import {
   StorageRequestError,
   type TaskId,
   watchEvents,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { describe, expect, it } from "vitest";
 
 import { safeNow } from "../src/harness/harness.ts";
@@ -337,7 +337,7 @@ describe("a failed Storage call", () => {
         );
       },
       () => root.commit((tx) => tx.scanEntries({ conversationId: 999_999 as never }, 10), context),
-      // `pi.live` keeps no history.
+      // `msa.live` keeps no history.
       () => harness.snapshotAsOf(LiveDoc as never, root.id, entry.id, context),
     ];
     for (const request of requests) {

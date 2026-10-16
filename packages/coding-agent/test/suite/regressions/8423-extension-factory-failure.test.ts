@@ -21,7 +21,7 @@ describe("issue #8423 extension factory failure", () => {
     let flagDuringLoad: boolean | string | undefined;
 
     await loadExtensionFromFactory(
-      (pi) => pi.registerProvider("working-provider", providerConfig),
+      (msa) => msa.registerProvider("working-provider", providerConfig),
       process.cwd(),
       eventBus,
       runtime,
@@ -29,15 +29,15 @@ describe("issue #8423 extension factory failure", () => {
     );
     await expect(
       loadExtensionFromFactory(
-        (pi) => {
-          capturedApi = pi;
-          pi.events.on("factory-failure", () => {
+        (msa) => {
+          capturedApi = msa;
+          msa.events.on("factory-failure", () => {
             eventCalls++;
           });
-          pi.registerFlag("failed-flag", { type: "boolean", default: true });
-          flagDuringLoad = pi.getFlag("failed-flag");
-          pi.unregisterProvider("working-provider");
-          pi.registerProvider("failed-provider", providerConfig);
+          msa.registerFlag("failed-flag", { type: "boolean", default: true });
+          flagDuringLoad = msa.getFlag("failed-flag");
+          msa.unregisterProvider("working-provider");
+          msa.registerProvider("failed-provider", providerConfig);
           throw new Error("factory failed");
         },
         process.cwd(),
@@ -68,8 +68,8 @@ describe("issue #8423 extension factory failure", () => {
       releaseFailure = resolve;
     });
     const failingLoad = loadExtensionFromFactory(
-      async (pi) => {
-        pi.registerProvider("failed-provider", providerConfig);
+      async (msa) => {
+        msa.registerProvider("failed-provider", providerConfig);
         await waitBeforeFailure;
         throw new Error("factory failed");
       },
@@ -80,7 +80,7 @@ describe("issue #8423 extension factory failure", () => {
     );
 
     await loadExtensionFromFactory(
-      (pi) => pi.registerProvider("working-provider", providerConfig),
+      (msa) => msa.registerProvider("working-provider", providerConfig),
       process.cwd(),
       eventBus,
       runtime,

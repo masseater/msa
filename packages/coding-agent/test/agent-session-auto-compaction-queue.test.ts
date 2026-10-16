@@ -2,13 +2,13 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Agent } from "@earendil-works/pi-agent-core";
+import { Agent } from "@msa/agent-core";
 import {
   type AssistantMessage,
   createAssistantMessageEventStream,
   fauxAssistantMessage,
-} from "@earendil-works/pi-ai";
-import { getModel, streamSimple } from "@earendil-works/pi-ai/compat";
+} from "@msa/ai";
+import { getModel, streamSimple } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AgentSession } from "../src/core/agent-session.ts";
@@ -25,7 +25,7 @@ describe("AgentSession auto-compaction queue resume", () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = join(tmpdir(), `pi-auto-compaction-queue-${Date.now()}`);
+    tempDir = join(tmpdir(), `msa-auto-compaction-queue-${Date.now()}`);
     mkdirSync(tempDir, { recursive: true });
 
     const model = getModel("anthropic", "claude-sonnet-4-5")!;

@@ -1,10 +1,10 @@
+import type { FauxResponseStep } from "@msa/ai";
+import { createModels } from "@msa/ai/models";
+import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
 // The inbox: what happens to submissions while a conversation is busy.
 // Run from packages/durable:
 //   node --conditions=source --experimental-strip-types test/examples/20-inbox.ts
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { FauxResponseStep } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import {
   createRegistry,

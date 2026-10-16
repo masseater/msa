@@ -5,7 +5,7 @@ import {
   type Models,
   type SimpleStreamOptions,
   type SystemMessage,
-} from "@earendil-works/pi-ai";
+} from "@msa/ai";
 import {
   AssistantEntry,
   type CommitPublication,
@@ -24,7 +24,7 @@ import {
   type TaskId,
   UserEntry,
   wrapSection,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { describe, expect, it } from "vitest";
 
 import { resolveSettings } from "../src/harness/agent.ts";
@@ -92,7 +92,11 @@ function livePublications(harness: Harness): LiveState[] {
   const values: LiveState[] = [];
   harness.subscribeCommits((publication: CommitPublication) => {
     for (const change of publication.changes) {
-      if (change.type === "document" && change.record.kind === "pi.live" && change.value !== null) {
+      if (
+        change.type === "document" &&
+        change.record.kind === "msa.live" &&
+        change.value !== null
+      ) {
         values.push(change.value as LiveState);
       }
     }
@@ -115,7 +119,7 @@ describe("generation", () => {
     const answer = await root.commit((tx) => tx.entry(AssistantEntry, settled.answer), context);
     expect(textOf(answer?.model?.[0])).toBe("Hello there");
     const entries = await allEntries(root);
-    expect(entries.map((entry) => entry.kind)).toEqual(["pi.user", "pi.system", "pi.assistant"]);
+    expect(entries.map((entry) => entry.kind)).toEqual(["msa.user", "msa.system", "msa.assistant"]);
     expect(entries[0]!.id).toBe(settled.entry);
     expect(entries[1]!.model).toEqual([
       {
@@ -129,7 +133,7 @@ describe("generation", () => {
     const task = (
       await harness.commit((tx) => tx.scanTasks({ conversationId: root.id }, 10), context)
     ).items[0];
-    expect(task?.kind).toBe("pi.generation");
+    expect(task?.kind).toBe("msa.generation");
     // Entries written by the generation are attributed to it; the admitted user entry is not task work.
     expect(entries.map((entry) => entry.byTaskId)).toEqual([undefined, task!.id, task!.id]);
     expect(task?.state).toEqual({
@@ -145,7 +149,7 @@ describe("generation", () => {
     const storage = new ControlledStorage();
     const { harness, root } = await openChat(storage, setup);
     const record = await storage.findDocument(
-      { kind: "pi.live", scope: { kind: "conversation", conversationId: root.id } },
+      { kind: "msa.live", scope: { kind: "conversation", conversationId: root.id } },
       "current",
       context,
     );
@@ -206,7 +210,7 @@ describe("generation", () => {
       reason: "no_model",
       entry: expect.any(Number),
     });
-    expect((await allEntries(root)).map((entry) => entry.kind)).toEqual(["pi.user"]);
+    expect((await allEntries(root)).map((entry) => entry.kind)).toEqual(["msa.user"]);
     const tasks = await harness.commit(
       (tx) => tx.scanTasks({ conversationId: root.id }, 10),
       context,
@@ -237,10 +241,10 @@ describe("generation", () => {
     expect(settled.status).toBe("done");
     const entries = await allEntries(root);
     expect(entries.map((entry) => entry.kind)).toEqual([
-      "pi.user",
-      "pi.system",
-      "pi.assistant",
-      "pi.assistant",
+      "msa.user",
+      "msa.system",
+      "msa.assistant",
+      "msa.assistant",
     ]);
     expect((entries[2]!.model![0] as AssistantMessage).stopReason).toBe("error");
     expect(
@@ -266,9 +270,9 @@ describe("generation", () => {
       detail: "503 Service Unavailable",
     });
     expect((await allEntries(root)).map((entry) => entry.kind)).toEqual([
-      "pi.user",
-      "pi.assistant",
-      "pi.assistant",
+      "msa.user",
+      "msa.assistant",
+      "msa.assistant",
     ]);
     expect(setup.faux.getPendingResponseCount()).toBe(1);
     await harness.close(context);
@@ -310,8 +314,8 @@ describe("generation", () => {
     expect(setup.reports).toContainEqual(new Error("wrapper failed"));
     // The failed section is absent, so nothing was rendered.
     expect((await allEntries(root)).map((entry) => entry.kind)).toEqual([
-      "pi.user",
-      "pi.assistant",
+      "msa.user",
+      "msa.assistant",
     ]);
     await harness.close(context);
   });
@@ -385,7 +389,7 @@ describe("generation", () => {
       reason: "aborted",
     });
     const entries = await allEntries(root);
-    expect(entries.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant"]);
+    expect(entries.map((entry) => entry.kind)).toEqual(["msa.user", "msa.assistant"]);
     const converted = entries[1]!.model![0] as AssistantMessage;
     expect(converted.stopReason).toBe("aborted");
     expect(textOf(converted)!.startsWith(textOf(partial as Message)!)).toBe(true);
@@ -461,7 +465,7 @@ describe("generation", () => {
     await root.configure({ thinkingLevel: "high" }, context);
     harness.resume();
     await (await root.submit({ type: "input", content: "one" }, context)).wait(context);
-    // Both are read at the next preparation: the thinking level from pi.agent, the stream options live from settings.
+    // Both are read at the next preparation: the thinking level from msa.agent, the stream options live from settings.
     await root.configure({ thinkingLevel: null }, context);
     setup.settings.stream = { timeoutMs: 99 };
     await (await root.submit({ type: "input", content: "two" }, context)).wait(context);
@@ -688,7 +692,7 @@ describe("generation", () => {
     await (await root.submit({ type: "input", content: "one" }, context)).wait(context);
     await (await sub.submit({ type: "input", content: "two" }, context)).wait(context);
     const sections = async (conversation: Conversation) =>
-      (await allEntries(conversation)).find((entry) => entry.kind === "pi.system")?.model?.[0];
+      (await allEntries(conversation)).find((entry) => entry.kind === "msa.system")?.model?.[0];
     expect(await sections(root)).toMatchObject({
       sections: { cwd: "<cwd>\n/repo\n</cwd>", agents: "<agents>\nRead AGENTS.md\n</agents>" },
     });
@@ -732,7 +736,7 @@ describe("generation", () => {
       status: "unanswered",
       reason: "aborted",
     });
-    expect((await allEntries(root)).map((entry) => entry.kind)).toEqual(["pi.user"]);
+    expect((await allEntries(root)).map((entry) => entry.kind)).toEqual(["msa.user"]);
     await harness.close(context);
   });
 
@@ -752,7 +756,7 @@ describe("generation", () => {
       true,
     );
     const entries = await allEntries(root);
-    expect(entries.map((entry) => entry.kind)).toEqual(["pi.user", "pi.assistant"]);
+    expect(entries.map((entry) => entry.kind)).toEqual(["msa.user", "msa.assistant"]);
     expect(entries[1]!.model![0]).toMatchObject({ role: "assistant", stopReason: "aborted" });
     expect(textOf(entries[1]!.model![0])).toBe("partial");
     expect(await live(harness, root)).toEqual({});
@@ -816,8 +820,8 @@ describe("generation", () => {
       extension: () => undefined,
       tools: () => [],
       sections: () => [],
-      tasks: () => empty.tasks().filter((task) => task.definition.name !== "pi.generation"),
-      task: (name) => (name === "pi.generation" ? undefined : empty.task(name)),
+      tasks: () => empty.tasks().filter((task) => task.definition.name !== "msa.generation"),
+      task: (name) => (name === "msa.generation" ? undefined : empty.task(name)),
     };
     await expect(
       Harness.open(
@@ -828,6 +832,6 @@ describe("generation", () => {
         },
         context,
       ),
-    ).rejects.toThrow("Registry lacks built-in tasks pi.generation");
+    ).rejects.toThrow("Registry lacks built-in tasks msa.generation");
   });
 });

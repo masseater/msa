@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { Model } from "@earendil-works/pi-ai";
+import type { Model } from "@msa/ai";
 import lockfile from "proper-lockfile";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -18,7 +18,7 @@ import { FileModelsStore } from "../src/core/models-store.ts";
 
 const sharedTempDir = join(
   tmpdir(),
-  `pi-models-store-shared-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  `msa-models-store-shared-${Date.now()}-${Math.random().toString(36).slice(2)}`,
 );
 const sharedModelsPath = join(sharedTempDir, "models-store.json");
 

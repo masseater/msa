@@ -36,7 +36,7 @@ Chord builds applications out of **objects** that live in several processes (a s
 ## Quick start
 
 ```ts
-import { createHost, method, remote } from "@earendil-works/chord";
+import { createHost, method, remote } from "@msa/chord";
 import { Type } from "typebox";
 
 // contract.ts: shared by provider and consumers
@@ -80,7 +80,7 @@ A contract is a runtime value: a name, a version number, and a description of th
 Remote types can be reached from other hosts. Everything that crosses the wire has a schema, and the provider validates it.
 
 ```ts
-export const Chat = remote("pi.chat", {
+export const Chat = remote("msa.chat", {
   version: 1,
   input: Type.Object({ session: Type.String(), conversation: Type.Number() }),
   host: hostFamily("session:", "session"), // lives on `session:S1` for `{ session: "S1", … }`
@@ -117,13 +117,13 @@ references to it get `upgrade_required`.
 Local types are reachable only inside their host. Their members may be anything: functions, callbacks, native objects. Non-JSON members get opaque or function descriptors.
 
 ```ts
-export const Index = local("pi.index", {
+export const Index = local("msa.index", {
   version: 1,
   input: Type.Object({ session: Type.String() }),
   members: {
     search: method(Type.Object({ query: Type.String() }), Type.Array(HitSchema)),
     onChange: method(Type.Function([ChangeSchema], Type.Void()), UnsubscribeSchema),
-    harness: opaque("pi.durable-harness@1"),
+    harness: opaque("msa.durable-harness@1"),
   },
 });
 ```
@@ -331,7 +331,7 @@ host.serve(Harness, (_, _host, self) => {
     open: () => DurableHarness.open(storage),
     close: (h) => h.close(),
   });
-  return { harness: self.expose(durable) }; // contract member: harness: opaque<DurableHarness>("pi.durable-harness@1")
+  return { harness: self.expose(durable) }; // contract member: harness: opaque<DurableHarness>("msa.durable-harness@1")
 });
 
 const harness = await ctx.get(Harness, {});
@@ -628,7 +628,7 @@ plugins/chat/
 
 ```ts
 // plugins/chat/worker.ts
-import { defineFacet } from "@earendil-works/chord";
+import { defineFacet } from "@msa/chord";
 
 import { Chat, Conversation } from "./contract.ts";
 

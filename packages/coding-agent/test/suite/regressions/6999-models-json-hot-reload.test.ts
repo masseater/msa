@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { setKeybindings, type TUI } from "@earendil-works/pi-tui";
+import { setKeybindings, type TUI } from "@msa/tui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { AuthStorage } from "../../../src/core/auth-storage.ts";
@@ -59,7 +59,7 @@ describe("issue #6999 models.json hot reload", () => {
   });
 
   it("reloads models.json when opening /model", async () => {
-    tempDir = mkdtempSync(join(tmpdir(), "pi-models-json-hot-reload-"));
+    tempDir = mkdtempSync(join(tmpdir(), "msa-models-json-hot-reload-"));
     const modelsPath = join(tempDir, "models.json");
     writeFileSync(modelsPath, JSON.stringify(modelsJson("old-provider", "old-model")));
     const modelRuntime = getModelRuntime(

@@ -2,7 +2,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { Context } from "@earendil-works/chord";
 import {
   type AssistantMessage,
   fauxAssistantMessage,
@@ -10,7 +9,8 @@ import {
   fauxToolCall,
   type ToolResultMessage,
   Type,
-} from "@earendil-works/pi-ai";
+} from "@msa/ai";
+import type { Context } from "@msa/chord";
 import {
   type AgentEvent,
   defineExtension,
@@ -25,7 +25,7 @@ import {
   ToolTask,
   type ToolTaskInput,
   watchEvents,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
@@ -58,7 +58,7 @@ afterEach(async () => {
 });
 
 async function sqlitePath(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "pi-durable-nested-restart-"));
+  const directory = await mkdtemp(join(tmpdir(), "msa-durable-nested-restart-"));
   directories.add(directory);
   return join(directory, "session.sqlite");
 }
@@ -544,7 +544,7 @@ describe("nested tool calls across a restart", () => {
         )
           continue;
         const live = publication.changes.find(
-          (each) => each.type === "document" && each.record.kind === "pi.live",
+          (each) => each.type === "document" && each.record.kind === "msa.live",
         );
         const value =
           live?.type === "document"

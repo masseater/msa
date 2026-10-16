@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { basename, join } from "path";
 
-import type { AgentState } from "@earendil-works/pi-agent-core";
+import type { AgentState } from "@msa/agent-core";
 
 import { APP_NAME, getExportTemplateDir } from "../../config.ts";
 import {

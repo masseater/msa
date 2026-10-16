@@ -1,4 +1,4 @@
-import type { CredentialStore } from "@earendil-works/pi-ai";
+import type { CredentialStore } from "@msa/ai";
 
 import { resolveCliModel } from "../core/model-resolver.ts";
 import { ModelRuntime } from "../core/model-runtime.ts";

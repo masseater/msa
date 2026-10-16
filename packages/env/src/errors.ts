@@ -1,4 +1,4 @@
-import { err, FileError, type Result } from "@earendil-works/pi-durable/env";
+import { err, FileError, type Result } from "@msa/durable/env";
 
 import { RemoteError } from "./connection.ts";
 

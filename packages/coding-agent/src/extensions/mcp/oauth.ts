@@ -14,8 +14,8 @@ import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { oauthErrorHtml, oauthSuccessHtml } from "@earendil-works/pi-ai/utils/oauth-page";
-import type { AuthProvider, McpFetch } from "@earendil-works/pi-mcp";
+import { oauthErrorHtml, oauthSuccessHtml } from "@msa/ai/utils/oauth-page";
+import type { AuthProvider, McpFetch } from "@msa/mcp";
 import {
   type AuthorizationServerMetadata,
   authorizeMcp,
@@ -31,7 +31,7 @@ import {
   type OAuthClientMetadataDocument,
   parseWwwAuthenticate,
   stepUpScope,
-} from "@earendil-works/pi-mcp/oauth";
+} from "@msa/mcp/oauth";
 import lockfile from "proper-lockfile";
 
 import { APP_NAME, getAgentDir } from "../../config.ts";
@@ -40,7 +40,7 @@ import { mcpNamespace } from "../../core/mcp-servers.ts";
 
 const CALLBACK_HOST = "127.0.0.1";
 const CALLBACK_PATH = "/callback";
-/** Where pi.dev serves pi's Client ID Metadata Documents: `client.json` and `<callback ID>/client.json`. */
+/** Where pi.dev serves msa's Client ID Metadata Documents: `client.json` and `<callback ID>/client.json`. */
 const CLIENT_METADATA_BASE_URL = "https://pi.dev/oauth";
 /** Redirect URI for refreshes when none is stored. Refreshing never redirects the user. */
 const FALLBACK_REDIRECT_URL = `http://${CALLBACK_HOST}${CALLBACK_PATH}`;
@@ -250,7 +250,7 @@ function callbackId(serverUrl: string): string {
 }
 
 /**
- * pi's Client ID Metadata Document, for `clientRegistration: "cimd"`, chosen like Codex chooses its own.
+ * msa's Client ID Metadata Document, for `clientRegistration: "cimd"`, chosen like Codex chooses its own.
  * The configuration ensures the default callback path. Without the `iss` parameter in authorization
  * responses (RFC 9207), the redirect URI and the document are specific to the MCP server, so a response
  * cannot be mixed up with one from another authorization server (RFC 9700 section 4.4.2.2).

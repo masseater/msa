@@ -1,5 +1,5 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import type { AgentTool } from "@msa/agent-core";
+import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -39,8 +39,8 @@ describe("issue #7253: manual compaction during an active response", () => {
       settings: { compaction: { enabled: true, reserveTokens: 200, keepRecentTokens: 2 } },
       tools: [createNoopTool()],
       extensionFactories: [
-        (pi) => {
-          pi.on("session_before_compact", async (event) => ({
+        (msa) => {
+          msa.on("session_before_compact", async (event) => ({
             compaction: {
               summary: `${event.reason} summary`,
               firstKeptEntryId: event.preparation.firstKeptEntryId,

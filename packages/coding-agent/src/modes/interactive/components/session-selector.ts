@@ -13,7 +13,7 @@ import {
   Text,
   truncateToWidth,
   visibleWidth,
-} from "@earendil-works/pi-tui";
+} from "@msa/tui";
 
 import { KeybindingsManager } from "../../../core/keybindings.ts";
 import type { SessionInfo, SessionListProgress } from "../../../core/session-manager.ts";

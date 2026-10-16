@@ -1,7 +1,7 @@
 import { compare, valid } from "semver";
 
 import { fetchWithRetry } from "./management-http.ts";
-import { getPiUserAgent } from "./pi-user-agent.ts";
+import { getMsaUserAgent } from "./user-agent.ts";
 
 const LATEST_VERSION_URL = "https://pi.dev/api/latest-version";
 const DEFAULT_VERSION_CHECK_TIMEOUT_MS = 10000;
@@ -60,13 +60,13 @@ export async function getLatestPiRelease(
   currentVersion: string,
   options: { timeoutMs?: number; retry?: boolean } = {},
 ): Promise<LatestPiRelease | undefined> {
-  if (process.env.PI_OFFLINE) return undefined;
+  if (process.env.MSA_OFFLINE) return undefined;
 
   const response = await fetchWithRetry(
     LATEST_VERSION_URL,
     {
       headers: {
-        "User-Agent": getPiUserAgent(currentVersion),
+        "User-Agent": getMsaUserAgent(currentVersion),
         accept: "application/json",
       },
     },
@@ -107,7 +107,7 @@ export async function getLatestPiVersion(
 export async function checkForNewPiVersion(
   currentVersion: string,
 ): Promise<LatestPiRelease | undefined> {
-  if (process.env.PI_SKIP_VERSION_CHECK) return undefined;
+  if (process.env.MSA_SKIP_VERSION_CHECK) return undefined;
 
   try {
     const latestRelease = await getLatestPiRelease(currentVersion);

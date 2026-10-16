@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@msa/chord";
 import { type Static, Type } from "typebox";
 
 import { defineTool } from "../harness/define.ts";

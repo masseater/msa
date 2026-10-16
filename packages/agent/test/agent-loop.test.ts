@@ -5,7 +5,7 @@ import {
   type Model,
   type ToolResultMessage,
   type UserMessage,
-} from "@earendil-works/pi-ai";
+} from "@msa/ai";
 import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
 

@@ -1,4 +1,4 @@
-import type { AgentTool, ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { AgentTool, ThinkingLevel } from "@msa/agent-core";
 import {
   fauxAssistantMessage,
   fauxToolCall,
@@ -6,7 +6,7 @@ import {
   type JsonObject,
   type Model,
   type Usage,
-} from "@earendil-works/pi-ai";
+} from "@msa/ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -30,8 +30,8 @@ describe("AgentSession model and extension characterization", () => {
         { id: "faux-2", name: "Two", reasoning: true },
       ],
       extensionFactories: [
-        (pi) => {
-          pi.on("model_select", async (event) => {
+        (msa) => {
+          msa.on("model_select", async (event) => {
             modelEvents.push(
               `${event.previousModel?.id ?? "none"}->${event.model.id}:${event.source}`,
             );
@@ -260,8 +260,8 @@ describe("AgentSession model and extension characterization", () => {
     const harness = await createHarness({
       tools: [echoTool],
       extensionFactories: [
-        (pi) => {
-          pi.on("tool_call", async () => ({ block: true, reason: "Blocked by test" }));
+        (msa) => {
+          msa.on("tool_call", async () => ({ block: true, reason: "Blocked by test" }));
         },
       ],
     });
@@ -323,8 +323,8 @@ describe("AgentSession model and extension characterization", () => {
     const harness = await createHarness({
       tools: [echoTool],
       extensionFactories: [
-        (pi) => {
-          pi.on("tool_result", async (event) => {
+        (msa) => {
+          msa.on("tool_result", async (event) => {
             observedToolUsage = event.usage;
             return {
               content: [{ type: "text", text: "patched result" }],
@@ -372,8 +372,8 @@ describe("AgentSession model and extension characterization", () => {
   it("allows extension context handlers to modify messages before the LLM call", async () => {
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("context", async (event) => ({
+        (msa) => {
+          msa.on("context", async (event) => ({
             messages: event.messages.map((message) =>
               message.role === "user"
                 ? {
@@ -417,9 +417,9 @@ describe("AgentSession model and extension characterization", () => {
     let extensionApi: ExtensionAPI | undefined;
     const transformedHarness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          extensionApi = pi;
-          pi.on("input", async (event) => {
+        (msa) => {
+          extensionApi = msa;
+          msa.on("input", async (event) => {
             if (event.text === "ping") {
               return { action: "handled" };
             }
@@ -458,8 +458,8 @@ describe("AgentSession model and extension characterization", () => {
     const seenOptions: BuildSystemPromptOptions[] = [];
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.registerCommand("inspect-options", {
+        (msa) => {
+          msa.registerCommand("inspect-options", {
             description: "Inspect system prompt options",
             handler: async (_args, ctx) => {
               const options = ctx.getSystemPromptOptions();
@@ -485,8 +485,8 @@ describe("AgentSession model and extension characterization", () => {
   it("allows before_agent_start handlers to inject custom messages and modify the system prompt", async () => {
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("before_agent_start", async (event) => ({
+        (msa) => {
+          msa.on("before_agent_start", async (event) => ({
             message: {
               customType: "before-start",
               content: "injected",
@@ -529,11 +529,11 @@ describe("AgentSession model and extension characterization", () => {
     const lifecycleEvents: string[] = [];
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("session_start", async (event) => {
+        (msa) => {
+          msa.on("session_start", async (event) => {
             lifecycleEvents.push(`start:${event.reason}`);
           });
-          pi.on("session_shutdown", async (event) => {
+          msa.on("session_shutdown", async (event) => {
             lifecycleEvents.push(`shutdown:${event.reason}`);
           });
         },

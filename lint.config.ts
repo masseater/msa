@@ -67,6 +67,6 @@ const generated = [
   "pnpm-lock.yaml",
 ];
 
-const engine = ["packages/**", "scripts/**", ".pi/**"];
+const engine = ["packages/**", "scripts/**", ".msa/**"];
 
 export { engine, generated, requiredStack, restrictedImports };

@@ -12,7 +12,7 @@
  * - Organize with subdirectories: Group related rules (e.g., frontend/, backend/)
  *
  * Usage:
- * 1. Copy this file to ~/.pi/agent/extensions/ or your project's .pi/extensions/
+ * 1. Copy this file to ~/.msa/agent/extensions/ or your project's .msa/extensions/
  * 2. Create .claude/rules/ folder in your project root
  * 3. Add .md files with your rules
  */
@@ -20,7 +20,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@msa/coding-agent";
 
 /**
  * Recursively find all .md files in a directory
@@ -47,12 +47,12 @@ function findMarkdownFiles(dir: string, basePath: string = ""): string[] {
   return results;
 }
 
-export default function claudeRulesExtension(pi: ExtensionAPI) {
+export default function claudeRulesExtension(msa: ExtensionAPI) {
   let ruleFiles: string[] = [];
   let rulesDir: string = "";
 
   // Scan for rules on session start
-  pi.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", async (_event, ctx) => {
     rulesDir = path.join(ctx.cwd, ".claude", "rules");
     ruleFiles = findMarkdownFiles(rulesDir);
 
@@ -62,7 +62,7 @@ export default function claudeRulesExtension(pi: ExtensionAPI) {
   });
 
   // Append available rules to system prompt
-  pi.on("before_agent_start", async (event) => {
+  msa.on("before_agent_start", async (event) => {
     if (ruleFiles.length === 0) {
       return;
     }

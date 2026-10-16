@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { setKeybindings } from "@earendil-works/pi-tui";
+import { setKeybindings } from "@msa/tui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
@@ -57,7 +57,7 @@ function createSymlinkedSessionPaths(): {
   parentAliasB: string;
   childAliasB: string;
 } {
-  const baseDir = mkdtempSync(join(tmpdir(), "pi-session-selector-"));
+  const baseDir = mkdtempSync(join(tmpdir(), "msa-session-selector-"));
   const realDir = join(baseDir, "real");
   const aliasADir = join(baseDir, "alias-a");
   const aliasBDir = join(baseDir, "alias-b");

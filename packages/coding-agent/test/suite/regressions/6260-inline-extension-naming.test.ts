@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
 import type { ExtensionAPI } from "../../../src/index.ts";
 
-const noop: (pi: ExtensionAPI) => void = () => {};
+const noop: (msa: ExtensionAPI) => void = () => {};
 
 describe("inline extension naming", () => {
   const roots: string[] = [];
@@ -15,7 +15,7 @@ describe("inline extension naming", () => {
   function fixture(name: string) {
     const root = join(
       tmpdir(),
-      `pi-inline-naming-${name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `msa-inline-naming-${name}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     const cwd = join(root, "project");
     const agentDir = join(root, "agent");

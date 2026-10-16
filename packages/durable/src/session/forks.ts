@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@msa/chord";
 
 import { addressId } from "../documents.ts";
 import type {

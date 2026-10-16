@@ -1,5 +1,5 @@
-import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { Container } from "@earendil-works/pi-tui";
+import type { AssistantMessage } from "@msa/ai";
+import { Container } from "@msa/tui";
 import { describe, expect, test } from "vitest";
 
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";

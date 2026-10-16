@@ -1,4 +1,4 @@
-import { type Context, copyJson, type JsonRepresentation } from "@earendil-works/chord";
+import { type Context, copyJson, type JsonRepresentation } from "@msa/chord";
 
 import { ConversationBusy } from "../errors.ts";
 import type { SessionImpl } from "../session/session.ts";
@@ -166,12 +166,12 @@ function isSettled(record: SubmissionRecord): record is SettledSubmissionRecord 
   return record.status === "done" || record.status === "unanswered";
 }
 
-/** Reject an input entry an untyped caller got wrong: its kind must be a non-empty string outside the `pi.` prefix. */
+/** Reject an input entry an untyped caller got wrong: its kind must be a non-empty string outside the `msa.` prefix. */
 function checkInputEntry(entry: InputEntry): void {
   const { kind } = entry;
-  if (typeof kind !== "string" || kind.length === 0 || kind.startsWith("pi.")) {
+  if (typeof kind !== "string" || kind.length === 0 || kind.startsWith("msa.")) {
     throw new TypeError(
-      `An input entry's kind must be a non-empty string not starting with "pi.", got ${String(kind)}`,
+      `An input entry's kind must be a non-empty string not starting with "msa.", got ${String(kind)}`,
     );
   }
 }
@@ -181,8 +181,8 @@ function checkInputEntry(entry: InputEntry): void {
  * known request ID returns its existing submission without writing. A display-only write (only `kind` and `data`) is
  * appended and settled `done` at once, busy or not, as it changes nothing the model sees; only behind a queued reset it
  * queues, so it lands after the reset instead of before it in the context the reset ends. A busy conversation queues anything else in
- * `pi.inbox`, or rejects `whenBusy: "reject"` input with `ConversationBusy`. An idle conversation with queued items
- * queues it behind them and runs a final boundary. Otherwise idle input places its entry (`pi.user`, or the input's
+ * `msa.inbox`, or rejects `whenBusy: "reject"` input with `ConversationBusy`. An idle conversation with queued items
+ * queues it behind them and runs a final boundary. Otherwise idle input places its entry (`msa.user`, or the input's
  * own) and starts a run, and an idle write appends its entry and settles `done`, or `stale` when its head reaches
  * before the active range.
  */

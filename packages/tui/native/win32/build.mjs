@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const sourceFile = path.join(scriptDir, "src", "win32-platform.c");
-const temporaryDir = mkdtempSync(path.join(tmpdir(), "pi-tui-win32-"));
+const temporaryDir = mkdtempSync(path.join(tmpdir(), "msa-tui-win32-"));
 
 const targets = [
   {
@@ -234,16 +234,16 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 Builds win32-x64 and win32-arm64 native prebuilds.
 
 Environment:
-  PI_TUI_WIN32_TOOLCHAIN=msvc|mingw
+  MSA_TUI_WIN32_TOOLCHAIN=msvc|mingw
   CC_X64=/path/to/x86_64-w64-mingw32-gcc
   CC_ARM64=/path/to/aarch64-w64-mingw32-gcc
   CC=/path/to/clang`);
   process.exit(0);
 }
 
-const requestedToolchain = process.env.PI_TUI_WIN32_TOOLCHAIN;
+const requestedToolchain = process.env.MSA_TUI_WIN32_TOOLCHAIN;
 if (requestedToolchain && requestedToolchain !== "msvc" && requestedToolchain !== "mingw") {
-  throw new Error("PI_TUI_WIN32_TOOLCHAIN must be either 'msvc' or 'mingw'");
+  throw new Error("MSA_TUI_WIN32_TOOLCHAIN must be either 'msvc' or 'mingw'");
 }
 
 const vsDevCmd = findVisualStudioDevCmd();
@@ -254,7 +254,7 @@ const toolchain =
 if (toolchain === "msvc") {
   if (!vsDevCmd || !hasMsvc) {
     throw new Error(
-      "Microsoft C++ Build Tools not found. Install the Visual Studio C++ workload or set PI_TUI_WIN32_TOOLCHAIN=mingw.",
+      "Microsoft C++ Build Tools not found. Install the Visual Studio C++ workload or set MSA_TUI_WIN32_TOOLCHAIN=mingw.",
     );
   }
   for (const target of targets) buildWithMsvc(target, vsDevCmd);

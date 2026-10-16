@@ -8,7 +8,7 @@ import { readReportWorkspace, readVitestJsonReportFile } from "@vitest-evals/cor
 
 import type { DocumentationVariant, EvalTask } from "./plan.ts";
 
-export const PI_SESSION_SNAPSHOT_ARTIFACT = "piSessionJsonl";
+export const MSA_SESSION_SNAPSHOT_ARTIFACT = "msaSessionJsonl";
 
 export type EvalRunIdentity = {
   evalSet: string;
@@ -133,7 +133,7 @@ async function persistSession(
   task: EvalTask,
   artifactDirectory: string,
 ): Promise<void> {
-  const session = caseResult.harness?.run?.artifacts?.[PI_SESSION_SNAPSHOT_ARTIFACT];
+  const session = caseResult.harness?.run?.artifacts?.[MSA_SESSION_SNAPSHOT_ARTIFACT];
   if (typeof session !== "string") return;
   const identity = JSON.stringify([
     task.evalSet,

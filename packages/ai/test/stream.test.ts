@@ -1428,7 +1428,7 @@ describe("Generate E2E Tests", () => {
   );
 
   // =========================================================================
-  // OAuth-based providers (credentials from ~/.pi/agent/oauth.json)
+  // OAuth-based providers (credentials from ~/.msa/agent/oauth.json)
   // Tokens are resolved at module level (see oauthTokens above)
   // =========================================================================
 
@@ -1765,7 +1765,7 @@ describe("Generate E2E Tests", () => {
           "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
         );
         let capturedPayload: unknown;
-        const metadata = { app: "pi-test", env: "ci" };
+        const metadata = { app: "msa-test", env: "ci" };
         const response = await complete(
           llmSonnet,
           {
@@ -1825,7 +1825,7 @@ describe("Generate E2E Tests", () => {
 
   // Check if ollama is installed and local LLM tests are enabled
   let ollamaInstalled = false;
-  if (!process.env.PI_NO_LOCAL_LLM) {
+  if (!process.env.MSA_NO_LOCAL_LLM) {
     try {
       execSync("which ollama", { stdio: "ignore" });
       ollamaInstalled = true;

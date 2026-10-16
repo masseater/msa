@@ -20,9 +20,9 @@ describe("theme picker", () => {
   let tempRoot: string;
 
   beforeEach(() => {
-    tempRoot = mkdtempSync(join(tmpdir(), "pi-theme-picker-"));
+    tempRoot = mkdtempSync(join(tmpdir(), "msa-theme-picker-"));
     const agentDir = join(tempRoot, "agent");
-    vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
+    vi.stubEnv("MSA_CODING_AGENT_DIR", agentDir);
     mkdirSync(join(agentDir, "themes"), { recursive: true });
     setRegisteredThemes([]);
   });
@@ -42,7 +42,7 @@ describe("theme picker", () => {
       name: "bar",
     };
 
-    const themePath = join(process.env.PI_CODING_AGENT_DIR!, "themes", "foo.json");
+    const themePath = join(process.env.MSA_CODING_AGENT_DIR!, "themes", "foo.json");
     writeFileSync(themePath, JSON.stringify(customTheme, null, 2));
 
     expect(getAvailableThemes()).toContain("bar");

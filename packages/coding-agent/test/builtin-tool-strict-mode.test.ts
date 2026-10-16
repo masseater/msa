@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { getModel } from "@earendil-works/pi-ai/compat";
+import { getModel } from "@msa/ai/compat";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
@@ -18,9 +18,9 @@ describe("strict built-in tools", () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it.each([undefined, "0", "1"])(
-    "prefers strict sampling with PI_EXPERIMENTAL=%s",
+    "prefers strict sampling with MSA_EXPERIMENTAL=%s",
     (experimental) => {
-      vi.stubEnv("PI_EXPERIMENTAL", experimental);
+      vi.stubEnv("MSA_EXPERIMENTAL", experimental);
       const definitions = createAllToolDefinitions(process.cwd());
       const tools = createAllTools(process.cwd());
       for (const name of strictToolNames) {
@@ -57,7 +57,7 @@ describe("strict built-in tools", () => {
   it.each([{ activeTools: [] }, { activeTools: ["read"] }, { activeTools: [...strictToolNames] }])(
     "allows extensions to re-register tools without strict sampling: $activeTools",
     async ({ activeTools }) => {
-      const cwd = mkdtempSync(join(tmpdir(), "pi-non-strict-tools-"));
+      const cwd = mkdtempSync(join(tmpdir(), "msa-non-strict-tools-"));
       const agentDir = join(cwd, "agent");
       const settingsManager = SettingsManager.inMemory({ defaultTools: activeTools });
       const resourceLoader = new DefaultResourceLoader({
@@ -69,13 +69,13 @@ describe("strict built-in tools", () => {
         noPromptTemplates: true,
         noThemes: true,
         extensionFactories: [
-          (pi) => {
-            pi.on("session_start", () => {
+          (msa) => {
+            msa.on("session_start", () => {
               const definitions = createAllToolDefinitions(cwd);
               for (const name of strictToolNames) {
-                pi.registerTool({ ...definitions[name], constrainedSampling: false });
+                msa.registerTool({ ...definitions[name], constrainedSampling: false });
               }
-              pi.setActiveTools(activeTools);
+              msa.setActiveTools(activeTools);
             });
           },
         ],

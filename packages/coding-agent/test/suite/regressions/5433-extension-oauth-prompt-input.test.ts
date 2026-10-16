@@ -1,4 +1,4 @@
-import { setKeybindings, type TUI } from "@earendil-works/pi-tui";
+import { setKeybindings, type TUI } from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { KeybindingsManager } from "../../../src/core/keybindings.ts";
@@ -80,13 +80,13 @@ describe("LoginDialogComponent OAuth prompts", () => {
   test("preserves neutral information and links when showing a prompt", () => {
     const dialog = createDialog();
 
-    dialog.showInfo("Configure credentials outside pi.", [
+    dialog.showInfo("Configure credentials outside msa.", [
       { label: "Provider documentation", url: "https://example.invalid/docs" },
     ]);
     dialog.showPrompt("Press Enter to continue:");
 
     const output = renderDialog(dialog).join("\n");
-    expect(output).toContain("Configure credentials outside pi.");
+    expect(output).toContain("Configure credentials outside msa.");
     expect(output).toContain("Provider documentation: https://example.invalid/docs");
     expect(output).toContain("Press Enter to continue:");
   });

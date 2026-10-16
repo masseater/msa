@@ -1,3 +1,5 @@
+import { createModels } from "@msa/ai/models";
+import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
 /**
  * Scheduler fan-out benchmark. One model-issued tool makes `calls` parallel nested calls of a tool that returns at
  * once, on in-memory storage, so the time is the Harness's and the scheduler's own. Quadratic work shows as four times
@@ -5,14 +7,7 @@
  *
  *   node --conditions=source --experimental-strip-types test/scheduler-fanout-bench.ts [calls...]
  */
-import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import {
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxText,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
+import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 import { Type } from "typebox";
 
 import {

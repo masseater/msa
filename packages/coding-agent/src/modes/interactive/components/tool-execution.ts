@@ -9,7 +9,7 @@ import {
   Text,
   type TUI,
   type TuiMouseEvent,
-} from "@earendil-works/pi-tui";
+} from "@msa/tui";
 
 import type {
   ToolDefinition,

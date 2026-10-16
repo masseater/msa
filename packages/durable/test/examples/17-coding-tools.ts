@@ -7,15 +7,10 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { ToolResultMessage } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
-import {
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxText,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
+import type { ToolResultMessage } from "@msa/ai";
+import { createModels } from "@msa/ai/models";
+import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
 import {
@@ -31,7 +26,7 @@ import { openNodeJsonlStorage } from "../../src/storage/jsonl/node.ts";
 import { type BashToolInput, CodingTools } from "../../src/tools/index.ts";
 
 const context = BACKGROUND_CONTEXT;
-const directory = await mkdtemp(join(tmpdir(), "pi-durable-example-"));
+const directory = await mkdtemp(join(tmpdir(), "msa-durable-example-"));
 await writeFile(join(directory, "notes.txt"), "hello world\n");
 
 // The faux provider plays the model: four tool-calling answers, then a final answer.
@@ -84,7 +79,7 @@ const root = await harness.root(context, {
   agent: { model: { provider: "faux", modelId: "faux-1" }, cwd: directory },
 });
 
-// Each tool call runs as a durable pi.tool task owned by the generation, which waits for them and continues the run with the next generation.
+// Each tool call runs as a durable msa.tool task owned by the generation, which waits for them and continues the run with the next generation.
 const settled = await (
   await root.submit({ type: "input", content: "Greet durable instead." }, context)
 ).wait(context);

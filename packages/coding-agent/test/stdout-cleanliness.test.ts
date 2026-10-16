@@ -28,7 +28,7 @@ afterEach(() => {
 });
 
 function createTempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "pi-stdout-clean-"));
+  const dir = mkdtempSync(join(tmpdir(), "msa-stdout-clean-"));
   tempDirs.push(dir);
   return dir;
 }
@@ -39,7 +39,7 @@ async function runCli(
   const tempRoot = createTempDir();
   const agentDir = join(tempRoot, "agent");
   const projectDir = join(tempRoot, "project");
-  const projectConfigDir = join(projectDir, ".pi");
+  const projectConfigDir = join(projectDir, ".msa");
   mkdirSync(agentDir, { recursive: true });
   mkdirSync(projectConfigDir, { recursive: true });
 

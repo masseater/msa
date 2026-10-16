@@ -2,7 +2,7 @@ import { spawn } from "child_process";
 import { createInterface } from "node:readline";
 import path from "path";
 
-import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AgentTool } from "@msa/agent-core";
 import { type Static, Type } from "typebox";
 
 import { ensureTool } from "../../utils/tools-manager.ts";

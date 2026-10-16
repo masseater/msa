@@ -28,7 +28,7 @@ function setStdoutIsTTY(value: boolean): void {
 }
 
 function createTempFile(): string {
-  const dir = mkdtempSync(join(tmpdir(), "pi-format-resume-command-"));
+  const dir = mkdtempSync(join(tmpdir(), "msa-format-resume-command-"));
   tempDirs.push(dir);
   const file = join(dir, "session.jsonl");
   writeFileSync(file, "\n");
@@ -46,7 +46,7 @@ function createSessionManager(options: {
     isPersisted: () => options.persisted ?? true,
     getSessionFile: () => options.sessionFile,
     getSessionId: () => options.sessionId ?? "0197f6e4-4cf9-7f44-a2d8-f8f7f49ee9d3",
-    getSessionDir: () => options.sessionDir ?? "/tmp/pi-sessions",
+    getSessionDir: () => options.sessionDir ?? "/tmp/msa-sessions",
     usesDefaultSessionDir: () => options.usesDefaultSessionDir ?? true,
   } as unknown as SessionManager;
 }
@@ -66,12 +66,12 @@ describe("formatResumeCommand", () => {
     const sessionManager = createSessionManager({
       sessionFile,
       sessionId: "test-session",
-      sessionDir: "/tmp/custom-pi-sessions",
+      sessionDir: "/tmp/custom-msa-sessions",
       usesDefaultSessionDir: false,
     });
 
     expect(formatResumeCommand(sessionManager)).toBe(
-      `${APP_NAME} --session-dir /tmp/custom-pi-sessions --session test-session`,
+      `${APP_NAME} --session-dir /tmp/custom-msa-sessions --session test-session`,
     );
   });
 
@@ -81,12 +81,12 @@ describe("formatResumeCommand", () => {
     const sessionManager = createSessionManager({
       sessionFile,
       sessionId: "test-session",
-      sessionDir: "/tmp/custom pi sessions",
+      sessionDir: "/tmp/custom msa sessions",
       usesDefaultSessionDir: false,
     });
 
     expect(formatResumeCommand(sessionManager)).toBe(
-      `${APP_NAME} --session-dir '/tmp/custom pi sessions' --session test-session`,
+      `${APP_NAME} --session-dir '/tmp/custom msa sessions' --session test-session`,
     );
   });
 
@@ -96,12 +96,12 @@ describe("formatResumeCommand", () => {
     const sessionManager = createSessionManager({
       sessionFile,
       sessionId: "test-session",
-      sessionDir: "/tmp/custom pi's sessions",
+      sessionDir: "/tmp/custom msa's sessions",
       usesDefaultSessionDir: false,
     });
 
     expect(formatResumeCommand(sessionManager)).toBe(
-      `${APP_NAME} --session-dir '/tmp/custom pi'\\''s sessions' --session test-session`,
+      `${APP_NAME} --session-dir '/tmp/custom msa'\\''s sessions' --session test-session`,
     );
   });
 
@@ -123,7 +123,7 @@ describe("formatResumeCommand", () => {
 
   it("returns undefined when the session file is missing", () => {
     setStdoutIsTTY(true);
-    const sessionManager = createSessionManager({ sessionFile: "/tmp/pi-missing-session.jsonl" });
+    const sessionManager = createSessionManager({ sessionFile: "/tmp/msa-missing-session.jsonl" });
 
     expect(formatResumeCommand(sessionManager)).toBeUndefined();
   });

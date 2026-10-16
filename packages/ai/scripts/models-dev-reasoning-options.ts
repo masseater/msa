@@ -20,8 +20,8 @@ const THINKING_LEVELS: readonly ThinkingLevel[] = [
 ];
 
 /**
- * Converts models.dev verified effort values into Pi's selectable thinking levels.
- * Values without a Pi equivalent (`default` and JSON `null`) are intentionally
+ * Converts models.dev verified effort values into msa's selectable thinking levels.
+ * Values without a msa equivalent (`default` and JSON `null`) are intentionally
  * omitted.
  */
 export function getEffortThinkingLevelMap(

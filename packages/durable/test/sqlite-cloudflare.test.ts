@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 
-import { registerStorageConformance } from "@earendil-works/pi-durable/testing";
+import { registerStorageConformance } from "@msa/durable/testing";
 import { describe, expect, it } from "vitest";
 
 import {

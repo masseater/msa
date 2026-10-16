@@ -1,14 +1,14 @@
 /**
- * Syncs pi theme with macOS system appearance (dark/light mode).
+ * Syncs msa theme with macOS system appearance (dark/light mode).
  *
  * Usage:
- *   pi -e examples/extensions/mac-system-theme.ts
+ *   msa -e examples/extensions/mac-system-theme.ts
  */
 
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@msa/coding-agent";
 
 const execAsync = promisify(exec);
 
@@ -23,10 +23,10 @@ async function isDarkMode(): Promise<boolean> {
   }
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (msa: ExtensionAPI) {
   let intervalId: ReturnType<typeof setInterval> | null = null;
 
-  pi.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", async (_event, ctx) => {
     let currentTheme = (await isDarkMode()) ? "dark" : "light";
     ctx.ui.setTheme(currentTheme);
 
@@ -39,7 +39,7 @@ export default function (pi: ExtensionAPI) {
     }, 2000);
   });
 
-  pi.on("session_shutdown", () => {
+  msa.on("session_shutdown", () => {
     if (intervalId) {
       clearInterval(intervalId);
       intervalId = null;

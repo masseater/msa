@@ -26,7 +26,6 @@ import type {
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { providerHeadersToRecord } from "../utils/headers.ts";
-import { getPiUserAgent } from "../utils/pi-user-agent.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { getSystemMessageText } from "../utils/text.ts";
@@ -35,6 +34,7 @@ import {
   getCurrentTools,
   getInitialSystemMessage,
 } from "../utils/transcript.ts";
+import { getMsaUserAgent } from "../utils/user-agent.ts";
 import type { GoogleApiThinkingLevel, ResolvedGoogleThinkingLevel } from "./google-shared.ts";
 import {
   convertMessages,
@@ -426,7 +426,7 @@ function buildHttpOptions(
   }
 
   const headers = providerHeadersToRecord({
-    "User-Agent": getPiUserAgent(),
+    "User-Agent": getMsaUserAgent(),
     ...model.headers,
     ...optionsHeaders,
   });

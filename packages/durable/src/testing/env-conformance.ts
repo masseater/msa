@@ -1,5 +1,5 @@
-import type { Context } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
+import type { Context } from "@msa/chord";
+import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 
 import {
   type ExecutionEnv,
@@ -354,19 +354,19 @@ export function createEnvConformance(
     }),
 
     watchCase("watch keeps watching a path whose parent is renamed and recreated", async (env) => {
-      getOrThrow(await env.writeFile("proj/.pi/skills/x.md", "x", context));
+      getOrThrow(await env.writeFile("proj/.msa/skills/x.md", "x", context));
       await watching(
         env,
-        [{ path: "proj/.pi/skills", recursive: true }],
+        [{ path: "proj/.msa/skills", recursive: true }],
         async ({ expectChange }) => {
-          await expectChange("proj/.pi/skills", async () => {
-            getOrThrow(await env.renameFile("proj/.pi", "proj/old", context));
+          await expectChange("proj/.msa/skills", async () => {
+            getOrThrow(await env.renameFile("proj/.msa", "proj/old", context));
           });
-          await expectChange("proj/.pi/skills/y.md", async () => {
-            getOrThrow(await env.writeFile("proj/.pi/skills/y.md", "y", context));
+          await expectChange("proj/.msa/skills/y.md", async () => {
+            getOrThrow(await env.writeFile("proj/.msa/skills/y.md", "y", context));
           });
-          await expectChange("proj/.pi/skills/y.md", async () => {
-            getOrThrow(await env.writeFile("proj/.pi/skills/y.md", "yy", context));
+          await expectChange("proj/.msa/skills/y.md", async () => {
+            getOrThrow(await env.writeFile("proj/.msa/skills/y.md", "yy", context));
           });
         },
       );
@@ -479,7 +479,7 @@ export function createEnvConformance(
 
     createCase("argv exec reports missing programs and empty argv as spawn errors", async (env) => {
       assert.strictEqual(
-        errorCode(await env.exec(["pi-durable-conformance-missing-program"], undefined, context)),
+        errorCode(await env.exec(["msa-durable-conformance-missing-program"], undefined, context)),
         "spawn_error",
       );
       assert.strictEqual(errorCode(await env.exec([], undefined, context)), "spawn_error");

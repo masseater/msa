@@ -6,8 +6,8 @@
 
 import { type ChildProcess, spawn } from "node:child_process";
 
-import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { ImageContent } from "@earendil-works/pi-ai";
+import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
+import type { ImageContent } from "@msa/ai";
 
 import type {
   PromptDisposition,

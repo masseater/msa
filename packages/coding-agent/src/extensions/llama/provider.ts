@@ -9,10 +9,10 @@ import {
   type Provider,
   type ProviderStreamOptions,
   type RefreshModelsContext,
-} from "@earendil-works/pi-ai";
-import { llamaCppClassifyApi } from "@earendil-works/pi-ai/api/llama-cpp-classify.lazy";
-import { typesafeSystemOneApi } from "@earendil-works/pi-ai/api/typesafe-system-one.lazy";
-import { stream, streamSimple } from "@earendil-works/pi-ai/compat";
+} from "@msa/ai";
+import { llamaCppClassifyApi } from "@msa/ai/api/llama-cpp-classify.lazy";
+import { typesafeSystemOneApi } from "@msa/ai/api/typesafe-system-one.lazy";
+import { stream, streamSimple } from "@msa/ai/compat";
 
 import {
   LlamaClient,
@@ -108,7 +108,7 @@ function isChatModel(model: LlamaModelInfo): boolean {
  * System One endpoint (`/v1/systemone`). Chat models fall back to `llama-cpp-classify`, which reads
  * answers from next-token label probabilities.
  */
-function toPiClassifierModel(
+function toMsaClassifierModel(
   model: LlamaModelInfo,
   serverUrl: string,
   cachedContextWindow?: number,
@@ -134,7 +134,7 @@ function isLlamaClassifierModel(model: AnyModel): model is ClassifierModel<Llama
   );
 }
 
-function toPiModel(
+function toMsaModel(
   model: LlamaModelInfo,
   serverUrl: string,
   props?: LlamaServerProps,
@@ -198,8 +198,8 @@ export function createLlamaProvider(): LlamaProviderController {
     const selectable = catalog.filter((model) =>
       modelIsSelectable(model, options.routerAutoload === true),
     );
-    models = selectable.filter(isChatModel).map((model) => toPiModel(model, serverUrl));
-    classifiers = selectable.map((model) => toPiClassifierModel(model, serverUrl));
+    models = selectable.filter(isChatModel).map((model) => toMsaModel(model, serverUrl));
+    classifiers = selectable.map((model) => toMsaClassifierModel(model, serverUrl));
   };
 
   const provider: Provider<"openai-completions"> = {
@@ -297,13 +297,13 @@ export function createLlamaProvider(): LlamaProviderController {
         selectable.filter(isChatModel).map(async (model) => {
           const cachedContextWindow = cachedContextWindows.get(model.id);
           if (model.status.value !== "loaded")
-            return toPiModel(model, serverUrl, undefined, cachedContextWindow);
+            return toMsaModel(model, serverUrl, undefined, cachedContextWindow);
           const props = await client.props({ model: model.id, signal: context.signal });
-          return toPiModel(model, serverUrl, props, cachedContextWindow);
+          return toMsaModel(model, serverUrl, props, cachedContextWindow);
         }),
       );
       const refreshedClassifiers = selectable.map((model) =>
-        toPiClassifierModel(model, serverUrl, cachedContextWindows.get(model.id)),
+        toMsaClassifierModel(model, serverUrl, cachedContextWindows.get(model.id)),
       );
       if (context.signal.aborted) return;
       await context.publish({

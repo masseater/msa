@@ -1,5 +1,5 @@
-import type { Api, Model, ModelsRefreshResult } from "@earendil-works/pi-ai";
-import { setKeybindings, type TUI } from "@earendil-works/pi-tui";
+import type { Api, Model, ModelsRefreshResult } from "@msa/ai";
+import { setKeybindings, type TUI } from "@msa/tui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { KeybindingsManager } from "../../../src/core/keybindings.ts";

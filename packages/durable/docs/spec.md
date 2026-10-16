@@ -1,18 +1,9 @@
 # Durable specification
 
-`@earendil-works/pi-durable` is a durable, extensible agent harness. This document is normative.
+`@msa/durable` is a durable, extensible agent harness. This document is normative.
 It uses existing package types as follows:
 
 ```ts
-import type {
-  AttachedReplicatedState,
-  Context,
-  Draft,
-  JsonRepresentation,
-  JsonValue,
-  ReplicatedState,
-} from "@earendil-works/chord";
-import type { Op } from "@earendil-works/chord/delta";
 import type {
   AssistantMessage,
   CacheRetention,
@@ -27,14 +18,23 @@ import type {
   ToolResultMessage,
   Transport,
   UserMessage,
-} from "@earendil-works/pi-ai";
-import type { ExecutionEnv } from "@earendil-works/pi-durable/env";
+} from "@msa/ai";
+import type {
+  AttachedReplicatedState,
+  Context,
+  Draft,
+  JsonRepresentation,
+  JsonValue,
+  ReplicatedState,
+} from "@msa/chord";
+import type { Op } from "@msa/chord/delta";
+import type { ExecutionEnv } from "@msa/durable/env";
 
 type JsonObject = { [key: string]: JsonValue };
 type TaskOutcomeError = { message: string; detail?: JsonValue };
 ```
 
-Durable targets the transcript `SystemMessage` contract from pi-ai PR
+Durable targets the transcript `SystemMessage` contract from msa-ai PR
 [#9548](https://github.com/earendil-works/pi/pull/9548). `Message` includes that
 type once the PR lands.
 
@@ -118,7 +118,7 @@ type ConversationRecord = {
 };
 ```
 
-The referenced pi-ai member is:
+The referenced msa-ai member is:
 
 ```ts
 interface SystemMessage {
@@ -131,7 +131,7 @@ interface SystemMessage {
 }
 ```
 
-In pi-ai, `content` is the base prompt on the leading message and additional
+In msa-ai, `content` is the base prompt on the leading message and additional
 instruction text on later messages. `sections` is an ordered named patch: a
 string adds or replaces a section, while `null` removes it. `toolsRemoved` is
 applied before `toolsAdded` within one message. Replaying every system message
@@ -282,10 +282,10 @@ Context derivation:
 9. Exclude model-less entries and assistant messages with `aborted`, `error`, or
    `deferred` stop reasons from future provider requests.
 10. Move the first system message to the front when only user messages
-    precede it, or when it is the baseline's: the first `pi.system` entry after
+    precede it, or when it is the baseline's: the first `msa.system` entry after
     `H`, unless an edit targets it. Generation writes it with every section and
     tool in effect before the first request after a compaction or reset, and
-    omits the retained `pi.system` entries. Without `H`, the first `pi.system`
+    omits the retained `msa.system` entries. Without `H`, the first `msa.system`
     entry is the baseline unless an earlier entry carries a system message, in
     its messages or an edit's replacement, even one an edit omits later: only
     then did generation write it with every section and tool in effect, before
@@ -359,7 +359,7 @@ type AnyTask = {
 };
 
 type HarnessOptions<Tool extends ToolRegistration = ToolRegistration> = {
-  readonly models: Models; // the pi-ai Models interface
+  readonly models: Models; // the msa-ai Models interface
   readonly registry: RegistryReader<Tool>; // section 7.1
   readonly settings?: HarnessSettings;
   /** Builds a conversation's environment. Never called on the Session line; may be async. */
@@ -379,7 +379,7 @@ type HarnessOptions<Tool extends ToolRegistration = ToolRegistration> = {
   readonly onReport?: (error: unknown) => void;
 };
 
-/** Curated pi-ai request options; absent fields use pi-ai defaults. */
+/** Curated msa-ai request options; absent fields use msa-ai defaults. */
 type ConversationStreamOptions = {
   transport?: Transport;
   timeoutMs?: number;
@@ -392,7 +392,7 @@ type ConversationStreamOptions = {
   deferred?: boolean | { window?: "15m" | "1h" | "24h" };
 };
 
-/** Durable generation attempt retries; the JSON shape of pi-ai `RetryPolicy`. */
+/** Durable generation attempt retries; the JSON shape of msa-ai `RetryPolicy`. */
 type ConversationRetryPolicy = {
   enabled: boolean;
   maxRetries: number;
@@ -623,7 +623,7 @@ interface Harness extends Session {
   abortTask(id: TaskId, context: Context): Promise<"marked" | "terminal">;
   waitForTask<R>(id: TaskId<R>, context: Context): Promise<SettledTask<R>>;
   waitForIdle(context: Context): Promise<void>;
-  /** Session total of every conversation's `pi.usage` (section 8.6). */
+  /** Session total of every conversation's `msa.usage` (section 8.6). */
   usage(context: Context): Promise<UsageState>;
   /** Live tasks as a structural view (section 9.5). */
   taskGraph(context: Context): Promise<AttachedReplicatedState<TaskGraph>>;
@@ -694,17 +694,17 @@ creation hook in the same commit, whether through the conveniences or through
 raw `tx.createConversation()` and `tx.forkConversation()`, for example inside a
 tool commit. It runs inside `tx.createConversation()` and
 `tx.forkConversation()`, before they return, so a `configure()` later in the
-same callback overrides its copy. It creates empty `pi.live`, `pi.inbox`, and
-`pi.usage`, creates `pi.provider` with a fresh provider-facing UUIDv7, and handles
-`pi.agent`:
+same callback overrides its copy. It creates empty `msa.live`, `msa.inbox`, and
+`msa.usage`, creates `msa.provider` with a fresh provider-facing UUIDv7, and handles
+`msa.agent`:
 
-- A fork keeps the `asOf` copy of its parent's `pi.agent` (section 3.7),
+- A fork keeps the `asOf` copy of its parent's `msa.agent` (section 3.7),
   whatever its ownership.
-- A new task-owned conversation gets a copy of the stored `pi.agent` of the
+- A new task-owned conversation gets a copy of the stored `msa.agent` of the
   owner task's conversation, every field, `instructions` included. A later
   change to the owner does not reach the child. Fields the owner leaves unset
   stay unset and follow the host.
-- A new ownerless conversation gets an empty `pi.agent`, `{}`.
+- A new ownerless conversation gets an empty `msa.agent`, `{}`.
 
 `HarnessOptions.conversationCreated`, if given, then runs in the same commit
 with the new record, for every creation path, so the host can create the
@@ -731,13 +731,13 @@ The built-in agent document is final at version 1:
 
 | field              | value                              |
 | ------------------ | ---------------------------------- |
-| kind               | `pi.agent`                         |
+| kind               | `msa.agent`                        |
 | version            | `1` (no migration)                 |
 | scope/history/fork | conversation, `rewindable`, `asOf` |
 | schema             | `AgentState`                       |
 | `initial()`        | `{}`                               |
 | checkpoint         | complete base on every change      |
-| view mount         | `docs["pi.agent"]`                 |
+| view mount         | `docs["msa.agent"]`                |
 
 It stores only what someone chose for the conversation: extension and tool
 names, never code, and no prompt text other than `instructions`. Code comes
@@ -779,19 +779,19 @@ The built-in provider document is final at version 1:
 
 | field              | value                             |
 | ------------------ | --------------------------------- |
-| kind               | `pi.provider`                     |
+| kind               | `msa.provider`                    |
 | version            | `1` (no migration)                |
 | scope/history/fork | conversation, `latest`, `initial` |
 | schema             | `{ sessionId: string }`           |
 | `initial()`        | `{ sessionId: uuidv7() }`         |
 | checkpoint         | complete base on every change     |
-| view mount         | `docs["pi.provider"]`             |
+| view mount         | `docs["msa.provider"]`            |
 
 The UUID is a provider-facing conversation identity, not the numeric Durable
 `ConversationId` and not an enclosing application's Session ID. Every new,
 task-owned, raw-created, and forked conversation receives its own UUID in its
 creating commit; a fork never copies its parent's UUID. Generation requests and
-compaction summarization pass it to pi-ai as `options.sessionId`. Reset,
+compaction summarization pass it to msa-ai as `options.sessionId`. Reset,
 compaction, model changes, and reopen do not change it. A legacy conversation without the document creates and persists it
 on the Session line before its first generation or compaction provider request.
 Concurrent callers therefore observe one winner. Provider behavior still
@@ -907,7 +907,7 @@ so `Conversation.abort()` cancels it and idle waits include it. It does not take
 run control, so it does not make the conversation busy: the conversation keeps
 working while it summarizes, and its summary is placed through a write
 submission, at once when idle, otherwise at the next boundary (section 8.7). `reset()` durably admits a write submission of a
-`pi.reset` entry (section 8.1) with `head: "self"`, carrying the handoff text as
+`msa.reset` entry (section 8.1) with `head: "self"`, carrying the handoff text as
 a user message when given, and then resolves; while busy, placement follows
 section 6 and may occur later. Observe its placement through the conversation
 watch. An idle wait does not guarantee placement of queued passive writes.
@@ -1351,7 +1351,7 @@ interface Tx {
   latestHeadMarker(
     conversationId: ConversationId,
   ): Promise<(EntryRecord & { readonly head: EntryId }) | undefined>;
-  /** Record a queued submission's placement at `entry`: an input becomes `placed`, a write `done` (section 6). The caller appends the entry and edits `pi.inbox` and `pi.live`. */
+  /** Record a queued submission's placement at `entry`: an input becomes `placed`, a write `done` (section 6). The caller appends the entry and edits `msa.inbox` and `msa.live`. */
   placeSubmission(id: SubmissionId, entry: EntryId): void;
 
   doc<T extends JsonObject>(token: SessionDocToken<T>): Promise<Draft<T>>;
@@ -2297,18 +2297,18 @@ The scheduler knows nothing about runs or task kinds. The Harness, which owns
 submissions, run control, and the built-in tasks, gives it one hook that the
 scheduler calls in the commit that makes an outcome it wrote itself (`faulted`
 and `orphaned`) terminal, which is the final commit after a hold. The hook ignores tasks whose kind is not a built-in
-run, tool, or compaction kind, so it never creates `pi.live` elsewhere. It settles the run when
-`pi.live.run` names the task (section 8): a committed generation partial becomes
-an aborted `pi.assistant` entry, exactly as the generation abort handler converts
-it, so the transcript keeps what the model produced and `pi.usage` counts its
+run, tool, or compaction kind, so it never creates `msa.live` elsewhere. It settles the run when
+`msa.live.run` names the task (section 8): a committed generation partial becomes
+an aborted `msa.assistant` entry, exactly as the generation abort handler converts
+it, so the transcript keeps what the model produced and `msa.usage` counts its
 spend (the scheduler's commit has no task scope, so the entry has no
 `byTaskId`); its inputs become `unanswered` with reason `faulted` (detail: the error
 message) or the blocked reason; and `run`, `generation`, and `tools` are
 removed. Faults come from task bugs or malformed provider data, such as a
 non-JSON value in a response. A storage failure fails the Session and writes no
-outcome (section 10.1). For a `pi.tool` task it marks the task's tool slot `done`
+outcome (section 10.1). For a `msa.tool` task it marks the task's tool slot `done`
 without an entry; the run continues, and context derivation synthesizes the
-missing result (section 2.1). For a `pi.compaction` task it removes the task's
+missing result (section 2.1). For a `msa.compaction` task it removes the task's
 compaction status (section 8.7). Outcomes a task commits for itself do their own settlement.
 The Harness also supplies the per-phase agent resolution behind `runtime.hooks`
 and `runtime.agent()` (section 7.1); the scheduler only passes each phase's
@@ -2372,7 +2372,7 @@ its ordinary owned work drained:
    record's terminal state, task-document retirement, and task waiters are
    deferred to the final commit. A scheduler-written outcome writes only the
    record at hold; its Harness cleanup (section 5.4) runs in the final commit,
-   so a faulted run task keeps `pi.live.run` until its tools drained.
+   so a faulted run task keeps `msa.live.run` until its tools drained.
 5. Waiters, idle waits, inspection, and ordinary traversal see a `completing`
    task as live until its final commit.
 
@@ -2448,21 +2448,21 @@ type InboxState = { items: InboxItem[] };
 
 | field              | value                                         |
 | ------------------ | --------------------------------------------- |
-| kind               | `pi.inbox`                                    |
+| kind               | `msa.inbox`                                   |
 | version            | `1`                                           |
 | scope/history/fork | conversation, `latest`, `initial`             |
 | `initial()`        | `{ items: [] }`                               |
 | checkpoint         | complete base whenever `items` is empty       |
-| view mount         | `docs["pi.inbox"]`                            |
+| view mount         | `docs["msa.inbox"]`                           |
 | created            | with every Harness conversation (section 2.2) |
 
 Items are in ID order. A queued input stores its content and its entry's kind
 and data; its entry gets the Harness clock's timestamp at placement.
 
 An input is placed as one entry whose `model` is the user message of its
-`content`: a `pi.user` entry, or, with `entry: { kind, data }`, an entry of that
+`content`: a `msa.user` entry, or, with `entry: { kind, data }`, an entry of that
 kind carrying that data. Only `kind` and `data` are taken from `entry`; admission
-rejects a kind that is not a non-empty string or starts with `pi.`. Nothing in
+rejects a kind that is not a non-empty string or starts with `msa.`. Nothing in
 the Harness reads input entries by kind; context, compaction, events, and run
 accounting go by `model` and the submission records.
 
@@ -2476,14 +2476,14 @@ starts, so a display-only write queues behind a queued reset and is placed after
 it at the same boundary. Queued submissions belong to
 their conversation, so a fork starts with an empty inbox.
 
-Run control lives in the built-in live document `pi.live` (section 8). Its
+Run control lives in the built-in live document `msa.live` (section 8). Its
 optional `run` value names the task currently responsible for the run and its
 placed input-submission IDs. `run !== undefined` defines `busy`; get-or-create
 of the idle document does not. The value remains while generation, tools, and
 tools hand work to one another: `taskId` names the generation that settles the
 inputs, including while its tool round runs, then the next
 generation. Tool tasks never own the run; the current round's tool tasks are
-listed in `pi.live.tools`. The ID list is mutable state because a
+listed in `msa.live.tools`. The ID list is mutable state because a
 boundary adds placed steering inputs to an active run; every terminal path
 settles exactly the listed inputs.
 
@@ -2572,7 +2572,7 @@ Only successful run ends apply the final boundary: an answer, `terminate`, or
 `handoff`. Failure, a run task's abort handler, fault, and orphan settle the
 run's inputs `unanswered` and leave the inbox alone (`Conversation.abort()`
 separately withdraws queued user items); the queued items stay visible in
-`pi.inbox` until the next input or queued write runs a boundary, or their withdrawal.
+`msa.inbox` until the next input or queued write runs a boundary, or their withdrawal.
 
 Selected and stale items are removed positionally while retained item order is
 preserved. Chord's Astra operation generator must express scattered removals
@@ -2588,7 +2588,7 @@ extensions. An extension is a named bundle of tools, prompt sections, hooks,
 tool and section wrappers, and task definitions. The registry is process-local,
 may outlive a Harness, and is not persisted; durable state stays in
 conversations, entries, tasks, and documents. A conversation selects extensions
-by name in its `pi.agent` document (section 2.2).
+by name in its `msa.agent` document (section 2.2).
 
 ```ts
 type DocumentReader = Pick<Session, "snapshot" | "snapshotAsOf">;
@@ -2687,7 +2687,7 @@ The `Tool` parameter lets an application attach metadata, such as prompt
 snippets, to its tools and read it typed in its section renderers. The Harness
 only relies on `ToolRegistration`; its own surfaces, such as `runtime.agent()`,
 use the default. Metadata fields must be optional: the registry does not check
-them, and a default-typed extension may be installed. Pi-ai declarations derived from a tool keep only pi-ai `Tool`
+them, and a default-typed extension may be installed. msa-ai declarations derived from a tool keep only msa-ai `Tool`
 fields (`toToolDeclaration`), so application metadata never enters the
 transcript.
 
@@ -2799,7 +2799,7 @@ still-running call fail with an ordinary error result. Extensions that need
 graceful disposal manage their resources' lifetime themselves, for example by
 reference counting.
 
-**Resolution.** A conversation's `Agent` is resolved from its stored `pi.agent`
+**Resolution.** A conversation's `Agent` is resolved from its stored `msa.agent`
 (absent: every field unset), a registry snapshot, and the resolved settings:
 
 ```text
@@ -2863,7 +2863,7 @@ await conversation.configure({ extensions: { add: [Venv] } }, context);
 | reader                                             | resolves                                                                              | when                                                                                                                                                                                                                                                     |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | generation `prepare`                               | agent (tools, sections, model, thinking level), stream options, compaction thresholds | once per request; model, stream options, and offered tools are fixed in the request checkpoint (section 8.3)                                                                                                                                             |
-| every task phase                                   | extension selection for hooks; `runtime.agent()`                                      | at most once per phase handler, at its first hook dispatch or `agent()` call, from that phase's snapshot and the committed `pi.agent`, off the Session line, with the invocation's context; fixed for the rest of the phase                              |
+| every task phase                                   | extension selection for hooks; `runtime.agent()`                                      | at most once per phase handler, at its first hook dispatch or `agent()` call, from that phase's snapshot and the committed `msa.agent`, off the Session line, with the invocation's context; fixed for the rest of the phase                             |
 | tool task                                          | the implementation of an accepted call                                                | at `call` and `execute`: the name among the phase agent's `tools`, the current selection after the tools filter; no such tool, for example one removed after preparation: `tool_unavailable`. Replay policy on reopen uses the same lookup (section 7.3) |
 | generation, when a tool round starts               | tool execution mode                                                                   | once per round (section 8.3)                                                                                                                                                                                                                             |
 | generation, compaction                             | retry policy                                                                          | at each attempt's classification                                                                                                                                                                                                                         |
@@ -3044,7 +3044,7 @@ type ToolExecutionResult<TDetails extends JsonValue = JsonValue> = {
   readonly isError?: boolean;
   readonly details?: TDetails;
   readonly diagnostics?: readonly ToolDiagnostic[];
-  /** Spend of the execution itself, such as a model call; stored on the result and in `pi.usage.tools`. */
+  /** Spend of the execution itself, such as a model call; stored on the result and in `msa.usage.tools`. */
   readonly usage?: Usage;
   readonly control?: ToolControl;
 };
@@ -3152,10 +3152,10 @@ and `retain: "head"`. Omitted `executionMode` follows the settings'
 (section 8.3).
 
 A running tool calls another tool with `api.executeTool()`, as a codemode
-script or an MCP bridge does. The nested call is its own `pi.tool` task, owned
+script or an MCP bridge does. The nested call is its own `msa.tool` task, owned
 by the calling tool's task, so it has its own task ID for idempotence and
 ownership, runs the whole tool pipeline (section 8.4) including the `ToolTask`
-hooks, which see `call.parent`, and reports progress in `pi.live.nestedTools`
+hooks, which see `call.parent`, and reports progress in `msa.live.nestedTools`
 (section 8.2). Its result returns to the caller as a `NestedToolExecutionResult` and
 never enters the transcript; the model sees only what the caller puts in its
 own result. Its tool resolves among the agent's `callable` tools: the enabled
@@ -3169,7 +3169,7 @@ The nested call's key names it within its caller; the nested call ID is
 invocation's nested calls, `1`, `2`, ... An explicit `key` must be non-empty,
 without `/`, not `__proto__`, and not a positive integer, so call IDs never
 collide. One commit creates the nested task, its slot, and its member of
-`NestedCallDoc` (`pi.tool.nested-call`), a task-scoped document family of the
+`NestedCallDoc` (`msa.tool.nested-call`), a task-scoped document family of the
 caller keyed by the call's key, holding `{ taskId }`; it retires with the
 caller. One document per call, so admitting a call rewrites no other call's. A caller that is not replay-safe creates its nested
 calls, and the child tasks it creates through `api.createTask()` unless the
@@ -3218,7 +3218,7 @@ once `execute()` has returned, and rejects when the caller is aborted or the
 Harness closes; cancelling its `context` stops only the wait. An abort that
 arrives during this cleanup still aborts the caller, whose finished result is
 then replaced by the `aborted` one. The caller's result message lists none
-of its nested calls (no pi-ai `nestedCalls`): their task records keep every
+of its nested calls (no msa-ai `nestedCalls`): their task records keep every
 call and its arguments, and a tool that wants a list in its result, as code
 mode does, writes one into its own `details`. A crash between the
 caller's return and its result commit leaves it in `execute`: a replay-safe
@@ -3267,11 +3267,11 @@ widen what `tools` enables.
 A `deferred` tool is not offered to the model until it is loaded: `modelTools`
 must name it, in its array or its `add`. Other tools can call it any time. A
 tool loads deferred tools with `control.addTools`, which writes their names to
-`modelTools` (section 8.5); since `pi.agent` is rewindable and forks as of the
+`modelTools` (section 8.5); since `msa.agent` is rewindable and forks as of the
 fork's entry, loaded tools are per branch, and a baseline after a head marker
 declares them, built from the resolved tools. Loaded tools follow the other
 tools in load order, so a load appends declarations to the transcript and the
-cached prefix holds. `@earendil-works/pi-durable/tool-search` provides the
+cached prefix holds. `@msa/durable/tool-search` provides the
 coding agent's `tool_search` (`createToolSearchExtension()`): it ranks
 `Agent.deferred` with BM25 over the tools' names, descriptions, and parameter
 names and descriptions, and loads the matches. The `codemode` section does not
@@ -3304,7 +3304,7 @@ its final result, plus diagnostics (below):
 Neither is sent to the model while the tool runs. `output()` synchronously
 accepts UTF-8 output into that invocation-owned bounded buffer and throws after
 invocation end. Throttled commits publish the retained output, dropped
-byte/line counts, and the current details and diagnostics in its `pi.live.tools`
+byte/line counts, and the current details and diagnostics in its `msa.live.tools`
 slot. The throttle is adaptive, like the environment's shell output capture: the
 first change after an idle period commits at once; each commit then delays the
 next by at least `settings.progress.outputIntervalMs` (default 100 ms) and by
@@ -3313,7 +3313,7 @@ pause. Changes made during the delay
 coalesce into the next commit. The throttle is Harness policy, not part of
 `outputLimits`, which only bounds what is retained. Explicit
 text in explicit result content is bounded by the same limits before transcript
-persistence; non-text content is retained as declared by its pi-ai type. When
+persistence; non-text content is retained as declared by its msa-ai type. When
 bounding drops text, the Harness adds a `warn` diagnostic with code `truncated`
 stating the dropped lines and bytes.
 
@@ -3334,7 +3334,7 @@ When there are any, the result content ends with one text item:
 </harness>
 ```
 
-with one `[severity] message` line per diagnostic, and the `pi.tool-result`
+with one `[severity] message` line per diagnostic, and the `msa.tool-result`
 entry stores the structured list, possibly empty, as `data: { diagnostics }`
 (section 8.1). The
 stored message is exactly what the model saw, while UIs and code read the list.
@@ -3465,7 +3465,7 @@ ordinary transaction writes for passive entries.
 
 A tool executes in a durable task. It may:
 
-- publish bounded running output and details to its `pi.live.tools` slot;
+- publish bounded running output and details to its `msa.live.tools` slot;
 - commit memos;
 - create and wait for tasks;
 - atomically create or fork explicitly owned conversations through `commit()`;
@@ -3571,7 +3571,7 @@ the answer once. The reporter therefore needs no transaction-level admission;
 `tx.createSubmission()` writes a raw record without admission rules. The
 application's name document uses
 `fork: "initial"` so forks of the parent do not inherit it. A UI lists
-subagents from that document; a child is working while its `pi.live.run` is
+subagents from that document; a child is working while its `msa.live.run` is
 set. Owner edges alone drive abort and idle traversal. The anchor and reporter
 task definitions come with the subagent extension, so pending reporters resume
 after a restart once the host installs it again:
@@ -3600,16 +3600,16 @@ A tool result may request `addTools`, `terminate`, or `handoff`. The
 generation's `tools` phase (section 8.5) adds the named tools to the
 conversation's stored tools filter; they take effect at the next preparation. The round
 terminates only when every result of the round requests `terminate`, as in the
-pi agent loop; the `tools` phase then uses a final boundary. Any
+msa agent loop; the `tools` phase then uses a final boundary. Any
 `handoff` in the round, the last one in call order when several ask, ends the
-run the same way after appending a `pi.reset` entry with `head: "self"` and the
+run the same way after appending a `msa.reset` entry with `head: "self"` and the
 handoff text as a user message (section 8.1), exactly what `reset(handoff)`
 writes.
 
 A result's `usage` is stored on the tool-result message and added to the
-conversation's `pi.usage.tools[toolName]` in the result commit (section 8.6). A
+conversation's `msa.usage.tools[toolName]` in the result commit (section 8.6). A
 tool that runs an owned conversation must not report that conversation's spend
-again: the child's own `pi.usage` already counts it (section 12).
+again: the child's own `msa.usage` already counts it (section 12).
 
 On reopen, a tool reruns only when both its stored intent policy and the current
 declaration, resolved as at `call`, say `safe`. A current `unsafe` declaration
@@ -3625,7 +3625,7 @@ diagnostic with one of the codes `tool_unavailable`, `invalid_arguments`,
 and the error text as its message. Their content is the durable partial output,
 if any, and `details` is the tool's last reported value, if any.
 
-`@earendil-works/pi-durable/tools` provides `read`, `write`, `edit`, and `bash`
+`@msa/durable/tools` provides `read`, `write`, `edit`, and `bash`
 factories, ported from the agent harness tools, the `CodingTools` extension
 with all four, and `createCodingTools({ images })`, the same with an image
 processor for `read`. They use only `api.env`; nothing installs them
@@ -3645,12 +3645,12 @@ With one, `await processor.prepare(bytes, mimeType, limits)` returns the image f
 diagnostic says when its format changed or it was resized, with the factor that
 maps coordinates back. The Photon processor decodes every image, returns it as
 it is when it is upright, inline, and within the limits, and otherwise
-re-encodes it as PNG or JPEG (JPEG first for JPEG sources). `@earendil-works/pi-durable/images` provides `createPhotonImages(wasm)`,
+re-encodes it as PNG or JPEG (JPEG first for JPEG sources). `@msa/durable/images` provides `createPhotonImages(wasm)`,
 on Photon's WebAssembly, given its module or bytes; `/images/node` reads the
 wasm from the installed package and prepares images in a worker thread, which
 exits after 30 s without images (`{ worker: false }` prepares them inline);
 `/images/cloudflare` imports it as a Workers module and prepares inline. Neither is loaded unless imported. A conversation whose model
-does not take images still gets the image; pi-ai replaces it with a placeholder
+does not take images still gets the image; msa-ai replaces it with a placeholder
 in requests, and the diagnostic says so.
 
 For text, `read` reads a file through `openBinaryReader`: image detection reads
@@ -3669,14 +3669,14 @@ is not a lock against `bash` or other processes.
 ### 7.4 System prompt and dynamic tools
 
 Durable has no durable prompt sections. The conversation's resolved agent produces
-the desired sections for each request; the transcript's `pi.system` entries are
+the desired sections for each request; the transcript's `msa.system` entries are
 the only durable record of what the model saw. Durable stores prompt and tool
 changes directly as PR #9548 `SystemMessage` values at their transcript
 positions, always with empty `content`:
 
 ```ts
 type SystemEntry = EntryRecord & {
-  readonly kind: "pi.system";
+  readonly kind: "msa.system";
   readonly model: readonly [SystemMessage];
 };
 
@@ -3709,7 +3709,7 @@ Generation preparation takes these steps against its phase snapshot:
    committed documents (the task runtime). The results are the desired
    sections.
 4. Compare desired sections and tool declarations with the replayed state and
-   append one positional `pi.system` entry when they differ.
+   append one positional `msa.system` entry when they differ.
 
 Preparation does not recheck the transcript before appending: only the Harness
 writes model context to a busy conversation, through submissions, run tasks,
@@ -3760,7 +3760,7 @@ so a same-name replacement gets the new declaration and position.
 
 Preparation compares both values and order. If values can be patched without
 changing order, it emits the minimal patch. If shown and desired section order
-differ, one commit appends two `pi.system` entries: the first removes every
+differ, one commit appends two `msa.system` entries: the first removes every
 shown section with `null`, and the second re-adds every desired section in
 desired order. This makes order-only changes and deletion/re-addition between
 requests replay exactly; merely restating equal values is insufficient.
@@ -3768,14 +3768,14 @@ requests replay exactly; merely restating equal values is insufficient.
 A PR #9548 `SystemMessage` is always a patch, not a reset: it cannot remove
 previous `content` or restore section order merely by restating current values.
 Therefore, when a head removes the previous request-visible baseline, which is
-the case when the active context has a head marker and no `pi.system` entry
+the case when the active context has a head marker and no `msa.system` entry
 was appended after that marker (has a higher ID), the new
-`pi.system` entry adds `ContextEdit` omissions for every earlier `pi.system`
+`msa.system` entry adds `ContextEdit` omissions for every earlier `msa.system`
 entry still retained after the cut. Its own message is then a complete baseline
 containing every desired section in order and every effective tool declaration.
 Model-context replay sees the new baseline instead of the omitted retained
 deltas. Preparation writes this baseline even when it restates the replayed
-values, so every later preparation finds a `pi.system` entry after the marker.
+values, so every later preparation finds a `msa.system` entry after the marker.
 Head rebaselining takes precedence over ordinary order/value patching.
 Without a head cut, an order mismatch uses the two-entry remove/re-add sequence
 above; only when order already matches does preparation emit the minimal changed
@@ -3783,7 +3783,7 @@ values and `null` removals.
 
 Tool changes are planned separately and ride on the last planned entry, or on
 one entry of their own when sections are unchanged. Declarations are compared
-with pi-ai `declarationsEqual()` and written with `toToolDeclaration()`, so
+with msa-ai `declarationsEqual()` and written with `toToolDeclaration()`, so
 application metadata never enters the transcript. A changed declaration is
 removed and re-added in the same message. Replay keeps retained tools in place
 and appends additions; when that would not yield the desired order, the message
@@ -3791,7 +3791,7 @@ removes every offered tool and re-adds the desired tools in order. A head
 rebaseline adds every desired tool.
 
 The rendered strings stored in historical `SystemMessage.sections` remain
-authoritative even if the current renderer changes. Pi-ai decides whether to
+authoritative even if the current renderer changes. msa-ai decides whether to
 send the messages positionally to a capable provider or fold them into one
 leading system message; Durable does not rewrite its stored transcript for provider
 compatibility.
@@ -3837,9 +3837,9 @@ any more (section 2.2).
 
 ### 7.6 Code mode
 
-`@earendil-works/pi-durable/codemode` provides the `codemode` tool (`createCodemodeExtension({ sandbox })`):
+`@msa/durable/codemode` provides the `codemode` tool (`createCodemodeExtension({ sandbox })`):
 `callers: ["model"]`, `replay: "safe"`. Its argument is a script, run with
-pi-codemode's deterministic `sandbox.start()`. The script calls the agent's
+msa-codemode's deterministic `sandbox.start()`. The script calls the agent's
 `callable` tools as `tools.<name>(args)`; each call is a nested call with key
 `c<id>`, the VM's own number for the call. As in the coding agent, a tool that
 declares `structuredOutputSchema` resolves with its `structuredOutput`, also on an
@@ -3878,11 +3878,11 @@ With `models` (default on), scripts get the model catalog
 (`models.getModelsOfType`, `getAvailableOfType`, `getModelOfType`; journaled
 globals, configured `headers` removed) and `models.classify()` and
 `models.generateImages()`. Those two are paid effects, so each runs as an
-internal tool of the extension, `pi.codemode.models.classify` and
-`pi.codemode.models.generateImages` (`callers: ["tools"]`): the code mode tool
+internal tool of the extension, `msa.codemode.models.classify` and
+`msa.codemode.models.generateImages` (`callers: ["tools"]`): the code mode tool
 turns the script's call of the global into a nested call of the tool, which then
 has its own task, live row, abort, usage accounting, and replay policy. Tools
-named `pi.codemode.*` are recorded in the start data as `hidden`: never in the
+named `msa.codemode.*` are recorded in the start data as `hidden`: never in the
 section, `tools`, `ALL_TOOLS`, or tool search. They declare a schema, so like any
 such tool they resolve with the model's result whatever its `stopReason`, which
 the script checks; their rows show a failed one as an error. At most four such
@@ -3890,26 +3890,26 @@ calls of one script run at once, and a call waiting for a slot when the script
 has ended is not started. A script that
 received generated images and showed none gets a note in its result. The tool's
 declaration carries the Lark grammar of the script source as
-`constrainedSampling`, which pi-ai applies for models that support it.
+`constrainedSampling`, which msa-ai applies for models that support it.
 
 The result's \`details\` list the script's tool calls in call order
 (\`CodemodeToolDetails\`: id, name, cut arguments, status \`ok\`/\`error\`/
 \`cancelled\`, duration, cut error), written once with the result; a call still
 running or not yet launched when the script ended is \`cancelled\`. While the
-script runs, UIs show its nested calls from \`pi.live.nestedTools\`.
+script runs, UIs show its nested calls from \`msa.live.nestedTools\`.
 
 Three documents, two of them scoped to the code mode call's task:
 
-- `pi.codemode.run`: `start`, written once before the VM starts (module
+- `msa.codemode.run`: `start`, written once before the VM starts (module
   version, `startedAt`, seed, the VM's fingerprint once reported, the deadline
   from `timeout_ms`, the tools and globals the script sees, the store
   snapshot), and `result`, the outcome, written once.
-- `pi.codemode.journal`: `entries`, one per result delivered to the VM, in
+- `msa.codemode.journal`: `entries`, one per result delivered to the VM, in
   delivery order: the call's ID, the clock value, `issuedAfter` (the calls the VM
   had issued after processing it, from its acknowledgment), and for a global its
   name, arguments, and outcome; and `firstIssued`, the calls the VM had issued
   after the script's first run.
-- `pi.codemode.store`: conversation-scoped, `history: "rewindable"`,
+- `msa.codemode.store`: conversation-scoped, `history: "rewindable"`,
   `fork: "asOf"`; a successful script's `store()` writes are applied per key in
   the transaction that writes its `result`.
 
@@ -3957,19 +3957,19 @@ resume on their own whatever the rerun decides; the call's cleanup aborts them.
 
 The initial implementation provides:
 
-| kind            | responsibility                                                                   |
-| --------------- | -------------------------------------------------------------------------------- |
-| `pi.generation` | prepare system prompt and tools, request or poll model, retry, classify response |
-| `pi.tool`       | validate, hook, execute, persist output and details, append result               |
-| `pi.compaction` | select a transcript range, summarize, place a headed summary                     |
+| kind             | responsibility                                                                   |
+| ---------------- | -------------------------------------------------------------------------------- |
+| `msa.generation` | prepare system prompt and tools, request or poll model, retry, classify response |
+| `msa.tool`       | validate, hook, execute, persist output and details, append result               |
+| `msa.compaction` | select a transcript range, summarize, place a headed summary                     |
 
 Generation uses `HarnessOptions.models` without a Durable-specific model adapter. It
-resolves `models.getModel(ref.provider, ref.modelId)`, builds a pi-ai `Context`
+resolves `models.getModel(ref.provider, ref.modelId)`, builds a msa-ai `Context`
 from the prepared prompt/messages/tools, and calls `models.streamSimple()` with
 the task invocation's abort signal, the agent's thinking level, and the
 settings' stream options. Deferred
 continuation calls `models.fetchDeferred()` and `models.cancelDeferred()` with
-that same model and signal. Missing models and synchronous/streamed pi-ai errors
+that same model and signal. Missing models and synchronous/streamed msa-ai errors
 are classified into the durable generation outcomes below.
 
 Generation and tool progress are throttled durable document commits. A crash may
@@ -3985,22 +3985,22 @@ does not delete transcript history.
 
 ### 8.1 Built-in entries
 
-Built-in entry kinds carry no `data`, except `pi.tool-result`, whose token is
+Built-in entry kinds carry no `data`, except `msa.tool-result`, whose token is
 `Entry<{ diagnostics: ToolDiagnostic[] }>`; every tool result carries `data`,
 with an empty list when it has no diagnostics (section 7.3), and
-`pi.compaction`, whose token is `Entry<{ reason: CompactionReason }>`. Each kind
+`msa.compaction`, whose token is `Entry<{ reason: CompactionReason }>`. Each kind
 is exported as an `Entry` token.
 
-| kind             | `model`                                                                     | written by                                                          |
-| ---------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `pi.user`        | `[UserMessage]`, timestamp from the Harness clock at admission or placement | submissions, `onYield` continuations                                |
-| `pi.assistant`   | `[AssistantMessage]` with any stop reason                                   | generation                                                          |
-| `pi.system`      | `[SystemMessage]` with `content: ""` (section 7.4)                          | generation preparation                                              |
-| `pi.tool-result` | `[ToolResultMessage]`                                                       | tool tasks; generation for calls to tools its request did not offer |
-| `pi.reset`       | absent, or `[UserMessage]` with the handoff text; always `head: "self"`     | `reset()`, generation `tools` phase for `handoff`                   |
-| `pi.compaction`  | `[UserMessage]` with the wrapped summary; `head` is the first kept entry    | compaction tasks (section 8.7)                                      |
+| kind              | `model`                                                                     | written by                                                          |
+| ----------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `msa.user`        | `[UserMessage]`, timestamp from the Harness clock at admission or placement | submissions, `onYield` continuations                                |
+| `msa.assistant`   | `[AssistantMessage]` with any stop reason                                   | generation                                                          |
+| `msa.system`      | `[SystemMessage]` with `content: ""` (section 7.4)                          | generation preparation                                              |
+| `msa.tool-result` | `[ToolResultMessage]`                                                       | tool tasks; generation for calls to tools its request did not offer |
+| `msa.reset`       | absent, or `[UserMessage]` with the handoff text; always `head: "self"`     | `reset()`, generation `tools` phase for `handoff`                   |
+| `msa.compaction`  | `[UserMessage]` with the wrapped summary; `head` is the first kept entry    | compaction tasks (section 8.7)                                      |
 
-Every generation response becomes a `pi.assistant` entry: answers, failed attempts
+Every generation response becomes a `msa.assistant` entry: answers, failed attempts
 with their error text and usage, and converted partials with stop reason
 `aborted`. Context derivation (section 2.1, rule 9) keeps failed and aborted
 messages out of later requests, so no separate usage or notice kind exists.
@@ -4094,12 +4094,12 @@ type CompactionStatus = {
 
 | field              | value                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------------- |
-| kind               | `pi.live`                                                                                     |
+| kind               | `msa.live`                                                                                    |
 | version            | `1`                                                                                           |
 | scope/history/fork | conversation, `latest`, `initial`                                                             |
 | `initial()`        | `{}`                                                                                          |
 | checkpoint         | complete base whenever nothing runs: `generation` absent and no `running` tool or nested slot |
-| view mount         | `docs["pi.live"]`                                                                             |
+| view mount         | `docs["msa.live"]`                                                                            |
 | created            | with every Harness conversation (section 2.2)                                                 |
 
 Nothing runs while idle, at a final boundary, in the commit where generation
@@ -4128,7 +4128,7 @@ with the arguments the caller passed, runs like a tool slot, gets the arguments
 it executes with in its intent commit when they differ (a model-issued call's
 are in its assistant entry), and in its terminal commit becomes `done`, with its progress
 removed like a tool slot's and its `summary` set, enough for a status line; its
-result is in the caller's `NestedCallDoc`, never in `pi.live` (section 7.3). When any call settles, its terminal commit
+result is in the caller's `NestedCallDoc`, never in `msa.live` (section 7.3). When any call settles, its terminal commit
 removes the nested slots below it, transitively by `parentTaskId`; its
 left-running nested calls were aborted first. `endRun` and the generation's
 `tools` phase remove `nestedTools` with `tools`.
@@ -4191,15 +4191,15 @@ type GenerationCheckpoint =
 type GenerationResult = { entryId: EntryId };
 ```
 
-`pi.generation` is version 1 and starts at `{ phase: "prepare", attempt: 1 }`.
-The run's inputs live in `pi.live.run`, not in the task input.
+`msa.generation` is version 1 and starts at `{ phase: "prepare", attempt: 1 }`.
+The run's inputs live in `msa.live.run`, not in the task input.
 
 - `prepare` runs section 7.4 with the phase's agent resolution and resolves
   the settings once. When the agent has no model or `models.getModel()` does
   not know it, the task fails with `no_model`. When it resumes with `overflow`
   and its compaction did not complete with an `entryId`, the run fails with
   `model_error` and the overflow text as detail. Otherwise one commit appends
-  the planned `pi.system` entries and moves to `request` with the new tail as
+  the planned `msa.system` entries and moves to `request` with the new tail as
   `cutoff`, the agent's model and thinking level, and the settings' stream
   options. These stay fixed for this request attempt; a retry prepares again. `compacted` carries over to
   `request`, `retry`, `poll`, and the next `prepare`.
@@ -4208,7 +4208,7 @@ The run's inputs live in `pi.live.run`, not in the task input.
   `contextWindow` is positive, and `compacted` is absent. The estimate starts at
   the newest assistant message in the committed model context whose entry was
   appended after the head marker (all qualify without one) and whose usage is
-  nonzero: pi-ai `calculateContextTokens()` of its usage, plus pi-ai
+  nonzero: msa-ai `calculateContextTokens()` of its usage, plus msa-ai
   `estimateMessageTokens()` of every context message after it and of the planned
   system messages. Its request included the marker, because a head is placed
   only while no request is in flight. Without such a message, every message is
@@ -4226,7 +4226,7 @@ The run's inputs live in `pi.live.run`, not in the task input.
     abort). A failed compaction leaves a context above the blocking threshold,
     where a request would at best leave no room for the answer.
   - Above `contextWindow - reserveTokens - backgroundTokens` with
-    `backgroundTokens > 0` and no compaction status in `pi.live`: the commit that
+    `backgroundTokens > 0` and no compaction status in `msa.live`: the commit that
     moves to `request` also creates a background compaction, owned by the
     conversation, with reason `threshold`, and adds its status. The generation
     does not wait for it. The settings' retry policy is read when the
@@ -4236,8 +4236,8 @@ The run's inputs live in `pi.live.run`, not in the task input.
   `models.getModel()`; an unknown model fails the task with `no_model`, like
   `prepare`. `request` converts a leftover partial (below) before it resolves
   the model.
-- `request` first converts a committed partial left in `pi.live` by an
-  interrupted attempt into an aborted `pi.assistant` entry. It then streams the
+- `request` first converts a committed partial left in `msa.live` by an
+  interrupted attempt into an aborted `msa.assistant` entry. It then streams the
   model context through `cutoff` with the invocation signal, the thinking level
   as `reasoning` (omitted for `off`), the conversation's persisted provider
   `sessionId`, and the pinned `streamOptions`, committing throttled partials at
@@ -4254,8 +4254,8 @@ The run's inputs live in `pi.live.run`, not in the task input.
   - `stop`/`length`: before the commit, the `onYield` chain runs; the first
     `{ continue }` wins. The commit appends the answer and applies the final
     boundary (section 6). With a continuation and no selected user item or
-    reset, it appends a `pi.user` entry with the continuation content, creates a
-    successor generation, and hands it `pi.live.run`, keeping the inputs open.
+    reset, it appends a `msa.user` entry with the continuation content, creates a
+    successor generation, and hands it `msa.live.run`, keeping the inputs open.
     Otherwise it settles the run's inputs `done`, removes `run` and
     `generation`, and starts a successor run for the selected user items, if
     any; a dropped continuation is not retried. Both complete with
@@ -4263,7 +4263,7 @@ The run's inputs live in `pi.live.run`, not in the task input.
   - `toolUse` with at least one tool call: the commit appends the assistant
     entry and starts the tool round described below, moving to `waiting` in the
     `tools` phase. A `toolUse` message without calls is classified like `stop`.
-  - `error` that pi-ai `isContextOverflow()` recognizes, while the settings'
+  - `error` that msa-ai `isContextOverflow()` recognizes, while the settings'
     compaction policy is enabled, `compacted` is absent, and range selection finds a cut:
     the commit appends the error entry, removes `generation`, creates a
     compaction owned by the generation with reason `overflow`, adds its status,
@@ -4292,11 +4292,11 @@ The run's inputs live in `pi.live.run`, not in the task input.
 
 A tool round starts in the commit that appends the tool-calling answer:
 
-1. The offered tools are replayed with pi-ai `getCurrentTools()` from the
+1. The offered tools are replayed with msa-ai `getCurrentTools()` from the
    committed model context through `cutoff`: `request` already holds it, and
    `poll` derives it again. A call to a tool not offered gets its
    `tool_unavailable` result entry here, without a task.
-2. Every other call gets a `pi.tool` task owned by the generation, with input
+2. Every other call gets a `msa.tool` task owned by the generation, with input
    `{ assistant, callId }`. The round is sequential when the settings'
    `toolExecution`, read as the round starts, is `sequential` or any called
    tool, resolved from the phase's agent as the tool task resolves it (section
@@ -4306,14 +4306,14 @@ A tool round starts in the commit that appends the tool-calling answer:
    created so far and grows by one per started sequential call, while
    `pending` shrinks.
 3. The generation commits `waiting` on its tool tasks with `allSettled` and the
-   `tools` checkpoint (section 8.5); `pi.live.run` stays with it.
-4. `pi.live.tools` receives the round's slots (section 8.2), and `generation` is
+   `tools` checkpoint (section 8.5); `msa.live.run` stays with it.
+4. `msa.live.tools` receives the round's slots (section 8.2), and `generation` is
    removed.
 
 Input submissions settle `unanswered` with one of these reasons: `no_model`,
 `model_error` (detail: provider error text), `aborted`, `faulted` (detail: error
 message), or an orphaning blocked reason (section 5.4). Fault and orphan
-settlement convert a committed partial into an aborted `pi.assistant` entry,
+settlement convert a committed partial into an aborted `msa.assistant` entry,
 like the abort handler.
 
 ### 8.4 Tool
@@ -4337,7 +4337,7 @@ type ToolTaskResult =
   | { kind: "nested" };
 ```
 
-`pi.tool` is version 2 and starts at `{ phase: "call" }`; `migrate` gives a
+`msa.tool` is version 2 and starts at `{ phase: "call" }`; `migrate` gives a
 version 1 input `kind: "model"`, and readers treat a terminal result without
 `kind` as a model-issued call's. A model-issued call's input stays small
 because the terminal record keeps it; the call is read from the assistant
@@ -4351,7 +4351,7 @@ Below, `{ entryId }` is a model-issued call's result.
 
 - `call` reads the call with `runtime.entry()`, resolves the tool among the
   phase's agent `tools` (section 7.3), validates
-  the arguments with pi-ai
+  the arguments with msa-ai
   `validateToolArguments()`, runs the `beforeTool` chain, and validates again
   (section 7.3). One commit then records intent: it moves to `execute` with the
   final arguments and the tool's replay policy and sets the slot `running`. The
@@ -4365,7 +4365,7 @@ Below, `{ entryId }` is a model-issued call's result.
   `interrupted` error result from the slot's durable partial output, details, and
   diagnostics, and ends `failed` with `{ entryId }`.
 - The result commit bounds the content, appends the diagnostics block (section
-  7.3), appends one `pi.tool-result` entry with `model: [{ role: "toolResult",
+  7.3), appends one `msa.tool-result` entry with `model: [{ role: "toolResult",
   toolCallId, toolName, content, details, isError, durationMs, timestamp }]` and
   `data: { diagnostics }`, marks the slot `done`, and
   completes with `{ entryId, control }`. An `isError` result still completes.
@@ -4391,10 +4391,10 @@ The generation resumes in its `tools` phase once every tool task it waits on is
 terminal. In a sequential round with calls left in `pending`, one commit creates
 the next call's owned tool task and waits on it again with the shorter `pending`.
 Otherwise it reads the tool records with `runtime.getTask()` and the round's
-result entries from the `pi.live.tools` slots, runs the `afterTools` observers,
+result entries from the `msa.live.tools` slots, runs the `afterTools` observers,
 and then commits once:
 
-- It edits the conversation's stored `pi.agent` `tools` and `modelTools` for
+- It edits the conversation's stored `msa.agent` `tools` and `modelTools` for
   every `addTools` name: an array gets the name appended unless it holds it
   already, and `{ remove }` loses the name. An unset `tools` already enables
   every tool, and nothing is written for it. An unset or object `modelTools`
@@ -4403,13 +4403,13 @@ and then commits once:
   tool that is not registered now is offered once it is again. The next
   preparation offers the tool when it resolves and the model may call it.
 - When every result of the round requests `terminate`, or any requests
-  `handoff`, it appends the handoff's `pi.reset` entry, if any, settles the
+  `handoff`, it appends the handoff's `msa.reset` entry, if any, settles the
   run's inputs `done` with the tool-calling answer, removes `run` and `tools`,
   and applies the final boundary.
 - Otherwise it removes `tools` and applies the `postTools` boundary. When that
   boundary placed a reset, the run's inputs settle `unanswered` with `reset` and
   selected user items start a successor run (section 6). Otherwise selected
-  steer IDs join `pi.live.run`, and it creates the next generation, owned by the
+  steer IDs join `msa.live.run`, and it creates the next generation, owned by the
   conversation, and hands it the run.
 
 It completes with `{ entryId }` of the tool-calling answer. Its abort handler
@@ -4433,18 +4433,18 @@ type UsageState = {
 
 | field              | value                                         |
 | ------------------ | --------------------------------------------- |
-| kind               | `pi.usage`                                    |
+| kind               | `msa.usage`                                   |
 | version            | `1`                                           |
 | scope/history/fork | conversation, `latest`, `initial`             |
 | `initial()`        | `{ models: {}, tools: {} }`                   |
 | checkpoint         | complete base on every change                 |
-| view mount         | `docs["pi.usage"]`                            |
+| view mount         | `docs["msa.usage"]`                           |
 | created            | with every Harness conversation (section 2.2) |
 
-`pi.usage` is the ledger of the conversation's own spend. Every built-in writer
-of a `pi.assistant` entry adds its message's `usage` to `models` under the
+`msa.usage` is the ledger of the conversation's own spend. Every built-in writer
+of a `msa.assistant` entry adds its message's `usage` to `models` under the
 message's own `provider/model`, and every writer of
-a `pi.tool-result` entry with `usage` adds it to `tools`, in the same commit, as
+a `msa.tool-result` entry with `usage` adds it to `tools`, in the same commit, as
 does the result commit of a nested call (section 7.3) with `usage`.
 Every summarization attempt of a compaction task adds its response's `usage` to
 `models` in the commit that classifies it (section 8.7); that spend has no entry,
@@ -4482,7 +4482,7 @@ type CompactionCheckpoint =
 type CompactionResult = { entryId?: EntryId; submissionId?: SubmissionId };
 ```
 
-`pi.compaction` is version 1 and starts at `{ phase: "select" }`. Compaction
+`msa.compaction` is version 1 and starts at `{ phase: "select" }`. Compaction
 replaces an old prefix of the model context with a summary entry whose `head` is
 the first kept entry (section 2.1). Raw history stays in storage. There are three
 ways to start one; the task is the same, only ownership and placement differ:
@@ -4509,7 +4509,7 @@ markers, and the settings' `keepRecentTokens`.
    candidates, so a kept assistant message keeps its tool results. A user entry
    is not a candidate either while a result for a call of the assistant before
    it follows it, before the next assistant (section 2.1, rule 7).
-2. Walk the non-marker entries from newest to oldest, adding pi-ai
+2. Walk the non-marker entries from newest to oldest, adding msa-ai
    `estimateMessageTokens()` of each contribution. At the first entry where the
    sum reaches `keepRecentTokens`, the cut is the first candidate at or after
    that entry in transcript order, or the newest candidate when none follows.
@@ -4558,7 +4558,7 @@ Phases:
   `cacheRetention: "none"` and the pinned `maxTokens`. Providers such as Codex
   may suppress that identity when caching is disabled. Recovery resends the same
   request. The response is classified in one commit
-  that adds its usage to `pi.usage` (section 8.6):
+  that adds its usage to `msa.usage` (section 8.6):
   - `stop` with non-empty text and no tool call: the text is the summary, placed
     as below.
   - `error` that `isRetryableAssistantError()` accepts while the settings'
@@ -4577,7 +4577,7 @@ the conversation.
 
 ```ts
 {
-  kind: "pi.compaction",
+  kind: "msa.compaction",
   head: firstKept,
   model: [{ role: "user", content: [{ type: "text", text: wrapped }], timestamp: now }],
   data: { reason },
@@ -4587,7 +4587,7 @@ the conversation.
 where `wrapped` is `"The conversation history before this point was compacted
 into the following summary:\n\n<summary>\n"`, the summary, and
 `"\n</summary>"`. The commit that places it also removes the task's status,
-removes `pi.live.compactionFailure`, and commits the task's `completed` outcome:
+removes `msa.live.compactionFailure`, and commits the task's `completed` outcome:
 
 - A blocking compaction appends the entry directly and completes with
   `{ entryId }`. Its generation holds the run and waits, so nothing else writes
@@ -4601,7 +4601,7 @@ removes `pi.live.compactionFailure`, and commits the task's `completed` outcome:
   `Harness.submission()` observes the placement.
 
 The next generation's preparation finds a head marker without a later
-`pi.system` entry and writes a complete system baseline (section 7.4).
+`msa.system` entry and writes a complete system baseline (section 7.4).
 
 **Cancellation.** The abort handler removes the task's status and ends
 `aborted`; it writes no entry. An attempt cut short by abort or a crash has no
@@ -4614,7 +4614,7 @@ aborted with its generation, before the generation's abort handler runs
 conversation abort keeps it, and `Submission.abort()` withdraws it.
 
 **Failure.** The commit that fails a compaction (`model_error`, `no_model`)
-removes its status and sets `pi.live.compactionFailure` to its task, reason,
+removes its status and sets `msa.live.compactionFailure` to its task, reason,
 and error message, replacing an older failure; the Harness cleanup does the
 same for a compaction the scheduler faults or orphans, with the fault's
 message or the orphan reason. Only a compaction that produces a summary
@@ -4819,7 +4819,7 @@ type ConversationView = {
   readonly conversation: ConversationRecord;
   /** Raw active entries, as `ContextView.entries` (section 2.1): the head marker, then the non-head entries from its head. */
   readonly entries: readonly EntryRecord[];
-  /** `pi.agent`, `pi.live`, `pi.inbox`, `pi.provider`, and `pi.usage`, keyed by kind; absent documents are absent. */
+  /** `msa.agent`, `msa.live`, `msa.inbox`, `msa.provider`, and `msa.usage`, keyed by kind; absent documents are absent. */
   readonly docs: Readonly<Record<string, JsonObject>>;
 };
 ```
@@ -4837,7 +4837,7 @@ touches the conversation yields one Chord batch:
 
 ```text
 document op ["s", ["generation", "message"], value]
--> view op ["s", ["docs", "pi.live", "generation", "message"], value]
+-> view op ["s", ["docs", "msa.live", "generation", "message"], value]
 ```
 
 An appended entry without a head is a splice at the end of `entries`. An
@@ -4896,14 +4896,14 @@ type AgentEvent =
         deferred?: { pollAt: number };
       };
       tools: readonly ToolSlot[];
-      /** `pi.live.nestedTools` (section 8.2). */
+      /** `msa.live.nestedTools` (section 8.2). */
       nestedTools: readonly NestedToolSlot[];
-      /** `pi.live.compactions` (section 8.2). */
+      /** `msa.live.compactions` (section 8.2). */
       compactions: readonly CompactionStatus[];
-      /** `pi.live.compactionFailure` (section 8.2). */
+      /** `msa.live.compactionFailure` (section 8.2). */
       compactionFailure?: CompactionFailure;
       inbox: readonly { id: SubmissionId; mode: InboxItem["mode"] }[];
-      /** `pi.agent`; `{}` when absent. */
+      /** `msa.agent`; `{}` when absent. */
       agent: AgentState;
       usage: UsageState;
     }
@@ -4974,11 +4974,11 @@ registers for later publications atomically on the Session line.
 
 Events derive from committed changes:
 
-- `run_start`/`run_end`: `pi.live.run` appears, is removed, or is replaced by a
+- `run_start`/`run_end`: `msa.live.run` appears, is removed, or is replaced by a
   successor run whose first input differs. Steers joining the current run and
   handovers between its tasks are not run events. The inputs' outcomes are
   `submission` events.
-- `turn_start`: a `pi.generation` task is created. `turn_end`: a generation's
+- `turn_start`: a `msa.generation` task is created. `turn_end`: a generation's
   outcome is committed, when it holds `completing` or becomes terminal,
   whichever comes first, so a successor created at hold starts after it.
 - `message_start`: the first committed partial of an attempt, or, for a message
@@ -5003,7 +5003,7 @@ Events derive from committed changes:
   appends, front trims, and replacements of the slot's retained window, and the
   slot's current `details` and `diagnostics` when they change; removed ones, as
   when a safe replay restarts the tool, send `null` and `[]`.
-  `tool_execution_end`: the slot becomes `done`, with its `pi.tool-result`
+  `tool_execution_end`: the slot becomes `done`, with its `msa.tool-result`
   entry, which carries the diagnostics, or without one after a fault or
   orphan. An unfinished slot that disappears because its run ended ends with the
   result entry appended in the same commit, as for the unstarted calls of an
@@ -5018,12 +5018,12 @@ Events derive from committed changes:
   retired one reads as its initial value, as in a snapshot. Registry installs
   and settings changes make no commit and emit nothing; a UI showing resolved
   tools or a resolved model resolves again through `Conversation.agent()`.
-- `auto_retry_start`/`auto_retry_end`, `deferred_poll`: `pi.live.generation`
+- `auto_retry_start`/`auto_retry_end`, `deferred_poll`: `msa.live.generation`
   gains or drops `retry`, or gains `deferred` or moves its `pollAt`.
 - `task_failed`: a task of the conversation settles `faulted` or `orphaned`.
 - `compaction_start`/`compaction_end`: a status appears in or disappears from
-  `pi.live.compactions`. `compaction_end` carries `error` when the same commit
-  recorded the task in `pi.live.compactionFailure`. A retry backoff shows only
+  `msa.live.compactions`. `compaction_end` carries `error` when the same commit
+  recorded the task in `msa.live.compactionFailure`. A retry backoff shows only
   in the snapshot's `compactions`. A queued summary is placed later with its own
   `message_start`/`message_end` and `submission` events.
 
@@ -5546,7 +5546,7 @@ These are contracts, not invitations to add defensive machinery:
   task while a generation prepares its request can misplace its system prompt entries;
   use a write submission.
 - **Queued items after a failed run:** failure and task abort leave the inbox alone.
-  Queued follow-ups wait in `pi.inbox`, and their `wait()` does not settle, until
+  Queued follow-ups wait in `msa.inbox`, and their `wait()` does not settle, until
   the next input or queued write's boundary places them or the host withdraws
   them; a display-only write runs no boundary. A
   compaction summary is such a submission: when a manual or background
@@ -5564,14 +5564,14 @@ These are contracts, not invitations to add defensive machinery:
   that summary still describes 10-84. Place such writes before compacting.
 - **Summary timestamps:** a queued summary's user message carries the time its
   compaction finished, not its placement. Code that judges usage staleness by
-  message timestamps, such as pi-ai `estimateContextTokens()` over view
+  message timestamps, such as msa-ai `estimateContextTokens()` over view
   messages, can misjudge; the Harness estimate uses entry order (section 8.3).
 - **Raw head writes into the past:** a head written directly with `tx.appendEntry()`
   that targets an entry before the conversation's active range changes model
   context, but a mounted view keeps only the entries it already holds until the
   mount is rebuilt. Use a write submission, whose stale check rejects it.
 - **Double-counted subagent spend:** a tool that runs an owned conversation must
-  not report that conversation's usage in its result; the child's `pi.usage`
+  not report that conversation's usage in its result; the child's `msa.usage`
   already counts it, and subtree sums would count it twice.
 - **Owned work holds its owner:** a task that owns live ordinary work stays
   `completing` until that work ends (section 5.5). Foreground work an extension
@@ -5636,9 +5636,9 @@ These are contracts, not invitations to add defensive machinery:
   outcome. Never reference a task-scoped document retired by that same outcome.
 - **Raw transcript:** view entries are not model context. Rendering edits,
   display-only entries, and model filtering require the appropriate reducer.
-- **Reserved `pi.` names:** task names, document kinds, and entry kinds starting
-  with `pi.` belong to built-ins by convention. Nothing enforces it; reusing one
-  collides with Harness behavior, such as `pi.system` entries being replayed as
+- **Reserved `msa.` names:** task names, document kinds, and entry kinds starting
+  with `msa.` belong to built-ins by convention. Nothing enforces it; reusing one
+  collides with Harness behavior, such as `msa.system` entries being replayed as
   system messages.
 - **Early resource disposal:** uninstalling or replacing an extension only stops
   new use. Freeing resources immediately can fail calls that are still running.
@@ -5651,14 +5651,14 @@ These are contracts, not invitations to add defensive machinery:
   gets the host default with the edit, not the owner's selection. Compute the child's array from the resolved agent
   instead (section 7.3).
 - **Copies are one-time:** a new task-owned conversation copies its owner's
-  `pi.agent` at creation; later owner changes do not reach it. A fork keeps its
+  `msa.agent` at creation; later owner changes do not reach it. A fork keeps its
   `asOf` copy instead (section 2.2).
 - **Environment on recovery:** a tool rerun after recovery builds its
   environment again, with the conversation's current `cwd`, which may differ
   from the first attempt's.
 - **Moving default selections:** a conversation on the default selection changes
   whenever the settings or the installed extensions change; each change appends
-  `pi.system` entries and misses the provider prompt cache.
+  `msa.system` entries and misses the provider prompt cache.
 - **Unstable prompt text:** a section renderer whose output changes without a
   real content change, for example by embedding the time, appends system deltas
   and defeats provider prompt caching.

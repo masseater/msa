@@ -8,8 +8,8 @@ import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
-import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { ProcessTerminal, type TUI, TuiMainScreen } from "@earendil-works/pi-tui";
+import type { AssistantMessage } from "@msa/ai";
+import { ProcessTerminal, type TUI, TuiMainScreen } from "@msa/tui";
 
 import { AssistantMessageComponent } from "../src/modes/interactive/components/assistant-message.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
