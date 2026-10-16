@@ -22,7 +22,6 @@ import type {
   AutocompleteItem,
   AutocompleteProvider,
   EditorComponent,
-  Keybinding,
   KeyId,
   MarkdownTheme,
   OverlayHandle,
@@ -80,7 +79,7 @@ import {
   computeCacheWaste,
   detectCacheMiss,
 } from "../../core/cache-stats.ts";
-import { formatCacheWarmingStatus, formatCacheWarmingUsage } from "../../core/cache-warmer.ts";
+import { formatCacheWarmingUsage } from "../../core/cache-warmer.ts";
 import {
   findExtensionStackMatches,
   recordCrash,
@@ -194,6 +193,7 @@ import { EditorSlot } from "./editor-slot.ts";
 import { ExtensionDialogs } from "./extension-dialogs.ts";
 import { ExtensionWidgets } from "./extension-widgets.ts";
 import { editInExternalEditor } from "./external-editor.ts";
+import { formatHotkeysMarkdown } from "./hotkeys.ts";
 import { getStartupVisibility, renderLoadedResources } from "./loaded-resources.ts";
 import {
   formatLoginProviderCompletionDescription,
@@ -204,6 +204,7 @@ import {
 import { refreshModelCatalogs } from "./model-catalog-refresh.ts";
 import { getModelSearchText } from "./model-search.ts";
 import { ProgramStatusReporter } from "./program-status-reporter.ts";
+import { formatSessionInfo, type SessionInfo } from "./session-info.ts";
 import { shareSession } from "./session-share.ts";
 import { InteractiveThemeController } from "./theme/theme-controller.ts";
 import {
@@ -4000,7 +4001,7 @@ export class InteractiveMode {
         const text = theme.fg("dim", `Follow-up: ${message}`);
         this.pendingMessagesContainer.addChild(new TruncatedText(text, 1, 0));
       }
-      const dequeueHint = this.getAppKeyDisplay("app.message.dequeue");
+      const dequeueHint = keyDisplayText("app.message.dequeue");
       const hintText = theme.fg("dim", `↳ ${dequeueHint} to edit all queued messages`);
       this.pendingMessagesContainer.addChild(new TruncatedText(hintText, 1, 0));
     }
@@ -5322,86 +5323,19 @@ export class InteractiveMode {
   }
 
   private handleSessionCommand(): void {
-    const stats = this.session.getSessionStats();
-    const sessionName = this.sessionManager.getSessionName();
     const entries = this.sessionManager.getEntries();
-    const cacheWaste = computeCacheWaste(entries, this.session.modelRuntime);
-
-    // Cost/token totals per provider/model actually used (e.g. OpenRouter `auto`
-    // resolves to a concrete responseModel). Usage without model attribution is
-    // grouped separately so the breakdown reconciles with the session total.
-    const usageBreakdown = getUsageCostBreakdown(entries);
-
-    // Snapshot the stats; the text is built on demand so it follows theme changes.
-    const cacheWarmingStatus = this.session.cacheWarmingStatus;
-    const cacheWarmingMode = this.settingsManager.getCacheWarmingMode();
     const model = this.session.model;
-    const selectedModelKey = `${model?.provider}/${model?.id}`;
-    const renderInfo = (): string => {
-      let info = `${theme.bold("Session Info")}\n\n`;
-      if (sessionName) {
-        info += `${theme.fg("dim", "Name:")} ${sessionName}\n`;
-      }
-      info += `${theme.fg("dim", "File:")} ${stats.sessionFile ?? "In-memory"}\n`;
-      info += `${theme.fg("dim", "ID:")} ${stats.sessionId}\n\n`;
-      info += `${theme.bold("Messages")}\n`;
-      info += `${theme.fg("dim", "Total:")} ${stats.totalMessages}\n`;
-      info += `${theme.fg("dim", "User:")} ${stats.userMessages}\n`;
-      info += `${theme.fg("dim", "Assistant:")} ${stats.assistantMessages}\n`;
-      info += `${theme.fg("dim", "Tools:")} ${stats.toolCalls} calls, ${stats.toolResults} results\n\n`;
-      info += `${theme.bold("Tokens")}\n`;
-      // "Input" is the full prompt volume. With cache activity, split it into
-      // cached (served from cache) vs uncached (everything else) - the only
-      // provider-independent split. Cache writes, where reported, are a detail
-      // of the uncached portion.
-      const { input, cacheRead, cacheWrite } = stats.tokens;
-      const promptTokens = input + cacheRead + cacheWrite;
-      info += `${theme.fg("dim", "Input:")} ${promptTokens.toLocaleString()}\n`;
-      if (promptTokens > 0 && (cacheRead > 0 || cacheWrite > 0)) {
-        const hitRate = theme.fg("dim", `(${((cacheRead / promptTokens) * 100).toFixed(1)}%)`);
-        info += `  ${theme.fg("dim", "Cached:")} ${cacheRead.toLocaleString()} ${hitRate}\n`;
-        const written =
-          cacheWrite > 0
-            ? ` ${theme.fg("dim", `(${cacheWrite.toLocaleString()} written to cache)`)}`
-            : "";
-        info += `  ${theme.fg("dim", "Uncached:")} ${(input + cacheWrite).toLocaleString()}${written}\n`;
-      }
-      info += `${theme.fg("dim", "Output:")} ${stats.tokens.output.toLocaleString()}\n`;
-      info += `${theme.fg("dim", "Total:")} ${stats.tokens.total.toLocaleString()}\n`;
-
-      info += `\n${theme.bold("Cache Warming")}\n`;
-      info += `${theme.fg("dim", "Mode:")} ${cacheWarmingMode}\n`;
-      info += `${theme.fg("dim", "Status:")} ${cacheWarmingStatus ? formatCacheWarmingStatus(cacheWarmingStatus) : "Inactive (cache warming unavailable)"}\n`;
-      const decision = cacheWarmingStatus?.decision;
-      if (decision?.economicsAvailable) {
-        info += `${theme.fg("dim", "Cache miss penalty:")} $${decision.missCost.toFixed(3)}\n`;
-        info += `${theme.fg("dim", "Refresh cost:")} $${decision.warmCost.toFixed(3)}\n`;
-      }
-
-      if (stats.cost > 0 || cacheWaste.missedTokens > 0) {
-        info += `\n${theme.bold("Cost")}\n`;
-        info += `${theme.fg("dim", "Total:")} $${stats.cost.toFixed(3)}`;
-        // A single entry repeats the total, unless it names a model other than the selected one.
-        if (usageBreakdown.length > 1 || usageBreakdown[0]?.key !== selectedModelKey) {
-          for (const entry of usageBreakdown) {
-            info += `\n  ${theme.fg("dim", `${entry.key}:`)} $${entry.cost.toFixed(3)} ${theme.fg("dim", `(${formatTokens(entry.tokens)} tokens)`)}`;
-          }
-        }
-        if (cacheWaste.missedTokens > 0) {
-          const missLabel =
-            cacheWaste.missCount === 1 ? "1 miss" : `${cacheWaste.missCount} misses`;
-          const detail = `${cacheWaste.missedTokens.toLocaleString()} tokens, ${missLabel}`;
-          info +=
-            cacheWaste.missedCost >= 0.0001
-              ? `\n${theme.fg("dim", "Cache Re-billed:")} $${cacheWaste.missedCost.toFixed(3)} ${theme.fg("dim", `(${detail})`)}`
-              : `\n${theme.fg("dim", "Cache Re-billed:")} ${detail}`;
-        }
-      }
-      return info;
+    const info: SessionInfo = {
+      stats: this.session.getSessionStats(),
+      sessionName: this.sessionManager.getSessionName(),
+      cacheWaste: computeCacheWaste(entries, this.session.modelRuntime),
+      usageBreakdown: getUsageCostBreakdown(entries),
+      cacheWarmingMode: this.settingsManager.getCacheWarmingMode(),
+      cacheWarmingStatus: this.session.cacheWarmingStatus,
+      selectedModelKey: `${model?.provider}/${model?.id}`,
     };
-
     this.chatContainer.addChild(new Spacer(1));
-    this.chatContainer.addChild(new ThemedText(renderInfo, 1, 0));
+    this.chatContainer.addChild(new ThemedText(() => formatSessionInfo(info), 1, 0));
     this.ui.requestRender();
   }
 
@@ -5417,152 +5351,25 @@ export class InteractiveMode {
             .join("\n\n")
         : "No changelog entries found.";
 
+    this.addMarkdownPanel("What's New", changelogMarkdown);
+  }
+
+  /** A bordered, titled markdown block appended to the transcript. */
+  private addMarkdownPanel(title: string, markdown: string): void {
     this.chatContainer.addChild(new Spacer(1));
     this.chatContainer.addChild(new DynamicBorder());
-    this.chatContainer.addChild(
-      new ThemedText(() => theme.bold(theme.fg("accent", "What's New")), 1, 0),
-    );
+    this.chatContainer.addChild(new ThemedText(() => theme.bold(theme.fg("accent", title)), 1, 0));
     this.chatContainer.addChild(new Spacer(1));
-    this.chatContainer.addChild(
-      new Markdown(changelogMarkdown, 1, 1, this.getMarkdownThemeWithSettings()),
-    );
+    this.chatContainer.addChild(new Markdown(markdown, 1, 1, this.getMarkdownThemeWithSettings()));
     this.chatContainer.addChild(new DynamicBorder());
     this.ui.requestRender();
-  }
-
-  /**
-   * Get capitalized display string for an app keybinding action.
-   */
-  private getAppKeyDisplay(action: AppKeybinding): string {
-    return keyDisplayText(action);
-  }
-
-  /**
-   * Get capitalized display string for an editor keybinding action.
-   */
-  private getEditorKeyDisplay(action: Keybinding): string {
-    return keyDisplayText(action);
   }
 
   private handleHotkeysCommand(): void {
-    // Navigation keybindings
-    const cursorUp = this.getEditorKeyDisplay("tui.editor.cursorUp");
-    const cursorDown = this.getEditorKeyDisplay("tui.editor.cursorDown");
-    const cursorLeft = this.getEditorKeyDisplay("tui.editor.cursorLeft");
-    const cursorRight = this.getEditorKeyDisplay("tui.editor.cursorRight");
-    const cursorWordLeft = this.getEditorKeyDisplay("tui.editor.cursorWordLeft");
-    const cursorWordRight = this.getEditorKeyDisplay("tui.editor.cursorWordRight");
-    const cursorLineStart = this.getEditorKeyDisplay("tui.editor.cursorLineStart");
-    const cursorLineEnd = this.getEditorKeyDisplay("tui.editor.cursorLineEnd");
-    const jumpForward = this.getEditorKeyDisplay("tui.editor.jumpForward");
-    const jumpBackward = this.getEditorKeyDisplay("tui.editor.jumpBackward");
-    const pageUp = this.getEditorKeyDisplay("tui.editor.pageUp");
-    const pageDown = this.getEditorKeyDisplay("tui.editor.pageDown");
-
-    // Editing keybindings
-    const submit = this.getEditorKeyDisplay("tui.input.submit");
-    const newLine = this.getEditorKeyDisplay("tui.input.newLine");
-    const deleteWordBackward = this.getEditorKeyDisplay("tui.editor.deleteWordBackward");
-    const deleteWordForward = this.getEditorKeyDisplay("tui.editor.deleteWordForward");
-    const deleteToLineStart = this.getEditorKeyDisplay("tui.editor.deleteToLineStart");
-    const deleteToLineEnd = this.getEditorKeyDisplay("tui.editor.deleteToLineEnd");
-    const yank = this.getEditorKeyDisplay("tui.editor.yank");
-    const yankPop = this.getEditorKeyDisplay("tui.editor.yankPop");
-    const undo = this.getEditorKeyDisplay("tui.editor.undo");
-    const tab = this.getEditorKeyDisplay("tui.input.tab");
-
-    // App keybindings
-    const interrupt = this.getAppKeyDisplay("app.interrupt");
-    const clear = this.getAppKeyDisplay("app.clear");
-    const exit = this.getAppKeyDisplay("app.exit");
-    const suspend = this.getAppKeyDisplay("app.suspend");
-    const cycleThinkingLevel = this.getAppKeyDisplay("app.thinking.cycle");
-    const cycleModelForward = this.getAppKeyDisplay("app.model.cycleForward");
-    const selectModel = this.getAppKeyDisplay("app.model.select");
-    const expandTools = this.getAppKeyDisplay("app.tools.expand");
-    const toggleThinking = this.getAppKeyDisplay("app.thinking.toggle");
-    const externalEditor = this.getAppKeyDisplay("app.editor.external");
-    const cycleModelBackward = this.getAppKeyDisplay("app.model.cycleBackward");
-    const copyMessage = this.getAppKeyDisplay("app.message.copy");
-    const followUp = this.getAppKeyDisplay("app.message.followUp");
-    const dequeue = this.getAppKeyDisplay("app.message.dequeue");
-    const pasteImage = this.getAppKeyDisplay("app.clipboard.pasteImage");
-
-    let hotkeys = `
-**Navigation**
-| Key | Action |
-|-----|--------|
-| \`${cursorUp}\` / \`${cursorDown}\` / \`${cursorLeft}\` / \`${cursorRight}\` | Move cursor / browse history |
-| \`${cursorWordLeft}\` / \`${cursorWordRight}\` | Move by word |
-| \`${cursorLineStart}\` | Start of line |
-| \`${cursorLineEnd}\` | End of line |
-| \`${jumpForward}\` | Jump forward to character |
-| \`${jumpBackward}\` | Jump backward to character |
-| \`${pageUp}\` / \`${pageDown}\` | Scroll by page |
-
-**Editing**
-| Key | Action |
-|-----|--------|
-| \`${submit}\` | Send message |
-| \`${newLine}\` | New line${process.platform === "win32" ? " (Ctrl+Enter on Windows Terminal)" : ""} |
-| \`${deleteWordBackward}\` | Delete word backwards |
-| \`${deleteWordForward}\` | Delete word forwards |
-| \`${deleteToLineStart}\` | Delete to start of line |
-| \`${deleteToLineEnd}\` | Delete to end of line |
-| \`${yank}\` | Paste the most-recently-deleted text |
-| \`${yankPop}\` | Cycle through the deleted text after pasting |
-| \`${undo}\` | Undo |
-
-**Other**
-| Key | Action |
-|-----|--------|
-| \`${tab}\` | Path completion / accept autocomplete |
-| \`${interrupt}\` | Cancel autocomplete / abort streaming |
-| \`${clear}\` | Clear editor (first) / exit (second) |
-| \`${exit}\` | Exit (when editor is empty) |
-| \`${suspend}\` | Suspend to background |
-| \`${cycleThinkingLevel}\` | Cycle thinking level |
-| \`${cycleModelForward}\` / \`${cycleModelBackward}\` | Cycle models |
-| \`${selectModel}\` | Open model selector |
-| \`${expandTools}\` | Toggle tool output expansion |
-| \`${toggleThinking}\` | Toggle thinking block visibility |
-| \`${externalEditor}\` | Edit message in external editor |
-| \`${copyMessage}\` | Copy selection or last assistant message |
-| \`${followUp}\` | Queue follow-up message |
-| \`${dequeue}\` | Restore queued messages |
-| \`${pasteImage}\` | Paste files on macOS, images, or text from clipboard |
-| \`/\` | Slash commands |
-| \`!\` | Run bash command |
-| \`!!\` | Run bash command (excluded from context) |
-`;
-
-    // Add extension-registered shortcuts
-    const extensionRunner = this.session.extensionRunner;
-    const shortcuts = extensionRunner.getShortcuts(this.keybindings.getEffectiveConfig());
-    if (shortcuts.size > 0) {
-      hotkeys += `
-**Extensions**
-| Key | Action |
-|-----|--------|
-`;
-      for (const [key, shortcut] of shortcuts) {
-        const description = shortcut.description ?? shortcut.extensionPath;
-        const keyDisplay = formatKeyText(key, { capitalize: true });
-        hotkeys += `| \`${keyDisplay}\` | ${description} |\n`;
-      }
-    }
-
-    this.chatContainer.addChild(new Spacer(1));
-    this.chatContainer.addChild(new DynamicBorder());
-    this.chatContainer.addChild(
-      new ThemedText(() => theme.bold(theme.fg("accent", "Keyboard Shortcuts")), 1, 0),
+    const shortcuts = this.session.extensionRunner.getShortcuts(
+      this.keybindings.getEffectiveConfig(),
     );
-    this.chatContainer.addChild(new Spacer(1));
-    this.chatContainer.addChild(
-      new Markdown(hotkeys.trim(), 1, 1, this.getMarkdownThemeWithSettings()),
-    );
-    this.chatContainer.addChild(new DynamicBorder());
-    this.ui.requestRender();
+    this.addMarkdownPanel("Keyboard Shortcuts", formatHotkeysMarkdown(shortcuts));
   }
 
   private async handleClearCommand(): Promise<void> {
