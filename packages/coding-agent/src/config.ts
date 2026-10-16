@@ -388,7 +388,7 @@ export function getSelfUpdateUnavailableInstruction(
   const method = detectInstallMethod();
   const target = normalizeSelfUpdatePackageTarget(updatePackageTarget);
   if (method === "bun-binary") {
-    return `Download from: https://github.com/earendil-works/pi/releases/latest`;
+    return `Download from: ${RELEASES_URL}/latest`;
   }
   const command = getSelfUpdateCommandForMethod(method, packageName, target, npmCommand);
   if (command) {
@@ -633,6 +633,7 @@ export const APP_NAME: string = msaConfigName || "msa";
 export const APP_TITLE: string = msaConfigName ? APP_NAME : "msa";
 export const CONFIG_DIR_NAME: string = pkg.msaConfig?.configDir || ".msa";
 export const VERSION: string = pkg.version || "0.0.0";
+export const RELEASES_URL = "https://github.com/masseater/msa/releases";
 
 // e.g., MSA_CODING_AGENT_DIR or TAU_CODING_AGENT_DIR
 export const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`;
