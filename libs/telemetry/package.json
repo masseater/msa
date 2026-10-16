@@ -1,0 +1,46 @@
+{
+  "name": "@msa/telemetry",
+  "version": "0.0.2",
+  "description": "Vendor-neutral telemetry contracts and typed schema utilities for msa",
+  "keywords": [
+    "observability",
+    "telemetry",
+    "tracing"
+  ],
+  "license": "MIT",
+  "author": "Mario Zechner",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/masseater/msa.git",
+    "directory": "libs/telemetry"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "shx rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest --run"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..");
-const packageDir = join(repoRoot, "packages", "coding-agent");
+const packageDir = join(repoRoot, "apps", "coding-agent");
 const distCliPath = join(packageDir, "dist", "cli.js");
 const bundledDistCliPath = join(packageDir, "dist", "bundle", "cli.js");
 const srcCliPath = join(packageDir, "src", "cli.ts");
@@ -21,8 +21,8 @@ function printHelp() {
   node scripts/profile-coding-agent-node.mjs [options]
 
 Profiles coding-agent startup with the runtime selected below:
-- npm run profile:tui     -> builds packages/coding-agent and profiles TUI startup with Node
-- npm run profile:rpc     -> builds packages/coding-agent and profiles RPC startup with Node
+- npm run profile:tui     -> builds apps/coding-agent and profiles TUI startup with Node
+- npm run profile:rpc     -> builds apps/coding-agent and profiles RPC startup with Node
 - bun run profile:tui     -> profiles TUI startup from src/cli.ts directly with Bun
 - bun run profile:rpc     -> profiles RPC startup from src/cli.ts directly with Bun
 
@@ -299,18 +299,18 @@ async function runBuild(bundle) {
         "run",
         "build",
         "--workspace",
-        "packages/tui",
+        "libs/tui",
         "--workspace",
-        "packages/telemetry",
+        "libs/telemetry",
         "--workspace",
-        "packages/ai",
+        "libs/ai",
         "--workspace",
-        "packages/agent",
+        "libs/agent",
       ],
     },
     {
       label: "Coding-agent build",
-      args: ["run", bundle ? "build" : "build:unbundled", "--workspace", "packages/coding-agent"],
+      args: ["run", bundle ? "build" : "build:unbundled", "--workspace", "apps/coding-agent"],
     },
   ];
 
@@ -606,7 +606,7 @@ async function main() {
   }
   if (runtime === "bun") {
     process.stdout.write(
-      `Using Bun runtime with ${options.mode === "rpc" ? "packages/coding-agent/src/cli.ts --mode rpc" : "packages/coding-agent/src/cli.ts"}\n`,
+      `Using Bun runtime with ${options.mode === "rpc" ? "apps/coding-agent/src/cli.ts --mode rpc" : "apps/coding-agent/src/cli.ts"}\n`,
     );
   }
 

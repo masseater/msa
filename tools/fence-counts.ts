@@ -81,7 +81,7 @@ const writeFlagConfig = (context: FenceContext, flag: string, enabled: boolean) 
         "../../*.ts",
         "../../tools/**",
         "../../**/dist/**",
-        "../../packages/coding-agent/examples/extensions/gondolin/**",
+        "../../apps/coding-agent/examples/extensions/gondolin/**",
       ],
     });
     yield* context.fs.writeFileString(configPath, `${content}\n`);

@@ -51,7 +51,7 @@ const makeContext = () =>
     // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const path = yield* Path.Path;
     const repoRoot = path.resolve(import.meta.dirname, "..");
-    const codingAgentDir = path.join(repoRoot, "packages", "coding-agent");
+    const codingAgentDir = path.join(repoRoot, "apps", "coding-agent");
     const packageJsonText = yield* fs.readFileString(path.join(codingAgentDir, "package.json"));
     const { version } = yield* Schema.decodeEffect(packageJsonJson)(packageJsonText);
     if (!VERSION_PATTERN.test(version)) {
@@ -62,7 +62,7 @@ const makeContext = () =>
       path,
       repoRoot,
       codingAgentDir,
-      tuiDir: path.join(repoRoot, "packages", "tui"),
+      tuiDir: path.join(repoRoot, "libs", "tui"),
       outDir: path.join(repoRoot, ...DEFAULT_OUT_DIR),
       version,
       platforms: requestedPlatforms(),

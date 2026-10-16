@@ -5,12 +5,8 @@ dist/
 *.log
 .DS_Store
 *.tsbuildinfo
-# packages/*/node_modules/
-packages/*/dist/
-packages/*/dist-chrome/
-packages/*/dist-firefox/
-packages/ai/src/providers/data/
-packages/ai/src/providers/.model-generation-*/
+libs/ai/src/providers/data/
+libs/ai/src/providers/.model-generation-*/
 *.cpuprofile
 
 # Environment
@@ -36,18 +32,18 @@ syntax.jsonl
 out.jsonl
 msa-*.html
 out.html
-packages/coding-agent/binaries/
+apps/coding-agent/binaries/
 
 # AI agent worktrees
 .claude/worktrees/
 
 # Agent skills restored from skills-lock.json
 .agents/skills/
-packages/env/bin/
-packages/env/daemon/target/
+libs/env/bin/
+libs/env/daemon/target/
 todo.md
 plans/
 .msa/hf-sessions/
 .msa/hf-sessions-backup/
 collect.sh
-packages/agent/docs/extensions/msa-server-artifact/index.md
+libs/agent/docs/extensions/msa-server-artifact/index.md
