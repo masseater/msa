@@ -30,13 +30,13 @@ Existing sessions are automatically migrated to the current version (v3) when lo
 
 ## Source Files
 
-Source on GitHub ([pi](https://github.com/earendil-works/pi)):
+Source on GitHub ([msa](https://github.com/masseater/msa)):
 
-- [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/core/session-manager.ts) - Session entry types and SessionManager
+- [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/masseater/msa/blob/main/packages/coding-agent/src/core/session-manager.ts) - Session entry types and SessionManager
 - [Message Types](message-types.md) - Shared message and content-block reference
-- [`packages/coding-agent/src/core/messages.ts`](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/core/messages.ts) - Extended message types
-- [`packages/ai/src/types.ts`](https://github.com/earendil-works/pi/blob/main/packages/ai/src/types.ts) - Base message and content-block types
-- [`packages/agent/src/types.ts`](https://github.com/earendil-works/pi/blob/main/packages/agent/src/types.ts) - Extensible `AgentMessage` union
+- [`packages/coding-agent/src/core/messages.ts`](https://github.com/masseater/msa/blob/main/packages/coding-agent/src/core/messages.ts) - Extended message types
+- [`packages/ai/src/types.ts`](https://github.com/masseater/msa/blob/main/packages/ai/src/types.ts) - Base message and content-block types
+- [`packages/agent/src/types.ts`](https://github.com/masseater/msa/blob/main/packages/agent/src/types.ts) - Extensible `AgentMessage` union
 
 For TypeScript definitions in your project, inspect `node_modules/@msa/coding-agent/dist/` and `node_modules/@msa/ai/dist/`.
 

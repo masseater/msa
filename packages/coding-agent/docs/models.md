@@ -48,7 +48,7 @@ Use [`models.json`](configuration.md#agent-directory) when an endpoint speaks an
 
 ```json
 {
-  "$schema": "https://pi.dev/schemas/models.schema.json",
+  "$schema": "https://raw.githubusercontent.com/masseater/msa/main/packages/coding-agent/schemas/models.schema.json",
   "providers": {
     "ollama": {
       "baseUrl": "http://localhost:11434/v1",

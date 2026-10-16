@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://pi.dev/schemas/settings.schema.json",
+  "$id": "https://raw.githubusercontent.com/masseater/msa/main/packages/coding-agent/schemas/settings.schema.json",
   "$comment": "This file is generated from TypeScript source. Do not edit it manually; run npm run generate:schemas.",
   "type": "object",
   "properties": {
@@ -265,7 +265,7 @@
     },
     "enableInstallTelemetry": {
       "type": "boolean",
-      "description": "Send an anonymous version and update ping after changelog-detected updates.",
+      "description": "Send attribution headers to OpenRouter, NVIDIA NIM, and Cloudflare.",
       "default": true
     },
     "enableAnalytics": {

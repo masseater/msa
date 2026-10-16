@@ -37,11 +37,15 @@ Create `Dockerfile.msa`:
 
 ```dockerfile
 FROM node:24-bookworm-slim
+ARG TARGETARCH
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends bash ca-certificates git ripgrep \
+  && apt-get install -y --no-install-recommends bash ca-certificates curl git ripgrep \
   && rm -rf /var/lib/apt/lists/*
-RUN npm install -g --ignore-scripts @msa/coding-agent
+RUN arch="$([ "$TARGETARCH" = arm64 ] && echo arm64 || echo x64)" \
+  && curl -fsSL "https://github.com/masseater/msa/releases/latest/download/msa-linux-${arch}.tar.gz" \
+  | tar -xz -C /opt \
+  && ln -s /opt/msa/msa /usr/local/bin/msa
 
 WORKDIR /workspace
 ENTRYPOINT ["msa"]

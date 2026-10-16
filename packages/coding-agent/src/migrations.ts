@@ -22,7 +22,7 @@ import { stripBom } from "./utils/text.ts";
 const MIGRATION_GUIDE_URL =
   "https://github.com/earendil-works/pi/blob/main/packages/coding-agent/CHANGELOG.md#extensions-migration";
 const EXTENSIONS_DOC_URL =
-  "https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md";
+  "https://github.com/masseater/msa/blob/main/packages/coding-agent/docs/extensions.md";
 
 /**
  * Migrate legacy oauth.json and settings.json apiKeys to auth.json.

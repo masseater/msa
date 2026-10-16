@@ -59,7 +59,6 @@ Use an explicit manifest when resources live elsewhere or need filtering:
 ```json
 {
   "name": "my-msa-package",
-  "keywords": ["msa-package"],
   "msa": {
     "extensions": ["./src/extension.ts"],
     "skills": ["./resources/skills"],
@@ -70,8 +69,6 @@ Use an explicit manifest when resources live elsewhere or need filtering:
 ```
 
 Paths are relative to the package root. Arrays accept glob patterns and exclusions. List dot-prefixed or symlinked resource roots directly when traversal through a glob would not discover them.
-
-The `msa-package` keyword makes an npm package eligible for discovery in the [msa package gallery](https://pi.dev/packages). Optional `msa.image` and `msa.video` fields add gallery previews.
 
 ## Declare dependencies
 
