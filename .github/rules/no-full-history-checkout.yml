@@ -1,0 +1,15 @@
+id: no-full-history-checkout
+language: yaml
+severity: error
+message: "fetch-depth: 0 fetches the whole history. Fetch only the commits the job reads."
+rule:
+  any:
+    - kind: block_mapping_pair
+    - kind: flow_pair
+  all:
+    - has:
+        field: key
+        regex: ^fetch-depth$
+    - has:
+        field: value
+        regex: ^["']?0["']?$

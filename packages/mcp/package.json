@@ -47,12 +47,12 @@
     "test": "vitest --run"
   },
   "dependencies": {
-    "cross-spawn": "7.0.6"
+    "cross-spawn": "catalog:"
   },
   "devDependencies": {
-    "@types/cross-spawn": "6.0.6",
+    "@types/cross-spawn": "catalog:",
     "shx": "catalog:",
-    "vitest": "4.1.11"
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">=22.19.0"

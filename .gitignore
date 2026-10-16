@@ -20,7 +20,6 @@ packages/ai/src/providers/.model-generation-*/
 .vscode/
 .zed/
 .idea/
-.claude/
 *.swp
 *.swo
 *~
@@ -38,6 +37,12 @@ out.jsonl
 pi-*.html
 out.html
 packages/coding-agent/binaries/
+
+# AI agent worktrees
+.claude/worktrees/
+
+# Agent skills restored from skills-lock.json
+.agents/skills/
 packages/env/bin/
 packages/env/daemon/target/
 todo.md

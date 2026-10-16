@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
+  "permissions": {
+    "deny": ["Bash(pnpm *)", "Bash(pnpx *)", "Bash(pn *)", "Bash(pnx *)"]
+  },
+  "enabledMcpjsonServers": ["fallow"],
+  "extraKnownMarketplaces": {
+    "cc-jev-teacher": {
+      "source": {
+        "source": "github",
+        "repo": "masseater/cc-jev-teacher"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "cc-jev-teacher@cc-jev-teacher": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/block-pnpm.ts"],
+            "timeout": 10,
+            "statusMessage": "pnpm の直接実行を確認中"
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/fallow-gate.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh",
+            "timeout": 600,
+            "statusMessage": "依存関係をインストール中"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "--env-file-if-exists=${CLAUDE_PROJECT_DIR}/.env",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/post-edit.ts"
+            ],
+            "timeout": 300,
+            "statusMessage": "fallow で変更を検査中"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "--env-file-if-exists=${CLAUDE_PROJECT_DIR}/.env",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/stop-gate.ts"
+            ],
+            "timeout": 1800,
+            "statusMessage": "vp run verify を実行中"
+          },
+          {
+            "type": "agent",
+            "prompt": "別の目でこのリポジトリの変更を審査する。検査や lint や型の設定、ルール、閾値、抑制コメント、無視パターンが、正当な理由なく無効化・簡易化・緩和されていないかを判断する。\n\n判定材料は `git status`・`git diff HEAD`・`git log main..HEAD -p` と、変更されたファイルおよび設定ファイルである。問題がなければ ok を true にする。問題があれば ok を false にし、reason に何が問題でどう直すべきかを具体的に書く。\n\n$ARGUMENTS",
+            "timeout": 600
+          },
+          {
+            "type": "agent",
+            "prompt": "別の目でこのリポジトリの変更を審査する。自作のコードや仕組みが本当に最終手段かを判断する。CLAUDE.md の最上位原則に照らし、公式の統合手段、既存のライブラリ、ブログや issue の方針を本当に探したうえでの自作かを確かめる。必要なら自分でも探す。\n\n判定材料は `git status`・`git diff HEAD`・`git log main..HEAD -p` と、変更されたファイルおよび設定ファイルである。問題がなければ ok を true にする。問題があれば ok を false にし、reason に何が問題でどう直すべきかを具体的に書く。\n\n$ARGUMENTS",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}

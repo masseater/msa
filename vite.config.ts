@@ -140,13 +140,41 @@ export default defineConfig({
     tasks: {
       verify: {
         command: "vp check",
-        dependsOn: ["engine-checks", "fence-check", "syncpack", "fallow-all", "audit", "test-all"],
+        dependsOn: [
+          "engine-checks",
+          "fence-check",
+          "syncpack",
+          "actions-lint",
+          "mcp-conformance",
+          "fallow-all",
+          "audit",
+          "test-all",
+        ],
       },
       "engine-checks": {
         command:
           "node scripts/check-ts-relative-imports.mjs && node scripts/check-entry-graphs.mjs && node scripts/check-browser-smoke.mjs",
       },
       "fence-check": "node tools/fence-counts.ts",
+      "actions-lint": {
+        command:
+          'uvx --from actionlint-py@1.7.12.25 actionlint && uvx zizmor@1.30.1 $(test -n "$CLAUDE_CODE_REMOTE" && echo --no-online-audits) .github && ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows',
+        cache: {
+          env: ["CLAUDE_CODE_REMOTE"],
+          untrackedEnv: [
+            "GH_TOKEN",
+            "HTTPS_PROXY",
+            "https_proxy",
+            "NO_PROXY",
+            "no_proxy",
+            "SSL_CERT_FILE",
+          ],
+        },
+      },
+      "mcp-conformance": {
+        command: "node packages/coding-agent/test/mcp-conformance/run.ts",
+        cache: false,
+      },
       "fallow-all": "vp run -r fallow",
       syncpack: "syncpack lint",
       gitleaks: {
