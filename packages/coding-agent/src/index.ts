@@ -23,6 +23,7 @@ export {
   parseSkillBlock,
   type SessionStats,
 } from "./core/agent-session.ts";
+export type { GoalEntryData, GoalEvaluation, GoalSnapshot, GoalVerdict } from "./core/goal.ts";
 export { readStoredCredential } from "./core/auth-storage.ts";
 export type { CacheWarmingDecision, CacheWarmingStatus } from "./core/cache-warmer.ts";
 // Compaction

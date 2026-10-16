@@ -9,6 +9,7 @@
 import type { AssistantMessage, ImageContent } from "@msa/ai";
 
 import type { AgentSessionRuntime } from "../core/agent-session-runtime.ts";
+import { describeGoalEntry, describeGoalStatus } from "../core/goal.ts";
 import {
   flushRawStdout,
   waitForRawStdoutBackpressure,
@@ -116,6 +117,13 @@ export async function runPrintMode(
     unsubscribe = session.subscribe((event) => {
       if (mode === "json") {
         writeRawStdout(`${JSON.stringify(toJsonEvent(event))}\n`);
+        return;
+      }
+      if (event.type === "goal_status") {
+        console.error(describeGoalStatus(event.goal, Date.now()).join("\n"));
+      } else if (event.type === "entry_appended") {
+        const line = describeGoalEntry(event.entry);
+        if (line) console.error(line.text);
       }
     });
     unsubscribeBackpressure =

@@ -199,6 +199,15 @@
         }
       }
     },
+    "goal": {
+      "type": "object",
+      "properties": {
+        "evaluatorModel": {
+          "type": "string",
+          "description": "Model that judges /goal conditions, as \"provider/id\". Default: the strongest small model (haiku, flash, mini, lite, small) of the working model's provider, or the working model."
+        }
+      }
+    },
     "hideThinkingBlock": {
       "type": "boolean",
       "default": false

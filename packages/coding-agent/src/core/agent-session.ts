@@ -32,7 +32,7 @@ import {
   runToolCall,
   type ThinkingLevel,
 } from "@msa/agent-core";
-import { contentText, getCurrentSystemMessage, retryDelayMs } from "@msa/ai";
+import { contentText, getCurrentSystemMessage, normalizeContext, retryDelayMs } from "@msa/ai";
 import type {
   AssistantMessage,
   AuthResult,
@@ -72,6 +72,7 @@ import {
   calculateContextTokens,
   collectEntriesForBranchSummary,
   compact,
+  completeSummarization,
   estimateContextTokens,
   estimateProjectedContextTokens,
   estimateTokens,
@@ -115,9 +116,22 @@ import {
   wrapRegisteredTools,
 } from "./extensions/index.ts";
 import { type BeforeAgentStartTrigger, emitSessionShutdownEvent } from "./extensions/runner.ts";
+import {
+  findActiveGoalCondition,
+  GOAL_CONTINUE_MESSAGE_TYPE,
+  GOAL_ENTRY_TYPE,
+  GOAL_EVALUATOR_SYSTEM_PROMPT,
+  type GoalCommand,
+  type GoalEntryData,
+  GoalLoop,
+  type GoalSnapshot,
+  parseGoalCommand,
+  pickEvaluatorModel,
+} from "./goal.ts";
 import { createToolNameMatcher, isMcpToolName } from "./mcp-servers.ts";
 import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
+import { resolveModelReference } from "./model-resolver.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import { NestedToolCallRunner } from "./nested-tool-calls.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
@@ -249,7 +263,11 @@ export type AgentSessionEvent =
       reason: "manual" | "threshold" | "overflow";
     }
   | { type: "summarization_retry_finished" }
-  | { type: "bash_execution_update"; id?: string; delta: string };
+  | { type: "bash_execution_update"; id?: string; delta: string }
+  /** The active `/goal` changed: set, evaluated, ended, or started or finished evaluating. */
+  | { type: "goal_changed"; goal: GoalSnapshot | undefined }
+  /** `/goal` without arguments, or `/goal clear` without an active goal. */
+  | { type: "goal_status"; goal: GoalSnapshot | undefined };
 
 /** Listener function for agent session events */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
@@ -451,6 +469,8 @@ export class AgentSession {
   private _lastAssistantMessage: AssistantMessage | undefined;
   private _lastAssistantToolResults: AgentMessage[] = [];
   private _lastActivityOutcome: AgentActivityOutcome = "completed";
+  private readonly _goal: GoalLoop;
+  private _totalTokensCache: { entryCount: number; total: number } | undefined;
   private _isBeforeSettle = false;
   private _abortDuringBeforeSettle = false;
   private _isEmittingAgentSettled = false;
@@ -539,6 +559,31 @@ export class AgentSession {
       type: "session_start",
       reason: "startup",
     };
+
+    this._goal = new GoalLoop(
+      {
+        messages: () => this.messages,
+        totalTokens: () => this._totalSessionTokens(),
+        lastAssistant: () => this._findLastAssistantMessage(),
+        isContextOverflow: (message) =>
+          isContextOverflow(
+            message,
+            (this._modelForMessage(message) ?? this.model)?.contextWindow ?? 0,
+          ),
+        evaluate: (prompt, signal) => this._evaluateGoal(prompt, signal),
+        record: (data) => this._recordGoalEntry(data),
+        queueContinue: (text) =>
+          this.agent.followUp({
+            role: "custom",
+            customType: GOAL_CONTINUE_MESSAGE_TYPE,
+            content: text,
+            display: false,
+            timestamp: Date.now(),
+          }),
+        changed: () => this._emit({ type: "goal_changed", goal: this._goal.snapshot }),
+      },
+      findActiveGoalCondition(this.sessionManager.getBranch()),
+    );
 
     // Always subscribe to agent events for internal handling
     // (session persistence, extensions, auto-compaction, retry logic)
@@ -1188,6 +1233,7 @@ export class AgentSession {
         this._nestedToolCalls.clear();
       }
     }
+    if (event.type === "tool_execution_start") this._goal.noteToolUse();
     // When a user message starts, check if it's from either queue and remove it BEFORE emitting
     // This ensures the UI sees the updated queue state
     if (event.type === "message_start" && event.message.role === "user") {
@@ -1480,6 +1526,7 @@ export class AgentSession {
       this.abortCompaction();
       this.abortBranchSummary();
       this.abortBash();
+      this._goal.abort();
       this.agent.abort();
     } catch {
       // Dispose must succeed even if an abort hook throws.
@@ -1953,6 +2000,7 @@ export class AgentSession {
     // The run records the loadout in the transcript; restored tools that did not register by now
     // are dropped, so a tool that never registers does not stay pending.
     this._pendingToolNames.clear();
+    this._goal.resetGuards();
     try {
       await this.agent.prompt(messages);
       while (!this._agentRunAbortRequested) {
@@ -1961,8 +2009,11 @@ export class AgentSession {
           await this.agent.continue();
           continue;
         }
-        if (this._agentRunAbortRequested || !(await this._runBeforeSettleBoundary())) break;
         if (this._agentRunAbortRequested) break;
+        const continueRun =
+          (await this._runBeforeSettleBoundary()) ||
+          (!this._agentRunAbortRequested && (await this._goal.afterRun()));
+        if (!continueRun || this._agentRunAbortRequested) break;
         await this.agent.continue();
       }
     } finally {
@@ -2169,6 +2220,11 @@ export class AgentSession {
     }
     const expandPromptTemplates = options?.expandPromptTemplates ?? true;
     const preflightResult = options?.preflightResult;
+    const goalCommand = expandPromptTemplates ? parseGoalCommand(text) : undefined;
+    if (goalCommand) {
+      await this._runGoalCommand(goalCommand, options);
+      return;
+    }
     // Handle extension commands first (execute immediately, even during streaming)
     // Extension commands manage their own LLM interaction via msa.sendMessage()
     if (expandPromptTemplates && text.startsWith("/")) {
@@ -2577,6 +2633,7 @@ export class AgentSession {
     this.abortRetry();
     this.abortCompaction();
     this.abortBranchSummary();
+    this._goal.abort();
     if (this._isBeforeSettle) this._abortDuringBeforeSettle = true;
     this.agent.abort();
     await this.waitForIdle();
@@ -2587,6 +2644,119 @@ export class AgentSession {
       return;
     }
     await this._getIdleWaitPromise();
+  }
+
+  // =========================================================================
+  // Goal
+  // =========================================================================
+
+  /** The active `/goal`, or undefined when none is set. */
+  get goal(): GoalSnapshot | undefined {
+    return this._goal.snapshot;
+  }
+
+  /**
+   * Set the completion condition that later runs continue toward, replacing any active one.
+   * Does not start a run; `prompt("/goal <condition>")` sets it and starts one.
+   */
+  setGoal(condition: string): void {
+    this._goal.set(condition);
+  }
+
+  /** Clear the active goal. Returns false when there was none. */
+  clearGoal(): boolean {
+    return this._goal.clear();
+  }
+
+  private async _runGoalCommand(command: GoalCommand, options?: PromptOptions): Promise<void> {
+    if (command.kind === "set") {
+      this._goal.set(command.condition);
+      const goal = this._goal.snapshot;
+      if (!goal) return;
+      await this.prompt(goal.condition, {
+        ...options,
+        expandPromptTemplates: false,
+        streamingBehavior: options?.streamingBehavior ?? "steer",
+      });
+      return;
+    }
+    if (command.kind === "status" || !this._goal.clear()) {
+      this._emit({ type: "goal_status", goal: this._goal.snapshot });
+    }
+    options?.preflightResult?.("handled");
+  }
+
+  private _recordGoalEntry(data: GoalEntryData): void {
+    const entry = this.sessionManager.getEntry(
+      this.sessionManager.appendCustomEntry(GOAL_ENTRY_TYPE, data),
+    );
+    if (entry) this._emit({ type: "entry_appended", entry });
+  }
+
+  /** Tokens billed across the whole session; cached because goal snapshots ask on every render. */
+  private _totalSessionTokens(): number {
+    const entryCount = this.sessionManager.getEntryCount();
+    if (this._totalTokensCache?.entryCount !== entryCount) {
+      this._totalTokensCache = { entryCount, total: this.getSessionStats().tokens.total };
+    }
+    return this._totalTokensCache.total;
+  }
+
+  private _goalEvaluatorModel(): Model<any> {
+    const configured = this.settingsManager.getGoalEvaluatorModel();
+    const available = this._modelRuntime.getAvailableSnapshot();
+    if (configured) {
+      const result = resolveModelReference(
+        { text: configured, thinkingSuffix: "none", fuzzy: false },
+        available,
+        () => true,
+      );
+      if (result.status !== "resolved") {
+        throw new Error(`goal.evaluatorModel "${configured}" is not an available model`);
+      }
+      return result.model;
+    }
+    const current = this._limitsModel();
+    if (!current) throw new Error(formatNoModelSelectedMessage());
+    return pickEvaluatorModel(current, available);
+  }
+
+  private async _evaluateGoal(prompt: string, signal: AbortSignal): Promise<string> {
+    const {
+      model,
+      thinkingLevel: _thinkingLevel,
+      ...credentials
+    } = await this._getSummarizationRequestAuth(this._goalEvaluatorModel(), signal);
+    const response = await completeSummarization(
+      model,
+      normalizeContext({
+        systemPrompt: GOAL_EVALUATOR_SYSTEM_PROMPT,
+        messages: [
+          { role: "user", content: [{ type: "text", text: prompt }], timestamp: Date.now() },
+        ],
+      }),
+      {
+        ...credentials,
+        maxTokens: Math.min(2048, model.maxTokens > 0 ? model.maxTokens : 2048),
+        signal,
+        sessionId: this.sessionId,
+      },
+      this.agent.streamFunction,
+      this.settingsManager.getRetrySettings(),
+    );
+    if (response.usage) {
+      const entry = this.sessionManager.appendUsage(
+        "goal_evaluation",
+        response.provider,
+        response.model,
+        response.usage,
+      );
+      this._emit({ type: "entry_appended", entry });
+    }
+    if (response.stopReason === "aborted") throw new Error("cancelled");
+    if (response.stopReason === "error") throw new Error(response.errorMessage || "Unknown error");
+    if (response.stopReason === "length") throw new Error("the response hit the token cap");
+    return contentText(response.content).trim();
   }
 
   // =========================================================================
