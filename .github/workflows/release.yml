@@ -54,9 +54,6 @@ jobs:
             exit 1
           fi
 
-      - name: Hydrate model data
-        run: vp run hydrate:model-data
-
       - name: Build release binaries
         run: vp run build-binaries
 
