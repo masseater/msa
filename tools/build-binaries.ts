@@ -134,8 +134,8 @@ const prepareWorkspace = (context: Context) =>
     if (context.skipBuild) {
       yield* Console.log("==> skipping the workspace build (--skip-build)");
     } else {
-      yield* Console.log("==> building workspace packages (vp run build:offline)");
-      yield* run("vp", ["run", "--no-cache", "build:offline"], context.repoRoot);
+      yield* Console.log("==> building workspace packages (vp run build)");
+      yield* run("vp", ["run", "--no-cache", "build"], context.repoRoot);
     }
     yield* run(
       "vp",
