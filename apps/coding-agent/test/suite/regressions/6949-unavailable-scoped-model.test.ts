@@ -31,8 +31,12 @@ function createInteractiveContext(options: {
       setEnabledModels: vi.fn(),
     },
     showStatus: vi.fn(),
-    showSelector: (factory: (done: () => void) => { component: ScopedModelsSelectorComponent }) => {
-      selector = factory(() => {}).component;
+    editorSlot: {
+      showSelector: (
+        factory: (done: () => void) => { component: ScopedModelsSelectorComponent },
+      ) => {
+        selector = factory(() => {}).component;
+      },
     },
     updateAvailableProviderCount: vi.fn(),
     ui: { requestRender: vi.fn() },

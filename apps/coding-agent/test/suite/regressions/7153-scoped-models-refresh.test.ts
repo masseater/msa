@@ -31,19 +31,21 @@ function openSelector(harness: Harness, initialModels: readonly Model<Api>[]) {
   const context = {
     session: harness.session,
     settingsManager: harness.settingsManager,
-    showSelector: (
-      factory: (close: () => void) => {
-        component: ScopedModelsSelectorComponent;
-        dispose?: () => void;
+    editorSlot: {
+      showSelector: (
+        factory: (close: () => void) => {
+          component: ScopedModelsSelectorComponent;
+          dispose?: () => void;
+        },
+      ) => {
+        const close = () => {
+          dispose?.();
+          done();
+        };
+        const created = factory(close);
+        selector = created.component;
+        dispose = created.dispose;
       },
-    ) => {
-      const close = () => {
-        dispose?.();
-        done();
-      };
-      const created = factory(close);
-      selector = created.component;
-      dispose = created.dispose;
     },
     updateAvailableProviderCount: vi.fn(),
     ui: { requestRender: vi.fn() } as unknown as TUI,

@@ -1,6 +1,6 @@
 import * as path from "node:path";
 
-import type { Container, EditorComponent, TUI } from "@msa/tui";
+import type { Container, TUI } from "@msa/tui";
 
 import { getAuthCredential } from "../../cli/auth-command.ts";
 import type { AgentSession } from "../../core/agent-session.ts";
@@ -21,14 +21,14 @@ import { serializeSessionBranch } from "../../core/session-export.ts";
 import { BorderedLoader } from "./components/bordered-loader.ts";
 import { ExtensionEditorComponent } from "./components/extension-editor.ts";
 import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
+import type { EditorSlot } from "./editor-slot.ts";
 import { createShareTrailingEntries } from "./session-share.ts";
 import { theme } from "./theme/theme.ts";
 
 interface BugReportContext {
   session: AgentSession;
   ui: TUI;
-  editorContainer: Container;
-  editor: EditorComponent;
+  editorSlot: EditorSlot;
   keybindings: KeybindingsManager;
   showStatus: (message: string) => void;
   showError: (message: string) => void;
@@ -298,18 +298,12 @@ function showLoader(context: BugReportContext, message: string): BorderedLoader 
 }
 
 function showOverlay(context: BugReportContext, component: Overlay): void {
-  context.editorContainer.clear();
-  context.editorContainer.addChild(component);
-  context.ui.setFocus(component);
-  context.ui.requestRender();
+  context.editorSlot.show(component);
 }
 
 function restoreEditor(context: BugReportContext, component: Overlay): void {
   component.dispose?.();
-  context.editorContainer.clear();
-  context.editorContainer.addChild(context.editor);
-  context.ui.setFocus(context.editor);
-  context.ui.requestRender();
+  context.editorSlot.restoreEditor();
 }
 
 function errorMessage(error: unknown): string {

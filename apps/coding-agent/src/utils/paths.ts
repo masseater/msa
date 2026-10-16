@@ -128,6 +128,14 @@ export function getCwdRelativePath(filePath: string, cwd: string): string | unde
   return isInsideCwd ? relativePath || "." : undefined;
 }
 
+/** Replaces a leading home directory with `~`; other paths are returned unchanged. */
+export function abbreviateHomePath(filePath: string, home: string = homedir()): string {
+  if (!home || !filePath.startsWith(home)) return filePath;
+  const rest = filePath.slice(home.length);
+  if (rest !== "" && !rest.startsWith("/") && !rest.startsWith("\\")) return filePath;
+  return `~${rest}`;
+}
+
 export function formatPathRelativeToCwdOrAbsolute(filePath: string, cwd: string): string {
   const absolutePath = resolvePath(filePath, cwd);
   return (getCwdRelativePath(absolutePath, cwd) ?? absolutePath).split(sep).join("/");

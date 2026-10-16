@@ -5,20 +5,20 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { DEFAULT_RADIUS_GATEWAY } from "@msa/ai/providers/radius-config";
-import { type Container, type EditorComponent, hyperlink, type TUI } from "@msa/tui";
+import { hyperlink, type TUI } from "@msa/tui";
 
 import { getAuthCredential } from "../../cli/auth-command.ts";
 import { getShareViewerUrl } from "../../config.ts";
 import type { AgentSession } from "../../core/agent-session.ts";
 import { exportSessionToJsonl } from "../../core/session-export.ts";
 import { BorderedLoader } from "./components/bordered-loader.ts";
+import type { EditorSlot } from "./editor-slot.ts";
 import { theme } from "./theme/theme.ts";
 
 interface SessionShareContext {
   session: AgentSession;
   ui: TUI;
-  editorContainer: Container;
-  editor: EditorComponent;
+  editorSlot: EditorSlot;
   showStatus: (message: string) => void;
   showError: (message: string) => void;
 }
@@ -120,10 +120,7 @@ async function tryShareViaRadius(tmpFile: string, context: SessionShareContext):
   if (!token) return false;
 
   const loader = new BorderedLoader(context.ui, theme, "Uploading to Radius...");
-  context.editorContainer.clear();
-  context.editorContainer.addChild(loader);
-  context.ui.setFocus(loader);
-  context.ui.requestRender();
+  context.editorSlot.show(loader);
   loader.onAbort = () => {
     restoreEditor(loader, context);
     context.showStatus("Share cancelled");
@@ -173,10 +170,7 @@ async function tryShareViaRadius(tmpFile: string, context: SessionShareContext):
 
 async function shareViaGist(tmpFile: string, context: SessionShareContext): Promise<void> {
   const loader = new BorderedLoader(context.ui, theme, "Creating gist...");
-  context.editorContainer.clear();
-  context.editorContainer.addChild(loader);
-  context.ui.setFocus(loader);
-  context.ui.requestRender();
+  context.editorSlot.show(loader);
 
   let proc: ReturnType<typeof spawn> | null = null;
   loader.onAbort = () => {
@@ -232,7 +226,5 @@ async function shareViaGist(tmpFile: string, context: SessionShareContext): Prom
 
 function restoreEditor(loader: BorderedLoader, context: SessionShareContext): void {
   loader.dispose();
-  context.editorContainer.clear();
-  context.editorContainer.addChild(context.editor);
-  context.ui.setFocus(context.editor);
+  context.editorSlot.restoreEditor();
 }

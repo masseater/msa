@@ -32,10 +32,8 @@ type LoadedResourcesContext = {
       getRegisteredCommands: () => [];
     };
   };
-  getStartupExpansionState: () => boolean;
-  shouldShowStartupDetails: () => boolean;
-  formatDisplayPath: (resourcePath: string) => string;
-  formatContextPath: (resourcePath: string) => string;
+  isStartupExpanded: () => boolean;
+  getStartupVisibility: () => { header: boolean; details: boolean };
   getBuiltInCommandConflictDiagnostics: (
     extensionRunner: LoadedResourcesContext["session"]["extensionRunner"],
   ) => [];
@@ -75,7 +73,7 @@ type ReloadCommandContext = {
   keybindings: { reload: () => void };
   customHeader?: unknown;
   builtInHeader?: unknown;
-  editorContainer: { clear: () => void; addChild: (component: unknown) => void };
+  editorSlot: { show: (component: unknown) => void };
   ui: {
     setFocus: (component: unknown) => void;
     requestRender: (force?: boolean) => void;
@@ -122,7 +120,7 @@ type ReloadCommandContextOverrides = Omit<
   | "session"
   | "settingsManager"
   | "keybindings"
-  | "editorContainer"
+  | "editorSlot"
   | "ui"
   | "defaultEditor"
   | "themeController"
@@ -130,7 +128,7 @@ type ReloadCommandContextOverrides = Omit<
   session?: Partial<ReloadCommandContext["session"]>;
   settingsManager?: Partial<ReloadCommandContext["settingsManager"]>;
   keybindings?: Partial<ReloadCommandContext["keybindings"]>;
-  editorContainer?: Partial<ReloadCommandContext["editorContainer"]>;
+  editorSlot?: Partial<ReloadCommandContext["editorSlot"]>;
   ui?: Partial<ReloadCommandContext["ui"]>;
   defaultEditor?: Partial<ReloadCommandContext["defaultEditor"]>;
   themeController?: Partial<ReloadCommandContext["themeController"]>;
@@ -140,6 +138,13 @@ function createReloadCommandContext(
   overrides: ReloadCommandContextOverrides = {},
 ): ReloadCommandContext {
   const editor = overrides.editor ?? {};
+  const ui = {
+    setFocus: () => {},
+    requestRender: () => {},
+    setShowHardwareCursor: () => {},
+    setClearOnShrink: () => {},
+    ...overrides.ui,
+  };
   return {
     hideThinkingBlock: overrides.hideThinkingBlock ?? false,
     session: {
@@ -164,14 +169,8 @@ function createReloadCommandContext(
       ...overrides.settingsManager,
     },
     keybindings: { reload: () => {}, ...overrides.keybindings },
-    editorContainer: { clear: () => {}, addChild: () => {}, ...overrides.editorContainer },
-    ui: {
-      setFocus: () => {},
-      requestRender: () => {},
-      setShowHardwareCursor: () => {},
-      setClearOnShrink: () => {},
-      ...overrides.ui,
-    },
+    editorSlot: { show: (component) => ui.setFocus(component), ...overrides.editorSlot },
+    ui,
     editor,
     defaultEditor: {
       setPaddingX: () => {},
@@ -235,10 +234,8 @@ function createLoadedResourcesContext(): LoadedResourcesContext {
         getRegisteredCommands: () => [],
       },
     },
-    getStartupExpansionState: () => false,
-    shouldShowStartupDetails: () => true,
-    formatDisplayPath: (resourcePath) => resourcePath,
-    formatContextPath: (resourcePath) => resourcePath.replace("/repo/", ""),
+    isStartupExpanded: () => false,
+    getStartupVisibility: () => ({ header: true, details: true }),
     getBuiltInCommandConflictDiagnostics: () => [],
   };
 }
