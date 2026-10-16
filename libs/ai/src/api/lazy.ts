@@ -5,6 +5,7 @@ import type {
   Model,
   ProviderStreams,
 } from "../types.ts";
+import { toErrorMessage } from "../utils/errors.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 
 function createSetupErrorMessage(
@@ -27,7 +28,7 @@ function createSetupErrorMessage(
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "error",
-    errorMessage: error instanceof Error ? error.message : String(error),
+    errorMessage: toErrorMessage(error),
     timestamp,
   };
 }

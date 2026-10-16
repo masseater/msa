@@ -36,6 +36,7 @@ import {
   resolveConfigValueOrThrow,
   resolveHeadersOrThrow,
 } from "../../core/resolve-config-value.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import type { McpServerEntry } from "./config.ts";
 import type { McpServerLog } from "./log.ts";
 import {
@@ -66,10 +67,6 @@ export type McpTransportFactory = (
   cwd: string,
   authProvider: AuthProvider | undefined,
 ) => McpTransport;
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /** Network failures and overloaded or restarting servers, which are worth another attempt. */
 function isTransientError(error: unknown): boolean {
@@ -450,8 +447,8 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
     }
     this.state = this.closed ? "closed" : "failed";
     this.error = this.stderrTail
-      ? `${errorMessage(error)}\n${this.stderrTail}`
-      : errorMessage(error);
+      ? `${toErrorMessage(error)}\n${this.stderrTail}`
+      : toErrorMessage(error);
     this.changed();
     return new Error(`MCP server "${this.entry.name}" failed to connect: ${this.error}`);
   }
@@ -473,7 +470,7 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
       this.tools = tools;
       this.onTools(this);
     } catch (error) {
-      this.error = `Failed to refresh tools: ${errorMessage(error)}`;
+      this.error = `Failed to refresh tools: ${toErrorMessage(error)}`;
     }
     this.changed();
   }

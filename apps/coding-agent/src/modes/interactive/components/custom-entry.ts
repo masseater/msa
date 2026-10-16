@@ -3,6 +3,7 @@ import { Box, Container, Spacer, Text } from "@msa/tui";
 
 import type { EntryRenderer } from "../../../core/extensions/types.ts";
 import type { CustomEntry } from "../../../core/session-manager.ts";
+import { toErrorMessage } from "../../../utils/errors.ts";
 import { theme } from "../theme/theme.ts";
 
 /**
@@ -53,7 +54,7 @@ export class CustomEntryComponent extends Container {
     try {
       component = this.renderer(this.entry, { expanded: this._expanded }, theme);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       const box = new Box(this.outputPad, 1, (text) => theme.bg("customMessageBg", text));
       box.addChild(
         new Text(theme.fg("error", `[${this.entry.customType}] renderer failed: ${message}`), 0, 0),

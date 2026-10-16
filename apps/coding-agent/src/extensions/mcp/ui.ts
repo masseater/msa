@@ -23,6 +23,7 @@ import { AuthUrlComponent } from "../../modes/interactive/components/auth-url.ts
 import { DynamicBorder } from "../../modes/interactive/components/dynamic-border.ts";
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
 import { getSelectListTheme, type Theme } from "../../modes/interactive/theme/theme.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 
 export interface McpMenu {
   title: string;
@@ -281,7 +282,7 @@ export async function showMcpManager(
     void manage(view).then(
       () => done(),
       (error: unknown) => {
-        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+        ctx.ui.notify(toErrorMessage(error), "error");
         done();
       },
     );

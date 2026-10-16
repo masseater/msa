@@ -2,6 +2,7 @@ import type { Terminal, WheelScrollLines } from "@msa/tui";
 import { ProcessTerminal, type TUI, TuiAltScreen, TuiMainScreen } from "@msa/tui";
 
 import { copyToClipboard } from "../../utils/clipboard.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import { openBrowser } from "../../utils/open-browser.ts";
 import { keyDisplayText } from "./components/keybinding-hints.ts";
 import { theme } from "./theme/theme.ts";
@@ -47,7 +48,7 @@ export function createInteractiveTui(options: InteractiveTuiOptions): TuiMainScr
           await copyToClipboard(text);
           return true;
         } catch (error) {
-          return error instanceof Error ? error.message : String(error);
+          return toErrorMessage(error);
         }
       },
     });

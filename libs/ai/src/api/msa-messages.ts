@@ -28,6 +28,7 @@ import {
   appendAssistantMessageDiagnostic,
   createAssistantMessageDiagnostic,
 } from "../utils/diagnostics.ts";
+import { toErrorMessage } from "../utils/errors.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
 import { parseStreamingJson } from "../utils/json-parse.ts";
@@ -349,7 +350,7 @@ function createErrorEvent(
     model: model.id,
     usage: createEmptyUsage(),
     stopReason: reason,
-    errorMessage: error instanceof Error ? error.message : String(error),
+    errorMessage: toErrorMessage(error),
     timestamp: Date.now(),
   };
 

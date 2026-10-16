@@ -26,6 +26,7 @@ import {
   waitForRawStdoutBackpressure,
   writeRawStdout,
 } from "../../core/output-guard.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { type Theme, theme } from "../interactive/theme/theme.ts";
 import { toJsonEvent } from "../json-event.ts";
@@ -782,13 +783,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
     try {
       parsed = JSON.parse(line);
     } catch (parseError: unknown) {
-      output(
-        error(
-          undefined,
-          "parse",
-          `Failed to parse command: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
-        ),
-      );
+      output(error(undefined, "parse", `Failed to parse command: ${toErrorMessage(parseError)}`));
       await waitForRawStdoutBackpressure();
       return;
     }
@@ -818,13 +813,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
       }
       await checkShutdownRequested();
     } catch (commandError: unknown) {
-      output(
-        error(
-          command.id,
-          command.type,
-          commandError instanceof Error ? commandError.message : String(commandError),
-        ),
-      );
+      output(error(command.id, command.type, toErrorMessage(commandError)));
       await waitForRawStdoutBackpressure();
     }
   };

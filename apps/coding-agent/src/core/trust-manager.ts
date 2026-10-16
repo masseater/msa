@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import lockfile from "proper-lockfile";
 
 import { CONFIG_DIR_NAME } from "../config.ts";
+import { toErrorMessage } from "../utils/errors.ts";
 import { canonicalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 
@@ -115,7 +116,7 @@ function readTrustFile(path: string): TrustFile {
   try {
     parsed = JSON.parse(stripBom(readFileSync(path, "utf-8")));
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = toErrorMessage(error);
     throw new Error(`Failed to read trust store ${path}: ${message}`);
   }
 

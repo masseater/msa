@@ -9,6 +9,7 @@ import type { ImageContent } from "@msa/ai";
 import chalk from "chalk";
 
 import { resolveReadPath } from "../core/tools/path-utils.ts";
+import { toErrorMessage } from "../utils/errors.ts";
 import { processImage } from "../utils/image-process.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime.ts";
 import { stripBom } from "../utils/text.ts";
@@ -82,7 +83,7 @@ export async function processFileArguments(
         const content = stripBom(await readFile(absolutePath, "utf-8"));
         text += `<file name="${absolutePath}">\n${content}\n</file>\n`;
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = toErrorMessage(error);
         console.error(chalk.red(`Error: Could not read file ${absolutePath}: ${message}`));
         process.exit(1);
       }

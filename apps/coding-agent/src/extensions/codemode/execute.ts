@@ -30,6 +30,7 @@ import type { ExtensionToolContext, ToolNamespace } from "../../core/extensions/
 import type { SessionEntry } from "../../core/session-manager.ts";
 import { formatSize } from "../../core/tools/truncate.ts";
 import { combineUsage } from "../../core/usage-totals.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import { writeOutputFile } from "../../utils/output-files.ts";
 import {
   Bm25Ranker,
@@ -381,7 +382,7 @@ async function spillOutput(text: string): Promise<{ path: string } | { error: st
   try {
     return { path: await writeOutputFile("msa-codemode", ".txt", text) };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : String(error) };
+    return { error: toErrorMessage(error) };
   }
 }
 
@@ -413,7 +414,7 @@ async function saveImages(
       const path = await writeOutputFile("msa-codemode", extension, bytes);
       return `[Image saved to ${path} (${kind})]`;
     } catch (error) {
-      return `[Image (${kind}) could not be saved: ${error instanceof Error ? error.message : String(error)}]`;
+      return `[Image (${kind}) could not be saved: ${toErrorMessage(error)}]`;
     }
   };
   const result = await Promise.all(

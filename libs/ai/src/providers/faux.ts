@@ -18,6 +18,7 @@ import type {
   TranscriptContext,
   Usage,
 } from "../types.ts";
+import { toErrorMessage } from "../utils/errors.ts";
 import { createAssistantMessageEventStream } from "../utils/event-stream.ts";
 import { getSystemMessageText } from "../utils/text.ts";
 
@@ -352,7 +353,7 @@ function createErrorMessage(
     model: modelId,
     usage: DEFAULT_USAGE,
     stopReason: "error",
-    errorMessage: error instanceof Error ? error.message : String(error),
+    errorMessage: toErrorMessage(error),
     timestamp: Date.now(),
   };
 }

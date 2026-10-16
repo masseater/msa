@@ -69,8 +69,7 @@ describe("shareSession", () => {
         },
       },
       ui: { setFocus() {}, requestRender() {} },
-      editorContainer: { clear() {}, addChild() {} },
-      editor: {},
+      editorSlot: { show() {}, restoreEditor() {} },
       showStatus() {},
       showError(message: string) {
         errors.push(message);
@@ -117,8 +116,7 @@ describe("shareSession", () => {
         exportToHtml: async (filePath: string) => writeFileSync(filePath, "html"),
       },
       ui: { setFocus() {}, requestRender() {} },
-      editorContainer: { clear() {}, addChild() {} },
-      editor: {},
+      editorSlot: { show() {}, restoreEditor() {} },
       showStatus: (message: string) => statuses.push(message),
       showError: vi.fn(),
     } as never);
@@ -144,8 +142,7 @@ describe("shareSession", () => {
         modelRuntime: { getProvider: () => undefined },
       },
       ui: { setFocus() {}, requestRender() {} },
-      editorContainer: { clear() {}, addChild() {} },
-      editor: {},
+      editorSlot: { show() {}, restoreEditor() {} },
       showStatus: vi.fn(),
       showError: (message: string) => errors.push(message),
     } as never);

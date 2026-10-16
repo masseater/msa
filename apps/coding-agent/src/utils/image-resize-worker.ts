@@ -1,5 +1,6 @@
 import { parentPort } from "node:worker_threads";
 
+import { toErrorMessage } from "./errors.ts";
 import {
   IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
   type ImageResizeOptions,
@@ -43,7 +44,7 @@ port.once("message", (message: unknown) => {
     } catch (error) {
       const response: ResizeImageWorkerResponse = {
         type: IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       };
       port.postMessage(response);
     }

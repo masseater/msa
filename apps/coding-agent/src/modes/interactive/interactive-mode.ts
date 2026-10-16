@@ -10,7 +10,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
-import type { AuthEvent, AuthPrompt } from "@msa/ai";
 import {
   type AssistantMessage,
   type ImageContent,
@@ -23,7 +22,6 @@ import type {
   AutocompleteItem,
   AutocompleteProvider,
   EditorComponent,
-  Keybinding,
   KeyId,
   MarkdownTheme,
   OverlayHandle,
@@ -60,9 +58,7 @@ import {
   CONFIG_DIR_NAME,
   detectInstallChange,
   getAgentDir,
-  getAuthPath,
   getDebugLogPath,
-  getDocsPath,
   RELEASES_URL,
   VERSION,
 } from "../../config.ts";
@@ -83,7 +79,7 @@ import {
   computeCacheWaste,
   detectCacheMiss,
 } from "../../core/cache-stats.ts";
-import { formatCacheWarmingStatus, formatCacheWarmingUsage } from "../../core/cache-warmer.ts";
+import { formatCacheWarmingUsage } from "../../core/cache-warmer.ts";
 import {
   findExtensionStackMatches,
   recordCrash,
@@ -97,8 +93,6 @@ import type {
   ExtensionContext,
   ExtensionRunner,
   ExtensionUIContext,
-  ExtensionUIDialogOptions,
-  ExtensionWidgetOptions,
   MarkdownTransformer,
   ProjectTrustContext,
   UserBashEventResult,
@@ -111,16 +105,12 @@ import {
 import { describeGoalEntry, describeGoalStatus } from "../../core/goal.ts";
 import { configureHttpDispatcher, formatHttpIdleTimeoutMs } from "../../core/http-dispatcher.ts";
 import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.ts";
-import type { McpHttpServerConfig } from "../../core/mcp-servers.ts";
 import { createCompactionSummaryMessage, createCustomMessage } from "../../core/messages.ts";
 import {
-  defaultModelPerProvider,
   findExactModelReferenceMatch,
   resolveModelScopeFromModels,
 } from "../../core/model-resolver.ts";
-import { CredentialSynchronizationError } from "../../core/model-runtime.ts";
 import { DefaultPackageManager } from "../../core/package-manager.ts";
-import { RADIUS_MCP_URL, RADIUS_PROVIDER_ID } from "../../core/radius.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
 import {
@@ -136,7 +126,6 @@ import { withBuiltInRenderers } from "../../core/tools/renderers/index.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
-import { addMcpServerConfig, loadMcpConfig } from "../../extensions/mcp/config.ts";
 import {
   getChangelogPath,
   getNewEntries,
@@ -149,9 +138,9 @@ import {
   readClipboardFilePaths,
   readClipboardText,
 } from "../../utils/clipboard.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import { parseGitUrl } from "../../utils/git.ts";
 import { ensurePngTranscoder } from "../../utils/image-convert.ts";
-import { getCwdRelativePath } from "../../utils/paths.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { loadAllHighlightLanguages } from "../../utils/syntax-highlight.ts";
 import { ensureTool, type ToolStatus } from "../../utils/tools-manager.ts";
@@ -169,9 +158,7 @@ import { CustomMessageComponent } from "./components/custom-message.ts";
 import { DynamicBorder } from "./components/dynamic-border.ts";
 import { EarendilAnnouncementComponent } from "./components/earendil-announcement.ts";
 import { playArmin3d } from "./components/easter-egg-3d.lazy.ts";
-import { ExtensionEditorComponent } from "./components/extension-editor.ts";
-import { ExtensionInputComponent } from "./components/extension-input.ts";
-import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
+import { ExpandableText, isExpandable } from "./components/expandable-text.ts";
 import { FooterComponent, formatTokens } from "./components/footer.ts";
 import {
   formatKeyText,
@@ -180,17 +167,9 @@ import {
   keyText,
   rawKeyHint,
 } from "./components/keybinding-hints.ts";
-import { LoginDialogComponent } from "./components/login-dialog.ts";
 import { wordmark } from "./components/logo.ts";
 import { createMermaidMarkdownTransformer } from "./components/mermaid.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
-import {
-  type AuthSelectorProvider,
-  formatAuthSelectorProviderStatus,
-  formatAuthSelectorProviderType,
-  OAuthSelectorComponent,
-} from "./components/oauth-selector.ts";
-import { createLoginMenuSelector } from "./components/radius-login-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
@@ -210,10 +189,22 @@ import { TreeSelectorComponent } from "./components/tree-selector.ts";
 import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
+import { EditorSlot } from "./editor-slot.ts";
+import { ExtensionDialogs } from "./extension-dialogs.ts";
+import { ExtensionWidgets } from "./extension-widgets.ts";
 import { editInExternalEditor } from "./external-editor.ts";
+import { formatHotkeysMarkdown } from "./hotkeys.ts";
+import { getStartupVisibility, renderLoadedResources } from "./loaded-resources.ts";
+import {
+  formatLoginProviderCompletionDescription,
+  getLoginProviderCompletionOptions,
+  getLoginProviderSearchText,
+  LoginFlow,
+} from "./login-flow.ts";
 import { refreshModelCatalogs } from "./model-catalog-refresh.ts";
 import { getModelSearchText } from "./model-search.ts";
-import { type BlockedStatus, ProgramStatusReporter } from "./program-status-reporter.ts";
+import { ProgramStatusReporter } from "./program-status-reporter.ts";
+import { formatSessionInfo, type SessionInfo } from "./session-info.ts";
 import { shareSession } from "./session-share.ts";
 import { InteractiveThemeController } from "./theme/theme-controller.ts";
 import {
@@ -227,17 +218,11 @@ import {
   setRegisteredThemes,
   stopThemeWatcher,
   Theme,
-  type ThemeColor,
   theme,
 } from "./theme/theme.ts";
 import { createInteractiveTui, createInteractiveTuiReference } from "./tui-renderer.ts";
 
 export { createInteractiveTui, createInteractiveTuiReference } from "./tui-renderer.ts";
-
-/** Interface for components that can be expanded/collapsed */
-interface Expandable {
-  setExpanded(expanded: boolean): void;
-}
 
 interface ActiveEditor extends EditorComponent {
   getCursor?(): { line: number; col: number };
@@ -256,39 +241,6 @@ function isEmbeddedStatus(editor: EditorComponent): editor is WorkingStatusEdito
     typeof editor.setWorkingStatusIndicator === "function"
   );
 }
-
-function isExpandable(obj: unknown): obj is Expandable {
-  return (
-    typeof obj === "object" &&
-    obj !== null &&
-    "setExpanded" in obj &&
-    typeof obj.setExpanded === "function"
-  );
-}
-
-class ExpandableText extends ThemedText implements Expandable {
-  private readonly state: { expanded: boolean };
-
-  constructor(
-    getCollapsedText: () => string,
-    getExpandedText: () => string,
-    expanded = false,
-    paddingX = 0,
-    paddingY = 0,
-  ) {
-    const state = { expanded };
-    super(() => (state.expanded ? getExpandedText() : getCollapsedText()), paddingX, paddingY);
-    this.state = state;
-  }
-
-  setExpanded(expanded: boolean): void {
-    this.state.expanded = expanded;
-    this.invalidate();
-  }
-}
-
-/** The built-in header. */
-class BuiltInHeader extends ExpandableText {}
 
 type CompactionQueuedMessage = {
   text: string;
@@ -362,12 +314,6 @@ function isAnthropicSubscriptionAuthKey(apiKey: string | undefined): boolean {
   return typeof apiKey === "string" && apiKey.startsWith("sk-ant-oat");
 }
 
-function isUnknownModel(model: Model<any> | undefined): boolean {
-  return (
-    !!model && model.provider === "unknown" && model.id === "unknown" && model.api === "unknown"
-  );
-}
-
 function quoteIfNeeded(value: string): string {
   if (value.length > 0 && !/[^a-zA-Z0-9_\-./~:@]/.test(value)) {
     return value;
@@ -390,33 +336,6 @@ export function formatResumeCommand(sessionManager: SessionManager): string | un
   return args.join(" ");
 }
 
-function hasDefaultModelProvider(
-  providerId: string,
-): providerId is keyof typeof defaultModelPerProvider {
-  return providerId in defaultModelPerProvider;
-}
-
-function llamaCppPostLoginGuidance(actionLabel: string, loadedModelCount: number): string {
-  return loadedModelCount === 0
-    ? `${actionLabel}. No llama.cpp models are loaded. Use /llama to load a model, then /model to select it.`
-    : `${actionLabel}. Use /model to select a loaded llama.cpp model, or /llama to manage models.`;
-}
-
-type LoginProviderCompletionOption = {
-  id: string;
-  name: string;
-  authTypes: AuthSelectorProvider["authType"][];
-  subscription?: boolean;
-};
-
-const RADIUS_LOGIN_INTRO =
-  "Radius is a service crafted for msa by the builders of msa, Earendil Works";
-
-const AUTH_TYPE_ORDER = { oauth: 0, api_key: 1 } satisfies Record<
-  AuthSelectorProvider["authType"],
-  number
->;
-
 function createFuzzyAutocompleteItems<T>(
   items: T[],
   prefix: string,
@@ -426,46 +345,6 @@ function createFuzzyAutocompleteItems<T>(
   const filtered = fuzzyFilter(items, prefix, getSearchText);
   if (filtered.length === 0) return null;
   return filtered.map(toAutocompleteItem);
-}
-
-function getLoginProviderCompletionOptions(
-  providerOptions: readonly AuthSelectorProvider[],
-): LoginProviderCompletionOption[] {
-  const byId = new Map<string, LoginProviderCompletionOption>();
-  for (const provider of providerOptions) {
-    const existing = byId.get(provider.id);
-    if (existing) {
-      if (!existing.authTypes.includes(provider.authType)) {
-        existing.authTypes.push(provider.authType);
-        existing.authTypes.sort((a, b) => AUTH_TYPE_ORDER[a] - AUTH_TYPE_ORDER[b]);
-      }
-      continue;
-    }
-    byId.set(provider.id, {
-      id: provider.id,
-      name: provider.name,
-      authTypes: [provider.authType],
-      subscription: provider.subscription,
-    });
-  }
-  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function getLoginProviderSearchText(provider: LoginProviderCompletionOption): string {
-  const authTypes = provider.authTypes
-    .map(
-      (authType) =>
-        `${authType} ${formatAuthSelectorProviderType(authType, provider.subscription)}`,
-    )
-    .join(" ");
-  return `${provider.id} ${provider.name} ${authTypes}`;
-}
-
-function formatLoginProviderCompletionDescription(provider: LoginProviderCompletionOption): string {
-  const authTypes = provider.authTypes
-    .map((authType) => formatAuthSelectorProviderType(authType, provider.subscription))
-    .join("/");
-  return provider.name === provider.id ? authTypes : `${provider.name} · ${authTypes}`;
 }
 
 /**
@@ -515,8 +394,8 @@ export class InteractiveMode {
   private autocompleteProviderWrappers: AutocompleteProviderFactory[] = [];
   private fdPath: string | undefined;
   private editorContainer: Container;
-  private activeSelectorToken?: object;
-  private activeSelectorDispose?: () => void;
+  private readonly editorSlot: EditorSlot;
+  private readonly loginFlow: LoginFlow;
   private footer: FooterComponent;
   private footerContainer: Container;
   private footerDataProvider: FooterDataProvider;
@@ -608,19 +487,14 @@ export class InteractiveMode {
   private installChangeWarningShown = false;
 
   // Extension UI state
-  private extensionSelector: ExtensionSelectorComponent | undefined = undefined;
-  private extensionInput: ExtensionInputComponent | undefined = undefined;
-  private extensionEditor: ExtensionEditorComponent | undefined = undefined;
+  private readonly extensionDialogs: ExtensionDialogs;
   private extensionTerminalInputSubscriptions = new Set<{
     handler: (data: string) => { consume?: boolean; data?: string } | undefined;
     unsubscribe: () => void;
   }>();
 
   // Extension widgets (components rendered above/below the editor)
-  private extensionWidgetsAbove = new Map<string, Component & { dispose?(): void }>();
-  private extensionWidgetsBelow = new Map<string, Component & { dispose?(): void }>();
-  private widgetContainerAbove!: Container;
-  private widgetContainerBelow!: Container;
+  private readonly extensionWidgets: ExtensionWidgets;
 
   // Custom footer from extension (undefined = use built-in footer)
   private customFooter: (Component & { dispose?(): void }) | undefined = undefined;
@@ -644,9 +518,6 @@ export class InteractiveMode {
   // Convenience accessors
   private get session(): AgentSession {
     return this.runtimeHost.session;
-  }
-  private get agent() {
-    return this.session.agent;
   }
   private get sessionManager() {
     return this.session.sessionManager;
@@ -689,8 +560,7 @@ export class InteractiveMode {
     this.documentContainer.addChild(this.chatContainer);
     this.pendingMessagesContainer = new Container();
     this.statusContainer = new Container();
-    this.widgetContainerAbove = new Container();
-    this.widgetContainerBelow = new Container();
+    this.extensionWidgets = new ExtensionWidgets(this.ui);
     this.keybindings = KeybindingsManager.create();
     setKeybindings(this.keybindings);
     const editorPaddingX = this.settingsManager.getEditorPaddingX();
@@ -703,6 +573,35 @@ export class InteractiveMode {
     this.editor = this.defaultEditor;
     this.editorContainer = new Container();
     this.editorContainer.addChild(this.editor as Component);
+    this.editorSlot = new EditorSlot(this.editorContainer, this.ui, () => this.editor);
+    const mode = this;
+    this.extensionDialogs = new ExtensionDialogs({
+      ui: this.ui,
+      editorSlot: this.editorSlot,
+      programStatus: this.programStatus,
+      keybindings: this.keybindings,
+      getExternalEditorCommand: () => this.settingsManager.getExternalEditorCommand(),
+      toggleToolsExpanded: () => this.toggleToolOutputExpansion(),
+    });
+    this.loginFlow = new LoginFlow({
+      ui: this.ui,
+      get session() {
+        return mode.session;
+      },
+      programStatus: this.programStatus,
+      editorSlot: this.editorSlot,
+      showStatus: (message) => this.showStatus(message),
+      showWarning: (message) => this.showWarning(message),
+      showError: (message) => this.showError(message),
+      refreshAuthState: () => {
+        this.updateAvailableProviderCount();
+        this.footer.invalidate();
+        this.updateEditorBorderColor();
+      },
+      maybeWarnAboutAnthropicSubscriptionAuth: (model) =>
+        this.maybeWarnAboutAnthropicSubscriptionAuth(model),
+      reload: () => this.handleReloadCommand(),
+    });
     this.footerDataProvider = new FooterDataProvider(this.sessionManager.getCwd());
     this.footer = new FooterComponent(this.session, this.footerDataProvider);
     this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
@@ -830,7 +729,7 @@ export class InteractiveMode {
     const loginCommand = slashCommands.find((command) => command.name === "login");
     if (loginCommand) {
       loginCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
-        const providers = getLoginProviderCompletionOptions(this.getLoginProviderOptions());
+        const providers = getLoginProviderCompletionOptions(this.loginFlow.getProviderOptions());
         return createFuzzyAutocompleteItems(
           providers,
           prefix,
@@ -1014,7 +913,8 @@ export class InteractiveMode {
     // Load changelog (only show new entries, skip for resumed sessions)
     this.changelogMarkdown = this.getChangelogForDisplay();
 
-    if (this.session.scopedModels.length > 0 && this.shouldShowStartupDetails()) {
+    const startupVisibility = this.getStartupVisibility();
+    if (this.session.scopedModels.length > 0 && startupVisibility.details) {
       const modelList = this.session.scopedModels
         .map((sm) => {
           const thinkingStr = sm.thinkingLevel ? `:${sm.thinkingLevel}` : "";
@@ -1033,14 +933,13 @@ export class InteractiveMode {
     }
 
     // Keep one component tree and remount it when changing renderers.
-    this.renderWidgets(); // Initialize with default spacer
     const viewport = createChatViewport({
       document: this.documentContainer,
       pendingMessages: this.pendingMessagesContainer,
       status: this.statusContainer,
-      widgetsAbove: this.widgetContainerAbove,
+      widgetsAbove: this.extensionWidgets.above,
       editor: this.editorContainer,
-      widgetsBelow: this.widgetContainerBelow,
+      widgetsBelow: this.extensionWidgets.below,
       footer: this.footerContainer,
       scrollbar: this.settingsManager.getFullscreenScrollbar(),
       scrollbarTrackStyle: (text) => theme.fg("scrollbarTrack", text),
@@ -1052,9 +951,9 @@ export class InteractiveMode {
       this.documentContainer,
       this.pendingMessagesContainer,
       this.statusContainer,
-      this.widgetContainerAbove,
+      this.extensionWidgets.above,
       this.editorContainer,
-      this.widgetContainerBelow,
+      this.extensionWidgets.below,
       this.footerContainer,
     ]);
     // Accept text while startup completes, but only enable interrupt, exit, and submission feedback.
@@ -1075,8 +974,8 @@ export class InteractiveMode {
     await this.themeController.waitForTerminalColors();
 
     // Add header with keybindings from config (unless silenced)
-    if (this.shouldShowStartupHeader()) {
-      const showDetails = this.shouldShowStartupDetails();
+    if (startupVisibility.header) {
+      const showDetails = startupVisibility.details;
       // Built on demand so the header follows theme changes. The wordmark line carries the version,
       // the second line the first line of key hints.
       const withWordmark = (hints: string) =>
@@ -1129,10 +1028,10 @@ export class InteractiveMode {
           "dim",
           `msa can explain its own features and look up its docs. Ask it how to use or extend msa.`,
         );
-      const header = new BuiltInHeader(
+      const header = new ExpandableText(
         () => `${withWordmark(compactInstructions())}\n${compactOnboarding()}\n\n${onboarding()}`,
         () => `${withWordmark(expandedInstructions())}\n\n${onboarding()}`,
-        this.getStartupExpansionState(),
+        this.isStartupExpanded(),
         1,
         0,
       );
@@ -1182,7 +1081,7 @@ export class InteractiveMode {
     });
 
     // Initialize available provider count for footer display
-    await this.updateAvailableProviderCount();
+    this.updateAvailableProviderCount();
 
     // Flush the completed startup state before loading the remaining syntax grammars.
     this.ui.renderNow();
@@ -1428,429 +1327,15 @@ export class InteractiveMode {
     };
   }
 
-  // =========================================================================
-  // Extension System
-  // =========================================================================
-
-  private formatDisplayPath(p: string): string {
-    const home = os.homedir();
-    let result = p;
-
-    // Replace home directory with ~
-    if (result.startsWith(home)) {
-      result = `~${result.slice(home.length)}`;
-    }
-
-    return result;
+  private isStartupExpanded(): boolean {
+    return this.options.verbose === true || this.toolOutputExpanded;
   }
 
-  private formatExtensionDisplayPath(path: string): string {
-    let result = this.formatDisplayPath(path);
-    result = result.replace(/\/index\.ts$/, "").replace(/\/index\.js$/, "");
-    return result;
-  }
-
-  private formatContextPath(p: string): string {
-    const cwd = path.resolve(this.sessionManager.getCwd());
-    const absolutePath = path.isAbsolute(p) ? path.resolve(p) : path.resolve(cwd, p);
-    const relativePath = getCwdRelativePath(absolutePath, cwd);
-    if (relativePath !== undefined) {
-      return relativePath;
-    }
-
-    return this.formatDisplayPath(absolutePath);
-  }
-
-  private getStartupExpansionState(): boolean {
-    return this.options.verbose || this.toolOutputExpanded;
-  }
-
-  /** Startup header (logo, version, key hints). Hidden only by quietStartup: true. */
-  private shouldShowStartupHeader(): boolean {
-    return this.options.verbose === true || this.settingsManager.getQuietStartup() !== true;
-  }
-
-  /** Startup details (model scope, loaded resources). Hidden by quietStartup: true or "header". */
-  private shouldShowStartupDetails(): boolean {
-    return this.options.verbose === true || this.settingsManager.getQuietStartup() === false;
-  }
-
-  /**
-   * Get a short path relative to the package root for display.
-   */
-  private getShortPath(fullPath: string, sourceInfo?: SourceInfo): string {
-    const normalizedFullPath = fullPath.replace(/\\/g, "/");
-    const baseDir = sourceInfo?.baseDir;
-    if (baseDir && this.isPackageSource(sourceInfo)) {
-      const normalizedBaseDir = baseDir.replace(/\\/g, "/");
-      const npmRootMatch = normalizedBaseDir.match(/^(.*\/node_modules)\/(@?[^/]+(?:\/[^/]+)?)$/);
-      // If fullPath is under the same node_modules root as baseDir, preserve that relative topology.
-      if (npmRootMatch?.[1] && normalizedFullPath.startsWith(`${npmRootMatch[1]}/`)) {
-        return path.posix.relative(normalizedBaseDir, normalizedFullPath);
-      }
-
-      const relativePath = path.relative(path.resolve(baseDir), path.resolve(fullPath));
-      if (
-        relativePath &&
-        relativePath !== "." &&
-        !relativePath.startsWith("..") &&
-        !relativePath.startsWith(`..${path.sep}`) &&
-        !path.isAbsolute(relativePath)
-      ) {
-        return relativePath.replace(/\\/g, "/");
-      }
-    }
-
-    const source = sourceInfo?.source ?? "";
-    const npmMatch = normalizedFullPath.match(/node_modules\/(@?[^/]+(?:\/[^/]+)?)\/(.*)/);
-    if (npmMatch && source.startsWith("npm:")) {
-      return npmMatch[2];
-    }
-
-    const gitMatch = normalizedFullPath.match(/git\/[^/]+\/[^/]+\/(.*)/);
-    if (gitMatch && source.startsWith("git:")) {
-      return gitMatch[1];
-    }
-
-    return this.formatDisplayPath(fullPath);
-  }
-
-  private getCompactPathLabel(resourcePath: string, sourceInfo?: SourceInfo): string {
-    const shortPath = this.getShortPath(resourcePath, sourceInfo);
-    const normalizedPath = shortPath.replace(/\\/g, "/");
-    const segments = normalizedPath
-      .split("/")
-      .filter((segment) => segment.length > 0 && segment !== "~");
-    if (segments.length > 0) {
-      return segments[segments.length - 1]!;
-    }
-    return shortPath;
-  }
-
-  private getCompactPackageSourceLabel(sourceInfo?: SourceInfo): string {
-    const source = sourceInfo?.source ?? "";
-    if (source.startsWith("npm:")) {
-      return source.slice("npm:".length) || source;
-    }
-
-    const gitSource = parseGitUrl(source);
-    if (gitSource) {
-      return gitSource.path || source;
-    }
-
-    return source;
-  }
-
-  private getCompactExtensionLabel(resourcePath: string, sourceInfo?: SourceInfo): string {
-    if (!this.isPackageSource(sourceInfo)) {
-      return this.getCompactPathLabel(resourcePath, sourceInfo);
-    }
-
-    const sourceLabel = this.getCompactPackageSourceLabel(sourceInfo);
-    if (!sourceLabel) {
-      return this.getCompactPathLabel(resourcePath, sourceInfo);
-    }
-
-    const shortPath = this.getShortPath(resourcePath, sourceInfo).replace(/\\/g, "/");
-    const packagePath = shortPath.startsWith("extensions/")
-      ? shortPath.slice("extensions/".length)
-      : shortPath;
-    const parsedPath = path.posix.parse(packagePath);
-
-    if (parsedPath.name === "index") {
-      return !parsedPath.dir || parsedPath.dir === "."
-        ? sourceLabel
-        : `${sourceLabel}:${parsedPath.dir}`;
-    }
-
-    return `${sourceLabel}:${packagePath}`;
-  }
-
-  private getCompactDisplayPathSegments(resourcePath: string): string[] {
-    return this.formatDisplayPath(resourcePath)
-      .replace(/\\/g, "/")
-      .split("/")
-      .filter((segment) => segment.length > 0 && segment !== "~");
-  }
-
-  private getCompactNonPackageExtensionLabel(
-    resourcePath: string,
-    index: number,
-    allPaths: Array<{ path: string; segments: string[] }>,
-  ): string {
-    const segments = allPaths[index]?.segments;
-    if (!segments || segments.length === 0) {
-      return this.getCompactPathLabel(resourcePath);
-    }
-
-    for (let segmentCount = 1; segmentCount <= segments.length; segmentCount += 1) {
-      const candidate = segments.slice(-segmentCount).join("/");
-      const isUnique = allPaths.every((item, itemIndex) => {
-        if (itemIndex === index) {
-          return true;
-        }
-        return item.segments.slice(-segmentCount).join("/") !== candidate;
-      });
-
-      if (isUnique) {
-        return candidate;
-      }
-    }
-
-    return segments.join("/");
-  }
-
-  private getCompactExtensionLabels(
-    extensions: Array<{ path: string; sourceInfo?: SourceInfo }>,
-  ): string[] {
-    const nonPackageExtensions = extensions
-      .map((extension) => {
-        const segments = this.getCompactDisplayPathSegments(extension.path);
-        const lastSegment = segments[segments.length - 1];
-        if (segments.length > 1 && (lastSegment === "index.ts" || lastSegment === "index.js")) {
-          segments.pop();
-        }
-        return {
-          path: extension.path,
-          sourceInfo: extension.sourceInfo,
-          segments,
-        };
-      })
-      .filter((extension) => !this.isPackageSource(extension.sourceInfo));
-
-    return extensions.map((extension) => {
-      if (this.isPackageSource(extension.sourceInfo)) {
-        return this.getCompactExtensionLabel(extension.path, extension.sourceInfo);
-      }
-
-      const nonPackageIndex = nonPackageExtensions.findIndex(
-        (item) => item.path === extension.path,
-      );
-      if (nonPackageIndex === -1) {
-        return this.getCompactPathLabel(extension.path, extension.sourceInfo);
-      }
-
-      return this.getCompactNonPackageExtensionLabel(
-        extension.path,
-        nonPackageIndex,
-        nonPackageExtensions,
-      );
-    });
-  }
-
-  private getDisplaySourceInfo(sourceInfo?: SourceInfo): {
-    label: string;
-    scopeLabel?: string;
-    color: "accent" | "muted";
-  } {
-    const source = sourceInfo?.source ?? "local";
-    const scope = sourceInfo?.scope ?? "project";
-    if (source === "local") {
-      if (scope === "user") {
-        return { label: "user", color: "muted" };
-      }
-      if (scope === "project") {
-        return { label: "project", color: "muted" };
-      }
-      if (scope === "temporary") {
-        return { label: "path", scopeLabel: "temp", color: "muted" };
-      }
-      return { label: "path", color: "muted" };
-    }
-
-    if (source === "cli") {
-      return {
-        label: "path",
-        scopeLabel: scope === "temporary" ? "temp" : undefined,
-        color: "muted",
-      };
-    }
-
-    const scopeLabel =
-      scope === "user"
-        ? "user"
-        : scope === "project"
-          ? "project"
-          : scope === "temporary"
-            ? "temp"
-            : undefined;
-    return { label: source, scopeLabel, color: "accent" };
-  }
-
-  private getScopeGroup(sourceInfo?: SourceInfo): "user" | "project" | "path" {
-    const source = sourceInfo?.source ?? "local";
-    const scope = sourceInfo?.scope ?? "project";
-    if (source === "cli" || scope === "temporary") return "path";
-    if (scope === "user") return "user";
-    if (scope === "project") return "project";
-    return "path";
-  }
-
-  private isPackageSource(sourceInfo?: SourceInfo): boolean {
-    const source = sourceInfo?.source ?? "";
-    return source.startsWith("npm:") || source.startsWith("git:");
-  }
-
-  private buildScopeGroups(items: Array<{ path: string; sourceInfo?: SourceInfo }>): Array<{
-    scope: "user" | "project" | "path";
-    paths: Array<{ path: string; sourceInfo?: SourceInfo }>;
-    packages: Map<string, Array<{ path: string; sourceInfo?: SourceInfo }>>;
-  }> {
-    const groups: Record<
-      "user" | "project" | "path",
-      {
-        scope: "user" | "project" | "path";
-        paths: Array<{ path: string; sourceInfo?: SourceInfo }>;
-        packages: Map<string, Array<{ path: string; sourceInfo?: SourceInfo }>>;
-      }
-    > = {
-      user: { scope: "user", paths: [], packages: new Map() },
-      project: { scope: "project", paths: [], packages: new Map() },
-      path: { scope: "path", paths: [], packages: new Map() },
-    };
-
-    for (const item of items) {
-      const groupKey = this.getScopeGroup(item.sourceInfo);
-      const group = groups[groupKey];
-      const source = item.sourceInfo?.source ?? "local";
-
-      if (this.isPackageSource(item.sourceInfo)) {
-        const list = group.packages.get(source) ?? [];
-        list.push(item);
-        group.packages.set(source, list);
-      } else {
-        group.paths.push(item);
-      }
-    }
-
-    return [groups.project, groups.user, groups.path].filter(
-      (group) => group.paths.length > 0 || group.packages.size > 0,
+  private getStartupVisibility(): { header: boolean; details: boolean } {
+    return getStartupVisibility(
+      this.settingsManager.getQuietStartup(),
+      this.options.verbose === true,
     );
-  }
-
-  private formatScopeGroups(
-    groups: Array<{
-      scope: "user" | "project" | "path";
-      paths: Array<{ path: string; sourceInfo?: SourceInfo }>;
-      packages: Map<string, Array<{ path: string; sourceInfo?: SourceInfo }>>;
-    }>,
-    options: {
-      formatPath: (item: { path: string; sourceInfo?: SourceInfo }) => string;
-      formatPackagePath: (
-        item: { path: string; sourceInfo?: SourceInfo },
-        source: string,
-      ) => string;
-    },
-  ): string {
-    const lines: string[] = [];
-
-    for (const group of groups) {
-      lines.push(`  ${theme.fg("accent", group.scope)}`);
-
-      const sortedPaths = [...group.paths].sort((a, b) => a.path.localeCompare(b.path));
-      for (const item of sortedPaths) {
-        lines.push(theme.fg("dim", `    ${options.formatPath(item)}`));
-      }
-
-      const sortedPackages = Array.from(group.packages.entries()).sort(([a], [b]) =>
-        a.localeCompare(b),
-      );
-      for (const [source, items] of sortedPackages) {
-        lines.push(`    ${theme.fg("mdLink", source)}`);
-        const sortedPackagePaths = [...items].sort((a, b) => a.path.localeCompare(b.path));
-        for (const item of sortedPackagePaths) {
-          lines.push(theme.fg("dim", `      ${options.formatPackagePath(item, source)}`));
-        }
-      }
-    }
-
-    return lines.join("\n");
-  }
-
-  private findSourceInfoForPath(
-    p: string,
-    sourceInfos: Map<string, SourceInfo>,
-  ): SourceInfo | undefined {
-    const exact = sourceInfos.get(p);
-    if (exact) return exact;
-
-    let current = p;
-    while (current.includes("/")) {
-      current = current.substring(0, current.lastIndexOf("/"));
-      const parent = sourceInfos.get(current);
-      if (parent) return parent;
-    }
-
-    return undefined;
-  }
-
-  private formatPathWithSource(p: string, sourceInfo?: SourceInfo): string {
-    if (sourceInfo) {
-      const shortPath = this.getShortPath(p, sourceInfo);
-      const { label, scopeLabel } = this.getDisplaySourceInfo(sourceInfo);
-      const labelText = scopeLabel ? `${label} (${scopeLabel})` : label;
-      return `${labelText} ${shortPath}`;
-    }
-    return this.formatDisplayPath(p);
-  }
-
-  private formatDiagnostics(
-    diagnostics: readonly ResourceDiagnostic[],
-    sourceInfos: Map<string, SourceInfo>,
-  ): string {
-    const lines: string[] = [];
-
-    // Group collision diagnostics by name
-    const collisions = new Map<string, ResourceDiagnostic[]>();
-    const otherDiagnostics: ResourceDiagnostic[] = [];
-
-    for (const d of diagnostics) {
-      if (d.type === "collision" && d.collision) {
-        const list = collisions.get(d.collision.name) ?? [];
-        list.push(d);
-        collisions.set(d.collision.name, list);
-      } else {
-        otherDiagnostics.push(d);
-      }
-    }
-
-    // Format collision diagnostics grouped by name
-    for (const [name, collisionList] of collisions) {
-      const first = collisionList[0]?.collision;
-      if (!first) continue;
-      lines.push(theme.fg("warning", `  "${name}" collision:`));
-      lines.push(
-        theme.fg(
-          "dim",
-          `    ${theme.fg("success", "✓")} ${this.formatPathWithSource(first.winnerPath, this.findSourceInfoForPath(first.winnerPath, sourceInfos))}`,
-        ),
-      );
-      for (const d of collisionList) {
-        if (d.collision) {
-          lines.push(
-            theme.fg(
-              "dim",
-              `    ${theme.fg("warning", "✗")} ${this.formatPathWithSource(d.collision.loserPath, this.findSourceInfoForPath(d.collision.loserPath, sourceInfos))} (skipped)`,
-            ),
-          );
-        }
-      }
-    }
-
-    for (const d of otherDiagnostics) {
-      if (d.path) {
-        const formattedPath = this.formatPathWithSource(
-          d.path,
-          this.findSourceInfoForPath(d.path, sourceInfos),
-        );
-        lines.push(theme.fg(d.type === "error" ? "error" : "warning", `  ${formattedPath}`));
-        lines.push(theme.fg(d.type === "error" ? "error" : "warning", `    ${d.message}`));
-      } else {
-        lines.push(theme.fg(d.type === "error" ? "error" : "warning", `  ${d.message}`));
-      }
-    }
-
-    return lines.join("\n");
   }
 
   private showLoadedResources(options?: {
@@ -1858,225 +1343,32 @@ export class InteractiveMode {
     force?: boolean;
     showDiagnosticsWhenQuiet?: boolean;
   }): void {
-    // Resource rendering is idempotent; chat clears no longer clear this separate container.
-    this.loadedResourcesContainer.clear();
-
-    const showListing = options?.force || this.shouldShowStartupDetails();
-    const showDiagnostics = showListing || options?.showDiagnosticsWhenQuiet === true;
-    if (!showListing && !showDiagnostics) {
-      return;
-    }
-
-    const sectionHeader = (name: string, color: ThemeColor = "mdHeading") =>
-      theme.fg(color, `[${name}]`);
-    const formatCompactList = (items: string[], options?: { sort?: boolean }): string => {
-      const labels = items.map((item) => item.trim()).filter((item) => item.length > 0);
-      if (options?.sort !== false) {
-        labels.sort((a, b) => a.localeCompare(b));
-      }
-      return theme.fg("dim", `  ${labels.join(", ")}`);
-    };
-    // Bodies are built on demand so the listing follows theme changes.
-    const addLoadedSection = (
-      name: string,
-      collapsedBody: () => string,
-      expandedBody = collapsedBody,
-      color: ThemeColor = "mdHeading",
-    ): void => {
-      const section = new ExpandableText(
-        () => `${sectionHeader(name, color)}\n${collapsedBody()}`,
-        () => `${sectionHeader(name, color)}\n${expandedBody()}`,
-        this.getStartupExpansionState(),
-        0,
-        0,
-      );
-      this.loadedResourcesContainer.addChild(section);
-      this.loadedResourcesContainer.addChild(new Spacer(1));
-    };
-
-    const skillsResult = this.session.resourceLoader.getSkills();
-    const promptsResult = this.session.resourceLoader.getPrompts();
-    const themesResult = this.session.resourceLoader.getThemes();
-    const extensions =
-      options?.extensions ??
-      this.session.resourceLoader
-        .getExtensions()
-        .extensions.filter((extension) => !extension.hidden)
-        .map((extension) => ({
-          path: extension.path,
-          sourceInfo: extension.sourceInfo,
-        }));
-    const sourceInfos = new Map<string, SourceInfo>();
-    for (const extension of extensions) {
-      if (extension.sourceInfo) {
-        sourceInfos.set(extension.path, extension.sourceInfo);
-      }
-    }
-    for (const skill of skillsResult.skills) {
-      if (skill.sourceInfo) {
-        sourceInfos.set(skill.filePath, skill.sourceInfo);
-      }
-    }
-    for (const prompt of promptsResult.prompts) {
-      if (prompt.sourceInfo) {
-        sourceInfos.set(prompt.filePath, prompt.sourceInfo);
-      }
-    }
-    for (const loadedTheme of themesResult.themes) {
-      if (loadedTheme.sourcePath && loadedTheme.sourceInfo) {
-        sourceInfos.set(loadedTheme.sourcePath, loadedTheme.sourceInfo);
-      }
-    }
-
-    if (showListing) {
-      const systemPromptSource = this.session.resourceLoader.getSystemPromptSource();
-      const contextFiles = [
-        ...(systemPromptSource ? [systemPromptSource] : []),
-        ...this.session.resourceLoader.getAppendSystemPromptSources(),
-        ...this.session.resourceLoader.getAgentsFiles().agentsFiles,
-      ];
-      if (contextFiles.length > 0) {
-        this.loadedResourcesContainer.addChild(new Spacer(1));
-        const contextList = () =>
-          contextFiles
-            .map((f) => theme.fg("dim", `  ${this.formatDisplayPath(f.path)}`))
-            .join("\n");
-        const contextCompactList = () =>
-          formatCompactList(
-            contextFiles.map((contextFile) => this.formatContextPath(contextFile.path)),
-            { sort: false },
-          );
-        addLoadedSection("Context", contextCompactList, contextList);
-      }
-
-      const skills = skillsResult.skills;
-      if (skills.length > 0) {
-        const groups = this.buildScopeGroups(
-          skills.map((skill) => ({ path: skill.filePath, sourceInfo: skill.sourceInfo })),
-        );
-        const skillList = () =>
-          this.formatScopeGroups(groups, {
-            formatPath: (item) => this.formatDisplayPath(item.path),
-            formatPackagePath: (item) => this.getShortPath(item.path, item.sourceInfo),
-          });
-        const skillCompactList = () => formatCompactList(skills.map((skill) => skill.name));
-        addLoadedSection("Skills", skillCompactList, skillList);
-      }
-
-      const templates = this.session.promptTemplates;
-      if (templates.length > 0) {
-        const groups = this.buildScopeGroups(
-          templates.map((template) => ({
-            path: template.filePath,
-            sourceInfo: template.sourceInfo,
-          })),
-        );
-        const templateByPath = new Map(templates.map((t) => [t.filePath, t]));
-        const templateList = () =>
-          this.formatScopeGroups(groups, {
-            formatPath: (item) => {
-              const template = templateByPath.get(item.path);
-              return template ? `/${template.name}` : this.formatDisplayPath(item.path);
-            },
-            formatPackagePath: (item) => {
-              const template = templateByPath.get(item.path);
-              return template ? `/${template.name}` : this.formatDisplayPath(item.path);
-            },
-          });
-        const promptCompactList = () =>
-          formatCompactList(templates.map((template) => `/${template.name}`));
-        addLoadedSection("Prompts", promptCompactList, templateList);
-      }
-
-      if (extensions.length > 0) {
-        const groups = this.buildScopeGroups(extensions);
-        const extList = () =>
-          this.formatScopeGroups(groups, {
-            formatPath: (item) => this.formatExtensionDisplayPath(item.path),
-            formatPackagePath: (item) =>
-              this.formatExtensionDisplayPath(this.getShortPath(item.path, item.sourceInfo)),
-          });
-        const extensionLabels = this.getCompactExtensionLabels(extensions);
-        const extensionCompactList = () => formatCompactList(extensionLabels);
-        addLoadedSection("Extensions", extensionCompactList, extList, "mdHeading");
-      }
-    }
-
-    if (showDiagnostics) {
-      const skillDiagnostics = skillsResult.diagnostics;
-      if (skillDiagnostics.length > 0) {
-        const warningLines = () => this.formatDiagnostics(skillDiagnostics, sourceInfos);
-        this.loadedResourcesContainer.addChild(
-          new ThemedText(
-            () => `${theme.fg("warning", "[Skill conflicts]")}\n${warningLines()}`,
-            0,
-            0,
-          ),
-        );
-        this.loadedResourcesContainer.addChild(new Spacer(1));
-      }
-
-      const promptDiagnostics = promptsResult.diagnostics;
-      if (promptDiagnostics.length > 0) {
-        const warningLines = () => this.formatDiagnostics(promptDiagnostics, sourceInfos);
-        this.loadedResourcesContainer.addChild(
-          new ThemedText(
-            () => `${theme.fg("warning", "[Prompt conflicts]")}\n${warningLines()}`,
-            0,
-            0,
-          ),
-        );
-        this.loadedResourcesContainer.addChild(new Spacer(1));
-      }
-
-      const extensionDiagnostics: ResourceDiagnostic[] = [];
-      const extensionsResult = this.session.resourceLoader.getExtensions();
-      for (const error of extensionsResult.errors) {
-        extensionDiagnostics.push({ type: "error", message: error.error, path: error.path });
-      }
-      for (const warning of extensionsResult.warnings ?? []) {
-        extensionDiagnostics.push({
-          type: "warning",
-          message: warning.warning,
-          path: warning.path,
-        });
-      }
-
-      const commandDiagnostics = this.session.extensionRunner.getCommandDiagnostics();
-      extensionDiagnostics.push(...commandDiagnostics);
-      extensionDiagnostics.push(
-        ...this.getBuiltInCommandConflictDiagnostics(this.session.extensionRunner),
-      );
-
-      const shortcutDiagnostics = this.session.extensionRunner.getShortcutDiagnostics();
-      extensionDiagnostics.push(...shortcutDiagnostics);
-
-      if (extensionDiagnostics.length > 0) {
-        const warningLines = () => this.formatDiagnostics(extensionDiagnostics, sourceInfos);
-        this.loadedResourcesContainer.addChild(
-          new ThemedText(
-            () => `${theme.fg("warning", "[Extension issues]")}\n${warningLines()}`,
-            0,
-            0,
-          ),
-        );
-        this.loadedResourcesContainer.addChild(new Spacer(1));
-      }
-
-      const themeDiagnostics = themesResult.diagnostics;
-      if (themeDiagnostics.length > 0) {
-        const warningLines = () => this.formatDiagnostics(themeDiagnostics, sourceInfos);
-        this.loadedResourcesContainer.addChild(
-          new ThemedText(
-            () => `${theme.fg("warning", "[Theme conflicts]")}\n${warningLines()}`,
-            0,
-            0,
-          ),
-        );
-        this.loadedResourcesContainer.addChild(new Spacer(1));
-      }
-    }
+    const showListing = options?.force === true || this.getStartupVisibility().details;
+    const runner = this.session.extensionRunner;
+    renderLoadedResources(
+      this.loadedResourcesContainer,
+      {
+        resourceLoader: this.session.resourceLoader,
+        promptTemplates: this.session.promptTemplates,
+        extensionRunnerDiagnostics: [
+          ...runner.getCommandDiagnostics(),
+          ...this.getBuiltInCommandConflictDiagnostics(runner),
+          ...runner.getShortcutDiagnostics(),
+        ],
+      },
+      {
+        cwd: this.sessionManager.getCwd(),
+        expanded: this.isStartupExpanded(),
+        showListing,
+        showDiagnostics: showListing || options?.showDiagnosticsWhenQuiet === true,
+        extensions: options?.extensions,
+      },
+    );
   }
+
+  // =========================================================================
+  // Extension System
+  // =========================================================================
 
   /**
    * Initialize the extension system with TUI-based UI context.
@@ -2224,13 +1516,13 @@ export class InteractiveMode {
       this.subscribeToAgent();
     }
 
-    await this.updateAvailableProviderCount();
+    this.updateAvailableProviderCount();
     this.updateEditorBorderColor();
     this.updateTerminalTitle();
   }
 
   private async handleFatalRuntimeError(prefix: string, error: unknown): Promise<never> {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = toErrorMessage(error);
     this.showError(`${prefix}: ${message}`);
     const extensionHint = this.getCrashExtensionHint(error);
     if (extensionHint) {
@@ -2414,9 +1706,7 @@ export class InteractiveMode {
         if (matchesKey(data, shortcutStr as KeyId)) {
           // Run handler async, don't block input
           Promise.resolve(shortcut.handler(createContext())).catch((err) => {
-            this.showError(
-              `Shortcut handler error: ${err instanceof Error ? err.message : String(err)}`,
-            );
+            this.showError(`Shortcut handler error: ${toErrorMessage(err)}`);
           });
           return true;
         }
@@ -2529,76 +1819,13 @@ export class InteractiveMode {
   /**
    * Set an extension widget (string array or custom component).
    */
-  private setExtensionWidget(
-    key: string,
-    content: string[] | ((tui: TUI, thm: Theme) => Component & { dispose?(): void }) | undefined,
-    options?: ExtensionWidgetOptions,
-  ): void {
-    const placement = options?.placement ?? "aboveEditor";
-    const removeExisting = (map: Map<string, Component & { dispose?(): void }>) => {
-      const existing = map.get(key);
-      if (existing?.dispose) existing.dispose();
-      map.delete(key);
-    };
-
-    removeExisting(this.extensionWidgetsAbove);
-    removeExisting(this.extensionWidgetsBelow);
-
-    if (content === undefined) {
-      this.renderWidgets();
-      return;
-    }
-
-    let component: Component & { dispose?(): void };
-
-    if (Array.isArray(content)) {
-      // Wrap string array in a Container with Text components
-      const container = new Container();
-      for (const line of content.slice(0, InteractiveMode.MAX_WIDGET_LINES)) {
-        container.addChild(new Text(line, 1, 0));
-      }
-      if (content.length > InteractiveMode.MAX_WIDGET_LINES) {
-        container.addChild(new ThemedText(() => theme.fg("muted", "... (widget truncated)"), 1, 0));
-      }
-      component = container;
-    } else {
-      // Factory function - create component
-      component = content(this.ui, theme);
-    }
-
-    const targetMap =
-      placement === "belowEditor" ? this.extensionWidgetsBelow : this.extensionWidgetsAbove;
-    targetMap.set(key, component);
-    this.renderWidgets();
-  }
-
-  private clearExtensionWidgets(): void {
-    for (const widget of this.extensionWidgetsAbove.values()) {
-      widget.dispose?.();
-    }
-    for (const widget of this.extensionWidgetsBelow.values()) {
-      widget.dispose?.();
-    }
-    this.extensionWidgetsAbove.clear();
-    this.extensionWidgetsBelow.clear();
-    this.renderWidgets();
-  }
-
   private resetExtensionUI(): void {
-    if (this.extensionSelector) {
-      this.hideExtensionSelector();
-    }
-    if (this.extensionInput) {
-      this.hideExtensionInput();
-    }
-    if (this.extensionEditor) {
-      this.hideExtensionEditor();
-    }
+    this.extensionDialogs.close();
     this.ui.hideOverlay();
     this.clearExtensionTerminalInputListeners();
     this.setExtensionFooter(undefined);
     this.setExtensionHeader(undefined);
-    this.clearExtensionWidgets();
+    this.extensionWidgets.clear();
     this.footerDataProvider.clearExtensionStatuses();
     this.footer.invalidate();
     this.autocompleteProviderWrappers = [];
@@ -2615,42 +1842,6 @@ export class InteractiveMode {
       );
     }
     this.setHiddenThinkingLabel();
-  }
-
-  // Maximum total widget lines to prevent viewport overflow
-  private static readonly MAX_WIDGET_LINES = 10;
-
-  /**
-   * Render all extension widgets to the widget container.
-   */
-  private renderWidgets(): void {
-    if (!this.widgetContainerAbove || !this.widgetContainerBelow) return;
-    this.renderWidgetContainer(this.widgetContainerAbove, this.extensionWidgetsAbove, true, true);
-    this.renderWidgetContainer(this.widgetContainerBelow, this.extensionWidgetsBelow, false, false);
-    this.ui.requestRender();
-  }
-
-  private renderWidgetContainer(
-    container: Container,
-    widgets: Map<string, Component & { dispose?(): void }>,
-    spacerWhenEmpty: boolean,
-    leadingSpacer: boolean,
-  ): void {
-    container.clear();
-
-    if (widgets.size === 0) {
-      if (spacerWhenEmpty) {
-        container.addChild(new Spacer(1));
-      }
-      return;
-    }
-
-    if (leadingSpacer) {
-      container.addChild(new Spacer(1));
-    }
-    for (const component of widgets.values()) {
-      container.addChild(component);
-    }
   }
 
   /**
@@ -2773,9 +1964,9 @@ export class InteractiveMode {
 
   private createExtensionUIContext(): ExtensionUIContext {
     return {
-      select: (title, options, opts) => this.showExtensionSelector(title, options, opts),
-      confirm: (title, message, opts) => this.showExtensionConfirm(title, message, opts),
-      input: (title, placeholder, opts) => this.showExtensionInput(title, placeholder, opts),
+      select: (title, options, opts) => this.extensionDialogs.select(title, options, opts),
+      confirm: (title, message, opts) => this.extensionDialogs.confirm(title, message, opts),
+      input: (title, placeholder, opts) => this.extensionDialogs.input(title, placeholder, opts),
       notify: (message, type) => this.showExtensionNotify(message, type),
       onTerminalInput: (handler) => this.addExtensionTerminalInputListener(handler),
       setStatus: (key, text) => this.setExtensionStatus(key, text),
@@ -2788,7 +1979,7 @@ export class InteractiveMode {
       setWorkingVisible: (visible) => this.setWorkingVisible(visible),
       setWorkingIndicator: (options) => this.setWorkingIndicator(options),
       setHiddenThinkingLabel: (label) => this.setHiddenThinkingLabel(label),
-      setWidget: (key, content, options) => this.setExtensionWidget(key, content, options),
+      setWidget: (key, content, options) => this.extensionWidgets.set(key, content, options),
       setFooter: (factory) => this.setExtensionFooter(factory),
       setHeader: (factory) => this.setExtensionHeader(factory),
       setTitle: (title) => this.ui.terminal.setTitle(title),
@@ -2796,7 +1987,7 @@ export class InteractiveMode {
       pasteToEditor: (text) => this.editor.handleInput(`\x1b[200~${text}\x1b[201~`),
       setEditorText: (text) => this.editor.setText(text),
       getEditorText: () => this.editor.getExpandedText?.() ?? this.editor.getText(),
-      editor: (title, prefill) => this.showExtensionEditor(title, prefill),
+      editor: (title, prefill) => this.extensionDialogs.editor(title, prefill),
       addAutocompleteProvider: (factory) => {
         this.autocompleteProviderWrappers.push(factory);
         this.setupAutocompleteProvider();
@@ -2825,194 +2016,14 @@ export class InteractiveMode {
     };
   }
 
-  /**
-   * Show a selector for extensions.
-   */
-  private showExtensionSelector(
-    title: string,
-    options: string[],
-    opts?: ExtensionUIDialogOptions,
-    blocked: BlockedStatus = { kind: "question", message: title },
-  ): Promise<string | undefined> {
-    return new Promise((resolve) => {
-      if (opts?.signal?.aborted) {
-        resolve(undefined);
-        return;
-      }
-
-      const onAbort = () => {
-        this.hideExtensionSelector();
-        resolve(undefined);
-      };
-      opts?.signal?.addEventListener("abort", onAbort, { once: true });
-
-      this.extensionSelector = new ExtensionSelectorComponent(
-        title,
-        options,
-        (option) => {
-          opts?.signal?.removeEventListener("abort", onAbort);
-          this.hideExtensionSelector();
-          resolve(option);
-        },
-        () => {
-          opts?.signal?.removeEventListener("abort", onAbort);
-          this.hideExtensionSelector();
-          resolve(undefined);
-        },
-        {
-          tui: this.ui,
-          timeout: opts?.timeout,
-          onToggleToolsExpanded: () => this.toggleToolOutputExpansion(),
-        },
-      );
-
-      this.disposeActiveSelector();
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.extensionSelector);
-      this.ui.setFocus(this.extensionSelector);
-      // Extension dialogs share the editor slot: opening one replaces the status of a displaced one.
-      this.programStatus.setBlocked("extension-dialog", blocked);
-      this.ui.requestRender();
-    });
-  }
-
-  /**
-   * Hide the extension selector.
-   */
-  private hideExtensionSelector(): void {
-    this.extensionSelector?.dispose();
-    this.editorContainer.clear();
-    this.editorContainer.addChild(this.editor);
-    this.extensionSelector = undefined;
-    this.programStatus.setBlocked("extension-dialog", undefined);
-    this.ui.setFocus(this.editor);
-    this.ui.requestRender();
-  }
-
-  /**
-   * Show a confirmation dialog for extensions.
-   */
-  private async showExtensionConfirm(
-    title: string,
-    message: string,
-    opts?: ExtensionUIDialogOptions,
-  ): Promise<boolean> {
-    const result = await this.showExtensionSelector(`${title}\n${message}`, ["Yes", "No"], opts, {
-      kind: "permission",
-      message: title,
-    });
-    return result === "Yes";
-  }
-
   private async promptForMissingSessionCwd(
     error: MissingSessionCwdError,
   ): Promise<string | undefined> {
-    const confirmed = await this.showExtensionConfirm(
+    const confirmed = await this.extensionDialogs.confirm(
       "Session cwd not found",
       formatMissingSessionCwdPrompt(error.issue),
     );
     return confirmed ? error.issue.fallbackCwd : undefined;
-  }
-
-  /**
-   * Show a text input for extensions.
-   */
-  private showExtensionInput(
-    title: string,
-    placeholder?: string,
-    opts?: ExtensionUIDialogOptions,
-  ): Promise<string | undefined> {
-    return new Promise((resolve) => {
-      if (opts?.signal?.aborted) {
-        resolve(undefined);
-        return;
-      }
-
-      const onAbort = () => {
-        this.hideExtensionInput();
-        resolve(undefined);
-      };
-      opts?.signal?.addEventListener("abort", onAbort, { once: true });
-
-      this.extensionInput = new ExtensionInputComponent(
-        title,
-        placeholder,
-        (value) => {
-          opts?.signal?.removeEventListener("abort", onAbort);
-          this.hideExtensionInput();
-          resolve(value);
-        },
-        () => {
-          opts?.signal?.removeEventListener("abort", onAbort);
-          this.hideExtensionInput();
-          resolve(undefined);
-        },
-        { tui: this.ui, timeout: opts?.timeout },
-      );
-
-      this.disposeActiveSelector();
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.extensionInput);
-      this.ui.setFocus(this.extensionInput);
-      this.programStatus.setBlocked("extension-dialog", { kind: "question", message: title });
-      this.ui.requestRender();
-    });
-  }
-
-  /**
-   * Hide the extension input.
-   */
-  private hideExtensionInput(): void {
-    this.extensionInput?.dispose();
-    this.editorContainer.clear();
-    this.editorContainer.addChild(this.editor);
-    this.extensionInput = undefined;
-    this.programStatus.setBlocked("extension-dialog", undefined);
-    this.ui.setFocus(this.editor);
-    this.ui.requestRender();
-  }
-
-  /**
-   * Show a multi-line editor for extensions (with Ctrl+G support).
-   */
-  private showExtensionEditor(title: string, prefill?: string): Promise<string | undefined> {
-    return new Promise((resolve) => {
-      this.extensionEditor = new ExtensionEditorComponent(
-        this.ui,
-        this.keybindings,
-        title,
-        prefill,
-        (value) => {
-          this.hideExtensionEditor();
-          resolve(value);
-        },
-        () => {
-          this.hideExtensionEditor();
-          resolve(undefined);
-        },
-        undefined,
-        this.settingsManager.getExternalEditorCommand(),
-      );
-
-      this.disposeActiveSelector();
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.extensionEditor);
-      this.ui.setFocus(this.extensionEditor);
-      this.programStatus.setBlocked("extension-dialog", { kind: "question", message: title });
-      this.ui.requestRender();
-    });
-  }
-
-  /**
-   * Hide the extension editor.
-   */
-  private hideExtensionEditor(): void {
-    this.editorContainer.clear();
-    this.editorContainer.addChild(this.editor);
-    this.extensionEditor = undefined;
-    this.programStatus.setBlocked("extension-dialog", undefined);
-    this.ui.setFocus(this.editor);
-    this.ui.requestRender();
   }
 
   /**
@@ -3025,8 +2036,7 @@ export class InteractiveMode {
     // Save text from current editor before switching
     const currentText = this.editor.getText();
 
-    this.disposeActiveSelector();
-    this.editorContainer.clear();
+    this.editorSlot.disposeActiveSelector();
 
     if (factory) {
       // Create the custom editor with tui, theme, and keybindings
@@ -3085,7 +2095,6 @@ export class InteractiveMode {
       this.editor = this.defaultEditor;
     }
 
-    this.editorContainer.addChild(this.editor as Component);
     if (this.activeStatusIndicator) {
       this.statusContainer.clear();
       this.activeWorkingIndicatorEmbedded = this.setEditorWorkingStatusIndicator(
@@ -3095,8 +2104,7 @@ export class InteractiveMode {
         this.statusContainer.addChild(this.activeStatusIndicator);
       }
     }
-    this.ui.setFocus(this.editor as Component);
-    this.ui.requestRender();
+    this.editorSlot.show(this.editor);
   }
 
   /**
@@ -3130,11 +2138,8 @@ export class InteractiveMode {
     const isOverlay = options?.overlay ?? false;
 
     const restoreEditor = () => {
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.editor);
       this.editor.setText(savedText);
-      this.ui.setFocus(this.editor);
-      this.ui.requestRender();
+      this.editorSlot.restoreEditor();
     };
 
     return new Promise((resolve, reject) => {
@@ -3177,11 +2182,8 @@ export class InteractiveMode {
             // Expose handle to caller for visibility control
             options?.onHandle?.(handle);
           } else {
-            this.disposeActiveSelector();
-            this.editorContainer.clear();
-            this.editorContainer.addChild(component);
-            this.ui.setFocus(component);
-            this.ui.requestRender();
+            this.editorSlot.disposeActiveSelector();
+            this.editorSlot.show(component);
           }
         })
         .catch((err) => {
@@ -3340,9 +2342,7 @@ export class InteractiveMode {
         this.ui.requestRender();
       }
     } catch (error) {
-      this.showError(
-        `Failed to paste from clipboard: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      this.showError(`Failed to paste from clipboard: ${toErrorMessage(error)}`);
     }
   }
 
@@ -3448,11 +2448,11 @@ export class InteractiveMode {
       if (text === "/login" || text.startsWith("/login ")) {
         const providerRef = text.startsWith("/login ") ? text.slice(7).trim() : undefined;
         this.editor.setText("");
-        await this.handleLoginCommand(providerRef);
+        await this.loginFlow.login(providerRef);
         return;
       }
       if (text === "/logout") {
-        this.showOAuthSelector("logout");
+        void this.loginFlow.logout();
         this.editor.setText("");
         return;
       }
@@ -4816,7 +3816,7 @@ export class InteractiveMode {
         void this.maybeWarnAboutAnthropicSubscriptionAuth(result.model);
       }
     } catch (error) {
-      this.showError(error instanceof Error ? error.message : String(error));
+      this.showError(toErrorMessage(error));
     }
   }
 
@@ -5001,7 +4001,7 @@ export class InteractiveMode {
         const text = theme.fg("dim", `Follow-up: ${message}`);
         this.pendingMessagesContainer.addChild(new TruncatedText(text, 1, 0));
       }
-      const dequeueHint = this.getAppKeyDisplay("app.message.dequeue");
+      const dequeueHint = keyDisplayText("app.message.dequeue");
       const hintText = theme.fg("dim", `↳ ${dequeueHint} to edit all queued messages`);
       this.pendingMessagesContainer.addChild(new TruncatedText(hintText, 1, 0));
     }
@@ -5063,9 +4063,9 @@ export class InteractiveMode {
       this.compactionQueuedMessages = queuedMessages;
       this.updatePendingMessagesDisplay();
       this.showError(
-        `Failed to send queued message${queuedMessages.length > 1 ? "s" : ""}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to send queued message${queuedMessages.length > 1 ? "s" : ""}: ${toErrorMessage(
+          error,
+        )}`,
       );
     };
 
@@ -5143,44 +4143,8 @@ export class InteractiveMode {
   // Selectors
   // =========================================================================
 
-  private disposeActiveSelector(): void {
-    const dispose = this.activeSelectorDispose;
-    this.activeSelectorToken = undefined;
-    this.activeSelectorDispose = undefined;
-    dispose?.();
-  }
-
-  /**
-   * Shows a selector component in place of the editor.
-   * @param create Factory that receives a `done` callback and returns the component and focus target
-   */
-  private showSelector(
-    create: (done: () => void) => { component: Component; focus: Component; dispose?: () => void },
-  ): void {
-    const token = {};
-    let dispose: (() => void) | undefined;
-    const done = () => {
-      dispose?.();
-      if (this.activeSelectorToken !== token) return;
-      this.activeSelectorToken = undefined;
-      this.activeSelectorDispose = undefined;
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.editor);
-      this.ui.setFocus(this.editor);
-    };
-    const created = create(done);
-    dispose = created.dispose;
-    this.disposeActiveSelector();
-    this.activeSelectorToken = token;
-    this.activeSelectorDispose = dispose;
-    this.editorContainer.clear();
-    this.editorContainer.addChild(created.component);
-    this.ui.setFocus(created.focus);
-    this.ui.requestRender();
-  }
-
   private showSettingsSelector(): void {
-    this.showSelector((done) => {
+    this.editorSlot.showSelector((done) => {
       let selector: SettingsSelectorComponent | undefined;
       const defaultProvider = this.settingsManager.getDefaultProvider();
       const defaultModelId = this.settingsManager.getDefaultModel();
@@ -5450,12 +4414,12 @@ export class InteractiveMode {
       this.updateEditorBorderColor();
       this.showStatus(persist ? `Default thinking level: ${level}` : `Thinking level: ${level}`);
     } catch (error) {
-      this.showError(error instanceof Error ? error.message : String(error));
+      this.showError(toErrorMessage(error));
     }
   }
 
   private showThinkingSelector(): void {
-    this.showSelector((done) => {
+    this.editorSlot.showSelector((done) => {
       const selectLevel = (level: ThinkingLevel, persist: boolean) => {
         this.selectThinkingLevel(level, persist);
         done();
@@ -5490,7 +4454,7 @@ export class InteractiveMode {
         this.showStatus(`Model: ${model.id}`);
         void this.maybeWarnAboutAnthropicSubscriptionAuth(model);
       } catch (error) {
-        this.showError(error instanceof Error ? error.message : String(error));
+        this.showError(toErrorMessage(error));
       }
       return;
     }
@@ -5526,7 +4490,7 @@ export class InteractiveMode {
       this.showWarning(
         timedOut
           ? "Model refresh timed out; searching cached models."
-          : `Could not refresh model catalogs: ${error instanceof Error ? error.message : String(error)}`,
+          : `Could not refresh model catalogs: ${toErrorMessage(error)}`,
       );
     } finally {
       clearTimeout(timeout);
@@ -5595,9 +4559,7 @@ export class InteractiveMode {
       this.autoTrustOnReloadCwd = undefined;
       return true;
     } catch (error) {
-      this.showWarning(
-        `Could not save project trust after reload: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      this.showWarning(`Could not save project trust after reload: ${toErrorMessage(error)}`);
       return false;
     }
   }
@@ -5606,7 +4568,7 @@ export class InteractiveMode {
     const cwd = this.sessionManager.getCwd();
     const trustStore = new ProjectTrustStore(this.runtimeHost.services.agentDir);
     const savedDecision = trustStore.getEntry(cwd);
-    this.showSelector((done) => {
+    this.editorSlot.showSelector((done) => {
       const selector = new TrustSelectorComponent({
         cwd,
         savedDecision,
@@ -5628,7 +4590,7 @@ export class InteractiveMode {
   }
 
   private showModelSelector(initialSearchInput?: string): void {
-    this.showSelector((done) => {
+    this.editorSlot.showSelector((done) => {
       const selectModel = async (model: Model<any>, persist: boolean) => {
         try {
           await this.session.setModel(model, { persist });
@@ -5642,7 +4604,7 @@ export class InteractiveMode {
           void this.maybeWarnAboutAnthropicSubscriptionAuth(model);
         } catch (error) {
           done();
-          this.showError(error instanceof Error ? error.message : String(error));
+          this.showError(toErrorMessage(error));
         }
       };
       const defaultProvider = this.settingsManager.getDefaultProvider();
@@ -5716,7 +4678,7 @@ export class InteractiveMode {
       this.ui.requestRender();
     };
 
-    this.showSelector((done) => {
+    this.editorSlot.showSelector((done) => {
       let disposed = false;
       let timedOut = false;
       const controller = new AbortController();
@@ -5781,7 +4743,7 @@ export class InteractiveMode {
           selector.setRefreshStatus(
             timedOut
               ? "Model refresh timed out; showing cached models."
-              : `Could not refresh model catalogs: ${error instanceof Error ? error.message : String(error)}`,
+              : `Could not refresh model catalogs: ${toErrorMessage(error)}`,
             "warning",
           );
           this.ui.requestRender();
@@ -5809,7 +4771,7 @@ export class InteractiveMode {
 
     const initialSelectedId = userMessages[userMessages.length - 1]?.entryId;
 
-    this.showSelector((done) => {
+    this.editorSlot.showSelector((done) => {
       const selector = new UserMessageSelectorComponent(
         userMessages.map((m) => ({ id: m.entryId, text: m.text })),
         async (entryId) => {
@@ -5824,7 +4786,7 @@ export class InteractiveMode {
             this.editor.setText(result.selectedText ?? "");
             this.showStatus("Forked to new session");
           } catch (error: unknown) {
-            this.showError(error instanceof Error ? error.message : String(error));
+            this.showError(toErrorMessage(error));
           }
         },
         () => {
@@ -5854,7 +4816,7 @@ export class InteractiveMode {
       this.editor.setText("");
       this.showStatus("Cloned to new session");
     } catch (error: unknown) {
-      this.showError(error instanceof Error ? error.message : String(error));
+      this.showError(toErrorMessage(error));
     }
   }
 
@@ -5868,7 +4830,7 @@ export class InteractiveMode {
       return;
     }
 
-    this.showSelector((done) => {
+    this.editorSlot.showSelector((done) => {
       const selector = new TreeSelectorComponent(
         tree,
         realLeafId,
@@ -5891,7 +4853,7 @@ export class InteractiveMode {
           // Check if we should skip the prompt (user preference to always default to no summary)
           if (!this.settingsManager.getBranchSummarySkipPrompt()) {
             while (true) {
-              const summaryChoice = await this.showExtensionSelector("Summarize branch?", [
+              const summaryChoice = await this.extensionDialogs.select("Summarize branch?", [
                 "No summary",
                 "Summarize",
                 "Summarize with custom prompt",
@@ -5906,7 +4868,7 @@ export class InteractiveMode {
               wantsSummary = summaryChoice !== "No summary";
 
               if (summaryChoice === "Summarize with custom prompt") {
-                customInstructions = await this.showExtensionEditor(
+                customInstructions = await this.extensionDialogs.editor(
                   "Custom summarization instructions",
                 );
                 if (customInstructions === undefined) {
@@ -5974,7 +4936,7 @@ export class InteractiveMode {
             this.showStatus("Navigated to selected point");
             void this.flushCompactionQueue({ willRetry: false });
           } catch (error) {
-            this.showError(error instanceof Error ? error.message : String(error));
+            this.showError(toErrorMessage(error));
           } finally {
             if (showingSummaryIndicator) {
               this.clearStatusIndicator("branchSummary");
@@ -6002,7 +4964,7 @@ export class InteractiveMode {
           await copyToClipboard(text);
           this.showStatus("Copied selected message to clipboard");
         } catch (error) {
-          this.showError(error instanceof Error ? error.message : String(error));
+          this.showError(toErrorMessage(error));
         }
       };
       return { component: selector, focus: selector };
@@ -6010,7 +4972,7 @@ export class InteractiveMode {
   }
 
   private showSessionSelector(): void {
-    this.showSelector((done) => {
+    this.editorSlot.showSelector((done) => {
       const selector = new SessionSelectorComponent(
         (onProgress, signal) =>
           SessionManager.list(
@@ -6089,695 +5051,6 @@ export class InteractiveMode {
     }
   }
 
-  private getLoginProviderOptions(authType?: "oauth" | "api_key"): AuthSelectorProvider[] {
-    const options: AuthSelectorProvider[] = [];
-    for (const provider of this.session.modelRuntime.getProviders()) {
-      const authStatus = this.session.modelRuntime.getProviderAuthStatus(provider.id);
-      const status = authStatus.configured
-        ? {
-            type: this.session.modelRuntime.isUsingOAuth(provider.id)
-              ? ("oauth" as const)
-              : ("api_key" as const),
-            source: authStatus.label ?? authStatus.source,
-          }
-        : undefined;
-      const subscription = provider.auth.oauth?.isSubscription === true;
-      if ((!authType || authType === "oauth") && provider.auth.oauth) {
-        options.push({
-          id: provider.id,
-          name: provider.name,
-          authType: "oauth",
-          method: provider.auth.oauth,
-          status,
-          subscription,
-        });
-      }
-      if ((!authType || authType === "api_key") && provider.auth.apiKey) {
-        options.push({
-          id: provider.id,
-          name: provider.name,
-          authType: "api_key",
-          method: provider.auth.apiKey,
-          status,
-          subscription,
-        });
-      }
-    }
-    return options.sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  private async getLogoutProviderOptions(): Promise<AuthSelectorProvider[]> {
-    return (
-      await this.session.modelRuntime.listCredentials({ signal: AbortSignal.timeout(15_000) })
-    )
-      .map(({ providerId, type }) => {
-        const provider = this.session.modelRuntime.getProvider(providerId);
-        return {
-          id: providerId,
-          name: provider?.name ?? providerId,
-          authType: type,
-          status: { type, source: "stored credential" },
-          subscription: provider?.auth.oauth?.isSubscription === true,
-        };
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  private findLoginProviderOptions(providerRef: string): AuthSelectorProvider[] {
-    const normalizedProviderRef = providerRef.trim().toLowerCase();
-    if (!normalizedProviderRef) {
-      return [];
-    }
-
-    return this.getLoginProviderOptions().filter(
-      (provider) =>
-        provider.id.toLowerCase() === normalizedProviderRef ||
-        provider.name.toLowerCase() === normalizedProviderRef,
-    );
-  }
-
-  private async handleLoginCommand(providerRef?: string): Promise<void> {
-    if (!providerRef) {
-      this.showLoginAuthTypeSelector();
-      return;
-    }
-
-    const providerOptions = this.findLoginProviderOptions(providerRef);
-    if (providerOptions.length === 1) {
-      await this.startProviderLogin(providerOptions[0]!);
-      return;
-    }
-
-    if (providerOptions.length > 1) {
-      const providerIds = new Set(providerOptions.map((provider) => provider.id));
-      if (providerIds.size === 1) {
-        this.showLoginAuthTypeSelector(providerOptions);
-        return;
-      }
-    }
-
-    this.showLoginProviderSelector(undefined, providerRef);
-  }
-
-  /** `onBack` reopens the selector the login was started from when the user cancels it. */
-  private async startProviderLogin(
-    providerOption: AuthSelectorProvider,
-    onBack?: () => void,
-  ): Promise<void> {
-    if (providerOption.authType === "oauth") {
-      await this.showLoginDialog(providerOption.id, providerOption.name, onBack);
-    } else if (providerOption.method?.login) {
-      await this.showApiKeyLoginDialog(providerOption.id, providerOption.name, onBack);
-    } else {
-      this.showAmbientAuthDialog(providerOption, onBack);
-    }
-  }
-
-  private showLoginAuthTypeSelector(providerOptions?: AuthSelectorProvider[]): void {
-    // The top-level selector offers Radius directly, as its last option.
-    const radiusOption = providerOptions
-      ? undefined
-      : this.getLoginProviderOptions("oauth").find(
-          (provider) => provider.id === RADIUS_PROVIDER_ID,
-        );
-    const radiusText = radiusOption ? `Sign in with ${radiusOption.name}` : undefined;
-    const radiusLabel = radiusOption
-      ? `${radiusText}${formatAuthSelectorProviderStatus(radiusOption)}`
-      : undefined;
-    const oauthProvider = providerOptions?.find((provider) => provider.authType === "oauth");
-    const oauthLoginLabel =
-      oauthProvider?.method && "loginLabel" in oauthProvider.method
-        ? oauthProvider.method.loginLabel
-        : undefined;
-    const subscriptionLabel = oauthLoginLabel ?? "Sign in with an account";
-    const apiKeyLabel = "Sign in with an API key";
-    const availableAuthTypes = providerOptions
-      ? new Set(providerOptions.map((provider) => provider.authType))
-      : new Set<AuthSelectorProvider["authType"]>(["oauth", "api_key"]);
-    const options: string[] = [];
-    if (availableAuthTypes.has("oauth")) {
-      options.push(subscriptionLabel);
-    }
-    if (availableAuthTypes.has("api_key")) {
-      options.push(apiKeyLabel);
-    }
-    if (radiusLabel) options.push(radiusLabel);
-
-    if (options.length === 0) {
-      this.showStatus("No login methods available.");
-      return;
-    }
-
-    if (providerOptions && options.length === 1) {
-      const providerOption = providerOptions[0];
-      if (providerOption) {
-        void this.startProviderLogin(providerOption);
-      }
-      return;
-    }
-
-    const title = providerOptions?.[0]
-      ? `Select authentication method for ${providerOptions[0].name}:`
-      : "Select authentication method:";
-    this.showSelector((done) => {
-      const onSelect = (option: string) => {
-        done();
-        if (radiusOption && option === radiusLabel) {
-          void this.startProviderLogin(radiusOption, () => this.showLoginAuthTypeSelector());
-          return;
-        }
-        const authType = option === subscriptionLabel ? "oauth" : "api_key";
-        if (providerOptions) {
-          const providerOption = providerOptions.find((provider) => provider.authType === authType);
-          if (providerOption) {
-            void this.startProviderLogin(providerOption, () =>
-              this.showLoginAuthTypeSelector(providerOptions),
-            );
-          }
-          return;
-        }
-        this.showLoginProviderSelector(authType);
-      };
-      const onCancel = () => {
-        done();
-        this.ui.requestRender();
-      };
-      const selector =
-        radiusLabel && radiusText
-          ? createLoginMenuSelector(
-              this.ui,
-              title,
-              options,
-              { label: radiusLabel, text: radiusText },
-              onSelect,
-              onCancel,
-            )
-          : new ExtensionSelectorComponent(title, options, onSelect, onCancel);
-      return { component: selector, focus: selector, dispose: () => selector.dispose() };
-    });
-  }
-
-  private showLoginProviderSelector(
-    authType?: AuthSelectorProvider["authType"],
-    initialSearchInput?: string,
-  ): void {
-    const providerOptions = this.getLoginProviderOptions(authType);
-    if (providerOptions.length === 0) {
-      const message =
-        authType === "oauth"
-          ? "No account providers available."
-          : authType === "api_key"
-            ? "No API key providers available."
-            : "No login providers available.";
-      this.showStatus(message);
-      return;
-    }
-
-    this.showSelector((done) => {
-      const selector = new OAuthSelectorComponent(
-        "login",
-        providerOptions,
-        async (providerId, selectedAuthType) => {
-          done();
-
-          const providerOption = providerOptions.find(
-            (provider) => provider.id === providerId && provider.authType === selectedAuthType,
-          );
-          if (!providerOption) {
-            return;
-          }
-
-          await this.startProviderLogin(providerOption, () =>
-            this.showLoginProviderSelector(authType, initialSearchInput),
-          );
-        },
-        () => {
-          done();
-          if (authType) {
-            this.showLoginAuthTypeSelector();
-          } else {
-            this.ui.requestRender();
-          }
-        },
-        initialSearchInput,
-      );
-      return { component: selector, focus: selector };
-    });
-  }
-
-  private async showOAuthSelector(mode: "login" | "logout"): Promise<void> {
-    if (mode === "login") {
-      this.showLoginAuthTypeSelector();
-      return;
-    }
-
-    let providerOptions: AuthSelectorProvider[];
-    try {
-      providerOptions = await this.getLogoutProviderOptions();
-    } catch (error) {
-      this.showError(
-        `Could not read stored credentials: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return;
-    }
-    if (providerOptions.length === 0) {
-      this.showStatus(
-        "No stored credentials to remove. /logout only removes credentials saved by /login; environment variables and models.json config are unchanged.",
-      );
-      return;
-    }
-
-    this.showSelector((done) => {
-      const selector = new OAuthSelectorComponent(
-        mode,
-        providerOptions,
-        async (providerId: string) => {
-          done();
-
-          const providerOption = providerOptions.find((provider) => provider.id === providerId);
-          if (!providerOption) {
-            return;
-          }
-
-          try {
-            await this.session.modelRuntime.logout(providerOption.id, {
-              signal: AbortSignal.timeout(15_000),
-            });
-            await this.updateAvailableProviderCount();
-            const message =
-              providerOption.authType === "oauth"
-                ? `Logged out of ${providerOption.name}`
-                : `Removed stored API key for ${providerOption.name}. Environment variables and models.json config are unchanged.`;
-            this.showStatus(message);
-          } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
-            this.showError(
-              error instanceof CredentialSynchronizationError
-                ? `Credentials removed for ${providerOption.name}, but local model state could not be synchronized: ${message}`
-                : `Logout failed: ${message}`,
-            );
-          }
-        },
-        () => {
-          done();
-          this.ui.requestRender();
-        },
-      );
-      return { component: selector, focus: selector };
-    });
-  }
-
-  private async completeProviderAuthentication(
-    providerId: string,
-    providerName: string,
-    authType: "oauth" | "api_key",
-    previousModel: Model<any> | undefined,
-  ): Promise<void> {
-    const actionLabel =
-      authType === "oauth" ? `Logged in to ${providerName}` : `Saved API key for ${providerName}`;
-
-    const session = this.session;
-    // Dynamic catalogs may be empty until the first authenticated network refresh.
-    const deferSelection =
-      isUnknownModel(previousModel) &&
-      hasDefaultModelProvider(providerId) &&
-      !session.modelRuntime
-        .getAvailableSnapshot()
-        .some(
-          (model) =>
-            model.provider === providerId && model.id === defaultModelPerProvider[providerId],
-        );
-    const finishAuthentication = async () => {
-      let selectedModel: Model<any> | undefined;
-      let selectionError: string | undefined;
-      if (isUnknownModel(previousModel)) {
-        const availableModels = this.session.modelRuntime.getAvailableSnapshot();
-        const providerModels = availableModels.filter((model) => model.provider === providerId);
-        // Matches LLAMA_PROVIDER_ID from extensions/llama/provider.ts; kept inline to avoid coupling interactive mode to the built-in extension.
-        if (providerId === "llama.cpp") {
-          selectionError = llamaCppPostLoginGuidance(actionLabel, providerModels.length);
-        } else if (!hasDefaultModelProvider(providerId)) {
-          selectionError = `${actionLabel}, but no default model is configured for provider "${providerId}". Use /model to select a model.`;
-        } else if (providerModels.length === 0) {
-          selectionError = `${actionLabel}, but no models are available for that provider. Use /model to select a model.`;
-        } else {
-          const defaultModelId = defaultModelPerProvider[providerId];
-          // Radius catalogs vary by account; prefer balanced, then use catalog order.
-          selectedModel =
-            providerModels.find((model) => model.id === defaultModelId) ??
-            (providerId === "radius" ? providerModels[0] : undefined);
-          if (!selectedModel) {
-            selectionError = `${actionLabel}, but its default model "${defaultModelId}" is not available. Use /model to select a model.`;
-          } else {
-            try {
-              await this.session.setModel(selectedModel, { persist: true });
-            } catch (error: unknown) {
-              selectedModel = undefined;
-              const errorMessage = error instanceof Error ? error.message : String(error);
-              selectionError = `${actionLabel}, but selecting its default model failed: ${errorMessage}. Use /model to select a model.`;
-            }
-          }
-        }
-      }
-
-      await this.updateAvailableProviderCount();
-      this.footer.invalidate();
-      this.updateEditorBorderColor();
-      if (selectedModel) {
-        this.showStatus(
-          `${actionLabel}. Selected ${selectedModel.id}. Credentials saved to ${getAuthPath()}`,
-        );
-        void this.maybeWarnAboutAnthropicSubscriptionAuth(selectedModel);
-      } else {
-        this.showStatus(`${actionLabel}. Credentials saved to ${getAuthPath()}`);
-        if (selectionError) {
-          this.showError(selectionError);
-        } else {
-          void this.maybeWarnAboutAnthropicSubscriptionAuth();
-        }
-      }
-    };
-    if (deferSelection) {
-      this.showStatus(
-        `${actionLabel}. Credentials saved to ${getAuthPath()}. Refreshing model catalog…`,
-      );
-    } else {
-      await finishAuthentication();
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
-    void session.modelRuntime
-      .refresh({ providers: [providerId], signal: controller.signal })
-      .then(async (result) => {
-        if (result.aborted) {
-          this.showWarning(
-            `${actionLabel}, but its model catalog refresh timed out; using cached models.`,
-          );
-        } else if (result.errors.size > 0) {
-          this.showWarning(
-            `${actionLabel}, but its model catalog could not be refreshed; using cached models.`,
-          );
-        }
-        // Do not replace a model or session selected while the refresh was running.
-        if (deferSelection && this.session === session && session.model === previousModel) {
-          await finishAuthentication();
-        }
-        this.updateAvailableProviderCount();
-        this.footer.invalidate();
-        this.ui.requestRender();
-      })
-      .catch((error: unknown) => {
-        this.showWarning(
-          `${actionLabel}, but its model catalog could not be refreshed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      })
-      .finally(() => clearTimeout(timeout));
-  }
-
-  private showAmbientAuthDialog(providerOption: AuthSelectorProvider, onBack?: () => void): void {
-    const restoreEditor = () => {
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.editor);
-      this.ui.setFocus(this.editor);
-      this.ui.requestRender();
-    };
-
-    const dialog = new LoginDialogComponent(
-      this.ui,
-      providerOption.id,
-      () => {
-        restoreEditor();
-        onBack?.();
-      },
-      providerOption.name,
-      `${providerOption.name} setup`,
-    );
-    dialog.showInfo(
-      `${providerOption.method?.name ?? "Authentication"} is configured outside ${APP_NAME}.`,
-      [],
-      true,
-    );
-
-    this.editorContainer.clear();
-    this.editorContainer.addChild(dialog);
-    this.ui.setFocus(dialog);
-    this.ui.requestRender();
-  }
-
-  private async showApiKeyLoginDialog(
-    providerId: string,
-    providerName: string,
-    onBack?: () => void,
-  ): Promise<void> {
-    const previousModel = this.session.model;
-
-    const dialog = new LoginDialogComponent(
-      this.ui,
-      providerId,
-      (_success, _message) => {
-        // Completion handled below
-      },
-      providerName,
-    );
-
-    if (providerId === "amazon-bedrock") {
-      dialog.showDetails([
-        theme.fg("text", "You can also use an AWS profile, IAM keys, or role-based credentials."),
-        theme.fg("muted", "See:"),
-        theme.fg("accent", `  ${path.join(getDocsPath(), "providers.md")}`),
-      ]);
-    }
-
-    this.editorContainer.clear();
-    this.editorContainer.addChild(dialog);
-    this.ui.setFocus(dialog);
-    this.ui.requestRender();
-
-    const restoreEditor = () => {
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.editor);
-      this.ui.setFocus(this.editor);
-      this.ui.requestRender();
-    };
-
-    try {
-      await this.loginProvider(dialog, providerId, providerName, "api_key");
-      restoreEditor();
-      await this.completeProviderAuthentication(providerId, providerName, "api_key", previousModel);
-    } catch (error: unknown) {
-      restoreEditor();
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      if (error instanceof CredentialSynchronizationError) {
-        this.showError(
-          `Saved API key for ${providerName}, but local model state could not be synchronized: ${errorMsg}`,
-        );
-      } else if (errorMsg === "Login cancelled") {
-        onBack?.();
-      } else {
-        this.showError(`Failed to save API key for ${providerName}: ${errorMsg}`);
-      }
-    }
-  }
-
-  private showAuthSelect(
-    dialog: LoginDialogComponent,
-    prompt: Extract<AuthPrompt, { type: "select" }>,
-    providerId: string,
-  ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const restoreDialog = () => {
-        this.editorContainer.clear();
-        this.editorContainer.addChild(dialog);
-        this.ui.setFocus(dialog);
-        this.ui.requestRender();
-      };
-      const labels = prompt.options.map((option) => option.label);
-      const selector = new ExtensionSelectorComponent(
-        prompt.message,
-        labels,
-        (optionLabel) => {
-          restoreDialog();
-          const id = prompt.options.find((option) => option.label === optionLabel)?.id;
-          if (id) resolve(id);
-          else reject(new Error("Login cancelled"));
-        },
-        () => {
-          restoreDialog();
-          reject(new Error("Login cancelled"));
-        },
-        { description: providerId === RADIUS_PROVIDER_ID ? RADIUS_LOGIN_INTRO : undefined },
-      );
-      this.editorContainer.clear();
-      this.editorContainer.addChild(selector);
-      this.ui.setFocus(selector);
-      this.ui.requestRender();
-    });
-  }
-
-  private async showAuthPrompt(
-    dialog: LoginDialogComponent,
-    prompt: AuthPrompt,
-    providerId: string,
-  ): Promise<string> {
-    let response: Promise<string>;
-    if (prompt.type === "select") {
-      response = this.showAuthSelect(dialog, prompt, providerId);
-    } else if (prompt.type === "manual_code") {
-      response = dialog.showManualInput(prompt.message);
-    } else {
-      response = dialog.showPrompt(prompt.message, prompt.placeholder);
-    }
-    if (!prompt.signal) return response;
-    if (prompt.signal.aborted) throw new Error("Login cancelled");
-    const signal = prompt.signal;
-    let onAbort: (() => void) | undefined;
-    const aborted = new Promise<string>((_resolve, reject) => {
-      onAbort = () => reject(new Error("Login cancelled"));
-      signal.addEventListener("abort", onAbort, { once: true });
-    });
-    try {
-      return await Promise.race([response, aborted]);
-    } finally {
-      if (onAbort) signal.removeEventListener("abort", onAbort);
-    }
-  }
-
-  private notifyAuthDialog(dialog: LoginDialogComponent, event: AuthEvent): void {
-    if (event.type === "auth_url") {
-      dialog.showAuth(event.url, event.instructions);
-    } else if (event.type === "device_code") {
-      dialog.showDeviceCode(event);
-      dialog.showWaiting("Waiting for authentication...");
-    } else if (event.type === "info") {
-      dialog.showInfo(event.message, event.links);
-    } else {
-      dialog.showProgress(event.message);
-    }
-  }
-
-  private async loginProvider(
-    dialog: LoginDialogComponent,
-    providerId: string,
-    providerName: string,
-    method: "api_key" | "oauth",
-  ): Promise<void> {
-    this.programStatus.setBlocked("login", { kind: "auth", message: `Log in to ${providerName}` });
-    try {
-      await this.session.modelRuntime.login(
-        providerId,
-        method,
-        {
-          signal: dialog.signal,
-          prompt: (prompt) => this.showAuthPrompt(dialog, prompt, providerId),
-          notify: (event) => this.notifyAuthDialog(dialog, event),
-        },
-        { getDeviceId: () => this.settingsManager.getOrCreateDeviceId() },
-      );
-    } finally {
-      this.programStatus.setBlocked("login", undefined);
-    }
-  }
-
-  private async showLoginDialog(
-    providerId: string,
-    providerName: string,
-    onBack?: () => void,
-  ): Promise<void> {
-    const previousModel = this.session.model;
-    const dialog = new LoginDialogComponent(
-      this.ui,
-      providerId,
-      (_success, _message) => {},
-      providerName,
-    );
-    this.editorContainer.clear();
-    this.editorContainer.addChild(dialog);
-    this.ui.setFocus(dialog);
-    this.ui.requestRender();
-
-    const restoreEditor = () => {
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.editor);
-      this.ui.setFocus(this.editor);
-      this.ui.requestRender();
-    };
-
-    try {
-      await this.loginProvider(dialog, providerId, providerName, "oauth");
-      restoreEditor();
-      await this.completeProviderAuthentication(providerId, providerName, "oauth", previousModel);
-      if (providerId === RADIUS_PROVIDER_ID) this.offerRadiusMcpServer(providerId, providerName);
-    } catch (error: unknown) {
-      restoreEditor();
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      if (error instanceof CredentialSynchronizationError) {
-        this.showError(
-          `Logged in to ${providerName}, but local model state could not be synchronized: ${errorMsg}`,
-        );
-      } else if (errorMsg === "Login cancelled") {
-        onBack?.();
-      } else {
-        this.showError(`Failed to login to ${providerName}: ${errorMsg}`);
-      }
-    }
-  }
-
-  /**
-   * Offer to point the Radius MCP server in the global mcp.json at the Radius login, adding the server
-   * when missing. Nothing is asked when a global server already uses this login.
-   */
-  private offerRadiusMcpServer(providerId: string, providerName: string): void {
-    const mcpPath = path.join(getAgentDir(), "mcp.json");
-    const normalizeUrl = (url: string) => url.replace(/\/+$/u, "");
-    const { servers } = loadMcpConfig({
-      agentDir: getAgentDir(),
-      cwd: this.sessionManager.getCwd(),
-      projectTrusted: false,
-    });
-    const existing = servers.find(
-      (server) =>
-        "url" in server.config && normalizeUrl(server.config.url) === normalizeUrl(RADIUS_MCP_URL),
-    );
-    if (existing && "url" in existing.config && existing.config.auth?.provider === providerId)
-      return;
-
-    let name = existing?.name ?? "radius";
-    if (!existing && servers.some((server) => server.name === name)) name = "radius-mcp";
-    const config: McpHttpServerConfig =
-      existing && "url" in existing.config
-        ? { ...existing.config, auth: { provider: providerId } }
-        : { url: RADIUS_MCP_URL, auth: { provider: providerId } };
-    // `auth` replaces the MCP OAuth sign-in.
-    delete config.oauth;
-
-    this.showSelector((done) => {
-      const selector = new ExtensionSelectorComponent(
-        `Configure ${providerName} MCP in ${mcpPath}?`,
-        ["Yes", "No"],
-        (option) => {
-          done();
-          if (option !== "Yes") return;
-          try {
-            addMcpServerConfig(mcpPath, name, config);
-          } catch (error: unknown) {
-            this.showError(
-              `Could not update ${mcpPath}: ${error instanceof Error ? error.message : String(error)}`,
-            );
-            return;
-          }
-          // The MCP extension reads mcp.json when the session starts.
-          void this.handleReloadCommand();
-        },
-        () => {
-          done();
-          this.ui.requestRender();
-        },
-      );
-      return { component: selector, focus: selector };
-    });
-  }
-
   // =========================================================================
   // Command handlers
   // =========================================================================
@@ -6813,18 +5086,9 @@ export class InteractiveMode {
     reloadBox.addChild(new DynamicBorder(borderColor));
 
     const previousEditor = this.editor;
-    this.editorContainer.clear();
-    this.editorContainer.addChild(reloadBox);
-    this.ui.setFocus(reloadBox);
+    this.editorSlot.show(reloadBox);
     this.ui.requestRender(true);
     await new Promise((resolve) => process.nextTick(resolve));
-
-    const dismissReloadBox = (editor: Component) => {
-      this.editorContainer.clear();
-      this.editorContainer.addChild(editor);
-      this.ui.setFocus(editor);
-      this.ui.requestRender();
-    };
 
     let chatRestoredBeforeSessionStart = false;
     let reloadBoxDismissed = false;
@@ -6866,13 +5130,13 @@ export class InteractiveMode {
           ? "Reloaded keybindings, extensions, skills, prompts, themes, and context files; saved project trust"
           : "Reloaded keybindings, extensions, skills, prompts, themes, and context files",
       );
-      dismissReloadBox(this.editor as Component);
+      this.editorSlot.show(this.editor);
       reloadBoxDismissed = true;
     } catch (error) {
       if (!reloadBoxDismissed) {
-        dismissReloadBox(previousEditor as Component);
+        this.editorSlot.show(previousEditor);
       }
-      this.showError(`Reload failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.showError(`Reload failed: ${toErrorMessage(error)}`);
     }
   }
 
@@ -6932,7 +5196,7 @@ export class InteractiveMode {
       return;
     }
 
-    const confirmed = await this.showExtensionConfirm(
+    const confirmed = await this.extensionDialogs.confirm(
       "Import session",
       `Replace current session with ${inputPath}?`,
     );
@@ -6976,8 +5240,7 @@ export class InteractiveMode {
     await shareSession({
       session: this.session,
       ui: this.ui,
-      editorContainer: this.editorContainer,
-      editor: this.editor,
+      editorSlot: this.editorSlot,
       showStatus: (message) => this.showStatus(message),
       showError: (message) => this.showError(message),
     });
@@ -6988,8 +5251,7 @@ export class InteractiveMode {
       {
         session: this.session,
         ui: this.ui,
-        editorContainer: this.editorContainer,
-        editor: this.editor,
+        editorSlot: this.editorSlot,
         keybindings: this.keybindings,
         showStatus: (message) => this.showStatus(message),
         showError: (message) => this.showError(message),
@@ -7025,7 +5287,7 @@ export class InteractiveMode {
         this.showStatus("Copied last agent message to clipboard");
       }
     } catch (error) {
-      this.showError(error instanceof Error ? error.message : String(error));
+      this.showError(toErrorMessage(error));
     }
   }
 
@@ -7061,86 +5323,19 @@ export class InteractiveMode {
   }
 
   private handleSessionCommand(): void {
-    const stats = this.session.getSessionStats();
-    const sessionName = this.sessionManager.getSessionName();
     const entries = this.sessionManager.getEntries();
-    const cacheWaste = computeCacheWaste(entries, this.session.modelRuntime);
-
-    // Cost/token totals per provider/model actually used (e.g. OpenRouter `auto`
-    // resolves to a concrete responseModel). Usage without model attribution is
-    // grouped separately so the breakdown reconciles with the session total.
-    const usageBreakdown = getUsageCostBreakdown(entries);
-
-    // Snapshot the stats; the text is built on demand so it follows theme changes.
-    const cacheWarmingStatus = this.session.cacheWarmingStatus;
-    const cacheWarmingMode = this.settingsManager.getCacheWarmingMode();
     const model = this.session.model;
-    const selectedModelKey = `${model?.provider}/${model?.id}`;
-    const renderInfo = (): string => {
-      let info = `${theme.bold("Session Info")}\n\n`;
-      if (sessionName) {
-        info += `${theme.fg("dim", "Name:")} ${sessionName}\n`;
-      }
-      info += `${theme.fg("dim", "File:")} ${stats.sessionFile ?? "In-memory"}\n`;
-      info += `${theme.fg("dim", "ID:")} ${stats.sessionId}\n\n`;
-      info += `${theme.bold("Messages")}\n`;
-      info += `${theme.fg("dim", "Total:")} ${stats.totalMessages}\n`;
-      info += `${theme.fg("dim", "User:")} ${stats.userMessages}\n`;
-      info += `${theme.fg("dim", "Assistant:")} ${stats.assistantMessages}\n`;
-      info += `${theme.fg("dim", "Tools:")} ${stats.toolCalls} calls, ${stats.toolResults} results\n\n`;
-      info += `${theme.bold("Tokens")}\n`;
-      // "Input" is the full prompt volume. With cache activity, split it into
-      // cached (served from cache) vs uncached (everything else) - the only
-      // provider-independent split. Cache writes, where reported, are a detail
-      // of the uncached portion.
-      const { input, cacheRead, cacheWrite } = stats.tokens;
-      const promptTokens = input + cacheRead + cacheWrite;
-      info += `${theme.fg("dim", "Input:")} ${promptTokens.toLocaleString()}\n`;
-      if (promptTokens > 0 && (cacheRead > 0 || cacheWrite > 0)) {
-        const hitRate = theme.fg("dim", `(${((cacheRead / promptTokens) * 100).toFixed(1)}%)`);
-        info += `  ${theme.fg("dim", "Cached:")} ${cacheRead.toLocaleString()} ${hitRate}\n`;
-        const written =
-          cacheWrite > 0
-            ? ` ${theme.fg("dim", `(${cacheWrite.toLocaleString()} written to cache)`)}`
-            : "";
-        info += `  ${theme.fg("dim", "Uncached:")} ${(input + cacheWrite).toLocaleString()}${written}\n`;
-      }
-      info += `${theme.fg("dim", "Output:")} ${stats.tokens.output.toLocaleString()}\n`;
-      info += `${theme.fg("dim", "Total:")} ${stats.tokens.total.toLocaleString()}\n`;
-
-      info += `\n${theme.bold("Cache Warming")}\n`;
-      info += `${theme.fg("dim", "Mode:")} ${cacheWarmingMode}\n`;
-      info += `${theme.fg("dim", "Status:")} ${cacheWarmingStatus ? formatCacheWarmingStatus(cacheWarmingStatus) : "Inactive (cache warming unavailable)"}\n`;
-      const decision = cacheWarmingStatus?.decision;
-      if (decision?.economicsAvailable) {
-        info += `${theme.fg("dim", "Cache miss penalty:")} $${decision.missCost.toFixed(3)}\n`;
-        info += `${theme.fg("dim", "Refresh cost:")} $${decision.warmCost.toFixed(3)}\n`;
-      }
-
-      if (stats.cost > 0 || cacheWaste.missedTokens > 0) {
-        info += `\n${theme.bold("Cost")}\n`;
-        info += `${theme.fg("dim", "Total:")} $${stats.cost.toFixed(3)}`;
-        // A single entry repeats the total, unless it names a model other than the selected one.
-        if (usageBreakdown.length > 1 || usageBreakdown[0]?.key !== selectedModelKey) {
-          for (const entry of usageBreakdown) {
-            info += `\n  ${theme.fg("dim", `${entry.key}:`)} $${entry.cost.toFixed(3)} ${theme.fg("dim", `(${formatTokens(entry.tokens)} tokens)`)}`;
-          }
-        }
-        if (cacheWaste.missedTokens > 0) {
-          const missLabel =
-            cacheWaste.missCount === 1 ? "1 miss" : `${cacheWaste.missCount} misses`;
-          const detail = `${cacheWaste.missedTokens.toLocaleString()} tokens, ${missLabel}`;
-          info +=
-            cacheWaste.missedCost >= 0.0001
-              ? `\n${theme.fg("dim", "Cache Re-billed:")} $${cacheWaste.missedCost.toFixed(3)} ${theme.fg("dim", `(${detail})`)}`
-              : `\n${theme.fg("dim", "Cache Re-billed:")} ${detail}`;
-        }
-      }
-      return info;
+    const info: SessionInfo = {
+      stats: this.session.getSessionStats(),
+      sessionName: this.sessionManager.getSessionName(),
+      cacheWaste: computeCacheWaste(entries, this.session.modelRuntime),
+      usageBreakdown: getUsageCostBreakdown(entries),
+      cacheWarmingMode: this.settingsManager.getCacheWarmingMode(),
+      cacheWarmingStatus: this.session.cacheWarmingStatus,
+      selectedModelKey: `${model?.provider}/${model?.id}`,
     };
-
     this.chatContainer.addChild(new Spacer(1));
-    this.chatContainer.addChild(new ThemedText(renderInfo, 1, 0));
+    this.chatContainer.addChild(new ThemedText(() => formatSessionInfo(info), 1, 0));
     this.ui.requestRender();
   }
 
@@ -7156,152 +5351,25 @@ export class InteractiveMode {
             .join("\n\n")
         : "No changelog entries found.";
 
+    this.addMarkdownPanel("What's New", changelogMarkdown);
+  }
+
+  /** A bordered, titled markdown block appended to the transcript. */
+  private addMarkdownPanel(title: string, markdown: string): void {
     this.chatContainer.addChild(new Spacer(1));
     this.chatContainer.addChild(new DynamicBorder());
-    this.chatContainer.addChild(
-      new ThemedText(() => theme.bold(theme.fg("accent", "What's New")), 1, 0),
-    );
+    this.chatContainer.addChild(new ThemedText(() => theme.bold(theme.fg("accent", title)), 1, 0));
     this.chatContainer.addChild(new Spacer(1));
-    this.chatContainer.addChild(
-      new Markdown(changelogMarkdown, 1, 1, this.getMarkdownThemeWithSettings()),
-    );
+    this.chatContainer.addChild(new Markdown(markdown, 1, 1, this.getMarkdownThemeWithSettings()));
     this.chatContainer.addChild(new DynamicBorder());
     this.ui.requestRender();
-  }
-
-  /**
-   * Get capitalized display string for an app keybinding action.
-   */
-  private getAppKeyDisplay(action: AppKeybinding): string {
-    return keyDisplayText(action);
-  }
-
-  /**
-   * Get capitalized display string for an editor keybinding action.
-   */
-  private getEditorKeyDisplay(action: Keybinding): string {
-    return keyDisplayText(action);
   }
 
   private handleHotkeysCommand(): void {
-    // Navigation keybindings
-    const cursorUp = this.getEditorKeyDisplay("tui.editor.cursorUp");
-    const cursorDown = this.getEditorKeyDisplay("tui.editor.cursorDown");
-    const cursorLeft = this.getEditorKeyDisplay("tui.editor.cursorLeft");
-    const cursorRight = this.getEditorKeyDisplay("tui.editor.cursorRight");
-    const cursorWordLeft = this.getEditorKeyDisplay("tui.editor.cursorWordLeft");
-    const cursorWordRight = this.getEditorKeyDisplay("tui.editor.cursorWordRight");
-    const cursorLineStart = this.getEditorKeyDisplay("tui.editor.cursorLineStart");
-    const cursorLineEnd = this.getEditorKeyDisplay("tui.editor.cursorLineEnd");
-    const jumpForward = this.getEditorKeyDisplay("tui.editor.jumpForward");
-    const jumpBackward = this.getEditorKeyDisplay("tui.editor.jumpBackward");
-    const pageUp = this.getEditorKeyDisplay("tui.editor.pageUp");
-    const pageDown = this.getEditorKeyDisplay("tui.editor.pageDown");
-
-    // Editing keybindings
-    const submit = this.getEditorKeyDisplay("tui.input.submit");
-    const newLine = this.getEditorKeyDisplay("tui.input.newLine");
-    const deleteWordBackward = this.getEditorKeyDisplay("tui.editor.deleteWordBackward");
-    const deleteWordForward = this.getEditorKeyDisplay("tui.editor.deleteWordForward");
-    const deleteToLineStart = this.getEditorKeyDisplay("tui.editor.deleteToLineStart");
-    const deleteToLineEnd = this.getEditorKeyDisplay("tui.editor.deleteToLineEnd");
-    const yank = this.getEditorKeyDisplay("tui.editor.yank");
-    const yankPop = this.getEditorKeyDisplay("tui.editor.yankPop");
-    const undo = this.getEditorKeyDisplay("tui.editor.undo");
-    const tab = this.getEditorKeyDisplay("tui.input.tab");
-
-    // App keybindings
-    const interrupt = this.getAppKeyDisplay("app.interrupt");
-    const clear = this.getAppKeyDisplay("app.clear");
-    const exit = this.getAppKeyDisplay("app.exit");
-    const suspend = this.getAppKeyDisplay("app.suspend");
-    const cycleThinkingLevel = this.getAppKeyDisplay("app.thinking.cycle");
-    const cycleModelForward = this.getAppKeyDisplay("app.model.cycleForward");
-    const selectModel = this.getAppKeyDisplay("app.model.select");
-    const expandTools = this.getAppKeyDisplay("app.tools.expand");
-    const toggleThinking = this.getAppKeyDisplay("app.thinking.toggle");
-    const externalEditor = this.getAppKeyDisplay("app.editor.external");
-    const cycleModelBackward = this.getAppKeyDisplay("app.model.cycleBackward");
-    const copyMessage = this.getAppKeyDisplay("app.message.copy");
-    const followUp = this.getAppKeyDisplay("app.message.followUp");
-    const dequeue = this.getAppKeyDisplay("app.message.dequeue");
-    const pasteImage = this.getAppKeyDisplay("app.clipboard.pasteImage");
-
-    let hotkeys = `
-**Navigation**
-| Key | Action |
-|-----|--------|
-| \`${cursorUp}\` / \`${cursorDown}\` / \`${cursorLeft}\` / \`${cursorRight}\` | Move cursor / browse history |
-| \`${cursorWordLeft}\` / \`${cursorWordRight}\` | Move by word |
-| \`${cursorLineStart}\` | Start of line |
-| \`${cursorLineEnd}\` | End of line |
-| \`${jumpForward}\` | Jump forward to character |
-| \`${jumpBackward}\` | Jump backward to character |
-| \`${pageUp}\` / \`${pageDown}\` | Scroll by page |
-
-**Editing**
-| Key | Action |
-|-----|--------|
-| \`${submit}\` | Send message |
-| \`${newLine}\` | New line${process.platform === "win32" ? " (Ctrl+Enter on Windows Terminal)" : ""} |
-| \`${deleteWordBackward}\` | Delete word backwards |
-| \`${deleteWordForward}\` | Delete word forwards |
-| \`${deleteToLineStart}\` | Delete to start of line |
-| \`${deleteToLineEnd}\` | Delete to end of line |
-| \`${yank}\` | Paste the most-recently-deleted text |
-| \`${yankPop}\` | Cycle through the deleted text after pasting |
-| \`${undo}\` | Undo |
-
-**Other**
-| Key | Action |
-|-----|--------|
-| \`${tab}\` | Path completion / accept autocomplete |
-| \`${interrupt}\` | Cancel autocomplete / abort streaming |
-| \`${clear}\` | Clear editor (first) / exit (second) |
-| \`${exit}\` | Exit (when editor is empty) |
-| \`${suspend}\` | Suspend to background |
-| \`${cycleThinkingLevel}\` | Cycle thinking level |
-| \`${cycleModelForward}\` / \`${cycleModelBackward}\` | Cycle models |
-| \`${selectModel}\` | Open model selector |
-| \`${expandTools}\` | Toggle tool output expansion |
-| \`${toggleThinking}\` | Toggle thinking block visibility |
-| \`${externalEditor}\` | Edit message in external editor |
-| \`${copyMessage}\` | Copy selection or last assistant message |
-| \`${followUp}\` | Queue follow-up message |
-| \`${dequeue}\` | Restore queued messages |
-| \`${pasteImage}\` | Paste files on macOS, images, or text from clipboard |
-| \`/\` | Slash commands |
-| \`!\` | Run bash command |
-| \`!!\` | Run bash command (excluded from context) |
-`;
-
-    // Add extension-registered shortcuts
-    const extensionRunner = this.session.extensionRunner;
-    const shortcuts = extensionRunner.getShortcuts(this.keybindings.getEffectiveConfig());
-    if (shortcuts.size > 0) {
-      hotkeys += `
-**Extensions**
-| Key | Action |
-|-----|--------|
-`;
-      for (const [key, shortcut] of shortcuts) {
-        const description = shortcut.description ?? shortcut.extensionPath;
-        const keyDisplay = formatKeyText(key, { capitalize: true });
-        hotkeys += `| \`${keyDisplay}\` | ${description} |\n`;
-      }
-    }
-
-    this.chatContainer.addChild(new Spacer(1));
-    this.chatContainer.addChild(new DynamicBorder());
-    this.chatContainer.addChild(
-      new ThemedText(() => theme.bold(theme.fg("accent", "Keyboard Shortcuts")), 1, 0),
+    const shortcuts = this.session.extensionRunner.getShortcuts(
+      this.keybindings.getEffectiveConfig(),
     );
-    this.chatContainer.addChild(new Spacer(1));
-    this.chatContainer.addChild(
-      new Markdown(hotkeys.trim(), 1, 1, this.getMarkdownThemeWithSettings()),
-    );
-    this.chatContainer.addChild(new DynamicBorder());
-    this.ui.requestRender();
+    this.addMarkdownPanel("Keyboard Shortcuts", formatHotkeysMarkdown(shortcuts));
   }
 
   private async handleClearCommand(): Promise<void> {
@@ -7491,7 +5559,7 @@ export class InteractiveMode {
   }
 
   stop(fullscreenExitOutput = this.settingsManager.getFullscreenExitOutput()): void {
-    this.disposeActiveSelector();
+    this.editorSlot.disposeActiveSelector();
     if (this.settingsManager.getShowTerminalProgress()) {
       this.ui.terminal.setProgress(false);
     }

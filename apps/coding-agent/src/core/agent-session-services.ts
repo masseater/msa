@@ -4,6 +4,7 @@ import type { ThinkingLevel } from "@msa/agent-core";
 import type { Model } from "@msa/ai";
 
 import { getAgentDir } from "../config.ts";
+import { toErrorMessage } from "../utils/errors.ts";
 import { resolvePath } from "../utils/paths.ts";
 import type { SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
 import { ModelRuntime } from "./model-runtime.ts";
@@ -169,7 +170,7 @@ export async function createAgentSessionServices(
     try {
       modelRuntime.registerProvider(name, config);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       diagnostics.push({
         type: "error",
         message: `Extension "${extensionPath}" error: ${message}`,
@@ -182,7 +183,7 @@ export async function createAgentSessionServices(
     try {
       modelRuntime.registerNativeProvider(provider);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       diagnostics.push({
         type: "error",
         message: `Extension "${extensionPath}" error: ${message}`,
@@ -195,7 +196,7 @@ export async function createAgentSessionServices(
     try {
       modelRuntime.registerVirtualModel(definition);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = toErrorMessage(error);
       diagnostics.push({
         type: "error",
         message: `Extension "${extensionPath}" error: ${message}`,

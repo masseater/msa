@@ -15,6 +15,7 @@ import {
   waitForRawStdoutBackpressure,
   writeRawStdout,
 } from "../core/output-guard.ts";
+import { toErrorMessage } from "../utils/errors.ts";
 import { killTrackedDetachedChildren } from "../utils/shell.ts";
 import { toJsonEvent } from "./json-event.ts";
 
@@ -177,7 +178,7 @@ export async function runPrintMode(
 
     return exitCode;
   } catch (error: unknown) {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(toErrorMessage(error));
     return 1;
   } finally {
     for (const cleanup of signalCleanupHandlers) {

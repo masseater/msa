@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "../../core/extensions/types.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import {
   formatBytes,
   LlamaClient,
@@ -23,7 +24,7 @@ function isConnectionError(error: unknown): boolean {
 
 function connectionErrorMessage(error: unknown): string {
   if (isConnectionError(error)) return "Could not connect to the server.";
-  return error instanceof Error ? error.message : String(error);
+  return toErrorMessage(error);
 }
 
 function parseHuggingFaceModel(value: string): { repository: string; quantization?: string } {
@@ -239,10 +240,7 @@ export default function llamaExtension(msa: ExtensionAPI): void {
           if (!refreshed) return;
           catalog = refreshed;
           if (actionError && !isConnectionError(actionError)) {
-            ctx.ui.notify(
-              actionError instanceof Error ? actionError.message : String(actionError),
-              "error",
-            );
+            ctx.ui.notify(toErrorMessage(actionError), "error");
           }
         }
       });

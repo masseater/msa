@@ -11,7 +11,9 @@ import type { AutocompleteProviderFactory } from "../src/core/extensions/types.t
 import type { QuietStartup } from "../src/core/settings-manager.ts";
 import type { SourceInfo } from "../src/core/source-info.ts";
 import type { AuthSelectorProvider } from "../src/modes/interactive/components/oauth-selector.ts";
+import { EditorSlot } from "../src/modes/interactive/editor-slot.ts";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+import { getStartupVisibility } from "../src/modes/interactive/loaded-resources.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 
 function renderLastLine(container: Container, width = 120): string {
@@ -252,10 +254,9 @@ describe("InteractiveMode.showExtensionCustom", () => {
     };
     const fakeThis = {
       editor,
-      editorContainer,
+      editorSlot: new EditorSlot(editorContainer, ui, () => editor),
       keybindings: {},
       ui,
-      disposeActiveSelector: vi.fn(),
     };
     const showExtensionCustom = <T>(
       factory: (
@@ -483,7 +484,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
       skillCommands: Map<string, string>;
       sessionManager: { getCwd: () => string };
       fdPath: null;
-      getLoginProviderOptions: () => AuthSelectorProvider[];
+      loginFlow: { getProviderOptions: () => AuthSelectorProvider[] };
     };
 
     const createBaseAutocompleteProvider = (
@@ -505,12 +506,14 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
       skillCommands: new Map(),
       sessionManager: { getCwd: () => "/tmp" },
       fdPath: null,
-      getLoginProviderOptions: () => [
-        { id: "anthropic", name: "Anthropic", authType: "oauth", subscription: true },
-        { id: "anthropic", name: "Anthropic", authType: "api_key", subscription: true },
-        { id: "openai", name: "OpenAI", authType: "api_key" },
-        { id: "radius", name: "Radius", authType: "oauth", subscription: false },
-      ],
+      loginFlow: {
+        getProviderOptions: () => [
+          { id: "anthropic", name: "Anthropic", authType: "oauth", subscription: true },
+          { id: "anthropic", name: "Anthropic", authType: "api_key", subscription: true },
+          { id: "openai", name: "OpenAI", authType: "api_key" },
+          { id: "radius", name: "Radius", authType: "oauth", subscription: false },
+        ],
+      },
     };
 
     const provider = createBaseAutocompleteProvider.call(fakeThis);
@@ -553,7 +556,6 @@ describe("InteractiveMode.showLoadedResources", () => {
     extensions?: ExtensionFixture[];
     skills?: Array<{ filePath: string; name: string }>;
     skillDiagnostics?: Array<{ type: "warning" | "error" | "collision"; message: string }>;
-    useRealScopeGroups?: boolean;
   }) {
     const fakeThis: any = {
       options: { verbose: options.verbose ?? false },
@@ -586,55 +588,11 @@ describe("InteractiveMode.showLoadedResources", () => {
           getThemes: () => ({ themes: [], diagnostics: [] }),
         },
       },
-      formatDisplayPath: (p: string) =>
-        (InteractiveMode as any).prototype.formatDisplayPath.call(fakeThis, p),
-      formatExtensionDisplayPath: (p: string) =>
-        (InteractiveMode as any).prototype.formatExtensionDisplayPath.call(fakeThis, p),
-      formatContextPath: (p: string) =>
-        (InteractiveMode as any).prototype.formatContextPath.call(fakeThis, p),
-      getStartupExpansionState: () =>
-        (InteractiveMode as any).prototype.getStartupExpansionState.call(fakeThis),
-      shouldShowStartupDetails: () =>
-        (InteractiveMode as any).prototype.shouldShowStartupDetails.call(fakeThis),
-      buildScopeGroups: () => [],
-      formatScopeGroups: () => "resource-list",
-      isPackageSource: (sourceInfo?: SourceInfo) =>
-        (InteractiveMode as any).prototype.isPackageSource.call(fakeThis, sourceInfo),
-      getShortPath: (p: string, sourceInfo?: SourceInfo) =>
-        (InteractiveMode as any).prototype.getShortPath.call(fakeThis, p, sourceInfo),
-      getCompactPathLabel: (p: string, sourceInfo?: SourceInfo) =>
-        (InteractiveMode as any).prototype.getCompactPathLabel.call(fakeThis, p, sourceInfo),
-      getCompactPackageSourceLabel: (sourceInfo?: SourceInfo) =>
-        (InteractiveMode as any).prototype.getCompactPackageSourceLabel.call(fakeThis, sourceInfo),
-      getCompactExtensionLabel: (p: string, sourceInfo?: SourceInfo) =>
-        (InteractiveMode as any).prototype.getCompactExtensionLabel.call(fakeThis, p, sourceInfo),
-      getCompactDisplayPathSegments: (p: string) =>
-        (InteractiveMode as any).prototype.getCompactDisplayPathSegments.call(fakeThis, p),
-      getCompactNonPackageExtensionLabel: (
-        p: string,
-        index: number,
-        allPaths: Array<{ path: string; segments: string[] }>,
-      ) =>
-        (InteractiveMode as any).prototype.getCompactNonPackageExtensionLabel.call(
-          fakeThis,
-          p,
-          index,
-          allPaths,
-        ),
-      getCompactExtensionLabels: (extensions: ExtensionFixture[]) =>
-        (InteractiveMode as any).prototype.getCompactExtensionLabels.call(fakeThis, extensions),
-      formatDiagnostics: () => "diagnostics",
+      isStartupExpanded: () => (InteractiveMode as any).prototype.isStartupExpanded.call(fakeThis),
+      getStartupVisibility: () =>
+        (InteractiveMode as any).prototype.getStartupVisibility.call(fakeThis),
       getBuiltInCommandConflictDiagnostics: () => [],
     };
-
-    if (options.useRealScopeGroups) {
-      fakeThis.getScopeGroup = (sourceInfo?: SourceInfo) =>
-        (InteractiveMode as any).prototype.getScopeGroup.call(fakeThis, sourceInfo);
-      fakeThis.buildScopeGroups = (items: Array<{ path: string; sourceInfo?: SourceInfo }>) =>
-        (InteractiveMode as any).prototype.buildScopeGroups.call(fakeThis, items);
-      fakeThis.formatScopeGroups = (groups: unknown, formatOptions: unknown) =>
-        (InteractiveMode as any).prototype.formatScopeGroups.call(fakeThis, groups, formatOptions);
-    }
 
     return fakeThis;
   }
@@ -759,7 +717,7 @@ describe("InteractiveMode.showLoadedResources", () => {
     const output = renderAll(fakeThis.loadedResourcesContainer);
     expect(output).toContain("[Skills]");
     expect(output).toContain("commit");
-    expect(output).not.toContain("resource-list");
+    expect(output).not.toContain("/tmp/skill/SKILL.md");
   });
 
   test("shows full resource listing when expanded", () => {
@@ -775,8 +733,8 @@ describe("InteractiveMode.showLoadedResources", () => {
 
     const output = renderAll(fakeThis.loadedResourcesContainer);
     expect(output).toContain("[Skills]");
-    expect(output).toContain("resource-list");
-    expect(output).not.toContain("commit");
+    expect(output).toContain("/tmp/skill/SKILL.md");
+    expect(output).not.toContain("  commit");
   });
 
   test("shows full resource listing on verbose startup even when tool output is collapsed", () => {
@@ -793,8 +751,8 @@ describe("InteractiveMode.showLoadedResources", () => {
 
     const output = renderAll(fakeThis.loadedResourcesContainer);
     expect(output).toContain("[Skills]");
-    expect(output).toContain("resource-list");
-    expect(output).not.toContain("commit");
+    expect(output).toContain("/tmp/skill/SKILL.md");
+    expect(output).not.toContain("  commit");
   });
 
   test("abbreviates extensions in compact listing", () => {
@@ -817,7 +775,6 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       extensions: createExtensionFixtures(),
-      useRealScopeGroups: true,
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -863,7 +820,6 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       extensions,
-      useRealScopeGroups: true,
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -891,7 +847,6 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       extensions,
-      useRealScopeGroups: true,
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -919,7 +874,6 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       extensions,
-      useRealScopeGroups: true,
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -956,7 +910,6 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       extensions,
-      useRealScopeGroups: true,
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -993,7 +946,6 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       extensions,
-      useRealScopeGroups: true,
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -1030,7 +982,6 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       extensions,
-      useRealScopeGroups: true,
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -1058,7 +1009,6 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       extensions,
-      useRealScopeGroups: true,
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -1089,7 +1039,6 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       extensions,
-      useRealScopeGroups: true,
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -1132,7 +1081,6 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       extensions,
-      useRealScopeGroups: true,
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -1172,7 +1120,6 @@ describe("InteractiveMode.showLoadedResources", () => {
     const fakeThis = createShowLoadedResourcesThis({
       quietStartup: false,
       extensions,
-      useRealScopeGroups: true,
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -1189,7 +1136,6 @@ describe("InteractiveMode.showLoadedResources", () => {
       quietStartup: false,
       toolOutputExpanded: true,
       extensions: createExtensionFixtures(),
-      useRealScopeGroups: true,
     });
 
     (InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -1305,15 +1251,12 @@ describe("InteractiveMode.showLoadedResources", () => {
     });
 
     expect(fakeThis.loadedResourcesContainer.children).toHaveLength(0);
-    expect((InteractiveMode as any).prototype.shouldShowStartupHeader.call(fakeThis)).toBe(true);
-    expect((InteractiveMode as any).prototype.shouldShowStartupDetails.call(fakeThis)).toBe(false);
+    expect(getStartupVisibility("header", false)).toEqual({ header: true, details: false });
   });
 
   test("hides the startup header with full quiet startup unless verbose", () => {
-    const quiet = createShowLoadedResourcesThis({ quietStartup: true });
-    expect((InteractiveMode as any).prototype.shouldShowStartupHeader.call(quiet)).toBe(false);
-    const verbose = createShowLoadedResourcesThis({ quietStartup: "header", verbose: true });
-    expect((InteractiveMode as any).prototype.shouldShowStartupDetails.call(verbose)).toBe(true);
+    expect(getStartupVisibility(true, false)).toEqual({ header: false, details: false });
+    expect(getStartupVisibility("header", true)).toEqual({ header: true, details: true });
   });
 
   test("still shows diagnostics on quiet startup when requested", () => {

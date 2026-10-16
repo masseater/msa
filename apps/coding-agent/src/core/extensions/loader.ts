@@ -13,6 +13,7 @@ import type { KeyId } from "@msa/tui";
 import type { createJiti } from "jiti";
 
 import { CONFIG_DIR_NAME, getAgentDir, isBunBinary, isBundledNode } from "../../config.ts";
+import { toErrorMessage } from "../../utils/errors.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
@@ -692,7 +693,7 @@ async function loadExtension(
 
     return { extension, error: null };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = toErrorMessage(err);
     return { extension: null, error: `Failed to load extension: ${message}` };
   }
 }

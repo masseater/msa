@@ -27,6 +27,7 @@ import chalk from "chalk";
 
 import { getCustomThemesDir, getThemesDir } from "../../../config.ts";
 import type { SourceInfo } from "../../../core/source-info.ts";
+import { toErrorMessage } from "../../../utils/errors.ts";
 import { closeWatcher, watchWithErrorHandler } from "../../../utils/fs-watch.ts";
 import { highlight, supportsLanguage } from "../../../utils/syntax-highlight.ts";
 import { stripBom } from "../../../utils/text.ts";
@@ -746,7 +747,7 @@ export function setTheme(
     // Don't start watcher for fallback theme
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: toErrorMessage(error),
     };
   }
 }

@@ -39,15 +39,17 @@ function createTreeUI() {
     isInitialized: true,
     footer: { invalidate: vi.fn() },
     ui: { terminal: { rows: 24, setProgress: vi.fn() }, requestRender: vi.fn() },
-    showSelector: (
-      create: (done: () => void) => {
-        component: TreeSelectorComponent;
-        focus: TreeSelectorComponent;
+    editorSlot: {
+      showSelector: (
+        create: (done: () => void) => {
+          component: TreeSelectorComponent;
+          focus: TreeSelectorComponent;
+        },
+      ) => {
+        selector = create(vi.fn()).component;
       },
-    ) => {
-      selector = create(vi.fn()).component;
     },
-    showExtensionSelector: vi.fn(async () => "No summary"),
+    extensionDialogs: { select: vi.fn(async () => "No summary") },
     // Dispose newly created indicators so a failing regression cannot leak spinner timers.
     showStatusIndicator: vi.fn((indicator: StatusIndicator) => indicator.dispose()),
     clearStatusIndicator: vi.fn(),
@@ -82,7 +84,7 @@ describe("InteractiveMode tree navigation availability", () => {
     async (choice) => {
       const { ui, onEscape, select } = createTreeUI();
       const originalLeafId = ui.sessionManager.getLeafId();
-      ui.showExtensionSelector.mockImplementation(async () => {
+      ui.extensionDialogs.select.mockImplementation(async () => {
         // Compaction or another navigation can start while the dialog is open.
         ui.session.isCompacting = true;
         return choice;
@@ -103,7 +105,7 @@ describe("InteractiveMode tree navigation availability", () => {
   it("allows navigation when compaction finishes while the dialog is open", async () => {
     const { ui, targetId, select } = createTreeUI();
     ui.session.isCompacting = true;
-    ui.showExtensionSelector.mockImplementation(async () => {
+    ui.extensionDialogs.select.mockImplementation(async () => {
       ui.session.isCompacting = false;
       return "No summary";
     });
@@ -136,7 +138,7 @@ describe("InteractiveMode tree navigation availability", () => {
   it("rechecks availability after the response abort settles", async () => {
     const { ui, onEscape, select } = createTreeUI();
     ui.session.isStreaming = true;
-    ui.showExtensionSelector.mockResolvedValue("Summarize");
+    ui.extensionDialogs.select.mockResolvedValue("Summarize");
     ui.session.abort.mockImplementation(async () => {
       ui.session.isStreaming = false;
       ui.session.isCompacting = true;

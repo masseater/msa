@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { unlink } from "node:fs/promises";
-import * as os from "node:os";
 
 import {
   type Component,
@@ -17,7 +16,8 @@ import {
 
 import { KeybindingsManager } from "../../../core/keybindings.ts";
 import type { SessionInfo, SessionListProgress } from "../../../core/session-manager.ts";
-import { canonicalizePath as _canonicalizePath } from "../../../utils/paths.ts";
+import { toErrorMessage } from "../../../utils/errors.ts";
+import { abbreviateHomePath, canonicalizePath as _canonicalizePath } from "../../../utils/paths.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, keyText } from "./keybinding-hints.ts";
@@ -29,15 +29,6 @@ import {
 } from "./session-selector-search.ts";
 
 type SessionScope = "current" | "all";
-
-function shortenPath(path: string): string {
-  const home = os.homedir();
-  if (!path) return path;
-  if (path.startsWith(home)) {
-    return `~${path.slice(home.length)}`;
-  }
-  return path;
-}
 
 function formatSessionDate(date: Date): string {
   const now = new Date();
@@ -510,10 +501,10 @@ class SessionList implements Component, Focusable {
       const msgCount = String(session.messageCount);
       let rightPart = `${msgCount} ${age}`;
       if (this.showCwd && session.cwd) {
-        rightPart = `${shortenPath(session.cwd)} ${rightPart}`;
+        rightPart = `${abbreviateHomePath(session.cwd)} ${rightPart}`;
       }
       if (this.showPath) {
-        rightPart = `${shortenPath(session.path)} ${rightPart}`;
+        rightPart = `${abbreviateHomePath(session.path)} ${rightPart}`;
       }
 
       // Cursor
@@ -723,7 +714,7 @@ async function deleteSessionFile(
     await unlink(sessionPath);
     return { ok: true, method: "unlink" };
   } catch (err) {
-    const unlinkError = err instanceof Error ? err.message : String(err);
+    const unlinkError = toErrorMessage(err);
     const trashErrorHint = getTrashErrorHint();
     const error = trashErrorHint ? `${unlinkError} (${trashErrorHint})` : unlinkError;
     return { ok: false, method: "unlink", error };
@@ -1053,7 +1044,7 @@ export class SessionSelectorComponent extends Container implements Focusable {
       }
       if (scope !== this.scope) return;
 
-      const message = err instanceof Error ? err.message : String(err);
+      const message = toErrorMessage(err);
       this.header.setLoading(false);
       this.header.setStatusMessage(
         { type: "error", message: `Failed to load sessions: ${message}` },

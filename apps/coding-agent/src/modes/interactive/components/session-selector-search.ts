@@ -1,6 +1,7 @@
 import { fuzzyMatch } from "@msa/tui";
 
 import type { SessionInfo } from "../../../core/session-manager.ts";
+import { toErrorMessage } from "../../../utils/errors.ts";
 
 export type SortMode = "threaded" | "recent" | "relevance";
 
@@ -52,7 +53,7 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
     try {
       return { mode: "regex", tokens: [], regex: new RegExp(pattern, "i") };
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = toErrorMessage(err);
       return { mode: "regex", tokens: [], regex: null, error: msg };
     }
   }

@@ -70,6 +70,7 @@ import {
 
 import { getAgentDir } from "../config.ts";
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
+import { toErrorMessage } from "../utils/errors.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
@@ -342,10 +343,7 @@ export class ModelRuntime implements Models {
       this.compositionErrors.delete(providerId);
       return provider;
     } catch (error) {
-      this.compositionErrors.set(
-        providerId,
-        error instanceof Error ? error.message : String(error),
-      );
+      this.compositionErrors.set(providerId, toErrorMessage(error));
       return base;
     }
   }
@@ -408,7 +406,7 @@ export class ModelRuntime implements Models {
     const effectiveSignal = operationSignal(signal);
     return this.runAvailabilityRefresh(seq, errorSeq, effectiveSignal).catch((error) => {
       if (errorSeq === this.availabilityErrorSeq && !effectiveSignal.aborted) {
-        this.availabilityError = error instanceof Error ? error.message : String(error);
+        this.availabilityError = toErrorMessage(error);
       }
       throw error;
     });
@@ -466,7 +464,7 @@ export class ModelRuntime implements Models {
         errorSeq === this.availabilityErrorSeq &&
         !signal.aborted
       ) {
-        this.availabilityError = error instanceof Error ? error.message : String(error);
+        this.availabilityError = toErrorMessage(error);
       }
       throw error;
     }
@@ -541,7 +539,7 @@ export class ModelRuntime implements Models {
         return available;
       } catch (error) {
         if (errorSeq === this.availabilityErrorSeq && !options?.signal?.aborted) {
-          this.availabilityError = error instanceof Error ? error.message : String(error);
+          this.availabilityError = toErrorMessage(error);
         }
         throw error;
       }
