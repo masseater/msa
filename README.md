@@ -19,8 +19,20 @@ Use msa [interactively](packages/coding-agent/docs/usage.md), automate it in
 
 ## Getting started
 
-This fork is not published to npm, and the pi.dev installer installs upstream pi, so run msa from a
-checkout:
+This fork is not published to npm, and the pi.dev installer installs upstream pi, so install msa
+from a [release](https://github.com/masseater/msa/releases/latest) or run it from a checkout:
+
+```bash
+curl -fsSLO https://github.com/masseater/msa/releases/latest/download/msa-darwin-arm64.tar.gz
+tar -xzf msa-darwin-arm64.tar.gz
+./msa/msa
+```
+
+Releases ship `msa-darwin-arm64.tar.gz`, `msa-darwin-x64.tar.gz`, `msa-linux-x64.tar.gz`,
+`msa-linux-arm64.tar.gz`, `msa-windows-x64.zip`, `msa-windows-arm64.zip`, and `SHA256SUMS`. On
+Windows, unzip the archive and run `msa.exe`.
+
+To run from a checkout instead:
 
 ```bash
 git clone https://github.com/masseater/msa.git
@@ -29,7 +41,7 @@ vp install
 ./scripts/msa-dev.sh
 ```
 
-Node.js 22.19 or newer is required. State lives in `~/.msa/agent`, next to `settings.json`,
+The checkout requires Node.js 22.19 or newer. State lives in `~/.msa/agent`, next to `settings.json`,
 `auth.json`, and sessions.
 
 Run `/login` inside msa to connect a subscription or API key, then give msa a task.
@@ -77,46 +89,12 @@ vp run verify         # Lint, type check, tests, model data check, fence ratchet
 ./scripts/msa-dev.sh  # Run msa from sources (can be run from any directory)
 ```
 
-### Using local packages outside the monorepo
+### Release binaries
 
-Build every public package into one coherent local artifact set:
-
-```bash
-vp run pack:packages -- --out .artifacts/msa-packages
-```
-
-This refreshes model data before building `@msa/ai`. To avoid network access when model data is
-already hydrated, pass `--offline-model-data`.
-
-Then configure an external project to consume one package and resolve all of its msa dependencies
-from the same artifact set. npm is the default:
-
-```bash
-node scripts/use-local-packages.mjs \
-  --manifest .artifacts/msa-packages/manifest.json \
-  --consumer ../my-project \
-  --package @msa/durable \
-  --package @msa/agent-core
-cd ../my-project
-npm install --ignore-scripts
-```
-
-For a pnpm project, point `--consumer` at the workspace root:
-
-```bash
-node scripts/use-local-packages.mjs \
-  --manifest .artifacts/msa-packages/manifest.json \
-  --consumer ../my-project \
-  --package @msa/agent-core \
-  --package-manager pnpm
-cd ../my-project
-pnpm install --ignore-scripts
-```
-
-Repeat `--package` for each direct dependency. The command updates the consumer's `package.json`
-with content-addressed local `file:` references. It writes transitive overrides to `package.json`
-for npm or `pnpm-workspace.yaml` for pnpm. Keep the artifact directory available while installing
-or updating the consumer. Re-run both commands after changing msa source.
+`vp run build-binaries` builds `msa` for every release platform into `.artifacts/binaries`
+(`msa-<platform>.tar.gz`, `msa-<platform>.zip`, and `SHA256SUMS`). Pushing a `v*` tag runs
+`.github/workflows/release.yml`, which builds them in CI, smoke-tests the result, and publishes a
+GitHub Release.
 
 ## License
 

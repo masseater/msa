@@ -13,7 +13,7 @@ try {
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   console.error(
-    "\nModel data is missing or stale. Run `npm run hydrate:model-data` from the repository root.",
+    "\nModel data is missing or stale. Run `vp run hydrate:model-data` from the repository root.",
   );
   process.exitCode = 1;
 }

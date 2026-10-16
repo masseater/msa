@@ -190,6 +190,10 @@ export default defineConfig({
         command: "vp run --filter @msa/env build:daemon",
         cache: false,
       },
+      "build-binaries": {
+        command: "node tools/build-binaries.ts",
+        cache: false,
+      },
       test: {
         command: "vp run --no-cache test:scripts && vp run --no-cache -r test",
         cache: false,
