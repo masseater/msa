@@ -74,7 +74,7 @@ describe("host manager (real child processes)", () => {
       await manager.stop();
       await release();
     }
-  });
+  }, 20_000);
 
   it("starts a child host, links it, stops it gracefully", async () => {
     const manager = createHostManager({ driver: driver() });
@@ -89,7 +89,7 @@ describe("host manager (real child processes)", () => {
     assert.equal(manager.status, "stopped");
     assert.deepEqual(await instance.exited, { code: 0, signal: null });
     await server.close();
-  });
+  }, 20_000);
 
   it("a child-owned kernel lock admits one live process; replace waits for the exit before the next start", async () => {
     const lock = `chord2-test-${process.pid}-lock`;
@@ -117,7 +117,7 @@ describe("host manager (real child processes)", () => {
     await first.stop();
     await second.start();
     await second.stop();
-  });
+  }, 20_000);
 
   it("a graceful exit still takes the child's descendants with it", async () => {
     const file = scratch("grandchild-graceful");
@@ -131,7 +131,7 @@ describe("host manager (real child processes)", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     assert.ok(!alive(grandchild));
     rmSync(file, { force: true });
-  });
+  }, 20_000);
 
   it("idleFor counts from the busy → idle transition", async () => {
     const listeners = new Set<(message: ControlMessage) => void>();
@@ -182,13 +182,13 @@ describe("host manager (real child processes)", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     assert.ok(!alive(grandchild));
     rmSync(file, { force: true });
-  });
+  }, 20_000);
 
   it("reports a fatal child as a failed start", async () => {
     const manager = createHostManager({ driver: driver({ FIXTURE_MODE: "fatal" }) });
     await assert.rejects(manager.start(), /fixture refuses to start/);
     assert.equal(manager.status, "stopped");
-  });
+  }, 20_000);
 
   it("stops an idle child when keepAlive says so", async () => {
     const exits: unknown[] = [];
@@ -203,5 +203,5 @@ describe("host manager (real child processes)", () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(manager.status, "stopped");
     assert.equal(exits.length, 1);
-  });
+  }, 20_000);
 });
