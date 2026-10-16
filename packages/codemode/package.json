@@ -1,6 +1,6 @@
 {
   "name": "@msa/codemode",
-  "version": "1.2.0",
+  "version": "0.0.1",
   "description": "Sandboxed JavaScript execution where the only capability is calling injected tools",
   "keywords": [
     "cloudflare",

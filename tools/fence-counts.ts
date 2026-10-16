@@ -1,7 +1,8 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import getExePath from "@effect/tsgo/lib/getExePath";
-import { Console, Data, DateTime, Effect, FileSystem, Path, Schema, Stream } from "effect";
-import { ChildProcess } from "effect/process";
+import { Console, Data, DateTime, Effect, FileSystem, Path, Schema } from "effect";
+
+import { captureProcess } from "./capture-process.ts";
 
 const FLAGS: ReadonlyArray<Readonly<{ flag: string; enabled: boolean }>> = [
   { flag: "exactOptionalPropertyTypes", enabled: true },
@@ -70,23 +71,6 @@ const makeContext = Effect.gen(function* () {
 
 type FenceContext = Effect.Success<typeof makeContext>;
 
-const runCommand = (command: string, args: ReadonlyArray<string>, cwd: string) =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
-      const child = yield* ChildProcess.make(command, args, { cwd });
-      const [stdout, stderr, exitCode] = yield* Effect.all(
-        [
-          child.stdout.pipe(Stream.decodeText(), Stream.mkString),
-          child.stderr.pipe(Stream.decodeText(), Stream.mkString),
-          child.exitCode,
-        ],
-        { concurrency: "unbounded" },
-      );
-      return { stdout, stderr, exitCode: Number(exitCode) };
-    }),
-  );
-
 const writeFlagConfig = (context: FenceContext, flag: string, enabled: boolean) =>
   Effect.gen(function* () {
     const configPath = context.path.join(context.workDir, `${flag}.json`);
@@ -107,11 +91,11 @@ const writeFlagConfig = (context: FenceContext, flag: string, enabled: boolean) 
 const measureFlag = (context: FenceContext, flag: string, enabled: boolean) =>
   Effect.gen(function* () {
     const configPath = yield* writeFlagConfig(context, flag, enabled);
-    const { stdout, stderr, exitCode } = yield* runCommand(
-      context.tsgo,
-      ["--noEmit", "--pretty", "false", "-p", configPath],
-      context.repoRoot,
-    );
+    const { stdout, stderr, exitCode } = yield* captureProcess({
+      args: ["--noEmit", "--pretty", "false", "-p", configPath],
+      command: context.tsgo,
+      cwd: context.repoRoot,
+    });
     const output = `${stdout}${stderr}`;
     const diagnostics = (output.match(diagnosticsCount) ?? []).length;
     if (exitCode !== 0 && diagnostics === 0) {
@@ -125,11 +109,11 @@ const measureFlag = (context: FenceContext, flag: string, enabled: boolean) =>
 
 const gitShortHead = (context: FenceContext) =>
   Effect.gen(function* () {
-    const { stdout, exitCode } = yield* runCommand(
-      "git",
-      ["rev-parse", "--short", "HEAD"],
-      context.repoRoot,
-    );
+    const { stdout, exitCode } = yield* captureProcess({
+      args: ["rev-parse", "--short", "HEAD"],
+      command: "git",
+      cwd: context.repoRoot,
+    });
     return exitCode === 0 ? stdout.trim() : "unknown";
   });
 
