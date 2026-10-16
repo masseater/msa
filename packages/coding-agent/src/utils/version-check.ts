@@ -3,13 +3,11 @@ import { compare, valid } from "semver";
 import { fetchWithRetry } from "./management-http.ts";
 import { getMsaUserAgent } from "./user-agent.ts";
 
-const LATEST_VERSION_URL = "https://pi.dev/api/latest-version";
+const LATEST_RELEASE_URL = "https://api.github.com/repos/masseater/msa/releases/latest";
 const DEFAULT_VERSION_CHECK_TIMEOUT_MS = 10000;
 
-export interface LatestPiRelease {
+export interface LatestMsaRelease {
   version: string;
-  packageName?: string;
-  note?: string;
 }
 
 /** Include useful errno details hidden behind Node's generic "fetch failed" error. */
@@ -56,18 +54,18 @@ export function isNewerPackageVersion(candidateVersion: string, currentVersion: 
   return candidateVersion.trim() !== currentVersion.trim();
 }
 
-export async function getLatestPiRelease(
+export async function getLatestMsaRelease(
   currentVersion: string,
   options: { timeoutMs?: number; retry?: boolean } = {},
-): Promise<LatestPiRelease | undefined> {
+): Promise<LatestMsaRelease | undefined> {
   if (process.env.MSA_OFFLINE) return undefined;
 
   const response = await fetchWithRetry(
-    LATEST_VERSION_URL,
+    LATEST_RELEASE_URL,
     {
       headers: {
         "User-Agent": getMsaUserAgent(currentVersion),
-        accept: "application/json",
+        accept: "application/vnd.github+json",
       },
     },
     {
@@ -77,40 +75,19 @@ export async function getLatestPiRelease(
   );
   if (!response.ok) return undefined;
 
-  const data = (await response.json()) as {
-    packageName?: unknown;
-    version?: unknown;
-    note?: unknown;
-  };
-  if (typeof data.version !== "string" || !data.version.trim()) {
-    return undefined;
-  }
-  const packageName =
-    typeof data.packageName === "string" && data.packageName.trim()
-      ? data.packageName.trim()
-      : undefined;
-  const note = typeof data.note === "string" && data.note.trim() ? data.note.trim() : undefined;
-  return {
-    version: data.version.trim(),
-    packageName,
-    ...(note ? { note } : {}),
-  };
+  const data = (await response.json()) as { tag_name?: unknown };
+  if (typeof data.tag_name !== "string") return undefined;
+  const version = data.tag_name.trim().replace(/^v/, "");
+  return version ? { version } : undefined;
 }
 
-export async function getLatestPiVersion(
+export async function checkForNewMsaVersion(
   currentVersion: string,
-  options: { timeoutMs?: number; retry?: boolean } = {},
-): Promise<string | undefined> {
-  return (await getLatestPiRelease(currentVersion, options))?.version;
-}
-
-export async function checkForNewPiVersion(
-  currentVersion: string,
-): Promise<LatestPiRelease | undefined> {
+): Promise<LatestMsaRelease | undefined> {
   if (process.env.MSA_SKIP_VERSION_CHECK) return undefined;
 
   try {
-    const latestRelease = await getLatestPiRelease(currentVersion);
+    const latestRelease = await getLatestMsaRelease(currentVersion);
     if (latestRelease && isNewerPackageVersion(latestRelease.version, currentVersion)) {
       return latestRelease;
     }

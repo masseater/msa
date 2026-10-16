@@ -63,6 +63,7 @@ import {
   getAuthPath,
   getDebugLogPath,
   getDocsPath,
+  RELEASES_URL,
   VERSION,
 } from "../../config.ts";
 import {
@@ -155,7 +156,7 @@ import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { loadAllHighlightLanguages } from "../../utils/syntax-highlight.ts";
 import { ensureTool, type ToolStatus } from "../../utils/tools-manager.ts";
 import { getMsaUserAgent } from "../../utils/user-agent.ts";
-import { checkForNewPiVersion, type LatestPiRelease } from "../../utils/version-check.ts";
+import { checkForNewMsaVersion, type LatestMsaRelease } from "../../utils/version-check.ts";
 import { reportBug } from "./bug-report.ts";
 import { createChatViewport } from "./chat-viewport.ts";
 import { ArminComponent } from "./components/armin.ts";
@@ -1222,7 +1223,7 @@ export class InteractiveMode {
     }
 
     // Start version check asynchronously
-    checkForNewPiVersion(this.version).then((newRelease) => {
+    checkForNewMsaVersion(this.version).then((newRelease) => {
       if (newRelease) {
         this.showNewVersionNotification(newRelease);
       }
@@ -4878,18 +4879,17 @@ export class InteractiveMode {
     this.ui.requestRender();
   }
 
-  showNewVersionNotification(release: LatestPiRelease): void {
+  showNewVersionNotification(release: LatestMsaRelease): void {
     const updateInstruction = () =>
       theme.fg("muted", `New version ${release.version} is available. Run `) +
       theme.fg("accent", `${APP_NAME} update`);
-    const changelogUrl = "https://pi.dev/changelog";
+    const changelogUrl = RELEASES_URL;
     const changelogLine = () => {
       const changelogLink = getCapabilities().hyperlinks
         ? hyperlink(theme.fg("accent", changelogUrl), changelogUrl)
         : theme.fg("accent", changelogUrl);
       return theme.fg("muted", "Changelog: ") + changelogLink;
     };
-    const note = release.note?.trim();
 
     this.chatContainer.addChild(new Spacer(1));
     this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
@@ -4900,15 +4900,6 @@ export class InteractiveMode {
         0,
       ),
     );
-    if (note) {
-      this.chatContainer.addChild(new Spacer(1));
-      this.chatContainer.addChild(
-        new Markdown(note, 1, 0, this.getMarkdownThemeWithSettings(), {
-          color: (text) => theme.fg("muted", text),
-        }),
-      );
-      this.chatContainer.addChild(new Spacer(1));
-    }
     this.chatContainer.addChild(new ThemedText(changelogLine, 1, 0));
     this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
     this.ui.requestRender();
