@@ -36,13 +36,20 @@ export function aborted(signal: AbortSignal): Promise<never> {
   });
 }
 
-/** Flush macrotask turns until `check` holds. */
-export async function eventually(check: () => boolean | Promise<boolean>): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt++) {
+/**
+ * Flush macrotask turns until `check` holds. The budget is wall clock, so a loaded machine
+ * (parallel test runs, cold caches) cannot exhaust it with a few hundred turns.
+ */
+export async function eventually(
+  check: () => boolean | Promise<boolean>,
+  timeoutMs = 4_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
     if (await check()) return;
+    if (Date.now() >= deadline) throw new Error("Condition was not reached");
     await flush();
   }
-  throw new Error("Condition was not reached");
 }
 
 /** Whether `promise` has settled after pending work flushes. */
