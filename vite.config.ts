@@ -198,6 +198,10 @@ export default defineConfig({
         command: "node tools/build-binaries.ts",
         cache: false,
       },
+      "render-homebrew-formula": {
+        command: "node tools/render-homebrew-formula.ts",
+        cache: false,
+      },
       test: {
         command: "vp run --no-cache test:scripts && vp run --no-cache -r test",
         cache: false,

@@ -17,7 +17,13 @@ Use msa [interactively](apps/coding-agent/docs/usage.md), automate it in [print 
 
 ## Getting started
 
-msa is not published to npm, and the pi.dev installer installs pi, so install msa from a [release](https://github.com/masseater/msa/releases/latest) or run it from a checkout:
+msa is not published to npm, and the pi.dev installer installs pi, so install msa with [Homebrew](https://github.com/masseater/homebrew-tap), from a [release](https://github.com/masseater/msa/releases/latest), or run it from a checkout:
+
+```bash
+brew install masseater/tap/msa
+```
+
+Or download and extract a release archive directly:
 
 ```bash
 curl -fsSLO https://github.com/masseater/msa/releases/latest/download/msa-darwin-arm64.tar.gz
@@ -78,7 +84,7 @@ vp run verify         # Lint, type check, tests, model data check, fence ratchet
 
 ### Release binaries
 
-`vp run build-binaries` builds `msa` for every release platform into `.artifacts/binaries` (`msa-<platform>.tar.gz`, `msa-<platform>.zip`, and `SHA256SUMS`). Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds them in CI, smoke-tests the result, and publishes a GitHub Release.
+`vp run build-binaries` builds `msa` for every release platform into `.artifacts/binaries` (`msa-<platform>.tar.gz`, `msa-<platform>.zip`, and `SHA256SUMS`). Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds them in CI, smoke-tests the result, and publishes a GitHub Release. `vp run render-homebrew-formula` renders `Formula/msa.rb` from `SHA256SUMS` into `.artifacts/homebrew`; the workflow pushes it to [masseater/homebrew-tap](https://github.com/masseater/homebrew-tap) once the release is published.
 
 ## License
 
