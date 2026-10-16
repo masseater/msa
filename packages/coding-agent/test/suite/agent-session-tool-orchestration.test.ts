@@ -3,8 +3,8 @@ import {
   fauxToolCall,
   getCurrentTools,
   type TranscriptContext,
-} from "@earendil-works/pi-ai";
-import type { ToolResultMessage } from "@earendil-works/pi-ai/compat";
+} from "@msa/ai";
+import type { ToolResultMessage } from "@msa/ai/compat";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -17,8 +17,8 @@ import { createHarness, type Harness } from "./harness.ts";
  * A tool that calls other tools, built only on the extension API: its own name, exposure, loadout
  * hook, and ctx.executeTool(). Codemode and tool search use the same mechanisms.
  */
-function orchestratorExtension(pi: ExtensionAPI): void {
-  pi.registerTool({
+function orchestratorExtension(msa: ExtensionAPI): void {
+  msa.registerTool({
     name: "echo",
     label: "echo",
     description: "Echo text.",
@@ -28,7 +28,7 @@ function orchestratorExtension(pi: ExtensionAPI): void {
       details: {},
     }),
   });
-  pi.registerTool({
+  msa.registerTool({
     name: "helper",
     label: "helper",
     description: "Only reachable from other tools.",
@@ -36,7 +36,7 @@ function orchestratorExtension(pi: ExtensionAPI): void {
     exposure: "codemode",
     execute: async () => ({ content: [{ type: "text", text: "helped" }], details: {} }),
   });
-  pi.registerTool({
+  msa.registerTool({
     name: "run_tools",
     label: "run_tools",
     description: "Runs tools.",
@@ -74,8 +74,8 @@ describe("AgentSession tool orchestration", () => {
       initialActiveToolNames: [],
       extensionFactories: [
         orchestratorExtension,
-        (pi) => {
-          pi.on("tool_call", (event) => {
+        (msa) => {
+          msa.on("tool_call", (event) => {
             toolCalls.push(`${event.toolName}:${event.parentToolCallId ?? "top"}`);
           });
         },

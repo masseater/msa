@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "pi-codemode-agent-example",
+  "name": "msa-codemode-agent-example",
   "main": "src/index.ts",
   "compatibility_date": "2026-04-22",
   "durable_objects": {
@@ -11,7 +11,7 @@
       {
         "name": "CODEMODE_SANDBOX",
         "class_name": "CodemodeSandbox",
-        "script_name": "pi-codemode-sandbox",
+        "script_name": "msa-codemode-sandbox",
       },
     ],
   },

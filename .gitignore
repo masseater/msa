@@ -34,7 +34,7 @@ compaction-results/
 .opencode/
 syntax.jsonl
 out.jsonl
-pi-*.html
+msa-*.html
 out.html
 packages/coding-agent/binaries/
 
@@ -47,7 +47,7 @@ packages/env/bin/
 packages/env/daemon/target/
 todo.md
 plans/
-.pi/hf-sessions/
-.pi/hf-sessions-backup/
+.msa/hf-sessions/
+.msa/hf-sessions-backup/
 collect.sh
-packages/agent/docs/extensions/pi-server-artifact/index.md
+packages/agent/docs/extensions/msa-server-artifact/index.md

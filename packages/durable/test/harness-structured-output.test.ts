@@ -2,7 +2,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { JsonValue } from "@earendil-works/chord";
 import {
   type AssistantMessage,
   fauxAssistantMessage,
@@ -10,7 +9,8 @@ import {
   fauxToolCall,
   type ToolResultMessage,
   Type,
-} from "@earendil-works/pi-ai";
+} from "@msa/ai";
+import type { JsonValue } from "@msa/chord";
 import {
   defineTool,
   MemoryStorage,
@@ -22,7 +22,7 @@ import {
   ToolResultEntry,
   ToolTask,
   watchEvents,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { describe, expect, it } from "vitest";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
@@ -411,7 +411,7 @@ describe("structured output", () => {
   });
 
   it("gives callers of bash its retained output and exit code, also for a nonzero exit", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "pi-durable-structured-"));
+    const directory = mkdtempSync(join(tmpdir(), "msa-durable-structured-"));
     try {
       const setup = chatSetup();
       addTool(setup.registry, createBashTool());

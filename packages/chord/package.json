@@ -1,5 +1,5 @@
 {
-  "name": "@earendil-works/chord",
+  "name": "@msa/chord",
   "version": "1.2.0",
   "description": "Typed host runtime for plugins, contracts, replicated state, and RPC over JSON links",
   "keywords": [
@@ -13,7 +13,7 @@
   "author": "Earendil Works",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/earendil-works/pi.git",
+    "url": "git+https://github.com/masseater/msa.git",
     "directory": "packages/chord"
   },
   "files": [

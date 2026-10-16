@@ -1,14 +1,8 @@
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile } from "fs/promises";
 
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type {
-  Api,
-  ImageContent,
-  Model,
-  ModelImageResizeOptions,
-  TextContent,
-} from "@earendil-works/pi-ai";
+import type { AgentTool } from "@msa/agent-core";
+import type { Api, ImageContent, Model, ModelImageResizeOptions, TextContent } from "@msa/ai";
 import { type Static, Type } from "typebox";
 
 import { processImage } from "../../utils/image-process.ts";

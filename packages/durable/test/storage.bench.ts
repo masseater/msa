@@ -3,13 +3,13 @@ import { copyFile, cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import {
   STORAGE_READ_BENCHMARKS,
   STORAGE_WRITE_BENCHMARKS,
   seedStorageBenchmark,
   seedStorageWriteBenchmark,
-} from "@earendil-works/pi-durable/testing";
+} from "@msa/durable/testing";
 import { afterAll, bench, describe } from "vitest";
 
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
@@ -38,7 +38,7 @@ async function createFixture(backend: StorageBenchmarkBackend): Promise<Fixture>
     fixtures.push(fixture);
     return fixture;
   }
-  const directory = await mkdtemp(join(tmpdir(), "pi-durable-benchmark-"));
+  const directory = await mkdtemp(join(tmpdir(), "msa-durable-benchmark-"));
   directories.push(directory);
   if (backend === "sqlite") {
     const path = join(directory, "storage.sqlite");
@@ -144,7 +144,7 @@ async function copyPersistentStorage(
 const reopenFixtures: ReopenFixture[] = [];
 for (const backend of STORAGE_BENCHMARK_BACKENDS) {
   if (backend === "memory") continue;
-  const seedDirectory = await mkdtemp(join(tmpdir(), `pi-durable-${backend}-reopen-benchmark-`));
+  const seedDirectory = await mkdtemp(join(tmpdir(), `msa-durable-${backend}-reopen-benchmark-`));
   directories.push(seedDirectory);
   const seedPath = join(seedDirectory, backend === "sqlite" ? "storage.sqlite" : "storage");
   const seed = await openPersistentStorage(backend, seedPath);
@@ -154,7 +154,7 @@ for (const backend of STORAGE_BENCHMARK_BACKENDS) {
     Array.from(
       { length: REOPEN_OPTIONS.iterations + REOPEN_OPTIONS.warmupIterations },
       async () => {
-        const directory = await mkdtemp(join(tmpdir(), `pi-durable-${backend}-reopen-sample-`));
+        const directory = await mkdtemp(join(tmpdir(), `msa-durable-${backend}-reopen-sample-`));
         directories.push(directory);
         const path = join(directory, backend === "sqlite" ? "storage.sqlite" : "storage");
         await copyPersistentStorage(backend, seedPath, path);

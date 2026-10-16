@@ -10,8 +10,8 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Agent } from "@earendil-works/pi-agent-core";
-import { getModel, streamSimple } from "@earendil-works/pi-ai/compat";
+import { Agent } from "@msa/agent-core";
+import { getModel, streamSimple } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { AgentSession, type AgentSessionEvent } from "../src/core/agent-session.ts";
@@ -30,7 +30,7 @@ describe.skipIf(!API_KEY)("AgentSession compaction e2e", () => {
 
   beforeEach(async () => {
     // Create temp directory for session files
-    tempDir = join(tmpdir(), `pi-compaction-test-${Date.now()}`);
+    tempDir = join(tmpdir(), `msa-compaction-test-${Date.now()}`);
     mkdirSync(tempDir, { recursive: true });
 
     // Track events

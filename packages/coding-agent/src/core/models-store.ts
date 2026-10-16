@@ -1,10 +1,6 @@
 import { join } from "node:path";
 
-import type {
-  ModelsStore,
-  ModelsStoreEntry,
-  ModelsStoreOperationOptions,
-} from "@earendil-works/pi-ai";
+import type { ModelsStore, ModelsStoreEntry, ModelsStoreOperationOptions } from "@msa/ai";
 
 import { getAgentDir } from "../config.ts";
 import { raceWithAbortSignal } from "../utils/abort.ts";

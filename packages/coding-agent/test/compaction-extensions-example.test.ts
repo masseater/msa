@@ -10,7 +10,7 @@ import type {
   SessionCompactEvent,
 } from "../src/core/extensions/index.ts";
 
-vi.mock("@earendil-works/pi-coding-agent", () => ({
+vi.mock("@msa/coding-agent", () => ({
   convertToLlm: (messages: unknown) => messages,
   serializeConversation: () => "conversation",
 }));
@@ -21,8 +21,8 @@ const { default: customCompactionExtension } =
 describe("Documentation example", () => {
   it("custom compaction example should type-check correctly", () => {
     // This is the example from extensions.md - verify it compiles
-    const exampleExtension = (pi: ExtensionAPI) => {
-      pi.on("session_before_compact", async (event: SessionBeforeCompactEvent, ctx) => {
+    const exampleExtension = (msa: ExtensionAPI) => {
+      msa.on("session_before_compact", async (event: SessionBeforeCompactEvent, ctx) => {
         // All these should be accessible on the event
         const { preparation, branchEntries } = event;
         // sessionManager, modelRegistry, and model come from ctx
@@ -149,8 +149,8 @@ describe("Documentation example", () => {
   });
 
   it("compact event should have correct fields", () => {
-    const checkCompactEvent = (pi: ExtensionAPI) => {
-      pi.on("session_compact", async (event: SessionCompactEvent) => {
+    const checkCompactEvent = (msa: ExtensionAPI) => {
+      msa.on("session_compact", async (event: SessionCompactEvent) => {
         // These should all be accessible
         const entry = event.compactionEntry;
         const fromExtension = event.fromExtension;

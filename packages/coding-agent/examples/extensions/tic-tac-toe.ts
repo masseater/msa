@@ -17,20 +17,9 @@
  * separate variables. Only the agent cursor is ever exposed to the agent.
  */
 
-import { StringEnum } from "@earendil-works/pi-ai";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  Theme,
-  ToolExecutionMode,
-} from "@earendil-works/pi-coding-agent";
-import {
-  type Component,
-  matchesKey,
-  Text,
-  truncateToWidth,
-  visibleWidth,
-} from "@earendil-works/pi-tui";
+import { StringEnum } from "@msa/ai";
+import type { ExtensionAPI, ExtensionContext, Theme, ToolExecutionMode } from "@msa/coding-agent";
+import { type Component, matchesKey, Text, truncateToWidth, visibleWidth } from "@msa/tui";
 import { Type } from "typebox";
 
 // Thrown from the tool on illegal actions. The agent runtime surfaces thrown
@@ -684,9 +673,9 @@ function getBoardDetails(): BoardDetails {
   };
 }
 
-export default function (pi: ExtensionAPI) {
-  pi.on("session_start", async (_event, ctx) => reconstructState(ctx));
-  pi.on("session_tree", async (_event, ctx) => reconstructState(ctx));
+export default function (msa: ExtensionAPI) {
+  msa.on("session_start", async (_event, ctx) => reconstructState(ctx));
+  msa.on("session_tree", async (_event, ctx) => reconstructState(ctx));
 
   // Sent once per game at end-of-game. The custom renderer paints the banner;
   // `content` is a plain-text fallback for any non-TUI consumer and for the
@@ -700,7 +689,7 @@ export default function (pi: ExtensionAPI) {
           : gameState.status === "draw"
             ? "Draw"
             : "Game over";
-    pi.sendMessage({
+    msa.sendMessage({
       customType: GAME_OVER_MESSAGE_TYPE,
       content: `Game over: ${label}.`,
       display: true,
@@ -711,7 +700,7 @@ export default function (pi: ExtensionAPI) {
   // -----------------------------------------------------------------------
   // Custom message renderer for user move messages
   // -----------------------------------------------------------------------
-  pi.registerMessageRenderer(MOVE_MESSAGE_TYPE, (message, { expanded }, theme) => {
+  msa.registerMessageRenderer(MOVE_MESSAGE_TYPE, (message, { expanded }, theme) => {
     const details = message.details as BoardDetails | undefined;
     const turnLabel =
       details?.currentTurn === "O"
@@ -724,7 +713,7 @@ export default function (pi: ExtensionAPI) {
   // -----------------------------------------------------------------------
   // Custom message renderer for game-over messages
   // -----------------------------------------------------------------------
-  pi.registerMessageRenderer(GAME_OVER_MESSAGE_TYPE, (message, _options, theme) => {
+  msa.registerMessageRenderer(GAME_OVER_MESSAGE_TYPE, (message, _options, theme) => {
     const details = message.details as BoardDetails | undefined;
     const status = (details?.status ?? "draw") as GameStatus;
     return new GameOverMessageComponent(status, details, theme);
@@ -733,7 +722,7 @@ export default function (pi: ExtensionAPI) {
   // -----------------------------------------------------------------------
   // before_agent_start - inject game instructions each turn
   // -----------------------------------------------------------------------
-  pi.on("before_agent_start", async (event) => {
+  msa.on("before_agent_start", async (event) => {
     if (!gameActive) return undefined;
 
     const instructions = `
@@ -804,7 +793,7 @@ Decide the target cell first, then dump every action for the turn in one go.
   // -----------------------------------------------------------------------
   // /tic-tac-toe command
   // -----------------------------------------------------------------------
-  pi.registerCommand("tic-tac-toe", {
+  msa.registerCommand("tic-tac-toe", {
     description: "Play tic-tac-toe against the agent",
 
     handler: async (_args, ctx) => {
@@ -818,7 +807,7 @@ Decide the target cell first, then dump every action for the turn in one go.
         gameState = createInitialState();
       }
       gameActive = true;
-      pi.setSessionName("Tic-Tac-Toe");
+      msa.setSessionName("Tic-Tac-Toe");
 
       await ctx.ui.custom<void>((tui, _theme, _kb, done) => {
         component = new TicTacToeComponent(
@@ -835,7 +824,7 @@ Decide the target cell first, then dump every action for the turn in one go.
               gameState.currentTurn = gameState.agentMark;
             }
             component?.updateState(gameState);
-            pi.appendEntry(SAVE_TYPE, getBoardDetails());
+            msa.appendEntry(SAVE_TYPE, getBoardDetails());
 
             if (gameState.status === "playing") {
               // IMPORTANT: user play does NOT touch the agent cursor.
@@ -845,7 +834,7 @@ Decide the target cell first, then dump every action for the turn in one go.
                 gameState.agentCursorRow,
                 gameState.agentCursorCol,
               );
-              pi.sendMessage(
+              msa.sendMessage(
                 {
                   customType: MOVE_MESSAGE_TYPE,
                   content:
@@ -885,7 +874,7 @@ Decide the target cell first, then dump every action for the turn in one go.
     play: 0,
   };
 
-  pi.registerTool({
+  msa.registerTool({
     name: "tic_tac_toe",
     label: "Tic-Tac-Toe",
     description:
@@ -939,7 +928,7 @@ Decide the target cell first, then dump every action for the turn in one go.
             // Do NOT reset the cursor on failure. The agent can retry
             // from the cursor's current position.
             component?.updateState(gameState);
-            pi.appendEntry(SAVE_TYPE, getBoardDetails());
+            msa.appendEntry(SAVE_TYPE, getBoardDetails());
             throw new TicTacToeError(
               `Cell (${r},${c}) is already ${gameState.board[r][c]}. Your cursor is still at (${r},${c}). Move to an empty cell and retry play.`,
             );
@@ -968,7 +957,7 @@ Decide the target cell first, then dump every action for the turn in one go.
       }
 
       component?.updateState(gameState);
-      pi.appendEntry(SAVE_TYPE, getBoardDetails());
+      msa.appendEntry(SAVE_TYPE, getBoardDetails());
 
       return {
         content: [{ type: "text", text: result }],
@@ -1004,7 +993,7 @@ Decide the target cell first, then dump every action for the turn in one go.
   // -----------------------------------------------------------------------
   // tic_tac_toe_see_board tool - inspect board + agent cursor.
   // -----------------------------------------------------------------------
-  pi.registerTool({
+  msa.registerTool({
     name: "tic_tac_toe_see_board",
     label: "See Board",
     description:

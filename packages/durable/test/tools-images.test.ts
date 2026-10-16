@@ -4,15 +4,11 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
-import type { Model } from "@earendil-works/pi-ai";
-import type {
-  ToolDiagnostic,
-  ToolExecutionApi,
-  ToolExecutionResult,
-} from "@earendil-works/pi-durable";
-import { createNodePhotonImages } from "@earendil-works/pi-durable/images/node";
-import { createCodingTools } from "@earendil-works/pi-durable/tools";
+import type { Model } from "@msa/ai";
+import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import type { ToolDiagnostic, ToolExecutionApi, ToolExecutionResult } from "@msa/durable";
+import { createNodePhotonImages } from "@msa/durable/images/node";
+import { createCodingTools } from "@msa/durable/tools";
 import { initSync, PhotonImage } from "@silvia-odwyer/photon/photon_rs.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -27,7 +23,7 @@ import {
 import { imageDimensions } from "../src/tools/image.ts";
 import { createReadTool } from "../src/tools/read.ts";
 
-const directory = mkdtempSync(join(tmpdir(), "pi-durable-images-"));
+const directory = mkdtempSync(join(tmpdir(), "msa-durable-images-"));
 let processor: ImageProcessor;
 
 beforeAll(async () => {

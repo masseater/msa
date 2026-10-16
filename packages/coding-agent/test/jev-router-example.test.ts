@@ -1,4 +1,4 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AgentTool } from "@msa/agent-core";
 import {
   type AssistantMessage,
   type ClassifierModel,
@@ -6,7 +6,7 @@ import {
   fauxAssistantMessage,
   fauxProvider,
   fauxToolCall,
-} from "@earendil-works/pi-ai";
+} from "@msa/ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -85,9 +85,9 @@ describe("jev-router example", () => {
     const harness = await createHarness({
       tools,
       extensionFactories: [
-        (pi) => {
-          pi.registerProvider(codex.provider);
-          pi.registerProvider(typesafe);
+        (msa) => {
+          msa.registerProvider(codex.provider);
+          msa.registerProvider(typesafe);
         },
         jevRouter,
       ],

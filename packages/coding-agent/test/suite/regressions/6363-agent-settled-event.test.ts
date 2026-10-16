@@ -1,5 +1,5 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import type { AgentTool } from "@msa/agent-core";
+import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -33,11 +33,11 @@ describe("regression #6363: agent settled event and idle waiting", () => {
     const harness = await createHarness({
       settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
       extensionFactories: [
-        (pi) => {
-          pi.on("agent_end", () => {
+        (msa) => {
+          msa.on("agent_end", () => {
             extensionEvents.push("agent_end");
           });
-          pi.on("agent_settled", (_event, ctx) => {
+          msa.on("agent_settled", (_event, ctx) => {
             extensionEvents.push(`agent_settled:${ctx.isIdle()}`);
           });
         },
@@ -72,13 +72,13 @@ describe("regression #6363: agent settled event and idle waiting", () => {
     const settledIdleStates: boolean[] = [];
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          pi.on("agent_end", () => {
+        (msa) => {
+          msa.on("agent_end", () => {
             if (queuedFollowUp) return;
             queuedFollowUp = true;
-            pi.sendUserMessage("status follow-up", { deliverAs: "followUp" });
+            msa.sendUserMessage("status follow-up", { deliverAs: "followUp" });
           });
-          pi.on("agent_settled", (_event, ctx) => {
+          msa.on("agent_settled", (_event, ctx) => {
             settledIdleStates.push(ctx.isIdle());
           });
         },
@@ -108,8 +108,8 @@ describe("regression #6363: agent settled event and idle waiting", () => {
     const harness = await createHarness({
       tools: [createWaitTool(released)],
       extensionFactories: [
-        (pi) => {
-          pi.registerCommand("after-idle", {
+        (msa) => {
+          msa.registerCommand("after-idle", {
             description: "Wait for idle",
             handler: async (_args, ctx) => {
               markCommandStarted();

@@ -2,13 +2,13 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Agent } from "@earendil-works/pi-agent-core";
+import { Agent } from "@msa/agent-core";
 import {
   type AssistantMessage,
   createAssistantMessageEventStream,
   getModel,
   type Model,
-} from "@earendil-works/pi-ai/compat";
+} from "@msa/ai/compat";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AgentSessionRuntime } from "../src/core/agent-session-runtime.ts";
@@ -95,7 +95,7 @@ async function createRuntimeHost(options: {
 }> {
   const tempDir = join(
     tmpdir(),
-    `pi-rpc-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    `msa-rpc-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
   mkdirSync(tempDir, { recursive: true });
 
@@ -252,9 +252,9 @@ describe("RPC prompt response semantics", () => {
       withAuth: false,
       responseDelayMs: 0,
       extensionsResult: await createTestExtensionsResult([
-        (pi) => {
-          pi.registerCommand("handled", { handler: async () => {} });
-          pi.on("input", (event) => {
+        (msa) => {
+          msa.registerCommand("handled", { handler: async () => {} });
+          msa.on("input", (event) => {
             if (event.text === "handled input") return { action: "handled" };
           });
         },
@@ -332,10 +332,10 @@ describe("RPC prompt response semantics", () => {
         withAuth: true,
         responseDelayMs: 500,
         extensionsResult: await createTestExtensionsResult([
-          (pi) => {
-            pi.on("input", (event) => {
+          (msa) => {
+            msa.on("input", (event) => {
               if (event.text === "A" && event.source === "rpc") {
-                pi.sendUserMessage("B", { deliverAs: type === "steer" ? "steer" : "followUp" });
+                msa.sendUserMessage("B", { deliverAs: type === "steer" ? "steer" : "followUp" });
                 return { action: "handled" };
               }
             });
@@ -384,8 +384,8 @@ describe("RPC prompt response semantics", () => {
         withAuth: false,
         responseDelayMs: 0,
         extensionsResult: await createTestExtensionsResult([
-          (pi) => {
-            pi.on("input", (event) => {
+          (msa) => {
+            msa.on("input", (event) => {
               if (event.text === "A") return { action: "transform", text: "B" };
             });
           },

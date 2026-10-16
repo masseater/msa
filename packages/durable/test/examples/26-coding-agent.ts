@@ -6,14 +6,10 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { ToolResultMessage } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
-import {
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
+import type { ToolResultMessage } from "@msa/ai";
+import { createModels } from "@msa/ai/models";
+import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
 import {
@@ -28,7 +24,7 @@ import {
 import { CodingTools } from "../../src/tools/index.ts";
 
 const context = BACKGROUND_CONTEXT;
-const workspace = await mkdtemp(join(tmpdir(), "pi-durable-agent-"));
+const workspace = await mkdtemp(join(tmpdir(), "msa-durable-agent-"));
 await mkdir(join(workspace, "app"));
 
 // The app's own prompt, next to the coding tools.

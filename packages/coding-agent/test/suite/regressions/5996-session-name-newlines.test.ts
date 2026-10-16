@@ -24,12 +24,12 @@ describe("regression #5996: session names do not contain newlines", () => {
     ]);
   });
 
-  it("filters newlines when an extension calls pi.setSessionName", async () => {
+  it("filters newlines when an extension calls msa.setSessionName", async () => {
     let api: ExtensionAPI | undefined;
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => {
-          api = pi;
+        (msa) => {
+          api = msa;
         },
       ],
     });

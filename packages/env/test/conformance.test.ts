@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { registerEnvConformance } from "@earendil-works/pi-durable/testing";
+import { registerEnvConformance } from "@msa/durable/testing";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { Connection } from "../src/connection.ts";
@@ -20,12 +20,12 @@ registerEnvConformance(
   { describe, expect, it },
   "RemoteExecutionEnv over a pipe",
   async (use) => {
-    const cwd = mkdtempSync(join(tmpdir(), "pi-env-conformance-"));
+    const cwd = mkdtempSync(join(tmpdir(), "msa-env-conformance-"));
     try {
       await use(
         new RemoteExecutionEnv({
           connection,
-          id: "pi-env:test",
+          id: "msa-env:test",
           cwd,
           watch: { pollIntervalMs: 100 },
         }),
@@ -43,7 +43,7 @@ registerEnvConformance(
   { describe, expect, it },
   "LocalExecutionEnv",
   async (use) => {
-    const cwd = mkdtempSync(join(tmpdir(), "pi-env-local-conformance-"));
+    const cwd = mkdtempSync(join(tmpdir(), "msa-env-local-conformance-"));
     try {
       await use(new LocalExecutionEnv({ connection, cwd, watch: { pollIntervalMs: 100 } }));
     } finally {

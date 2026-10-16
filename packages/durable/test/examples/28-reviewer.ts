@@ -6,14 +6,10 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
-import {
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
+import type { AssistantMessage } from "@msa/ai";
+import { createModels } from "@msa/ai/models";
+import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
 import {
@@ -56,7 +52,7 @@ const Reviewer = defineExtension({
 // ─── Host setup ─────────────────────────────────────────────────────────────
 
 // The reviewer works in its own checkout, in practice a `git worktree add`.
-const worktree = await mkdtemp(join(tmpdir(), "pi-durable-review-"));
+const worktree = await mkdtemp(join(tmpdir(), "msa-durable-review-"));
 await writeFile(join(worktree, "user.ts"), "export const name = (user) => user.name;\n");
 
 const faux = fauxProvider({ models: [{ id: "big" }, { id: "small" }] });

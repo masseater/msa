@@ -1,13 +1,13 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@msa/chord";
 import {
   BACKGROUND_CONTEXT,
   createContextKey,
   withAbortSignal,
   withCancel,
   withContextValue,
-} from "@earendil-works/chord/context";
-import { applyImmutable } from "@earendil-works/chord/delta";
-import { defineDoc } from "@earendil-works/pi-durable";
+} from "@msa/chord/context";
+import { applyImmutable } from "@msa/chord/delta";
+import { defineDoc } from "@msa/durable";
 import { describe, expect, it } from "vitest";
 
 import { context, documentChanges, flush, openTestSession } from "./session-support.ts";

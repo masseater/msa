@@ -1,4 +1,4 @@
-import { type Component, TuiMainScreen } from "@earendil-works/pi-tui";
+import { type Component, TuiMainScreen } from "@msa/tui";
 import { Type } from "typebox";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 

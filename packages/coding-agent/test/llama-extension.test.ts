@@ -2,12 +2,7 @@ import { once } from "node:events";
 import { createServer, type RequestListener, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
-import type {
-  AuthContext,
-  AuthPrompt,
-  ModelsPublication,
-  ModelsStoreEntry,
-} from "@earendil-works/pi-ai";
+import type { AuthContext, AuthPrompt, ModelsPublication, ModelsStoreEntry } from "@msa/ai";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createEventBus } from "../src/core/event-bus.ts";

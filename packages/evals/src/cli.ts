@@ -89,13 +89,13 @@ function parseEvalCli(
     if (!provider || !model)
       throw new Error("CLI model selection requires both --provider and --model.");
   } else {
-    provider = environment.PI_PROVIDER?.trim() || undefined;
-    model = environment.PI_MODEL?.trim() || undefined;
+    provider = environment.MSA_PROVIDER?.trim() || undefined;
+    model = environment.MSA_MODEL?.trim() || undefined;
     if (Boolean(provider) !== Boolean(model))
-      throw new Error("Set both PI_PROVIDER and PI_MODEL, or neither.");
+      throw new Error("Set both MSA_PROVIDER and MSA_MODEL, or neither.");
   }
 
-  const configuredRuns = (runsText ?? environment.PI_EVAL_RUNS_PER_VARIANT)?.trim();
+  const configuredRuns = (runsText ?? environment.MSA_EVAL_RUNS_PER_VARIANT)?.trim();
   const runsPerVariant = configuredRuns ? Number(configuredRuns) : 1;
   if (!Number.isSafeInteger(runsPerVariant) || runsPerVariant < 1) {
     throw new Error("Runs per variant must be a positive integer.");
@@ -139,7 +139,7 @@ function compareDiscovery(
 
 const cli = parseEvalCli(process.argv.slice(2));
 if (!cli.provider || !cli.model)
-  throw new Error("Set PI_PROVIDER and PI_MODEL, or pass --provider and --model.");
+  throw new Error("Set MSA_PROVIDER and MSA_MODEL, or pass --provider and --model.");
 const selectedModel = { provider: cli.provider, model: cli.model };
 const modelIdentity = `${selectedModel.provider}/${selectedModel.model}`;
 const files = (

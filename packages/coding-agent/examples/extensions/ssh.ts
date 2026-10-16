@@ -5,8 +5,8 @@
  * When --ssh is provided, read/write/edit/bash run on the remote.
  *
  * Usage:
- *   pi -e ./ssh.ts --ssh user@host
- *   pi -e ./ssh.ts --ssh user@host:/remote/path
+ *   msa -e ./ssh.ts --ssh user@host
+ *   msa -e ./ssh.ts --ssh user@host:/remote/path
  *
  * Requirements:
  *   - SSH key-based auth (no password prompts)
@@ -15,7 +15,7 @@
 
 import { spawn } from "node:child_process";
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@msa/coding-agent";
 import {
   type BashOperations,
   createBashTool,
@@ -25,7 +25,7 @@ import {
   type EditOperations,
   type ReadOperations,
   type WriteOperations,
-} from "@earendil-works/pi-coding-agent";
+} from "@msa/coding-agent";
 
 function sshExec(remote: string, command: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -119,8 +119,8 @@ function createRemoteBashOps(remote: string, remoteCwd: string, localCwd: string
   };
 }
 
-export default function (pi: ExtensionAPI) {
-  pi.registerFlag("ssh", {
+export default function (msa: ExtensionAPI) {
+  msa.registerFlag("ssh", {
     description: "SSH remote: user@host or user@host:/path",
     type: "string",
   });
@@ -136,7 +136,7 @@ export default function (pi: ExtensionAPI) {
 
   const getSsh = () => resolvedSsh;
 
-  pi.registerTool({
+  msa.registerTool({
     ...localRead,
     async execute(id, params, signal, onUpdate, _ctx) {
       const ssh = getSsh();
@@ -150,7 +150,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  msa.registerTool({
     ...localWrite,
     async execute(id, params, signal, onUpdate, _ctx) {
       const ssh = getSsh();
@@ -164,7 +164,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  msa.registerTool({
     ...localEdit,
     async execute(id, params, signal, onUpdate, _ctx) {
       const ssh = getSsh();
@@ -178,7 +178,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  msa.registerTool({
     ...localBash,
     async execute(id, params, signal, onUpdate, _ctx) {
       const ssh = getSsh();
@@ -192,9 +192,9 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", async (_event, ctx) => {
     // Resolve SSH config now that CLI flags are available
-    const arg = pi.getFlag("ssh") as string | undefined;
+    const arg = msa.getFlag("ssh") as string | undefined;
     if (arg) {
       if (arg.includes(":")) {
         const [remote, path] = arg.split(":");
@@ -214,14 +214,14 @@ export default function (pi: ExtensionAPI) {
   });
 
   // Handle user ! commands via SSH
-  pi.on("user_bash", (_event) => {
+  msa.on("user_bash", (_event) => {
     const ssh = getSsh();
     if (!ssh) return; // No SSH, use local execution
     return { operations: createRemoteBashOps(ssh.remote, ssh.remoteCwd, localCwd) };
   });
 
   // Replace local cwd with remote cwd in system prompt
-  pi.on("before_agent_start", async (event) => {
+  msa.on("before_agent_start", async (event) => {
     const ssh = getSsh();
     if (ssh) {
       const modified = event.systemPrompt.replace(

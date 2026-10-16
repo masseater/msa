@@ -70,7 +70,7 @@ let tempDir: string;
 let federationEnv: Record<string, string>;
 
 beforeAll(() => {
-  tempDir = mkdtempSync(join(tmpdir(), "pi-anthropic-federation-"));
+  tempDir = mkdtempSync(join(tmpdir(), "msa-anthropic-federation-"));
   const identityTokenFile = join(tempDir, "identity.jwt");
   writeFileSync(identityTokenFile, "header.payload.signature");
   federationEnv = {

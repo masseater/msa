@@ -14,11 +14,11 @@ describe("formatProgramStatus", () => {
     assert.equal(
       formatProgramStatus({
         state: "blocked",
-        app: "pi",
+        app: "msa",
         kind: "permission",
         message: "Allow bash?",
       }),
-      `\x1b]7501;state=blocked:app=pi:kind=permission:msg=${Buffer.from("Allow bash?").toString("base64")}\x1b\\`,
+      `\x1b]7501;state=blocked:app=msa:kind=permission:msg=${Buffer.from("Allow bash?").toString("base64")}\x1b\\`,
     );
     assert.equal(formatProgramStatus({ state: "clear" }), "\x1b]7501;state=clear\x1b\\");
   });
@@ -43,7 +43,7 @@ describe("formatProgramStatus", () => {
   it("cuts long messages at a UTF-8 boundary within the spec limits", () => {
     const sequence = formatProgramStatus({
       state: "working",
-      app: "pi",
+      app: "msa",
       message: "é".repeat(2000),
     });
     const message = decodeMessage(sequence)!;

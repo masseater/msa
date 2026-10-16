@@ -4,7 +4,7 @@ This document specifies the runtime in `src`. Where it and the code disagree, th
 
 Hard constraints:
 
-- Chord's runtime depends only on its own `delta` module (tracker, applyImmutable, encoder/decoder, diff) and Node/browser built-ins plus `typebox` for schemas. No other Pi packages.
+- Chord's runtime depends only on its own `delta` module (tracker, applyImmutable, encoder/decoder, diff) and Node/browser built-ins plus `typebox` for schemas. No other msa packages.
 - Built-in plugins are trusted, loaded from source in-process. The plugin loader uses dynamic `import()` with a cache-busting query (owner-approved exception, `TODO(loader)`: replace with an isolating, evicting loader; old module copies leak; TUI plugins need isolation).
 - Hot reload is required. Host restart only for Chord/runtime code changes or host-level crash recovery.
 
@@ -28,7 +28,7 @@ Hard constraints:
 Contracts are runtime values for every type (shipped bundles have no TypeScript; third-party plugins are built separately). TS types are inferred from them.
 
 ```ts
-export const Chat = remote("pi.chat", {
+export const Chat = remote("msa.chat", {
   version: 1, // contract version: a plain number, bumped only on breaking changes
   input: Type.Object({ session: Type.String(), conversation: Type.Number() }),
   host: hostFamily("session:", "session"), // where its objects live: `session:` + input.session
@@ -41,13 +41,13 @@ export const Chat = remote("pi.chat", {
   },
 });
 
-export const Index = local("pi.index", {
+export const Index = local("msa.index", {
   version: 1,
   input: Type.Object({ session: Type.String() }),
   members: {
     search: method(Type.Object({ query: Type.String() }), Type.Array(Hit)),
     onChange: method(Type.Function([Change], Type.Void()), Unsubscribe), // non-JSON allowed for locals
-    harness: opaque("pi.durable-harness@1"), // native object, by name+version
+    harness: opaque("msa.durable-harness@1"), // native object, by name+version
   },
 });
 ```

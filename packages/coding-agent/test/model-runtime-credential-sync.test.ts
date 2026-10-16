@@ -1,10 +1,4 @@
-import type {
-  ApiKeyCredential,
-  Credential,
-  CredentialStore,
-  Model,
-  Provider,
-} from "@earendil-works/pi-ai";
+import type { ApiKeyCredential, Credential, CredentialStore, Model, Provider } from "@msa/ai";
 import { describe, expect, it, vi } from "vitest";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";

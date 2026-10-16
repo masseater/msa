@@ -1,7 +1,7 @@
 import { readdir as fsReaddir, stat as fsStat } from "node:fs/promises";
 import nodePath from "path";
 
-import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AgentTool } from "@msa/agent-core";
 import { type Static, Type } from "typebox";
 
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";

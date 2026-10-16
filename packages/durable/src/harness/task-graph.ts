@@ -3,9 +3,9 @@ import {
   type Context,
   type JsonValue,
   replicatedState,
-} from "@earendil-works/chord";
-import { withoutAbortSignal } from "@earendil-works/chord/context";
-import { applyImmutable, type Op } from "@earendil-works/chord/delta";
+} from "@msa/chord";
+import { withoutAbortSignal } from "@msa/chord/context";
+import { applyImmutable, type Op } from "@msa/chord/delta";
 
 import { CommittedStateSource, CommittedWatch } from "../session/observation.ts";
 import { contained, type SessionImpl } from "../session/session.ts";

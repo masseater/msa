@@ -3,7 +3,7 @@ import { type PlatformPath, posix, win32 } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@msa/chord";
 import {
   type BinaryReader,
   type DirReader,
@@ -28,7 +28,7 @@ import {
   type TextLineReader,
   type WatchChange,
   type WatchTarget,
-} from "@earendil-works/pi-durable/env";
+} from "@msa/durable/env";
 
 import {
   type Connection,
@@ -58,7 +58,7 @@ const LINE_CHUNK = 64 * 1024;
 
 export interface RemoteExecutionEnvOptions {
   connection: Connection;
-  /** The file namespace: equal ids see the same files (`FileSystem.id`), e.g. `pi-env:<env name>`. */
+  /** The file namespace: equal ids see the same files (`FileSystem.id`), e.g. `msa-env:<env name>`. */
   id: string;
   cwd: string;
   shellPath?: string;
@@ -404,7 +404,7 @@ class RemoteTextLineReader implements TextLineReader {
 }
 
 /**
- * An `ExecutionEnv` on another machine, reached through a pi-env daemon. Results match `NodeExecutionEnv` running on
+ * An `ExecutionEnv` on another machine, reached through a msa-env daemon. Results match `NodeExecutionEnv` running on
  * that machine: the daemon performs the system calls, and this class applies Node's path, error, and result rules.
  */
 export class RemoteExecutionEnv implements ExecutionEnv {

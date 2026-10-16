@@ -1,6 +1,6 @@
 import { DatabaseSync, type StatementSync } from "node:sqlite";
 
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { describe, expect, it } from "vitest";
 
 import { idFromNumber } from "../src/ids.ts";

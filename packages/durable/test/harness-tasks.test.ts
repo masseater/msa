@@ -1,6 +1,6 @@
-import type { Context } from "@earendil-works/chord";
-import { withCancel } from "@earendil-works/chord/context";
-import { createModels, Type } from "@earendil-works/pi-ai";
+import { createModels, Type } from "@msa/ai";
+import type { Context } from "@msa/chord";
+import { withCancel } from "@msa/chord/context";
 import {
   type Conversation,
   createRegistry,
@@ -15,7 +15,7 @@ import {
   type RegistrySnapshot,
   type TaskId,
   type TaskRuntime,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { describe, expect, it } from "vitest";
 
 import { addHooks, addTask, addTool, user } from "./harness-support.ts";

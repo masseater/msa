@@ -5,14 +5,14 @@ import { symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { Context, JsonValue } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
+import type { Context, JsonValue } from "@msa/chord";
+import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import type {
   ToolDiagnostic,
   ToolExecutionApi,
   ToolExecutionResult,
   ToolRegistration,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { applyPatch } from "diff";
 import { afterAll, describe, expect, it } from "vitest";
 
@@ -49,7 +49,7 @@ afterAll(() => {
 function createTempDir(): string {
   const dir = join(
     tmpdir(),
-    `pi-durable-tools-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    `msa-durable-tools-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
   mkdirSync(dir, { recursive: true });
   tempDirs.push(dir);
@@ -760,7 +760,7 @@ describe("durable tools", () => {
     it("prepares command, cwd, and an explicit environment with the call's api", async () => {
       const env = new NodeExecutionEnv({
         cwd: createTempDir(),
-        shellEnv: { PI_BASH_PREPARE_INHERITED: "inherited" },
+        shellEnv: { MSA_BASH_PREPARE_INHERITED: "inherited" },
       });
       getOrThrow(await env.createDir("workspace", undefined, BACKGROUND_CONTEXT));
       const workspace = `${env.cwd}/workspace`;
@@ -773,9 +773,9 @@ describe("durable tools", () => {
           receivedEnv = api.env;
           receivedSignal = callContext.abortSignal;
           execution.cwd = workspace;
-          execution.env = { PI_BASH_PREPARE_EXPLICIT: "explicit" };
+          execution.env = { MSA_BASH_PREPARE_EXPLICIT: "explicit" };
           execution.inheritEnv = false;
-          execution.command += `\n: > prepared-cwd\nprintf '%s:%s:%s' "$prefix" "\${PI_BASH_PREPARE_INHERITED-}" "$PI_BASH_PREPARE_EXPLICIT"`;
+          execution.command += `\n: > prepared-cwd\nprintf '%s:%s:%s' "$prefix" "\${MSA_BASH_PREPARE_INHERITED-}" "$MSA_BASH_PREPARE_EXPLICIT"`;
           // Git Bash on Windows reports $PWD as an MSYS path, so only POSIX compares it.
           if (process.platform !== "win32") execution.command += `\nprintf ':%s' "$PWD"`;
         },

@@ -7,7 +7,7 @@
  * Nested calls are not separate tool rows because they never reach the model as tool calls.
  */
 
-import { Container, Spacer, Text } from "@earendil-works/pi-tui";
+import { Container, Spacer, Text } from "@msa/tui";
 
 import type { ToolDefinition } from "../../core/extensions/types.ts";
 import {

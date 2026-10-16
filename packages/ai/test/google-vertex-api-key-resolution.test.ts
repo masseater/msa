@@ -51,7 +51,7 @@ import { stream as streamGoogleVertex } from "../src/api/google-vertex.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { Model } from "../src/types.ts";
 
-const PI_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
+const MSA_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
 const model = getModel("google-vertex", "gemini-3-flash-preview");
 const context = normalizeContext({
   messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
@@ -158,7 +158,7 @@ describe("google-vertex api key resolution", () => {
 
     expect(googleGenAiMock.constructorCalls).toHaveLength(1);
     expect(googleGenAiMock.constructorCalls[0]?.httpOptions).toEqual({
-      headers: { "User-Agent": PI_USER_AGENT },
+      headers: { "User-Agent": MSA_USER_AGENT },
     });
   });
 

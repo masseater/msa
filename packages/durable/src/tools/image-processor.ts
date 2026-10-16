@@ -29,7 +29,7 @@ export type PreparedImage = {
 
 /**
  * Decodes, orients, resizes, and re-encodes images so the model can take them. `read` uses one when given; without
- * one, it passes supported images within the byte limit through as they are. `@earendil-works/pi-durable/images`
+ * one, it passes supported images within the byte limit through as they are. `@msa/durable/images`
  * provides a Photon-based one.
  */
 export type ImageProcessor = {

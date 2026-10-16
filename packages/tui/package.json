@@ -1,5 +1,5 @@
 {
-  "name": "@earendil-works/pi-tui",
+  "name": "@msa/tui",
   "version": "1.2.0",
   "description": "Terminal User Interface library with differential rendering for efficient text-based applications",
   "keywords": [
@@ -15,7 +15,7 @@
   "author": "Mario Zechner",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/earendil-works/pi.git",
+    "url": "git+https://github.com/masseater/msa.git",
     "directory": "packages/tui"
   },
   "files": [

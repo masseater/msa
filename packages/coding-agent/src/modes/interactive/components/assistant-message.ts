@@ -1,12 +1,5 @@
-import type { AssistantMessage } from "@earendil-works/pi-ai";
-import {
-  Container,
-  Markdown,
-  type MarkdownTheme,
-  MouseRegion,
-  Spacer,
-  Text,
-} from "@earendil-works/pi-tui";
+import type { AssistantMessage } from "@msa/ai";
+import { Container, Markdown, type MarkdownTheme, MouseRegion, Spacer, Text } from "@msa/tui";
 
 import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";

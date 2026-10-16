@@ -9,7 +9,7 @@ export type RadiusGatewayModel = {
   reasoning: boolean;
   thinkingLevelMap?: ThinkingLevelMap;
   input: ("text" | "image")[];
-  cost: Model<"pi-messages">["cost"];
+  cost: Model<"msa-messages">["cost"];
   contextWindow: number;
   maxTokens: number;
 };
@@ -65,10 +65,10 @@ export function getRadiusCredentialConfig(
 export function getRadiusModelsFromConfig(
   providerId: string,
   config: RadiusGatewayConfig,
-): Model<"pi-messages">[] {
+): Model<"msa-messages">[] {
   return config.models.map((model) => ({
     ...model,
-    api: "pi-messages",
+    api: "msa-messages",
     provider: providerId,
     baseUrl: config.baseUrl,
   }));
@@ -77,7 +77,7 @@ export function getRadiusModelsFromConfig(
 export function getRadiusModels(
   providerId: string,
   credential: OAuthCredential | undefined,
-): Model<"pi-messages">[] {
+): Model<"msa-messages">[] {
   const config = getRadiusCredentialConfig(credential);
   return config ? getRadiusModelsFromConfig(providerId, config) : [];
 }

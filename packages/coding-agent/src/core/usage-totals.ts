@@ -1,4 +1,4 @@
-import type { Usage } from "@earendil-works/pi-ai/compat";
+import type { Usage } from "@msa/ai/compat";
 
 import type { SessionEntry } from "./session-manager.ts";
 

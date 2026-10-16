@@ -1,11 +1,11 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@msa/chord";
 import {
   createSession,
   defineTask,
   MemoryStorage,
   type StorageWrite,
   type TaskId,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { describe, expect, it } from "vitest";
 
 import { context, flush } from "./session-support.ts";

@@ -11,7 +11,7 @@ import {
   truncateToWidth,
   visibleWidth,
   wrapTextWithAnsi,
-} from "@earendil-works/pi-tui";
+} from "@msa/tui";
 
 import type { SessionTreeNode } from "../../../core/session-manager.ts";
 import { formatReadLineRange } from "../../../core/tools/render-utils.ts";

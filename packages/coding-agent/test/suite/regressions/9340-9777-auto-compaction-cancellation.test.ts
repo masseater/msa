@@ -1,4 +1,4 @@
-import { type AssistantMessage, fauxAssistantMessage } from "@earendil-works/pi-ai";
+import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createHarness, type Harness } from "../harness.ts";
@@ -56,8 +56,8 @@ describe("automatic compaction cancellation regressions", () => {
         retry: { enabled: false },
       },
       extensionFactories: [
-        (pi) => {
-          pi.on("session_before_compact", () => ({ cancel: true }));
+        (msa) => {
+          msa.on("session_before_compact", () => ({ cancel: true }));
         },
       ],
     });
@@ -152,8 +152,8 @@ describe("automatic compaction cancellation regressions", () => {
     const harness = await createHarness({
       settings: { compaction: { keepRecentTokens: 1 } },
       extensionFactories: [
-        (pi) => {
-          pi.on("session_before_compact", () => ({ cancel: true }));
+        (msa) => {
+          msa.on("session_before_compact", () => ({ cancel: true }));
         },
       ],
     });

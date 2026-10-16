@@ -6,8 +6,8 @@ import {
   contentText,
   type Model,
   type ModelsSimpleStreamOptions,
-} from "@earendil-works/pi-ai";
-import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+} from "@msa/ai";
+import { ModelRuntime } from "@msa/coding-agent";
 
 type ModelFields = {
   id: string;

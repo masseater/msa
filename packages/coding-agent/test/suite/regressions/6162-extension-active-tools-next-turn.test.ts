@@ -4,7 +4,7 @@ import {
   getCurrentSystemPrompt,
   getCurrentTools,
   type TranscriptContext,
-} from "@earendil-works/pi-ai";
+} from "@msa/ai";
 import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
 
@@ -18,19 +18,19 @@ function getProviderToolNames(context: TranscriptContext): string[] {
 }
 
 /** Register `switch_tools`, which swaps the active set to `after_switch` when executed. */
-function registerSwitchTools(pi: ExtensionAPI): void {
-  pi.registerTool({
+function registerSwitchTools(msa: ExtensionAPI): void {
+  msa.registerTool({
     name: "switch_tools",
     label: "Switch Tools",
     description: "Switch the active extension tool set",
     promptSnippet: "Switch to the next extension tool",
     parameters: Type.Object({}),
     execute: async () => {
-      pi.setActiveTools(["after_switch"]);
+      msa.setActiveTools(["after_switch"]);
       return { content: [{ type: "text", text: "switched" }], details: {} };
     },
   });
-  pi.registerTool({
+  msa.registerTool({
     name: "after_switch",
     label: "After Switch",
     description: "Tool that should be available after switching",
@@ -42,7 +42,7 @@ function registerSwitchTools(pi: ExtensionAPI): void {
 
 describe("extension active tools next-turn refresh", () => {
   // Regression #6162
-  it("applies pi.setActiveTools before the next provider request in the same run", async () => {
+  it("applies msa.setActiveTools before the next provider request in the same run", async () => {
     const harness = await createHarness({ extensionFactories: [registerSwitchTools] });
 
     try {
@@ -102,12 +102,12 @@ describe("extension active tools next-turn refresh", () => {
 
   it("preserves before_agent_start system prompt overrides when tools change mid-run", async () => {
     const extensionFactories: ExtensionFactory[] = [
-      (pi) => {
-        pi.on("before_agent_start", async (event) => ({
+      (msa) => {
+        msa.on("before_agent_start", async (event) => ({
           systemPrompt: `${event.systemPrompt}\n\nkeep this run override`,
         }));
 
-        registerSwitchTools(pi);
+        registerSwitchTools(msa);
       },
     ];
     const harness = await createHarness({

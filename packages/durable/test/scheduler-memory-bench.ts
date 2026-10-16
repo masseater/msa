@@ -10,8 +10,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { createModels } from "@msa/ai/models";
+import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 
 import { SCHEDULER_INDEX_SIZES } from "../src/harness/harness.ts";
 import {
@@ -56,7 +56,7 @@ type Sizes = Record<
 >;
 
 async function run(cycles: number) {
-  const directory = mkdtempSync(join(tmpdir(), "pi-durable-memory-bench-"));
+  const directory = mkdtempSync(join(tmpdir(), "msa-durable-memory-bench-"));
   try {
     const storage = await openNodeSqliteStorage(join(directory, "session.sqlite"));
     const reads = { count: 0 };

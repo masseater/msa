@@ -1,13 +1,8 @@
 import * as os from "node:os";
 import { pathToFileURL } from "node:url";
 
-import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
-import {
-  getCapabilities,
-  getImageDimensions,
-  hyperlink,
-  imageFallback,
-} from "@earendil-works/pi-tui";
+import type { ImageContent, TextContent } from "@msa/ai";
+import { getCapabilities, getImageDimensions, hyperlink, imageFallback } from "@msa/tui";
 
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../utils/ansi.ts";

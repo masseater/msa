@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 
-const DEFAULT_SESSIONS_DIR = path.join(homedir(), ".pi/agent/sessions");
+const DEFAULT_SESSIONS_DIR = path.join(homedir(), ".msa/agent/sessions");
 const DEFAULT_ACTIVE_READ_TOOL_PATH = path.join(
   process.cwd(),
   "packages/coding-agent/src/core/tools/read.ts",
@@ -60,7 +60,7 @@ function printHelp() {
   console.log(`Usage: node scripts/read-tool-stats.mjs [options]
 
 Options:
-  --sessions-dir <path>  Sessions directory (default: ~/.pi/agent/sessions)
+  --sessions-dir <path>  Sessions directory (default: ~/.msa/agent/sessions)
   --model <substring>    Filter provider/model by substring
   --top <n>              Number of examples to show (default: ${DEFAULT_TOP})
   --since <iso>          Only scan session files created at or after this ISO time

@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 function createTempDir(): string {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), "pi-session-file-invalid-")));
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "msa-session-file-invalid-")));
   tempDirs.push(dir);
   return dir;
 }
@@ -39,7 +39,7 @@ async function runCli(
       env: {
         ...process.env,
         [ENV_AGENT_DIR]: agentDir,
-        PI_OFFLINE: "1",
+        MSA_OFFLINE: "1",
       },
       stdio: ["ignore", "ignore", "pipe"],
     });
@@ -68,7 +68,7 @@ describe("--session invalid file handling", () => {
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain(
-      `Error: Session file is not a valid pi session: ${sessionFile}`,
+      `Error: Session file is not a valid msa session: ${sessionFile}`,
     );
     expect(result.stderr).not.toContain("SessionManager.open");
     expect(result.stderr).not.toContain("at ");

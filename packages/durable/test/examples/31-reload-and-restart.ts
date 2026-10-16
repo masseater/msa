@@ -6,14 +6,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { type ToolResultMessage, Type } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
-import {
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
+import { type ToolResultMessage, Type } from "@msa/ai";
+import { createModels } from "@msa/ai/models";
+import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import {
   createRegistry,
@@ -59,7 +55,7 @@ faux.setResponses([
   fauxAssistantMessage("Done."),
 ]);
 
-const directory = await mkdtemp(join(tmpdir(), "pi-durable-reload-"));
+const directory = await mkdtemp(join(tmpdir(), "msa-durable-reload-"));
 const open = async (registry: ReturnType<typeof createRegistry>) =>
   Harness.open(
     await openNodeSqliteStorage(join(directory, "session.sqlite")),

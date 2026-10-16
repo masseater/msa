@@ -21,7 +21,7 @@ import { homedir, constants as osConstants, tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@msa/chord";
 
 import { StreamDecoder } from "./decode.ts";
 import {
@@ -837,7 +837,7 @@ export class NodeExecutionEnv implements ExecutionEnv {
         pauseOutput();
         spillStart = (async () => {
           const created = await this.createTempFile(
-            { prefix: "pi-output-", suffix: ".log" },
+            { prefix: "msa-output-", suffix: ".log" },
             context,
           );
           if (!created.ok) throw created.error;

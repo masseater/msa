@@ -1,5 +1,5 @@
-import type { Context } from "@earendil-works/chord";
-import { uuidv7 } from "@earendil-works/pi-ai/utils/uuid";
+import { uuidv7 } from "@msa/ai/utils/uuid";
+import type { Context } from "@msa/chord";
 
 import { defineDoc } from "../documents.ts";
 import type { TaskRuntime } from "../types.ts";
@@ -11,7 +11,7 @@ export type ProviderState = {
 
 /** Built-in provider state; every fork starts with a fresh identity instead of copying its parent. */
 export const ProviderDoc = defineDoc<ProviderState>({
-  kind: "pi.provider",
+  kind: "msa.provider",
   version: 1,
   scope: "conversation",
   history: "latest",
@@ -21,7 +21,7 @@ export const ProviderDoc = defineDoc<ProviderState>({
 });
 
 /**
- * Return the persisted identity without writing in the normal path. A legacy conversation without `pi.provider` gets
+ * Return the persisted identity without writing in the normal path. A legacy conversation without `msa.provider` gets
  * one migration commit whose `tx.doc()` runs `initial()` before the provider request starts.
  */
 export async function ensureProviderSessionId<I, S, R, H extends object>(

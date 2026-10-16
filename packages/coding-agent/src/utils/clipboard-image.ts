@@ -3,7 +3,7 @@ import { readFileSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
-import { getNativeClipboard } from "@earendil-works/pi-tui";
+import { getNativeClipboard } from "@msa/tui";
 
 import { runClipboardCommand } from "./clipboard-command.ts";
 import { detectSupportedImageMimeType } from "./mime.ts";
@@ -119,7 +119,7 @@ async function readClipboardImageViaWlPaste(): Promise<ClipboardImage | null | u
  * directly, so we use it as a fallback.
  */
 async function readClipboardImageViaPowerShell(): Promise<ClipboardImage | null> {
-  const tmpFile = join(tmpdir(), `pi-wsl-clip-${randomUUID()}.png`);
+  const tmpFile = join(tmpdir(), `msa-wsl-clip-${randomUUID()}.png`);
 
   try {
     const winPathResult = await runClipboardCommand("wslpath", ["-w", tmpFile], {

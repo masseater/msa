@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { InMemoryModelsStore } from "@earendil-works/pi-ai";
+import { InMemoryModelsStore } from "@msa/ai";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { parseArgs } from "../src/cli/args.ts";
@@ -17,7 +17,7 @@ import { ModelRuntime } from "../src/core/model-runtime.ts";
 
 const tempDir = join(
   tmpdir(),
-  `pi-test-auth-check-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  `msa-test-auth-check-${Date.now()}-${Math.random().toString(36).slice(2)}`,
 );
 
 async function createRuntime(

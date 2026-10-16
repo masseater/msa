@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { resetCapabilitiesCache, setCapabilityOverrides } from "@earendil-works/pi-tui";
+import { resetCapabilitiesCache, setCapabilityOverrides } from "@msa/tui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
@@ -68,7 +68,7 @@ describe("DefaultResourceLoader theme color mode", () => {
   ])(
     "uses the $setting setting over a $environment environment",
     async ({ environmentOverride, setting, expected }) => {
-      vi.stubEnv("PI_TRUE_COLOR", environmentOverride);
+      vi.stubEnv("MSA_TRUE_COLOR", environmentOverride);
       setCapabilityOverrides({});
       resetCapabilitiesCache();
 
@@ -92,7 +92,7 @@ describe("DefaultResourceLoader theme color mode", () => {
   );
 
   it("returns to automatic detection after an explicit setting is removed", async () => {
-    vi.stubEnv("PI_TRUE_COLOR", "1");
+    vi.stubEnv("MSA_TRUE_COLOR", "1");
     setCapabilityOverrides({});
     resetCapabilitiesCache();
 

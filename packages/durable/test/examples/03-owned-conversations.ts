@@ -1,7 +1,7 @@
 // A background task that owns a child conversation.
 // Run from packages/durable:
 //   node --conditions=source --experimental-strip-types test/examples/03-owned-conversations.ts
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import {
   type ConversationId,

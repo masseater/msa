@@ -15,7 +15,7 @@ import {
   createAgentSessionServices,
   getAgentDir,
   SessionManager,
-} from "@earendil-works/pi-coding-agent";
+} from "@msa/coding-agent";
 
 const createRuntime: CreateAgentSessionRuntimeFactory = async ({
   cwd,

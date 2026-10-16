@@ -7,7 +7,7 @@
     ".artifacts/**",
     ".claude/**",
     ".local-agents",
-    ".pi/**",
+    ".msa/**",
     "packages/**",
     "scripts/**",
   ],

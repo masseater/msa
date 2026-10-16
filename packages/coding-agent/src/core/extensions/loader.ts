@@ -8,8 +8,8 @@ import { createRequire } from "node:module";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { Provider } from "@earendil-works/pi-ai";
-import type { KeyId } from "@earendil-works/pi-tui";
+import type { Provider } from "@msa/ai";
+import type { KeyId } from "@msa/tui";
 import type { createJiti } from "jiti";
 
 import { CONFIG_DIR_NAME, getAgentDir, isBunBinary, isBundledNode } from "../../config.ts";
@@ -17,13 +17,13 @@ import { resolvePath } from "../../utils/paths.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
 import { execCommand } from "../exec.ts";
+import { readMsaManifest } from "../manifest.ts";
 import {
   type McpServerConfig,
   McpServerRegistry,
   mcpNamespace,
   validateMcpServerConfig,
 } from "../mcp-servers.ts";
-import { readPiManifest } from "../pi-manifest.ts";
 import {
   createSyntheticSourceInfo,
   getSyntheticPathSource,
@@ -97,43 +97,34 @@ function getAliases(): Record<string, string> {
     return fileURLToPath(import.meta.resolve(specifier));
   };
 
-  const piCodingAgentEntry = packageIndex;
-  const piAgentCoreEntry = resolveWorkspaceOrImport(
-    "agent/dist/index.js",
-    "@earendil-works/pi-agent-core",
-  );
-  const piTuiEntry = resolveWorkspaceOrImport("tui/dist/index.js", "@earendil-works/pi-tui");
-  // Extensions resolve the pi-ai root to the compat entrypoint (a strict
+  const msaCodingAgentEntry = packageIndex;
+  const msaAgentCoreEntry = resolveWorkspaceOrImport("agent/dist/index.js", "@msa/agent-core");
+  const msaTuiEntry = resolveWorkspaceOrImport("tui/dist/index.js", "@msa/tui");
+  // Extensions resolve the msa-ai root to the compat entrypoint (a strict
   // superset of the core entrypoint): existing extensions using the old
   // global API keep working at runtime until compat is removed.
-  const piAiCompatEntry = resolveWorkspaceOrImport(
-    "ai/dist/compat.js",
-    "@earendil-works/pi-ai/compat",
-  );
-  const piAiOauthEntry = resolveWorkspaceOrImport(
-    "ai/dist/oauth.js",
-    "@earendil-works/pi-ai/oauth",
-  );
-  const piAiProvidersEntry = resolveWorkspaceOrImport(
+  const msaAiCompatEntry = resolveWorkspaceOrImport("ai/dist/compat.js", "@msa/ai/compat");
+  const msaAiOauthEntry = resolveWorkspaceOrImport("ai/dist/oauth.js", "@msa/ai/oauth");
+  const msaAiProvidersEntry = resolveWorkspaceOrImport(
     "ai/dist/providers/all.js",
-    "@earendil-works/pi-ai/providers/all",
+    "@msa/ai/providers/all",
   );
 
   _aliases = {
-    "@earendil-works/pi-coding-agent": piCodingAgentEntry,
-    "@earendil-works/pi-agent-core": piAgentCoreEntry,
-    "@earendil-works/pi-tui": piTuiEntry,
-    "@earendil-works/pi-ai/providers/all": piAiProvidersEntry,
-    "@earendil-works/pi-ai/compat": piAiCompatEntry,
-    "@earendil-works/pi-ai/oauth": piAiOauthEntry,
-    "@earendil-works/pi-ai": piAiCompatEntry,
-    "@mariozechner/pi-coding-agent": piCodingAgentEntry,
-    "@mariozechner/pi-agent-core": piAgentCoreEntry,
-    "@mariozechner/pi-tui": piTuiEntry,
-    "@mariozechner/pi-ai/providers/all": piAiProvidersEntry,
-    "@mariozechner/pi-ai/compat": piAiCompatEntry,
-    "@mariozechner/pi-ai/oauth": piAiOauthEntry,
-    "@mariozechner/pi-ai": piAiCompatEntry,
+    "@msa/coding-agent": msaCodingAgentEntry,
+    "@msa/agent-core": msaAgentCoreEntry,
+    "@msa/tui": msaTuiEntry,
+    "@msa/ai/providers/all": msaAiProvidersEntry,
+    "@msa/ai/compat": msaAiCompatEntry,
+    "@msa/ai/oauth": msaAiOauthEntry,
+    "@msa/ai": msaAiCompatEntry,
+    "@mariozechner/pi-coding-agent": msaCodingAgentEntry,
+    "@mariozechner/pi-agent-core": msaAgentCoreEntry,
+    "@mariozechner/pi-tui": msaTuiEntry,
+    "@mariozechner/pi-ai/providers/all": msaAiProvidersEntry,
+    "@mariozechner/pi-ai/compat": msaAiCompatEntry,
+    "@mariozechner/pi-ai/oauth": msaAiOauthEntry,
+    "@mariozechner/pi-ai": msaAiCompatEntry,
     typebox: typeboxEntry,
     "typebox/compile": typeboxCompileEntry,
     "typebox/value": typeboxValueEntry,
@@ -217,7 +208,7 @@ export function createExtensionRuntime(): ExtensionRuntime {
       if (state.staleMessage) return;
       state.staleMessage =
         message ??
-        "This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().";
+        "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().";
       for (const unsubscribe of eventBusUnsubscribers) unsubscribe();
       eventBusUnsubscribers.clear();
     },
@@ -334,7 +325,7 @@ function createExtensionAPI(
       assertActive();
       if (typeof name !== "string" || name.length === 0) {
         throw new Error(
-          `Command registered by extension "${extension.path}" must have a non-empty string name. Use pi.registerCommand("name", { description, handler }).`,
+          `Command registered by extension "${extension.path}" must have a non-empty string name. Use msa.registerCommand("name", { description, handler }).`,
         );
       }
       if (typeof options?.handler !== "function") {
@@ -791,16 +782,16 @@ function isExtensionFile(name: string): boolean {
  * Resolve extension entry points from a directory.
  *
  * Checks for:
- * 1. package.json with "pi.extensions" field -> returns declared paths
+ * 1. package.json with "msa.extensions" field -> returns declared paths
  * 2. index.ts or index.js -> returns the index file
  *
  * Returns resolved paths or null if no entry points found.
  */
 function resolveExtensionEntries(dir: string): string[] | null {
-  // Check for package.json with "pi" field first
+  // Check for package.json with "msa" field first
   const packageJsonPath = path.join(dir, "package.json");
   if (fs.existsSync(packageJsonPath)) {
-    const manifest = readPiManifest(packageJsonPath);
+    const manifest = readMsaManifest(packageJsonPath);
     if (manifest?.extensions?.length) {
       const entries: string[] = [];
       for (const extPath of manifest.extensions) {
@@ -834,7 +825,7 @@ function resolveExtensionEntries(dir: string): string[] | null {
  * Discovery rules:
  * 1. Direct files: `extensions/*.ts` or `*.js` → load
  * 2. Subdirectory with index: `extensions/* /index.ts` or `index.js` → load
- * 3. Subdirectory with package.json: `extensions/* /package.json` with "pi" field → load what it declares
+ * 3. Subdirectory with package.json: `extensions/* /package.json` with "msa" field → load what it declares
  *
  * No recursion beyond one level. Complex packages must use package.json manifest.
  */
@@ -908,7 +899,7 @@ export async function discoverAndLoadExtensions(
   for (const p of configuredPaths) {
     const resolved = resolvePath(p, resolvedCwd, { normalizeUnicodeSpaces: true });
     if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
-      // Check for package.json with pi manifest or index.ts
+      // Check for package.json with msa manifest or index.ts
       const entries = resolveExtensionEntries(resolved);
       if (entries) {
         addPaths(entries);

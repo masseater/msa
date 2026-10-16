@@ -2,11 +2,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join, parse } from "node:path";
 
-import {
-  fauxAssistantMessage,
-  fauxToolCall,
-  registerFauxProvider,
-} from "@earendil-works/pi-ai/compat";
+import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@msa/ai/compat";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -49,7 +45,7 @@ describe("AgentSessionRuntime characterization", () => {
   ) {
     const tempDir =
       options?.cwd ??
-      join(tmpdir(), `pi-runtime-suite-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      join(tmpdir(), `msa-runtime-suite-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tempDir, { recursive: true });
 
     const faux = registerFauxProvider({
@@ -77,8 +73,8 @@ describe("AgentSessionRuntime characterization", () => {
       thinkingLevel: options?.bootstrapThinkingLevel === false ? undefined : undefined,
       resourceLoaderOptions: {
         extensionFactories: [
-          (pi: ExtensionAPI) => {
-            pi.registerProvider(faux.getModel().provider, {
+          (msa: ExtensionAPI) => {
+            msa.registerProvider(faux.getModel().provider, {
               baseUrl: faux.getModel().baseUrl,
               apiKey: "faux-key",
               api: faux.api,
@@ -93,7 +89,7 @@ describe("AgentSessionRuntime characterization", () => {
                 maxTokens: registeredModel.maxTokens,
               })),
             });
-            extensionFactory(pi);
+            extensionFactory(msa);
           },
         ],
         noSkills: true,
@@ -141,8 +137,8 @@ describe("AgentSessionRuntime characterization", () => {
   }
 
   it("persists message_end assistant replacements to the session manager", async () => {
-    const { runtime } = await createRuntimeForTest((pi: ExtensionAPI) => {
-      pi.on("message_end", (event) => {
+    const { runtime } = await createRuntimeForTest((msa: ExtensionAPI) => {
+      msa.on("message_end", (event) => {
         if (event.message.role !== "assistant") return;
 
         return {
@@ -188,8 +184,8 @@ describe("AgentSessionRuntime characterization", () => {
     const toolStartedPromise = new Promise<void>((resolve) => {
       toolStarted = resolve;
     });
-    const { runtime, faux } = await createRuntimeForTest((pi: ExtensionAPI) => {
-      pi.registerTool({
+    const { runtime, faux } = await createRuntimeForTest((msa: ExtensionAPI) => {
+      msa.registerTool({
         name: "block",
         label: "Block",
         description: "Blocks until aborted",
@@ -268,14 +264,14 @@ describe("AgentSessionRuntime characterization", () => {
 
   it("emits session_before_switch and session_start for new and resume flows", async () => {
     const events: RecordedSessionEvent[] = [];
-    const { runtime } = await createRuntimeForTest((pi: ExtensionAPI) => {
-      pi.on("session_before_switch", (event) => {
+    const { runtime } = await createRuntimeForTest((msa: ExtensionAPI) => {
+      msa.on("session_before_switch", (event) => {
         events.push(event);
       });
-      pi.on("session_shutdown", (event) => {
+      msa.on("session_shutdown", (event) => {
         events.push(event);
       });
-      pi.on("session_start", (event) => {
+      msa.on("session_start", (event) => {
         events.push(event);
       });
     });
@@ -314,14 +310,14 @@ describe("AgentSessionRuntime characterization", () => {
   it("honors session_before_switch cancellation for new and resume", async () => {
     const events: RecordedSessionEvent[] = [];
     let cancelReason: "new" | "resume" | undefined;
-    const { runtime } = await createRuntimeForTest((pi: ExtensionAPI) => {
-      pi.on("session_before_switch", (event) => {
+    const { runtime } = await createRuntimeForTest((msa: ExtensionAPI) => {
+      msa.on("session_before_switch", (event) => {
         events.push(event);
         if (event.reason === cancelReason) {
           return { cancel: true };
         }
       });
-      pi.on("session_start", (event) => {
+      msa.on("session_start", (event) => {
         events.push(event);
       });
     });
@@ -337,7 +333,7 @@ describe("AgentSessionRuntime characterization", () => {
     events.length = 0;
     const otherDir = join(
       tmpdir(),
-      `pi-runtime-other-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `msa-runtime-other-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     mkdirSync(otherDir, { recursive: true });
     const otherSession = SessionManager.create(otherDir);
@@ -356,18 +352,18 @@ describe("AgentSessionRuntime characterization", () => {
   it("emits session_before_fork and session_start and honors cancellation", async () => {
     const events: RecordedSessionEvent[] = [];
     let cancelNextFork = false;
-    const { runtime } = await createRuntimeForTest((pi: ExtensionAPI) => {
-      pi.on("session_before_fork", (event) => {
+    const { runtime } = await createRuntimeForTest((msa: ExtensionAPI) => {
+      msa.on("session_before_fork", (event) => {
         events.push(event);
         if (cancelNextFork) {
           cancelNextFork = false;
           return { cancel: true };
         }
       });
-      pi.on("session_shutdown", (event) => {
+      msa.on("session_shutdown", (event) => {
         events.push(event);
       });
-      pi.on("session_start", (event) => {
+      msa.on("session_start", (event) => {
         events.push(event);
       });
     });
@@ -462,7 +458,7 @@ describe("AgentSessionRuntime characterization", () => {
   it("duplicates the current active branch in-memory when forking at the current position", async () => {
     const tempDir = join(
       tmpdir(),
-      `pi-runtime-suite-in-memory-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `msa-runtime-suite-in-memory-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     mkdirSync(tempDir, { recursive: true });
 
@@ -490,8 +486,8 @@ describe("AgentSessionRuntime characterization", () => {
       model: faux.getModel(),
       resourceLoaderOptions: {
         extensionFactories: [
-          (pi: ExtensionAPI) => {
-            pi.registerProvider(faux.getModel().provider, {
+          (msa: ExtensionAPI) => {
+            msa.registerProvider(faux.getModel().provider, {
               baseUrl: faux.getModel().baseUrl,
               apiKey: "faux-key",
               api: faux.api,
@@ -593,11 +589,11 @@ describe("AgentSessionRuntime characterization", () => {
   it("updates the runtime session cwd on cross-cwd session replacement", async () => {
     const firstDir = join(
       tmpdir(),
-      `pi-runtime-cwd-a-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `msa-runtime-cwd-a-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     const secondDir = join(
       tmpdir(),
-      `pi-runtime-cwd-b-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `msa-runtime-cwd-b-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     mkdirSync(firstDir, { recursive: true });
     mkdirSync(secondDir, { recursive: true });
@@ -612,8 +608,8 @@ describe("AgentSessionRuntime characterization", () => {
       authStorage: otherAuthStorage,
       resourceLoaderOptions: {
         extensionFactories: [
-          (pi: ExtensionAPI) => {
-            pi.registerProvider(faux.getModel().provider, {
+          (msa: ExtensionAPI) => {
+            msa.registerProvider(faux.getModel().provider, {
               baseUrl: faux.getModel().baseUrl,
               apiKey: "faux-key",
               api: faux.api,
@@ -688,8 +684,8 @@ describe("AgentSessionRuntime characterization", () => {
       authStorage: otherAuthStorage,
       resourceLoaderOptions: {
         extensionFactories: [
-          (pi: ExtensionAPI) => {
-            pi.registerProvider(faux.getModel().provider, {
+          (msa: ExtensionAPI) => {
+            msa.registerProvider(faux.getModel().provider, {
               baseUrl: faux.getModel().baseUrl,
               apiKey: "faux-key",
               api: faux.api,

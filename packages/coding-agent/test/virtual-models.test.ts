@@ -9,7 +9,7 @@ import {
   getSupportedThinkingLevels,
   InMemoryModelsStore,
   type Model,
-} from "@earendil-works/pi-ai";
+} from "@msa/ai";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished } from "vitest";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -322,7 +322,7 @@ describe("createAgentSession with virtual models", () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), "pi-virtual-models-"));
+    tempDir = mkdtempSync(join(tmpdir(), "msa-virtual-models-"));
   });
 
   afterEach(() => {

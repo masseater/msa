@@ -1,8 +1,8 @@
+import { createModels } from "@msa/ai/models";
 // Run a durable task.
 // Run from packages/durable:
 //   node --conditions=source --experimental-strip-types test/examples/12-tasks.ts
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import {
   createRegistry,

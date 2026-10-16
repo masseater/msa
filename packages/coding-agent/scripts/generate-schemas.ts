@@ -4,14 +4,14 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ProviderCompatSchema } from "@earendil-works/pi-ai/providers/compat-schema";
+import { ProviderCompatSchema } from "@msa/ai/providers/compat-schema";
 import {
   ModelCostSchema,
   ModelInputLimitsSchema,
   ModelPromptCacheSchema,
   ModelThinkingLevelSchema,
   ThinkingLevelMapSchema,
-} from "@earendil-works/pi-ai/providers/model-schema";
+} from "@msa/ai/providers/model-schema";
 import type { TSchema } from "typebox";
 import { format } from "vite-plus/fmt";
 

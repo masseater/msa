@@ -1,7 +1,7 @@
 import { mkdir as fsMkdir, writeFile as fsWriteFile } from "fs/promises";
 import { dirname } from "path";
 
-import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AgentTool } from "@msa/agent-core";
 import { type Static, Type } from "typebox";
 
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";

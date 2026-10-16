@@ -9,15 +9,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BACKGROUND_CONTEXT as context } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
-import {
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxText,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
-import { CodemodeSandbox } from "@earendil-works/pi-codemode";
+import { createModels } from "@msa/ai/models";
+import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
+import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import { CodemodeSandbox } from "@msa/codemode";
 import { Type } from "typebox";
 
 import { createCodemodeTool } from "../src/codemode/codemode.ts";
@@ -55,7 +50,7 @@ async function run(
   shape: Shape,
   n: number,
 ): Promise<{ ms: number; commits: number }> {
-  const directory = await mkdtemp(join(tmpdir(), "pi-codemode-bench-"));
+  const directory = await mkdtemp(join(tmpdir(), "msa-codemode-bench-"));
   try {
     const faux = fauxProvider();
     const models = createModels();

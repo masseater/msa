@@ -3,8 +3,8 @@ import { type AddressInfo, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
-import type { ToolResultMessage } from "@earendil-works/pi-ai/compat";
+import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type { ToolResultMessage } from "@msa/ai/compat";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { InMemoryAuthStorageBackend } from "../../src/core/auth-storage.ts";
@@ -214,7 +214,7 @@ describe("AgentSession MCP OAuth", () => {
 
     const fallback = await setup("follow");
     await fallback.harness.session.prompt("/mcp login issues");
-    expect(fallback.server.registrations.map((metadata) => metadata.client_name)).toEqual(["pi"]);
+    expect(fallback.server.registrations.map((metadata) => metadata.client_name)).toEqual(["msa"]);
     // OpenID Connect servers reject the loopback redirect URI of a `web` client (#10493).
     expect(fallback.server.registrations.map((metadata) => metadata.application_type)).toEqual([
       "native",
@@ -242,10 +242,10 @@ describe("AgentSession MCP OAuth", () => {
     );
   });
 
-  it("gives up on pi mcp login after --timeout, also while the authorization server hangs", async () => {
+  it("gives up on msa mcp login after --timeout, also while the authorization server hangs", async () => {
     const server = await startOAuthMcpServer();
     cleanups.push(server.close);
-    const agentDir = mkdtempSync(join(tmpdir(), "pi-mcp-login-"));
+    const agentDir = mkdtempSync(join(tmpdir(), "msa-mcp-login-"));
     cleanups.push(() => rmSync(agentDir, { recursive: true, force: true }));
     writeFileSync(
       join(agentDir, "mcp.json"),
@@ -276,16 +276,16 @@ describe("AgentSession MCP OAuth", () => {
     expect(stalled.output.at(-1)).toContain("was cancelled or not completed within");
   });
 
-  it("uses credentials from pi mcp login on the next turn", async () => {
+  it("uses credentials from msa mcp login on the next turn", async () => {
     const { harness, server, backend } = await setup("follow");
-    const agentDir = mkdtempSync(join(tmpdir(), "pi-mcp-login-"));
+    const agentDir = mkdtempSync(join(tmpdir(), "msa-mcp-login-"));
     cleanups.push(() => rmSync(agentDir, { recursive: true, force: true }));
     writeFileSync(
       join(agentDir, "mcp.json"),
       JSON.stringify({ mcpServers: { issues: { url: server.url } } }),
     );
 
-    // The agent runs `pi mcp login issues` through bash; the user approves in the browser.
+    // The agent runs `msa mcp login issues` through bash; the user approves in the browser.
     const output: string[] = [];
     const exitCode = await runMcpCommand(["login", "issues"], {
       cwd: agentDir,

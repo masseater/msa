@@ -2,12 +2,8 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Agent, type AgentEvent, type AgentTool } from "@earendil-works/pi-agent-core";
-import {
-  type AssistantMessage,
-  createAssistantMessageEventStream,
-  getModel,
-} from "@earendil-works/pi-ai/compat";
+import { Agent, type AgentEvent, type AgentTool } from "@msa/agent-core";
+import { type AssistantMessage, createAssistantMessageEventStream, getModel } from "@msa/ai/compat";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -51,7 +47,7 @@ describe("AgentSession retry", () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = join(tmpdir(), `pi-retry-test-${Date.now()}`);
+    tempDir = join(tmpdir(), `msa-retry-test-${Date.now()}`);
     mkdirSync(tempDir, { recursive: true });
   });
 

@@ -1,4 +1,4 @@
-import { Text } from "@earendil-works/pi-tui";
+import { Text } from "@msa/tui";
 
 /**
  * Text whose content applies theme colors. Plain `Text` keeps the colors its string was built with, so

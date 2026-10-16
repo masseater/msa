@@ -1,9 +1,9 @@
+import { Type } from "@msa/ai";
+import { createModels } from "@msa/ai/models";
 // Per-conversation agent choices and Harness-wide settings.
 // Run from packages/durable:
 //   node --conditions=source --experimental-strip-types test/examples/07-configuration.ts
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { Type } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import {
   AgentDoc,
@@ -72,7 +72,7 @@ const root = await harness.root(context);
 const tools = async () => (await root.agent(context)).tools.map((tool) => tool.name);
 console.log("default tools:", await tools());
 
-// configure() stores choices in the conversation's pi.agent document, one
+// configure() stores choices in the conversation's msa.agent document, one
 // commit per call. Extensions and tools are passed as objects and stored by
 // name, so a typo cannot slip in.
 await root.configure(

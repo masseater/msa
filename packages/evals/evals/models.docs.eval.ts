@@ -1,6 +1,6 @@
 import { describeEval, StructuredOutputJudge } from "vitest-evals";
 
-import { createPiDocumentationEvalHarness } from "../src/harness.ts";
+import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
 import { inspectAddedModel, type AddedModelOutput } from "./configured-runtime.ts";
 
 const PROVIDER_ID = "openai";
@@ -23,7 +23,7 @@ const expected: AddedModelOutput = {
   },
 };
 
-const harness = createPiDocumentationEvalHarness({
+const harness = createMsaDocumentationEvalHarness({
   output: ({ session }) => inspectAddedModel(session.modelRuntime, PROVIDER_ID, MODEL_ID),
 });
 const judge = StructuredOutputJudge({ expected, match: "strict", allowExtras: false });
@@ -36,7 +36,7 @@ describeEval(
       await run([
         {
           type: "prompt",
-          content: `Configure this running Pi installation with a new \`${PROVIDER_ID}/${MODEL_ID}\` model. Do not create project-local configuration. Show it as “${MODEL_NAME}”. It accepts text, supports reasoning, has a 32,768-token context window and a 4,096-token maximum output, and has no usage cost.`,
+          content: `Configure this running msa installation with a new \`${PROVIDER_ID}/${MODEL_ID}\` model. Do not create project-local configuration. Show it as “${MODEL_NAME}”. It accepts text, supports reasoning, has a 32,768-token context window and a 4,096-token maximum output, and has no usage cost.`,
         },
         { type: "reload" },
       ]);

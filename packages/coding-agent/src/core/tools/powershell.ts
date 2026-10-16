@@ -18,7 +18,9 @@ const UTF8_OUTPUT_PREFIX =
 
 export const powershellToolSystemPromptContribution = {
   snippet: "Execute PowerShell commands",
-  guidelines: ["You can inspect PI_* environment variables for current model and session details."],
+  guidelines: [
+    "You can inspect MSA_* environment variables for current model and session details.",
+  ],
 } as const;
 
 export type PowerShellOperations = BashOperations;
@@ -47,7 +49,7 @@ const powershellToolConfig: ShellToolConfig = {
   prompt: "PS>",
   promptSnippet: powershellToolSystemPromptContribution.snippet,
   promptGuidelines: powershellToolSystemPromptContribution.guidelines,
-  tempFilePrefix: "pi-powershell",
+  tempFilePrefix: "msa-powershell",
 };
 
 export function createPowerShellToolDefinition(

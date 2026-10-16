@@ -1,5 +1,5 @@
-import type { JsonValue } from "@earendil-works/chord";
-import type { TSchema } from "@earendil-works/pi-ai";
+import type { TSchema } from "@msa/ai";
+import type { JsonValue } from "@msa/chord";
 
 import type {
   AnyTask,

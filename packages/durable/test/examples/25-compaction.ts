@@ -1,10 +1,10 @@
+import type { AssistantMessage, Message, TranscriptContext } from "@msa/ai";
+import { createModels } from "@msa/ai/models";
+import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
 // Compaction: a long trip-planning chat whose older messages are summarized so the model context stays small.
 // Run from packages/durable:
 //   node --conditions=source --experimental-strip-types test/examples/25-compaction.ts
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { AssistantMessage, Message, TranscriptContext } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import {
   CompactionEntry,

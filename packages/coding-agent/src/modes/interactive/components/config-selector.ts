@@ -15,7 +15,7 @@ import {
   Spacer,
   truncateToWidth,
   visibleWidth,
-} from "@earendil-works/pi-tui";
+} from "@msa/tui";
 
 import { CONFIG_DIR_NAME } from "../../../config.ts";
 import type {

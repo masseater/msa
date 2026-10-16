@@ -9,7 +9,7 @@ import {
   InMemoryModelsStore,
   type Model,
   type Provider,
-} from "@earendil-works/pi-ai";
+} from "@msa/ai";
 import { describe, expect, it } from "vitest";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -32,7 +32,7 @@ function model(id: string): Model<"openai-completions"> {
 }
 
 describe("extension provider model lifecycle", () => {
-  it("registers native pi-ai providers with their auth implementation", async () => {
+  it("registers native msa-ai providers with their auth implementation", async () => {
     const runtime = await ModelRuntime.create({
       credentials: AuthStorage.inMemory(),
       modelsStore: new InMemoryModelsStore(),
@@ -140,7 +140,7 @@ describe("extension provider model lifecycle", () => {
   });
 
   it("preserves native deferred methods through provider overlays", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "pi-native-provider-deferred-"));
+    const tempDir = mkdtempSync(join(tmpdir(), "msa-native-provider-deferred-"));
     const modelsPath = join(tempDir, "models.json");
     writeFileSync(
       modelsPath,
@@ -264,7 +264,7 @@ describe("extension provider model lifecycle", () => {
   });
 
   it("applies models.json overrides above native providers", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "pi-native-provider-"));
+    const tempDir = mkdtempSync(join(tmpdir(), "msa-native-provider-"));
     const modelsPath = join(tempDir, "models.json");
     writeFileSync(
       modelsPath,

@@ -1,12 +1,12 @@
 import { globSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { Type } from "@earendil-works/pi-ai";
-import { defineTool } from "@earendil-works/pi-coding-agent";
+import { Type } from "@msa/ai";
+import { defineTool } from "@msa/coding-agent";
 import { expect } from "vitest";
 import { describeEval, toolCalls } from "vitest-evals";
 
-import { createPiCodingAgentHarness } from "../src/harness.ts";
+import { createMsaCodingAgentHarness } from "../src/harness.ts";
 
 const TOOL_NAME = "submit_documentation_audit";
 const submitAudit = defineTool({
@@ -40,7 +40,7 @@ const docsRoot = resolve(repositoryRoot, "packages/coding-agent/docs");
 const pages = globSync("**/*.md", { cwd: docsRoot })
   .map((path) => ({ path: path.replaceAll("\\", "/") }))
   .sort((left, right) => left.path.localeCompare(right.path));
-const harness = createPiCodingAgentHarness({
+const harness = createMsaCodingAgentHarness({
   name: "documentation-page-audit",
   tools: ["read", "grep", "find", "ls", TOOL_NAME],
   customTools: [submitAudit],
@@ -50,7 +50,7 @@ describeEval("Audit documentation against implementation", { harness }, (it) => 
   it.for(pages)("$path matches the implementation", async ({ path }, { run }) => {
     const documentationPath = resolve(docsRoot, path);
     const result =
-      await run(`Audit this Pi documentation page against the repository implementation.
+      await run(`Audit this msa documentation page against the repository implementation.
 
 Documentation page: ${documentationPath}
 Repository root: ${repositoryRoot}

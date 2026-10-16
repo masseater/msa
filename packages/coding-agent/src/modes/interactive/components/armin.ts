@@ -2,7 +2,7 @@
  * Armin says hi! A fun easter egg with animated XBM art.
  */
 
-import type { Component, TUI } from "@earendil-works/pi-tui";
+import type { Component, TUI } from "@msa/tui";
 
 import { theme } from "../theme/theme.ts";
 

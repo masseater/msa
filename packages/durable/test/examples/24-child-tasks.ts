@@ -6,8 +6,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { createModels } from "@msa/ai/models";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import {
   type Conversation,
@@ -119,7 +119,7 @@ const Checkout = defineTask<{ cards: string[] }, CheckoutState, string>({
 
 const registry = createRegistry();
 registry.install(defineExtension({ name: "checkout", tasks: [Payment, Checkout] }));
-const directory = await mkdtemp(join(tmpdir(), "pi-durable-example-"));
+const directory = await mkdtemp(join(tmpdir(), "msa-durable-example-"));
 const databasePath = join(directory, "session.sqlite");
 const open = async () =>
   Harness.open(

@@ -1,4 +1,4 @@
-import { InMemoryModelsStore } from "@earendil-works/pi-ai";
+import { InMemoryModelsStore } from "@msa/ai";
 import { describe, expect, test, vi } from "vitest";
 
 import { parseArgs } from "../src/cli/args.ts";
@@ -96,7 +96,7 @@ describe("credential print commands", () => {
       const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
       expect(stderr).toContain('Unknown option --credentails for "auth check".');
       expect(stderr).toContain(
-        'Use "pi --help" or "pi auth check --provider <provider> [--json] [--credentials] [--no-refresh]".',
+        'Use "msa --help" or "msa auth check --provider <provider> [--json] [--credentials] [--no-refresh]".',
       );
       expect(process.exitCode).toBe(1);
     } finally {

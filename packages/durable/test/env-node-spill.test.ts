@@ -3,7 +3,7 @@ import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getOrThrow } from "../src/env/index.ts";
@@ -60,7 +60,7 @@ describe("NodeExecutionEnv spill backpressure", () => {
     async () => {
       const root = join(
         tmpdir(),
-        `pi-durable-env-spill-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        `msa-durable-env-spill-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       );
       mkdirSync(root, { recursive: true });
       tempDirs.push(root);

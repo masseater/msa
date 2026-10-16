@@ -424,7 +424,7 @@ describe("SessionManager.setSessionFile with corrupted files", () => {
     writeFileSync(noHeaderFile, originalContent);
 
     expect(() => SessionManager.open(noHeaderFile, tempDir)).toThrow(
-      `Session file is not a valid pi session: ${noHeaderFile}`,
+      `Session file is not a valid msa session: ${noHeaderFile}`,
     );
     expect(readFileSync(noHeaderFile, "utf-8")).toBe(originalContent);
   });
@@ -435,7 +435,7 @@ describe("SessionManager.setSessionFile with corrupted files", () => {
     writeFileSync(nonSessionFile, originalContent);
 
     expect(() => SessionManager.open(nonSessionFile, tempDir)).toThrow(
-      `Session file is not a valid pi session: ${nonSessionFile}`,
+      `Session file is not a valid msa session: ${nonSessionFile}`,
     );
     expect(readFileSync(nonSessionFile, "utf-8")).toBe(originalContent);
   });
@@ -467,7 +467,7 @@ describe("SessionManager session file creation", () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), "pi-session-persist-"));
+    tempDir = mkdtempSync(join(tmpdir(), "msa-session-persist-"));
   });
 
   afterEach(() => {

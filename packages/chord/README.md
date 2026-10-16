@@ -1,4 +1,4 @@
-# @earendil-works/chord
+# @msa/chord
 
 Chord builds applications out of **objects** that live in several processes (a server, workers, browser tabs) and can be **hot reloaded** while they run.
 
@@ -12,18 +12,18 @@ Contracts are runtime values described with [TypeBox](https://github.com/sinclai
 
 ## Entry points
 
-| Import                          | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Runs in           |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- |
-| `@earendil-works/chord`         | Contracts (`local`, `remote`, `method`, `opaque`), declarations (through the factory's `self`: `state`, `derive`, `resource`, `on`, `task`), hosts (`createHost`, `defineFacet`, `defineRegistry`), links (`memoryLinkPair`, `ipcLink`, `webSocketLink`, `acceptWebSockets`), errors (`ChordError`, `isChordError`, `forbidden`, `invalid`). Also the shared base: `Context`, `JsonValue`, `JsonRepresentation`, `Draft`, `copyJson`, `isJsonValue`, and `replicatedState` with its types. | Node and browsers |
-| `@earendil-works/chord/node`    | Child host processes: `createHostManager`, `forkDriver`, `childControl`, `processLock`; the facet module loader `nodeLoader`.                                                                                                                                                                                                                                                                                                                                                              | Node              |
-| `@earendil-works/chord/context` | Explicit cancellation and invocation values: `BACKGROUND_CONTEXT`, `withCancel`, `withAbortSignal`, `withoutAbortSignal`, `withContextValue`, `awaitWithContext`.                                                                                                                                                                                                                                                                                                                          | Node and browsers |
-| `@earendil-works/chord/delta`   | The transactional JSON tracker, structural diff, immutable apply, and the wire encoder/decoder for operation batches.                                                                                                                                                                                                                                                                                                                                                                      | Node and browsers |
-| `@earendil-works/chord/output`  | Bounded output streams and paced progress: `OutputBuffer` (head or tail window of a stream, `OutputLimits`, `OutputSkip`), `boundOutput`, `sanitizeOutput`, `utf8ByteLength`, and `Progress` (adaptive commits of a changing value).                                                                                                                                                                                                                                                       | Node and browsers |
+| Import               | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Runs in           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- |
+| `@msa/chord`         | Contracts (`local`, `remote`, `method`, `opaque`), declarations (through the factory's `self`: `state`, `derive`, `resource`, `on`, `task`), hosts (`createHost`, `defineFacet`, `defineRegistry`), links (`memoryLinkPair`, `ipcLink`, `webSocketLink`, `acceptWebSockets`), errors (`ChordError`, `isChordError`, `forbidden`, `invalid`). Also the shared base: `Context`, `JsonValue`, `JsonRepresentation`, `Draft`, `copyJson`, `isJsonValue`, and `replicatedState` with its types. | Node and browsers |
+| `@msa/chord/node`    | Child host processes: `createHostManager`, `forkDriver`, `childControl`, `processLock`; the facet module loader `nodeLoader`.                                                                                                                                                                                                                                                                                                                                                              | Node              |
+| `@msa/chord/context` | Explicit cancellation and invocation values: `BACKGROUND_CONTEXT`, `withCancel`, `withAbortSignal`, `withoutAbortSignal`, `withContextValue`, `awaitWithContext`.                                                                                                                                                                                                                                                                                                                          | Node and browsers |
+| `@msa/chord/delta`   | The transactional JSON tracker, structural diff, immutable apply, and the wire encoder/decoder for operation batches.                                                                                                                                                                                                                                                                                                                                                                      | Node and browsers |
+| `@msa/chord/output`  | Bounded output streams and paced progress: `OutputBuffer` (head or tail window of a stream, `OutputLimits`, `OutputSkip`), `boundOutput`, `sanitizeOutput`, `utf8ByteLength`, and `Progress` (adaptive commits of a changing value).                                                                                                                                                                                                                                                       | Node and browsers |
 
 ## Quick start
 
 ```ts
-import { createHost, hostNamed, method, remote } from "@earendil-works/chord";
+import { createHost, hostNamed, method, remote } from "@msa/chord";
 import { Type } from "typebox";
 
 // contract.ts: shared by provider and consumers
@@ -64,14 +64,14 @@ await host.root(async (ctx) => {
 - [Tutorial](docs/tutorial.md): a shared todo list, built up section by section. Every example runs as `test/tutorial.test.ts`.
 - [Usage guide](docs/guide.md): API reference for contracts, objects, state, roots, lifetime, plugins, hot reload, hosts, and links.
 - [Specification](docs/spec.md): compatibility, lifetime, and reload semantics, plus known limitations and implementation decisions.
-- [Delta guide](src/delta/README.md): ownership, lifecycle, operation, and replica contracts of `@earendil-works/chord/delta`.
+- [Delta guide](src/delta/README.md): ownership, lifecycle, operation, and replica contracts of `@msa/chord/delta`.
 
 ## Tracking JSON deltas
 
-Import the standalone transactional tracker from `@earendil-works/chord/delta`:
+Import the standalone transactional tracker from `@msa/chord/delta`:
 
 ```ts
-import { applyImmutable, track } from "@earendil-works/chord/delta";
+import { applyImmutable, track } from "@msa/chord/delta";
 
 const tracker = track({ output: "", count: 0 });
 const change = tracker.beginChange();
@@ -102,7 +102,7 @@ standalone observable value, independent of hosts; Durable uses it for document,
 view, and task-graph states:
 
 ```ts
-import { replicatedState } from "@earendil-works/chord";
+import { replicatedState } from "@msa/chord";
 
 const initial = { output: "", count: 0 };
 const status = replicatedState(initial); // transfers ownership of initial

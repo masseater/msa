@@ -1,10 +1,6 @@
-import { type Context, type JsonValue, replicatedState } from "@earendil-works/chord";
-import {
-  awaitWithContext,
-  BACKGROUND_CONTEXT,
-  withoutAbortSignal,
-} from "@earendil-works/chord/context";
-import { type Op, track } from "@earendil-works/chord/delta";
+import { type Context, type JsonValue, replicatedState } from "@msa/chord";
+import { awaitWithContext, BACKGROUND_CONTEXT, withoutAbortSignal } from "@msa/chord/context";
+import { type Op, track } from "@msa/chord/delta";
 
 import {
   type AnyDocToken,

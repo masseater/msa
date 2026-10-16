@@ -17,8 +17,8 @@ import {
   type Model,
   registerApiProvider,
   streamSimple,
-} from "@earendil-works/pi-ai/compat";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+} from "@msa/ai/compat";
+import { getAgentDir } from "@msa/coding-agent";
 
 import { MODELS, streamGitLabDuo } from "./index.ts";
 

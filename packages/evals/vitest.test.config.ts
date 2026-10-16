@@ -11,7 +11,7 @@ export default mergeConfig(
     resolve: {
       alias: [
         {
-          find: /^@earendil-works\/pi-coding-agent$/,
+          find: /^@msa\/coding-agent$/,
           replacement: workspaceSourcePaths.codingAgentIndex,
         },
       ],

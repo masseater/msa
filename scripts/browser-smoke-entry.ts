@@ -1,7 +1,7 @@
-import { createHost, memoryLinkPair, replicatedState } from "@earendil-works/chord";
-import { Agent, streamProxy } from "@earendil-works/pi-agent-core";
-import { createAssistantMessageEventStream, Type } from "@earendil-works/pi-ai";
-import { complete, getModel, getProviders, streamSimple } from "@earendil-works/pi-ai/compat";
+import { Agent, streamProxy } from "@msa/agent-core";
+import { createAssistantMessageEventStream, Type } from "@msa/ai";
+import { complete, getModel, getProviders, streamSimple } from "@msa/ai/compat";
+import { createHost, memoryLinkPair, replicatedState } from "@msa/chord";
 
 // Keep this entry browser-safe. It is bundled by scripts/check-browser-smoke.mjs
 // to catch accidental Node-only runtime imports in browser-facing package exports.

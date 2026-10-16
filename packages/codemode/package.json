@@ -1,12 +1,12 @@
 {
-  "name": "@earendil-works/pi-codemode",
+  "name": "@msa/codemode",
   "version": "1.2.0",
   "description": "Sandboxed JavaScript execution where the only capability is calling injected tools",
   "keywords": [
     "cloudflare",
     "codemode",
     "durable-objects",
-    "pi",
+    "msa",
     "quickjs",
     "sandbox",
     "wasm"
@@ -15,7 +15,7 @@
   "author": "Earendil Works",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/earendil-works/pi.git",
+    "url": "git+https://github.com/masseater/msa.git",
     "directory": "packages/codemode"
   },
   "files": [

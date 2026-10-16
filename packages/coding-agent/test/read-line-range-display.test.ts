@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { runInNewContext } from "node:vm";
 
-import type { TUI } from "@earendil-works/pi-tui";
+import type { TUI } from "@msa/tui";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { exportFromFile } from "../src/core/export-html/index.ts";
@@ -64,7 +64,7 @@ describe("read line range display", () => {
 
   beforeAll(() => {
     initTheme("dark");
-    tempDir = mkdtempSync(join(tmpdir(), "pi-read-range-"));
+    tempDir = mkdtempSync(join(tmpdir(), "msa-read-range-"));
   });
 
   afterAll(() => {

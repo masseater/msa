@@ -39,7 +39,7 @@ function createTempDir(): string {
   // realpath: on macOS tmpdir() is a symlink (/var -> /private/var), but the
   // spawned CLI sees the physical path via process.cwd(). Session cwd
   // filtering compares paths textually, so the fixture must use physical paths.
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), "pi-session-id-readonly-")));
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "msa-session-id-readonly-")));
   tempDirs.push(dir);
   return dir;
 }
@@ -75,7 +75,7 @@ async function runCli(args: string[]): Promise<{ code: number | null; agentDir: 
       env: {
         ...process.env,
         [ENV_AGENT_DIR]: agentDir,
-        PI_OFFLINE: "1",
+        MSA_OFFLINE: "1",
       },
       stdio: ["ignore", "ignore", "ignore"],
     });

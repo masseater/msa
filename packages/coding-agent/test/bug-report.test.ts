@@ -5,7 +5,7 @@ import {
   setKeybindings,
   stripTerminalSequences,
   TuiMainScreen,
-} from "@earendil-works/pi-tui";
+} from "@msa/tui";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { VirtualTerminal } from "../../tui/test/virtual-terminal.ts";
@@ -49,7 +49,7 @@ describe("bug report prompt", () => {
       if (!(descriptionEditor instanceof ExtensionEditorComponent))
         throw new Error("Missing description editor");
       descriptionEditor.handleInput(
-        "\x1b[200~Request failed\r\n  ↳ pi exiting...\r\nstack trace\x1b[201~",
+        "\x1b[200~Request failed\r\n  ↳ msa exiting...\r\nstack trace\x1b[201~",
       );
       descriptionEditor.handleInput("\r");
       expect(editorContainer.children[0]).toBe(editor);
@@ -86,7 +86,7 @@ describe("bug report prompt", () => {
         throw new Error("Missing delivery selector");
       const deliveryLines = deliverySelector.render(120).map(stripTerminalSequences);
       expect(deliveryLines.some((line) => line.includes("Description: Request failed"))).toBe(true);
-      expect(deliveryLines.some((line) => line.includes("↳ pi exiting..."))).toBe(true);
+      expect(deliveryLines.some((line) => line.includes("↳ msa exiting..."))).toBe(true);
       expect(deliveryLines.some((line) => line.includes("stack trace"))).toBe(true);
 
       deliverySelector.handleInput("j");

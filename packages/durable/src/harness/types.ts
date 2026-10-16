@@ -1,4 +1,3 @@
-import type { AttachedReplicatedState, Context, JsonValue } from "@earendil-works/chord";
 import type {
   AssistantMessage,
   CacheRetention,
@@ -13,7 +12,8 @@ import type {
   TSchema,
   Usage,
   UserMessage,
-} from "@earendil-works/pi-ai";
+} from "@msa/ai";
+import type { AttachedReplicatedState, Context, JsonValue } from "@msa/chord";
 
 import type { ExecutionEnv, ShellOutputSkip, ShellOutputWindow } from "../env/index.ts";
 import type {
@@ -44,7 +44,7 @@ import type { TaskGraph, TaskGraphWatch } from "./task-graph.ts";
 import type { UsageState } from "./usage.ts";
 import type { ConversationView } from "./view.ts";
 
-/** Provider and model ID resolved through pi-ai `Models`. */
+/** Provider and model ID resolved through msa-ai `Models`. */
 export type ModelRef = {
   readonly provider: string;
   readonly modelId: string;
@@ -53,7 +53,7 @@ export type ModelRef = {
 export type UserInput = UserMessage["content"];
 
 /**
- * The entry an input is placed as, instead of `pi.user`: an application kind, and data the transcript shows, such as its
+ * The entry an input is placed as, instead of `msa.user`: an application kind, and data the transcript shows, such as its
  * author. Its model message is still the input's user message.
  */
 export type InputEntry = { readonly kind: string; readonly data?: JsonValue };
@@ -66,7 +66,7 @@ export type SubmissionDraft = {
       readonly type: "input";
       readonly content: UserInput;
       readonly whenBusy?: "steer" | "followUp" | "reject";
-      /** Place the input as this entry; default `pi.user` without data. The kind must not start with `pi.`. */
+      /** Place the input as this entry; default `msa.user` without data. The kind must not start with `msa.`. */
       readonly entry?: InputEntry;
     }
   | {
@@ -165,7 +165,7 @@ export type ToolExecutionResult<TDetails extends JsonValue = JsonValue> = {
   readonly details?: TDetails;
   /** Added after those recorded through `api.diagnostic()`. */
   readonly diagnostics?: readonly ToolDiagnostic[];
-  /** Spend of the execution itself, such as a model call; stored on the result and in `pi.usage.tools`. */
+  /** Spend of the execution itself, such as a model call; stored on the result and in `msa.usage.tools`. */
   readonly usage?: Usage;
   readonly control?: ToolControl;
 };
@@ -257,9 +257,9 @@ export interface ToolExecutionApi<TDetails extends JsonValue = JsonValue>
   /** Invocation-bound handle of an existing conversation, such as one this tool created in `commit()`. */
   conversation(id: ConversationId, context: Context): Promise<ConversationHandle | undefined>;
   /**
-   * Run tool `name` as a nested call of this one and wait for its result. The nested call is its own `pi.tool` task,
+   * Run tool `name` as a nested call of this one and wait for its result. The nested call is its own `msa.tool` task,
    * owned by this call: it resolves the tool among the conversation's tools, validates, runs the `ToolTask` hooks (which
-   * see `call.parent`), applies output limits and the tool's replay policy, and reports progress in `pi.live.nestedTools`.
+   * see `call.parent`), applies output limits and the tool's replay policy, and reports progress in `msa.live.nestedTools`.
    * Its result returns here instead of entering the transcript. A call that is blocked, invalid, throws, is interrupted,
    * or is aborted returns an `isError` result.
    *
@@ -292,7 +292,7 @@ export interface ToolExecutionApi<TDetails extends JsonValue = JsonValue>
 }
 
 /**
- * Executable tool registered in a registry. Only pi-ai `Tool` fields enter the transcript. `args` are typed by
+ * Executable tool registered in a registry. Only msa-ai `Tool` fields enter the transcript. `args` are typed by
  * `parameters`, which the Harness validates them against before `execute()`; `defineTool()` infers both generics.
  */
 export type ToolRegistration<
@@ -438,7 +438,7 @@ export type AgentState = {
   cwd?: string;
 };
 
-/** A change to `pi.agent`: a given field replaces the stored one, `null` clears it, `undefined` changes nothing. */
+/** A change to `msa.agent`: a given field replaces the stored one, `null` clears it, `undefined` changes nothing. */
 export type AgentChange = {
   readonly model?: ModelRef | null;
   readonly thinkingLevel?: ModelThinkingLevel | null;
@@ -489,7 +489,7 @@ export type ConversationCreateOptions = {
   readonly init?: ConversationInit;
 };
 
-/** Curated pi-ai request options; absent fields use pi-ai defaults. */
+/** Curated msa-ai request options; absent fields use msa-ai defaults. */
 export type ConversationStreamOptions = {
   transport?: Transport;
   timeoutMs?: number;
@@ -502,7 +502,7 @@ export type ConversationStreamOptions = {
   deferred?: boolean | { window?: "15m" | "1h" | "24h" };
 };
 
-/** Durable generation attempt retries; the JSON shape of pi-ai `RetryPolicy`. */
+/** Durable generation attempt retries; the JSON shape of msa-ai `RetryPolicy`. */
 export type ConversationRetryPolicy = {
   enabled: boolean;
   maxRetries: number;
@@ -590,7 +590,7 @@ export type EnvTarget = {
 };
 
 export type HarnessOptions<Tool extends ToolRegistration = ToolRegistration> = {
-  /** pi-ai model access used by generation. */
+  /** msa-ai model access used by generation. */
   readonly models: Models;
   readonly registry: RegistryReader<Tool>;
   readonly settings?: HarnessSettings;
@@ -601,7 +601,7 @@ export type HarnessOptions<Tool extends ToolRegistration = ToolRegistration> = {
   ) => ExecutionEnv | undefined | Promise<ExecutionEnv | undefined>;
   /**
    * Runs in every commit that creates or forks a conversation, raw `tx.createConversation()` included, after the
-   * built-in `pi.*` documents and before the conveniences apply `agent` and run `init`. A fork already has its copies.
+   * built-in `msa.*` documents and before the conveniences apply `agent` and run `init`. A fork already has its copies.
    * Table reads throw `ReadAfterWrite`, as in `init`; a throw fails the creating commit.
    */
   readonly conversationCreated?: (tx: Tx, conversation: ConversationRecord) => void | Promise<void>;
@@ -666,13 +666,13 @@ export interface Conversation {
 
   /**
    * Durably admit user input or a passive entry write. A busy conversation, or one with queued items, queues input and
-   * writes that affect model context in `pi.inbox`; `whenBusy: "reject"` rejects input with `ConversationBusy` instead
+   * writes that affect model context in `msa.inbox`; `whenBusy: "reject"` rejects input with `ConversationBusy` instead
    * and writes nothing. A write of only `kind` and `data` (no `model`, `head`, or `edits`) is appended at once,
    * even mid-run, as it changes nothing the model sees.
    */
   submit(submission: SubmissionDraft, context: Context): Promise<Submission>;
   /**
-   * Admit a write of a `pi.reset` entry that starts a new context, carrying `handoff` as a user message when given.
+   * Admit a write of a `msa.reset` entry that starts a new context, carrying `handoff` as a user message when given.
    * Resolves after admission; while busy, it is placed at the next boundary.
    */
   reset(handoff: string | undefined, context: Context): Promise<void>;
@@ -755,7 +755,7 @@ export interface Harness extends Session {
   waitForTask<R>(id: TaskId<R>, context: Context): Promise<SettledTask<R>>;
   /** Resolve when the ordinary ownership scope of every ownerless conversation has no live non-background task. */
   waitForIdle(context: Context): Promise<void>;
-  /** Session total: every conversation's `pi.usage` summed. */
+  /** Session total: every conversation's `msa.usage` summed. */
   usage(context: Context): Promise<UsageState>;
   /** Every live task with its owner edge, status, and owned conversations (spec §9.5), as a disposable Chord state. */
   taskGraph(context: Context): Promise<AttachedReplicatedState<TaskGraph>>;

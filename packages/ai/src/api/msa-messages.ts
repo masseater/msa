@@ -1,12 +1,12 @@
 /**
- * pi-messages API implementation.
+ * msa-messages API implementation.
  *
- * Streams pi's own message protocol directly to a backend: the request is a
+ * Streams msa's own message protocol directly to a backend: the request is a
  * single POST of `{ model, context, options }` to `<baseUrl>/messages`, the
  * response is an SSE stream of serialized assistant-message events plus a
  * terminal `done`/`error` event. This is the wire protocol spoken by the
  * Radius gateway, but any backend implementing it can be used, e.g. via a
- * models.json custom provider with `"api": "pi-messages"`.
+ * models.json custom provider with `"api": "msa-messages"`.
  */
 
 import type {
@@ -33,18 +33,18 @@ import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
 import { parseStreamingJson } from "../utils/json-parse.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 
-export interface PiMessagesOptions extends StreamOptions {
+export interface MsaMessagesOptions extends StreamOptions {
   reasoning?: ThinkingLevel;
   toolChoice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } };
   /** Ask the backend for debug metadata (e.g. routing response headers). */
   debug?: boolean;
 }
 
-type PiMessagesUsage = AssistantMessage["usage"];
-type PiMessagesStopReason = AssistantMessage["stopReason"];
+type MsaMessagesUsage = AssistantMessage["usage"];
+type MsaMessagesStopReason = AssistantMessage["stopReason"];
 
 /** Impact summary of a server-side message rewrite (e.g. a gateway policy). */
-export type PiMessagesRewriteImpact = {
+export type MsaMessagesRewriteImpact = {
   policyId: string;
   policyVersion: number;
   changed: boolean;
@@ -53,8 +53,8 @@ export type PiMessagesRewriteImpact = {
   systemPromptChanged: boolean;
 };
 
-/** Serialized assistant-message event as sent by a pi-messages backend. */
-export type PiMessagesEvent =
+/** Serialized assistant-message event as sent by a msa-messages backend. */
+export type MsaMessagesEvent =
   | { type: "start" }
   | { type: "text_start"; contentIndex: number }
   | { type: "text_delta"; contentIndex: number; delta: string }
@@ -73,23 +73,23 @@ export type PiMessagesEvent =
   | { type: "toolcall_end"; contentIndex: number; toolCall: ToolCall }
   | {
       type: "done";
-      reason: Extract<PiMessagesStopReason, "stop" | "length" | "toolUse">;
-      usage: PiMessagesUsage;
+      reason: Extract<MsaMessagesStopReason, "stop" | "length" | "toolUse">;
+      usage: MsaMessagesUsage;
       responseId?: string;
       providerThinkingLevel?: string;
-      rewrite?: PiMessagesRewriteImpact;
+      rewrite?: MsaMessagesRewriteImpact;
     }
   | {
       type: "error";
-      reason: Extract<PiMessagesStopReason, "aborted" | "error">;
-      usage: PiMessagesUsage;
+      reason: Extract<MsaMessagesStopReason, "aborted" | "error">;
+      usage: MsaMessagesUsage;
       errorMessage?: string;
       responseId?: string;
       providerThinkingLevel?: string;
-      rewrite?: PiMessagesRewriteImpact;
+      rewrite?: MsaMessagesRewriteImpact;
     };
 
-type PiMessagesErrorBody = {
+type MsaMessagesErrorBody = {
   error?: {
     message?: unknown;
     code?: unknown;
@@ -98,21 +98,21 @@ type PiMessagesErrorBody = {
   };
 };
 
-export class PiMessagesResponseError extends Error {
+export class MsaMessagesResponseError extends Error {
   code?: string;
   readonly diagnosticDetails: JsonObject;
 
   constructor(message: string, code: string | undefined, diagnosticDetails: JsonObject) {
     super(message);
-    this.name = "PiMessagesResponseError";
+    this.name = "MsaMessagesResponseError";
     this.code = code;
     this.diagnosticDetails = diagnosticDetails;
   }
 }
 
-function parsePiMessagesErrorBody(body: string): PiMessagesErrorBody | undefined {
+function parseMsaMessagesErrorBody(body: string): MsaMessagesErrorBody | undefined {
   try {
-    const parsed = JSON.parse(body) as PiMessagesErrorBody | null;
+    const parsed = JSON.parse(body) as MsaMessagesErrorBody | null;
     const error = parsed?.error;
     return parsed && typeof error === "object" && error !== null && !Array.isArray(error)
       ? parsed
@@ -127,10 +127,10 @@ function truncateDiagnosticString(value: string): string {
   return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
 }
 
-function formatPiMessagesResponseError(
+function formatMsaMessagesResponseError(
   response: Response,
   body: string,
-  errorBody: PiMessagesErrorBody | undefined,
+  errorBody: MsaMessagesErrorBody | undefined,
 ): string {
   const message =
     typeof errorBody?.error?.message === "string" ? errorBody.error.message : undefined;
@@ -140,16 +140,16 @@ function formatPiMessagesResponseError(
   return `${response.status} ${response.statusText}: ${suffix}${codeSuffix}`;
 }
 
-function createPiMessagesResponseError(
-  model: Model<"pi-messages">,
+function createMsaMessagesResponseError(
+  model: Model<"msa-messages">,
   url: URL,
   response: Response,
   body: string,
-): PiMessagesResponseError {
-  const errorBody = parsePiMessagesErrorBody(body);
+): MsaMessagesResponseError {
+  const errorBody = parseMsaMessagesErrorBody(body);
   const code = typeof errorBody?.error?.code === "string" ? errorBody.error.code : undefined;
-  return new PiMessagesResponseError(
-    formatPiMessagesResponseError(response, body, errorBody),
+  return new MsaMessagesResponseError(
+    formatMsaMessagesResponseError(response, body, errorBody),
     code,
     {
       version: 1,
@@ -165,7 +165,7 @@ function createPiMessagesResponseError(
   );
 }
 
-function createEmptyUsage(): PiMessagesUsage {
+function createEmptyUsage(): MsaMessagesUsage {
   return {
     input: 0,
     output: 0,
@@ -178,7 +178,7 @@ function createEmptyUsage(): PiMessagesUsage {
 
 function appendRewriteDiagnostic(
   message: AssistantMessage,
-  rewrite: PiMessagesRewriteImpact | undefined,
+  rewrite: MsaMessagesRewriteImpact | undefined,
 ): void {
   if (!rewrite) {
     return;
@@ -190,7 +190,7 @@ function appendRewriteDiagnostic(
   });
 }
 
-function createEventConverter(model: Model<"pi-messages">) {
+function createEventConverter(model: Model<"msa-messages">) {
   const partial: AssistantMessage = {
     role: "assistant",
     content: [],
@@ -203,7 +203,7 @@ function createEventConverter(model: Model<"pi-messages">) {
   };
   const toolJson = new Map<number, string>();
 
-  return (event: PiMessagesEvent): AssistantMessageEvent => {
+  return (event: MsaMessagesEvent): AssistantMessageEvent => {
     switch (event.type) {
       case "done":
         Object.assign(partial, {
@@ -286,9 +286,9 @@ function createEventConverter(model: Model<"pi-messages">) {
   };
 }
 
-async function* readPiMessagesEvents(
+async function* readMsaMessagesEvents(
   stream: ReadableStream<Uint8Array>,
-): AsyncGenerator<PiMessagesEvent> {
+): AsyncGenerator<MsaMessagesEvent> {
   const decoder = new TextDecoder();
   const reader = stream.getReader();
   let buffer = "";
@@ -301,7 +301,7 @@ async function* readPiMessagesEvents(
 
       let split = buffer.indexOf("\n\n");
       while (split !== -1) {
-        const event = parsePiMessagesEvent(buffer.slice(0, split));
+        const event = parseMsaMessagesEvent(buffer.slice(0, split));
         if (event) {
           yield event;
         }
@@ -315,7 +315,7 @@ async function* readPiMessagesEvents(
     }
 
     if (buffer.trim()) {
-      const event = parsePiMessagesEvent(buffer);
+      const event = parseMsaMessagesEvent(buffer);
       if (event) {
         yield event;
       }
@@ -325,18 +325,18 @@ async function* readPiMessagesEvents(
   }
 }
 
-function parsePiMessagesEvent(raw: string): PiMessagesEvent | undefined {
+function parseMsaMessagesEvent(raw: string): MsaMessagesEvent | undefined {
   const data = raw
     .split("\n")
     .find((line) => line.startsWith("data:"))
     ?.slice(5)
     .trim();
 
-  return data && data !== "[DONE]" ? (JSON.parse(data) as PiMessagesEvent) : undefined;
+  return data && data !== "[DONE]" ? (JSON.parse(data) as MsaMessagesEvent) : undefined;
 }
 
 function createErrorEvent(
-  model: Model<"pi-messages">,
+  model: Model<"msa-messages">,
   error: unknown,
   aborted: boolean,
 ): AssistantMessageEvent {
@@ -353,7 +353,7 @@ function createErrorEvent(
     timestamp: Date.now(),
   };
 
-  if (!aborted && error instanceof PiMessagesResponseError) {
+  if (!aborted && error instanceof MsaMessagesResponseError) {
     appendAssistantMessageDiagnostic(
       assistantMessage,
       createAssistantMessageDiagnostic(
@@ -375,13 +375,13 @@ function resolveCacheRetention(
     return cacheRetention;
   }
   // Backend defaults apply when unset; only the legacy env opt-in is mapped.
-  return getProviderEnvValue("PI_CACHE_RETENTION", env) === "long" ? "long" : undefined;
+  return getProviderEnvValue("MSA_CACHE_RETENTION", env) === "long" ? "long" : undefined;
 }
 
-export const stream: StreamFunction<"pi-messages", PiMessagesOptions> = (
-  model: Model<"pi-messages">,
+export const stream: StreamFunction<"msa-messages", MsaMessagesOptions> = (
+  model: Model<"msa-messages">,
   context: TranscriptContext,
-  options?: PiMessagesOptions,
+  options?: MsaMessagesOptions,
 ): AssistantMessageEventStream => {
   const eventStream = new AssistantMessageEventStream();
   const convertEvent = createEventConverter(model);
@@ -434,15 +434,15 @@ export const stream: StreamFunction<"pi-messages", PiMessagesOptions> = (
 
       if (!response.ok) {
         const body = await response.text();
-        throw createPiMessagesResponseError(model, url, response, body);
+        throw createMsaMessagesResponseError(model, url, response, body);
       }
       if (!response.body) {
         throw new Error(`${model.provider} response has no body`);
       }
 
-      for await (const piEvent of readPiMessagesEvents(response.body)) {
-        await options?.onProviderStreamEvent?.(piEvent, model);
-        const event = convertEvent(piEvent);
+      for await (const msaEvent of readMsaMessagesEvents(response.body)) {
+        await options?.onProviderStreamEvent?.(msaEvent, model);
+        const event = convertEvent(msaEvent);
         eventStream.push(event);
         if (event.type === "done" || event.type === "error") {
           return;
@@ -458,12 +458,12 @@ export const stream: StreamFunction<"pi-messages", PiMessagesOptions> = (
   return eventStream;
 };
 
-export const streamSimple: StreamFunction<"pi-messages", SimpleStreamOptions> = (
-  model: Model<"pi-messages">,
+export const streamSimple: StreamFunction<"msa-messages", SimpleStreamOptions> = (
+  model: Model<"msa-messages">,
   context: TranscriptContext,
   options?: SimpleStreamOptions,
 ): AssistantMessageEventStream => {
-  const extra = options as PiMessagesOptions | undefined;
+  const extra = options as MsaMessagesOptions | undefined;
   return stream(model, context, {
     ...options,
     reasoning: options?.reasoning,

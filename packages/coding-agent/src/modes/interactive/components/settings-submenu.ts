@@ -9,7 +9,7 @@ import {
   type SelectListLayoutOptions,
   Spacer,
   Text,
-} from "@earendil-works/pi-tui";
+} from "@msa/tui";
 
 import { getSelectListTheme, theme } from "../theme/theme.ts";
 

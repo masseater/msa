@@ -17,7 +17,7 @@ describe("resolveConfigValue", () => {
   beforeEach(() => {
     tempDir = join(
       tmpdir(),
-      `pi-config-value-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      `msa-config-value-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     );
     mkdirSync(tempDir, { recursive: true });
     clearConfigValueCache();

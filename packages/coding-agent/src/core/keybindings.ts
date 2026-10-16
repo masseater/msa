@@ -8,7 +8,7 @@ import {
   type KeyId,
   TUI_KEYBINDINGS,
   KeybindingsManager as TuiKeybindingsManager,
-} from "@earendil-works/pi-tui";
+} from "@msa/tui";
 import { Compile } from "typebox/compile";
 
 import { getAgentDir } from "../config.ts";
@@ -180,7 +180,7 @@ const APP_KEYBINDINGS = {
 export type AppKeybinding = keyof typeof APP_KEYBINDINGS;
 export type AppKeybindings = { [K in AppKeybinding]: true };
 
-declare module "@earendil-works/pi-tui" {
+declare module "@msa/tui" {
   interface Keybindings extends AppKeybindings {}
 }
 

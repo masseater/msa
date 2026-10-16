@@ -4,7 +4,7 @@
  * Escape in editor returns to options, Escape in options cancels
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@msa/coding-agent";
 import {
   Editor,
   type EditorTheme,
@@ -13,7 +13,7 @@ import {
   Text,
   visibleWidth,
   wrapTextWithAnsi,
-} from "@earendil-works/pi-tui";
+} from "@msa/tui";
 import { Type } from "typebox";
 
 interface OptionWithDesc {
@@ -43,8 +43,8 @@ const QuestionParams = Type.Object({
   options: Type.Array(OptionSchema, { description: "Options for the user to choose from" }),
 });
 
-export default function question(pi: ExtensionAPI) {
-  pi.registerTool({
+export default function question(msa: ExtensionAPI) {
+  msa.registerTool({
     name: "question",
     label: "Question",
     description:

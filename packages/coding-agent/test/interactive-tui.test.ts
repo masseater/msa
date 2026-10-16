@@ -1,4 +1,4 @@
-import type { Component, Terminal, TUI, WheelScrollLines } from "@earendil-works/pi-tui";
+import type { Component, Terminal, TUI, WheelScrollLines } from "@msa/tui";
 import {
   Container,
   getKeybindings,
@@ -6,7 +6,7 @@ import {
   ScrollView,
   setKeybindings,
   Text,
-} from "@earendil-works/pi-tui";
+} from "@msa/tui";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { VirtualTerminal } from "../../tui/test/virtual-terminal.ts";

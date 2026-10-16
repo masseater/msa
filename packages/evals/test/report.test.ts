@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { EvalTask } from "../src/plan.ts";
 import {
   classifyCaseStatus,
-  PI_SESSION_SNAPSHOT_ARTIFACT,
+  MSA_SESSION_SNAPSHOT_ARTIFACT,
   readTaskObservation,
 } from "../src/report.ts";
 
@@ -35,7 +35,7 @@ type ReportAssertion = {
 };
 
 async function writeTaskReport(assertion: ReportAssertion = {}) {
-  const directory = await mkdtemp(join(tmpdir(), "pi-eval-report-test-"));
+  const directory = await mkdtemp(join(tmpdir(), "msa-eval-report-test-"));
   temporaryDirectories.push(directory);
   const reportPath = join(directory, "vitest.json");
   const status = assertion.status ?? "passed";
@@ -100,7 +100,7 @@ function scoredMeta(overrides?: {
         timings: { totalMs: 1234 },
         artifacts: overrides?.artifacts ?? {
           runId: "run-1",
-          [PI_SESSION_SNAPSHOT_ARTIFACT]: SESSION,
+          [MSA_SESSION_SNAPSHOT_ARTIFACT]: SESSION,
         },
         errors: overrides?.errors ?? [],
       },

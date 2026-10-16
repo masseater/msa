@@ -1,9 +1,9 @@
+import { Type } from "@msa/ai";
+import { createModels } from "@msa/ai/models";
 // Open a Harness with a registry of extensions.
 // Run from packages/durable:
 //   node --conditions=source --experimental-strip-types test/examples/06-harness.ts
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { Type } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import {
   AgentDoc,
@@ -31,7 +31,7 @@ const Files = defineExtension({ name: "files", tools: [read] });
 const registry = createRegistry();
 registry.install(Files);
 
-// `models` is pi-ai's model access; generation calls models through it.
+// `models` is msa-ai's model access; generation calls models through it.
 const harness = await Harness.open(
   new MemoryStorage(),
   { models: createModels(), registry },

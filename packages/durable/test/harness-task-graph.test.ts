@@ -2,8 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { JsonValue } from "@earendil-works/chord";
-import { applyImmutable, type Op } from "@earendil-works/chord/delta";
+import type { JsonValue } from "@msa/chord";
+import { applyImmutable, type Op } from "@msa/chord/delta";
 import {
   type ConversationId,
   defineTask,
@@ -11,7 +11,7 @@ import {
   MemoryStorage,
   type TaskGraph,
   type TaskId,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { describe, expect, it } from "vitest";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
@@ -193,7 +193,7 @@ describe("task graph view", () => {
   });
 
   it("builds from committed tasks, shows surviving tasks as pending after reopen, and marks aborts", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pi-durable-graph-"));
+    const directory = await mkdtemp(join(tmpdir(), "msa-durable-graph-"));
     const path = join(directory, "session.sqlite");
     const gate = deferred();
     const Work = defineTask<null, { phase: "work" }, null>({

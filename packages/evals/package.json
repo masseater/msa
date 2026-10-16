@@ -1,5 +1,5 @@
 {
-  "name": "@earendil-works/pi-evals",
+  "name": "@msa/evals",
   "version": "1.2.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,8 @@
     "test": "vitest run --config vitest.test.config.ts"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "workspace:*",
-    "@earendil-works/pi-coding-agent": "workspace:*",
+    "@msa/ai": "workspace:*",
+    "@msa/coding-agent": "workspace:*",
     "@types/node": "catalog:",
     "@vitest-evals/core": "catalog:",
     "autoevals": "catalog:",

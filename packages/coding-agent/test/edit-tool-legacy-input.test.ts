@@ -10,7 +10,7 @@ import { createEditToolDefinition } from "../src/core/tools/edit.ts";
 const tempDirs: string[] = [];
 
 async function createTempDir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "pi-edit-legacy-input-"));
+  const dir = await mkdtemp(join(tmpdir(), "msa-edit-legacy-input-"));
   tempDirs.push(dir);
   return dir;
 }

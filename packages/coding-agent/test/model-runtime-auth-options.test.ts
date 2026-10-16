@@ -1,8 +1,4 @@
-import {
-  type AuthType,
-  type CredentialStore,
-  InMemoryCredentialStore,
-} from "@earendil-works/pi-ai";
+import { type AuthType, type CredentialStore, InMemoryCredentialStore } from "@msa/ai";
 import { describe, expect, it } from "vitest";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -38,7 +34,7 @@ function testModel(id: string) {
 }
 
 describe("ModelRuntime auth options", () => {
-  it("accepts a pi-ai CredentialStore", async () => {
+  it("accepts a msa-ai CredentialStore", async () => {
     const credentials = new InMemoryCredentialStore();
     await credentials.modify("anthropic", async () => ({ type: "api_key", key: "stored-key" }));
     const runtime = await ModelRuntime.create({ credentials, modelsPath: null });

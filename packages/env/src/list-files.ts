@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@msa/chord";
 import {
   type ExecutionEnv,
   err,
@@ -9,8 +9,8 @@ import {
   type ListFilesOptions,
   ok,
   type Result,
-} from "@earendil-works/pi-durable/env";
-import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
+} from "@msa/durable/env";
+import { NodeExecutionEnv } from "@msa/durable/env/node";
 
 import type { Connection } from "./connection.ts";
 import { abortResult, toFileError } from "./errors.ts";
@@ -39,7 +39,7 @@ export async function listFilesOver(
   try {
     if (!(await connection.info()).features?.includes("listFiles")) {
       return err(
-        new FileError("not_supported", "The pi-env daemon does not list files; update it", path),
+        new FileError("not_supported", "The msa-env daemon does not list files; update it", path),
       );
     }
     const { json, payload } = await connection.request(
@@ -80,7 +80,7 @@ export type LocalExecutionEnvOptions = ConstructorParameters<typeof NodeExecutio
 };
 
 /**
- * `NodeExecutionEnv` with `listFiles` through a pi-env daemon on the same machine, so local and remote environments
+ * `NodeExecutionEnv` with `listFiles` through a msa-env daemon on the same machine, so local and remote environments
  * list files with the same code. Everything else is `NodeExecutionEnv`'s. The connection belongs to the caller, who
  * closes it; several environments may share it.
  */

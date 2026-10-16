@@ -6,14 +6,10 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { ToolResultMessage } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
-import {
-  fauxAssistantMessage,
-  fauxProvider,
-  fauxToolCall,
-} from "@earendil-works/pi-ai/providers/faux";
+import type { ToolResultMessage } from "@msa/ai";
+import { createModels } from "@msa/ai/models";
+import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import { NodeExecutionEnv } from "../../src/env/node.ts";
 import {
@@ -58,7 +54,7 @@ const Timing = defineExtension({
 
 // ─── Host setup ─────────────────────────────────────────────────────────────
 
-const project = await mkdtemp(join(tmpdir(), "pi-durable-venv-"));
+const project = await mkdtemp(join(tmpdir(), "msa-durable-venv-"));
 await mkdir(join(project, ".venv/bin"), { recursive: true });
 await writeFile(join(project, ".venv/bin/activate"), `export VIRTUAL_ENV="${project}/.venv"\n`);
 

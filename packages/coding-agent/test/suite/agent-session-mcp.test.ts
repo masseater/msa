@@ -1,9 +1,9 @@
 import { readFileSync, rmSync } from "node:fs";
 
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
-import type { SystemMessage, ToolResultMessage } from "@earendil-works/pi-ai/compat";
-import { type JsonRpcRequest, LATEST_PROTOCOL_VERSION } from "@earendil-works/pi-mcp";
-import { createInMemoryTransportPair } from "@earendil-works/pi-mcp/testing";
+import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type { SystemMessage, ToolResultMessage } from "@msa/ai/compat";
+import { type JsonRpcRequest, LATEST_PROTOCOL_VERSION } from "@msa/mcp";
+import { createInMemoryTransportPair } from "@msa/mcp/testing";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -308,7 +308,7 @@ describe("AgentSession MCP integration", () => {
     await first.harness.session.prompt("second");
     expect(declaredToolNames(first.harness)).toContain("mcp__docs__search");
 
-    // Like `pi --tools read,codemode -c` followed by /tree.
+    // Like `msa --tools read,codemode -c` followed by /tree.
     const second = await setup("direct", undefined, {
       allowedToolNames: ["read", "codemode"],
       sessionManager: first.harness.sessionManager,
@@ -375,7 +375,7 @@ describe("AgentSession MCP integration", () => {
             code: `
 							const [a, b] = await Promise.allSettled([
 								tools.${searchName}({ query: "mcp" }),
-								tools.${searchName}({ query: "pi" }),
+								tools.${searchName}({ query: "msa" }),
 							]);
 							const failure = await tools.mcp__docs__fail({});
 							const shot = await tools.mcp__docs__shot({});
@@ -423,7 +423,7 @@ describe("AgentSession MCP integration", () => {
       mimeType: "image/png",
     });
     expect(JSON.parse((result.content[3] as { text: string }).text)).toEqual({
-      hits: ["mcp guide", "mcp faq", "pi guide", "pi faq"],
+      hits: ["mcp guide", "mcp faq", "msa guide", "msa faq"],
       failed: true,
       failure: "server exploded",
       found: [searchName],
@@ -431,7 +431,7 @@ describe("AgentSession MCP integration", () => {
     expect(result.content).toHaveLength(4);
     expect(calls).toEqual([
       'search:{"query":"mcp"}',
-      'search:{"query":"pi"}',
+      'search:{"query":"msa"}',
       "fail:{}",
       "shot:{}",
     ]);
@@ -796,8 +796,8 @@ return { docs, sameForAliases: aliases.every((alias) => JSON.stringify(alias) ==
   });
 
   it("activates another extension's codemode tool when it reaches other tools", async () => {
-    const otherExec: ExtensionFactory = (pi) => {
-      pi.registerTool({
+    const otherExec: ExtensionFactory = (msa) => {
+      msa.registerTool({
         name: "codemode",
         label: "codemode",
         description: "Another extension's codemode tool.",
@@ -816,8 +816,8 @@ return { docs, sameForAliases: aliases.every((alias) => JSON.stringify(alias) ==
 
   it("does not activate another extension's tool named codemode", async () => {
     // Registered first, so it wins over the codemode extension's codemode.
-    const otherExec: ExtensionFactory = (pi) => {
-      pi.registerTool({
+    const otherExec: ExtensionFactory = (msa) => {
+      msa.registerTool({
         name: "codemode",
         label: "codemode",
         description: "Another extension's codemode tool.",
@@ -1201,8 +1201,8 @@ describe("AgentSession MCP servers registered by extensions", () => {
   }
 
   it("connects servers registered while extensions load", async () => {
-    const { harness, connected } = await setup((pi) => {
-      pi.registerMcpServer("plugin", { url: "http://plugin.invalid", exposure: "direct" });
+    const { harness, connected } = await setup((msa) => {
+      msa.registerMcpServer("plugin", { url: "http://plugin.invalid", exposure: "direct" });
     });
     harness.setResponses([fauxAssistantMessage("ready")]);
     await harness.session.prompt("start");
@@ -1213,13 +1213,13 @@ describe("AgentSession MCP servers registered by extensions", () => {
 
   it("connects and disconnects servers registered during the session", async () => {
     let api: ExtensionAPI | undefined;
-    const { harness, connected } = await setup((pi) => {
-      api = pi;
+    const { harness, connected } = await setup((msa) => {
+      api = msa;
     });
     if (!api) throw new Error("No extension API");
-    const pi = api;
+    const msa = api;
 
-    pi.registerMcpServer("late", { url: "http://late.invalid" });
+    msa.registerMcpServer("late", { url: "http://late.invalid" });
     await vi.waitFor(() =>
       expect(harness.session.getCallableToolNames()).toContain("mcp__late__search"),
     );
@@ -1227,7 +1227,7 @@ describe("AgentSession MCP servers registered by extensions", () => {
     // Codemode-exposed tools need the codemode tool, which is activated for them.
     expect(harness.session.getActiveToolNames()).toContain("codemode");
 
-    pi.unregisterMcpServer("late");
+    msa.unregisterMcpServer("late");
     await vi.waitFor(() =>
       expect(harness.session.getCallableToolNames()).not.toContain("mcp__late__search"),
     );
@@ -1243,8 +1243,8 @@ describe("AgentSession MCP servers registered by extensions", () => {
         source: "mcp.json",
       };
       const { connected } = await setup(
-        (pi) => {
-          pi.registerMcpServer(name, { url: "http://plugin.invalid" });
+        (msa) => {
+          msa.registerMcpServer(name, { url: "http://plugin.invalid" });
         },
         [configured],
       );
@@ -1257,16 +1257,16 @@ describe("AgentSession MCP servers registered by extensions", () => {
   it("rejects names another extension registered", async () => {
     const errors: string[] = [];
     await setup([
-      (pi) => {
-        pi.registerMcpServer("taken", { url: "http://x.invalid" });
+      (msa) => {
+        msa.registerMcpServer("taken", { url: "http://x.invalid" });
         // Registering again replaces the extension's own registration.
-        pi.registerMcpServer("taken", { url: "http://y.invalid" });
-        pi.registerMcpServer("my-server", { url: "http://x.invalid" });
+        msa.registerMcpServer("taken", { url: "http://y.invalid" });
+        msa.registerMcpServer("my-server", { url: "http://x.invalid" });
       },
-      (pi) => {
+      (msa) => {
         for (const name of ["taken", "my_server"]) {
           try {
-            pi.registerMcpServer(name, { url: "http://z.invalid" });
+            msa.registerMcpServer(name, { url: "http://z.invalid" });
           } catch (caught) {
             errors.push(String(caught));
           }
@@ -1283,7 +1283,7 @@ describe("AgentSession MCP servers registered by extensions", () => {
   it("reports registered servers when no extension connects them", async () => {
     const harness = await createHarness({
       extensionFactories: [
-        (pi) => pi.registerMcpServer("orphan", { url: "http://orphan.invalid" }),
+        (msa) => msa.registerMcpServer("orphan", { url: "http://orphan.invalid" }),
       ],
     });
     harnesses.push(harness);
@@ -1395,9 +1395,9 @@ describe("AgentSession MCP tools after resume and reload", () => {
       await loadDocsSearch(first.harness);
 
       // Like plan mode restoring its tools, or an extension adding one to the current loadout.
-      const setLoadout: ExtensionFactory = (pi) => {
-        pi.on("session_start", () =>
-          pi.setActiveTools(loadout ? [...loadout] : [...pi.getActiveTools(), "read"]),
+      const setLoadout: ExtensionFactory = (msa) => {
+        msa.on("session_start", () =>
+          msa.setActiveTools(loadout ? [...loadout] : [...msa.getActiveTools(), "read"]),
         );
       };
       const second = await setup(first.harness.sessionManager, [setLoadout]);

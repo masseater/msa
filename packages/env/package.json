@@ -1,7 +1,7 @@
 {
-  "name": "@earendil-works/pi-env",
+  "name": "@msa/env",
   "version": "1.2.0",
-  "description": "Remote execution environments for Pi Durable: a small daemon deployed over SSH and its ExecutionEnv client",
+  "description": "Remote execution environments for msa Durable: a small daemon deployed over SSH and its ExecutionEnv client",
   "keywords": [
     "agents",
     "durable-execution",
@@ -12,7 +12,7 @@
   "author": "Earendil Works",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/earendil-works/pi.git",
+    "url": "git+https://github.com/masseater/msa.git",
     "directory": "packages/env"
   },
   "files": [
@@ -41,8 +41,8 @@
     "test": "vitest --run"
   },
   "dependencies": {
-    "@earendil-works/chord": "workspace:*",
-    "@earendil-works/pi-durable": "workspace:*"
+    "@msa/chord": "workspace:*",
+    "@msa/durable": "workspace:*"
   },
   "devDependencies": {
     "shx": "catalog:",

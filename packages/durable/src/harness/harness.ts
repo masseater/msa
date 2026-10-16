@@ -1,5 +1,5 @@
-import type { AttachedReplicatedState, Context, JsonValue } from "@earendil-works/chord";
-import { withAbortSignal, withoutAbortSignal } from "@earendil-works/chord/context";
+import type { AttachedReplicatedState, Context, JsonValue } from "@msa/chord";
+import { withAbortSignal, withoutAbortSignal } from "@msa/chord/context";
 
 import { ResetEntry } from "../entries.ts";
 import type { ExecutionEnv } from "../env/index.ts";
@@ -82,7 +82,7 @@ type ConversationHost<Tool extends ToolRegistration> = {
 };
 
 /** Key of the Harness's internal index-size getter, for tests. */
-export const SCHEDULER_INDEX_SIZES = Symbol.for("pi-durable.schedulerIndexSizes");
+export const SCHEDULER_INDEX_SIZES = Symbol.for("msa-durable.schedulerIndexSizes");
 
 class ConversationImpl<Tool extends ToolRegistration> implements Conversation {
   readonly id: ConversationId;
@@ -228,7 +228,7 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
     };
   }
 
-  /** Resolve a conversation's committed `pi.agent` against `snapshot`, or the current one, and the current settings. */
+  /** Resolve a conversation's committed `msa.agent` against `snapshot`, or the current one, and the current settings. */
   async resolveAgent(
     id: ConversationId,
     snapshot: RegistrySnapshot<Tool> | undefined,
@@ -314,7 +314,7 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
     return this.#tasks.waitForIdle(undefined, context);
   }
 
-  /** Sum every conversation's committed `pi.usage`. Each document is read at its own point; totals only grow. */
+  /** Sum every conversation's committed `msa.usage`. Each document is read at its own point; totals only grow. */
   async usage(context: Context): Promise<UsageState> {
     const conversations = await this.readOnLine(() =>
       scanAll((cursor) => this.storage.scanConversations({}, SCAN_PAGE_SIZE, cursor, context)),
@@ -385,8 +385,8 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
   }
 
   /**
-   * The built-in creation hook, in every commit that creates or forks a conversation: empty `pi.live`, `pi.inbox`, and
-   * `pi.usage`, a fresh `pi.provider`, the conversation's `pi.agent` (see `createAgent()`), then
+   * The built-in creation hook, in every commit that creates or forks a conversation: empty `msa.live`, `msa.inbox`, and
+   * `msa.usage`, a fresh `msa.provider`, the conversation's `msa.agent` (see `createAgent()`), then
    * `HarnessOptions.conversationCreated`.
    */
   protected override async conversationCreated(

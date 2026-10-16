@@ -418,7 +418,7 @@ importers:
 
   packages/agent:
     dependencies:
-      '@earendil-works/pi-ai':
+      '@msa/ai':
         specifier: workspace:*
         version: link:../ai
       typebox:
@@ -440,12 +440,12 @@ importers:
       '@aws-sdk/client-bedrock-runtime':
         specifier: 'catalog:'
         version: 3.1127.0
-      '@earendil-works/pi-telemetry':
-        specifier: workspace:*
-        version: link:../telemetry
       '@google/genai':
         specifier: 'catalog:'
         version: 2.21.0
+      '@msa/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       '@smithy/node-http-handler':
         specifier: 'catalog:'
         version: 4.12.1
@@ -512,19 +512,19 @@ importers:
 
   packages/coding-agent:
     dependencies:
-      '@earendil-works/pi-agent-core':
+      '@msa/agent-core':
         specifier: workspace:*
         version: link:../agent
-      '@earendil-works/pi-ai':
+      '@msa/ai':
         specifier: workspace:*
         version: link:../ai
-      '@earendil-works/pi-codemode':
+      '@msa/codemode':
         specifier: workspace:*
         version: link:../codemode
-      '@earendil-works/pi-mcp':
+      '@msa/mcp':
         specifier: workspace:*
         version: link:../mcp
-      '@earendil-works/pi-tui':
+      '@msa/tui':
         specifier: workspace:*
         version: link:../tui
       '@silvia-odwyer/photon-node':
@@ -636,13 +636,13 @@ importers:
 
   packages/durable:
     dependencies:
-      '@earendil-works/chord':
-        specifier: workspace:*
-        version: link:../chord
-      '@earendil-works/pi-ai':
+      '@msa/ai':
         specifier: workspace:*
         version: link:../ai
-      '@earendil-works/pi-codemode':
+      '@msa/chord':
+        specifier: workspace:*
+        version: link:../chord
+      '@msa/codemode':
         specifier: workspace:*
         version: link:../codemode
       '@silvia-odwyer/photon':
@@ -664,10 +664,10 @@ importers:
 
   packages/env:
     dependencies:
-      '@earendil-works/chord':
+      '@msa/chord':
         specifier: workspace:*
         version: link:../chord
-      '@earendil-works/pi-durable':
+      '@msa/durable':
         specifier: workspace:*
         version: link:../durable
     devDependencies:
@@ -680,10 +680,10 @@ importers:
 
   packages/evals:
     devDependencies:
-      '@earendil-works/pi-ai':
+      '@msa/ai':
         specifier: workspace:*
         version: link:../ai
-      '@earendil-works/pi-coding-agent':
+      '@msa/coding-agent':
         specifier: workspace:*
         version: link:../coding-agent
       '@types/node':

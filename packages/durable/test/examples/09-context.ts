@@ -1,14 +1,9 @@
+import type { AssistantMessage, Message, StopReason, ToolResultMessage } from "@msa/ai";
+import { createModels } from "@msa/ai/models";
 // Transcript history and model context.
 // Run from packages/durable:
 //   node --conditions=source --experimental-strip-types test/examples/09-context.ts
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type {
-  AssistantMessage,
-  Message,
-  StopReason,
-  ToolResultMessage,
-} from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 
 import { createRegistry, Harness, MemoryStorage } from "../../src/index.ts";
 
@@ -90,7 +85,7 @@ const question = await say("message", { role: "user", content: "read a and b", t
 await say("message", assistantMessage("I crashed", [], "aborted")); // stored, never sent
 const calls = await say("message", assistantMessage("reading", ["a", "b"]));
 await say("message", toolResultMessage("b")); // results finish out of order
-await say("pi.system", {
+await say("msa.system", {
   role: "system",
   content: "",
   sections: { cwd: "<cwd>/repo</cwd>" },

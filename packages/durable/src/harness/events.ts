@@ -1,6 +1,6 @@
-import type { Context, JsonValue } from "@earendil-works/chord";
-import type { Op, Path } from "@earendil-works/chord/delta";
-import type { AssistantMessage, Message, Usage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Message, Usage } from "@msa/ai";
+import type { Context, JsonValue } from "@msa/chord";
+import type { Op, Path } from "@msa/chord/delta";
 
 import { CommittedWatch } from "../session/observation.ts";
 import type {
@@ -63,14 +63,14 @@ export type SnapshotEvent = {
     deferred?: { pollAt: number };
   };
   tools: readonly ToolSlot[];
-  /** `pi.live.nestedTools`: nested calls of running tool calls. */
+  /** `msa.live.nestedTools`: nested calls of running tool calls. */
   nestedTools: readonly NestedToolSlot[];
-  /** `pi.live.compactions`: live compactions with their attempt and retry backoff. */
+  /** `msa.live.compactions`: live compactions with their attempt and retry backoff. */
   compactions: readonly CompactionStatus[];
-  /** `pi.live.compactionFailure`: the newest compaction failure since a compaction last produced a summary. */
+  /** `msa.live.compactionFailure`: the newest compaction failure since a compaction last produced a summary. */
   compactionFailure?: CompactionFailure;
   inbox: readonly QueuedItem[];
-  /** `pi.agent`; `{}` when absent. */
+  /** `msa.agent`; `{}` when absent. */
   agent: AgentState;
   usage: UsageState;
 };
@@ -96,7 +96,7 @@ export type AgentEvent =
     } & ToolEventCall)
   /**
    * A model-issued call ends with its result `entry`, a nested call with its `result`. Both are absent when the tool
-   * task faulted or was orphaned, or when the call's slot left `pi.live` unfinished: its run ended, or its parent
+   * task faulted or was orphaned, or when the call's slot left `msa.live` unfinished: its run ended, or its parent
    * settled first.
    */
   | ({
@@ -116,7 +116,7 @@ export type AgentEvent =
   | { type: "compaction_start"; taskId: TaskId; reason: CompactionReason; blocking: boolean }
   /**
    * The task's receipt tells whether it produced a summary; the summary entry has its own events. `error` is set when
-   * the compaction failed, faulted, or was orphaned, as in `pi.live.compactionFailure`.
+   * the compaction failed, faulted, or was orphaned, as in `msa.live.compactionFailure`.
    */
   | { type: "compaction_end"; taskId: TaskId; reason: CompactionReason; error?: string };
 
@@ -153,10 +153,10 @@ type Parts = {
 
 function parts(view: ConversationView): Parts {
   return {
-    live: (view.docs["pi.live"] ?? {}) as LiveState,
-    inbox: view.docs["pi.inbox"] as InboxState | undefined,
-    agent: view.docs["pi.agent"] as AgentState | undefined,
-    usage: view.docs["pi.usage"] as UsageState | undefined,
+    live: (view.docs["msa.live"] ?? {}) as LiveState,
+    inbox: view.docs["msa.inbox"] as InboxState | undefined,
+    agent: view.docs["msa.agent"] as AgentState | undefined,
+    usage: view.docs["msa.usage"] as UsageState | undefined,
   };
 }
 
@@ -199,7 +199,7 @@ export async function watchEvents(
     conversationId,
     async (initial, release, storage) => {
       // Generations whose held outcome already ended their turn, read on the line with the snapshot.
-      const query = { conversationId, kind: "pi.generation", status: "completing" } as const;
+      const query = { conversationId, kind: "msa.generation", status: "completing" } as const;
       const completing = await scanAll((cursor) => storage.scanTasks(query, 100, cursor, context));
       const held = new Set<TaskId>(completing.map((record) => record.id));
       let current = initial;
@@ -429,12 +429,12 @@ function translate(
   let turnEnded = false;
   for (const task of tasks.values()) {
     const status = task.state.status;
-    if (task.kind === "pi.generation" && status === "completing" && !held.has(task.id)) {
+    if (task.kind === "msa.generation" && status === "completing" && !held.has(task.id)) {
       held.add(task.id);
       turnEnded = true;
     }
     if (status !== "terminal") continue;
-    if (task.kind === "pi.generation" && !held.delete(task.id)) turnEnded = true;
+    if (task.kind === "msa.generation" && !held.delete(task.id)) turnEnded = true;
     const outcome = task.state.outcome;
     if (outcome.status === "faulted" || outcome.status === "orphaned") {
       const message = outcome.status === "faulted" ? outcome.error.message : outcome.reason;
@@ -466,14 +466,14 @@ function translate(
   if (
     run !== undefined &&
     run.taskId !== runBefore?.taskId &&
-    tasks.get(run.taskId)?.kind === "pi.generation"
+    tasks.get(run.taskId)?.kind === "msa.generation"
   ) {
     events.push({ type: "turn_start" });
   }
   return events;
 }
 
-const PARTIAL_PATH = ["docs", "pi.live", "generation", "message"];
+const PARTIAL_PATH = ["docs", "msa.live", "generation", "message"];
 
 /** Translate the view operations on the in-flight message into message changes (spec §9.4). */
 function messageChanges(viewOps: readonly Op[], message: AssistantMessage): MessageChange[] {
@@ -535,7 +535,7 @@ function callOf(slot: ToolSlot | NestedToolSlot): ToolEventCall {
   };
 }
 
-/** Output, details, and diagnostics changes of a running slot at `at` in `pi.live`, from the view operations on it. */
+/** Output, details, and diagnostics changes of a running slot at `at` in `msa.live`, from the view operations on it. */
 function toolUpdate(
   viewOps: readonly Op[],
   at: readonly ["tools" | "nestedTools", number],
@@ -544,7 +544,7 @@ function toolUpdate(
 ):
   | Omit<Extract<AgentEvent, { type: "tool_execution_update" }>, "type" | keyof ToolEventCall>
   | undefined {
-  const outputPath = ["docs", "pi.live", ...at, "output"];
+  const outputPath = ["docs", "msa.live", ...at, "output"];
   let trimStart = 0;
   let append = "";
   let set = false;

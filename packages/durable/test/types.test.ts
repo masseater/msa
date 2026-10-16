@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@msa/chord";
 import { expect, expectTypeOf, it } from "vitest";
 
 import { idFromNumber, seqFromNumber } from "../src/ids.ts";

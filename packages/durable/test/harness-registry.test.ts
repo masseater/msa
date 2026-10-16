@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "@msa/ai";
 import {
   type AgentState,
   CompactionTask,
@@ -14,7 +14,7 @@ import {
   ToolTask,
   wrapSection,
   wrapTool,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { describe, expect, it } from "vitest";
 
 import { agentHooks, resolveAgent, resolveSettings } from "../src/harness/agent.ts";
@@ -127,7 +127,7 @@ describe("registry", () => {
       ],
       [defineExtension({ name: "x", sections: [section("Bad Key", () => "")] }), "must match"],
       [defineExtension({ name: "x", sections: [section("instructions", () => "")] }), "reserved"],
-      [defineExtension({ name: "x", tasks: [task("pi.generation")] }), "already installed"],
+      [defineExtension({ name: "x", tasks: [task("msa.generation")] }), "already installed"],
       [defineExtension({ name: "x", tasks: [task("app.index")] }), "already installed"],
     ] as const;
     for (const [extension, message] of invalid)
@@ -321,12 +321,12 @@ describe("agent resolution", () => {
       }),
     );
     local.install(defineExtension<AppTool>({ name: "b", hooks: [hook(ToolTask, second)] }));
-    expect(agentHooks(resolve(undefined, local.snapshot()), "pi.tool")).toEqual([first, second]);
-    expect(agentHooks(resolve({ extensions: ["b", "a"] }, local.snapshot()), "pi.tool")).toEqual([
+    expect(agentHooks(resolve(undefined, local.snapshot()), "msa.tool")).toEqual([first, second]);
+    expect(agentHooks(resolve({ extensions: ["b", "a"] }, local.snapshot()), "msa.tool")).toEqual([
       second,
       first,
     ]);
-    expect(agentHooks(resolve({ extensions: ["b"] }, local.snapshot()), "pi.generation")).toEqual(
+    expect(agentHooks(resolve({ extensions: ["b"] }, local.snapshot()), "msa.generation")).toEqual(
       [],
     );
 

@@ -44,7 +44,7 @@ describe("path-utils", () => {
     });
 
     it("should resolve tilde-prefixed filenames against cwd", () => {
-      const cwd = join(tmpdir(), "pi-path-utils-cwd");
+      const cwd = join(tmpdir(), "msa-path-utils-cwd");
       expect(resolveToCwd("~draft.md", cwd)).toBe(resolve(cwd, "~draft.md"));
       expect(resolveToCwd("@~draft.md", cwd)).toBe(resolve(cwd, "~draft.md"));
     });

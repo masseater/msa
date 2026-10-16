@@ -635,7 +635,7 @@
     },
     "httpProxy": {
       "type": "string",
-      "description": "Proxy URL applied as HTTP_PROXY and HTTPS_PROXY for Pi-managed HTTP clients."
+      "description": "Proxy URL applied as HTTP_PROXY and HTTPS_PROXY for msa-managed HTTP clients."
     },
     "httpIdleTimeoutMs": {
       "anyOf": [

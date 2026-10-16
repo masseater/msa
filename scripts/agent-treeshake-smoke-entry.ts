@@ -1,6 +1,6 @@
-import { Agent } from "@earendil-works/pi-agent-core";
-import { createModels } from "@earendil-works/pi-ai";
-import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
+import { Agent } from "@msa/agent-core";
+import { createModels } from "@msa/ai";
+import { anthropicProvider } from "@msa/ai/providers/anthropic";
 
 const models = createModels();
 models.setProvider(anthropicProvider());

@@ -1,6 +1,6 @@
 import { Worker } from "node:worker_threads";
 
-import * as codemode from "@earendil-works/pi-codemode";
+import * as codemode from "@msa/codemode";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { executeCodemode } from "../src/extensions/codemode/execute.ts";

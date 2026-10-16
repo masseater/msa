@@ -1,5 +1,5 @@
 {
-  "name": "@earendil-works/pi-agent-core",
+  "name": "@msa/agent-core",
   "version": "1.2.0",
   "description": "General-purpose agent with transport abstraction, state management, and attachment support",
   "keywords": [
@@ -13,7 +13,7 @@
   "author": "Mario Zechner",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/earendil-works/pi.git",
+    "url": "git+https://github.com/masseater/msa.git",
     "directory": "packages/agent"
   },
   "files": [
@@ -36,7 +36,7 @@
     "test": "vitest --run"
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "workspace:*",
+    "@msa/ai": "workspace:*",
     "typebox": "catalog:"
   },
   "devDependencies": {

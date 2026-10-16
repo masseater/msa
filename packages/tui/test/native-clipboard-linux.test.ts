@@ -92,7 +92,7 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
   }
 
   before(() => {
-    directory = mkdtempSync(join(tmpdir(), "pi-clipboard-test-"));
+    directory = mkdtempSync(join(tmpdir(), "msa-clipboard-test-"));
     const flags = [
       "-std=c11",
       "-D_POSIX_C_SOURCE=200809L",

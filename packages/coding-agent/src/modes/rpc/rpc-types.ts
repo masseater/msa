@@ -5,8 +5,8 @@
  * Responses and events are emitted as JSON lines on stdout.
  */
 
-import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { ImageContent, Model } from "@earendil-works/pi-ai";
+import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
+import type { ImageContent, Model } from "@msa/ai";
 
 import type {
   PromptDisposition,

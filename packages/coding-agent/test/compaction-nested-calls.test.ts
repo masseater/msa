@@ -1,4 +1,4 @@
-import type { ToolResultMessage } from "@earendil-works/pi-ai/compat";
+import type { ToolResultMessage } from "@msa/ai/compat";
 import { describe, expect, it } from "vitest";
 
 import {

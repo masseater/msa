@@ -2,7 +2,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import type { JsonValue } from "@earendil-works/chord";
 import {
   type AssistantMessage,
   fauxAssistantMessage,
@@ -10,7 +9,8 @@ import {
   fauxToolCall,
   type ToolResultMessage,
   Type,
-} from "@earendil-works/pi-ai";
+} from "@msa/ai";
+import type { JsonValue } from "@msa/chord";
 import {
   defineTool,
   type EntryRecord,
@@ -21,7 +21,7 @@ import {
   type ToolRegistration,
   ToolResultEntry,
   ToolTask,
-} from "@earendil-works/pi-durable";
+} from "@msa/durable";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { ExecutionEnv } from "../src/env/index.ts";
@@ -41,7 +41,7 @@ afterEach(async () => {
 });
 
 async function sqlitePath(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "pi-durable-tools-"));
+  const directory = await mkdtemp(join(tmpdir(), "msa-durable-tools-"));
   directories.add(directory);
   return join(directory, "session.sqlite");
 }
@@ -295,11 +295,11 @@ describe("tool recovery", () => {
     );
     expect(observed).toBe(2);
     expect((await allEntries(opened.root)).map((entry) => entry.kind)).toEqual([
-      "pi.user",
-      "pi.system",
-      "pi.assistant",
-      "pi.tool-result",
-      "pi.assistant",
+      "msa.user",
+      "msa.system",
+      "msa.assistant",
+      "msa.tool-result",
+      "msa.assistant",
     ]);
     await opened.harness.close(context);
   });
@@ -353,7 +353,7 @@ describe("tool recovery", () => {
       (tx) => tx.scanTasks({ conversationId: opened.root.id }, 20),
       context,
     );
-    const faulted = tasks.items.find((task) => task.kind === "pi.tool")!;
+    const faulted = tasks.items.find((task) => task.kind === "msa.tool")!;
     expect(faulted.state).toMatchObject({ status: "terminal", outcome: { status: "faulted" } });
     await opened.harness.close(context);
   });

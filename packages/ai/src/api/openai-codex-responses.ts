@@ -31,7 +31,6 @@ import { formatProviderError, normalizeProviderError } from "../utils/error-body
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import { resolveHttpProxyUrlForTarget } from "../utils/node-http-proxy.ts";
-import { getPiUserAgent } from "../utils/pi-user-agent.ts";
 import { getSystemMessageText } from "../utils/text.ts";
 import {
   getDeclaredTools,
@@ -40,6 +39,7 @@ import {
   resolveTranscript,
   resolveTranscriptTools,
 } from "../utils/transcript.ts";
+import { getMsaUserAgent } from "../utils/user-agent.ts";
 import { uuidv7 } from "../utils/uuid.ts";
 import { createGrammarToolInputProperties } from "./constrained-sampling.ts";
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
@@ -1759,7 +1759,7 @@ function buildBaseCodexHeaders(
   token: string,
 ): Headers {
   // Defaults first so model and caller headers can override them, matching the other providers.
-  const headers = new Headers({ originator: "pi", "User-Agent": getPiUserAgent() });
+  const headers = new Headers({ originator: "pi", "User-Agent": getMsaUserAgent() });
   for (const [key, value] of Object.entries(initHeaders || {})) {
     headers.set(key, value);
   }
