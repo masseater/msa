@@ -19,14 +19,14 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Workspace package name -> its source root, so cross-package imports are followed. */
 const WORKSPACE = {
-  "@msa/chord": "packages/chord/src",
-  "@msa/ai": "packages/ai/src",
-  "@msa/durable": "packages/durable/src",
-  "@msa/agent-core": "packages/agent/src",
-  "@msa/codemode": "packages/codemode/src",
-  "@msa/telemetry": "packages/telemetry/src",
-  "@msa/mcp": "packages/mcp/src",
-  "@msa/tui": "packages/tui/src",
+  "@msa/chord": "libs/chord/src",
+  "@msa/ai": "libs/ai/src",
+  "@msa/durable": "libs/durable/src",
+  "@msa/agent-core": "libs/agent/src",
+  "@msa/codemode": "libs/codemode/src",
+  "@msa/telemetry": "libs/telemetry/src",
+  "@msa/mcp": "libs/mcp/src",
+  "@msa/tui": "libs/tui/src",
 };
 
 /**
@@ -34,7 +34,7 @@ const WORKSPACE = {
  * graph it is allowed to reach.
  */
 const BUDGETS = {
-  "packages/ai": {
+  "libs/ai": {
     "./models": {
       maxFiles: 15,
       forbid: [
@@ -47,7 +47,7 @@ const BUDGETS = {
     },
     "./utils/*": { maxFiles: 3, forbid: ["providers/", "api/", "index.ts"] },
   },
-  "packages/codemode": {
+  "libs/codemode": {
     // Node and Bun users never load the Cloudflare entry, which imports the `cloudflare:workers` built-in.
     ".": { maxFiles: 12, forbid: ["codemode/src/cloudflare.ts"] },
     // Runtimes without Node built-ins (Workers, browsers) import these; neither may reach the worker-thread host
@@ -71,21 +71,21 @@ const BUDGETS = {
       ],
     },
   },
-  "packages/durable": {
+  "libs/durable": {
     ".": {
       // Tool argument validation reaches TypeBox; provider-session creation reaches msa-ai's lean UUID utility; the
       // memory and SQLite storages share scan order and cursor handling. Values from Chord's root (copyJson,
       // replicatedState) reach its host runtime through the root barrel.
       maxFiles: 66,
       forbid: [
-        "packages/ai/src/index.ts",
-        "packages/ai/src/utils/typebox-helpers.ts",
+        "libs/ai/src/index.ts",
+        "libs/ai/src/utils/typebox-helpers.ts",
         // Photon (WebAssembly) loads only through `./images`.
-        "packages/durable/src/images/",
+        "libs/durable/src/images/",
       ],
     },
     // The file tools reach their environment helpers and the Harness definitions they need, not the Harness itself.
-    "./tools": { maxFiles: 17, forbid: ["packages/durable/src/images/"] },
+    "./tools": { maxFiles: 17, forbid: ["libs/durable/src/images/"] },
   },
 };
 

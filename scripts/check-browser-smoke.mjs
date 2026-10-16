@@ -8,7 +8,7 @@ const outputPath = join(tmpdir(), "msa-browser-smoke.js");
 const durableOutputPath = join(tmpdir(), "msa-durable-browser-smoke.js");
 const agentTreeshakeOutputPath = join(tmpdir(), "msa-agent-treeshake-smoke.js");
 const errorLogPath = join(tmpdir(), "msa-browser-smoke-errors.log");
-const generatedCatalogDataDir = join(process.cwd(), "packages/ai/src/providers/data");
+const generatedCatalogDataDir = join(process.cwd(), "libs/ai/src/providers/data");
 
 // Fresh checkouts do not materialize provider JSON until model data is hydrated.
 const generatedCatalogDataPlugin = {
@@ -65,22 +65,22 @@ try {
   });
   const durableInputs = durableBuild.metafile.inputs;
   for (const expectedInput of [
-    "packages/durable/src/index.ts",
-    "packages/durable/src/env/index.ts",
-    "packages/durable/src/storage/jsonl/index.ts",
-    "packages/durable/src/storage/jsonl/storage.ts",
-    "packages/durable/src/storage/memory.ts",
-    "packages/durable/src/storage/sqlite/index.ts",
-    "packages/durable/src/storage/sqlite/storage.ts",
+    "libs/durable/src/index.ts",
+    "libs/durable/src/env/index.ts",
+    "libs/durable/src/storage/jsonl/index.ts",
+    "libs/durable/src/storage/jsonl/storage.ts",
+    "libs/durable/src/storage/memory.ts",
+    "libs/durable/src/storage/sqlite/index.ts",
+    "libs/durable/src/storage/sqlite/storage.ts",
   ]) {
     if (!findInput(durableInputs, expectedInput)) {
       throw new Error(`Durable browser bundle does not include ${expectedInput}`);
     }
   }
   for (const forbiddenInput of [
-    "packages/durable/src/env/node.ts",
-    "packages/durable/src/storage/jsonl/node.ts",
-    "packages/durable/src/storage/sqlite/node.ts",
+    "libs/durable/src/env/node.ts",
+    "libs/durable/src/storage/jsonl/node.ts",
+    "libs/durable/src/storage/sqlite/node.ts",
   ]) {
     const nodeAdapter = findInput(durableInputs, forbiddenInput);
     if (nodeAdapter) throw new Error(`Durable browser bundle unexpectedly includes ${nodeAdapter}`);
@@ -99,9 +99,9 @@ try {
   });
   const inputs = agentTreeshakeBuild.metafile.inputs;
   for (const forbiddenInput of [
-    "packages/ai/src/compat.ts",
-    "packages/ai/src/models.generated.ts",
-    "packages/ai/src/providers/all.ts",
+    "libs/ai/src/compat.ts",
+    "libs/ai/src/models.generated.ts",
+    "libs/ai/src/providers/all.ts",
   ]) {
     const includedInput = findInput(inputs, forbiddenInput);
     if (includedInput) {
@@ -117,7 +117,7 @@ try {
     ),
   );
   const catalogInputs = Array.from(contributingInputs).filter((input) =>
-    normalizePath(input).includes("packages/ai/src/providers/data/"),
+    normalizePath(input).includes("libs/ai/src/providers/data/"),
   );
   if (catalogInputs.length !== 1 || !normalizePath(catalogInputs[0]).endsWith("/anthropic.json")) {
     throw new Error(

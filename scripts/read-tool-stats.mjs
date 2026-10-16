@@ -9,7 +9,7 @@ import { createInterface } from "node:readline";
 const DEFAULT_SESSIONS_DIR = path.join(homedir(), ".msa/agent/sessions");
 const DEFAULT_ACTIVE_READ_TOOL_PATH = path.join(
   process.cwd(),
-  "packages/coding-agent/src/core/tools/read.ts",
+  "apps/coding-agent/src/core/tools/read.ts",
 );
 const DEFAULT_TOP = 20;
 const CHART_WIDTH = 40;

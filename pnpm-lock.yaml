@@ -416,117 +416,23 @@ importers:
         specifier: 'catalog:'
         version: 22.19.19
 
-  packages/agent:
-    dependencies:
-      '@msa/ai':
-        specifier: workspace:*
-        version: link:../ai
-      typebox:
-        specifier: 'catalog:'
-        version: 1.3.27
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 22.19.19
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/ai:
-    dependencies:
-      '@anthropic-ai/sdk':
-        specifier: 'catalog:'
-        version: 0.129.0(zod@4.6.7)
-      '@aws-sdk/client-bedrock-runtime':
-        specifier: 'catalog:'
-        version: 3.1127.0
-      '@google/genai':
-        specifier: 'catalog:'
-        version: 2.21.0
-      '@msa/telemetry':
-        specifier: workspace:*
-        version: link:../telemetry
-      '@smithy/node-http-handler':
-        specifier: 'catalog:'
-        version: 4.12.1
-      '@smithy/types':
-        specifier: 4.19.0
-        version: 4.19.0
-      http-proxy-agent:
-        specifier: 'catalog:'
-        version: 9.1.0
-      https-proxy-agent:
-        specifier: 'catalog:'
-        version: 9.1.0
-      openai:
-        specifier: 'catalog:'
-        version: 7.19.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/signature-v4@5.7.4)(undici@8.10.2)(ws@8.21.0)(zod@4.6.7)
-      partial-json:
-        specifier: 'catalog:'
-        version: 0.1.7
-      typebox:
-        specifier: 'catalog:'
-        version: 1.3.27
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 22.19.19
-      canvas:
-        specifier: 'catalog:'
-        version: 3.2.3
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/chord:
-    dependencies:
-      typebox:
-        specifier: 'catalog:'
-        version: 1.3.27
-    devDependencies:
-      '@types/ws':
-        specifier: 'catalog:'
-        version: 8.18.2
-      shx:
-        specifier: 'catalog:'
-        version: 0.3.4
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
-      ws:
-        specifier: 'catalog:'
-        version: 8.21.0
-
-  packages/codemode:
-    dependencies:
-      quickjs-wasi:
-        specifier: 'catalog:'
-        version: 3.6.2
-    devDependencies:
-      shx:
-        specifier: 'catalog:'
-        version: 0.3.4
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/coding-agent:
+  apps/coding-agent:
     dependencies:
       '@msa/agent-core':
         specifier: workspace:*
-        version: link:../agent
+        version: link:../../libs/agent
       '@msa/ai':
         specifier: workspace:*
-        version: link:../ai
+        version: link:../../libs/ai
       '@msa/codemode':
         specifier: workspace:*
-        version: link:../codemode
+        version: link:../../libs/codemode
       '@msa/mcp':
         specifier: workspace:*
-        version: link:../mcp
+        version: link:../../libs/mcp
       '@msa/tui':
         specifier: workspace:*
-        version: link:../tui
+        version: link:../../libs/tui
       '@silvia-odwyer/photon-node':
         specifier: 'catalog:'
         version: 0.3.4
@@ -604,27 +510,27 @@ importers:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/coding-agent/examples/extensions/custom-provider-anthropic:
+  apps/coding-agent/examples/extensions/custom-provider-anthropic:
     dependencies:
       '@anthropic-ai/sdk':
         specifier: 'catalog:'
         version: 0.129.0(zod@4.6.7)
 
-  packages/coding-agent/examples/extensions/custom-provider-gitlab-duo: {}
+  apps/coding-agent/examples/extensions/custom-provider-gitlab-duo: {}
 
-  packages/coding-agent/examples/extensions/gondolin:
+  apps/coding-agent/examples/extensions/gondolin:
     dependencies:
       '@earendil-works/gondolin':
         specifier: 0.12.0
         version: 0.12.0
 
-  packages/coding-agent/examples/extensions/sandbox:
+  apps/coding-agent/examples/extensions/sandbox:
     dependencies:
       '@anthropic-ai/sandbox-runtime':
         specifier: 'catalog:'
         version: 0.0.26
 
-  packages/coding-agent/examples/extensions/with-deps:
+  apps/coding-agent/examples/extensions/with-deps:
     dependencies:
       ms:
         specifier: 'catalog:'
@@ -634,7 +540,128 @@ importers:
         specifier: 'catalog:'
         version: 2.1.0
 
-  packages/durable:
+  apps/evals:
+    devDependencies:
+      '@msa/ai':
+        specifier: workspace:*
+        version: link:../../libs/ai
+      '@msa/coding-agent':
+        specifier: workspace:*
+        version: link:../coding-agent
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.19
+      '@vitest-evals/core':
+        specifier: 'catalog:'
+        version: 0.15.0
+      autoevals:
+        specifier: 'catalog:'
+        version: 0.3.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/signature-v4@5.7.4)(ws@8.21.0)(zod@4.6.7)
+      shx:
+        specifier: 'catalog:'
+        version: 0.3.4
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
+      vitest-evals:
+        specifier: 'catalog:'
+        version: 0.15.0(tinyrainbow@3.2.0)(vitest@4.1.11)(zod@4.6.7)
+
+  libs/agent:
+    dependencies:
+      '@msa/ai':
+        specifier: workspace:*
+        version: link:../ai
+      typebox:
+        specifier: 'catalog:'
+        version: 1.3.27
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.19
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
+
+  libs/ai:
+    dependencies:
+      '@anthropic-ai/sdk':
+        specifier: 'catalog:'
+        version: 0.129.0(zod@4.6.7)
+      '@aws-sdk/client-bedrock-runtime':
+        specifier: 'catalog:'
+        version: 3.1127.0
+      '@google/genai':
+        specifier: 'catalog:'
+        version: 2.21.0
+      '@msa/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
+      '@smithy/node-http-handler':
+        specifier: 'catalog:'
+        version: 4.12.1
+      '@smithy/types':
+        specifier: 4.19.0
+        version: 4.19.0
+      http-proxy-agent:
+        specifier: 'catalog:'
+        version: 9.1.0
+      https-proxy-agent:
+        specifier: 'catalog:'
+        version: 9.1.0
+      openai:
+        specifier: 'catalog:'
+        version: 7.19.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/signature-v4@5.7.4)(undici@8.10.2)(ws@8.21.0)(zod@4.6.7)
+      partial-json:
+        specifier: 'catalog:'
+        version: 0.1.7
+      typebox:
+        specifier: 'catalog:'
+        version: 1.3.27
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.19
+      canvas:
+        specifier: 'catalog:'
+        version: 3.2.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
+
+  libs/chord:
+    dependencies:
+      typebox:
+        specifier: 'catalog:'
+        version: 1.3.27
+    devDependencies:
+      '@types/ws':
+        specifier: 'catalog:'
+        version: 8.18.2
+      shx:
+        specifier: 'catalog:'
+        version: 0.3.4
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
+      ws:
+        specifier: 'catalog:'
+        version: 8.21.0
+
+  libs/codemode:
+    dependencies:
+      quickjs-wasi:
+        specifier: 'catalog:'
+        version: 3.6.2
+    devDependencies:
+      shx:
+        specifier: 'catalog:'
+        version: 0.3.4
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
+
+  libs/durable:
     dependencies:
       '@msa/ai':
         specifier: workspace:*
@@ -662,7 +689,7 @@ importers:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/env:
+  libs/env:
     dependencies:
       '@msa/chord':
         specifier: workspace:*
@@ -678,34 +705,7 @@ importers:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/evals:
-    devDependencies:
-      '@msa/ai':
-        specifier: workspace:*
-        version: link:../ai
-      '@msa/coding-agent':
-        specifier: workspace:*
-        version: link:../coding-agent
-      '@types/node':
-        specifier: 'catalog:'
-        version: 22.19.19
-      '@vitest-evals/core':
-        specifier: 'catalog:'
-        version: 0.15.0
-      autoevals:
-        specifier: 'catalog:'
-        version: 0.3.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/signature-v4@5.7.4)(ws@8.21.0)(zod@4.6.7)
-      shx:
-        specifier: 'catalog:'
-        version: 0.3.4
-      vitest:
-        specifier: 'catalog:'
-        version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
-      vitest-evals:
-        specifier: 'catalog:'
-        version: 0.15.0(tinyrainbow@3.2.0)(vitest@4.1.11)(zod@4.6.7)
-
-  packages/mcp:
+  libs/mcp:
     dependencies:
       cross-spawn:
         specifier: 'catalog:'
@@ -721,7 +721,7 @@ importers:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/telemetry:
+  libs/telemetry:
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -730,7 +730,7 @@ importers:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/tui:
+  libs/tui:
     dependencies:
       get-east-asian-width:
         specifier: 'catalog:'

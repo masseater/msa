@@ -47,10 +47,10 @@ jobs:
           set -euo pipefail
 
           version="${RELEASE_TAG#v}"
-          workspace_version="$(node -p "require('./packages/coding-agent/package.json').version")"
+          workspace_version="$(node -p "require('./apps/coding-agent/package.json').version")"
 
           if [[ "${version}" != "${workspace_version}" ]]; then
-            echo "::error::${RELEASE_TAG} does not match packages/coding-agent/package.json (${workspace_version})."
+            echo "::error::${RELEASE_TAG} does not match apps/coding-agent/package.json (${workspace_version})."
             exit 1
           fi
 

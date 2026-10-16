@@ -1,0 +1,60 @@
+{
+  "name": "@msa/mcp",
+  "version": "0.0.2",
+  "description": "Standalone Model Context Protocol client for msa and other applications",
+  "keywords": [
+    "client",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "license": "MIT",
+  "author": "Earendil Works",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/masseater/msa.git",
+    "directory": "libs/mcp"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSES"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./oauth": {
+      "source": "./src/oauth/index.ts",
+      "types": "./dist/oauth/index.d.ts",
+      "import": "./dist/oauth/index.js"
+    },
+    "./testing": {
+      "source": "./src/testing/index.ts",
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "shx rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "cross-spawn": "catalog:"
+  },
+  "devDependencies": {
+    "@types/cross-spawn": "catalog:",
+    "shx": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

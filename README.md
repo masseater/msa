@@ -4,18 +4,18 @@ msa is a minimal, extensible agent harness, forked from [pi](https://github.com/
 and maintained under its own name, package scope, and config directory.
 
 Adapt msa to your workflows, not the other way around. Customize msa with
-[extensions](packages/coding-agent/docs/extensions.md), [skills](packages/coding-agent/docs/skills.md),
-[prompt templates](packages/coding-agent/docs/prompt-templates.md), and
-[themes](packages/coding-agent/docs/themes.md). Bundle them as
-[msa packages](packages/coding-agent/docs/packages.md) and share via npm or git.
+[extensions](apps/coding-agent/docs/extensions.md), [skills](apps/coding-agent/docs/skills.md),
+[prompt templates](apps/coding-agent/docs/prompt-templates.md), and
+[themes](apps/coding-agent/docs/themes.md). Bundle them as
+[msa packages](apps/coding-agent/docs/packages.md) and share via npm or git.
 
 msa ships with powerful defaults but skips features like sub-agents and plan mode. Ask msa to build
 what you want, or install a package that does it your way.
 
-Use msa [interactively](packages/coding-agent/docs/usage.md), automate it in
-[print or JSON mode](packages/coding-agent/docs/cli.md), control it over
-[RPC](packages/coding-agent/docs/rpc.md), or build apps with the
-[msa TypeScript SDK](packages/coding-agent/docs/sdk.md).
+Use msa [interactively](apps/coding-agent/docs/usage.md), automate it in
+[print or JSON mode](apps/coding-agent/docs/cli.md), control it over
+[RPC](apps/coding-agent/docs/rpc.md), or build apps with the
+[msa TypeScript SDK](apps/coding-agent/docs/sdk.md).
 
 ## Getting started
 
@@ -55,15 +55,15 @@ identifiers) intentionally keep the pi name, because those services know the cli
 
 This monorepo contains the msa CLI and its supporting libraries.
 
-| Package                                        | Description                                                                                         |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **[@msa/chord](packages/chord)**               | Typed host runtime for hot-reloadable plugins, contracts, replicated state, and RPC over JSON links |
-| **[@msa/telemetry](packages/telemetry)**       | Vendor-neutral telemetry contracts, reference adapter, conformance tests, and typed schemas         |
-| **[@msa/ai](packages/ai)**                     | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.)                                    |
-| **[@msa/durable](packages/durable)**           | Durable conversation, task, and document runtime                                                    |
-| **[@msa/agent-core](packages/agent)**          | Agent runtime with tool calling and state management                                                |
-| **[@msa/coding-agent](packages/coding-agent)** | Interactive coding agent CLI                                                                        |
-| **[@msa/tui](packages/tui)**                   | Terminal UI library with differential rendering                                                     |
+| Package                                    | Description                                                                                         |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| **[@msa/chord](libs/chord)**               | Typed host runtime for hot-reloadable plugins, contracts, replicated state, and RPC over JSON links |
+| **[@msa/telemetry](libs/telemetry)**       | Vendor-neutral telemetry contracts, reference adapter, conformance tests, and typed schemas         |
+| **[@msa/ai](libs/ai)**                     | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.)                                    |
+| **[@msa/durable](libs/durable)**           | Durable conversation, task, and document runtime                                                    |
+| **[@msa/agent-core](libs/agent)**          | Agent runtime with tool calling and state management                                                |
+| **[@msa/coding-agent](apps/coding-agent)** | Interactive coding agent CLI                                                                        |
+| **[@msa/tui](libs/tui)**                   | Terminal UI library with differential rendering                                                     |
 
 ## Permissions & Containerization
 
@@ -71,7 +71,7 @@ msa does not include a built-in permission system for restricting filesystem, pr
 credential access. By default, it runs with the permissions of the user and process that launched it.
 
 If you need stronger boundaries, containerize or sandbox msa. See
-[packages/coding-agent/docs/containerization.md](packages/coding-agent/docs/containerization.md) for
+[apps/coding-agent/docs/containerization.md](apps/coding-agent/docs/containerization.md) for
 three patterns:
 
 - **Gondolin extension**: keep `msa` and provider auth on the host while routing built-in tools and

@@ -1,10 +1,10 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Console, Crypto, Data, Effect, FileSystem, Path, Schema } from "effect";
+import { Console, Crypto, Data, Effect, FileSystem, Layer, Path, Schema } from "effect";
 import type { PlatformError } from "effect";
 import { Hex } from "effect/encoding";
 import { ChildProcess } from "effect/process";
 
-import { captureProcess } from "./capture-process.ts";
+import { captureProcess, processRunnerLayer } from "./capture-process.ts";
 import {
   ARCHIVE_FLAGS,
   archiveFileNameFor,
@@ -51,7 +51,7 @@ const makeContext = () =>
     // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const path = yield* Path.Path;
     const repoRoot = path.resolve(import.meta.dirname, "..");
-    const codingAgentDir = path.join(repoRoot, "packages", "coding-agent");
+    const codingAgentDir = path.join(repoRoot, "apps", "coding-agent");
     const packageJsonText = yield* fs.readFileString(path.join(codingAgentDir, "package.json"));
     const { version } = yield* Schema.decodeEffect(packageJsonJson)(packageJsonText);
     if (!VERSION_PATTERN.test(version)) {
@@ -62,7 +62,7 @@ const makeContext = () =>
       path,
       repoRoot,
       codingAgentDir,
-      tuiDir: path.join(repoRoot, "packages", "tui"),
+      tuiDir: path.join(repoRoot, "libs", "tui"),
       outDir: path.join(repoRoot, ...DEFAULT_OUT_DIR),
       version,
       platforms: requestedPlatforms(),
@@ -277,5 +277,8 @@ const program = Effect.gen(function* () {
   );
 });
 
+// oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
+const mainLayer = Layer.mergeAll(NodeServices.layer, processRunnerLayer);
+
 // oxlint-disable-next-line effecttsgo/unstable-api-usage, effecttsgo/strict-effect-provide -- application entry point on pre-GA v4 platform APIs
-NodeRuntime.runMain(program.pipe(Effect.provide(NodeServices.layer)));
+NodeRuntime.runMain(program.pipe(Effect.provide(mainLayer)));

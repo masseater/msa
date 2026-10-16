@@ -24,7 +24,7 @@
     "profile:tui": "node scripts/profile-coding-agent-node.mjs --mode tui",
     "profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",
     "test:scripts": "node --test scripts/*.test.mjs scripts/*.test.ts",
-    "test:mcp-conformance": "node packages/coding-agent/test/mcp-conformance/run.ts",
+    "test:mcp-conformance": "node apps/coding-agent/test/mcp-conformance/run.ts",
     "prepare": "vp config --no-agent && effect-tsgo patch --no-typescript --oxlint && skills experimental_install --force"
   },
   "devDependencies": {
