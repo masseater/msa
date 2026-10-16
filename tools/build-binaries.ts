@@ -1,10 +1,10 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Console, Crypto, Data, Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { Console, Crypto, Data, Effect, FileSystem, Layer, Path } from "effect";
 import type { PlatformError } from "effect";
 import { Hex } from "effect/encoding";
-import { ChildProcess } from "effect/process";
 
-import { captureProcess, processRunnerLayer } from "./capture-process.ts";
+import { captureProcess, processRunnerLayer, runInherit } from "./capture-process.ts";
+import { Workspace, workspaceLayer } from "./coding-agent-package.ts";
 import {
   ARCHIVE_FLAGS,
   archiveFileNameFor,
@@ -17,11 +17,6 @@ import {
 
 const DEFAULT_OUT_DIR = [".artifacts", "binaries"];
 const SKIP_BUILD_FLAG = "--skip-build";
-const VERSION_PATTERN = /^\d+\.\d+\.\d+$/u;
-
-const packageJsonJson = Schema.fromJsonString(Schema.Struct({ version: Schema.String }), {
-  space: 2,
-});
 
 class BuildBinariesError extends Data.TaggedError("BuildBinariesError")<{
   readonly message: string;
@@ -46,22 +41,17 @@ const unknownArguments = () =>
 
 const makeContext = () =>
   Effect.gen(function* () {
+    const workspace = yield* Workspace;
+    const { repoRoot, version } = yield* workspace.loadCodingAgentPackage;
     // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const fs = yield* FileSystem.FileSystem;
     // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const path = yield* Path.Path;
-    const repoRoot = path.resolve(import.meta.dirname, "..");
-    const codingAgentDir = path.join(repoRoot, "apps", "coding-agent");
-    const packageJsonText = yield* fs.readFileString(path.join(codingAgentDir, "package.json"));
-    const { version } = yield* Schema.decodeEffect(packageJsonJson)(packageJsonText);
-    if (!VERSION_PATTERN.test(version)) {
-      return yield* new BuildBinariesError({ message: `invalid package version: ${version}` });
-    }
     return {
       fs,
       path,
       repoRoot,
-      codingAgentDir,
+      codingAgentDir: path.join(repoRoot, "apps", "coding-agent"),
       tuiDir: path.join(repoRoot, "libs", "tui"),
       outDir: path.join(repoRoot, ...DEFAULT_OUT_DIR),
       version,
@@ -71,24 +61,6 @@ const makeContext = () =>
   });
 
 type Context = Effect.Success<ReturnType<typeof makeContext>>;
-
-const run = (command: string, args: ReadonlyArray<string>, cwd: string) =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
-      const child = yield* ChildProcess.make(command, args, {
-        cwd,
-        stderr: "inherit",
-        stdout: "inherit",
-      });
-      const exitCode = Number(yield* child.exitCode);
-      if (exitCode !== 0) {
-        return yield* new BuildBinariesError({
-          message: `${command} ${args.join(" ")} exited with ${exitCode}`,
-        });
-      }
-    }),
-  );
 
 const SKIPPED_ENTRIES = new Set(["node_modules", ".DS_Store"]);
 
@@ -135,13 +107,17 @@ const prepareWorkspace = (context: Context) =>
       yield* Console.log("==> skipping the workspace build (--skip-build)");
     } else {
       yield* Console.log("==> building workspace packages (vp run build)");
-      yield* run("vp", ["run", "--no-cache", "build"], context.repoRoot);
+      yield* runInherit({
+        args: ["run", "--no-cache", "build"],
+        command: "vp",
+        cwd: context.repoRoot,
+      });
     }
-    yield* run(
-      "vp",
-      ["run", "--no-cache", "--filter", "@msa/coding-agent", "copy-binary-assets"],
-      context.repoRoot,
-    );
+    yield* runInherit({
+      args: ["run", "--no-cache", "--filter", "@msa/coding-agent", "copy-binary-assets"],
+      command: "vp",
+      cwd: context.repoRoot,
+    });
   });
 
 const copyPayload = (context: Context, platform: ReleasePlatform, payloadDir: string) =>
@@ -166,9 +142,8 @@ const buildPlatformArtifact = (context: Context, platform: ReleasePlatform) =>
     yield* context.fs.remove(workDirFor(context, platform), { recursive: true, force: true });
     yield* context.fs.makeDirectory(payloadDir, { recursive: true });
     yield* Console.log(`==> compiling ${platform.name} (${platform.bunTarget})`);
-    yield* run(
-      "bun",
-      [
+    yield* runInherit({
+      args: [
         "build",
         "--compile",
         "--no-compile-autoload-bunfig",
@@ -179,20 +154,21 @@ const buildPlatformArtifact = (context: Context, platform: ReleasePlatform) =>
         "./src/extensions/codemode/worker.ts",
         `--outfile=${context.path.join(payloadDir, platform.executable)}`,
       ],
-      context.codingAgentDir,
-    );
+      command: "bun",
+      cwd: context.codingAgentDir,
+    });
     yield* copyPayload(context, platform, payloadDir);
     const archivePath = archivePathFor(context, platform);
     yield* context.fs.remove(archivePath, { force: true });
     if (platform.archive === "zip") {
-      yield* run("zip", ["-r", "-q", archivePath, "."], payloadDir);
+      yield* runInherit({ args: ["-r", "-q", archivePath, "."], command: "zip", cwd: payloadDir });
       return;
     }
-    yield* run(
-      "tar",
-      ["-czf", archivePath, "-C", context.path.dirname(payloadDir), "msa"],
-      context.repoRoot,
-    );
+    yield* runInherit({
+      args: ["-czf", archivePath, "-C", context.path.dirname(payloadDir), "msa"],
+      command: "tar",
+      cwd: context.repoRoot,
+    });
   });
 
 const writeChecksums = (context: Context) =>
@@ -225,11 +201,11 @@ const smokeTest = (context: Context) =>
     const smokeDir = context.path.join(context.outDir, "smoke");
     yield* context.fs.remove(smokeDir, { recursive: true, force: true });
     yield* context.fs.makeDirectory(smokeDir, { recursive: true });
-    yield* run(
-      "tar",
-      [ARCHIVE_FLAGS[platform.archive], archivePathFor(context, platform), "-C", smokeDir],
-      context.repoRoot,
-    );
+    yield* runInherit({
+      args: [ARCHIVE_FLAGS[platform.archive], archivePathFor(context, platform), "-C", smokeDir],
+      command: "tar",
+      cwd: context.repoRoot,
+    });
     const binary = context.path.join(smokeDir, archiveRootFor(platform), platform.executable);
     const { exitCode, stderr, stdout } = yield* captureProcess({
       args: ["--version"],
@@ -278,7 +254,7 @@ const program = Effect.gen(function* () {
 });
 
 // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
-const mainLayer = Layer.mergeAll(NodeServices.layer, processRunnerLayer);
+const mainLayer = Layer.mergeAll(NodeServices.layer, processRunnerLayer, workspaceLayer);
 
 // oxlint-disable-next-line effecttsgo/unstable-api-usage, effecttsgo/strict-effect-provide -- application entry point on pre-GA v4 platform APIs
 NodeRuntime.runMain(program.pipe(Effect.provide(mainLayer)));

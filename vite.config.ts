@@ -198,6 +198,10 @@ export default defineConfig({
         command: "node tools/build-binaries.ts",
         cache: false,
       },
+      "install-local": {
+        command: "node tools/local-install.ts",
+        cache: false,
+      },
       "render-homebrew-formula": {
         command: "node tools/render-homebrew-formula.ts",
         cache: false,
