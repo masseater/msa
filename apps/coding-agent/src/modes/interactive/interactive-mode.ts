@@ -1327,10 +1327,6 @@ export class InteractiveMode {
     };
   }
 
-  // =========================================================================
-  // Extension System
-  // =========================================================================
-
   private isStartupExpanded(): boolean {
     return this.options.verbose === true || this.toolOutputExpanded;
   }
@@ -1369,6 +1365,10 @@ export class InteractiveMode {
       },
     );
   }
+
+  // =========================================================================
+  // Extension System
+  // =========================================================================
 
   /**
    * Initialize the extension system with TUI-based UI context.
