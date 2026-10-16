@@ -128,6 +128,7 @@ export default defineConfig({
       "node/no-top-level-await": "off",
       ...effectRules,
     },
+    overrides: [{ files: ["tools/**"], rules: { "effecttsgo/api-stability-leak": "off" } }],
     options: {
       typeAware: true,
       typeCheck: true,
