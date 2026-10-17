@@ -46,6 +46,8 @@ The checkout requires Node.js 22.19 or newer. State lives in `~/.msa/agent`, nex
 
 Run `/login` inside msa to connect a subscription or API key, then give msa a task.
 
+Set `TREG_TOKEN` to a [treg](https://treg.to/web-access) API key and msa gets `web_search` and `web_fetch` tools, on by default. treg tries free TinyFish first and falls back to other vendors, and uses keys you registered in treg (Exa, for example) before its own.
+
 Values that identify the client to external services (the `pi/<version>` User-Agent, pi.dev endpoints, the Codex and xAI login identifiers) intentionally keep the pi name, because those services know the client by it.
 
 ## Packages

@@ -14,9 +14,12 @@ import { findRenderers } from "./find.ts";
 import { grepRenderers } from "./grep.ts";
 import { lsRenderers } from "./ls.ts";
 import { readRenderers } from "./read.ts";
+import { webFetchRenderers, webSearchRenderers } from "./web.ts";
 import { writeRenderers } from "./write.ts";
 
 export type { ToolRenderers };
+
+type RenderedToolName = ToolName | "web_search" | "web_fetch";
 
 export {
   createShellRenderers,
@@ -25,11 +28,13 @@ export {
   grepRenderers,
   lsRenderers,
   readRenderers,
+  webFetchRenderers,
+  webSearchRenderers,
   writeRenderers,
 };
 
 /** Renderers for every built-in tool, keyed by tool name. */
-export function createAllToolRenderers(): Record<ToolName, ToolRenderers> {
+export function createAllToolRenderers(): Record<RenderedToolName, ToolRenderers> {
   return {
     read: readRenderers,
     bash: createShellRenderers("$"),
@@ -39,6 +44,8 @@ export function createAllToolRenderers(): Record<ToolName, ToolRenderers> {
     grep: grepRenderers,
     find: findRenderers,
     ls: lsRenderers,
+    web_search: webSearchRenderers,
+    web_fetch: webFetchRenderers,
   };
 }
 
@@ -52,7 +59,7 @@ export function withBuiltInRenderers<TDefinition extends ToolRenderers>(
   toolName: string,
   definition: TDefinition | undefined,
 ): TDefinition | ToolRenderers | undefined {
-  const builtIn = createAllToolRenderers()[toolName as ToolName];
+  const builtIn = createAllToolRenderers()[toolName as RenderedToolName];
   if (!definition) return builtIn;
   if (!builtIn) return definition;
   return {
