@@ -19,16 +19,16 @@ const CliEnvelope = Schema.fromJsonString(
   Schema.Struct({
     result: Schema.Unknown,
     _treg: Schema.Struct({
-      http_status: Schema.Number,
-      charged_micro: Schema.optionalKey(Schema.Number),
+      http_status: Schema.Finite,
+      charged_micro: Schema.optionalKey(Schema.Finite),
     }),
   }),
 );
 
 const RoutedResult = Schema.Struct({
-  output: Schema.optionalKey(Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown))),
+  output: Schema.Record(Schema.String, Schema.Unknown).pipe(Schema.NullOr, Schema.optionalKey),
   _treg: Schema.optionalKey(
-    Schema.Struct({ served_by: Schema.optionalKey(Schema.NullOr(Schema.String)) }),
+    Schema.Struct({ served_by: Schema.String.pipe(Schema.NullOr, Schema.optionalKey) }),
   ),
 });
 
@@ -78,7 +78,7 @@ function isSignedIn(command: string, env: NodeJS.ProcessEnv): boolean {
     timeout: 10_000,
     windowsHide: true,
   });
-  return Option.match(Schema.decodeUnknownOption(CliConfig)(stdout ?? ""), {
+  return Option.match(Schema.decodeOption(CliConfig)(stdout ?? ""), {
     onNone: () => false,
     onSome: (config) => config.logged_in,
   });
@@ -123,7 +123,7 @@ export async function callTreg(
     signal,
   );
   const line = stdout.trim().split("\n").at(-1) ?? "";
-  const envelope = Schema.decodeUnknownOption(CliEnvelope)(line);
+  const envelope = Schema.decodeOption(CliEnvelope)(line);
   if (envelope._tag === "None") {
     throw new Error(
       `treg exited ${exitCode} without a result: ${(stderr || stdout).trim().slice(0, 2000)}`,
@@ -131,7 +131,11 @@ export async function callTreg(
   }
   const { result, _treg: meta } = envelope.value;
   if (meta.http_status >= 400) throw new Error(describeFailure(meta.http_status, result));
-  const routed = Schema.decodeUnknownSync(RoutedResult)(result);
+  const decoded = Schema.decodeUnknownOption(RoutedResult)(result);
+  if (Option.isNone(decoded)) {
+    throw new Error(`treg returned an unexpected result: ${JSON.stringify(result).slice(0, 2000)}`);
+  }
+  const routed = decoded.value;
   const tregResult: TregResult = { output: routed.output ?? {} };
   if (routed._treg?.served_by) tregResult.servedBy = routed._treg.served_by;
   if (meta.charged_micro !== undefined) tregResult.costMicro = meta.charged_micro;

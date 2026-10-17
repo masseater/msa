@@ -74,7 +74,7 @@ function formatFetchResult(
 }
 
 function textRenderers(
-  formatCall: (args: any, theme: Theme) => string,
+  formatArgs: (args: any, theme: Theme) => string,
   formatResult: (
     result: Result,
     options: ToolRenderResultOptions,
@@ -85,7 +85,7 @@ function textRenderers(
   return {
     renderCall(args, theme, context) {
       const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-      text.setText(formatCall(args, theme));
+      text.setText(formatArgs(args, theme));
       return text;
     },
     renderResult(result, options, theme, context) {
