@@ -1,24 +1,11 @@
-/**
- * Codemode source format: JavaScript, optionally preceded by one options line.
- *
- * ```js
- * // @options: {"max_output_tokens": 2000, "timeout_ms": 30000}
- * const text = await tools.read({ path: "package.json" });
- * text(JSON.parse(text).name);
- * ```
- */
+import * as Data from "effect/Data";
 
 export const CODEMODE_OPTIONS_PREFIX = "// @options:";
 
 const SUPPORTED_FIELDS = ["max_output_tokens", "timeout_ms"] as const;
 const SUPPORTED_FIELDS_TEXT = "`max_output_tokens` and `timeout_ms`";
-/** Largest delay `setTimeout` supports, which bounds `timeout_ms`. */
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
-/**
- * Lark grammar for providers with grammar-constrained tool input. It only fixes the shape of the
- * options line; the options JSON and the code are checked by {@link parseCodemodeSource}.
- */
 export const CODEMODE_SOURCE_GRAMMAR = String.raw`
 start: options_source | plain_source
 options_source: OPTIONS_LINE NEWLINE SOURCE
@@ -30,22 +17,20 @@ SOURCE: /[\s\S]+/
 `;
 
 export interface CodemodeSourceOptions {
-  /** Token budget for the script's output. */
   maxOutputTokens?: number;
-  /** Hard deadline for the whole script in milliseconds, including tool calls. */
   timeoutMs?: number;
 }
 
 export interface ParsedCodemodeSource {
-  /** The script with the options line replaced by an empty line, so line numbers are unchanged. */
   code: string;
   options: CodemodeSourceOptions;
 }
 
-export class CodemodeSourceError extends Error {
+export class CodemodeSourceError extends Data.TaggedError("CodemodeSourceError")<{
+  readonly message: string;
+}> {
   constructor(message: string) {
-    super(message);
-    this.name = "CodemodeSourceError";
+    super({ message });
   }
 }
 
@@ -101,11 +86,6 @@ function parseOptions(directive: string): CodemodeSourceOptions {
   return options;
 }
 
-/**
- * Split an optional first-line `// @options: {...}` from the script. Throws
- * {@link CodemodeSourceError} for empty input, invalid options, and an options line that is not the
- * first line, which would otherwise be ignored without notice.
- */
 export function parseCodemodeSource(input: string): ParsedCodemodeSource {
   if (input.trim() === "") {
     throw new CodemodeSourceError(
@@ -122,7 +102,7 @@ export function parseCodemodeSource(input: string): ParsedCodemodeSource {
     );
   }
   const newline = input.indexOf("\n");
-  const firstLine = (newline === -1 ? input : input.slice(0, newline)).replace(/\r$/, "");
+  const firstLine = (newline === -1 ? input : input.slice(0, newline)).replace(/\r$/u, "");
   const trimmed = firstLine.trimStart();
   if (!trimmed.startsWith(CODEMODE_OPTIONS_PREFIX)) return { code: input, options: {} };
   const code = newline === -1 ? "" : input.slice(newline);

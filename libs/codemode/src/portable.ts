@@ -1,11 +1,5 @@
-/**
- * Sandboxes that need no Node built-ins: `InlineCodemodeSandbox` runs the VM on the calling thread
- * and `RemoteCodemodeSandbox` runs it in another isolate. Neither imports `node:*` modules, so this
- * entry works in Cloudflare Workers, Durable Objects, and browsers. `CodemodeSandbox`, which uses
- * worker threads, stays in the main entry.
- */
 export { toCodemodeIdentifier } from "./identifier.ts";
-export { CodemodeSandboxBase } from "./runtime/execution.ts";
+export { CodemodeSandboxBase } from "./runtime/sandbox-base.ts";
 export {
   DEFAULT_INTERRUPT_BUDGET,
   InlineCodemodeSandbox,
