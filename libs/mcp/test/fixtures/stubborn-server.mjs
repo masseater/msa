@@ -1,17 +1,18 @@
-// Answers initialize, spawns a grandchild that outlives stdin, and ignores stdin EOF and SIGTERM.
-import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
+import crossSpawn from "cross-spawn";
+import { Console, Effect } from "effect";
+
 process.on("SIGTERM", () => {});
-const grandchild = spawn(
+const grandchild = crossSpawn(
   process.execPath,
   ["-e", "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"],
   {
     stdio: "ignore",
   },
 );
-console.error(`grandchild ${grandchild.pid}`);
-setInterval(() => {}, 1000);
+Effect.runSync(Console.error(`grandchild ${grandchild.pid}`));
+Effect.runFork(Effect.forever(Effect.sleep("1 second")));
 
 const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
 lines.on("line", (line) => {

@@ -5,36 +5,50 @@ export {
   type OAuthCallbackServerOptions,
 } from "./callback.ts";
 export {
+  type AuthorizationServerDiscoveryOptions,
   buildAuthorizationServerDiscoveryUrls,
   discoverAuthorizationServerMetadata,
   discoverOAuthServerInfo,
   discoverProtectedResourceMetadata,
+  type OAuthServerInfoDiscoveryOptions,
   parseWwwAuthenticate,
+  type ProtectedResourceDiscoveryOptions,
   resourceUrlFromServerUrl,
   selectResource,
 } from "./discovery.ts";
 export {
   McpOAuthAuthorizationRequiredError,
+  OAuthCallbackError,
   OAuthError,
+  OAuthFlowError,
   OAuthInsecureEndpointError,
   OAuthIssuerMismatchError,
   OAuthRegistrationError,
 } from "./errors.ts";
 export {
-  type AddClientAuthentication,
-  adaptOAuthProvider,
-  authorizeMcp,
-  exchangeAuthorizationCode,
-  type OAuthClientMetadataDocument,
-  type OAuthClientProvider,
-  type OAuthFlowOptions,
-  type OAuthFlowResult,
-  refreshAuthorization,
+  type AuthorizationRequest,
+  type AuthorizationStart,
+  type ClientRegistrationRequest,
   registerClient,
   startAuthorization,
-  stepUpScope,
-  type TokenRequestOptions,
-} from "./flow.ts";
+} from "./authorization.ts";
+export { adaptOAuthProvider } from "./adapter.ts";
+export { authorizeMcp, type OAuthFlowFailure, stepUpScope } from "./flow.ts";
+export type {
+  AddClientAuthentication,
+  OAuthClientMetadataDocument,
+  OAuthClientProvider,
+  OAuthFlowOptions,
+  OAuthFlowResult,
+  TokenRequestOptions,
+} from "./flow-types.ts";
+export {
+  type AuthorizationCodeExchange,
+  exchangeAuthorizationCode,
+  type RefreshRequest,
+  refreshAuthorization,
+  type TokenRequestError,
+} from "./token.ts";
 export {
   McpOAuthProvider,
   type McpOAuthProviderOptions,

@@ -1,12 +1,11 @@
-/*
- * Adapted from modelcontextprotocol/typescript-sdk v1.29.0 src/client/auth.ts.
- * Copyright (c) 2024 Anthropic, PBC. Licensed under MIT; see LICENSES/.
- * Modified to remove Zod/CORS shims and enforce authorization-server issuer validation.
- */
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import type { McpFetch } from "../auth-provider.ts";
+import { fromPromise, fromSync, McpForeignError } from "../foreign.ts";
 import { LATEST_PROTOCOL_VERSION } from "../protocol/types.ts";
-import { OAuthIssuerMismatchError } from "./errors.ts";
+import { isServerUrl } from "./endpoint.ts";
+import { OAuthFlowError, OAuthIssuerMismatchError } from "./errors.ts";
 import {
   type AuthorizationServerMetadata,
   type OAuthChallenge,
@@ -16,39 +15,59 @@ import {
   parseProtectedResourceMetadata,
 } from "./types.ts";
 
-function discard(response: Response | undefined): void {
-  void response?.body?.cancel().catch(() => {});
+export interface ProtectedResourceDiscoveryOptions {
+  resourceMetadataUrl?: string | URL | undefined;
+  protocolVersion?: string | undefined;
+  fetch?: McpFetch | undefined;
+  signal?: AbortSignal | undefined;
 }
 
-/** 4xx and 502 mean "not here", so discovery tries the next candidate URL. */
+export interface AuthorizationServerDiscoveryOptions {
+  fetch?: McpFetch | undefined;
+  protocolVersion?: string | undefined;
+  skipIssuerValidation?: boolean | undefined;
+  signal?: AbortSignal | undefined;
+}
+
+export interface OAuthServerInfoDiscoveryOptions {
+  resourceMetadataUrl?: URL | undefined;
+  authorizationServerMetadataUrl?: URL | undefined;
+  fetch?: McpFetch | undefined;
+  skipIssuerValidation?: boolean | undefined;
+  signal?: AbortSignal | undefined;
+}
+
+type DiscoveryError = McpForeignError | OAuthFlowError | OAuthIssuerMismatchError;
+
+function discard(response: Response | undefined): void {
+  void response?.body?.cancel().catch(() => undefined);
+}
+
 function isDiscoveryMiss(status: number): boolean {
   return (status >= 400 && status < 500) || status === 502;
 }
 
-/** Path suffix for `/.well-known/<kind><path>`; empty for the root path. */
 function pathSuffix(pathname: string): string {
   return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 }
 
 function field(header: string, name: string): string | undefined {
   const match = header.match(
-    new RegExp(String.raw`(?:^|[,\s])${name}=(?:"([^"]*)"|([^\s,]+))`, "i"),
+    new RegExp(String.raw`(?:^|[,\s])${name}=(?:"([^"]*)"|([^\s,]+))`, "iu"),
   );
-  // An empty value (`scope=""`) carries no information, so it counts as absent.
-  return match?.[1] || match?.[2] || undefined;
+  const value = match?.[1] ?? match?.[2];
+  return value === undefined || value === "" ? undefined : value;
 }
 
 export function parseWwwAuthenticate(header: string | null): OAuthChallenge {
-  if (!header) return {};
-  const scheme = header.trimStart().split(/\s+/, 1)[0]?.toLowerCase();
+  if (header === null || header === "") return {};
+  const scheme = header.trimStart().split(/\s+/u, 1)[0]?.toLowerCase();
   if (scheme !== "bearer" && scheme !== "dpop") return {};
   const resourceMetadata = field(header, "resource_metadata");
-  let resourceMetadataUrl: URL | undefined;
-  if (resourceMetadata) {
-    try {
-      resourceMetadataUrl = new URL(resourceMetadata);
-    } catch {}
-  }
+  const resourceMetadataUrl =
+    resourceMetadata !== undefined && URL.canParse(resourceMetadata)
+      ? new URL(resourceMetadata)
+      : undefined;
   return {
     resourceMetadataUrl,
     scope: field(header, "scope"),
@@ -57,56 +76,70 @@ export function parseWwwAuthenticate(header: string | null): OAuthChallenge {
   };
 }
 
-async function fetchMetadata(
+const fetchMetadata = (
   url: URL,
   fetch: McpFetch,
   protocolVersion: string,
   signal: AbortSignal | undefined,
-): Promise<Response> {
-  return fetch(url, {
-    headers: { Accept: "application/json", "MCP-Protocol-Version": protocolVersion },
-    signal: signal ?? null,
-  });
-}
-
-export async function discoverProtectedResourceMetadata(
-  serverUrl: string | URL,
-  options: {
-    resourceMetadataUrl?: string | URL | undefined;
-    protocolVersion?: string | undefined;
-    fetch?: McpFetch | undefined;
-    signal?: AbortSignal | undefined;
-  } = {},
-): Promise<OAuthProtectedResourceMetadata> {
-  const server = new URL(serverUrl);
-  const fetch = options.fetch ?? globalThis.fetch;
-  const version = options.protocolVersion ?? LATEST_PROTOCOL_VERSION;
-  let response = await fetchMetadata(
-    options.resourceMetadataUrl
-      ? new URL(options.resourceMetadataUrl)
-      : new URL(
-          `/.well-known/oauth-protected-resource${pathSuffix(server.pathname)}`,
-          server.origin,
-        ),
-    fetch,
-    version,
-    options.signal,
+): Effect.Effect<Response, McpForeignError> =>
+  fromPromise(() =>
+    fetch(url, {
+      headers: { Accept: "application/json", "MCP-Protocol-Version": protocolVersion },
+      signal: signal ?? null,
+    }),
   );
-  if (!options.resourceMetadataUrl && server.pathname !== "/" && isDiscoveryMiss(response.status)) {
-    discard(response);
-    response = await fetchMetadata(
-      new URL("/.well-known/oauth-protected-resource", server.origin),
+
+const readJson = (response: Response): Effect.Effect<unknown, McpForeignError> =>
+  fromPromise((): Promise<unknown> => response.json());
+
+const discoverProtectedResourceMetadataEffect = Effect.fn("discoverProtectedResourceMetadata")(
+  function* (serverUrl: string | URL, options: ProtectedResourceDiscoveryOptions = {}) {
+    const server = new URL(serverUrl);
+    const fetch = options.fetch ?? globalThis.fetch;
+    const version = options.protocolVersion ?? LATEST_PROTOCOL_VERSION;
+    const configured = options.resourceMetadataUrl;
+    let response = yield* fetchMetadata(
+      configured === undefined
+        ? new URL(
+            `/.well-known/oauth-protected-resource${pathSuffix(server.pathname)}`,
+            server.origin,
+          )
+        : new URL(configured),
       fetch,
       version,
       options.signal,
     );
-  }
-  if (!response.ok) {
-    discard(response);
-    throw new Error(`HTTP ${response.status} loading OAuth protected resource metadata`);
-  }
-  return parseProtectedResourceMetadata(await response.json());
-}
+    if (configured === undefined && server.pathname !== "/" && isDiscoveryMiss(response.status)) {
+      discard(response);
+      response = yield* fetchMetadata(
+        new URL("/.well-known/oauth-protected-resource", server.origin),
+        fetch,
+        version,
+        options.signal,
+      );
+    }
+    if (!response.ok) {
+      discard(response);
+      return yield* new OAuthFlowError(
+        `HTTP ${response.status} loading OAuth protected resource metadata`,
+      );
+    }
+    const body = yield* readJson(response);
+    return yield* fromSync(() => parseProtectedResourceMetadata(body));
+  },
+);
+
+export const discoverProtectedResourceMetadata: {
+  (
+    options?: ProtectedResourceDiscoveryOptions,
+  ): (
+    serverUrl: string | URL,
+  ) => Effect.Effect<OAuthProtectedResourceMetadata, McpForeignError | OAuthFlowError>;
+  (
+    serverUrl: string | URL,
+    options?: ProtectedResourceDiscoveryOptions,
+  ): Effect.Effect<OAuthProtectedResourceMetadata, McpForeignError | OAuthFlowError>;
+} = dual(isServerUrl, discoverProtectedResourceMetadataEffect);
 
 export function buildAuthorizationServerDiscoveryUrls(
   authorizationServerUrl: string | URL,
@@ -120,7 +153,7 @@ export function buildAuthorizationServerDiscoveryUrls(
     },
     { url: new URL(`/.well-known/openid-configuration${path}`, issuer.origin), type: "oidc" },
   ];
-  if (path)
+  if (path !== "")
     urls.push({
       url: new URL(`${path}/.well-known/openid-configuration`, issuer.origin),
       type: "oidc",
@@ -128,122 +161,127 @@ export function buildAuthorizationServerDiscoveryUrls(
   return urls;
 }
 
-export async function discoverAuthorizationServerMetadata(
-  authorizationServerUrl: string | URL,
-  options: {
-    fetch?: McpFetch | undefined;
-    protocolVersion?: string | undefined;
-    skipIssuerValidation?: boolean | undefined;
-    signal?: AbortSignal | undefined;
-  } = {},
-): Promise<AuthorizationServerMetadata | undefined> {
-  const fetch = options.fetch ?? globalThis.fetch;
-  for (const { url } of buildAuthorizationServerDiscoveryUrls(authorizationServerUrl)) {
-    const response = await fetchMetadata(
-      url,
-      fetch,
-      options.protocolVersion ?? LATEST_PROTOCOL_VERSION,
-      options.signal,
-    );
-    if (!response.ok) {
-      discard(response);
-      if (isDiscoveryMiss(response.status)) continue;
-      throw new Error(`HTTP ${response.status} loading authorization server metadata from ${url}`);
-    }
-    const metadata = parseAuthorizationServerMetadata(await response.json());
-    if (!options.skipIssuerValidation) {
-      const expected = String(authorizationServerUrl);
-      // URL parsing adds a trailing slash to bare origins, so compare without one on either side.
-      const trim = (value: string) => (value.endsWith("/") ? value.slice(0, -1) : value);
-      if (trim(metadata.issuer) !== trim(expected))
-        throw new OAuthIssuerMismatchError(expected, metadata.issuer);
-    }
-    return metadata;
-  }
-  return undefined;
-}
+const trimSlash = (value: string): string => (value.endsWith("/") ? value.slice(0, -1) : value);
 
-export async function discoverOAuthServerInfo(
-  serverUrl: string | URL,
-  options: {
-    resourceMetadataUrl?: URL | undefined;
-    /** Metadata document to use instead of discovery. It is trusted as configured, so its issuer is not checked. */
-    authorizationServerMetadataUrl?: URL | undefined;
-    fetch?: McpFetch | undefined;
-    skipIssuerValidation?: boolean | undefined;
-    signal?: AbortSignal | undefined;
-  } = {},
-): Promise<OAuthServerInfo> {
-  let resourceMetadata: OAuthProtectedResourceMetadata | undefined;
-  try {
-    resourceMetadata = await discoverProtectedResourceMetadata(serverUrl, {
-      resourceMetadataUrl: options.resourceMetadataUrl,
-      fetch: options.fetch,
-      signal: options.signal,
-    });
-  } catch (error) {
-    if (error instanceof TypeError) throw error;
-  }
-  if (options.authorizationServerMetadataUrl) {
-    const url = options.authorizationServerMetadataUrl;
-    const response = await fetchMetadata(
-      url,
-      options.fetch ?? globalThis.fetch,
-      LATEST_PROTOCOL_VERSION,
-      options.signal,
-    );
-    if (!response.ok) {
-      discard(response);
-      throw new Error(`HTTP ${response.status} loading authorization server metadata from ${url}`);
+const discoverAuthorizationServerMetadataEffect = Effect.fn("discoverAuthorizationServerMetadata")(
+  function* (
+    authorizationServerUrl: string | URL,
+    options: AuthorizationServerDiscoveryOptions = {},
+  ) {
+    const fetch = options.fetch ?? globalThis.fetch;
+    for (const { url } of buildAuthorizationServerDiscoveryUrls(authorizationServerUrl)) {
+      const response = yield* fetchMetadata(
+        url,
+        fetch,
+        options.protocolVersion ?? LATEST_PROTOCOL_VERSION,
+        options.signal,
+      );
+      if (!response.ok) {
+        discard(response);
+        if (isDiscoveryMiss(response.status)) continue;
+        return yield* new OAuthFlowError(
+          `HTTP ${response.status} loading authorization server metadata from ${url}`,
+        );
+      }
+      const body = yield* readJson(response);
+      const metadata = yield* fromSync(() => parseAuthorizationServerMetadata(body));
+      if (options.skipIssuerValidation !== true) {
+        const expected = String(authorizationServerUrl);
+        if (trimSlash(metadata.issuer) !== trimSlash(expected))
+          return yield* new OAuthIssuerMismatchError(expected, metadata.issuer);
+      }
+      return metadata;
     }
-    const metadata = parseAuthorizationServerMetadata(await response.json());
-    return {
-      authorizationServerUrl: metadata.issuer,
-      authorizationServerMetadata: metadata,
-      resourceMetadata,
-    };
+    return undefined;
+  },
+);
+
+export const discoverAuthorizationServerMetadata: {
+  (
+    options?: AuthorizationServerDiscoveryOptions,
+  ): (
+    authorizationServerUrl: string | URL,
+  ) => Effect.Effect<AuthorizationServerMetadata | undefined, DiscoveryError>;
+  (
+    authorizationServerUrl: string | URL,
+    options?: AuthorizationServerDiscoveryOptions,
+  ): Effect.Effect<AuthorizationServerMetadata | undefined, DiscoveryError>;
+} = dual(isServerUrl, discoverAuthorizationServerMetadataEffect);
+
+const isNetworkFailure = (error: unknown): boolean =>
+  error instanceof McpForeignError && error.cause instanceof TypeError;
+
+const configuredServerInfo = Effect.fn("configuredServerInfo")(function* (
+  url: URL,
+  options: OAuthServerInfoDiscoveryOptions,
+  resourceMetadata: OAuthProtectedResourceMetadata | undefined,
+) {
+  const response = yield* fetchMetadata(
+    url,
+    options.fetch ?? globalThis.fetch,
+    LATEST_PROTOCOL_VERSION,
+    options.signal,
+  );
+  if (!response.ok) {
+    discard(response);
+    return yield* new OAuthFlowError(
+      `HTTP ${response.status} loading authorization server metadata from ${url}`,
+    );
   }
+  const body = yield* readJson(response);
+  const metadata = yield* fromSync(() => parseAuthorizationServerMetadata(body));
+  return {
+    authorizationServerUrl: metadata.issuer,
+    authorizationServerMetadata: metadata,
+    resourceMetadata,
+  } satisfies OAuthServerInfo;
+});
+
+const discoverOAuthServerInfoEffect = Effect.fn("discoverOAuthServerInfo")(function* (
+  serverUrl: string | URL,
+  options: OAuthServerInfoDiscoveryOptions = {},
+) {
+  const resourceMetadata = yield* discoverProtectedResourceMetadata(serverUrl, {
+    resourceMetadataUrl: options.resourceMetadataUrl,
+    fetch: options.fetch,
+    signal: options.signal,
+  }).pipe(
+    Effect.catchIf(
+      (error) => !isNetworkFailure(error),
+      () => Effect.undefined,
+    ),
+  );
+  if (options.authorizationServerMetadataUrl !== undefined)
+    return yield* configuredServerInfo(
+      options.authorizationServerMetadataUrl,
+      options,
+      resourceMetadata,
+    );
   const authorizationServerUrl =
     resourceMetadata?.authorization_servers?.[0] ?? String(new URL("/", serverUrl));
-  return {
+  const info: OAuthServerInfo = {
     authorizationServerUrl,
-    authorizationServerMetadata: await discoverAuthorizationServerMetadata(authorizationServerUrl, {
-      fetch: options.fetch,
-      skipIssuerValidation: options.skipIssuerValidation,
-      signal: options.signal,
-    }),
+    authorizationServerMetadata: yield* discoverAuthorizationServerMetadata(
+      authorizationServerUrl,
+      {
+        fetch: options.fetch,
+        skipIssuerValidation: options.skipIssuerValidation,
+        signal: options.signal,
+      },
+    ),
     resourceMetadata,
   };
-}
+  return info;
+});
 
-export function resourceUrlFromServerUrl(value: string | URL): URL {
-  const url = new URL(value);
-  url.hash = "";
-  return url;
-}
+export const discoverOAuthServerInfo: {
+  (
+    options?: OAuthServerInfoDiscoveryOptions,
+  ): (serverUrl: string | URL) => Effect.Effect<OAuthServerInfo, DiscoveryError>;
+  (
+    serverUrl: string | URL,
+    options?: OAuthServerInfoDiscoveryOptions,
+  ): Effect.Effect<OAuthServerInfo, DiscoveryError>;
+} = dual(isServerUrl, discoverOAuthServerInfoEffect);
 
-export function selectResource(
-  serverUrl: string | URL,
-  metadata?: OAuthProtectedResourceMetadata,
-): string | undefined {
-  if (!metadata) return undefined;
-  const requested = resourceUrlFromServerUrl(serverUrl);
-  const configured = new URL(metadata.resource);
-  if (requested.origin !== configured.origin) {
-    throw new Error(
-      `Protected resource ${metadata.resource} does not match MCP server ${requested}`,
-    );
-  }
-  const requestedPath = requested.pathname.endsWith("/")
-    ? requested.pathname
-    : `${requested.pathname}/`;
-  const configuredPath = configured.pathname.endsWith("/")
-    ? configured.pathname
-    : `${configured.pathname}/`;
-  if (!requestedPath.startsWith(configuredPath)) {
-    throw new Error(
-      `Protected resource ${metadata.resource} does not match MCP server ${requested}`,
-    );
-  }
-  return metadata.resource;
-}
+export { resourceUrlFromServerUrl, selectResource } from "./resource.ts";

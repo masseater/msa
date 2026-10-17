@@ -1,3 +1,11 @@
+import { McpError } from "./errors/mcp-error.ts";
+
+export { McpAbortError } from "./errors/abort-error.ts";
+export { McpClientError } from "./errors/client-error.ts";
+export { McpConnectionClosedError } from "./errors/connection-closed-error.ts";
+export { McpError } from "./errors/mcp-error.ts";
+export { McpTimeoutError } from "./errors/timeout-error.ts";
+
 export type JsonRpcId = string | number;
 
 export interface JsonRpcRequest {
@@ -41,42 +49,6 @@ export const JSON_RPC_ERROR_CODES = {
   invalidParams: -32602,
   internalError: -32603,
 } as const;
-
-export class McpError extends Error {
-  readonly code: number;
-  readonly data: unknown;
-
-  constructor(code: number, message: string, data?: unknown) {
-    super(message);
-    this.name = "McpError";
-    this.code = code;
-    this.data = data;
-  }
-}
-
-export class McpConnectionClosedError extends Error {
-  constructor(message = "MCP connection closed") {
-    super(message);
-    this.name = "McpConnectionClosedError";
-  }
-}
-
-export class McpTimeoutError extends Error {
-  readonly timeoutMs: number;
-
-  constructor(timeoutMs: number) {
-    super(`MCP request timed out after ${timeoutMs}ms`);
-    this.name = "McpTimeoutError";
-    this.timeoutMs = timeoutMs;
-  }
-}
-
-export class McpAbortError extends Error {
-  constructor(message = "MCP request aborted") {
-    super(message);
-    this.name = "AbortError";
-  }
-}
 
 export function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

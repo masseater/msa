@@ -2,10 +2,6 @@ import type { BlobResourceContents, ContentAnnotations, TextResourceContents } f
 import type { JsonRpcId } from "./jsonrpc.ts";
 
 export const LATEST_PROTOCOL_VERSION = "2025-11-25";
-/**
- * Versions the client accepts from a server. Servers that do not support the requested version answer
- * with their own latest one, so older versions stay accepted for servers built on older SDKs.
- */
 export const SUPPORTED_PROTOCOL_VERSIONS = [
   LATEST_PROTOCOL_VERSION,
   "2025-06-18",
@@ -95,7 +91,6 @@ export interface ListToolsResult {
   _meta?: Record<string, unknown>;
 }
 
-/** A resource a server lists in `resources/list`. */
 export interface Resource {
   uri: string;
   name: string;
@@ -107,7 +102,6 @@ export interface Resource {
   _meta?: Record<string, unknown>;
 }
 
-/** A family of resources, addressed by an RFC 6570 URI template, from `resources/templates/list`. */
 export interface ResourceTemplate {
   uriTemplate: string;
   name: string;

@@ -7,11 +7,6 @@ export type McpTransportErrorListener = (error: Error) => void;
 export type McpTransportCloseListener = () => void;
 
 export interface McpTransportSendOptions {
-  /**
-   * Aborted once the sender no longer waits for a reply (the request was cancelled, timed out, answered,
-   * or the client closed). A transport must not dispatch the message after that, for example when
-   * retrying it after an authorization refresh. It does not undo a message already dispatched.
-   */
   signal?: AbortSignal;
 }
 
@@ -25,7 +20,6 @@ export interface McpTransport {
   setProtocolVersion?(version: string): void;
 }
 
-/** Listener bookkeeping shared by transports. `emitClose` fires at most once per transport. */
 export abstract class TransportEvents {
   private messageListeners = new Set<McpTransportMessageListener>();
   private errorListeners = new Set<McpTransportErrorListener>();
