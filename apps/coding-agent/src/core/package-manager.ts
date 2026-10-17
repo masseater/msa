@@ -1893,7 +1893,7 @@ export class DefaultPackageManager implements PackageManager {
     }
     const name = match[1] ?? spec;
     const version = match[2];
-    return { name, version };
+    return version === undefined ? { name } : { name, version };
   }
 
   private assertProjectTrustedForScope(scope: SourceScope): void {

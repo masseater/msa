@@ -603,7 +603,7 @@ export class SettingsSelectorComponent extends Container {
                   return {
                     value: key,
                     label: modelItemLabel(model),
-                    description: override ?? undefined,
+                    ...(override ? { description: override } : {}),
                   };
                 });
                 if (modelItems.length === 0) {

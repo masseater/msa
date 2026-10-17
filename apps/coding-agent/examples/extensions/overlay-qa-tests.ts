@@ -61,11 +61,13 @@ export default function (msa: ExtensionAPI) {
 
       let index = 0;
       while (true) {
+        const anchor = anchors[index];
+        if (anchor === undefined) throw new Error(`No anchor at index ${index}`);
         const result = await ctx.ui.custom<"next" | "confirm" | "cancel">(
-          (_tui, theme, _kb, done) => new AnchorTestComponent(theme, anchors[index]!, done),
+          (_tui, theme, _kb, done) => new AnchorTestComponent(theme, anchor, done),
           {
             overlay: true,
-            overlayOptions: { anchor: anchors[index], width: 40 },
+            overlayOptions: { anchor, width: 40 },
           },
         );
 

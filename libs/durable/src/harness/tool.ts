@@ -926,7 +926,13 @@ function summaryOf(result: NestedToolExecutionResult, output: Content): NestedTo
   return {
     isError: result.isError,
     ...(result.durationMs === undefined ? {} : { durationMs: result.durationMs }),
-    ...(result.usage === undefined ? {} : { usage: result.usage }),
+    ...(result.usage === undefined
+      ? {}
+      : {
+          usage: copyJson(result.usage, { omitUndefinedProperties: true }) as NonNullable<
+            NestedToolSummary["usage"]
+          >,
+        }),
     ...(error === "" ? {} : { error }),
   };
 }

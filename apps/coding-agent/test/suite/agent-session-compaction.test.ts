@@ -427,7 +427,7 @@ describe("AgentSession compaction characterization", () => {
   it("notifies extensions when auto-compaction fails", async () => {
     const failedEvents: Array<{
       reason: "manual" | "threshold" | "overflow";
-      errorMessage?: string;
+      errorMessage?: string | undefined;
       aborted: boolean;
       willRetry: boolean;
       fromExtension: boolean;

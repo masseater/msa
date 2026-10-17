@@ -2134,7 +2134,7 @@ export interface ProviderChatModelConfig extends ProviderModelConfigBase {
   maxTokens: number;
   samplingParams?: Record<string, unknown>;
   /** OpenAI compatibility settings. */
-  compat?: NonNullable<Model<Api>["compat"]>;
+  compat?: Model<Api>["compat"];
 }
 
 /** Image-generation model configuration. */

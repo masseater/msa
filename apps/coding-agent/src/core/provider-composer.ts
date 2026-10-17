@@ -76,7 +76,7 @@ export interface ProviderChatModelConfig extends ProviderModelConfigBase {
   maxTokens: number;
   samplingParams?: NonNullable<Model<Api>["samplingParams"]>;
   samplingParamsByThinkingLevel?: NonNullable<Model<Api>["samplingParamsByThinkingLevel"]>;
-  compat?: NonNullable<Model<Api>["compat"]>;
+  compat?: Model<Api>["compat"];
 }
 
 export interface ProviderImageModelConfig extends ProviderModelConfigBase {

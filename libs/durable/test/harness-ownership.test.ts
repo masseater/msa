@@ -167,7 +167,7 @@ async function ownedChild(
 function gated(message: AssistantMessage) {
   const reached = deferred();
   const gate = deferred();
-  const step = async (_request: unknown, options?: { signal?: AbortSignal }) => {
+  const step = async (_request: unknown, options?: { signal?: AbortSignal | undefined }) => {
     reached.resolve();
     await Promise.race([gate.promise, aborted(options!.signal!)]);
     return message;

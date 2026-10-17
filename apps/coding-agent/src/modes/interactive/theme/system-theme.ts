@@ -440,10 +440,10 @@ const SOLVE_ORDER: ThemeToken[] = (() => {
 // ============================================================================
 
 export interface SystemThemeInput {
-  foreground?: RgbColor;
-  background?: RgbColor;
+  foreground?: RgbColor | undefined;
+  background?: RgbColor | undefined;
   /** ANSI colors 0-15. */
-  palette?: RgbColor[];
+  palette?: RgbColor[] | undefined;
   /** Saturation multiplier from 0 (grayscale) to 1. The first frame renders in grayscale until colors arrive. */
   saturation?: number;
   /** Appearance when the terminal did not report its background, e.g. from its light/dark report or COLORFGBG. */

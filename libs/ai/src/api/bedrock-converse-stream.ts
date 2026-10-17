@@ -204,9 +204,9 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
       // Region resolution: ARN-embedded > explicit option > env vars > SDK default chain.
       // When the model ID is an inference profile ARN, extract the region from it.
       // This avoids conflicts with AWS_REGION set for other services.
-      const arnRegionMatch = model.id.match(/^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9-]+):/);
-      if (arnRegionMatch) {
-        config.region = arnRegionMatch[1];
+      const arnRegion = model.id.match(/^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9-]+):/)?.[1];
+      if (arnRegion) {
+        config.region = arnRegion;
       } else if (configuredRegion) {
         config.region = configuredRegion;
       } else if (endpointRegion && useExplicitEndpoint) {
