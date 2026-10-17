@@ -3,7 +3,7 @@ import { Crypto, Effect, Function } from "effect";
 export type DigestAlgorithm = "SHA-1" | "SHA-256" | "SHA-384" | "SHA-512";
 
 const webCrypto =
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- effect の Crypto は 4.0.2 で pre-GA
+  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- Crypto.make (effect) is the only Effect service for random bytes and digests
   Crypto.make({
     randomBytes: (size) => globalThis.crypto.getRandomValues(new Uint8Array(size)),
     digest: (algorithm, data) =>
