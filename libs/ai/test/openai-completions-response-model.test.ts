@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { complete } from "../src/compat.ts";
@@ -57,91 +58,109 @@ describe("openai-completions responseModel", () => {
     mockState.chunks = [];
   });
 
-  it("surfaces routed chunk.model on responseModel without changing model", async () => {
-    mockState.chunks = [
-      {
-        id: "chatcmpl-1",
-        model: "anthropic/claude-opus-4.8",
-        choices: [{ index: 0, delta: { content: "hi" } }],
-      },
-      {
-        id: "chatcmpl-1",
-        model: "anthropic/claude-opus-4.8",
-        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-        usage: {
-          prompt_tokens: 10,
-          completion_tokens: 5,
-          prompt_tokens_details: { cached_tokens: 0 },
-          completion_tokens_details: { reasoning_tokens: 0 },
-        },
-      },
-    ];
+  it("surfaces routed chunk.model on responseModel without changing model", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.chunks = [
+          {
+            id: "chatcmpl-1",
+            model: "anthropic/claude-opus-4.8",
+            choices: [{ index: 0, delta: { content: "hi" } }],
+          },
+          {
+            id: "chatcmpl-1",
+            model: "anthropic/claude-opus-4.8",
+            choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+            usage: {
+              prompt_tokens: 10,
+              completion_tokens: 5,
+              prompt_tokens_details: { cached_tokens: 0 },
+              completion_tokens_details: { reasoning_tokens: 0 },
+            },
+          },
+        ];
 
-    const message = await complete(
-      openRouterAuto(),
-      { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
-      { apiKey: "test" },
-    );
+        const currentTime = yield* Clock.currentTimeMillis;
+        const message = yield* Effect.promise(() =>
+          complete(
+            openRouterAuto(),
+            { messages: [{ role: "user", content: "hi", timestamp: currentTime }] },
+            { apiKey: "test" },
+          ),
+        );
 
-    expect(message.model).toBe("openrouter/auto");
-    expect(message.responseModel).toBe("anthropic/claude-opus-4.8");
-    expect(message.provider).toBe("openrouter");
-    expect(message.stopReason).toBe("stop");
-  });
+        expect(message.model).toBe("openrouter/auto");
+        expect(message.responseModel).toBe("anthropic/claude-opus-4.8");
+        expect(message.provider).toBe("openrouter");
+        expect(message.stopReason).toBe("stop");
+      }),
+    ));
 
-  it("leaves responseModel undefined when chunks echo the requested id", async () => {
-    mockState.chunks = [
-      {
-        id: "chatcmpl-2",
-        model: "openrouter/auto",
-        choices: [{ index: 0, delta: { content: "hi" } }],
-      },
-      {
-        id: "chatcmpl-2",
-        model: "openrouter/auto",
-        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-        usage: {
-          prompt_tokens: 1,
-          completion_tokens: 1,
-          prompt_tokens_details: { cached_tokens: 0 },
-          completion_tokens_details: { reasoning_tokens: 0 },
-        },
-      },
-    ];
+  it("leaves responseModel undefined when chunks echo the requested id", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.chunks = [
+          {
+            id: "chatcmpl-2",
+            model: "openrouter/auto",
+            choices: [{ index: 0, delta: { content: "hi" } }],
+          },
+          {
+            id: "chatcmpl-2",
+            model: "openrouter/auto",
+            choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+            usage: {
+              prompt_tokens: 1,
+              completion_tokens: 1,
+              prompt_tokens_details: { cached_tokens: 0 },
+              completion_tokens_details: { reasoning_tokens: 0 },
+            },
+          },
+        ];
 
-    const message = await complete(
-      openRouterAuto(),
-      { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
-      { apiKey: "test" },
-    );
+        const currentTime1 = yield* Clock.currentTimeMillis;
+        const message = yield* Effect.promise(() =>
+          complete(
+            openRouterAuto(),
+            { messages: [{ role: "user", content: "hi", timestamp: currentTime1 }] },
+            { apiKey: "test" },
+          ),
+        );
 
-    expect(message.model).toBe("openrouter/auto");
-    expect(message.responseModel).toBeUndefined();
-  });
+        expect(message.model).toBe("openrouter/auto");
+        expect(message.responseModel).toBeUndefined();
+      }),
+    ));
 
-  it("ignores empty or missing chunk.model", async () => {
-    mockState.chunks = [
-      { id: "chatcmpl-3", choices: [{ index: 0, delta: { content: "hi" } }] },
-      { id: "chatcmpl-3", model: "", choices: [{ index: 0, delta: { content: "!" } }] },
-      {
-        id: "chatcmpl-3",
-        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-        usage: {
-          prompt_tokens: 1,
-          completion_tokens: 2,
-          prompt_tokens_details: { cached_tokens: 0 },
-          completion_tokens_details: { reasoning_tokens: 0 },
-        },
-      },
-    ];
+  it("ignores empty or missing chunk.model", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.chunks = [
+          { id: "chatcmpl-3", choices: [{ index: 0, delta: { content: "hi" } }] },
+          { id: "chatcmpl-3", model: "", choices: [{ index: 0, delta: { content: "!" } }] },
+          {
+            id: "chatcmpl-3",
+            choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+            usage: {
+              prompt_tokens: 1,
+              completion_tokens: 2,
+              prompt_tokens_details: { cached_tokens: 0 },
+              completion_tokens_details: { reasoning_tokens: 0 },
+            },
+          },
+        ];
 
-    const message = await complete(
-      openRouterAuto(),
-      { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
-      { apiKey: "test" },
-    );
+        const currentTime2 = yield* Clock.currentTimeMillis;
+        const message = yield* Effect.promise(() =>
+          complete(
+            openRouterAuto(),
+            { messages: [{ role: "user", content: "hi", timestamp: currentTime2 }] },
+            { apiKey: "test" },
+          ),
+        );
 
-    expect(message.model).toBe("openrouter/auto");
-    expect(message.responseModel).toBeUndefined();
-  });
+        expect(message.model).toBe("openrouter/auto");
+        expect(message.responseModel).toBeUndefined();
+      }),
+    ));
 });

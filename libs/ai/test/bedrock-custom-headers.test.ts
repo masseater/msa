@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 type MiddlewareHandler = (
@@ -74,11 +75,13 @@ function getModelFixture(): Model<"bedrock-converse-stream"> {
   return getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
 }
 
-async function driveBedrock(options: BedrockOptions): Promise<void> {
-  await streamBedrock(getModelFixture(), context, options)
-    .result()
-    .catch(() => undefined);
-}
+const driveBedrock = Effect.fn("driveBedrock")(function* (options: BedrockOptions) {
+  yield* Effect.promise(() =>
+    streamBedrock(getModelFixture(), context, options)
+      .result()
+      .catch(() => undefined),
+  );
+});
 
 function findCustomHeadersRegistration() {
   const matches = bedrockMock.middlewareRegistrations.filter(
@@ -92,113 +95,137 @@ beforeEach(() => {
 });
 
 describe("bedrock custom headers middleware", () => {
-  it("VC1: registers a build-step middleware that injects the caller header (happy path)", async () => {
-    await driveBedrock({ cacheRetention: "none", headers: { "x-custom": "v" } });
+  it("VC1: registers a build-step middleware that injects the caller header (happy path)", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* driveBedrock({ cacheRetention: "none", headers: { "x-custom": "v" } });
 
-    const registrations = findCustomHeadersRegistration();
-    expect(registrations).toHaveLength(1);
+        const registrations = findCustomHeadersRegistration();
+        expect(registrations).toHaveLength(1);
 
-    const [reg] = registrations;
-    expect(reg?.opts.step).toBe("build");
-    expect(reg?.opts.priority).toBe("low");
-    expect(reg?.opts.name).toBe(MIDDLEWARE_NAME);
+        const [reg] = registrations;
+        expect(reg?.opts.step).toBe("build");
+        expect(reg?.opts.priority).toBe("low");
+        expect(reg?.opts.name).toBe(MIDDLEWARE_NAME);
 
-    const nextSpy = vi.fn((a: unknown) => Promise.resolve(a));
-    const fakeArgs = { request: { headers: {} as Record<string, string> } };
-    await reg?.handler(nextSpy)(fakeArgs);
+        const nextSpy = vi.fn((a: unknown) => Promise.resolve(a));
+        const fakeArgs = { request: { headers: {} as Record<string, string> } };
+        yield* Effect.promise(() => Promise.resolve(reg?.handler(nextSpy)(fakeArgs)));
 
-    expect(fakeArgs.request.headers["x-custom"]).toBe("v");
-    expect(nextSpy).toHaveBeenCalledTimes(1);
-    expect(nextSpy).toHaveBeenCalledWith(fakeArgs);
-  });
+        expect(fakeArgs.request.headers["x-custom"]).toBe("v");
+        expect(nextSpy).toHaveBeenCalledTimes(1);
+        expect(nextSpy).toHaveBeenCalledWith(fakeArgs);
+      }),
+    ));
 
-  it("VC2: skips reserved headers case-insensitively while applying allowed ones", async () => {
-    await driveBedrock({
-      cacheRetention: "none",
-      headers: {
-        authorization: "evil",
-        "x-amz-date": "evil",
-        "x-allowed": "ok",
-        Authorization: "evil2",
-        "X-Amz-Date": "evil2",
-        HOST: "evil3",
-      },
-    });
+  it("VC2: skips reserved headers case-insensitively while applying allowed ones", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* driveBedrock({
+          cacheRetention: "none",
+          headers: {
+            authorization: "evil",
+            "x-amz-date": "evil",
+            "x-allowed": "ok",
+            Authorization: "evil2",
+            "X-Amz-Date": "evil2",
+            HOST: "evil3",
+          },
+        });
 
-    const [reg] = findCustomHeadersRegistration();
-    expect(reg).toBeDefined();
+        const [reg] = findCustomHeadersRegistration();
+        expect(reg).toBeDefined();
 
-    const nextSpy = vi.fn((a: unknown) => Promise.resolve(a));
-    const fakeArgs = {
-      request: {
-        headers: {
-          authorization: "real-auth",
-          "x-amz-date": "real-date",
-          host: "real-host",
-        } as Record<string, string>,
-      },
-    };
-    await reg?.handler(nextSpy)(fakeArgs);
+        const nextSpy = vi.fn((a: unknown) => Promise.resolve(a));
+        const fakeArgs = {
+          request: {
+            headers: {
+              authorization: "real-auth",
+              "x-amz-date": "real-date",
+              host: "real-host",
+            } as Record<string, string>,
+          },
+        };
+        yield* Effect.promise(() => Promise.resolve(reg?.handler(nextSpy)(fakeArgs)));
 
-    expect(fakeArgs.request.headers["authorization"]).toBe("real-auth");
-    expect(fakeArgs.request.headers["x-amz-date"]).toBe("real-date");
-    expect(fakeArgs.request.headers["host"]).toBe("real-host");
-    expect(fakeArgs.request.headers["x-allowed"]).toBe("ok");
-    expect(fakeArgs.request.headers["Authorization"]).toBeUndefined();
-    expect(fakeArgs.request.headers["X-Amz-Date"]).toBeUndefined();
-    expect(fakeArgs.request.headers["HOST"]).toBeUndefined();
-    expect(Object.keys(fakeArgs.request.headers).sort()).toEqual(
-      ["authorization", "host", "x-allowed", "x-amz-date"].sort(),
-    );
-    expect(nextSpy).toHaveBeenCalledTimes(1);
-  });
+        expect(fakeArgs.request.headers["authorization"]).toBe("real-auth");
+        expect(fakeArgs.request.headers["x-amz-date"]).toBe("real-date");
+        expect(fakeArgs.request.headers["host"]).toBe("real-host");
+        expect(fakeArgs.request.headers["x-allowed"]).toBe("ok");
+        expect(fakeArgs.request.headers["Authorization"]).toBeUndefined();
+        expect(fakeArgs.request.headers["X-Amz-Date"]).toBeUndefined();
+        expect(fakeArgs.request.headers["HOST"]).toBeUndefined();
+        expect(Object.keys(fakeArgs.request.headers).sort()).toEqual(
+          ["authorization", "host", "x-allowed", "x-amz-date"].sort(),
+        );
+        expect(nextSpy).toHaveBeenCalledTimes(1);
+      }),
+    ));
 
-  it("VC3: registers no middleware when headers is undefined", async () => {
-    await driveBedrock({ cacheRetention: "none" });
+  it("VC3: registers no middleware when headers is undefined", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* driveBedrock({ cacheRetention: "none" });
 
-    expect(findCustomHeadersRegistration()).toHaveLength(0);
-  });
+        expect(findCustomHeadersRegistration()).toHaveLength(0);
+      }),
+    ));
 
-  it("VC3: registers no middleware when headers is empty", async () => {
-    await driveBedrock({ cacheRetention: "none", headers: {} });
+  it("VC3: registers no middleware when headers is empty", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* driveBedrock({ cacheRetention: "none", headers: {} });
 
-    expect(findCustomHeadersRegistration()).toHaveLength(0);
-  });
+        expect(findCustomHeadersRegistration()).toHaveLength(0);
+      }),
+    ));
 
-  it("VC3 (structural guard): passes through unchanged when the request has no headers", async () => {
-    await driveBedrock({ cacheRetention: "none", headers: { "x-custom": "v" } });
+  it("VC3 (structural guard): passes through unchanged when the request has no headers", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* driveBedrock({ cacheRetention: "none", headers: { "x-custom": "v" } });
 
-    const [reg] = findCustomHeadersRegistration();
-    expect(reg).toBeDefined();
+        const [reg] = findCustomHeadersRegistration();
+        expect(reg).toBeDefined();
 
-    const nextSpy = vi.fn((a: unknown) => Promise.resolve(a));
+        const nextSpy = vi.fn((a: unknown) => Promise.resolve(a));
 
-    const argsNoHeaders = { request: {} };
-    await expect(reg?.handler(nextSpy)(argsNoHeaders)).resolves.toBeDefined();
-    expect(nextSpy).toHaveBeenCalledWith(argsNoHeaders);
+        const argsNoHeaders = { request: {} };
+        yield* Effect.promise(() =>
+          expect(reg?.handler(nextSpy)(argsNoHeaders)).resolves.toBeDefined(),
+        );
+        expect(nextSpy).toHaveBeenCalledWith(argsNoHeaders);
 
-    const argsUndefinedRequest = { request: undefined };
-    await expect(reg?.handler(nextSpy)(argsUndefinedRequest)).resolves.toBeDefined();
-    expect(nextSpy).toHaveBeenCalledWith(argsUndefinedRequest);
+        const argsUndefinedRequest = { request: undefined };
+        yield* Effect.promise(() =>
+          expect(reg?.handler(nextSpy)(argsUndefinedRequest)).resolves.toBeDefined(),
+        );
+        expect(nextSpy).toHaveBeenCalledWith(argsUndefinedRequest);
 
-    expect(nextSpy).toHaveBeenCalledTimes(2);
-  });
+        expect(nextSpy).toHaveBeenCalledTimes(2);
+      }),
+    ));
 
-  it("VC4: streamSimpleBedrock forwards headers end-to-end (regression guard)", async () => {
-    await streamSimpleBedrock(getModelFixture(), context, { headers: { "x-custom": "v" } })
-      .result()
-      .catch(() => undefined);
+  it("VC4: streamSimpleBedrock forwards headers end-to-end (regression guard)", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          streamSimpleBedrock(getModelFixture(), context, { headers: { "x-custom": "v" } })
+            .result()
+            .catch(() => undefined),
+        );
 
-    const registrations = findCustomHeadersRegistration();
-    expect(registrations).toHaveLength(1);
+        const registrations = findCustomHeadersRegistration();
+        expect(registrations).toHaveLength(1);
 
-    const [reg] = registrations;
-    expect(reg?.opts.step).toBe("build");
+        const [reg] = registrations;
+        expect(reg?.opts.step).toBe("build");
 
-    const nextSpy = vi.fn((a: unknown) => Promise.resolve(a));
-    const fakeArgs = { request: { headers: {} as Record<string, string> } };
-    await reg?.handler(nextSpy)(fakeArgs);
+        const nextSpy = vi.fn((a: unknown) => Promise.resolve(a));
+        const fakeArgs = { request: { headers: {} as Record<string, string> } };
+        yield* Effect.promise(() => Promise.resolve(reg?.handler(nextSpy)(fakeArgs)));
 
-    expect(fakeArgs.request.headers["x-custom"]).toBe("v");
-  });
+        expect(fakeArgs.request.headers["x-custom"]).toBe("v");
+      }),
+    ));
 });

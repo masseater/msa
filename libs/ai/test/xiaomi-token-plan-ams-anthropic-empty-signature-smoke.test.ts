@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { completeSimple, getEnvApiKey, streamSimple } from "../src/compat.ts";
@@ -52,7 +53,7 @@ function getThinkingBlocks(message: AssistantMessage) {
   return message.content.filter((block) => block.type === "thinking");
 }
 
-async function captureReplayPayload(context: Context): Promise<AnthropicPayload> {
+const captureReplayPayload = Effect.fn("captureReplayPayload")(function* (context: Context) {
   let capturedPayload: AnthropicPayload | undefined;
   const stream = streamSimple(model, context, {
     apiKey,
@@ -64,13 +65,13 @@ async function captureReplayPayload(context: Context): Promise<AnthropicPayload>
     },
   });
 
-  await stream.result();
+  yield* Effect.promise(() => stream.result());
 
   if (capturedPayload === undefined) {
     throw new Error("Expected payload capture before request");
   }
   return capturedPayload;
-}
+});
 
 describe.skipIf(apiKey === undefined || apiKey === "")(
   "Xiaomi Token Plan AMS Anthropic empty thinking signature smoke",
@@ -78,51 +79,56 @@ describe.skipIf(apiKey === undefined || apiKey === "")(
     it(
       "reproduces empty thinking signatures and preserves them for replay",
       { timeout: 60000, retry: 1 },
-      async () => {
-        const firstContext = makeInitialContext();
-        const first = await completeSimple(model, firstContext, {
-          apiKey,
-          maxTokens: 512,
-          reasoning: "high",
-        });
+      () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const firstContext = makeInitialContext();
+            const first = yield* Effect.promise(() =>
+              completeSimple(model, firstContext, {
+                apiKey,
+                maxTokens: 512,
+                reasoning: "high",
+              }),
+            );
 
-        expect(first.stopReason, first.errorMessage).toBe("stop");
+            expect(first.stopReason, first.errorMessage).toBe("stop");
 
-        const thinkingBlocks = getThinkingBlocks(first);
-        expect(thinkingBlocks.length).toBeGreaterThan(0);
-        expect(thinkingBlocks.some((block) => block.thinkingSignature === "")).toBe(true);
+            const thinkingBlocks = getThinkingBlocks(first);
+            expect(thinkingBlocks.length).toBeGreaterThan(0);
+            expect(thinkingBlocks.some((block) => block.thinkingSignature === "")).toBe(true);
 
-        const replayContext: Context = {
-          ...firstContext,
-          messages: [
-            ...firstContext.messages,
-            first,
-            {
-              role: "user",
-              content: "Reply with exactly this text and nothing else: second-ok",
-              timestamp: Date.now(),
-            },
-          ],
-        };
+            const replayContext: Context = {
+              ...firstContext,
+              messages: [
+                ...firstContext.messages,
+                first,
+                {
+                  role: "user",
+                  content: "Reply with exactly this text and nothing else: second-ok",
+                  timestamp: yield* Clock.currentTimeMillis,
+                },
+              ],
+            };
 
-        const replayPayload = await captureReplayPayload(replayContext);
-        const assistantPayload = replayPayload.messages?.find(
-          (message) => message.role === "assistant",
-        );
-        expect(assistantPayload).toBeDefined();
-        expect(Array.isArray(assistantPayload!.content)).toBe(true);
-        const replayedThinking = (
-          assistantPayload!.content as Array<{ type: string; text?: string }>
-        ).filter((block) => block.type === "thinking");
-        const replayedText = (
-          assistantPayload!.content as Array<{ type: string; text?: string }>
-        ).filter((block) => block.type === "text");
-        const firstThinking = thinkingBlocks.at(0)?.thinking;
-        expect(replayedThinking).toEqual([
-          { type: "thinking", thinking: firstThinking, signature: "" },
-        ]);
-        expect(replayedText.some((block) => block.text === firstThinking)).toBe(false);
-      },
+            const replayPayload = yield* captureReplayPayload(replayContext);
+            const assistantPayload = replayPayload.messages?.find(
+              (message) => message.role === "assistant",
+            );
+            expect(assistantPayload).toBeDefined();
+            expect(Array.isArray(assistantPayload!.content)).toBe(true);
+            const replayedThinking = (
+              assistantPayload!.content as Array<{ type: string; text?: string }>
+            ).filter((block) => block.type === "thinking");
+            const replayedText = (
+              assistantPayload!.content as Array<{ type: string; text?: string }>
+            ).filter((block) => block.type === "text");
+            const firstThinking = thinkingBlocks.at(0)?.thinking;
+            expect(replayedThinking).toEqual([
+              { type: "thinking", thinking: firstThinking, signature: "" },
+            ]);
+            expect(replayedText.some((block) => block.text === firstThinking)).toBe(false);
+          }),
+        ),
     );
   },
 );

@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
@@ -60,27 +61,37 @@ describe("OpenAI completions raw stop reasons", () => {
     mockState.chunks = [];
   });
 
-  it("preserves raw finish reasons for successful stops", async () => {
-    mockState.chunks = [
-      { id: "chatcmpl-1", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] },
-    ];
+  it("preserves raw finish reasons for successful stops", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.chunks = [
+          { id: "chatcmpl-1", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] },
+        ];
 
-    const message = await streamOpenAICompletions(model, context, { apiKey: "test" }).result();
+        const message = yield* Effect.promise(() =>
+          streamOpenAICompletions(model, context, { apiKey: "test" }).result(),
+        );
 
-    expect(message.stopReason).toBe("stop");
-    expect(message.rawStopReason).toBe("stop");
-    expect(message.errorMessage).toBeUndefined();
-  });
+        expect(message.stopReason).toBe("stop");
+        expect(message.rawStopReason).toBe("stop");
+        expect(message.errorMessage).toBeUndefined();
+      }),
+    ));
 
-  it("preserves raw finish reasons for provider error stops", async () => {
-    mockState.chunks = [
-      { id: "chatcmpl-2", choices: [{ index: 0, delta: {}, finish_reason: "content_filter" }] },
-    ];
+  it("preserves raw finish reasons for provider error stops", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.chunks = [
+          { id: "chatcmpl-2", choices: [{ index: 0, delta: {}, finish_reason: "content_filter" }] },
+        ];
 
-    const message = await streamOpenAICompletions(model, context, { apiKey: "test" }).result();
+        const message = yield* Effect.promise(() =>
+          streamOpenAICompletions(model, context, { apiKey: "test" }).result(),
+        );
 
-    expect(message.stopReason).toBe("error");
-    expect(message.rawStopReason).toBe("content_filter");
-    expect(message.errorMessage).toBe("Provider finish_reason: content_filter");
-  });
+        expect(message.stopReason).toBe("error");
+        expect(message.rawStopReason).toBe("content_filter");
+        expect(message.errorMessage).toBe("Provider finish_reason: content_filter");
+      }),
+    ));
 });

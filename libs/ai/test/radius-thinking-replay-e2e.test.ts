@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { completeSimple, getModel } from "../src/compat.ts";
@@ -11,9 +12,10 @@ import type {
   Tool,
   ToolResultMessage,
 } from "../src/types.ts";
+import { envValue } from "./env.ts";
 import { resolveApiKey } from "./oauth.ts";
 
-const radiusKey = process.env["RADIUS_API_KEY"] ?? (await resolveApiKey("radius"));
+const radiusKey = envValue("RADIUS_API_KEY") ?? (await resolveApiKey("radius"));
 const anthropicKey = getEnvApiKey("anthropic") ?? (await resolveApiKey("anthropic"));
 
 const tool: Tool = {
@@ -56,11 +58,11 @@ function request<TApi extends Api>(
   });
 }
 
-async function thinkingTurn<TApi extends Api>(
+const thinkingTurn = Effect.fn("thinkingTurn")(function* <TApi extends Api>(
   model: Model<TApi>,
   apiKey: string,
-): Promise<{ reply: AssistantMessage; result: ToolResultMessage }> {
-  const reply = await request(model, apiKey, [user]);
+) {
+  const reply = yield* Effect.promise(() => request(model, apiKey, [user]));
   expect(reply.stopReason, reply.errorMessage).toBe("toolUse");
   expect(
     reply.content.some(
@@ -78,69 +80,80 @@ async function thinkingTurn<TApi extends Api>(
     timestamp: 2,
   };
   return { reply, result };
-}
+});
 
-async function replayedThinkingTokens<TApi extends Api>(
+const replayedThinkingTokens = Effect.fn("replayedThinkingTokens")(function* <TApi extends Api>(
   model: Model<TApi>,
   apiKey: string,
   reply: AssistantMessage,
   result: ToolResultMessage,
-): Promise<number> {
+) {
   const withoutThinking: AssistantMessage = {
     ...reply,
     content: reply.content.filter((block) => block.type !== "thinking"),
   };
-  const [kept, stripped] = await Promise.all([
-    request(model, apiKey, [user, reply, result]),
-    request(model, apiKey, [user, withoutThinking, result]),
-  ]);
+  const [kept, stripped] = yield* Effect.promise(() =>
+    Promise.all([
+      request(model, apiKey, [user, reply, result]),
+      request(model, apiKey, [user, withoutThinking, result]),
+    ]),
+  );
   expect(kept.stopReason, kept.errorMessage).not.toBe("error");
   expect(stripped.stopReason, stripped.errorMessage).not.toBe("error");
   return inputTokens(kept) - inputTokens(stripped);
-}
+});
 
 describe("replayed Claude thinking stays in context", () => {
   it.skipIf(anthropicKey === undefined || anthropicKey === "")(
     "anthropic keeps it (control)",
     { timeout: 180000 },
-    async () => {
-      const model = getModel("anthropic", "claude-opus-5-5");
-      const { reply, result } = await thinkingTurn(model, anthropicKey!);
-      expect(reply.providerThinkingLevel).toBe("high");
-      const added = await replayedThinkingTokens(model, anthropicKey!, reply, result);
-      expect(added).toBeGreaterThan(0.5 * reply.usage.output);
-    },
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = getModel("anthropic", "claude-opus-5-5");
+          const { reply, result } = yield* thinkingTurn(model, anthropicKey!);
+          expect(reply.providerThinkingLevel).toBe("high");
+          const added = yield* replayedThinkingTokens(model, anthropicKey!, reply, result);
+          expect(added).toBeGreaterThan(0.5 * reply.usage.output);
+        }),
+      ),
   );
 
   it.skipIf(radiusKey === undefined || radiusKey === "")(
     "radius keeps it",
     { timeout: 180000 },
-    async () => {
-      const model = getModel("radius", "claude-opus-5-5");
-      const { reply, result } = await thinkingTurn(model, radiusKey!);
-      expect
-        .soft(reply.providerThinkingLevel, "radius done event omits providerThinkingLevel")
-        .toBe("high");
-      const added = await replayedThinkingTokens(model, radiusKey!, reply, result);
-      expect(added, "radius dropped the replayed thinking").toBeGreaterThan(
-        0.5 * reply.usage.output,
-      );
-    },
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = getModel("radius", "claude-opus-5-5");
+          const { reply, result } = yield* thinkingTurn(model, radiusKey!);
+          expect
+            .soft(reply.providerThinkingLevel, "radius done event omits providerThinkingLevel")
+            .toBe("high");
+          const added = yield* replayedThinkingTokens(model, radiusKey!, reply, result);
+          expect(added, "radius dropped the replayed thinking").toBeGreaterThan(
+            0.5 * reply.usage.output,
+          );
+        }),
+      ),
   );
 
   it.skipIf(radiusKey === undefined || radiusKey === "")(
     "radius keeps it when the client supplies the level",
     { timeout: 180000 },
-    async () => {
-      const model = getModel("radius", "claude-opus-5-5");
-      const { reply, result } = await thinkingTurn(model, radiusKey!);
-      const added = await replayedThinkingTokens(
-        model,
-        radiusKey!,
-        { ...reply, providerThinkingLevel: "high" },
-        result,
-      );
-      expect(added).toBeGreaterThan(0.5 * reply.usage.output);
-    },
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = getModel("radius", "claude-opus-5-5");
+          const { reply, result } = yield* thinkingTurn(model, radiusKey!);
+          const added = yield* replayedThinkingTokens(
+            model,
+            radiusKey!,
+            { ...reply, providerThinkingLevel: "high" },
+            result,
+          );
+          expect(added).toBeGreaterThan(0.5 * reply.usage.output);
+        }),
+      ),
   );
 });

@@ -1,3 +1,4 @@
+import { Effect, Stream } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
@@ -68,12 +69,14 @@ const context = normalizeContext({
   tools: [],
 });
 
-async function consume(options?: { maxRetries?: number; maxRetryDelayMs?: number }) {
-  const stream = streamOpenAICompletions(model, context, { apiKey: "test", ...options });
-  for await (const _event of stream) {
-    void _event;
-  }
-  return stream.result();
+function consume(options?: { maxRetries?: number; maxRetryDelayMs?: number }) {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const stream = streamOpenAICompletions(model, context, { apiKey: "test", ...options });
+      yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(Stream.orDie, Stream.runDrain);
+      return yield* Effect.promise(() => stream.result());
+    }),
+  );
 }
 
 describe("openai-completions provider retries", () => {
@@ -86,56 +89,67 @@ describe("openai-completions provider retries", () => {
     vi.useRealTimers();
   });
 
-  it("disables SDK retries by default", async () => {
-    await consume();
-    expect(mockState.requestOptions).toEqual([expect.objectContaining({ maxRetries: 0 })]);
-  });
-
-  it("honors provider retries while keeping SDK retries disabled", async () => {
-    vi.useFakeTimers();
-    mockState.requestErrors = [
-      Object.assign(new Error("rate limited"), {
-        status: 429,
-        headers: new Headers({ "retry-after-ms": "100" }),
+  it("disables SDK retries by default", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() => consume());
+        expect(mockState.requestOptions).toEqual([expect.objectContaining({ maxRetries: 0 })]);
       }),
-      Object.assign(new Error("server error"), {
-        status: 500,
-        headers: new Headers({ "retry-after-ms": "100" }),
+    ));
+
+  it("honors provider retries while keeping SDK retries disabled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        mockState.requestErrors = [
+          Object.assign(new Error("rate limited"), {
+            status: 429,
+            headers: new Headers({ "retry-after-ms": "100" }),
+          }),
+          Object.assign(new Error("server error"), {
+            status: 500,
+            headers: new Headers({ "retry-after-ms": "100" }),
+          }),
+        ];
+
+        const result = consume({ maxRetries: 2, maxRetryDelayMs: 100 });
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
+        expect(mockState.requestOptions).toHaveLength(1);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(99));
+        expect(mockState.requestOptions).toHaveLength(1);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1));
+        expect(mockState.requestOptions).toHaveLength(2);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(99));
+        expect(mockState.requestOptions).toHaveLength(2);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1));
+        yield* Effect.promise(() => result);
+
+        expect(mockState.requestOptions).toEqual([
+          expect.objectContaining({ maxRetries: 0 }),
+          expect.objectContaining({ maxRetries: 0 }),
+          expect.objectContaining({ maxRetries: 0 }),
+        ]);
       }),
-    ];
+    ));
 
-    const result = consume({ maxRetries: 2, maxRetryDelayMs: 100 });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(mockState.requestOptions).toHaveLength(1);
-    await vi.advanceTimersByTimeAsync(99);
-    expect(mockState.requestOptions).toHaveLength(1);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(mockState.requestOptions).toHaveLength(2);
-    await vi.advanceTimersByTimeAsync(99);
-    expect(mockState.requestOptions).toHaveLength(2);
-    await vi.advanceTimersByTimeAsync(1);
-    await result;
+  it("fails immediately when a provider-requested retry delay exceeds the limit", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.requestErrors = [
+          Object.assign(new Error("rate limited"), {
+            status: 429,
+            headers: new Headers({ "retry-after": "277403" }),
+          }),
+        ];
 
-    expect(mockState.requestOptions).toEqual([
-      expect.objectContaining({ maxRetries: 0 }),
-      expect.objectContaining({ maxRetries: 0 }),
-      expect.objectContaining({ maxRetries: 0 }),
-    ]);
-  });
+        const result = yield* Effect.promise(() =>
+          consume({ maxRetries: 2, maxRetryDelayMs: 1000 }),
+        );
 
-  it("fails immediately when a provider-requested retry delay exceeds the limit", async () => {
-    mockState.requestErrors = [
-      Object.assign(new Error("rate limited"), {
-        status: 429,
-        headers: new Headers({ "retry-after": "277403" }),
+        expect(result.stopReason).toBe("error");
+        expect(result.errorMessage).toContain("Server requested 277403s retry delay (max: 1s)");
+        expect(result.errorMessage).toContain("rate limited");
+        expect(mockState.requestOptions).toEqual([expect.objectContaining({ maxRetries: 0 })]);
       }),
-    ];
-
-    const result = await consume({ maxRetries: 2, maxRetryDelayMs: 1000 });
-
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toContain("Server requested 277403s retry delay (max: 1s)");
-    expect(result.errorMessage).toContain("rate limited");
-    expect(mockState.requestOptions).toEqual([expect.objectContaining({ maxRetries: 0 })]);
-  });
+    ));
 });

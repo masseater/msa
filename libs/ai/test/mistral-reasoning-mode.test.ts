@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { streamSimple } from "../src/api/mistral-conversations.ts";
@@ -48,10 +49,10 @@ function makeContext(): Context {
   };
 }
 
-async function capturePayload(
+const capturePayload = Effect.fn("capturePayload")(function* (
   model: Model<"mistral-conversations">,
   options?: SimpleStreamOptions,
-): Promise<MistralPayload> {
+) {
   let capturedPayload: MistralPayload | undefined;
   const stream = streamSimple(model, normalizeContext(makeContext()), {
     ...options,
@@ -62,109 +63,147 @@ async function capturePayload(
     },
   });
 
-  await stream.result();
+  yield* Effect.promise(() => stream.result());
 
   if (capturedPayload === undefined) {
     throw new Error("Expected payload to be captured before request failure");
   }
 
   return capturedPayload;
-}
+});
 
 describe("Mistral reasoning mode selection", () => {
-  it("uses prompt_mode for reasoning models without a thinking level map (Magistral)", async () => {
-    const payload = await capturePayload(makeModel("magistral-medium-latest", true), {
-      reasoning: "medium",
-    });
+  it("uses prompt_mode for reasoning models without a thinking level map (Magistral)", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeModel("magistral-medium-latest", true), {
+          reasoning: "medium",
+        });
 
-    expect(payload.promptMode).toBe("reasoning");
-    expect(payload.reasoningEffort).toBeUndefined();
-  });
+        expect(payload.promptMode).toBe("reasoning");
+        expect(payload.reasoningEffort).toBeUndefined();
+      }),
+    ));
 
-  it("omits reasoning controls for Magistral when thinking is off", async () => {
-    const payload = await capturePayload(makeModel("magistral-medium-latest", true));
+  it("omits reasoning controls for Magistral when thinking is off", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeModel("magistral-medium-latest", true));
 
-    expect(payload.promptMode).toBeUndefined();
-    expect(payload.reasoningEffort).toBeUndefined();
-  });
+        expect(payload.promptMode).toBeUndefined();
+        expect(payload.reasoningEffort).toBeUndefined();
+      }),
+    ));
 
   describe.each(["mistral-small-2603", "mistral-medium-latest", "zai-glm-5-2"] as const)(
     "%s",
     (modelId) => {
       const map = modelId === "zai-glm-5-2" ? GLM_5_2_LEVELS : NONE_HIGH_LEVELS;
 
-      it("uses reasoning_effort when thinking is enabled", async () => {
-        const payload = await capturePayload(makeModel(modelId, true, map), { reasoning: "high" });
+      it("uses reasoning_effort when thinking is enabled", () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const payload = yield* capturePayload(makeModel(modelId, true, map), {
+              reasoning: "high",
+            });
 
-        expect(payload.reasoningEffort).toBe("high");
-        expect(payload.promptMode).toBeUndefined();
-      });
+            expect(payload.reasoningEffort).toBe("high");
+            expect(payload.promptMode).toBeUndefined();
+          }),
+        ));
 
-      it("clamps unsupported levels to a supported effort", async () => {
-        const payload = await capturePayload(makeModel(modelId, true, map), { reasoning: "low" });
+      it("clamps unsupported levels to a supported effort", () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const payload = yield* capturePayload(makeModel(modelId, true, map), {
+              reasoning: "low",
+            });
 
-        expect(payload.reasoningEffort).toBe("high");
-      });
+            expect(payload.reasoningEffort).toBe("high");
+          }),
+        ));
 
-      it("sends reasoning_effort none when thinking is off", async () => {
-        const payload = await capturePayload(makeModel(modelId, true, map));
+      it("sends reasoning_effort none when thinking is off", () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const payload = yield* capturePayload(makeModel(modelId, true, map));
 
-        expect(payload.reasoningEffort).toBe("none");
-        expect(payload.promptMode).toBeUndefined();
-      });
+            expect(payload.reasoningEffort).toBe("none");
+            expect(payload.promptMode).toBeUndefined();
+          }),
+        ));
     },
   );
 
-  it("sends max for GLM-5.2", async () => {
-    const payload = await capturePayload(makeModel("zai-glm-5-2", true, GLM_5_2_LEVELS), {
-      reasoning: "max",
-    });
+  it("sends max for GLM-5.2", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeModel("zai-glm-5-2", true, GLM_5_2_LEVELS), {
+          reasoning: "max",
+        });
 
-    expect(payload.reasoningEffort).toBe("max");
-  });
+        expect(payload.reasoningEffort).toBe("max");
+      }),
+    ));
 
   describe("zai-glm-5-3", () => {
-    it.each(["low", "high", "max"] as const)("sends reasoning_effort %s", async (level) => {
-      const payload = await capturePayload(makeModel("zai-glm-5-3", true, GLM_5_3_LEVELS), {
-        reasoning: level,
-      });
+    it.each(["low", "high", "max"] as const)("sends reasoning_effort %s", (level) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const payload = yield* capturePayload(makeModel("zai-glm-5-3", true, GLM_5_3_LEVELS), {
+            reasoning: level,
+          });
 
-      expect(payload.reasoningEffort).toBe(level);
-      expect(payload.promptMode).toBeUndefined();
-    });
+          expect(payload.reasoningEffort).toBe(level);
+          expect(payload.promptMode).toBeUndefined();
+        }),
+      ),
+    );
 
-    it("maps medium to high", async () => {
-      const payload = await capturePayload(makeModel("zai-glm-5-3", true, GLM_5_3_LEVELS), {
-        reasoning: "medium",
-      });
+    it("maps medium to high", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const payload = yield* capturePayload(makeModel("zai-glm-5-3", true, GLM_5_3_LEVELS), {
+            reasoning: "medium",
+          });
 
-      expect(payload.reasoningEffort).toBe("high");
-    });
+          expect(payload.reasoningEffort).toBe("high");
+        }),
+      ));
   });
 
-  it("omits reasoning controls for non-reasoning models", async () => {
-    const payload = await capturePayload(makeModel("mistral-medium-2505", false), {
-      reasoning: "medium",
-    });
+  it("omits reasoning controls for non-reasoning models", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeModel("mistral-medium-2505", false), {
+          reasoning: "medium",
+        });
 
-    expect(payload.reasoningEffort).toBeUndefined();
-    expect(payload.promptMode).toBeUndefined();
-  });
+        expect(payload.reasoningEffort).toBeUndefined();
+        expect(payload.promptMode).toBeUndefined();
+      }),
+    ));
 
-  it("uses the session id as prompt cache key", async () => {
-    const payload = await capturePayload(makeModel("mistral-large-latest", false), {
-      sessionId: "session-123",
-    });
+  it("uses the session id as prompt cache key", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeModel("mistral-large-latest", false), {
+          sessionId: "session-123",
+        });
 
-    expect(payload.promptCacheKey).toBe("session-123");
-  });
+        expect(payload.promptCacheKey).toBe("session-123");
+      }),
+    ));
 
-  it("omits prompt cache key when cache retention is disabled", async () => {
-    const payload = await capturePayload(makeModel("mistral-large-latest", false), {
-      sessionId: "session-123",
-      cacheRetention: "none",
-    });
+  it("omits prompt cache key when cache retention is disabled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeModel("mistral-large-latest", false), {
+          sessionId: "session-123",
+          cacheRetention: "none",
+        });
 
-    expect(payload.promptCacheKey).toBeUndefined();
-  });
+        expect(payload.promptCacheKey).toBeUndefined();
+      }),
+    ));
 });

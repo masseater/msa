@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("@aws-sdk/client-bedrock-runtime", () => {
@@ -67,13 +68,18 @@ const context = normalizeContext({
 });
 
 describe("Bedrock 1h cache write cost", () => {
-  it("prices the 1h cache details at 2x while preserving the total cache write", async () => {
-    const result = await streamBedrock(model, context, { cacheRetention: "none" }).result();
+  it("prices the 1h cache details at 2x while preserving the total cache write", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const result = yield* Effect.promise(() =>
+          streamBedrock(model, context, { cacheRetention: "none" }).result(),
+        );
 
-    expect(result.usage.cacheWrite).toBe(1_000_000);
-    expect(result.usage.cacheWrite1h).toBe(400_000);
-    const expectedCacheWriteCost =
-      (600_000 * model.cost.cacheWrite + 400_000 * model.cost.input * 2) / 1_000_000;
-    expect(result.usage.cost.cacheWrite).toBeCloseTo(expectedCacheWriteCost, 10);
-  });
+        expect(result.usage.cacheWrite).toBe(1_000_000);
+        expect(result.usage.cacheWrite1h).toBe(400_000);
+        const expectedCacheWriteCost =
+          (600_000 * model.cost.cacheWrite + 400_000 * model.cost.input * 2) / 1_000_000;
+        expect(result.usage.cost.cacheWrite).toBeCloseTo(expectedCacheWriteCost, 10);
+      }),
+    ));
 });

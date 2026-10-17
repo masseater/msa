@@ -1,8 +1,10 @@
+import { Clock, Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { getModel, normalizeContext } from "../src/compat.ts";
 import { azureProvider } from "../src/providers/azure.ts";
 import type { AssistantMessage, Context } from "../src/types.ts";
+import { envValue } from "./env.ts";
 
 interface FakeOpenAIClientOptions {
   apiKey: string;
@@ -78,26 +80,27 @@ vi.mock("openai", () => {
 
 const azure = azureProvider();
 
-const originalBaseUrl = process.env["AZURE_OPENAI_BASE_URL"];
-const originalCacheRetention = process.env["MSA_CACHE_RETENTION"];
-const originalDeploymentMap = process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"];
+const originalBaseUrl = envValue("AZURE_OPENAI_BASE_URL");
+const originalCacheRetention = envValue("MSA_CACHE_RETENTION");
+const originalDeploymentMap = envValue("AZURE_OPENAI_DEPLOYMENT_NAME_MAP");
 
 beforeEach(() => {
   mockState.lastParams = undefined;
   mockState.lastClientOptions = undefined;
   mockState.dispatchedTo = undefined;
-  delete process.env["MSA_CACHE_RETENTION"];
-  delete process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"];
-  process.env["AZURE_OPENAI_BASE_URL"] = "https://my-resource.services.ai.azure.com";
+  vi.stubEnv("MSA_CACHE_RETENTION", undefined);
+  vi.stubEnv("AZURE_OPENAI_DEPLOYMENT_NAME_MAP", undefined);
+  vi.stubEnv("AZURE_OPENAI_BASE_URL", "https://my-resource.services.ai.azure.com");
 });
 
 afterEach(() => {
-  if (originalBaseUrl === undefined) delete process.env["AZURE_OPENAI_BASE_URL"];
-  else process.env["AZURE_OPENAI_BASE_URL"] = originalBaseUrl;
-  if (originalCacheRetention === undefined) delete process.env["MSA_CACHE_RETENTION"];
-  else process.env["MSA_CACHE_RETENTION"] = originalCacheRetention;
-  if (originalDeploymentMap === undefined) delete process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"];
-  else process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"] = originalDeploymentMap;
+  if (originalBaseUrl === undefined) vi.stubEnv("AZURE_OPENAI_BASE_URL", undefined);
+  else vi.stubEnv("AZURE_OPENAI_BASE_URL", originalBaseUrl);
+  if (originalCacheRetention === undefined) vi.stubEnv("MSA_CACHE_RETENTION", undefined);
+  else vi.stubEnv("MSA_CACHE_RETENTION", originalCacheRetention);
+  if (originalDeploymentMap === undefined)
+    vi.stubEnv("AZURE_OPENAI_DEPLOYMENT_NAME_MAP", undefined);
+  else vi.stubEnv("AZURE_OPENAI_DEPLOYMENT_NAME_MAP", originalDeploymentMap);
 });
 
 const context = normalizeContext({
@@ -110,190 +113,266 @@ function deepSeekModel() {
 }
 
 describe("azure deepseek-v4-pro over Chat Completions", () => {
-  it("turns thinking on with reasoning_effort instead of DeepSeek's thinking field", async () => {
-    await azure
-      .streamSimple(deepSeekModel(), context, { apiKey: "test-key", reasoning: "high" })
-      .result();
+  it("turns thinking on with reasoning_effort instead of DeepSeek's thinking field", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          azure
+            .streamSimple(deepSeekModel(), context, { apiKey: "test-key", reasoning: "high" })
+            .result(),
+        );
 
-    expect(mockState.lastParams?.reasoning_effort).toBe("high");
-    expect(mockState.lastParams?.thinking).toBeUndefined();
-  });
+        expect(mockState.lastParams?.reasoning_effort).toBe("high");
+        expect(mockState.lastParams?.thinking).toBeUndefined();
+      }),
+    ));
 
-  it("clamps thinking levels the deployment does not accept", async () => {
-    await azure
-      .streamSimple(deepSeekModel(), context, { apiKey: "test-key", reasoning: "max" })
-      .result();
+  it("clamps thinking levels the deployment does not accept", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          azure
+            .streamSimple(deepSeekModel(), context, { apiKey: "test-key", reasoning: "max" })
+            .result(),
+        );
 
-    expect(mockState.lastParams?.reasoning_effort).toBe("high");
-  });
+        expect(mockState.lastParams?.reasoning_effort).toBe("high");
+      }),
+    ));
 
-  it("sends no reasoning_effort when no thinking level is requested", async () => {
-    await azure.streamSimple(deepSeekModel(), context, { apiKey: "test-key" }).result();
+  it("sends no reasoning_effort when no thinking level is requested", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          azure.streamSimple(deepSeekModel(), context, { apiKey: "test-key" }).result(),
+        );
 
-    expect(mockState.lastParams?.reasoning_effort).toBeUndefined();
-    expect(mockState.lastParams?.thinking).toBeUndefined();
-  });
+        expect(mockState.lastParams?.reasoning_effort).toBeUndefined();
+        expect(mockState.lastParams?.thinking).toBeUndefined();
+      }),
+    ));
 
-  it("omits prompt cache parameters when long retention comes from MSA_CACHE_RETENTION", async () => {
-    process.env["MSA_CACHE_RETENTION"] = "long";
+  it("omits prompt cache parameters when long retention comes from MSA_CACHE_RETENTION", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("MSA_CACHE_RETENTION", "long");
 
-    await azure
-      .stream(deepSeekModel(), context, { apiKey: "test-key", sessionId: "session-env" })
-      .result();
+        yield* Effect.promise(() =>
+          azure
+            .stream(deepSeekModel(), context, { apiKey: "test-key", sessionId: "session-env" })
+            .result(),
+        );
 
-    expect(mockState.lastParams?.prompt_cache_key).toBeUndefined();
-    expect(mockState.lastParams?.prompt_cache_retention).toBeUndefined();
-  });
+        expect(mockState.lastParams?.prompt_cache_key).toBeUndefined();
+        expect(mockState.lastParams?.prompt_cache_retention).toBeUndefined();
+      }),
+    ));
 
-  it("sends the system prompt under the system role", async () => {
-    await azure
-      .stream(deepSeekModel(), context, { apiKey: "test-key", reasoningEffort: "low" })
-      .result();
+  it("sends the system prompt under the system role", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          azure
+            .stream(deepSeekModel(), context, { apiKey: "test-key", reasoningEffort: "low" })
+            .result(),
+        );
 
-    expect(mockState.lastParams?.messages?.[0]).toMatchObject({ role: "system", content: "sys" });
-  });
+        expect(mockState.lastParams?.messages?.[0]).toMatchObject({
+          role: "system",
+          content: "sys",
+        });
+      }),
+    ));
 
-  it("keeps mid-conversation system messages in place", async () => {
-    const resumed = normalizeContext({
-      systemPrompt: "first",
-      messages: [
-        { role: "user", content: "hi", timestamp: Date.now() },
-        { role: "system", content: "second", timestamp: Date.now() },
-        { role: "user", content: "again", timestamp: Date.now() },
-      ],
-    });
+  it("keeps mid-conversation system messages in place", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const resumed = normalizeContext({
+          systemPrompt: "first",
+          messages: [
+            { role: "user", content: "hi", timestamp: yield* Clock.currentTimeMillis },
+            { role: "system", content: "second", timestamp: yield* Clock.currentTimeMillis },
+            { role: "user", content: "again", timestamp: yield* Clock.currentTimeMillis },
+          ],
+        });
 
-    await azure.stream(deepSeekModel(), resumed, { apiKey: "test-key" }).result();
+        yield* Effect.promise(() =>
+          azure.stream(deepSeekModel(), resumed, { apiKey: "test-key" }).result(),
+        );
 
-    expect(mockState.lastParams?.messages?.map((message) => message.role)).toEqual([
-      "system",
-      "user",
-      "system",
-      "user",
-    ]);
-  });
+        expect(mockState.lastParams?.messages?.map((message) => message.role)).toEqual([
+          "system",
+          "user",
+          "system",
+          "user",
+        ]);
+      }),
+    ));
 
-  it("omits prompt cache parameters even when long retention is requested", async () => {
-    await azure
-      .stream(deepSeekModel(), context, {
-        apiKey: "test-key",
-        cacheRetention: "long",
-        sessionId: "session-1",
-      })
-      .result();
+  it("omits prompt cache parameters even when long retention is requested", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          azure
+            .stream(deepSeekModel(), context, {
+              apiKey: "test-key",
+              cacheRetention: "long",
+              sessionId: "session-1",
+            })
+            .result(),
+        );
 
-    expect(mockState.lastParams?.prompt_cache_key).toBeUndefined();
-    expect(mockState.lastParams?.prompt_cache_retention).toBeUndefined();
-  });
+        expect(mockState.lastParams?.prompt_cache_key).toBeUndefined();
+        expect(mockState.lastParams?.prompt_cache_retention).toBeUndefined();
+      }),
+    ));
 
-  it("replays reasoning_content on assistant turns so the cached prefix is unchanged", async () => {
-    const assistant: AssistantMessage = {
-      role: "assistant",
-      content: [
-        {
-          type: "thinking",
-          thinking: "internal reasoning",
-          thinkingSignature: "reasoning_content",
-        },
-        { type: "text", text: "answer" },
-      ],
-      provider: "azure",
-      api: "openai-completions",
-      model: "deepseek-v4-pro",
-      timestamp: Date.now(),
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
-      stopReason: "stop",
-    };
-    const resumed: Context = {
-      systemPrompt: "sys",
-      messages: [
-        { role: "user", content: "first", timestamp: Date.now() },
-        assistant,
-        { role: "user", content: "second", timestamp: Date.now() },
-      ],
-    };
+  it("replays reasoning_content on assistant turns so the cached prefix is unchanged", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const assistant: AssistantMessage = {
+          role: "assistant",
+          content: [
+            {
+              type: "thinking",
+              thinking: "internal reasoning",
+              thinkingSignature: "reasoning_content",
+            },
+            { type: "text", text: "answer" },
+          ],
+          provider: "azure",
+          api: "openai-completions",
+          model: "deepseek-v4-pro",
+          timestamp: yield* Clock.currentTimeMillis,
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+        };
+        const resumed: Context = {
+          systemPrompt: "sys",
+          messages: [
+            { role: "user", content: "first", timestamp: yield* Clock.currentTimeMillis },
+            assistant,
+            { role: "user", content: "second", timestamp: yield* Clock.currentTimeMillis },
+          ],
+        };
 
-    await azure.stream(deepSeekModel(), normalizeContext(resumed), { apiKey: "test-key" }).result();
+        yield* Effect.promise(() =>
+          azure.stream(deepSeekModel(), normalizeContext(resumed), { apiKey: "test-key" }).result(),
+        );
 
-    const assistantMessage = mockState.lastParams?.messages?.find(
-      (message) => message.role === "assistant",
-    );
-    expect(assistantMessage?.reasoning_content).toBe("internal reasoning");
-  });
+        const assistantMessage = mockState.lastParams?.messages?.find(
+          (message) => message.role === "assistant",
+        );
+        expect(assistantMessage?.reasoning_content).toBe("internal reasoning");
+      }),
+    ));
 });
 
 describe("azure Chat Completions endpoint resolution", () => {
-  it("normalizes the Azure endpoint the completions client is built with", async () => {
-    await azure.stream(deepSeekModel(), context, { apiKey: "test-key" }).result();
+  it("normalizes the Azure endpoint the completions client is built with", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          azure.stream(deepSeekModel(), context, { apiKey: "test-key" }).result(),
+        );
 
-    expect(mockState.lastClientOptions?.baseURL).toBe(
-      "https://my-resource.services.ai.azure.com/openai/v1",
-    );
-  });
+        expect(mockState.lastClientOptions?.baseURL).toBe(
+          "https://my-resource.services.ai.azure.com/openai/v1",
+        );
+      }),
+    ));
 
-  it("surfaces an unconfigured endpoint as an error event rather than throwing out of stream()", async () => {
-    delete process.env["AZURE_OPENAI_BASE_URL"];
+  it("surfaces an unconfigured endpoint as an error event rather than throwing out of stream()", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("AZURE_OPENAI_BASE_URL", undefined);
 
-    const result = await azure.stream(deepSeekModel(), context, { apiKey: "test-key" }).result();
+        const result = yield* Effect.promise(() =>
+          azure.stream(deepSeekModel(), context, { apiKey: "test-key" }).result(),
+        );
 
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toContain("Azure OpenAI base URL is required");
-  });
+        expect(result.stopReason).toBe("error");
+        expect(result.errorMessage).toContain("Azure OpenAI base URL is required");
+      }),
+    ));
 
-  it("sends the model id as the request model", async () => {
-    const result = await azure.stream(deepSeekModel(), context, { apiKey: "test-key" }).result();
+  it("sends the model id as the request model", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const result = yield* Effect.promise(() =>
+          azure.stream(deepSeekModel(), context, { apiKey: "test-key" }).result(),
+        );
 
-    expect(mockState.lastParams?.model).toBe("deepseek-v4-pro");
-    expect(result.model).toBe("deepseek-v4-pro");
-  });
+        expect(mockState.lastParams?.model).toBe("deepseek-v4-pro");
+        expect(result.model).toBe("deepseek-v4-pro");
+      }),
+    ));
 
-  it("sends the mapped deployment name while keeping the catalog id on the message", async () => {
-    process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"] = "deepseek-v4-pro=my-deepseek";
+  it("sends the mapped deployment name while keeping the catalog id on the message", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("AZURE_OPENAI_DEPLOYMENT_NAME_MAP", "deepseek-v4-pro=my-deepseek");
 
-    const result = await azure
-      .streamSimple(deepSeekModel(), context, { apiKey: "test-key" })
-      .result();
+        const result = yield* Effect.promise(() =>
+          azure.streamSimple(deepSeekModel(), context, { apiKey: "test-key" }).result(),
+        );
 
-    expect(mockState.lastParams?.model).toBe("my-deepseek");
-    expect(result.model).toBe("deepseek-v4-pro");
-  });
+        expect(mockState.lastParams?.model).toBe("my-deepseek");
+        expect(result.model).toBe("deepseek-v4-pro");
+      }),
+    ));
 
-  it("passes the deployment name through a caller's onPayload", async () => {
-    process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"] = "deepseek-v4-pro=my-deepseek";
-    let seenModel: unknown;
+  it("passes the deployment name through a caller's onPayload", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("AZURE_OPENAI_DEPLOYMENT_NAME_MAP", "deepseek-v4-pro=my-deepseek");
+        let seenModel: unknown;
 
-    await azure
-      .stream(deepSeekModel(), context, {
-        apiKey: "test-key",
-        onPayload: (payload) => {
-          seenModel = (payload as CapturedCompletionsPayload).model;
-          return { ...(payload as object), temperature: 0.1 };
-        },
-      })
-      .result();
+        yield* Effect.promise(() =>
+          azure
+            .stream(deepSeekModel(), context, {
+              apiKey: "test-key",
+              onPayload: (payload) => {
+                seenModel = (payload as CapturedCompletionsPayload).model;
+                return { ...(payload as object), temperature: 0.1 };
+              },
+            })
+            .result(),
+        );
 
-    expect(seenModel).toBe("my-deepseek");
-    expect(mockState.lastParams).toMatchObject({ model: "my-deepseek", temperature: 0.1 });
-  });
+        expect(seenModel).toBe("my-deepseek");
+        expect(mockState.lastParams).toMatchObject({ model: "my-deepseek", temperature: 0.1 });
+      }),
+    ));
 });
 
 describe("azure api map", () => {
-  it("still routes Responses models to the Responses api", async () => {
-    await azure.stream(getModel("azure", "gpt-4o-mini"), context, { apiKey: "test-key" }).result();
+  it("still routes Responses models to the Responses api", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          azure.stream(getModel("azure", "gpt-4o-mini"), context, { apiKey: "test-key" }).result(),
+        );
 
-    expect(mockState.dispatchedTo).toBe("responses");
-  });
+        expect(mockState.dispatchedTo).toBe("responses");
+      }),
+    ));
 
-  it("routes openai-completions models to chat completions", async () => {
-    await azure.stream(deepSeekModel(), context, { apiKey: "test-key" }).result();
+  it("routes openai-completions models to chat completions", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          azure.stream(deepSeekModel(), context, { apiKey: "test-key" }).result(),
+        );
 
-    expect(mockState.dispatchedTo).toBe("chat.completions");
-  });
+        expect(mockState.dispatchedTo).toBe("chat.completions");
+      }),
+    ));
 });

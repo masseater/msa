@@ -2,7 +2,8 @@ import { once } from "node:events";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { Effect, Stream } from "effect";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   convertMessages,
@@ -17,6 +18,7 @@ import type {
   Usage,
 } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
+import { decodeJson, encodeJson } from "./json-codec.ts";
 
 const emptyUsage: Usage = {
   input: 0,
@@ -99,14 +101,23 @@ function buildContext(assistant: AssistantMessage): Context {
   };
 }
 
-async function collectEvents(
+function collectEvents(
   stream: AsyncIterable<AssistantMessageEvent>,
 ): Promise<AssistantMessageEvent[]> {
-  const events: AssistantMessageEvent[] = [];
-  for await (const event of stream) {
-    events.push(event);
-  }
-  return events;
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const events: AssistantMessageEvent[] = [];
+      yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
+        Stream.orDie,
+        Stream.runForEach((event) =>
+          Effect.sync(() => {
+            events.push(event);
+          }),
+        ),
+      );
+      return events;
+    }),
+  );
 }
 
 interface ChatCompletionsRequestBody {
@@ -118,7 +129,7 @@ interface ChatCompletionsRequestBody {
 
 describe("openai-completions thinking-as-text replay", () => {
   afterEach(() => {
-    delete process.env["OPENAI_API_KEY"];
+    vi.stubEnv("OPENAI_API_KEY", undefined);
   });
 
   it("serializes same-model thinking-plus-text replay as assistant text parts", () => {
@@ -161,45 +172,56 @@ describe("openai-completions thinking-as-text replay", () => {
 
   it("reaches the endpoint when replay contains both thinking and text", async () => {
     const requestBodies: ChatCompletionsRequestBody[] = [];
-    const server = http.createServer(async (req, res) => {
-      if (req.method !== "POST" || req.url !== "/chat/completions") {
-        res.writeHead(404).end();
-        return;
-      }
+    const server = http.createServer((req, res) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          if (req.method !== "POST" || req.url !== "/chat/completions") {
+            res.writeHead(404).end();
+            return;
+          }
 
-      let body = "";
-      for await (const chunk of req) {
-        body += chunk.toString();
-      }
-      requestBodies.push(JSON.parse(body) as ChatCompletionsRequestBody);
+          let body = "";
+          yield* Stream.fromAsyncIterable(req, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEach((chunk) =>
+              Effect.sync(() => {
+                body += chunk.toString();
+              }),
+            ),
+          );
+          requestBodies.push((yield* decodeJson(body)) as ChatCompletionsRequestBody);
 
-      res.writeHead(200, {
-        "content-type": "text/event-stream",
-        "cache-control": "no-cache",
-        connection: "keep-alive",
-      });
-      res.write(
-        `data: ${JSON.stringify({
-          id: "chatcmpl-repro",
-          object: "chat.completion.chunk",
-          created: 0,
-          model: "repro-model",
-          choices: [{ index: 0, delta: { role: "assistant", content: "ok" }, finish_reason: null }],
-        })}\n\n`,
-      );
-      res.write(
-        `data: ${JSON.stringify({
-          id: "chatcmpl-repro",
-          object: "chat.completion.chunk",
-          created: 0,
-          model: "repro-model",
-          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-          usage: { prompt_tokens: 1, completion_tokens: 1 },
-        })}\n\n`,
-      );
-      res.write("data: [DONE]\n\n");
-      res.end();
-    });
+          res.writeHead(200, {
+            "content-type": "text/event-stream",
+            "cache-control": "no-cache",
+            connection: "keep-alive",
+          });
+          res.write(
+            `data: ${yield* encodeJson({
+              id: "chatcmpl-repro",
+              object: "chat.completion.chunk",
+              created: 0,
+              model: "repro-model",
+              choices: [
+                { index: 0, delta: { role: "assistant", content: "ok" }, finish_reason: null },
+              ],
+            })}\n\n`,
+          );
+          res.write(
+            `data: ${yield* encodeJson({
+              id: "chatcmpl-repro",
+              object: "chat.completion.chunk",
+              created: 0,
+              model: "repro-model",
+              choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+              usage: { prompt_tokens: 1, completion_tokens: 1 },
+            })}\n\n`,
+          );
+          res.write("data: [DONE]\n\n");
+          res.end();
+        }),
+      ),
+    );
 
     server.listen(0, "127.0.0.1");
     await once(server, "listening");

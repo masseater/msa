@@ -1,5 +1,6 @@
 import { arch, platform, release } from "node:os";
 
+import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const googleGenAiMock = vi.hoisted(() => ({
@@ -106,59 +107,67 @@ const context = normalizeContext({
   messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
 });
 
-async function captureGoogleHeaders(
+const captureGoogleHeaders = Effect.fn("captureGoogleHeaders")(function* (
   headers?: Record<string, string>,
-): Promise<Record<string, string>> {
+) {
   googleGenAiMock.constructorCalls.length = 0;
   googleGenAiMock.finishReason = "STOP";
   googleGenAiMock.includeFunctionCall = false;
-  await streamGoogleGenerativeAi(getModel("google", "gemini-2.5-flash"), context, {
-    apiKey: "test-api-key",
-    headers,
-  }).result();
+  yield* Effect.promise(() =>
+    streamGoogleGenerativeAi(getModel("google", "gemini-2.5-flash"), context, {
+      apiKey: "test-api-key",
+      headers,
+    }).result(),
+  );
 
   expect(googleGenAiMock.constructorCalls).toHaveLength(1);
   const httpOptions = googleGenAiMock.constructorCalls[0]?.["httpOptions"] as {
     headers?: Record<string, string>;
   };
   return httpOptions.headers ?? {};
-}
+});
 
 describe("Google raw stop reasons", () => {
-  it("preserves raw Gemini finish reasons for Google Generative AI errors", async () => {
-    googleGenAiMock.finishReason = "MALFORMED_FUNCTION_CALL";
-    googleGenAiMock.includeFunctionCall = false;
+  it("preserves raw Gemini finish reasons for Google Generative AI errors", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        googleGenAiMock.finishReason = "MALFORMED_FUNCTION_CALL";
+        googleGenAiMock.includeFunctionCall = false;
 
-    const stream = streamGoogleGenerativeAi(getModel("google", "gemini-2.5-flash"), context, {
-      apiKey: "test-api-key",
-    });
+        const stream = streamGoogleGenerativeAi(getModel("google", "gemini-2.5-flash"), context, {
+          apiKey: "test-api-key",
+        });
 
-    const message = await stream.result();
+        const message = yield* Effect.promise(() => stream.result());
 
-    expect(message.stopReason).toBe("error");
-    expect(message.rawStopReason).toBe("MALFORMED_FUNCTION_CALL");
-    expect(message.errorMessage).toBe("Provider stopped with: MALFORMED_FUNCTION_CALL");
-  });
+        expect(message.stopReason).toBe("error");
+        expect(message.rawStopReason).toBe("MALFORMED_FUNCTION_CALL");
+        expect(message.errorMessage).toBe("Provider stopped with: MALFORMED_FUNCTION_CALL");
+      }),
+    ));
 
-  it("preserves raw Gemini finish reasons for Google Vertex errors", async () => {
-    googleGenAiMock.finishReason = "SAFETY";
-    googleGenAiMock.includeFunctionCall = false;
+  it("preserves raw Gemini finish reasons for Google Vertex errors", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        googleGenAiMock.finishReason = "SAFETY";
+        googleGenAiMock.includeFunctionCall = false;
 
-    const stream = streamGoogleVertex(
-      getModel("google-vertex", "gemini-3-flash-preview"),
-      context,
-      {
-        project: "test-project",
-        location: "us-central1",
-      },
-    );
+        const stream = streamGoogleVertex(
+          getModel("google-vertex", "gemini-3-flash-preview"),
+          context,
+          {
+            project: "test-project",
+            location: "us-central1",
+          },
+        );
 
-    const message = await stream.result();
+        const message = yield* Effect.promise(() => stream.result());
 
-    expect(message.stopReason).toBe("error");
-    expect(message.rawStopReason).toBe("SAFETY");
-    expect(message.errorMessage).toBe("Provider stopped with: SAFETY");
-  });
+        expect(message.stopReason).toBe("error");
+        expect(message.rawStopReason).toBe("SAFETY");
+        expect(message.errorMessage).toBe("Provider stopped with: SAFETY");
+      }),
+    ));
 
   const adapters = [
     {
@@ -180,28 +189,35 @@ describe("Google raw stop reasons", () => {
 
   it.each(adapters)(
     "preserves MAX_TOKENS with a tool call as length for $name",
-    async ({ createStream }) => {
-      googleGenAiMock.finishReason = "MAX_TOKENS";
-      googleGenAiMock.includeFunctionCall = true;
+    ({ createStream }) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          googleGenAiMock.finishReason = "MAX_TOKENS";
+          googleGenAiMock.includeFunctionCall = true;
 
-      const message = await createStream().result();
+          const message = yield* Effect.promise(() => createStream().result());
 
-      expect(message.stopReason).toBe("length");
-      expect(message.rawStopReason).toBe("MAX_TOKENS");
-      expect(message.content.some((block) => block.type === "toolCall")).toBe(true);
-    },
+          expect(message.stopReason).toBe("length");
+          expect(message.rawStopReason).toBe("MAX_TOKENS");
+          expect(message.content.some((block) => block.type === "toolCall")).toBe(true);
+        }),
+      ),
   );
 
-  it.each(adapters)("maps STOP with a tool call to toolUse for $name", async ({ createStream }) => {
-    googleGenAiMock.finishReason = "STOP";
-    googleGenAiMock.includeFunctionCall = true;
+  it.each(adapters)("maps STOP with a tool call to toolUse for $name", ({ createStream }) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        googleGenAiMock.finishReason = "STOP";
+        googleGenAiMock.includeFunctionCall = true;
 
-    const message = await createStream().result();
+        const message = yield* Effect.promise(() => createStream().result());
 
-    expect(message.stopReason).toBe("toolUse");
-    expect(message.rawStopReason).toBe("STOP");
-    expect(message.content.some((block) => block.type === "toolCall")).toBe(true);
-  });
+        expect(message.stopReason).toBe("toolUse");
+        expect(message.rawStopReason).toBe("STOP");
+        expect(message.content.some((block) => block.type === "toolCall")).toBe(true);
+      }),
+    ),
+  );
 });
 
 describe("Google provider stream events", () => {
@@ -231,44 +247,60 @@ describe("Google provider stream events", () => {
 
   it.each(adapters)(
     "forwards each SDK chunk in order before normalizing it for $name",
-    async ({ model, createStream }) => {
-      googleGenAiMock.streamChunks = [
-        {
-          responseId: "resp_google",
-          candidates: [{ content: { parts: [{ text: "hello" }] } }],
-        },
-        {
-          candidates: [{ finishReason: "STOP" }],
-          usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 1, totalTokenCount: 3 },
-        },
-      ];
-      const received: unknown[] = [];
-      const eventModels: Model<Api>[] = [];
-      const result = await createStream(async (chunk, eventModel) => {
-        await Promise.resolve();
-        received.push(chunk);
-        eventModels.push(eventModel);
-      }).result();
+    ({ model, createStream }) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const effectContext = yield* Effect.context();
+          googleGenAiMock.streamChunks = [
+            {
+              responseId: "resp_google",
+              candidates: [{ content: { parts: [{ text: "hello" }] } }],
+            },
+            {
+              candidates: [{ finishReason: "STOP" }],
+              usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 1, totalTokenCount: 3 },
+            },
+          ];
+          const received: unknown[] = [];
+          const eventModels: Model<Api>[] = [];
+          const result = yield* Effect.promise(() =>
+            createStream((chunk, eventModel) =>
+              Effect.runPromiseWith(effectContext)(
+                Effect.gen(function* () {
+                  yield* Effect.promise(() => Promise.resolve());
+                  received.push(chunk);
+                  eventModels.push(eventModel);
+                }),
+              ),
+            ).result(),
+          );
 
-      expect(received).toEqual(googleGenAiMock.streamChunks);
-      expect(received[0]).toBe(googleGenAiMock.streamChunks[0]);
-      expect(received[1]).toBe(googleGenAiMock.streamChunks[1]);
-      expect(eventModels).toEqual([model, model]);
-      expect(result.stopReason).toBe("stop");
-      expect(result.responseId).toBe("resp_google");
-      expect(result.content).toEqual([{ type: "text", text: "hello" }]);
-    },
+          expect(received).toEqual(googleGenAiMock.streamChunks);
+          expect(received[0]).toBe(googleGenAiMock.streamChunks[0]);
+          expect(received[1]).toBe(googleGenAiMock.streamChunks[1]);
+          expect(eventModels).toEqual([model, model]);
+          expect(result.stopReason).toBe("stop");
+          expect(result.responseId).toBe("resp_google");
+          expect(result.content).toEqual([{ type: "text", text: "hello" }]);
+        }),
+      ),
   );
 });
 
 describe("Google Generative AI user agent", () => {
-  it("uses msa's User-Agent by default", async () => {
-    expect((await captureGoogleHeaders())["User-Agent"]).toBe(MSA_USER_AGENT);
-  });
+  it("uses msa's User-Agent by default", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        expect((yield* captureGoogleHeaders())["User-Agent"]).toBe(MSA_USER_AGENT);
+      }),
+    ));
 
-  it("lets explicit headers override the default User-Agent", async () => {
-    expect((await captureGoogleHeaders({ "User-Agent": "custom-agent" }))["User-Agent"]).toBe(
-      "custom-agent",
-    );
-  });
+  it("lets explicit headers override the default User-Agent", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        expect((yield* captureGoogleHeaders({ "User-Agent": "custom-agent" }))["User-Agent"]).toBe(
+          "custom-agent",
+        );
+      }),
+    ));
 });

@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { generateImages } from "../src/images.ts";
@@ -34,27 +35,32 @@ vi.mock("openai", () => {
 });
 
 describe("provider error body passthrough", () => {
-  it("surfaces the HTTP body reason instead of the opaque SDK message (openrouter images)", async () => {
-    const model: ImageModel<"openrouter-images"> = {
-      type: "image",
-      id: "black-forest-labs/flux.2-pro",
-      name: "FLUX.2 Pro",
-      api: "openrouter-images",
-      provider: "openrouter",
-      baseUrl: "https://openrouter.ai/api/v1",
-      input: ["text", "image"],
-      output: ["image"],
-      cost: { input: 0.015, output: 0.03, cacheRead: 0, cacheWrite: 0 },
-    };
-    const context: ImagesContext = {
-      input: [{ type: "text", text: "Generate a dog" }],
-    };
+  it("surfaces the HTTP body reason instead of the opaque SDK message (openrouter images)", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model: ImageModel<"openrouter-images"> = {
+          type: "image",
+          id: "black-forest-labs/flux.2-pro",
+          name: "FLUX.2 Pro",
+          api: "openrouter-images",
+          provider: "openrouter",
+          baseUrl: "https://openrouter.ai/api/v1",
+          input: ["text", "image"],
+          output: ["image"],
+          cost: { input: 0.015, output: 0.03, cacheRead: 0, cacheWrite: 0 },
+        };
+        const context: ImagesContext = {
+          input: [{ type: "text", text: "Generate a dog" }],
+        };
 
-    const output = await generateImages(model, context, { apiKey: "test" });
+        const output = yield* Effect.promise(() =>
+          generateImages(model, context, { apiKey: "test" }),
+        );
 
-    expect(output.stopReason).toBe("error");
-    expect(output.errorMessage).toContain("403");
-    expect(output.errorMessage).toContain("blocked by gateway WAF");
-    expect(output.errorMessage).not.toBe("403 status code (no body)");
-  });
+        expect(output.stopReason).toBe("error");
+        expect(output.errorMessage).toContain("403");
+        expect(output.errorMessage).toContain("blocked by gateway WAF");
+        expect(output.errorMessage).not.toBe("403 status code (no body)");
+      }),
+    ));
 });

@@ -1,3 +1,4 @@
+import { Clock, DateTime, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { kimiCodingOAuth } from "../src/auth/oauth/kimi-coding.ts";
@@ -42,6 +43,8 @@ function createInteraction(events: Array<Record<string, unknown>>): ProviderAuth
   };
 }
 
+const neverAbortedSignal = new AbortController().signal;
+
 describe("Kimi Code OAuth", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -50,237 +53,265 @@ describe("Kimi Code OAuth", () => {
     vi.useRealTimers();
   });
 
-  it("logs in with the device authorization flow", async () => {
-    vi.useFakeTimers();
-    const startTime = new Date("2026-07-20T00:00:00Z");
-    vi.setSystemTime(startTime);
+  it("logs in with the device authorization flow", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        const startTime = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-07-20T00:00:00Z"));
+        vi.setSystemTime(startTime);
 
-    const events: Array<Record<string, unknown>> = [];
-    const pollResponses = [
-      jsonResponse({ error: "authorization_pending" }, 400),
-      jsonResponse({
-        access_token: "access-token",
-        refresh_token: "refresh-token",
-        expires_in: 3600,
-      }),
-    ];
-    const pollTimes: number[] = [];
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
-        const url = getUrl(input);
-        if (url === `${OAUTH_HOST}/api/oauth/device_authorization`) {
-          expect(init?.method).toBe("POST");
-          expect(init?.headers).toMatchObject({
-            "Content-Type": "application/x-www-form-urlencoded",
-            Accept: "application/json",
-          });
-          expect(new URLSearchParams(String(init?.body)).get("client_id")).toBe(CLIENT_ID);
-          return Promise.resolve(deviceAuthorizationResponse());
-        }
-        if (url === `${OAUTH_HOST}/api/oauth/token`) {
-          pollTimes.push(Date.now());
-          const params = new URLSearchParams(String(init?.body));
-          expect(params.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
-          expect(params.get("client_id")).toBe(CLIENT_ID);
-          expect(params.get("device_code")).toBe("device-code-123");
-          const response = pollResponses.shift();
-          if (response === undefined)
-            return Promise.reject(new Error("Unexpected extra token poll"));
-          return Promise.resolve(response);
-        }
-        return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
-      }),
-    );
-
-    const credentialPromise = kimiCodingOAuth.login(createInteraction(events));
-    for (let i = 0; i < 5 && events.length === 0; i++) {
-      await vi.advanceTimersByTimeAsync(0);
-    }
-    expect(events).toEqual([
-      {
-        type: "device_code",
-        userCode: "ABCD-1234",
-        verificationUri: "https://www.kimi.com/code?user_code=ABCD-1234",
-        intervalSeconds: 5,
-        expiresInSeconds: 600,
-      },
-    ]);
-
-    await vi.advanceTimersByTimeAsync(4999);
-    expect(pollTimes).toEqual([]);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(pollTimes).toEqual([startTime.getTime() + 5000]);
-
-    await vi.advanceTimersByTimeAsync(5000);
-    await expect(credentialPromise).resolves.toEqual({
-      type: "oauth",
-      access: "access-token",
-      refresh: "refresh-token",
-      expires: startTime.getTime() + 10000 + 3600 * 1000,
-    });
-    expect(pollTimes).toEqual([startTime.getTime() + 5000, startTime.getTime() + 10000]);
-  });
-
-  it("fails when the device code expires", async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: unknown): Promise<Response> => {
-        const url = getUrl(input);
-        if (url === `${OAUTH_HOST}/api/oauth/device_authorization`) {
-          return Promise.resolve(deviceAuthorizationResponse());
-        }
-        if (url === `${OAUTH_HOST}/api/oauth/token`) {
-          return Promise.resolve(jsonResponse({ error: "expired_token" }, 400));
-        }
-        return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
-      }),
-    );
-
-    const credentialPromise = kimiCodingOAuth.login(createInteraction([]));
-    const assertion = expect(credentialPromise).rejects.toThrow("expired");
-    await vi.advanceTimersByTimeAsync(5000);
-    await assertion;
-  });
-
-  it("fails when the user denies the login", async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: unknown): Promise<Response> => {
-        const url = getUrl(input);
-        if (url === `${OAUTH_HOST}/api/oauth/device_authorization`) {
-          return Promise.resolve(deviceAuthorizationResponse());
-        }
-        if (url === `${OAUTH_HOST}/api/oauth/token`) {
-          return Promise.resolve(jsonResponse({ error: "access_denied" }, 400));
-        }
-        return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
-      }),
-    );
-
-    const credentialPromise = kimiCodingOAuth.login(createInteraction([]));
-    const assertion = expect(credentialPromise).rejects.toThrow("denied");
-    await vi.advanceTimersByTimeAsync(5000);
-    await assertion;
-  });
-
-  it("honors the KIMI_CODE_OAUTH_HOST override", async () => {
-    vi.useFakeTimers();
-    vi.stubEnv("KIMI_CODE_OAUTH_HOST", "https://auth.example.com/");
-
-    const urls: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: unknown): Promise<Response> => {
-        const url = getUrl(input);
-        urls.push(url);
-        if (url === "https://auth.example.com/api/oauth/device_authorization") {
-          return Promise.resolve(deviceAuthorizationResponse({ interval: 1 }));
-        }
-        if (url === "https://auth.example.com/api/oauth/token") {
-          return Promise.resolve(
-            jsonResponse({ access_token: "a", refresh_token: "r", expires_in: 60 }),
-          );
-        }
-        return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
-      }),
-    );
-
-    const credentialPromise = kimiCodingOAuth.login(createInteraction([]));
-    await vi.advanceTimersByTimeAsync(1000);
-    await expect(credentialPromise).resolves.toMatchObject({ access: "a", refresh: "r" });
-    expect(urls).toEqual([
-      "https://auth.example.com/api/oauth/device_authorization",
-      "https://auth.example.com/api/oauth/token",
-    ]);
-  });
-
-  it("refreshes tokens and returns a Bearer header for requests", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
-        const url = getUrl(input);
-        expect(url).toBe(`${OAUTH_HOST}/api/oauth/token`);
-        const params = new URLSearchParams(String(init?.body));
-        expect(params.get("grant_type")).toBe("refresh_token");
-        expect(params.get("refresh_token")).toBe("old-refresh");
-        expect(params.get("client_id")).toBe(CLIENT_ID);
-        return Promise.resolve(
+        const events: Array<Record<string, unknown>> = [];
+        const pollResponses = [
+          jsonResponse({ error: "authorization_pending" }, 400),
           jsonResponse({
-            access_token: "new-access",
-            refresh_token: "new-refresh",
+            access_token: "access-token",
+            refresh_token: "refresh-token",
             expires_in: 3600,
+          }),
+        ];
+        const pollTimes: number[] = [];
+
+        vi.stubGlobal(
+          "fetch",
+          vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
+            const url = getUrl(input);
+            if (url === `${OAUTH_HOST}/api/oauth/device_authorization`) {
+              expect(init?.method).toBe("POST");
+              expect(init?.headers).toMatchObject({
+                "Content-Type": "application/x-www-form-urlencoded",
+                Accept: "application/json",
+              });
+              expect(new URLSearchParams(String(init?.body)).get("client_id")).toBe(CLIENT_ID);
+              return Promise.resolve(deviceAuthorizationResponse());
+            }
+            if (url === `${OAUTH_HOST}/api/oauth/token`) {
+              pollTimes.push(Date.now());
+              const params = new URLSearchParams(String(init?.body));
+              expect(params.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
+              expect(params.get("client_id")).toBe(CLIENT_ID);
+              expect(params.get("device_code")).toBe("device-code-123");
+              const response = pollResponses.shift();
+              if (response === undefined)
+                return Promise.reject(new Error("Unexpected extra token poll"));
+              return Promise.resolve(response);
+            }
+            return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
+          }),
+        );
+
+        const credentialPromise = kimiCodingOAuth.login(createInteraction(events));
+        for (let i = 0; i < 5 && events.length === 0; i++) {
+          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
+        }
+        expect(events).toEqual([
+          {
+            type: "device_code",
+            userCode: "ABCD-1234",
+            verificationUri: "https://www.kimi.com/code?user_code=ABCD-1234",
+            intervalSeconds: 5,
+            expiresInSeconds: 600,
+          },
+        ]);
+
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(4999));
+        expect(pollTimes).toEqual([]);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1));
+        expect(pollTimes).toEqual([startTime + 5000]);
+
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(5000));
+        yield* Effect.promise(() =>
+          expect(credentialPromise).resolves.toEqual({
+            type: "oauth",
+            access: "access-token",
+            refresh: "refresh-token",
+            expires: startTime + 10000 + 3600 * 1000,
+          }),
+        );
+        expect(pollTimes).toEqual([startTime + 5000, startTime + 10000]);
+      }),
+    ));
+
+  it("fails when the device code expires", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        vi.stubGlobal(
+          "fetch",
+          vi.fn((input: unknown): Promise<Response> => {
+            const url = getUrl(input);
+            if (url === `${OAUTH_HOST}/api/oauth/device_authorization`) {
+              return Promise.resolve(deviceAuthorizationResponse());
+            }
+            if (url === `${OAUTH_HOST}/api/oauth/token`) {
+              return Promise.resolve(jsonResponse({ error: "expired_token" }, 400));
+            }
+            return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
+          }),
+        );
+
+        const credentialPromise = kimiCodingOAuth.login(createInteraction([]));
+        const assertion = expect(credentialPromise).rejects.toThrow("expired");
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(5000));
+        yield* Effect.promise(() => assertion);
+      }),
+    ));
+
+  it("fails when the user denies the login", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        vi.stubGlobal(
+          "fetch",
+          vi.fn((input: unknown): Promise<Response> => {
+            const url = getUrl(input);
+            if (url === `${OAUTH_HOST}/api/oauth/device_authorization`) {
+              return Promise.resolve(deviceAuthorizationResponse());
+            }
+            if (url === `${OAUTH_HOST}/api/oauth/token`) {
+              return Promise.resolve(jsonResponse({ error: "access_denied" }, 400));
+            }
+            return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
+          }),
+        );
+
+        const credentialPromise = kimiCodingOAuth.login(createInteraction([]));
+        const assertion = expect(credentialPromise).rejects.toThrow("denied");
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(5000));
+        yield* Effect.promise(() => assertion);
+      }),
+    ));
+
+  it("honors the KIMI_CODE_OAUTH_HOST override", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        vi.stubEnv("KIMI_CODE_OAUTH_HOST", "https://auth.example.com/");
+
+        const urls: string[] = [];
+        vi.stubGlobal(
+          "fetch",
+          vi.fn((input: unknown): Promise<Response> => {
+            const url = getUrl(input);
+            urls.push(url);
+            if (url === "https://auth.example.com/api/oauth/device_authorization") {
+              return Promise.resolve(deviceAuthorizationResponse({ interval: 1 }));
+            }
+            if (url === "https://auth.example.com/api/oauth/token") {
+              return Promise.resolve(
+                jsonResponse({ access_token: "a", refresh_token: "r", expires_in: 60 }),
+              );
+            }
+            return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
+          }),
+        );
+
+        const credentialPromise = kimiCodingOAuth.login(createInteraction([]));
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1000));
+        yield* Effect.promise(() =>
+          expect(credentialPromise).resolves.toMatchObject({ access: "a", refresh: "r" }),
+        );
+        expect(urls).toEqual([
+          "https://auth.example.com/api/oauth/device_authorization",
+          "https://auth.example.com/api/oauth/token",
+        ]);
+      }),
+    ));
+
+  it("refreshes tokens and returns a Bearer header for requests", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubGlobal(
+          "fetch",
+          vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
+            const url = getUrl(input);
+            expect(url).toBe(`${OAUTH_HOST}/api/oauth/token`);
+            const params = new URLSearchParams(String(init?.body));
+            expect(params.get("grant_type")).toBe("refresh_token");
+            expect(params.get("refresh_token")).toBe("old-refresh");
+            expect(params.get("client_id")).toBe(CLIENT_ID);
+            return Promise.resolve(
+              jsonResponse({
+                access_token: "new-access",
+                refresh_token: "new-refresh",
+                expires_in: 3600,
+              }),
+            );
+          }),
+        );
+
+        const before = yield* Clock.currentTimeMillis;
+        const credential = yield* Effect.promise(() =>
+          kimiCodingOAuth.refresh(
+            {
+              type: "oauth",
+              access: "old-access",
+              refresh: "old-refresh",
+              expires: before,
+            },
+            neverAbortedSignal,
+          ),
+        );
+        expect(credential).toEqual({
+          type: "oauth",
+          access: "new-access",
+          refresh: "new-refresh",
+          expires: expect.any(Number),
+        });
+        expect(credential.expires).toBeGreaterThanOrEqual(before + 3600 * 1000);
+
+        yield* Effect.promise(() =>
+          expect(kimiCodingOAuth.toAuth(credential)).resolves.toEqual({
+            headers: { Authorization: "Bearer new-access" },
           }),
         );
       }),
-    );
+    ));
 
-    const before = Date.now();
-    const credential = await kimiCodingOAuth.refresh(
-      {
-        type: "oauth",
-        access: "old-access",
-        refresh: "old-refresh",
-        expires: before,
-      },
-      new AbortController().signal,
-    );
-    expect(credential).toEqual({
-      type: "oauth",
-      access: "new-access",
-      refresh: "new-refresh",
-      expires: expect.any(Number),
-    });
-    expect(credential.expires).toBeGreaterThanOrEqual(before + 3600 * 1000);
+  it("retries refresh on 429 and fails unauthorized on invalid_grant", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
 
-    await expect(kimiCodingOAuth.toAuth(credential)).resolves.toEqual({
-      headers: { Authorization: "Bearer new-access" },
-    });
-  });
+        let calls = 0;
+        vi.stubGlobal(
+          "fetch",
+          vi.fn((): Promise<Response> => {
+            calls += 1;
+            if (calls === 1)
+              return Promise.resolve(jsonResponse({ error: "temporarily_unavailable" }, 429));
+            return Promise.resolve(
+              jsonResponse({ access_token: "a", refresh_token: "r", expires_in: 60 }),
+            );
+          }),
+        );
 
-  it("retries refresh on 429 and fails unauthorized on invalid_grant", async () => {
-    vi.useFakeTimers();
+        const refreshPromise = kimiCodingOAuth.refresh(
+          {
+            type: "oauth",
+            access: "old",
+            refresh: "old",
+            expires: 0,
+          },
+          neverAbortedSignal,
+        );
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1000));
+        yield* Effect.promise(() => expect(refreshPromise).resolves.toMatchObject({ access: "a" }));
+        expect(calls).toBe(2);
 
-    let calls = 0;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((): Promise<Response> => {
-        calls += 1;
-        if (calls === 1)
-          return Promise.resolve(jsonResponse({ error: "temporarily_unavailable" }, 429));
-        return Promise.resolve(
-          jsonResponse({ access_token: "a", refresh_token: "r", expires_in: 60 }),
+        vi.stubGlobal(
+          "fetch",
+          vi.fn((): Promise<Response> =>
+            Promise.resolve(jsonResponse({ error: "invalid_grant" }, 400)),
+          ),
+        );
+        yield* Effect.promise(() =>
+          expect(
+            kimiCodingOAuth.refresh(
+              { type: "oauth", access: "old", refresh: "old", expires: 0 },
+              neverAbortedSignal,
+            ),
+          ).rejects.toThrow("unauthorized"),
         );
       }),
-    );
-
-    const refreshPromise = kimiCodingOAuth.refresh(
-      {
-        type: "oauth",
-        access: "old",
-        refresh: "old",
-        expires: 0,
-      },
-      new AbortController().signal,
-    );
-    await vi.advanceTimersByTimeAsync(1000);
-    await expect(refreshPromise).resolves.toMatchObject({ access: "a" });
-    expect(calls).toBe(2);
-
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((): Promise<Response> =>
-        Promise.resolve(jsonResponse({ error: "invalid_grant" }, 400)),
-      ),
-    );
-    await expect(
-      kimiCodingOAuth.refresh(
-        { type: "oauth", access: "old", refresh: "old", expires: 0 },
-        new AbortController().signal,
-      ),
-    ).rejects.toThrow("unauthorized");
-  });
+    ));
 });

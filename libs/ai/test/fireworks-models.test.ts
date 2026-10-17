@@ -1,22 +1,25 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
+import { Effect, Stream } from "effect";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import { getModel, normalizeContext, streamSimple } from "../src/compat.ts";
 import { findEnvKeys, getEnvApiKey } from "../src/env-api-keys.ts";
 import { getSupportedThinkingLevels } from "../src/models.ts";
 import type { Context, Model, Tool } from "../src/types.ts";
+import { envValue } from "./env.ts";
+import { decodeJson } from "./json-codec.ts";
 
-const originalFireworksApiKey = process.env["FIREWORKS_API_KEY"];
+const originalFireworksApiKey = envValue("FIREWORKS_API_KEY");
 
 afterEach(() => {
   if (originalFireworksApiKey === undefined) {
-    delete process.env["FIREWORKS_API_KEY"];
+    vi.stubEnv("FIREWORKS_API_KEY", undefined);
   } else {
-    process.env["FIREWORKS_API_KEY"] = originalFireworksApiKey;
+    vi.stubEnv("FIREWORKS_API_KEY", originalFireworksApiKey);
   }
 });
 
@@ -45,110 +48,125 @@ describe("Fireworks models", () => {
   it.each([
     "accounts/fireworks/models/glm-5p3",
     "accounts/fireworks/routers/glm-5p3-fast",
-  ] as const)("omits unsupported long cache retention for %s", async (modelId) => {
-    const model = getModel("fireworks", modelId);
-    let payload: Record<string, unknown> | undefined;
-    const response = streamSimple(
-      model,
-      { messages: [{ role: "user", content: "test", timestamp: 0 }] },
-      {
-        apiKey: "test-fireworks-key",
-        cacheRetention: "long",
-        sessionId: "test-fireworks-session",
-        onPayload: (value) => {
-          payload = value as Record<string, unknown>;
-          throw new Error("payload captured");
-        },
-      },
-    );
-    await response.result();
+  ] as const)("omits unsupported long cache retention for %s", (modelId) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("fireworks", modelId);
+        let payload: Record<string, unknown> | undefined;
+        const response = streamSimple(
+          model,
+          { messages: [{ role: "user", content: "test", timestamp: 0 }] },
+          {
+            apiKey: "test-fireworks-key",
+            cacheRetention: "long",
+            sessionId: "test-fireworks-session",
+            onPayload: (value) => {
+              payload = value as Record<string, unknown>;
+              throw new Error("payload captured");
+            },
+          },
+        );
+        yield* Effect.promise(() => response.result());
 
-    expect(payload).toBeDefined();
-    expect(payload?.["prompt_cache_retention"]).toBeUndefined();
-  });
+        expect(payload).toBeDefined();
+        expect(payload?.["prompt_cache_retention"]).toBeUndefined();
+      }),
+    ),
+  );
 
-  it("routes Kimi K3 through the OpenAI-compatible API with native effort controls", async () => {
-    const base = getModel("fireworks", "accounts/fireworks/models/kimi-k3");
-    const fast = getModel("fireworks", "accounts/fireworks/routers/kimi-k3-fast");
-    const compat = {
-      supportsStore: false,
-      supportsDeveloperRole: false,
-      supportsStrictMode: true,
-      requiresReasoningContentOnAssistantMessages: true,
-      thinkingFormat: "openai",
-      supportsMidConvoSystemMessages: true,
-      supportsMidConvoToolAdditions: true,
-      sendSessionAffinityHeaders: true,
-      supportsLongCacheRetention: false,
-    };
-    const thinkingLevelMap = {
-      off: null,
-      minimal: null,
-      low: "low",
-      medium: null,
-      high: "high",
-      xhigh: null,
-      max: "max",
-    };
+  it("routes Kimi K3 through the OpenAI-compatible API with native effort controls", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const base = getModel("fireworks", "accounts/fireworks/models/kimi-k3");
+        const fast = getModel("fireworks", "accounts/fireworks/routers/kimi-k3-fast");
+        const compat = {
+          supportsStore: false,
+          supportsDeveloperRole: false,
+          supportsStrictMode: true,
+          requiresReasoningContentOnAssistantMessages: true,
+          thinkingFormat: "openai",
+          supportsMidConvoSystemMessages: true,
+          supportsMidConvoToolAdditions: true,
+          sendSessionAffinityHeaders: true,
+          supportsLongCacheRetention: false,
+        };
+        const thinkingLevelMap = {
+          off: null,
+          minimal: null,
+          low: "low",
+          medium: null,
+          high: "high",
+          xhigh: null,
+          max: "max",
+        };
 
-    expect(base.api).toBe("openai-completions");
-    expect(base.baseUrl).toBe("https://api.fireworks.ai/inference/v1");
-    expect(base.compat).toEqual(compat);
-    expect(base.thinkingLevelMap).toEqual(thinkingLevelMap);
-    expect(fast.api).toBe(base.api);
-    expect(fast.baseUrl).toBe(base.baseUrl);
-    expect(fast.compat).toEqual(compat);
-    expect(fast.thinkingLevelMap).toEqual(thinkingLevelMap);
+        expect(base.api).toBe("openai-completions");
+        expect(base.baseUrl).toBe("https://api.fireworks.ai/inference/v1");
+        expect(base.compat).toEqual(compat);
+        expect(base.thinkingLevelMap).toEqual(thinkingLevelMap);
+        expect(fast.api).toBe(base.api);
+        expect(fast.baseUrl).toBe(base.baseUrl);
+        expect(fast.compat).toEqual(compat);
+        expect(fast.thinkingLevelMap).toEqual(thinkingLevelMap);
 
-    let payload: Record<string, unknown> | undefined;
-    const response = streamSimple(
-      base,
-      { messages: [{ role: "user", content: "test", timestamp: 0 }] },
-      {
-        apiKey: "test-fireworks-key",
-        reasoning: "max",
-        onPayload: (value) => {
-          payload = value as Record<string, unknown>;
-          throw new Error("payload captured");
-        },
-      },
-    );
-    await response.result();
+        let payload: Record<string, unknown> | undefined;
+        const response = streamSimple(
+          base,
+          { messages: [{ role: "user", content: "test", timestamp: 0 }] },
+          {
+            apiKey: "test-fireworks-key",
+            reasoning: "max",
+            onPayload: (value) => {
+              payload = value as Record<string, unknown>;
+              throw new Error("payload captured");
+            },
+          },
+        );
+        yield* Effect.promise(() => response.result());
 
-    expect(payload?.["reasoning_effort"]).toBe("max");
-  });
+        expect(payload?.["reasoning_effort"]).toBe("max");
+      }),
+    ));
 
   it.each([
     ["accounts/fireworks/models/deepseek-v4p1-flash", ["off", "low", "high", "max"]],
     ["accounts/fireworks/models/qwen3p8-max", ["off", "low", "medium", "xhigh"]],
     ["accounts/fireworks/models/qwen3p8-2p4t-a95b", ["off", "low", "medium", "xhigh"]],
-  ] as const)("sends native Messages effort levels for %s", async (modelId, levels) => {
-    const model = getModel("fireworks", modelId);
-    expect(model.api).toBe("anthropic-messages");
-    expect(model.compat?.forceAdaptiveThinking).toBe(true);
-    expect(getSupportedThinkingLevels(model)).toEqual(levels);
+  ] as const)("sends native Messages effort levels for %s", (modelId, levels) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("fireworks", modelId);
+        expect(model.api).toBe("anthropic-messages");
+        expect(model.compat?.forceAdaptiveThinking).toBe(true);
+        expect(getSupportedThinkingLevels(model)).toEqual(levels);
 
-    for (const level of levels) {
-      let payload: Record<string, unknown> | undefined;
-      await streamSimple(
-        model,
-        { messages: [{ role: "user", content: "test", timestamp: 0 }] },
-        {
-          apiKey: "test-fireworks-key",
-          reasoning: level === "off" ? undefined : level,
-          onPayload: (value) => {
-            payload = value as Record<string, unknown>;
-            throw new Error("payload captured");
-          },
-        },
-      ).result();
-      expect(payload).toBeDefined();
-      expect(payload?.["thinking"]).toEqual(
-        level === "off" ? { type: "disabled" } : { type: "adaptive", display: "summarized" },
-      );
-      expect(payload?.["output_config"]).toEqual(level === "off" ? undefined : { effort: level });
-    }
-  });
+        for (const level of levels) {
+          let payload: Record<string, unknown> | undefined;
+          yield* Effect.promise(() =>
+            streamSimple(
+              model,
+              { messages: [{ role: "user", content: "test", timestamp: 0 }] },
+              {
+                apiKey: "test-fireworks-key",
+                reasoning: level === "off" ? undefined : level,
+                onPayload: (value) => {
+                  payload = value as Record<string, unknown>;
+                  throw new Error("payload captured");
+                },
+              },
+            ).result(),
+          );
+          expect(payload).toBeDefined();
+          expect(payload?.["thinking"]).toEqual(
+            level === "off" ? { type: "disabled" } : { type: "adaptive", display: "summarized" },
+          );
+          expect(payload?.["output_config"]).toEqual(
+            level === "off" ? undefined : { effort: level },
+          );
+        }
+      }),
+    ),
+  );
 
   it.each([
     ["accounts/fireworks/models/glm-5p3", ["low", "high", "max"]],
@@ -159,32 +177,37 @@ describe("Fireworks models", () => {
     expect(getSupportedThinkingLevels(getModel("fireworks", modelId))).toEqual(levels);
   });
 
-  it("keeps toggle-only Messages models without a verified fallback on budget-based thinking", async () => {
-    const model = getModel("fireworks", "accounts/fireworks/models/nemotron-3-ultra-nvfp4");
-    expect(model.compat?.forceAdaptiveThinking).toBeUndefined();
-    let payload: Record<string, unknown> | undefined;
-    await streamSimple(
-      model,
-      { messages: [{ role: "user", content: "test", timestamp: 0 }] },
-      {
-        apiKey: "test-fireworks-key",
-        reasoning: "high",
-        onPayload: (value) => {
-          payload = value as Record<string, unknown>;
-          throw new Error("payload captured");
-        },
-      },
-    ).result();
-    expect(payload?.["thinking"]).toEqual({
-      type: "enabled",
-      budget_tokens: 16384,
-      display: "summarized",
-    });
-    expect(payload?.["output_config"]).toBeUndefined();
-  });
+  it("keeps toggle-only Messages models without a verified fallback on budget-based thinking", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("fireworks", "accounts/fireworks/models/nemotron-3-ultra-nvfp4");
+        expect(model.compat?.forceAdaptiveThinking).toBeUndefined();
+        let payload: Record<string, unknown> | undefined;
+        yield* Effect.promise(() =>
+          streamSimple(
+            model,
+            { messages: [{ role: "user", content: "test", timestamp: 0 }] },
+            {
+              apiKey: "test-fireworks-key",
+              reasoning: "high",
+              onPayload: (value) => {
+                payload = value as Record<string, unknown>;
+                throw new Error("payload captured");
+              },
+            },
+          ).result(),
+        );
+        expect(payload?.["thinking"]).toEqual({
+          type: "enabled",
+          budget_tokens: 16384,
+          display: "summarized",
+        });
+        expect(payload?.["output_config"]).toBeUndefined();
+      }),
+    ));
 
   it("resolves FIREWORKS_API_KEY from the environment", () => {
-    process.env["FIREWORKS_API_KEY"] = "test-fireworks-key";
+    vi.stubEnv("FIREWORKS_API_KEY", "test-fireworks-key");
 
     expect(findEnvKeys("fireworks")).toEqual(["FIREWORKS_API_KEY"]);
     expect(getEnvApiKey("fireworks")).toBe("test-fireworks-key");
@@ -270,12 +293,21 @@ function createContext(tools: Tool[] = [tool]): Context {
   };
 }
 
-async function readRequestBody(request: IncomingMessage): Promise<Record<string, unknown>> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<string, unknown>;
+function readRequestBody(request: IncomingMessage): Promise<Record<string, unknown>> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const chunks: Buffer[] = [];
+      yield* Stream.fromAsyncIterable(request, (error) => error).pipe(
+        Stream.orDie,
+        Stream.runForEach((chunk) =>
+          Effect.sync(() => {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }),
+        ),
+      );
+      return (yield* decodeJson(Buffer.concat(chunks).toString("utf8"))) as Record<string, unknown>;
+    }),
+  );
 }
 
 function writeEmptySseResponse(response: ServerResponse): void {
@@ -290,13 +322,17 @@ async function captureAnthropicRequest(
 ): Promise<CapturedRequest> {
   let capturedRequest: CapturedRequest | undefined;
 
-  const server = createServer(async (request, response) => {
-    capturedRequest = {
-      headers: request.headers,
-      body: await readRequestBody(request),
-    };
-    writeEmptySseResponse(response);
-  });
+  const server = createServer((request, response) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        capturedRequest = {
+          headers: request.headers,
+          body: yield* Effect.promise(() => readRequestBody(request)),
+        };
+        writeEmptySseResponse(response);
+      }),
+    ),
+  );
 
   await new Promise<void>((resolve) => {
     server.listen(0, "127.0.0.1", resolve);
@@ -312,9 +348,17 @@ async function captureAnthropicRequest(
       sessionId: options?.sessionId,
     });
 
-    for await (const event of stream) {
-      if (event.type === "done" || event.type === "error") break;
-    }
+    await Effect.runPromise(
+      Stream.fromAsyncIterable(stream, (error) => error).pipe(
+        Stream.orDie,
+        Stream.runForEachWhile((event) =>
+          Effect.sync(() => {
+            if (event.type === "done" || event.type === "error") return false;
+            return true;
+          }),
+        ),
+      ),
+    );
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => (error === undefined ? resolve() : reject(error)));
@@ -336,98 +380,148 @@ function getTools(body: Record<string, unknown>): Record<string, unknown>[] {
 }
 
 describe("Anthropic-compatible session affinity and tool compat", () => {
-  it("sends x-session-affinity header for Fireworks models", async () => {
-    const model = createFireworksModel();
-    const request = await captureAnthropicRequest(model, createContext(), {
-      sessionId: "fireworks-session-1",
-    });
+  it("sends x-session-affinity header for Fireworks models", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createFireworksModel();
+        const request = yield* Effect.promise(() =>
+          captureAnthropicRequest(model, createContext(), {
+            sessionId: "fireworks-session-1",
+          }),
+        );
 
-    expect(request.headers["x-session-affinity"]).toBe("fireworks-session-1");
-  });
+        expect(request.headers["x-session-affinity"]).toBe("fireworks-session-1");
+      }),
+    ));
 
-  it("omits x-session-affinity header for native Anthropic models", async () => {
-    const model = createAnthropicModel();
-    const request = await captureAnthropicRequest(model, createContext(), {
-      sessionId: "anthropic-session-1",
-    });
+  it("omits x-session-affinity header for native Anthropic models", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createAnthropicModel();
+        const request = yield* Effect.promise(() =>
+          captureAnthropicRequest(model, createContext(), {
+            sessionId: "anthropic-session-1",
+          }),
+        );
 
-    expect(request.headers["x-session-affinity"]).toBeUndefined();
-  });
+        expect(request.headers["x-session-affinity"]).toBeUndefined();
+      }),
+    ));
 
-  it("omits x-session-affinity header when cacheRetention is none", async () => {
-    const model = createFireworksModel();
-    const request = await captureAnthropicRequest(model, createContext(), {
-      sessionId: "fireworks-session-2",
-      cacheRetention: "none",
-    });
+  it("omits x-session-affinity header when cacheRetention is none", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createFireworksModel();
+        const request = yield* Effect.promise(() =>
+          captureAnthropicRequest(model, createContext(), {
+            sessionId: "fireworks-session-2",
+            cacheRetention: "none",
+          }),
+        );
 
-    expect(request.headers["x-session-affinity"]).toBeUndefined();
-  });
+        expect(request.headers["x-session-affinity"]).toBeUndefined();
+      }),
+    ));
 
-  it("sends only x-session-id for OpenRouter models", async () => {
-    const request = await captureAnthropicRequest(createOpenRouterModel(), createContext(), {
-      sessionId: "openrouter-session-1",
-    });
+  it("sends only x-session-id for OpenRouter models", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const request = yield* Effect.promise(() =>
+          captureAnthropicRequest(createOpenRouterModel(), createContext(), {
+            sessionId: "openrouter-session-1",
+          }),
+        );
 
-    expect(request.headers["x-session-id"]).toBe("openrouter-session-1");
-    expect(request.headers["x-session-affinity"]).toBeUndefined();
-  });
+        expect(request.headers["x-session-id"]).toBe("openrouter-session-1");
+        expect(request.headers["x-session-affinity"]).toBeUndefined();
+      }),
+    ));
 
-  it("omits OpenRouter session headers when cacheRetention is none", async () => {
-    const request = await captureAnthropicRequest(createOpenRouterModel(), createContext(), {
-      sessionId: "openrouter-session-2",
-      cacheRetention: "none",
-    });
+  it("omits OpenRouter session headers when cacheRetention is none", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const request = yield* Effect.promise(() =>
+          captureAnthropicRequest(createOpenRouterModel(), createContext(), {
+            sessionId: "openrouter-session-2",
+            cacheRetention: "none",
+          }),
+        );
 
-    expect(request.headers["x-session-id"]).toBeUndefined();
-    expect(request.headers["x-session-affinity"]).toBeUndefined();
-  });
+        expect(request.headers["x-session-id"]).toBeUndefined();
+        expect(request.headers["x-session-affinity"]).toBeUndefined();
+      }),
+    ));
 
-  it("allows OpenRouter session headers to be disabled", async () => {
-    const model = { ...createOpenRouterModel(), compat: { sendSessionAffinityHeaders: false } };
-    const request = await captureAnthropicRequest(model, createContext(), {
-      sessionId: "openrouter-session-3",
-    });
+  it("allows OpenRouter session headers to be disabled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = { ...createOpenRouterModel(), compat: { sendSessionAffinityHeaders: false } };
+        const request = yield* Effect.promise(() =>
+          captureAnthropicRequest(model, createContext(), {
+            sessionId: "openrouter-session-3",
+          }),
+        );
 
-    expect(request.headers["x-session-id"]).toBeUndefined();
-  });
+        expect(request.headers["x-session-id"]).toBeUndefined();
+      }),
+    ));
 
-  it("omits cache_control on tools for Fireworks models", async () => {
-    const model = createFireworksModel();
-    const request = await captureAnthropicRequest(model, createContext());
+  it("omits cache_control on tools for Fireworks models", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createFireworksModel();
+        const request = yield* Effect.promise(() =>
+          captureAnthropicRequest(model, createContext()),
+        );
 
-    const tools = getTools(request.body);
-    const lastTool = tools.at(-1);
-    if (lastTool === undefined) throw new Error("Expected a tool definition");
-    expect(lastTool["cache_control"]).toBeUndefined();
-  });
+        const tools = getTools(request.body);
+        const lastTool = tools.at(-1);
+        if (lastTool === undefined) throw new Error("Expected a tool definition");
+        expect(lastTool["cache_control"]).toBeUndefined();
+      }),
+    ));
 
-  it("omits eager_input_streaming on tools for Fireworks models", async () => {
-    const model = createFireworksModel();
-    const request = await captureAnthropicRequest(model, createContext());
+  it("omits eager_input_streaming on tools for Fireworks models", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createFireworksModel();
+        const request = yield* Effect.promise(() =>
+          captureAnthropicRequest(model, createContext()),
+        );
 
-    const tools = getTools(request.body);
-    for (const t of tools) {
-      expect(t["eager_input_streaming"]).toBeUndefined();
-    }
-  });
+        const tools = getTools(request.body);
+        for (const t of tools) {
+          expect(t["eager_input_streaming"]).toBeUndefined();
+        }
+      }),
+    ));
 
-  it("sends cache_control on tools for native Anthropic models", async () => {
-    const model = createAnthropicModel();
-    const request = await captureAnthropicRequest(model, createContext());
+  it("sends cache_control on tools for native Anthropic models", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createAnthropicModel();
+        const request = yield* Effect.promise(() =>
+          captureAnthropicRequest(model, createContext()),
+        );
 
-    const tools = getTools(request.body);
-    const lastTool = tools.at(-1);
-    if (lastTool === undefined) throw new Error("Expected a tool definition");
-    expect(lastTool["cache_control"]).toBeDefined();
-    expect((lastTool["cache_control"] as { type: string }).type).toBe("ephemeral");
-  });
+        const tools = getTools(request.body);
+        const lastTool = tools.at(-1);
+        if (lastTool === undefined) throw new Error("Expected a tool definition");
+        expect(lastTool["cache_control"]).toBeDefined();
+        expect((lastTool["cache_control"] as { type: string }).type).toBe("ephemeral");
+      }),
+    ));
 
-  it("sends eager_input_streaming on tools for native Anthropic models", async () => {
-    const model = createAnthropicModel();
-    const request = await captureAnthropicRequest(model, createContext());
+  it("sends eager_input_streaming on tools for native Anthropic models", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createAnthropicModel();
+        const request = yield* Effect.promise(() =>
+          captureAnthropicRequest(model, createContext()),
+        );
 
-    const tools = getTools(request.body);
-    expect(tools[0]?.["eager_input_streaming"]).toBe(true);
-  });
+        const tools = getTools(request.body);
+        expect(tools[0]?.["eager_input_streaming"]).toBe(true);
+      }),
+    ));
 });

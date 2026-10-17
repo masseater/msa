@@ -1,9 +1,11 @@
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import type { AssistantMessage, Model, Tool } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
+import { encodeJson } from "./json-codec.ts";
 
 const mockState = vi.hoisted(() => ({
   chunkSets: [] as unknown[][],
@@ -101,10 +103,8 @@ function toolCallChunk(): unknown {
   });
 }
 
-async function runOpenAICompletionsStream(
-  messages: AssistantMessage[] = [],
-): Promise<AssistantMessage> {
-  return await streamOpenAICompletions(model(), normalizeContext({ messages, tools: [readTool] }), {
+function runOpenAICompletionsStream(messages: AssistantMessage[] = []): Promise<AssistantMessage> {
+  return streamOpenAICompletions(model(), normalizeContext({ messages, tools: [readTool] }), {
     apiKey: "test",
   }).result();
 }
@@ -154,130 +154,143 @@ describe("openai-completions reasoning_details streaming", () => {
     ]);
   });
 
-  it("falls back to encrypted tool-call signatures for older stored assistant messages", async () => {
-    mockState.chunkSets = [
-      [chunk({ reasoning_details: [reasoningDetail] }), toolCallChunk(), chunk({}, "tool_calls")],
-      [chunk({ content: "ok" }), chunk({}, "stop")],
-    ];
+  it("falls back to encrypted tool-call signatures for older stored assistant messages", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.chunkSets = [
+          [
+            chunk({ reasoning_details: [reasoningDetail] }),
+            toolCallChunk(),
+            chunk({}, "tool_calls"),
+          ],
+          [chunk({ content: "ok" }), chunk({}, "stop")],
+        ];
 
-    const assistantMessage = await runOpenAICompletionsStream();
-    assistantMessage.content = assistantMessage.content.filter(
-      (block) => block.type !== "thinking",
-    );
-    const toolCall = assistantMessage.content.find((block) => block.type === "toolCall");
-    if (toolCall === undefined || toolCall.type !== "toolCall")
-      throw new Error("Expected tool call");
-    toolCall.thoughtSignature = JSON.stringify(reasoningDetail);
+        const assistantMessage = yield* Effect.promise(() => runOpenAICompletionsStream());
+        assistantMessage.content = assistantMessage.content.filter(
+          (block) => block.type !== "thinking",
+        );
+        const toolCall = assistantMessage.content.find((block) => block.type === "toolCall");
+        if (toolCall === undefined || toolCall.type !== "toolCall")
+          throw new Error("Expected tool call");
+        toolCall.thoughtSignature = yield* encodeJson(reasoningDetail);
 
-    await runOpenAICompletionsStream([assistantMessage]);
+        yield* Effect.promise(() => runOpenAICompletionsStream([assistantMessage]));
 
-    expect(getAssistantPayload(mockState.payloads[1])?.reasoning_details).toEqual([
-      reasoningDetail,
-    ]);
-  });
+        expect(getAssistantPayload(mockState.payloads[1])?.reasoning_details).toEqual([
+          reasoningDetail,
+        ]);
+      }),
+    ));
 
-  it("preserves signed text and summary reasoning_details in their original sequence", async () => {
-    mockState.chunkSets = [
-      [
-        chunk({
-          reasoning: signedReasoningTextDetail.text,
-          reasoning_details: [signedReasoningTextDetail],
-        }),
-        chunk({ reasoning_details: [reasoningDetail, reasoningSummaryDetail] }),
-        toolCallChunk(),
-        chunk({}, "tool_calls"),
-      ],
-      [chunk({ content: "ok" }), chunk({}, "stop")],
-    ];
+  it("preserves signed text and summary reasoning_details in their original sequence", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.chunkSets = [
+          [
+            chunk({
+              reasoning: signedReasoningTextDetail.text,
+              reasoning_details: [signedReasoningTextDetail],
+            }),
+            chunk({ reasoning_details: [reasoningDetail, reasoningSummaryDetail] }),
+            toolCallChunk(),
+            chunk({}, "tool_calls"),
+          ],
+          [chunk({ content: "ok" }), chunk({}, "stop")],
+        ];
 
-    const assistantMessage = await runOpenAICompletionsStream();
-    const expectedReasoningDetails = [
-      signedReasoningTextDetail,
-      reasoningDetail,
-      reasoningSummaryDetail,
-    ];
-    const thinking = assistantMessage.content.find((block) => block.type === "thinking");
-    expect(thinking).toEqual({
-      type: "thinking",
-      thinking: signedReasoningTextDetail.text,
-      thinkingSignature: JSON.stringify(expectedReasoningDetails),
-    });
+        const assistantMessage = yield* Effect.promise(() => runOpenAICompletionsStream());
+        const expectedReasoningDetails = [
+          signedReasoningTextDetail,
+          reasoningDetail,
+          reasoningSummaryDetail,
+        ];
+        const thinking = assistantMessage.content.find((block) => block.type === "thinking");
+        expect(thinking).toEqual({
+          type: "thinking",
+          thinking: signedReasoningTextDetail.text,
+          thinkingSignature: yield* encodeJson(expectedReasoningDetails),
+        });
 
-    await runOpenAICompletionsStream([assistantMessage]);
+        yield* Effect.promise(() => runOpenAICompletionsStream([assistantMessage]));
 
-    const payload = getAssistantPayload(mockState.payloads[1]);
-    expect(payload?.reasoning_details).toEqual(expectedReasoningDetails);
-    expect(payload?.reasoning).toBeUndefined();
-  });
+        const payload = getAssistantPayload(mockState.payloads[1]);
+        expect(payload?.reasoning_details).toEqual(expectedReasoningDetails);
+        expect(payload?.reasoning).toBeUndefined();
+      }),
+    ));
 
-  it("merges consecutive text and summary reasoning_details deltas before replay", async () => {
-    const textDelta = { type: "reasoning.text", text: "The", index: 0 };
-    const textDeltaWithSignature = {
-      type: "reasoning.text",
-      text: " user wants the time.",
-      signature: "sha256:text-signature",
-      format: "openai-responses-v1",
-      index: 0,
-    };
-    const summaryDelta = { type: "reasoning.summary", summary: "Looked", index: 0 };
-    const summaryDeltaWithFormat = {
-      type: "reasoning.summary",
-      summary: " up time.",
-      format: "openai-responses-v1",
-      index: 0,
-    };
-    const laterSummaryDelta = {
-      type: "reasoning.summary",
-      summary: "After encrypted block.",
-      format: "openai-responses-v1",
-      index: 0,
-    };
-    const expectedReasoningDetails = [
-      {
-        type: "reasoning.text",
-        text: "The user wants the time.",
-        index: 0,
-        signature: "sha256:text-signature",
-        format: "openai-responses-v1",
-      },
-      {
-        type: "reasoning.summary",
-        summary: "Looked up time.",
-        index: 0,
-        format: "openai-responses-v1",
-      },
-      reasoningDetail,
-      laterSummaryDelta,
-    ];
+  it("merges consecutive text and summary reasoning_details deltas before replay", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const textDelta = { type: "reasoning.text", text: "The", index: 0 };
+        const textDeltaWithSignature = {
+          type: "reasoning.text",
+          text: " user wants the time.",
+          signature: "sha256:text-signature",
+          format: "openai-responses-v1",
+          index: 0,
+        };
+        const summaryDelta = { type: "reasoning.summary", summary: "Looked", index: 0 };
+        const summaryDeltaWithFormat = {
+          type: "reasoning.summary",
+          summary: " up time.",
+          format: "openai-responses-v1",
+          index: 0,
+        };
+        const laterSummaryDelta = {
+          type: "reasoning.summary",
+          summary: "After encrypted block.",
+          format: "openai-responses-v1",
+          index: 0,
+        };
+        const expectedReasoningDetails = [
+          {
+            type: "reasoning.text",
+            text: "The user wants the time.",
+            index: 0,
+            signature: "sha256:text-signature",
+            format: "openai-responses-v1",
+          },
+          {
+            type: "reasoning.summary",
+            summary: "Looked up time.",
+            index: 0,
+            format: "openai-responses-v1",
+          },
+          reasoningDetail,
+          laterSummaryDelta,
+        ];
 
-    mockState.chunkSets = [
-      [
-        chunk({ reasoning_details: [textDelta] }),
-        chunk({ reasoning_details: [textDeltaWithSignature] }),
-        chunk({ reasoning_details: [summaryDelta] }),
-        chunk({ reasoning_details: [summaryDeltaWithFormat] }),
-        chunk({ reasoning_details: [reasoningDetail] }),
-        chunk({ reasoning_details: [laterSummaryDelta] }),
-        toolCallChunk(),
-        chunk({}, "tool_calls"),
-      ],
-      [chunk({ content: "ok" }), chunk({}, "stop")],
-    ];
+        mockState.chunkSets = [
+          [
+            chunk({ reasoning_details: [textDelta] }),
+            chunk({ reasoning_details: [textDeltaWithSignature] }),
+            chunk({ reasoning_details: [summaryDelta] }),
+            chunk({ reasoning_details: [summaryDeltaWithFormat] }),
+            chunk({ reasoning_details: [reasoningDetail] }),
+            chunk({ reasoning_details: [laterSummaryDelta] }),
+            toolCallChunk(),
+            chunk({}, "tool_calls"),
+          ],
+          [chunk({ content: "ok" }), chunk({}, "stop")],
+        ];
 
-    const assistantMessage = await runOpenAICompletionsStream();
-    const thinking = assistantMessage.content.find((block) => block.type === "thinking");
-    expect(thinking).toEqual({
-      type: "thinking",
-      thinking: "",
-      thinkingSignature: JSON.stringify(expectedReasoningDetails),
-    });
+        const assistantMessage = yield* Effect.promise(() => runOpenAICompletionsStream());
+        const thinking = assistantMessage.content.find((block) => block.type === "thinking");
+        expect(thinking).toEqual({
+          type: "thinking",
+          thinking: "",
+          thinkingSignature: yield* encodeJson(expectedReasoningDetails),
+        });
 
-    await runOpenAICompletionsStream([assistantMessage]);
+        yield* Effect.promise(() => runOpenAICompletionsStream([assistantMessage]));
 
-    expect(getAssistantPayload(mockState.payloads[1])?.reasoning_details).toEqual(
-      expectedReasoningDetails,
-    );
-  });
+        expect(getAssistantPayload(mockState.payloads[1])?.reasoning_details).toEqual(
+          expectedReasoningDetails,
+        );
+      }),
+    ));
 });
 
 describe("openai-completions reasoning and content in one delta", () => {
@@ -286,24 +299,30 @@ describe("openai-completions reasoning and content in one delta", () => {
     mockState.payloads = [];
   });
 
-  it("places thinking before text when one delta carries reasoning_content and content", async () => {
-    mockState.chunkSets = [
-      [chunk({ role: "assistant", reasoning_content: "thinking", content: "answer" }, "stop")],
-    ];
+  it("places thinking before text when one delta carries reasoning_content and content", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.chunkSets = [
+          [chunk({ role: "assistant", reasoning_content: "thinking", content: "answer" }, "stop")],
+        ];
 
-    const assistantMessage = await runOpenAICompletionsStream();
-    expect(assistantMessage.content).toEqual([
-      { type: "thinking", thinking: "thinking", thinkingSignature: "reasoning_content" },
-      { type: "text", text: "answer" },
-    ]);
-  });
+        const assistantMessage = yield* Effect.promise(() => runOpenAICompletionsStream());
+        expect(assistantMessage.content).toEqual([
+          { type: "thinking", thinking: "thinking", thinkingSignature: "reasoning_content" },
+          { type: "text", text: "answer" },
+        ]);
+      }),
+    ));
 
-  it("places thinking before text when one delta carries reasoning_details and content", async () => {
-    mockState.chunkSets = [
-      [chunk({ reasoning_details: [reasoningDetail], content: "answer" }, "stop")],
-    ];
+  it("places thinking before text when one delta carries reasoning_details and content", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.chunkSets = [
+          [chunk({ reasoning_details: [reasoningDetail], content: "answer" }, "stop")],
+        ];
 
-    const assistantMessage = await runOpenAICompletionsStream();
-    expect(assistantMessage.content.map((block) => block.type)).toEqual(["thinking", "text"]);
-  });
+        const assistantMessage = yield* Effect.promise(() => runOpenAICompletionsStream());
+        expect(assistantMessage.content.map((block) => block.type)).toEqual(["thinking", "text"]);
+      }),
+    ));
 });

@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { getModels, streamSimple } from "../src/compat.ts";
@@ -170,35 +171,41 @@ describe("Qwen Token Plan models", () => {
 
   it.each(QWEN_THINKING_MODEL_CASES)(
     "sends Qwen thinking fields for $provider/$modelId",
-    async ({ provider, modelId }) => {
-      const model = getModels(provider).find((candidate) => candidate.id === modelId);
-      expect(model).toBeDefined();
-      if (model === undefined) throw new Error(`Missing model: ${provider}/${modelId}`);
+    ({ provider, modelId }) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = getModels(provider).find((candidate) => candidate.id === modelId);
+          expect(model).toBeDefined();
+          if (model === undefined) throw new Error(`Missing model: ${provider}/${modelId}`);
 
-      let payload: unknown;
-      await streamSimple(
-        model,
-        {
-          messages: [
-            {
-              role: "user",
-              content: "Hi",
-              timestamp: Date.now(),
-            },
-          ],
-        },
-        {
-          apiKey: "test",
-          reasoning: "high",
-          onPayload: (params) => {
-            payload = params;
-          },
-        },
-      ).result();
+          let payload: unknown;
+          const currentTime = yield* Clock.currentTimeMillis;
+          yield* Effect.promise(() =>
+            streamSimple(
+              model,
+              {
+                messages: [
+                  {
+                    role: "user",
+                    content: "Hi",
+                    timestamp: currentTime,
+                  },
+                ],
+              },
+              {
+                apiKey: "test",
+                reasoning: "high",
+                onPayload: (params) => {
+                  payload = params;
+                },
+              },
+            ).result(),
+          );
 
-      expect(payload).toHaveProperty("enable_thinking", true);
-      expect(payload).not.toHaveProperty("thinking");
-    },
+          expect(payload).toHaveProperty("enable_thinking", true);
+          expect(payload).not.toHaveProperty("thinking");
+        }),
+      ),
   );
 
   it.each(QWEN_REASONING_EFFORT_MODEL_CASES)(
@@ -247,67 +254,79 @@ describe("Qwen Token Plan models", () => {
 
   it.each(QWEN_REASONING_EFFORT_MODEL_CASES)(
     "sends Qwen reasoning_effort for $provider/$modelId",
-    async ({ provider, modelId }) => {
-      const model = getModels(provider).find((candidate) => candidate.id === modelId);
-      expect(model).toBeDefined();
-      if (model === undefined) throw new Error(`Missing model: ${provider}/${modelId}`);
+    ({ provider, modelId }) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = getModels(provider).find((candidate) => candidate.id === modelId);
+          expect(model).toBeDefined();
+          if (model === undefined) throw new Error(`Missing model: ${provider}/${modelId}`);
 
-      let payload: unknown;
-      await streamSimple(
-        model,
-        {
-          messages: [
-            {
-              role: "user",
-              content: "Hi",
-              timestamp: Date.now(),
-            },
-          ],
-        },
-        {
-          apiKey: "test",
-          reasoning: "high",
-          onPayload: (params) => {
-            payload = params;
-          },
-        },
-      ).result();
+          let payload: unknown;
+          const currentTime1 = yield* Clock.currentTimeMillis;
+          yield* Effect.promise(() =>
+            streamSimple(
+              model,
+              {
+                messages: [
+                  {
+                    role: "user",
+                    content: "Hi",
+                    timestamp: currentTime1,
+                  },
+                ],
+              },
+              {
+                apiKey: "test",
+                reasoning: "high",
+                onPayload: (params) => {
+                  payload = params;
+                },
+              },
+            ).result(),
+          );
 
-      expect(payload).toHaveProperty("reasoning_effort", "high");
-    },
+          expect(payload).toHaveProperty("reasoning_effort", "high");
+        }),
+      ),
   );
 
   it.each(QWEN38_MODEL_CASES)(
     "sends qwen3.8 xhigh reasoning_effort for $provider/$modelId",
-    async ({ provider, modelId }) => {
-      const model = getModels(provider).find((candidate) => candidate.id === modelId);
-      expect(model).toBeDefined();
-      if (model === undefined) throw new Error(`Missing model: ${provider}/${modelId}`);
+    ({ provider, modelId }) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = getModels(provider).find((candidate) => candidate.id === modelId);
+          expect(model).toBeDefined();
+          if (model === undefined) throw new Error(`Missing model: ${provider}/${modelId}`);
 
-      let payload: unknown;
-      await streamSimple(
-        model,
-        {
-          messages: [
-            {
-              role: "user",
-              content: "Hi",
-              timestamp: Date.now(),
-            },
-          ],
-        },
-        {
-          apiKey: "test",
-          reasoning: "xhigh",
-          onPayload: (params) => {
-            payload = params;
-          },
-        },
-      ).result();
+          let payload: unknown;
+          const currentTime2 = yield* Clock.currentTimeMillis;
+          yield* Effect.promise(() =>
+            streamSimple(
+              model,
+              {
+                messages: [
+                  {
+                    role: "user",
+                    content: "Hi",
+                    timestamp: currentTime2,
+                  },
+                ],
+              },
+              {
+                apiKey: "test",
+                reasoning: "xhigh",
+                onPayload: (params) => {
+                  payload = params;
+                },
+              },
+            ).result(),
+          );
 
-      expect(payload).toHaveProperty("enable_thinking", true);
-      expect(payload).toHaveProperty("reasoning_effort", "xhigh");
-      expect(payload).not.toHaveProperty("thinking");
-    },
+          expect(payload).toHaveProperty("enable_thinking", true);
+          expect(payload).toHaveProperty("reasoning_effort", "xhigh");
+          expect(payload).not.toHaveProperty("thinking");
+        }),
+      ),
   );
 });

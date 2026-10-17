@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
@@ -44,15 +45,20 @@ describe("OAuthAuth adapters", () => {
     expect(openRouterOAuth.isSubscription).not.toBe(true);
   });
 
-  it("anthropic toAuth derives the api key from the access token", async () => {
-    const auth = await anthropicOAuth.toAuth({
-      type: "oauth",
-      access: "token",
-      refresh: "r",
-      expires: 0,
-    });
-    expect(auth).toEqual({ apiKey: "token" });
-  });
+  it("anthropic toAuth derives the api key from the access token", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const auth = yield* Effect.promise(() =>
+          anthropicOAuth.toAuth({
+            type: "oauth",
+            access: "token",
+            refresh: "r",
+            expires: 0,
+          }),
+        );
+        expect(auth).toEqual({ apiKey: "token" });
+      }),
+    ));
 
   it("OpenAI exposes ChatGPT OAuth alongside API-key auth", () => {
     const provider = openaiProvider();
@@ -64,81 +70,108 @@ describe("OAuthAuth adapters", () => {
     });
   });
 
-  it("openai-codex toAuth derives the api key from the access token", async () => {
-    const auth = await openaiCodexOAuth.toAuth({
-      type: "oauth",
-      access: "token",
-      refresh: "r",
-      expires: 0,
-    });
-    expect(auth).toEqual({ apiKey: "token" });
-  });
-
-  it("openrouter derives the api key and keeps the permanent credential on refresh", async () => {
-    const credential = {
-      type: "oauth" as const,
-      access: "token",
-      refresh: "",
-      expires: Number.MAX_SAFE_INTEGER,
-    };
-    expect(await openRouterOAuth.toAuth(credential)).toEqual({ apiKey: "token" });
-    expect(await openRouterOAuth.refresh(credential, neverAbortedSignal)).toBe(credential);
-  });
-
-  it("xAI toAuth derives the api key from the access token", async () => {
-    const auth = await xaiOAuth.toAuth({
-      type: "oauth",
-      access: "token",
-      refresh: "r",
-      expires: 0,
-    });
-    expect(auth).toEqual({ apiKey: "token" });
-  });
-
-  it("anthropic refresh exchanges the refresh token and returns a typed credential", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() =>
-        Promise.resolve(
-          jsonResponse({
-            access_token: "new-access",
-            refresh_token: "new-refresh",
-            expires_in: 3600,
+  it("openai-codex toAuth derives the api key from the access token", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const auth = yield* Effect.promise(() =>
+          openaiCodexOAuth.toAuth({
+            type: "oauth",
+            access: "token",
+            refresh: "r",
+            expires: 0,
           }),
-        ),
-      ),
-    );
+        );
+        expect(auth).toEqual({ apiKey: "token" });
+      }),
+    ));
 
-    const refreshed = await anthropicOAuth.refresh(
-      { type: "oauth", access: "old", refresh: "old-r", expires: 0 },
-      neverAbortedSignal,
-    );
-    expect(refreshed.type).toBe("oauth");
-    expect(refreshed.access).toBe("new-access");
-    expect(refreshed.refresh).toBe("new-refresh");
-    expect(refreshed.expires).toBeGreaterThan(Date.now());
-  });
+  it("openrouter derives the api key and keeps the permanent credential on refresh", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const credential = {
+          type: "oauth" as const,
+          access: "token",
+          refresh: "",
+          expires: Number.MAX_SAFE_INTEGER,
+        };
+        expect(yield* Effect.promise(() => openRouterOAuth.toAuth(credential))).toEqual({
+          apiKey: "token",
+        });
+        expect(
+          yield* Effect.promise(() => openRouterOAuth.refresh(credential, neverAbortedSignal)),
+        ).toBe(credential);
+      }),
+    ));
+
+  it("xAI toAuth derives the api key from the access token", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const auth = yield* Effect.promise(() =>
+          xaiOAuth.toAuth({
+            type: "oauth",
+            access: "token",
+            refresh: "r",
+            expires: 0,
+          }),
+        );
+        expect(auth).toEqual({ apiKey: "token" });
+      }),
+    ));
+
+  it("anthropic refresh exchanges the refresh token and returns a typed credential", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubGlobal(
+          "fetch",
+          vi.fn(() =>
+            Promise.resolve(
+              jsonResponse({
+                access_token: "new-access",
+                refresh_token: "new-refresh",
+                expires_in: 3600,
+              }),
+            ),
+          ),
+        );
+
+        const refreshed = yield* Effect.promise(() =>
+          anthropicOAuth.refresh(
+            { type: "oauth", access: "old", refresh: "old-r", expires: 0 },
+            neverAbortedSignal,
+          ),
+        );
+        expect(refreshed.type).toBe("oauth");
+        expect(refreshed.access).toBe("new-access");
+        expect(refreshed.refresh).toBe("new-refresh");
+        expect(refreshed.expires).toBeGreaterThan(yield* Clock.currentTimeMillis);
+      }),
+    ));
 });
 
 describe("OAuth through Models.getAuth (lazy load chain)", () => {
-  it("resolves stored anthropic oauth credentials via the lazy flow import", async () => {
-    const credentials = new InMemoryCredentialStore();
-    await credentials.modify("anthropic", () =>
-      Promise.resolve({
-        type: "oauth",
-        access: "oauth-access-token",
-        refresh: "r",
-        expires: Date.now() + 10 * 60_000,
+  it("resolves stored anthropic oauth credentials via the lazy flow import", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const credentials = new InMemoryCredentialStore();
+        yield* Effect.promise(() =>
+          credentials.modify("anthropic", () =>
+            Promise.resolve({
+              type: "oauth",
+              access: "oauth-access-token",
+              refresh: "r",
+              expires: Date.now() + 10 * 60_000,
+            }),
+          ),
+        );
+        const models = createModels({ credentials });
+        models.setProvider(anthropicProvider());
+
+        const model = models.getModels("anthropic")[0];
+
+        if (model === undefined) throw new Error("Expected a model");
+        const result = yield* Effect.promise(() => models.getAuth(model.provider));
+        expect(result?.auth.apiKey).toBe("oauth-access-token");
+        expect(result?.source).toBe("OAuth");
       }),
-    );
-    const models = createModels({ credentials });
-    models.setProvider(anthropicProvider());
-
-    const model = models.getModels("anthropic")[0];
-
-    if (model === undefined) throw new Error("Expected a model");
-    const result = await models.getAuth(model.provider);
-    expect(result?.auth.apiKey).toBe("oauth-access-token");
-    expect(result?.source).toBe("OAuth");
-  });
+    ));
 });

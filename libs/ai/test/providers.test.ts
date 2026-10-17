@@ -1,3 +1,4 @@
+import { Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { lazyApi } from "../src/api/lazy.ts";
@@ -285,251 +286,313 @@ describe("builtin providers", () => {
     }
   });
 
-  it("resolves Anthropic bearer auth from env with auth token precedence", async () => {
-    const models = createModels({
-      authContext: fakeAuthContext({
-        ANTHROPIC_AUTH_TOKEN: "auth-token",
-        ANTHROPIC_OAUTH_TOKEN: "oauth-token",
-        ANTHROPIC_API_KEY: "api-key",
+  it("resolves Anthropic bearer auth from env with auth token precedence", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const models = createModels({
+          authContext: fakeAuthContext({
+            ANTHROPIC_AUTH_TOKEN: "auth-token",
+            ANTHROPIC_OAUTH_TOKEN: "oauth-token",
+            ANTHROPIC_API_KEY: "api-key",
+          }),
+        });
+        models.setProvider(anthropicProvider());
+
+        expect(yield* Effect.promise(() => models.getAuth("anthropic"))).toEqual({
+          auth: { headers: { Authorization: "Bearer auth-token" } },
+          source: "ANTHROPIC_AUTH_TOKEN",
+        });
       }),
-    });
-    models.setProvider(anthropicProvider());
+    ));
 
-    expect(await models.getAuth("anthropic")).toEqual({
-      auth: { headers: { Authorization: "Bearer auth-token" } },
-      source: "ANTHROPIC_AUTH_TOKEN",
-    });
-  });
+  it("preserves Anthropic OAuth token precedence over the API key", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const models = createModels({
+          authContext: fakeAuthContext({
+            ANTHROPIC_API_KEY: "key",
+            ANTHROPIC_OAUTH_TOKEN: "oauth-token",
+          }),
+        });
+        models.setProvider(anthropicProvider());
 
-  it("preserves Anthropic OAuth token precedence over the API key", async () => {
-    const models = createModels({
-      authContext: fakeAuthContext({
-        ANTHROPIC_API_KEY: "key",
-        ANTHROPIC_OAUTH_TOKEN: "oauth-token",
+        const result = yield* Effect.promise(() => models.getAuth("anthropic"));
+        expect(result?.auth.apiKey).toBe("oauth-token");
+        expect(result?.source).toBe("ANTHROPIC_OAUTH_TOKEN");
       }),
-    });
-    models.setProvider(anthropicProvider());
+    ));
 
-    const result = await models.getAuth("anthropic");
-    expect(result?.auth.apiKey).toBe("oauth-token");
-    expect(result?.source).toBe("ANTHROPIC_OAUTH_TOKEN");
-  });
+  it("runs provider-owned Bedrock bearer token and AWS profile login flows", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const auth = amazonBedrockProvider().auth.apiKey!;
+        const bearerAnswers = ["bearer-token", "bedrock-token"];
+        expect(
+          yield* Effect.promise(() =>
+            Promise.resolve(
+              auth.login?.({
+                signal: neverAbortedSignal,
+                prompt: () => Promise.resolve(bearerAnswers.shift()!),
+                notify: () => {},
+              }),
+            ),
+          ),
+        ).toEqual({ type: "api_key", key: "bedrock-token" });
 
-  it("runs provider-owned Bedrock bearer token and AWS profile login flows", async () => {
-    const auth = amazonBedrockProvider().auth.apiKey!;
-    const bearerAnswers = ["bearer-token", "bedrock-token"];
-    expect(
-      await auth.login?.({
-        signal: neverAbortedSignal,
-        prompt: () => Promise.resolve(bearerAnswers.shift()!),
-        notify: () => {},
+        const profileAnswers = ["aws-profile", "work"];
+        const events: AuthEvent[] = [];
+        expect(
+          yield* Effect.promise(() =>
+            Promise.resolve(
+              auth.login?.({
+                signal: neverAbortedSignal,
+                prompt: () => Promise.resolve(profileAnswers.shift()!),
+                notify: (event) => events.push(event),
+              }),
+            ),
+          ),
+        ).toEqual({ type: "api_key", env: { AWS_PROFILE: "work" } });
+        expect(events).toEqual([
+          expect.objectContaining({
+            type: "info",
+            links: [expect.objectContaining({ label: "AWS credential provider chain" })],
+          }),
+        ]);
+        expect(
+          yield* Effect.promise(() =>
+            auth.resolve({
+              ctx: fakeAuthContext({}),
+              credential: { type: "api_key", env: { AWS_PROFILE: "work" } },
+              signal: neverAbortedSignal,
+            }),
+          ),
+        ).toMatchObject({ auth: {}, env: { AWS_PROFILE: "work" } });
       }),
-    ).toEqual({ type: "api_key", key: "bedrock-token" });
+    ));
 
-    const profileAnswers = ["aws-profile", "work"];
-    const events: AuthEvent[] = [];
-    expect(
-      await auth.login?.({
-        signal: neverAbortedSignal,
-        prompt: () => Promise.resolve(profileAnswers.shift()!),
-        notify: (event) => events.push(event),
+  it("reports bedrock as configured from ambient AWS credentials without an api key", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const models = createModels({ authContext: fakeAuthContext({ AWS_PROFILE: "dev" }) });
+        models.setProvider(amazonBedrockProvider());
+        const model = models.getModels("amazon-bedrock")[0];
+        if (model === undefined) throw new Error("Expected a model");
+
+        const result = yield* Effect.promise(() => models.getAuth(model.provider));
+        expect(result?.auth).toEqual({});
+        expect(result?.source).toBe("AWS_PROFILE");
+
+        const unconfigured = createModels({ authContext: fakeAuthContext({}) });
+        unconfigured.setProvider(amazonBedrockProvider());
+        expect(yield* Effect.promise(() => unconfigured.getAuth(model.provider))).toBeUndefined();
       }),
-    ).toEqual({ type: "api_key", env: { AWS_PROFILE: "work" } });
-    expect(events).toEqual([
-      expect.objectContaining({
-        type: "info",
-        links: [expect.objectContaining({ label: "AWS credential provider chain" })],
+    ));
+
+  it("requires Cloudflare Workers AI account config and returns scoped env", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const missingAccount = createModels({
+          authContext: fakeAuthContext({ CLOUDFLARE_API_KEY: "cf-key" }),
+        });
+        missingAccount.setProvider(cloudflareWorkersAIProvider());
+        const model = missingAccount.getModels("cloudflare-workers-ai")[0];
+        if (model === undefined) throw new Error("Expected a model");
+        expect(yield* Effect.promise(() => missingAccount.getAuth(model.provider))).toBeUndefined();
+
+        const configured = createModels({
+          authContext: fakeAuthContext({
+            CLOUDFLARE_API_KEY: "cf-key",
+            CLOUDFLARE_ACCOUNT_ID: "account-id",
+          }),
+        });
+        configured.setProvider(cloudflareWorkersAIProvider());
+        const result = yield* Effect.promise(() => configured.getAuth(model.provider));
+        expect(result?.auth).toEqual({ apiKey: "cf-key" });
+        expect(result?.env).toEqual({ CLOUDFLARE_ACCOUNT_ID: "account-id" });
       }),
-    ]);
-    expect(
-      await auth.resolve({
-        ctx: fakeAuthContext({}),
-        credential: { type: "api_key", env: { AWS_PROFILE: "work" } },
-        signal: neverAbortedSignal,
+    ));
+
+  it("requires Cloudflare AI Gateway account and gateway config and returns scoped env headers", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const missingGateway = createModels({
+          authContext: fakeAuthContext({
+            CLOUDFLARE_API_KEY: "cf-key",
+            CLOUDFLARE_ACCOUNT_ID: "account-id",
+          }),
+        });
+        missingGateway.setProvider(cloudflareAIGatewayProvider());
+        const model = missingGateway.getModels("cloudflare-ai-gateway")[0];
+        if (model === undefined) throw new Error("Expected a model");
+        expect(yield* Effect.promise(() => missingGateway.getAuth(model.provider))).toBeUndefined();
+
+        const configured = createModels({
+          authContext: fakeAuthContext({
+            CLOUDFLARE_API_KEY: "cf-key",
+            CLOUDFLARE_ACCOUNT_ID: "account-id",
+            CLOUDFLARE_GATEWAY_ID: "gateway-id",
+          }),
+        });
+        configured.setProvider(cloudflareAIGatewayProvider());
+        const result = yield* Effect.promise(() => configured.getAuth(model.provider));
+        expect(result?.auth).toEqual({
+          headers: {
+            "cf-aig-authorization": "Bearer cf-key",
+            Authorization: null,
+            "x-api-key": null,
+          },
+        });
+        expect(result?.env).toEqual({
+          CLOUDFLARE_ACCOUNT_ID: "account-id",
+          CLOUDFLARE_GATEWAY_ID: "gateway-id",
+        });
       }),
-    ).toMatchObject({ auth: {}, env: { AWS_PROFILE: "work" } });
-  });
+    ));
 
-  it("reports bedrock as configured from ambient AWS credentials without an api key", async () => {
-    const models = createModels({ authContext: fakeAuthContext({ AWS_PROFILE: "dev" }) });
-    models.setProvider(amazonBedrockProvider());
-    const model = models.getModels("amazon-bedrock")[0];
-    if (model === undefined) throw new Error("Expected a model");
+  it("runs provider-owned Vertex API key and ADC login flows", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const auth = googleVertexProvider().auth.apiKey!;
+        const keyAnswers = ["api-key", "vertex-key"];
+        expect(
+          yield* Effect.promise(() =>
+            Promise.resolve(
+              auth.login?.({
+                signal: neverAbortedSignal,
+                prompt: () => Promise.resolve(keyAnswers.shift()!),
+                notify: () => {},
+              }),
+            ),
+          ),
+        ).toEqual({ type: "api_key", key: "vertex-key" });
 
-    const result = await models.getAuth(model.provider);
-    expect(result?.auth).toEqual({});
-    expect(result?.source).toBe("AWS_PROFILE");
-
-    const unconfigured = createModels({ authContext: fakeAuthContext({}) });
-    unconfigured.setProvider(amazonBedrockProvider());
-    expect(await unconfigured.getAuth(model.provider)).toBeUndefined();
-  });
-
-  it("requires Cloudflare Workers AI account config and returns scoped env", async () => {
-    const missingAccount = createModels({
-      authContext: fakeAuthContext({ CLOUDFLARE_API_KEY: "cf-key" }),
-    });
-    missingAccount.setProvider(cloudflareWorkersAIProvider());
-    const model = missingAccount.getModels("cloudflare-workers-ai")[0];
-    if (model === undefined) throw new Error("Expected a model");
-    expect(await missingAccount.getAuth(model.provider)).toBeUndefined();
-
-    const configured = createModels({
-      authContext: fakeAuthContext({
-        CLOUDFLARE_API_KEY: "cf-key",
-        CLOUDFLARE_ACCOUNT_ID: "account-id",
-      }),
-    });
-    configured.setProvider(cloudflareWorkersAIProvider());
-    const result = await configured.getAuth(model.provider);
-    expect(result?.auth).toEqual({ apiKey: "cf-key" });
-    expect(result?.env).toEqual({ CLOUDFLARE_ACCOUNT_ID: "account-id" });
-  });
-
-  it("requires Cloudflare AI Gateway account and gateway config and returns scoped env headers", async () => {
-    const missingGateway = createModels({
-      authContext: fakeAuthContext({
-        CLOUDFLARE_API_KEY: "cf-key",
-        CLOUDFLARE_ACCOUNT_ID: "account-id",
-      }),
-    });
-    missingGateway.setProvider(cloudflareAIGatewayProvider());
-    const model = missingGateway.getModels("cloudflare-ai-gateway")[0];
-    if (model === undefined) throw new Error("Expected a model");
-    expect(await missingGateway.getAuth(model.provider)).toBeUndefined();
-
-    const configured = createModels({
-      authContext: fakeAuthContext({
-        CLOUDFLARE_API_KEY: "cf-key",
-        CLOUDFLARE_ACCOUNT_ID: "account-id",
-        CLOUDFLARE_GATEWAY_ID: "gateway-id",
-      }),
-    });
-    configured.setProvider(cloudflareAIGatewayProvider());
-    const result = await configured.getAuth(model.provider);
-    expect(result?.auth).toEqual({
-      headers: {
-        "cf-aig-authorization": "Bearer cf-key",
-        Authorization: null,
-        "x-api-key": null,
-      },
-    });
-    expect(result?.env).toEqual({
-      CLOUDFLARE_ACCOUNT_ID: "account-id",
-      CLOUDFLARE_GATEWAY_ID: "gateway-id",
-    });
-  });
-
-  it("runs provider-owned Vertex API key and ADC login flows", async () => {
-    const auth = googleVertexProvider().auth.apiKey!;
-    const keyAnswers = ["api-key", "vertex-key"];
-    expect(
-      await auth.login?.({
-        signal: neverAbortedSignal,
-        prompt: () => Promise.resolve(keyAnswers.shift()!),
-        notify: () => {},
-      }),
-    ).toEqual({ type: "api_key", key: "vertex-key" });
-
-    const adcAnswers = ["adc", "project-id", "us-central1"];
-    const events: AuthEvent[] = [];
-    expect(
-      await auth.login?.({
-        signal: neverAbortedSignal,
-        prompt: () => Promise.resolve(adcAnswers.shift()!),
-        notify: (event) => events.push(event),
-      }),
-    ).toEqual({
-      type: "api_key",
-      env: { GOOGLE_CLOUD_PROJECT: "project-id", GOOGLE_CLOUD_LOCATION: "us-central1" },
-    });
-    expect(events).toEqual([
-      expect.objectContaining({
-        type: "info",
-        links: [expect.objectContaining({ label: "Application Default Credentials" })],
-      }),
-    ]);
-    expect(
-      await auth.resolve({
-        ctx: fakeAuthContext({}, ["~/.config/gcloud/application_default_credentials.json"]),
-        credential: {
+        const adcAnswers = ["adc", "project-id", "us-central1"];
+        const events: AuthEvent[] = [];
+        expect(
+          yield* Effect.promise(() =>
+            Promise.resolve(
+              auth.login?.({
+                signal: neverAbortedSignal,
+                prompt: () => Promise.resolve(adcAnswers.shift()!),
+                notify: (event) => events.push(event),
+              }),
+            ),
+          ),
+        ).toEqual({
           type: "api_key",
           env: { GOOGLE_CLOUD_PROJECT: "project-id", GOOGLE_CLOUD_LOCATION: "us-central1" },
-        },
-        signal: neverAbortedSignal,
+        });
+        expect(events).toEqual([
+          expect.objectContaining({
+            type: "info",
+            links: [expect.objectContaining({ label: "Application Default Credentials" })],
+          }),
+        ]);
+        expect(
+          yield* Effect.promise(() =>
+            auth.resolve({
+              ctx: fakeAuthContext({}, ["~/.config/gcloud/application_default_credentials.json"]),
+              credential: {
+                type: "api_key",
+                env: { GOOGLE_CLOUD_PROJECT: "project-id", GOOGLE_CLOUD_LOCATION: "us-central1" },
+              },
+              signal: neverAbortedSignal,
+            }),
+          ),
+        ).toMatchObject({
+          auth: {},
+          env: { GOOGLE_CLOUD_PROJECT: "project-id", GOOGLE_CLOUD_LOCATION: "us-central1" },
+        });
       }),
-    ).toMatchObject({
-      auth: {},
-      env: { GOOGLE_CLOUD_PROJECT: "project-id", GOOGLE_CLOUD_LOCATION: "us-central1" },
-    });
-  });
+    ));
 
-  it("resolves vertex via ADC file plus project and location", async () => {
-    const adc = "~/.config/gcloud/application_default_credentials.json";
-    const configured = createModels({
-      authContext: fakeAuthContext(
-        { GOOGLE_CLOUD_PROJECT: "proj", GOOGLE_CLOUD_LOCATION: "us-central1" },
-        [adc],
-      ),
-    });
-    configured.setProvider(googleVertexProvider());
-    const model = configured.getModels("google-vertex")[0];
-    if (model === undefined) throw new Error("Expected a model");
+  it("resolves vertex via ADC file plus project and location", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const adc = "~/.config/gcloud/application_default_credentials.json";
+        const configured = createModels({
+          authContext: fakeAuthContext(
+            { GOOGLE_CLOUD_PROJECT: "proj", GOOGLE_CLOUD_LOCATION: "us-central1" },
+            [adc],
+          ),
+        });
+        configured.setProvider(googleVertexProvider());
+        const model = configured.getModels("google-vertex")[0];
+        if (model === undefined) throw new Error("Expected a model");
 
-    const result = await configured.getAuth(model.provider);
-    expect(result?.auth).toEqual({});
-    expect(result?.source).toContain("application default");
+        const result = yield* Effect.promise(() => configured.getAuth(model.provider));
+        expect(result?.auth).toEqual({});
+        expect(result?.source).toContain("application default");
 
-    const partial = createModels({
-      authContext: fakeAuthContext({ GOOGLE_CLOUD_PROJECT: "proj" }, [adc]),
-    });
-    partial.setProvider(googleVertexProvider());
-    expect(await partial.getAuth(model.provider)).toBeUndefined();
+        const partial = createModels({
+          authContext: fakeAuthContext({ GOOGLE_CLOUD_PROJECT: "proj" }, [adc]),
+        });
+        partial.setProvider(googleVertexProvider());
+        expect(yield* Effect.promise(() => partial.getAuth(model.provider))).toBeUndefined();
 
-    const keyed = createModels({
-      authContext: fakeAuthContext({ GOOGLE_CLOUD_API_KEY: "vertex-key" }),
-    });
-    keyed.setProvider(googleVertexProvider());
-    expect((await keyed.getAuth(model.provider))?.auth.apiKey).toBe("vertex-key");
-  });
+        const keyed = createModels({
+          authContext: fakeAuthContext({ GOOGLE_CLOUD_API_KEY: "vertex-key" }),
+        });
+        keyed.setProvider(googleVertexProvider());
+        expect((yield* Effect.promise(() => keyed.getAuth(model.provider)))?.auth.apiKey).toBe(
+          "vertex-key",
+        );
+      }),
+    ));
 });
 
 describe("envApiKeyAuth", () => {
-  it("prefers the stored credential key and falls back through env vars in order", async () => {
-    const auth = envApiKeyAuth("Test key", ["FIRST_KEY", "SECOND_KEY"]);
+  it("prefers the stored credential key and falls back through env vars in order", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const auth = envApiKeyAuth("Test key", ["FIRST_KEY", "SECOND_KEY"]);
 
-    const stored = await auth.resolve({
-      ctx: fakeAuthContext({ FIRST_KEY: "env" }),
-      credential: { type: "api_key", key: "stored" },
-      signal: neverAbortedSignal,
-    });
-    expect(stored?.auth.apiKey).toBe("stored");
-    expect(stored?.source).toBe("stored credential");
+        const stored = yield* Effect.promise(() =>
+          auth.resolve({
+            ctx: fakeAuthContext({ FIRST_KEY: "env" }),
+            credential: { type: "api_key", key: "stored" },
+            signal: neverAbortedSignal,
+          }),
+        );
+        expect(stored?.auth.apiKey).toBe("stored");
+        expect(stored?.source).toBe("stored credential");
 
-    const second = await auth.resolve({
-      ctx: fakeAuthContext({ SECOND_KEY: "second" }),
-      signal: neverAbortedSignal,
-    });
-    expect(second?.auth.apiKey).toBe("second");
-    expect(second?.source).toBe("SECOND_KEY");
+        const second = yield* Effect.promise(() =>
+          auth.resolve({
+            ctx: fakeAuthContext({ SECOND_KEY: "second" }),
+            signal: neverAbortedSignal,
+          }),
+        );
+        expect(second?.auth.apiKey).toBe("second");
+        expect(second?.source).toBe("SECOND_KEY");
 
-    expect(
-      await auth.resolve({ ctx: fakeAuthContext({}), signal: neverAbortedSignal }),
-    ).toBeUndefined();
-  });
+        expect(
+          yield* Effect.promise(() =>
+            auth.resolve({ ctx: fakeAuthContext({}), signal: neverAbortedSignal }),
+          ),
+        ).toBeUndefined();
+      }),
+    ));
 
-  it("login prompts for a secret and returns an api-key credential", async () => {
-    const auth = envApiKeyAuth("Test key", ["TEST_KEY"]);
-    const credential = await auth.login?.({
-      signal: neverAbortedSignal,
-      prompt: (prompt) => {
-        expect(prompt.type).toBe("secret");
-        return Promise.resolve("entered-key");
-      },
-      notify: () => {},
-    });
-    expect(credential).toEqual({ type: "api_key", key: "entered-key" });
-  });
+  it("login prompts for a secret and returns an api-key credential", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const auth = envApiKeyAuth("Test key", ["TEST_KEY"]);
+        const credential = yield* Effect.promise(() =>
+          Promise.resolve(
+            auth.login?.({
+              signal: neverAbortedSignal,
+              prompt: (prompt) => {
+                expect(prompt.type).toBe("secret");
+                return Promise.resolve("entered-key");
+              },
+              notify: () => {},
+            }),
+          ),
+        );
+        expect(credential).toEqual({ type: "api_key", key: "entered-key" });
+      }),
+    ));
 });
 
 describe("createProvider", () => {
@@ -561,307 +624,371 @@ describe("createProvider", () => {
     };
   }
 
-  it("lazily exposes only declared deferred capabilities", async () => {
-    let loads = 0;
-    const streams = recordingStreams("deferred", []);
-    streams.fetchDeferred = (model) => streams.streamSimple(model, context);
-    const api = lazyApi(
-      () => {
-        loads++;
-        return Promise.resolve(streams);
-      },
-      { fetchDeferred: true },
-    );
-    const model = testModel("api-a", "model-a");
-    const handle: DeferredHandle = {
-      provider: model.provider,
-      modelId: model.id,
-      api: model.api,
-      id: "response-1",
-    };
+  it("lazily exposes only declared deferred capabilities", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let loads = 0;
+        const streams = recordingStreams("deferred", []);
+        streams.fetchDeferred = (model) => streams.streamSimple(model, context);
+        const api = lazyApi(
+          () => {
+            loads++;
+            return Promise.resolve(streams);
+          },
+          { fetchDeferred: true },
+        );
+        const model = testModel("api-a", "model-a");
+        const handle: DeferredHandle = {
+          provider: model.provider,
+          modelId: model.id,
+          api: model.api,
+          id: "response-1",
+        };
 
-    expect(loads).toBe(0);
-    expect(api.cancelDeferred).toBeUndefined();
-    expect((await api.fetchDeferred!(model, handle).result()).stopReason).toBe("stop");
-    expect(loads).toBe(1);
-  });
+        expect(loads).toBe(0);
+        expect(api.cancelDeferred).toBeUndefined();
+        expect(
+          (yield* Effect.promise(() => api.fetchDeferred!(model, handle).result())).stopReason,
+        ).toBe("stop");
+        expect(loads).toBe(1);
+      }),
+    ));
 
-  it("dispatches on model.api for mixed-API providers", async () => {
-    const calls: string[] = [];
-    const provider = createProvider({
-      id: "mixed",
-      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-      models: [testModel("api-a", "model-a"), testModel("api-b", "model-b")],
-      api: { "api-a": recordingStreams("a", calls), "api-b": recordingStreams("b", calls) },
-    });
-    const models = createModels();
-    models.setProvider(provider);
+  it("dispatches on model.api for mixed-API providers", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const calls: string[] = [];
+        const provider = createProvider({
+          id: "mixed",
+          auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
+          models: [testModel("api-a", "model-a"), testModel("api-b", "model-b")],
+          api: { "api-a": recordingStreams("a", calls), "api-b": recordingStreams("b", calls) },
+        });
+        const models = createModels();
+        models.setProvider(provider);
 
-    await models.completeSimple(testModel("api-a", "model-a"), context);
-    await models.completeSimple(testModel("api-b", "model-b"), context);
-    expect(calls).toEqual(["a:model-a", "b:model-b"]);
-  });
+        yield* Effect.promise(() => models.completeSimple(testModel("api-a", "model-a"), context));
+        yield* Effect.promise(() => models.completeSimple(testModel("api-b", "model-b"), context));
+        expect(calls).toEqual(["a:model-a", "b:model-b"]);
+      }),
+    ));
 
-  it("merges provider-resolved env into stream options", async () => {
-    let capturedEnv: Record<string, string> | undefined;
-    let capturedApiKey: string | undefined;
-    const envModel = { ...testModel("api-a", "model-a"), provider: "env-provider" };
-    const provider = createProvider({
-      id: "env-provider",
-      auth: {
-        apiKey: {
-          name: "Test",
-          resolve: () =>
-            Promise.resolve({
-              auth: { apiKey: "provider-key" },
-              env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
+  it("merges provider-resolved env into stream options", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let capturedEnv: Record<string, string> | undefined;
+        let capturedApiKey: string | undefined;
+        const envModel = { ...testModel("api-a", "model-a"), provider: "env-provider" };
+        const provider = createProvider({
+          id: "env-provider",
+          auth: {
+            apiKey: {
+              name: "Test",
+              resolve: () =>
+                Promise.resolve({
+                  auth: { apiKey: "provider-key" },
+                  env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
+                }),
+            },
+          },
+          models: [envModel],
+          api: {
+            stream: (model, _context, options) => {
+              capturedEnv = options?.env;
+              capturedApiKey = options?.apiKey;
+              return recordingStreams("a", []).stream(model, _context, options);
+            },
+            streamSimple: (model, _context, options) => {
+              capturedEnv = options?.env;
+              capturedApiKey = options?.apiKey;
+              return recordingStreams("a", []).streamSimple(model, _context, options);
+            },
+          },
+        });
+        const models = createModels();
+        models.setProvider(provider);
+
+        yield* Effect.promise(() =>
+          models.completeSimple(envModel, context, {
+            apiKey: "request-key",
+            env: { REQUEST_ONLY: "request", SHARED: "request" },
+          }),
+        );
+
+        expect(capturedApiKey).toBe("request-key");
+        expect(capturedEnv).toEqual({
+          PROVIDER_ONLY: "provider",
+          REQUEST_ONLY: "request",
+          SHARED: "request",
+        });
+      }),
+    ));
+
+  it("applies resolved request options to deferred fetch and cancellation", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let fetchedModel: Model<Api> | undefined;
+        let fetchedOptions: DeferredFetchOptions | undefined;
+        let cancelledOptions: DeferredCancelOptions | undefined;
+        const deferredModel = { ...testModel("api-a", "model-a"), provider: "deferred-provider" };
+        const streams = recordingStreams("deferred", []);
+        streams.fetchDeferred = (model, _handle, options) => {
+          fetchedModel = model;
+          fetchedOptions = options;
+          return streams.streamSimple(model, context);
+        };
+        streams.cancelDeferred = (_model, _handle, options) => {
+          cancelledOptions = options;
+
+          return Promise.resolve();
+        };
+        const provider = createProvider({
+          id: "deferred-provider",
+          auth: {
+            apiKey: {
+              name: "Test",
+              resolve: () =>
+                Promise.resolve({
+                  auth: {
+                    apiKey: "provider-key",
+                    baseUrl: "https://resolved.test/v1",
+                    headers: { Authorization: "Bearer provider", "X-Shared": "provider" },
+                  },
+                  env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
+                }),
+            },
+          },
+          models: [deferredModel],
+          api: streams,
+        });
+        const models = createModels();
+        models.setProvider(provider);
+        const handle: DeferredHandle = {
+          provider: deferredModel.provider,
+          modelId: deferredModel.id,
+          api: deferredModel.api,
+          id: "response-1",
+        };
+
+        yield* Effect.promise(() =>
+          models.fetchDeferred(deferredModel, handle, {
+            wait: 50,
+            timeoutMs: 100,
+            apiKey: "request-key",
+            headers: { "X-Request": "request", "x-shared": "request" },
+            env: { REQUEST_ONLY: "request", SHARED: "request" },
+            transformHeaders: (headers) => ({ ...headers, "X-Transformed": "yes" }),
+          }),
+        );
+        yield* Effect.promise(() =>
+          models.cancelDeferred(deferredModel, handle, {
+            timeoutMs: 200,
+            transformHeaders: (headers) => ({ ...headers, "X-Cancel": "yes" }),
+          }),
+        );
+
+        expect(fetchedModel?.baseUrl).toBe("https://resolved.test/v1");
+        expect(fetchedOptions).toMatchObject({
+          wait: 50,
+          timeoutMs: 100,
+          apiKey: "request-key",
+          headers: {
+            Authorization: "Bearer provider",
+            "X-Request": "request",
+            "x-shared": "request",
+            "X-Transformed": "yes",
+          },
+          env: { PROVIDER_ONLY: "provider", REQUEST_ONLY: "request", SHARED: "request" },
+        });
+        expect(cancelledOptions).toMatchObject({
+          timeoutMs: 200,
+          apiKey: "provider-key",
+          headers: { Authorization: "Bearer provider", "X-Shared": "provider", "X-Cancel": "yes" },
+          env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
+        });
+      }),
+    ));
+
+  it("produces a stream error for a model whose api has no implementation", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const provider = createProvider({
+          id: "mixed",
+          auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
+          models: [testModel("api-a", "model-a")],
+          api: { "api-a": recordingStreams("a", []) },
+        });
+        const result = yield* Effect.promise(() =>
+          provider.streamSimple(testModel("api-ghost", "model-x"), context).result(),
+        );
+        expect(result.stopReason).toBe("error");
+        expect(result.errorMessage).toContain("no API implementation");
+      }),
+    ));
+
+  it("lets a newer dynamic refresh bypass and supersede older network work", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const effectContext = yield* Effect.context();
+        let fetches = 0;
+        let markFirstStarted: (() => void) | undefined;
+        let finishFirst: (() => void) | undefined;
+        const firstStarted = new Promise<void>((resolve) => {
+          markFirstStarted = resolve;
+        });
+        const firstBlocked = new Promise<void>((resolve) => {
+          finishFirst = resolve;
+        });
+        const provider = createProvider({
+          id: "dynamic",
+          auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
+          models: [],
+          fetchModels: () =>
+            Effect.runPromiseWith(effectContext)(
+              Effect.gen(function* () {
+                fetches++;
+                const current = fetches;
+                if (current === 1) {
+                  markFirstStarted?.();
+                  yield* Effect.promise(() => firstBlocked);
+                }
+                return [testModel("api-a", `listed-${current}`)];
+              }),
+            ),
+          api: recordingStreams("a", []),
+        });
+
+        const store = new InMemoryModelsStore();
+        const models = createModels({ modelsStore: store });
+        models.setProvider(provider);
+        expect(provider.getModels()).toEqual([]);
+
+        const first = models.refresh({ providers: ["dynamic"] });
+        yield* Effect.promise(() => firstStarted);
+        const second = models.refresh({ providers: ["dynamic"] });
+        yield* Effect.promise(() => expect(second).resolves.toMatchObject({ aborted: false }));
+        yield* Effect.promise(() => expect(first).resolves.toMatchObject({ aborted: false }));
+        expect(fetches).toBe(2);
+        expect(provider.getModels().map((model) => model.id)).toEqual(["listed-2"]);
+        expect(
+          (yield* Effect.promise(() => store.read("dynamic")))?.models.map((model) => model.id),
+        ).toEqual(["listed-2"]);
+
+        finishFirst?.();
+        yield* Effect.promise(
+          () =>
+            new Promise((resolve) => {
+              setTimeout(resolve, 0);
             }),
-        },
-      },
-      models: [envModel],
-      api: {
-        stream: (model, _context, options) => {
-          capturedEnv = options?.env;
-          capturedApiKey = options?.apiKey;
-          return recordingStreams("a", []).stream(model, _context, options);
-        },
-        streamSimple: (model, _context, options) => {
-          capturedEnv = options?.env;
-          capturedApiKey = options?.apiKey;
-          return recordingStreams("a", []).streamSimple(model, _context, options);
-        },
-      },
-    });
-    const models = createModels();
-    models.setProvider(provider);
-
-    await models.completeSimple(envModel, context, {
-      apiKey: "request-key",
-      env: { REQUEST_ONLY: "request", SHARED: "request" },
-    });
-
-    expect(capturedApiKey).toBe("request-key");
-    expect(capturedEnv).toEqual({
-      PROVIDER_ONLY: "provider",
-      REQUEST_ONLY: "request",
-      SHARED: "request",
-    });
-  });
-
-  it("applies resolved request options to deferred fetch and cancellation", async () => {
-    let fetchedModel: Model<Api> | undefined;
-    let fetchedOptions: DeferredFetchOptions | undefined;
-    let cancelledOptions: DeferredCancelOptions | undefined;
-    const deferredModel = { ...testModel("api-a", "model-a"), provider: "deferred-provider" };
-    const streams = recordingStreams("deferred", []);
-    streams.fetchDeferred = (model, _handle, options) => {
-      fetchedModel = model;
-      fetchedOptions = options;
-      return streams.streamSimple(model, context);
-    };
-    streams.cancelDeferred = (_model, _handle, options) => {
-      cancelledOptions = options;
-
-      return Promise.resolve();
-    };
-    const provider = createProvider({
-      id: "deferred-provider",
-      auth: {
-        apiKey: {
-          name: "Test",
-          resolve: () =>
-            Promise.resolve({
-              auth: {
-                apiKey: "provider-key",
-                baseUrl: "https://resolved.test/v1",
-                headers: { Authorization: "Bearer provider", "X-Shared": "provider" },
-              },
-              env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
-            }),
-        },
-      },
-      models: [deferredModel],
-      api: streams,
-    });
-    const models = createModels();
-    models.setProvider(provider);
-    const handle: DeferredHandle = {
-      provider: deferredModel.provider,
-      modelId: deferredModel.id,
-      api: deferredModel.api,
-      id: "response-1",
-    };
-
-    await models.fetchDeferred(deferredModel, handle, {
-      wait: 50,
-      timeoutMs: 100,
-      apiKey: "request-key",
-      headers: { "X-Request": "request", "x-shared": "request" },
-      env: { REQUEST_ONLY: "request", SHARED: "request" },
-      transformHeaders: (headers) => ({ ...headers, "X-Transformed": "yes" }),
-    });
-    await models.cancelDeferred(deferredModel, handle, {
-      timeoutMs: 200,
-      transformHeaders: (headers) => ({ ...headers, "X-Cancel": "yes" }),
-    });
-
-    expect(fetchedModel?.baseUrl).toBe("https://resolved.test/v1");
-    expect(fetchedOptions).toMatchObject({
-      wait: 50,
-      timeoutMs: 100,
-      apiKey: "request-key",
-      headers: {
-        Authorization: "Bearer provider",
-        "X-Request": "request",
-        "x-shared": "request",
-        "X-Transformed": "yes",
-      },
-      env: { PROVIDER_ONLY: "provider", REQUEST_ONLY: "request", SHARED: "request" },
-    });
-    expect(cancelledOptions).toMatchObject({
-      timeoutMs: 200,
-      apiKey: "provider-key",
-      headers: { Authorization: "Bearer provider", "X-Shared": "provider", "X-Cancel": "yes" },
-      env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
-    });
-  });
-
-  it("produces a stream error for a model whose api has no implementation", async () => {
-    const provider = createProvider({
-      id: "mixed",
-      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-      models: [testModel("api-a", "model-a")],
-      api: { "api-a": recordingStreams("a", []) },
-    });
-    const result = await provider.streamSimple(testModel("api-ghost", "model-x"), context).result();
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toContain("no API implementation");
-  });
-
-  it("lets a newer dynamic refresh bypass and supersede older network work", async () => {
-    let fetches = 0;
-    let markFirstStarted: (() => void) | undefined;
-    let finishFirst: (() => void) | undefined;
-    const firstStarted = new Promise<void>((resolve) => {
-      markFirstStarted = resolve;
-    });
-    const firstBlocked = new Promise<void>((resolve) => {
-      finishFirst = resolve;
-    });
-    const provider = createProvider({
-      id: "dynamic",
-      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-      models: [],
-      fetchModels: async () => {
-        fetches++;
-        const current = fetches;
-        if (current === 1) {
-          markFirstStarted?.();
-          await firstBlocked;
-        }
-        return [testModel("api-a", `listed-${current}`)];
-      },
-      api: recordingStreams("a", []),
-    });
-
-    const store = new InMemoryModelsStore();
-    const models = createModels({ modelsStore: store });
-    models.setProvider(provider);
-    expect(provider.getModels()).toEqual([]);
-
-    const first = models.refresh({ providers: ["dynamic"] });
-    await firstStarted;
-    const second = models.refresh({ providers: ["dynamic"] });
-    await expect(second).resolves.toMatchObject({ aborted: false });
-    await expect(first).resolves.toMatchObject({ aborted: false });
-    expect(fetches).toBe(2);
-    expect(provider.getModels().map((model) => model.id)).toEqual(["listed-2"]);
-    expect((await store.read("dynamic"))?.models.map((model) => model.id)).toEqual(["listed-2"]);
-
-    finishFirst?.();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
-    expect(provider.getModels().map((model) => model.id)).toEqual(["listed-2"]);
-    expect((await store.read("dynamic"))?.models.map((model) => model.id)).toEqual(["listed-2"]);
-  });
+        );
+        expect(provider.getModels().map((model) => model.id)).toEqual(["listed-2"]);
+        expect(
+          (yield* Effect.promise(() => store.read("dynamic")))?.models.map((model) => model.id),
+        ).toEqual(["listed-2"]);
+      }),
+    ));
 });
 
 describe("fauxProvider", () => {
-  it("streams queued responses through a Models collection", async () => {
-    const faux = fauxProvider();
-    const models = createModels();
-    models.setProvider(faux.provider);
-    faux.setResponses([fauxAssistantMessage("hello from faux")]);
+  it("streams queued responses through a Models collection", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const faux = fauxProvider();
+        const models = createModels();
+        models.setProvider(faux.provider);
+        faux.setResponses([fauxAssistantMessage("hello from faux")]);
 
-    const model = models.getModels(faux.provider.id)[0];
+        const model = models.getModels(faux.provider.id)[0];
 
-    if (model === undefined) throw new Error("Expected a model");
-    const result = await models.completeSimple(model, context);
-    expect(result.stopReason).toBe("stop");
-    expect(result.content).toEqual([{ type: "text", text: "hello from faux" }]);
-    expect(faux.state.callCount).toBe(1);
-  });
+        if (model === undefined) throw new Error("Expected a model");
+        const result = yield* Effect.promise(() => models.completeSimple(model, context));
+        expect(result.stopReason).toBe("stop");
+        expect(result.content).toEqual([{ type: "text", text: "hello from faux" }]);
+        expect(faux.state.callCount).toBe(1);
+      }),
+    ));
 
-  it("submits, polls, and redeems deferred responses", async () => {
-    const faux = fauxProvider({ deferred: { pendingFetches: 1, pollAfterMs: 25 } });
-    const models = createModels();
-    models.setProvider(faux.provider);
-    faux.setResponses([fauxAssistantMessage("ready")]);
-    const model = faux.getModel();
+  it("submits, polls, and redeems deferred responses", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const faux = fauxProvider({ deferred: { pendingFetches: 1, pollAfterMs: 25 } });
+        const models = createModels();
+        models.setProvider(faux.provider);
+        faux.setResponses([fauxAssistantMessage("ready")]);
+        const model = faux.getModel();
 
-    const submission = models.streamSimple(model, context, { deferred: { window: "1h" } });
-    const eventTypes: string[] = [];
-    for await (const event of submission) eventTypes.push(event.type);
-    const deferred = await submission.result();
-    expect(eventTypes).toEqual(["start", "done"]);
-    expect(deferred).toMatchObject({ stopReason: "deferred", content: [] });
-    expect(deferred.deferred).toEqual({
-      provider: model.provider,
-      modelId: model.id,
-      api: model.api,
-      id: expect.any(String),
-      pollAfterMs: 25,
-    });
-    if (deferred.deferred === undefined)
-      throw new Error("Faux response did not include a deferred handle");
+        const submission = models.streamSimple(model, context, { deferred: { window: "1h" } });
+        const eventTypes: string[] = [];
+        yield* Stream.fromAsyncIterable(submission, (error) => error).pipe(
+          Stream.orDie,
+          Stream.runForEach((event) =>
+            Effect.sync(() => {
+              eventTypes.push(event.type);
+            }),
+          ),
+        );
+        const deferred = yield* Effect.promise(() => submission.result());
+        expect(eventTypes).toEqual(["start", "done"]);
+        expect(deferred).toMatchObject({ stopReason: "deferred", content: [] });
+        expect(deferred.deferred).toEqual({
+          provider: model.provider,
+          modelId: model.id,
+          api: model.api,
+          id: expect.any(String),
+          pollAfterMs: 25,
+        });
+        const handle = deferred.deferred;
+        if (handle === undefined)
+          throw new Error("Faux response did not include a deferred handle");
 
-    const pending = await models.fetchDeferred(model, deferred.deferred);
-    expect(pending.stopReason).toBe("deferred");
-    expect(pending.deferred).toEqual(deferred.deferred);
+        const pending = yield* Effect.promise(() => models.fetchDeferred(model, handle));
+        expect(pending.stopReason).toBe("deferred");
+        expect(pending.deferred).toEqual(handle);
 
-    const ready = await models.fetchDeferred(model, deferred.deferred, { wait: 0 });
-    expect(ready.stopReason).toBe("stop");
-    expect(ready.content).toEqual([{ type: "text", text: "ready" }]);
-    expect(ready.usage.totalTokens).toBeGreaterThan(0);
-    expect(faux.state).toMatchObject({ callCount: 1, deferredFetchCount: 2 });
-  });
+        const ready = yield* Effect.promise(() => models.fetchDeferred(model, handle, { wait: 0 }));
+        expect(ready.stopReason).toBe("stop");
+        expect(ready.content).toEqual([{ type: "text", text: "ready" }]);
+        expect(ready.usage.totalTokens).toBeGreaterThan(0);
+        expect(faux.state).toMatchObject({ callCount: 1, deferredFetchCount: 2 });
+      }),
+    ));
 
-  it("records cancellation and returns deferred fetch failures in-band", async () => {
-    const faux = fauxProvider();
-    const models = createModels();
-    models.setProvider(faux.provider);
-    faux.setResponses([
-      () => Promise.reject(new Error("deferred failed")),
-      fauxAssistantMessage("cancelled"),
-    ]);
-    const model = faux.getModel();
+  it("records cancellation and returns deferred fetch failures in-band", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const faux = fauxProvider();
+        const models = createModels();
+        models.setProvider(faux.provider);
+        faux.setResponses([
+          () => Promise.reject(new Error("deferred failed")),
+          fauxAssistantMessage("cancelled"),
+        ]);
+        const model = faux.getModel();
 
-    const failedSubmission = await models.completeSimple(model, context, { deferred: true });
-    if (failedSubmission.deferred === undefined)
-      throw new Error("Faux response did not include a deferred handle");
-    const failed = await models.fetchDeferred(model, failedSubmission.deferred);
-    expect(failed).toMatchObject({ stopReason: "error", errorMessage: "deferred failed" });
+        const failedSubmission = yield* Effect.promise(() =>
+          models.completeSimple(model, context, { deferred: true }),
+        );
+        const failedDeferred = failedSubmission.deferred;
+        if (failedDeferred === undefined)
+          throw new Error("Faux response did not include a deferred handle");
+        const failed = yield* Effect.promise(() => models.fetchDeferred(model, failedDeferred));
+        expect(failed).toMatchObject({ stopReason: "error", errorMessage: "deferred failed" });
 
-    const cancelledSubmission = await models.completeSimple(model, context, { deferred: true });
-    if (cancelledSubmission.deferred === undefined)
-      throw new Error("Faux response did not include a deferred handle");
-    await models.cancelDeferred(model, cancelledSubmission.deferred);
-    expect(faux.state.cancelledDeferred).toEqual([cancelledSubmission.deferred]);
-    const cancelled = await models.fetchDeferred(model, cancelledSubmission.deferred);
-    expect(cancelled).toMatchObject({
-      stopReason: "error",
-      errorMessage: expect.stringContaining("was cancelled"),
-    });
-  });
+        const cancelledSubmission = yield* Effect.promise(() =>
+          models.completeSimple(model, context, { deferred: true }),
+        );
+        const cancelledDeferred = cancelledSubmission.deferred;
+        if (cancelledDeferred === undefined)
+          throw new Error("Faux response did not include a deferred handle");
+        yield* Effect.promise(() => models.cancelDeferred(model, cancelledDeferred));
+        expect(faux.state.cancelledDeferred).toEqual([cancelledDeferred]);
+        const cancelled = yield* Effect.promise(() =>
+          models.fetchDeferred(model, cancelledDeferred),
+        );
+        expect(cancelled).toMatchObject({
+          stopReason: "error",
+          errorMessage: expect.stringContaining("was cancelled"),
+        });
+      }),
+    ));
 });

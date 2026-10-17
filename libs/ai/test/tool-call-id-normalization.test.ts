@@ -1,3 +1,4 @@
+import { Clock, Console, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -27,69 +28,78 @@ describe("Tool Call ID Normalization - Live Handoff", () => {
       openrouterKey === "",
   )(
     "openai -> openrouter should normalize pipe-separated IDs",
-    async () => {
-      const openaiModel = getModel("openai", "gpt-5.5");
-      const openrouterModel = getModel("openrouter", "openai/gpt-5.5");
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const openaiModel = getModel("openai", "gpt-5.5");
+          const openrouterModel = getModel("openrouter", "openai/gpt-5.5");
 
-      const userMessage: Message = {
-        role: "user",
-        content: "Use the echo tool to echo 'hello world'",
-        timestamp: Date.now(),
-      };
+          const userMessage: Message = {
+            role: "user",
+            content: "Use the echo tool to echo 'hello world'",
+            timestamp: yield* Clock.currentTimeMillis,
+          };
 
-      const assistantResponse = await completeSimple(
-        openaiModel,
-        {
-          systemPrompt: "You are a helpful assistant. Use the echo tool when asked.",
-          messages: [userMessage],
-          tools: [echoTool],
-        },
-        { apiKey: openaiKey },
-      );
+          const assistantResponse = yield* Effect.promise(() =>
+            completeSimple(
+              openaiModel,
+              {
+                systemPrompt: "You are a helpful assistant. Use the echo tool when asked.",
+                messages: [userMessage],
+                tools: [echoTool],
+              },
+              { apiKey: openaiKey },
+            ),
+          );
 
-      expect(assistantResponse.stopReason, `OpenAI error: ${assistantResponse.errorMessage}`).toBe(
-        "toolUse",
-      );
+          expect(
+            assistantResponse.stopReason,
+            `OpenAI error: ${assistantResponse.errorMessage}`,
+          ).toBe("toolUse");
 
-      const toolCall = assistantResponse.content.find((c) => c.type === "toolCall");
-      expect(toolCall).toBeDefined();
-      expect(toolCall!.type).toBe("toolCall");
+          const toolCall = assistantResponse.content.find((c) => c.type === "toolCall");
+          expect(toolCall).toBeDefined();
+          expect(toolCall!.type).toBe("toolCall");
 
-      if (toolCall?.type === "toolCall") {
-        expect(toolCall.id).toContain("|");
-        console.log(`Tool call ID from openai: ${toolCall.id.slice(0, 80)}...`);
-      }
+          if (toolCall?.type === "toolCall") {
+            expect(toolCall.id).toContain("|");
+            yield* Console.log(`Tool call ID from openai: ${toolCall.id.slice(0, 80)}...`);
+          }
 
-      const toolResult: ToolResultMessage = {
-        role: "toolResult",
-        toolCallId: (toolCall as any).id,
-        toolName: "echo",
-        content: [{ type: "text", text: "hello world" }],
-        isError: false,
-        timestamp: Date.now(),
-      };
+          const toolResult: ToolResultMessage = {
+            role: "toolResult",
+            toolCallId: (toolCall as any).id,
+            toolName: "echo",
+            content: [{ type: "text", text: "hello world" }],
+            isError: false,
+            timestamp: yield* Clock.currentTimeMillis,
+          };
 
-      const openrouterResponse = await completeSimple(
-        openrouterModel,
-        {
-          systemPrompt: "You are a helpful assistant.",
-          messages: [
-            userMessage,
-            assistantResponse,
-            toolResult,
-            { role: "user", content: "Say hi", timestamp: Date.now() },
-          ],
-          tools: [echoTool],
-        },
-        { apiKey: openrouterKey },
-      );
+          const currentTime = yield* Clock.currentTimeMillis;
+          const openrouterResponse = yield* Effect.promise(() =>
+            completeSimple(
+              openrouterModel,
+              {
+                systemPrompt: "You are a helpful assistant.",
+                messages: [
+                  userMessage,
+                  assistantResponse,
+                  toolResult,
+                  { role: "user", content: "Say hi", timestamp: currentTime },
+                ],
+                tools: [echoTool],
+              },
+              { apiKey: openrouterKey },
+            ),
+          );
 
-      expect(
-        openrouterResponse.stopReason,
-        `OpenRouter error: ${openrouterResponse.errorMessage}`,
-      ).not.toBe("error");
-      expect(openrouterResponse.errorMessage).toBeUndefined();
-    },
+          expect(
+            openrouterResponse.stopReason,
+            `OpenRouter error: ${openrouterResponse.errorMessage}`,
+          ).not.toBe("error");
+          expect(openrouterResponse.errorMessage).toBeUndefined();
+        }),
+      ),
     60000,
   );
 
@@ -97,62 +107,71 @@ describe("Tool Call ID Normalization - Live Handoff", () => {
     openaiKey === undefined || openaiKey === "" || codexToken === undefined || codexToken === "",
   )(
     "openai -> openai-codex should normalize pipe-separated IDs",
-    async () => {
-      const openaiModel = getModel("openai", "gpt-5.5");
-      const codexModel = getModel("openai-codex", "gpt-5.5");
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const openaiModel = getModel("openai", "gpt-5.5");
+          const codexModel = getModel("openai-codex", "gpt-5.5");
 
-      const userMessage: Message = {
-        role: "user",
-        content: "Use the echo tool to echo 'test message'",
-        timestamp: Date.now(),
-      };
+          const userMessage: Message = {
+            role: "user",
+            content: "Use the echo tool to echo 'test message'",
+            timestamp: yield* Clock.currentTimeMillis,
+          };
 
-      const assistantResponse = await completeSimple(
-        openaiModel,
-        {
-          systemPrompt: "You are a helpful assistant. Use the echo tool when asked.",
-          messages: [userMessage],
-          tools: [echoTool],
-        },
-        { apiKey: openaiKey },
-      );
+          const assistantResponse = yield* Effect.promise(() =>
+            completeSimple(
+              openaiModel,
+              {
+                systemPrompt: "You are a helpful assistant. Use the echo tool when asked.",
+                messages: [userMessage],
+                tools: [echoTool],
+              },
+              { apiKey: openaiKey },
+            ),
+          );
 
-      expect(assistantResponse.stopReason, `OpenAI error: ${assistantResponse.errorMessage}`).toBe(
-        "toolUse",
-      );
+          expect(
+            assistantResponse.stopReason,
+            `OpenAI error: ${assistantResponse.errorMessage}`,
+          ).toBe("toolUse");
 
-      const toolCall = assistantResponse.content.find((c) => c.type === "toolCall");
-      expect(toolCall).toBeDefined();
+          const toolCall = assistantResponse.content.find((c) => c.type === "toolCall");
+          expect(toolCall).toBeDefined();
 
-      const toolResult: ToolResultMessage = {
-        role: "toolResult",
-        toolCallId: (toolCall as any).id,
-        toolName: "echo",
-        content: [{ type: "text", text: "test message" }],
-        isError: false,
-        timestamp: Date.now(),
-      };
+          const toolResult: ToolResultMessage = {
+            role: "toolResult",
+            toolCallId: (toolCall as any).id,
+            toolName: "echo",
+            content: [{ type: "text", text: "test message" }],
+            isError: false,
+            timestamp: yield* Clock.currentTimeMillis,
+          };
 
-      const codexResponse = await completeSimple(
-        codexModel,
-        {
-          systemPrompt: "You are a helpful assistant.",
-          messages: [
-            userMessage,
-            assistantResponse,
-            toolResult,
-            { role: "user", content: "Say hi", timestamp: Date.now() },
-          ],
-          tools: [echoTool],
-        },
-        { apiKey: codexToken },
-      );
+          const currentTime1 = yield* Clock.currentTimeMillis;
+          const codexResponse = yield* Effect.promise(() =>
+            completeSimple(
+              codexModel,
+              {
+                systemPrompt: "You are a helpful assistant.",
+                messages: [
+                  userMessage,
+                  assistantResponse,
+                  toolResult,
+                  { role: "user", content: "Say hi", timestamp: currentTime1 },
+                ],
+                tools: [echoTool],
+              },
+              { apiKey: codexToken },
+            ),
+          );
 
-      expect(codexResponse.stopReason, `Codex error: ${codexResponse.errorMessage}`).not.toBe(
-        "error",
-      );
-      expect(codexResponse.errorMessage).toBeUndefined();
-    },
+          expect(codexResponse.stopReason, `Codex error: ${codexResponse.errorMessage}`).not.toBe(
+            "error",
+          );
+          expect(codexResponse.errorMessage).toBeUndefined();
+        }),
+      ),
     60000,
   );
 });
@@ -213,51 +232,63 @@ describe("Tool Call ID Normalization - Prefilled Context", () => {
 
   it.skipIf(openrouterKey === undefined || openrouterKey === "")(
     "openrouter should handle prefilled context with long pipe-separated IDs",
-    async () => {
-      const model = getModel("openrouter", "openai/gpt-5.5");
-      const messages = buildPrefilledMessages();
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = getModel("openrouter", "openai/gpt-5.5");
+          const messages = buildPrefilledMessages();
 
-      const response = await completeSimple(
-        model,
-        {
-          systemPrompt: "You are a helpful assistant.",
-          messages,
-          tools: [echoTool],
-        },
-        { apiKey: openrouterKey },
-      );
+          const response = yield* Effect.promise(() =>
+            completeSimple(
+              model,
+              {
+                systemPrompt: "You are a helpful assistant.",
+                messages,
+                tools: [echoTool],
+              },
+              { apiKey: openrouterKey },
+            ),
+          );
 
-      expect(response.stopReason, `OpenRouter error: ${response.errorMessage}`).not.toBe("error");
-      if (response.errorMessage !== undefined && response.errorMessage !== "") {
-        expect(response.errorMessage).not.toContain("call_id");
-        expect(response.errorMessage).not.toContain("too long");
-      }
-    },
+          expect(response.stopReason, `OpenRouter error: ${response.errorMessage}`).not.toBe(
+            "error",
+          );
+          if (response.errorMessage !== undefined && response.errorMessage !== "") {
+            expect(response.errorMessage).not.toContain("call_id");
+            expect(response.errorMessage).not.toContain("too long");
+          }
+        }),
+      ),
     30000,
   );
 
   it.skipIf(codexToken === undefined || codexToken === "")(
     "openai-codex should handle prefilled context with long pipe-separated IDs",
-    async () => {
-      const model = getModel("openai-codex", "gpt-5.5");
-      const messages = buildPrefilledMessages();
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = getModel("openai-codex", "gpt-5.5");
+          const messages = buildPrefilledMessages();
 
-      const response = await completeSimple(
-        model,
-        {
-          systemPrompt: "You are a helpful assistant.",
-          messages,
-          tools: [echoTool],
-        },
-        { apiKey: codexToken },
-      );
+          const response = yield* Effect.promise(() =>
+            completeSimple(
+              model,
+              {
+                systemPrompt: "You are a helpful assistant.",
+                messages,
+                tools: [echoTool],
+              },
+              { apiKey: codexToken },
+            ),
+          );
 
-      expect(response.stopReason, `Codex error: ${response.errorMessage}`).not.toBe("error");
-      if (response.errorMessage !== undefined && response.errorMessage !== "") {
-        expect(response.errorMessage).not.toContain("id");
-        expect(response.errorMessage).not.toContain("additional characters");
-      }
-    },
+          expect(response.stopReason, `Codex error: ${response.errorMessage}`).not.toBe("error");
+          if (response.errorMessage !== undefined && response.errorMessage !== "") {
+            expect(response.errorMessage).not.toContain("id");
+            expect(response.errorMessage).not.toContain("additional characters");
+          }
+        }),
+      ),
     30000,
   );
 });

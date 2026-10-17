@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { type AnthropicOptions, stream } from "../src/api/anthropic-messages.ts";
@@ -69,11 +70,11 @@ function assistant(model: Model<"anthropic-messages">, level?: string): Assistan
   };
 }
 
-async function capture(
+const capture = Effect.fn("capture")(function* (
   model: Model<"anthropic-messages">,
   context: Context,
   options: Pick<AnthropicOptions, "effort" | "thinkingEnabled"> = {},
-): Promise<{ payload: CapturedPayload; message: AssistantMessage }> {
+) {
   let payload: CapturedPayload | undefined;
   const result = stream(model, normalizeContext(context), {
     apiKey: "test-key",
@@ -85,10 +86,10 @@ async function capture(
       throw new Error("payload captured");
     },
   });
-  const message = await result.result();
+  const message = yield* Effect.promise(() => result.result());
   if (payload === undefined) throw new Error("Expected payload capture");
   return { payload, message };
-}
+});
 
 const user = (text: string, timestamp: number) => ({
   role: "user" as const,
@@ -101,167 +102,197 @@ function effortMessages(payload: CapturedPayload): WireMessage[] {
 }
 
 describe("Anthropic mid-conversation effort", () => {
-  it("reconstructs an exact historical marker prefix and appends the current marker", async () => {
-    const model = managedModel();
-    const first = await capture(model, { messages: [user("one", 1)] }, { effort: "low" });
-    const second = await capture(
-      model,
-      { messages: [user("one", 1), assistant(model, "low"), user("two", 2)] },
-      { effort: "high" },
-    );
+  it("reconstructs an exact historical marker prefix and appends the current marker", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = managedModel();
+        const first = yield* capture(model, { messages: [user("one", 1)] }, { effort: "low" });
+        const second = yield* capture(
+          model,
+          { messages: [user("one", 1), assistant(model, "low"), user("two", 2)] },
+          { effort: "high" },
+        );
 
-    expect(first.payload.messages).toEqual([
-      { role: "user", content: "one" },
-      { role: "system", content: [], output_config: { effort: "low" } },
-    ]);
-    expect(second.payload.messages.slice(0, first.payload.messages.length)).toEqual(
-      first.payload.messages,
-    );
-    expect(second.payload.messages.at(-1)).toEqual({
-      role: "system",
-      content: [],
-      output_config: { effort: "high" },
-    });
-    expect(first.payload.output_config).toEqual({ effort: "high" });
-    expect(second.payload.output_config).toEqual({ effort: "high" });
-    expect(second.payload.thinking).toEqual({
-      type: "adaptive",
-      display: "summarized",
-      block_binding: { prefix_mismatch_behavior: "drop_block" },
-    });
-    expect(first.message.providerThinkingLevel).toBe("low");
-  });
+        expect(first.payload.messages).toEqual([
+          { role: "user", content: "one" },
+          { role: "system", content: [], output_config: { effort: "low" } },
+        ]);
+        expect(second.payload.messages.slice(0, first.payload.messages.length)).toEqual(
+          first.payload.messages,
+        );
+        expect(second.payload.messages.at(-1)).toEqual({
+          role: "system",
+          content: [],
+          output_config: { effort: "high" },
+        });
+        expect(first.payload.output_config).toEqual({ effort: "high" });
+        expect(second.payload.output_config).toEqual({ effort: "high" });
+        expect(second.payload.thinking).toEqual({
+          type: "adaptive",
+          display: "summarized",
+          block_binding: { prefix_mismatch_behavior: "drop_block" },
+        });
+        expect(first.message.providerThinkingLevel).toBe("low");
+      }),
+    ));
 
   it.each(["low", "medium", "high", "xhigh", "max"] as const)(
     "preserves native effort %s",
-    async (effort) => {
-      const model = managedModel();
-      const { payload, message } = await capture(model, { messages: [user("one", 1)] }, { effort });
-      expect(effortMessages(payload)).toEqual([
-        { role: "system", content: [], output_config: { effort } },
-      ]);
-      expect(message.providerThinkingLevel).toBe(effort);
-    },
+    (effort) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = managedModel();
+          const { payload, message } = yield* capture(
+            model,
+            { messages: [user("one", 1)] },
+            { effort },
+          );
+          expect(effortMessages(payload)).toEqual([
+            { role: "system", content: [], output_config: { effort } },
+          ]);
+          expect(message.providerThinkingLevel).toBe(effort);
+        }),
+      ),
   );
 
-  it("defaults omitted effort to high and still enables drop_block", async () => {
-    const { payload, message } = await capture(managedModel(), { messages: [user("one", 1)] });
-    expect(payload.messages.at(-1)).toEqual({
-      role: "system",
-      content: [],
-      output_config: { effort: "high" },
-    });
-    expect(payload.thinking?.block_binding?.prefix_mismatch_behavior).toBe("drop_block");
-    expect(message.providerThinkingLevel).toBe("high");
-  });
+  it("defaults omitted effort to high and still enables drop_block", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { payload, message } = yield* capture(managedModel(), { messages: [user("one", 1)] });
+        expect(payload.messages.at(-1)).toEqual({
+          role: "system",
+          content: [],
+          output_config: { effort: "high" },
+        });
+        expect(payload.thinking?.block_binding?.prefix_mismatch_behavior).toBe("drop_block");
+        expect(message.providerThinkingLevel).toBe("high");
+      }),
+    ));
 
-  it("does not invent markers for legacy or other-provider assistants", async () => {
-    const model = managedModel();
-    const legacy = assistant(model);
-    const otherProvider = { ...assistant(model, "low"), provider: "other-provider" };
-    const { payload } = await capture(
-      model,
-      { messages: [user("one", 1), legacy, user("two", 2), otherProvider, user("three", 3)] },
-      { effort: "medium" },
-    );
-    expect(effortMessages(payload)).toEqual([
-      { role: "system", content: [], output_config: { effort: "medium" } },
-    ]);
-  });
+  it("does not invent markers for legacy or other-provider assistants", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = managedModel();
+        const legacy = assistant(model);
+        const otherProvider = { ...assistant(model, "low"), provider: "other-provider" };
+        const { payload } = yield* capture(
+          model,
+          { messages: [user("one", 1), legacy, user("two", 2), otherProvider, user("three", 3)] },
+          { effort: "medium" },
+        );
+        expect(effortMessages(payload)).toEqual([
+          { role: "system", content: [], output_config: { effort: "medium" } },
+        ]);
+      }),
+    ));
 
-  it("sends plain disabled thinking without effort when off is supported", async () => {
-    const model = managedModel();
-    model.thinkingLevelMap = {
-      minimal: null,
-      low: "low",
-      medium: "medium",
-      high: "high",
-      max: "max",
-    };
-    const { payload, message } = await capture(
-      model,
-      {
-        messages: [
-          user("one", 1),
-          assistant(model, "low"),
-          user("two", 2),
-          assistant(model, "medium"),
-          user("three", 3),
-        ],
-      },
-      { thinkingEnabled: false },
-    );
-    expect(payload.thinking).toEqual({ type: "disabled" });
-    expect(payload.output_config).toBeUndefined();
-    expect(effortMessages(payload)).toEqual([]);
-    expect(message.providerThinkingLevel).toBeUndefined();
-  });
+  it("sends plain disabled thinking without effort when off is supported", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = managedModel();
+        model.thinkingLevelMap = {
+          minimal: null,
+          low: "low",
+          medium: "medium",
+          high: "high",
+          max: "max",
+        };
+        const { payload, message } = yield* capture(
+          model,
+          {
+            messages: [
+              user("one", 1),
+              assistant(model, "low"),
+              user("two", 2),
+              assistant(model, "medium"),
+              user("three", 3),
+            ],
+          },
+          { thinkingEnabled: false },
+        );
+        expect(payload.thinking).toEqual({ type: "disabled" });
+        expect(payload.output_config).toBeUndefined();
+        expect(effortMessages(payload)).toEqual([]);
+        expect(message.providerThinkingLevel).toBeUndefined();
+      }),
+    ));
 
-  it("keeps adaptive thinking when off is unsupported", async () => {
-    const { payload, message } = await capture(
-      managedModel(),
-      { messages: [user("one", 1)] },
-      { thinkingEnabled: false },
-    );
-    expect(payload.thinking?.type).toBe("adaptive");
-    expect(effortMessages(payload)).toEqual([
-      { role: "system", content: [], output_config: { effort: "high" } },
-    ]);
-    expect(message.providerThinkingLevel).toBe("high");
-  });
+  it("keeps adaptive thinking when off is unsupported", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { payload, message } = yield* capture(
+          managedModel(),
+          { messages: [user("one", 1)] },
+          { thinkingEnabled: false },
+        );
+        expect(payload.thinking?.type).toBe("adaptive");
+        expect(effortMessages(payload)).toEqual([
+          { role: "system", content: [], output_config: { effort: "high" } },
+        ]);
+        expect(message.providerThinkingLevel).toBe("high");
+      }),
+    ));
 
-  it("leaves unsupported models on top-level effort", async () => {
-    const model = managedModel();
-    model.compat = { forceAdaptiveThinking: true };
-    const { payload, message } = await capture(
-      model,
-      { messages: [user("one", 1)] },
-      { effort: "low" },
-    );
-    expect(payload.messages).toEqual([{ role: "user", content: "one" }]);
-    expect(payload.output_config).toEqual({ effort: "low" });
-    expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
-    expect(message.providerThinkingLevel).toBeUndefined();
-  });
+  it("leaves unsupported models on top-level effort", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = managedModel();
+        model.compat = { forceAdaptiveThinking: true };
+        const { payload, message } = yield* capture(
+          model,
+          { messages: [user("one", 1)] },
+          { effort: "low" },
+        );
+        expect(payload.messages).toEqual([{ role: "user", content: "one" }]);
+        expect(payload.output_config).toEqual({ effort: "low" });
+        expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
+        expect(message.providerThinkingLevel).toBeUndefined();
+      }),
+    ));
 
-  it("sends the effort and binding beta headers", async () => {
-    let betaHeader: string | null = null;
-    const events = [
-      {
-        type: "message_start",
-        message: {
-          id: "msg_test",
-          model: "claude-fable-5-1",
-          usage: { input_tokens: 1, output_tokens: 0 },
-        },
-      },
-      {
-        type: "message_delta",
-        delta: { stop_reason: "end_turn" },
-        usage: { input_tokens: 1, output_tokens: 1 },
-      },
-      { type: "message_stop" },
-    ];
-    const body = events
-      .map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
-      .join("");
-    const fetchImpl: typeof fetch = (input, init) => {
-      const request = input instanceof Request ? input : new Request(input, init);
-      betaHeader = request.headers.get("anthropic-beta");
-      return Promise.resolve(
-        new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }),
-      );
-    };
-    const result = await stream(managedModel(), normalizeContext({ messages: [user("one", 1)] }), {
-      apiKey: "test-key",
-      cacheRetention: "none",
-      fetch: fetchImpl,
-    }).result();
+  it("sends the effort and binding beta headers", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let betaHeader: string | null = null;
+        const events = [
+          {
+            type: "message_start",
+            message: {
+              id: "msg_test",
+              model: "claude-fable-5-1",
+              usage: { input_tokens: 1, output_tokens: 0 },
+            },
+          },
+          {
+            type: "message_delta",
+            delta: { stop_reason: "end_turn" },
+            usage: { input_tokens: 1, output_tokens: 1 },
+          },
+          { type: "message_stop" },
+        ];
+        const body = events
+          .map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+          .join("");
+        const fetchImpl: typeof fetch = (input, init) => {
+          const request = input instanceof Request ? input : new Request(input, init);
+          betaHeader = request.headers.get("anthropic-beta");
+          return Promise.resolve(
+            new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }),
+          );
+        };
+        const result = yield* Effect.promise(() =>
+          stream(managedModel(), normalizeContext({ messages: [user("one", 1)] }), {
+            apiKey: "test-key",
+            cacheRetention: "none",
+            fetch: fetchImpl,
+          }).result(),
+        );
 
-    expect(result.stopReason).toBe("stop");
-    expect(betaHeader).toContain("mid-conversation-output-config-2026-07-01");
-    expect(betaHeader).toContain("thinking-binding-controls-2026-08-01");
-  });
+        expect(result.stopReason).toBe("stop");
+        expect(betaHeader).toContain("mid-conversation-output-config-2026-07-01");
+        expect(betaHeader).toContain("thinking-binding-controls-2026-08-01");
+      }),
+    ));
 
   it("generates exact model and transport gates", () => {
     const direct = getModel("anthropic", "claude-fable-5-1");

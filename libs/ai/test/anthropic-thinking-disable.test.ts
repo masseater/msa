@@ -1,7 +1,9 @@
+import { Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { getModel, streamSimple } from "../src/compat.ts";
 import type { Context, Model, SimpleStreamOptions } from "../src/types.ts";
+import { envValue } from "./env.ts";
 
 interface AnthropicThinkingPayload {
   thinking?: { type: string; budget_tokens?: number; display?: string };
@@ -21,10 +23,10 @@ function makePayloadCaptureContext(): Context {
   };
 }
 
-async function capturePayload(
+const capturePayload = Effect.fn("capturePayload")(function* (
   model: Model<"anthropic-messages">,
   options?: SimpleStreamOptions,
-): Promise<AnthropicThinkingPayload> {
+) {
   let capturedPayload: AnthropicThinkingPayload | undefined;
   const payloadCaptureModel: Model<"anthropic-messages"> = {
     ...model,
@@ -40,14 +42,14 @@ async function capturePayload(
     },
   });
 
-  await s.result();
+  yield* Effect.promise(() => s.result());
 
   if (capturedPayload === undefined) {
     throw new Error("Expected payload to be captured before request failure");
   }
 
   return capturedPayload;
-}
+});
 
 interface RunResult {
   thinkingEventCount: number;
@@ -74,108 +76,144 @@ function countPongs(text: string): number {
   return text.match(/\bpong\b/giu)?.length ?? 0;
 }
 
-async function runWithoutReasoning(model: Model<"anthropic-messages">): Promise<RunResult> {
-  const s = streamSimple(model, makeE2EContext(), {
-    temperature: 0,
-    maxTokens: 160,
-  });
+function runWithoutReasoning(model: Model<"anthropic-messages">): Promise<RunResult> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const s = streamSimple(model, makeE2EContext(), {
+        temperature: 0,
+        maxTokens: 160,
+      });
 
-  let thinkingEventCount = 0;
-  let thinkingCharCount = 0;
+      let thinkingEventCount = 0;
+      let thinkingCharCount = 0;
 
-  for await (const event of s) {
-    if (event.type === "thinking_start" || event.type === "thinking_end") {
-      thinkingEventCount += 1;
-    }
-    if (event.type === "thinking_delta") {
-      thinkingEventCount += 1;
-      thinkingCharCount += event.delta.length;
-    }
-  }
+      yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+        Stream.orDie,
+        Stream.runForEach((event) =>
+          Effect.sync(() => {
+            if (event.type === "thinking_start" || event.type === "thinking_end") {
+              thinkingEventCount += 1;
+            }
+            if (event.type === "thinking_delta") {
+              thinkingEventCount += 1;
+              thinkingCharCount += event.delta.length;
+            }
+          }),
+        ),
+      );
 
-  const response = await s.result();
-  expect(response.stopReason, response.errorMessage).toBe("stop");
+      const response = yield* Effect.promise(() => s.result());
+      expect(response.stopReason, response.errorMessage).toBe("stop");
 
-  const text = response.content
-    .filter((block) => block.type === "text")
-    .map((block) => block.text)
-    .join("")
-    .trim();
+      const text = response.content
+        .filter((block) => block.type === "text")
+        .map((block) => block.text)
+        .join("")
+        .trim();
 
-  return {
-    thinkingEventCount,
-    thinkingCharCount,
-    text,
-    contentTypes: response.content.map((block) => block.type),
-  };
+      return {
+        thinkingEventCount,
+        thinkingCharCount,
+        text,
+        contentTypes: response.content.map((block) => block.type),
+      };
+    }),
+  );
 }
 
 describe("Anthropic thinking disable payload", () => {
-  it("sends thinking.type=disabled for budget-based reasoning models when thinking is off", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-sonnet-4-5"));
+  it("sends thinking.type=disabled for budget-based reasoning models when thinking is off", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-sonnet-4-5"));
 
-    expect(payload.thinking).toEqual({ type: "disabled" });
-    expect(payload.output_config).toBeUndefined();
-  });
+        expect(payload.thinking).toEqual({ type: "disabled" });
+        expect(payload.output_config).toBeUndefined();
+      }),
+    ));
 
-  it("sends thinking.type=disabled for adaptive reasoning models when thinking is off", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-opus-4-6"));
+  it("sends thinking.type=disabled for adaptive reasoning models when thinking is off", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-6"));
 
-    expect(payload.thinking).toEqual({ type: "disabled" });
-    expect(payload.output_config).toBeUndefined();
-  });
+        expect(payload.thinking).toEqual({ type: "disabled" });
+        expect(payload.output_config).toBeUndefined();
+      }),
+    ));
 
-  it("sends thinking.type=disabled for Claude Opus 4.8 when thinking is off", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-opus-4-8"));
+  it("sends thinking.type=disabled for Claude Opus 4.8 when thinking is off", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-8"));
 
-    expect(payload.thinking).toEqual({ type: "disabled" });
-    expect(payload.output_config).toBeUndefined();
-  });
+        expect(payload.thinking).toEqual({ type: "disabled" });
+        expect(payload.output_config).toBeUndefined();
+      }),
+    ));
 
-  it("omits thinking.type=disabled for Claude Fable 5 when thinking is off", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-fable-5"));
+  it("omits thinking.type=disabled for Claude Fable 5 when thinking is off", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-fable-5"));
 
-    expect(payload.thinking).toBeUndefined();
-    expect(payload.output_config).toBeUndefined();
-  });
+        expect(payload.thinking).toBeUndefined();
+        expect(payload.output_config).toBeUndefined();
+      }),
+    ));
 
-  it("uses adaptive thinking for Claude Opus 4.8 when reasoning is enabled", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-opus-4-8"), {
-      reasoning: "high",
-    });
+  it("uses adaptive thinking for Claude Opus 4.8 when reasoning is enabled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-8"), {
+          reasoning: "high",
+        });
 
-    expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
-    expect(payload.output_config).toEqual({ effort: "high" });
-  });
+        expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
+        expect(payload.output_config).toEqual({ effort: "high" });
+      }),
+    ));
 
-  it("uses adaptive thinking for Claude Sonnet 5 when reasoning is enabled", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-sonnet-5"), {
-      reasoning: "high",
-    });
+  it("uses adaptive thinking for Claude Sonnet 5 when reasoning is enabled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-sonnet-5"), {
+          reasoning: "high",
+        });
 
-    expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
-    expect(payload.output_config).toEqual({ effort: "high" });
-  });
+        expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
+        expect(payload.output_config).toEqual({ effort: "high" });
+      }),
+    ));
 
-  it("maps xhigh reasoning to effort=xhigh for Claude Opus 4.8", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-opus-4-8"), {
-      reasoning: "xhigh",
-    });
+  it("maps xhigh reasoning to effort=xhigh for Claude Opus 4.8", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-8"), {
+          reasoning: "xhigh",
+        });
 
-    expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
-    expect(payload.output_config).toEqual({ effort: "xhigh" });
-  });
+        expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
+        expect(payload.output_config).toEqual({ effort: "xhigh" });
+      }),
+    ));
 });
 
 describe.skipIf(
-  process.env["ANTHROPIC_API_KEY"] === undefined || process.env["ANTHROPIC_API_KEY"] === "",
+  envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
 )("Anthropic thinking disable E2E", () => {
-  it("disables thinking for Claude reasoning models", { retry: 2, timeout: 30000 }, async () => {
-    const result = await runWithoutReasoning(getModel("anthropic", "claude-sonnet-4-5"));
+  it("disables thinking for Claude reasoning models", { retry: 2, timeout: 30000 }, () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const result = yield* Effect.promise(() =>
+          runWithoutReasoning(getModel("anthropic", "claude-sonnet-4-5")),
+        );
 
-    expect(result.thinkingEventCount).toBe(0);
-    expect(result.thinkingCharCount).toBe(0);
-    expect(result.contentTypes).not.toContain("thinking");
-    expect(countPongs(result.text)).toBeGreaterThanOrEqual(35);
-  });
+        expect(result.thinkingEventCount).toBe(0);
+        expect(result.thinkingCharCount).toBe(0);
+        expect(result.contentTypes).not.toContain("thinking");
+        expect(countPongs(result.text)).toBeGreaterThanOrEqual(35);
+      }),
+    ),
+  );
 });

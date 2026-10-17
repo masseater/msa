@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { getModel as getCompatModel } from "../src/compat.ts";
@@ -52,36 +53,41 @@ const chatStreams = {
 };
 
 describe("chat models without a type", () => {
-  it("work through a handwritten provider without getAllModels", async () => {
-    const faux = fauxProvider({ provider: "handwritten" });
-    const handwritten: Provider = {
-      id: "handwritten",
-      name: "Handwritten",
-      auth: faux.provider.auth,
-      getModels: () => faux.models,
-      stream: faux.provider.stream,
-      streamSimple: faux.provider.streamSimple,
-    };
-    const models = createModels();
-    models.setProvider(handwritten);
+  it("work through a handwritten provider without getAllModels", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const faux = fauxProvider({ provider: "handwritten" });
+        const handwritten: Provider = {
+          id: "handwritten",
+          name: "Handwritten",
+          auth: faux.provider.auth,
+          getModels: () => faux.models,
+          stream: faux.provider.stream,
+          streamSimple: faux.provider.streamSimple,
+        };
+        const models = createModels();
+        models.setProvider(handwritten);
 
-    const model = models.getModel("handwritten", faux.models[0].id);
-    expect(model).toBeDefined();
-    expect(model?.type).toBeUndefined();
-    expect(getModelType(model!)).toBe("chat");
-    expect(hasApi(model!, model!.api)).toBe(true);
-    expect(modelsAreEqual(model, { ...model!, type: "chat" })).toBe(true);
-    expect(modelsAreEqual(model, { ...imageModel(model!.provider, model!.id) })).toBe(false);
-    expect(models.getModelsOfType("chat", "handwritten")).toEqual(faux.models);
-    expect(models.getAllModels("handwritten")).toEqual(faux.models);
-    expect(models.getModelsOfType("image", "handwritten")).toEqual([]);
+        const model = models.getModel("handwritten", faux.models[0].id);
+        expect(model).toBeDefined();
+        expect(model?.type).toBeUndefined();
+        expect(getModelType(model!)).toBe("chat");
+        expect(hasApi(model!, model!.api)).toBe(true);
+        expect(modelsAreEqual(model, { ...model!, type: "chat" })).toBe(true);
+        expect(modelsAreEqual(model, { ...imageModel(model!.provider, model!.id) })).toBe(false);
+        expect(models.getModelsOfType("chat", "handwritten")).toEqual(faux.models);
+        expect(models.getAllModels("handwritten")).toEqual(faux.models);
+        expect(models.getModelsOfType("image", "handwritten")).toEqual([]);
 
-    faux.setResponses([fauxAssistantMessage("hi")]);
-    const result = await models.complete(model!, {
-      messages: [{ role: "user", content: "hi", timestamp: 0 }],
-    });
-    expect(result.stopReason).toBe("stop");
-  });
+        faux.setResponses([fauxAssistantMessage("hi")]);
+        const result = yield* Effect.promise(() =>
+          models.complete(model!, {
+            messages: [{ role: "user", content: "hi", timestamp: 0 }],
+          }),
+        );
+        expect(result.stopReason).toBe("stop");
+      }),
+    ));
 
   it("narrow mixed lists with isModelType", () => {
     const mixed = [
@@ -115,44 +121,51 @@ describe("built-in catalog getters", () => {
 });
 
 describe("stored and fetched models of unknown types", () => {
-  it("are dropped instead of failing the refresh", async () => {
-    const modelsStore = new InMemoryModelsStore();
-    const stored = {
-      models: [
-        chatModel("dyn", "stored-chat"),
-        imageModel("dyn", "stored-image"),
-        { ...chatModel("dyn", "future-embedding"), type: "embedding" },
-        { ...imageModel("dyn", "future-video"), type: "video" },
-      ],
-    } as unknown as ModelsStoreEntry;
-    await modelsStore.write("dyn", stored);
+  it("are dropped instead of failing the refresh", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const modelsStore = new InMemoryModelsStore();
+        const stored = {
+          models: [
+            chatModel("dyn", "stored-chat"),
+            imageModel("dyn", "stored-image"),
+            { ...chatModel("dyn", "future-embedding"), type: "embedding" },
+            { ...imageModel("dyn", "future-video"), type: "video" },
+          ],
+        } as unknown as ModelsStoreEntry;
+        yield* Effect.promise(() => modelsStore.write("dyn", stored));
 
-    let fetched: unknown[] = [];
-    const models = createModels({ modelsStore });
-    models.setProvider(
-      createProvider({
-        id: "dyn",
-        auth: noAuth,
-        models: [],
-        fetchModels: () => Promise.resolve(fetched as Model<Api>[]),
-        api: chatStreams,
+        let fetched: unknown[] = [];
+        const models = createModels({ modelsStore });
+        models.setProvider(
+          createProvider({
+            id: "dyn",
+            auth: noAuth,
+            models: [],
+            fetchModels: () => Promise.resolve(fetched as Model<Api>[]),
+            api: chatStreams,
+          }),
+        );
+
+        const restored = yield* Effect.promise(() =>
+          models.refresh({ providers: ["dyn"], allowNetwork: false }),
+        );
+        expect(restored.errors.size).toBe(0);
+        expect(models.getAllModels("dyn").map((model) => model.id)).toEqual([
+          "stored-chat",
+          "stored-image",
+        ]);
+
+        fetched = [
+          chatModel("dyn", "fetched-chat"),
+          { ...imageModel("dyn", "fetched-video"), type: "video" },
+        ];
+        const refreshed = yield* Effect.promise(() => models.refresh({ providers: ["dyn"] }));
+        expect(refreshed.errors.size).toBe(0);
+        expect(models.getAllModels("dyn").map((model) => model.id)).toEqual(["fetched-chat"]);
+        expect(yield* Effect.promise(() => modelsStore.read("dyn"))).toMatchObject({
+          models: [{ id: "fetched-chat" }],
+        });
       }),
-    );
-
-    const restored = await models.refresh({ providers: ["dyn"], allowNetwork: false });
-    expect(restored.errors.size).toBe(0);
-    expect(models.getAllModels("dyn").map((model) => model.id)).toEqual([
-      "stored-chat",
-      "stored-image",
-    ]);
-
-    fetched = [
-      chatModel("dyn", "fetched-chat"),
-      { ...imageModel("dyn", "fetched-video"), type: "video" },
-    ];
-    const refreshed = await models.refresh({ providers: ["dyn"] });
-    expect(refreshed.errors.size).toBe(0);
-    expect(models.getAllModels("dyn").map((model) => model.id)).toEqual(["fetched-chat"]);
-    expect(await modelsStore.read("dyn")).toMatchObject({ models: [{ id: "fetched-chat" }] });
-  });
+    ));
 });

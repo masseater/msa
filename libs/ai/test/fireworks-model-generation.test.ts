@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { ModelsDevReasoningOption } from "../scripts/models-dev-reasoning-options.ts";
@@ -120,31 +121,36 @@ describe("Fireworks model generation", () => {
     expect(models["accounts/fireworks/models/kimi-k2p6"]?.thinkingLevelMap).toBeUndefined();
   });
 
-  it("automatically sends native effort for newly cataloged Messages models", async () => {
-    const models = generateFireworksModels({
-      "new-reasoner": [{ type: "toggle" }, { type: "effort", values: ["low", "max"] }],
-    });
-    const model = models["accounts/fireworks/models/new-reasoner"];
-    if (model === undefined || !hasApi(model, "anthropic-messages"))
-      throw new Error("Expected Messages model");
-    expect(model.compat?.forceAdaptiveThinking).toBe(true);
-    expect(getSupportedThinkingLevels(model)).toEqual(["off", "low", "max"]);
-    let payload: Record<string, unknown> | undefined;
-    await streamSimple(
-      model,
-      normalizeContext({ messages: [{ role: "user", content: "test", timestamp: 0 }] }),
-      {
-        apiKey: "test-fireworks-key",
-        reasoning: "max",
-        onPayload: (value) => {
-          payload = value as Record<string, unknown>;
-          throw new Error("payload captured");
-        },
-      },
-    ).result();
-    expect(payload?.["thinking"]).toEqual({ type: "adaptive", display: "summarized" });
-    expect(payload?.["output_config"]).toEqual({ effort: "max" });
-  });
+  it("automatically sends native effort for newly cataloged Messages models", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const models = generateFireworksModels({
+          "new-reasoner": [{ type: "toggle" }, { type: "effort", values: ["low", "max"] }],
+        });
+        const model = models["accounts/fireworks/models/new-reasoner"];
+        if (model === undefined || !hasApi(model, "anthropic-messages"))
+          throw new Error("Expected Messages model");
+        expect(model.compat?.forceAdaptiveThinking).toBe(true);
+        expect(getSupportedThinkingLevels(model)).toEqual(["off", "low", "max"]);
+        let payload: Record<string, unknown> | undefined;
+        yield* Effect.promise(() =>
+          streamSimple(
+            model,
+            normalizeContext({ messages: [{ role: "user", content: "test", timestamp: 0 }] }),
+            {
+              apiKey: "test-fireworks-key",
+              reasoning: "max",
+              onPayload: (value) => {
+                payload = value as Record<string, unknown>;
+                throw new Error("payload captured");
+              },
+            },
+          ).result(),
+        );
+        expect(payload?.["thinking"]).toEqual({ type: "adaptive", display: "summarized" });
+        expect(payload?.["output_config"]).toEqual({ effort: "max" });
+      }),
+    ));
 
   it("does not infer adaptive thinking from toggle, budget, or missing metadata", () => {
     const models = generateFireworksModels({

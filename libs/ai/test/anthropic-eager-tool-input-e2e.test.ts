@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -92,34 +93,37 @@ function withEagerToolInputStreaming(
   };
 }
 
-async function expectToolEnabledRequestAccepted(
+const expectToolEnabledRequestAccepted = Effect.fn("expectToolEnabledRequestAccepted")(function* (
   model: Model<"anthropic-messages">,
   apiKey: string | undefined,
-): Promise<void> {
+) {
   const options: ProviderStreamOptions = {
     apiKey,
     maxTokens: 128,
     thinkingEnabled: false,
   };
-  const response = await complete(
-    model,
-    {
-      systemPrompt: "You are a concise assistant. Use tools when useful.",
-      messages: [
-        {
-          role: "user",
-          content: "Call echo_value with value set to eager-input-streaming-compat.",
-          timestamp: Date.now(),
-        },
-      ],
-      tools: [echoTool],
-    },
-    options,
+  const currentTime = yield* Clock.currentTimeMillis;
+  const response = yield* Effect.promise(() =>
+    complete(
+      model,
+      {
+        systemPrompt: "You are a concise assistant. Use tools when useful.",
+        messages: [
+          {
+            role: "user",
+            content: "Call echo_value with value set to eager-input-streaming-compat.",
+            timestamp: currentTime,
+          },
+        ],
+        tools: [echoTool],
+      },
+      options,
+    ),
   );
 
   expect(response.errorMessage, response.errorMessage).toBeFalsy();
   expect(response.stopReason, response.errorMessage).not.toBe("error");
-}
+});
 
 describe("Anthropic Messages eager tool input streaming E2E", () => {
   it("covers every generated anthropic-messages model", () => {
@@ -136,9 +140,7 @@ describe("Anthropic Messages eager tool input streaming E2E", () => {
       it.skipIf(testCase.apiKey === undefined || testCase.apiKey === "")(
         `${testCase.name} accepts configured tool streaming`,
         { retry: 2 },
-        async () => {
-          await expectToolEnabledRequestAccepted(testCase.model, testCase.apiKey);
-        },
+        () => Effect.runPromise(expectToolEnabledRequestAccepted(testCase.model, testCase.apiKey)),
       );
     }
   });
@@ -150,9 +152,7 @@ describe("Anthropic Messages eager tool input streaming E2E", () => {
       it.skipIf(testCase.apiKey === undefined || testCase.apiKey === "")(
         `${testCase.name} accepts forced eager_input_streaming`,
         { retry: 2 },
-        async () => {
-          await expectToolEnabledRequestAccepted(model, testCase.apiKey);
-        },
+        () => Effect.runPromise(expectToolEnabledRequestAccepted(model, testCase.apiKey)),
       );
     }
   });

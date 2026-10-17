@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -19,63 +20,69 @@ const model: Model<"azure-openai-responses"> = {
 };
 
 describe("Azure OpenAI tool choice", () => {
-  it("forwards provider-specific tool choice while preserving tool definitions", async () => {
-    let payload: unknown;
-    const result = stream(
-      model,
-      normalizeContext({
-        messages: [{ role: "user", content: "Summarize this", timestamp: 1 }],
-        tools: [
+  it("forwards provider-specific tool choice while preserving tool definitions", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let payload: unknown;
+        const result = stream(
+          model,
+          normalizeContext({
+            messages: [{ role: "user", content: "Summarize this", timestamp: 1 }],
+            tools: [
+              {
+                name: "read",
+                description: "Read a file",
+                parameters: Type.Object({ path: Type.String() }),
+              },
+            ],
+          }),
           {
-            name: "read",
-            description: "Read a file",
-            parameters: Type.Object({ path: Type.String() }),
+            apiKey: "test-key",
+            toolChoice: "required",
+            onPayload: (requestPayload) => {
+              payload = requestPayload;
+              throw new Error("payload captured");
+            },
           },
-        ],
+        );
+
+        yield* Effect.promise(() => result.result());
+
+        expect(payload).toMatchObject({ tool_choice: "required" });
+        expect((payload as { tools?: unknown[] }).tools).toHaveLength(1);
       }),
-      {
-        apiKey: "test-key",
-        toolChoice: "required",
-        onPayload: (requestPayload) => {
-          payload = requestPayload;
-          throw new Error("payload captured");
-        },
-      },
-    );
+    ));
 
-    await result.result();
-
-    expect(payload).toMatchObject({ tool_choice: "required" });
-    expect((payload as { tools?: unknown[] }).tools).toHaveLength(1);
-  });
-
-  it("forwards provider-neutral tool choice from simple options", async () => {
-    let payload: unknown;
-    const result = streamSimple(
-      model,
-      normalizeContext({
-        messages: [{ role: "user", content: "Summarize this", timestamp: 1 }],
-        tools: [
+  it("forwards provider-neutral tool choice from simple options", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let payload: unknown;
+        const result = streamSimple(
+          model,
+          normalizeContext({
+            messages: [{ role: "user", content: "Summarize this", timestamp: 1 }],
+            tools: [
+              {
+                name: "read",
+                description: "Read a file",
+                parameters: Type.Object({ path: Type.String() }),
+              },
+            ],
+          }),
           {
-            name: "read",
-            description: "Read a file",
-            parameters: Type.Object({ path: Type.String() }),
+            apiKey: "test-key",
+            toolChoice: "none",
+            onPayload: (requestPayload) => {
+              payload = requestPayload;
+              throw new Error("payload captured");
+            },
           },
-        ],
+        );
+
+        yield* Effect.promise(() => result.result());
+
+        expect(payload).toMatchObject({ tool_choice: "none" });
+        expect((payload as { tools?: unknown[] }).tools).toHaveLength(1);
       }),
-      {
-        apiKey: "test-key",
-        toolChoice: "none",
-        onPayload: (requestPayload) => {
-          payload = requestPayload;
-          throw new Error("payload captured");
-        },
-      },
-    );
-
-    await result.result();
-
-    expect(payload).toMatchObject({ tool_choice: "none" });
-    expect((payload as { tools?: unknown[] }).tools).toHaveLength(1);
-  });
+    ));
 });

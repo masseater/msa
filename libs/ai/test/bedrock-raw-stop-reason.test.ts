@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const bedrockMock = vi.hoisted(() => ({
@@ -69,72 +70,99 @@ const context = normalizeContext({
 });
 
 describe("Bedrock provider stream events", () => {
-  it("forwards SDK stream items in order before normalizing them", async () => {
-    bedrockMock.streamEvents = [
-      { messageStart: { role: "assistant" } },
-      { contentBlockDelta: { contentBlockIndex: 0, delta: { text: "hello" } } },
-      {
-        messageStop: { stopReason: "end_turn", additionalModelResponseFields: { source: "test" } },
-      },
-      { metadata: { usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } } },
-    ];
-    const received: unknown[] = [];
-    const eventModels: Model<Api>[] = [];
-    const result = await streamBedrock(model, context, {
-      cacheRetention: "none",
-      onProviderStreamEvent: async (item, eventModel) => {
-        await Promise.resolve();
-        received.push(item);
-        eventModels.push(eventModel);
-      },
-    }).result();
+  it("forwards SDK stream items in order before normalizing them", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const effectContext = yield* Effect.context();
+        bedrockMock.streamEvents = [
+          { messageStart: { role: "assistant" } },
+          { contentBlockDelta: { contentBlockIndex: 0, delta: { text: "hello" } } },
+          {
+            messageStop: {
+              stopReason: "end_turn",
+              additionalModelResponseFields: { source: "test" },
+            },
+          },
+          { metadata: { usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } } },
+        ];
+        const received: unknown[] = [];
+        const eventModels: Model<Api>[] = [];
+        const result = yield* Effect.promise(() =>
+          streamBedrock(model, context, {
+            cacheRetention: "none",
+            onProviderStreamEvent: (item, eventModel) =>
+              Effect.runPromiseWith(effectContext)(
+                Effect.gen(function* () {
+                  yield* Effect.promise(() => Promise.resolve());
+                  received.push(item);
+                  eventModels.push(eventModel);
+                }),
+              ),
+          }).result(),
+        );
 
-    expect(received).toEqual(bedrockMock.streamEvents);
-    for (const [index, item] of received.entries())
-      expect(item).toBe(bedrockMock.streamEvents[index]);
-    expect(eventModels).toEqual([model, model, model, model]);
-    expect(result.stopReason).toBe("stop");
-    expect(result.content).toEqual([{ type: "text", text: "hello" }]);
-  });
+        expect(received).toEqual(bedrockMock.streamEvents);
+        for (const [index, item] of received.entries())
+          expect(item).toBe(bedrockMock.streamEvents[index]);
+        expect(eventModels).toEqual([model, model, model, model]);
+        expect(result.stopReason).toBe("stop");
+        expect(result.content).toEqual([{ type: "text", text: "hello" }]);
+      }),
+    ));
 
-  it("forwards SDK error items before reporting them", async () => {
-    const exception = new Error("bedrock stream failed");
-    bedrockMock.streamEvents = [
-      { messageStart: { role: "assistant" } },
-      { internalServerException: exception },
-    ];
-    const received: unknown[] = [];
-    const result = await streamBedrock(model, context, {
-      cacheRetention: "none",
-      onProviderStreamEvent: (item) => {
-        received.push(item);
-      },
-    }).result();
+  it("forwards SDK error items before reporting them", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const exception = new Error("bedrock stream failed");
+        bedrockMock.streamEvents = [
+          { messageStart: { role: "assistant" } },
+          { internalServerException: exception },
+        ];
+        const received: unknown[] = [];
+        const result = yield* Effect.promise(() =>
+          streamBedrock(model, context, {
+            cacheRetention: "none",
+            onProviderStreamEvent: (item) => {
+              received.push(item);
+            },
+          }).result(),
+        );
 
-    expect(received).toEqual(bedrockMock.streamEvents);
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toBe("bedrock stream failed");
-  });
+        expect(received).toEqual(bedrockMock.streamEvents);
+        expect(result.stopReason).toBe("error");
+        expect(result.errorMessage).toBe("bedrock stream failed");
+      }),
+    ));
 });
 
 describe("Bedrock raw stop reasons", () => {
-  it("preserves raw Bedrock stop reasons for successful stops", async () => {
-    bedrockMock.stopReason = "end_turn";
+  it("preserves raw Bedrock stop reasons for successful stops", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.stopReason = "end_turn";
 
-    const message = await streamBedrock(model, context, { cacheRetention: "none" }).result();
+        const message = yield* Effect.promise(() =>
+          streamBedrock(model, context, { cacheRetention: "none" }).result(),
+        );
 
-    expect(message.stopReason).toBe("stop");
-    expect(message.rawStopReason).toBe("end_turn");
-    expect(message.errorMessage).toBeUndefined();
-  });
+        expect(message.stopReason).toBe("stop");
+        expect(message.rawStopReason).toBe("end_turn");
+        expect(message.errorMessage).toBeUndefined();
+      }),
+    ));
 
-  it("preserves raw Bedrock stop reasons for provider error stops", async () => {
-    bedrockMock.stopReason = "guardrail_intervened";
+  it("preserves raw Bedrock stop reasons for provider error stops", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.stopReason = "guardrail_intervened";
 
-    const message = await streamBedrock(model, context, { cacheRetention: "none" }).result();
+        const message = yield* Effect.promise(() =>
+          streamBedrock(model, context, { cacheRetention: "none" }).result(),
+        );
 
-    expect(message.stopReason).toBe("error");
-    expect(message.rawStopReason).toBe("guardrail_intervened");
-    expect(message.errorMessage).toBe("Provider stopped with: guardrail_intervened");
-  });
+        expect(message.stopReason).toBe("error");
+        expect(message.rawStopReason).toBe("guardrail_intervened");
+        expect(message.errorMessage).toBe("Provider stopped with: guardrail_intervened");
+      }),
+    ));
 });

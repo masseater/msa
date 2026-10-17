@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 const bedrockMock = vi.hoisted(() => ({
@@ -53,65 +54,76 @@ const context: Context = {
   messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
 };
 
-async function captureClientConfig(
+const captureClientConfig = Effect.fn("captureClientConfig")(function* (
   model: Model<"bedrock-converse-stream">,
   options: BedrockOptions = {},
-): Promise<Record<string, unknown>> {
+) {
   bedrockMock.constructorCalls.length = 0;
-  await streamBedrock(model, context, { cacheRetention: "none", ...options }).result();
+  yield* Effect.promise(() =>
+    streamBedrock(model, context, { cacheRetention: "none", ...options }).result(),
+  );
   expect(bedrockMock.constructorCalls).toHaveLength(1);
   const [config] = bedrockMock.constructorCalls;
   if (config === undefined) throw new Error("Expected a BedrockRuntimeClient constructor call");
   return config;
-}
+});
 
 describe("bedrock credential priority", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it("prefers explicit and scoped profiles over ambient AWS access keys", async () => {
-    vi.stubEnv("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE");
-    vi.stubEnv("AWS_SECRET_ACCESS_KEY", "secretexample");
-    const model = getBuiltinModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
+  it("prefers explicit and scoped profiles over ambient AWS access keys", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE");
+        vi.stubEnv("AWS_SECRET_ACCESS_KEY", "secretexample");
+        const model = getBuiltinModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
 
-    let config = await captureClientConfig(model, { profile: "explicit-profile" });
+        let config = yield* captureClientConfig(model, { profile: "explicit-profile" });
 
-    expect(config["profile"]).toBe("explicit-profile");
-    expect(config["credentials"]).toBeUndefined();
+        expect(config["profile"]).toBe("explicit-profile");
+        expect(config["credentials"]).toBeUndefined();
 
-    config = await captureClientConfig(model, { env: { AWS_PROFILE: "scoped-profile" } });
+        config = yield* captureClientConfig(model, { env: { AWS_PROFILE: "scoped-profile" } });
 
-    expect(config["profile"]).toBe("scoped-profile");
-    expect(config["credentials"]).toBeUndefined();
-  });
+        expect(config["profile"]).toBe("scoped-profile");
+        expect(config["credentials"]).toBeUndefined();
+      }),
+    ));
 
-  it("uses ambient AWS access keys when no profile is configured", async () => {
-    vi.stubEnv("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE");
-    vi.stubEnv("AWS_SECRET_ACCESS_KEY", "secretexample");
-    const model = getBuiltinModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
+  it("uses ambient AWS access keys when no profile is configured", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE");
+        vi.stubEnv("AWS_SECRET_ACCESS_KEY", "secretexample");
+        const model = getBuiltinModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
 
-    const config = await captureClientConfig(model);
+        const config = yield* captureClientConfig(model);
 
-    expect(config["profile"]).toBeUndefined();
-    expect(config["credentials"]).toEqual({
-      accessKeyId: "AKIAEXAMPLE",
-      secretAccessKey: "secretexample",
-    });
-  });
+        expect(config["profile"]).toBeUndefined();
+        expect(config["credentials"]).toEqual({
+          accessKeyId: "AKIAEXAMPLE",
+          secretAccessKey: "secretexample",
+        });
+      }),
+    ));
 
-  it("uses ambient AWS access keys when only an ambient profile is set", async () => {
-    vi.stubEnv("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE");
-    vi.stubEnv("AWS_SECRET_ACCESS_KEY", "secretexample");
-    vi.stubEnv("AWS_PROFILE", "ambient-profile");
-    const model = getBuiltinModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
+  it("uses ambient AWS access keys when only an ambient profile is set", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("AWS_ACCESS_KEY_ID", "AKIAEXAMPLE");
+        vi.stubEnv("AWS_SECRET_ACCESS_KEY", "secretexample");
+        vi.stubEnv("AWS_PROFILE", "ambient-profile");
+        const model = getBuiltinModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
 
-    const config = await captureClientConfig(model);
+        const config = yield* captureClientConfig(model);
 
-    expect(config["profile"]).toBe("ambient-profile");
-    expect(config["credentials"]).toEqual({
-      accessKeyId: "AKIAEXAMPLE",
-      secretAccessKey: "secretexample",
-    });
-  });
+        expect(config["profile"]).toBe("ambient-profile");
+        expect(config["credentials"]).toEqual({
+          accessKeyId: "AKIAEXAMPLE",
+          secretAccessKey: "secretexample",
+        });
+      }),
+    ));
 });

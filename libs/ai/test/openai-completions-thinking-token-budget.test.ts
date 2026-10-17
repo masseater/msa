@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { streamSimple } from "../src/compat.ts";
@@ -75,145 +76,181 @@ function vllmModel(
   };
 }
 
-async function capture(
+const capture = Effect.fn("capture")(function* (
   model: Model<"openai-completions">,
   options?: {
     reasoning?: SimpleStreamOptions["reasoning"];
     thinkingBudgets?: ThinkingBudgets;
     maxTokens?: number;
   },
-): Promise<CapturedParams> {
+) {
   let payload: unknown;
 
-  await streamSimple(
-    model,
-    { messages: [{ role: "user", content: "Hi", timestamp: Date.now() }] },
-    {
-      apiKey: "test",
-      reasoning: options?.reasoning,
-      thinkingBudgets: options?.thinkingBudgets,
-      maxTokens: options?.maxTokens,
-      onPayload: (params: unknown) => {
-        payload = params;
+  const currentTime = yield* Clock.currentTimeMillis;
+  yield* Effect.promise(() =>
+    streamSimple(
+      model,
+      { messages: [{ role: "user", content: "Hi", timestamp: currentTime }] },
+      {
+        apiKey: "test",
+        reasoning: options?.reasoning,
+        thinkingBudgets: options?.thinkingBudgets,
+        maxTokens: options?.maxTokens,
+        onPayload: (params: unknown) => {
+          payload = params;
+        },
       },
-    },
-  ).result();
+    ).result(),
+  );
 
   return (payload ?? mockState.lastParams) as CapturedParams;
-}
+});
 
 describe("openai-completions thinking token budget", () => {
   beforeEach(() => {
     mockState.lastParams = undefined;
   });
 
-  it("sends the configured budget for the requested level", async () => {
-    const params = await capture(vllmModel(), {
-      reasoning: "medium",
-      thinkingBudgets: { medium: 4096 },
-    });
-    expect(params.thinking_token_budget).toBe(4096);
-  });
+  it("sends the configured budget for the requested level", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const params = yield* capture(vllmModel(), {
+          reasoning: "medium",
+          thinkingBudgets: { medium: 4096 },
+        });
+        expect(params.thinking_token_budget).toBe(4096);
+      }),
+    ));
 
-  it("omits the budget when neither the field nor the alias is set", async () => {
-    const params = await capture(vllmModel({ thinkingFormat: "zai" }), {
-      reasoning: "medium",
-      thinkingBudgets: { medium: 4096 },
-    });
-    expect(params.thinking_token_budget).toBeUndefined();
-    expect(params.thinking_budget).toBeUndefined();
-    expect(params.thinking_budget_tokens).toBeUndefined();
-  });
+  it("omits the budget when neither the field nor the alias is set", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const params = yield* capture(vllmModel({ thinkingFormat: "zai" }), {
+          reasoning: "medium",
+          thinkingBudgets: { medium: 4096 },
+        });
+        expect(params.thinking_token_budget).toBeUndefined();
+        expect(params.thinking_budget).toBeUndefined();
+        expect(params.thinking_budget_tokens).toBeUndefined();
+      }),
+    ));
 
-  it("omits the budget when thinking is off", async () => {
-    const params = await capture(vllmModel(), {
-      reasoning: undefined,
-      thinkingBudgets: { high: 8192 },
-    });
-    expect(params.thinking_token_budget).toBeUndefined();
-  });
+  it("omits the budget when thinking is off", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const params = yield* capture(vllmModel(), {
+          reasoning: undefined,
+          thinkingBudgets: { high: 8192 },
+        });
+        expect(params.thinking_token_budget).toBeUndefined();
+      }),
+    ));
 
-  it("clamps xhigh and max to the high budget", async () => {
-    const xhigh = await capture(vllmModel(), {
-      reasoning: "xhigh",
-      thinkingBudgets: { high: 8192 },
-    });
-    const max = await capture(vllmModel(), { reasoning: "max", thinkingBudgets: { high: 8192 } });
-    expect(xhigh.thinking_token_budget).toBe(8192);
-    expect(max.thinking_token_budget).toBe(8192);
-  });
+  it("clamps xhigh and max to the high budget", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const xhigh = yield* capture(vllmModel(), {
+          reasoning: "xhigh",
+          thinkingBudgets: { high: 8192 },
+        });
+        const max = yield* capture(vllmModel(), {
+          reasoning: "max",
+          thinkingBudgets: { high: 8192 },
+        });
+        expect(xhigh.thinking_token_budget).toBe(8192);
+        expect(max.thinking_token_budget).toBe(8192);
+      }),
+    ));
 
-  it("leaves room for the answer when the budget meets the response ceiling", async () => {
-    const params = await capture(vllmModel(), { reasoning: "high" });
-    expect(params.thinking_token_budget).toBe(16384 - 1024);
-  });
+  it("leaves room for the answer when the budget meets the response ceiling", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const params = yield* capture(vllmModel(), { reasoning: "high" });
+        expect(params.thinking_token_budget).toBe(16384 - 1024);
+      }),
+    ));
 
-  it("uses the caller max_tokens as the ceiling when it is lower than the model cap", async () => {
-    const params = await capture(vllmModel(), {
-      reasoning: "high",
-      thinkingBudgets: { high: 8192 },
-      maxTokens: 4096,
-    });
-    expect(params.thinking_token_budget).toBe(4096 - 1024);
-  });
+  it("uses the caller max_tokens as the ceiling when it is lower than the model cap", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const params = yield* capture(vllmModel(), {
+          reasoning: "high",
+          thinkingBudgets: { high: 8192 },
+          maxTokens: 4096,
+        });
+        expect(params.thinking_token_budget).toBe(4096 - 1024);
+      }),
+    ));
 
   it.each(["thinking_budget", "thinking_budget_tokens"] as const)(
     "sends %s when thinkingTokenBudgetField is set",
-    async (field) => {
-      const params = await capture(
-        vllmModel({ thinkingFormat: "qwen", thinkingTokenBudgetField: field }),
-        {
-          reasoning: "medium",
-          thinkingBudgets: { medium: 4096 },
-        },
-      );
-      expect(params[field]).toBe(4096);
-      expect(params.thinking_token_budget).toBeUndefined();
-    },
+    (field) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const params = yield* capture(
+            vllmModel({ thinkingFormat: "qwen", thinkingTokenBudgetField: field }),
+            {
+              reasoning: "medium",
+              thinkingBudgets: { medium: 4096 },
+            },
+          );
+          expect(params[field]).toBe(4096);
+          expect(params.thinking_token_budget).toBeUndefined();
+        }),
+      ),
   );
 
-  it("lets thinkingTokenBudgetField win over the boolean alias", async () => {
-    const params = await capture(
-      vllmModel({
-        thinkingFormat: "zai",
-        supportsThinkingTokenBudget: true,
-        thinkingTokenBudgetField: "thinking_budget",
+  it("lets thinkingTokenBudgetField win over the boolean alias", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const params = yield* capture(
+          vllmModel({
+            thinkingFormat: "zai",
+            supportsThinkingTokenBudget: true,
+            thinkingTokenBudgetField: "thinking_budget",
+          }),
+          { reasoning: "medium", thinkingBudgets: { medium: 4096 } },
+        );
+        expect(params.thinking_budget).toBe(4096);
+        expect(params.thinking_token_budget).toBeUndefined();
       }),
-      { reasoning: "medium", thinkingBudgets: { medium: 4096 } },
-    );
-    expect(params.thinking_budget).toBe(4096);
-    expect(params.thinking_token_budget).toBeUndefined();
-  });
+    ));
 
-  it("puts the clamped budget in chat_template_kwargs when $var is thinking.budget", async () => {
-    const params = await capture(
-      vllmModel({
-        thinkingFormat: "chat-template",
-        chatTemplateKwargs: {
-          enable_thinking: { $var: "thinking.enabled" },
-          thinking_budget: { $var: "thinking.budget" },
-        },
+  it("puts the clamped budget in chat_template_kwargs when $var is thinking.budget", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const params = yield* capture(
+          vllmModel({
+            thinkingFormat: "chat-template",
+            chatTemplateKwargs: {
+              enable_thinking: { $var: "thinking.enabled" },
+              thinking_budget: { $var: "thinking.budget" },
+            },
+          }),
+          { reasoning: "high" },
+        );
+        expect(params.chat_template_kwargs).toEqual({
+          enable_thinking: true,
+          thinking_budget: 16384 - 1024,
+        });
+        expect(params.thinking_token_budget).toBeUndefined();
       }),
-      { reasoning: "high" },
-    );
-    expect(params.chat_template_kwargs).toEqual({
-      enable_thinking: true,
-      thinking_budget: 16384 - 1024,
-    });
-    expect(params.thinking_token_budget).toBeUndefined();
-  });
+    ));
 
-  it("omits thinking.budget from chat_template_kwargs when thinking is off", async () => {
-    const params = await capture(
-      vllmModel({
-        thinkingFormat: "chat-template",
-        chatTemplateKwargs: {
-          enable_thinking: { $var: "thinking.enabled" },
-          thinking_budget: { $var: "thinking.budget" },
-        },
+  it("omits thinking.budget from chat_template_kwargs when thinking is off", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const params = yield* capture(
+          vllmModel({
+            thinkingFormat: "chat-template",
+            chatTemplateKwargs: {
+              enable_thinking: { $var: "thinking.enabled" },
+              thinking_budget: { $var: "thinking.budget" },
+            },
+          }),
+          { reasoning: undefined },
+        );
+        expect(params.chat_template_kwargs).toEqual({ enable_thinking: false });
       }),
-      { reasoning: undefined },
-    );
-    expect(params.chat_template_kwargs).toEqual({ enable_thinking: false });
-  });
+    ));
 });

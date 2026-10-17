@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -122,51 +123,56 @@ function wordTokens(content: string): number[] {
 }
 
 describe("llama.cpp classifier", () => {
-  it("answers choice, bool and score questions from label log-probabilities", async () => {
-    const server = fakeServer({ next: answerByPrompt, tokenize: wordTokens });
-    const classifierModel = model();
+  it("answers choice, bool and score questions from label log-probabilities", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const server = fakeServer({ next: answerByPrompt, tokenize: wordTokens });
+        const classifierModel = model();
 
-    const result = await classify(classifierModel, context, {
-      apiKey: "local",
-      fetch: server.fetch,
-    });
+        const result = yield* Effect.promise(() =>
+          classify(classifierModel, context, {
+            apiKey: "local",
+            fetch: server.fetch,
+          }),
+        );
 
-    expect(result.errorMessage).toBeUndefined();
-    expect(result.stopReason).toBe("stop");
-    const choice = labelProbabilities([-1.5, -0.3, -3], 1);
-    expect(result.answers["team"]).toEqual({
-      type: "choice",
-      choice: "technical",
-      probabilities: { billing: choice[0], technical: choice[1], sales: choice[2] },
-      confidence: peakConfidence(choice),
-    });
-    expect(result.answers["urgent"]).toEqual({
-      type: "bool",
-      probability: labelProbabilities([-0.05, -3], 1)[0],
-    });
-    const levels = labelProbabilities([-4, -1.8, -0.2], 1);
-    expect(result.answers["severity"]).toEqual({
-      type: "score",
-      score: levels[1]! + 2 * levels[2]!,
-      confidence: peakConfidence(levels),
-    });
+        expect(result.errorMessage).toBeUndefined();
+        expect(result.stopReason).toBe("stop");
+        const choice = labelProbabilities([-1.5, -0.3, -3], 1);
+        expect(result.answers["team"]).toEqual({
+          type: "choice",
+          choice: "technical",
+          probabilities: { billing: choice[0], technical: choice[1], sales: choice[2] },
+          confidence: peakConfidence(choice),
+        });
+        expect(result.answers["urgent"]).toEqual({
+          type: "bool",
+          probability: labelProbabilities([-0.05, -3], 1)[0],
+        });
+        const levels = labelProbabilities([-4, -1.8, -0.2], 1);
+        expect(result.answers["severity"]).toEqual({
+          type: "score",
+          score: levels[1]! + 2 * levels[2]!,
+          confidence: peakConfidence(levels),
+        });
 
-    const root = classifierModel.baseUrl.replace(/\/v1$/u, "");
-    for (const request of server.requests) {
-      expect(request.url.startsWith(`${root}/`)).toBe(true);
-      expect(request.body["model"]).toBe("qwen");
-      expect(request.headers.get("authorization")).toBe("Bearer local");
-    }
-    const completion = server.requests.find((request) => request.url.endsWith("/completion"));
-    expect(completion?.body).toMatchObject({
-      n_predict: 1,
-      n_probs: 256,
-      post_sampling_probs: false,
-      cache_prompt: true,
-    });
-    const template = server.requests.find((request) => request.url.endsWith("/apply-template"));
-    expect(template?.body["chat_template_kwargs"]).toEqual({ enable_thinking: false });
-  });
+        const root = classifierModel.baseUrl.replace(/\/v1$/u, "");
+        for (const request of server.requests) {
+          expect(request.url.startsWith(`${root}/`)).toBe(true);
+          expect(request.body["model"]).toBe("qwen");
+          expect(request.headers.get("authorization")).toBe("Bearer local");
+        }
+        const completion = server.requests.find((request) => request.url.endsWith("/completion"));
+        expect(completion?.body).toMatchObject({
+          n_predict: 1,
+          n_probs: 256,
+          post_sampling_probs: false,
+          cache_prompt: true,
+        });
+        const template = server.requests.find((request) => request.url.endsWith("/apply-template"));
+        expect(template?.body["chat_template_kwargs"]).toEqual({ enable_thinking: false });
+      }),
+    ));
 
   it("repeats the state around all questions and ends with this question's labels", () => {
     const rendered = renderQuestion(context, "team");
@@ -231,204 +237,269 @@ describe("llama.cpp classifier", () => {
     ).toBe(true);
   });
 
-  it("divides label log-probabilities by the temperature", async () => {
-    const server = fakeServer({ next: () => ({ A: -0.1, B: -2.5 }) });
-    const questions: ClassifierContext["questions"] = {
-      pick: { type: "choice", instructions: "Pick one", criteria: { a: "", b: "" } },
-    };
+  it("divides label log-probabilities by the temperature", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const server = fakeServer({ next: () => ({ A: -0.1, B: -2.5 }) });
+        const questions: ClassifierContext["questions"] = {
+          pick: { type: "choice", instructions: "Pick one", criteria: { a: "", b: "" } },
+        };
 
-    const result = await classify(
-      model(),
-      { state: {}, questions },
-      { fetch: server.fetch, temperature: 2 },
-    );
+        const result = yield* Effect.promise(() =>
+          classify(model(), { state: {}, questions }, { fetch: server.fetch, temperature: 2 }),
+        );
 
-    const expected = labelProbabilities([-0.1 / 2, -2.5 / 2], 1);
-    expect(result.answers["pick"]).toMatchObject({
-      probabilities: { a: expected[0], b: expected[1] },
-    });
-    expect(labelProbabilities([-0.1, -2.5], 2)).toEqual(expected);
-  });
+        const expected = labelProbabilities([-0.1 / 2, -2.5 / 2], 1);
+        expect(result.answers["pick"]).toMatchObject({
+          probabilities: { a: expected[0], b: expected[1] },
+        });
+        expect(labelProbabilities([-0.1, -2.5], 2)).toEqual(expected);
+      }),
+    ));
 
-  it("rejects non-positive temperatures before sending requests", async () => {
-    const server = fakeServer();
-    const result = await classify(model(), context, { fetch: server.fetch, temperature: 0 });
+  it("rejects non-positive temperatures before sending requests", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const server = fakeServer();
+        const result = yield* Effect.promise(() =>
+          classify(model(), context, { fetch: server.fetch, temperature: 0 }),
+        );
 
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toContain("Temperature must be a positive number, got 0");
-    expect(server.requests).toEqual([]);
-  });
+        expect(result.stopReason).toBe("error");
+        expect(result.errorMessage).toContain("Temperature must be a positive number, got 0");
+        expect(server.requests).toEqual([]);
+      }),
+    ));
 
-  it("retries deeper readouts when a label is missing and fails without inventing zeros", async () => {
-    const questions: ClassifierContext["questions"] = {
-      pick: { type: "choice", instructions: "Pick one", criteria: { a: "", b: "" } },
-    };
-    const deep = fakeServer({
-      next: (_prompt, depth): Record<string, number> =>
-        depth < 4096 ? { A: -0.1 } : { A: -0.1, B: -9 },
-    });
-    const recovered = await classify(model(), { state: {}, questions }, { fetch: deep.fetch });
-    expect(recovered.stopReason).toBe("stop");
-    expect(completionDepths(deep.requests)).toEqual([256, 4096]);
+  it("retries deeper readouts when a label is missing and fails without inventing zeros", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const questions: ClassifierContext["questions"] = {
+          pick: { type: "choice", instructions: "Pick one", criteria: { a: "", b: "" } },
+        };
+        const deep = fakeServer({
+          next: (_prompt, depth): Record<string, number> =>
+            depth < 4096 ? { A: -0.1 } : { A: -0.1, B: -9 },
+        });
+        const recovered = yield* Effect.promise(() =>
+          classify(model(), { state: {}, questions }, { fetch: deep.fetch }),
+        );
+        expect(recovered.stopReason).toBe("stop");
+        expect(completionDepths(deep.requests)).toEqual([256, 4096]);
 
-    const never = fakeServer({ next: () => ({ A: -0.1 }) });
-    const failed = await classify(model(), { state: {}, questions }, { fetch: never.fetch });
-    expect(failed.stopReason).toBe("error");
-    expect(failed.answers).toEqual({});
-    expect(failed.errorMessage).toContain(
-      "did not rank labels B for pick within the top 32768 tokens",
-    );
-    expect(completionDepths(never.requests)).toEqual([256, 4096, 32768]);
-  });
+        const never = fakeServer({ next: () => ({ A: -0.1 }) });
+        const failed = yield* Effect.promise(() =>
+          classify(model(), { state: {}, questions }, { fetch: never.fetch }),
+        );
+        expect(failed.stopReason).toBe("error");
+        expect(failed.answers).toEqual({});
+        expect(failed.errorMessage).toContain(
+          "did not rank labels B for pick within the top 32768 tokens",
+        );
+        expect(completionDepths(never.requests)).toEqual([256, 4096, 32768]);
+      }),
+    ));
 
-  it("closes a reasoning block the template leaves open", async () => {
-    const server = fakeServer({ template: () => "<|assistant|>\n<think>" });
-    await classify(
-      model(),
-      {
-        state: {},
-        questions: { pick: { type: "choice", instructions: "Pick", criteria: { a: "", b: "" } } },
-      },
-      { fetch: server.fetch },
-    );
+  it("closes a reasoning block the template leaves open", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const server = fakeServer({ template: () => "<|assistant|>\n<think>" });
+        yield* Effect.promise(() =>
+          classify(
+            model(),
+            {
+              state: {},
+              questions: {
+                pick: { type: "choice", instructions: "Pick", criteria: { a: "", b: "" } },
+              },
+            },
+            { fetch: server.fetch },
+          ),
+        );
 
-    const completion = server.requests.find((request) => request.url.endsWith("/completion"));
-    expect(completion?.body["prompt"]).toBe("<|assistant|>\n<think></think>");
-  });
+        const completion = server.requests.find((request) => request.url.endsWith("/completion"));
+        expect(completion?.body["prompt"]).toBe("<|assistant|>\n<think></think>");
+      }),
+    ));
 
-  it("reads labels in reply position and rejects labels that are not one token", async () => {
-    const merging = fakeServer({
-      tokenize: (content) =>
-        content.startsWith("\n") && content.length > 1 ? [1000] : charTokens(content),
-    });
-    const merged = await classify(
-      model(),
-      {
-        state: {},
-        questions: { pick: { type: "choice", instructions: "Pick", criteria: { a: "", b: "" } } },
-      },
-      { fetch: merging.fetch },
-    );
-    expect(merged.stopReason).toBe("stop");
+  it("reads labels in reply position and rejects labels that are not one token", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const merging = fakeServer({
+          tokenize: (content) =>
+            content.startsWith("\n") && content.length > 1 ? [1000] : charTokens(content),
+        });
+        const merged = yield* Effect.promise(() =>
+          classify(
+            model(),
+            {
+              state: {},
+              questions: {
+                pick: { type: "choice", instructions: "Pick", criteria: { a: "", b: "" } },
+              },
+            },
+            { fetch: merging.fetch },
+          ),
+        );
+        expect(merged.stopReason).toBe("stop");
 
-    const split = fakeServer();
-    const result = await classify(
-      model(),
-      {
-        state: {},
-        questions: { ok: { type: "bool", instructions: "OK?", criteria: { true: "", false: "" } } },
-      },
-      { fetch: split.fetch },
-    );
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toContain('Label "Yes" is not a single token for qwen');
-  });
+        const split = fakeServer();
+        const result = yield* Effect.promise(() =>
+          classify(
+            model(),
+            {
+              state: {},
+              questions: {
+                ok: { type: "bool", instructions: "OK?", criteria: { true: "", false: "" } },
+              },
+            },
+            { fetch: split.fetch },
+          ),
+        );
+        expect(result.stopReason).toBe("error");
+        expect(result.errorMessage).toContain('Label "Yes" is not a single token for qwen');
+      }),
+    ));
 
-  it("caches label tokens per server and model", async () => {
-    const classifierModel = model();
-    const server = fakeServer();
-    const questions: ClassifierContext["questions"] = {
-      pick: { type: "choice", instructions: "Pick", criteria: { a: "", b: "" } },
-    };
-    await classify(classifierModel, { state: {}, questions }, { fetch: server.fetch });
-    const firstTokenizations = server.requests.filter((request) =>
-      request.url.endsWith("/tokenize"),
-    ).length;
-    await classify(classifierModel, { state: {}, questions }, { fetch: server.fetch });
+  it("caches label tokens per server and model", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const classifierModel = model();
+        const server = fakeServer();
+        const questions: ClassifierContext["questions"] = {
+          pick: { type: "choice", instructions: "Pick", criteria: { a: "", b: "" } },
+        };
+        yield* Effect.promise(() =>
+          classify(classifierModel, { state: {}, questions }, { fetch: server.fetch }),
+        );
+        const firstTokenizations = server.requests.filter((request) =>
+          request.url.endsWith("/tokenize"),
+        ).length;
+        yield* Effect.promise(() =>
+          classify(classifierModel, { state: {}, questions }, { fetch: server.fetch }),
+        );
 
-    expect(firstTokenizations).toBeGreaterThan(0);
-    expect(server.requests.filter((request) => request.url.endsWith("/tokenize"))).toHaveLength(
-      firstTokenizations,
-    );
-  });
+        expect(firstTokenizations).toBeGreaterThan(0);
+        expect(server.requests.filter((request) => request.url.endsWith("/tokenize"))).toHaveLength(
+          firstTokenizations,
+        );
+      }),
+    ));
 
-  it("validates option counts before sending requests", async () => {
-    const server = fakeServer();
-    const criteria = Object.fromEntries(
-      Array.from({ length: 63 }, (_value, index) => [`option${index}`, ""]),
-    );
-    const tooMany = await classify(
-      model(),
-      { state: {}, questions: { pick: { type: "choice", instructions: "Pick", criteria } } },
-      { fetch: server.fetch },
-    );
-    const tooFew = await classify(
-      model(),
-      {
-        state: {},
-        questions: { rate: { type: "score", instructions: "Rate", criteria: ["only"] } },
-      },
-      { fetch: server.fetch },
-    );
+  it("validates option counts before sending requests", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const server = fakeServer();
+        const criteria = Object.fromEntries(
+          Array.from({ length: 63 }, (_value, index) => [`option${index}`, ""]),
+        );
+        const tooMany = yield* Effect.promise(() =>
+          classify(
+            model(),
+            { state: {}, questions: { pick: { type: "choice", instructions: "Pick", criteria } } },
+            { fetch: server.fetch },
+          ),
+        );
+        const tooFew = yield* Effect.promise(() =>
+          classify(
+            model(),
+            {
+              state: {},
+              questions: { rate: { type: "score", instructions: "Rate", criteria: ["only"] } },
+            },
+            { fetch: server.fetch },
+          ),
+        );
 
-    expect(tooMany.errorMessage).toContain("A choice question needs 2 to 62 options, got 63");
-    expect(tooFew.errorMessage).toContain("A score question needs 2 to 10 levels, got 1");
-    expect(server.requests).toEqual([]);
-  });
+        expect(tooMany.errorMessage).toContain("A choice question needs 2 to 62 options, got 63");
+        expect(tooFew.errorMessage).toContain("A score question needs 2 to 10 levels, got 1");
+        expect(server.requests).toEqual([]);
+      }),
+    ));
 
-  it("passes completion payloads and responses through the request hooks", async () => {
-    const server = fakeServer();
-    const payloads: unknown[] = [];
-    const statuses: number[] = [];
-    const options: ClassifierOptions = {
-      fetch: server.fetch,
-      onPayload: (payload) => {
-        payloads.push(payload);
-        return { ...(payload as object), id_slot: 1 };
-      },
-      onResponse: (response) => {
-        statuses.push(response.status);
-      },
-    };
+  it("passes completion payloads and responses through the request hooks", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const server = fakeServer();
+        const payloads: unknown[] = [];
+        const statuses: number[] = [];
+        const options: ClassifierOptions = {
+          fetch: server.fetch,
+          onPayload: (payload) => {
+            payloads.push(payload);
+            return { ...(payload as object), id_slot: 1 };
+          },
+          onResponse: (response) => {
+            statuses.push(response.status);
+          },
+        };
 
-    await classify(
-      model(),
-      {
-        state: {},
-        questions: { pick: { type: "choice", instructions: "Pick", criteria: { a: "", b: "" } } },
-      },
-      options,
-    );
+        yield* Effect.promise(() =>
+          classify(
+            model(),
+            {
+              state: {},
+              questions: {
+                pick: { type: "choice", instructions: "Pick", criteria: { a: "", b: "" } },
+              },
+            },
+            options,
+          ),
+        );
 
-    expect(payloads).toHaveLength(1);
-    expect(payloads[0]).toMatchObject({ n_predict: 1 });
-    expect(statuses).toEqual([200]);
-    expect(
-      server.requests.find((request) => request.url.endsWith("/completion"))?.body["id_slot"],
-    ).toBe(1);
-  });
+        expect(payloads).toHaveLength(1);
+        expect(payloads[0]).toMatchObject({ n_predict: 1 });
+        expect(statuses).toEqual([200]);
+        expect(
+          server.requests.find((request) => request.url.endsWith("/completion"))?.body["id_slot"],
+        ).toBe(1);
+      }),
+    ));
 
-  it("reports server errors and cancellation", async () => {
-    const failing = await classify(model(), context, {
-      maxRetries: 0,
-      fetch: () =>
-        Promise.resolve(new Response('{"error":{"message":"context overflow"}}', { status: 400 })),
-    });
-    expect(failing.stopReason).toBe("error");
-    expect(failing.errorMessage).toContain("llama.cpp error (400)");
-    expect(failing.errorMessage).toContain("context overflow");
+  it("reports server errors and cancellation", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const failing = yield* Effect.promise(() =>
+          classify(model(), context, {
+            maxRetries: 0,
+            fetch: () =>
+              Promise.resolve(
+                new Response('{"error":{"message":"context overflow"}}', { status: 400 }),
+              ),
+          }),
+        );
+        expect(failing.stopReason).toBe("error");
+        expect(failing.errorMessage).toContain("llama.cpp error (400)");
+        expect(failing.errorMessage).toContain("context overflow");
 
-    const controller = new AbortController();
-    controller.abort();
-    const aborted = await classify(model(), context, {
-      signal: controller.signal,
-      fetch: (_input, init) => {
-        init?.signal?.throwIfAborted();
-        return Promise.resolve(Response.json({}));
-      },
-    });
-    expect(aborted.stopReason).toBe("aborted");
-  });
+        const controllerSignal = AbortSignal.abort();
+        const aborted = yield* Effect.promise(() =>
+          classify(model(), context, {
+            signal: controllerSignal,
+            fetch: (_input, init) => {
+              init?.signal?.throwIfAborted();
+              return Promise.resolve(Response.json({}));
+            },
+          }),
+        );
+        expect(aborted.stopReason).toBe("aborted");
+      }),
+    ));
 
-  it("rejects models for other classifier APIs", async () => {
-    const server = fakeServer();
-    const result = await classify({ ...model(), api: "typesafe-system-one" }, context, {
-      fetch: server.fetch,
-    });
+  it("rejects models for other classifier APIs", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const server = fakeServer();
+        const result = yield* Effect.promise(() =>
+          classify({ ...model(), api: "typesafe-system-one" }, context, {
+            fetch: server.fetch,
+          }),
+        );
 
-    expect(result.errorMessage).toContain("Unsupported classifier API: typesafe-system-one");
-    expect(server.requests).toEqual([]);
-  });
+        expect(result.errorMessage).toContain("Unsupported classifier API: typesafe-system-one");
+        expect(server.requests).toEqual([]);
+      }),
+    ));
 
   it("derives the server root from OpenAI-compatible base URLs", () => {
     expect(llamaServerRoot("http://127.0.0.1:8080/v1/")).toBe("http://127.0.0.1:8080");

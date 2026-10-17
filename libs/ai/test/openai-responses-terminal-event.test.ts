@@ -1,3 +1,4 @@
+import { Effect, Stream } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -265,214 +266,280 @@ async function* createToolCallsWithoutOutputIndexEvents(): AsyncIterable<Respons
 }
 
 describe("OpenAI Responses terminal event handling", () => {
-  it("rejects streams that end before a terminal response event", async () => {
-    const model = createModel();
-    const output = createOutput(model);
-    const stream = new AssistantMessageEventStream();
+  it("rejects streams that end before a terminal response event", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
+        const output = createOutput(model);
+        const stream = new AssistantMessageEventStream();
 
-    await expect(
-      processResponsesStream(createEarlyEofEvents(), output, stream, model),
-    ).rejects.toThrow("OpenAI Responses stream ended before a terminal response event");
-  });
+        yield* Effect.promise(() =>
+          expect(
+            processResponsesStream(createEarlyEofEvents(), output, stream, model),
+          ).rejects.toThrow("OpenAI Responses stream ended before a terminal response event"),
+        );
+      }),
+    ));
 
-  it("rejects completed streams whose tool call never received output_item.done", async () => {
-    const model = createModel();
+  it("rejects completed streams whose tool call never received output_item.done", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
 
-    await expect(
-      processResponsesStream(
-        createUnfinishedToolCallEvents(),
-        createOutput(model),
-        new AssistantMessageEventStream(),
-        model,
-      ),
-    ).rejects.toThrow(
-      "OpenAI Responses stream completed with an unfinished tool call: bash (call_1|fc_1)",
-    );
-  });
+        yield* Effect.promise(() =>
+          expect(
+            processResponsesStream(
+              createUnfinishedToolCallEvents(),
+              createOutput(model),
+              new AssistantMessageEventStream(),
+              model,
+            ),
+          ).rejects.toThrow(
+            "OpenAI Responses stream completed with an unfinished tool call: bash (call_1|fc_1)",
+          ),
+        );
+      }),
+    ));
 
-  it("rejects parallel tool calls without output_index instead of running mixed-up calls", async () => {
-    const model = createModel();
+  it("rejects parallel tool calls without output_index instead of running mixed-up calls", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
 
-    await expect(
-      processResponsesStream(
-        createToolCallsWithoutOutputIndexEvents(),
-        createOutput(model),
-        new AssistantMessageEventStream(),
-        model,
-      ),
-    ).rejects.toThrow(
-      "OpenAI Responses stream completed with an unfinished tool call: bash (call_a|fc_a)",
-    );
-  });
+        yield* Effect.promise(() =>
+          expect(
+            processResponsesStream(
+              createToolCallsWithoutOutputIndexEvents(),
+              createOutput(model),
+              new AssistantMessageEventStream(),
+              model,
+            ),
+          ).rejects.toThrow(
+            "OpenAI Responses stream completed with an unfinished tool call: bash (call_a|fc_a)",
+          ),
+        );
+      }),
+    ));
 
-  it("forwards parsed provider stream events in order", async () => {
-    const model = createModel();
-    const context = normalizeContext({
-      systemPrompt: "",
-      messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }],
-      tools: [],
-    });
-    const providerEvents: unknown[] = [];
-    const eventModels: Model<Api>[] = [];
-    const stream = streamOpenAIResponses(model, context, {
-      apiKey: "test",
-      onProviderStreamEvent: async (event, eventModel) => {
-        await Promise.resolve();
-        providerEvents.push(event);
-        eventModels.push(eventModel);
-      },
-    });
+  it("forwards parsed provider stream events in order", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const effectContext = yield* Effect.context();
+        const model = createModel();
+        const context = normalizeContext({
+          systemPrompt: "",
+          messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }],
+          tools: [],
+        });
+        const providerEvents: unknown[] = [];
+        const eventModels: Model<Api>[] = [];
+        const stream = streamOpenAIResponses(model, context, {
+          apiKey: "test",
+          onProviderStreamEvent: (event, eventModel) =>
+            Effect.runPromiseWith(effectContext)(
+              Effect.gen(function* () {
+                yield* Effect.promise(() => Promise.resolve());
+                providerEvents.push(event);
+                eventModels.push(eventModel);
+              }),
+            ),
+        });
 
-    await stream.result();
+        yield* Effect.promise(() => stream.result());
 
-    expect(providerEvents).toHaveLength(3);
-    expect(providerEvents.map((event) => (event as ResponseStreamEvent).type)).toEqual([
-      "response.created",
-      "response.output_item.added",
-      "response.reasoning_text.delta",
-    ]);
-    expect(eventModels).toEqual([model, model, model]);
-  });
+        expect(providerEvents).toHaveLength(3);
+        expect(providerEvents.map((event) => (event as ResponseStreamEvent).type)).toEqual([
+          "response.created",
+          "response.output_item.added",
+          "response.reasoning_text.delta",
+        ]);
+        expect(eventModels).toEqual([model, model, model]);
+      }),
+    ));
 
-  it("emits an error final result when the wrapper stream ends before a terminal response event", async () => {
-    const model = createModel();
-    const context = normalizeContext({
-      systemPrompt: "",
-      messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }],
-      tools: [],
-    });
-    const stream = streamOpenAIResponses(model, context, { apiKey: "test" });
-    const events: AssistantMessageEvent[] = [];
-    let initialStopReason: AssistantMessage["stopReason"] | undefined;
+  it("emits an error final result when the wrapper stream ends before a terminal response event", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
+        const context = normalizeContext({
+          systemPrompt: "",
+          messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }],
+          tools: [],
+        });
+        const stream = streamOpenAIResponses(model, context, { apiKey: "test" });
+        const events: AssistantMessageEvent[] = [];
+        let initialStopReason: AssistantMessage["stopReason"] | undefined;
 
-    for await (const event of stream) {
-      if (event.type === "start") initialStopReason = event.partial.stopReason;
-      events.push(event);
-    }
+        yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
+          Stream.orDie,
+          Stream.runForEach((event) =>
+            Effect.sync(() => {
+              if (event.type === "start") initialStopReason = event.partial.stopReason;
+              events.push(event);
+            }),
+          ),
+        );
 
-    const result = await stream.result();
-    const lastEvent = events.at(-1);
-    expect(initialStopReason).toBe("pending");
-    expect(lastEvent?.type).toBe("error");
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toBe(
-      "OpenAI Responses stream ended before a terminal response event",
-    );
-  });
+        const result = yield* Effect.promise(() => stream.result());
+        const lastEvent = events.at(-1);
+        expect(initialStopReason).toBe("pending");
+        expect(lastEvent?.type).toBe("error");
+        expect(result.stopReason).toBe("error");
+        expect(result.errorMessage).toBe(
+          "OpenAI Responses stream ended before a terminal response event",
+        );
+      }),
+    ));
 
   it.each([
     { phases: ["commentary", "commentary"], expected: ["pending", "pending"] },
     { phases: ["final_answer", "final_answer"], expected: ["stop", "stop"] },
     { phases: ["commentary", "final_answer"], expected: ["pending", "stop"] },
-  ] as const)("tracks message phases $phases", async ({ phases, expected }) => {
-    const model = createModel();
-    const output = createOutput(model);
-    const stream = new AssistantMessageEventStream();
-    const observedStopReasons: AssistantMessage["stopReason"][] = [];
-    const push = stream.push.bind(stream);
-    stream.push = (event) => {
-      if ("partial" in event) observedStopReasons.push(event.partial.stopReason);
-      push(event);
-    };
+  ] as const)("tracks message phases $phases", ({ phases, expected }) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
+        const output = createOutput(model);
+        const stream = new AssistantMessageEventStream();
+        const observedStopReasons: AssistantMessage["stopReason"][] = [];
+        const push = stream.push.bind(stream);
+        stream.push = (event) => {
+          if ("partial" in event) observedStopReasons.push(event.partial.stopReason);
+          push(event);
+        };
 
-    await processResponsesStream(createPhasedMessageEvents(phases), output, stream, model);
+        yield* Effect.promise(() =>
+          processResponsesStream(createPhasedMessageEvents(phases), output, stream, model),
+        );
 
-    expect(observedStopReasons).toEqual(expected);
-    expect(output.stopReason).toBe("stop");
-  });
+        expect(observedStopReasons).toEqual(expected);
+        expect(output.stopReason).toBe("stop");
+      }),
+    ),
+  );
 
-  it("replaces a provisional final-answer stop with an incomplete terminal reason", async () => {
-    const model = createModel();
-    const output = createOutput(model);
-    const stream = new AssistantMessageEventStream();
-    const observedStopReasons: AssistantMessage["stopReason"][] = [];
-    const push = stream.push.bind(stream);
-    stream.push = (event) => {
-      if ("partial" in event) observedStopReasons.push(event.partial.stopReason);
-      push(event);
-    };
+  it("replaces a provisional final-answer stop with an incomplete terminal reason", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
+        const output = createOutput(model);
+        const stream = new AssistantMessageEventStream();
+        const observedStopReasons: AssistantMessage["stopReason"][] = [];
+        const push = stream.push.bind(stream);
+        stream.push = (event) => {
+          if ("partial" in event) observedStopReasons.push(event.partial.stopReason);
+          push(event);
+        };
 
-    await processResponsesStream(
-      createPhasedMessageEvents(["final_answer", "final_answer"], "incomplete"),
-      output,
-      stream,
-      model,
-    );
+        yield* Effect.promise(() =>
+          processResponsesStream(
+            createPhasedMessageEvents(["final_answer", "final_answer"], "incomplete"),
+            output,
+            stream,
+            model,
+          ),
+        );
 
-    expect(observedStopReasons).toEqual(["stop", "stop"]);
-    expect(output.stopReason).toBe("length");
-  });
+        expect(observedStopReasons).toEqual(["stop", "stop"]);
+        expect(output.stopReason).toBe("length");
+      }),
+    ));
 
-  it("finalizes completed terminal events as stop", async () => {
-    const model = createModel();
-    const output = createOutput(model);
-    const stream = new AssistantMessageEventStream();
+  it("finalizes completed terminal events as stop", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
+        const output = createOutput(model);
+        const stream = new AssistantMessageEventStream();
 
-    await processResponsesStream(createCompletedEvents(), output, stream, model);
+        yield* Effect.promise(() =>
+          processResponsesStream(createCompletedEvents(), output, stream, model),
+        );
 
-    expect(output.responseId).toBe("resp_completed");
-    expect(output.stopReason).toBe("stop");
-    expect(output.rawStopReason).toBe("completed");
-    expect(output.usage).toMatchObject({
-      input: 15,
-      output: 7,
-      cacheRead: 2,
-      cacheWrite: 3,
-      totalTokens: 27,
-    });
-  });
+        expect(output.responseId).toBe("resp_completed");
+        expect(output.stopReason).toBe("stop");
+        expect(output.rawStopReason).toBe("completed");
+        expect(output.usage).toMatchObject({
+          input: 15,
+          output: 7,
+          cacheRead: 2,
+          cacheWrite: 3,
+          totalTokens: 27,
+        });
+      }),
+    ));
 
-  it("finalizes incomplete terminal events as length stops", async () => {
-    const model = createModel();
-    const output = createOutput(model);
-    const stream = new AssistantMessageEventStream();
+  it("finalizes incomplete terminal events as length stops", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
+        const output = createOutput(model);
+        const stream = new AssistantMessageEventStream();
 
-    await processResponsesStream(createIncompleteEvents(), output, stream, model);
+        yield* Effect.promise(() =>
+          processResponsesStream(createIncompleteEvents(), output, stream, model),
+        );
 
-    expect(output.responseId).toBe("resp_incomplete");
-    expect(output.stopReason).toBe("length");
-    expect(output.rawStopReason).toBe("incomplete.max_output_tokens");
-    expect(output.usage).toMatchObject({
-      input: 25,
-      output: 12,
-      cacheRead: 5,
-      cacheWrite: 0,
-      totalTokens: 42,
-    });
-  });
+        expect(output.responseId).toBe("resp_incomplete");
+        expect(output.stopReason).toBe("length");
+        expect(output.rawStopReason).toBe("incomplete.max_output_tokens");
+        expect(output.usage).toMatchObject({
+          input: 25,
+          output: 12,
+          cacheRead: 5,
+          cacheWrite: 0,
+          totalTokens: 42,
+        });
+      }),
+    ));
 
-  it("finalizes content-filtered incomplete responses as non-retryable errors", async () => {
-    const model = createModel();
-    const output = createOutput(model);
-    const stream = new AssistantMessageEventStream();
+  it("finalizes content-filtered incomplete responses as non-retryable errors", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
+        const output = createOutput(model);
+        const stream = new AssistantMessageEventStream();
 
-    await processResponsesStream(createIncompleteEvents("content_filter"), output, stream, model);
+        yield* Effect.promise(() =>
+          processResponsesStream(createIncompleteEvents("content_filter"), output, stream, model),
+        );
 
-    expect(output.stopReason).toBe("error");
-    expect(output.rawStopReason).toBe("incomplete.content_filter");
-    expect(output.errorMessage).toBe("Response incomplete: content_filter");
-  });
+        expect(output.stopReason).toBe("error");
+        expect(output.rawStopReason).toBe("incomplete.content_filter");
+        expect(output.errorMessage).toBe("Response incomplete: content_filter");
+      }),
+    ));
 
-  it("preserves unknown provider incomplete reasons as non-retryable errors", async () => {
-    const model = createModel();
-    const output = createOutput(model);
-    const stream = new AssistantMessageEventStream();
+  it("preserves unknown provider incomplete reasons as non-retryable errors", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
+        const output = createOutput(model);
+        const stream = new AssistantMessageEventStream();
 
-    await processResponsesStream(createIncompleteEvents("max_time_limit"), output, stream, model);
+        yield* Effect.promise(() =>
+          processResponsesStream(createIncompleteEvents("max_time_limit"), output, stream, model),
+        );
 
-    expect(output.stopReason).toBe("error");
-    expect(output.rawStopReason).toBe("incomplete.max_time_limit");
-    expect(output.errorMessage).toBe("Response incomplete: max_time_limit");
-  });
+        expect(output.stopReason).toBe("error");
+        expect(output.rawStopReason).toBe("incomplete.max_time_limit");
+        expect(output.errorMessage).toBe("Response incomplete: max_time_limit");
+      }),
+    ));
 
-  it("rejects failed terminal events with the provider error", async () => {
-    const model = createModel();
-    const output = createOutput(model);
-    const stream = new AssistantMessageEventStream();
+  it("rejects failed terminal events with the provider error", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
+        const output = createOutput(model);
+        const stream = new AssistantMessageEventStream();
 
-    await expect(
-      processResponsesStream(createFailedEvents(), output, stream, model),
-    ).rejects.toThrow("server_error: boom");
-    expect(output.rawStopReason).toBe("failed");
-  });
+        yield* Effect.promise(() =>
+          expect(
+            processResponsesStream(createFailedEvents(), output, stream, model),
+          ).rejects.toThrow("server_error: boom"),
+        );
+        expect(output.rawStopReason).toBe("failed");
+      }),
+    ));
 });

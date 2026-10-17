@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { Effect, Stream } from "effect";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
@@ -6,6 +7,7 @@ import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts"
 import { getModel, normalizeContext, stream } from "../src/compat.ts";
 import { MODELS } from "../src/models.generated.ts";
 import type { Model } from "../src/types.ts";
+import { envValue } from "./env.ts";
 
 class PayloadCaptured extends Error {
   constructor() {
@@ -33,17 +35,17 @@ function stopAfterPayload<TPayload>(
 }
 
 describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
-  const originalEnv = process.env["MSA_CACHE_RETENTION"];
+  const originalEnv = envValue("MSA_CACHE_RETENTION");
 
   beforeEach(() => {
-    delete process.env["MSA_CACHE_RETENTION"];
+    vi.stubEnv("MSA_CACHE_RETENTION", undefined);
   });
 
   afterEach(() => {
     if (originalEnv === undefined) {
-      delete process.env["MSA_CACHE_RETENTION"];
+      vi.stubEnv("MSA_CACHE_RETENTION", undefined);
     } else {
-      process.env["MSA_CACHE_RETENTION"] = originalEnv;
+      vi.stubEnv("MSA_CACHE_RETENTION", originalEnv);
     }
   });
 
@@ -53,52 +55,64 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
   });
 
   describe("Anthropic Provider", () => {
-    it.skipIf(
-      process.env["ANTHROPIC_API_KEY"] === undefined || process.env["ANTHROPIC_API_KEY"] === "",
-    )(
+    it.skipIf(envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "")(
       "should use default cache TTL (no ttl field) when MSA_CACHE_RETENTION is not set",
-      async () => {
-        const model = getModel("anthropic", "claude-haiku-4-5");
-        let capturedPayload: any = null;
+      () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const model = getModel("anthropic", "claude-haiku-4-5");
+            let capturedPayload: any = null;
 
-        const s = stream(model, context, {
-          onPayload: stopAfterPayload((payload) => {
-            capturedPayload = payload;
+            const s = stream(model, context, {
+              onPayload: stopAfterPayload((payload) => {
+                capturedPayload = payload;
+              }),
+            });
+
+            yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+              Stream.orDie,
+              Stream.runDrain,
+            );
+
+            expect(capturedPayload).not.toBeNull();
+            expect(capturedPayload.system).toBeDefined();
+            expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral" });
           }),
-        });
-
-        for await (const _ of s) {
-        }
-
-        expect(capturedPayload).not.toBeNull();
-        expect(capturedPayload.system).toBeDefined();
-        expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral" });
-      },
+        ),
     );
 
-    it.skipIf(
-      process.env["ANTHROPIC_API_KEY"] === undefined || process.env["ANTHROPIC_API_KEY"] === "",
-    )("should use 1h cache TTL when MSA_CACHE_RETENTION=long", async () => {
-      process.env["MSA_CACHE_RETENTION"] = "long";
-      const model = getModel("anthropic", "claude-haiku-4-5");
-      let capturedPayload: any = null;
+    it.skipIf(envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "")(
+      "should use 1h cache TTL when MSA_CACHE_RETENTION=long",
+      () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            vi.stubEnv("MSA_CACHE_RETENTION", "long");
+            const model = getModel("anthropic", "claude-haiku-4-5");
+            let capturedPayload: any = null;
 
-      const s = stream(model, context, {
-        onPayload: stopAfterPayload((payload) => {
-          capturedPayload = payload;
-        }),
-      });
+            const s = stream(model, context, {
+              onPayload: stopAfterPayload((payload) => {
+                capturedPayload = payload;
+              }),
+            });
 
-      for await (const _ of s) {
-      }
+            yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+              Stream.orDie,
+              Stream.runDrain,
+            );
 
-      expect(capturedPayload).not.toBeNull();
-      expect(capturedPayload.system).toBeDefined();
-      expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
-    });
+            expect(capturedPayload).not.toBeNull();
+            expect(capturedPayload.system).toBeDefined();
+            expect(capturedPayload.system[0].cache_control).toEqual({
+              type: "ephemeral",
+              ttl: "1h",
+            });
+          }),
+        ),
+    );
 
     it("should add ttl for non-api.anthropic.com baseUrl by default", async () => {
-      process.env["MSA_CACHE_RETENTION"] = "long";
+      vi.stubEnv("MSA_CACHE_RETENTION", "long");
 
       const baseModel = getModel("anthropic", "claude-haiku-4-5");
       const proxyModel = {
@@ -116,9 +130,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         });
 
-        for await (const event of s) {
-          if (event.type === "error") break;
-        }
+        await Effect.runPromise(
+          Stream.fromAsyncIterable(s, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEachWhile((event) =>
+              Effect.sync(() => {
+                if (event.type === "error") return false;
+                return true;
+              }),
+            ),
+          ),
+        );
       } catch {}
 
       expect(capturedPayload).not.toBeNull();
@@ -143,9 +165,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         });
 
-        for await (const event of s) {
-          if (event.type === "error") break;
-        }
+        await Effect.runPromise(
+          Stream.fromAsyncIterable(s, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEachWhile((event) =>
+              Effect.sync(() => {
+                if (event.type === "error") return false;
+                return true;
+              }),
+            ),
+          ),
+        );
       } catch {}
 
       expect(capturedPayload).not.toBeNull();
@@ -165,9 +195,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         });
 
-        for await (const event of s) {
-          if (event.type === "error") break;
-        }
+        await Effect.runPromise(
+          Stream.fromAsyncIterable(s, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEachWhile((event) =>
+              Effect.sync(() => {
+                if (event.type === "error") return false;
+                return true;
+              }),
+            ),
+          ),
+        );
       } catch {}
 
       expect(capturedPayload).not.toBeNull();
@@ -186,9 +224,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         });
 
-        for await (const event of s) {
-          if (event.type === "error") break;
-        }
+        await Effect.runPromise(
+          Stream.fromAsyncIterable(s, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEachWhile((event) =>
+              Effect.sync(() => {
+                if (event.type === "error") return false;
+                return true;
+              }),
+            ),
+          ),
+        );
       } catch {}
 
       expect(capturedPayload).not.toBeNull();
@@ -211,9 +257,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         });
 
-        for await (const event of s) {
-          if (event.type === "error") break;
-        }
+        await Effect.runPromise(
+          Stream.fromAsyncIterable(s, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEachWhile((event) =>
+              Effect.sync(() => {
+                if (event.type === "error") return false;
+                return true;
+              }),
+            ),
+          ),
+        );
       } catch {}
 
       expect(capturedPayload).not.toBeNull();
@@ -233,49 +287,59 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(getModel("openai", modelId).promptCache).toBeUndefined();
     });
 
-    it.skipIf(process.env["OPENAI_API_KEY"] === undefined || process.env["OPENAI_API_KEY"] === "")(
+    it.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
       "should not set prompt_cache_retention when MSA_CACHE_RETENTION is not set",
-      async () => {
-        const model = getModel("openai", "gpt-4o-mini");
-        let capturedPayload: any = null;
+      () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const model = getModel("openai", "gpt-4o-mini");
+            let capturedPayload: any = null;
 
-        const s = stream(model, context, {
-          onPayload: stopAfterPayload((payload) => {
-            capturedPayload = payload;
+            const s = stream(model, context, {
+              onPayload: stopAfterPayload((payload) => {
+                capturedPayload = payload;
+              }),
+            });
+
+            yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+              Stream.orDie,
+              Stream.runDrain,
+            );
+
+            expect(capturedPayload).not.toBeNull();
+            expect(capturedPayload.prompt_cache_retention).toBeUndefined();
           }),
-        });
-
-        for await (const _ of s) {
-        }
-
-        expect(capturedPayload).not.toBeNull();
-        expect(capturedPayload.prompt_cache_retention).toBeUndefined();
-      },
+        ),
     );
 
-    it.skipIf(process.env["OPENAI_API_KEY"] === undefined || process.env["OPENAI_API_KEY"] === "")(
+    it.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
       "should set prompt_cache_retention to 24h when MSA_CACHE_RETENTION=long",
-      async () => {
-        process.env["MSA_CACHE_RETENTION"] = "long";
-        const model = getModel("openai", "gpt-4o-mini");
-        let capturedPayload: any = null;
+      () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            vi.stubEnv("MSA_CACHE_RETENTION", "long");
+            const model = getModel("openai", "gpt-4o-mini");
+            let capturedPayload: any = null;
 
-        const s = stream(model, context, {
-          onPayload: stopAfterPayload((payload) => {
-            capturedPayload = payload;
+            const s = stream(model, context, {
+              onPayload: stopAfterPayload((payload) => {
+                capturedPayload = payload;
+              }),
+            });
+
+            yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+              Stream.orDie,
+              Stream.runDrain,
+            );
+
+            expect(capturedPayload).not.toBeNull();
+            expect(capturedPayload.prompt_cache_retention).toBe("24h");
           }),
-        });
-
-        for await (const _ of s) {
-        }
-
-        expect(capturedPayload).not.toBeNull();
-        expect(capturedPayload.prompt_cache_retention).toBe("24h");
-      },
+        ),
     );
 
     it("should set prompt_cache_retention for non-api.openai.com baseUrl by default", async () => {
-      process.env["MSA_CACHE_RETENTION"] = "long";
+      vi.stubEnv("MSA_CACHE_RETENTION", "long");
 
       const baseModel = getModel("openai", "gpt-4o-mini");
       const proxyModel = {
@@ -293,9 +357,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         });
 
-        for await (const event of s) {
-          if (event.type === "error") break;
-        }
+        await Effect.runPromise(
+          Stream.fromAsyncIterable(s, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEachWhile((event) =>
+              Effect.sync(() => {
+                if (event.type === "error") return false;
+                return true;
+              }),
+            ),
+          ),
+        );
       } catch {}
 
       expect(capturedPayload).not.toBeNull();
@@ -319,9 +391,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         });
 
-        for await (const event of s) {
-          if (event.type === "error") break;
-        }
+        await Effect.runPromise(
+          Stream.fromAsyncIterable(s, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEachWhile((event) =>
+              Effect.sync(() => {
+                if (event.type === "error") return false;
+                return true;
+              }),
+            ),
+          ),
+        );
       } catch {}
 
       expect(capturedPayload).not.toBeNull();
@@ -342,9 +422,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         });
 
-        for await (const event of s) {
-          if (event.type === "error") break;
-        }
+        await Effect.runPromise(
+          Stream.fromAsyncIterable(s, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEachWhile((event) =>
+              Effect.sync(() => {
+                if (event.type === "error") return false;
+                return true;
+              }),
+            ),
+          ),
+        );
       } catch {}
 
       expect(capturedPayload).toBeDefined();
@@ -367,9 +455,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         });
 
-        for await (const event of s) {
-          if (event.type === "error") break;
-        }
+        await Effect.runPromise(
+          Stream.fromAsyncIterable(s, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEachWhile((event) =>
+              Effect.sync(() => {
+                if (event.type === "error") return false;
+                return true;
+              }),
+            ),
+          ),
+        );
       } catch {}
 
       expect(capturedPayload).toBeDefined();
@@ -398,9 +494,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
             }),
           });
 
-          for await (const event of s) {
-            if (event.type === "error") break;
-          }
+          await Effect.runPromise(
+            Stream.fromAsyncIterable(s, (error) => error).pipe(
+              Stream.orDie,
+              Stream.runForEachWhile((event) =>
+                Effect.sync(() => {
+                  if (event.type === "error") return false;
+                  return true;
+                }),
+              ),
+            ),
+          );
         } catch {}
 
         expect(capturedPayload?.prompt_cache_key).toBe("session-2");
@@ -442,9 +546,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         });
 
-        for await (const event of s) {
-          if (event.type === "error") break;
-        }
+        await Effect.runPromise(
+          Stream.fromAsyncIterable(s, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEachWhile((event) =>
+              Effect.sync(() => {
+                if (event.type === "error") return false;
+                return true;
+              }),
+            ),
+          ),
+        );
       } catch {}
 
       expect(capturedPayload).not.toBeNull();
@@ -469,9 +581,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           },
         );
 
-        for await (const event of s) {
-          if (event.type === "error") break;
-        }
+        await Effect.runPromise(
+          Stream.fromAsyncIterable(s, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEachWhile((event) =>
+              Effect.sync(() => {
+                if (event.type === "error") return false;
+                return true;
+              }),
+            ),
+          ),
+        );
       } catch {}
 
       expect(capturedPayload).not.toBeNull();
@@ -499,9 +619,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         });
 
-        for await (const event of s) {
-          if (event.type === "error") break;
-        }
+        await Effect.runPromise(
+          Stream.fromAsyncIterable(s, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEachWhile((event) =>
+              Effect.sync(() => {
+                if (event.type === "error") return false;
+                return true;
+              }),
+            ),
+          ),
+        );
       } catch {}
 
       expect(model.compat?.supportsLongCacheRetention).toBe(false);
@@ -558,9 +686,17 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
             }),
           });
 
-          for await (const event of s) {
-            if (event.type === "error") break;
-          }
+          await Effect.runPromise(
+            Stream.fromAsyncIterable(s, (error) => error).pipe(
+              Stream.orDie,
+              Stream.runForEachWhile((event) =>
+                Effect.sync(() => {
+                  if (event.type === "error") return false;
+                  return true;
+                }),
+              ),
+            ),
+          );
         } catch {}
 
         expect(model.compat?.supportsStrictMode).toBeUndefined();

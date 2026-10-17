@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -50,14 +51,14 @@ function createStrictTool(parameters: Tool["parameters"]): Tool {
   return createTool(parameters, { type: "json_schema", strict: "prefer" });
 }
 
-async function captureFirstTool(
-  tool: Tool,
-): Promise<NonNullable<AnthropicToolPayload["tools"]>[number]> {
+const captureFirstTool = Effect.fn("captureFirstTool")(function* (tool: Tool) {
   let payload: AnthropicToolPayload | undefined;
   const stream = streamAnthropic(
     createModel(),
     normalizeContext({
-      messages: [{ role: "user", content: "Use the tool", timestamp: Date.now() }],
+      messages: [
+        { role: "user", content: "Use the tool", timestamp: yield* Clock.currentTimeMillis },
+      ],
       tools: [tool],
     }),
     {
@@ -69,66 +70,74 @@ async function captureFirstTool(
       },
     },
   );
-  await stream.result();
+  yield* Effect.promise(() => stream.result());
 
   const firstTool = payload?.tools?.[0];
   if (firstTool === undefined) {
     throw new Error("Expected a tool in the captured Anthropic payload");
   }
   return firstTool;
-}
+});
 
 describe("Anthropic strict tool schemas", () => {
-  it("only sends the full input schema for strict JSON-schema tools", async () => {
-    const legacyParameters = Type.Object(
-      { value: Type.String() },
-      { additionalProperties: false, title: "LookupInput" },
-    );
-    const legacyTool = await captureFirstTool(createTool(legacyParameters));
-    expect(legacyTool.strict).toBeUndefined();
-    expect(legacyTool.input_schema).toEqual({
-      type: "object",
-      properties: legacyParameters.properties,
-      required: legacyParameters.required,
-    });
+  it("only sends the full input schema for strict JSON-schema tools", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const legacyParameters = Type.Object(
+          { value: Type.String() },
+          { additionalProperties: false, title: "LookupInput" },
+        );
+        const legacyTool = yield* captureFirstTool(createTool(legacyParameters));
+        expect(legacyTool.strict).toBeUndefined();
+        expect(legacyTool.input_schema).toEqual({
+          type: "object",
+          properties: legacyParameters.properties,
+          required: legacyParameters.required,
+        });
 
-    const strictTool = await captureFirstTool(
-      createStrictTool(
-        Type.Object(
-          { value: Type.String(), optional: Type.Optional(Type.Number()) },
-          { title: "StrictLookupInput" },
-        ),
-      ),
-    );
-    expect(strictTool.strict).toBe(true);
-    expect(strictTool.input_schema).toMatchObject({
-      additionalProperties: false,
-      required: ["value", "optional"],
-      properties: { optional: { anyOf: [{ type: "number" }, { type: "null" }] } },
-      title: "StrictLookupInput",
-    });
-  });
+        const strictTool = yield* captureFirstTool(
+          createStrictTool(
+            Type.Object(
+              { value: Type.String(), optional: Type.Optional(Type.Number()) },
+              { title: "StrictLookupInput" },
+            ),
+          ),
+        );
+        expect(strictTool.strict).toBe(true);
+        expect(strictTool.input_schema).toMatchObject({
+          additionalProperties: false,
+          required: ["value", "optional"],
+          properties: { optional: { anyOf: [{ type: "number" }, { type: "null" }] } },
+          title: "StrictLookupInput",
+        });
+      }),
+    ));
 
-  it("sends prefer tools non-strict when they use keywords Anthropic strict mode rejects", async () => {
-    const unsupportedParameters: Tool["parameters"][] = [
-      Type.Object({ timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 300000 })) }),
-      Type.Object({ options: Type.Object({ tags: Type.Array(Type.String(), { minItems: 2 }) }) }),
-      Type.Object({ expression: Type.String({ format: "regex" }) }),
-    ];
-    for (const parameters of unsupportedParameters) {
-      const tool = await captureFirstTool(createStrictTool(parameters));
-      expect(tool.strict).toBeUndefined();
-    }
+  it("sends prefer tools non-strict when they use keywords Anthropic strict mode rejects", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const unsupportedParameters: Tool["parameters"][] = [
+          Type.Object({ timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 300000 })) }),
+          Type.Object({
+            options: Type.Object({ tags: Type.Array(Type.String(), { minItems: 2 }) }),
+          }),
+          Type.Object({ expression: Type.String({ format: "regex" }) }),
+        ];
+        for (const parameters of unsupportedParameters) {
+          const tool = yield* captureFirstTool(createStrictTool(parameters));
+          expect(tool.strict).toBeUndefined();
+        }
 
-    const supportedTool = await captureFirstTool(
-      createStrictTool(
-        Type.Object({
-          code: Type.String({ minLength: 1, maxLength: 1000, pattern: "^[a-z]+$" }),
-          url: Type.String({ format: "uri" }),
-          tags: Type.Array(Type.String(), { minItems: 1 }),
-        }),
-      ),
-    );
-    expect(supportedTool.strict).toBe(true);
-  });
+        const supportedTool = yield* captureFirstTool(
+          createStrictTool(
+            Type.Object({
+              code: Type.String({ minLength: 1, maxLength: 1000, pattern: "^[a-z]+$" }),
+              url: Type.String({ format: "uri" }),
+              tags: Type.Array(Type.String(), { minItems: 1 }),
+            }),
+          ),
+        );
+        expect(supportedTool.strict).toBe(true);
+      }),
+    ));
 });

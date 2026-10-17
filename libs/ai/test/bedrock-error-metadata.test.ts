@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 type SendResult = { kind: "reject"; error: unknown } | { kind: "resolve"; response: unknown };
@@ -103,115 +104,147 @@ beforeEach(() => {
 });
 
 describe("bedrock failure diagnostics", () => {
-  it("records status, error code and request id for a non-2xx from client.send()", async () => {
-    bedrockMock.send = {
-      kind: "reject",
-      error: makeServiceException("ValidationException", {
-        $metadata: { httpStatusCode: 400, requestId: REQUEST_ID },
+  it("records status, error code and request id for a non-2xx from client.send()", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.send = {
+          kind: "reject",
+          error: makeServiceException("ValidationException", {
+            $metadata: { httpStatusCode: 400, requestId: REQUEST_ID },
+          }),
+        };
+
+        const message = yield* Effect.promise(() => runBedrock());
+        const diagnostic = findDiagnostic(message);
+
+        expect(message.stopReason).toBe("error");
+        expect(diagnostic?.details).toEqual({
+          status: 400,
+          errorCode: "ValidationException",
+          requestId: REQUEST_ID,
+        });
+        expect(diagnostic?.error).toBeUndefined();
+        expect(Object.keys(diagnostic ?? {}).sort()).toEqual(["details", "timestamp", "type"]);
       }),
-    };
+    ));
 
-    const message = await runBedrock();
-    const diagnostic = findDiagnostic(message);
+  it("leaves errorMessage untouched so retry classification is unaffected", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.send = {
+          kind: "reject",
+          error: makeServiceException("ValidationException", {
+            $metadata: { httpStatusCode: 400, requestId: REQUEST_ID },
+            $response: { body: { pipe: () => {} } },
+          }),
+        };
 
-    expect(message.stopReason).toBe("error");
-    expect(diagnostic?.details).toEqual({
-      status: 400,
-      errorCode: "ValidationException",
-      requestId: REQUEST_ID,
-    });
-    expect(diagnostic?.error).toBeUndefined();
-    expect(Object.keys(diagnostic ?? {}).sort()).toEqual(["details", "timestamp", "type"]);
-  });
-
-  it("leaves errorMessage untouched so retry classification is unaffected", async () => {
-    bedrockMock.send = {
-      kind: "reject",
-      error: makeServiceException("ValidationException", {
-        $metadata: { httpStatusCode: 400, requestId: REQUEST_ID },
-        $response: { body: { pipe: () => {} } },
+        expect((yield* Effect.promise(() => runBedrock())).errorMessage).toBe(
+          `Validation error: ${VALIDATION_MESSAGE}`,
+        );
       }),
-    };
+    ));
 
-    expect((await runBedrock()).errorMessage).toBe(`Validation error: ${VALIDATION_MESSAGE}`);
-  });
+  it("reports only the request id for a modeled mid-stream exception", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.send = respondWithFailingStream({ message: "Too many requests, please wait." });
 
-  it("reports only the request id for a modeled mid-stream exception", async () => {
-    bedrockMock.send = respondWithFailingStream({ message: "Too many requests, please wait." });
+        const message = yield* Effect.promise(() => runBedrock());
 
-    const message = await runBedrock();
-
-    expect(message.stopReason).toBe("error");
-    expect(findDiagnostic(message)?.details).toEqual({ requestId: REQUEST_ID });
-  });
-
-  it("captures the error code for an unmodeled mid-stream error", async () => {
-    const unmodeled = new Error("Model stream terminated unexpectedly.");
-    unmodeled.name = "ModelStreamErrorException";
-    bedrockMock.send = respondWithFailingStream(unmodeled);
-
-    expect(findDiagnostic(await runBedrock())?.details).toEqual({
-      errorCode: "ModelStreamErrorException",
-      requestId: REQUEST_ID,
-    });
-  });
-
-  it("does not report a transport failure name as a provider error code", async () => {
-    const timeout = new Error("Connection timed out after 1000 ms");
-    timeout.name = "TimeoutError";
-    bedrockMock.send = respondWithFailingStream(timeout);
-
-    expect(findDiagnostic(await runBedrock())?.details).toEqual({ requestId: REQUEST_ID });
-  });
-
-  it("emits no diagnostic when the failure carries no provider metadata", async () => {
-    bedrockMock.send = { kind: "reject", error: new Error("socket hang up") };
-
-    const message = await runBedrock();
-
-    expect(message.stopReason).toBe("error");
-    expect(message.errorMessage).toBe("socket hang up");
-    expect(findDiagnostic(message)).toBeUndefined();
-  });
-
-  it("emits no diagnostic for an aborted turn", async () => {
-    const controller = new AbortController();
-    controller.abort();
-    bedrockMock.send = {
-      kind: "reject",
-      error: makeServiceException("ValidationException", {
-        $metadata: { httpStatusCode: 400, requestId: REQUEST_ID },
+        expect(message.stopReason).toBe("error");
+        expect(findDiagnostic(message)?.details).toEqual({ requestId: REQUEST_ID });
       }),
-    };
+    ));
 
-    const message = await runBedrock(controller.signal);
+  it("captures the error code for an unmodeled mid-stream error", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const unmodeled = new Error("Model stream terminated unexpectedly.");
+        unmodeled.name = "ModelStreamErrorException";
+        bedrockMock.send = respondWithFailingStream(unmodeled);
 
-    expect(message.stopReason).toBe("aborted");
-    expect(findDiagnostic(message)).toBeUndefined();
-  });
-
-  it("drops header-derived values that exceed the length bound", async () => {
-    bedrockMock.send = {
-      kind: "reject",
-      error: makeServiceException(`${"E".repeat(5000)}Exception`, {
-        $metadata: { httpStatusCode: 400, requestId: "R".repeat(5000) },
+        expect(findDiagnostic(yield* Effect.promise(() => runBedrock()))?.details).toEqual({
+          errorCode: "ModelStreamErrorException",
+          requestId: REQUEST_ID,
+        });
       }),
-    };
+    ));
 
-    expect(findDiagnostic(await runBedrock())?.details).toEqual({ status: 400 });
-  });
+  it("does not report a transport failure name as a provider error code", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const timeout = new Error("Connection timed out after 1000 ms");
+        timeout.name = "TimeoutError";
+        bedrockMock.send = respondWithFailingStream(timeout);
 
-  it("omits the SDK's Unknown placeholder instead of reporting it as a code", async () => {
-    bedrockMock.send = {
-      kind: "reject",
-      error: makeServiceException("Unknown", {
-        $metadata: { httpStatusCode: 403, requestId: REQUEST_ID },
+        expect(findDiagnostic(yield* Effect.promise(() => runBedrock()))?.details).toEqual({
+          requestId: REQUEST_ID,
+        });
       }),
-    };
+    ));
 
-    expect(findDiagnostic(await runBedrock())?.details).toEqual({
-      status: 403,
-      requestId: REQUEST_ID,
-    });
-  });
+  it("emits no diagnostic when the failure carries no provider metadata", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.send = { kind: "reject", error: new Error("socket hang up") };
+
+        const message = yield* Effect.promise(() => runBedrock());
+
+        expect(message.stopReason).toBe("error");
+        expect(message.errorMessage).toBe("socket hang up");
+        expect(findDiagnostic(message)).toBeUndefined();
+      }),
+    ));
+
+  it("emits no diagnostic for an aborted turn", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const controllerSignal = AbortSignal.abort();
+        bedrockMock.send = {
+          kind: "reject",
+          error: makeServiceException("ValidationException", {
+            $metadata: { httpStatusCode: 400, requestId: REQUEST_ID },
+          }),
+        };
+
+        const message = yield* Effect.promise(() => runBedrock(controllerSignal));
+
+        expect(message.stopReason).toBe("aborted");
+        expect(findDiagnostic(message)).toBeUndefined();
+      }),
+    ));
+
+  it("drops header-derived values that exceed the length bound", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.send = {
+          kind: "reject",
+          error: makeServiceException(`${"E".repeat(5000)}Exception`, {
+            $metadata: { httpStatusCode: 400, requestId: "R".repeat(5000) },
+          }),
+        };
+
+        expect(findDiagnostic(yield* Effect.promise(() => runBedrock()))?.details).toEqual({
+          status: 400,
+        });
+      }),
+    ));
+
+  it("omits the SDK's Unknown placeholder instead of reporting it as a code", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.send = {
+          kind: "reject",
+          error: makeServiceException("Unknown", {
+            $metadata: { httpStatusCode: 403, requestId: REQUEST_ID },
+          }),
+        };
+
+        expect(findDiagnostic(yield* Effect.promise(() => runBedrock()))?.details).toEqual({
+          status: 403,
+          requestId: REQUEST_ID,
+        });
+      }),
+    ));
 });

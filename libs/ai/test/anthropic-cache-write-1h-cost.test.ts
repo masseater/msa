@@ -1,8 +1,10 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
+import { encodeJson } from "./json-codec.ts";
 
 function createSseResponse(events: Array<{ event: string; data: string }>): Response {
   const body = events.map(({ event, data }) => `event: ${event}\ndata: ${data}\n`).join("\n");
@@ -72,66 +74,84 @@ const context = normalizeContext({
 });
 
 describe("Anthropic 1h cache write cost", () => {
-  it("prices the 1h portion at 2x input and the rest at the 5m rate", async () => {
-    const model = getModel("anthropic", "claude-opus-4-8");
-    const response = createSseResponse(
-      eventsWithCacheCreation({
-        ephemeral_5m_input_tokens: 600_000,
-        ephemeral_1h_input_tokens: 400_000,
+  it("prices the 1h portion at 2x input and the rest at the 5m rate", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("anthropic", "claude-opus-4-8");
+        const response = createSseResponse(
+          eventsWithCacheCreation({
+            ephemeral_5m_input_tokens: 600_000,
+            ephemeral_1h_input_tokens: 400_000,
+          }),
+        );
+        const result = yield* Effect.promise(() =>
+          streamAnthropic(model, context, {
+            client: createFakeAnthropicClient(response),
+          }).result(),
+        );
+
+        expect(result.usage.cacheWrite).toBe(1_000_000);
+        expect(result.usage.cacheWrite1h).toBe(400_000);
+        expect(result.usage.cost.cacheWrite).toBeCloseTo(7.75, 10);
       }),
-    );
-    const result = await streamAnthropic(model, context, {
-      client: createFakeAnthropicClient(response),
-    }).result();
+    ));
 
-    expect(result.usage.cacheWrite).toBe(1_000_000);
-    expect(result.usage.cacheWrite1h).toBe(400_000);
-    expect(result.usage.cost.cacheWrite).toBeCloseTo(7.75, 10);
-  });
-
-  it("prices 1h cache writes reported only in message_delta", async () => {
-    const model = getModel("vercel-ai-gateway", "anthropic/claude-haiku-4.5");
-    const response = createSseResponse([
-      {
-        event: "message_start",
-        data: JSON.stringify({
-          type: "message_start",
-          message: { id: "msg_test", usage: { input_tokens: 0, output_tokens: 0 } },
-        }),
-      },
-      {
-        event: "message_delta",
-        data: JSON.stringify({
-          type: "message_delta",
-          delta: { stop_reason: "end_turn" },
-          usage: {
-            input_tokens: 3,
-            output_tokens: 4,
-            cache_creation_input_tokens: 6535,
-            cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 6535 },
+  it("prices 1h cache writes reported only in message_delta", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("vercel-ai-gateway", "anthropic/claude-haiku-4.5");
+        const response = createSseResponse([
+          {
+            event: "message_start",
+            data: yield* encodeJson({
+              type: "message_start",
+              message: { id: "msg_test", usage: { input_tokens: 0, output_tokens: 0 } },
+            }),
           },
-        }),
-      },
-      { event: "message_stop", data: JSON.stringify({ type: "message_stop" }) },
-    ]);
-    const result = await streamAnthropic(model, context, {
-      client: createFakeAnthropicClient(response),
-    }).result();
+          {
+            event: "message_delta",
+            data: yield* encodeJson({
+              type: "message_delta",
+              delta: { stop_reason: "end_turn" },
+              usage: {
+                input_tokens: 3,
+                output_tokens: 4,
+                cache_creation_input_tokens: 6535,
+                cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 6535 },
+              },
+            }),
+          },
+          { event: "message_stop", data: yield* encodeJson({ type: "message_stop" }) },
+        ]);
+        const result = yield* Effect.promise(() =>
+          streamAnthropic(model, context, {
+            client: createFakeAnthropicClient(response),
+          }).result(),
+        );
 
-    expect(result.usage.cacheWrite).toBe(6535);
-    expect(result.usage.cacheWrite1h).toBe(6535);
-    expect(result.usage.cost.cacheWrite).toBeCloseTo((6535 * model.cost.input * 2) / 1_000_000, 10);
-  });
+        expect(result.usage.cacheWrite).toBe(6535);
+        expect(result.usage.cacheWrite1h).toBe(6535);
+        expect(result.usage.cost.cacheWrite).toBeCloseTo(
+          (6535 * model.cost.input * 2) / 1_000_000,
+          10,
+        );
+      }),
+    ));
 
-  it("falls back to the 5m rate when no breakdown is reported", async () => {
-    const model = getModel("anthropic", "claude-opus-4-8");
-    const response = createSseResponse(eventsWithCacheCreation(undefined));
-    const result = await streamAnthropic(model, context, {
-      client: createFakeAnthropicClient(response),
-    }).result();
+  it("falls back to the 5m rate when no breakdown is reported", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("anthropic", "claude-opus-4-8");
+        const response = createSseResponse(eventsWithCacheCreation(undefined));
+        const result = yield* Effect.promise(() =>
+          streamAnthropic(model, context, {
+            client: createFakeAnthropicClient(response),
+          }).result(),
+        );
 
-    expect(result.usage.cacheWrite).toBe(1_000_000);
-    expect(result.usage.cacheWrite1h ?? 0).toBe(0);
-    expect(result.usage.cost.cacheWrite).toBeCloseTo(6.25, 10);
-  });
+        expect(result.usage.cacheWrite).toBe(1_000_000);
+        expect(result.usage.cacheWrite1h ?? 0).toBe(0);
+        expect(result.usage.cost.cacheWrite).toBeCloseTo(6.25, 10);
+      }),
+    ));
 });

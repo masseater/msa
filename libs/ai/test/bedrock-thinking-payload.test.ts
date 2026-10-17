@@ -1,3 +1,4 @@
+import { Clock, Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -43,184 +44,232 @@ function makeContext(): Context {
   };
 }
 
-async function capturePayload(
+function capturePayload(
   model: Model<"bedrock-converse-stream">,
   options?: BedrockOptions,
 ): Promise<BedrockThinkingPayload> {
-  let capturedPayload: BedrockThinkingPayload | undefined;
-  const s = streamBedrock(model, normalizeContext(makeContext()), {
-    ...options,
-    reasoning: options?.reasoning ?? "high",
-    onPayload: (payload) => {
-      capturedPayload = payload as BedrockThinkingPayload;
-      throw new PayloadCaptured();
-    },
-  });
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      let capturedPayload: BedrockThinkingPayload | undefined;
+      const s = streamBedrock(model, normalizeContext(makeContext()), {
+        ...options,
+        reasoning: options?.reasoning ?? "high",
+        onPayload: (payload) => {
+          capturedPayload = payload as BedrockThinkingPayload;
+          throw new PayloadCaptured();
+        },
+      });
 
-  for await (const event of s) {
-    if (event.type === "error") {
-      break;
-    }
-  }
+      yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+        Stream.orDie,
+        Stream.runForEachWhile((event) =>
+          Effect.sync(() => {
+            if (event.type === "error") {
+              return false;
+            }
+            return true;
+          }),
+        ),
+      );
 
-  if (capturedPayload === undefined) {
-    throw new Error("Expected Bedrock payload to be captured before request abort");
-  }
+      if (capturedPayload === undefined) {
+        throw new Error("Expected Bedrock payload to be captured before request abort");
+      }
 
-  return capturedPayload;
+      return capturedPayload;
+    }),
+  );
 }
 
 describe("Bedrock thinking payload", () => {
-  it("uses adaptive thinking for Claude Opus 4.8 when reasoning is enabled", async () => {
-    const baseModel = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
-    const model: Model<"bedrock-converse-stream"> = {
-      ...baseModel,
-      id: "global.anthropic.claude-opus-4-8-v1",
-      name: "Claude Opus 4.8 (Global)",
-    };
+  it("uses adaptive thinking for Claude Opus 4.8 when reasoning is enabled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const baseModel = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
+        const model: Model<"bedrock-converse-stream"> = {
+          ...baseModel,
+          id: "global.anthropic.claude-opus-4-8-v1",
+          name: "Claude Opus 4.8 (Global)",
+        };
 
-    const payload = await capturePayload(model);
+        const payload = yield* Effect.promise(() => capturePayload(model));
 
-    expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
-    expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
-    expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
-      THINKING_BINDING_CONTROLS_BETA,
-    ]);
-  });
+        expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
+        expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
+        expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
+          THINKING_BINDING_CONTROLS_BETA,
+        ]);
+      }),
+    ));
 
-  it("maps xhigh reasoning to effort=xhigh for Claude Opus 4.8", async () => {
-    const baseModel = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
-    const model: Model<"bedrock-converse-stream"> = {
-      ...baseModel,
-      id: "global.anthropic.claude-opus-4-8-v1",
-      name: "Claude Opus 4.8 (Global)",
-    };
+  it("maps xhigh reasoning to effort=xhigh for Claude Opus 4.8", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const baseModel = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
+        const model: Model<"bedrock-converse-stream"> = {
+          ...baseModel,
+          id: "global.anthropic.claude-opus-4-8-v1",
+          name: "Claude Opus 4.8 (Global)",
+        };
 
-    const payload = await capturePayload(model, { reasoning: "xhigh" });
+        const payload = yield* Effect.promise(() => capturePayload(model, { reasoning: "xhigh" }));
 
-    expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
-    expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "xhigh" });
-    expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
-      THINKING_BINDING_CONTROLS_BETA,
-    ]);
-  });
+        expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
+        expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "xhigh" });
+        expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
+          THINKING_BINDING_CONTROLS_BETA,
+        ]);
+      }),
+    ));
 
-  it("uses adaptive thinking for Claude Fable 5 when reasoning is enabled", async () => {
-    const model = getModel("amazon-bedrock", "global.anthropic.claude-fable-5");
+  it("uses adaptive thinking for Claude Fable 5 when reasoning is enabled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("amazon-bedrock", "global.anthropic.claude-fable-5");
 
-    const payload = await capturePayload(model);
+        const payload = yield* Effect.promise(() => capturePayload(model));
 
-    expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
-    expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
-    expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
-      THINKING_BINDING_CONTROLS_BETA,
-    ]);
-  });
+        expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
+        expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
+        expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
+          THINKING_BINDING_CONTROLS_BETA,
+        ]);
+      }),
+    ));
 
-  it("uses adaptive thinking for Claude Sonnet 5 when reasoning is enabled", async () => {
-    const model = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-5");
+  it("uses adaptive thinking for Claude Sonnet 5 when reasoning is enabled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-5");
 
-    const payload = await capturePayload(model);
+        const payload = yield* Effect.promise(() => capturePayload(model));
 
-    expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
-    expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
-    expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
-      THINKING_BINDING_CONTROLS_BETA,
-    ]);
-  });
+        expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
+        expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
+        expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
+          THINKING_BINDING_CONTROLS_BETA,
+        ]);
+      }),
+    ));
 
-  it("uses adaptive thinking for Claude Opus 5 when reasoning is enabled", async () => {
-    const model = getModel("amazon-bedrock", "global.anthropic.claude-opus-5");
+  it("uses adaptive thinking for Claude Opus 5 when reasoning is enabled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("amazon-bedrock", "global.anthropic.claude-opus-5");
 
-    const payload = await capturePayload(model);
+        const payload = yield* Effect.promise(() => capturePayload(model));
 
-    expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
-    expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
-    expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
-      THINKING_BINDING_CONTROLS_BETA,
-    ]);
-  });
+        expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
+        expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
+        expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
+          THINKING_BINDING_CONTROLS_BETA,
+        ]);
+      }),
+    ));
 
-  it("maps xhigh reasoning to effort=xhigh for Claude Opus 5", async () => {
-    const model = getModel("amazon-bedrock", "global.anthropic.claude-opus-5");
+  it("maps xhigh reasoning to effort=xhigh for Claude Opus 5", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("amazon-bedrock", "global.anthropic.claude-opus-5");
 
-    const payload = await capturePayload(model, { reasoning: "xhigh" });
+        const payload = yield* Effect.promise(() => capturePayload(model, { reasoning: "xhigh" }));
 
-    expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
-    expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "xhigh" });
-    expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
-      THINKING_BINDING_CONTROLS_BETA,
-    ]);
-  });
+        expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
+        expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "xhigh" });
+        expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
+          THINKING_BINDING_CONTROLS_BETA,
+        ]);
+      }),
+    ));
 
-  it("maps xhigh reasoning to effort=xhigh for Claude Fable 5", async () => {
-    const model = getModel("amazon-bedrock", "global.anthropic.claude-fable-5");
+  it("maps xhigh reasoning to effort=xhigh for Claude Fable 5", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("amazon-bedrock", "global.anthropic.claude-fable-5");
 
-    const payload = await capturePayload(model, { reasoning: "xhigh" });
+        const payload = yield* Effect.promise(() => capturePayload(model, { reasoning: "xhigh" }));
 
-    expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
-    expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "xhigh" });
-  });
+        expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
+        expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "xhigh" });
+      }),
+    ));
 
-  it("sends block_binding and the binding beta for Claude Opus 5.5", async () => {
-    const model = getModel("amazon-bedrock", "global.anthropic.claude-opus-5-5");
+  it("sends block_binding and the binding beta for Claude Opus 5.5", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("amazon-bedrock", "global.anthropic.claude-opus-5-5");
 
-    const payload = await capturePayload(model);
+        const payload = yield* Effect.promise(() => capturePayload(model));
 
-    expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
-    expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
-      THINKING_BINDING_CONTROLS_BETA,
-    ]);
-  });
+        expect(payload.additionalModelRequestFields?.thinking).toEqual(ADAPTIVE_WITH_BINDING);
+        expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
+          THINKING_BINDING_CONTROLS_BETA,
+        ]);
+      }),
+    ));
 
   it.each(["global.anthropic.claude-opus-4-6-v1", "global.anthropic.claude-sonnet-4-6"] as const)(
     "omits block_binding for %s",
-    async (modelId) => {
-      const model = getModel("amazon-bedrock", modelId);
+    (modelId) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = getModel("amazon-bedrock", modelId);
 
-      const payload = await capturePayload(model);
+          const payload = yield* Effect.promise(() => capturePayload(model));
 
-      expect(payload.additionalModelRequestFields?.thinking).toEqual({
-        type: "adaptive",
-        display: "summarized",
-      });
-      expect(payload.additionalModelRequestFields?.anthropic_beta).toBeUndefined();
-    },
+          expect(payload.additionalModelRequestFields?.thinking).toEqual({
+            type: "adaptive",
+            display: "summarized",
+          });
+          expect(payload.additionalModelRequestFields?.anthropic_beta).toBeUndefined();
+        }),
+      ),
   );
 
-  it("omits display for GovCloud model ids on non-adaptive Claude thinking", async () => {
-    const baseModel = getModel("amazon-bedrock", "us.anthropic.claude-sonnet-4-5-20250929-v1:0");
-    const model: Model<"bedrock-converse-stream"> = {
-      ...baseModel,
-      id: "us-gov.anthropic.claude-sonnet-4-5-20250929-v1:0",
-      name: "Claude Sonnet 4.5 (GovCloud)",
-    };
+  it("omits display for GovCloud model ids on non-adaptive Claude thinking", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const baseModel = getModel(
+          "amazon-bedrock",
+          "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        );
+        const model: Model<"bedrock-converse-stream"> = {
+          ...baseModel,
+          id: "us-gov.anthropic.claude-sonnet-4-5-20250929-v1:0",
+          name: "Claude Sonnet 4.5 (GovCloud)",
+        };
 
-    const payload = await capturePayload(model);
+        const payload = yield* Effect.promise(() => capturePayload(model));
 
-    expect(payload.additionalModelRequestFields?.thinking).toEqual({
-      type: "enabled",
-      budget_tokens: 16384,
-    });
-    expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
-      "interleaved-thinking-2025-05-14",
-    ]);
-  });
+        expect(payload.additionalModelRequestFields?.thinking).toEqual({
+          type: "enabled",
+          budget_tokens: 16384,
+        });
+        expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
+          "interleaved-thinking-2025-05-14",
+        ]);
+      }),
+    ));
 
-  it("omits display for GovCloud regions on adaptive Claude thinking", async () => {
-    const baseModel = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
-    const model: Model<"bedrock-converse-stream"> = {
-      ...baseModel,
-      id: "global.anthropic.claude-opus-4-8-v1",
-      name: "Claude Opus 4.8 (Global)",
-    };
+  it("omits display for GovCloud regions on adaptive Claude thinking", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const baseModel = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
+        const model: Model<"bedrock-converse-stream"> = {
+          ...baseModel,
+          id: "global.anthropic.claude-opus-4-8-v1",
+          name: "Claude Opus 4.8 (Global)",
+        };
 
-    const payload = await capturePayload(model, { region: "us-gov-west-1" });
+        const payload = yield* Effect.promise(() =>
+          capturePayload(model, { region: "us-gov-west-1" }),
+        );
 
-    expect(payload.additionalModelRequestFields?.thinking).toEqual({ type: "adaptive" });
-    expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
-    expect(payload.additionalModelRequestFields?.anthropic_beta).toBeUndefined();
-  });
+        expect(payload.additionalModelRequestFields?.thinking).toEqual({ type: "adaptive" });
+        expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
+        expect(payload.additionalModelRequestFields?.anthropic_beta).toBeUndefined();
+      }),
+    ));
 });
 
 describe("Bedrock OpenAI reasoning payload", () => {
@@ -233,175 +282,224 @@ describe("Bedrock OpenAI reasoning payload", () => {
     ["max", "max"],
   ] as const)(
     "sends reasoning=%s as reasoning.effort=%s for GPT-6 and GPT-5.6",
-    async (reasoning, effort) => {
-      for (const id of [
-        "global.openai.gpt-6-sol",
-        "us.openai.gpt-6-luna",
-        "global.openai.gpt-5.6-sol",
-      ] as const) {
-        const payload = await capturePayload(getModel("amazon-bedrock", id), { reasoning });
+    (reasoning, effort) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          for (const id of [
+            "global.openai.gpt-6-sol",
+            "us.openai.gpt-6-luna",
+            "global.openai.gpt-5.6-sol",
+          ] as const) {
+            const payload = yield* Effect.promise(() =>
+              capturePayload(getModel("amazon-bedrock", id), { reasoning }),
+            );
 
-        expect(payload.additionalModelRequestFields, id).toEqual({ reasoning: { effort } });
-      }
-    },
+            expect(payload.additionalModelRequestFields, id).toEqual({ reasoning: { effort } });
+          }
+        }),
+      ),
   );
 
-  it("sends reasoning.effort when only model.name identifies a GPT model", async () => {
-    const model: Model<"bedrock-converse-stream"> = {
-      ...getModel("amazon-bedrock", "global.openai.gpt-6-sol"),
-      id: "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile",
-      name: "GPT-6 Sol",
-    };
+  it("sends reasoning.effort when only model.name identifies a GPT model", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model: Model<"bedrock-converse-stream"> = {
+          ...getModel("amazon-bedrock", "global.openai.gpt-6-sol"),
+          id: "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile",
+          name: "GPT-6 Sol",
+        };
 
-    const payload = await capturePayload(model, { reasoning: "medium" });
+        const payload = yield* Effect.promise(() => capturePayload(model, { reasoning: "medium" }));
 
-    expect(payload.additionalModelRequestFields).toEqual({ reasoning: { effort: "medium" } });
-  });
+        expect(payload.additionalModelRequestFields).toEqual({ reasoning: { effort: "medium" } });
+      }),
+    ));
 
-  it("sends flat reasoning_effort for gpt-oss, clamped to high", async () => {
-    const model = getModel("amazon-bedrock", "openai.gpt-oss-120b-1:0");
+  it("sends flat reasoning_effort for gpt-oss, clamped to high", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("amazon-bedrock", "openai.gpt-oss-120b-1:0");
 
-    expect(
-      (await capturePayload(model, { reasoning: "minimal" })).additionalModelRequestFields,
-    ).toEqual({
-      reasoning_effort: "low",
-    });
-    expect(
-      (await capturePayload(model, { reasoning: "medium" })).additionalModelRequestFields,
-    ).toEqual({
-      reasoning_effort: "medium",
-    });
-    expect(
-      (await capturePayload(model, { reasoning: "xhigh" })).additionalModelRequestFields,
-    ).toEqual({
-      reasoning_effort: "high",
-    });
-  });
+        expect(
+          (yield* Effect.promise(() => capturePayload(model, { reasoning: "minimal" })))
+            .additionalModelRequestFields,
+        ).toEqual({
+          reasoning_effort: "low",
+        });
+        expect(
+          (yield* Effect.promise(() => capturePayload(model, { reasoning: "medium" })))
+            .additionalModelRequestFields,
+        ).toEqual({
+          reasoning_effort: "medium",
+        });
+        expect(
+          (yield* Effect.promise(() => capturePayload(model, { reasoning: "xhigh" })))
+            .additionalModelRequestFields,
+        ).toEqual({
+          reasoning_effort: "high",
+        });
+      }),
+    ));
 
-  it("sends no reasoning fields when reasoning is off", async () => {
-    let captured: BedrockThinkingPayload | undefined;
-    const s = streamBedrock(
-      getModel("amazon-bedrock", "global.openai.gpt-6-sol"),
-      normalizeContext(makeContext()),
-      {
-        onPayload: (payload) => {
-          captured = payload as BedrockThinkingPayload;
-          throw new PayloadCaptured();
-        },
-      },
-    );
-    for await (const event of s) {
-      if (event.type === "error") break;
-    }
+  it("sends no reasoning fields when reasoning is off", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let captured: BedrockThinkingPayload | undefined;
+        const s = streamBedrock(
+          getModel("amazon-bedrock", "global.openai.gpt-6-sol"),
+          normalizeContext(makeContext()),
+          {
+            onPayload: (payload) => {
+              captured = payload as BedrockThinkingPayload;
+              throw new PayloadCaptured();
+            },
+          },
+        );
+        yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+          Stream.orDie,
+          Stream.runForEachWhile((event) =>
+            Effect.sync(() => {
+              if (event.type === "error") return false;
+              return true;
+            }),
+          ),
+        );
 
-    expect(captured).toBeDefined();
-    expect(captured?.additionalModelRequestFields).toBeUndefined();
-  });
+        expect(captured).toBeDefined();
+        expect(captured?.additionalModelRequestFields).toBeUndefined();
+      }),
+    ));
 });
 
 describe.skipIf(!hasBedrockCredentials())("Bedrock Claude max tokens E2E", () => {
   it(
     "uses the model maxTokens cap instead of Bedrock's 4096-token default for adaptive Claude models",
     { retry: 2, timeout: 180000 },
-    async () => {
-      const baseModel = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-4-6");
-      const model: Model<"bedrock-converse-stream"> = {
-        ...baseModel,
-        maxTokens: 6000,
-      };
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const baseModel = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-4-6");
+          const model: Model<"bedrock-converse-stream"> = {
+            ...baseModel,
+            maxTokens: 6000,
+          };
 
-      const response = await streamBedrock(
-        model,
-        normalizeContext({
-          systemPrompt:
-            "You are a deterministic text generator. Follow the requested output format exactly.",
-          messages: [
-            {
-              role: "user",
-              content:
-                "Output exactly 5200 repetitions of the token alpha, separated by single spaces. Do not number them. Do not use markdown. Do not add any other text.",
-              timestamp: Date.now(),
-            },
-          ],
+          const currentTime = yield* Clock.currentTimeMillis;
+          const response = yield* Effect.promise(() =>
+            streamBedrock(
+              model,
+              normalizeContext({
+                systemPrompt:
+                  "You are a deterministic text generator. Follow the requested output format exactly.",
+                messages: [
+                  {
+                    role: "user",
+                    content:
+                      "Output exactly 5200 repetitions of the token alpha, separated by single spaces. Do not number them. Do not use markdown. Do not add any other text.",
+                    timestamp: currentTime,
+                  },
+                ],
+              }),
+              { reasoning: "low" },
+            ).result(),
+          );
+
+          expect(response.stopReason, response.errorMessage).not.toBe("error");
+          expect(response.usage.output).toBeGreaterThan(4096);
         }),
-        { reasoning: "low" },
-      ).result();
-
-      expect(response.stopReason, response.errorMessage).not.toBe("error");
-      expect(response.usage.output).toBeGreaterThan(4096);
-    },
+      ),
   );
 });
 
 describe("Application inference profile support", () => {
-  it("uses adaptive thinking when model.name contains the model name but ARN does not", async () => {
-    const baseModel = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
-    const model: Model<"bedrock-converse-stream"> = {
-      ...baseModel,
-      id: "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile",
-      name: "Claude Opus 4.6",
-    };
+  it("uses adaptive thinking when model.name contains the model name but ARN does not", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const baseModel = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
+        const model: Model<"bedrock-converse-stream"> = {
+          ...baseModel,
+          id: "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile",
+          name: "Claude Opus 4.6",
+        };
 
-    const payload = await capturePayload(model);
+        const payload = yield* Effect.promise(() => capturePayload(model));
 
-    expect(payload.additionalModelRequestFields?.thinking).toEqual({
-      type: "adaptive",
-      display: "summarized",
-    });
-    expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
-  });
-
-  it("injects cache points when model.name identifies a supported Claude model", async () => {
-    const baseModel = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
-    const model: Model<"bedrock-converse-stream"> = {
-      ...baseModel,
-      id: "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile",
-      name: "Claude Sonnet 4.6",
-    };
-
-    let capturedPayload: any;
-    const s = streamBedrock(
-      model,
-      normalizeContext({
-        systemPrompt: "You are helpful.",
-        messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+        expect(payload.additionalModelRequestFields?.thinking).toEqual({
+          type: "adaptive",
+          display: "summarized",
+        });
+        expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
       }),
-      {
-        onPayload: (payload) => {
-          capturedPayload = payload;
-          throw new PayloadCaptured();
-        },
-      },
-    );
+    ));
 
-    for await (const event of s) {
-      if (event.type === "error") break;
-    }
+  it("injects cache points when model.name identifies a supported Claude model", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const baseModel = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
+        const model: Model<"bedrock-converse-stream"> = {
+          ...baseModel,
+          id: "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile",
+          name: "Claude Sonnet 4.6",
+        };
 
-    expect(capturedPayload.system).toHaveLength(2);
-    expect(capturedPayload.system[1]).toHaveProperty("cachePoint");
+        let capturedPayload: any;
+        const s = streamBedrock(
+          model,
+          normalizeContext({
+            systemPrompt: "You are helpful.",
+            messages: [
+              { role: "user", content: "Hello", timestamp: yield* Clock.currentTimeMillis },
+            ],
+          }),
+          {
+            onPayload: (payload) => {
+              capturedPayload = payload;
+              throw new PayloadCaptured();
+            },
+          },
+        );
 
-    const lastMsg = capturedPayload.messages[capturedPayload.messages.length - 1];
-    const lastContent = lastMsg.content[lastMsg.content.length - 1];
-    expect(lastContent).toHaveProperty("cachePoint");
-  });
+        yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+          Stream.orDie,
+          Stream.runForEachWhile((event) =>
+            Effect.sync(() => {
+              if (event.type === "error") return false;
+              return true;
+            }),
+          ),
+        );
 
-  it("falls back to fixed-budget thinking for non-adaptive Claude via model.name", async () => {
-    const baseModel = getModel("amazon-bedrock", "us.anthropic.claude-sonnet-4-5-20250929-v1:0");
-    const model: Model<"bedrock-converse-stream"> = {
-      ...baseModel,
-      id: "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile",
-      name: "Claude Sonnet 4.5",
-    };
+        expect(capturedPayload.system).toHaveLength(2);
+        expect(capturedPayload.system[1]).toHaveProperty("cachePoint");
 
-    const payload = await capturePayload(model);
+        const lastMsg = capturedPayload.messages[capturedPayload.messages.length - 1];
+        const lastContent = lastMsg.content[lastMsg.content.length - 1];
+        expect(lastContent).toHaveProperty("cachePoint");
+      }),
+    ));
 
-    expect(payload.additionalModelRequestFields?.thinking).toMatchObject({
-      type: "enabled",
-      budget_tokens: expect.any(Number),
-    });
-    expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
-      "interleaved-thinking-2025-05-14",
-    ]);
-  });
+  it("falls back to fixed-budget thinking for non-adaptive Claude via model.name", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const baseModel = getModel(
+          "amazon-bedrock",
+          "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        );
+        const model: Model<"bedrock-converse-stream"> = {
+          ...baseModel,
+          id: "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile",
+          name: "Claude Sonnet 4.5",
+        };
+
+        const payload = yield* Effect.promise(() => capturePayload(model));
+
+        expect(payload.additionalModelRequestFields?.thinking).toMatchObject({
+          type: "enabled",
+          budget_tokens: expect.any(Number),
+        });
+        expect(payload.additionalModelRequestFields?.anthropic_beta).toEqual([
+          "interleaved-thinking-2025-05-14",
+        ]);
+      }),
+    ));
 });

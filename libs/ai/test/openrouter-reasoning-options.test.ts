@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { getOpenRouterThinkingLevelMap } from "../scripts/openrouter-reasoning-options.ts";
@@ -26,19 +27,24 @@ function openRouterModel(thinkingLevelMap?: ThinkingLevelMap): Model<"openai-com
   };
 }
 
-async function capturePayload(model: Model<"openai-completions">, reasoning?: "low") {
+const capturePayload = Effect.fn("capturePayload")(function* (
+  model: Model<"openai-completions">,
+  reasoning?: "low",
+) {
   let payload: { reasoning?: { effort?: string } } | undefined;
-  await streamSimple(model, context, {
-    apiKey: "test",
-    reasoning,
-    onPayload: (request) => {
-      payload = request as { reasoning?: { effort?: string } };
-      throw new Error("payload captured");
-    },
-  }).result();
+  yield* Effect.promise(() =>
+    streamSimple(model, context, {
+      apiKey: "test",
+      reasoning,
+      onPayload: (request) => {
+        payload = request as { reasoning?: { effort?: string } };
+        throw new Error("payload captured");
+      },
+    }).result(),
+  );
   if (payload === undefined) throw new Error("OpenRouter payload was not captured");
   return payload;
-}
+});
 
 describe("getOpenRouterThinkingLevelMap", () => {
   it("marks mandatory reasoning and unsupported efforts unavailable", () => {
@@ -93,19 +99,30 @@ describe("OpenRouter mandatory reasoning payloads", () => {
     supported_efforts: ["max", "high", "low"],
   });
 
-  it("omits reasoning when a background call does not request it", async () => {
-    expect(await capturePayload(openRouterModel(mandatoryMap))).not.toHaveProperty("reasoning");
-  });
+  it("omits reasoning when a background call does not request it", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        expect(yield* capturePayload(openRouterModel(mandatoryMap))).not.toHaveProperty(
+          "reasoning",
+        );
+      }),
+    ));
 
-  it("still sends an explicitly selected supported effort", async () => {
-    expect(await capturePayload(openRouterModel(mandatoryMap), "low")).toMatchObject({
-      reasoning: { effort: "low" },
-    });
-  });
+  it("still sends an explicitly selected supported effort", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        expect(yield* capturePayload(openRouterModel(mandatoryMap), "low")).toMatchObject({
+          reasoning: { effort: "low" },
+        });
+      }),
+    ));
 
-  it("continues to explicitly disable reasoning for optional models", async () => {
-    expect(await capturePayload(openRouterModel())).toMatchObject({
-      reasoning: { effort: "none" },
-    });
-  });
+  it("continues to explicitly disable reasoning for optional models", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        expect(yield* capturePayload(openRouterModel())).toMatchObject({
+          reasoning: { effort: "none" },
+        });
+      }),
+    ));
 });

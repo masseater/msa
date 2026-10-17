@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { openaiChatGPTOAuth } from "../src/auth/oauth/openai-chatgpt.ts";
@@ -81,130 +82,169 @@ describe("OpenAI ChatGPT OAuth", () => {
     vi.unstubAllGlobals();
   });
 
-  it("registers a user-owned client and stores its issued ID and granted scopes", async () => {
-    let authorizeUrl: URL | undefined;
-    let exchangeBody: URLSearchParams | undefined;
-    stubTokenEndpoint(tokenResponse(), (body) => {
-      exchangeBody = body;
-    });
+  it("registers a user-owned client and stores its issued ID and granted scopes", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let authorizeUrl: URL | undefined;
+        let exchangeBody: URLSearchParams | undefined;
+        stubTokenEndpoint(tokenResponse(), (body) => {
+          exchangeBody = body;
+        });
 
-    const credential = await openaiChatGPTOAuth.login(
-      loginInteraction({
-        callbackClientId: "oaiapp_issued",
-        onAuthorize: (url) => {
-          authorizeUrl = url;
-        },
+        const credential = yield* Effect.promise(() =>
+          openaiChatGPTOAuth.login(
+            loginInteraction({
+              callbackClientId: "oaiapp_issued",
+              onAuthorize: (url) => {
+                authorizeUrl = url;
+              },
+            }),
+            { getDeviceId: () => DEVICE_ID },
+          ),
+        );
+
+        expect(authorizeUrl?.searchParams.get("client_id")).toBe("dynamic_agent_client");
+        expect(authorizeUrl?.searchParams.get("agent_name_hint")).toBe("msa");
+        expect(authorizeUrl?.searchParams.get("ext_agent_host_id")).toBe(`urn:uuid:${DEVICE_ID}`);
+        expect(authorizeUrl?.searchParams.get("scope")).toBe(REQUIRED_SCOPE);
+        expect(authorizeUrl?.searchParams.get("redirect_uri")).toBe(
+          "http://127.0.0.1:1455/auth/callback",
+        );
+        expect(authorizeUrl?.searchParams.get("resource")).toBe("https://api.openai.com/v1");
+        expect(authorizeUrl?.searchParams.get("code_challenge_method")).toBe("S256");
+        expect(exchangeBody?.get("client_id")).toBe("oaiapp_issued");
+        expect(exchangeBody?.get("code")).toBe("authorization-code");
+        expect(exchangeBody?.get("resource")).toBe("https://api.openai.com/v1");
+        expect(exchangeBody?.get("code_verifier")).toBeTruthy();
+        expect(credential).toMatchObject({
+          type: "oauth",
+          access: "access-token",
+          refresh: "refresh-token",
+          clientId: "oaiapp_issued",
+          scopes: REQUIRED_SCOPE.split(" "),
+        });
       }),
-      { getDeviceId: () => DEVICE_ID },
-    );
+    ));
 
-    expect(authorizeUrl?.searchParams.get("client_id")).toBe("dynamic_agent_client");
-    expect(authorizeUrl?.searchParams.get("agent_name_hint")).toBe("msa");
-    expect(authorizeUrl?.searchParams.get("ext_agent_host_id")).toBe(`urn:uuid:${DEVICE_ID}`);
-    expect(authorizeUrl?.searchParams.get("scope")).toBe(REQUIRED_SCOPE);
-    expect(authorizeUrl?.searchParams.get("redirect_uri")).toBe(
-      "http://127.0.0.1:1455/auth/callback",
-    );
-    expect(authorizeUrl?.searchParams.get("resource")).toBe("https://api.openai.com/v1");
-    expect(authorizeUrl?.searchParams.get("code_challenge_method")).toBe("S256");
-    expect(exchangeBody?.get("client_id")).toBe("oaiapp_issued");
-    expect(exchangeBody?.get("code")).toBe("authorization-code");
-    expect(exchangeBody?.get("resource")).toBe("https://api.openai.com/v1");
-    expect(exchangeBody?.get("code_verifier")).toBeTruthy();
-    expect(credential).toMatchObject({
-      type: "oauth",
-      access: "access-token",
-      refresh: "refresh-token",
-      clientId: "oaiapp_issued",
-      scopes: REQUIRED_SCOPE.split(" "),
-    });
-  });
+  it("uses the app's agent name as the name hint", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let authorizeUrl: URL | undefined;
+        stubTokenEndpoint(tokenResponse());
 
-  it("uses the app's agent name as the name hint", async () => {
-    let authorizeUrl: URL | undefined;
-    stubTokenEndpoint(tokenResponse());
+        yield* Effect.promise(() =>
+          openaiChatGPTOAuth.login(
+            loginInteraction({
+              callbackClientId: "oaiapp_issued",
+              onAuthorize: (url) => {
+                authorizeUrl = url;
+              },
+            }),
+            { getDeviceId: () => DEVICE_ID, agentName: "my-app" },
+          ),
+        );
 
-    await openaiChatGPTOAuth.login(
-      loginInteraction({
-        callbackClientId: "oaiapp_issued",
-        onAuthorize: (url) => {
-          authorizeUrl = url;
-        },
+        expect(authorizeUrl?.searchParams.get("agent_name_hint")).toBe("my-app");
       }),
-      { getDeviceId: () => DEVICE_ID, agentName: "my-app" },
-    );
+    ));
 
-    expect(authorizeUrl?.searchParams.get("agent_name_hint")).toBe("my-app");
-  });
+  it("rejects registration without an issued client ID", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const fetchMock = stubTokenEndpoint(tokenResponse());
 
-  it("rejects registration without an issued client ID", async () => {
-    const fetchMock = stubTokenEndpoint(tokenResponse());
-
-    await expect(
-      openaiChatGPTOAuth.login(loginInteraction(), { getDeviceId: () => DEVICE_ID }),
-    ).rejects.toThrow("registration callback did not contain an issued client ID");
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("rejects a token response that did not grant direct token use", async () => {
-    stubTokenEndpoint(tokenResponse("openid profile email offline_access resource.invoke"));
-
-    await expect(
-      openaiChatGPTOAuth.login(loginInteraction({ callbackClientId: "oaiapp_issued" }), {
-        getDeviceId: () => DEVICE_ID,
+        yield* Effect.promise(() =>
+          expect(
+            openaiChatGPTOAuth.login(loginInteraction(), { getDeviceId: () => DEVICE_ID }),
+          ).rejects.toThrow("registration callback did not contain an issued client ID"),
+        );
+        expect(fetchMock).not.toHaveBeenCalled();
       }),
-    ).rejects.toThrow("grant did not include chatgpt.tokens.use.direct");
-  });
+    ));
 
-  it("requires a device ID before starting authorization", async () => {
-    let authorizationStarted = false;
-    const interaction = loginInteraction({
-      onAuthorize: () => {
-        authorizationStarted = true;
-      },
-    });
+  it("rejects a token response that did not grant direct token use", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        stubTokenEndpoint(tokenResponse("openid profile email offline_access resource.invoke"));
 
-    await expect(openaiChatGPTOAuth.login(interaction)).rejects.toThrow("requires a device ID");
-    await expect(
-      openaiChatGPTOAuth.login(interaction, { getDeviceId: () => "not-a-uuid" }),
-    ).rejects.toThrow("requires a device ID");
-    expect(authorizationStarted).toBe(false);
-  });
+        yield* Effect.promise(() =>
+          expect(
+            openaiChatGPTOAuth.login(loginInteraction({ callbackClientId: "oaiapp_issued" }), {
+              getDeviceId: () => DEVICE_ID,
+            }),
+          ).rejects.toThrow("grant did not include chatgpt.tokens.use.direct"),
+        );
+      }),
+    ));
 
-  it("requires refresh responses to rotate the refresh token", async () => {
-    const { refresh_token: _refreshToken, ...responseWithoutRefresh } = tokenResponse();
-    stubTokenEndpoint(responseWithoutRefresh);
+  it("requires a device ID before starting authorization", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let authorizationStarted = false;
+        const interaction = loginInteraction({
+          onAuthorize: () => {
+            authorizationStarted = true;
+          },
+        });
 
-    await expect(
-      openaiChatGPTOAuth.refresh(connectedCredential(), neverAbortedSignal),
-    ).rejects.toThrow("token response has invalid refresh_token");
-  });
+        yield* Effect.promise(() =>
+          expect(openaiChatGPTOAuth.login(interaction)).rejects.toThrow("requires a device ID"),
+        );
+        yield* Effect.promise(() =>
+          expect(
+            openaiChatGPTOAuth.login(interaction, { getDeviceId: () => "not-a-uuid" }),
+          ).rejects.toThrow("requires a device ID"),
+        );
+        expect(authorizationStarted).toBe(false);
+      }),
+    ));
 
-  it("refreshes with the credential's issued client ID and stores replacement scopes", async () => {
-    let refreshBody: URLSearchParams | undefined;
-    stubTokenEndpoint(
-      { ...tokenResponse(), access_token: "new-access", refresh_token: "new-refresh" },
-      (body) => {
-        refreshBody = body;
-      },
-    );
+  it("requires refresh responses to rotate the refresh token", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { refresh_token: _refreshToken, ...responseWithoutRefresh } = tokenResponse();
+        stubTokenEndpoint(responseWithoutRefresh);
 
-    const before = Date.now();
-    const credential = await openaiChatGPTOAuth.refresh(connectedCredential(), neverAbortedSignal);
+        yield* Effect.promise(() =>
+          expect(
+            openaiChatGPTOAuth.refresh(connectedCredential(), neverAbortedSignal),
+          ).rejects.toThrow("token response has invalid refresh_token"),
+        );
+      }),
+    ));
 
-    expect(credential.expires).toBeGreaterThanOrEqual(before + (3600 - 180) * 1000);
-    expect(credential.expires).toBeLessThanOrEqual(Date.now() + (3600 - 180) * 1000);
+  it("refreshes with the credential's issued client ID and stores replacement scopes", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let refreshBody: URLSearchParams | undefined;
+        stubTokenEndpoint(
+          { ...tokenResponse(), access_token: "new-access", refresh_token: "new-refresh" },
+          (body) => {
+            refreshBody = body;
+          },
+        );
 
-    expect(refreshBody?.get("grant_type")).toBe("refresh_token");
-    expect(refreshBody?.get("client_id")).toBe("oaiapp_existing");
-    expect(refreshBody?.get("refresh_token")).toBe("old-refresh");
-    expect(refreshBody?.get("resource")).toBe("https://api.openai.com/v1");
-    expect(refreshBody?.has("scope")).toBe(false);
-    expect(credential).toMatchObject({
-      access: "new-access",
-      refresh: "new-refresh",
-      clientId: "oaiapp_existing",
-      scopes: REQUIRED_SCOPE.split(" "),
-    });
-  });
+        const before = yield* Clock.currentTimeMillis;
+        const credential = yield* Effect.promise(() =>
+          openaiChatGPTOAuth.refresh(connectedCredential(), neverAbortedSignal),
+        );
+
+        expect(credential.expires).toBeGreaterThanOrEqual(before + (3600 - 180) * 1000);
+        expect(credential.expires).toBeLessThanOrEqual(
+          (yield* Clock.currentTimeMillis) + (3600 - 180) * 1000,
+        );
+
+        expect(refreshBody?.get("grant_type")).toBe("refresh_token");
+        expect(refreshBody?.get("client_id")).toBe("oaiapp_existing");
+        expect(refreshBody?.get("refresh_token")).toBe("old-refresh");
+        expect(refreshBody?.get("resource")).toBe("https://api.openai.com/v1");
+        expect(refreshBody?.has("scope")).toBe(false);
+        expect(credential).toMatchObject({
+          access: "new-access",
+          refresh: "new-refresh",
+          clientId: "oaiapp_existing",
+          scopes: REQUIRED_SCOPE.split(" "),
+        });
+      }),
+    ));
 });

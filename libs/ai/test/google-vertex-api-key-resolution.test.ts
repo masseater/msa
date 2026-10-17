@@ -1,6 +1,9 @@
 import { arch, platform, release } from "node:os";
 
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { envValue } from "./env.ts";
 
 const googleGenAiMock = vi.hoisted(() => ({
   constructorCalls: [] as Array<Record<string, unknown>>,
@@ -57,187 +60,220 @@ const context = normalizeContext({
   messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
 });
 
-const originalGoogleCloudApiKey = process.env["GOOGLE_CLOUD_API_KEY"];
+const originalGoogleCloudApiKey = envValue("GOOGLE_CLOUD_API_KEY");
 
 beforeEach(() => {
   googleGenAiMock.constructorCalls.length = 0;
-  delete process.env["GOOGLE_CLOUD_API_KEY"];
+  vi.stubEnv("GOOGLE_CLOUD_API_KEY", undefined);
 });
 
 afterEach(() => {
   if (originalGoogleCloudApiKey === undefined) {
-    delete process.env["GOOGLE_CLOUD_API_KEY"];
+    vi.stubEnv("GOOGLE_CLOUD_API_KEY", undefined);
   } else {
-    process.env["GOOGLE_CLOUD_API_KEY"] = originalGoogleCloudApiKey;
+    vi.stubEnv("GOOGLE_CLOUD_API_KEY", originalGoogleCloudApiKey);
   }
 });
 
 describe("google-vertex api key resolution", () => {
-  it("falls back to ADC when options.apiKey is a placeholder marker", async () => {
-    const stream = streamGoogleVertex(model, context, {
-      apiKey: "<authenticated>",
-      project: "test-project",
-      location: "us-central1",
-    });
+  it("falls back to ADC when options.apiKey is a placeholder marker", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const stream = streamGoogleVertex(model, context, {
+          apiKey: "<authenticated>",
+          project: "test-project",
+          location: "us-central1",
+        });
 
-    await stream.result();
+        yield* Effect.promise(() => stream.result());
 
-    expect(googleGenAiMock.constructorCalls).toHaveLength(1);
-    expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
-      vertexai: true,
-      project: "test-project",
-      location: "us-central1",
-      apiVersion: "v1",
-    });
-    expect(googleGenAiMock.constructorCalls[0]).not.toHaveProperty("apiKey");
-  });
+        expect(googleGenAiMock.constructorCalls).toHaveLength(1);
+        expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
+          vertexai: true,
+          project: "test-project",
+          location: "us-central1",
+          apiVersion: "v1",
+        });
+        expect(googleGenAiMock.constructorCalls[0]).not.toHaveProperty("apiKey");
+      }),
+    ));
 
-  it("falls back to ADC when options.apiKey is the gcp-vertex-credentials marker", async () => {
-    const stream = streamGoogleVertex(model, context, {
-      apiKey: "gcp-vertex-credentials",
-      project: "test-project",
-      location: "us-central1",
-    });
+  it("falls back to ADC when options.apiKey is the gcp-vertex-credentials marker", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const stream = streamGoogleVertex(model, context, {
+          apiKey: "gcp-vertex-credentials",
+          project: "test-project",
+          location: "us-central1",
+        });
 
-    await stream.result();
+        yield* Effect.promise(() => stream.result());
 
-    expect(googleGenAiMock.constructorCalls).toHaveLength(1);
-    expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
-      vertexai: true,
-      project: "test-project",
-      location: "us-central1",
-      apiVersion: "v1",
-    });
-    expect(googleGenAiMock.constructorCalls[0]).not.toHaveProperty("apiKey");
-  });
+        expect(googleGenAiMock.constructorCalls).toHaveLength(1);
+        expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
+          vertexai: true,
+          project: "test-project",
+          location: "us-central1",
+          apiVersion: "v1",
+        });
+        expect(googleGenAiMock.constructorCalls[0]).not.toHaveProperty("apiKey");
+      }),
+    ));
 
-  it("falls back to ADC when GOOGLE_CLOUD_API_KEY is a placeholder marker", async () => {
-    process.env["GOOGLE_CLOUD_API_KEY"] = "<authenticated>";
+  it("falls back to ADC when GOOGLE_CLOUD_API_KEY is a placeholder marker", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("GOOGLE_CLOUD_API_KEY", "<authenticated>");
 
-    const stream = streamGoogleVertex(model, context, {
-      project: "test-project",
-      location: "us-central1",
-    });
+        const stream = streamGoogleVertex(model, context, {
+          project: "test-project",
+          location: "us-central1",
+        });
 
-    await stream.result();
+        yield* Effect.promise(() => stream.result());
 
-    expect(googleGenAiMock.constructorCalls).toHaveLength(1);
-    expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
-      vertexai: true,
-      project: "test-project",
-      location: "us-central1",
-      apiVersion: "v1",
-    });
-    expect(googleGenAiMock.constructorCalls[0]).not.toHaveProperty("apiKey");
-  });
+        expect(googleGenAiMock.constructorCalls).toHaveLength(1);
+        expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
+          vertexai: true,
+          project: "test-project",
+          location: "us-central1",
+          apiVersion: "v1",
+        });
+        expect(googleGenAiMock.constructorCalls[0]).not.toHaveProperty("apiKey");
+      }),
+    ));
 
-  it("still uses the API key client for real API keys", async () => {
-    const stream = streamGoogleVertex(model, context, {
-      apiKey: "AIzaSyExampleRealisticLookingApiKey123456",
-    });
+  it("still uses the API key client for real API keys", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const stream = streamGoogleVertex(model, context, {
+          apiKey: "AIzaSyExampleRealisticLookingApiKey123456",
+        });
 
-    await stream.result();
+        yield* Effect.promise(() => stream.result());
 
-    expect(googleGenAiMock.constructorCalls).toHaveLength(1);
-    expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
-      vertexai: true,
-      apiKey: "AIzaSyExampleRealisticLookingApiKey123456",
-      apiVersion: "v1",
-    });
-    expect(googleGenAiMock.constructorCalls[0]).not.toHaveProperty("project");
-    expect(googleGenAiMock.constructorCalls[0]).not.toHaveProperty("location");
-  });
+        expect(googleGenAiMock.constructorCalls).toHaveLength(1);
+        expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
+          vertexai: true,
+          apiKey: "AIzaSyExampleRealisticLookingApiKey123456",
+          apiVersion: "v1",
+        });
+        expect(googleGenAiMock.constructorCalls[0]).not.toHaveProperty("project");
+        expect(googleGenAiMock.constructorCalls[0]).not.toHaveProperty("location");
+      }),
+    ));
 
-  it("does not forward generated Vertex base URL placeholders", async () => {
-    const stream = streamGoogleVertex(model, context, {
-      project: "test-project",
-      location: "us-central1",
-    });
+  it("does not forward generated Vertex base URL placeholders", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const stream = streamGoogleVertex(model, context, {
+          project: "test-project",
+          location: "us-central1",
+        });
 
-    await stream.result();
+        yield* Effect.promise(() => stream.result());
 
-    expect(googleGenAiMock.constructorCalls).toHaveLength(1);
-    expect(googleGenAiMock.constructorCalls[0]?.["httpOptions"]).toEqual({
-      headers: { "User-Agent": MSA_USER_AGENT },
-    });
-  });
+        expect(googleGenAiMock.constructorCalls).toHaveLength(1);
+        expect(googleGenAiMock.constructorCalls[0]?.["httpOptions"]).toEqual({
+          headers: { "User-Agent": MSA_USER_AGENT },
+        });
+      }),
+    ));
 
-  it("lets explicit headers override the default User-Agent", async () => {
-    const stream = streamGoogleVertex(model, context, {
-      project: "test-project",
-      location: "us-central1",
-      headers: { "User-Agent": "custom-agent" },
-    });
+  it("lets explicit headers override the default User-Agent", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const stream = streamGoogleVertex(model, context, {
+          project: "test-project",
+          location: "us-central1",
+          headers: { "User-Agent": "custom-agent" },
+        });
 
-    await stream.result();
+        yield* Effect.promise(() => stream.result());
 
-    expect(googleGenAiMock.constructorCalls).toHaveLength(1);
-    expect(googleGenAiMock.constructorCalls[0]?.["httpOptions"]).toEqual({
-      headers: { "User-Agent": "custom-agent" },
-    });
-  });
+        expect(googleGenAiMock.constructorCalls).toHaveLength(1);
+        expect(googleGenAiMock.constructorCalls[0]?.["httpOptions"]).toEqual({
+          headers: { "User-Agent": "custom-agent" },
+        });
+      }),
+    ));
 
-  it("forwards custom baseUrl to the ADC client", async () => {
-    const customModel: Model<"google-vertex"> = { ...model, baseUrl: "https://proxy.example.com" };
-    const stream = streamGoogleVertex(customModel, context, {
-      project: "test-project",
-      location: "us-central1",
-    });
+  it("forwards custom baseUrl to the ADC client", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const customModel: Model<"google-vertex"> = {
+          ...model,
+          baseUrl: "https://proxy.example.com",
+        };
+        const stream = streamGoogleVertex(customModel, context, {
+          project: "test-project",
+          location: "us-central1",
+        });
 
-    await stream.result();
+        yield* Effect.promise(() => stream.result());
 
-    expect(googleGenAiMock.constructorCalls).toHaveLength(1);
-    expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
-      vertexai: true,
-      project: "test-project",
-      location: "us-central1",
-      apiVersion: "v1",
-      httpOptions: {
-        baseUrl: "https://proxy.example.com",
-        baseUrlResourceScope: "COLLECTION",
-      },
-    });
-  });
+        expect(googleGenAiMock.constructorCalls).toHaveLength(1);
+        expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
+          vertexai: true,
+          project: "test-project",
+          location: "us-central1",
+          apiVersion: "v1",
+          httpOptions: {
+            baseUrl: "https://proxy.example.com",
+            baseUrlResourceScope: "COLLECTION",
+          },
+        });
+      }),
+    ));
 
-  it("forwards custom baseUrl to the API key client", async () => {
-    const customModel: Model<"google-vertex"> = { ...model, baseUrl: "https://proxy.example.com" };
-    const stream = streamGoogleVertex(customModel, context, {
-      apiKey: "AIzaSyExampleRealisticLookingApiKey123456",
-    });
+  it("forwards custom baseUrl to the API key client", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const customModel: Model<"google-vertex"> = {
+          ...model,
+          baseUrl: "https://proxy.example.com",
+        };
+        const stream = streamGoogleVertex(customModel, context, {
+          apiKey: "AIzaSyExampleRealisticLookingApiKey123456",
+        });
 
-    await stream.result();
+        yield* Effect.promise(() => stream.result());
 
-    expect(googleGenAiMock.constructorCalls).toHaveLength(1);
-    expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
-      vertexai: true,
-      apiKey: "AIzaSyExampleRealisticLookingApiKey123456",
-      apiVersion: "v1",
-      httpOptions: {
-        baseUrl: "https://proxy.example.com",
-        baseUrlResourceScope: "COLLECTION",
-      },
-    });
-  });
+        expect(googleGenAiMock.constructorCalls).toHaveLength(1);
+        expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
+          vertexai: true,
+          apiKey: "AIzaSyExampleRealisticLookingApiKey123456",
+          apiVersion: "v1",
+          httpOptions: {
+            baseUrl: "https://proxy.example.com",
+            baseUrlResourceScope: "COLLECTION",
+          },
+        });
+      }),
+    ));
 
-  it("does not append apiVersion when custom baseUrl already includes one", async () => {
-    const customModel: Model<"google-vertex"> = {
-      ...model,
-      baseUrl: "https://proxy.example.com/v1/projects/test-project/locations/global",
-    };
-    const stream = streamGoogleVertex(customModel, context, {
-      project: "test-project",
-      location: "us-central1",
-    });
+  it("does not append apiVersion when custom baseUrl already includes one", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const customModel: Model<"google-vertex"> = {
+          ...model,
+          baseUrl: "https://proxy.example.com/v1/projects/test-project/locations/global",
+        };
+        const stream = streamGoogleVertex(customModel, context, {
+          project: "test-project",
+          location: "us-central1",
+        });
 
-    await stream.result();
+        yield* Effect.promise(() => stream.result());
 
-    expect(googleGenAiMock.constructorCalls).toHaveLength(1);
-    expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
-      httpOptions: {
-        baseUrl: "https://proxy.example.com/v1/projects/test-project/locations/global",
-        baseUrlResourceScope: "COLLECTION",
-        apiVersion: "",
-      },
-    });
-  });
+        expect(googleGenAiMock.constructorCalls).toHaveLength(1);
+        expect(googleGenAiMock.constructorCalls[0]).toMatchObject({
+          httpOptions: {
+            baseUrl: "https://proxy.example.com/v1/projects/test-project/locations/global",
+            baseUrlResourceScope: "COLLECTION",
+            apiVersion: "",
+          },
+        });
+      }),
+    ));
 });

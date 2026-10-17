@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Effect } from "effect";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
@@ -87,36 +88,46 @@ afterEach(() => {
 });
 
 describe("Anthropic workload identity federation with the SDK", () => {
-  it("exchanges the identity token once across requests", async () => {
-    const requests: RecordedRequest[] = [];
-    const fetch = createFetch(requests);
+  it("exchanges the identity token once across requests", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const requests: RecordedRequest[] = [];
+        const fetch = createFetch(requests);
 
-    for (let i = 0; i < 3; i++) {
-      const message = await streamAnthropic(anthropicModel, context, {
-        env: federationEnv,
-        fetch,
-      }).result();
-      expect(message.stopReason).toBe("stop");
-    }
+        for (let i = 0; i < 3; i++) {
+          const message = yield* Effect.promise(() =>
+            streamAnthropic(anthropicModel, context, {
+              env: federationEnv,
+              fetch,
+            }).result(),
+          );
+          expect(message.stopReason).toBe("stop");
+        }
 
-    expect(requests.filter((request) => request.path === "/v1/oauth/token")).toHaveLength(1);
-    const messageRequests = requests.filter((request) => request.path === "/v1/messages");
-    expect(messageRequests).toHaveLength(3);
-    for (const request of messageRequests) {
-      expect(request.authorization).toBe("Bearer federated-token");
-    }
-  });
+        expect(requests.filter((request) => request.path === "/v1/oauth/token")).toHaveLength(1);
+        const messageRequests = requests.filter((request) => request.path === "/v1/messages");
+        expect(messageRequests).toHaveLength(3);
+        for (const request of messageRequests) {
+          expect(request.authorization).toBe("Bearer federated-token");
+        }
+      }),
+    ));
 
-  it("does not run the SDK credential chain for header-owned auth", async () => {
-    for (const [name, value] of Object.entries(federationEnv)) vi.stubEnv(name, value);
-    const requests: RecordedRequest[] = [];
+  it("does not run the SDK credential chain for header-owned auth", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        for (const [name, value] of Object.entries(federationEnv)) vi.stubEnv(name, value);
+        const requests: RecordedRequest[] = [];
 
-    const message = await streamAnthropic(anthropicModel, context, {
-      headers: { Authorization: "Bearer auth-token" },
-      fetch: createFetch(requests),
-    }).result();
+        const message = yield* Effect.promise(() =>
+          streamAnthropic(anthropicModel, context, {
+            headers: { Authorization: "Bearer auth-token" },
+            fetch: createFetch(requests),
+          }).result(),
+        );
 
-    expect(message.stopReason).toBe("stop");
-    expect(requests).toEqual([{ path: "/v1/messages", authorization: "Bearer auth-token" }]);
-  });
+        expect(message.stopReason).toBe("stop");
+        expect(requests).toEqual([{ path: "/v1/messages", authorization: "Bearer auth-token" }]);
+      }),
+    ));
 });

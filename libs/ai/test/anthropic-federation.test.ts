@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
@@ -101,98 +102,154 @@ afterEach(() => {
 });
 
 describe("Anthropic workload identity federation", () => {
-  it("resolves the federation variables as provider env with no request auth", async () => {
-    expect(await resolveWithEnv(federationEnv)).toEqual({
-      auth: {},
-      env: federationEnv,
-      source: "workload identity federation",
-    });
-  });
+  it("resolves the federation variables as provider env with no request auth", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        expect(yield* Effect.promise(() => Promise.resolve(resolveWithEnv(federationEnv)))).toEqual(
+          {
+            auth: {},
+            env: federationEnv,
+            source: "workload identity federation",
+          },
+        );
+      }),
+    ));
 
-  it("passes ANTHROPIC_WORKSPACE_ID through when set", async () => {
-    const result = await resolveWithEnv({
-      ...federationEnv,
-      ANTHROPIC_WORKSPACE_ID: "wrkspc_test",
-    });
-    expect(result?.env?.["ANTHROPIC_WORKSPACE_ID"]).toBe("wrkspc_test");
-  });
+  it("passes ANTHROPIC_WORKSPACE_ID through when set", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const result = yield* Effect.promise(() =>
+          Promise.resolve(
+            resolveWithEnv({
+              ...federationEnv,
+              ANTHROPIC_WORKSPACE_ID: "wrkspc_test",
+            }),
+          ),
+        );
+        expect(result?.env?.["ANTHROPIC_WORKSPACE_ID"]).toBe("wrkspc_test");
+      }),
+    ));
 
-  it("is not configured when a federation variable is missing", async () => {
-    const { ANTHROPIC_IDENTITY_TOKEN_FILE: _omitted, ...partial } = federationEnv;
-    expect(await resolveWithEnv(partial)).toBeUndefined();
-  });
+  it("is not configured when a federation variable is missing", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { ANTHROPIC_IDENTITY_TOKEN_FILE: _omitted, ...partial } = federationEnv;
+        expect(
+          yield* Effect.promise(() => Promise.resolve(resolveWithEnv(partial))),
+        ).toBeUndefined();
+      }),
+    ));
 
-  it("treats ANTHROPIC_SERVICE_ACCOUNT_ID as optional, like the SDK", async () => {
-    const { ANTHROPIC_SERVICE_ACCOUNT_ID: _omitted, ...partial } = federationEnv;
-    expect(await resolveWithEnv(partial)).toEqual({
-      auth: {},
-      env: partial,
-      source: "workload identity federation",
-    });
+  it("treats ANTHROPIC_SERVICE_ACCOUNT_ID as optional, like the SDK", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { ANTHROPIC_SERVICE_ACCOUNT_ID: _omitted, ...partial } = federationEnv;
+        expect(yield* Effect.promise(() => Promise.resolve(resolveWithEnv(partial)))).toEqual({
+          auth: {},
+          env: partial,
+          source: "workload identity federation",
+        });
 
-    await streamAnthropic(anthropicModel, context, { env: partial }).result();
-    expect(mockState.constructorOpts?.["config"]).toEqual({
-      ...expectedConfig,
-      authentication: { ...expectedConfig.authentication, service_account_id: undefined },
-    });
-  });
+        yield* Effect.promise(() =>
+          streamAnthropic(anthropicModel, context, { env: partial }).result(),
+        );
+        expect(mockState.constructorOpts?.["config"]).toEqual({
+          ...expectedConfig,
+          authentication: { ...expectedConfig.authentication, service_account_id: undefined },
+        });
+      }),
+    ));
 
-  it("keeps API key and auth token precedence over federation", async () => {
-    expect(await resolveWithEnv({ ...federationEnv, ANTHROPIC_API_KEY: "api-key" })).toEqual({
-      auth: { apiKey: "api-key" },
-      source: "ANTHROPIC_API_KEY",
-    });
-    expect(await resolveWithEnv({ ...federationEnv, ANTHROPIC_AUTH_TOKEN: "auth-token" })).toEqual({
-      auth: { headers: { Authorization: "Bearer auth-token" } },
-      source: "ANTHROPIC_AUTH_TOKEN",
-    });
-  });
+  it("keeps API key and auth token precedence over federation", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        expect(
+          yield* Effect.promise(() =>
+            Promise.resolve(resolveWithEnv({ ...federationEnv, ANTHROPIC_API_KEY: "api-key" })),
+          ),
+        ).toEqual({
+          auth: { apiKey: "api-key" },
+          source: "ANTHROPIC_API_KEY",
+        });
+        expect(
+          yield* Effect.promise(() =>
+            Promise.resolve(
+              resolveWithEnv({ ...federationEnv, ANTHROPIC_AUTH_TOKEN: "auth-token" }),
+            ),
+          ),
+        ).toEqual({
+          auth: { headers: { Authorization: "Bearer auth-token" } },
+          source: "ANTHROPIC_AUTH_TOKEN",
+        });
+      }),
+    ));
 
-  it("hands the SDK a federation config instead of a key", async () => {
-    await streamAnthropic(anthropicModel, context, { env: federationEnv }).result();
+  it("hands the SDK a federation config instead of a key", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          streamAnthropic(anthropicModel, context, { env: federationEnv }).result(),
+        );
 
-    expect(mockState.constructorOpts?.["apiKey"]).toBeNull();
-    expect(mockState.constructorOpts?.["authToken"]).toBeNull();
-    expect(mockState.constructorOpts?.["config"]).toEqual(expectedConfig);
-    const headers = mockState.constructorOpts?.["defaultHeaders"] as Record<string, string | null>;
-    expect(headers["Authorization"]).toBeUndefined();
-    expect(mockState.createParams?.["betas"] ?? []).not.toContain("oauth-2025-04-20");
-  });
+        expect(mockState.constructorOpts?.["apiKey"]).toBeNull();
+        expect(mockState.constructorOpts?.["authToken"]).toBeNull();
+        expect(mockState.constructorOpts?.["config"]).toEqual(expectedConfig);
+        const headers = mockState.constructorOpts?.["defaultHeaders"] as Record<
+          string,
+          string | null
+        >;
+        expect(headers["Authorization"]).toBeUndefined();
+        expect(mockState.createParams?.["betas"] ?? []).not.toContain("oauth-2025-04-20");
+      }),
+    ));
 
-  it("threads authContext federation variables through Models", async () => {
-    const models = createModels({
-      authContext: {
-        env: (name) => Promise.resolve(federationEnv[name as keyof typeof federationEnv]),
-        fileExists: () => Promise.resolve(false),
-      },
-    });
-    models.setProvider(anthropicProvider());
+  it("threads authContext federation variables through Models", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const models = createModels({
+          authContext: {
+            env: (name) => Promise.resolve(federationEnv[name as keyof typeof federationEnv]),
+            fileExists: () => Promise.resolve(false),
+          },
+        });
+        models.setProvider(anthropicProvider());
 
-    await models.streamSimple(anthropicModel, context).result();
+        yield* Effect.promise(() => models.streamSimple(anthropicModel, context).result());
 
-    expect(mockState.constructorOpts?.["apiKey"]).toBeNull();
-    expect(mockState.constructorOpts?.["config"]).toEqual(expectedConfig);
-  });
+        expect(mockState.constructorOpts?.["apiKey"]).toBeNull();
+        expect(mockState.constructorOpts?.["config"]).toEqual(expectedConfig);
+      }),
+    ));
 
-  it("lets an explicit API key win over federation env", async () => {
-    await streamAnthropic(anthropicModel, context, {
-      apiKey: "explicit-key",
-      env: federationEnv,
-    }).result();
+  it("lets an explicit API key win over federation env", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          streamAnthropic(anthropicModel, context, {
+            apiKey: "explicit-key",
+            env: federationEnv,
+          }).result(),
+        );
 
-    expect(mockState.constructorOpts?.["apiKey"]).toBe("explicit-key");
-    expect(mockState.constructorOpts?.["config"]).toBeUndefined();
-  });
+        expect(mockState.constructorOpts?.["apiKey"]).toBe("explicit-key");
+        expect(mockState.constructorOpts?.["config"]).toBeUndefined();
+      }),
+    ));
 
-  it("does not federate other anthropic-messages providers", async () => {
-    const kimi: Model<"anthropic-messages"> = {
-      ...anthropicModel,
-      provider: "kimi-coding",
-      baseUrl: "https://api.kimi.com/coding",
-    };
-    const message = await streamAnthropic(kimi, context, { env: federationEnv }).result();
+  it("does not federate other anthropic-messages providers", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const kimi: Model<"anthropic-messages"> = {
+          ...anthropicModel,
+          provider: "kimi-coding",
+          baseUrl: "https://api.kimi.com/coding",
+        };
+        const message = yield* Effect.promise(() =>
+          streamAnthropic(kimi, context, { env: federationEnv }).result(),
+        );
 
-    expect(message.stopReason).toBe("error");
-    expect(mockState.constructorOpts).toBeUndefined();
-  });
+        expect(message.stopReason).toBe("error");
+        expect(mockState.constructorOpts).toBeUndefined();
+      }),
+    ));
 });

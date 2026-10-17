@@ -1,3 +1,4 @@
+import { Clock, Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const bedrockMock = vi.hoisted(() => {
@@ -104,23 +105,33 @@ interface BedrockRequestPayload {
   messages: Array<{ role: string; content: Array<Record<string, unknown>> }>;
 }
 
-async function capturePayload(context: Context): Promise<BedrockRequestPayload> {
-  let capturedPayload: BedrockRequestPayload | undefined;
-  const s = streamBedrock(gptModel, normalizeContext(context), {
-    cacheRetention: "none",
-    signal: AbortSignal.abort(),
-    onPayload: (payload) => {
-      capturedPayload = payload as BedrockRequestPayload;
-      return payload;
-    },
-  });
-  for await (const event of s) {
-    if (event.type === "error") break;
-  }
-  if (capturedPayload === undefined) {
-    throw new Error("Expected Bedrock payload to be captured before request abort");
-  }
-  return capturedPayload;
+function capturePayload(context: Context): Promise<BedrockRequestPayload> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      let capturedPayload: BedrockRequestPayload | undefined;
+      const s = streamBedrock(gptModel, normalizeContext(context), {
+        cacheRetention: "none",
+        signal: AbortSignal.abort(),
+        onPayload: (payload) => {
+          capturedPayload = payload as BedrockRequestPayload;
+          return payload;
+        },
+      });
+      yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+        Stream.orDie,
+        Stream.runForEachWhile((event) =>
+          Effect.sync(() => {
+            if (event.type === "error") return false;
+            return true;
+          }),
+        ),
+      );
+      if (capturedPayload === undefined) {
+        throw new Error("Expected Bedrock payload to be captured before request abort");
+      }
+      return capturedPayload;
+    }),
+  );
 }
 
 describe("Bedrock redacted reasoning", () => {
@@ -128,111 +139,134 @@ describe("Bedrock redacted reasoning", () => {
     bedrockMock.streamEvents = undefined;
   });
 
-  it("does not fail the stream when reasoning arrives as redactedContent", async () => {
-    bedrockMock.streamEvents = redactedReasoningEvents();
+  it("does not fail the stream when reasoning arrives as redactedContent", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.streamEvents = redactedReasoningEvents();
 
-    const response = await streamBedrock(gptModel, helloContext).result();
+        const response = yield* Effect.promise(() =>
+          streamBedrock(gptModel, helloContext).result(),
+        );
 
-    expect(response.stopReason, response.errorMessage).not.toBe("error");
-    expect(response.content.map((c) => c.type)).toEqual(["thinking", "text"]);
-    expect(response.content[1]).toEqual({ type: "text", text: "done" });
-  });
+        expect(response.stopReason, response.errorMessage).not.toBe("error");
+        expect(response.content.map((c) => c.type)).toEqual(["thinking", "text"]);
+        expect(response.content[1]).toEqual({ type: "text", text: "done" });
+      }),
+    ));
 
-  it("preserves the encrypted reasoning payload on the assistant message", async () => {
-    bedrockMock.streamEvents = redactedReasoningEvents();
+  it("preserves the encrypted reasoning payload on the assistant message", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.streamEvents = redactedReasoningEvents();
 
-    const response = await streamBedrock(gptModel, helloContext).result();
+        const response = yield* Effect.promise(() =>
+          streamBedrock(gptModel, helloContext).result(),
+        );
 
-    const thinking = response.content.find((c): c is ThinkingContent => c.type === "thinking");
-    expect(thinking).toBeDefined();
-    expect(thinking?.redacted).toBe(true);
-    expect(thinking?.thinkingSignature).toBe(bedrockMock.redactedBase64);
-    expect("redactedChunks" in thinking!).toBe(false);
-  });
+        const thinking = response.content.find((c): c is ThinkingContent => c.type === "thinking");
+        expect(thinking).toBeDefined();
+        expect(thinking?.redacted).toBe(true);
+        expect(thinking?.thinkingSignature).toBe(bedrockMock.redactedBase64);
+        expect("redactedChunks" in thinking!).toBe(false);
+      }),
+    ));
 
-  it("encodes the payload when the stream never sends contentBlockStop", async () => {
-    bedrockMock.streamEvents = [
-      { messageStart: { role: "assistant" } },
-      {
-        contentBlockDelta: {
-          contentBlockIndex: 0,
-          delta: { reasoningContent: { redactedContent: bedrockMock.redactedBytes } },
-        },
-      },
-      { messageStop: { stopReason: "end_turn" } },
-    ];
-
-    const response = await streamBedrock(gptModel, helloContext).result();
-
-    const thinking = response.content.find((c): c is ThinkingContent => c.type === "thinking");
-    expect(thinking?.thinkingSignature).toBe(bedrockMock.redactedBase64);
-    expect("redactedChunks" in thinking!).toBe(false);
-    expect("index" in thinking!).toBe(false);
-  });
-
-  it("joins encrypted reasoning split across deltas", async () => {
-    const [head, tail] = [
-      bedrockMock.redactedBytes.slice(0, 7),
-      bedrockMock.redactedBytes.slice(7),
-    ];
-    bedrockMock.streamEvents = [
-      { messageStart: { role: "assistant" } },
-      {
-        contentBlockDelta: {
-          contentBlockIndex: 0,
-          delta: { reasoningContent: { redactedContent: head } },
-        },
-      },
-      {
-        contentBlockDelta: {
-          contentBlockIndex: 0,
-          delta: { reasoningContent: { redactedContent: tail } },
-        },
-      },
-      { contentBlockStop: { contentBlockIndex: 0 } },
-      { messageStop: { stopReason: "end_turn" } },
-    ];
-
-    const response = await streamBedrock(gptModel, helloContext).result();
-
-    const thinking = response.content.find((c): c is ThinkingContent => c.type === "thinking");
-    expect(thinking?.thinkingSignature).toBe(bedrockMock.redactedBase64);
-    expect(thinking?.thinking).toBe("[Reasoning redacted]");
-  });
-
-  it("replays redacted reasoning as reasoningContent.redactedContent", async () => {
-    const messages: Message[] = [
-      { role: "user", content: "hello", timestamp: Date.now() },
-      {
-        role: "assistant",
-        content: [
+  it("encodes the payload when the stream never sends contentBlockStop", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.streamEvents = [
+          { messageStart: { role: "assistant" } },
           {
-            type: "thinking",
-            thinking: "",
-            thinkingSignature: bedrockMock.redactedBase64,
-            redacted: true,
+            contentBlockDelta: {
+              contentBlockIndex: 0,
+              delta: { reasoningContent: { redactedContent: bedrockMock.redactedBytes } },
+            },
           },
-          { type: "text", text: "done" },
-        ],
-        api: "bedrock-converse-stream",
-        provider: "amazon-bedrock",
-        model: gptModel.id,
-        usage: emptyUsage,
-        stopReason: "stop",
-        timestamp: Date.now(),
-      },
-      { role: "user", content: "continue", timestamp: Date.now() },
-    ];
+          { messageStop: { stopReason: "end_turn" } },
+        ];
 
-    const payload = await capturePayload({ messages });
+        const response = yield* Effect.promise(() =>
+          streamBedrock(gptModel, helloContext).result(),
+        );
 
-    const assistant = payload.messages.find((m: any) => m.role === "assistant");
-    expect(assistant).toBeDefined();
-    expect(assistant!.content).toEqual([
-      { reasoningContent: { redactedContent: bedrockMock.redactedBytes } },
-      { text: "done" },
-    ]);
-  });
+        const thinking = response.content.find((c): c is ThinkingContent => c.type === "thinking");
+        expect(thinking?.thinkingSignature).toBe(bedrockMock.redactedBase64);
+        expect("redactedChunks" in thinking!).toBe(false);
+        expect("index" in thinking!).toBe(false);
+      }),
+    ));
+
+  it("joins encrypted reasoning split across deltas", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const [head, tail] = [
+          bedrockMock.redactedBytes.slice(0, 7),
+          bedrockMock.redactedBytes.slice(7),
+        ];
+        bedrockMock.streamEvents = [
+          { messageStart: { role: "assistant" } },
+          {
+            contentBlockDelta: {
+              contentBlockIndex: 0,
+              delta: { reasoningContent: { redactedContent: head } },
+            },
+          },
+          {
+            contentBlockDelta: {
+              contentBlockIndex: 0,
+              delta: { reasoningContent: { redactedContent: tail } },
+            },
+          },
+          { contentBlockStop: { contentBlockIndex: 0 } },
+          { messageStop: { stopReason: "end_turn" } },
+        ];
+
+        const response = yield* Effect.promise(() =>
+          streamBedrock(gptModel, helloContext).result(),
+        );
+
+        const thinking = response.content.find((c): c is ThinkingContent => c.type === "thinking");
+        expect(thinking?.thinkingSignature).toBe(bedrockMock.redactedBase64);
+        expect(thinking?.thinking).toBe("[Reasoning redacted]");
+      }),
+    ));
+
+  it("replays redacted reasoning as reasoningContent.redactedContent", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const messages: Message[] = [
+          { role: "user", content: "hello", timestamp: yield* Clock.currentTimeMillis },
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "thinking",
+                thinking: "",
+                thinkingSignature: bedrockMock.redactedBase64,
+                redacted: true,
+              },
+              { type: "text", text: "done" },
+            ],
+            api: "bedrock-converse-stream",
+            provider: "amazon-bedrock",
+            model: gptModel.id,
+            usage: emptyUsage,
+            stopReason: "stop",
+            timestamp: yield* Clock.currentTimeMillis,
+          },
+          { role: "user", content: "continue", timestamp: yield* Clock.currentTimeMillis },
+        ];
+
+        const payload = yield* Effect.promise(() => capturePayload({ messages }));
+
+        const assistant = payload.messages.find((m: any) => m.role === "assistant");
+        expect(assistant).toBeDefined();
+        expect(assistant!.content).toEqual([
+          { reasoningContent: { redactedContent: bedrockMock.redactedBytes } },
+          { text: "done" },
+        ]);
+      }),
+    ));
 
   it("replays redacted reasoning before the toolUse block it belongs to", async () => {
     const messages: Message[] = [

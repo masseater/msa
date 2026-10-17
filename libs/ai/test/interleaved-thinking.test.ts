@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -72,10 +73,9 @@ function evaluateCalculatorCall(toolCall: ToolCall): number {
   }
 }
 
-async function assertSecondToolCallWithInterleavedThinking<TApi extends Api>(
-  llm: Model<TApi>,
-  reasoning: "high" | "xhigh",
-) {
+const assertSecondToolCallWithInterleavedThinking = Effect.fn(
+  "assertSecondToolCallWithInterleavedThinking",
+)(function* <TApi extends Api>(llm: Model<TApi>, reasoning: "high" | "xhigh") {
   const context: Context = {
     systemPrompt: [
       "You are a helpful assistant that must use tools for arithmetic.",
@@ -91,13 +91,13 @@ async function assertSecondToolCallWithInterleavedThinking<TApi extends Api>(
           "Provide the final answer based on the best guess given the tool result, even if it seems unreliable.",
           "Start by thinking about the steps you will take to solve the problem.",
         ].join(" "),
-        timestamp: Date.now(),
+        timestamp: yield* Clock.currentTimeMillis,
       },
     ],
     tools: [calculatorTool],
   };
 
-  const firstResponse = await completeSimple(llm, context, { reasoning });
+  const firstResponse = yield* Effect.promise(() => completeSimple(llm, context, { reasoning }));
 
   expect(firstResponse.stopReason, `Error: ${firstResponse.errorMessage}`).toBe(
     "toolUse" satisfies StopReason,
@@ -120,41 +120,57 @@ async function assertSecondToolCallWithInterleavedThinking<TApi extends Api>(
     toolName: firstToolCall.name,
     content: [{ type: "text", text: `The answer is ${correctAnswer} or ${correctAnswer * 2}.` }],
     isError: false,
-    timestamp: Date.now(),
+    timestamp: yield* Clock.currentTimeMillis,
   };
   context.messages.push(firstToolResult);
 
-  const secondResponse = await completeSimple(llm, context, { reasoning });
+  const secondResponse = yield* Effect.promise(() => completeSimple(llm, context, { reasoning }));
 
   expect(secondResponse.stopReason, `Error: ${secondResponse.errorMessage}`).toBe(
     "stop" satisfies StopReason,
   );
   expect(secondResponse.content.some((block) => block.type === "thinking")).toBe(true);
   expect(secondResponse.content.some((block) => block.type === "text")).toBe(true);
-}
+});
 
 const hasAnthropicCredentials = !!getEnvApiKey("anthropic");
 
 describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock interleaved thinking", () => {
-  it("should do interleaved thinking on Claude Opus 4.5", { retry: 3 }, async () => {
-    const llm = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-5-20251101-v1:0");
-    await assertSecondToolCallWithInterleavedThinking(llm, "high");
-  });
+  it("should do interleaved thinking on Claude Opus 4.5", { retry: 3 }, () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-5-20251101-v1:0");
+        yield* assertSecondToolCallWithInterleavedThinking(llm, "high");
+      }),
+    ),
+  );
 
-  it("should do interleaved thinking on Claude Opus 4.6", { retry: 3 }, async () => {
-    const llm = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
-    await assertSecondToolCallWithInterleavedThinking(llm, "high");
-  });
+  it("should do interleaved thinking on Claude Opus 4.6", { retry: 3 }, () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = getModel("amazon-bedrock", "global.anthropic.claude-opus-4-6-v1");
+        yield* assertSecondToolCallWithInterleavedThinking(llm, "high");
+      }),
+    ),
+  );
 });
 
 describe.skipIf(!hasAnthropicCredentials)("Anthropic interleaved thinking", () => {
-  it("should do interleaved thinking on Claude Opus 4.5", { retry: 3 }, async () => {
-    const llm = getModel("anthropic", "claude-opus-4-5");
-    await assertSecondToolCallWithInterleavedThinking(llm, "high");
-  });
+  it("should do interleaved thinking on Claude Opus 4.5", { retry: 3 }, () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = getModel("anthropic", "claude-opus-4-5");
+        yield* assertSecondToolCallWithInterleavedThinking(llm, "high");
+      }),
+    ),
+  );
 
-  it("should do interleaved thinking on Claude Opus 4.6", { retry: 3 }, async () => {
-    const llm = getModel("anthropic", "claude-opus-4-6");
-    await assertSecondToolCallWithInterleavedThinking(llm, "high");
-  });
+  it("should do interleaved thinking on Claude Opus 4.6", { retry: 3 }, () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const llm = getModel("anthropic", "claude-opus-4-6");
+        yield* assertSecondToolCallWithInterleavedThinking(llm, "high");
+      }),
+    ),
+  );
 });

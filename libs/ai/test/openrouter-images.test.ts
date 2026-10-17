@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { generateImages } from "../src/images.ts";
@@ -66,91 +67,105 @@ describe("openrouter images", () => {
     mockState.lastRequestOptions = undefined;
   });
 
-  it("returns text plus images in final output", async () => {
-    const model: ImageModel<"openrouter-images"> = {
-      type: "image",
-      id: "google/gemini-3.1-flash-image-preview",
-      name: "Gemini 3.1 Flash Image Preview",
-      api: "openrouter-images",
-      provider: "openrouter",
-      baseUrl: "https://openrouter.ai/api/v1",
-      input: ["text", "image"],
-      output: ["text", "image"],
-      cost: { input: 0.015, output: 0.03, cacheRead: 0, cacheWrite: 0 },
-      headers: { "HTTP-Referer": "https://example.com" },
-    };
-    const context: ImagesContext = {
-      input: [{ type: "text", text: "Generate a dog" }],
-    };
+  it("returns text plus images in final output", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model: ImageModel<"openrouter-images"> = {
+          type: "image",
+          id: "google/gemini-3.1-flash-image-preview",
+          name: "Gemini 3.1 Flash Image Preview",
+          api: "openrouter-images",
+          provider: "openrouter",
+          baseUrl: "https://openrouter.ai/api/v1",
+          input: ["text", "image"],
+          output: ["text", "image"],
+          cost: { input: 0.015, output: 0.03, cacheRead: 0, cacheWrite: 0 },
+          headers: { "HTTP-Referer": "https://example.com" },
+        };
+        const context: ImagesContext = {
+          input: [{ type: "text", text: "Generate a dog" }],
+        };
 
-    const output = await generateImages(model, context, { apiKey: "test" });
-    expect(output.stopReason).toBe("stop");
-    expect(output.responseId).toBe("img-1");
-    expect(output.output[0]).toMatchObject({ type: "text", text: "Here is your image." });
-    expect(output.output[1]).toMatchObject({
-      type: "image",
-      mimeType: "image/png",
-      data: "ZmFrZS1wbmc=",
-    });
+        const output = yield* Effect.promise(() =>
+          generateImages(model, context, { apiKey: "test" }),
+        );
+        expect(output.stopReason).toBe("stop");
+        expect(output.responseId).toBe("img-1");
+        expect(output.output[0]).toMatchObject({ type: "text", text: "Here is your image." });
+        expect(output.output[1]).toMatchObject({
+          type: "image",
+          mimeType: "image/png",
+          data: "ZmFrZS1wbmc=",
+        });
 
-    const params = mockState.lastParams as {
-      stream?: boolean;
-      modalities?: string[];
-      messages?: [{ content?: [{ type: string; text?: string }] }];
-    };
-    expect(params.stream).toBe(false);
-    expect(params.modalities).toEqual(["image", "text"]);
-    expect(params.messages?.[0]?.content?.[0]).toMatchObject({
-      type: "text",
-      text: "Generate a dog",
-    });
-  });
+        const params = mockState.lastParams as {
+          stream?: boolean;
+          modalities?: string[];
+          messages?: [{ content?: [{ type: string; text?: string }] }];
+        };
+        expect(params.stream).toBe(false);
+        expect(params.modalities).toEqual(["image", "text"]);
+        expect(params.messages?.[0]?.content?.[0]).toMatchObject({
+          type: "text",
+          text: "Generate a dog",
+        });
+      }),
+    ));
 
-  it("passes through abort signal and returns aborted result", async () => {
-    const model: ImageModel<"openrouter-images"> = {
-      type: "image",
-      id: "black-forest-labs/flux.2-pro",
-      name: "FLUX.2 Pro",
-      api: "openrouter-images",
-      provider: "openrouter",
-      baseUrl: "https://openrouter.ai/api/v1",
-      input: ["text", "image"],
-      output: ["image"],
-      cost: { input: 0.015, output: 0.03, cacheRead: 0, cacheWrite: 0 },
-    };
-    const context: ImagesContext = {
-      input: [{ type: "text", text: "Generate a dog" }],
-    };
-    const controller = new AbortController();
-    controller.abort();
+  it("passes through abort signal and returns aborted result", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model: ImageModel<"openrouter-images"> = {
+          type: "image",
+          id: "black-forest-labs/flux.2-pro",
+          name: "FLUX.2 Pro",
+          api: "openrouter-images",
+          provider: "openrouter",
+          baseUrl: "https://openrouter.ai/api/v1",
+          input: ["text", "image"],
+          output: ["image"],
+          cost: { input: 0.015, output: 0.03, cacheRead: 0, cacheWrite: 0 },
+        };
+        const context: ImagesContext = {
+          input: [{ type: "text", text: "Generate a dog" }],
+        };
+        const controllerSignal = AbortSignal.abort();
 
-    const output = await generateImages(model, context, {
-      apiKey: "test",
-      signal: controller.signal,
-    });
-    expect(output.stopReason).toBe("aborted");
-    expect(output.errorMessage).toBe("Request aborted");
-    expect(mockState.lastRequestOptions).toMatchObject({ signal: controller.signal });
-  });
+        const output = yield* Effect.promise(() =>
+          generateImages(model, context, {
+            apiKey: "test",
+            signal: controllerSignal,
+          }),
+        );
+        expect(output.stopReason).toBe("aborted");
+        expect(output.errorMessage).toBe("Request aborted");
+        expect(mockState.lastRequestOptions).toMatchObject({ signal: controllerSignal });
+      }),
+    ));
 
-  it("generateImages resolves the final assistant images result", async () => {
-    const model: ImageModel<"openrouter-images"> = {
-      type: "image",
-      id: "black-forest-labs/flux.2-pro",
-      name: "FLUX.2 Pro",
-      api: "openrouter-images",
-      provider: "openrouter",
-      baseUrl: "https://openrouter.ai/api/v1",
-      input: ["text", "image"],
-      output: ["image"],
-      cost: { input: 0.015, output: 0.03, cacheRead: 0, cacheWrite: 0 },
-    };
-    const context: ImagesContext = {
-      input: [{ type: "text", text: "Generate a dog" }],
-    };
+  it("generateImages resolves the final assistant images result", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model: ImageModel<"openrouter-images"> = {
+          type: "image",
+          id: "black-forest-labs/flux.2-pro",
+          name: "FLUX.2 Pro",
+          api: "openrouter-images",
+          provider: "openrouter",
+          baseUrl: "https://openrouter.ai/api/v1",
+          input: ["text", "image"],
+          output: ["image"],
+          cost: { input: 0.015, output: 0.03, cacheRead: 0, cacheWrite: 0 },
+        };
+        const context: ImagesContext = {
+          input: [{ type: "text", text: "Generate a dog" }],
+        };
 
-    const output = await generateImages(model, context, { apiKey: "test" });
-    expect(output.output.some((item) => item.type === "image")).toBe(true);
-    expect((mockState.lastParams as { modalities?: string[] }).modalities).toEqual(["image"]);
-  });
+        const output = yield* Effect.promise(() =>
+          generateImages(model, context, { apiKey: "test" }),
+        );
+        expect(output.output.some((item) => item.type === "image")).toBe(true);
+        expect((mockState.lastParams as { modalities?: string[] }).modalities).toEqual(["image"]);
+      }),
+    ));
 });

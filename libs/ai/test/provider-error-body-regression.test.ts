@@ -1,3 +1,4 @@
+import { Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { streamSimple as streamSimpleBedrock } from "../src/api/bedrock-converse-stream.ts";
@@ -109,14 +110,16 @@ const responsesModel: Model<"openai-responses"> = {
   maxTokens: 100,
 };
 
-async function drainResult(stream: {
+function drainResult(stream: {
   [Symbol.asyncIterator](): AsyncIterator<unknown>;
   result(): Promise<{ errorMessage?: string; stopReason?: string }>;
 }) {
-  for await (const _event of stream) {
-    void _event;
-  }
-  return stream.result();
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(Stream.orDie, Stream.runDrain);
+      return yield* Effect.promise(() => stream.result());
+    }),
+  );
 }
 
 describe("provider error body passthrough (per-tier regression)", () => {
@@ -124,84 +127,103 @@ describe("provider error body passthrough (per-tier regression)", () => {
     openaiMock.parsedBody = { error: "blocked by gateway WAF" };
   });
 
-  it("openai-completions (body-blind text) surfaces status + body", async () => {
-    const output = await drainResult(
-      streamOpenAICompletions(completionsModel, context, { apiKey: "test" }),
-    );
+  it("openai-completions (body-blind text) surfaces status + body", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const output = yield* Effect.promise(() =>
+          drainResult(streamOpenAICompletions(completionsModel, context, { apiKey: "test" })),
+        );
 
-    expect(output.stopReason).toBe("error");
-    expect(output.errorMessage).toContain("403");
-    expect(output.errorMessage).toContain("blocked by gateway WAF");
-    expect(output.errorMessage).not.toBe("403 status code (no body)");
-  });
+        expect(output.stopReason).toBe("error");
+        expect(output.errorMessage).toContain("403");
+        expect(output.errorMessage).toContain("blocked by gateway WAF");
+        expect(output.errorMessage).not.toBe("403 status code (no body)");
+      }),
+    ));
 
-  it("openai-completions does not double-print the OpenRouter metadata.raw extra", async () => {
-    openaiMock.parsedBody = {
-      message: "Provider returned error",
-      code: 403,
-      metadata: { raw: "upstream WAF blocked policy XYZ" },
-    };
+  it("openai-completions does not double-print the OpenRouter metadata.raw extra", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        openaiMock.parsedBody = {
+          message: "Provider returned error",
+          code: 403,
+          metadata: { raw: "upstream WAF blocked policy XYZ" },
+        };
 
-    const output = await drainResult(
-      streamOpenAICompletions(completionsModel, context, { apiKey: "test" }),
-    );
+        const output = yield* Effect.promise(() =>
+          drainResult(streamOpenAICompletions(completionsModel, context, { apiKey: "test" })),
+        );
 
-    expect(output.errorMessage).toContain("upstream WAF blocked policy XYZ");
-    const occurrences = output.errorMessage?.match(/upstream WAF blocked policy XYZ/gu) ?? [];
-    expect(occurrences).toHaveLength(1);
-  });
+        expect(output.errorMessage).toContain("upstream WAF blocked policy XYZ");
+        const occurrences = output.errorMessage?.match(/upstream WAF blocked policy XYZ/gu) ?? [];
+        expect(occurrences).toHaveLength(1);
+      }),
+    ));
 
-  it("openai-responses (status-only) keeps the prefix and surfaces the body", async () => {
-    const output = await drainResult(
-      streamOpenAIResponses(responsesModel, context, { apiKey: "test" }),
-    );
+  it("openai-responses (status-only) keeps the prefix and surfaces the body", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const output = yield* Effect.promise(() =>
+          drainResult(streamOpenAIResponses(responsesModel, context, { apiKey: "test" })),
+        );
 
-    expect(output.stopReason).toBe("error");
-    expect(output.errorMessage).toContain("OpenAI API error (403)");
-    expect(output.errorMessage).toContain("blocked by gateway WAF");
-  });
+        expect(output.stopReason).toBe("error");
+        expect(output.errorMessage).toContain("OpenAI API error (403)");
+        expect(output.errorMessage).toContain("blocked by gateway WAF");
+      }),
+    ));
 
-  it("bedrock (body-blind) surfaces the gateway body instead of Unknown: UnknownError", async () => {
-    bedrockMock.sendError = Object.assign(new Error("UnknownError"), {
-      name: "UnknownError",
-      $metadata: { httpStatusCode: 403 },
-      $response: { statusCode: 403, body: '{"message":"blocked by gateway WAF"}' },
-    });
+  it("bedrock (body-blind) surfaces the gateway body instead of Unknown: UnknownError", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.sendError = Object.assign(new Error("UnknownError"), {
+          name: "UnknownError",
+          $metadata: { httpStatusCode: 403 },
+          $response: { statusCode: 403, body: '{"message":"blocked by gateway WAF"}' },
+        });
 
-    const model = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
-    const output = await drainResult(
-      streamSimpleBedrock(model, normalizeContext({ messages: context.messages }), {}),
-    );
+        const model = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
+        const output = yield* Effect.promise(() =>
+          drainResult(
+            streamSimpleBedrock(model, normalizeContext({ messages: context.messages }), {}),
+          ),
+        );
 
-    expect(output.stopReason).toBe("error");
-    expect(output.errorMessage).toContain("403");
-    expect(output.errorMessage).toContain("blocked by gateway WAF");
-    expect(output.errorMessage).not.toContain("Unknown: UnknownError");
-  });
+        expect(output.stopReason).toBe("error");
+        expect(output.errorMessage).toContain("403");
+        expect(output.errorMessage).toContain("blocked by gateway WAF");
+        expect(output.errorMessage).not.toContain("Unknown: UnknownError");
+      }),
+    ));
 
-  it("bedrock preserves the SDK validation message when the response body is a stream", async () => {
-    bedrockMock.sendError = Object.assign(
-      new Error(
-        "Invocation of model ID anthropic.claude-opus-5 with on-demand throughput isn't supported. Retry with an inference profile.",
-      ),
-      {
-        name: "ValidationException",
-        $metadata: { httpStatusCode: 400 },
-        $response: {
-          statusCode: 400,
-          body: { pipe: () => undefined, _readableState: { buffer: [], length: 0 } },
-        },
-      },
-    );
+  it("bedrock preserves the SDK validation message when the response body is a stream", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        bedrockMock.sendError = Object.assign(
+          new Error(
+            "Invocation of model ID anthropic.claude-opus-5 with on-demand throughput isn't supported. Retry with an inference profile.",
+          ),
+          {
+            name: "ValidationException",
+            $metadata: { httpStatusCode: 400 },
+            $response: {
+              statusCode: 400,
+              body: { pipe: () => undefined, _readableState: { buffer: [], length: 0 } },
+            },
+          },
+        );
 
-    const model = getModel("amazon-bedrock", "global.anthropic.claude-opus-5");
-    const output = await drainResult(
-      streamSimpleBedrock(model, normalizeContext({ messages: context.messages }), {}),
-    );
+        const model = getModel("amazon-bedrock", "global.anthropic.claude-opus-5");
+        const output = yield* Effect.promise(() =>
+          drainResult(
+            streamSimpleBedrock(model, normalizeContext({ messages: context.messages }), {}),
+          ),
+        );
 
-    expect(output.stopReason).toBe("error");
-    expect(output.errorMessage).toContain("on-demand throughput isn't supported");
-    expect(output.errorMessage).toContain("inference profile");
-    expect(output.errorMessage).not.toContain("_readableState");
-  });
+        expect(output.stopReason).toBe("error");
+        expect(output.errorMessage).toContain("on-demand throughput isn't supported");
+        expect(output.errorMessage).toContain("inference profile");
+        expect(output.errorMessage).not.toContain("_readableState");
+      }),
+    ));
 });

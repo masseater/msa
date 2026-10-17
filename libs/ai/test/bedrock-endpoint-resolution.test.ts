@@ -1,4 +1,7 @@
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+
+import { envValue } from "./env.ts";
 
 const bedrockMock = vi.hoisted(() => ({
   constructorCalls: [] as Array<Record<string, unknown>>,
@@ -52,48 +55,50 @@ const context: Context = {
   messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
 };
 
-const originalAwsRegion = process.env["AWS_REGION"];
-const originalAwsDefaultRegion = process.env["AWS_DEFAULT_REGION"];
-const originalAwsProfile = process.env["AWS_PROFILE"];
+const originalAwsRegion = envValue("AWS_REGION");
+const originalAwsDefaultRegion = envValue("AWS_DEFAULT_REGION");
+const originalAwsProfile = envValue("AWS_PROFILE");
 
 beforeEach(() => {
   bedrockMock.constructorCalls.length = 0;
-  delete process.env["AWS_REGION"];
-  delete process.env["AWS_DEFAULT_REGION"];
-  delete process.env["AWS_PROFILE"];
+  vi.stubEnv("AWS_REGION", undefined);
+  vi.stubEnv("AWS_DEFAULT_REGION", undefined);
+  vi.stubEnv("AWS_PROFILE", undefined);
 });
 
 afterEach(() => {
   if (originalAwsRegion === undefined) {
-    delete process.env["AWS_REGION"];
+    vi.stubEnv("AWS_REGION", undefined);
   } else {
-    process.env["AWS_REGION"] = originalAwsRegion;
+    vi.stubEnv("AWS_REGION", originalAwsRegion);
   }
 
   if (originalAwsDefaultRegion === undefined) {
-    delete process.env["AWS_DEFAULT_REGION"];
+    vi.stubEnv("AWS_DEFAULT_REGION", undefined);
   } else {
-    process.env["AWS_DEFAULT_REGION"] = originalAwsDefaultRegion;
+    vi.stubEnv("AWS_DEFAULT_REGION", originalAwsDefaultRegion);
   }
 
   if (originalAwsProfile === undefined) {
-    delete process.env["AWS_PROFILE"];
+    vi.stubEnv("AWS_PROFILE", undefined);
   } else {
-    process.env["AWS_PROFILE"] = originalAwsProfile;
+    vi.stubEnv("AWS_PROFILE", originalAwsProfile);
   }
 });
 
-async function captureClientConfig(
+const captureClientConfig = Effect.fn("captureClientConfig")(function* (
   model: Model<"bedrock-converse-stream">,
   options: BedrockOptions = {},
-): Promise<Record<string, unknown>> {
+) {
   bedrockMock.constructorCalls.length = 0;
-  await streamBedrock(model, context, { cacheRetention: "none", ...options }).result();
+  yield* Effect.promise(() =>
+    streamBedrock(model, context, { cacheRetention: "none", ...options }).result(),
+  );
   expect(bedrockMock.constructorCalls).toHaveLength(1);
   const [config] = bedrockMock.constructorCalls;
   if (config === undefined) throw new Error("Expected a BedrockRuntimeClient constructor call");
   return config;
-}
+});
 
 describe("bedrock endpoint resolution", () => {
   it("assigns eu-central-1 runtime URLs to built-in EU inference profiles", () => {
@@ -102,109 +107,135 @@ describe("bedrock endpoint resolution", () => {
     expect(model.baseUrl).toBe("https://bedrock-runtime.eu-central-1.amazonaws.com");
   });
 
-  it("does not pin standard AWS endpoints when AWS_REGION is configured", async () => {
-    process.env["AWS_REGION"] = "us-east-2";
-    const model = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
+  it("does not pin standard AWS endpoints when AWS_REGION is configured", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("AWS_REGION", "us-east-2");
+        const model = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
 
-    const config = await captureClientConfig(model);
+        const config = yield* captureClientConfig(model);
 
-    expect(config["region"]).toBe("us-east-2");
-    expect(config["endpoint"]).toBeUndefined();
-  });
+        expect(config["region"]).toBe("us-east-2");
+        expect(config["endpoint"]).toBeUndefined();
+      }),
+    ));
 
-  it("derives region from a built-in EU endpoint when no region or profile is configured", async () => {
-    const model = getModel("amazon-bedrock", "eu.anthropic.claude-sonnet-4-5-20250929-v1:0");
+  it("derives region from a built-in EU endpoint when no region or profile is configured", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("amazon-bedrock", "eu.anthropic.claude-sonnet-4-5-20250929-v1:0");
 
-    const config = await captureClientConfig(model);
+        const config = yield* captureClientConfig(model);
 
-    expect(config["endpoint"]).toBe("https://bedrock-runtime.eu-central-1.amazonaws.com");
-    expect(config["region"]).toBe("eu-central-1");
-  });
+        expect(config["endpoint"]).toBe("https://bedrock-runtime.eu-central-1.amazonaws.com");
+        expect(config["region"]).toBe("eu-central-1");
+      }),
+    ));
 
-  it("handles missing regions for explicit, scoped, and ambient profiles", async () => {
-    const model = getModel("amazon-bedrock", "eu.anthropic.claude-sonnet-4-5-20250929-v1:0");
+  it("handles missing regions for explicit, scoped, and ambient profiles", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("amazon-bedrock", "eu.anthropic.claude-sonnet-4-5-20250929-v1:0");
 
-    let config = await captureClientConfig(model, { profile: "bedrock-profile" });
+        let config = yield* captureClientConfig(model, { profile: "bedrock-profile" });
 
-    expect(config["profile"]).toBe("bedrock-profile");
-    expect(config["endpoint"]).toBe("https://bedrock-runtime.eu-central-1.amazonaws.com");
-    expect(config["region"]).toBe("eu-central-1");
+        expect(config["profile"]).toBe("bedrock-profile");
+        expect(config["endpoint"]).toBe("https://bedrock-runtime.eu-central-1.amazonaws.com");
+        expect(config["region"]).toBe("eu-central-1");
 
-    config = await captureClientConfig(model, { env: { AWS_PROFILE: "scoped-bedrock-profile" } });
+        config = yield* captureClientConfig(model, {
+          env: { AWS_PROFILE: "scoped-bedrock-profile" },
+        });
 
-    expect(config["profile"]).toBe("scoped-bedrock-profile");
-    expect(config["endpoint"]).toBe("https://bedrock-runtime.eu-central-1.amazonaws.com");
-    expect(config["region"]).toBe("eu-central-1");
+        expect(config["profile"]).toBe("scoped-bedrock-profile");
+        expect(config["endpoint"]).toBe("https://bedrock-runtime.eu-central-1.amazonaws.com");
+        expect(config["region"]).toBe("eu-central-1");
 
-    process.env["AWS_PROFILE"] = "ambient-bedrock-profile";
-    config = await captureClientConfig(model);
+        vi.stubEnv("AWS_PROFILE", "ambient-bedrock-profile");
+        config = yield* captureClientConfig(model);
 
-    expect(config["profile"]).toBe("ambient-bedrock-profile");
-    expect(config["endpoint"]).toBeUndefined();
-    expect(config["region"]).toBeUndefined();
-  });
+        expect(config["profile"]).toBe("ambient-bedrock-profile");
+        expect(config["endpoint"]).toBeUndefined();
+        expect(config["region"]).toBeUndefined();
+      }),
+    ));
 
-  it("still passes custom Bedrock endpoints through to the SDK client", async () => {
-    process.env["AWS_REGION"] = "us-west-2";
-    const baseModel = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
-    const model: Model<"bedrock-converse-stream"> = {
-      ...baseModel,
-      baseUrl: "https://bedrock-vpc.example.com",
-    };
+  it("still passes custom Bedrock endpoints through to the SDK client", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("AWS_REGION", "us-west-2");
+        const baseModel = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
+        const model: Model<"bedrock-converse-stream"> = {
+          ...baseModel,
+          baseUrl: "https://bedrock-vpc.example.com",
+        };
 
-    const config = await captureClientConfig(model);
+        const config = yield* captureClientConfig(model);
 
-    expect(config["endpoint"]).toBe("https://bedrock-vpc.example.com");
-    expect(config["region"]).toBe("us-west-2");
-  });
+        expect(config["endpoint"]).toBe("https://bedrock-vpc.example.com");
+        expect(config["region"]).toBe("us-west-2");
+      }),
+    ));
 
-  it("extracts region from inference profile ARN regardless of AWS_REGION", async () => {
-    process.env["AWS_REGION"] = "us-east-1";
-    const baseModel = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
-    const model: Model<"bedrock-converse-stream"> = {
-      ...baseModel,
-      id: "arn:aws:bedrock:us-west-2:123456789012:application-inference-profile/abc123",
-    };
+  it("extracts region from inference profile ARN regardless of AWS_REGION", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("AWS_REGION", "us-east-1");
+        const baseModel = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
+        const model: Model<"bedrock-converse-stream"> = {
+          ...baseModel,
+          id: "arn:aws:bedrock:us-west-2:123456789012:application-inference-profile/abc123",
+        };
 
-    const config = await captureClientConfig(model);
+        const config = yield* captureClientConfig(model);
 
-    expect(config["region"]).toBe("us-west-2");
-  });
+        expect(config["region"]).toBe("us-west-2");
+      }),
+    ));
 
-  it("extracts region from GovCloud inference profile ARN", async () => {
-    process.env["AWS_REGION"] = "us-east-1";
-    const baseModel = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
-    const model: Model<"bedrock-converse-stream"> = {
-      ...baseModel,
-      id: "arn:aws-us-gov:bedrock:us-gov-west-1:123456789012:application-inference-profile/abc123",
-    };
+  it("extracts region from GovCloud inference profile ARN", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("AWS_REGION", "us-east-1");
+        const baseModel = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
+        const model: Model<"bedrock-converse-stream"> = {
+          ...baseModel,
+          id: "arn:aws-us-gov:bedrock:us-gov-west-1:123456789012:application-inference-profile/abc123",
+        };
 
-    const config = await captureClientConfig(model);
+        const config = yield* captureClientConfig(model);
 
-    expect(config["region"]).toBe("us-gov-west-1");
-  });
+        expect(config["region"]).toBe("us-gov-west-1");
+      }),
+    ));
 
-  it("preserves ambient AWS auth for custom model IDs through compat dispatch", async () => {
-    process.env["AWS_PROFILE"] = "bedrock-profile";
-    const baseModel = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
-    const model: Model<"bedrock-converse-stream"> = {
-      ...baseModel,
-      id: "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/example",
-    };
+  it("preserves ambient AWS auth for custom model IDs through compat dispatch", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.stubEnv("AWS_PROFILE", "bedrock-profile");
+        const baseModel = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
+        const model: Model<"bedrock-converse-stream"> = {
+          ...baseModel,
+          id: "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/example",
+        };
 
-    const config = await captureClientConfig(model);
+        const config = yield* captureClientConfig(model);
 
-    expect(config["profile"]).toBe("bedrock-profile");
-    expect(config["token"]).toBeUndefined();
-    expect(config["authSchemePreference"]).toBeUndefined();
-  });
+        expect(config["profile"]).toBe("bedrock-profile");
+        expect(config["token"]).toBeUndefined();
+        expect(config["authSchemePreference"]).toBeUndefined();
+      }),
+    ));
 
-  it("uses the generic API key option as a Bedrock bearer token", async () => {
-    const model = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
+  it("uses the generic API key option as a Bedrock bearer token", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
 
-    const config = await captureClientConfig(model, { apiKey: "bedrock-api-key" });
+        const config = yield* captureClientConfig(model, { apiKey: "bedrock-api-key" });
 
-    expect(config["token"]).toEqual({ token: "bedrock-api-key" });
-    expect(config["authSchemePreference"]).toEqual(["httpBearerAuth"]);
-  });
+        expect(config["token"]).toEqual({ token: "bedrock-api-key" });
+        expect(config["authSchemePreference"]).toEqual(["httpBearerAuth"]);
+      }),
+    ));
 });

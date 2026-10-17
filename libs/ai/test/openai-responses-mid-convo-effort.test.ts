@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -79,11 +80,11 @@ function responseEvents(responseId: string, withToolCall: boolean): object[] {
   ];
 }
 
-async function runOpenAI(
+const runOpenAI = Effect.fn("runOpenAI")(function* (
   messages: Message[],
   reasoningEffort: OpenAIResponsesOptions["reasoningEffort"],
   options: { apiKey?: string; model?: Model<"openai-responses">; withToolCall?: boolean } = {},
-): Promise<{ payload: Payload; message: AssistantMessage }> {
+) {
   let payload: Payload | undefined;
   const fetchMock = (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
     payload = JSON.parse(String(init?.body)) as Payload;
@@ -94,114 +95,124 @@ async function runOpenAI(
       new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }),
     );
   };
-  const message = await streamOpenAIResponses(
-    options.model ?? openAIModel(),
-    normalizeContext({ messages }),
-    {
+  const message = yield* Effect.promise(() =>
+    streamOpenAIResponses(options.model ?? openAIModel(), normalizeContext({ messages }), {
       apiKey: options.apiKey ?? "sk-test",
       reasoningEffort,
       fetch: fetchMock as typeof globalThis.fetch,
-    },
-  ).result();
+    }).result(),
+  );
   if (payload === undefined) throw new Error("Request payload was not captured");
   expect(message.stopReason).not.toBe("error");
   return { payload, message };
-}
+});
 
 describe("OpenAI Responses configuration_update", () => {
-  it("keeps reasoning.effort constant and only appends input when the level changes", async () => {
-    const history: Message[] = [user("one")];
-    const first = await runOpenAI(history, "high");
-    history.push(first.message, user("two"));
-    const second = await runOpenAI(history, "high");
-    history.push(second.message, user("three"));
-    const third = await runOpenAI(history, "low");
+  it("keeps reasoning.effort constant and only appends input when the level changes", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const history: Message[] = [user("one")];
+        const first = yield* runOpenAI(history, "high");
+        history.push(first.message, user("two"));
+        const second = yield* runOpenAI(history, "high");
+        history.push(second.message, user("three"));
+        const third = yield* runOpenAI(history, "low");
 
-    expect(first.payload.input).toEqual([
-      { role: "user", content: [{ type: "input_text", text: "one" }] },
-      update("high"),
-    ]);
-    for (const { payload } of [first, second, third]) {
-      expect(payload.reasoning?.effort).toBe("medium");
-    }
-    expect(second.payload.input.slice(0, first.payload.input.length)).toEqual(first.payload.input);
-    expect(third.payload.input.slice(0, second.payload.input.length)).toEqual(second.payload.input);
-    expect(third.payload.input.filter((item) => item["type"] === "configuration_update")).toEqual([
-      update("high"),
-      update("high"),
-      update("low"),
-    ]);
-    expect(third.payload.input.at(-1)).toEqual(update("low"));
-    expect([first, second, third].map(({ message }) => message.providerThinkingLevel)).toEqual([
-      "high",
-      "high",
-      "low",
-    ]);
-  });
+        expect(first.payload.input).toEqual([
+          { role: "user", content: [{ type: "input_text", text: "one" }] },
+          update("high"),
+        ]);
+        for (const { payload } of [first, second, third]) {
+          expect(payload.reasoning?.effort).toBe("medium");
+        }
+        expect(second.payload.input.slice(0, first.payload.input.length)).toEqual(
+          first.payload.input,
+        );
+        expect(third.payload.input.slice(0, second.payload.input.length)).toEqual(
+          second.payload.input,
+        );
+        expect(
+          third.payload.input.filter((item) => item["type"] === "configuration_update"),
+        ).toEqual([update("high"), update("high"), update("low")]);
+        expect(third.payload.input.at(-1)).toEqual(update("low"));
+        expect([first, second, third].map(({ message }) => message.providerThinkingLevel)).toEqual([
+          "high",
+          "high",
+          "low",
+        ]);
+      }),
+    ));
 
-  it("applies a level change made during a tool loop to the next reply", async () => {
-    const history: Message[] = [user("one")];
-    const toolCall = await runOpenAI(history, "high", { withToolCall: true });
-    history.push(toolCall.message, toolResult("call_1|fc_1"));
-    const afterTool = await runOpenAI(history, "low");
+  it("applies a level change made during a tool loop to the next reply", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const history: Message[] = [user("one")];
+        const toolCall = yield* runOpenAI(history, "high", { withToolCall: true });
+        history.push(toolCall.message, toolResult("call_1|fc_1"));
+        const afterTool = yield* runOpenAI(history, "low");
 
-    expect(afterTool.payload.input.slice(0, toolCall.payload.input.length)).toEqual(
-      toolCall.payload.input,
-    );
-    expect(afterTool.payload.input.slice(-2)).toEqual([
-      expect.objectContaining({ type: "function_call_output", call_id: "call_1" }),
-      update("low"),
-    ]);
-    expect(afterTool.message.providerThinkingLevel).toBe("low");
-  });
+        expect(afterTool.payload.input.slice(0, toolCall.payload.input.length)).toEqual(
+          toolCall.payload.input,
+        );
+        expect(afterTool.payload.input.slice(-2)).toEqual([
+          expect.objectContaining({ type: "function_call_output", call_id: "call_1" }),
+          update("low"),
+        ]);
+        expect(afterTool.message.providerThinkingLevel).toBe("low");
+      }),
+    ));
 
-  it("adds items only before replies recorded by this model", async () => {
-    const unstamped = (await runOpenAI([user("one")], "high", { model: openAIModel({}) })).message;
-    const otherProvider: AssistantMessage = {
-      ...unstamped,
-      provider: "opencode",
-      providerThinkingLevel: "high",
-    };
-    const otherModel: AssistantMessage = {
-      ...unstamped,
-      model: "gpt-6-sol",
-      providerThinkingLevel: "high",
-    };
-    const recorded: AssistantMessage = { ...unstamped, providerThinkingLevel: "high" };
+  it("adds items only before replies recorded by this model", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const unstamped = (yield* runOpenAI([user("one")], "high", { model: openAIModel({}) }))
+          .message;
+        const otherProvider: AssistantMessage = {
+          ...unstamped,
+          provider: "opencode",
+          providerThinkingLevel: "high",
+        };
+        const otherModel: AssistantMessage = {
+          ...unstamped,
+          model: "gpt-6-sol",
+          providerThinkingLevel: "high",
+        };
+        const recorded: AssistantMessage = { ...unstamped, providerThinkingLevel: "high" };
 
-    const { payload } = await runOpenAI(
-      [
-        user("one"),
-        unstamped,
-        user("two"),
-        otherProvider,
-        user("three"),
-        otherModel,
-        user("four"),
-        recorded,
-        user("five"),
-      ],
-      "low",
-    );
+        const { payload } = yield* runOpenAI(
+          [
+            user("one"),
+            unstamped,
+            user("two"),
+            otherProvider,
+            user("three"),
+            otherModel,
+            user("four"),
+            recorded,
+            user("five"),
+          ],
+          "low",
+        );
 
-    expect(payload.input.map((item) => item["type"] ?? item["role"])).toEqual([
-      "user",
-      "message",
-      "user",
-      "message",
-      "user",
-      "message",
-      "user",
-      "configuration_update",
-      "message",
-      "user",
-      "configuration_update",
-    ]);
-    expect(payload.input.filter((item) => item["type"] === "configuration_update")).toEqual([
-      update("high"),
-      update("low"),
-    ]);
-  });
+        expect(payload.input.map((item) => item["type"] ?? item["role"])).toEqual([
+          "user",
+          "message",
+          "user",
+          "message",
+          "user",
+          "message",
+          "user",
+          "configuration_update",
+          "message",
+          "user",
+          "configuration_update",
+        ]);
+        expect(payload.input.filter((item) => item["type"] === "configuration_update")).toEqual([
+          update("high"),
+          update("low"),
+        ]);
+      }),
+    ));
 
   it.each([
     {
@@ -227,20 +238,23 @@ describe("OpenAI Responses configuration_update", () => {
     },
   ] as const)(
     "sends the level as reasoning.effort with $name",
-    async ({ apiKey, model, level, effort }) => {
-      const first = await runOpenAI([user("one")], "high", { apiKey, model });
-      const { payload, message } = await runOpenAI(
-        [user("one"), first.message, user("two")],
-        level,
-        {
-          apiKey,
-          model,
-        },
-      );
+    ({ apiKey, model, level, effort }) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const first = yield* runOpenAI([user("one")], "high", { apiKey, model });
+          const { payload, message } = yield* runOpenAI(
+            [user("one"), first.message, user("two")],
+            level,
+            {
+              apiKey,
+              model,
+            },
+          );
 
-      expect(payload.reasoning?.effort).toBe(effort);
-      expect(payload.input.some((item) => item["type"] === "configuration_update")).toBe(false);
-      expect(message.providerThinkingLevel).toBeUndefined();
-    },
+          expect(payload.reasoning?.effort).toBe(effort);
+          expect(payload.input.some((item) => item["type"] === "configuration_update")).toBe(false);
+          expect(message.providerThinkingLevel).toBeUndefined();
+        }),
+      ),
   );
 });

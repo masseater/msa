@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { type BuiltinProvider, complete, getModels, getProviders } from "../src/compat.ts";
@@ -77,34 +78,37 @@ function withLongCacheRetention(model: Model<"anthropic-messages">): Model<"anth
   };
 }
 
-async function expectLongCacheRetentionAccepted(
+const expectLongCacheRetentionAccepted = Effect.fn("expectLongCacheRetentionAccepted")(function* (
   model: Model<"anthropic-messages">,
   apiKey: string | undefined,
-): Promise<void> {
+) {
   const options: ProviderStreamOptions = {
     apiKey,
     cacheRetention: "long",
     maxTokens: 128,
     thinkingEnabled: false,
   };
-  const response = await complete(
-    model,
-    {
-      systemPrompt: "You are a concise assistant.",
-      messages: [
-        {
-          role: "user",
-          content: "Reply with exactly: long cache retention accepted",
-          timestamp: Date.now(),
-        },
-      ],
-    },
-    options,
+  const currentTime = yield* Clock.currentTimeMillis;
+  const response = yield* Effect.promise(() =>
+    complete(
+      model,
+      {
+        systemPrompt: "You are a concise assistant.",
+        messages: [
+          {
+            role: "user",
+            content: "Reply with exactly: long cache retention accepted",
+            timestamp: currentTime,
+          },
+        ],
+      },
+      options,
+    ),
   );
 
   expect(response.errorMessage, response.errorMessage).toBeFalsy();
   expect(response.stopReason, response.errorMessage).not.toBe("error");
-}
+});
 
 describe("Anthropic Messages long cache retention E2E", () => {
   it("covers every generated anthropic-messages model", () => {
@@ -123,9 +127,7 @@ describe("Anthropic Messages long cache retention E2E", () => {
       it.skipIf(testCase.apiKey === undefined || testCase.apiKey === "")(
         `${testCase.name} accepts long cache retention`,
         { retry: 2 },
-        async () => {
-          await expectLongCacheRetentionAccepted(model, testCase.apiKey);
-        },
+        () => Effect.runPromise(expectLongCacheRetentionAccepted(model, testCase.apiKey)),
       );
     }
   });

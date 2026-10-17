@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
@@ -23,43 +24,51 @@ const context = normalizeContext({
   tools: [],
 });
 
-async function capturePayload(
+const capturePayload = Effect.fn("capturePayload")(function* (
   apiKey: string,
   requestModel: Model<"openai-responses"> = model,
-): Promise<Record<string, unknown>> {
+) {
   let payload: Record<string, unknown> | undefined;
-  await streamOpenAIResponses(requestModel, context, {
-    apiKey,
-    maxTokens: 1000,
-    temperature: 0.5,
-    cacheRetention: "long",
-    onPayload: (params) => {
-      payload = params as Record<string, unknown>;
-    },
-    fetch: () => Promise.resolve(new Response(null, { status: 500 })),
-  }).result();
+  yield* Effect.promise(() =>
+    streamOpenAIResponses(requestModel, context, {
+      apiKey,
+      maxTokens: 1000,
+      temperature: 0.5,
+      cacheRetention: "long",
+      onPayload: (params) => {
+        payload = params as Record<string, unknown>;
+      },
+      fetch: () => Promise.resolve(new Response(null, { status: 500 })),
+    }).result(),
+  );
   if (payload === undefined) throw new Error("Request payload was not captured");
   return payload;
-}
+});
 
 describe("OpenAI Responses with Sign in with ChatGPT", () => {
-  it("omits request fields that token sharing rejects", async () => {
-    const payload = await capturePayload("chatgpt-access-token");
+  it("omits request fields that token sharing rejects", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload("chatgpt-access-token");
 
-    expect(payload).not.toHaveProperty("max_output_tokens");
-    expect(payload).not.toHaveProperty("temperature");
-    expect(payload["prompt_cache_retention"]).toBeUndefined();
-  });
+        expect(payload).not.toHaveProperty("max_output_tokens");
+        expect(payload).not.toHaveProperty("temperature");
+        expect(payload["prompt_cache_retention"]).toBeUndefined();
+      }),
+    ));
 
-  it("omits prompt_cache_options on models with explicit prompt cache mode", async () => {
-    const explicitCacheModel = { ...model, compat: { supportsExplicitPromptCacheMode: true } };
+  it("omits prompt_cache_options on models with explicit prompt cache mode", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const explicitCacheModel = { ...model, compat: { supportsExplicitPromptCacheMode: true } };
 
-    const signInPayload = await capturePayload("chatgpt-access-token", explicitCacheModel);
-    const apiKeyPayload = await capturePayload("sk-proj-test", explicitCacheModel);
+        const signInPayload = yield* capturePayload("chatgpt-access-token", explicitCacheModel);
+        const apiKeyPayload = yield* capturePayload("sk-proj-test", explicitCacheModel);
 
-    expect(signInPayload["prompt_cache_options"]).toBeUndefined();
-    expect(apiKeyPayload["prompt_cache_options"]).toEqual({ ttl: "30m" });
-  });
+        expect(signInPayload["prompt_cache_options"]).toBeUndefined();
+        expect(apiKeyPayload["prompt_cache_options"]).toEqual({ ttl: "30m" });
+      }),
+    ));
 
   it.each([
     { name: "OpenAI API keys", apiKey: "sk-proj-test", requestModel: model },
@@ -68,11 +77,15 @@ describe("OpenAI Responses with Sign in with ChatGPT", () => {
       apiKey: "gateway-key",
       requestModel: { ...model, baseUrl: "https://gateway.example.com/v1" },
     },
-  ])("keeps those fields for $name", async ({ apiKey, requestModel }) => {
-    const payload = await capturePayload(apiKey, requestModel);
+  ])("keeps those fields for $name", ({ apiKey, requestModel }) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(apiKey, requestModel);
 
-    expect(payload["max_output_tokens"]).toBe(1000);
-    expect(payload["temperature"]).toBe(0.5);
-    expect(payload["prompt_cache_retention"]).toBe("24h");
-  });
+        expect(payload["max_output_tokens"]).toBe(1000);
+        expect(payload["temperature"]).toBe(0.5);
+        expect(payload["prompt_cache_retention"]).toBe("24h");
+      }),
+    ),
+  );
 });

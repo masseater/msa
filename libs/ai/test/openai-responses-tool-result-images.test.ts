@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { Clock, Console, Effect } from "effect";
 import type { ResponseFunctionCallOutputItemList } from "openai/resources/responses/responses.js";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
@@ -9,6 +10,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { Api, Context, Model, StreamOptions, Tool, ToolResultMessage } from "../src/compat.ts";
 import { complete, getModel } from "../src/compat.ts";
 import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
+import { envValue } from "./env.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
@@ -33,12 +35,11 @@ type FunctionCallOutputItem = {
 type InputTextItem = { type: "input_text"; text: string };
 type InputImageItem = { type: "input_image"; image_url: string };
 
-async function verifyToolResultImagesStayInFunctionCallOutput<TApi extends Api>(
-  model: Model<TApi>,
-  options?: StreamOptionsWithExtras,
-) {
+const verifyToolResultImagesStayInFunctionCallOutput = Effect.fn(
+  "verifyToolResultImagesStayInFunctionCallOutput",
+)(function* <TApi extends Api>(model: Model<TApi>, options?: StreamOptionsWithExtras) {
   if (!model.input.includes("image")) {
-    console.log(
+    yield* Console.log(
       `Skipping responses tool-result image test. Model ${model.id} does not support images.`,
     );
     return;
@@ -55,13 +56,13 @@ async function verifyToolResultImagesStayInFunctionCallOutput<TApi extends Api>(
         role: "user",
         content:
           "Call get_circle_with_description, then describe both the tool text and the image. Mention the color and shape.",
-        timestamp: Date.now(),
+        timestamp: yield* Clock.currentTimeMillis,
       },
     ],
     tools: [getImageTool],
   };
 
-  const firstResponse = await complete(model, context, options);
+  const firstResponse = yield* Effect.promise(() => complete(model, context, options));
   expect(firstResponse.stopReason, `Error: ${firstResponse.errorMessage}`).toBe("toolUse");
 
   const toolCall = firstResponse.content.find((block) => block.type === "toolCall");
@@ -80,16 +81,18 @@ async function verifyToolResultImagesStayInFunctionCallOutput<TApi extends Api>(
       { type: "image", data: base64Image, mimeType: "image/png" },
     ],
     isError: false,
-    timestamp: Date.now(),
+    timestamp: yield* Clock.currentTimeMillis,
   } satisfies ToolResultMessage);
 
   let capturedPayload: unknown;
-  const secondResponse = await complete(model, context, {
-    ...options,
-    onPayload: (payload) => {
-      capturedPayload = payload;
-    },
-  });
+  const secondResponse = yield* Effect.promise(() =>
+    complete(model, context, {
+      ...options,
+      onPayload: (payload) => {
+        capturedPayload = payload;
+      },
+    }),
+  );
 
   expect(secondResponse.stopReason, `Error: ${secondResponse.errorMessage}`).toBe("stop");
   expect(secondResponse.errorMessage).toBeFalsy();
@@ -146,22 +149,24 @@ async function verifyToolResultImagesStayInFunctionCallOutput<TApi extends Api>(
     .toLowerCase();
   expect(responseText).toContain("red");
   expect(responseText).toContain("circle");
-}
+});
 
 describe("Responses API tool result images", () => {
-  describe.skipIf(
-    process.env["OPENAI_API_KEY"] === undefined || process.env["OPENAI_API_KEY"] === "",
-  )("OpenAI Responses Provider (gpt-5-mini)", () => {
-    const model = getModel("openai", "gpt-5-mini");
+  describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
+    "OpenAI Responses Provider (gpt-5-mini)",
+    () => {
+      const model = getModel("openai", "gpt-5-mini");
 
-    it(
-      "should send tool result images in function_call_output",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await verifyToolResultImagesStayInFunctionCallOutput(model, { reasoningEffort: "low" });
-      },
-    );
-  });
+      it(
+        "should send tool result images in function_call_output",
+        { retry: 3, timeout: 30000 },
+        () =>
+          Effect.runPromise(
+            verifyToolResultImagesStayInFunctionCallOutput(model, { reasoningEffort: "low" }),
+          ),
+      );
+    },
+  );
 
   describe.skipIf(!hasAzureOpenAICredentials())(
     "Azure OpenAI Responses Provider (gpt-4o-mini)",
@@ -176,9 +181,8 @@ describe("Responses API tool result images", () => {
       it(
         "should send tool result images in function_call_output",
         { retry: 3, timeout: 30000 },
-        async () => {
-          await verifyToolResultImagesStayInFunctionCallOutput(model, azureOptions);
-        },
+        () =>
+          Effect.runPromise(verifyToolResultImagesStayInFunctionCallOutput(model, azureOptions)),
       );
     },
   );
@@ -189,12 +193,13 @@ describe("Responses API tool result images", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "should send tool result images in function_call_output",
       { retry: 3, timeout: 30000 },
-      async () => {
-        await verifyToolResultImagesStayInFunctionCallOutput(model, {
-          apiKey: openaiCodexToken,
-          reasoningEffort: "low",
-        });
-      },
+      () =>
+        Effect.runPromise(
+          verifyToolResultImagesStayInFunctionCallOutput(model, {
+            apiKey: openaiCodexToken,
+            reasoningEffort: "low",
+          }),
+        ),
     );
   });
 });

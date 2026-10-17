@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { stream as streamMistral } from "../src/api/mistral-conversations.ts";
@@ -36,38 +37,53 @@ function createFetch(finishReason: string): FetchFunction {
 }
 
 describe("Mistral raw stop reasons", () => {
-  it("preserves raw Mistral finish reasons for successful stops", async () => {
-    const message = await streamMistral(model, context, {
-      apiKey: "test",
-      fetch: createFetch("stop"),
-    }).result();
+  it("preserves raw Mistral finish reasons for successful stops", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const message = yield* Effect.promise(() =>
+          streamMistral(model, context, {
+            apiKey: "test",
+            fetch: createFetch("stop"),
+          }).result(),
+        );
 
-    expect(message.stopReason).toBe("stop");
-    expect(message.rawStopReason).toBe("stop");
-    expect(message.errorMessage).toBeUndefined();
-  });
+        expect(message.stopReason).toBe("stop");
+        expect(message.rawStopReason).toBe("stop");
+        expect(message.errorMessage).toBeUndefined();
+      }),
+    ));
 
-  it("preserves raw Mistral finish reasons for provider error stops", async () => {
-    const message = await streamMistral(model, context, {
-      apiKey: "test",
-      fetch: createFetch("error"),
-    }).result();
+  it("preserves raw Mistral finish reasons for provider error stops", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const message = yield* Effect.promise(() =>
+          streamMistral(model, context, {
+            apiKey: "test",
+            fetch: createFetch("error"),
+          }).result(),
+        );
 
-    expect(message.stopReason).toBe("error");
-    expect(message.rawStopReason).toBe("error");
-    expect(message.errorMessage).toBe("Provider stopped with: error (server error)");
-    expect(isRetryableAssistantError(message)).toBe(true);
-  });
+        expect(message.stopReason).toBe("error");
+        expect(message.rawStopReason).toBe("error");
+        expect(message.errorMessage).toBe("Provider stopped with: error (server error)");
+        expect(isRetryableAssistantError(message)).toBe(true);
+      }),
+    ));
 
-  it("treats unknown Mistral finish reasons as provider error stops", async () => {
-    const message = await streamMistral(model, context, {
-      apiKey: "test",
-      fetch: createFetch("unmapped_error"),
-    }).result();
+  it("treats unknown Mistral finish reasons as provider error stops", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const message = yield* Effect.promise(() =>
+          streamMistral(model, context, {
+            apiKey: "test",
+            fetch: createFetch("unmapped_error"),
+          }).result(),
+        );
 
-    expect(message.stopReason).toBe("error");
-    expect(message.rawStopReason).toBe("unmapped_error");
-    expect(message.errorMessage).toBe("Provider stopped with: unmapped_error");
-    expect(isRetryableAssistantError(message)).toBe(false);
-  });
+        expect(message.stopReason).toBe("error");
+        expect(message.rawStopReason).toBe("unmapped_error");
+        expect(message.errorMessage).toBe("Provider stopped with: unmapped_error");
+        expect(isRetryableAssistantError(message)).toBe(false);
+      }),
+    ));
 });

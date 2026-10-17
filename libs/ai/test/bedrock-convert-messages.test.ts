@@ -1,3 +1,4 @@
+import { Clock, Effect, Stream } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -81,52 +82,67 @@ const novaModel: Model<"bedrock-converse-stream"> = {
   compat: undefined,
 };
 
-async function capturePayload(context: Context, model = baseModel): Promise<unknown> {
-  let capturedPayload: unknown;
-  const s = streamBedrock(model, normalizeContext(context), {
-    cacheRetention: "none",
-    signal: AbortSignal.abort(),
-    onPayload: (payload) => {
-      capturedPayload = payload;
-      return payload;
-    },
-  });
-  for await (const event of s) {
-    if (event.type === "error") break;
-  }
-  return capturedPayload;
+function capturePayload(context: Context, model = baseModel): Promise<unknown> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      let capturedPayload: unknown;
+      const s = streamBedrock(model, normalizeContext(context), {
+        cacheRetention: "none",
+        signal: AbortSignal.abort(),
+        onPayload: (payload) => {
+          capturedPayload = payload;
+          return payload;
+        },
+      });
+      yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+        Stream.orDie,
+        Stream.runForEachWhile((event) =>
+          Effect.sync(() => {
+            if (event.type === "error") return false;
+            return true;
+          }),
+        ),
+      );
+      return capturedPayload;
+    }),
+  );
 }
 
 describe("Bedrock constrained sampling", () => {
-  it("gates native strict tool use by model capability", async () => {
-    const context: Context = {
-      messages: [{ role: "user", content: "Use the tool", timestamp: Date.now() }],
-      tools: [
-        {
-          name: "lookup",
-          description: "Look up a value",
-          parameters: Type.Object({ value: Type.String() }),
-          constrainedSampling: { type: "json_schema", strict: "require" },
-        },
-      ],
-    };
-    const payload = await capturePayload(context);
-    const toolConfig = (
-      payload as { toolConfig: { tools: Array<{ toolSpec: { strict?: boolean } }> } }
-    ).toolConfig;
-    expect(toolConfig.tools[0]?.toolSpec.strict).toBe(true);
+  it("gates native strict tool use by model capability", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const context: Context = {
+          messages: [
+            { role: "user", content: "Use the tool", timestamp: yield* Clock.currentTimeMillis },
+          ],
+          tools: [
+            {
+              name: "lookup",
+              description: "Look up a value",
+              parameters: Type.Object({ value: Type.String() }),
+              constrainedSampling: { type: "json_schema", strict: "require" },
+            },
+          ],
+        };
+        const payload = yield* Effect.promise(() => capturePayload(context));
+        const toolConfig = (
+          payload as { toolConfig: { tools: Array<{ toolSpec: { strict?: boolean } }> } }
+        ).toolConfig;
+        expect(toolConfig.tools[0]?.toolSpec.strict).toBe(true);
 
-    const [lookupTool] = context.tools ?? [];
-    if (lookupTool === undefined) throw new Error("Expected the lookup tool");
-    lookupTool.constrainedSampling = { type: "json_schema", strict: "prefer" };
-    const novaPayload = await capturePayload(context, novaModel);
-    const novaToolConfig = (
-      novaPayload as {
-        toolConfig: { tools: Array<{ toolSpec: { strict?: boolean } }> };
-      }
-    ).toolConfig;
-    expect(novaToolConfig.tools[0]?.toolSpec.strict).toBeUndefined();
-  });
+        const [lookupTool] = context.tools ?? [];
+        if (lookupTool === undefined) throw new Error("Expected the lookup tool");
+        lookupTool.constrainedSampling = { type: "json_schema", strict: "prefer" };
+        const novaPayload = yield* Effect.promise(() => capturePayload(context, novaModel));
+        const novaToolConfig = (
+          novaPayload as {
+            toolConfig: { tools: Array<{ toolSpec: { strict?: boolean } }> };
+          }
+        ).toolConfig;
+        expect(novaToolConfig.tools[0]?.toolSpec.strict).toBeUndefined();
+      }),
+    ));
 });
 
 describe("Bedrock tool arguments", () => {
@@ -182,181 +198,219 @@ describe("Bedrock tool arguments", () => {
 });
 
 describe("bedrock convertMessages skips unknown content types", () => {
-  it("skips unknown user content blocks instead of throwing", async () => {
-    const messages: Message[] = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: "hello" },
-          { type: "unknown", data: "foo" },
-        ] as any,
-        timestamp: Date.now(),
-      },
-    ];
-    const payload = await capturePayload({ messages });
-    expect(payload).toBeDefined();
-    const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
-    expect(p.messages).toHaveLength(1);
-    expect(p.messages[0]?.content).toHaveLength(1);
-    expect(p.messages[0]?.content[0]).toEqual({ text: "hello" });
-  });
+  it("skips unknown user content blocks instead of throwing", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const messages: Message[] = [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "hello" },
+              { type: "unknown", data: "foo" },
+            ] as any,
+            timestamp: yield* Clock.currentTimeMillis,
+          },
+        ];
+        const payload = yield* Effect.promise(() => capturePayload({ messages }));
+        expect(payload).toBeDefined();
+        const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
+        expect(p.messages).toHaveLength(1);
+        expect(p.messages[0]?.content).toHaveLength(1);
+        expect(p.messages[0]?.content[0]).toEqual({ text: "hello" });
+      }),
+    ));
 
-  it("skips unknown assistant content blocks instead of throwing", async () => {
-    const messages: Message[] = [
-      {
-        role: "assistant",
-        content: [
-          { type: "text", text: "hello" },
-          { type: "unknown", data: "foo" },
-        ] as any,
-        api: "bedrock-converse-stream",
-        provider: "amazon-bedrock",
-        model: baseModel.id,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-        stopReason: "stop",
-        timestamp: Date.now(),
-      },
-    ];
-    const payload = await capturePayload({ messages });
-    expect(payload).toBeDefined();
-    const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
-    expect(p.messages).toHaveLength(1);
-    expect(p.messages[0]?.content).toHaveLength(1);
-    expect(p.messages[0]?.content[0]).toEqual({ text: "hello" });
-  });
+  it("skips unknown assistant content blocks instead of throwing", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const messages: Message[] = [
+          {
+            role: "assistant",
+            content: [
+              { type: "text", text: "hello" },
+              { type: "unknown", data: "foo" },
+            ] as any,
+            api: "bedrock-converse-stream",
+            provider: "amazon-bedrock",
+            model: baseModel.id,
+            usage: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+            stopReason: "stop",
+            timestamp: yield* Clock.currentTimeMillis,
+          },
+        ];
+        const payload = yield* Effect.promise(() => capturePayload({ messages }));
+        expect(payload).toBeDefined();
+        const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
+        expect(p.messages).toHaveLength(1);
+        expect(p.messages[0]?.content).toHaveLength(1);
+        expect(p.messages[0]?.content[0]).toEqual({ text: "hello" });
+      }),
+    ));
 
-  it("replaces user messages with only unknown content blocks with a placeholder", async () => {
-    const messages: Message[] = [
-      {
-        role: "user",
-        content: [{ type: "unknown", data: "foo" }] as any,
-        timestamp: Date.now(),
-      },
-    ];
-    const payload = await capturePayload({ messages });
-    expect(payload).toBeDefined();
-    const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
-    expect(p.messages).toHaveLength(1);
-    expect(p.messages[0]?.content).toEqual([{ text: "<empty>" }]);
-  });
+  it("replaces user messages with only unknown content blocks with a placeholder", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const messages: Message[] = [
+          {
+            role: "user",
+            content: [{ type: "unknown", data: "foo" }] as any,
+            timestamp: yield* Clock.currentTimeMillis,
+          },
+        ];
+        const payload = yield* Effect.promise(() => capturePayload({ messages }));
+        expect(payload).toBeDefined();
+        const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
+        expect(p.messages).toHaveLength(1);
+        expect(p.messages[0]?.content).toEqual([{ text: "<empty>" }]);
+      }),
+    ));
 
-  it("replaces blank user string content with a placeholder", async () => {
-    const payload = await capturePayload({
-      messages: [{ role: "user", content: "   ", timestamp: Date.now() }],
-    });
-    expect(payload).toBeDefined();
-    const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
-    expect(p.messages).toHaveLength(1);
-    expect(p.messages[0]?.content).toEqual([{ text: "<empty>" }]);
-  });
+  it("replaces blank user string content with a placeholder", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const currentTime = yield* Clock.currentTimeMillis;
+        const payload = yield* Effect.promise(() =>
+          capturePayload({
+            messages: [{ role: "user", content: "   ", timestamp: currentTime }],
+          }),
+        );
+        expect(payload).toBeDefined();
+        const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
+        expect(p.messages).toHaveLength(1);
+        expect(p.messages[0]?.content).toEqual([{ text: "<empty>" }]);
+      }),
+    ));
 
-  it("filters blank user text blocks when other content remains", async () => {
-    const payload = await capturePayload({
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "" },
-            { type: "text", text: "hello" },
-          ],
-          timestamp: Date.now(),
-        },
-      ],
-    });
-    expect(payload).toBeDefined();
-    const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
-    expect(p.messages).toHaveLength(1);
-    expect(p.messages[0]?.content).toEqual([{ text: "hello" }]);
-  });
+  it("filters blank user text blocks when other content remains", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const currentTime1 = yield* Clock.currentTimeMillis;
+        const payload = yield* Effect.promise(() =>
+          capturePayload({
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: "" },
+                  { type: "text", text: "hello" },
+                ],
+                timestamp: currentTime1,
+              },
+            ],
+          }),
+        );
+        expect(payload).toBeDefined();
+        const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
+        expect(p.messages).toHaveLength(1);
+        expect(p.messages[0]?.content).toEqual([{ text: "hello" }]);
+      }),
+    ));
 
-  it("replaces user content emptied by surrogate sanitization with a placeholder", async () => {
-    const payload = await capturePayload({
-      messages: [{ role: "user", content: String.fromCharCode(0xd83d), timestamp: Date.now() }],
-    });
-    expect(payload).toBeDefined();
-    const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
-    expect(p.messages).toHaveLength(1);
-    expect(p.messages[0]?.content).toEqual([{ text: "<empty>" }]);
-  });
+  it("replaces user content emptied by surrogate sanitization with a placeholder", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const currentTime2 = yield* Clock.currentTimeMillis;
+        const payload = yield* Effect.promise(() =>
+          capturePayload({
+            messages: [
+              { role: "user", content: String.fromCharCode(0xd83d), timestamp: currentTime2 },
+            ],
+          }),
+        );
+        expect(payload).toBeDefined();
+        const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
+        expect(p.messages).toHaveLength(1);
+        expect(p.messages[0]?.content).toEqual([{ text: "<empty>" }]);
+      }),
+    ));
 
-  it("skips assistant text blocks emptied by surrogate sanitization", async () => {
-    const messages: Message[] = [
-      {
-        role: "assistant",
-        content: [{ type: "text", text: String.fromCharCode(0xd83d) }],
-        api: "bedrock-converse-stream",
-        provider: "amazon-bedrock",
-        model: baseModel.id,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-        stopReason: "stop",
-        timestamp: Date.now(),
-      },
-    ];
-    const payload = await capturePayload({ messages });
-    expect(payload).toBeDefined();
-    const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
-    expect(p.messages).toHaveLength(0);
-  });
+  it("skips assistant text blocks emptied by surrogate sanitization", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const messages: Message[] = [
+          {
+            role: "assistant",
+            content: [{ type: "text", text: String.fromCharCode(0xd83d) }],
+            api: "bedrock-converse-stream",
+            provider: "amazon-bedrock",
+            model: baseModel.id,
+            usage: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+            stopReason: "stop",
+            timestamp: yield* Clock.currentTimeMillis,
+          },
+        ];
+        const payload = yield* Effect.promise(() => capturePayload({ messages }));
+        expect(payload).toBeDefined();
+        const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
+        expect(p.messages).toHaveLength(0);
+      }),
+    ));
 
-  it("replaces blank tool result content with a placeholder", async () => {
-    const messages: Message[] = [
-      {
-        role: "toolResult",
-        toolCallId: "tool-1",
-        toolName: "tool",
-        content: [{ type: "text", text: "" }],
-        isError: false,
-        timestamp: Date.now(),
-      },
-    ];
-    const payload = await capturePayload({ messages });
-    expect(payload).toBeDefined();
-    const p = payload as {
-      messages: Array<{ role: string; content: Array<{ toolResult: { content: unknown[] } }> }>;
-    };
-    expect(p.messages).toHaveLength(1);
-    expect(p.messages[0]?.content[0]?.toolResult.content).toEqual([{ text: "<empty>" }]);
-  });
+  it("replaces blank tool result content with a placeholder", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const messages: Message[] = [
+          {
+            role: "toolResult",
+            toolCallId: "tool-1",
+            toolName: "tool",
+            content: [{ type: "text", text: "" }],
+            isError: false,
+            timestamp: yield* Clock.currentTimeMillis,
+          },
+        ];
+        const payload = yield* Effect.promise(() => capturePayload({ messages }));
+        expect(payload).toBeDefined();
+        const p = payload as {
+          messages: Array<{ role: string; content: Array<{ toolResult: { content: unknown[] } }> }>;
+        };
+        expect(p.messages).toHaveLength(1);
+        expect(p.messages[0]?.content[0]?.toolResult.content).toEqual([{ text: "<empty>" }]);
+      }),
+    ));
 
-  it("skips assistant messages with only unknown content blocks", async () => {
-    const messages: Message[] = [
-      {
-        role: "assistant",
-        content: [{ type: "unknown", data: "foo" }] as any,
-        api: "bedrock-converse-stream",
-        provider: "amazon-bedrock",
-        model: baseModel.id,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-        stopReason: "stop",
-        timestamp: Date.now(),
-      },
-    ];
-    const payload = await capturePayload({ messages });
-    expect(payload).toBeDefined();
-    const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
-    expect(p.messages).toHaveLength(0);
-  });
+  it("skips assistant messages with only unknown content blocks", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const messages: Message[] = [
+          {
+            role: "assistant",
+            content: [{ type: "unknown", data: "foo" }] as any,
+            api: "bedrock-converse-stream",
+            provider: "amazon-bedrock",
+            model: baseModel.id,
+            usage: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+            stopReason: "stop",
+            timestamp: yield* Clock.currentTimeMillis,
+          },
+        ];
+        const payload = yield* Effect.promise(() => capturePayload({ messages }));
+        expect(payload).toBeDefined();
+        const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
+        expect(p.messages).toHaveLength(0);
+      }),
+    ));
 
   it("removes empty property names only from replayed Bedrock input", async () => {
     const toolArguments: { path: string; edits: Array<Record<string, string>> } = {

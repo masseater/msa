@@ -1,3 +1,4 @@
+import { envValue } from "./env.ts";
 function parseDeploymentNameMap(value: string | undefined): Map<string, string> {
   const map = new Map<string, string>();
   if (value === undefined || value === "") return map;
@@ -19,15 +20,15 @@ function parseDeploymentNameMap(value: string | undefined): Map<string, string> 
 
 export function hasAzureOpenAICredentials(): boolean {
   const hasKey =
-    process.env["AZURE_OPENAI_API_KEY"] !== undefined && process.env["AZURE_OPENAI_API_KEY"] !== "";
+    envValue("AZURE_OPENAI_API_KEY") !== undefined && envValue("AZURE_OPENAI_API_KEY") !== "";
   const hasBaseUrl = !!(
-    process.env["AZURE_OPENAI_BASE_URL"] || process.env["AZURE_OPENAI_RESOURCE_NAME"]
+    envValue("AZURE_OPENAI_BASE_URL") || envValue("AZURE_OPENAI_RESOURCE_NAME")
   );
   return hasKey && hasBaseUrl;
 }
 
 export function resolveAzureDeploymentName(modelId: string): string | undefined {
-  const mapValue = process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"];
+  const mapValue = envValue("AZURE_OPENAI_DEPLOYMENT_NAME_MAP");
   if (mapValue === undefined || mapValue === "") return undefined;
   return parseDeploymentNameMap(mapValue).get(modelId);
 }

@@ -1,7 +1,9 @@
+import { Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { getModel, stream } from "../src/compat.ts";
 import type { Context, Model } from "../src/types.ts";
+import { envValue } from "./env.ts";
 
 function makeContext(): Context {
   return {
@@ -15,56 +17,75 @@ function makeContext(): Context {
   };
 }
 
-describe.skipIf(
-  process.env["OPENAI_API_KEY"] === undefined || process.env["OPENAI_API_KEY"] === "",
-)("xhigh reasoning", () => {
-  describe("gpt 5.5 (supports xhigh)", () => {
-    it("should work with openai-responses", async () => {
-      const model = getModel("openai", "gpt-5.5");
-      const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
-      let hasThinking = false;
+describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
+  "xhigh reasoning",
+  () => {
+    describe("gpt 5.5 (supports xhigh)", () => {
+      it("should work with openai-responses", () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const model = getModel("openai", "gpt-5.5");
+            const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
+            let hasThinking = false;
 
-      for await (const event of s) {
-        if (event.type === "thinking_start" || event.type === "thinking_delta") {
-          hasThinking = true;
-        }
-      }
+            yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+              Stream.orDie,
+              Stream.runForEach((event) =>
+                Effect.sync(() => {
+                  if (event.type === "thinking_start" || event.type === "thinking_delta") {
+                    hasThinking = true;
+                  }
+                }),
+              ),
+            );
 
-      const response = await s.result();
-      expect(response.stopReason, `Error: ${response.errorMessage}`).toBe("stop");
-      expect(response.content.some((b) => b.type === "text")).toBe(true);
-      expect(hasThinking || response.content.some((b) => b.type === "thinking")).toBe(true);
-    });
-  });
-
-  describe("gpt-5-mini (does not support xhigh)", () => {
-    it("should error with openai-responses when using xhigh", async () => {
-      const model = getModel("openai", "gpt-5-mini");
-      const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
-
-      for await (const _ of s) {
-      }
-
-      const response = await s.result();
-      expect(response.stopReason).toBe("error");
-      expect(response.errorMessage).toContain("xhigh");
+            const response = yield* Effect.promise(() => s.result());
+            expect(response.stopReason, `Error: ${response.errorMessage}`).toBe("stop");
+            expect(response.content.some((b) => b.type === "text")).toBe(true);
+            expect(hasThinking || response.content.some((b) => b.type === "thinking")).toBe(true);
+          }),
+        ));
     });
 
-    it("should error with openai-completions when using xhigh", async () => {
-      const { compat: _compat, ...baseModel } = getModel("openai", "gpt-5-mini");
-      void _compat;
-      const model: Model<"openai-completions"> = {
-        ...baseModel,
-        api: "openai-completions",
-      };
-      const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
+    describe("gpt-5-mini (does not support xhigh)", () => {
+      it("should error with openai-responses when using xhigh", () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const model = getModel("openai", "gpt-5-mini");
+            const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
 
-      for await (const _ of s) {
-      }
+            yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+              Stream.orDie,
+              Stream.runDrain,
+            );
 
-      const response = await s.result();
-      expect(response.stopReason).toBe("error");
-      expect(response.errorMessage).toContain("xhigh");
+            const response = yield* Effect.promise(() => s.result());
+            expect(response.stopReason).toBe("error");
+            expect(response.errorMessage).toContain("xhigh");
+          }),
+        ));
+
+      it("should error with openai-completions when using xhigh", () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const { compat: _compat, ...baseModel } = getModel("openai", "gpt-5-mini");
+            void _compat;
+            const model: Model<"openai-completions"> = {
+              ...baseModel,
+              api: "openai-completions",
+            };
+            const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
+
+            yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+              Stream.orDie,
+              Stream.runDrain,
+            );
+
+            const response = yield* Effect.promise(() => s.result());
+            expect(response.stopReason).toBe("error");
+            expect(response.errorMessage).toContain("xhigh");
+          }),
+        ));
     });
-  });
-});
+  },
+);

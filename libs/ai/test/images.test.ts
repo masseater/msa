@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { Console, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { getImageModel } from "../src/image-models.ts";
@@ -12,13 +13,14 @@ import type {
   ImagesContext,
   ProviderImagesOptions,
 } from "../src/types.ts";
+import { envValue } from "./env.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 type ImagesOptionsWithExtras = ProviderImagesOptions & Record<string, unknown>;
 
-async function basicImageGeneration<TApi extends string>(
+const basicImageGeneration = Effect.fn("basicImageGeneration")(function* <TApi extends string>(
   model: ImageModel<TApi>,
   options?: ImagesOptionsWithExtras,
 ) {
@@ -28,20 +30,20 @@ async function basicImageGeneration<TApi extends string>(
     ],
   };
 
-  const response = await generateImages(model, context, options);
+  const response = yield* Effect.promise(() => generateImages(model, context, options));
 
   expect(response.stopReason, `Error: ${response.errorMessage}`).toBe("stop");
   expect(response.errorMessage).toBeFalsy();
   expect(response.output.some((item) => item.type === "image")).toBe(true);
   expect(response.timestamp).toBeGreaterThan(0);
-}
+});
 
-async function handleImageInput<TApi extends string>(
+const handleImageInput = Effect.fn("handleImageInput")(function* <TApi extends string>(
   model: ImageModel<TApi>,
   options?: ImagesOptionsWithExtras,
 ) {
   if (!model.input.includes("image")) {
-    console.log(`Skipping image input test - model ${model.id} doesn't support image input`);
+    yield* Console.log(`Skipping image input test - model ${model.id} doesn't support image input`);
     return;
   }
 
@@ -60,24 +62,22 @@ async function handleImageInput<TApi extends string>(
     ],
   };
 
-  const response = await generateImages(model, context, options);
+  const response = yield* Effect.promise(() => generateImages(model, context, options));
 
   expect(response.stopReason, `Error: ${response.errorMessage}`).toBe("stop");
   expect(response.output.some((item) => item.type === "image")).toBe(true);
-}
+});
 
 describe("Images E2E Tests", () => {
   describe.skipIf(
-    process.env["OPENROUTER_API_KEY"] === undefined || process.env["OPENROUTER_API_KEY"] === "",
+    envValue("OPENROUTER_API_KEY") === undefined || envValue("OPENROUTER_API_KEY") === "",
   )("OpenRouter Images Provider (google/gemini-2.5-flash-image)", () => {
     const model = getImageModel("openrouter", "google/gemini-2.5-flash-image");
 
-    it("should generate a basic image", { retry: 3 }, async () => {
-      await basicImageGeneration(model);
-    });
+    it("should generate a basic image", { retry: 3 }, () =>
+      Effect.runPromise(basicImageGeneration(model)),
+    );
 
-    it("should handle image input", { retry: 3 }, async () => {
-      await handleImageInput(model);
-    });
+    it("should handle image input", { retry: 3 }, () => Effect.runPromise(handleImageInput(model)));
   });
 });

@@ -1,4 +1,5 @@
 import { NOOP_TELEMETRY_CONTEXT, type TelemetryContext } from "@msa/telemetry";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildBaseOptions } from "../src/api/simple-options.ts";
@@ -81,98 +82,114 @@ describe("ProviderRequestOptions.telemetryContext", () => {
     );
   });
 
-  it("survives provider and Models stream/deferred dispatch", async () => {
-    const observed: Array<TelemetryContext | undefined> = [];
-    const handle: DeferredHandle = {
-      provider: model.provider,
-      modelId: model.id,
-      api: model.api,
-      id: "response",
-    };
-    const provider = createProvider({
-      id: model.provider,
-      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-      models: [model],
-      api: {
-        stream: (requestModel, _context, options) => {
-          observed.push(options?.telemetryContext);
-          return completedStream(requestModel);
-        },
-        streamSimple: (requestModel, _context, options) => {
-          observed.push(options?.telemetryContext);
-          return completedStream(requestModel);
-        },
-        fetchDeferred: (requestModel, _handle, options) => {
-          observed.push(options?.telemetryContext);
-          return completedStream(requestModel);
-        },
-        cancelDeferred: (_requestModel, _handle, options) => {
-          observed.push(options?.telemetryContext);
-
-          return Promise.resolve();
-        },
-      },
-    });
-
-    await provider.stream(model, context, { telemetryContext }).result();
-    await provider.streamSimple(model, context, { telemetryContext }).result();
-    await provider.fetchDeferred!(model, handle, { telemetryContext }).result();
-    await provider.cancelDeferred!(model, handle, { telemetryContext });
-
-    const models = createModels();
-    models.setProvider(provider);
-    await models.stream(model, context, { telemetryContext }).result();
-    await models.streamSimple(model, context, { telemetryContext }).result();
-    await models.fetchDeferred(model, handle, { telemetryContext });
-    await models.cancelDeferred(model, handle, { telemetryContext });
-
-    expect(observed).toHaveLength(8);
-    expect(observed.every((value) => value === telemetryContext)).toBe(true);
-  });
-
-  it("survives direct and Models image dispatch", async () => {
-    const observed: Array<TelemetryContext | undefined> = [];
-    registerImagesApiProvider({
-      api: imageModel.api,
-      generateImages: (requestModel, _context, options) => {
-        observed.push(options?.telemetryContext);
-        return Promise.resolve({
-          api: requestModel.api,
-          provider: requestModel.provider,
-          model: requestModel.id,
-          output: [],
-          stopReason: "stop",
-          timestamp: 0,
-        });
-      },
-    });
-    await generateImages(imageModel, imagesContext, { telemetryContext });
-
-    const models = createModels();
-    models.setProvider(
-      createProvider({
-        id: imageModel.provider,
-        auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-        models: [imageModel],
-        images: {
-          [imageModel.api]: {
-            generateImages: (requestModel, _context, options) => {
+  it("survives provider and Models stream/deferred dispatch", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const observed: Array<TelemetryContext | undefined> = [];
+        const handle: DeferredHandle = {
+          provider: model.provider,
+          modelId: model.id,
+          api: model.api,
+          id: "response",
+        };
+        const provider = createProvider({
+          id: model.provider,
+          auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
+          models: [model],
+          api: {
+            stream: (requestModel, _context, options) => {
               observed.push(options?.telemetryContext);
-              return Promise.resolve({
-                api: requestModel.api,
-                provider: requestModel.provider,
-                model: requestModel.id,
-                output: [],
-                stopReason: "stop",
-                timestamp: 0,
-              });
+              return completedStream(requestModel);
+            },
+            streamSimple: (requestModel, _context, options) => {
+              observed.push(options?.telemetryContext);
+              return completedStream(requestModel);
+            },
+            fetchDeferred: (requestModel, _handle, options) => {
+              observed.push(options?.telemetryContext);
+              return completedStream(requestModel);
+            },
+            cancelDeferred: (_requestModel, _handle, options) => {
+              observed.push(options?.telemetryContext);
+
+              return Promise.resolve();
             },
           },
-        },
-      }),
-    );
-    await models.generateImages(imageModel, imagesContext, { telemetryContext });
+        });
 
-    expect(observed).toEqual([telemetryContext, telemetryContext]);
-  });
+        yield* Effect.promise(() => provider.stream(model, context, { telemetryContext }).result());
+        yield* Effect.promise(() =>
+          provider.streamSimple(model, context, { telemetryContext }).result(),
+        );
+        yield* Effect.promise(() =>
+          provider.fetchDeferred!(model, handle, { telemetryContext }).result(),
+        );
+        yield* Effect.promise(() => provider.cancelDeferred!(model, handle, { telemetryContext }));
+
+        const models = createModels();
+        models.setProvider(provider);
+        yield* Effect.promise(() => models.stream(model, context, { telemetryContext }).result());
+        yield* Effect.promise(() =>
+          models.streamSimple(model, context, { telemetryContext }).result(),
+        );
+        yield* Effect.promise(() => models.fetchDeferred(model, handle, { telemetryContext }));
+        yield* Effect.promise(() => models.cancelDeferred(model, handle, { telemetryContext }));
+
+        expect(observed).toHaveLength(8);
+        expect(observed.every((value) => value === telemetryContext)).toBe(true);
+      }),
+    ));
+
+  it("survives direct and Models image dispatch", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const observed: Array<TelemetryContext | undefined> = [];
+        registerImagesApiProvider({
+          api: imageModel.api,
+          generateImages: (requestModel, _context, options) => {
+            observed.push(options?.telemetryContext);
+            return Promise.resolve({
+              api: requestModel.api,
+              provider: requestModel.provider,
+              model: requestModel.id,
+              output: [],
+              stopReason: "stop",
+              timestamp: 0,
+            });
+          },
+        });
+        yield* Effect.promise(() =>
+          generateImages(imageModel, imagesContext, { telemetryContext }),
+        );
+
+        const models = createModels();
+        models.setProvider(
+          createProvider({
+            id: imageModel.provider,
+            auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
+            models: [imageModel],
+            images: {
+              [imageModel.api]: {
+                generateImages: (requestModel, _context, options) => {
+                  observed.push(options?.telemetryContext);
+                  return Promise.resolve({
+                    api: requestModel.api,
+                    provider: requestModel.provider,
+                    model: requestModel.id,
+                    output: [],
+                    stopReason: "stop",
+                    timestamp: 0,
+                  });
+                },
+              },
+            },
+          }),
+        );
+        yield* Effect.promise(() =>
+          models.generateImages(imageModel, imagesContext, { telemetryContext }),
+        );
+
+        expect(observed).toEqual([telemetryContext, telemetryContext]);
+      }),
+    ));
 });

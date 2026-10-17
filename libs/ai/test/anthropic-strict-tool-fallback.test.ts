@@ -3,6 +3,7 @@ import type {
   BetaTool,
   MessageCreateParamsStreaming,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
+import { Effect, Stream } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -10,6 +11,7 @@ import { type AnthropicOptions, stream as streamAnthropic } from "../src/api/ant
 import { stream as streamMsaMessages } from "../src/api/msa-messages.ts";
 import type { Model, Tool, TranscriptContext } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
+import { decodeJson, encodeJson } from "./json-codec.ts";
 
 const grammarError =
   "The compiled grammar is too large, which would cause performance issues. Simplify your tool schemas or reduce the number of strict tools.";
@@ -83,110 +85,123 @@ describe("Anthropic preferred strict tool fallback", () => {
     grammarError,
     "Too many strict tools (32). The maximum number of strict tools supported is 20. Try reducing the number of tools marked as strict.",
     "Schemas contains too many parameters with union types (480 parameters with type arrays or anyOf). This causes exponential compilation cost. Reduce the number of nullable or union-typed parameters (limit: 16 parameters with unions).",
-  ])(
-    "retries %s with original non-strict schemas and preserves required tools",
-    async (message) => {
-      const preferred = tool("preferred", "prefer");
-      const required = tool("required", "require");
-      const ordinary = tool("ordinary");
-      const transcript = context([preferred, required, ordinary]);
-      const original = JSON.stringify(transcript);
-      const { payloads, options } = harness((_payload, attempt) =>
-        attempt === 1 ? errorResponse(message) : successResponse(),
-      );
-      const onPayload = vi.fn((payload: unknown) => ({
-        ...(payload as MessageCreateParamsStreaming),
-        inference_geo: "us",
-        stream: false,
-      }));
-      const onResponse = vi.fn();
-      const stream = streamAnthropic(model, transcript, {
-        ...options,
-        onPayload,
-        onResponse,
-        cacheRetention: "long",
-      });
-      const events: string[] = [];
-      for await (const event of stream) events.push(event.type);
-      const result = await stream.result();
+  ])("retries %s with original non-strict schemas and preserves required tools", (message) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const preferred = tool("preferred", "prefer");
+        const required = tool("required", "require");
+        const ordinary = tool("ordinary");
+        const transcript = context([preferred, required, ordinary]);
+        const original = yield* encodeJson(transcript);
+        const { payloads, options } = harness((_payload, attempt) =>
+          attempt === 1 ? errorResponse(message) : successResponse(),
+        );
+        const onPayload = vi.fn((payload: unknown) => ({
+          ...(payload as MessageCreateParamsStreaming),
+          inference_geo: "us",
+          stream: false,
+        }));
+        const onResponse = vi.fn();
+        const stream = streamAnthropic(model, transcript, {
+          ...options,
+          onPayload,
+          onResponse,
+          cacheRetention: "long",
+        });
+        const events: string[] = [];
+        yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
+          Stream.orDie,
+          Stream.runForEach((event) =>
+            Effect.sync(() => {
+              events.push(event.type);
+            }),
+          ),
+        );
+        const result = yield* Effect.promise(() => stream.result());
 
-      expect(result.stopReason).toBe("stop");
-      expect(events).toEqual(["start", "done"]);
-      expect(payloads).toHaveLength(2);
-      expect(onPayload).toHaveBeenCalledTimes(2);
-      expect(onResponse).toHaveBeenCalledTimes(1);
-      const first = payloads[0]?.tools as BetaTool[];
-      const second = payloads[1]?.tools as BetaTool[];
-      expect(first[0]).toMatchObject({
-        strict: true,
-        input_schema: {
-          required: ["value", "optional"],
-          properties: { optional: { anyOf: [{ type: "number" }, { type: "null" }] } },
-        },
-      });
-      expect(second[0]?.strict).toBeUndefined();
-      expect(second[0]?.input_schema).toEqual({
-        type: "object",
-        properties: { value: { type: "string" }, optional: { type: "number" } },
-        required: ["value"],
-      });
-      expect(second[1]).toEqual(first[1]);
-      expect(second[1]?.strict).toBe(true);
-      expect(second[2]).toEqual(first[2]);
-      expect(second[2]?.cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
-      expect(payloads.map((payload) => payload.stream)).toEqual([true, true]);
-      expect(payloads[1]).toMatchObject({ inference_geo: "us" });
-      expect(JSON.stringify(transcript)).toBe(original);
-      expect(result.diagnostics?.[0]).toMatchObject({
-        type: "anthropic_strict_tools_fallback",
-        details: { reason: "strict_tool_limits_exceeded" },
-      });
-    },
+        expect(result.stopReason).toBe("stop");
+        expect(events).toEqual(["start", "done"]);
+        expect(payloads).toHaveLength(2);
+        expect(onPayload).toHaveBeenCalledTimes(2);
+        expect(onResponse).toHaveBeenCalledTimes(1);
+        const first = payloads[0]?.tools as BetaTool[];
+        const second = payloads[1]?.tools as BetaTool[];
+        expect(first[0]).toMatchObject({
+          strict: true,
+          input_schema: {
+            required: ["value", "optional"],
+            properties: { optional: { anyOf: [{ type: "number" }, { type: "null" }] } },
+          },
+        });
+        expect(second[0]?.strict).toBeUndefined();
+        expect(second[0]?.input_schema).toEqual({
+          type: "object",
+          properties: { value: { type: "string" }, optional: { type: "number" } },
+          required: ["value"],
+        });
+        expect(second[1]).toEqual(first[1]);
+        expect(second[1]?.strict).toBe(true);
+        expect(second[2]).toEqual(first[2]);
+        expect(second[2]?.cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
+        expect(payloads.map((payload) => payload.stream)).toEqual([true, true]);
+        expect(payloads[1]).toMatchObject({ inference_geo: "us" });
+        expect(yield* encodeJson(transcript)).toBe(original);
+        expect(result.diagnostics?.[0]).toMatchObject({
+          type: "anthropic_strict_tools_fallback",
+          details: { reason: "strict_tool_limits_exceeded" },
+        });
+      }),
+    ),
   );
 
-  it("downgrades inline additions and same-name redefinitions without downgrading require", async () => {
-    const transcript = context([tool("lookup", "require")]);
-    transcript.messages.push(
-      { role: "system", content: "", toolsAdded: [tool("lookup", "prefer")], timestamp: 2 },
-      { role: "system", content: "", toolsAdded: [tool("lookup", "require")], timestamp: 3 },
-    );
-    const { payloads, options } = harness((_payload, attempt) =>
-      attempt === 1 ? errorResponse() : successResponse(),
-    );
-    const result = await streamAnthropic(
-      {
-        ...model,
-        compat: {
-          ...model.compat,
-          supportsMidConvoSystemMessages: true,
-          supportsMidConvoToolChanges: true,
-        },
-      },
-      transcript,
-      { ...options, apiKey: "sk-ant-oat-test" },
-    ).result();
-    expect(result.stopReason).toBe("stop");
-    expect(payloads).toHaveLength(2);
-    expect(payloads[1]?.tools).toEqual(payloads[0]?.tools);
-    const additions = payloads.map((payload) =>
-      payload.messages.flatMap((message) =>
-        Array.isArray(message.content)
-          ? message.content.flatMap((block) =>
-              block.type === "tool_addition" && block.tool.type === "tool_definition"
-                ? [block.tool.definition as BetaTool]
-                : [],
-            )
-          : [],
-      ),
-    );
-    const [firstAdditions, secondAdditions] = additions;
-    if (firstAdditions === undefined || secondAdditions === undefined)
-      throw new Error("Expected two tool additions");
-    expect(firstAdditions.map((definition) => definition.strict)).toEqual([true, true]);
-    expect(secondAdditions.map((definition) => definition.strict)).toEqual([undefined, true]);
-    expect(secondAdditions[0]?.input_schema.required).toEqual(["value"]);
-    expect(secondAdditions[1]).toEqual(firstAdditions[1]);
-  });
+  it("downgrades inline additions and same-name redefinitions without downgrading require", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const transcript = context([tool("lookup", "require")]);
+        transcript.messages.push(
+          { role: "system", content: "", toolsAdded: [tool("lookup", "prefer")], timestamp: 2 },
+          { role: "system", content: "", toolsAdded: [tool("lookup", "require")], timestamp: 3 },
+        );
+        const { payloads, options } = harness((_payload, attempt) =>
+          attempt === 1 ? errorResponse() : successResponse(),
+        );
+        const result = yield* Effect.promise(() =>
+          streamAnthropic(
+            {
+              ...model,
+              compat: {
+                ...model.compat,
+                supportsMidConvoSystemMessages: true,
+                supportsMidConvoToolChanges: true,
+              },
+            },
+            transcript,
+            { ...options, apiKey: "sk-ant-oat-test" },
+          ).result(),
+        );
+        expect(result.stopReason).toBe("stop");
+        expect(payloads).toHaveLength(2);
+        expect(payloads[1]?.tools).toEqual(payloads[0]?.tools);
+        const additions = payloads.map((payload) =>
+          payload.messages.flatMap((message) =>
+            Array.isArray(message.content)
+              ? message.content.flatMap((block) =>
+                  block.type === "tool_addition" && block.tool.type === "tool_definition"
+                    ? [block.tool.definition as BetaTool]
+                    : [],
+                )
+              : [],
+          ),
+        );
+        const [firstAdditions, secondAdditions] = additions;
+        if (firstAdditions === undefined || secondAdditions === undefined)
+          throw new Error("Expected two tool additions");
+        expect(firstAdditions.map((definition) => definition.strict)).toEqual([true, true]);
+        expect(secondAdditions.map((definition) => definition.strict)).toEqual([undefined, true]);
+        expect(secondAdditions[0]?.input_schema.required).toEqual(["value"]);
+        expect(secondAdditions[1]).toEqual(firstAdditions[1]);
+      }),
+    ));
 
   it.each([
     ["required", [tool("lookup", "require")]],
@@ -200,137 +215,178 @@ describe("Anthropic preferred strict tool fallback", () => {
         },
       ],
     ],
-  ])("does not retry a %s tool set", async (_name, tools) => {
-    const { payloads, options } = harness(() => errorResponse());
-    const result = await streamAnthropic(model, context(tools), options).result();
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toContain(grammarError);
-    expect(payloads).toHaveLength(1);
-  });
+  ])("does not retry a %s tool set", (_name, tools) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { payloads, options } = harness(() => errorResponse());
+        const result = yield* Effect.promise(() =>
+          streamAnthropic(model, context(tools), options).result(),
+        );
+        expect(result.stopReason).toBe("error");
+        expect(result.errorMessage).toContain(grammarError);
+        expect(payloads).toHaveLength(1);
+      }),
+    ),
+  );
 
   it.each([
     ["unrelated 400", "Invalid tool schema", 400, "invalid_request_error"],
     ["wrong error type", grammarError, 400, "authentication_error"],
     ["wrong HTTP status", grammarError, 500, "invalid_request_error"],
-  ])("does not downgrade on %s", async (_name, message, status, type) => {
-    const { payloads, options } = harness(() => errorResponse(message, status, type));
-    const result = await streamAnthropic(
-      model,
-      context([tool("lookup", "prefer")]),
-      options,
-    ).result();
-    expect(result.stopReason).toBe("error");
-    expect(payloads).toHaveLength(1);
-  });
-
-  it("surfaces a second rejection rather than retrying again", async () => {
-    const { payloads, options } = harness((_payload, attempt) =>
-      errorResponse(attempt === 1 ? grammarError : "Required grammar is still too large"),
-    );
-    const result = await streamAnthropic(
-      model,
-      context([tool("lookup", "prefer"), tool("required", "require")]),
-      options,
-    ).result();
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toContain("Required grammar is still too large");
-    expect(payloads).toHaveLength(2);
-    const retriedPayload = payloads[1];
-    if (retriedPayload === undefined) throw new Error("Expected a retried payload");
-    expect((retriedPayload.tools as BetaTool[])[1]?.strict).toBe(true);
-  });
-
-  it("does not downgrade a hook exception, even if it looks like the provider rejection", async () => {
-    const { payloads, options } = harness(() => successResponse());
-    const result = await streamAnthropic(model, context([tool("lookup", "prefer")]), {
-      ...options,
-      onPayload: () => {
-        throw APIError.generate(
-          400,
-          { error: { type: "invalid_request_error", message: grammarError } },
-          grammarError,
-          new Headers(),
+  ])("does not downgrade on %s", (_name, message, status, type) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { payloads, options } = harness(() => errorResponse(message, status, type));
+        const result = yield* Effect.promise(() =>
+          streamAnthropic(model, context([tool("lookup", "prefer")]), options).result(),
         );
-      },
-    }).result();
-    expect(result.stopReason).toBe("error");
-    expect(payloads).toHaveLength(0);
-    expect(result.diagnostics).toBeUndefined();
-  });
+        expect(result.stopReason).toBe("error");
+        expect(payloads).toHaveLength(1);
+      }),
+    ),
+  );
 
-  it("honors cancellation before the fallback attempt", async () => {
+  it("surfaces a second rejection rather than retrying again", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { payloads, options } = harness((_payload, attempt) =>
+          errorResponse(attempt === 1 ? grammarError : "Required grammar is still too large"),
+        );
+        const result = yield* Effect.promise(() =>
+          streamAnthropic(
+            model,
+            context([tool("lookup", "prefer"), tool("required", "require")]),
+            options,
+          ).result(),
+        );
+        expect(result.stopReason).toBe("error");
+        expect(result.errorMessage).toContain("Required grammar is still too large");
+        expect(payloads).toHaveLength(2);
+        const retriedPayload = payloads[1];
+        if (retriedPayload === undefined) throw new Error("Expected a retried payload");
+        expect((retriedPayload.tools as BetaTool[])[1]?.strict).toBe(true);
+      }),
+    ));
+
+  it("does not downgrade a hook exception, even if it looks like the provider rejection", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { payloads, options } = harness(() => successResponse());
+        const result = yield* Effect.promise(() =>
+          streamAnthropic(model, context([tool("lookup", "prefer")]), {
+            ...options,
+            onPayload: () => {
+              throw APIError.generate(
+                400,
+                { error: { type: "invalid_request_error", message: grammarError } },
+                grammarError,
+                new Headers(),
+              );
+            },
+          }).result(),
+        );
+        expect(result.stopReason).toBe("error");
+        expect(payloads).toHaveLength(0);
+        expect(result.diagnostics).toBeUndefined();
+      }),
+    ));
+
+  it("honors cancellation before the fallback attempt", () => {
     const controller = new AbortController();
-    const { payloads, options } = harness(() => {
-      controller.abort();
-      return errorResponse();
-    });
-    const result = await streamAnthropic(model, context([tool("lookup", "prefer")]), {
-      ...options,
-      signal: controller.signal,
-    }).result();
-    expect(result.stopReason).toBe("aborted");
-    expect(payloads).toHaveLength(1);
-  });
-
-  it("does not retry an SSE error after response headers", async () => {
-    const { payloads, options } = harness(
-      () =>
-        new Response(
-          `event: error\ndata: ${JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: grammarError } })}\n\n`,
-          { headers: { "content-type": "text/event-stream" } },
-        ),
-    );
-    const result = await streamAnthropic(
-      model,
-      context([tool("lookup", "prefer")]),
-      options,
-    ).result();
-    expect(result.stopReason).toBe("error");
-    expect(payloads).toHaveLength(1);
-  });
-
-  it("does not disable strict sampling on later requests", async () => {
-    const { payloads, options } = harness((_payload, attempt) =>
-      attempt === 1 ? errorResponse() : successResponse(),
-    );
-    const transcript = context([tool("lookup", "prefer")]);
-    await streamAnthropic(model, transcript, options).result();
-    await streamAnthropic(model, transcript, options).result();
-    expect(payloads.map((payload) => (payload.tools as BetaTool[])[0]?.strict)).toEqual([
-      true,
-      undefined,
-      true,
-    ]);
-  });
-
-  it("preserves prefer through msa-messages so the gateway's Anthropic adapter can fall back", async () => {
-    const { payloads, options } = harness((_payload, attempt) =>
-      attempt === 1 ? errorResponse() : successResponse(),
-    );
-    const transcript = context([tool("lookup", "prefer")]);
-    const gatewayModel: Model<"msa-messages"> = {
-      ...model,
-      api: "msa-messages",
-      provider: "radius",
-      baseUrl: "https://radius.example/v1",
-      compat: undefined,
-    };
-    const result = await streamMsaMessages(gatewayModel, transcript, {
-      apiKey: "radius-test",
-      fetch: async (_input, init) => {
-        const request = JSON.parse(init?.body as string) as { context: TranscriptContext };
-        expect(request.context).toEqual(JSON.parse(JSON.stringify(transcript)));
-        const upstream = await streamAnthropic(model, request.context, options).result();
-        return new Response(
-          `data: ${JSON.stringify({ type: "done", reason: upstream.stopReason, usage: upstream.usage })}\n\n`,
-          { headers: { "content-type": "text/event-stream" } },
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const { payloads, options } = harness(() => {
+          controller.abort();
+          return errorResponse();
+        });
+        const result = yield* Effect.promise(() =>
+          streamAnthropic(model, context([tool("lookup", "prefer")]), {
+            ...options,
+            signal: controller.signal,
+          }).result(),
         );
-      },
-    }).result();
-    expect(result.stopReason).toBe("stop");
-    expect(payloads.map((payload) => (payload.tools as BetaTool[])[0]?.strict)).toEqual([
-      true,
-      undefined,
-    ]);
+        expect(result.stopReason).toBe("aborted");
+        expect(payloads).toHaveLength(1);
+      }),
+    );
   });
+
+  it("does not retry an SSE error after response headers", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { payloads, options } = harness(
+          () =>
+            new Response(
+              `event: error\ndata: ${JSON.stringify({ type: "error", error: { type: "invalid_request_error", message: grammarError } })}\n\n`,
+              { headers: { "content-type": "text/event-stream" } },
+            ),
+        );
+        const result = yield* Effect.promise(() =>
+          streamAnthropic(model, context([tool("lookup", "prefer")]), options).result(),
+        );
+        expect(result.stopReason).toBe("error");
+        expect(payloads).toHaveLength(1);
+      }),
+    ));
+
+  it("does not disable strict sampling on later requests", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { payloads, options } = harness((_payload, attempt) =>
+          attempt === 1 ? errorResponse() : successResponse(),
+        );
+        const transcript = context([tool("lookup", "prefer")]);
+        yield* Effect.promise(() => streamAnthropic(model, transcript, options).result());
+        yield* Effect.promise(() => streamAnthropic(model, transcript, options).result());
+        expect(payloads.map((payload) => (payload.tools as BetaTool[])[0]?.strict)).toEqual([
+          true,
+          undefined,
+          true,
+        ]);
+      }),
+    ));
+
+  it("preserves prefer through msa-messages so the gateway's Anthropic adapter can fall back", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const effectContext = yield* Effect.context();
+        const { payloads, options } = harness((_payload, attempt) =>
+          attempt === 1 ? errorResponse() : successResponse(),
+        );
+        const transcript = context([tool("lookup", "prefer")]);
+        const gatewayModel: Model<"msa-messages"> = {
+          ...model,
+          api: "msa-messages",
+          provider: "radius",
+          baseUrl: "https://radius.example/v1",
+          compat: undefined,
+        };
+        const result = yield* Effect.promise(() =>
+          streamMsaMessages(gatewayModel, transcript, {
+            apiKey: "radius-test",
+            fetch: (_input, init) =>
+              Effect.runPromiseWith(effectContext)(
+                Effect.gen(function* () {
+                  const request = (yield* decodeJson(init?.body as string)) as {
+                    context: TranscriptContext;
+                  };
+                  expect(request.context).toEqual(yield* decodeJson(yield* encodeJson(transcript)));
+                  const upstream = yield* Effect.promise(() =>
+                    streamAnthropic(model, request.context, options).result(),
+                  );
+                  return new Response(
+                    `data: ${yield* encodeJson({ type: "done", reason: upstream.stopReason, usage: upstream.usage })}\n\n`,
+                    { headers: { "content-type": "text/event-stream" } },
+                  );
+                }),
+              ),
+          }).result(),
+        );
+        expect(result.stopReason).toBe("stop");
+        expect(payloads.map((payload) => (payload.tools as BetaTool[])[0]?.strict)).toEqual([
+          true,
+          undefined,
+        ]);
+      }),
+    ));
 });

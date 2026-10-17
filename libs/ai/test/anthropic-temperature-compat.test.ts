@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { getModel, streamSimple } from "../src/compat.ts";
@@ -38,10 +39,10 @@ function makeCustomModel(
   };
 }
 
-async function capturePayload(
+const capturePayload = Effect.fn("capturePayload")(function* (
   model: Model<"anthropic-messages">,
   options?: SimpleStreamOptions,
-): Promise<AnthropicTemperaturePayload> {
+) {
   let capturedPayload: AnthropicTemperaturePayload | undefined;
 
   const payloadCaptureModel: Model<"anthropic-messages"> = {
@@ -58,61 +59,79 @@ async function capturePayload(
     },
   });
 
-  await s.result();
+  yield* Effect.promise(() => s.result());
 
   if (capturedPayload === undefined) {
     throw new Error("Expected payload to be captured before request failure");
   }
 
   return capturedPayload;
-}
+});
 
 describe("Anthropic temperature compatibility", () => {
-  it("omits temperature for Claude Opus 4.7", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-opus-4-7"), {
-      temperature: 0,
-    });
+  it("omits temperature for Claude Opus 4.7", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-7"), {
+          temperature: 0,
+        });
 
-    expect(payload.temperature).toBeUndefined();
-  });
+        expect(payload.temperature).toBeUndefined();
+      }),
+    ));
 
-  it("omits temperature for Claude Opus 4.8", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-opus-4-8"), {
-      temperature: 0,
-    });
+  it("omits temperature for Claude Opus 4.8", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-8"), {
+          temperature: 0,
+        });
 
-    expect(payload.temperature).toBeUndefined();
-  });
+        expect(payload.temperature).toBeUndefined();
+      }),
+    ));
 
-  it("omits default temperature for Claude Opus 4.7", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-opus-4-7"), {
-      temperature: 1,
-    });
+  it("omits default temperature for Claude Opus 4.7", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-7"), {
+          temperature: 1,
+        });
 
-    expect(payload.temperature).toBeUndefined();
-  });
+        expect(payload.temperature).toBeUndefined();
+      }),
+    ));
 
-  it("keeps temperature for Claude Opus 4.6", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-opus-4-6"), {
-      temperature: 0,
-    });
+  it("keeps temperature for Claude Opus 4.6", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-opus-4-6"), {
+          temperature: 0,
+        });
 
-    expect(payload.temperature).toBe(0);
-  });
+        expect(payload.temperature).toBe(0);
+      }),
+    ));
 
-  it("keeps temperature for Claude Sonnet 4.6", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-sonnet-4-6"), {
-      temperature: 0,
-    });
+  it("keeps temperature for Claude Sonnet 4.6", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-sonnet-4-6"), {
+          temperature: 0,
+        });
 
-    expect(payload.temperature).toBe(0);
-  });
+        expect(payload.temperature).toBe(0);
+      }),
+    ));
 
-  it("omits temperature for custom models with supportsTemperature disabled", async () => {
-    const payload = await capturePayload(makeCustomModel({ supportsTemperature: false }), {
-      temperature: 0,
-    });
+  it("omits temperature for custom models with supportsTemperature disabled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeCustomModel({ supportsTemperature: false }), {
+          temperature: 0,
+        });
 
-    expect(payload.temperature).toBeUndefined();
-  });
+        expect(payload.temperature).toBeUndefined();
+      }),
+    ));
 });

@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { AuthContext } from "../src/auth/types.ts";
@@ -106,13 +107,20 @@ function testProvider(input: {
     auth: {
       apiKey: {
         name: "Test key",
-        resolve: async ({ ctx, credential }) => {
-          if (input.envVar === undefined || input.envVar === "") return { auth: {} };
-          const key = credential?.key ?? (await ctx.env(input.envVar));
-          return key !== undefined && key !== ""
-            ? { auth: { apiKey: key }, source: credential === undefined ? input.envVar : "stored" }
-            : undefined;
-        },
+        resolve: ({ ctx, credential }) =>
+          Effect.runPromise(
+            Effect.gen(function* () {
+              const { envVar } = input;
+              if (envVar === undefined || envVar === "") return { auth: {} };
+              const key = credential?.key ?? (yield* Effect.promise(() => ctx.env(envVar)));
+              return key !== undefined && key !== ""
+                ? {
+                    auth: { apiKey: key },
+                    source: credential === undefined ? input.envVar : "stored",
+                  }
+                : undefined;
+            }),
+          ),
       },
     },
     models: allModels,
@@ -147,26 +155,31 @@ describe("model discriminants", () => {
 });
 
 describe("Models with image models", () => {
-  it("lists models without a type as chat models at createProvider boundaries", async () => {
-    const provider = createProvider({
-      id: "legacy",
-      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-      models: [chatModel("legacy", "static"), imageModel("legacy", "static")],
-      fetchModels: () => Promise.resolve([chatModel("legacy", "dynamic")]),
-      api: {
-        stream: () => new AssistantMessageEventStream(),
-        streamSimple: () => new AssistantMessageEventStream(),
-      },
-    });
-    const models = createModels();
-    models.setProvider(provider);
+  it("lists models without a type as chat models at createProvider boundaries", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const provider = createProvider({
+          id: "legacy",
+          auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
+          models: [chatModel("legacy", "static"), imageModel("legacy", "static")],
+          fetchModels: () => Promise.resolve([chatModel("legacy", "dynamic")]),
+          api: {
+            stream: () => new AssistantMessageEventStream(),
+            streamSimple: () => new AssistantMessageEventStream(),
+          },
+        });
+        const models = createModels();
+        models.setProvider(provider);
 
-    expect(provider.getModels().map((model) => model.id)).toEqual(["static"]);
-    await models.refresh({ providers: [provider.id] });
-    expect(provider.getModels().map((model) => model.id)).toEqual(["static", "dynamic"]);
-    expect(provider.getModels().map((model) => model.type)).toEqual([undefined, undefined]);
-    expect(models.getModelsOfType("image", "legacy").map((model) => model.id)).toEqual(["static"]);
-  });
+        expect(provider.getModels().map((model) => model.id)).toEqual(["static"]);
+        yield* Effect.promise(() => models.refresh({ providers: [provider.id] }));
+        expect(provider.getModels().map((model) => model.id)).toEqual(["static", "dynamic"]);
+        expect(provider.getModels().map((model) => model.type)).toEqual([undefined, undefined]);
+        expect(models.getModelsOfType("image", "legacy").map((model) => model.id)).toEqual([
+          "static",
+        ]);
+      }),
+    ));
 
   it("lists chat, image, and all models through typed accessors", () => {
     const models = createModels();
@@ -192,167 +205,204 @@ describe("Models with image models", () => {
     expect(models.getModelOfType("image", "p1", "c1")).toBeUndefined();
   });
 
-  it("splits available models by type", async () => {
-    const models = createModels({ authContext: fakeAuthContext({ KEY: "k" }) });
-    models.setProvider(
-      testProvider({
-        id: "p1",
-        envVar: "KEY",
-        models: [chatModel("p1", "c1"), imageModel("p1", "i1")],
+  it("splits available models by type", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const models = createModels({ authContext: fakeAuthContext({ KEY: "k" }) });
+        models.setProvider(
+          testProvider({
+            id: "p1",
+            envVar: "KEY",
+            models: [chatModel("p1", "c1"), imageModel("p1", "i1")],
+          }),
+        );
+        models.setProvider(
+          testProvider({ id: "p2", envVar: "MISSING", models: [imageModel("p2", "i2")] }),
+        );
+
+        expect((yield* Effect.promise(() => models.getAvailable())).map((m) => m.id)).toEqual([
+          "c1",
+        ]);
+        expect(
+          (yield* Effect.promise(() => models.getAvailableOfType("chat"))).map((m) => m.id),
+        ).toEqual(["c1"]);
+        expect(
+          (yield* Effect.promise(() => models.getAvailableOfType("image"))).map((m) => m.id),
+        ).toEqual(["i1"]);
+        expect((yield* Effect.promise(() => models.getAllAvailable())).map((m) => m.id)).toEqual([
+          "c1",
+          "i1",
+        ]);
       }),
-    );
-    models.setProvider(
-      testProvider({ id: "p2", envVar: "MISSING", models: [imageModel("p2", "i2")] }),
-    );
+    ));
 
-    expect((await models.getAvailable()).map((m) => m.id)).toEqual(["c1"]);
-    expect((await models.getAvailableOfType("chat")).map((m) => m.id)).toEqual(["c1"]);
-    expect((await models.getAvailableOfType("image")).map((m) => m.id)).toEqual(["i1"]);
-    expect((await models.getAllAvailable()).map((m) => m.id)).toEqual(["c1", "i1"]);
-  });
+  it("resolves auth through the provider and merges it into image requests; explicit options win", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const calls: GenerateCall[] = [];
+        const models = createModels({ authContext: fakeAuthContext({ TEST_KEY: "env-key" }) });
+        models.setProvider(testProvider({ id: "p1", envVar: "TEST_KEY", calls }));
+        const model = models.getModelOfType("image", "p1", "model-a")!;
 
-  it("resolves auth through the provider and merges it into image requests; explicit options win", async () => {
-    const calls: GenerateCall[] = [];
-    const models = createModels({ authContext: fakeAuthContext({ TEST_KEY: "env-key" }) });
-    models.setProvider(testProvider({ id: "p1", envVar: "TEST_KEY", calls }));
-    const model = models.getModelOfType("image", "p1", "model-a")!;
+        expect((yield* Effect.promise(() => models.getAuth(model)))?.auth.apiKey).toBe("env-key");
+        expect((yield* Effect.promise(() => models.getAuth(model.provider)))?.auth.apiKey).toBe(
+          "env-key",
+        );
+        expect(
+          (yield* Effect.promise(() => models.getAuth(model, { apiKey: "explicit-key" })))?.auth
+            .apiKey,
+        ).toBe("explicit-key");
 
-    expect((await models.getAuth(model))?.auth.apiKey).toBe("env-key");
-    expect((await models.getAuth(model.provider))?.auth.apiKey).toBe("env-key");
-    expect((await models.getAuth(model, { apiKey: "explicit-key" }))?.auth.apiKey).toBe(
-      "explicit-key",
-    );
+        const result = yield* Effect.promise(() => models.generateImages(model, context));
+        expect(result.stopReason).toBe("stop");
+        expect(calls[0]?.options?.apiKey).toBe("env-key");
 
-    const result = await models.generateImages(model, context);
-    expect(result.stopReason).toBe("stop");
-    expect(calls[0]?.options?.apiKey).toBe("env-key");
+        yield* Effect.promise(() => models.generateImages(model, context, { apiKey: "explicit" }));
+        expect(calls[1]?.options?.apiKey).toBe("explicit");
+      }),
+    ));
 
-    await models.generateImages(model, context, { apiKey: "explicit" });
-    expect(calls[1]?.options?.apiKey).toBe("explicit");
-  });
-
-  it("merges provider-resolved env and applies header transforms", async () => {
-    const calls: GenerateCall[] = [];
-    const models = createModels();
-    models.setProvider(
-      createProvider({
-        id: "p1",
-        auth: {
-          apiKey: {
-            name: "Test key",
-            resolve: () =>
-              Promise.resolve({
-                auth: { apiKey: "provider-key", headers: { "x-base": "1" } },
-                env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
-              }),
-          },
-        },
-        models: [imageModel("p1", "model-a")],
-        images: {
-          "test-images": {
-            generateImages: (model, _context, options) => {
-              calls.push({ model, options });
-              return Promise.resolve(okResult(model));
+  it("merges provider-resolved env and applies header transforms", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const calls: GenerateCall[] = [];
+        const models = createModels();
+        models.setProvider(
+          createProvider({
+            id: "p1",
+            auth: {
+              apiKey: {
+                name: "Test key",
+                resolve: () =>
+                  Promise.resolve({
+                    auth: { apiKey: "provider-key", headers: { "x-base": "1" } },
+                    env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
+                  }),
+              },
             },
-          },
-        },
+            models: [imageModel("p1", "model-a")],
+            images: {
+              "test-images": {
+                generateImages: (model, _context, options) => {
+                  calls.push({ model, options });
+                  return Promise.resolve(okResult(model));
+                },
+              },
+            },
+          }),
+        );
+        const model = models.getModelOfType("image", "p1", "model-a")!;
+
+        yield* Effect.promise(() =>
+          models.generateImages(model, context, {
+            apiKey: "request-key",
+            env: { REQUEST_ONLY: "request", SHARED: "request" },
+            transformHeaders: (headers) => ({ ...headers, "x-extra": "2" }),
+          }),
+        );
+
+        expect(calls[0]?.options?.apiKey).toBe("request-key");
+        expect(calls[0]?.options?.env).toEqual({
+          PROVIDER_ONLY: "provider",
+          REQUEST_ONLY: "request",
+          SHARED: "request",
+        });
+        expect(calls[0]?.options?.headers).toEqual({ "x-base": "1", "x-extra": "2" });
       }),
-    );
-    const model = models.getModelOfType("image", "p1", "model-a")!;
+    ));
 
-    await models.generateImages(model, context, {
-      apiKey: "request-key",
-      env: { REQUEST_ONLY: "request", SHARED: "request" },
-      transformHeaders: (headers) => ({ ...headers, "x-extra": "2" }),
-    });
+  it("returns error results instead of rejecting", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const models = createModels({ authContext: fakeAuthContext({}) });
 
-    expect(calls[0]?.options?.apiKey).toBe("request-key");
-    expect(calls[0]?.options?.env).toEqual({
-      PROVIDER_ONLY: "provider",
-      REQUEST_ONLY: "request",
-      SHARED: "request",
-    });
-    expect(calls[0]?.options?.headers).toEqual({ "x-base": "1", "x-extra": "2" });
-  });
+        const ghost = yield* Effect.promise(() =>
+          models.generateImages(imageModel("ghost", "m"), context),
+        );
+        expect(ghost.stopReason).toBe("error");
+        expect(ghost.errorMessage).toContain("Unknown provider: ghost");
 
-  it("returns error results instead of rejecting", async () => {
-    const models = createModels({ authContext: fakeAuthContext({}) });
+        const calls: GenerateCall[] = [];
+        models.setProvider(testProvider({ id: "p1", envVar: "MISSING", calls }));
+        const model = models.getModelOfType("image", "p1", "model-a")!;
+        expect(yield* Effect.promise(() => models.getAuth(model))).toBeUndefined();
+        const unconfigured = yield* Effect.promise(() => models.generateImages(model, context));
+        expect(unconfigured.stopReason).toBe("error");
+        expect(unconfigured.errorMessage).toContain("not configured");
+        expect(calls).toEqual([]);
 
-    const ghost = await models.generateImages(imageModel("ghost", "m"), context);
-    expect(ghost.stopReason).toBe("error");
-    expect(ghost.errorMessage).toContain("Unknown provider: ghost");
+        const controllerSignal = AbortSignal.abort();
+        const cancelled = yield* Effect.promise(() =>
+          models.generateImages(model, context, { signal: controllerSignal }),
+        );
+        expect(cancelled.stopReason).toBe("aborted");
+        expect(calls).toEqual([]);
 
-    const calls: GenerateCall[] = [];
-    models.setProvider(testProvider({ id: "p1", envVar: "MISSING", calls }));
-    const model = models.getModelOfType("image", "p1", "model-a")!;
-    expect(await models.getAuth(model)).toBeUndefined();
-    const unconfigured = await models.generateImages(model, context);
-    expect(unconfigured.stopReason).toBe("error");
-    expect(unconfigured.errorMessage).toContain("not configured");
-    expect(calls).toEqual([]);
+        models.setProvider(
+          createProvider({
+            id: "chat-only",
+            auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
+            models: [imageModel("chat-only", "i")],
+            api: {
+              stream: () => new AssistantMessageEventStream(),
+              streamSimple: () => new AssistantMessageEventStream(),
+            },
+          }),
+        );
+        const unsupported = yield* Effect.promise(() =>
+          models.generateImages(models.getModelOfType("image", "chat-only", "i")!, context),
+        );
+        expect(unsupported.stopReason).toBe("error");
+        expect(unsupported.errorMessage).toContain("does not support image generation");
 
-    const controller = new AbortController();
-    controller.abort();
-    const cancelled = await models.generateImages(model, context, { signal: controller.signal });
-    expect(cancelled.stopReason).toBe("aborted");
-    expect(calls).toEqual([]);
-
-    models.setProvider(
-      createProvider({
-        id: "chat-only",
-        auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-        models: [imageModel("chat-only", "i")],
-        api: {
-          stream: () => new AssistantMessageEventStream(),
-          streamSimple: () => new AssistantMessageEventStream(),
-        },
+        models.setProvider(
+          testProvider({
+            id: "wrong-api",
+            models: [imageModel("wrong-api", "i")],
+            images: { "other-images": true },
+          }),
+        );
+        const missingApi = yield* Effect.promise(() =>
+          models.generateImages(models.getModelOfType("image", "wrong-api", "i")!, context),
+        );
+        expect(missingApi.stopReason).toBe("error");
+        expect(missingApi.errorMessage).toContain(
+          'no image generation implementation for "test-images"',
+        );
       }),
-    );
-    const unsupported = await models.generateImages(
-      models.getModelOfType("image", "chat-only", "i")!,
-      context,
-    );
-    expect(unsupported.stopReason).toBe("error");
-    expect(unsupported.errorMessage).toContain("does not support image generation");
+    ));
 
-    models.setProvider(
-      testProvider({
-        id: "wrong-api",
-        models: [imageModel("wrong-api", "i")],
-        images: { "other-images": true },
+  it("rejects chat models at the image entry point at runtime", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const models = createModels();
+        const chat = chatModel("p1", "chat");
+        models.setProvider(
+          testProvider({ id: "p1", models: [chat], images: { "test-chat": true } }),
+        );
+
+        const result = yield* Effect.promise(() =>
+          models.generateImages(chat as unknown as ImageModel<ImageApi>, context),
+        );
+        expect(result.stopReason).toBe("error");
+        expect(result.errorMessage).toContain("is not an image model");
       }),
-    );
-    const missingApi = await models.generateImages(
-      models.getModelOfType("image", "wrong-api", "i")!,
-      context,
-    );
-    expect(missingApi.stopReason).toBe("error");
-    expect(missingApi.errorMessage).toContain(
-      'no image generation implementation for "test-images"',
-    );
-  });
+    ));
 
-  it("rejects chat models at the image entry point at runtime", async () => {
-    const models = createModels();
-    const chat = chatModel("p1", "chat");
-    models.setProvider(testProvider({ id: "p1", models: [chat], images: { "test-chat": true } }));
+  it("rejects image models at the stream entry points at runtime", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const models = createModels();
+        models.setProvider(testProvider({ id: "p1" }));
+        const image = models.getModelOfType("image", "p1", "model-a")!;
 
-    const result = await models.generateImages(chat as unknown as ImageModel<ImageApi>, context);
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toContain("is not an image model");
-  });
-
-  it("rejects image models at the stream entry points at runtime", async () => {
-    const models = createModels();
-    models.setProvider(testProvider({ id: "p1" }));
-    const image = models.getModelOfType("image", "p1", "model-a")!;
-
-    const result = await models
-      .streamSimple(image as unknown as Model<Api>, { messages: [] })
-      .result();
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toContain("is not a chat model");
-  });
+        const result = yield* Effect.promise(() =>
+          models.streamSimple(image as unknown as Model<Api>, { messages: [] }).result(),
+        );
+        expect(result.stopReason).toBe("error");
+        expect(result.errorMessage).toContain("is not a chat model");
+      }),
+    ));
 
   it("requires at least one concrete operation implementation", () => {
     const createEmptyProvider = (
@@ -372,32 +422,37 @@ describe("Models with image models", () => {
     expect(() => createEmptyProvider({ classifiers: {} })).toThrow(message);
   });
 
-  it("supports dynamic providers listing image models via refresh", async () => {
-    let fetches = 0;
-    const modelsStore = new InMemoryModelsStore();
-    const models = createModels({ modelsStore });
-    models.setProvider(
-      createProvider({
-        id: "dyn",
-        auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-        models: [],
-        fetchModels: () => {
-          fetches++;
-          return Promise.resolve([imageModel("dyn", "listed"), chatModel("dyn", "chat")]);
-        },
-        images: { "test-images": { generateImages: (model) => Promise.resolve(okResult(model)) } },
-      }),
-    );
+  it("supports dynamic providers listing image models via refresh", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let fetches = 0;
+        const modelsStore = new InMemoryModelsStore();
+        const models = createModels({ modelsStore });
+        models.setProvider(
+          createProvider({
+            id: "dyn",
+            auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
+            models: [],
+            fetchModels: () => {
+              fetches++;
+              return Promise.resolve([imageModel("dyn", "listed"), chatModel("dyn", "chat")]);
+            },
+            images: {
+              "test-images": { generateImages: (model) => Promise.resolve(okResult(model)) },
+            },
+          }),
+        );
 
-    expect(models.getAllModels("dyn")).toEqual([]);
-    const result = await models.refresh({ providers: ["dyn"] });
-    expect(result.errors.size).toBe(0);
-    expect(fetches).toBe(1);
-    expect(models.getModelOfType("image", "dyn", "listed")).toBeDefined();
-    expect(models.getModel("dyn", "chat")).toBeDefined();
-    const stored = await modelsStore.read("dyn");
-    expect(stored?.models.map((model) => model.id)).toEqual(["listed", "chat"]);
-  });
+        expect(models.getAllModels("dyn")).toEqual([]);
+        const result = yield* Effect.promise(() => models.refresh({ providers: ["dyn"] }));
+        expect(result.errors.size).toBe(0);
+        expect(fetches).toBe(1);
+        expect(models.getModelOfType("image", "dyn", "listed")).toBeDefined();
+        expect(models.getModel("dyn", "chat")).toBeDefined();
+        const stored = yield* Effect.promise(() => modelsStore.read("dyn"));
+        expect(stored?.models.map((model) => model.id)).toEqual(["listed", "chat"]);
+      }),
+    ));
 
   it("keeps existing built-in and compat model reads chat-only", () => {
     const chat = getBuiltinModels("openrouter");
@@ -416,27 +471,34 @@ describe("Models with image models", () => {
     expect(getBuiltinImageModel("openrouter", "black-forest-labs/flux.2-pro").type).toBe("image");
   });
 
-  it("builtinModels exposes OpenRouter image models under the openrouter provider", async () => {
-    const models = builtinModels({
-      authContext: fakeAuthContext({ OPENROUTER_API_KEY: "or-key" }),
-    });
-    const provider = models.getProvider("openrouter")!;
-    const images = models.getModelsOfType("image", "openrouter");
-    expect(images.length).toBeGreaterThan(0);
-    expect(provider.getModels().every((model) => isModelType(model, "chat"))).toBe(true);
-    expect(provider.getAllModels?.().some((model) => isModelType(model, "image"))).toBe(true);
-    expect(images.every((m) => m.type === "image" && m.api === "openrouter-images")).toBe(true);
-    expect(models.getModelsOfType("image").every((m) => m.provider === "openrouter")).toBe(true);
+  it("builtinModels exposes OpenRouter image models under the openrouter provider", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const models = builtinModels({
+          authContext: fakeAuthContext({ OPENROUTER_API_KEY: "or-key" }),
+        });
+        const provider = models.getProvider("openrouter")!;
+        const images = models.getModelsOfType("image", "openrouter");
+        expect(images.length).toBeGreaterThan(0);
+        expect(provider.getModels().every((model) => isModelType(model, "chat"))).toBe(true);
+        expect(provider.getAllModels?.().some((model) => isModelType(model, "image"))).toBe(true);
+        expect(images.every((m) => m.type === "image" && m.api === "openrouter-images")).toBe(true);
+        expect(models.getModelsOfType("image").every((m) => m.provider === "openrouter")).toBe(
+          true,
+        );
 
-    const chat = models.getModel("openrouter", "google/gemini-3-pro-image");
-    const image = models.getModelOfType("image", "openrouter", "google/gemini-3-pro-image");
-    expect(chat?.api).toBe("openai-completions");
-    expect(image?.api).toBe("openrouter-images");
+        const chat = models.getModel("openrouter", "google/gemini-3-pro-image");
+        const image = models.getModelOfType("image", "openrouter", "google/gemini-3-pro-image");
+        expect(chat?.api).toBe("openai-completions");
+        expect(image?.api).toBe("openrouter-images");
 
-    const [firstImage] = images;
-    if (firstImage === undefined) throw new Error("Expected an OpenRouter image model");
-    expect((await models.getAuth(firstImage))?.auth.apiKey).toBe("or-key");
-    expect((await models.getAuth(chat!))?.auth.apiKey).toBe("or-key");
-    expect(provider.generateImages).toBeDefined();
-  });
+        const [firstImage] = images;
+        if (firstImage === undefined) throw new Error("Expected an OpenRouter image model");
+        expect((yield* Effect.promise(() => models.getAuth(firstImage)))?.auth.apiKey).toBe(
+          "or-key",
+        );
+        expect((yield* Effect.promise(() => models.getAuth(chat!)))?.auth.apiKey).toBe("or-key");
+        expect(provider.generateImages).toBeDefined();
+      }),
+    ));
 });

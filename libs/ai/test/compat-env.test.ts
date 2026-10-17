@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { complete, registerApiProvider, resetApiProviders } from "../src/compat.ts";
@@ -44,32 +45,35 @@ describe("compat legacy API fallback", () => {
     resetApiProviders();
   });
 
-  it("dispatches unknown providers through the legacy API registry", async () => {
-    let capturedApiKey: string | undefined;
-    registerApiProvider({
-      api: "openai-responses",
-      stream: (_model, _context, options) => {
-        capturedApiKey = options?.apiKey;
-        const stream = new AssistantMessageEventStream();
-        const output = message();
-        stream.push({ type: "start", partial: output });
-        stream.push({ type: "done", reason: "stop", message: output });
-        stream.end(output);
-        return stream;
-      },
-      streamSimple: (_model, _context, options) => {
-        capturedApiKey = options?.apiKey;
-        const stream = new AssistantMessageEventStream();
-        const output = message();
-        stream.push({ type: "start", partial: output });
-        stream.push({ type: "done", reason: "stop", message: output });
-        stream.end(output);
-        return stream;
-      },
-    });
+  it("dispatches unknown providers through the legacy API registry", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let capturedApiKey: string | undefined;
+        registerApiProvider({
+          api: "openai-responses",
+          stream: (_model, _context, options) => {
+            capturedApiKey = options?.apiKey;
+            const stream = new AssistantMessageEventStream();
+            const output = message();
+            stream.push({ type: "start", partial: output });
+            stream.push({ type: "done", reason: "stop", message: output });
+            stream.end(output);
+            return stream;
+          },
+          streamSimple: (_model, _context, options) => {
+            capturedApiKey = options?.apiKey;
+            const stream = new AssistantMessageEventStream();
+            const output = message();
+            stream.push({ type: "start", partial: output });
+            stream.push({ type: "done", reason: "stop", message: output });
+            stream.end(output);
+            return stream;
+          },
+        });
 
-    await complete(model, context, { apiKey: "request-key" });
+        yield* Effect.promise(() => complete(model, context, { apiKey: "request-key" }));
 
-    expect(capturedApiKey).toBe("request-key");
-  });
+        expect(capturedApiKey).toBe("request-key");
+      }),
+    ));
 });

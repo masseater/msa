@@ -1,5 +1,6 @@
 import { arch, platform, release } from "node:os";
 
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
@@ -10,6 +11,7 @@ import { XAI_MODELS } from "../src/providers/xai.models.ts";
 import { xaiProvider } from "../src/providers/xai.ts";
 import type { Context, Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
+import { decodeJson } from "./json-codec.ts";
 
 const MSA_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
 
@@ -54,9 +56,9 @@ const customCompletionsModel: Model<"openai-completions"> = {
   maxTokens: 16384,
 };
 
-async function captureCompletionsUserAgent(
+const captureCompletionsUserAgent = Effect.fn("captureCompletionsUserAgent")(function* (
   headers?: Record<string, string>,
-): Promise<string | null> {
+) {
   let userAgent: string | null = null;
   vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
     userAgent = new Request(input, init).headers.get("user-agent");
@@ -82,37 +84,49 @@ async function captureCompletionsUserAgent(
     );
   });
 
-  const result = await streamOpenAICompletions(
-    customCompletionsModel,
-    normalizeContext({ messages: [{ role: "user", content: "hello", timestamp: 1 }] }),
-    { apiKey: "xai-test-token", headers },
-  ).result();
+  const result = yield* Effect.promise(() =>
+    streamOpenAICompletions(
+      customCompletionsModel,
+      normalizeContext({ messages: [{ role: "user", content: "hello", timestamp: 1 }] }),
+      { apiKey: "xai-test-token", headers },
+    ).result(),
+  );
 
   expect(result.stopReason, result.errorMessage).toBe("stop");
   return userAgent;
-}
+});
 
-async function captureRequest(
+const captureRequest = Effect.fn("captureRequest")(function* (
   model: Model<"openai-responses">,
   context: Context,
   options: OpenAIResponsesOptions,
-): Promise<CapturedRequest> {
+) {
+  const effectContext = yield* Effect.context();
   let captured: CapturedRequest | undefined;
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-    const request = new Request(input, init);
-    captured = {
-      url: request.url,
-      headers: request.headers,
-      body: JSON.parse(await request.clone().text()) as Record<string, unknown>,
-    };
-    return completedResponse();
-  });
+  vi.spyOn(globalThis, "fetch").mockImplementation((input, init) =>
+    Effect.runPromiseWith(effectContext)(
+      Effect.gen(function* () {
+        const request = new Request(input, init);
+        captured = {
+          url: request.url,
+          headers: request.headers,
+          body: (yield* decodeJson(yield* Effect.promise(() => request.clone().text()))) as Record<
+            string,
+            unknown
+          >,
+        };
+        return completedResponse();
+      }),
+    ),
+  );
 
-  const result = await xaiProvider().stream(model, normalizeContext(context), options).result();
+  const result = yield* Effect.promise(() =>
+    xaiProvider().stream(model, normalizeContext(context), options).result(),
+  );
   expect(result.stopReason, result.errorMessage).toBe("stop");
   expect(captured).toBeDefined();
   return captured!;
-}
+});
 
 describe("xAI Responses provider", () => {
   afterEach(() => {
@@ -182,142 +196,168 @@ describe("xAI Responses provider", () => {
     });
   });
 
-  it("uses /responses with bearer auth and xAI-compatible request fields", async () => {
-    const captured = await captureRequest(
-      XAI_MODELS["grok-4.5"],
-      {
-        systemPrompt: "You are a careful coding assistant.",
-        messages: [{ role: "user", content: "hello", timestamp: 1 }],
-      },
-      {
-        apiKey: "xai-test-token",
-        sessionId: "msa-session-123",
-        cacheRetention: "long",
-        reasoningEffort: "medium",
-      },
-    );
+  it("uses /responses with bearer auth and xAI-compatible request fields", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const captured = yield* captureRequest(
+          XAI_MODELS["grok-4.5"],
+          {
+            systemPrompt: "You are a careful coding assistant.",
+            messages: [{ role: "user", content: "hello", timestamp: 1 }],
+          },
+          {
+            apiKey: "xai-test-token",
+            sessionId: "msa-session-123",
+            cacheRetention: "long",
+            reasoningEffort: "medium",
+          },
+        );
 
-    expect(captured.url).toBe("https://api.x.ai/v1/responses");
-    expect(captured.headers.get("authorization")).toBe("Bearer xai-test-token");
-    expect(captured.headers.get("user-agent")).toBe(MSA_USER_AGENT);
-    expect(captured.headers.get("session_id")).toBe("msa-session-123");
-    expect(captured.body).toMatchObject({
-      model: "grok-4.5",
-      store: false,
-      stream: true,
-      prompt_cache_key: "msa-session-123",
-      reasoning: { effort: "medium" },
-      include: ["reasoning.encrypted_content"],
-    });
-    expect(captured.body).not.toHaveProperty("prompt_cache_retention");
-    expect(captured.body["input"]).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          role: "developer",
-          content: "You are a careful coding assistant.",
-        }),
-      ]),
-    );
-  });
+        expect(captured.url).toBe("https://api.x.ai/v1/responses");
+        expect(captured.headers.get("authorization")).toBe("Bearer xai-test-token");
+        expect(captured.headers.get("user-agent")).toBe(MSA_USER_AGENT);
+        expect(captured.headers.get("session_id")).toBe("msa-session-123");
+        expect(captured.body).toMatchObject({
+          model: "grok-4.5",
+          store: false,
+          stream: true,
+          prompt_cache_key: "msa-session-123",
+          reasoning: { effort: "medium" },
+          include: ["reasoning.encrypted_content"],
+        });
+        expect(captured.body).not.toHaveProperty("prompt_cache_retention");
+        expect(captured.body["input"]).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              role: "developer",
+              content: "You are a careful coding assistant.",
+            }),
+          ]),
+        );
+      }),
+    ));
 
-  it("requests encrypted reasoning without an effort override", async () => {
-    const captured = await captureRequest(
-      XAI_MODELS["grok-4.5"],
-      { messages: [{ role: "user", content: "hello", timestamp: 1 }] },
-      { apiKey: "xai-test-token" },
-    );
+  it("requests encrypted reasoning without an effort override", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const captured = yield* captureRequest(
+          XAI_MODELS["grok-4.5"],
+          { messages: [{ role: "user", content: "hello", timestamp: 1 }] },
+          { apiKey: "xai-test-token" },
+        );
 
-    expect(captured.body).toMatchObject({
-      model: "grok-4.5",
-      store: false,
-      include: ["reasoning.encrypted_content"],
-    });
-    expect(captured.body).not.toHaveProperty("reasoning");
-  });
+        expect(captured.body).toMatchObject({
+          model: "grok-4.5",
+          store: false,
+          include: ["reasoning.encrypted_content"],
+        });
+        expect(captured.body).not.toHaveProperty("reasoning");
+      }),
+    ));
 
-  it("uses /responses for Grok 4.7 with xhigh effort and encrypted reasoning", async () => {
-    const captured = await captureRequest(
-      XAI_MODELS["grok-4.7"],
-      {
-        systemPrompt: "You are a careful coding assistant.",
-        messages: [{ role: "user", content: "hello", timestamp: 1 }],
-      },
-      {
-        apiKey: "xai-test-token",
-        reasoningEffort: "xhigh",
-      },
-    );
+  it("uses /responses for Grok 4.7 with xhigh effort and encrypted reasoning", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const captured = yield* captureRequest(
+          XAI_MODELS["grok-4.7"],
+          {
+            systemPrompt: "You are a careful coding assistant.",
+            messages: [{ role: "user", content: "hello", timestamp: 1 }],
+          },
+          {
+            apiKey: "xai-test-token",
+            reasoningEffort: "xhigh",
+          },
+        );
 
-    expect(captured.url).toBe("https://api.x.ai/v1/responses");
-    expect(captured.body).toMatchObject({
-      model: "grok-4.7",
-      store: false,
-      stream: true,
-      reasoning: { effort: "xhigh" },
-      include: ["reasoning.encrypted_content"],
-    });
-  });
+        expect(captured.url).toBe("https://api.x.ai/v1/responses");
+        expect(captured.body).toMatchObject({
+          model: "grok-4.7",
+          store: false,
+          stream: true,
+          reasoning: { effort: "xhigh" },
+          include: ["reasoning.encrypted_content"],
+        });
+      }),
+    ));
 
-  it("uses /responses for Grok 4.3", async () => {
-    const captured = await captureRequest(
-      XAI_MODELS["grok-4.3"],
-      {
-        messages: [{ role: "user", content: "hello", timestamp: 1 }],
-      },
-      {
-        apiKey: "xai-test-token",
-        reasoningEffort: "low",
-      },
-    );
+  it("uses /responses for Grok 4.3", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const captured = yield* captureRequest(
+          XAI_MODELS["grok-4.3"],
+          {
+            messages: [{ role: "user", content: "hello", timestamp: 1 }],
+          },
+          {
+            apiKey: "xai-test-token",
+            reasoningEffort: "low",
+          },
+        );
 
-    expect(captured.url).toBe("https://api.x.ai/v1/responses");
-    expect(captured.body).toMatchObject({
-      model: "grok-4.3",
-      store: false,
-      include: ["reasoning.encrypted_content"],
-      reasoning: { effort: "low" },
-    });
-  });
+        expect(captured.url).toBe("https://api.x.ai/v1/responses");
+        expect(captured.body).toMatchObject({
+          model: "grok-4.3",
+          store: false,
+          include: ["reasoning.encrypted_content"],
+          reasoning: { effort: "low" },
+        });
+      }),
+    ));
 
-  it("uses msa's User-Agent by default for Responses requests", async () => {
-    let userAgent: string | null = null;
-    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
-      userAgent = new Request(input, init).headers.get("user-agent");
-      return Promise.resolve(completedResponse());
-    });
+  it("uses msa's User-Agent by default for Responses requests", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        let userAgent: string | null = null;
+        vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+          userAgent = new Request(input, init).headers.get("user-agent");
+          return Promise.resolve(completedResponse());
+        });
 
-    const openaiModel: Model<"openai-responses"> = {
-      ...XAI_MODELS["grok-4.5"],
-      provider: "openai",
-      baseUrl: "https://api.openai.com/v1",
-    };
-    const result = await streamOpenAIResponses(
-      openaiModel,
-      normalizeContext({ messages: [{ role: "user", content: "hello", timestamp: 1 }] }),
-      { apiKey: "test-token" },
-    ).result();
+        const openaiModel: Model<"openai-responses"> = {
+          ...XAI_MODELS["grok-4.5"],
+          provider: "openai",
+          baseUrl: "https://api.openai.com/v1",
+        };
+        const result = yield* Effect.promise(() =>
+          streamOpenAIResponses(
+            openaiModel,
+            normalizeContext({ messages: [{ role: "user", content: "hello", timestamp: 1 }] }),
+            { apiKey: "test-token" },
+          ).result(),
+        );
 
-    expect(result.stopReason, result.errorMessage).toBe("stop");
-    expect(userAgent).toBe(MSA_USER_AGENT);
-  });
+        expect(result.stopReason, result.errorMessage).toBe("stop");
+        expect(userAgent).toBe(MSA_USER_AGENT);
+      }),
+    ));
 
-  it("lets explicit headers override the default Responses User-Agent", async () => {
-    const captured = await captureRequest(
-      XAI_MODELS["grok-4.5"],
-      { messages: [{ role: "user", content: "hello", timestamp: 1 }] },
-      { apiKey: "xai-test-token", headers: { "User-Agent": "custom-agent" } },
-    );
+  it("lets explicit headers override the default Responses User-Agent", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const captured = yield* captureRequest(
+          XAI_MODELS["grok-4.5"],
+          { messages: [{ role: "user", content: "hello", timestamp: 1 }] },
+          { apiKey: "xai-test-token", headers: { "User-Agent": "custom-agent" } },
+        );
 
-    expect(captured.headers.get("user-agent")).toBe("custom-agent");
-  });
+        expect(captured.headers.get("user-agent")).toBe("custom-agent");
+      }),
+    ));
 
-  it("uses msa's User-Agent by default for Completions requests", async () => {
-    expect(await captureCompletionsUserAgent()).toBe(MSA_USER_AGENT);
-  });
+  it("uses msa's User-Agent by default for Completions requests", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        expect(yield* captureCompletionsUserAgent()).toBe(MSA_USER_AGENT);
+      }),
+    ));
 
-  it("lets explicit headers override the default Completions User-Agent", async () => {
-    expect(await captureCompletionsUserAgent({ "User-Agent": "custom-agent" })).toBe(
-      "custom-agent",
-    );
-  });
+  it("lets explicit headers override the default Completions User-Agent", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        expect(yield* captureCompletionsUserAgent({ "User-Agent": "custom-agent" })).toBe(
+          "custom-agent",
+        );
+      }),
+    ));
 });

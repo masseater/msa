@@ -1,8 +1,10 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
 import type { Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
+import { encodeJson } from "./json-codec.ts";
 
 const usageLimitError = {
   code: "subscription_sharing_usage_limit_exceeded",
@@ -28,47 +30,62 @@ const context = normalizeContext({
   tools: [],
 });
 
-async function getErrorMessage(response: Response): Promise<string | undefined> {
-  const result = await streamOpenAIResponses(model, context, {
-    apiKey: "test",
-    fetch: () => Promise.resolve(response),
-  }).result();
+const getErrorMessage = Effect.fn("getErrorMessage")(function* (response: Response) {
+  const result = yield* Effect.promise(() =>
+    streamOpenAIResponses(model, context, {
+      apiKey: "test",
+      fetch: () => Promise.resolve(response),
+    }).result(),
+  );
   expect(result.stopReason).toBe("error");
   return result.errorMessage;
-}
+});
 
 describe("OpenAI Responses ChatGPT usage limit", () => {
-  it("links to ChatGPT usage when the request is rejected", async () => {
-    const response = new Response(
-      JSON.stringify({ error: { ...usageLimitError, type: "rate_limit_error" } }),
-      {
-        status: 429,
-        headers: { "content-type": "application/json" },
-      },
-    );
+  it("links to ChatGPT usage when the request is rejected", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const response = new Response(
+          yield* encodeJson({ error: { ...usageLimitError, type: "rate_limit_error" } }),
+          {
+            status: 429,
+            headers: { "content-type": "application/json" },
+          },
+        );
 
-    const errorMessage = await getErrorMessage(response);
+        const errorMessage = yield* getErrorMessage(response);
 
-    expect(errorMessage).toContain("subscription_sharing_usage_limit_exceeded");
-    expect(errorMessage).toContain("Check your ChatGPT usage: https://chatgpt.com/settings/usage");
-  });
+        expect(errorMessage).toContain("subscription_sharing_usage_limit_exceeded");
+        expect(errorMessage).toContain(
+          "Check your ChatGPT usage: https://chatgpt.com/settings/usage",
+        );
+      }),
+    ));
 
-  it("links to ChatGPT usage when the stream fails", async () => {
-    const event = {
-      type: "response.failed",
-      sequence_number: 0,
-      response: { id: "resp_failed", status: "failed", error: usageLimitError },
-    };
-    const response = new Response(`event: response.failed\ndata: ${JSON.stringify(event)}\n\n`, {
-      status: 200,
-      headers: { "content-type": "text/event-stream" },
-    });
+  it("links to ChatGPT usage when the stream fails", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const event = {
+          type: "response.failed",
+          sequence_number: 0,
+          response: { id: "resp_failed", status: "failed", error: usageLimitError },
+        };
+        const response = new Response(
+          `event: response.failed\ndata: ${yield* encodeJson(event)}\n\n`,
+          {
+            status: 200,
+            headers: { "content-type": "text/event-stream" },
+          },
+        );
 
-    const errorMessage = await getErrorMessage(response);
+        const errorMessage = yield* getErrorMessage(response);
 
-    expect(errorMessage).toContain(
-      "subscription_sharing_usage_limit_exceeded: Usage limit reached.",
-    );
-    expect(errorMessage).toContain("Check your ChatGPT usage: https://chatgpt.com/settings/usage");
-  });
+        expect(errorMessage).toContain(
+          "subscription_sharing_usage_limit_exceeded: Usage limit reached.",
+        );
+        expect(errorMessage).toContain(
+          "Check your ChatGPT usage: https://chatgpt.com/settings/usage",
+        );
+      }),
+    ));
 });

@@ -1,15 +1,16 @@
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { getModel } from "../src/compat.ts";
 import { findEnvKeys, getEnvApiKey } from "../src/env-api-keys.ts";
+import { envValue } from "./env.ts";
 
-const originalTogetherApiKey = process.env["TOGETHER_API_KEY"];
+const originalTogetherApiKey = envValue("TOGETHER_API_KEY");
 
 afterEach(() => {
   if (originalTogetherApiKey === undefined) {
-    delete process.env["TOGETHER_API_KEY"];
+    vi.stubEnv("TOGETHER_API_KEY", undefined);
   } else {
-    process.env["TOGETHER_API_KEY"] = originalTogetherApiKey;
+    vi.stubEnv("TOGETHER_API_KEY", originalTogetherApiKey);
   }
 });
 
@@ -79,7 +80,7 @@ describe("Together models", () => {
   });
 
   it("resolves TOGETHER_API_KEY from the environment", () => {
-    process.env["TOGETHER_API_KEY"] = "test-together-key";
+    vi.stubEnv("TOGETHER_API_KEY", "test-together-key");
 
     expect(findEnvKeys("together")).toEqual(["TOGETHER_API_KEY"]);
     expect(getEnvApiKey("together")).toBe("test-together-key");

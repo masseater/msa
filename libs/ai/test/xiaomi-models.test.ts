@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { getModels, streamSimple } from "../src/compat.ts";
@@ -30,37 +31,45 @@ describe("Xiaomi MiMo models", () => {
     for (const modelId of REPLACEMENT_MODEL_IDS) expect(modelIds).toContain(modelId);
   });
 
-  it.each(XIAOMI_PROVIDERS)("models %s reasoning as an off/on toggle", async (provider) => {
-    const models = getModels(provider).filter((model) => model.reasoning);
-    expect(models.length).toBeGreaterThan(0);
+  it.each(XIAOMI_PROVIDERS)("models %s reasoning as an off/on toggle", (provider) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const models = getModels(provider).filter((model) => model.reasoning);
+        expect(models.length).toBeGreaterThan(0);
 
-    for (const model of models) {
-      expect(getSupportedThinkingLevels(model)).toEqual(["off", "high"]);
+        for (const model of models) {
+          expect(getSupportedThinkingLevels(model)).toEqual(["off", "high"]);
 
-      const capturePayload = async (reasoning: ThinkingLevel | undefined) => {
-        let payload: Record<string, unknown> | undefined;
-        await streamSimple(
-          model,
-          { messages: [{ role: "user", content: "test", timestamp: 0 }] },
-          {
-            apiKey: "test-xiaomi-key",
-            reasoning,
-            onPayload: (value) => {
-              payload = value as Record<string, unknown>;
-              throw new Error("payload captured");
-            },
-          },
-        ).result();
-        return payload;
-      };
+          const capturePayload = Effect.fn("capturePayload")(function* (
+            reasoning: ThinkingLevel | undefined,
+          ) {
+            let payload: Record<string, unknown> | undefined;
+            yield* Effect.promise(() =>
+              streamSimple(
+                model,
+                { messages: [{ role: "user", content: "test", timestamp: 0 }] },
+                {
+                  apiKey: "test-xiaomi-key",
+                  reasoning,
+                  onPayload: (value) => {
+                    payload = value as Record<string, unknown>;
+                    throw new Error("payload captured");
+                  },
+                },
+              ).result(),
+            );
+            return payload;
+          });
 
-      const enabled = await capturePayload("high");
-      expect(enabled?.["thinking"]).toEqual({ type: "enabled" });
-      expect(enabled?.["reasoning_effort"]).toBeUndefined();
+          const enabled = yield* capturePayload("high");
+          expect(enabled?.["thinking"]).toEqual({ type: "enabled" });
+          expect(enabled?.["reasoning_effort"]).toBeUndefined();
 
-      const disabled = await capturePayload(undefined);
-      expect(disabled?.["thinking"]).toEqual({ type: "disabled" });
-      expect(disabled?.["reasoning_effort"]).toBeUndefined();
-    }
-  });
+          const disabled = yield* capturePayload(undefined);
+          expect(disabled?.["thinking"]).toEqual({ type: "disabled" });
+          expect(disabled?.["reasoning_effort"]).toBeUndefined();
+        }
+      }),
+    ),
+  );
 });

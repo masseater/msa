@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { completeSimple } from "../src/compat.ts";
@@ -56,40 +57,46 @@ describe("openai-completions provider stream events", () => {
     mockState.chunks = [];
   });
 
-  it("exposes provider chunks including OpenRouter metadata", async () => {
-    const firstChunk = {
-      id: "chatcmpl-1",
-      model: "anthropic/claude-sonnet-4.6",
-      choices: [{ index: 0, delta: { content: "hello" } }],
-    };
-    const finalChunk = {
-      id: "chatcmpl-1",
-      model: "anthropic/claude-sonnet-4.6",
-      choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-      usage: {
-        prompt_tokens: 10,
-        completion_tokens: 2,
-        total_tokens: 12,
-        cost: 0.0012,
-        is_byok: false,
-      },
-      openrouter_metadata: { strategy: "direct", region: "iad" },
-    };
-    mockState.chunks = [firstChunk, finalChunk];
-    const events: unknown[] = [];
+  it("exposes provider chunks including OpenRouter metadata", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const firstChunk = {
+          id: "chatcmpl-1",
+          model: "anthropic/claude-sonnet-4.6",
+          choices: [{ index: 0, delta: { content: "hello" } }],
+        };
+        const finalChunk = {
+          id: "chatcmpl-1",
+          model: "anthropic/claude-sonnet-4.6",
+          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+          usage: {
+            prompt_tokens: 10,
+            completion_tokens: 2,
+            total_tokens: 12,
+            cost: 0.0012,
+            is_byok: false,
+          },
+          openrouter_metadata: { strategy: "direct", region: "iad" },
+        };
+        mockState.chunks = [firstChunk, finalChunk];
+        const events: unknown[] = [];
 
-    const message = await completeSimple(
-      openRouterModel(),
-      { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
-      {
-        apiKey: "test",
-        onProviderStreamEvent: (data) => {
-          events.push(data);
-        },
-      },
-    );
+        const currentTime = yield* Clock.currentTimeMillis;
+        const message = yield* Effect.promise(() =>
+          completeSimple(
+            openRouterModel(),
+            { messages: [{ role: "user", content: "hi", timestamp: currentTime }] },
+            {
+              apiKey: "test",
+              onProviderStreamEvent: (data) => {
+                events.push(data);
+              },
+            },
+          ),
+        );
 
-    expect(message.content).toEqual([{ type: "text", text: "hello" }]);
-    expect(events).toEqual([firstChunk, finalChunk]);
-  });
+        expect(message.content).toEqual([{ type: "text", text: "hello" }]);
+        expect(events).toEqual([firstChunk, finalChunk]);
+      }),
+    ));
 });

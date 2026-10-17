@@ -1,5 +1,6 @@
 import { writeFileSync } from "fs";
 
+import { Console, DateTime, Effect } from "effect";
 import { Type } from "typebox";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
 
@@ -17,6 +18,7 @@ import {
   hasCloudflareAiGatewayCredentials,
   hasCloudflareWorkersAICredentials,
 } from "./cloudflare-utils.ts";
+import { envValue } from "./env.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 const testToolSchema = Type.Object({
@@ -139,10 +141,14 @@ interface CachedContext {
   generatedAt: string;
 }
 
-async function getApiKey(provider: string): Promise<string | undefined> {
-  const oauthKey = await resolveApiKey(provider);
-  if (oauthKey !== undefined && oauthKey !== "") return oauthKey;
-  return getEnvApiKey(provider);
+function getApiKey(provider: string): Promise<string | undefined> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const oauthKey = yield* Effect.promise(() => resolveApiKey(provider));
+      if (oauthKey !== undefined && oauthKey !== "") return oauthKey;
+      return getEnvApiKey(provider);
+    }),
+  );
 }
 
 function hasApiKey(pair: ProviderModelPair): boolean {
@@ -155,7 +161,7 @@ function hasApiKey(pair: ProviderModelPair): boolean {
   if (pair.provider === "cloudflare-ai-gateway") {
     if (!hasCloudflareAiGatewayCredentials()) return false;
     return pair.upstreamApiKeyEnv !== undefined && pair.upstreamApiKeyEnv !== ""
-      ? !!process.env[pair.upstreamApiKeyEnv]
+      ? !!envValue(pair.upstreamApiKeyEnv)
       : true;
   }
   return !!getEnvApiKey(pair.provider);
@@ -163,7 +169,7 @@ function hasApiKey(pair: ProviderModelPair): boolean {
 
 function getHeaders(pair: ProviderModelPair): Record<string, string> | undefined {
   if (pair.upstreamApiKeyEnv === undefined || pair.upstreamApiKeyEnv === "") return undefined;
-  const upstreamApiKey = process.env[pair.upstreamApiKeyEnv];
+  const upstreamApiKey = envValue(pair.upstreamApiKeyEnv);
   return upstreamApiKey !== undefined && upstreamApiKey !== ""
     ? { Authorization: `Bearer ${upstreamApiKey}` }
     : undefined;
@@ -328,43 +334,49 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
   let contexts: Record<string, CachedContext>;
   let availablePairs: ProviderModelPair[];
 
-  beforeAll(async () => {
-    contexts = {};
-    availablePairs = [];
+  beforeAll(
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          contexts = {};
+          availablePairs = [];
 
-    console.log("\n=== Generating Fixtures ===\n");
+          yield* Console.log("\n=== Generating Fixtures ===\n");
 
-    for (const pair of PROVIDER_MODEL_PAIRS) {
-      const apiKey = await getApiKey(pair.provider);
-      if (apiKey === undefined || apiKey === "" || !hasApiKey(pair)) {
-        console.log(`[${pair.label}] Skipping - no auth for ${pair.provider}`);
-        continue;
-      }
+          for (const pair of PROVIDER_MODEL_PAIRS) {
+            const apiKey = yield* Effect.promise(() => getApiKey(pair.provider));
+            if (apiKey === undefined || apiKey === "" || !hasApiKey(pair)) {
+              yield* Console.log(`[${pair.label}] Skipping - no auth for ${pair.provider}`);
+              continue;
+            }
 
-      console.log(`[${pair.label}] Generating fixture...`);
-      const result = await generateContext(pair, apiKey);
+            yield* Console.log(`[${pair.label}] Generating fixture...`);
+            const result = yield* Effect.promise(() => generateContext(pair, apiKey));
 
-      if (result === null || result.messages.length < 4) {
-        console.log(`[${pair.label}] Failed to generate fixture, skipping`);
-        continue;
-      }
+            if (result === null || result.messages.length < 4) {
+              yield* Console.log(`[${pair.label}] Failed to generate fixture, skipping`);
+              continue;
+            }
 
-      contexts[pair.label] = {
-        label: pair.label,
-        provider: pair.provider,
-        model: pair.model,
-        api: result.api,
-        messages: result.messages,
-        generatedAt: new Date().toISOString(),
-      };
-      availablePairs.push(pair);
-      console.log(`[${pair.label}] Generated ${result.messages.length} messages`);
-    }
+            contexts[pair.label] = {
+              label: pair.label,
+              provider: pair.provider,
+              model: pair.model,
+              api: result.api,
+              messages: result.messages,
+              generatedAt: DateTime.formatIso(yield* DateTime.now),
+            };
+            availablePairs.push(pair);
+            yield* Console.log(`[${pair.label}] Generated ${result.messages.length} messages`);
+          }
 
-    console.log(
-      `\n=== ${availablePairs.length}/${PROVIDER_MODEL_PAIRS.length} contexts available ===\n`,
-    );
-  }, 300000);
+          yield* Console.log(
+            `\n=== ${availablePairs.length}/${PROVIDER_MODEL_PAIRS.length} contexts available ===\n`,
+          );
+        }),
+      ),
+    300000,
+  );
 
   it.skipIf(!hasAnyApiKey())("should have at least 2 fixtures to test handoffs", () => {
     expect(Object.keys(contexts).length).toBeGreaterThanOrEqual(2);

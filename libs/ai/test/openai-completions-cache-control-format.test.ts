@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { Type } from "typebox";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -73,36 +74,42 @@ vi.mock("openai", () => {
   return { default: FakeOpenAI };
 });
 
-async function capturePayload(
+function capturePayload(
   model: Model<"openai-completions">,
   options?: { cacheRetention?: "none" | "short" | "long" },
   messages?: Message[],
 ): Promise<CapturedParams> {
-  const timestamp = Date.now();
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const timestamp = yield* Clock.currentTimeMillis;
 
-  await streamOpenAICompletions(
-    model,
-    normalizeContext({
-      systemPrompt: "System prompt",
-      messages: messages ?? [{ role: "user", content: "Hello", timestamp }],
-      tools: [
-        {
-          name: "read",
-          description: "Read a file",
-          parameters: Type.Object({
-            path: Type.String(),
+      yield* Effect.promise(() =>
+        streamOpenAICompletions(
+          model,
+          normalizeContext({
+            systemPrompt: "System prompt",
+            messages: messages ?? [{ role: "user", content: "Hello", timestamp }],
+            tools: [
+              {
+                name: "read",
+                description: "Read a file",
+                parameters: Type.Object({
+                  path: Type.String(),
+                }),
+              },
+            ],
           }),
-        },
-      ],
+          { apiKey: "test-key", ...options },
+        ).result(),
+      );
+
+      if (mockState.lastParams === undefined) {
+        throw new Error("Expected payload to be captured");
+      }
+
+      return mockState.lastParams;
     }),
-    { apiKey: "test-key", ...options },
-  ).result();
-
-  if (mockState.lastParams === undefined) {
-    throw new Error("Expected payload to be captured");
-  }
-
-  return mockState.lastParams;
+  );
 }
 
 function getInstructionMessage(params: CapturedParams) {
@@ -134,37 +141,43 @@ describe("openai-completions cacheControlFormat", () => {
     mockState.lastParams = undefined;
   });
 
-  it("applies Anthropic-style cache markers when model compat enables them", async () => {
-    const model: Model<"openai-completions"> = {
-      id: "custom-qwen",
-      name: "Custom Qwen",
-      api: "openai-completions",
-      provider: "openrouter",
-      baseUrl: "https://example.com/v1",
-      reasoning: true,
-      input: ["text"],
-      cost: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-      },
-      contextWindow: 128000,
-      maxTokens: 32000,
-      compat: {
-        cacheControlFormat: "anthropic",
-      },
-    };
+  it("applies Anthropic-style cache markers when model compat enables them", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model: Model<"openai-completions"> = {
+          id: "custom-qwen",
+          name: "Custom Qwen",
+          api: "openai-completions",
+          provider: "openrouter",
+          baseUrl: "https://example.com/v1",
+          reasoning: true,
+          input: ["text"],
+          cost: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+          },
+          contextWindow: 128000,
+          maxTokens: 32000,
+          compat: {
+            cacheControlFormat: "anthropic",
+          },
+        };
 
-    const params = await capturePayload(model);
-    expectAnthropicCacheMarkers(params);
-  });
+        const params = yield* Effect.promise(() => capturePayload(model));
+        expectAnthropicCacheMarkers(params);
+      }),
+    ));
 
-  it("preserves Anthropic-style cache markers for OpenRouter Anthropic batch aliases", async () => {
-    const model = getModel("openrouter", "anthropic/claude-fable-5.1:batch");
-    const params = await capturePayload(model);
-    expectAnthropicCacheMarkers(params);
-  });
+  it("preserves Anthropic-style cache markers for OpenRouter Anthropic batch aliases", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("openrouter", "anthropic/claude-fable-5.1:batch");
+        const params = yield* Effect.promise(() => capturePayload(model));
+        expectAnthropicCacheMarkers(params);
+      }),
+    ));
 
   it("moves the conversation cache marker to a tool result", async () => {
     const model = getModel("openrouter", "anthropic/claude-fable-5.1:batch");
@@ -210,32 +223,37 @@ describe("openai-completions cacheControlFormat", () => {
     expect((toolMessage.content as TextPart[])[0]?.cache_control).toEqual({ type: "ephemeral" });
   });
 
-  it("omits Anthropic-style cache markers when cacheRetention is none", async () => {
-    const model: Model<"openai-completions"> = {
-      id: "custom-qwen",
-      name: "Custom Qwen",
-      api: "openai-completions",
-      provider: "openrouter",
-      baseUrl: "https://example.com/v1",
-      reasoning: true,
-      input: ["text"],
-      cost: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-      },
-      contextWindow: 128000,
-      maxTokens: 32000,
-      compat: {
-        cacheControlFormat: "anthropic",
-      },
-    };
-    const params = await capturePayload(model, { cacheRetention: "none" });
-    const instructionMessage = getInstructionMessage(params);
+  it("omits Anthropic-style cache markers when cacheRetention is none", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model: Model<"openai-completions"> = {
+          id: "custom-qwen",
+          name: "Custom Qwen",
+          api: "openai-completions",
+          provider: "openrouter",
+          baseUrl: "https://example.com/v1",
+          reasoning: true,
+          input: ["text"],
+          cost: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+          },
+          contextWindow: 128000,
+          maxTokens: 32000,
+          compat: {
+            cacheControlFormat: "anthropic",
+          },
+        };
+        const params = yield* Effect.promise(() =>
+          capturePayload(model, { cacheRetention: "none" }),
+        );
+        const instructionMessage = getInstructionMessage(params);
 
-    expect(Array.isArray(instructionMessage?.content)).toBe(false);
-    expect(params.tools?.[0]?.cache_control).toBeUndefined();
-    expect(typeof params.messages[params.messages.length - 1]?.content).toBe("string");
-  });
+        expect(Array.isArray(instructionMessage?.content)).toBe(false);
+        expect(params.tools?.[0]?.cache_control).toBeUndefined();
+        expect(typeof params.messages[params.messages.length - 1]?.content).toBe("string");
+      }),
+    ));
 });

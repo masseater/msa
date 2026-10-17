@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -115,17 +116,22 @@ function getToolCall(output: AssistantMessage): ToolCall {
 }
 
 describe("OpenAI Responses terminal messages", () => {
-  it("omits an absent error message", async () => {
-    const output = createOutput();
-    await processResponsesStream(
-      createFunctionCallEvents(),
-      output,
-      new AssistantMessageEventStream(),
-      model,
-    );
+  it("omits an absent error message", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const output = createOutput();
+        yield* Effect.promise(() =>
+          processResponsesStream(
+            createFunctionCallEvents(),
+            output,
+            new AssistantMessageEventStream(),
+            model,
+          ),
+        );
 
-    expect(output).not.toHaveProperty("errorMessage");
-  });
+        expect(output).not.toHaveProperty("errorMessage");
+      }),
+    ));
 });
 
 describe("OpenAI Responses tool-call namespaces", () => {

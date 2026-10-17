@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
@@ -8,6 +9,7 @@ import {
   type RadiusGatewayConfig,
 } from "../src/providers/radius-config.ts";
 import { radiusProvider } from "../src/providers/radius.ts";
+import { encodeJson } from "./json-codec.ts";
 
 function radiusConfig(): RadiusGatewayConfig {
   return {
@@ -53,71 +55,87 @@ describe("Radius provider catalogs", () => {
     expect(provider.getModels()).toEqual([]);
   });
 
-  it("replaces the static public catalog with refreshed models", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify(radiusConfig()), {
-        status: 200,
-        headers: { "content-type": "application/json" },
+  it("replaces the static public catalog with refreshed models", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(
+          new Response(yield* encodeJson(radiusConfig()), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+        const credentials = new InMemoryCredentialStore();
+        yield* Effect.promise(() =>
+          credentials.modify("radius", () =>
+            Promise.resolve({ type: "api_key", key: "radius-key" }),
+          ),
+        );
+        const models = createModels({ credentials });
+        models.setProvider(radiusProvider());
+
+        const result = yield* Effect.promise(() => models.refresh({ providers: ["radius"] }));
+
+        expect(result.errors).toEqual(new Map());
+        expect(models.getModel("radius", "balanced")).toMatchObject({
+          name: "Fresh Balanced",
+          baseUrl: "https://radius.example/v1",
+          contextWindow: 424242,
+        });
+        expect(models.getModel("radius", "organization-only")).toBeDefined();
+        expect(models.getModels("radius").map((model) => model.id)).toEqual([
+          "balanced",
+          "organization-only",
+        ]);
       }),
-    );
-    const credentials = new InMemoryCredentialStore();
-    await credentials.modify("radius", () =>
-      Promise.resolve({ type: "api_key", key: "radius-key" }),
-    );
-    const models = createModels({ credentials });
-    models.setProvider(radiusProvider());
+    ));
 
-    const result = await models.refresh({ providers: ["radius"] });
+  it("replaces the static public catalog with a cached catalog without network access", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const store = new InMemoryModelsStore();
+        const currentTime = yield* Clock.currentTimeMillis;
+        yield* Effect.promise(() =>
+          store.write("radius", {
+            models: getRadiusModelsFromConfig("radius", radiusConfig()),
+            checkedAt: currentTime,
+          }),
+        );
+        const models = createModels({ modelsStore: store });
+        models.setProvider(radiusProvider());
 
-    expect(result.errors).toEqual(new Map());
-    expect(models.getModel("radius", "balanced")).toMatchObject({
-      name: "Fresh Balanced",
-      baseUrl: "https://radius.example/v1",
-      contextWindow: 424242,
-    });
-    expect(models.getModel("radius", "organization-only")).toBeDefined();
-    expect(models.getModels("radius").map((model) => model.id)).toEqual([
-      "balanced",
-      "organization-only",
-    ]);
-  });
+        yield* Effect.promise(() => models.refresh({ providers: ["radius"], allowNetwork: false }));
 
-  it("replaces the static public catalog with a cached catalog without network access", async () => {
-    const store = new InMemoryModelsStore();
-    await store.write("radius", {
-      models: getRadiusModelsFromConfig("radius", radiusConfig()),
-      checkedAt: Date.now(),
-    });
-    const models = createModels({ modelsStore: store });
-    models.setProvider(radiusProvider());
-
-    await models.refresh({ providers: ["radius"], allowNetwork: false });
-
-    expect(models.getModel("radius", "balanced")?.name).toBe("Fresh Balanced");
-    expect(models.getModel("radius", "organization-only")).toBeDefined();
-    expect(models.getModels("radius").map((model) => model.id)).toEqual([
-      "balanced",
-      "organization-only",
-    ]);
-  });
-
-  it("exposes no models when the organization disabled all of them", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ baseUrl: "https://radius.example/v1", models: [] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
+        expect(models.getModel("radius", "balanced")?.name).toBe("Fresh Balanced");
+        expect(models.getModel("radius", "organization-only")).toBeDefined();
+        expect(models.getModels("radius").map((model) => model.id)).toEqual([
+          "balanced",
+          "organization-only",
+        ]);
       }),
-    );
-    const credentials = new InMemoryCredentialStore();
-    await credentials.modify("radius", () =>
-      Promise.resolve({ type: "api_key", key: "radius-key" }),
-    );
-    const models = createModels({ credentials });
-    models.setProvider(radiusProvider());
+    ));
 
-    const result = await models.refresh({ providers: ["radius"] });
+  it("exposes no models when the organization disabled all of them", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(
+          new Response(yield* encodeJson({ baseUrl: "https://radius.example/v1", models: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+        const credentials = new InMemoryCredentialStore();
+        yield* Effect.promise(() =>
+          credentials.modify("radius", () =>
+            Promise.resolve({ type: "api_key", key: "radius-key" }),
+          ),
+        );
+        const models = createModels({ credentials });
+        models.setProvider(radiusProvider());
 
-    expect(result.errors).toEqual(new Map());
-    expect(models.getModels("radius")).toEqual([]);
-  });
+        const result = yield* Effect.promise(() => models.refresh({ providers: ["radius"] }));
+
+        expect(result.errors).toEqual(new Map());
+        expect(models.getModels("radius")).toEqual([]);
+      }),
+    ));
 });

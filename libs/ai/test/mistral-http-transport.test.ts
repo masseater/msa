@@ -1,11 +1,13 @@
 import { arch, platform, release } from "node:os";
 
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
 import { stream as streamMistral } from "../src/api/mistral-conversations.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { Api, FetchFunction, Model, ProviderResponse } from "../src/types.ts";
+import { decodeJson, encodeJson } from "./json-codec.ts";
 
 const MSA_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
 
@@ -41,128 +43,139 @@ function createTerminalEvent(finishReason = "stop") {
 }
 
 describe("Mistral HTTP transport", () => {
-  it("serializes SDK-style payloads to the Mistral wire format", async () => {
-    const model = getModel("mistral", "mistral-large-latest");
-    const context = normalizeContext({
-      systemPrompt: "Be precise",
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "describe" },
-            { type: "image", data: "aGVsbG8=", mimeType: "image/png" },
+  it("serializes SDK-style payloads to the Mistral wire format", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("mistral", "mistral-large-latest");
+        const context = normalizeContext({
+          systemPrompt: "Be precise",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "describe" },
+                { type: "image", data: "aGVsbG8=", mimeType: "image/png" },
+              ],
+              timestamp: 1,
+            },
           ],
-          timestamp: 1,
-        },
-      ],
-      tools: [
-        {
-          name: "lookup",
-          description: "Look something up",
-          parameters: Type.Object({ query: Type.String() }),
-        },
-      ],
-    });
-    let requestUrl: string | undefined;
-    let requestInit: RequestInit | undefined;
-    let callbackPayload: Record<string, unknown> | undefined;
-    let callbackResponse: ProviderResponse | undefined;
-    const fetch: FetchFunction = (input, init) => {
-      requestUrl = String(input);
-      requestInit = init;
-      return Promise.resolve(
-        createSseResponse([createTerminalEvent()], { "x-request-id": "request-1" }),
-      );
-    };
+          tools: [
+            {
+              name: "lookup",
+              description: "Look something up",
+              parameters: Type.Object({ query: Type.String() }),
+            },
+          ],
+        });
+        let requestUrl: string | undefined;
+        let requestInit: RequestInit | undefined;
+        let callbackPayload: Record<string, unknown> | undefined;
+        let callbackResponse: ProviderResponse | undefined;
+        const fetch: FetchFunction = (input, init) => {
+          requestUrl = String(input);
+          requestInit = init;
+          return Promise.resolve(
+            createSseResponse([createTerminalEvent()], { "x-request-id": "request-1" }),
+          );
+        };
 
-    const message = await streamMistral(model, context, {
-      apiKey: "secret",
-      fetch,
-      headers: { "x-custom": "value" },
-      maxTokens: 123,
-      promptMode: "reasoning",
-      reasoningEffort: "high",
-      toolChoice: { type: "function", function: { name: "lookup" } },
-      sessionId: "session-1",
-      onPayload: (payload) => {
-        callbackPayload = payload as Record<string, unknown>;
-        return {
-          ...callbackPayload,
-          topP: 0.9,
-          randomSeed: 42,
-          responseFormat: {
-            type: "json_schema",
-            jsonSchema: {
-              name: "result",
-              schemaDefinition: {
-                type: "object",
-                properties: { maxTokens: { type: "number" } },
-              },
+        const message = yield* Effect.promise(() =>
+          streamMistral(model, context, {
+            apiKey: "secret",
+            fetch,
+            headers: { "x-custom": "value" },
+            maxTokens: 123,
+            promptMode: "reasoning",
+            reasoningEffort: "high",
+            toolChoice: { type: "function", function: { name: "lookup" } },
+            sessionId: "session-1",
+            onPayload: (payload) => {
+              callbackPayload = payload as Record<string, unknown>;
+              return {
+                ...callbackPayload,
+                topP: 0.9,
+                randomSeed: 42,
+                responseFormat: {
+                  type: "json_schema",
+                  jsonSchema: {
+                    name: "result",
+                    schemaDefinition: {
+                      type: "object",
+                      properties: { maxTokens: { type: "number" } },
+                    },
+                  },
+                },
+                presencePenalty: 0.1,
+                frequencyPenalty: 0.2,
+                parallelToolCalls: true,
+                safePrompt: true,
+              };
+            },
+            onResponse: (response) => {
+              callbackResponse = response;
+            },
+          }).result(),
+        );
+
+        expect(message.stopReason).toBe("stop");
+        expect(requestUrl).toBe("https://api.mistral.ai/v1/chat/completions");
+        const headers = new Headers(requestInit?.headers);
+        expect(headers.get("authorization")).toBe("Bearer secret");
+        expect(headers.get("accept")).toBe("text/event-stream");
+        expect(headers.get("x-affinity")).toBe("session-1");
+        expect(headers.get("x-custom")).toBe("value");
+        expect(headers.get("user-agent")).toBe(MSA_USER_AGENT);
+        expect(callbackPayload?.["maxTokens"]).toBe(123);
+        expect(callbackPayload?.["promptMode"]).toBe("reasoning");
+        expect(callbackPayload?.["promptCacheKey"]).toBe("session-1");
+        expect(callbackResponse).toEqual({
+          status: 200,
+          headers: { "content-type": "text/event-stream", "x-request-id": "request-1" },
+        });
+
+        const wirePayload = (yield* decodeJson(String(requestInit?.body))) as Record<
+          string,
+          unknown
+        >;
+        expect(wirePayload["max_tokens"]).toBe(123);
+        expect(wirePayload["prompt_mode"]).toBe("reasoning");
+        expect(wirePayload["reasoning_effort"]).toBe("high");
+        expect(wirePayload["tool_choice"]).toEqual({
+          type: "function",
+          function: { name: "lookup" },
+        });
+        expect(wirePayload["prompt_cache_key"]).toBe("session-1");
+        expect(wirePayload["top_p"]).toBe(0.9);
+        expect(wirePayload["random_seed"]).toBe(42);
+        expect(wirePayload["presence_penalty"]).toBe(0.1);
+        expect(wirePayload["frequency_penalty"]).toBe(0.2);
+        expect(wirePayload["parallel_tool_calls"]).toBe(true);
+        expect(wirePayload["safe_prompt"]).toBe(true);
+        expect(wirePayload["response_format"]).toEqual({
+          type: "json_schema",
+          json_schema: {
+            name: "result",
+            schema: {
+              type: "object",
+              properties: { maxTokens: { type: "number" } },
             },
           },
-          presencePenalty: 0.1,
-          frequencyPenalty: 0.2,
-          parallelToolCalls: true,
-          safePrompt: true,
-        };
-      },
-      onResponse: (response) => {
-        callbackResponse = response;
-      },
-    }).result();
-
-    expect(message.stopReason).toBe("stop");
-    expect(requestUrl).toBe("https://api.mistral.ai/v1/chat/completions");
-    const headers = new Headers(requestInit?.headers);
-    expect(headers.get("authorization")).toBe("Bearer secret");
-    expect(headers.get("accept")).toBe("text/event-stream");
-    expect(headers.get("x-affinity")).toBe("session-1");
-    expect(headers.get("x-custom")).toBe("value");
-    expect(headers.get("user-agent")).toBe(MSA_USER_AGENT);
-    expect(callbackPayload?.["maxTokens"]).toBe(123);
-    expect(callbackPayload?.["promptMode"]).toBe("reasoning");
-    expect(callbackPayload?.["promptCacheKey"]).toBe("session-1");
-    expect(callbackResponse).toEqual({
-      status: 200,
-      headers: { "content-type": "text/event-stream", "x-request-id": "request-1" },
-    });
-
-    const wirePayload = JSON.parse(String(requestInit?.body)) as Record<string, unknown>;
-    expect(wirePayload["max_tokens"]).toBe(123);
-    expect(wirePayload["prompt_mode"]).toBe("reasoning");
-    expect(wirePayload["reasoning_effort"]).toBe("high");
-    expect(wirePayload["tool_choice"]).toEqual({ type: "function", function: { name: "lookup" } });
-    expect(wirePayload["prompt_cache_key"]).toBe("session-1");
-    expect(wirePayload["top_p"]).toBe(0.9);
-    expect(wirePayload["random_seed"]).toBe(42);
-    expect(wirePayload["presence_penalty"]).toBe(0.1);
-    expect(wirePayload["frequency_penalty"]).toBe(0.2);
-    expect(wirePayload["parallel_tool_calls"]).toBe(true);
-    expect(wirePayload["safe_prompt"]).toBe(true);
-    expect(wirePayload["response_format"]).toEqual({
-      type: "json_schema",
-      json_schema: {
-        name: "result",
-        schema: {
-          type: "object",
-          properties: { maxTokens: { type: "number" } },
-        },
-      },
-    });
-    expect(wirePayload).not.toHaveProperty("maxTokens");
-    expect(wirePayload).not.toHaveProperty("promptMode");
-    expect(wirePayload).not.toHaveProperty("promptCacheKey");
-    expect(wirePayload["messages"]).toEqual([
-      { role: "system", content: "Be precise" },
-      {
-        role: "user",
-        content: [
-          { type: "text", text: "describe" },
-          { type: "image_url", image_url: "data:image/png;base64,aGVsbG8=" },
-        ],
-      },
-    ]);
-  });
+        });
+        expect(wirePayload).not.toHaveProperty("maxTokens");
+        expect(wirePayload).not.toHaveProperty("promptMode");
+        expect(wirePayload).not.toHaveProperty("promptCacheKey");
+        expect(wirePayload["messages"]).toEqual([
+          { role: "system", content: "Be precise" },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "describe" },
+              { type: "image_url", image_url: "data:image/png;base64,aGVsbG8=" },
+            ],
+          },
+        ]);
+      }),
+    ));
 
   it("serializes assistant thinking, tool calls, and tool results for replay", async () => {
     const model = getModel("mistral", "mistral-large-latest");
@@ -376,195 +389,250 @@ describe("Mistral HTTP transport", () => {
     ]);
   });
 
-  it("forwards each parsed SSE payload before normalizing it", async () => {
-    const model = getModel("mistral", "mistral-large-latest");
-    const context = normalizeContext({
-      messages: [{ role: "user", content: "hello", timestamp: 1 }],
-    });
-    const events = [
-      {
-        id: "response-1",
-        provider_metadata: { request: "test" },
-        choices: [{ index: 0, finish_reason: null, delta: { content: "hello" } }],
-      },
-      {
-        id: "response-1",
-        choices: [{ index: 0, finish_reason: "stop", delta: {} }],
-        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-      },
-    ];
-    const received: unknown[] = [];
-    const eventModels: Model<Api>[] = [];
-    const result = await streamMistral(model, context, {
-      apiKey: "test",
-      fetch: () => Promise.resolve(createSseResponse(events)),
-      onProviderStreamEvent: async (event, eventModel) => {
-        await Promise.resolve();
-        received.push(event);
-        eventModels.push(eventModel);
-      },
-    }).result();
+  it("forwards each parsed SSE payload before normalizing it", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const effectContext = yield* Effect.context();
+        const model = getModel("mistral", "mistral-large-latest");
+        const context = normalizeContext({
+          messages: [{ role: "user", content: "hello", timestamp: 1 }],
+        });
+        const events = [
+          {
+            id: "response-1",
+            provider_metadata: { request: "test" },
+            choices: [{ index: 0, finish_reason: null, delta: { content: "hello" } }],
+          },
+          {
+            id: "response-1",
+            choices: [{ index: 0, finish_reason: "stop", delta: {} }],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          },
+        ];
+        const received: unknown[] = [];
+        const eventModels: Model<Api>[] = [];
+        const result = yield* Effect.promise(() =>
+          streamMistral(model, context, {
+            apiKey: "test",
+            fetch: () => Promise.resolve(createSseResponse(events)),
+            onProviderStreamEvent: (event, eventModel) =>
+              Effect.runPromiseWith(effectContext)(
+                Effect.gen(function* () {
+                  yield* Effect.promise(() => Promise.resolve());
+                  received.push(event);
+                  eventModels.push(eventModel);
+                }),
+              ),
+          }).result(),
+        );
 
-    expect(received).toEqual(events);
-    expect(eventModels).toEqual([model, model]);
-    expect(result.stopReason).toBe("stop");
-    expect(result.content).toEqual([{ type: "text", text: "hello" }]);
-  });
+        expect(received).toEqual(events);
+        expect(eventModels).toEqual([model, model]);
+        expect(result.stopReason).toBe("stop");
+        expect(result.content).toEqual([{ type: "text", text: "hello" }]);
+      }),
+    ));
 
-  it("parses SSE and UTF-8 sequences split across transport chunks", async () => {
-    const model = getModel("mistral", "mistral-large-latest");
-    const context = normalizeContext({
-      messages: [{ role: "user", content: "hello", timestamp: 1 }],
-    });
-    const fetch: FetchFunction = () =>
-      Promise.resolve(
-        createBytewiseSseResponse({
-          id: "response-bytewise",
-          model: model.id,
-          choices: [{ index: 0, finish_reason: "stop", delta: { content: "héllo 🌍" } }],
-          usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
-        }),
-      );
+  it("parses SSE and UTF-8 sequences split across transport chunks", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("mistral", "mistral-large-latest");
+        const context = normalizeContext({
+          messages: [{ role: "user", content: "hello", timestamp: 1 }],
+        });
+        const fetch: FetchFunction = () =>
+          Promise.resolve(
+            createBytewiseSseResponse({
+              id: "response-bytewise",
+              model: model.id,
+              choices: [{ index: 0, finish_reason: "stop", delta: { content: "héllo 🌍" } }],
+              usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
+            }),
+          );
 
-    const message = await streamMistral(model, context, { apiKey: "test", fetch }).result();
+        const message = yield* Effect.promise(() =>
+          streamMistral(model, context, { apiKey: "test", fetch }).result(),
+        );
 
-    expect(message.stopReason).toBe("stop");
-    expect(message.content).toEqual([{ type: "text", text: "héllo 🌍" }]);
-  });
+        expect(message.stopReason).toBe("stop");
+        expect(message.content).toEqual([{ type: "text", text: "héllo 🌍" }]);
+      }),
+    ));
 
-  it("honors case-insensitive header overrides and explicit affinity suppression", async () => {
-    const model = {
-      ...getModel("mistral", "mistral-large-latest"),
-      headers: { Authorization: "Bearer model-key", "X-Affinity": "model-affinity" },
-    };
-    const context = normalizeContext({
-      messages: [{ role: "user", content: "hello", timestamp: 1 }],
-    });
-    let requestHeaders: Headers | undefined;
-    const fetch: FetchFunction = (_input, init) => {
-      requestHeaders = new Headers(init?.headers);
-      return Promise.resolve(createSseResponse([createTerminalEvent()]));
-    };
+  it("honors case-insensitive header overrides and explicit affinity suppression", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = {
+          ...getModel("mistral", "mistral-large-latest"),
+          headers: { Authorization: "Bearer model-key", "X-Affinity": "model-affinity" },
+        };
+        const context = normalizeContext({
+          messages: [{ role: "user", content: "hello", timestamp: 1 }],
+        });
+        let requestHeaders: Headers | undefined;
+        const fetch: FetchFunction = (_input, init) => {
+          requestHeaders = new Headers(init?.headers);
+          return Promise.resolve(createSseResponse([createTerminalEvent()]));
+        };
 
-    await streamMistral(model, context, {
-      apiKey: "request-key",
-      fetch,
-      sessionId: "automatic-affinity",
-      headers: { authorization: null, "x-affinity": null, "User-Agent": "custom-agent" },
-    }).result();
+        yield* Effect.promise(() =>
+          streamMistral(model, context, {
+            apiKey: "request-key",
+            fetch,
+            sessionId: "automatic-affinity",
+            headers: { authorization: null, "x-affinity": null, "User-Agent": "custom-agent" },
+          }).result(),
+        );
 
-    expect(requestHeaders?.has("authorization")).toBe(false);
-    expect(requestHeaders?.has("x-affinity")).toBe(false);
-    expect(requestHeaders?.get("user-agent")).toBe("custom-agent");
-  });
+        expect(requestHeaders?.has("authorization")).toBe(false);
+        expect(requestHeaders?.has("x-affinity")).toBe(false);
+        expect(requestHeaders?.get("user-agent")).toBe("custom-agent");
+      }),
+    ));
 
-  it("aborts while waiting for an SSE chunk", async () => {
-    const model = getModel("mistral", "mistral-large-latest");
-    const context = normalizeContext({
-      messages: [{ role: "user", content: "hello", timestamp: 1 }],
-    });
+  it("aborts while waiting for an SSE chunk", () => {
     const controller = new AbortController();
-    const fetch: FetchFunction = () =>
-      Promise.resolve(
-        new Response(
-          new ReadableStream({
-            start() {},
-          }),
-          { headers: { "content-type": "text/event-stream" } },
-        ),
-      );
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("mistral", "mistral-large-latest");
+        const context = normalizeContext({
+          messages: [{ role: "user", content: "hello", timestamp: 1 }],
+        });
+        const fetch: FetchFunction = () =>
+          Promise.resolve(
+            new Response(
+              new ReadableStream({
+                start() {},
+              }),
+              { headers: { "content-type": "text/event-stream" } },
+            ),
+          );
 
-    const result = streamMistral(model, context, {
-      apiKey: "test",
-      fetch,
-      signal: controller.signal,
-    }).result();
-    controller.abort();
-    const message = await result;
+        const result = streamMistral(model, context, {
+          apiKey: "test",
+          fetch,
+          signal: controller.signal,
+        }).result();
+        controller.abort();
+        const message = yield* Effect.promise(() => result);
 
-    expect(message.stopReason).toBe("aborted");
+        expect(message.stopReason).toBe("aborted");
+      }),
+    );
   });
 
-  it("applies the request timeout while waiting for response headers", async () => {
-    const model = getModel("mistral", "mistral-large-latest");
-    const context = normalizeContext({
-      messages: [{ role: "user", content: "hello", timestamp: 1 }],
-    });
-    const fetch: FetchFunction = (_url, init) =>
-      new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
-      });
+  it("applies the request timeout while waiting for response headers", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("mistral", "mistral-large-latest");
+        const context = normalizeContext({
+          messages: [{ role: "user", content: "hello", timestamp: 1 }],
+        });
+        const fetch: FetchFunction = (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), {
+              once: true,
+            });
+          });
 
-    const message = await streamMistral(model, context, {
-      apiKey: "test",
-      fetch,
-      timeoutMs: 5,
-    }).result();
+        const message = yield* Effect.promise(() =>
+          streamMistral(model, context, {
+            apiKey: "test",
+            fetch,
+            timeoutMs: 5,
+          }).result(),
+        );
 
-    expect(message.stopReason).toBe("error");
-    expect(message.errorMessage).toBe("Mistral response headers timed out after 5ms");
-  });
+        expect(message.stopReason).toBe("error");
+        expect(message.errorMessage).toBe("Mistral response headers timed out after 5ms");
+      }),
+    ));
 
-  it("does not abort an active stream that lasts longer than the request timeout", async () => {
-    const model = getModel("mistral", "mistral-large-latest");
-    const context = normalizeContext({
-      messages: [{ role: "user", content: "hello", timestamp: 1 }],
-    });
-    const encoder = new TextEncoder();
-    const thinkingEvent = {
-      choices: [
-        {
-          index: 0,
-          delta: { content: [{ type: "thinking", thinking: [{ type: "text", text: "x" }] }] },
-        },
-      ],
-    };
-    const fetch: FetchFunction = () =>
-      Promise.resolve(
-        new Response(
-          new ReadableStream({
-            async start(controller) {
-              for (let i = 0; i < 5; i++) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(thinkingEvent)}\n\n`));
-                await new Promise((resolve) => {
-                  setTimeout(resolve, 10);
-                });
-              }
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify(createTerminalEvent())}\n\ndata: [DONE]\n\n`,
-                ),
-              );
-              controller.close();
+  it("does not abort an active stream that lasts longer than the request timeout", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const effectContext = yield* Effect.context();
+        const model = getModel("mistral", "mistral-large-latest");
+        const context = normalizeContext({
+          messages: [{ role: "user", content: "hello", timestamp: 1 }],
+        });
+        const encoder = new TextEncoder();
+        const thinkingEvent = {
+          choices: [
+            {
+              index: 0,
+              delta: { content: [{ type: "thinking", thinking: [{ type: "text", text: "x" }] }] },
             },
-          }),
-          { headers: { "content-type": "text/event-stream" } },
-        ),
-      );
+          ],
+        };
+        const fetch: FetchFunction = () =>
+          Promise.resolve(
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  return Effect.runPromiseWith(effectContext)(
+                    Effect.gen(function* () {
+                      for (let i = 0; i < 5; i++) {
+                        controller.enqueue(
+                          encoder.encode(`data: ${yield* encodeJson(thinkingEvent)}\n\n`),
+                        );
+                        yield* Effect.promise(
+                          () =>
+                            new Promise((resolve) => {
+                              setTimeout(resolve, 10);
+                            }),
+                        );
+                      }
+                      controller.enqueue(
+                        encoder.encode(
+                          `data: ${yield* encodeJson(createTerminalEvent())}\n\ndata: [DONE]\n\n`,
+                        ),
+                      );
+                      controller.close();
+                    }),
+                  );
+                },
+              }),
+              { headers: { "content-type": "text/event-stream" } },
+            ),
+          );
 
-    const message = await streamMistral(model, context, {
-      apiKey: "test",
-      fetch,
-      timeoutMs: 20,
-    }).result();
+        const message = yield* Effect.promise(() =>
+          streamMistral(model, context, {
+            apiKey: "test",
+            fetch,
+            timeoutMs: 20,
+          }).result(),
+        );
 
-    expect(message.stopReason).toBe("stop");
-    expect(message.content).toEqual([{ type: "thinking", thinking: "xxxxx" }]);
-  });
+        expect(message.stopReason).toBe("stop");
+        expect(message.content).toEqual([{ type: "thinking", thinking: "xxxxx" }]);
+      }),
+    ));
 
-  it("preserves HTTP status and response bodies in errors", async () => {
-    const model = getModel("mistral", "mistral-large-latest");
-    const context = normalizeContext({
-      messages: [{ role: "user", content: "hello", timestamp: 1 }],
-    });
-    const fetch: FetchFunction = () =>
-      Promise.resolve(
-        new Response('{"message":"blocked by gateway"}', { status: 403, statusText: "Forbidden" }),
-      );
+  it("preserves HTTP status and response bodies in errors", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = getModel("mistral", "mistral-large-latest");
+        const context = normalizeContext({
+          messages: [{ role: "user", content: "hello", timestamp: 1 }],
+        });
+        const fetch: FetchFunction = () =>
+          Promise.resolve(
+            new Response('{"message":"blocked by gateway"}', {
+              status: 403,
+              statusText: "Forbidden",
+            }),
+          );
 
-    const message = await streamMistral(model, context, { apiKey: "test", fetch }).result();
+        const message = yield* Effect.promise(() =>
+          streamMistral(model, context, { apiKey: "test", fetch }).result(),
+        );
 
-    expect(message.stopReason).toBe("error");
-    expect(message.errorMessage).toBe('Mistral API error (403): {"message":"blocked by gateway"}');
-  });
+        expect(message.stopReason).toBe("error");
+        expect(message.errorMessage).toBe(
+          'Mistral API error (403): {"message":"blocked by gateway"}',
+        );
+      }),
+    ));
 });

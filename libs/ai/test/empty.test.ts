@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { complete, getModel } from "../src/compat.ts";
@@ -9,6 +10,7 @@ import type {
   StreamOptions,
   UserMessage,
 } from "../src/types.ts";
+import { envValue } from "./env.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
@@ -23,21 +25,21 @@ import { resolveApiKey } from "./oauth.ts";
 const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
 const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
 
-async function testEmptyMessage<TApi extends Api>(
+const testEmptyMessage = Effect.fn("testEmptyMessage")(function* <TApi extends Api>(
   llm: Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
   const emptyMessage: UserMessage = {
     role: "user",
     content: [],
-    timestamp: Date.now(),
+    timestamp: yield* Clock.currentTimeMillis,
   };
 
   const context: Context = {
     messages: [emptyMessage],
   };
 
-  const response = await complete(llm, context, options);
+  const response = yield* Effect.promise(() => complete(llm, context, options));
 
   expect(response).toBeDefined();
   expect(response.role).toBe("assistant");
@@ -46,9 +48,9 @@ async function testEmptyMessage<TApi extends Api>(
   } else {
     expect(response.content).toBeDefined();
   }
-}
+});
 
-async function testEmptyStringMessage<TApi extends Api>(
+const testEmptyStringMessage = Effect.fn("testEmptyStringMessage")(function* <TApi extends Api>(
   llm: Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
@@ -57,12 +59,12 @@ async function testEmptyStringMessage<TApi extends Api>(
       {
         role: "user",
         content: "",
-        timestamp: Date.now(),
+        timestamp: yield* Clock.currentTimeMillis,
       },
     ],
   };
 
-  const response = await complete(llm, context, options);
+  const response = yield* Effect.promise(() => complete(llm, context, options));
 
   expect(response).toBeDefined();
   expect(response.role).toBe("assistant");
@@ -72,23 +74,22 @@ async function testEmptyStringMessage<TApi extends Api>(
   } else {
     expect(response.content).toBeDefined();
   }
-}
+});
 
-async function testWhitespaceOnlyMessage<TApi extends Api>(
-  llm: Model<TApi>,
-  options: StreamOptionsWithExtras = {},
-) {
+const testWhitespaceOnlyMessage = Effect.fn("testWhitespaceOnlyMessage")(function* <
+  TApi extends Api,
+>(llm: Model<TApi>, options: StreamOptionsWithExtras = {}) {
   const context: Context = {
     messages: [
       {
         role: "user",
         content: "   \n\t  ",
-        timestamp: Date.now(),
+        timestamp: yield* Clock.currentTimeMillis,
       },
     ],
   };
 
-  const response = await complete(llm, context, options);
+  const response = yield* Effect.promise(() => complete(llm, context, options));
 
   expect(response).toBeDefined();
   expect(response.role).toBe("assistant");
@@ -98,12 +99,11 @@ async function testWhitespaceOnlyMessage<TApi extends Api>(
   } else {
     expect(response.content).toBeDefined();
   }
-}
+});
 
-async function testEmptyAssistantMessage<TApi extends Api>(
-  llm: Model<TApi>,
-  options: StreamOptionsWithExtras = {},
-) {
+const testEmptyAssistantMessage = Effect.fn("testEmptyAssistantMessage")(function* <
+  TApi extends Api,
+>(llm: Model<TApi>, options: StreamOptionsWithExtras = {}) {
   const emptyAssistant: AssistantMessage = {
     role: "assistant",
     content: [],
@@ -119,7 +119,7 @@ async function testEmptyAssistantMessage<TApi extends Api>(
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "stop",
-    timestamp: Date.now(),
+    timestamp: yield* Clock.currentTimeMillis,
   };
 
   const context: Context = {
@@ -127,18 +127,18 @@ async function testEmptyAssistantMessage<TApi extends Api>(
       {
         role: "user",
         content: "Hello, how are you?",
-        timestamp: Date.now(),
+        timestamp: yield* Clock.currentTimeMillis,
       },
       emptyAssistant,
       {
         role: "user",
         content: "Please respond this time.",
-        timestamp: Date.now(),
+        timestamp: yield* Clock.currentTimeMillis,
       },
     ],
   };
 
-  const response = await complete(llm, context, options);
+  const response = yield* Effect.promise(() => complete(llm, context, options));
 
   expect(response).toBeDefined();
   expect(response.role).toBe("assistant");
@@ -149,86 +149,83 @@ async function testEmptyAssistantMessage<TApi extends Api>(
     expect(response.content).toBeDefined();
     expect(response.content.length).toBeGreaterThan(0);
   }
-}
+});
 
 describe("AI Providers Empty Message Tests", () => {
-  describe.skipIf(
-    process.env["GEMINI_API_KEY"] === undefined || process.env["GEMINI_API_KEY"] === "",
-  )("Google Provider Empty Messages", () => {
-    const llm = getModel("google", "gemini-2.5-flash");
+  describe.skipIf(envValue("GEMINI_API_KEY") === undefined || envValue("GEMINI_API_KEY") === "")(
+    "Google Provider Empty Messages",
+    () => {
+      const llm = getModel("google", "gemini-2.5-flash");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
-    );
-  });
+      it(
+        "should handle empty assistant message in conversation",
+        { retry: 3, timeout: 30000 },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
+      );
+    },
+  );
 
-  describe.skipIf(
-    process.env["OPENAI_API_KEY"] === undefined || process.env["OPENAI_API_KEY"] === "",
-  )("OpenAI Completions Provider Empty Messages", () => {
-    const llm = getModel("openai", "gpt-4o-mini");
+  describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
+    "OpenAI Completions Provider Empty Messages",
+    () => {
+      const llm = getModel("openai", "gpt-4o-mini");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
-    );
-  });
+      it(
+        "should handle empty assistant message in conversation",
+        { retry: 3, timeout: 30000 },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
+      );
+    },
+  );
 
-  describe.skipIf(
-    process.env["OPENAI_API_KEY"] === undefined || process.env["OPENAI_API_KEY"] === "",
-  )("OpenAI Responses Provider Empty Messages", () => {
-    const llm = getModel("openai", "gpt-5-mini");
+  describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
+    "OpenAI Responses Provider Empty Messages",
+    () => {
+      const llm = getModel("openai", "gpt-5-mini");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
-    );
-  });
+      it(
+        "should handle empty assistant message in conversation",
+        { retry: 3, timeout: 30000 },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
+      );
+    },
+  );
 
   describe.skipIf(!hasAzureOpenAICredentials())(
     "Azure OpenAI Responses Provider Empty Messages",
@@ -240,131 +237,117 @@ describe("AI Providers Empty Message Tests", () => {
           ? { azureDeploymentName }
           : {};
 
-      it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyMessage(llm, azureOptions);
-      });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm, azureOptions)),
+      );
 
-      it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyStringMessage(llm, azureOptions);
-      });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm, azureOptions)),
+      );
 
-      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-        await testWhitespaceOnlyMessage(llm, azureOptions);
-      });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm, azureOptions)),
+      );
 
       it(
         "should handle empty assistant message in conversation",
         { retry: 3, timeout: 30000 },
-        async () => {
-          await testEmptyAssistantMessage(llm, azureOptions);
-        },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm, azureOptions)),
       );
     },
   );
 
   describe.skipIf(
-    process.env["ANTHROPIC_API_KEY"] === undefined || process.env["ANTHROPIC_API_KEY"] === "",
+    envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider Empty Messages", () => {
     const llm = getModel("anthropic", "claude-haiku-4-5");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+    it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyMessage(llm)),
+    );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+    it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyStringMessage(llm)),
+    );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+    );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
+    it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
 
-  describe.skipIf(process.env["XAI_API_KEY"] === undefined || process.env["XAI_API_KEY"] === "")(
+  describe.skipIf(envValue("XAI_API_KEY") === undefined || envValue("XAI_API_KEY") === "")(
     "xAI Provider Empty Messages",
     () => {
       const llm = getModel("xai", "grok-4.3");
 
-      it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyMessage(llm);
-      });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
 
-      it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyStringMessage(llm);
-      });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
 
-      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-        await testWhitespaceOnlyMessage(llm);
-      });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
 
       it(
         "should handle empty assistant message in conversation",
         { retry: 3, timeout: 30000 },
-        async () => {
-          await testEmptyAssistantMessage(llm);
-        },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
       );
     },
   );
 
-  describe.skipIf(process.env["GROQ_API_KEY"] === undefined || process.env["GROQ_API_KEY"] === "")(
+  describe.skipIf(envValue("GROQ_API_KEY") === undefined || envValue("GROQ_API_KEY") === "")(
     "Groq Provider Empty Messages",
     () => {
       const llm = getModel("groq", "openai/gpt-oss-20b");
 
-      it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyMessage(llm);
-      });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
 
-      it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyStringMessage(llm);
-      });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
 
-      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-        await testWhitespaceOnlyMessage(llm);
-      });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
 
       it(
         "should handle empty assistant message in conversation",
         { retry: 3, timeout: 30000 },
-        async () => {
-          await testEmptyAssistantMessage(llm);
-        },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
       );
     },
   );
 
   describe.skipIf(
-    process.env["CEREBRAS_API_KEY"] === undefined || process.env["CEREBRAS_API_KEY"] === "",
+    envValue("CEREBRAS_API_KEY") === undefined || envValue("CEREBRAS_API_KEY") === "",
   )("Cerebras Provider Empty Messages", () => {
     const llm = getModel("cerebras", "gpt-oss-120b");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+    it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyMessage(llm)),
+    );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+    it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyStringMessage(llm)),
+    );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+    );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
+    it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
 
@@ -373,24 +356,22 @@ describe("AI Providers Empty Message Tests", () => {
     () => {
       const llm = getModel("cloudflare-workers-ai", "@cf/moonshotai/kimi-k2.6");
 
-      it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyMessage(llm);
-      });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
 
-      it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyStringMessage(llm);
-      });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
 
-      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-        await testWhitespaceOnlyMessage(llm);
-      });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
 
       it(
         "should handle empty assistant message in conversation",
         { retry: 3, timeout: 30000 },
-        async () => {
-          await testEmptyAssistantMessage(llm);
-        },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
       );
     },
   );
@@ -400,449 +381,399 @@ describe("AI Providers Empty Message Tests", () => {
     () => {
       const llm = getModel("cloudflare-ai-gateway", "workers-ai/@cf/moonshotai/kimi-k2.6");
 
-      it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyMessage(llm);
-      });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
 
-      it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyStringMessage(llm);
-      });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
 
-      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-        await testWhitespaceOnlyMessage(llm);
-      });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
 
       it(
         "should handle empty assistant message in conversation",
         { retry: 3, timeout: 30000 },
-        async () => {
-          await testEmptyAssistantMessage(llm);
-        },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
       );
     },
   );
 
-  describe.skipIf(process.env["HF_TOKEN"] === undefined || process.env["HF_TOKEN"] === "")(
+  describe.skipIf(envValue("HF_TOKEN") === undefined || envValue("HF_TOKEN") === "")(
     "Hugging Face Provider Empty Messages",
     () => {
       const llm = getModel("huggingface", "moonshotai/Kimi-K2.5");
 
-      it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyMessage(llm);
-      });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
 
-      it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyStringMessage(llm);
-      });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
 
-      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-        await testWhitespaceOnlyMessage(llm);
-      });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
 
       it(
         "should handle empty assistant message in conversation",
         { retry: 3, timeout: 30000 },
-        async () => {
-          await testEmptyAssistantMessage(llm);
-        },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
       );
     },
   );
 
   describe.skipIf(
-    process.env["TOGETHER_API_KEY"] === undefined || process.env["TOGETHER_API_KEY"] === "",
+    envValue("TOGETHER_API_KEY") === undefined || envValue("TOGETHER_API_KEY") === "",
   )("Together AI Provider Empty Messages", () => {
     const llm = getModel("together", "moonshotai/Kimi-K3");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+    it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyMessage(llm)),
+    );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+    it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyStringMessage(llm)),
+    );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+    );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
+    it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
 
-  describe.skipIf(
-    process.env["BASETEN_API_KEY"] === undefined || process.env["BASETEN_API_KEY"] === "",
-  )("Baseten Provider Empty Messages", () => {
-    const llm = getModel("baseten", "zai-org/GLM-5.2");
-    const options = { reasoningEffort: "high" } satisfies StreamOptionsWithExtras;
+  describe.skipIf(envValue("BASETEN_API_KEY") === undefined || envValue("BASETEN_API_KEY") === "")(
+    "Baseten Provider Empty Messages",
+    () => {
+      const llm = getModel("baseten", "zai-org/GLM-5.2");
+      const options = { reasoningEffort: "high" } satisfies StreamOptionsWithExtras;
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm, options);
-    });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm, options)),
+      );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm, options);
-    });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm, options)),
+      );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm, options);
-    });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm, options)),
+      );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm, options);
-      },
-    );
-  });
+      it(
+        "should handle empty assistant message in conversation",
+        { retry: 3, timeout: 30000 },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm, options)),
+      );
+    },
+  );
 
-  describe.skipIf(process.env["ZAI_API_KEY"] === undefined || process.env["ZAI_API_KEY"] === "")(
+  describe.skipIf(envValue("ZAI_API_KEY") === undefined || envValue("ZAI_API_KEY") === "")(
     "zAI Provider Empty Messages",
     () => {
       const llm = getModel("zai", "glm-5.2");
 
-      it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyMessage(llm);
-      });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
 
-      it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyStringMessage(llm);
-      });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
 
-      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-        await testWhitespaceOnlyMessage(llm);
-      });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
 
       it(
         "should handle empty assistant message in conversation",
         { retry: 3, timeout: 30000 },
-        async () => {
-          await testEmptyAssistantMessage(llm);
-        },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
+      );
+    },
+  );
+
+  describe.skipIf(envValue("MISTRAL_API_KEY") === undefined || envValue("MISTRAL_API_KEY") === "")(
+    "Mistral Provider Empty Messages",
+    () => {
+      const llm = getModel("mistral", "devstral-medium-latest");
+
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
+
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
+
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
+
+      it(
+        "should handle empty assistant message in conversation",
+        { retry: 3, timeout: 30000 },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
+      );
+    },
+  );
+
+  describe.skipIf(envValue("MINIMAX_API_KEY") === undefined || envValue("MINIMAX_API_KEY") === "")(
+    "MiniMax Provider Empty Messages",
+    () => {
+      const llm = getModel("minimax", "MiniMax-M2.7");
+
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
+
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
+
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
+
+      it(
+        "should handle empty assistant message in conversation",
+        { retry: 3, timeout: 30000 },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
+      );
+    },
+  );
+
+  describe.skipIf(envValue("XIAOMI_API_KEY") === undefined || envValue("XIAOMI_API_KEY") === "")(
+    "Xiaomi MiMo (API billing) Provider Empty Messages",
+    () => {
+      const llm = getModel("xiaomi", "mimo-v2.6-pro");
+
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
+
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
+
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
+
+      it(
+        "should handle empty assistant message in conversation",
+        { retry: 3, timeout: 30000 },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
       );
     },
   );
 
   describe.skipIf(
-    process.env["MISTRAL_API_KEY"] === undefined || process.env["MISTRAL_API_KEY"] === "",
-  )("Mistral Provider Empty Messages", () => {
-    const llm = getModel("mistral", "devstral-medium-latest");
-
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
-
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
-
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
-
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
-    );
-  });
-
-  describe.skipIf(
-    process.env["MINIMAX_API_KEY"] === undefined || process.env["MINIMAX_API_KEY"] === "",
-  )("MiniMax Provider Empty Messages", () => {
-    const llm = getModel("minimax", "MiniMax-M2.7");
-
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
-
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
-
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
-
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
-    );
-  });
-
-  describe.skipIf(
-    process.env["XIAOMI_API_KEY"] === undefined || process.env["XIAOMI_API_KEY"] === "",
-  )("Xiaomi MiMo (API billing) Provider Empty Messages", () => {
-    const llm = getModel("xiaomi", "mimo-v2.6-pro");
-
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
-
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
-
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
-
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
-    );
-  });
-
-  describe.skipIf(
-    process.env["XIAOMI_TOKEN_PLAN_CN_API_KEY"] === undefined ||
-      process.env["XIAOMI_TOKEN_PLAN_CN_API_KEY"] === "",
+    envValue("XIAOMI_TOKEN_PLAN_CN_API_KEY") === undefined ||
+      envValue("XIAOMI_TOKEN_PLAN_CN_API_KEY") === "",
   )("Xiaomi MiMo Token Plan (CN) Provider Empty Messages", () => {
     const llm = getModel("xiaomi-token-plan-cn", "mimo-v2.6-pro");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+    it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyMessage(llm)),
+    );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+    it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyStringMessage(llm)),
+    );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+    );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
+    it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
 
   describe.skipIf(
-    process.env["XIAOMI_TOKEN_PLAN_AMS_API_KEY"] === undefined ||
-      process.env["XIAOMI_TOKEN_PLAN_AMS_API_KEY"] === "",
+    envValue("XIAOMI_TOKEN_PLAN_AMS_API_KEY") === undefined ||
+      envValue("XIAOMI_TOKEN_PLAN_AMS_API_KEY") === "",
   )("Xiaomi MiMo Token Plan (AMS) Provider Empty Messages", () => {
     const llm = getModel("xiaomi-token-plan-ams", "mimo-v2.6-pro");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+    it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyMessage(llm)),
+    );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+    it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyStringMessage(llm)),
+    );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+    );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
+    it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
 
   describe.skipIf(
-    process.env["XIAOMI_TOKEN_PLAN_SGP_API_KEY"] === undefined ||
-      process.env["XIAOMI_TOKEN_PLAN_SGP_API_KEY"] === "",
+    envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === undefined ||
+      envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === "",
   )("Xiaomi MiMo Token Plan (SGP) Provider Empty Messages", () => {
     const llm = getModel("xiaomi-token-plan-sgp", "mimo-v2.6-pro");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+    it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyMessage(llm)),
+    );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+    it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyStringMessage(llm)),
+    );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+    );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
+    it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
 
   describe.skipIf(
-    process.env["QWEN_TOKEN_PLAN_API_KEY"] === undefined ||
-      process.env["QWEN_TOKEN_PLAN_API_KEY"] === "",
+    envValue("QWEN_TOKEN_PLAN_API_KEY") === undefined || envValue("QWEN_TOKEN_PLAN_API_KEY") === "",
   )("Qwen Token Plan Provider Empty Messages", () => {
     const llm = getModel("qwen-token-plan", "qwen3.7-max");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+    it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyMessage(llm)),
+    );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+    it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyStringMessage(llm)),
+    );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+    );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
+    it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
 
   describe.skipIf(
-    process.env["QWEN_TOKEN_PLAN_API_KEY"] === undefined ||
-      process.env["QWEN_TOKEN_PLAN_API_KEY"] === "",
+    envValue("QWEN_TOKEN_PLAN_API_KEY") === undefined || envValue("QWEN_TOKEN_PLAN_API_KEY") === "",
   )("Qwen Token Plan Individual Provider Empty Messages", () => {
     const llm = getModel("qwen-token-plan-individual", "qwen3.8-max");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+    it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyMessage(llm)),
+    );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+    it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyStringMessage(llm)),
+    );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+    );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
+    it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
 
   describe.skipIf(
-    process.env["QWEN_TOKEN_PLAN_CN_API_KEY"] === undefined ||
-      process.env["QWEN_TOKEN_PLAN_CN_API_KEY"] === "",
+    envValue("QWEN_TOKEN_PLAN_CN_API_KEY") === undefined ||
+      envValue("QWEN_TOKEN_PLAN_CN_API_KEY") === "",
   )("Qwen Token Plan (CN) Provider Empty Messages", () => {
     const llm = getModel("qwen-token-plan-cn", "qwen3.7-max");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+    it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyMessage(llm)),
+    );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+    it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyStringMessage(llm)),
+    );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+    );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
+    it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
 
-  describe.skipIf(process.env["KIMI_API_KEY"] === undefined || process.env["KIMI_API_KEY"] === "")(
+  describe.skipIf(envValue("KIMI_API_KEY") === undefined || envValue("KIMI_API_KEY") === "")(
     "Kimi For Coding Provider Empty Messages",
     () => {
       const llm = getModel("kimi-coding", "kimi-for-coding");
 
-      it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyMessage(llm);
-      });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
 
-      it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyStringMessage(llm);
-      });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
 
-      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-        await testWhitespaceOnlyMessage(llm);
-      });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
 
       it(
         "should handle empty assistant message in conversation",
         { retry: 3, timeout: 30000 },
-        async () => {
-          await testEmptyAssistantMessage(llm);
-        },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
       );
     },
   );
 
   describe.skipIf(
-    process.env["AI_GATEWAY_API_KEY"] === undefined || process.env["AI_GATEWAY_API_KEY"] === "",
+    envValue("AI_GATEWAY_API_KEY") === undefined || envValue("AI_GATEWAY_API_KEY") === "",
   )("Vercel AI Gateway Provider Empty Messages", () => {
     const llm = getModel("vercel-ai-gateway", "google/gemini-2.5-flash");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+    it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyMessage(llm)),
+    );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+    it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyStringMessage(llm)),
+    );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+    );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
+    it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
 
   describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock Provider Empty Messages", () => {
     const llm = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-4-5-20250929-v1:0");
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+    it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyMessage(llm)),
+    );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+    it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyStringMessage(llm)),
+    );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+    );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
+    it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
 
@@ -852,33 +783,25 @@ describe("AI Providers Empty Message Tests", () => {
     it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
       "should handle empty content array",
       { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyMessage(llm, { apiKey: anthropicOAuthToken });
-      },
+      () => Effect.runPromise(testEmptyMessage(llm, { apiKey: anthropicOAuthToken })),
     );
 
     it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
       "should handle empty string content",
       { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyStringMessage(llm, { apiKey: anthropicOAuthToken });
-      },
+      () => Effect.runPromise(testEmptyStringMessage(llm, { apiKey: anthropicOAuthToken })),
     );
 
     it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
       "should handle whitespace-only content",
       { retry: 3, timeout: 30000 },
-      async () => {
-        await testWhitespaceOnlyMessage(llm, { apiKey: anthropicOAuthToken });
-      },
+      () => Effect.runPromise(testWhitespaceOnlyMessage(llm, { apiKey: anthropicOAuthToken })),
     );
 
     it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
       "should handle empty assistant message in conversation",
       { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm, { apiKey: anthropicOAuthToken });
-      },
+      () => Effect.runPromise(testEmptyAssistantMessage(llm, { apiKey: anthropicOAuthToken })),
     );
   });
 
@@ -886,37 +809,49 @@ describe("AI Providers Empty Message Tests", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should handle empty content array",
       { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("openai-codex", "gpt-5.5");
-        await testEmptyMessage(llm, { apiKey: openaiCodexToken });
-      },
+      () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const llm = getModel("openai-codex", "gpt-5.5");
+            yield* testEmptyMessage(llm, { apiKey: openaiCodexToken });
+          }),
+        ),
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should handle empty string content",
       { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("openai-codex", "gpt-5.5");
-        await testEmptyStringMessage(llm, { apiKey: openaiCodexToken });
-      },
+      () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const llm = getModel("openai-codex", "gpt-5.5");
+            yield* testEmptyStringMessage(llm, { apiKey: openaiCodexToken });
+          }),
+        ),
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should handle whitespace-only content",
       { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("openai-codex", "gpt-5.5");
-        await testWhitespaceOnlyMessage(llm, { apiKey: openaiCodexToken });
-      },
+      () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const llm = getModel("openai-codex", "gpt-5.5");
+            yield* testWhitespaceOnlyMessage(llm, { apiKey: openaiCodexToken });
+          }),
+        ),
     );
 
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should handle empty assistant message in conversation",
       { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("openai-codex", "gpt-5.5");
-        await testEmptyAssistantMessage(llm, { apiKey: openaiCodexToken });
-      },
+      () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const llm = getModel("openai-codex", "gpt-5.5");
+            yield* testEmptyAssistantMessage(llm, { apiKey: openaiCodexToken });
+          }),
+        ),
     );
   });
 });

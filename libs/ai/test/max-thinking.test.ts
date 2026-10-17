@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
@@ -82,24 +83,31 @@ describe("max thinking level", () => {
 
   it.each(["gpt-5.6-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"] as const)(
     "sends max to the Codex Responses API for %s",
-    async (modelId) => {
-      const model = getModel("openai-codex", modelId)!;
-      const context = normalizeContext({
-        systemPrompt: "You are a helpful assistant.",
-        messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
-      });
-      let payload: unknown;
+    (modelId) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = getModel("openai-codex", modelId)!;
+          const context = normalizeContext({
+            systemPrompt: "You are a helpful assistant.",
+            messages: [
+              { role: "user", content: "Hello", timestamp: yield* Clock.currentTimeMillis },
+            ],
+          });
+          let payload: unknown;
 
-      await streamSimpleOpenAICodexResponses(model, context, {
-        apiKey: mockToken(),
-        reasoning: "max",
-        onPayload: (request) => {
-          payload = request;
-          throw new Error("payload captured");
-        },
-      }).result();
+          yield* Effect.promise(() =>
+            streamSimpleOpenAICodexResponses(model, context, {
+              apiKey: mockToken(),
+              reasoning: "max",
+              onPayload: (request) => {
+                payload = request;
+                throw new Error("payload captured");
+              },
+            }).result(),
+          );
 
-      expect(payload).toMatchObject({ reasoning: { effort: "max", summary: "auto" } });
-    },
+          expect(payload).toMatchObject({ reasoning: { effort: "max", summary: "auto" } });
+        }),
+      ),
   );
 });

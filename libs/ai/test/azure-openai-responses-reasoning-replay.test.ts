@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import type {
   ResponseReasoningItem,
   ResponseStreamEvent,
@@ -87,58 +88,68 @@ function getReplayedReasoning(model: Model<"azure-openai-responses">, assistant:
 }
 
 describe("Azure OpenAI Responses reasoning replay", () => {
-  it("preserves existing encrypted_content from output_item.done", async () => {
-    const model = createModel();
-    const output = createOutput(model);
-    const doneItem: ResponseReasoningItem = {
-      type: "reasoning",
-      id: "rs_done",
-      summary: [],
-      encrypted_content: "from-output-item-done",
-    };
-    const completedItem: ResponseReasoningItem = {
-      ...doneItem,
-      encrypted_content: "from-response-completed",
-    };
+  it("preserves existing encrypted_content from output_item.done", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
+        const output = createOutput(model);
+        const doneItem: ResponseReasoningItem = {
+          type: "reasoning",
+          id: "rs_done",
+          summary: [],
+          encrypted_content: "from-output-item-done",
+        };
+        const completedItem: ResponseReasoningItem = {
+          ...doneItem,
+          encrypted_content: "from-response-completed",
+        };
 
-    await processResponsesStream(
-      createEvents(doneItem, completedItem),
-      output,
-      new AssistantMessageEventStream(),
-      model,
-    );
+        yield* Effect.promise(() =>
+          processResponsesStream(
+            createEvents(doneItem, completedItem),
+            output,
+            new AssistantMessageEventStream(),
+            model,
+          ),
+        );
 
-    expect(getReplayedReasoning(model, output)).toMatchObject({
-      type: "reasoning",
-      id: "rs_done",
-      encrypted_content: "from-output-item-done",
-    });
-  });
+        expect(getReplayedReasoning(model, output)).toMatchObject({
+          type: "reasoning",
+          id: "rs_done",
+          encrypted_content: "from-output-item-done",
+        });
+      }),
+    ));
 
-  it("fills encrypted_content when output_item.done omitted it", async () => {
-    const model = createModel();
-    const output = createOutput(model);
-    const doneItem: ResponseReasoningItem = {
-      type: "reasoning",
-      id: "rs_missing",
-      summary: [],
-    };
-    const completedItem: ResponseReasoningItem = {
-      ...doneItem,
-      encrypted_content: "from-response-completed",
-    };
+  it("fills encrypted_content when output_item.done omitted it", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model = createModel();
+        const output = createOutput(model);
+        const doneItem: ResponseReasoningItem = {
+          type: "reasoning",
+          id: "rs_missing",
+          summary: [],
+        };
+        const completedItem: ResponseReasoningItem = {
+          ...doneItem,
+          encrypted_content: "from-response-completed",
+        };
 
-    await processResponsesStream(
-      createEvents(doneItem, completedItem),
-      output,
-      new AssistantMessageEventStream(),
-      model,
-    );
+        yield* Effect.promise(() =>
+          processResponsesStream(
+            createEvents(doneItem, completedItem),
+            output,
+            new AssistantMessageEventStream(),
+            model,
+          ),
+        );
 
-    expect(getReplayedReasoning(model, output)).toMatchObject({
-      type: "reasoning",
-      id: "rs_missing",
-      encrypted_content: "from-response-completed",
-    });
-  });
+        expect(getReplayedReasoning(model, output)).toMatchObject({
+          type: "reasoning",
+          id: "rs_missing",
+          encrypted_content: "from-response-completed",
+        });
+      }),
+    ));
 });

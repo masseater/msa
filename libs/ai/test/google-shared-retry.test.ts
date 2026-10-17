@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { retryGoogleRequest } from "../src/api/google-shared.ts";
@@ -11,33 +12,44 @@ describe("google request retries", () => {
     vi.useRealTimers();
   });
 
-  it("retries a headers-less SDK error with a retryable status", async () => {
-    vi.useFakeTimers();
-    const request = vi
-      .fn<() => Promise<string>>()
-      .mockRejectedValueOnce(googleApiError(429))
-      .mockResolvedValue("ok");
+  it("retries a headers-less SDK error with a retryable status", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        const request = vi
+          .fn<() => Promise<string>>()
+          .mockRejectedValueOnce(googleApiError(429))
+          .mockResolvedValue("ok");
 
-    const result = retryGoogleRequest(request, { maxRetries: 1 });
-    await vi.advanceTimersByTimeAsync(500);
+        const result = retryGoogleRequest(request, { maxRetries: 1 });
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(500));
 
-    await expect(result).resolves.toBe("ok");
-    expect(request).toHaveBeenCalledTimes(2);
-  });
+        yield* Effect.promise(() => expect(result).resolves.toBe("ok"));
+        expect(request).toHaveBeenCalledTimes(2);
+      }),
+    ));
 
-  it("does not retry when maxRetries is unset", async () => {
-    const error = googleApiError(429);
-    const request = vi.fn<() => Promise<string>>().mockRejectedValue(error);
+  it("does not retry when maxRetries is unset", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const error = googleApiError(429);
+        const request = vi.fn<() => Promise<string>>().mockRejectedValue(error);
 
-    await expect(retryGoogleRequest(request)).rejects.toBe(error);
-    expect(request).toHaveBeenCalledTimes(1);
-  });
+        yield* Effect.promise(() => expect(retryGoogleRequest(request)).rejects.toBe(error));
+        expect(request).toHaveBeenCalledTimes(1);
+      }),
+    ));
 
-  it("does not retry a non-retryable status", async () => {
-    const error = googleApiError(400);
-    const request = vi.fn<() => Promise<string>>().mockRejectedValue(error);
+  it("does not retry a non-retryable status", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const error = googleApiError(400);
+        const request = vi.fn<() => Promise<string>>().mockRejectedValue(error);
 
-    await expect(retryGoogleRequest(request, { maxRetries: 2 })).rejects.toBe(error);
-    expect(request).toHaveBeenCalledTimes(1);
-  });
+        yield* Effect.promise(() =>
+          expect(retryGoogleRequest(request, { maxRetries: 2 })).rejects.toBe(error),
+        );
+        expect(request).toHaveBeenCalledTimes(1);
+      }),
+    ));
 });

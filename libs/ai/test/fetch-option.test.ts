@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { streamSimple as streamAnthropic } from "../src/api/anthropic-messages.ts";
@@ -12,6 +13,7 @@ import { streamSimple as streamOpenAIResponses } from "../src/api/openai-respons
 import { generateImages } from "../src/api/openrouter-images.ts";
 import type { Api, FetchFunction, ImageModel, Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
+import { encodeJson } from "./json-codec.ts";
 
 const context = normalizeContext({
   messages: [{ role: "user", content: "hello", timestamp: 1 }],
@@ -62,126 +64,163 @@ afterEach(() => {
 });
 
 describe("fetch stream option", () => {
-  it("passes fetch through streamSimple to the Anthropic SDK", async () => {
-    const { custom, fallback } = mockFetches();
-    await streamAnthropic(createModel("anthropic-messages"), context, {
-      apiKey: "test-key",
-      fetch: custom,
-      maxRetries: 0,
-    }).result();
-    expectOnlyCustomFetch(custom, fallback);
-  });
+  it("passes fetch through streamSimple to the Anthropic SDK", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { custom, fallback } = mockFetches();
+        yield* Effect.promise(() =>
+          streamAnthropic(createModel("anthropic-messages"), context, {
+            apiKey: "test-key",
+            fetch: custom,
+            maxRetries: 0,
+          }).result(),
+        );
+        expectOnlyCustomFetch(custom, fallback);
+      }),
+    ));
 
-  it("passes fetch through streamSimple to OpenAI SDK adapters", async () => {
-    const adapters = [
-      () =>
-        streamOpenAICompletions(createModel("openai-completions"), context, {
-          apiKey: "test-key",
-          fetch: custom,
-          maxRetries: 0,
-        }).result(),
-      () =>
-        streamOpenAIResponses(createModel("openai-responses"), context, {
-          apiKey: "test-key",
-          fetch: custom,
-          maxRetries: 0,
-        }).result(),
-      () =>
-        streamAzureOpenAIResponses(createModel("azure-openai-responses"), context, {
-          apiKey: "test-key",
-          fetch: custom,
-          maxRetries: 0,
-        }).result(),
-    ];
-    const { custom, fallback } = mockFetches();
-    for (const run of adapters) {
-      await run();
-    }
-    expect(custom).toHaveBeenCalledTimes(adapters.length);
-    expect(fallback).not.toHaveBeenCalled();
-    expect(globalThis.fetch).toBe(fallback);
-  });
+  it("passes fetch through streamSimple to OpenAI SDK adapters", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const adapters = [
+          () =>
+            streamOpenAICompletions(createModel("openai-completions"), context, {
+              apiKey: "test-key",
+              fetch: custom,
+              maxRetries: 0,
+            }).result(),
+          () =>
+            streamOpenAIResponses(createModel("openai-responses"), context, {
+              apiKey: "test-key",
+              fetch: custom,
+              maxRetries: 0,
+            }).result(),
+          () =>
+            streamAzureOpenAIResponses(createModel("azure-openai-responses"), context, {
+              apiKey: "test-key",
+              fetch: custom,
+              maxRetries: 0,
+            }).result(),
+        ];
+        const { custom, fallback } = mockFetches();
+        for (const run of adapters) {
+          yield* Effect.promise(() => run());
+        }
+        expect(custom).toHaveBeenCalledTimes(adapters.length);
+        expect(fallback).not.toHaveBeenCalled();
+        expect(globalThis.fetch).toBe(fallback);
+      }),
+    ));
 
-  it("uses fetch for Mistral, Codex SSE, and msa-messages HTTP requests", async () => {
-    const { custom, fallback } = mockFetches();
-    await streamMistral(createModel("mistral-conversations"), context, {
-      apiKey: "test-key",
-      fetch: custom,
-    }).result();
-    await streamOpenAICodexResponses(createModel("openai-codex-responses"), context, {
-      apiKey: `header.${btoa(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "account" } }))}.signature`,
-      fetch: custom,
-      transport: "sse",
-      maxRetries: 0,
-    }).result();
-    await streamMsaMessages(createModel("msa-messages"), context, {
-      apiKey: "test-key",
-      fetch: custom,
-    }).result();
-    expect(custom).toHaveBeenCalledTimes(3);
-    expect(fallback).not.toHaveBeenCalled();
-    expect(globalThis.fetch).toBe(fallback);
-  });
+  it("uses fetch for Mistral, Codex SSE, and msa-messages HTTP requests", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { custom, fallback } = mockFetches();
+        yield* Effect.promise(() =>
+          streamMistral(createModel("mistral-conversations"), context, {
+            apiKey: "test-key",
+            fetch: custom,
+          }).result(),
+        );
+        const encodedJson = yield* encodeJson({
+          "https://api.openai.com/auth": { chatgpt_account_id: "account" },
+        });
+        yield* Effect.promise(() =>
+          streamOpenAICodexResponses(createModel("openai-codex-responses"), context, {
+            apiKey: `header.${btoa(encodedJson)}.signature`,
+            fetch: custom,
+            transport: "sse",
+            maxRetries: 0,
+          }).result(),
+        );
+        yield* Effect.promise(() =>
+          streamMsaMessages(createModel("msa-messages"), context, {
+            apiKey: "test-key",
+            fetch: custom,
+          }).result(),
+        );
+        expect(custom).toHaveBeenCalledTimes(3);
+        expect(fallback).not.toHaveBeenCalled();
+        expect(globalThis.fetch).toBe(fallback);
+      }),
+    ));
 
-  it("rejects custom fetch for Google adapters instead of silently bypassing it", async () => {
-    const { custom, fallback } = mockFetches();
-    const google = await streamGoogleGenerativeAI(createModel("google-generative-ai"), context, {
-      apiKey: "test-key",
-      fetch: custom,
-    }).result();
-    const vertex = await streamGoogleVertex(createModel("google-vertex"), context, {
-      apiKey: "test-key",
-      fetch: custom,
-    }).result();
+  it("rejects custom fetch for Google adapters instead of silently bypassing it", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { custom, fallback } = mockFetches();
+        const google = yield* Effect.promise(() =>
+          streamGoogleGenerativeAI(createModel("google-generative-ai"), context, {
+            apiKey: "test-key",
+            fetch: custom,
+          }).result(),
+        );
+        const vertex = yield* Effect.promise(() =>
+          streamGoogleVertex(createModel("google-vertex"), context, {
+            apiKey: "test-key",
+            fetch: custom,
+          }).result(),
+        );
 
-    expect(google.errorMessage).toContain(
-      "Custom fetch is not supported by the Google Generative AI adapter",
-    );
-    expect(vertex.errorMessage).toContain(
-      "Custom fetch is not supported by the Google Vertex adapter",
-    );
-    expect(custom).not.toHaveBeenCalled();
-    expect(fallback).not.toHaveBeenCalled();
-    expect(globalThis.fetch).toBe(fallback);
-  });
+        expect(google.errorMessage).toContain(
+          "Custom fetch is not supported by the Google Generative AI adapter",
+        );
+        expect(vertex.errorMessage).toContain(
+          "Custom fetch is not supported by the Google Vertex adapter",
+        );
+        expect(custom).not.toHaveBeenCalled();
+        expect(fallback).not.toHaveBeenCalled();
+        expect(globalThis.fetch).toBe(fallback);
+      }),
+    ));
 
-  it("allows Google adapters to receive globalThis.fetch explicitly", async () => {
-    const ambient = vi.fn<FetchFunction>(() =>
-      Promise.resolve(
-        new Response(JSON.stringify({ error: { message: "upstream rejected request" } }), {
-          status: 401,
-          headers: { "content-type": "application/json" },
-        }),
-      ),
-    );
-    vi.stubGlobal("fetch", ambient);
-    const result = await streamGoogleGenerativeAI(createModel("google-generative-ai"), context, {
-      apiKey: "test-key",
-      fetch: ambient,
-    }).result();
+  it("allows Google adapters to receive globalThis.fetch explicitly", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const ambient = vi.fn<FetchFunction>(() =>
+          Promise.resolve(
+            new Response(JSON.stringify({ error: { message: "upstream rejected request" } }), {
+              status: 401,
+              headers: { "content-type": "application/json" },
+            }),
+          ),
+        );
+        vi.stubGlobal("fetch", ambient);
+        const result = yield* Effect.promise(() =>
+          streamGoogleGenerativeAI(createModel("google-generative-ai"), context, {
+            apiKey: "test-key",
+            fetch: ambient,
+          }).result(),
+        );
 
-    expect(ambient).toHaveBeenCalledOnce();
-    expect(result.errorMessage).not.toContain("Custom fetch is not supported");
-    expect(globalThis.fetch).toBe(ambient);
-  });
+        expect(ambient).toHaveBeenCalledOnce();
+        expect(result.errorMessage).not.toContain("Custom fetch is not supported");
+        expect(globalThis.fetch).toBe(ambient);
+      }),
+    ));
 
-  it("uses fetch for image generation", async () => {
-    const { custom, fallback } = mockFetches();
-    const model: ImageModel<"openrouter-images"> = {
-      ...createModel("openrouter-images"),
-      type: "image",
-      provider: "openrouter",
-      output: ["image"],
-    };
-    await generateImages(
-      model,
-      { input: [{ type: "text", text: "draw" }] },
-      {
-        apiKey: "test-key",
-        fetch: custom,
-        maxRetries: 0,
-      },
-    );
-    expectOnlyCustomFetch(custom, fallback);
-  });
+  it("uses fetch for image generation", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { custom, fallback } = mockFetches();
+        const model: ImageModel<"openrouter-images"> = {
+          ...createModel("openrouter-images"),
+          type: "image",
+          provider: "openrouter",
+          output: ["image"],
+        };
+        yield* Effect.promise(() =>
+          generateImages(
+            model,
+            { input: [{ type: "text", text: "draw" }] },
+            {
+              apiKey: "test-key",
+              fetch: custom,
+              maxRetries: 0,
+            },
+          ),
+        );
+        expectOnlyCustomFetch(custom, fallback);
+      }),
+    ));
 });

@@ -1,3 +1,4 @@
+import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createRadiusOAuth } from "../src/auth/oauth/radius.ts";
@@ -38,163 +39,198 @@ describe("Radius OAuth", () => {
     vi.useRealTimers();
   });
 
-  it("uses gateway endpoints directly for device login", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T00:00:00Z"));
-    const events: AuthEvent[] = [];
-    const urls: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: unknown, init?: RequestInit) => {
-        const url = requestUrl(input);
-        urls.push(url);
-        const form = new URLSearchParams(String(init?.body));
-        if (url === `${GATEWAY}/v1/oauth/device`) {
+  it("uses gateway endpoints directly for device login", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        vi.setSystemTime("2026-07-24T00:00:00Z");
+        const events: AuthEvent[] = [];
+        const urls: string[] = [];
+        vi.stubGlobal(
+          "fetch",
+          vi.fn((input: unknown, init?: RequestInit) => {
+            const url = requestUrl(input);
+            urls.push(url);
+            const form = new URLSearchParams(String(init?.body));
+            if (url === `${GATEWAY}/v1/oauth/device`) {
+              expect(form.get("client_id")).toBe("msa-gateway");
+              expect(form.get("scope")).toBe("gateway offline_access");
+              return Promise.resolve(
+                jsonResponse({
+                  device_code: "device-code",
+                  user_code: "ABCD-1234",
+                  verification_uri: "https://radius-ui.example/pair",
+                  expires_in: 600,
+                  interval: 5,
+                }),
+              );
+            }
+            if (url === `${GATEWAY}/v1/oauth/token`) {
+              expect(form.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
+              expect(form.get("client_id")).toBe("msa-gateway");
+              expect(form.get("device_code")).toBe("device-code");
+              return Promise.resolve(
+                jsonResponse({
+                  access_token: "access-token",
+                  refresh_token: "refresh-token",
+                  expires_in: 3600,
+                  scope: "gateway offline_access",
+                }),
+              );
+            }
+            return Promise.reject(new Error(`Unexpected request: ${url}`));
+          }),
+        );
+
+        const oauth = createRadiusOAuth({ name: "Radius", gateway: GATEWAY });
+        const currentTime = yield* Clock.currentTimeMillis;
+        yield* Effect.promise(() =>
+          expect(oauth.login(interaction("device-code", events))).resolves.toEqual({
+            type: "oauth",
+            access: "access-token",
+            refresh: "refresh-token",
+            expires: currentTime + 3600 * 1000 - 60_000,
+            scope: "gateway offline_access",
+          }),
+        );
+        expect(events).toEqual([
+          {
+            type: "device_code",
+            userCode: "ABCD-1234",
+            verificationUri: "https://radius-ui.example/pair",
+            intervalSeconds: 5,
+            expiresInSeconds: 600,
+          },
+        ]);
+        expect(urls).toEqual([`${GATEWAY}/v1/oauth/device`, `${GATEWAY}/v1/oauth/token`]);
+      }),
+    ));
+
+  it("refreshes directly through the gateway without discovery", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
+          expect(requestUrl(input)).toBe(`${GATEWAY}/v1/oauth/token`);
+          const form = new URLSearchParams(String(init?.body));
+          expect(form.get("grant_type")).toBe("refresh_token");
           expect(form.get("client_id")).toBe("msa-gateway");
-          expect(form.get("scope")).toBe("gateway offline_access");
+          expect(form.get("refresh_token")).toBe("old-refresh");
           return Promise.resolve(
             jsonResponse({
-              device_code: "device-code",
-              user_code: "ABCD-1234",
-              verification_uri: "https://radius-ui.example/pair",
-              expires_in: 600,
-              interval: 5,
-            }),
-          );
-        }
-        if (url === `${GATEWAY}/v1/oauth/token`) {
-          expect(form.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
-          expect(form.get("client_id")).toBe("msa-gateway");
-          expect(form.get("device_code")).toBe("device-code");
-          return Promise.resolve(
-            jsonResponse({
-              access_token: "access-token",
-              refresh_token: "refresh-token",
+              access_token: "new-access",
+              refresh_token: "new-refresh",
               expires_in: 3600,
-              scope: "gateway offline_access",
             }),
           );
-        }
-        return Promise.reject(new Error(`Unexpected request: ${url}`));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+
+        const oauth = createRadiusOAuth({ name: "Radius", gateway: GATEWAY });
+        yield* Effect.promise(() =>
+          expect(
+            oauth.refresh(
+              { type: "oauth", access: "old-access", refresh: "old-refresh", expires: 0 },
+              new AbortController().signal,
+            ),
+          ).resolves.toMatchObject({ access: "new-access", refresh: "new-refresh" }),
+        );
+        expect(fetchMock).toHaveBeenCalledOnce();
       }),
-    );
+    ));
 
-    const oauth = createRadiusOAuth({ name: "Radius", gateway: GATEWAY });
-    await expect(oauth.login(interaction("device-code", events))).resolves.toEqual({
-      type: "oauth",
-      access: "access-token",
-      refresh: "refresh-token",
-      expires: Date.now() + 3600 * 1000 - 60_000,
-      scope: "gateway offline_access",
-    });
-    expect(events).toEqual([
-      {
-        type: "device_code",
-        userCode: "ABCD-1234",
-        verificationUri: "https://radius-ui.example/pair",
-        intervalSeconds: 5,
-        expiresInSeconds: 600,
-      },
-    ]);
-    expect(urls).toEqual([`${GATEWAY}/v1/oauth/device`, `${GATEWAY}/v1/oauth/token`]);
-  });
+  it("discovers only the interactive browser authorization endpoint", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const fetchMock = vi.fn((input: unknown) => {
+          expect(requestUrl(input)).toBe(`${GATEWAY}/v1/oauth`);
+          return Promise.resolve(jsonResponse({ issuer: "https://radius-ui.example" }));
+        });
+        vi.stubGlobal("fetch", fetchMock);
 
-  it("refreshes directly through the gateway without discovery", async () => {
-    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
-      expect(requestUrl(input)).toBe(`${GATEWAY}/v1/oauth/token`);
-      const form = new URLSearchParams(String(init?.body));
-      expect(form.get("grant_type")).toBe("refresh_token");
-      expect(form.get("client_id")).toBe("msa-gateway");
-      expect(form.get("refresh_token")).toBe("old-refresh");
-      return Promise.resolve(
-        jsonResponse({
-          access_token: "new-access",
-          refresh_token: "new-refresh",
-          expires_in: 3600,
-        }),
-      );
-    });
-    vi.stubGlobal("fetch", fetchMock);
+        const oauth = createRadiusOAuth({ name: "Radius", gateway: GATEWAY });
+        yield* Effect.promise(() =>
+          expect(oauth.login(interaction("browser"))).rejects.toThrow(
+            `Invalid Radius OAuth config from ${GATEWAY}`,
+          ),
+        );
+        expect(fetchMock).toHaveBeenCalledOnce();
+      }),
+    ));
 
-    const oauth = createRadiusOAuth({ name: "Radius", gateway: GATEWAY });
-    await expect(
-      oauth.refresh(
-        { type: "oauth", access: "old-access", refresh: "old-refresh", expires: 0 },
-        new AbortController().signal,
-      ),
-    ).resolves.toMatchObject({ access: "new-access", refresh: "new-refresh" });
-    expect(fetchMock).toHaveBeenCalledOnce();
-  });
+  it("exchanges the browser callback code before showing the sign-in page", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const effectContext = yield* Effect.context();
+        let tokenStatus = 400;
+        vi.stubGlobal(
+          "fetch",
+          vi.fn((input: unknown, init?: RequestInit) => {
+            const url = requestUrl(input);
+            if (url === `${GATEWAY}/v1/oauth`)
+              return Promise.resolve(
+                jsonResponse({ authorizationEndpoint: `${GATEWAY}/authorize` }),
+              );
+            if (url === `${GATEWAY}/v1/oauth/token`) {
+              const body = new URLSearchParams(String(init?.body));
+              expect(body.get("code")).toBe("browser-code");
+              return Promise.resolve(
+                tokenStatus === 200
+                  ? jsonResponse({
+                      access_token: "access",
+                      refresh_token: "refresh",
+                      expires_in: 3600,
+                    })
+                  : jsonResponse(
+                      { error: "invalid_grant", error_description: "code expired" },
+                      tokenStatus,
+                    ),
+              );
+            }
+            return Promise.resolve(nativeFetch(url, init));
+          }),
+        );
 
-  it("discovers only the interactive browser authorization endpoint", async () => {
-    const fetchMock = vi.fn((input: unknown) => {
-      expect(requestUrl(input)).toBe(`${GATEWAY}/v1/oauth`);
-      return Promise.resolve(jsonResponse({ issuer: "https://radius-ui.example" }));
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const oauth = createRadiusOAuth({ name: "Radius", gateway: GATEWAY });
-    await expect(oauth.login(interaction("browser"))).rejects.toThrow(
-      `Invalid Radius OAuth config from ${GATEWAY}`,
-    );
-    expect(fetchMock).toHaveBeenCalledOnce();
-  });
-
-  it("exchanges the browser callback code before showing the sign-in page", async () => {
-    let tokenStatus = 400;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: unknown, init?: RequestInit) => {
-        const url = requestUrl(input);
-        if (url === `${GATEWAY}/v1/oauth`)
-          return Promise.resolve(jsonResponse({ authorizationEndpoint: `${GATEWAY}/authorize` }));
-        if (url === `${GATEWAY}/v1/oauth/token`) {
-          const body = new URLSearchParams(String(init?.body));
-          expect(body.get("code")).toBe("browser-code");
-          return Promise.resolve(
-            tokenStatus === 200
-              ? jsonResponse({ access_token: "access", refresh_token: "refresh", expires_in: 3600 })
-              : jsonResponse(
-                  { error: "invalid_grant", error_description: "code expired" },
-                  tokenStatus,
+        const oauth = createRadiusOAuth({ name: "Radius", gateway: GATEWAY });
+        const login = () =>
+          Effect.runPromiseWith(effectContext)(
+            Effect.gen(function* () {
+              let callbackPage: Promise<Response> | undefined;
+              const result = oauth.login({
+                ...interaction("browser"),
+                notify: (event) => {
+                  if (event.type !== "auth_url") return;
+                  const authorize = new URL(event.url);
+                  const callback = new URL(authorize.searchParams.get("redirect_uri") ?? "");
+                  callback.searchParams.set("code", "browser-code");
+                  callback.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+                  callbackPage = nativeFetch(callback);
+                },
+              });
+              const outcome = yield* Effect.promise(() =>
+                result.then(
+                  (credential) => ({ credential }),
+                  (error: Error) => ({ error }),
                 ),
+              );
+              const response = yield* Effect.promise(() => Promise.resolve(callbackPage));
+              return {
+                ...outcome,
+                status: response?.status,
+                page: yield* Effect.promise(() => Promise.resolve(response?.text())),
+              };
+            }),
           );
-        }
-        return Promise.resolve(nativeFetch(url, init));
+
+        const failed = yield* Effect.promise(() => login());
+        expect("error" in failed && failed.error.message).toContain("invalid_grant: code expired");
+        expect(failed.status).toBe(502);
+        expect(failed.page).toContain("code expired");
+
+        tokenStatus = 200;
+        const succeeded = yield* Effect.promise(() => login());
+        expect("credential" in succeeded && succeeded.credential.access).toBe("access");
+        expect(succeeded.status).toBe(200);
+        expect(succeeded.page).toContain("Signed in to Radius.");
       }),
-    );
-
-    const oauth = createRadiusOAuth({ name: "Radius", gateway: GATEWAY });
-    const login = async () => {
-      let callbackPage: Promise<Response> | undefined;
-      const result = oauth.login({
-        ...interaction("browser"),
-        notify: (event) => {
-          if (event.type !== "auth_url") return;
-          const authorize = new URL(event.url);
-          const callback = new URL(authorize.searchParams.get("redirect_uri") ?? "");
-          callback.searchParams.set("code", "browser-code");
-          callback.searchParams.set("state", authorize.searchParams.get("state") ?? "");
-          callbackPage = nativeFetch(callback);
-        },
-      });
-      const outcome = await result.then(
-        (credential) => ({ credential }),
-        (error: Error) => ({ error }),
-      );
-      const response = await callbackPage;
-      return { ...outcome, status: response?.status, page: await response?.text() };
-    };
-
-    const failed = await login();
-    expect("error" in failed && failed.error.message).toContain("invalid_grant: code expired");
-    expect(failed.status).toBe(502);
-    expect(failed.page).toContain("code expired");
-
-    tokenStatus = 200;
-    const succeeded = await login();
-    expect("credential" in succeeded && succeeded.credential.access).toBe("access");
-    expect(succeeded.status).toBe(200);
-    expect(succeeded.page).toContain("Signed in to Radius.");
-  });
+    ));
 });

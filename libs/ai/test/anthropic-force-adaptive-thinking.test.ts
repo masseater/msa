@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { getModel, streamSimple } from "../src/compat.ts";
@@ -39,10 +40,10 @@ function makeCustomModel(
   };
 }
 
-async function capturePayload(
+const capturePayload = Effect.fn("capturePayload")(function* (
   model: Model<"anthropic-messages">,
   options?: SimpleStreamOptions,
-): Promise<AnthropicThinkingPayload> {
+) {
   let capturedPayload: AnthropicThinkingPayload | undefined;
 
   const payloadCaptureModel: Model<"anthropic-messages"> = {
@@ -59,56 +60,71 @@ async function capturePayload(
     },
   });
 
-  await s.result();
+  yield* Effect.promise(() => s.result());
 
   if (capturedPayload === undefined) {
     throw new Error("Expected payload to be captured before request failure");
   }
 
   return capturedPayload;
-}
+});
 
 describe("Anthropic forceAdaptiveThinking compat override", () => {
-  it("sends legacy thinking payload for custom model ids by default", async () => {
-    const payload = await capturePayload(makeCustomModel(), { reasoning: "medium" });
+  it("sends legacy thinking payload for custom model ids by default", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeCustomModel(), { reasoning: "medium" });
 
-    expect(payload.thinking?.type).toBe("enabled");
-    expect(payload.output_config).toBeUndefined();
-  });
+        expect(payload.thinking?.type).toBe("enabled");
+        expect(payload.output_config).toBeUndefined();
+      }),
+    ));
 
-  it("sends adaptive thinking payload when compat.forceAdaptiveThinking is true", async () => {
-    const payload = await capturePayload(makeCustomModel({ forceAdaptiveThinking: true }), {
-      reasoning: "medium",
-    });
+  it("sends adaptive thinking payload when compat.forceAdaptiveThinking is true", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeCustomModel({ forceAdaptiveThinking: true }), {
+          reasoning: "medium",
+        });
 
-    expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
-    expect(payload.output_config).toEqual({ effort: "medium" });
-  });
+        expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
+        expect(payload.output_config).toEqual({ effort: "medium" });
+      }),
+    ));
 
-  it("uses adaptive thinking with native xhigh effort for Claude Fable 5", async () => {
-    const payload = await capturePayload(getModel("anthropic", "claude-fable-5"), {
-      reasoning: "xhigh",
-    });
+  it("uses adaptive thinking with native xhigh effort for Claude Fable 5", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(getModel("anthropic", "claude-fable-5"), {
+          reasoning: "xhigh",
+        });
 
-    expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
-    expect(payload.output_config).toEqual({ effort: "xhigh" });
-  });
+        expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
+        expect(payload.output_config).toEqual({ effort: "xhigh" });
+      }),
+    ));
 
-  it("allows built-in adaptive models to opt out with compat.forceAdaptiveThinking false", async () => {
-    const model: Model<"anthropic-messages"> = {
-      ...getModel("anthropic", "claude-opus-4-8"),
-      compat: { forceAdaptiveThinking: false },
-    };
-    const payload = await capturePayload(model, { reasoning: "medium" });
+  it("allows built-in adaptive models to opt out with compat.forceAdaptiveThinking false", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const model: Model<"anthropic-messages"> = {
+          ...getModel("anthropic", "claude-opus-4-8"),
+          compat: { forceAdaptiveThinking: false },
+        };
+        const payload = yield* capturePayload(model, { reasoning: "medium" });
 
-    expect(payload.thinking?.type).toBe("enabled");
-    expect(payload.output_config).toBeUndefined();
-  });
+        expect(payload.thinking?.type).toBe("enabled");
+        expect(payload.output_config).toBeUndefined();
+      }),
+    ));
 
-  it("preserves thinking.type=disabled when reasoning is off regardless of override", async () => {
-    const payload = await capturePayload(makeCustomModel({ forceAdaptiveThinking: true }));
+  it("preserves thinking.type=disabled when reasoning is off regardless of override", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeCustomModel({ forceAdaptiveThinking: true }));
 
-    expect(payload.thinking).toEqual({ type: "disabled" });
-    expect(payload.output_config).toBeUndefined();
-  });
+        expect(payload.thinking).toEqual({ type: "disabled" });
+        expect(payload.output_config).toBeUndefined();
+      }),
+    ));
 });
