@@ -116,7 +116,7 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
  * disable the limit.
  *
  * @param {() => Promise<T>} request - request to run
- * @param {ProviderRetryOptions} [options={}] - retry options
+ * @param {ProviderRetryOptions} [options] - retry options
  * @returns {Promise<T>} the request result
  */
 export async function retryProviderRequest<T>(

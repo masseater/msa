@@ -12,7 +12,7 @@ type Content = TextContent | ImageContent | ThinkingContent | ToolCall;
  * Extract and join text from message content.
  *
  * @param {string | readonly Content[]} content - message content
- * @param {string} [separator="\n"] - text placed between parts
+ * @param {string} [separator] - text placed between parts
  * @returns {string} the joined text
  */
 export function contentText(content: string | readonly Content[], separator = "\n"): string {

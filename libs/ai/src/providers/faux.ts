@@ -225,7 +225,7 @@ function messageToText(message: Message): string {
  * Length of the prompt text that joins `messages` with blank lines.
  *
  * @param {readonly string[]} messages - prompt messages
- * @param {number} [count=messages.length] - number of leading messages to join
+ * @param {number} [count] - number of leading messages to join
  * @returns {number} the length of the joined text
  */
 function joinedLength(messages: readonly string[], count = messages.length): number {
@@ -792,7 +792,7 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
  * faux.setResponses([fauxAssistantMessage("hi")]);
  * ```
  *
- * @param {RegisterFauxProviderOptions} [options={}] - faux provider options
+ * @param {RegisterFauxProviderOptions} [options] - faux provider options
  * @returns {FauxProviderHandle} the provider and its response controls
  */
 export function fauxProvider(options: RegisterFauxProviderOptions = {}): FauxProviderHandle {

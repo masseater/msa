@@ -436,8 +436,8 @@ function sanitizeForOpenApi(schema: unknown): unknown {
  * models, where the API translates `parameters` into Anthropic's `input_schema`.
  *
  * @param {Tool[]} tools - tools to convert
- * @param {boolean} [useParameters=false] - send the legacy `parameters` field
- * @param {boolean} [supportsStrictMode=true] - whether the target honours strict tool schemas
+ * @param {boolean} [useParameters] - send the legacy `parameters` field
+ * @param {boolean} [supportsStrictMode] - whether the target honours strict tool schemas
  * @returns {{ functionDeclarations: Record<string, unknown>[] }[] | undefined} the function declarations, or undefined when there are no tools
  */
 export function convertTools(

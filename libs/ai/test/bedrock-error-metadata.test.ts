@@ -71,7 +71,7 @@ function getModelFixture(): Model<"bedrock-converse-stream"> {
  * What the SDK's `handleError` path throws for a non-2xx response; `name` is the modeled AWS error code.
  *
  * @param {string} name - modeled AWS error code
- * @param {Record<string, unknown>} [extra={}] - extra fields
+ * @param {Record<string, unknown>} [extra] - extra fields
  * @returns {Error} the exception
  */
 function makeServiceException(name: string, extra: Record<string, unknown> = {}): Error {

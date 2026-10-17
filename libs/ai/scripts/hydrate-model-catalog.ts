@@ -37,7 +37,7 @@ function isCatalogEntry(value: unknown): value is CatalogEntry {
  *
  * @param {string} packageRoot - package root
  * @param {string} catalogPath - path of models.all.json
- * @param {{ validateOnly?: boolean }} [options={}] - hydration options
+ * @param {{ validateOnly?: boolean }} [options] - hydration options
  */
 export function hydrateModelCatalog(
   packageRoot: string,
