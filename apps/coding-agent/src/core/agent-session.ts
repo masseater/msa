@@ -189,6 +189,9 @@ import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts"
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createMemoryToolDefinition } from "./tools/memory.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
+import { createWebFetchToolDefinition } from "./tools/web-fetch.ts";
+import { createWebSearchToolDefinition } from "./tools/web-search.ts";
+import { findTreg } from "./treg.ts";
 import { addUsageToTotals, combineUsage, createUsageTotals } from "./usage-totals.ts";
 import {
   findLatestResponse,
@@ -4159,6 +4162,15 @@ export class AgentSession {
     this._baseToolDefinitions = new Map(
       Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
     );
+    const treg = findTreg();
+    if (treg && !this._baseToolsOverride) {
+      for (const tool of [
+        createWebSearchToolDefinition(treg),
+        createWebFetchToolDefinition(treg),
+      ]) {
+        this._baseToolDefinitions.set(tool.name, tool as ToolDefinition);
+      }
+    }
     if (this._orchestrator && !this._baseToolsOverride) {
       for (const [name, tool] of Object.entries(
         createOrchestratorToolDefinitions(this._orchestrator),

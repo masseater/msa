@@ -64,6 +64,7 @@
     "chalk": "catalog:",
     "cross-spawn": "catalog:",
     "diff": "catalog:",
+    "effect": "catalog:stack",
     "grok-mermaid": "catalog:",
     "highlight.js": "catalog:",
     "hosted-git-info": "catalog:",
