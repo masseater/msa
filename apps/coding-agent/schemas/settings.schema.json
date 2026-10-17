@@ -208,6 +208,30 @@
         }
       }
     },
+    "orchestrator": {
+      "type": "object",
+      "properties": {
+        "workerModel": {
+          "type": "string",
+          "description": "Model of the sessions the orchestrator starts, as \"provider/id\", unless start_session names one. Default: the orchestrator's model."
+        },
+        "workerThinkingLevel": {
+          "$ref": "#/$defs/ModelThinkingLevel"
+        },
+        "reviewModel": {
+          "type": "string",
+          "description": "Model of the review session that closes each round, as \"provider/id\". Default: the orchestrator's model."
+        },
+        "reviewThinkingLevel": {
+          "$ref": "#/$defs/ModelThinkingLevel"
+        },
+        "maxConcurrentSessions": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 4
+        }
+      }
+    },
     "hideThinkingBlock": {
       "type": "boolean",
       "default": true
