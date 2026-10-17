@@ -26,7 +26,7 @@ function interaction(
 ): ProviderAuthInteraction {
   return {
     signal: new AbortController().signal,
-    prompt: async () => loginMethod,
+    prompt: () => Promise.resolve(loginMethod),
     notify: (event) => events.push(event),
   };
 }
@@ -45,33 +45,37 @@ describe("Radius OAuth", () => {
     const urls: string[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown, init?: RequestInit) => {
+      vi.fn((input: unknown, init?: RequestInit) => {
         const url = requestUrl(input);
         urls.push(url);
         const form = new URLSearchParams(String(init?.body));
         if (url === `${GATEWAY}/v1/oauth/device`) {
           expect(form.get("client_id")).toBe("msa-gateway");
           expect(form.get("scope")).toBe("gateway offline_access");
-          return jsonResponse({
-            device_code: "device-code",
-            user_code: "ABCD-1234",
-            verification_uri: "https://radius-ui.example/pair",
-            expires_in: 600,
-            interval: 5,
-          });
+          return Promise.resolve(
+            jsonResponse({
+              device_code: "device-code",
+              user_code: "ABCD-1234",
+              verification_uri: "https://radius-ui.example/pair",
+              expires_in: 600,
+              interval: 5,
+            }),
+          );
         }
         if (url === `${GATEWAY}/v1/oauth/token`) {
           expect(form.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
           expect(form.get("client_id")).toBe("msa-gateway");
           expect(form.get("device_code")).toBe("device-code");
-          return jsonResponse({
-            access_token: "access-token",
-            refresh_token: "refresh-token",
-            expires_in: 3600,
-            scope: "gateway offline_access",
-          });
+          return Promise.resolve(
+            jsonResponse({
+              access_token: "access-token",
+              refresh_token: "refresh-token",
+              expires_in: 3600,
+              scope: "gateway offline_access",
+            }),
+          );
         }
-        throw new Error(`Unexpected request: ${url}`);
+        return Promise.reject(new Error(`Unexpected request: ${url}`));
       }),
     );
 
@@ -96,17 +100,19 @@ describe("Radius OAuth", () => {
   });
 
   it("refreshes directly through the gateway without discovery", async () => {
-    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
       expect(requestUrl(input)).toBe(`${GATEWAY}/v1/oauth/token`);
       const form = new URLSearchParams(String(init?.body));
       expect(form.get("grant_type")).toBe("refresh_token");
       expect(form.get("client_id")).toBe("msa-gateway");
       expect(form.get("refresh_token")).toBe("old-refresh");
-      return jsonResponse({
-        access_token: "new-access",
-        refresh_token: "new-refresh",
-        expires_in: 3600,
-      });
+      return Promise.resolve(
+        jsonResponse({
+          access_token: "new-access",
+          refresh_token: "new-refresh",
+          expires_in: 3600,
+        }),
+      );
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -121,9 +127,9 @@ describe("Radius OAuth", () => {
   });
 
   it("discovers only the interactive browser authorization endpoint", async () => {
-    const fetchMock = vi.fn(async (input: unknown) => {
+    const fetchMock = vi.fn((input: unknown) => {
       expect(requestUrl(input)).toBe(`${GATEWAY}/v1/oauth`);
-      return jsonResponse({ issuer: "https://radius-ui.example" });
+      return Promise.resolve(jsonResponse({ issuer: "https://radius-ui.example" }));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -138,21 +144,23 @@ describe("Radius OAuth", () => {
     let tokenStatus = 400;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown, init?: RequestInit) => {
+      vi.fn((input: unknown, init?: RequestInit) => {
         const url = requestUrl(input);
         if (url === `${GATEWAY}/v1/oauth`)
-          return jsonResponse({ authorizationEndpoint: `${GATEWAY}/authorize` });
+          return Promise.resolve(jsonResponse({ authorizationEndpoint: `${GATEWAY}/authorize` }));
         if (url === `${GATEWAY}/v1/oauth/token`) {
           const body = new URLSearchParams(String(init?.body));
           expect(body.get("code")).toBe("browser-code");
-          return tokenStatus === 200
-            ? jsonResponse({ access_token: "access", refresh_token: "refresh", expires_in: 3600 })
-            : jsonResponse(
-                { error: "invalid_grant", error_description: "code expired" },
-                tokenStatus,
-              );
+          return Promise.resolve(
+            tokenStatus === 200
+              ? jsonResponse({ access_token: "access", refresh_token: "refresh", expires_in: 3600 })
+              : jsonResponse(
+                  { error: "invalid_grant", error_description: "code expired" },
+                  tokenStatus,
+                ),
+          );
         }
-        return nativeFetch(url, init);
+        return Promise.resolve(nativeFetch(url, init));
       }),
     );
 

@@ -235,15 +235,15 @@ function validateModelValue(
       `${label} has type ${JSON.stringify(value["type"])}, expected "chat", "image", or "classifier"`,
     );
   }
-  if (!isRecord(value["cost"])) {
-    errors.push(`${label} has invalid cost metadata`);
-  } else {
+  if (isRecord(value["cost"])) {
     for (const field of ["input", "output", "cacheRead", "cacheWrite"] as const) {
       const cost = value["cost"][field];
       if (typeof cost !== "number" || !Number.isFinite(cost)) {
         errors.push(`${label} has invalid cost.${field}`);
       }
     }
+  } else {
+    errors.push(`${label} has invalid cost metadata`);
   }
 }
 
@@ -292,14 +292,15 @@ export function validateModelDataDirectory(structure: ModelDataStructure, dataDi
     errors.push("model data generation stamp does not match the generated catalog");
   }
   const manifestFiles = isRecord(manifest?.["files"]) ? manifest["files"] : undefined;
-  if (!manifestFiles) errors.push("model data manifest has no file hashes");
-  else {
+  if (manifestFiles) {
     const manifestFileNames = Object.keys(manifestFiles).sort();
     if (!sameStrings(expectedFiles, manifestFileNames)) {
       errors.push(
         `manifest file hashes do not match provider data files (${describeSetDifference(expectedFiles, manifestFileNames)})`,
       );
     }
+  } else {
+    errors.push("model data manifest has no file hashes");
   }
 
   for (const [providerId, expectedModels] of Object.entries(structure)) {

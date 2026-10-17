@@ -37,8 +37,8 @@ import { normalizeContext } from "../src/utils/transcript.ts";
 
 function fakeAuthContext(env: Record<string, string>, files: string[] = []): AuthContext {
   return {
-    env: async (name) => env[name],
-    fileExists: async (path) => files.includes(path),
+    env: (name) => Promise.resolve(env[name]),
+    fileExists: (path) => Promise.resolve(files.includes(path)),
   };
 }
 
@@ -56,7 +56,7 @@ const DEFAULT_IMAGE_RESIZE = {
 };
 
 describe("builtin providers", () => {
-  it("builtinModels registers every builtin provider with models", async () => {
+  it("builtinModels registers every builtin provider with models", () => {
     const models = builtinModels();
     const providers = models.getProviders();
     expect(providers.length).toBe(builtinProviders().length);
@@ -77,6 +77,8 @@ describe("builtin providers", () => {
       api: "msa-messages",
       provider: "radius",
     });
+
+    return Promise.resolve();
   });
 
   it("returns empty results for unknown provider ids", () => {
@@ -323,7 +325,7 @@ describe("builtin providers", () => {
     expect(
       await auth.login?.({
         signal: neverAbortedSignal,
-        prompt: async () => bearerAnswers.shift()!,
+        prompt: () => Promise.resolve(bearerAnswers.shift()!),
         notify: () => {},
       }),
     ).toEqual({ type: "api_key", key: "bedrock-token" });
@@ -333,7 +335,7 @@ describe("builtin providers", () => {
     expect(
       await auth.login?.({
         signal: neverAbortedSignal,
-        prompt: async () => profileAnswers.shift()!,
+        prompt: () => Promise.resolve(profileAnswers.shift()!),
         notify: (event) => events.push(event),
       }),
     ).toEqual({ type: "api_key", env: { AWS_PROFILE: "work" } });
@@ -428,7 +430,7 @@ describe("builtin providers", () => {
     expect(
       await auth.login?.({
         signal: neverAbortedSignal,
-        prompt: async () => keyAnswers.shift()!,
+        prompt: () => Promise.resolve(keyAnswers.shift()!),
         notify: () => {},
       }),
     ).toEqual({ type: "api_key", key: "vertex-key" });
@@ -438,7 +440,7 @@ describe("builtin providers", () => {
     expect(
       await auth.login?.({
         signal: neverAbortedSignal,
-        prompt: async () => adcAnswers.shift()!,
+        prompt: () => Promise.resolve(adcAnswers.shift()!),
         notify: (event) => events.push(event),
       }),
     ).toEqual({
@@ -526,9 +528,9 @@ describe("envApiKeyAuth", () => {
     const auth = envApiKeyAuth("Test key", ["TEST_KEY"]);
     const credential = await auth.login?.({
       signal: neverAbortedSignal,
-      prompt: async (prompt) => {
+      prompt: (prompt) => {
         expect(prompt.type).toBe("secret");
-        return "entered-key";
+        return Promise.resolve("entered-key");
       },
       notify: () => {},
     });
@@ -570,9 +572,9 @@ describe("createProvider", () => {
     const streams = recordingStreams("deferred", []);
     streams.fetchDeferred = (model) => streams.streamSimple(model, context);
     const api = lazyApi(
-      async () => {
+      () => {
         loads++;
-        return streams;
+        return Promise.resolve(streams);
       },
       { fetchDeferred: true },
     );
@@ -594,7 +596,7 @@ describe("createProvider", () => {
     const calls: string[] = [];
     const provider = createProvider({
       id: "mixed",
-      auth: { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } },
+      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
       models: [testModel("api-a", "model-a"), testModel("api-b", "model-b")],
       api: { "api-a": recordingStreams("a", calls), "api-b": recordingStreams("b", calls) },
     });
@@ -615,10 +617,11 @@ describe("createProvider", () => {
       auth: {
         apiKey: {
           name: "Test",
-          resolve: async () => ({
-            auth: { apiKey: "provider-key" },
-            env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
-          }),
+          resolve: () =>
+            Promise.resolve({
+              auth: { apiKey: "provider-key" },
+              env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
+            }),
         },
       },
       models: [envModel],
@@ -662,22 +665,25 @@ describe("createProvider", () => {
       fetchedOptions = options;
       return streams.streamSimple(model, context);
     };
-    streams.cancelDeferred = async (_model, _handle, options) => {
+    streams.cancelDeferred = (_model, _handle, options) => {
       cancelledOptions = options;
+
+      return Promise.resolve();
     };
     const provider = createProvider({
       id: "deferred-provider",
       auth: {
         apiKey: {
           name: "Test",
-          resolve: async () => ({
-            auth: {
-              apiKey: "provider-key",
-              baseUrl: "https://resolved.test/v1",
-              headers: { Authorization: "Bearer provider", "X-Shared": "provider" },
-            },
-            env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
-          }),
+          resolve: () =>
+            Promise.resolve({
+              auth: {
+                apiKey: "provider-key",
+                baseUrl: "https://resolved.test/v1",
+                headers: { Authorization: "Bearer provider", "X-Shared": "provider" },
+              },
+              env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
+            }),
         },
       },
       models: [deferredModel],
@@ -729,7 +735,7 @@ describe("createProvider", () => {
   it("produces a stream error for a model whose api has no implementation", async () => {
     const provider = createProvider({
       id: "mixed",
-      auth: { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } },
+      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
       models: [testModel("api-a", "model-a")],
       api: { "api-a": recordingStreams("a", []) },
     });
@@ -750,7 +756,7 @@ describe("createProvider", () => {
     });
     const provider = createProvider({
       id: "dynamic",
-      auth: { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } },
+      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
       models: [],
       fetchModels: async () => {
         fetches++;

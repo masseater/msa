@@ -45,7 +45,7 @@ function imageModel(provider: string, id: string): ImageModel<ImageApi> {
   };
 }
 
-const noAuth = { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } };
+const noAuth = { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } };
 const chatStreams = {
   stream: () => new AssistantMessageEventStream(),
   streamSimple: () => new AssistantMessageEventStream(),
@@ -133,7 +133,7 @@ describe("stored and fetched models of unknown types", () => {
         id: "dyn",
         auth: noAuth,
         models: [],
-        fetchModels: async () => fetched as Model<Api>[],
+        fetchModels: () => Promise.resolve(fetched as Model<Api>[]),
         api: chatStreams,
       }),
     );

@@ -1075,8 +1075,8 @@ type WebSocketConstructor = new (
 ) => WebSocketLike;
 
 let _cachedWebsocket: WebSocketConstructor | null = null;
-async function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketConstructor | null> {
-  if (!env && _cachedWebsocket) return _cachedWebsocket;
+function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketConstructor | null> {
+  if (!env && _cachedWebsocket) return Promise.resolve(_cachedWebsocket);
 
   // bun doesn't respect http proxy envs, ref: https://github.com/oven-sh/bun/issues/15489
   // TODO: remove this when bun supports proxy envs in websocket.
@@ -1100,12 +1100,12 @@ async function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketCons
     if (!env) {
       _cachedWebsocket = WebSocketWithProxy;
     }
-    return WebSocketWithProxy;
+    return Promise.resolve(WebSocketWithProxy);
   }
 
   const ctor = (globalThis as { WebSocket?: unknown }).WebSocket;
-  if (typeof ctor !== "function") return null;
-  return ctor as unknown as WebSocketConstructor;
+  if (typeof ctor !== "function") return Promise.resolve(null);
+  return Promise.resolve(ctor as unknown as WebSocketConstructor);
 }
 
 class WebSocketCloseError extends Error {
@@ -1734,7 +1734,7 @@ async function parseErrorResponse(
         const mins = err.resets_at
           ? Math.max(0, Math.round((err.resets_at * 1000 - Date.now()) / 60000))
           : undefined;
-        const when = mins !== undefined ? ` Try again in ~${mins} min.` : "";
+        const when = mins === undefined ? "" : ` Try again in ~${mins} min.`;
         friendlyMessage = `You have hit your ChatGPT usage limit${plan}.${when}`.trim();
       }
       message = err.message || friendlyMessage || message;

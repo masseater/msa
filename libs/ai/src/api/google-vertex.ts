@@ -395,7 +395,7 @@ function createClient(
     location,
     apiVersion: API_VERSION,
     ...(googleAuthOptions ? { googleAuthOptions } : {}),
-    ...(httpOptions !== undefined ? { httpOptions } : {}),
+    ...(httpOptions === undefined ? {} : { httpOptions }),
   });
 }
 
@@ -409,7 +409,7 @@ function createClientWithApiKey(
     vertexai: true,
     apiKey,
     apiVersion: API_VERSION,
-    ...(httpOptions !== undefined ? { httpOptions } : {}),
+    ...(httpOptions === undefined ? {} : { httpOptions }),
   });
 }
 

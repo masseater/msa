@@ -34,8 +34,8 @@ import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 
 function fakeAuthContext(env: Record<string, string>): AuthContext {
   return {
-    env: async (name) => env[name],
-    fileExists: async () => false,
+    env: (name) => Promise.resolve(env[name]),
+    fileExists: () => Promise.resolve(false),
   };
 }
 
@@ -91,13 +91,13 @@ function testProvider(input: {
   calls?: GenerateCall[];
   images?: Record<string, boolean>;
 }): Provider {
-  const generateImages = async (
+  const generateImages = (
     model: ImageModel<ImageApi>,
     _context: ImagesContext,
     options?: ImagesOptions,
   ) => {
     input.calls?.push({ model, options });
-    return okResult(model);
+    return Promise.resolve(okResult(model));
   };
   const imageApis = Object.keys(input.images ?? { "test-images": true });
   const allModels = input.models ?? [imageModel(input.id, "model-a")];
@@ -151,9 +151,9 @@ describe("Models with image models", () => {
   it("lists models without a type as chat models at createProvider boundaries", async () => {
     const provider = createProvider({
       id: "legacy",
-      auth: { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } },
+      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
       models: [chatModel("legacy", "static"), imageModel("legacy", "static")],
-      fetchModels: async () => [chatModel("legacy", "dynamic")],
+      fetchModels: () => Promise.resolve([chatModel("legacy", "dynamic")]),
       api: {
         stream: () => new AssistantMessageEventStream(),
         streamSimple: () => new AssistantMessageEventStream(),
@@ -241,18 +241,19 @@ describe("Models with image models", () => {
         auth: {
           apiKey: {
             name: "Test key",
-            resolve: async () => ({
-              auth: { apiKey: "provider-key", headers: { "x-base": "1" } },
-              env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
-            }),
+            resolve: () =>
+              Promise.resolve({
+                auth: { apiKey: "provider-key", headers: { "x-base": "1" } },
+                env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
+              }),
           },
         },
         models: [imageModel("p1", "model-a")],
         images: {
           "test-images": {
-            generateImages: async (model, _context, options) => {
+            generateImages: (model, _context, options) => {
               calls.push({ model, options });
-              return okResult(model);
+              return Promise.resolve(okResult(model));
             },
           },
         },
@@ -302,7 +303,7 @@ describe("Models with image models", () => {
     models.setProvider(
       createProvider({
         id: "chat-only",
-        auth: { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } },
+        auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
         models: [imageModel("chat-only", "i")],
         api: {
           stream: () => new AssistantMessageEventStream(),
@@ -363,7 +364,7 @@ describe("Models with image models", () => {
     ) =>
       createProvider({
         id: "empty",
-        auth: { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } },
+        auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
         models: [],
         ...implementations,
       });
@@ -382,13 +383,13 @@ describe("Models with image models", () => {
     models.setProvider(
       createProvider({
         id: "dyn",
-        auth: { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } },
+        auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
         models: [],
-        fetchModels: async () => {
+        fetchModels: () => {
           fetches++;
-          return [imageModel("dyn", "listed"), chatModel("dyn", "chat")];
+          return Promise.resolve([imageModel("dyn", "listed"), chatModel("dyn", "chat")]);
         },
-        images: { "test-images": { generateImages: async (model) => okResult(model) } },
+        images: { "test-images": { generateImages: (model) => Promise.resolve(okResult(model)) } },
       }),
     );
 

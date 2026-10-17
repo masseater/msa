@@ -98,12 +98,14 @@ describe("OAuthAuth adapters", () => {
   it("anthropic refresh exchanges the refresh token and returns a typed credential", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        jsonResponse({
-          access_token: "new-access",
-          refresh_token: "new-refresh",
-          expires_in: 3600,
-        }),
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse({
+            access_token: "new-access",
+            refresh_token: "new-refresh",
+            expires_in: 3600,
+          }),
+        ),
       ),
     );
 
@@ -121,13 +123,15 @@ describe("OAuthAuth adapters", () => {
 describe("OAuth through Models.getAuth (lazy load chain)", () => {
   it("resolves stored anthropic oauth credentials via the lazy flow import", async () => {
     const credentials = new InMemoryCredentialStore();
-    await credentials.modify("anthropic", async () => ({
-      type: "oauth",
-      access: "oauth-access-token",
-      refresh: "r",
-      // Keep this beyond getAuth()'s refresh window.
-      expires: Date.now() + 10 * 60_000,
-    }));
+    await credentials.modify("anthropic", () =>
+      Promise.resolve({
+        type: "oauth",
+        access: "oauth-access-token",
+        refresh: "r",
+        // Keep this beyond getAuth()'s refresh window.
+        expires: Date.now() + 10 * 60_000,
+      }),
+    );
     const models = createModels({ credentials });
     models.setProvider(anthropicProvider());
 

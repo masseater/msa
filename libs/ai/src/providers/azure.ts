@@ -34,7 +34,7 @@ function withDeploymentName<T extends StreamOptions>(
 function azureStreams(streams: ProviderStreams): ProviderStreams {
   return {
     stream: (model, context, options) =>
-      lazyStream(model, async () =>
+      lazyStream(model, () =>
         streams.stream(
           resolveAzureModel(model, options),
           context,
@@ -42,7 +42,7 @@ function azureStreams(streams: ProviderStreams): ProviderStreams {
         ),
       ),
     streamSimple: (model, context, options) =>
-      lazyStream(model, async () =>
+      lazyStream(model, () =>
         streams.streamSimple(
           resolveAzureModel(model, options),
           context,

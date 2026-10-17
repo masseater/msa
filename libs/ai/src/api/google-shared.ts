@@ -232,14 +232,13 @@ export function convertMessages<T extends GoogleApiType>(
         const parts: Part[] = msg.content.map((item) => {
           if (item.type === "text") {
             return { text: sanitizeSurrogates(item.text) };
-          } else {
-            return {
-              inlineData: {
-                mimeType: item.mimeType,
-                data: item.data,
-              },
-            };
           }
+          return {
+            inlineData: {
+              mimeType: item.mimeType,
+              data: item.data,
+            },
+          };
         });
         if (parts.length === 0) continue;
         contents.push({

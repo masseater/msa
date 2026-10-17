@@ -889,10 +889,10 @@ class ModelsImpl implements MutableModels {
     });
     const mutation = this.credentials.modify(
       providerId,
-      async () => {
+      () => {
         mutationStarted = true;
         markMutationStarted?.();
-        return credential;
+        return Promise.resolve(credential);
       },
       { signal },
     );
@@ -1007,12 +1007,16 @@ class ModelsImpl implements MutableModels {
     });
   }
 
-  async complete<TApi extends Api>(
+  complete<TApi extends Api>(
     model: Model<TApi>,
     context: Context,
     options?: ModelsApiStreamOptions<TApi>,
   ): Promise<AssistantMessage> {
-    return this.stream(model, context, options).result();
+    try {
+      return this.stream(model, context, options).result();
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   streamSimple(
@@ -1028,12 +1032,16 @@ class ModelsImpl implements MutableModels {
     });
   }
 
-  async completeSimple(
+  completeSimple(
     model: Model<Api>,
     context: Context,
     options?: ModelsSimpleStreamOptions,
   ): Promise<AssistantMessage> {
-    return this.streamSimple(model, context, options).result();
+    try {
+      return this.streamSimple(model, context, options).result();
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   streamDeferred(
@@ -1054,7 +1062,7 @@ class ModelsImpl implements MutableModels {
     });
   }
 
-  async fetchDeferred(
+  fetchDeferred(
     model: Model<Api>,
     handle: DeferredHandle,
     options?: ModelsDeferredFetchOptions,
@@ -1226,7 +1234,7 @@ export function createProvider<TApi extends Api = Api>(
   ): AssistantMessageEventStream => {
     const providerStreams = apiFor(model);
     if (!providerStreams) {
-      return lazyStream(model, async () => {
+      return lazyStream(model, () => {
         throw new ModelsError(
           "stream",
           `Provider ${input.id} has no API implementation for "${model.api}"`,
@@ -1245,8 +1253,8 @@ export function createProvider<TApi extends Api = Api>(
     getModels: () =>
       currentModels().filter((model): model is Model<TApi> => isModelType(model, "chat")),
     getAllModels: currentModels,
-    ...(input.filterModels !== undefined ? { filterModels: input.filterModels } : {}),
-    ...(input.filterAllModels !== undefined ? { filterAllModels: input.filterAllModels } : {}),
+    ...(input.filterModels === undefined ? {} : { filterModels: input.filterModels }),
+    ...(input.filterAllModels === undefined ? {} : { filterAllModels: input.filterAllModels }),
     stream: (model, context, options) =>
       dispatch(model, (providerStreams) => providerStreams.stream(model, context, options)),
     streamSimple: (model, context, options) =>
@@ -1283,7 +1291,7 @@ export function createProvider<TApi extends Api = Api>(
   }
   if (streams.some((entry) => entry.fetchDeferred !== undefined)) {
     provider.fetchDeferred = (model, handle, options) =>
-      lazyStream(model, async () => {
+      lazyStream(model, () => {
         const implementation = apiFor(model);
         if (!implementation?.fetchDeferred) {
           throw new ModelsError(
@@ -1307,33 +1315,45 @@ export function createProvider<TApi extends Api = Api>(
     };
   }
   if (images && imageImplementations.length > 0) {
-    provider.generateImages = async (model, context, options) => {
+    provider.generateImages = (model, context, options) => {
       const implementation = images[model.api];
       if (!implementation) {
-        return imageErrorResult(
-          model,
-          new ModelsError(
-            "provider",
-            `Provider ${input.id} has no image generation implementation for "${model.api}"`,
+        return Promise.resolve(
+          imageErrorResult(
+            model,
+            new ModelsError(
+              "provider",
+              `Provider ${input.id} has no image generation implementation for "${model.api}"`,
+            ),
           ),
         );
       }
-      return implementation.generateImages(model, context, options);
+      try {
+        return implementation.generateImages(model, context, options);
+      } catch (error) {
+        return Promise.reject(error);
+      }
     };
   }
   if (classifiers && classifierImplementations.length > 0) {
-    provider.classify = async (model, context, options) => {
+    provider.classify = (model, context, options) => {
       const implementation = classifiers[model.api];
       if (!implementation) {
-        return classifierErrorResult(
-          model,
-          new ModelsError(
-            "provider",
-            `Provider ${input.id} has no classifier implementation for "${model.api}"`,
+        return Promise.resolve(
+          classifierErrorResult(
+            model,
+            new ModelsError(
+              "provider",
+              `Provider ${input.id} has no classifier implementation for "${model.api}"`,
+            ),
           ),
         );
       }
-      return implementation.classify(model, context, options);
+      try {
+        return implementation.classify(model, context, options);
+      } catch (error) {
+        return Promise.reject(error);
+      }
     };
   }
 

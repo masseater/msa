@@ -172,7 +172,7 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
     const optionsProfile = options.profile || options.env?.["AWS_PROFILE"];
     const profile = optionsProfile || getProviderEnvValue("AWS_PROFILE", options.env);
     const config: BedrockRuntimeClientConfig = {
-      ...(profile !== undefined ? { profile } : {}),
+      ...(profile === undefined ? {} : { profile }),
     };
     const configuredRegion = getConfiguredBedrockRegion(options);
     const hasAmbientConfiguredProfile = Boolean(getProviderEnvValue("AWS_PROFILE"));
@@ -303,7 +303,7 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
 
       const response = await client.send(
         command,
-        options.signal !== undefined ? { abortSignal: options.signal } : {},
+        options.signal === undefined ? {} : { abortSignal: options.signal },
       );
       responseRequestId = normalizeDiagnosticValue(response.$metadata.requestId);
       if (!observedRawResponse && response.$metadata.httpStatusCode !== undefined) {
@@ -510,7 +510,7 @@ function addCustomHeadersMiddleware(
   client: BedrockRuntimeClient,
   headers: Record<string, string>,
 ): void {
-  const middleware: BuildMiddleware<object, MetadataBearer> = (next) => async (args) => {
+  const middleware: BuildMiddleware<object, MetadataBearer> = (next) => (args) => {
     const request = args.request;
     if (request && typeof request === "object" && "headers" in request) {
       const requestHeaders = (request as { headers: Record<string, string> }).headers;
@@ -1365,7 +1365,7 @@ function buildAdditionalModelRequestFields(
       ? {
           thinking: {
             type: "adaptive",
-            ...(display !== undefined ? { display } : {}),
+            ...(display === undefined ? {} : { display }),
             ...(useBlockBinding
               ? { block_binding: { prefix_mismatch_behavior: "drop_block" } }
               : {}),
@@ -1394,7 +1394,7 @@ function buildAdditionalModelRequestFields(
             thinking: {
               type: "enabled",
               budget_tokens: budget,
-              ...(display !== undefined ? { display } : {}),
+              ...(display === undefined ? {} : { display }),
             },
           };
         })();

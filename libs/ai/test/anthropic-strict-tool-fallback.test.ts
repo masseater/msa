@@ -67,10 +67,10 @@ function successResponse(): Response {
 
 function harness(respond: (payload: MessageCreateParamsStreaming, attempt: number) => Response) {
   const payloads: MessageCreateParamsStreaming[] = [];
-  const fetch: NonNullable<AnthropicOptions["fetch"]> = async (_input, init) => {
+  const fetch: NonNullable<AnthropicOptions["fetch"]> = (_input, init) => {
     const payload = JSON.parse(init?.body as string) as MessageCreateParamsStreaming;
     payloads.push(payload);
-    return respond(payload, payloads.length);
+    return Promise.resolve(respond(payload, payloads.length));
   };
   return {
     payloads,

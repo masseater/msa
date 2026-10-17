@@ -24,16 +24,18 @@ function strictBinding(payload: unknown): unknown {
   return params;
 }
 
-async function request(context: Context, effort: "low" | "high"): Promise<AssistantMessage> {
-  return stream(model, normalizeContext(context), {
-    apiKey: process.env["ANTHROPIC_API_KEY"],
-    cacheRetention: "none",
-    maxTokens: 1536,
-    thinkingEnabled: true,
-    thinkingDisplay: "summarized",
-    effort,
-    onPayload: strictBinding,
-  }).result();
+function request(context: Context, effort: "low" | "high"): Promise<AssistantMessage> {
+  return Promise.resolve(
+    stream(model, normalizeContext(context), {
+      apiKey: process.env["ANTHROPIC_API_KEY"],
+      cacheRetention: "none",
+      maxTokens: 1536,
+      thinkingEnabled: true,
+      thinkingDisplay: "summarized",
+      effort,
+      onPayload: strictBinding,
+    }).result(),
+  );
 }
 
 describe.skipIf(!enabled)("Anthropic thinking binding conformance", () => {

@@ -13,8 +13,8 @@ vi.mock("@aws-sdk/client-bedrock-runtime", () => {
       add: () => undefined,
     };
 
-    async send(): Promise<unknown> {
-      return {
+    send(): Promise<unknown> {
+      return Promise.resolve({
         $metadata: { httpStatusCode: 200, requestId: "request-id" },
         stream: (async function* () {
           if (bedrockMock.streamEvents) {
@@ -24,7 +24,7 @@ vi.mock("@aws-sdk/client-bedrock-runtime", () => {
           yield { messageStart: { role: "assistant" } };
           yield { messageStop: { stopReason: bedrockMock.stopReason } };
         })(),
-      };
+      });
     }
   }
 

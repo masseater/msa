@@ -75,7 +75,7 @@ function createFakeAnthropicClient(response: Response): Anthropic {
     beta: {
       messages: {
         create: () => ({
-          asResponse: async () => response,
+          asResponse: () => Promise.resolve(response),
         }),
       },
     },
@@ -263,7 +263,7 @@ describe("Anthropic raw SSE parsing", () => {
         messages: {
           create: (params: { stream?: boolean }) => {
             streaming = params.stream;
-            return { asResponse: async () => createSseResponse(minimalAnthropicEvents) };
+            return { asResponse: () => Promise.resolve(createSseResponse(minimalAnthropicEvents)) };
           },
         },
       },
@@ -288,7 +288,7 @@ describe("Anthropic raw SSE parsing", () => {
         messages: {
           create: (params: { betas?: string[] }) => {
             betaFeatures = params.betas;
-            return { asResponse: async () => createSseResponse(minimalAnthropicEvents) };
+            return { asResponse: () => Promise.resolve(createSseResponse(minimalAnthropicEvents)) };
           },
         },
       },
@@ -310,7 +310,7 @@ describe("Anthropic raw SSE parsing", () => {
         messages: {
           create: (params: { betas?: string[] }) => {
             betaFeatures = params.betas;
-            return { asResponse: async () => createSseResponse(minimalAnthropicEvents) };
+            return { asResponse: () => Promise.resolve(createSseResponse(minimalAnthropicEvents)) };
           },
         },
       },

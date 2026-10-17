@@ -34,17 +34,19 @@ interface RecordedRequest {
 }
 
 function createFetch(requests: RecordedRequest[]): typeof globalThis.fetch {
-  return async (input, init) => {
+  return (input, init) => {
     const request = new Request(input, init);
     const path = new URL(request.url).pathname;
     requests.push({ path, authorization: request.headers.get("authorization") });
     if (path === "/v1/oauth/token") {
-      return new Response(JSON.stringify({ access_token: "federated-token", expires_in: 3600 }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
+      return Promise.resolve(
+        new Response(JSON.stringify({ access_token: "federated-token", expires_in: 3600 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
     }
-    return sseResponse();
+    return Promise.resolve(sseResponse());
   };
 }
 

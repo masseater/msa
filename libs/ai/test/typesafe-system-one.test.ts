@@ -49,7 +49,7 @@ const wireAnswers = {
 
 describe("TypeSafe System One", () => {
   it("maps public bool questions and answers to TypeSafe noul values", async () => {
-    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+    const fetch = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
         questions: Record<string, { type: string }>;
@@ -61,7 +61,7 @@ describe("TypeSafe System One", () => {
       // System One has no temperature field; the option is ignored.
       expect(payload).not.toHaveProperty("temperature");
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer secret");
-      return Response.json({ answers: wireAnswers });
+      return Promise.resolve(Response.json({ answers: wireAnswers }));
     });
 
     const result = await classify(model, context, { apiKey: "secret", fetch, temperature: 1.5 });
@@ -70,8 +70,13 @@ describe("TypeSafe System One", () => {
       context,
       {
         apiKey: "secret",
-        fetch: async () =>
-          Response.json({ answers: wireAnswers, usage: { input_tokens: 308, output_tokens: 23 } }),
+        fetch: () =>
+          Promise.resolve(
+            Response.json({
+              answers: wireAnswers,
+              usage: { input_tokens: 308, output_tokens: 23 },
+            }),
+          ),
       },
     );
 
@@ -87,18 +92,20 @@ describe("TypeSafe System One", () => {
   });
 
   it("posts OpenRouter System One requests to its TypeSafe-compatible endpoint", async () => {
-    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+    const fetch = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
       expect(JSON.parse(String(init?.body))).toMatchObject({
         model: "typesafe/jev-1.13",
         state: context.state,
       });
       // Response shape observed from the live OpenRouter endpoint.
-      return Response.json({
-        id: "gen-dec-1",
-        provider: "TypeSafe",
-        answers: wireAnswers,
-        usage: { input_tokens: 308, output_tokens: 23, cost: 0.000012936 },
-      });
+      return Promise.resolve(
+        Response.json({
+          id: "gen-dec-1",
+          provider: "TypeSafe",
+          answers: wireAnswers,
+          usage: { input_tokens: 308, output_tokens: 23, cost: 0.000012936 },
+        }),
+      );
     });
     const openRouterModel = {
       ...model,
@@ -118,7 +125,7 @@ describe("TypeSafe System One", () => {
   });
 
   it("rejects models for other classifier APIs", async () => {
-    const fetch = vi.fn(async () => Response.json({ answers: wireAnswers }));
+    const fetch = vi.fn(() => Promise.resolve(Response.json({ answers: wireAnswers })));
     const result = await classify({ ...model, api: "cloudflare-workers-ai-system-one" }, context, {
       apiKey: "secret",
       fetch,
@@ -132,7 +139,7 @@ describe("TypeSafe System One", () => {
   });
 
   it("rejects image input before sending", async () => {
-    const fetch = vi.fn(async () => Response.json({ answers: wireAnswers }));
+    const fetch = vi.fn(() => Promise.resolve(Response.json({ answers: wireAnswers })));
     const result = await classify(
       { ...model, input: ["text", "image"] },
       { ...context, images: [{ type: "image", data: "aW1hZ2U=", mimeType: "image/png" }] },
@@ -146,9 +153,9 @@ describe("TypeSafe System One", () => {
 
   it("merges headers case-insensitively and supports null suppression", async () => {
     const requests: Array<Record<string, string>> = [];
-    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+    const fetch = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
       requests.push(Object.fromEntries(new Headers(init?.headers)));
-      return Response.json({ answers: wireAnswers });
+      return Promise.resolve(Response.json({ answers: wireAnswers }));
     });
     const modelWithHeaders = {
       ...model,
@@ -184,8 +191,10 @@ describe("TypeSafe System One", () => {
     };
     const result = await classify(model, prototypeContext, {
       apiKey: "secret",
-      fetch: async () =>
-        Response.json({ answers: JSON.parse('{"__proto__":{"type":"noul","noul":0.75}}') }),
+      fetch: () =>
+        Promise.resolve(
+          Response.json({ answers: JSON.parse('{"__proto__":{"type":"noul","noul":0.75}}') }),
+        ),
     });
 
     const serializedAnswers = JSON.parse(JSON.stringify(result.answers)) as Record<string, unknown>;
@@ -201,12 +210,14 @@ describe("TypeSafe System One", () => {
       apiKey: "secret",
       timeoutMs: 5,
       maxRetries: 0,
-      fetch: async (_input, init) => {
+      fetch: (_input, init) => {
         const signal = init?.signal;
-        if (!signal) throw new Error("missing request signal");
-        return new Promise<Response>((_resolve, reject) => {
-          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-        });
+        if (!signal) return Promise.reject(new Error("missing request signal"));
+        return Promise.resolve(
+          new Promise<Response>((_resolve, reject) => {
+            signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+          }),
+        );
       },
     });
 
@@ -221,13 +232,16 @@ describe("TypeSafe System One", () => {
       apiKey: "secret",
       timeoutMs: 1000,
       maxRetries: 1,
-      fetch: async (_input, init) => {
-        if (!(init?.signal instanceof AbortSignal)) throw new Error("missing request signal");
+      fetch: (_input, init) => {
+        if (!(init?.signal instanceof AbortSignal))
+          return Promise.reject(new Error("missing request signal"));
         signals.push(init.signal);
         attempt++;
-        return attempt === 1
-          ? new Response("retry", { status: 500, headers: { "retry-after-ms": "0" } })
-          : Response.json({ answers: wireAnswers });
+        return Promise.resolve(
+          attempt === 1
+            ? new Response("retry", { status: 500, headers: { "retry-after-ms": "0" } })
+            : Response.json({ answers: wireAnswers }),
+        );
       },
     });
 
@@ -239,8 +253,10 @@ describe("TypeSafe System One", () => {
   it("returns malformed responses as classifier errors", async () => {
     const result = await classify(model, context, {
       apiKey: "secret",
-      fetch: async () =>
-        Response.json({ answers: {}, usage: { input_tokens: 10, output_tokens: 2 } }),
+      fetch: () =>
+        Promise.resolve(
+          Response.json({ answers: {}, usage: { input_tokens: 10, output_tokens: 2 } }),
+        ),
     });
 
     expect(result.stopReason).toBe("error");
@@ -253,12 +269,17 @@ describe("TypeSafe System One", () => {
   it("ignores malformed usage", async () => {
     const result = await classify(model, context, {
       apiKey: "secret",
-      fetch: async () =>
-        Response.json({ answers: wireAnswers, usage: { input_tokens: "many", output_tokens: 3 } }),
+      fetch: () =>
+        Promise.resolve(
+          Response.json({
+            answers: wireAnswers,
+            usage: { input_tokens: "many", output_tokens: 3 },
+          }),
+        ),
     });
     const withoutTokens = await classify(model, context, {
       apiKey: "secret",
-      fetch: async () => Response.json({ answers: wireAnswers, usage: { cost: 0.1 } }),
+      fetch: () => Promise.resolve(Response.json({ answers: wireAnswers, usage: { cost: 0.1 } })),
     });
 
     expect(result.stopReason).toBe("stop");

@@ -392,7 +392,7 @@ function createClient(
   }
 
   return new GoogleGenAI({
-    ...(apiKey !== undefined ? { apiKey } : {}),
+    ...(apiKey === undefined ? {} : { apiKey }),
     ...(Object.keys(httpOptions).length > 0 ? { httpOptions } : {}),
   });
 }

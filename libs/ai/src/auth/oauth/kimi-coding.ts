@@ -151,7 +151,7 @@ function parseTokenResponse(
   };
 }
 
-async function pollForToken(
+function pollForToken(
   oauthHost: string,
   device: DeviceAuthorization,
   signal: AbortSignal,
@@ -318,7 +318,7 @@ export const kimiCodingOAuth: OAuthAuth = {
     return { type: "oauth", access: token.access, refresh: token.refresh, expires: token.expires };
   },
 
-  async toAuth(credential) {
-    return { headers: { Authorization: `Bearer ${credential.access}` } };
+  toAuth(credential) {
+    return Promise.resolve({ headers: { Authorization: `Bearer ${credential.access}` } });
   },
 };

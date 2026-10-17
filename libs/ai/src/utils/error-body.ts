@@ -136,9 +136,9 @@ export function formatProviderError(norm: NormalizedProviderError, prefix?: stri
       ? `${prefix} (${norm.status}): ${norm.message}`
       : norm.message;
   }
-  return prefix !== undefined
-    ? `${prefix} (${norm.status}): ${norm.body}`
-    : `${norm.status}: ${norm.body}`;
+  return prefix === undefined
+    ? `${norm.status}: ${norm.body}`
+    : `${prefix} (${norm.status}): ${norm.body}`;
 }
 
 export function truncateErrorText(text: string, maxChars: number): string {

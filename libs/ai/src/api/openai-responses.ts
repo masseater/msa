@@ -225,7 +225,7 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
       }
       const requestOptions = {
         ...(options?.signal ? { signal: options.signal } : {}),
-        ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+        ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
         maxRetries: 0,
       };
       const { data: openaiStream, response } = await retryProviderRequest(
@@ -383,9 +383,9 @@ function buildParams(
     model: model.id,
     input: messages,
     stream: true,
-    ...(promptCacheKey !== undefined ? { prompt_cache_key: promptCacheKey } : {}),
-    ...(promptCacheRetention !== undefined ? { prompt_cache_retention: promptCacheRetention } : {}),
-    ...(promptCacheOptions !== undefined ? { prompt_cache_options: promptCacheOptions } : {}),
+    ...(promptCacheKey === undefined ? {} : { prompt_cache_key: promptCacheKey }),
+    ...(promptCacheRetention === undefined ? {} : { prompt_cache_retention: promptCacheRetention }),
+    ...(promptCacheOptions === undefined ? {} : { prompt_cache_options: promptCacheOptions }),
     store: false,
   };
 

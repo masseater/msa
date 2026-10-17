@@ -188,14 +188,16 @@ describe("retryAssistantCall", () => {
   const enabled: RetryPolicy = { enabled: true, maxRetries: 3, baseDelayMs: 0 };
 
   it("returns a successful response immediately without retrying", async () => {
-    const produce = vi.fn(async () => fauxAssistantMessage("ok"));
+    const produce = vi.fn(() => Promise.resolve(fauxAssistantMessage("ok")));
     const res = await retryAssistantCall(produce, enabled, undefined);
     expect(res.content).toEqual([{ type: "text", text: "ok" }]);
     expect(produce).toHaveBeenCalledTimes(1);
   });
 
   it("does not retry an aborted message", async () => {
-    const produce = vi.fn(async () => fauxAssistantMessage("", { stopReason: "aborted" }));
+    const produce = vi.fn(() =>
+      Promise.resolve(fauxAssistantMessage("", { stopReason: "aborted" })),
+    );
     const onRetryScheduled = vi.fn();
     const res = await retryAssistantCall(produce, enabled, undefined, { onRetryScheduled });
     expect(res.stopReason).toBe("aborted");
@@ -204,8 +206,10 @@ describe("retryAssistantCall", () => {
   });
 
   it("does not retry a non-retryable error (quota/billing)", async () => {
-    const produce = vi.fn(async () =>
-      fauxAssistantMessage("", { stopReason: "error", errorMessage: "insufficient_quota" }),
+    const produce = vi.fn(() =>
+      Promise.resolve(
+        fauxAssistantMessage("", { stopReason: "error", errorMessage: "insufficient_quota" }),
+      ),
     );
     const onRetryScheduled = vi.fn();
     const onRetryFinished = vi.fn();
@@ -220,8 +224,10 @@ describe("retryAssistantCall", () => {
   });
 
   it("retries a transient error up to maxRetries then returns the final error", async () => {
-    const produce = vi.fn(async () =>
-      fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }),
+    const produce = vi.fn(() =>
+      Promise.resolve(
+        fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }),
+      ),
     );
     const onRetryScheduled = vi.fn();
     const onRetryFinished = vi.fn();
@@ -244,11 +250,13 @@ describe("retryAssistantCall", () => {
       baseDelayMs: 10,
       maxAgentDelayMs: 15,
     };
-    const produce = vi.fn(async () => {
+    const produce = vi.fn(() => {
       n++;
-      return n < 5
-        ? fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" })
-        : fauxAssistantMessage("recovered");
+      return Promise.resolve(
+        n < 5
+          ? fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" })
+          : fauxAssistantMessage("recovered"),
+      );
     });
     const onRetryScheduled = vi.fn();
 
@@ -259,11 +267,13 @@ describe("retryAssistantCall", () => {
 
   it("stops retrying once a call succeeds", async () => {
     let n = 0;
-    const produce = vi.fn(async () => {
+    const produce = vi.fn(() => {
       n++;
-      return n < 3
-        ? fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" })
-        : fauxAssistantMessage("recovered");
+      return Promise.resolve(
+        n < 3
+          ? fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" })
+          : fauxAssistantMessage("recovered"),
+      );
     });
     const onRetryFinished = vi.fn();
     const res = await retryAssistantCall(produce, enabled, undefined, { onRetryFinished });
@@ -274,11 +284,13 @@ describe("retryAssistantCall", () => {
 
   it("reports an aborted retried call as unsuccessful", async () => {
     let n = 0;
-    const produce = vi.fn(async () => {
+    const produce = vi.fn(() => {
       n++;
-      return n === 1
-        ? fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" })
-        : fauxAssistantMessage("", { stopReason: "aborted" });
+      return Promise.resolve(
+        n === 1
+          ? fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" })
+          : fauxAssistantMessage("", { stopReason: "aborted" }),
+      );
     });
     const onRetryFinished = vi.fn();
     const res = await retryAssistantCall(produce, enabled, undefined, { onRetryFinished });
@@ -288,8 +300,10 @@ describe("retryAssistantCall", () => {
   });
 
   it("does not retry when policy is disabled", async () => {
-    const produce = vi.fn(async () =>
-      fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }),
+    const produce = vi.fn(() =>
+      Promise.resolve(
+        fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }),
+      ),
     );
     const onRetryScheduled = vi.fn();
     const onRetryFinished = vi.fn();
@@ -306,12 +320,14 @@ describe("retryAssistantCall", () => {
   it("emits onRetryAttemptStart after backoff before each retried call", async () => {
     const events: string[] = [];
     let n = 0;
-    const produce = vi.fn(async () => {
+    const produce = vi.fn(() => {
       events.push(`produce:${n}`);
       n++;
-      return n < 3
-        ? fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" })
-        : fauxAssistantMessage("recovered");
+      return Promise.resolve(
+        n < 3
+          ? fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" })
+          : fauxAssistantMessage("recovered"),
+      );
     });
     const onRetryScheduled = vi.fn((attempt: number) => {
       events.push(`retry:${attempt}`);
@@ -339,8 +355,10 @@ describe("retryAssistantCall", () => {
 
   it("aborts backoff sleep via signal, returns an aborted message, and emits onRetryFinished(false)", async () => {
     const controller = new AbortController();
-    const produce = vi.fn(async () =>
-      fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }),
+    const produce = vi.fn(() =>
+      Promise.resolve(
+        fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }),
+      ),
     );
     const policy: RetryPolicy = { enabled: true, maxRetries: 5, baseDelayMs: 10_000 };
     const onRetryFinished = vi.fn();

@@ -58,7 +58,7 @@ describe("OAuth callback server", () => {
       port: 0,
       path: "/callback",
       state: "expected-state",
-      complete: async (code) => `completed:${code}` as T,
+      complete: (code) => Promise.resolve(`completed:${code}` as T),
       ...options,
     });
     servers.push(server);
@@ -116,8 +116,8 @@ describe("OAuth callback server", () => {
 
   it("shows completion failures on the page and rejects the wait", async () => {
     const server = await start<string>({
-      complete: async () => {
-        throw new Error("token exchange failed");
+      complete: () => {
+        return Promise.reject(new Error("token exchange failed"));
       },
     });
     const failure = await page(
@@ -214,7 +214,7 @@ describe("waitForCallbackOrManualInput", () => {
       host: "127.0.0.1",
       port: 0,
       path: "/callback",
-      complete: async (code) => code,
+      complete: (code) => Promise.resolve(code),
     });
     try {
       const result = waitForCallbackOrManualInput(
@@ -240,11 +240,11 @@ describe("waitForCallbackOrManualInput", () => {
       host: "127.0.0.1",
       port: 0,
       path: "/callback",
-      complete: async (code) => code,
+      complete: (code) => Promise.resolve(code),
     });
     try {
       const result = await waitForCallbackOrManualInput(
-        interaction(async () => "pasted"),
+        interaction(() => Promise.resolve("pasted")),
         server,
         {
           message: "paste",
@@ -259,7 +259,7 @@ describe("waitForCallbackOrManualInput", () => {
 
   it("uses only the manual prompt without a callback server", async () => {
     const result = await waitForCallbackOrManualInput(
-      interaction(async () => "pasted"),
+      interaction(() => Promise.resolve("pasted")),
       undefined,
       {
         message: "paste",
@@ -275,12 +275,12 @@ describe("waitForCallbackOrManualInput", () => {
       host: "127.0.0.1",
       port: 0,
       path: "/callback",
-      complete: async (code) => code,
+      complete: (code) => Promise.resolve(code),
     });
     try {
       const result = waitForCallbackOrManualInput(
-        interaction(async () => {
-          throw new Error("prompt cancelled");
+        interaction(() => {
+          return Promise.reject(new Error("prompt cancelled"));
         }),
         server,
         { message: "paste", placeholder: server.redirectUri },

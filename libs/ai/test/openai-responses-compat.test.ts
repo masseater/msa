@@ -47,14 +47,16 @@ async function captureOpenAIResponseHeaders(
     clientRequestId: null as string | null,
     xSessionId: null as string | null,
   };
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) => {
     captured.sessionId = getHeader(init?.headers, "session_id");
     captured.clientRequestId = getHeader(init?.headers, "x-client-request-id");
     captured.xSessionId = getHeader(init?.headers, "x-session-id");
-    return new Response("data: [DONE]\n\n", {
-      status: 200,
-      headers: { "content-type": "text/event-stream" },
-    });
+    return Promise.resolve(
+      new Response("data: [DONE]\n\n", {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      }),
+    );
   });
 
   const stream = streamOpenAIResponses(

@@ -44,18 +44,20 @@ describe("Anthropic OAuth", () => {
 
   it("keeps the localhost redirect_uri for manual callback login", async () => {
     let authUrl = "";
-    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
       expect(getUrl(input)).toBe("https://platform.claude.com/v1/oauth/token");
       expect(init?.method).toBe("POST");
       const body = getJsonBody(init);
       expect(body["grant_type"]).toBe("authorization_code");
       expect(body["code"]).toBe("manual-code");
       expect(body["redirect_uri"]).toBe("http://localhost:53692/callback");
-      return jsonResponse({
-        access_token: "access-token",
-        refresh_token: "refresh-token",
-        expires_in: 3600,
-      });
+      return Promise.resolve(
+        jsonResponse({
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+          expires_in: 3600,
+        }),
+      );
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -64,15 +66,16 @@ describe("Anthropic OAuth", () => {
       notify: (event) => {
         if (event.type === "auth_url") authUrl = event.url;
       },
-      prompt: async (prompt) => {
-        if (prompt.type === "select") return "browser";
-        if (prompt.type !== "manual_code") throw new Error(`Unexpected prompt: ${prompt.type}`);
+      prompt: (prompt) => {
+        if (prompt.type === "select") return Promise.resolve("browser");
+        if (prompt.type !== "manual_code")
+          return Promise.reject(new Error(`Unexpected prompt: ${prompt.type}`));
         const url = new URL(authUrl);
         const state = url.searchParams.get("state");
         const redirectUri = url.searchParams.get("redirect_uri");
         if (!state || !redirectUri)
-          throw new Error("Missing OAuth state or redirect_uri in auth URL");
-        return `${redirectUri}?code=manual-code&state=${state}`;
+          return Promise.reject(new Error("Missing OAuth state or redirect_uri in auth URL"));
+        return Promise.resolve(`${redirectUri}?code=manual-code&state=${state}`);
       },
     });
 
@@ -87,18 +90,20 @@ describe("Anthropic OAuth", () => {
       options: readonly { id: string; label: string }[];
     }> = [];
     let authUrl = "";
-    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
       expect(getUrl(input)).toBe("https://platform.claude.com/v1/oauth/token");
       const body = getJsonBody(init);
       expect(body["grant_type"]).toBe("authorization_code");
       expect(body["code"]).toBe("copied-code");
       expect(body["state"]).toBe(new URL(authUrl).searchParams.get("state"));
       expect(body["redirect_uri"]).toBe("https://platform.claude.com/oauth/code/callback");
-      return jsonResponse({
-        access_token: "access-token",
-        refresh_token: "refresh-token",
-        expires_in: 3600,
-      });
+      return Promise.resolve(
+        jsonResponse({
+          access_token: "access-token",
+          refresh_token: "refresh-token",
+          expires_in: 3600,
+        }),
+      );
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -107,13 +112,14 @@ describe("Anthropic OAuth", () => {
       notify: (event) => {
         if (event.type === "auth_url") authUrl = event.url;
       },
-      prompt: async (prompt) => {
+      prompt: (prompt) => {
         if (prompt.type === "select") {
           selectPrompts.push(prompt);
-          return "copy_code";
+          return Promise.resolve("copy_code");
         }
-        if (prompt.type !== "manual_code") throw new Error(`Unexpected prompt: ${prompt.type}`);
-        return `copied-code#${new URL(authUrl).searchParams.get("state")}`;
+        if (prompt.type !== "manual_code")
+          return Promise.reject(new Error(`Unexpected prompt: ${prompt.type}`));
+        return Promise.resolve(`copied-code#${new URL(authUrl).searchParams.get("state")}`);
       },
     });
 
@@ -139,8 +145,8 @@ describe("Anthropic OAuth", () => {
     await expect(
       anthropicOAuth.login({
         signal: neverAbortedSignal,
-        prompt: async () => {
-          throw new Error("Login cancelled");
+        prompt: () => {
+          return Promise.reject(new Error("Login cancelled"));
         },
         notify: () => {},
       }),
@@ -148,7 +154,7 @@ describe("Anthropic OAuth", () => {
   });
 
   it("omits scope from refresh token requests", async () => {
-    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
       expect(getUrl(input)).toBe("https://platform.claude.com/v1/oauth/token");
       expect(init?.method).toBe("POST");
       const body = getJsonBody(init);
@@ -156,11 +162,13 @@ describe("Anthropic OAuth", () => {
       expect(body["client_id"]).toBeTruthy();
       expect(body["refresh_token"]).toBe("refresh-token");
       expect(body).not.toHaveProperty("scope");
-      return jsonResponse({
-        access_token: "new-access-token",
-        refresh_token: "new-refresh-token",
-        expires_in: 3600,
-      });
+      return Promise.resolve(
+        jsonResponse({
+          access_token: "new-access-token",
+          refresh_token: "new-refresh-token",
+          expires_in: 3600,
+        }),
+      );
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -180,12 +188,14 @@ describe("Anthropic OAuth", () => {
   });
 
   it("anthropicOAuth.login resolves through the manual_code prompt and aborts it after settling", async () => {
-    const fetchMock = vi.fn(async (input: unknown): Promise<Response> => {
+    const fetchMock = vi.fn((input: unknown): Promise<Response> => {
       const url = typeof input === "string" ? input : String(input);
       if (url.includes("/oauth/token")) {
-        return jsonResponse({ access_token: "access", refresh_token: "refresh", expires_in: 3600 });
+        return Promise.resolve(
+          jsonResponse({ access_token: "access", refresh_token: "refresh", expires_in: 3600 }),
+        );
       }
-      throw new Error(`Unexpected fetch: ${url}`);
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -196,14 +206,14 @@ describe("Anthropic OAuth", () => {
     const credential = await anthropicOAuth.login({
       signal: neverAbortedSignal,
       notify: (event) => events.push(event),
-      prompt: async (prompt) => {
+      prompt: (prompt) => {
         prompts.push(prompt);
-        if (prompt.type === "select") return "browser";
+        if (prompt.type === "select") return Promise.resolve("browser");
         if (prompt.type === "manual_code") {
           manualSignal = prompt.signal;
-          return "the-code";
+          return Promise.resolve("the-code");
         }
-        throw new Error(`Unexpected prompt: ${prompt.type}`);
+        return Promise.reject(new Error(`Unexpected prompt: ${prompt.type}`));
       },
     });
 
@@ -260,13 +270,15 @@ async function loginThroughBrowserCallback() {
   let exchangedRedirectUri: string | undefined;
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+    vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
       if (getUrl(input) !== "https://platform.claude.com/v1/oauth/token")
-        return nativeFetch(input as string, init);
+        return Promise.resolve(nativeFetch(input as string, init));
       const body = getJsonBody(init);
       exchangedCode = body["code"];
       exchangedRedirectUri = body["redirect_uri"];
-      return jsonResponse({ access_token: "access", refresh_token: "refresh", expires_in: 3600 });
+      return Promise.resolve(
+        jsonResponse({ access_token: "access", refresh_token: "refresh", expires_in: 3600 }),
+      );
     }),
   );
 

@@ -51,17 +51,19 @@ async function forwardStream(
 
 /**
  * Returns a stream synchronously while running async setup (auth resolution,
- * lazy module loading) behind it. Setup failures terminate the stream with an
- * error event.
+ * lazy module loading) behind it. Setup failures, thrown or rejected, terminate
+ * the stream with an error event.
  */
 export function lazyStream(
   model: Model<Api>,
-  setup: () => Promise<AsyncIterable<AssistantMessageEvent>>,
+  setup: () => Promise<AsyncIterable<AssistantMessageEvent>> | AsyncIterable<AssistantMessageEvent>,
 ): AssistantMessageEventStream {
   const startedAt = Date.now();
   const outer = new AssistantMessageEventStream();
 
-  setup()
+  new Promise<AsyncIterable<AssistantMessageEvent>>((resolve) => {
+    resolve(setup());
+  })
     .then((inner) => forwardStream(outer, inner))
     .catch((error) => {
       const message = createSetupErrorMessage(model, error, startedAt);

@@ -109,10 +109,7 @@ async function startDeviceAuthorization(signal: AbortSignal): Promise<DeviceAuth
   };
 }
 
-async function pollForIdentityToken(
-  device: DeviceAuthorization,
-  signal: AbortSignal,
-): Promise<string> {
+function pollForIdentityToken(device: DeviceAuthorization, signal: AbortSignal): Promise<string> {
   return pollOAuthDeviceCodeFlow<string>({
     intervalSeconds: device.intervalSeconds,
     expiresInSeconds: device.expiresInSeconds,
@@ -225,7 +222,7 @@ export const metaOAuth: OAuthAuth = {
 
   refresh: (credential, signal) => mintApiKey(credential.refresh, signal),
 
-  async toAuth(credential) {
-    return { apiKey: credential.access };
+  toAuth(credential) {
+    return Promise.resolve({ apiKey: credential.access });
   },
 };

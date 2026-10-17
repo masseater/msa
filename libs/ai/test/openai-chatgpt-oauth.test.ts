@@ -27,10 +27,10 @@ function tokenResponse(scope = REQUIRED_SCOPE) {
 }
 
 function stubTokenEndpoint(response: unknown, inspect?: (body: URLSearchParams) => void) {
-  const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+  const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
     expect(input instanceof Request ? input.url : String(input)).toBe(TOKEN_URL);
     inspect?.(new URLSearchParams(String(init?.body)));
-    return jsonResponse(response);
+    return Promise.resolve(jsonResponse(response));
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -48,16 +48,19 @@ function loginInteraction(options?: {
       authorizeUrl = new URL(event.url);
       options?.onAuthorize?.(authorizeUrl);
     },
-    prompt: async (prompt) => {
-      if (prompt.type !== "manual_code") throw new Error(`Unexpected prompt: ${prompt.type}`);
+    prompt: (prompt) => {
+      if (prompt.type !== "manual_code")
+        return Promise.reject(new Error(`Unexpected prompt: ${prompt.type}`));
       if (!authorizeUrl)
-        throw new Error("Authorization URL was not emitted before the callback prompt");
+        return Promise.reject(
+          new Error("Authorization URL was not emitted before the callback prompt"),
+        );
       const callback = new URL(authorizeUrl.searchParams.get("redirect_uri") ?? "");
       callback.searchParams.set("code", "authorization-code");
       callback.searchParams.set("state", authorizeUrl.searchParams.get("state") ?? "");
       if (options?.callbackClientId)
         callback.searchParams.set("client_id", options.callbackClientId);
-      return callback.toString();
+      return Promise.resolve(callback.toString());
     },
   };
 }

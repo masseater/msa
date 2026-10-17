@@ -49,7 +49,7 @@ function getBunSandboxEnvValue(name: string): string | undefined {
 export function getProviderEnvValue(name: string, env?: ProviderEnv): string | undefined {
   return (
     env?.[name] ||
-    (typeof process !== "undefined" ? process.env[name] : undefined) ||
+    (typeof process === "undefined" ? undefined : process.env[name]) ||
     getBunSandboxEnvValue(name) ||
     undefined
   );

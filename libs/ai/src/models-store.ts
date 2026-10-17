@@ -35,26 +35,40 @@ export interface ModelsStore {
 export class InMemoryModelsStore implements ModelsStore {
   private readonly entries = new Map<string, ModelsStoreEntry>();
 
-  async read(
+  read(
     providerId: string,
     options?: ModelsStoreOperationOptions,
   ): Promise<ModelsStoreEntry | undefined> {
-    options?.signal?.throwIfAborted();
-    const entry = this.entries.get(providerId);
-    return entry ? structuredClone(entry) : undefined;
+    try {
+      options?.signal?.throwIfAborted();
+      const entry = this.entries.get(providerId);
+      return Promise.resolve(entry ? structuredClone(entry) : undefined);
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
-  async write(
+  write(
     providerId: string,
     entry: ModelsStoreEntry,
     options?: ModelsStoreOperationOptions,
   ): Promise<void> {
-    options?.signal?.throwIfAborted();
-    this.entries.set(providerId, structuredClone(entry));
+    try {
+      options?.signal?.throwIfAborted();
+      this.entries.set(providerId, structuredClone(entry));
+      return Promise.resolve();
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
-  async delete(providerId: string, options?: ModelsStoreOperationOptions): Promise<void> {
-    options?.signal?.throwIfAborted();
-    this.entries.delete(providerId);
+  delete(providerId: string, options?: ModelsStoreOperationOptions): Promise<void> {
+    try {
+      options?.signal?.throwIfAborted();
+      this.entries.delete(providerId);
+      return Promise.resolve();
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 }

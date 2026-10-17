@@ -410,7 +410,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
       }
       const requestOptions = {
         ...(options?.signal ? { signal: options.signal } : {}),
-        ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+        ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
         maxRetries: 0,
       };
       const { data: openaiStream, response } = await retryProviderRequest(
@@ -553,7 +553,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
       const ensureToolCallBlock = (toolCall: StreamingToolCallDelta) => {
         const streamIndex = typeof toolCall.index === "number" ? toolCall.index : undefined;
         const name = toolCall.function?.name ?? toolCall.custom?.name ?? "";
-        let block = streamIndex !== undefined ? toolCallBlocksByIndex.get(streamIndex) : undefined;
+        let block = streamIndex === undefined ? undefined : toolCallBlocksByIndex.get(streamIndex);
         if (!block && toolCall.id) {
           block = toolCallBlocksById.get(toolCall.id);
         }
@@ -885,7 +885,7 @@ function buildParams(
     model: model.id,
     messages,
     stream: true,
-    ...(promptCacheKey !== undefined ? { prompt_cache_key: promptCacheKey } : {}),
+    ...(promptCacheKey === undefined ? {} : { prompt_cache_key: promptCacheKey }),
     ...(cacheRetention === "long" && compat.supportsLongCacheRetention
       ? { prompt_cache_retention: "24h" as const }
       : {}),
@@ -1369,14 +1369,13 @@ export function convertMessages(
                 type: "text",
                 text: sanitizeSurrogates(item.text),
               } satisfies ChatCompletionContentPartText;
-            } else {
-              return {
-                type: "image_url",
-                image_url: {
-                  url: `data:${item.mimeType};base64,${item.data}`,
-                },
-              } satisfies ChatCompletionContentPartImage;
             }
+            return {
+              type: "image_url",
+              image_url: {
+                url: `data:${item.mimeType};base64,${item.data}`,
+              },
+            } satisfies ChatCompletionContentPartImage;
           });
         if (content.length === 0) continue;
         params.push({

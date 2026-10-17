@@ -39,9 +39,9 @@ vi.mock("openai", () => {
           const promise = Promise.resolve(undefined) as unknown as {
             withResponse: () => Promise<never>;
           };
-          promise.withResponse = async () => {
+          promise.withResponse = () => {
             // 403 from a gateway/proxy carrying the real reason in the body.
-            throw new FakeAPIError(403, { error: "blocked by gateway WAF" });
+            return Promise.reject(new FakeAPIError(403, { error: "blocked by gateway WAF" }));
           };
           return promise;
         },

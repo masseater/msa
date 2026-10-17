@@ -296,13 +296,16 @@ export function stream<TApi extends Api>(
   return provider.stream(model, transcript, withEnvApiKey(model, options) as StreamOptions);
 }
 
-export async function complete<TApi extends Api>(
+export function complete<TApi extends Api>(
   model: Model<TApi>,
   context: Context,
   options?: ProviderStreamOptions,
 ): Promise<AssistantMessage> {
-  const s = stream(model, context, options);
-  return s.result();
+  try {
+    return stream(model, context, options).result();
+  } catch (error) {
+    return Promise.reject(error);
+  }
 }
 
 export function streamSimple<TApi extends Api>(
@@ -322,11 +325,14 @@ export function streamSimple<TApi extends Api>(
   return provider.streamSimple(model, transcript, withEnvApiKey(model, options));
 }
 
-export async function completeSimple<TApi extends Api>(
+export function completeSimple<TApi extends Api>(
   model: Model<TApi>,
   context: Context,
   options?: SimpleStreamOptions,
 ): Promise<AssistantMessage> {
-  const s = streamSimple(model, context, options);
-  return s.result();
+  try {
+    return streamSimple(model, context, options).result();
+  } catch (error) {
+    return Promise.reject(error);
+  }
 }

@@ -1569,7 +1569,7 @@ function processZaiModels(data: ModelsDevCatalog): Model<Api>[] {
           supportsDeveloperRole: false,
           thinkingFormat: "zai",
           ...(supportsReasoningEffort ? { supportsReasoningEffort: true } : {}),
-          ...(!ZAI_TOOL_STREAM_UNSUPPORTED_MODELS.has(modelId) ? { zaiToolStream: true } : {}),
+          ...(ZAI_TOOL_STREAM_UNSUPPORTED_MODELS.has(modelId) ? {} : { zaiToolStream: true }),
         },
         contextWindow: m.limit?.context || 4096,
         maxTokens: m.limit?.output || 4096,
@@ -3279,7 +3279,7 @@ async function generateModels() {
       provider: "mistral",
       baseUrl: "https://api.mistral.ai",
       reasoning: true,
-      ...(thinkingLevelMap !== undefined ? { thinkingLevelMap } : {}),
+      ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
       input: ["text", "image"],
       cost: {
         input: 1.5,

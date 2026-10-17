@@ -11,25 +11,27 @@ const context = normalizeContext({
 });
 
 function createFetch(finishReason: string): FetchFunction {
-  return async () =>
-    new Response(
-      `data: ${JSON.stringify({
-        id: "mistral-response-id",
-        model: model.id,
-        choices: [
-          {
-            index: 0,
-            finish_reason: finishReason,
-            delta: {},
+  return () =>
+    Promise.resolve(
+      new Response(
+        `data: ${JSON.stringify({
+          id: "mistral-response-id",
+          model: model.id,
+          choices: [
+            {
+              index: 0,
+              finish_reason: finishReason,
+              delta: {},
+            },
+          ],
+          usage: {
+            prompt_tokens: 1,
+            completion_tokens: 0,
+            total_tokens: 1,
           },
-        ],
-        usage: {
-          prompt_tokens: 1,
-          completion_tokens: 0,
-          total_tokens: 1,
-        },
-      })}\n\ndata: [DONE]\n\n`,
-      { headers: { "content-type": "text/event-stream" } },
+        })}\n\ndata: [DONE]\n\n`,
+        { headers: { "content-type": "text/event-stream" } },
+      ),
     );
 }
 

@@ -67,7 +67,7 @@ export const generateImages: ImagesFunction<ImagesOptions> = async (
     }
     const requestOptions = {
       ...(options?.signal ? { signal: options.signal } : {}),
-      ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+      ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
       maxRetries: 0,
     };
     const { data: response, response: rawResponse } = await retryProviderRequest(

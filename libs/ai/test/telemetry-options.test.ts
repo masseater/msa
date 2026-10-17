@@ -91,7 +91,7 @@ describe("ProviderRequestOptions.telemetryContext", () => {
     };
     const provider = createProvider({
       id: model.provider,
-      auth: { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } },
+      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
       models: [model],
       api: {
         stream: (requestModel, _context, options) => {
@@ -106,8 +106,10 @@ describe("ProviderRequestOptions.telemetryContext", () => {
           observed.push(options?.telemetryContext);
           return completedStream(requestModel);
         },
-        cancelDeferred: async (_requestModel, _handle, options) => {
+        cancelDeferred: (_requestModel, _handle, options) => {
           observed.push(options?.telemetryContext);
+
+          return Promise.resolve();
         },
       },
     });
@@ -132,16 +134,16 @@ describe("ProviderRequestOptions.telemetryContext", () => {
     const observed: Array<TelemetryContext | undefined> = [];
     registerImagesApiProvider({
       api: imageModel.api,
-      generateImages: async (requestModel, _context, options) => {
+      generateImages: (requestModel, _context, options) => {
         observed.push(options?.telemetryContext);
-        return {
+        return Promise.resolve({
           api: requestModel.api,
           provider: requestModel.provider,
           model: requestModel.id,
           output: [],
           stopReason: "stop",
           timestamp: 0,
-        };
+        });
       },
     });
     await generateImages(imageModel, imagesContext, { telemetryContext });
@@ -150,20 +152,20 @@ describe("ProviderRequestOptions.telemetryContext", () => {
     models.setProvider(
       createProvider({
         id: imageModel.provider,
-        auth: { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } },
+        auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
         models: [imageModel],
         images: {
           [imageModel.api]: {
-            generateImages: async (requestModel, _context, options) => {
+            generateImages: (requestModel, _context, options) => {
               observed.push(options?.telemetryContext);
-              return {
+              return Promise.resolve({
                 api: requestModel.api,
                 provider: requestModel.provider,
                 model: requestModel.id,
                 output: [],
                 stopReason: "stop",
                 timestamp: 0,
-              };
+              });
             },
           },
         },

@@ -31,7 +31,7 @@ const context = normalizeContext({
 async function getErrorMessage(response: Response): Promise<string | undefined> {
   const result = await streamOpenAIResponses(model, context, {
     apiKey: "test",
-    fetch: async () => response,
+    fetch: () => Promise.resolve(response),
   }).result();
   expect(result.stopReason).toBe("error");
   return result.errorMessage;

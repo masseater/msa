@@ -90,8 +90,10 @@ function respondWithFailingStream(thrown: unknown): SendResult {
   };
 }
 
-async function runBedrock(signal?: AbortSignal): Promise<AssistantMessage> {
-  return streamBedrock(getModelFixture(), context, { cacheRetention: "none", signal }).result();
+function runBedrock(signal?: AbortSignal): Promise<AssistantMessage> {
+  return Promise.resolve(
+    streamBedrock(getModelFixture(), context, { cacheRetention: "none", signal }).result(),
+  );
 }
 
 function findDiagnostic(message: AssistantMessage): AssistantMessageDiagnostic | undefined {

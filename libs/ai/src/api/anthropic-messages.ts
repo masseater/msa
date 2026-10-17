@@ -646,7 +646,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
       }
       const requestOptions = {
         ...(options?.signal ? { signal: options.signal } : {}),
-        ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+        ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
         maxRetries: 0,
       };
       let disablePreferredStrictTools = false;
@@ -1474,20 +1474,15 @@ function convertMessages(
               type: "text",
               text: sanitizeSurrogates(item.text),
             };
-          } else {
-            return {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: item.mimeType as
-                  | "image/jpeg"
-                  | "image/png"
-                  | "image/gif"
-                  | "image/webp",
-                data: item.data,
-              },
-            };
           }
+          return {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: item.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+              data: item.data,
+            },
+          };
         });
         const filteredBlocks = blocks.filter((b) => {
           if (b.type === "text") {
@@ -1527,7 +1522,13 @@ function convertMessages(
           // If thinking signature is missing/empty (e.g., from aborted stream),
           // convert to plain text for Anthropic. Some compatible providers emit
           // and accept empty signatures, so let marked models preserve the block.
-          if (!hasThinkingSignature) {
+          if (hasThinkingSignature) {
+            blocks.push({
+              type: "thinking",
+              thinking: sanitizeSurrogates(block.thinking),
+              signature: thinkingSignature,
+            });
+          } else {
             blocks.push(
               allowEmptySignature
                 ? {
@@ -1540,12 +1541,6 @@ function convertMessages(
                     text: sanitizeSurrogates(block.thinking),
                   },
             );
-          } else {
-            blocks.push({
-              type: "thinking",
-              thinking: sanitizeSurrogates(block.thinking),
-              signature: thinkingSignature,
-            });
           }
         } else if (block.type === "toolCall") {
           blocks.push({

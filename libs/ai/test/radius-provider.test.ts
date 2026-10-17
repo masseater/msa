@@ -61,7 +61,9 @@ describe("Radius provider catalogs", () => {
       }),
     );
     const credentials = new InMemoryCredentialStore();
-    await credentials.modify("radius", async () => ({ type: "api_key", key: "radius-key" }));
+    await credentials.modify("radius", () =>
+      Promise.resolve({ type: "api_key", key: "radius-key" }),
+    );
     const models = createModels({ credentials });
     models.setProvider(radiusProvider());
 
@@ -108,7 +110,9 @@ describe("Radius provider catalogs", () => {
       }),
     );
     const credentials = new InMemoryCredentialStore();
-    await credentials.modify("radius", async () => ({ type: "api_key", key: "radius-key" }));
+    await credentials.modify("radius", () =>
+      Promise.resolve({ type: "api_key", key: "radius-key" }),
+    );
     const models = createModels({ credentials });
     models.setProvider(radiusProvider());
 

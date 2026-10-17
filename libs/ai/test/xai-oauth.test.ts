@@ -89,7 +89,7 @@ describe("xAI OAuth device flow", () => {
       jsonResponse(tokenResponse()),
     ];
 
-    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
       const url = requestUrl(input);
 
       if (url === "https://auth.x.ai/oauth2/device/code") {
@@ -99,7 +99,7 @@ describe("xAI OAuth device flow", () => {
           "openid profile email offline_access grok-cli:access api:access",
         );
         expect(form.get("referrer")).toBe("pi");
-        return jsonResponse(deviceCodeResponse());
+        return Promise.resolve(jsonResponse(deviceCodeResponse()));
       }
 
       if (url === "https://auth.x.ai/oauth2/token") {
@@ -109,11 +109,11 @@ describe("xAI OAuth device flow", () => {
         expect(form.get("client_id")).toBe("b1a00492-073a-47ea-816f-4c329264a828");
         expect(form.get("device_code")).toBe("device-code");
         const reply = tokenReplies.shift();
-        if (!reply) throw new Error("Unexpected token poll");
-        return reply;
+        if (!reply) return Promise.reject(new Error("Unexpected token poll"));
+        return Promise.resolve(reply);
       }
 
-      throw new Error(`Unexpected request: ${url}`);
+      return Promise.reject(new Error(`Unexpected request: ${url}`));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -160,12 +160,12 @@ describe("xAI OAuth device flow", () => {
     const pollTimes: number[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown) => {
+      vi.fn((input: unknown) => {
         if (requestUrl(input) === "https://auth.x.ai/oauth2/device/code") {
-          return jsonResponse(deviceCodeResponse({ interval: 0 }));
+          return Promise.resolve(jsonResponse(deviceCodeResponse({ interval: 0 })));
         }
         pollTimes.push(Date.now());
-        return jsonResponse(tokenResponse());
+        return Promise.resolve(jsonResponse(tokenResponse()));
       }),
     );
 
@@ -180,15 +180,18 @@ describe("xAI OAuth device flow", () => {
     vi.useFakeTimers();
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown) => {
+      vi.fn((input: unknown) => {
         if (requestUrl(input) === "https://auth.x.ai/oauth2/device/code") {
-          return jsonResponse(
-            deviceCodeResponse({
-              verification_uri_complete: "https://accounts.x.ai/oauth2/device?user_code=ABCD-1234",
-            }),
+          return Promise.resolve(
+            jsonResponse(
+              deviceCodeResponse({
+                verification_uri_complete:
+                  "https://accounts.x.ai/oauth2/device?user_code=ABCD-1234",
+              }),
+            ),
           );
         }
-        return jsonResponse(tokenResponse());
+        return Promise.resolve(jsonResponse(tokenResponse()));
       }),
     );
 
@@ -209,11 +212,13 @@ describe("xAI OAuth device flow", () => {
   it("rejects a non-https verification_uri_complete", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        jsonResponse(
-          deviceCodeResponse({
-            verification_uri_complete: "http://accounts.x.ai/oauth2/device?user_code=ABCD-1234",
-          }),
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse(
+            deviceCodeResponse({
+              verification_uri_complete: "http://accounts.x.ai/oauth2/device?user_code=ABCD-1234",
+            }),
+          ),
         ),
       ),
     );
@@ -228,7 +233,9 @@ describe("xAI OAuth device flow", () => {
     async (verificationUri) => {
       vi.stubGlobal(
         "fetch",
-        vi.fn(async () => jsonResponse(deviceCodeResponse({ verification_uri: verificationUri }))),
+        vi.fn(() =>
+          Promise.resolve(jsonResponse(deviceCodeResponse({ verification_uri: verificationUri }))),
+        ),
       );
 
       await expect(loginXaiForTest({ onDeviceCode: () => {} })).rejects.toThrow(
@@ -244,11 +251,13 @@ describe("xAI OAuth device flow", () => {
       let requestCount = 0;
       vi.stubGlobal(
         "fetch",
-        vi.fn(async () => {
+        vi.fn(() => {
           requestCount += 1;
-          return requestCount === 1
-            ? jsonResponse(deviceCodeResponse({ interval: 1 }))
-            : jsonResponse({ error }, 400);
+          return Promise.resolve(
+            requestCount === 1
+              ? jsonResponse(deviceCodeResponse({ interval: 1 }))
+              : jsonResponse({ error }, 400),
+          );
         }),
       );
 
@@ -262,7 +271,7 @@ describe("xAI OAuth device flow", () => {
   it("cancels while waiting for the first token poll", async () => {
     vi.useFakeTimers();
     const controller = new AbortController();
-    const fetchMock = vi.fn(async () => jsonResponse(deviceCodeResponse()));
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(deviceCodeResponse())));
     vi.stubGlobal("fetch", fetchMock);
 
     const loginPromise = loginXaiForTest({
@@ -276,7 +285,7 @@ describe("xAI OAuth device flow", () => {
 
   it("refreshes tokens and preserves an unrotated refresh token", async () => {
     let requestCount = 0;
-    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
       expect(requestUrl(input)).toBe("https://auth.x.ai/oauth2/token");
       const form = requestForm(init);
       expect(form.get("grant_type")).toBe("refresh_token");
@@ -284,13 +293,13 @@ describe("xAI OAuth device flow", () => {
       requestCount += 1;
       if (requestCount === 1) {
         expect(form.get("refresh_token")).toBe("old-refresh");
-        return jsonResponse(
-          tokenResponse({ access_token: "new-access", refresh_token: "new-refresh" }),
+        return Promise.resolve(
+          jsonResponse(tokenResponse({ access_token: "new-access", refresh_token: "new-refresh" })),
         );
       }
       expect(form.get("refresh_token")).toBe("keep-refresh");
-      return jsonResponse(
-        tokenResponse({ access_token: "newer-access", refresh_token: undefined }),
+      return Promise.resolve(
+        jsonResponse(tokenResponse({ access_token: "newer-access", refresh_token: undefined })),
       );
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -312,7 +321,7 @@ describe("xAI OAuth device flow", () => {
     vi.setSystemTime(startTime);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => jsonResponse(tokenResponse({ expires_in: undefined }))),
+      vi.fn(() => Promise.resolve(jsonResponse(tokenResponse({ expires_in: undefined })))),
     );
 
     const credentials = await refreshXaiForTest("old-refresh");
@@ -322,7 +331,7 @@ describe("xAI OAuth device flow", () => {
   it("rejects token responses with missing fields", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => jsonResponse(tokenResponse({ access_token: undefined }))),
+      vi.fn(() => Promise.resolve(jsonResponse(tokenResponse({ access_token: undefined })))),
     );
 
     await expect(refreshXaiForTest("old-refresh")).rejects.toThrow(
@@ -333,8 +342,10 @@ describe("xAI OAuth device flow", () => {
   it("surfaces the upstream error code and description on refresh failure", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        jsonResponse({ error: "invalid_grant", error_description: "refresh token revoked" }, 400),
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse({ error: "invalid_grant", error_description: "refresh token revoked" }, 400),
+        ),
       ),
     );
 

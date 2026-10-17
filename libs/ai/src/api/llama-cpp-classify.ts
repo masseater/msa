@@ -253,7 +253,7 @@ async function post(
   const { response, json } = await retryProviderRequest(
     async () => {
       const timeoutSignal =
-        options?.timeoutMs !== undefined ? AbortSignal.timeout(options.timeoutMs) : undefined;
+        options?.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs);
       const signal =
         options?.signal && timeoutSignal
           ? AbortSignal.any([options.signal, timeoutSignal])

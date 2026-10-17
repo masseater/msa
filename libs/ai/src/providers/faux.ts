@@ -606,9 +606,9 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
             modelId: requestModel.id,
             api: requestModel.api,
             id: randomId("deferred"),
-            ...(options.deferred?.pollAfterMs !== undefined
-              ? { pollAfterMs: options.deferred.pollAfterMs }
-              : {}),
+            ...(options.deferred?.pollAfterMs === undefined
+              ? {}
+              : { pollAfterMs: options.deferred.pollAfterMs }),
           };
           deferredResponses.set(handle.id, {
             handle,
@@ -782,7 +782,7 @@ export function fauxProvider(options: RegisterFauxProviderOptions = {}): FauxPro
   const core = createFauxCore(options);
   const provider = createProvider({
     id: core.provider,
-    auth: { apiKey: { name: "Faux", resolve: async () => ({ auth: {} }) } },
+    auth: { apiKey: { name: "Faux", resolve: () => Promise.resolve({ auth: {} }) } },
     models: core.models,
     api: {
       stream: core.stream,

@@ -339,7 +339,7 @@ export const openaiChatGPTOAuth: OAuthAuth = {
   loginLabel: "Sign in with ChatGPT",
   login: loginOpenAIChatGPT,
   refresh: refreshAccessToken,
-  async toAuth(credential) {
-    return { apiKey: credential.access };
+  toAuth(credential) {
+    return Promise.resolve({ apiKey: credential.access });
   },
 };
