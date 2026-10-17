@@ -1,7 +1,6 @@
 import { Effect, Function } from "effect";
 
 import type { AssistantMessage } from "../types.ts";
-import { waitForAbort } from "./abort.ts";
 
 function buildProviderErrorPattern(patterns: readonly string[]): RegExp {
   return new RegExp(patterns.join("|"), "iu");
@@ -138,7 +137,15 @@ const awaitHook = (run: () => void | Promise<void> | undefined): Effect.Effect<v
 const sleepOrAbort = (delayMs: number, signal: AbortSignal | undefined): Effect.Effect<boolean> =>
   signal === undefined
     ? Effect.sleep(delayMs).pipe(Effect.as(false))
-    : waitForAbort(signal).pipe(
+    : Effect.callback<void>((resume) => {
+        const onAbort = () => resume(Effect.void);
+        if (signal.aborted) {
+          onAbort();
+          return;
+        }
+        signal.addEventListener("abort", onAbort, { once: true });
+        return Effect.sync(() => signal.removeEventListener("abort", onAbort));
+      }).pipe(
         Effect.as(true),
         Effect.timeoutOrElse({ duration: delayMs, orElse: () => Effect.succeed(false) }),
       );
