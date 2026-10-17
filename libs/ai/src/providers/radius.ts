@@ -61,9 +61,7 @@ const refreshRadiusModels = Effect.fn("refreshRadiusModels")(function* ({
   if (!context.allowNetwork || context.signal.aborted) return;
   const apiKey =
     context.credential?.type === "oauth" ? context.credential.access : context.credential?.key;
-  const config = yield* Effect.promise(() =>
-    loadRadiusGatewayConfig(gateway, apiKey, context.signal),
-  );
+  const config = yield* loadRadiusGatewayConfig({ gateway, apiKey, signal: context.signal });
   if (context.signal.aborted) return;
   const refreshed = getRadiusModelsFromConfig(id, config);
   const checkedAt = yield* Clock.currentTimeMillis;

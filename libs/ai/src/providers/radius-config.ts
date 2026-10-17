@@ -1,5 +1,8 @@
+import { Effect, Function } from "effect";
+
 import type { OAuthCredential } from "../auth/types.ts";
 import type { Model, ThinkingLevelMap } from "../types.ts";
+import { httpRequest } from "../utils/http.ts";
 
 export const DEFAULT_RADIUS_GATEWAY = "https://radius.pi.dev";
 
@@ -62,48 +65,57 @@ export function getRadiusCredentialConfig(
   );
 }
 
-export function getRadiusModelsFromConfig(
-  providerId: string,
-  config: RadiusGatewayConfig,
-): Model<"msa-messages">[] {
-  return config.models.map((model) => ({
-    ...model,
-    api: "msa-messages",
-    provider: providerId,
-    baseUrl: config.baseUrl,
-  }));
-}
+export const getRadiusModelsFromConfig: {
+  (config: RadiusGatewayConfig): (providerId: string) => Model<"msa-messages">[];
+  (providerId: string, config: RadiusGatewayConfig): Model<"msa-messages">[];
+} = Function.dual(
+  2,
+  function (providerId: string, config: RadiusGatewayConfig): Model<"msa-messages">[] {
+    return config.models.map((model) => ({
+      ...model,
+      api: "msa-messages",
+      provider: providerId,
+      baseUrl: config.baseUrl,
+    }));
+  },
+);
 
-export function getRadiusModels(
-  providerId: string,
-  credential: OAuthCredential | undefined,
-): Model<"msa-messages">[] {
-  const config = getRadiusCredentialConfig(credential);
-  return config === undefined ? [] : getRadiusModelsFromConfig(providerId, config);
-}
+export const getRadiusModels: {
+  (credential: OAuthCredential | undefined): (providerId: string) => Model<"msa-messages">[];
+  (providerId: string, credential: OAuthCredential | undefined): Model<"msa-messages">[];
+} = Function.dual(
+  2,
+  function (providerId: string, credential: OAuthCredential | undefined): Model<"msa-messages">[] {
+    const config = getRadiusCredentialConfig(credential);
+    return config === undefined ? [] : getRadiusModelsFromConfig(providerId, config);
+  },
+);
 
 function truncateHttpBody(body: string): string {
   const trimmed = body.trim();
   return trimmed.length > 512 ? `${trimmed.slice(0, 512)}…` : trimmed;
 }
 
-export async function loadRadiusGatewayConfig(
-  gateway: string,
-  apiKey?: string,
-  signal?: AbortSignal,
-): Promise<RadiusGatewayConfig> {
+export interface RadiusGatewayConfigRequest {
+  readonly gateway: string;
+  readonly apiKey?: string | undefined;
+  readonly signal?: AbortSignal | undefined;
+}
+
+export const loadRadiusGatewayConfig = Effect.fn("loadRadiusGatewayConfig")(function* ({
+  gateway,
+  apiKey,
+  signal,
+}: RadiusGatewayConfigRequest) {
   const headers: Record<string, string> = { accept: "application/json" };
   if (apiKey !== undefined && apiKey !== "") headers["authorization"] = `Bearer ${apiKey}`;
-  const response = await fetch(new URL("/v1/config", gateway), {
-    headers,
-    signal: signal ?? null,
-  });
-  if (!response.ok) {
+  const reply = yield* httpRequest({ url: new URL("/v1/config", gateway), headers, signal });
+  if (!reply.ok) {
     throw new Error(
-      `Could not load Radius config from ${gateway}: ${response.status}: ${truncateHttpBody(await response.text())}`,
+      `Could not load Radius config from ${gateway}: ${reply.status}: ${truncateHttpBody(yield* reply.text)}`,
     );
   }
-  const config = sanitizeRadiusGatewayConfig(await response.json());
+  const config = sanitizeRadiusGatewayConfig(yield* reply.json);
   if (config === undefined) throw new Error(`Invalid Radius config from ${gateway}`);
   return config;
-}
+});

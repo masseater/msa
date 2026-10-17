@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -22,6 +30,7 @@ describe("strict model generation", () => {
     for (const entry of ["package.json", "scripts", "src"]) {
       cpSync(join(packageRoot, entry), join(isolatedPackageRoot, entry), { recursive: true });
     }
+    symlinkSync(join(packageRoot, "node_modules"), join(isolatedPackageRoot, "node_modules"));
     const preloadPath = join(fixtureRoot, "mock-models-dev.mjs");
     const modelIds = [
       "deepseek-v4-flash-0731",

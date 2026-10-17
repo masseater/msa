@@ -84,6 +84,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "catalog:",
     "@aws-sdk/client-bedrock-runtime": "catalog:",
+    "@effect/platform-node": "catalog:",
     "@google/genai": "catalog:",
     "@msa/telemetry": "workspace:*",
     "@smithy/node-http-handler": "catalog:",

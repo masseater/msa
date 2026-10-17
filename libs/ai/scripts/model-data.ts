@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
+import { Function } from "effect";
+
 export const MODEL_DATA_SCHEMA_VERSION = 6;
 export const MODEL_DATA_MANIFEST_FILE = ".manifest.json";
 
@@ -42,18 +44,20 @@ function describeSetDifference(expected: readonly string[], actual: readonly str
     .join("; ");
 }
 
-export function assertExactModelIds(
-  label: string,
-  expected: Iterable<string>,
-  actual: Iterable<string>,
-): void {
-  const expectedIds = Array.from(new Set(expected)).sort();
-  const actualIds = Array.from(new Set(actual)).sort();
-  if (sameStrings(expectedIds, actualIds)) return;
-  throw new Error(
-    `${label} model IDs do not match (${describeSetDifference(expectedIds, actualIds)})`,
-  );
-}
+export const assertExactModelIds: {
+  (expected: Iterable<string>, actual: Iterable<string>): (label: string) => void;
+  (label: string, expected: Iterable<string>, actual: Iterable<string>): void;
+} = Function.dual(
+  3,
+  function (label: string, expected: Iterable<string>, actual: Iterable<string>): void {
+    const expectedIds = Array.from(new Set(expected)).sort();
+    const actualIds = Array.from(new Set(actual)).sort();
+    if (sameStrings(expectedIds, actualIds)) return;
+    throw new Error(
+      `${label} model IDs do not match (${describeSetDifference(expectedIds, actualIds)})`,
+    );
+  },
+);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -154,20 +158,33 @@ export function modelDataStructureHash(structure: ModelDataStructure): string {
   return sha256(JSON.stringify(normalized));
 }
 
-export function createModelDataManifest(
-  structure: ModelDataStructure,
-  fileContents: Readonly<Record<string, string>>,
-  generatedAt: string,
-): ModelDataManifest {
-  return {
-    schemaVersion: MODEL_DATA_SCHEMA_VERSION,
-    generatedAt,
-    structureHash: modelDataStructureHash(structure),
-    files: sortedRecord(
-      Object.entries(fileContents).map(([file, content]) => [file, sha256(content)] as const),
-    ),
-  };
-}
+export const createModelDataManifest: {
+  (
+    fileContents: Readonly<Record<string, string>>,
+    generatedAt: string,
+  ): (structure: ModelDataStructure) => ModelDataManifest;
+  (
+    structure: ModelDataStructure,
+    fileContents: Readonly<Record<string, string>>,
+    generatedAt: string,
+  ): ModelDataManifest;
+} = Function.dual(
+  3,
+  function (
+    structure: ModelDataStructure,
+    fileContents: Readonly<Record<string, string>>,
+    generatedAt: string,
+  ): ModelDataManifest {
+    return {
+      schemaVersion: MODEL_DATA_SCHEMA_VERSION,
+      generatedAt,
+      structureHash: modelDataStructureHash(structure),
+      files: sortedRecord(
+        Object.entries(fileContents).map(([file, content]) => [file, sha256(content)] as const),
+      ),
+    };
+  },
+);
 
 function validateModelValue(
   value: unknown,
@@ -256,7 +273,10 @@ function throwValidationErrors(errors: string[]): never {
   );
 }
 
-export function validateModelDataDirectory(structure: ModelDataStructure, dataDir: string): void {
+export const validateModelDataDirectory: {
+  (dataDir: string): (structure: ModelDataStructure) => void;
+  (structure: ModelDataStructure, dataDir: string): void;
+} = Function.dual(2, function (structure: ModelDataStructure, dataDir: string): void {
   if (!existsSync(dataDir) || !statSync(dataDir).isDirectory()) {
     throw new Error(`Generated model data directory does not exist: ${dataDir}`);
   }
@@ -353,7 +373,7 @@ export function validateModelDataDirectory(structure: ModelDataStructure, dataDi
   }
 
   if (errors.length > 0) throwValidationErrors(errors);
-}
+});
 
 export function validateGeneratedModelData(packageRoot: string): void {
   const structure = readModelDataStructure(packageRoot);
@@ -366,10 +386,23 @@ export interface ModelCatalogEntry {
   api: string;
 }
 
-export function groupProviderModelData<T extends ModelCatalogEntry>(
-  providerId: string,
-  models: readonly T[],
-): { groups: Record<string, Record<string, T>>; structure: Record<string, string> } {
+export const groupProviderModelData: {
+  <T extends ModelCatalogEntry>(
+    models: readonly T[],
+  ): (providerId: string) => {
+    groups: Record<string, Record<string, T>>;
+    structure: Record<string, string>;
+  };
+  <T extends ModelCatalogEntry>(
+    providerId: string,
+    models: readonly T[],
+  ): { groups: Record<string, Record<string, T>>; structure: Record<string, string> };
+} = Function.dual(2, function <
+  T extends ModelCatalogEntry,
+>(providerId: string, models: readonly T[]): {
+  groups: Record<string, Record<string, T>>;
+  structure: Record<string, string>;
+} {
   const groups: Record<string, Record<string, T>> = {};
   const structure: Record<string, string> = {};
   for (const api of Array.from(new Set(models.map((model) => model.api))).sort()) {
@@ -385,4 +418,4 @@ export function groupProviderModelData<T extends ModelCatalogEntry>(
     groups[api] = group;
   }
   return { groups, structure };
-}
+});

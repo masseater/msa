@@ -10,6 +10,8 @@ import {
 } from "fs";
 import { join, resolve } from "path";
 
+import { Effect } from "effect";
+
 import {
   CLOUDFLARE_AI_GATEWAY_ANTHROPIC_BASE_URL,
   CLOUDFLARE_AI_GATEWAY_COMPAT_BASE_URL,
@@ -1362,7 +1364,9 @@ async function fetchOpenRouterModels(): Promise<OpenRouterCatalog> {
 async function fetchRadiusModels(): Promise<Model<"msa-messages">[]> {
   try {
     console.log("Fetching models from Radius API...");
-    const config = await loadRadiusGatewayConfig(DEFAULT_RADIUS_GATEWAY);
+    const config = await Effect.runPromise(
+      loadRadiusGatewayConfig({ gateway: DEFAULT_RADIUS_GATEWAY }),
+    );
     const models = getRadiusModelsFromConfig("radius", config);
     if (models.length === 0) throw new Error("Radius API returned no models");
     console.log(`Fetched ${models.length} models from Radius`);
