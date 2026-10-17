@@ -3,11 +3,12 @@
  * request, feeds the prompt on stdin, and turns its JSON-lines output into the
  * reply. A backend only builds the command and reads events.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 
 import type { Model, SimpleStreamOptions, TranscriptContext } from "@msa/ai/compat";
 
+import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
 import { createReply, type ReplyBuilder } from "./reply.ts";
 
 const SPAWN_ATTEMPTS = 3;
@@ -93,7 +94,7 @@ export function streamViaCli<Event>(
 
       let child: ChildProcess;
       try {
-        child = spawn(command.bin, command.args, {
+        child = spawnProcess(command.bin, command.args, {
           cwd,
           env: command.env ?? process.env,
           stdio: ["pipe", "pipe", "pipe"],
@@ -111,17 +112,15 @@ export function streamViaCli<Event>(
 
       let exitCode: number | null = null;
       let spawnError = "";
-      const finished = new Promise<void>((resolve) => {
-        child.on("close", (code) => {
-          exitCode ??= code;
-          resolve();
-        });
-        child.on("error", (error) => {
+      const finished = waitForChildProcess(child).then(
+        (code) => {
+          exitCode = code;
+        },
+        (error: unknown) => {
           spawnError = String(error);
-          exitCode ??= -1;
-          resolve();
-        });
-      });
+          exitCode = -1;
+        },
+      );
 
       const lines = createInterface({ input: child.stdout! });
       try {
