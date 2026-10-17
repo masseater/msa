@@ -43,6 +43,11 @@
       "types": "./dist/output.d.ts",
       "import": "./dist/output.js"
     },
+    "./progress": {
+      "source": "./src/progress.ts",
+      "types": "./dist/progress.d.ts",
+      "import": "./dist/progress.js"
+    },
     "./delta": {
       "source": "./src/delta/index.ts",
       "types": "./dist/delta/index.d.ts",

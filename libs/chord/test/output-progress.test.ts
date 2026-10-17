@@ -1,7 +1,7 @@
 import { Clock, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { Progress } from "../src/output.ts";
+import { Progress } from "../src/progress.ts";
 import { latch } from "./fixtures/timing.ts";
 
 const commitsTheFirstChangeAtOnce = Effect.gen(function* () {

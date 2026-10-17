@@ -10,6 +10,7 @@
       "@msa/chord/delta": ["./libs/chord/src/delta/index.ts"],
       "@msa/chord/node": ["./libs/chord/src/node.ts"],
       "@msa/chord/output": ["./libs/chord/src/output.ts"],
+      "@msa/chord/progress": ["./libs/chord/src/progress.ts"],
       "@msa/telemetry": ["./libs/telemetry/src/index.ts"],
       "@msa/telemetry/testing": ["./libs/telemetry/src/testing/index.ts"],
       "@msa/codemode": ["./libs/codemode/src/index.ts"],

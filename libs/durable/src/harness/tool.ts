@@ -9,13 +9,8 @@ import {
 } from "@msa/chord";
 import { awaitWithContext } from "@msa/chord/context";
 import { overlap } from "@msa/chord/delta";
-import {
-  boundOutput,
-  OutputBuffer,
-  type OutputLimits,
-  PROGRESS_BYTES_PER_SECOND,
-  Progress,
-} from "@msa/chord/output";
+import { boundOutput, OutputBuffer, type OutputLimits } from "@msa/chord/output";
+import { PROGRESS_BYTES_PER_SECOND, Progress } from "@msa/chord/progress";
 import { Compile } from "typebox/compile";
 
 import { defineDocFamily } from "../documents.ts";

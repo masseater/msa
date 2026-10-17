@@ -1,7 +1,5 @@
 import { dual } from "effect/Function";
 
-export { PROGRESS_BYTES_PER_SECOND, Progress } from "./progress.ts";
-
 export type OutputLimits = {
   readonly maxBytes: number;
   readonly maxLines: number;
