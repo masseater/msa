@@ -1,39 +1,43 @@
 import type { Context } from "@msa/chord";
+import { Effect } from "effect";
 
 import { type ExecutionEnv, getOrThrow } from "../env/index.ts";
 
-const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/gu;
-const NARROW_NO_BREAK_SPACE = "\u202F";
+const UNICODE_SPACES = /[  -   　]/gu;
+const NARROW_NO_BREAK_SPACE = " ";
 
-function normalizeToolPath(path: string): string {
+const normalizeToolPath = (path: string): string => {
   const normalized = path.replace(UNICODE_SPACES, " ");
   return normalized.startsWith("@") ? normalized.slice(1) : normalized;
-}
+};
 
-export async function resolveToolPath(
-  env: ExecutionEnv,
-  path: string,
-  context: Context,
-): Promise<string> {
-  return getOrThrow(await env.absolutePath(normalizeToolPath(path), context));
-}
-
-export async function resolveReadToolPath(
-  env: ExecutionEnv,
-  path: string,
-  context: Context,
-): Promise<string> {
-  const resolved = await resolveToolPath(env, path, context);
-  const variants = [
+const readVariants = (resolved: string): Set<string> =>
+  new Set([
     resolved,
     resolved.replace(/ (AM|PM)\./giu, `${NARROW_NO_BREAK_SPACE}$1.`),
     resolved.normalize("NFD"),
-    resolved.replace(/'/gu, "\u2019"),
-    resolved.normalize("NFD").replace(/'/gu, "\u2019"),
-  ];
+    resolved.replace(/'/gu, "’"),
+    resolved.normalize("NFD").replace(/'/gu, "’"),
+  ]);
 
-  for await (const variant of new Set(variants)) {
-    if (getOrThrow(await env.exists(variant, context))) return variant;
+export const resolveToolPath = Effect.fnUntraced(function* (
+  env: ExecutionEnv,
+  path: string,
+  context: Context,
+) {
+  return getOrThrow(
+    yield* Effect.promise(() => env.absolutePath(normalizeToolPath(path), context)),
+  );
+});
+
+export const resolveReadToolPath = Effect.fnUntraced(function* (
+  env: ExecutionEnv,
+  path: string,
+  context: Context,
+) {
+  const resolved = yield* resolveToolPath(env, path, context);
+  for (const variant of readVariants(resolved)) {
+    if (getOrThrow(yield* Effect.promise(() => env.exists(variant, context)))) return variant;
   }
   return resolved;
-}
+});

@@ -1,10 +1,11 @@
+import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
 import { getOrThrow } from "../env/index.ts";
 import { defineTool } from "../harness/define.ts";
 import type { ToolRegistration } from "../harness/types.ts";
 import { requireEnv } from "./env.ts";
-import { withFileMutationQueue } from "./file-mutation-queue.ts";
+import { fileMutation } from "./file-mutation-queue.ts";
 import { resolveToolPath } from "./path-utils.ts";
 
 const writeSchema = Type.Object({
@@ -20,20 +21,23 @@ export function createWriteTool(): ToolRegistration<typeof writeSchema> {
     description:
       "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories.",
     parameters: writeSchema,
-    async execute(args, api, context) {
+    execute(args, api, context) {
       const { path, content } = args;
-      const env = requireEnv(api);
-      const absolutePath = await resolveToolPath(env, path, context);
-      return withFileMutationQueue(
-        env,
-        absolutePath,
-        async () => {
-          if (context.abortSignal?.aborted) throw new Error("Operation aborted");
-          getOrThrow(await env.writeFile(absolutePath, content, context));
-          if (context.abortSignal?.aborted) throw new Error("Operation aborted");
-          return { output: [{ type: "text", text: `Successfully wrote to ${path}` }] };
-        },
-        context,
+      const aborted = (): void => {
+        if (context.abortSignal?.aborted === true) throw new Error("Operation aborted");
+      };
+      return Effect.runPromise(
+        Effect.gen(function* () {
+          const env = requireEnv(api);
+          const absolutePath = yield* resolveToolPath(env, path, context);
+          const write = Effect.gen(function* () {
+            aborted();
+            getOrThrow(yield* Effect.promise(() => env.writeFile(absolutePath, content, context)));
+            aborted();
+            return { output: [{ type: "text" as const, text: `Successfully wrote to ${path}` }] };
+          });
+          return yield* fileMutation(env, absolutePath, write, context);
+        }),
       );
     },
   });

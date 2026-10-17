@@ -1,6 +1,8 @@
 import type { Context } from "@msa/chord";
+import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
+import type { ExecutionEnv } from "../env/index.ts";
 import { defineTool } from "../harness/define.ts";
 import type { ToolExecutionApi, ToolExecutionResult, ToolRegistration } from "../harness/types.ts";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "../truncate.ts";
@@ -71,54 +73,69 @@ function validateTimeout(timeout: number | undefined): void {
   }
 }
 
-async function prepareExecution(
+const prepareExecution = Effect.fnUntraced(function* (
   command: string,
   options: { commandPrefix?: string; prepare?: BashPrepare } | undefined,
   api: ToolExecutionApi,
   context: Context,
-): Promise<BashExecution> {
+) {
+  const prefix = options?.commandPrefix;
   const execution: BashExecution = {
-    command: options?.commandPrefix ? `${options.commandPrefix}\n${command}` : command,
+    command: prefix === undefined || prefix === "" ? command : `${prefix}\n${command}`,
     cwd: requireEnv(api).cwd,
     env: {},
     inheritEnv: true,
   };
-  await options?.prepare?.(execution, api, context);
+  yield* Effect.promise(() => Promise.resolve(options?.prepare?.(execution, api, context)));
   return execution;
-}
+});
 
-async function runCommand(
+type ExecResult = Awaited<ReturnType<ExecutionEnv["exec"]>>;
+
+const execFirst = Effect.fnUntraced(function* (
   commands: readonly (string | readonly string[])[],
   execution: BashExecution,
   timeout: number | undefined,
   api: ToolExecutionApi,
   context: Context,
-): Promise<ToolExecutionResult> {
+) {
   const env = requireEnv(api);
-  let result: Awaited<ReturnType<typeof env.exec>> | undefined;
-  for await (const command of commands) {
-    result = await env.exec(
-      command,
-      {
-        cwd: execution.cwd,
-        env: execution.env,
-        inheritEnv: execution.inheritEnv,
-        ...(timeout === undefined ? {} : { timeout }),
-        onOutput: (text, _context, info) => api.output(text, info.skipped),
-        spill: { afterBytes: DEFAULT_MAX_BYTES, afterLines: DEFAULT_MAX_LINES },
-        ...(api.outputWindow === undefined ? {} : { window: api.outputWindow }),
-      },
-      context,
+  let result: ExecResult | undefined;
+  for (const command of commands) {
+    result = yield* Effect.promise(() =>
+      env.exec(
+        command,
+        {
+          cwd: execution.cwd,
+          env: execution.env,
+          inheritEnv: execution.inheritEnv,
+          ...(timeout === undefined ? {} : { timeout }),
+          onOutput: (text, _context, info) => api.output(text, info.skipped),
+          spill: { afterBytes: DEFAULT_MAX_BYTES, afterLines: DEFAULT_MAX_LINES },
+          ...(api.outputWindow === undefined ? {} : { window: api.outputWindow }),
+        },
+        context,
+      ),
     );
     if (result.ok || result.error.code !== "spawn_error") break;
   }
   if (result === undefined) throw new Error("No command to run");
+  return result;
+});
+
+function commandResult(
+  result: ExecResult,
+  timeout: number | undefined,
+  api: ToolExecutionApi,
+  context: Context,
+): ToolExecutionResult {
   const spillPath = result.ok ? result.value.spillPath : result.error.spillPath;
   if (spillPath !== undefined) {
     api.diagnostic({ severity: "info", code: "full_output", message: `Full output: ${spillPath}` });
   }
   if (!result.ok) {
-    if (result.error.code === "aborted" && context.abortSignal?.aborted) throw result.error;
+    if (result.error.code === "aborted" && context.abortSignal?.aborted === true)
+      throw result.error;
     if (result.error.code === "timeout")
       throw new Error(`Command timed out after ${timeout} seconds`);
     if (result.error.code === "aborted") throw new Error("Command aborted");
@@ -148,10 +165,21 @@ export function createBashTool(options?: BashToolOptions): ToolRegistration<type
     parameters: bashSchema,
     structuredOutputSchema: shellStructuredOutputSchema,
     outputLimits: { retain: "tail" },
-    async execute(args, api, context) {
-      validateTimeout(args.timeout);
-      const execution = await prepareExecution(args.command, options, api, context);
-      return runCommand([execution.command], execution, args.timeout, api, context);
+    execute(args, api, context) {
+      return Effect.runPromise(
+        Effect.gen(function* () {
+          validateTimeout(args.timeout);
+          const execution = yield* prepareExecution(args.command, options, api, context);
+          const result = yield* execFirst(
+            [execution.command],
+            execution,
+            args.timeout,
+            api,
+            context,
+          );
+          return commandResult(result, args.timeout, api, context);
+        }),
+      );
     },
   });
 }
@@ -175,12 +203,17 @@ export function createPowerShellTool(
     parameters: powershellSchema,
     structuredOutputSchema: shellStructuredOutputSchema,
     outputLimits: { retain: "tail" },
-    async execute(args, api, context) {
-      validateTimeout(args.timeout);
-      const execution = await prepareExecution(args.command, options, api, context);
-      const script = `${UTF8_OUTPUT}\n${execution.command}`;
-      const commands = programs.map((program) => [program].concat(POWERSHELL_ARGS, script));
-      return runCommand(commands, execution, args.timeout, api, context);
+    execute(args, api, context) {
+      return Effect.runPromise(
+        Effect.gen(function* () {
+          validateTimeout(args.timeout);
+          const execution = yield* prepareExecution(args.command, options, api, context);
+          const script = `${UTF8_OUTPUT}\n${execution.command}`;
+          const commands = programs.map((program) => [program].concat(POWERSHELL_ARGS, script));
+          const result = yield* execFirst(commands, execution, args.timeout, api, context);
+          return commandResult(result, args.timeout, api, context);
+        }),
+      );
     },
   });
 }

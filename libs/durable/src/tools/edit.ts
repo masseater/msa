@@ -1,21 +1,16 @@
+import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
-import type { FileError } from "../env/index.ts";
 import { defineTool } from "../harness/define.ts";
 import type { ToolRegistration } from "../harness/types.ts";
-import {
-  applyEditsToNormalizedContent,
-  detectLineEnding,
-  type Edit,
-  generateDiffString,
-  generateUnifiedPatch,
-  normalizeToLF,
-  restoreLineEndings,
-  stripBom,
-} from "./edit-diff.ts";
+import { applyEdits } from "./edit-apply.ts";
+import type { Edit } from "./edit-diff.ts";
+import type { EditToolDetails } from "./edit-display.ts";
 import { requireEnv } from "./env.ts";
-import { withFileMutationQueue } from "./file-mutation-queue.ts";
+import { fileMutation } from "./file-mutation-queue.ts";
 import { resolveToolPath } from "./path-utils.ts";
+
+export type { EditToolDetails } from "./edit-display.ts";
 
 const replaceEditSchema = Type.Object({
   oldText: Type.String({
@@ -38,13 +33,15 @@ type LegacyEditToolInput = EditToolInput & { oldText?: unknown; newText?: unknow
 type SingleEditInput = { oldText: string; newText: string };
 
 function isSingleEditInput(value: unknown): value is SingleEditInput {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const edit = value as Record<string, unknown>;
   return typeof edit["oldText"] === "string" && typeof edit["newText"] === "string";
 }
 
 function prepareEditArguments(input: unknown): EditToolInput {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return input as EditToolInput;
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    return input as EditToolInput;
+  }
   const args: Record<string, unknown> = { ...input };
   if (typeof args["edits"] === "string") {
     try {
@@ -67,21 +64,11 @@ function prepareEditArguments(input: unknown): EditToolInput {
   return { ...rest, edits };
 }
 
-export type EditToolDetails = {
-  diff: string;
-  patch: string;
-  firstChangedLine?: number;
-};
-
 function validateEditInput(input: EditToolInput): { path: string; edits: Edit[] } {
   if (!Array.isArray(input.edits) || input.edits.length === 0) {
     throw new Error("Edit tool input is invalid. edits must contain at least one replacement.");
   }
   return { path: input.path, edits: input.edits };
-}
-
-function editAccessError(path: string, error: FileError): Error {
-  return new Error(`Could not edit file: ${path}. Error code: ${error.code}.`, { cause: error });
 }
 
 export function createEditTool(): ToolRegistration<typeof editSchema, EditToolDetails> {
@@ -91,56 +78,15 @@ export function createEditTool(): ToolRegistration<typeof editSchema, EditToolDe
       "Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit instead of emitting overlapping edits. Do not include large unchanged regions just to connect distant changes.",
     parameters: editSchema,
     prepareArguments: prepareEditArguments,
-    async execute(args, api, context) {
-      const { path, edits } = validateEditInput(args);
-      const env = requireEnv(api);
-      const absolutePath = await resolveToolPath(env, path, context);
-      return withFileMutationQueue(
-        env,
-        absolutePath,
-        async () => {
-          if (context.abortSignal?.aborted) throw new Error("Operation aborted");
-          const info = await env.fileInfo(absolutePath, context);
-          if (!info.ok) throw editAccessError(path, info.error);
-          if (info.value.kind !== "file" && info.value.kind !== "symlink") {
-            throw new Error(`Could not edit file: ${path}. Path is not a file.`);
-          }
-
-          const readResult = await env.readTextFile(absolutePath, context);
-          if (!readResult.ok) throw editAccessError(path, readResult.error);
-          if (context.abortSignal?.aborted) throw new Error("Operation aborted");
-
-          const { bom, text: content } = stripBom(readResult.value);
-          const originalEnding = detectLineEnding(content);
-          const normalizedContent = normalizeToLF(content);
-          const { baseContent, newContent } = applyEditsToNormalizedContent(
-            normalizedContent,
-            edits,
-            path,
-          );
-          if (context.abortSignal?.aborted) throw new Error("Operation aborted");
-
-          const finalContent = bom + restoreLineEndings(newContent, originalEnding);
-          const writeResult = await env.writeFile(absolutePath, finalContent, context);
-          if (!writeResult.ok) throw editAccessError(path, writeResult.error);
-          if (context.abortSignal?.aborted) throw new Error("Operation aborted");
-
-          const diffResult = generateDiffString(baseContent, newContent);
-          const details: EditToolDetails = {
-            diff: diffResult.diff,
-            patch: generateUnifiedPatch(path, baseContent, newContent),
-            ...(diffResult.firstChangedLine === undefined
-              ? {}
-              : { firstChangedLine: diffResult.firstChangedLine }),
-          };
-          return {
-            output: [
-              { type: "text", text: `Successfully replaced ${edits.length} block(s) in ${path}.` },
-            ],
-            details,
-          };
-        },
-        context,
+    execute(args, api, context) {
+      return Effect.runPromise(
+        Effect.gen(function* () {
+          const { path, edits } = validateEditInput(args);
+          const env = requireEnv(api);
+          const absolutePath = yield* resolveToolPath(env, path, context);
+          const target = { env, path, absolutePath, context };
+          return yield* fileMutation(env, absolutePath, applyEdits(target, edits), context);
+        }),
       );
     },
   });
