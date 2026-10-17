@@ -1,6 +1,6 @@
 {
   "name": "@msa/chord",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Typed host runtime for plugins, contracts, replicated state, and RPC over JSON links",
   "keywords": [
     "application",
