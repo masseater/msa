@@ -86,5 +86,18 @@ for name in NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD; do
 	[[ -z "$value" ]] || test_env+=("$name=$value")
 done
 
+# Wrap the run so it holds in cloud containers, where CI's conditions differ:
+# - Root bypasses file permissions through CAP_DAC_OVERRIDE and CAP_DAC_READ_SEARCH (capabilities(7)),
+#   so tests that expect EACCES hold only once setpriv(1) drops both from the bounding and inheritable sets.
+# - PID 1 never reaps orphans, so killed grandchildren stay zombies; tini registered as a subreaper
+#   (tini -s, the mode tini's README gives for when it cannot be PID 1) reaps them.
+wrapper=(env -i)
+if [[ "$(id -u)" == 0 ]]; then
+	wrapper=(setpriv --bounding-set=-dac_override,-dac_read_search --inh-caps=-dac_override,-dac_read_search "${wrapper[@]}")
+fi
+if [[ "${CLAUDE_CODE_REMOTE-}" == true ]]; then
+	wrapper=(tini -s -- "${wrapper[@]}")
+fi
+
 echo "Running tests without API keys in isolated home: $test_root/home"
-env -i "${test_env[@]}" vp run test
+"${wrapper[@]}" "${test_env[@]}" vp run test
