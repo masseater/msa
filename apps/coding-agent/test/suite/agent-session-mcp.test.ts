@@ -64,10 +64,10 @@ const SERVER_TOOLS = [
 function createFakeServer(
   calls: string[],
   options: {
-    listTools?: () => unknown[];
-    resources?: boolean;
-    instructions?: string;
-    initializeDelayMs?: number;
+    listTools?: (() => unknown[]) | undefined;
+    resources?: boolean | undefined;
+    instructions?: string | undefined;
+    initializeDelayMs?: number | undefined;
   } = {},
 ) {
   const {

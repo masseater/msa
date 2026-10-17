@@ -236,13 +236,14 @@ function toTranscriptEvents(messages: AgentSession["messages"]): TranscriptEvent
     }
     if (message.role === "toolResult") {
       const text = contentText(message.content);
+      const content = message.content.every((part) => part.type === "text")
+        ? text
+        : toJsonValue(message.content);
       events.push({
         type: "tool_result",
         toolCallId: message.toolCallId,
         name: message.toolName,
-        content: message.content.every((part) => part.type === "text")
-          ? text
-          : toJsonValue(message.content),
+        ...(content !== undefined ? { content } : {}),
         ...(message.isError ? { error: { message: text || "Tool failed" } } : {}),
       });
     }
@@ -392,9 +393,9 @@ async function runMsaCodingAgent<TOutput extends JsonValue>(
         sessionManager,
         model,
         thinkingLevel: "off",
-        tools: options.tools,
-        noTools: options.noTools,
-        customTools: options.customTools,
+        ...(options.tools !== undefined ? { tools: options.tools } : {}),
+        ...(options.noTools !== undefined ? { noTools: options.noTools } : {}),
+        ...(options.customTools !== undefined ? { customTools: options.customTools } : {}),
       })
     ).session;
 

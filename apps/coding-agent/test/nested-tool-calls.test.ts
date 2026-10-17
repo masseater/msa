@@ -194,7 +194,7 @@ describe("NestedToolCallRunner", () => {
       label: name,
       description: name,
       parameters: Type.Object({}),
-      executionMode: name === "sequential" ? "sequential" : undefined,
+      ...(name === "sequential" ? { executionMode: "sequential" as const } : {}),
       async execute() {
         active++;
         maxActive = { ...maxActive, [name]: Math.max(maxActive[name], active) };

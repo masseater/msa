@@ -33,10 +33,10 @@ export interface BashExecutionMessage {
   exitCode: number | undefined;
   cancelled: boolean;
   truncated: boolean;
-  fullOutputPath?: string;
+  fullOutputPath?: string | undefined;
   timestamp: number;
   /** If true, this message is excluded from LLM context (!! prefix) */
-  excludeFromContext?: boolean;
+  excludeFromContext?: boolean | undefined;
 }
 
 /**
@@ -48,7 +48,7 @@ export interface CustomMessage<T = unknown> {
   customType: string;
   content: string | (TextContent | ImageContent)[];
   display: boolean;
-  details?: T;
+  details?: T | undefined;
   timestamp: number;
 }
 

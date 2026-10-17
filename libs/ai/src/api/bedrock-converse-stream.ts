@@ -87,15 +87,15 @@ import { transformMessages } from "./transform-messages.ts";
 export type BedrockThinkingDisplay = "summarized" | "omitted";
 
 export interface BedrockOptions extends StreamOptions {
-  region?: string;
-  profile?: string;
-  toolChoice?: "auto" | "any" | "none" | { type: "tool"; name: string };
+  region?: string | undefined;
+  profile?: string | undefined;
+  toolChoice?: "auto" | "any" | "none" | { type: "tool"; name: string } | undefined;
   /* See https://docs.aws.amazon.com/bedrock/latest/userguide/inference-reasoning.html for supported models. */
-  reasoning?: ThinkingLevel;
+  reasoning?: ThinkingLevel | undefined;
   /* Custom token budgets per thinking level. Overrides default budgets. */
-  thinkingBudgets?: ThinkingBudgets;
+  thinkingBudgets?: ThinkingBudgets | undefined;
   /* Only supported by Claude 4.x models, see https://docs.aws.amazon.com/bedrock/latest/userguide/claude-messages-extended-thinking.html#claude-messages-extended-thinking-tool-use-interleaved */
-  interleavedThinking?: boolean;
+  interleavedThinking?: boolean | undefined;
   /**
    * Controls how Claude's thinking content is returned in responses.
    * - "summarized": Thinking blocks contain summarized thinking text (default here).
@@ -106,18 +106,18 @@ export interface BedrockOptions extends StreamOptions {
    * "omitted". We default to "summarized" here to keep behavior consistent with
    * older Claude 4 models. Only applies to Claude models on Bedrock.
    */
-  thinkingDisplay?: BedrockThinkingDisplay;
+  thinkingDisplay?: BedrockThinkingDisplay | undefined;
   /** Key-value pairs attached to the inference request for cost allocation tagging.
    * Keys: max 64 chars, no `aws:` prefix. Values: max 256 chars. Max 50 pairs.
    * Tags appear in AWS Cost Explorer split cost allocation data.
    * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ConverseStream.html */
-  requestMetadata?: Record<string, string>;
+  requestMetadata?: Record<string, string> | undefined;
   /** Bearer token for Bedrock API key authentication.
    * When set, bypasses SigV4 signing and sends Authorization: Bearer <token> instead.
    * Requires `bedrock:CallWithBearerToken` IAM permission on the token's identity.
    * Set via AWS_BEARER_TOKEN_BEDROCK env var or pass directly.
    * @see https://docs.aws.amazon.com/service-authorization/latest/reference/list_amazonbedrock.html */
-  bearerToken?: string;
+  bearerToken?: string | undefined;
 }
 
 type Block = (TextContent | ThinkingContent | ToolCall) & {
@@ -170,8 +170,9 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
     // chain already prefers a configured profile over env keys, but only when
     // `credentials` is not set on the client config. See #6957.
     const optionsProfile = options.profile || options.env?.["AWS_PROFILE"];
+    const profile = optionsProfile || getProviderEnvValue("AWS_PROFILE", options.env);
     const config: BedrockRuntimeClientConfig = {
-      profile: optionsProfile || getProviderEnvValue("AWS_PROFILE", options.env),
+      ...(profile !== undefined ? { profile } : {}),
     };
     const configuredRegion = getConfiguredBedrockRegion(options);
     const hasAmbientConfiguredProfile = Boolean(getProviderEnvValue("AWS_PROFILE"));
@@ -203,9 +204,9 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
       // Region resolution: ARN-embedded > explicit option > env vars > SDK default chain.
       // When the model ID is an inference profile ARN, extract the region from it.
       // This avoids conflicts with AWS_REGION set for other services.
-      const arnRegionMatch = model.id.match(/^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9-]+):/);
-      if (arnRegionMatch) {
-        config.region = arnRegionMatch[1];
+      const arnRegion = model.id.match(/^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9-]+):/)?.[1];
+      if (arnRegion) {
+        config.region = arnRegion;
       } else if (configuredRegion) {
         config.region = configuredRegion;
       } else if (endpointRegion && useExplicitEndpoint) {
@@ -300,7 +301,10 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
       }
       const command = new ConverseStreamCommand(commandInput);
 
-      const response = await client.send(command, { abortSignal: options.signal });
+      const response = await client.send(
+        command,
+        options.signal !== undefined ? { abortSignal: options.signal } : {},
+      );
       responseRequestId = normalizeDiagnosticValue(response.$metadata.requestId);
       if (!observedRawResponse && response.$metadata.httpStatusCode !== undefined) {
         const responseHeaders: Record<string, string> = {};

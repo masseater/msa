@@ -49,7 +49,7 @@ const compactionEnd = (
   result: undefined,
   aborted: options.aborted ?? false,
   willRetry: false,
-  errorMessage: options.errorMessage,
+  ...(options.errorMessage !== undefined ? { errorMessage: options.errorMessage } : {}),
 });
 
 // #10607

@@ -26,7 +26,10 @@ const ANTHROPIC_COPY_CODE_LOGIN_METHOD = "copy_code";
 const SCOPES =
   "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload";
 
-function parseAuthorizationInput(input: string): { code?: string; state?: string } {
+function parseAuthorizationInput(input: string): {
+  code?: string | undefined;
+  state?: string | undefined;
+} {
   const value = input.trim();
   if (!value) return {};
 

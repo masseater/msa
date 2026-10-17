@@ -246,13 +246,13 @@ export interface AnthropicOptions extends StreamOptions {
    * Default: undefined (thinking is omitted unless `streamSimple()` maps
    * a simple reasoning level to this option, or callers set it explicitly).
    */
-  thinkingEnabled?: boolean;
+  thinkingEnabled?: boolean | undefined;
   /**
    * Token budget for extended thinking (older models only).
    * Ignored for adaptive thinking models.
    * Default: 1024 when `thinkingEnabled` is true and no budget is provided.
    */
-  thinkingBudgetTokens?: number;
+  thinkingBudgetTokens?: number | undefined;
   /**
    * Effort level for adaptive thinking models.
    * Controls how much thinking Claude allocates:
@@ -265,7 +265,7 @@ export interface AnthropicOptions extends StreamOptions {
    * Default: omitted unless `streamSimple()` maps a simple reasoning
    * level to this option.
    */
-  effort?: AnthropicEffort;
+  effort?: AnthropicEffort | undefined;
   /**
    * Controls how thinking content is returned in API responses.
    * - "summarized": Thinking blocks contain summarized thinking text.
@@ -278,26 +278,26 @@ export interface AnthropicOptions extends StreamOptions {
    * with older Claude 4 models. Set this explicitly to "omitted" to opt in.
    * Default: "summarized" when thinking is enabled.
    */
-  thinkingDisplay?: AnthropicThinkingDisplay;
+  thinkingDisplay?: AnthropicThinkingDisplay | undefined;
   /**
    * Whether to request the interleaved thinking beta header for non-adaptive
    * thinking models. Adaptive thinking models have interleaved thinking built in,
    * so the header is skipped for them regardless of this setting.
    * Default: true.
    */
-  interleavedThinking?: boolean;
+  interleavedThinking?: boolean | undefined;
   /**
    * Anthropic tool choice behavior. String values map to Anthropic's built-in
    * choices; `{ type: "tool", name }` forces a specific tool.
    * Default: omitted (Anthropic default behavior, currently equivalent to auto).
    */
-  toolChoice?: "auto" | "any" | "none" | { type: "tool"; name: string };
+  toolChoice?: "auto" | "any" | "none" | { type: "tool"; name: string } | undefined;
   /**
    * Pre-built Anthropic client instance. When provided, skips internal client
    * construction entirely. Use this to inject alternative SDK clients such as
    * `AnthropicVertex` that shares the same messaging API.
    */
-  client?: Anthropic;
+  client?: Anthropic | undefined;
 }
 
 function mergeHeaders(...headerSources: (ProviderHeaders | undefined)[]): ProviderHeaders {

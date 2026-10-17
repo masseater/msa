@@ -14,7 +14,7 @@ export interface HuggingFaceModel {
 
 export interface HuggingFaceQuantization {
   name: string;
-  size?: number;
+  size?: number | undefined;
 }
 
 export interface HuggingFaceModelDetails {

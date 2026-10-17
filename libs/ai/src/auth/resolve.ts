@@ -17,11 +17,11 @@ import type {
 } from "./types.ts";
 
 export interface AuthResolutionOverrides {
-  apiKey?: string;
-  env?: ProviderEnv;
+  apiKey?: string | undefined;
+  env?: ProviderEnv | undefined;
   /** Require this much remaining OAuth-token validity; defaults to five minutes. */
-  minOAuthValidityMs?: number;
-  signal?: AbortSignal;
+  minOAuthValidityMs?: number | undefined;
+  signal?: AbortSignal | undefined;
 }
 
 /**

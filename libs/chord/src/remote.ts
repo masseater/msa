@@ -47,7 +47,10 @@ export interface RemoteChannel {
 export interface RemoteHost {
   readonly inFactory: number;
   report(error: unknown): void;
-  root<T>(fn: (ctx: Ctx) => T | Promise<T>, options?: { signal?: AbortSignal }): Promise<T>;
+  root<T>(
+    fn: (ctx: Ctx) => T | Promise<T>,
+    options?: { signal?: AbortSignal | undefined },
+  ): Promise<T>;
   /** The binding has no views left: the host lingers it or closes it. */
   bindingIdle(binding: RemoteBinding): void;
   /** The binding ended or was closed: the host forgets it. */

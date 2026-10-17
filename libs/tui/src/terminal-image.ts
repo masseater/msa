@@ -28,9 +28,9 @@ export interface ImageRenderOptions {
   maxHeightCells?: number;
   preserveAspectRatio?: boolean;
   /** Kitty image ID. If provided, reuses/replaces existing image with this ID. */
-  imageId?: number;
+  imageId?: number | undefined;
   /** Whether Kitty should apply its default cursor movement after placement. */
-  moveCursor?: boolean;
+  moveCursor?: boolean | undefined;
 }
 
 let cachedCapabilities: TerminalCapabilities | null = null;
@@ -244,9 +244,9 @@ export function encodeKitty(
   options: {
     columns?: number;
     rows?: number;
-    imageId?: number;
+    imageId?: number | undefined;
     /** Whether Kitty should apply its default cursor movement after placement. Default: true. */
-    moveCursor?: boolean;
+    moveCursor?: boolean | undefined;
   } = {},
 ): string {
   const CHUNK_SIZE = 4096;
@@ -706,7 +706,7 @@ export function renderImage(
   base64Data: string,
   imageDimensions: ImageDimensions,
   options: ImageRenderOptions = {},
-): { sequence: string; columns: number; rows: number; imageId?: number } | null {
+): { sequence: string; columns: number; rows: number; imageId?: number | undefined } | null {
   const caps = getCapabilities();
 
   if (!caps.images) {

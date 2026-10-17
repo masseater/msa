@@ -27,7 +27,7 @@ const createRuntime: CreateAgentSessionRuntimeFactory = async ({
     ...(await createAgentSessionFromServices({
       services,
       sessionManager,
-      sessionStartEvent,
+      ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
     })),
     services,
     diagnostics: services.diagnostics,

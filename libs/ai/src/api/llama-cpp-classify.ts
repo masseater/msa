@@ -263,7 +263,7 @@ async function post(
           method: "POST",
           headers,
           body: JSON.stringify(payload),
-          signal,
+          signal: signal ?? null,
         });
         if (!next.ok) throw httpError(next, await next.text());
         return { response: next, json: (await next.json()) as unknown };

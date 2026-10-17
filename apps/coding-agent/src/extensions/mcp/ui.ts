@@ -28,14 +28,14 @@ import { toErrorMessage } from "../../utils/errors.ts";
 export interface McpMenu {
   title: string;
   /** Shown below the title. */
-  details?: string;
+  details?: string | undefined;
   /** Shown below the details in the error color. */
-  error?: string;
+  error?: string | undefined;
   items: SelectItem[];
   /** Shown when there are no items. */
-  empty?: string;
+  empty?: string | undefined;
   /** Value of the item selected when the menu opens. */
-  selected?: string;
+  selected?: string | undefined;
   /** What the confirm key does, for the key hint. */
   confirmLabel: string;
   /** What the cancel key does, for the key hint. */

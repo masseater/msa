@@ -6,7 +6,7 @@ export interface UnauthorizedContext {
   serverUrl: URL;
   fetch: McpFetch;
   /** Access token the rejected request carried, if any. A different current token means another request already refreshed it. */
-  token?: string;
+  token?: string | undefined;
 }
 
 /** Supplies bearer tokens to an MCP HTTP transport and may refresh them after a 401 response. */

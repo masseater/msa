@@ -48,8 +48,8 @@ export class ToolExecutionComponent extends Container {
   private contentTextRegion: MouseRegion;
   private selfRenderContainer: Container;
   private selfRenderHeight = 0;
-  private callRendererComponent?: Component;
-  private resultRendererComponent?: Component;
+  private callRendererComponent?: Component | undefined;
+  private resultRendererComponent?: Component | undefined;
   private rendererState: any = {};
   private imageComponents: Image[] = [];
   /** Inputs of imageComponents, so updateDisplay can reuse images and keep their converted PNG data. */
@@ -63,7 +63,7 @@ export class ToolExecutionComponent extends Container {
   private imageWidthCells: number;
   private outputPad: number;
   private isPartial = true;
-  private toolDefinition?: ToolRenderers;
+  private toolDefinition?: ToolRenderers | undefined;
   private ui: TUI;
   private cwd: string;
   private executionStarted = false;

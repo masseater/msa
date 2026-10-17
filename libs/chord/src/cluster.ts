@@ -84,8 +84,10 @@ export async function runClusterReload(
         plugins: modulesFor(options.remote, name),
         options: {
           remove: modulesFor(options.remoteRemove, name),
-          gateDeadline: options.gateDeadline,
-          retireDeadline: options.retireDeadline,
+          ...(options.gateDeadline !== undefined ? { gateDeadline: options.gateDeadline } : {}),
+          ...(options.retireDeadline !== undefined
+            ? { retireDeadline: options.retireDeadline }
+            : {}),
         },
       });
       return vote.then(

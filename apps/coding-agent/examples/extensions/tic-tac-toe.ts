@@ -258,7 +258,7 @@ interface BoardRenderOpts {
   maxWidth: number;
   // Optional cursor overlay. Omit to render a static snapshot (used in tool
   // results, move messages, and the game-over banner).
-  cursor?: { row: number; col: number; owner: "user" | "agent" };
+  cursor?: { row: number; col: number; owner: "user" | "agent" } | undefined;
 }
 
 function renderBoard(opts: BoardRenderOpts): string[] {

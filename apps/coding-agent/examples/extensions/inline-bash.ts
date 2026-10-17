@@ -90,6 +90,10 @@ export default function (msa: ExtensionAPI) {
       ctx.ui.notify(`Expanded ${expansions.length} inline command(s):\n${summary}`, "info");
     }
 
-    return { action: "transform", text: result, images: event.images };
+    return {
+      action: "transform",
+      text: result,
+      ...(event.images !== undefined ? { images: event.images } : {}),
+    };
   });
 }

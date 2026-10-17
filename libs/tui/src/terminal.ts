@@ -155,20 +155,20 @@ export function resolveEscapeTimeoutMs(env: NodeJS.ProcessEnv = process.env): nu
  */
 export class ProcessTerminal implements Terminal {
   private wasRaw = false;
-  private inputHandler?: (data: string) => void;
-  private resizeHandler?: () => void;
+  private inputHandler?: ((data: string) => void) | undefined;
+  private resizeHandler?: (() => void) | undefined;
   private _kittyProtocolActive = false;
   private _modifyOtherKeysActive = false;
   private keyboardProtocolPushed = false;
   /** DA1 replies owed to keyboard protocol queries. Later DA1 replies answer other queries and are forwarded. */
   private pendingKeyboardProtocolDeviceAttributes = 0;
   private keyboardProtocolNegotiationBuffer = "";
-  private keyboardProtocolBufferFlushTimer?: ReturnType<typeof setTimeout>;
-  private stdinBuffer?: StdinBuffer;
-  private stdinDataHandler?: (data: string) => void;
-  private progressInterval?: ReturnType<typeof setInterval>;
+  private keyboardProtocolBufferFlushTimer?: ReturnType<typeof setTimeout> | undefined;
+  private stdinBuffer?: StdinBuffer | undefined;
+  private stdinDataHandler?: ((data: string) => void) | undefined;
+  private progressInterval?: ReturnType<typeof setInterval> | undefined;
   /** Latest program status, kept across stop() so start() can report it again. */
-  private programStatus?: ProgramStatus;
+  private programStatus?: ProgramStatus | undefined;
   /** Whether the terminal confirmed OSC 7501 support since the last start(), or `MSA_PROGRAM_STATUS=1`. */
   private programStatusSupported = false;
   /** The support query was sent and its DA1 sentinel has not arrived yet. */

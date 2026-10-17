@@ -628,7 +628,7 @@ describe("MCP connections", () => {
         return transport();
       },
       credentials: new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()),
-      log,
+      ...(log !== undefined ? { log } : {}),
       onTools: () => {},
     });
     return { connection, opened: () => opened };

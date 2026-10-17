@@ -25,8 +25,8 @@ export class BashExecutionComponent extends Container {
   private status: "running" | "complete" | "cancelled" | "error" = "running";
   private exitCode: number | undefined = undefined;
   private loader: Loader;
-  private truncationResult?: TruncationResult;
-  private fullOutputPath?: string;
+  private truncationResult?: TruncationResult | undefined;
+  private fullOutputPath?: string | undefined;
   private expanded = false;
   private contentContainer: Container;
   /** `dim` marks `!!` commands, whose output is excluded from the model context. */

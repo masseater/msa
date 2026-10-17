@@ -160,10 +160,10 @@ function isOpenAIReasoningDetail(detail: unknown): detail is OpenAIReasoningDeta
 }
 
 export interface OpenAICompletionsOptions extends StreamOptions {
-  toolChoice?: OpenAI.Chat.Completions.ChatCompletionToolChoiceOption;
-  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+  toolChoice?: OpenAI.Chat.Completions.ChatCompletionToolChoiceOption | undefined;
+  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | undefined;
   /** Token budgets per thinking level. Used when `compat.thinkingTokenBudgetField` or `compat.supportsThinkingTokenBudget` is set, or by `{ "$var": "thinking.budget" }`. */
-  thinkingBudgets?: ThinkingBudgets;
+  thinkingBudgets?: ThinkingBudgets | undefined;
 }
 
 export interface ConvertCompletionsMessagesOptions {
@@ -266,9 +266,19 @@ function fillMissingCommonReasoningDetailFields(
   target: OpenAIReasoningDetailBase,
   source: OpenAIReasoningDetail,
 ): void {
-  target.id ??= source.id;
-  target.format ||= source.format;
-  target.index ??= source.index;
+  // A missing source field clears the target field instead of storing an explicit undefined.
+  if (target.id === undefined || target.id === null) {
+    if (source.id === undefined) delete target.id;
+    else target.id = source.id;
+  }
+  if (!target.format) {
+    if (source.format === undefined) delete target.format;
+    else target.format = source.format;
+  }
+  if (target.index === undefined) {
+    if (source.index === undefined) delete target.index;
+    else target.index = source.index;
+  }
 }
 
 function appendOpenAIReasoningDetail(
@@ -278,7 +288,10 @@ function appendOpenAIReasoningDetail(
   const lastDetail = details[details.length - 1];
   if (detail.type === "reasoning.text" && lastDetail?.type === "reasoning.text") {
     lastDetail.text += detail.text;
-    lastDetail.signature ||= detail.signature;
+    if (!lastDetail.signature) {
+      if (detail.signature === undefined) delete lastDetail.signature;
+      else lastDetail.signature = detail.signature;
+    }
     fillMissingCommonReasoningDetailFields(lastDetail, detail);
     return;
   }
@@ -415,12 +428,14 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
       events.push({ type: "start", partial: output });
 
       interface StreamingToolCallBlock extends ToolCall {
-        partialArgs?: string;
-        customInput?: {
-          property: string;
-          jsonBuffer: GrammarToolInputJsonBuffer;
-        };
-        streamIndex?: number;
+        partialArgs?: string | undefined;
+        customInput?:
+          | {
+              property: string;
+              jsonBuffer: GrammarToolInputJsonBuffer;
+            }
+          | undefined;
+        streamIndex?: number | undefined;
       }
       type StreamingBlock = TextContent | ThinkingContent | StreamingToolCallBlock;
       type StreamingToolCallDelta = {
@@ -861,17 +876,19 @@ function buildParams(
   });
   const cacheControl = getCompatCacheControl(compat, cacheRetention);
 
+  const promptCacheKey =
+    (model.baseUrl.includes("api.openai.com") && cacheRetention !== "none") ||
+    (cacheRetention === "long" && compat.supportsLongCacheRetention)
+      ? clampOpenAIPromptCacheKey(options?.sessionId)
+      : undefined;
   const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
     model: model.id,
     messages,
     stream: true,
-    prompt_cache_key:
-      (model.baseUrl.includes("api.openai.com") && cacheRetention !== "none") ||
-      (cacheRetention === "long" && compat.supportsLongCacheRetention)
-        ? clampOpenAIPromptCacheKey(options?.sessionId)
-        : undefined,
-    prompt_cache_retention:
-      cacheRetention === "long" && compat.supportsLongCacheRetention ? "24h" : undefined,
+    ...(promptCacheKey !== undefined ? { prompt_cache_key: promptCacheKey } : {}),
+    ...(cacheRetention === "long" && compat.supportsLongCacheRetention
+      ? { prompt_cache_retention: "24h" as const }
+      : {}),
   };
 
   if (compat.supportsUsageInStreaming !== false) {
@@ -1074,7 +1091,10 @@ function buildParams(
 }
 
 function resolveThinkingTokenBudgetField(
-  compat: Pick<OpenAICompletionsCompat, "thinkingTokenBudgetField" | "supportsThinkingTokenBudget">,
+  compat: Pick<
+    ResolvedOpenAICompletionsCompat,
+    "thinkingTokenBudgetField" | "supportsThinkingTokenBudget"
+  >,
 ): ThinkingTokenBudgetField | undefined {
   if (compat.thinkingTokenBudgetField) return compat.thinkingTokenBudgetField;
   if (compat.supportsThinkingTokenBudget) return "thinking_token_budget";

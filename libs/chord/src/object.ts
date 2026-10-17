@@ -410,7 +410,7 @@ export interface HostCore {
   addressOf(type: AnyContract, input: unknown, principal: unknown, candidate?: boolean): string;
   root<T>(
     fn: (ctx: Ctx) => T | Promise<T>,
-    options?: { codeVersion?: number; signal?: AbortSignal },
+    options?: { codeVersion?: number; signal?: AbortSignal | undefined },
   ): Promise<T>;
   touch(rootId: string, object: ObjectImpl): void;
   forget(object: ObjectImpl): void;

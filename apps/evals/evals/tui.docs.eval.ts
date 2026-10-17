@@ -29,7 +29,7 @@ class RecordingTerminal {
   readonly rows = 30;
   readonly kittyProtocolActive = true;
   private writes: string[] = [];
-  private resizeHandler?: () => void;
+  private resizeHandler: (() => void) | undefined;
 
   start(_onInput: (data: string) => void, onResize: () => void): void {
     this.resizeHandler = onResize;

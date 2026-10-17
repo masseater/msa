@@ -13,7 +13,7 @@ import { theme } from "../theme/theme.ts";
 export class CustomEntryComponent extends Container {
   private entry: CustomEntry<unknown>;
   private renderer: EntryRenderer;
-  private customComponent?: Component;
+  private customComponent?: Component | undefined;
   private _expanded = false;
   private outputPad: number;
 

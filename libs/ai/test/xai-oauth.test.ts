@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { xaiOAuth } from "../src/auth/oauth/xai.ts";
-import type { OAuthCredential } from "../src/auth/types.ts";
+import type { AuthEvent, OAuthCredential } from "../src/auth/types.ts";
 
 const neverAbortedSignal = new AbortController().signal;
 
@@ -44,12 +44,7 @@ function tokenResponse(overrides: Record<string, unknown> = {}): Record<string, 
   };
 }
 
-type DeviceCodeInfo = {
-  userCode: string;
-  verificationUri: string;
-  intervalSeconds?: number;
-  expiresInSeconds?: number;
-};
+type DeviceCodeInfo = Omit<Extract<AuthEvent, { type: "device_code" }>, "type">;
 
 function loginXaiForTest(options: {
   onDeviceCode: (info: DeviceCodeInfo) => void;

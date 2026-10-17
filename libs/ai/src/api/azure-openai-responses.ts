@@ -1,5 +1,6 @@
 import { AzureOpenAI } from "openai";
 import type { ResponseCreateParamsStreaming } from "openai/resources/responses/responses.js";
+import type { ReasoningEffort } from "openai/resources/shared.js";
 
 import { clampThinkingLevel } from "../models.ts";
 import type {
@@ -44,9 +45,9 @@ function formatAzureOpenAIError(error: unknown): string {
 
 // Azure OpenAI Responses-specific options
 export interface AzureOpenAIResponsesOptions extends AzureEndpointOptions {
-  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-  toolChoice?: ResponseCreateParamsStreaming["tool_choice"];
-  reasoningSummary?: "auto" | "detailed" | "concise" | null;
+  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | undefined;
+  toolChoice?: ResponseCreateParamsStreaming["tool_choice"] | undefined;
+  reasoningSummary?: "auto" | "detailed" | "concise" | null | undefined;
 }
 
 /**
@@ -236,11 +237,12 @@ function buildParams(
     },
   });
 
+  const promptCacheKey = clampOpenAIPromptCacheKey(options?.sessionId);
   const params: ResponseCreateParamsStreaming = {
     model: deploymentName,
     input: messages,
     stream: true,
-    prompt_cache_key: clampOpenAIPromptCacheKey(options?.sessionId),
+    ...(promptCacheKey !== undefined ? { prompt_cache_key: promptCacheKey } : {}),
     store: false,
   };
 
@@ -270,15 +272,13 @@ function buildParams(
         ? (model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort)
         : reasoningEffort;
       params.reasoning = {
-        effort: effort as NonNullable<typeof params.reasoning>["effort"],
+        effort: effort as ReasoningEffort,
         summary: options?.reasoningSummary || "auto",
       };
       params.include = ["reasoning.encrypted_content"];
     } else if (model.thinkingLevelMap?.off !== null) {
       params.reasoning = {
-        effort: (model.thinkingLevelMap?.off ?? "none") as NonNullable<
-          typeof params.reasoning
-        >["effort"],
+        effort: (model.thinkingLevelMap?.off ?? "none") as ReasoningEffort,
       };
     }
   }

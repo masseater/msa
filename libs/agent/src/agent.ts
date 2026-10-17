@@ -73,9 +73,9 @@ type MutableAgentState = Omit<
   "isStreaming" | "streamingMessage" | "pendingToolCalls" | "errorMessage"
 > & {
   isStreaming: boolean;
-  streamingMessage?: AgentMessage;
+  streamingMessage?: AgentMessage | undefined;
   pendingToolCalls: Set<string>;
-  errorMessage?: string;
+  errorMessage?: string | undefined;
 };
 
 /** Initial state for {@link Agent}. `systemPrompt` and `tools` become the leading system message unless `messages` already starts with one. */
@@ -121,7 +121,9 @@ function createMutableAgentState(initialState?: AgentInitialState): MutableAgent
 export interface AgentOptions {
   initialState?: AgentInitialState;
   convertToLlm?: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
-  transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>;
+  transformContext?:
+    | ((messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>)
+    | undefined;
   streamFn: StreamFn;
   getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
   onPayload?: SimpleStreamOptions["onPayload"];
@@ -207,41 +209,50 @@ export class Agent {
   private readonly followUpQueue: PendingMessageQueue;
 
   public convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
-  public transformContext?: (
-    messages: AgentMessage[],
-    signal?: AbortSignal,
-  ) => Promise<AgentMessage[]>;
+  public transformContext?:
+    | ((messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>)
+    | undefined;
   public streamFunction: StreamFn;
-  public getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
+  public getApiKey?:
+    | ((provider: string) => Promise<string | undefined> | string | undefined)
+    | undefined;
   public onPayload?: SimpleStreamOptions["onPayload"];
   public onResponse?: SimpleStreamOptions["onResponse"];
   public onProviderStreamEvent?: SimpleStreamOptions["onProviderStreamEvent"];
-  public beforeToolCall?: (
-    context: BeforeToolCallContext,
-    signal?: AbortSignal,
-  ) => Promise<BeforeToolCallResult | undefined>;
-  public afterToolCall?: (
-    context: AfterToolCallContext,
-    signal?: AbortSignal,
-  ) => Promise<AfterToolCallResult | undefined>;
-  public finishTurn?: FinishTurn;
-  public prepareRequest?: PrepareRequest;
-  public prepareNextTurn?: (
-    signal?: AbortSignal,
-  ) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined;
-  public prepareNextTurnWithContext?: (
-    context: PrepareNextTurnContext,
-    signal?: AbortSignal,
-  ) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined;
-  private activeRun?: ActiveRun;
+  public beforeToolCall?:
+    | ((
+        context: BeforeToolCallContext,
+        signal?: AbortSignal,
+      ) => Promise<BeforeToolCallResult | undefined>)
+    | undefined;
+  public afterToolCall?:
+    | ((
+        context: AfterToolCallContext,
+        signal?: AbortSignal,
+      ) => Promise<AfterToolCallResult | undefined>)
+    | undefined;
+  public finishTurn?: FinishTurn | undefined;
+  public prepareRequest?: PrepareRequest | undefined;
+  public prepareNextTurn?:
+    | ((
+        signal?: AbortSignal,
+      ) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined)
+    | undefined;
+  public prepareNextTurnWithContext?:
+    | ((
+        context: PrepareNextTurnContext,
+        signal?: AbortSignal,
+      ) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined)
+    | undefined;
+  private activeRun?: ActiveRun | undefined;
   /** Session identifier forwarded to providers for cache-aware backends. */
-  public sessionId?: string;
+  public sessionId?: string | undefined;
   /** Optional per-level thinking token budgets forwarded to the stream function. */
-  public thinkingBudgets?: ThinkingBudgets;
+  public thinkingBudgets?: ThinkingBudgets | undefined;
   /** Preferred transport forwarded to the stream function. */
   public transport: Transport;
   /** Optional cap for provider-requested retry delays. */
-  public maxRetryDelayMs?: number;
+  public maxRetryDelayMs?: number | undefined;
   /** Tool execution strategy for assistant messages that contain multiple tool calls. */
   public toolExecution: ToolExecutionMode;
 
@@ -491,14 +502,16 @@ export class Agent {
     let skipInitialSteeringPoll = options.skipInitialSteeringPoll === true;
     return {
       model: this._state.model,
-      reasoning: this._state.thinkingLevel === "off" ? undefined : this._state.thinkingLevel,
-      sessionId: this.sessionId,
-      onPayload: this.onPayload,
-      onResponse: this.onResponse,
-      onProviderStreamEvent: this.onProviderStreamEvent,
+      ...(this._state.thinkingLevel !== "off" ? { reasoning: this._state.thinkingLevel } : {}),
+      ...(this.sessionId !== undefined ? { sessionId: this.sessionId } : {}),
+      ...(this.onPayload !== undefined ? { onPayload: this.onPayload } : {}),
+      ...(this.onResponse !== undefined ? { onResponse: this.onResponse } : {}),
+      ...(this.onProviderStreamEvent !== undefined
+        ? { onProviderStreamEvent: this.onProviderStreamEvent }
+        : {}),
       transport: this.transport,
-      thinkingBudgets: this.thinkingBudgets,
-      maxRetryDelayMs: this.maxRetryDelayMs,
+      ...(this.thinkingBudgets !== undefined ? { thinkingBudgets: this.thinkingBudgets } : {}),
+      ...(this.maxRetryDelayMs !== undefined ? { maxRetryDelayMs: this.maxRetryDelayMs } : {}),
       toolExecution: this.toolExecution,
       beforeToolCall: this.beforeToolCall,
       afterToolCall: this.afterToolCall,

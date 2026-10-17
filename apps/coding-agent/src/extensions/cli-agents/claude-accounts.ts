@@ -215,7 +215,7 @@ export async function authStatus(account: Account): Promise<AuthStatus> {
     } catch {}
     return {
       loggedIn: false,
-      detail: error instanceof Error ? error.message.split("\n")[0] : String(error),
+      detail: error instanceof Error ? (error.message.split("\n")[0] ?? "") : String(error),
     };
   }
 }

@@ -37,7 +37,7 @@ export async function listModels(
     console.error(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
   }
 
-  const models = [...(await modelRuntime.getAvailable(undefined, { signal }))];
+  const models = [...(await modelRuntime.getAvailable(undefined, signal ? { signal } : {}))];
 
   if (models.length === 0) {
     console.log(formatNoModelsAvailableMessage());

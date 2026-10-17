@@ -1049,7 +1049,11 @@ export class SettingsManager {
     this.setGlobalSetting("cacheWarming", mode);
   }
 
-  getProviderRetrySettings(): { timeoutMs?: number; maxRetries?: number; maxRetryDelayMs: number } {
+  getProviderRetrySettings(): {
+    timeoutMs?: number | undefined;
+    maxRetries?: number | undefined;
+    maxRetryDelayMs: number;
+  } {
     return {
       timeoutMs: this.settings.retry?.provider?.timeoutMs,
       maxRetries: this.settings.retry?.provider?.maxRetries,

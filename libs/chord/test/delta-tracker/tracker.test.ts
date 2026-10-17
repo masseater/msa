@@ -1252,7 +1252,7 @@ describe("delta tracker piece arrays", () => {
     const rows: Row[] = Array.from({ length: 400 }, () => ({ flag: 0 }));
     rows[100]!.special = JSON.parse(
       `{"__proto__":{"values":[${Array.from({ length: 400 }, (_, value) => value).join(",")}]}}`,
-    ) as Row["special"];
+    ) as NonNullable<Row["special"]>;
     const tracker = track({ rows });
     const base = clone(tracker.value);
     const change = tracker.beginChange();

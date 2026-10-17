@@ -47,8 +47,8 @@ type AuthFileReload = {
 
 type AuthFileReadState = {
   data: AuthStorageData;
-  revision?: string;
-  reload?: AuthFileReload;
+  revision?: string | undefined;
+  reload?: AuthFileReload | undefined;
 };
 
 let sharedAuthFileReadState: { authPath: string; readState: AuthFileReadState } | undefined;

@@ -72,20 +72,20 @@ type OverlayNode = {
   parentIndex: number;
   parentKind: ParentKind;
   parentKey: string | number;
-  parentSource?: InsertSource;
+  parentSource?: InsertSource | undefined;
   parentPlacement: boolean;
   target: object;
   proxy: object;
-  writeKey?: string;
-  writeValue?: StoredRef;
-  writes?: Map<string, StoredRef>;
-  deleteKey?: string;
-  deletes?: Set<string>;
-  readded?: Set<string>;
-  array?: ArrayOverlay;
+  writeKey?: string | undefined;
+  writeValue?: StoredRef | undefined;
+  writes?: Map<string, StoredRef> | undefined;
+  deleteKey?: string | undefined;
+  deletes?: Set<string> | undefined;
+  readded?: Set<string> | undefined;
+  array?: ArrayOverlay | undefined;
   dirty?: boolean;
-  subtreeDirty?: boolean;
-  preparedPath?: Path;
+  subtreeDirty?: boolean | undefined;
+  preparedPath?: Path | undefined;
 };
 
 type OverlayContext = {

@@ -155,7 +155,7 @@ type DocMutation = {
 };
 type CommitPlan = {
   readonly docs: readonly DocMutation[];
-  readonly entryKind?: TranscriptEntry["kind"];
+  readonly entryKind?: TranscriptEntry["kind"] | undefined;
   readonly branch?: boolean;
   readonly unmountedOnly: boolean;
   readonly expectedConversationNoop: boolean;

@@ -10,7 +10,7 @@ const SLOW_DOWN_INTERVAL_INCREMENT_MS = 5000;
 
 type OAuthDeviceCodeIncompletePollResult =
   | { status: "pending" }
-  | { status: "slow_down"; intervalSeconds?: number }
+  | { status: "slow_down"; intervalSeconds?: number | undefined }
   | { status: "failed"; message: string };
 
 export type OAuthDeviceCodePollResult<T> =
@@ -18,9 +18,9 @@ export type OAuthDeviceCodePollResult<T> =
   | { status: "complete"; value: T };
 
 export type OAuthDeviceCodePollOptions<T> = {
-  intervalSeconds?: number;
-  expiresInSeconds?: number;
-  waitBeforeFirstPoll?: boolean;
+  intervalSeconds?: number | undefined;
+  expiresInSeconds?: number | undefined;
+  waitBeforeFirstPoll?: boolean | undefined;
   poll: () => Promise<OAuthDeviceCodePollResult<T>>;
   signal: AbortSignal;
 };

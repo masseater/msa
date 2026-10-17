@@ -1127,7 +1127,12 @@ describe("nested tool calls", () => {
           seen.push(args);
           return {};
         },
-        { prepareArguments: () => ({ text: undefined }) },
+        {
+          prepareArguments: () => {
+            const repaired: { text?: string | undefined } = { text: undefined };
+            return repaired as { text?: string };
+          },
+        },
       ),
     );
     let result: NestedToolExecutionResult | undefined;

@@ -51,7 +51,11 @@ function routeTo(
 ): ModelRoute<JevState> {
   const model = ctx.modelRegistry.find(PROVIDER, id);
   if (!model) throw new Error(`Model ${PROVIDER}/${id} is not in the catalog`);
-  return { model, thinkingLevel: request.thinkingLevel, state };
+  return {
+    model,
+    thinkingLevel: request.thinkingLevel,
+    ...(state !== undefined ? { state } : {}),
+  };
 }
 
 function lastUserText(messages: readonly Message[]): string {

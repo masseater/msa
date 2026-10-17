@@ -6,7 +6,7 @@ import {
   type OpenRouterModelListItem,
 } from "../scripts/openrouter-catalog.ts";
 
-function openRouterChatCost(pricing: OpenRouterModelListItem["pricing"]) {
+function openRouterChatCost(pricing: NonNullable<OpenRouterModelListItem["pricing"]>) {
   const catalog = buildOpenRouterCatalog(
     [
       {

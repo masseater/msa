@@ -8,7 +8,7 @@ export interface SourceInfo {
   source: string;
   scope: SourceScope;
   origin: SourceOrigin;
-  baseDir?: string;
+  baseDir?: string | undefined;
 }
 
 /** Prefix of built-in tool and extension paths, such as `builtin:read` or `builtin:mcp`. */
@@ -45,7 +45,7 @@ export function createSyntheticSourceInfo(
     source: string;
     scope?: SourceScope;
     origin?: SourceOrigin;
-    baseDir?: string;
+    baseDir?: string | undefined;
   },
 ): SourceInfo {
   return {

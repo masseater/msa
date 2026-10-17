@@ -43,7 +43,7 @@ export type LoginProviderCompletionOption = {
   id: string;
   name: string;
   authTypes: AuthType[];
-  subscription?: boolean;
+  subscription?: boolean | undefined;
 };
 
 /** Collapses per-auth-type provider options into one completion entry per provider. */
@@ -134,12 +134,13 @@ export class LoginFlow {
     const options: AuthSelectorProvider[] = [];
     for (const provider of modelRuntime.getProviders()) {
       const authStatus = modelRuntime.getProviderAuthStatus(provider.id);
+      const source = authStatus.configured ? (authStatus.label ?? authStatus.source) : undefined;
       const status = authStatus.configured
         ? {
             type: modelRuntime.isUsingOAuth(provider.id)
               ? ("oauth" as const)
               : ("api_key" as const),
-            source: authStatus.label ?? authStatus.source,
+            ...(source !== undefined ? { source } : {}),
           }
         : undefined;
       const subscription = provider.auth.oauth?.isSubscription === true;

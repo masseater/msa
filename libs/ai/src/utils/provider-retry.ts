@@ -1,11 +1,11 @@
 const DEFAULT_MAX_RETRY_DELAY_MS = 60_000;
 
 interface ProviderRetryOptions {
-  maxRetries?: number;
-  maxRetryDelayMs?: number;
-  signal?: AbortSignal;
+  maxRetries?: number | undefined;
+  maxRetryDelayMs?: number | undefined;
+  signal?: AbortSignal | undefined;
   /** HTTP statuses that fail at once although the default policy would retry them. */
-  noRetryStatuses?: readonly number[];
+  noRetryStatuses?: readonly number[] | undefined;
 }
 
 interface ProviderError extends Error {

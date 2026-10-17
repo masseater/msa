@@ -66,7 +66,7 @@ const DEFAULT_PROJECT_TRUST_BY_LABEL = new Map(
 export interface SettingsConfig {
   autoCompact: boolean;
   defaultModel: string;
-  currentModel?: Model<any>;
+  currentModel?: Model<any> | undefined;
   availableDefaultModels: readonly Model<any>[];
   showImages: boolean;
   imageWidthCells: number;
@@ -603,7 +603,7 @@ export class SettingsSelectorComponent extends Container {
                   return {
                     value: key,
                     label: modelItemLabel(model),
-                    description: override ?? undefined,
+                    ...(override ? { description: override } : {}),
                   };
                 });
                 if (modelItems.length === 0) {

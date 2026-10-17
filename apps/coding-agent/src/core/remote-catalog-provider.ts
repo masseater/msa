@@ -65,12 +65,13 @@ function parseCatalog(providerId: string, value: unknown): AnyModel[] {
 async function readCatalog(
   providerId: string,
   response: Response,
-): Promise<{ models: AnyModel[]; lastModified: number; etag: string | undefined }> {
+): Promise<{ models: AnyModel[]; lastModified: number; etag?: string }> {
   const lastModified = Date.parse(response.headers.get("last-modified") ?? "");
+  const etag = response.headers.get("etag");
   return {
     models: parseCatalog(providerId, await response.json()),
     lastModified: Number.isNaN(lastModified) ? 0 : lastModified,
-    etag: response.headers.get("etag") ?? undefined,
+    ...(etag !== null ? { etag } : {}),
   };
 }
 
@@ -174,14 +175,8 @@ export function withRemoteCatalog(
         return;
       }
       if (response.status === 404 || response.status === 501) {
-        await context.publish({
-          persist: {
-            ...(stored ?? { models: [] }),
-            checkedAt,
-            lastModified: 0,
-            etag: undefined,
-          },
-        });
+        const { etag: _etag, ...withoutEtag }: ModelsStoreEntry = stored ?? { models: [] };
+        await context.publish({ persist: { ...withoutEtag, checkedAt, lastModified: 0 } });
         return;
       }
       if (!response.ok) {

@@ -28,6 +28,7 @@ import type {
   AgentToolResult,
   PrepareNextTurnContext,
   StreamFn,
+  ThinkingLevel,
 } from "./types.ts";
 
 export type AgentEventSink = (event: AgentEvent) => Promise<void> | void;
@@ -204,16 +205,11 @@ async function runLoop(
         if (nextTurnSnapshot) {
           currentContext = nextTurnSnapshot.context ?? currentContext;
           preparedMessages = nextTurnSnapshot.messages ?? [];
-          config = {
-            ...config,
-            model: nextTurnSnapshot.model ?? config.model,
-            reasoning:
-              nextTurnSnapshot.thinkingLevel === undefined
-                ? config.reasoning
-                : nextTurnSnapshot.thinkingLevel === "off"
-                  ? undefined
-                  : nextTurnSnapshot.thinkingLevel,
-          };
+          config = withRequestState(
+            config,
+            nextTurnSnapshot.model ?? config.model,
+            nextTurnSnapshot.thinkingLevel,
+          );
         }
         // Preparation can be long-running (for example, compaction). Pick up steering
         // queued while it ran. Only poll again if the earlier poll returned nothing;
@@ -246,16 +242,11 @@ async function runLoop(
       );
       if (requestUpdate) {
         currentContext = requestUpdate.context ?? currentContext;
-        config = {
-          ...config,
-          model: requestUpdate.model ?? config.model,
-          reasoning:
-            requestUpdate.thinkingLevel === undefined
-              ? config.reasoning
-              : requestUpdate.thinkingLevel === "off"
-                ? undefined
-                : requestUpdate.thinkingLevel,
-        };
+        config = withRequestState(
+          config,
+          requestUpdate.model ?? config.model,
+          requestUpdate.thinkingLevel,
+        );
       }
 
       // Stream assistant response
@@ -403,6 +394,18 @@ function withToolChanges(
   };
 }
 
+/** Apply a request update's model and thinking level; `"off"` clears the requested reasoning. */
+function withRequestState(
+  config: AgentLoopConfig,
+  model: AgentLoopConfig["model"],
+  thinkingLevel: ThinkingLevel | undefined,
+): AgentLoopConfig {
+  const { reasoning, ...rest } = config;
+  const next =
+    thinkingLevel === undefined ? reasoning : thinkingLevel === "off" ? undefined : thinkingLevel;
+  return next === undefined ? { ...rest, model } : { ...rest, model, reasoning: next };
+}
+
 /**
  * Stream an assistant response from the LLM.
  * This is where AgentMessage[] gets transformed to Message[] for the LLM.
@@ -429,10 +432,11 @@ async function streamAssistantResponse(
   const resolvedApiKey =
     (config.getApiKey ? await config.getApiKey(config.model.provider) : undefined) || config.apiKey;
 
+  const { signal: _configSignal, ...streamConfig } = config;
   const response = await streamFunction(config.model, llmContext, {
-    ...config,
-    apiKey: resolvedApiKey,
-    signal,
+    ...streamConfig,
+    ...(resolvedApiKey !== undefined ? { apiKey: resolvedApiKey } : {}),
+    ...(signal !== undefined ? { signal } : {}),
   });
   // Record the requested level, whichever stream function answered.
   const result = async () =>
@@ -1028,7 +1032,7 @@ function createToolResultMessage(finalized: FinalizedToolCallOutcome): ToolResul
     // so the null never enters session history or provider payloads.
     content: finalized.result.content ?? [],
     details: finalized.result.details,
-    usage: finalized.result.usage,
+    ...(finalized.result.usage !== undefined ? { usage: finalized.result.usage } : {}),
     isError: finalized.isError,
     ...(finalized.durationMs === undefined ? {} : { durationMs: finalized.durationMs }),
     timestamp: Date.now(),

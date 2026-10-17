@@ -45,17 +45,17 @@ type UpdateTarget =
 
 interface PackageCommandOptions {
   command: PackageCommand;
-  source?: string;
-  updateTarget?: UpdateTarget;
+  source?: string | undefined;
+  updateTarget?: UpdateTarget | undefined;
   showExtensionsSkippedNote: boolean;
   local: boolean;
   force: boolean;
-  projectTrustOverride?: boolean;
+  projectTrustOverride?: boolean | undefined;
   help: boolean;
-  invalidOption?: string;
-  invalidArgument?: string;
-  missingOptionValue?: string;
-  conflictingOptions?: string;
+  invalidOption?: string | undefined;
+  invalidArgument?: string | undefined;
+  missingOptionValue?: string | undefined;
+  conflictingOptions?: string | undefined;
 }
 
 function reportSettingsErrors(settingsManager: SettingsManager, context: string): void {
@@ -542,9 +542,9 @@ function reportProjectTrustWarnings(warnings: readonly string[]): void {
 async function createCommandSettingsManager(options: {
   cwd: string;
   agentDir: string;
-  projectTrustOverride?: boolean;
-  useSavedProjectTrustOnly?: boolean;
-  extensionFactories?: InlineExtension[];
+  projectTrustOverride?: boolean | undefined;
+  useSavedProjectTrustOnly?: boolean | undefined;
+  extensionFactories?: InlineExtension[] | undefined;
 }): Promise<CommandSettingsResult> {
   const settingsManager = SettingsManager.create(options.cwd, options.agentDir, {
     projectTrusted: false,

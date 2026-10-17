@@ -517,38 +517,42 @@ export async function executeCodemode(
       renderToolSample(toCodemodeDeclaration(tool, guidelines?.get(tool.name))),
     ]),
   );
-  const sandboxTools: CodemodeTool[] = callable.map((tool) => ({
-    name: tool.name,
-    description: samples.get(tool.name),
-    execute: async (args, { signal: callSignal }) => {
-      const record: CodemodeNestedCall = {
-        id: `${toolCallId}/?`,
-        name: tool.name,
-        args: previewArgs(args),
-        status: "running",
-      };
-      calls.push(record);
-      publish();
-      const callStartedAt = performance.now();
-      // Only tools from ctx.tools are callable, so ctx is set here.
-      if (!ctx) throw new Error("Tool calls need a session");
-      const outcome = await ctx.executeTool(tool.name, args, { signal: callSignal });
-      record.id = outcome.toolCall.id;
-      record.durationMs = performance.now() - callStartedAt;
-      if (outcome.isError) {
-        record.status = callSignal.aborted ? "cancelled" : "error";
-        record.error = truncateText(
-          textOf(outcome.result) || `Tool "${tool.name}" failed`,
-          ERROR_PREVIEW_CHARS,
-        );
-      } else {
-        record.status = "ok";
-      }
-      publish();
-      return toScriptValue(tool, outcome);
-    },
-  }));
+  const sandboxTools: CodemodeTool[] = callable.map((tool) => {
+    const description = samples.get(tool.name);
+    return {
+      name: tool.name,
+      ...(description !== undefined ? { description } : {}),
+      execute: async (args, { signal: callSignal }) => {
+        const record: CodemodeNestedCall = {
+          id: `${toolCallId}/?`,
+          name: tool.name,
+          args: previewArgs(args),
+          status: "running",
+        };
+        calls.push(record);
+        publish();
+        const callStartedAt = performance.now();
+        // Only tools from ctx.tools are callable, so ctx is set here.
+        if (!ctx) throw new Error("Tool calls need a session");
+        const outcome = await ctx.executeTool(tool.name, args, { signal: callSignal });
+        record.id = outcome.toolCall.id;
+        record.durationMs = performance.now() - callStartedAt;
+        if (outcome.isError) {
+          record.status = callSignal.aborted ? "cancelled" : "error";
+          record.error = truncateText(
+            textOf(outcome.result) || `Tool "${tool.name}" failed`,
+            ERROR_PREVIEW_CHARS,
+          );
+        } else {
+          record.status = "ok";
+        }
+        publish();
+        return toScriptValue(tool, outcome);
+      },
+    };
+  });
 
+  const workerUrl = getCodemodeWorkerSpecifier();
   const sandbox = new CodemodeSandbox({
     tools: sandboxTools,
     globals: [
@@ -567,7 +571,7 @@ export async function executeCodemode(
     timeoutMs: sourceOptions.timeoutMs ?? Number.POSITIVE_INFINITY,
     memoryLimitBytes: CODEMODE_MEMORY_LIMIT_BYTES,
     wasm: loadQuickJSWasm(getQuickJSWasmPath()),
-    workerUrl: getCodemodeWorkerSpecifier(),
+    ...(workerUrl !== undefined ? { workerUrl } : {}),
     acquireWorker: () => {
       if (activeCodemodeWorkers >= MAX_CONCURRENT_CODEMODE_WORKERS) {
         throw new Error(
@@ -584,7 +588,7 @@ export async function executeCodemode(
   let result: CodemodeResult;
   try {
     const store = ctx ? readCodemodeStore(ctx.sessionManager.getBranch()) : {};
-    result = await sandbox.execute(code, { signal, store });
+    result = await sandbox.execute(code, { ...(signal ? { signal } : {}), store });
   } finally {
     await sandbox.close();
   }

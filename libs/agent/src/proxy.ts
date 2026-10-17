@@ -40,25 +40,27 @@ export type ProxyAssistantMessageEvent =
   | {
       type: "error";
       reason: Extract<StopReason, "aborted" | "error">;
-      errorMessage?: string;
+      errorMessage?: string | undefined;
       usage: AssistantMessage["usage"];
       providerThinkingLevel?: string;
     };
 
-type ProxySerializableStreamOptions = Pick<
-  SimpleStreamOptions,
-  | "temperature"
-  | "samplingParams"
-  | "maxTokens"
-  | "reasoning"
-  | "cacheRetention"
-  | "sessionId"
-  | "headers"
-  | "metadata"
-  | "transport"
-  | "thinkingBudgets"
-  | "maxRetryDelayMs"
->;
+type ProxySerializableStreamOptions = {
+  [
+    K in
+      | "temperature"
+      | "samplingParams"
+      | "maxTokens"
+      | "reasoning"
+      | "cacheRetention"
+      | "sessionId"
+      | "headers"
+      | "metadata"
+      | "transport"
+      | "thinkingBudgets"
+      | "maxRetryDelayMs"
+  ]?: SimpleStreamOptions[K] | undefined;
+};
 
 export interface ProxyStreamOptions extends ProxySerializableStreamOptions {
   /** Local abort signal for the proxy request */
@@ -155,7 +157,7 @@ export function streamProxy(
           context,
           options: buildProxyRequestOptions(options),
         }),
-        signal: options.signal,
+        signal: options.signal ?? null,
       });
 
       if (!response.ok) {
@@ -283,7 +285,8 @@ function processProxyEvent(
     case "text_end": {
       const content = partial.content[proxyEvent.contentIndex];
       if (content?.type === "text") {
-        content.textSignature = proxyEvent.contentSignature;
+        if (proxyEvent.contentSignature === undefined) delete content.textSignature;
+        else content.textSignature = proxyEvent.contentSignature;
         return {
           type: "text_end",
           contentIndex: proxyEvent.contentIndex,
@@ -315,7 +318,8 @@ function processProxyEvent(
     case "thinking_end": {
       const content = partial.content[proxyEvent.contentIndex];
       if (content?.type === "thinking") {
-        content.thinkingSignature = proxyEvent.contentSignature;
+        if (proxyEvent.contentSignature === undefined) delete content.thinkingSignature;
+        else content.thinkingSignature = proxyEvent.contentSignature;
         return {
           type: "thinking_end",
           contentIndex: proxyEvent.contentIndex,
@@ -377,7 +381,8 @@ function processProxyEvent(
 
     case "error":
       partial.stopReason = proxyEvent.reason;
-      partial.errorMessage = proxyEvent.errorMessage;
+      if (proxyEvent.errorMessage === undefined) delete partial.errorMessage;
+      else partial.errorMessage = proxyEvent.errorMessage;
       partial.usage = proxyEvent.usage;
       if (proxyEvent.providerThinkingLevel !== undefined) {
         partial.providerThinkingLevel = proxyEvent.providerThinkingLevel;

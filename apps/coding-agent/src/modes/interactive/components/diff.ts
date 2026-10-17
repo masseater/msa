@@ -73,7 +73,7 @@ function renderIntraLineDiff(
 
 export interface RenderDiffOptions {
   /** File path (unused, kept for API compatibility) */
-  filePath?: string;
+  filePath?: string | undefined;
 }
 
 /**

@@ -109,17 +109,17 @@ const RESOURCE_TOOL_NAMES: ReadonlySet<string> = new Set([
 /** A configured server. Disabled servers have no connection. */
 interface McpServer {
   entry: McpServerEntry;
-  connection?: McpServerConnection;
+  connection?: McpServerConnection | undefined;
   /** For servers extensions registered: the config as registered, to detect re-registrations. */
   registeredConfig?: string;
   /** Result of the last `/mcp` action that failed, shown in the manager. */
-  message?: string;
+  message?: string | undefined;
   /** Identifies the current connection attempt; disabling or replacing it invalidates earlier work. */
-  attempt?: symbol;
+  attempt?: symbol | undefined;
   /** Settles when the connection started for the server connected or failed. */
   ready?: Promise<void>;
   /** Cleanup of a detached connection; a replacement waits for it before opening a transport. */
-  closing?: Promise<void>;
+  closing?: Promise<void> | undefined;
 }
 
 const EXPOSURE_DESCRIPTIONS: Record<Exclude<McpExposure, "hidden">, string> = {
@@ -184,7 +184,7 @@ function truncate(text: string, max: number): string {
 /** What the `mcp_servers` section needs of a server. */
 export interface McpServerListing {
   entry: McpServerEntry;
-  connection?: { instructions?: string };
+  connection?: { instructions?: string | undefined } | undefined;
 }
 
 /** First line of the configured description, or of the server instructions once connected. */

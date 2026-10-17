@@ -386,7 +386,12 @@ export type EntryRecord = {
 };
 
 /** Entry content supplied before the Session assigns identity and task attribution. */
-export type EntryDraft = Omit<EntryRecord, "id" | "conversationId" | "byTaskId" | "head"> & {
+export type EntryDraft = Omit<
+  EntryRecord,
+  "id" | "conversationId" | "byTaskId" | "head" | "data"
+> & {
+  /** `undefined` is dropped like an absent value. */
+  readonly data?: JsonValue | undefined;
   /** `"self"` starts active context at the newly assigned entry ID. */
   readonly head?: EntryId | "self";
 };

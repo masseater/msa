@@ -75,8 +75,8 @@ const bashOutputSchema = Type.Object({
 export type BashToolOutput = Static<typeof bashOutputSchema>;
 
 export interface BashToolDetails {
-  truncation?: TruncationResult;
-  fullOutputPath?: string;
+  truncation?: TruncationResult | undefined;
+  fullOutputPath?: string | undefined;
 }
 
 /**
@@ -97,9 +97,9 @@ export interface BashOperations {
     cwd: string,
     options: {
       onData: (data: Buffer) => void;
-      signal?: AbortSignal;
-      timeout?: number;
-      env?: NodeJS.ProcessEnv;
+      signal?: AbortSignal | undefined;
+      timeout?: number | undefined;
+      env?: NodeJS.ProcessEnv | undefined;
     },
   ) => Promise<{ exitCode: number | null }>;
 }
@@ -193,7 +193,9 @@ export function createLocalShellOperations(
  * This is useful for extensions that intercept user_bash and still want msa's
  * standard local shell behavior while wrapping or rewriting commands.
  */
-export function createLocalBashOperations(options?: { shellPath?: string }): BashOperations {
+export function createLocalBashOperations(options?: {
+  shellPath?: string | undefined;
+}): BashOperations {
   return createLocalShellOperations("bash", () => getShellConfig(options?.shellPath));
 }
 
@@ -237,9 +239,9 @@ export interface BashToolOptions {
   /** Custom operations for command execution. Default: local shell */
   operations?: BashOperations;
   /** Command prefix prepended to every command (for example shell setup commands) */
-  commandPrefix?: string;
+  commandPrefix?: string | undefined;
   /** Optional explicit shell path from settings */
-  shellPath?: string;
+  shellPath?: string | undefined;
   /** Expose current msa session metadata as MSA_* environment variables. Default: true */
   exposeSessionEnvironment?: boolean;
   /** Hook to adjust command, cwd, or env before execution */

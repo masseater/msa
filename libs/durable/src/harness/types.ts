@@ -136,9 +136,9 @@ export interface ConversationHandle {
 
 /** Post-tools controls requested by a tool result. */
 export type ToolControl = {
-  readonly addTools?: readonly string[];
-  readonly terminate?: true;
-  readonly handoff?: string;
+  readonly addTools?: readonly string[] | undefined;
+  readonly terminate?: true | undefined;
+  readonly handoff?: string | undefined;
 };
 
 /** Remark about a call for the model and the UI, such as truncation or a spill path; never part of the tool's data. */
@@ -440,7 +440,7 @@ export type AgentState = {
 
 /** A change to `msa.agent`: a given field replaces the stored one, `null` clears it, `undefined` changes nothing. */
 export type AgentChange = {
-  readonly model?: ModelRef | null;
+  readonly model?: ModelRef | null | undefined;
   readonly thinkingLevel?: ModelThinkingLevel | null;
   readonly extensions?:
     | readonly Extension[]
@@ -545,11 +545,12 @@ export type CompactionResult = { entryId?: EntryId; submissionId?: SubmissionId 
 /** Harness-wide run policy. Read at every resolution and never copied; getters are fine. Synchronous: some readers run on the Session line. */
 export type HarnessSettings = {
   /** Default extension selection; absent: every installed extension, in install order. */
-  readonly extensions?: readonly Extension[];
+  readonly extensions?: readonly Extension[] | undefined;
   readonly stream?: ConversationStreamOptions;
   readonly retry?: Partial<ConversationRetryPolicy>;
   readonly compaction?: Partial<CompactionPolicy>;
-  readonly progress?: Partial<ProgressPolicy>;
+  /** An interval given as `undefined` keeps its default. */
+  readonly progress?: { readonly [K in keyof ProgressPolicy]?: ProgressPolicy[K] | undefined };
   readonly toolExecution?: ToolExecutionMode;
   readonly steeringMode?: QueueMode;
   readonly followUpMode?: QueueMode;

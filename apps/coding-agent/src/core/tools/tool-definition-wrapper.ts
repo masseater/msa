@@ -18,10 +18,12 @@ export function wrapToolDefinition<TDetails = unknown>(
     label: definition.label,
     description: definition.description,
     parameters: definition.parameters,
-    outputSchema: definition.outputSchema,
-    constrainedSampling: definition.constrainedSampling,
-    prepareArguments: definition.prepareArguments,
-    executionMode: definition.executionMode,
+    ...(definition.outputSchema ? { outputSchema: definition.outputSchema } : {}),
+    ...(definition.constrainedSampling !== undefined
+      ? { constrainedSampling: definition.constrainedSampling }
+      : {}),
+    ...(definition.prepareArguments ? { prepareArguments: definition.prepareArguments } : {}),
+    ...(definition.executionMode ? { executionMode: definition.executionMode } : {}),
     execute: (toolCallId, params, signal, onUpdate, ctx?: ExtensionToolContext) =>
       definition.execute(
         toolCallId,

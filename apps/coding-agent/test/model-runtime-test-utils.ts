@@ -20,7 +20,7 @@ export async function createModelRegistry(
   return wrap(
     await ModelRuntime.create({
       credentials,
-      modelsPath,
+      ...(modelsPath !== undefined ? { modelsPath } : {}),
       modelsStore: new InMemoryCodingAgentModelsStore(),
       allowModelNetwork: false,
     }),

@@ -174,7 +174,7 @@ describe("AgentSession auto-compaction queue resume", () => {
       )
       .mockResolvedValue();
 
-    const events: Array<{ type: string; reason: string; errorMessage?: string }> = [];
+    const events: Array<{ type: string; reason: string; errorMessage?: string | undefined }> = [];
     session.subscribe((event) => {
       if (event.type === "compaction_end") {
         events.push({ type: event.type, reason: event.reason, errorMessage: event.errorMessage });

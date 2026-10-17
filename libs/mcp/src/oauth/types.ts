@@ -74,22 +74,22 @@ export type OAuthClientInformationMixed = OAuthClientInformation | OAuthClientIn
 
 export interface OAuthDiscoveryState {
   authorizationServerUrl: string;
-  authorizationServerMetadata?: AuthorizationServerMetadata;
-  resourceMetadata?: OAuthProtectedResourceMetadata;
-  resourceMetadataUrl?: string;
+  authorizationServerMetadata?: AuthorizationServerMetadata | undefined;
+  resourceMetadata?: OAuthProtectedResourceMetadata | undefined;
+  resourceMetadataUrl?: string | undefined;
 }
 
 export interface OAuthServerInfo {
   authorizationServerUrl: string;
-  authorizationServerMetadata?: AuthorizationServerMetadata;
-  resourceMetadata?: OAuthProtectedResourceMetadata;
+  authorizationServerMetadata?: AuthorizationServerMetadata | undefined;
+  resourceMetadata?: OAuthProtectedResourceMetadata | undefined;
 }
 
 export interface OAuthChallenge {
-  resourceMetadataUrl?: URL;
-  scope?: string;
-  error?: string;
-  errorDescription?: string;
+  resourceMetadataUrl?: URL | undefined;
+  scope?: string | undefined;
+  error?: string | undefined;
+  errorDescription?: string | undefined;
 }
 
 function object(value: unknown, name: string): Record<string, unknown> {
@@ -97,9 +97,18 @@ function object(value: unknown, name: string): Record<string, unknown> {
   return value;
 }
 
+/** `T` with the properties that may be `undefined` made optional and `undefined`-free. */
+type Compacted<T> = {
+  [K in keyof T as undefined extends T[K] ? never : K]: T[K];
+} & {
+  [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<T[K], undefined>;
+};
+
 /** Drops `undefined` values so optional fields are absent rather than present-but-undefined. */
-function compact<T extends object>(value: T): T {
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
+function compact<T extends object>(value: T): Compacted<T> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, item]) => item !== undefined),
+  ) as Compacted<T>;
 }
 
 function requiredString(value: unknown, name: string): string {

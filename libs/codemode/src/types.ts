@@ -74,9 +74,9 @@ export type CodemodeErrorKind =
 
 export interface CodemodeError {
   kind: CodemodeErrorKind;
-  name?: string;
+  name?: string | undefined;
   message: string;
-  stack?: string;
+  stack?: string | undefined;
 }
 
 /** Keys the script changed with `store()`. Only successful executions report writes. */
@@ -243,7 +243,7 @@ export interface CodemodeRun {
 }
 
 export interface CodemodeExecuteOptions {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   /** Overrides the sandbox default for this execution. */
   timeoutMs?: number;
   /**

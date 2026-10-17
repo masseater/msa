@@ -65,17 +65,17 @@ async function fetchMetadata(
 ): Promise<Response> {
   return fetch(url, {
     headers: { Accept: "application/json", "MCP-Protocol-Version": protocolVersion },
-    signal,
+    signal: signal ?? null,
   });
 }
 
 export async function discoverProtectedResourceMetadata(
   serverUrl: string | URL,
   options: {
-    resourceMetadataUrl?: string | URL;
-    protocolVersion?: string;
-    fetch?: McpFetch;
-    signal?: AbortSignal;
+    resourceMetadataUrl?: string | URL | undefined;
+    protocolVersion?: string | undefined;
+    fetch?: McpFetch | undefined;
+    signal?: AbortSignal | undefined;
   } = {},
 ): Promise<OAuthProtectedResourceMetadata> {
   const server = new URL(serverUrl);
@@ -131,10 +131,10 @@ export function buildAuthorizationServerDiscoveryUrls(
 export async function discoverAuthorizationServerMetadata(
   authorizationServerUrl: string | URL,
   options: {
-    fetch?: McpFetch;
-    protocolVersion?: string;
-    skipIssuerValidation?: boolean;
-    signal?: AbortSignal;
+    fetch?: McpFetch | undefined;
+    protocolVersion?: string | undefined;
+    skipIssuerValidation?: boolean | undefined;
+    signal?: AbortSignal | undefined;
   } = {},
 ): Promise<AuthorizationServerMetadata | undefined> {
   const fetch = options.fetch ?? globalThis.fetch;
@@ -166,12 +166,12 @@ export async function discoverAuthorizationServerMetadata(
 export async function discoverOAuthServerInfo(
   serverUrl: string | URL,
   options: {
-    resourceMetadataUrl?: URL;
+    resourceMetadataUrl?: URL | undefined;
     /** Metadata document to use instead of discovery. It is trusted as configured, so its issuer is not checked. */
-    authorizationServerMetadataUrl?: URL;
-    fetch?: McpFetch;
-    skipIssuerValidation?: boolean;
-    signal?: AbortSignal;
+    authorizationServerMetadataUrl?: URL | undefined;
+    fetch?: McpFetch | undefined;
+    skipIssuerValidation?: boolean | undefined;
+    signal?: AbortSignal | undefined;
   } = {},
 ): Promise<OAuthServerInfo> {
   let resourceMetadata: OAuthProtectedResourceMetadata | undefined;

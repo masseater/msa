@@ -46,7 +46,7 @@ export type FileErrorCode =
 
 export class FileError extends Error {
   public code: FileErrorCode;
-  public path?: string;
+  public path?: string | undefined;
 
   constructor(code: FileErrorCode, message: string, path?: string, cause?: Error) {
     super(message, cause === undefined ? undefined : { cause });

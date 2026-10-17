@@ -49,9 +49,9 @@ export async function createMcpTools(client: McpClient, prefix: string): Promise
       type: "object",
       properties: tool.inputSchema["properties"] ?? {},
     }),
-    outputSchema: tool.outputSchema
-      ? Type.Unsafe<Record<string, unknown>>(tool.outputSchema)
-      : undefined,
+    ...(tool.outputSchema
+      ? { outputSchema: Type.Unsafe<Record<string, unknown>>(tool.outputSchema) }
+      : {}),
     execute: async (_toolCallId, params, signal, onUpdate) => {
       const result = await client.callTool(tool.name, params as Record<string, unknown>, {
         signal,
@@ -67,7 +67,9 @@ export async function createMcpTools(client: McpClient, prefix: string): Promise
       return {
         content,
         details: undefined,
-        structuredContent: result.structuredContent as JsonValue | undefined,
+        ...(result.structuredContent !== undefined
+          ? { structuredContent: result.structuredContent as JsonValue }
+          : {}),
         // MCP reports tool failures in the result instead of as a protocol error.
         isError: result.isError === true,
       };

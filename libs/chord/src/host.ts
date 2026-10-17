@@ -83,7 +83,7 @@ export interface FacetApi<P = unknown> {
 /** What a facet module exports (default export): the code that serves its types on one host kind. */
 export interface FacetDefinition<P = unknown> {
   /** Contract tokens this facet consumes; checked against providers at reload. */
-  readonly uses?: readonly AnyContract[];
+  readonly uses?: readonly AnyContract[] | undefined;
   setup(api: FacetApi<P>): void;
 }
 
@@ -176,7 +176,7 @@ export type PrincipalMatch<P = unknown> = ((principal: P) => boolean) | Principa
 
 export interface RootOptions<P = unknown> {
   readonly principal?: P;
-  readonly signal?: AbortSignal;
+  readonly signal?: AbortSignal | undefined;
   /** Start the root in a retained code version (links carry code versions). Defaults to the current code version. */
   readonly codeVersion?: number;
 }
@@ -651,7 +651,7 @@ export class HostImpl implements Host, HostCore {
     fn: (ctx: Ctx) => T | Promise<T>,
     options: {
       readonly principal?: unknown;
-      readonly signal?: AbortSignal;
+      readonly signal?: AbortSignal | undefined;
       readonly from?: Connection;
     } = {},
   ): Promise<T> {

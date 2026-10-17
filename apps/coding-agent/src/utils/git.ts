@@ -13,7 +13,7 @@ export type GitSource = {
   /** Repository path (e.g., "user/repo") */
   path: string;
   /** Git ref (branch, tag, commit) if specified */
-  ref?: string;
+  ref?: string | undefined;
   /** True if ref was specified (package won't be auto-updated) */
   pinned: boolean;
 };
@@ -105,7 +105,7 @@ function buildGitSource(args: {
   repo: string;
   host: string;
   path: string;
-  ref?: string;
+  ref?: string | undefined;
 }): GitSource | null {
   if (args.path.startsWith("/")) {
     return null;

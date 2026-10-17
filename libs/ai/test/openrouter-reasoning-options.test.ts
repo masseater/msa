@@ -17,7 +17,7 @@ function openRouterModel(thinkingLevelMap?: ThinkingLevelMap): Model<"openai-com
     provider: "openrouter",
     baseUrl: "https://example.invalid/v1",
     reasoning: true,
-    thinkingLevelMap,
+    ...(thinkingLevelMap !== undefined ? { thinkingLevelMap } : {}),
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,

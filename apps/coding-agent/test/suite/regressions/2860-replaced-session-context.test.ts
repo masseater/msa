@@ -100,7 +100,7 @@ describe("regression #2860: replaced session callbacks", () => {
         ...(await createAgentSessionFromServices({
           services,
           sessionManager,
-          sessionStartEvent,
+          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
           model: faux.getModel(),
         })),
         services,
@@ -126,10 +126,14 @@ describe("regression #2860: replaced session callbacks", () => {
           },
           navigateTree: async (targetId, options) => {
             const result = await session.navigateTree(targetId, {
-              summarize: options?.summarize,
-              customInstructions: options?.customInstructions,
-              replaceInstructions: options?.replaceInstructions,
-              label: options?.label,
+              ...(options?.summarize !== undefined ? { summarize: options.summarize } : {}),
+              ...(options?.customInstructions !== undefined
+                ? { customInstructions: options.customInstructions }
+                : {}),
+              ...(options?.replaceInstructions !== undefined
+                ? { replaceInstructions: options.replaceInstructions }
+                : {}),
+              ...(options?.label !== undefined ? { label: options.label } : {}),
             });
             return { cancelled: result.cancelled };
           },
@@ -183,7 +187,7 @@ describe("regression #2860: replaced session callbacks", () => {
             oldPi = msa;
             oldSessionFile = ctx.sessionManager.getSessionFile();
             await ctx.newSession({
-              parentSession: oldSessionFile,
+              ...(oldSessionFile !== undefined ? { parentSession: oldSessionFile } : {}),
               withSession: async (replacedCtx) => {
                 events.push(`with:${currentInstance}`);
                 replacementSessionFile = replacedCtx.sessionManager.getSessionFile();

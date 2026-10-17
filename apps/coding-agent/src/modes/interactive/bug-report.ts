@@ -35,7 +35,7 @@ interface BugReportContext {
 }
 
 interface BugReportOptions {
-  hint?: string;
+  hint?: string | undefined;
   includeSession: boolean;
   includeSummary: boolean;
   delivery: "upload" | "zip";

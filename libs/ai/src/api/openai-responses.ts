@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { ResponseCreateParamsStreaming } from "openai/resources/responses/responses.js";
+import type { ReasoningEffort } from "openai/resources/shared.js";
 
 import { clampThinkingLevel } from "../models.ts";
 import type {
@@ -155,10 +156,10 @@ function getPromptCacheOptions(
 
 // OpenAI Responses-specific options
 export interface OpenAIResponsesOptions extends StreamOptions {
-  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-  reasoningSummary?: "auto" | "detailed" | "concise" | null;
-  serviceTier?: ResponseCreateParamsStreaming["service_tier"];
-  toolChoice?: ResponseCreateParamsStreaming["tool_choice"];
+  reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | undefined;
+  reasoningSummary?: "auto" | "detailed" | "concise" | null | undefined;
+  serviceTier?: ResponseCreateParamsStreaming["service_tier"] | undefined;
+  toolChoice?: ResponseCreateParamsStreaming["tool_choice"] | undefined;
 }
 
 /**
@@ -370,18 +371,21 @@ function buildParams(
   const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
   // Sign in with ChatGPT rejects these request fields.
   const omitUnsupportedFields = isChatGPTSignIn(model, options?.apiKey);
+  const promptCacheKey =
+    cacheRetention === "none" ? undefined : clampOpenAIPromptCacheKey(options?.sessionId);
+  const promptCacheRetention = omitUnsupportedFields
+    ? undefined
+    : getPromptCacheRetention(compat, cacheRetention);
+  const promptCacheOptions = omitUnsupportedFields
+    ? undefined
+    : getPromptCacheOptions(compat, cacheRetention);
   const params: ResponseCreateParamsStreaming = {
     model: model.id,
     input: messages,
     stream: true,
-    prompt_cache_key:
-      cacheRetention === "none" ? undefined : clampOpenAIPromptCacheKey(options?.sessionId),
-    prompt_cache_retention: omitUnsupportedFields
-      ? undefined
-      : getPromptCacheRetention(compat, cacheRetention),
-    prompt_cache_options: omitUnsupportedFields
-      ? undefined
-      : getPromptCacheOptions(compat, cacheRetention),
+    ...(promptCacheKey !== undefined ? { prompt_cache_key: promptCacheKey } : {}),
+    ...(promptCacheRetention !== undefined ? { prompt_cache_retention: promptCacheRetention } : {}),
+    ...(promptCacheOptions !== undefined ? { prompt_cache_options: promptCacheOptions } : {}),
     store: false,
   };
 
@@ -420,15 +424,13 @@ function buildParams(
           ? requestedEffort
           : CONFIGURATION_UPDATE_REQUEST_EFFORT;
       params.reasoning = {
-        effort: effort as NonNullable<typeof params.reasoning>["effort"],
+        effort: effort as ReasoningEffort,
         summary: options?.reasoningSummary || "auto",
       };
       params.include = ["reasoning.encrypted_content"];
     } else if (model.thinkingLevelMap?.off !== null) {
       params.reasoning = {
-        effort: (model.thinkingLevelMap?.off ?? "none") as NonNullable<
-          typeof params.reasoning
-        >["effort"],
+        effort: (model.thinkingLevelMap?.off ?? "none") as ReasoningEffort,
       };
     }
     if (model.provider === "xai") params.include = ["reasoning.encrypted_content"];

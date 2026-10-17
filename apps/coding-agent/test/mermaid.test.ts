@@ -16,7 +16,7 @@ interface TransformOptions {
 function transformMermaid(markdown: string, options: TransformOptions = {}): string {
   const transformer = createMermaidMarkdownTransformer({
     getMode: () => options.mode ?? "streaming",
-    theme: options.theme,
+    ...(options.theme !== undefined ? { theme: options.theme } : {}),
   });
   return transformer(markdown, {
     availableWidth: options.maxWidth ?? 100,

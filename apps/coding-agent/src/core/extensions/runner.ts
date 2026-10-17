@@ -422,7 +422,7 @@ export class ExtensionRunner {
   private commandDiagnostics: ResourceDiagnostic[] = [];
   private staleMessage: string | undefined;
   private uiPromptDepth = 0;
-  private activeUIPrompt: { kind: UIPromptKind; title?: string } | undefined;
+  private activeUIPrompt: { kind: UIPromptKind; title?: string | undefined } | undefined;
 
   constructor(
     extensions: Extension[],

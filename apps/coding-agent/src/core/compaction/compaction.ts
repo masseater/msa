@@ -109,9 +109,9 @@ export interface CompactionResult<T = unknown> {
   tokensBefore: number;
   estimatedTokensAfter?: number;
   /** Usage from the LLM call(s) that generated this summary, if available */
-  usage?: Usage;
+  usage?: Usage | undefined;
   /** Extension-specific data (e.g., ArtifactIndex, version markers for structured compaction) */
-  details?: T;
+  details?: T | undefined;
 }
 
 // ============================================================================
@@ -810,7 +810,7 @@ export interface CompactionPreparation {
   isSplitTurn: boolean;
   tokensBefore: number;
   /** Summary from previous compaction, for iterative update */
-  previousSummary?: string;
+  previousSummary?: string | undefined;
   /** File operations extracted from messagesToSummarize */
   fileOps: FileOperations;
   /** Compaction settions from settings.jsonl	*/

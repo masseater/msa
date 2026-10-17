@@ -677,14 +677,14 @@ interface FractionNode {
 interface OperatorNode {
   type: "operator";
   operator: string;
-  lower?: string;
-  upper?: string;
+  lower?: string | undefined;
+  upper?: string | undefined;
 }
 
 interface ScriptNode {
   type: "script";
-  lower?: string;
-  upper?: string;
+  lower?: string | undefined;
+  upper?: string | undefined;
 }
 
 interface MatrixNode {

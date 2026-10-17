@@ -14,7 +14,7 @@ interface RunResult {
 }
 
 interface DisableExpectations {
-  requestOptions?: SimpleOptionsWithExtras;
+  requestOptions?: SimpleOptionsWithExtras | undefined;
   minPongs?: number;
   maxOutputTokens?: number;
 }

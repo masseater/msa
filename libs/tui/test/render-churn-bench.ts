@@ -64,9 +64,9 @@ class NullTerminal implements Terminal {
 /** Editor stand-in: caches lines per (text, width), re-renders when text changes. */
 class EditorSim implements Component {
   private text = "";
-  private cachedText?: string;
-  private cachedWidth?: number;
-  private cachedLines?: string[];
+  private cachedText?: string | undefined;
+  private cachedWidth?: number | undefined;
+  private cachedLines?: string[] | undefined;
 
   append(char: string): void {
     this.text += char;

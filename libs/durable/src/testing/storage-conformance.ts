@@ -571,7 +571,10 @@ export function createStorageConformance(
         ).toBeUndefined();
 
         const activeFirst = await storage.scanEntries(
-          { conversationId: grandchildId, minEntryId: currentMarker?.head },
+          {
+            conversationId: grandchildId,
+            ...(currentMarker === undefined ? {} : { minEntryId: currentMarker.head }),
+          },
           1,
           undefined,
           context,
@@ -579,7 +582,10 @@ export function createStorageConformance(
         expect(activeFirst.items.map(({ id }) => id)).toEqual([grandchildTail]);
         expect(activeFirst.next).toBeDefined();
         const activeSecond = await storage.scanEntries(
-          { conversationId: grandchildId, minEntryId: currentMarker?.head },
+          {
+            conversationId: grandchildId,
+            ...(currentMarker === undefined ? {} : { minEntryId: currentMarker.head }),
+          },
           1,
           activeFirst.next,
           context,
@@ -592,7 +598,7 @@ export function createStorageConformance(
             await storage.scanEntries(
               {
                 conversationId: grandchildId,
-                minEntryId: historicalMarker?.head,
+                ...(historicalMarker === undefined ? {} : { minEntryId: historicalMarker.head }),
                 maxEntryId: childForkPoint,
               },
               10,
@@ -685,12 +691,18 @@ export function createStorageConformance(
         ) => Promise<Page<Identified, Cursor>>;
         const scans: readonly (readonly [Scan, readonly number[]])[] = [
           [
-            (order, cursor) => storage.scanConversations({ order }, 2, cursor, context),
+            (order, cursor) =>
+              storage.scanConversations(order === undefined ? {} : { order }, 2, cursor, context),
             conversationIds,
           ],
-          [(order, cursor) => storage.scanTasks({ order }, 2, cursor, context), taskIds],
           [
-            (order, cursor) => storage.scanSubmissions({ order }, 2, cursor, context),
+            (order, cursor) =>
+              storage.scanTasks(order === undefined ? {} : { order }, 2, cursor, context),
+            taskIds,
+          ],
+          [
+            (order, cursor) =>
+              storage.scanSubmissions(order === undefined ? {} : { order }, 2, cursor, context),
             submissionIds,
           ],
         ];

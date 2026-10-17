@@ -15,10 +15,10 @@ export class LoginDialogComponent extends Container implements Focusable {
   private input: Input;
   private tui: TUI;
   /** The shown sign-in URL, which `app.message.copy` copies. */
-  private authUrl?: AuthUrlComponent;
+  private authUrl?: AuthUrlComponent | undefined;
   private abortController = new AbortController();
-  private inputResolver?: (value: string) => void;
-  private inputRejecter?: (error: Error) => void;
+  private inputResolver?: ((value: string) => void) | undefined;
+  private inputRejecter?: ((error: Error) => void) | undefined;
   private onComplete: (success: boolean, message?: string) => void;
 
   // Focusable implementation - propagate to input for IME cursor positioning
@@ -115,7 +115,7 @@ export class LoginDialogComponent extends Container implements Focusable {
   /**
    * Called by onDeviceCode callback - show URL and user code.
    */
-  showDeviceCode(info: OAuthDeviceCodeInfo): void {
+  showDeviceCode(info: Pick<OAuthDeviceCodeInfo, "userCode" | "verificationUri">): void {
     this.authUrl = undefined;
     this.contentContainer.clear();
     this.contentContainer.addChild(new Spacer(1));

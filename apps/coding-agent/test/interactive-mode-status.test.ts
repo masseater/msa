@@ -615,7 +615,7 @@ describe("InteractiveMode.showLoadedResources", () => {
       source: options.source,
       scope: options.scope,
       origin: options.origin,
-      baseDir: options.baseDir,
+      ...(options.baseDir !== undefined ? { baseDir: options.baseDir } : {}),
     };
   }
 

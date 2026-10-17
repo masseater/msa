@@ -67,7 +67,7 @@ describe("Durable provider session cache e2e", () => {
                 normalizeContext(request),
                 {
                   ...options,
-                  apiKey: codexToken,
+                  ...(codexToken === undefined ? {} : { apiKey: codexToken }),
                   transport: "sse",
                 },
               );

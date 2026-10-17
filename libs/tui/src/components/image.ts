@@ -58,12 +58,12 @@ export class Image implements Component {
   private dimensions: ImageDimensions;
   private theme: ImageTheme;
   private options: ImageOptions;
-  private imageId?: number;
+  private imageId?: number | undefined;
   /** Converted PNG data for Kitty. Failures are not stored so a later transcoder can retry. */
-  private pngData?: string;
+  private pngData?: string | undefined;
 
-  private cachedLines?: string[];
-  private cachedWidth?: number;
+  private cachedLines?: string[] | undefined;
+  private cachedWidth?: number | undefined;
 
   constructor(
     base64Data: string,

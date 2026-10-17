@@ -286,10 +286,16 @@ describe("ModelRuntime virtual models", () => {
 
   it("does not forward caller credentials to a routed model of another provider", async () => {
     const { runtime, faux, definition, virtual } = await createRuntime();
-    const seen: { apiKey?: string; headers?: Record<string, string | null> }[] = [];
+    const seen: {
+      apiKey?: string | undefined;
+      headers?: Record<string, string | null> | undefined;
+    }[] = [];
     const respond = (
       _context: unknown,
-      options?: { apiKey?: string; headers?: Record<string, string | null> },
+      options?: {
+        apiKey?: string | undefined;
+        headers?: Record<string, string | null> | undefined;
+      },
     ) => {
       seen.push({ apiKey: options?.apiKey, headers: options?.headers });
       return fauxAssistantMessage("hello");
@@ -346,7 +352,7 @@ describe("createAgentSession with virtual models", () => {
       modelRuntime: runtime,
       sessionManager,
       resourceLoader,
-      model,
+      ...(model !== undefined ? { model } : {}),
     };
     const { session } = await createAgentSession(options);
     onTestFinished(() => session.dispose());
@@ -433,7 +439,7 @@ describe("createAgentSession with virtual models", () => {
         modelRuntime: runtime,
         sessionManager,
         resourceLoader,
-        model,
+        ...(model !== undefined ? { model } : {}),
       };
       return (await createAgentSession(options)).session;
     };
@@ -463,6 +469,8 @@ describe("createAgentSession with virtual models", () => {
     const { runtime, faux } = await createRuntime();
     faux.setResponses([fauxAssistantMessage("ok"), fauxAssistantMessage("ok")]);
     const small = runtime.getModel("faux", "small")!;
+    const large = runtime.getModel("faux", "large");
+    if (!large) throw new Error("faux/large is not registered");
     const sessionManager = SessionManager.inMemory(tempDir);
     const { session } = await createAgentSession({
       cwd: tempDir,
@@ -470,7 +478,7 @@ describe("createAgentSession with virtual models", () => {
       modelRuntime: runtime,
       sessionManager,
       resourceLoader: createTestResourceLoader(),
-      model: runtime.getModel("faux", "large"),
+      model: large,
     });
     onTestFinished(() => session.dispose());
     const prepareRequest = session.agent.prepareRequest!;
