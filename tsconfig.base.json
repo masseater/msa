@@ -34,9 +34,12 @@
       {
         "name": "@effect/language-service",
         "allowedUnstableApis": [
+          "@effect/platform-node-shared/NodeChildProcessSpawner#layer",
+          "@effect/platform-node/NodeCrypto#layer",
           "@effect/platform-node/NodeFileSystem#layer",
           "@effect/platform-node/NodeHttpClient#layerUndici",
           "@effect/platform-node/NodeHttpServer#layerTest",
+          "@effect/platform-node/NodePath#layer",
           "@effect/platform-node/NodeRuntime#runMain",
           "@effect/platform-node/NodeServices#layer",
           "effect/Crypto#Crypto",

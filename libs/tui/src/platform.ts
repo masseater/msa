@@ -40,13 +40,10 @@ const failWith =
   (cause: unknown): PlatformFailure =>
     new PlatformFailure({ operation, cause });
 
-// oxlint-disable-next-line effecttsgo/unstable-api-usage -- NodeFileSystem・NodePath は unstable API で、安定した代替が無い
 const platformServices = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 const makePlatform = Effect.gen(function* () {
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- FileSystem は unstable API で、安定した代替が無い
   const fs = yield* FileSystem.FileSystem;
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcessSpawner は unstable API で、安定した代替が無い
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   return Platform.of({
     isDirectory: (path) =>
@@ -60,7 +57,6 @@ const makePlatform = Effect.gen(function* () {
       Effect.scoped(
         Effect.gen(function* () {
           const handle = yield* spawner.spawn(
-            // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess は unstable API で、安定した代替が無い
             ChildProcess.make(file, [...args], {
               detached: false,
               killSignal: "SIGKILL",
@@ -78,7 +74,6 @@ const makePlatform = Effect.gen(function* () {
 });
 
 const platformLayer = Layer.effect(Platform, makePlatform).pipe(
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- NodeChildProcessSpawner は unstable API で、安定した代替が無い
   Layer.provide(NodeChildProcessSpawner.layer),
   Layer.provide(platformServices),
 );
@@ -86,7 +81,6 @@ const platformLayer = Layer.effect(Platform, makePlatform).pipe(
 export const platformRuntime: ManagedRuntime.ManagedRuntime<Platform, never> =
   ManagedRuntime.make(platformLayer);
 
-// oxlint-disable-next-line effecttsgo/unstable-api-usage -- NodePath・Path は unstable API で、安定した代替が無い
 const nodePath = ManagedRuntime.make(NodePath.layer).runSync(Path.Path);
 
 export const pathOperations: PathOperations = {

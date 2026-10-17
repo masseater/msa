@@ -48,13 +48,9 @@ export interface RunningProcess {
 }
 
 const testServices = Layer.mergeAll(
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- NodeFileSystem は unstable API で、安定した代替が無い
   NodeFileSystem.layer,
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- NodeCrypto は unstable API で、安定した代替が無い
   NodeCrypto.layer,
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- NodeChildProcessSpawner は unstable API で、安定した代替が無い
   NodeChildProcessSpawner.layer.pipe(
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- NodeFileSystem・NodePath は unstable API で、安定した代替が無い
     Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
   ),
 );
@@ -66,7 +62,6 @@ type TestServices = Layer.Success<typeof testServices>;
 const run = <A, E>(effect: Effect.Effect<A, E, TestServices>): Effect.Effect<A> =>
   Effect.promise(() => runtime.runPromise(Effect.orDie(effect)));
 
-// oxlint-disable-next-line effecttsgo/unstable-api-usage -- FileSystem は unstable API で、安定した代替が無い
 const fileSystem = Effect.service(FileSystem.FileSystem);
 
 export const makeTempDirectory = (prefix: string): Effect.Effect<string> =>
@@ -107,11 +102,9 @@ export const symlink: {
 
 export const sha256Hex = (bytes: Uint8Array): Effect.Effect<string> =>
   run(
-    Effect.flatMap(
-      // oxlint-disable-next-line effecttsgo/unstable-api-usage -- Crypto は unstable API で、安定した代替が無い
-      Effect.service(Crypto.Crypto),
-      (crypto) => crypto.digest("SHA-256", bytes),
-    ).pipe(Effect.map(Hex.encode)),
+    Effect.flatMap(Effect.service(Crypto.Crypto), (crypto) => crypto.digest("SHA-256", bytes)).pipe(
+      Effect.map(Hex.encode),
+    ),
   );
 
 const makeCommand = (request: {
@@ -122,7 +115,6 @@ const makeCommand = (request: {
   readonly killSignal?: "SIGKILL" | "SIGTERM" | undefined;
   readonly ignoreOutput?: boolean | undefined;
 }) =>
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess は unstable API で、安定した代替が無い
   ChildProcess.make(request.file, [...request.args], {
     detached: false,
     env: request.env,
@@ -132,7 +124,6 @@ const makeCommand = (request: {
     stderr: request.ignoreOutput === true ? "ignore" : "pipe",
   });
 
-// oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcessSpawner は unstable API で、安定した代替が無い
 const spawner = Effect.service(ChildProcessSpawner.ChildProcessSpawner);
 
 const collectCommand = (request: CommandRequest) =>
