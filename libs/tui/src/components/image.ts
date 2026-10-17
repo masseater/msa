@@ -6,7 +6,9 @@ import {
   getPngDimensions,
   type ImageDimensions,
   imageFallback,
+  type ImageProtocol,
   renderImage,
+  type RenderedImage,
 } from "../terminal-image.ts";
 import type { Component } from "../tui.ts";
 import { truncateToWidth } from "../utils.ts";
@@ -79,11 +81,31 @@ export class Image implements Component {
     this.cachedWidth = undefined;
   }
 
-  render(width: number): string[] {
-    if (this.cachedLines !== undefined && this.cachedWidth === width) {
-      return this.cachedLines;
+  private renderFallbackLines(width: number): string[] {
+    const fallback = imageFallback(this.mimeType, this.dimensions, this.options.filename);
+    return [truncateToWidth(this.theme.fallbackColor(fallback), width)];
+  }
+
+  private renderSequenceLines(result: RenderedImage, protocol: ImageProtocol): string[] {
+    if (result.imageId !== undefined && result.imageId !== 0) {
+      this.imageId = result.imageId;
     }
 
+    const blankLines: string[] = [];
+    for (let i = 0; i < result.rows - 1; i++) {
+      blankLines.push("");
+    }
+
+    if (protocol === "kitty") {
+      return [result.sequence, ...blankLines];
+    }
+
+    const rowOffset = result.rows - 1;
+    const moveUp = rowOffset > 0 ? `\x1b[${rowOffset}A` : "";
+    return [...blankLines, moveUp + result.sequence];
+  }
+
+  private renderImageLines(width: number): string[] {
     const maxWidth = Math.max(1, Math.min(width - 2, this.options.maxWidthCells ?? 60));
     const cellDimensions = getCellDimensions();
     const defaultMaxHeight = Math.max(
@@ -100,47 +122,32 @@ export class Image implements Component {
       data = this.pngData ?? null;
       if (data !== null && data !== "") dimensions = getPngDimensions(data) ?? dimensions;
     }
-    let lines: string[];
 
-    if (caps.images !== null && data !== null && data !== "") {
-      if (caps.images === "kitty" && this.imageId === undefined) {
-        this.imageId = allocateImageId();
-      }
-      const result = renderImage(data, dimensions, {
-        maxWidthCells: maxWidth,
-        maxHeightCells: maxHeight,
-        imageId: this.imageId,
-        moveCursor: false,
-      });
-
-      if (result === null) {
-        const fallback = imageFallback(this.mimeType, this.dimensions, this.options.filename);
-        lines = [truncateToWidth(this.theme.fallbackColor(fallback), width)];
-      } else {
-        if (result.imageId !== undefined && result.imageId !== 0) {
-          this.imageId = result.imageId;
-        }
-
-        if (caps.images === "kitty") {
-          lines = [result.sequence];
-
-          for (let i = 0; i < result.rows - 1; i++) {
-            lines.push("");
-          }
-        } else {
-          lines = [];
-          for (let i = 0; i < result.rows - 1; i++) {
-            lines.push("");
-          }
-          const rowOffset = result.rows - 1;
-          const moveUp = rowOffset > 0 ? `\x1b[${rowOffset}A` : "";
-          lines.push(moveUp + result.sequence);
-        }
-      }
-    } else {
-      const fallback = imageFallback(this.mimeType, this.dimensions, this.options.filename);
-      lines = [truncateToWidth(this.theme.fallbackColor(fallback), width)];
+    if (caps.images === null || data === null || data === "") {
+      return this.renderFallbackLines(width);
     }
+
+    if (caps.images === "kitty" && this.imageId === undefined) {
+      this.imageId = allocateImageId();
+    }
+    const result = renderImage(data, dimensions, {
+      maxWidthCells: maxWidth,
+      maxHeightCells: maxHeight,
+      imageId: this.imageId,
+      moveCursor: false,
+    });
+
+    return result === null
+      ? this.renderFallbackLines(width)
+      : this.renderSequenceLines(result, caps.images);
+  }
+
+  render(width: number): string[] {
+    if (this.cachedLines !== undefined && this.cachedWidth === width) {
+      return this.cachedLines;
+    }
+
+    const lines = this.renderImageLines(width);
 
     this.cachedLines = lines;
     this.cachedWidth = width;
