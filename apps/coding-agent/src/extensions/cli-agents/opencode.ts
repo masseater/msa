@@ -9,6 +9,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { Model, SimpleStreamOptions, TranscriptContext } from "@msa/ai/compat";
+import { getBuiltinModels } from "@msa/ai/providers/all";
 
 import type { ExtensionAPI } from "../../core/extensions/types.ts";
 import { streamViaCli, type CliBackend } from "./run.ts";
@@ -16,64 +17,17 @@ import { flattenTranscript } from "./transcript.ts";
 
 const PROVIDER_ID = "opencode-free";
 
-const FREE_MODELS = [
-  { id: "ll-alpha-free", name: "LL Alpha Free", contextWindow: 200_000, maxTokens: 32_000 },
-  { id: "cat-jam-free", name: "Cat Jam Free", contextWindow: 1_048_576, maxTokens: 131_072 },
-  {
-    id: "deepseek-v4.1-flash-free",
-    name: "DeepSeek V4.1 Flash Free",
-    contextWindow: 200_000,
-    maxTokens: 32_000,
-  },
-  {
-    id: "glm-5.3-flash-free",
-    name: "GLM-5.3-Flash Free",
-    contextWindow: 200_000,
-    maxTokens: 32_000,
-  },
-  {
-    id: "longcat-2.5-preview-free",
-    name: "LongCat 2.5 Preview Free",
-    contextWindow: 1_000_000,
-    maxTokens: 131_072,
-  },
-  {
-    id: "mimo-v2.6-flash-free",
-    name: "MiMo-V2.6-Flash Free",
-    contextWindow: 200_000,
-    maxTokens: 32_000,
-  },
-  {
-    id: "muse-spark-1.3-contributor-free",
-    name: "Muse Spark 1.3 Free",
-    contextWindow: 1_048_576,
-    maxTokens: 131_072,
-  },
-  {
-    id: "nemotron-3-ultra-free",
-    name: "Nemotron 3 Ultra Free",
-    contextWindow: 1_000_000,
-    maxTokens: 128_000,
-  },
-  {
-    id: "nemotron-3.5-lightning-free",
-    name: "Nemotron 3.5 Lightning Free",
-    contextWindow: 262_144,
-    maxTokens: 262_144,
-  },
-  {
-    id: "nemotron-3.5-super-vl-free",
-    name: "Nemotron 3.5 Super VL Free",
-    contextWindow: 1_048_576,
-    maxTokens: 131_072,
-  },
-  {
-    id: "space-bunny-free",
-    name: "Space Bunny Free",
-    contextWindow: 1_048_576,
-    maxTokens: 524_288,
-  },
-] as const;
+/** OpenCode Zen's zero-cost chat models from the bundled models.dev catalog. */
+function freeModels() {
+  return getBuiltinModels("opencode").filter(
+    (model) =>
+      model.id.endsWith("-free") &&
+      model.cost.input === 0 &&
+      model.cost.output === 0 &&
+      model.cost.cacheRead === 0 &&
+      model.cost.cacheWrite === 0,
+  );
+}
 
 function buildPrompt(messages: Parameters<typeof flattenTranscript>[0], cwd: string): string {
   return [
@@ -160,7 +114,7 @@ export function registerOpenCode(msa: ExtensionAPI): void {
     baseUrl: "http://127.0.0.1:1/v1",
     apiKey: "local",
     api: "openai-completions",
-    models: FREE_MODELS.map((free) => ({
+    models: freeModels().map((free) => ({
       id: free.id,
       name: free.name,
       reasoning: false,

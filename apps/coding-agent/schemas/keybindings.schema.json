@@ -315,6 +315,14 @@
       "$ref": "#/$defs/KeybindingValue",
       "description": "Delete session when query is empty"
     },
+    "app.orchestrator.stop": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Stop the selected orchestrated session"
+    },
+    "app.orchestrator.model": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Switch the selected orchestrated session's model"
+    },
     "app.models.save": {
       "$ref": "#/$defs/KeybindingValue",
       "description": "Save model selection"

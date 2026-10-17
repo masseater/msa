@@ -5,11 +5,10 @@ import {
   type Focusable,
   getKeybindings,
   Input,
-  matchesKey,
+  Spacer,
   Text,
   truncateToWidth,
   visibleWidth,
-  wrapTextWithAnsi,
 } from "@msa/tui";
 
 import type { MessageRenderer } from "../../../core/extensions/types.ts";
@@ -18,9 +17,12 @@ import type {
   SessionStatus,
 } from "../../../core/orchestrator/graph.ts";
 import type { Orchestrator, OrchestratorReport } from "../../../core/orchestrator/orchestrator.ts";
+import { formatToolCallWithArgs, formatToolDuration } from "../../../core/tools/render-utils.ts";
 import { toErrorMessage } from "../../../utils/errors.ts";
 import { theme } from "../theme/theme.ts";
-import { rawKeyHint } from "./keybinding-hints.ts";
+import { DynamicBorder } from "./dynamic-border.ts";
+import { keyHint, keyText, rawKeyHint } from "./keybinding-hints.ts";
+import { truncateToVisualLines } from "./visual-truncate.ts";
 
 const STATUS_ORDER: readonly SessionStatus[] = [
   "failed",
@@ -57,11 +59,6 @@ function statusGlyph(node: Pick<SessionNodeWithDependencies, "kind" | "status">)
   }
 }
 
-function formatElapsed(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-}
-
 function stoppable(node: SessionNodeWithDependencies): boolean {
   return node.status === "running" || node.status === "queued";
 }
@@ -87,11 +84,7 @@ function activityLines(messages: readonly AgentMessage[]): string[] {
     if (message.role !== "assistant") continue;
     for (const part of (message as AssistantMessage).content) {
       if (part.type === "toolCall") {
-        const args = Object.values(part.arguments ?? {})
-          .filter((value) => typeof value === "string")
-          .map((value) => firstLine(value as string))
-          .join(" ");
-        lines.push(`${theme.fg("toolTitle", part.name)} ${theme.fg("muted", args)}`);
+        lines.push(formatToolCallWithArgs(part.name, part.arguments, theme, false));
       } else if (part.type === "text" && part.text.trim()) {
         lines.push(firstLine(part.text));
       }
@@ -237,16 +230,16 @@ export class SessionsView implements Component, Focusable {
   private header(title: string, right: string, width: number): string[] {
     const gap = Math.max(1, width - 2 - visibleWidth(title) - visibleWidth(right));
     return [
-      "",
+      ...new Spacer(1).render(width),
       truncateToWidth(` ${theme.bold(title)}${" ".repeat(gap)}${right}`, width),
-      theme.fg("borderMuted", "─".repeat(width)),
+      ...new DynamicBorder((line) => theme.fg("borderMuted", line)).render(width),
     ];
   }
 
   private renderList(rows: readonly SessionNodeWithDependencies[], width: number): string[] {
     const lines = this.header("Sessions", describeSessionCounts(rows, "") ?? "", width);
     if (rows.length === 0) {
-      lines.push("", ` ${rawKeyHint("esc", "close")}`);
+      lines.push("", ` ${keyHint("tui.select.cancel", "close")}`);
       return lines;
     }
     const selected = this.selected(rows);
@@ -271,11 +264,11 @@ export class SessionsView implements Component, Focusable {
     lines.push("");
     lines.push(
       ` ${[
-        rawKeyHint("↑↓", "select"),
-        rawKeyHint("enter", "open"),
-        selected && stoppable(selected) ? rawKeyHint("s", "stop") : undefined,
-        rawKeyHint("m", "model"),
-        rawKeyHint("esc", "close"),
+        rawKeyHint(`${keyText("tui.select.up")}/${keyText("tui.select.down")}`, "select"),
+        keyHint("tui.select.confirm", "open"),
+        selected && stoppable(selected) ? keyHint("app.orchestrator.stop", "stop") : undefined,
+        keyHint("app.orchestrator.model", "model"),
+        keyHint("tui.select.cancel", "close"),
       ]
         .filter(Boolean)
         .join("  ")}`,
@@ -307,7 +300,7 @@ export class SessionsView implements Component, Focusable {
   private progressLine(node: SessionNodeWithDependencies, doing: string | undefined): string {
     const { startedAt, retrying } = this.options.orchestrator.progress(node.id);
     const now = retrying ? "retrying" : (doing ?? "waiting for the model");
-    return startedAt === undefined ? now : `${formatElapsed(Date.now() - startedAt)}  ${now}`;
+    return startedAt === undefined ? now : `${formatToolDuration(Date.now() - startedAt)}  ${now}`;
   }
 
   private renderDetail(
@@ -325,10 +318,9 @@ export class SessionsView implements Component, Focusable {
       lines.push("", theme.fg("accent", ` ${title}`));
     };
     const body = (text: string, limit: number) => {
-      const wrapped = text.split("\n").flatMap((line) => wrapTextWithAnsi(line, width - 4));
-      const shown = wrapped.slice(-limit);
-      if (wrapped.length > shown.length) lines.push(theme.fg("dim", "   …"));
-      lines.push(...shown.map((line) => `   ${line}`));
+      const { visualLines, skippedCount } = truncateToVisualLines(text, limit, width - 3);
+      if (skippedCount > 0) lines.push(theme.fg("dim", `   … ${skippedCount} more lines`));
+      lines.push(...visualLines.map((line) => `   ${line}`));
     };
 
     if (node.dependsOn.length > 0) {
@@ -367,16 +359,18 @@ export class SessionsView implements Component, Focusable {
     lines.push("");
     if (this.composing) {
       lines.push(...this.input.render(width));
-      lines.push(` ${rawKeyHint("enter", "send")}  ${rawKeyHint("esc", "cancel")}`);
+      lines.push(
+        ` ${keyHint("tui.input.submit", "send")}  ${keyHint("tui.select.cancel", "cancel")}`,
+      );
     } else {
       lines.push(
         ` ${[
           node.status === "queued"
             ? undefined
-            : rawKeyHint("enter", node.status === "running" ? "steer" : "rerun"),
-          stoppable(node) ? rawKeyHint("s", "stop") : undefined,
-          rawKeyHint("m", "model"),
-          rawKeyHint("esc", "back"),
+            : keyHint("tui.select.confirm", node.status === "running" ? "steer" : "rerun"),
+          stoppable(node) ? keyHint("app.orchestrator.stop", "stop") : undefined,
+          keyHint("app.orchestrator.model", "model"),
+          keyHint("tui.select.cancel", "back"),
         ]
           .filter(Boolean)
           .join("  ")}`,
@@ -406,11 +400,11 @@ export class SessionsView implements Component, Focusable {
     } else if (kb.matches(data, "tui.select.confirm") && selected) {
       if (!this.openId) this.openId = selected.id;
       else if (selected.status !== "queued") this.startComposing();
-    } else if (matchesKey(data, "s") && selected && stoppable(selected)) {
+    } else if (kb.matches(data, "app.orchestrator.stop") && selected && stoppable(selected)) {
       this.options.orchestrator.stop(selected.id).catch((error: unknown) => {
         this.options.onError(toErrorMessage(error));
       });
-    } else if (matchesKey(data, "m") && selected) {
+    } else if (kb.matches(data, "app.orchestrator.model") && selected) {
       this.options.onPickModel(selected.id);
       return;
     }
