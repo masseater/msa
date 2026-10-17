@@ -6,7 +6,12 @@ import { Effect } from "effect";
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
 import { pathOperations } from "../src/platform.ts";
-import { applyCompletion, createTestTUI, flushAutocomplete } from "./editor-helpers.ts";
+import {
+  applyCompletion,
+  createTestTUI,
+  flushAutocomplete,
+  settlingProvider,
+} from "./editor-helpers.ts";
 import { makeTempDirectory, removeRecursive, writeFileString } from "./test-platform.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
 
@@ -158,17 +163,20 @@ describe("Editor component", () => {
           t.after(() => runPromise(removeRecursive(baseDir)));
           yield* writeFileString(join(baseDir, "文档", "说明.md"), "text");
           const editor = new Editor(createTestTUI(), defaultEditorTheme);
-          editor.setAutocompleteProvider(new CombinedAutocompleteProvider([], baseDir));
+          const { provider, settled } = settlingProvider(
+            new CombinedAutocompleteProvider([], baseDir),
+          );
+          editor.setAutocompleteProvider(provider);
           for (const separator of [" ", "\t", "\u3000", "\u00a0", "，", "。"]) {
             editor.setText(`查看${separator}`);
             const before = editor.getText();
             editor.handleInput("文");
             editor.handleInput("\t");
-            yield* flushAutocomplete;
+            yield* settled;
             assert.strictEqual(editor.getText(), `${before}文档/`);
             editor.handleInput("说");
             editor.handleInput("\t");
-            yield* flushAutocomplete;
+            yield* settled;
             assert.strictEqual(editor.getText(), `${before}文档/说明.md`);
             assert.deepStrictEqual(editor.getCursor(), { line: 0, col: editor.getText().length });
           }

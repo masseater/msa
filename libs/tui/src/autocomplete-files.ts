@@ -1,11 +1,10 @@
-import { type Dirent, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 
 import { Effect } from "effect";
 
 import { buildCompletionValue, parsePathPrefix, toDisplayPath } from "./autocomplete-prefix.ts";
 import type { AutocompleteItem } from "./autocomplete-types.ts";
-import { pathOperations } from "./platform.ts";
+import { Platform, pathOperations } from "./platform.ts";
 
 const { basename, dirname, join } = pathOperations;
 
@@ -93,48 +92,43 @@ function compareDirectoriesFirst(a: AutocompleteItem, b: AutocompleteItem): numb
   return a.label.localeCompare(b.label);
 }
 
-function isDirectoryEntry(searchDir: string, entry: Dirent): boolean {
-  if (entry.isDirectory()) return true;
-  if (!entry.isSymbolicLink()) return false;
-  try {
-    return statSync(join(searchDir, entry.name)).isDirectory();
-  } catch {
-    return false;
-  }
+function suggestionFor(
+  rawPrefix: string,
+  flags: { isAtPrefix: boolean; isQuotedPrefix: boolean },
+): (entry: { name: string; isDirectory: boolean }) => AutocompleteItem {
+  return ({ name, isDirectory }) => {
+    const relativePath = toDisplayPath(relativeEntryPath(rawPrefix, name));
+    return {
+      value: buildCompletionValue({
+        path: isDirectory ? `${relativePath}/` : relativePath,
+        ...flags,
+      }),
+      label: name + (isDirectory ? "/" : ""),
+    };
+  };
 }
 
-function listFileSuggestions(context: FileSuggestionContext): AutocompleteItem[] {
+export function getFileSuggestions(
+  context: FileSuggestionContext,
+): Effect.Effect<AutocompleteItem[], never, Platform> {
   const { rawPrefix, isAtPrefix, isQuotedPrefix } = parsePathPrefix(context.prefix);
   const { searchDir, searchPrefix } = resolveSearchLocation({
     basePath: context.basePath,
     rawPrefix,
     isAtPrefix,
   });
-
-  const suggestions: AutocompleteItem[] = [];
-  for (const entry of readdirSync(searchDir, { withFileTypes: true })) {
-    if (!entry.name.toLowerCase().startsWith(searchPrefix.toLowerCase())) {
-      continue;
-    }
-    const isDirectory = isDirectoryEntry(searchDir, entry);
-    const relativePath = toDisplayPath(relativeEntryPath(rawPrefix, entry.name));
-    suggestions.push({
-      value: buildCompletionValue({
-        path: isDirectory ? `${relativePath}/` : relativePath,
-        isAtPrefix,
-        isQuotedPrefix,
-      }),
-      label: entry.name + (isDirectory ? "/" : ""),
-    });
-  }
-
-  return suggestions.sort(compareDirectoriesFirst);
-}
-
-export function getFileSuggestions(
-  context: FileSuggestionContext,
-): Effect.Effect<AutocompleteItem[]> {
-  return Effect.sync(() => listFileSuggestions(context)).pipe(
-    Effect.catchDefect(() => Effect.succeed([])),
-  );
+  return Effect.gen(function* () {
+    const platform = yield* Platform;
+    const names = yield* platform.readDirectory(searchDir);
+    const entries = yield* Effect.forEach(
+      names.filter((name) => name.toLowerCase().startsWith(searchPrefix.toLowerCase())),
+      (name) =>
+        platform
+          .isDirectory(join(searchDir, name))
+          .pipe(Effect.map((isDirectory) => ({ name, isDirectory }))),
+    );
+    return entries
+      .map(suggestionFor(rawPrefix, { isAtPrefix, isQuotedPrefix }))
+      .sort(compareDirectoriesFirst);
+  }).pipe(Effect.orElseSucceed((): AutocompleteItem[] => []));
 }

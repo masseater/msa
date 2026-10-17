@@ -4,6 +4,7 @@ import * as os from "node:os";
 import { Clock, DateTime, Effect, Random } from "effect";
 import { dual } from "effect/Function";
 
+import { writeFileInBackground } from "./file-log.ts";
 import { pathOperations } from "./platform.ts";
 
 const KITTY_SEQUENCE_PREFIX = "\x1b_G";
@@ -103,9 +104,13 @@ export const appendRedrawLog: {
   (directory: string, message: string): void;
   (message: string): (directory: string) => void;
 } = dual(2, (directory: string, message: string): void => {
-  const logPath = pathOperations.join(directory, "msa-tui-debug.log");
-  fs.mkdirSync(pathOperations.dirname(logPath), { recursive: true });
-  fs.appendFileSync(logPath, `[${nowIso()}] fullRender: ${message}\n`);
+  writeFileInBackground(
+    Effect.succeed({
+      path: pathOperations.join(directory, "msa-tui-debug.log"),
+      data: `[${nowIso()}] fullRender: ${message}\n`,
+      append: true,
+    }),
+  );
 });
 
 export const writeCrashLog: {
@@ -120,11 +125,9 @@ export const writeCrashLog: {
 });
 
 export function writeRenderDebugLog(lines: readonly string[]): void {
-  const debugDir = "/tmp/tui";
-  fs.mkdirSync(debugDir, { recursive: true });
   const debugPath = pathOperations.join(
-    debugDir,
+    "/tmp/tui",
     `render-${Effect.runSync(Clock.currentTimeMillis)}-${Effect.runSync(Random.next).toString(36).slice(2)}.log`,
   );
-  fs.writeFileSync(debugPath, lines.join("\n"));
+  writeFileInBackground(Effect.succeed({ path: debugPath, data: lines.join("\n"), append: false }));
 }

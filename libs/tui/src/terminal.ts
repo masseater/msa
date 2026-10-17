@@ -7,17 +7,16 @@ import { getNativePlatformHelper } from "./native-platform.ts";
 import type { ProgramStatus } from "./program-status.ts";
 import { StdinBuffer } from "./stdin-buffer.ts";
 import {
-  appendWriteLog,
   isAppleTerminalSession,
   KeyboardNegotiationBuffer,
   type KeyboardProtocolNegotiationSequence,
   normalizeNativeShiftEnterInput,
   refreshTerminalDimensions,
   resolveEscapeTimeoutMs,
-  resolveWriteLogPath,
   type Terminal,
 } from "./terminal-protocol.ts";
 import { TerminalStatusReporter } from "./terminal-status.ts";
+import { TerminalWriteLog } from "./terminal-write-log.ts";
 
 const DESIRED_KITTY_KEYBOARD_PROTOCOL_FLAGS = 7;
 const KITTY_KEYBOARD_PROTOCOL_QUERY = `\x1b[>${DESIRED_KITTY_KEYBOARD_PROTOCOL_FLAGS}u\x1b[?u`;
@@ -33,7 +32,7 @@ export class ProcessTerminal implements Terminal {
   private pendingKeyboardProtocolDeviceAttributes = 0;
   private stdinBuffer?: StdinBuffer | undefined;
   private stdinDataHandler?: ((data: string) => void) | undefined;
-  private writeLogPath = resolveWriteLogPath();
+  private readonly writeLog = new TerminalWriteLog();
   private readonly status = new TerminalStatusReporter();
   private readonly negotiationBuffer = new KeyboardNegotiationBuffer((sequence) =>
     this.forwardInputSequence(sequence),
@@ -237,7 +236,7 @@ export class ProcessTerminal implements Terminal {
 
   write(data: string): void {
     process.stdout.write(data);
-    appendWriteLog(this.writeLogPath, data);
+    this.writeLog.append(data);
   }
 
   get columns(): number {
