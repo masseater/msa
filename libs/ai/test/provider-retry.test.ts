@@ -45,7 +45,12 @@ describe("provider request retries", () => {
         expect(request).toHaveBeenCalledTimes(1);
       }),
     ));
+});
 
+describe("provider request retries", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it("does not retry statuses listed in noRetryStatuses", () =>
     Effect.runPromise(
       Effect.gen(function* () {

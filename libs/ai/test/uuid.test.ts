@@ -59,7 +59,9 @@ describe("uuidv7", () => {
   it.each([0, 2 ** 48 - 1])("accepts timestamp boundary %s", (timestamp) => {
     expect(parseTimestamp(uuidv7(timestamp))).toBe(timestamp);
   });
+});
 
+describe("uuidv7", () => {
   it.each([-1, 2 ** 48, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
     "rejects invalid timestamp %s",
     (timestamp) => {

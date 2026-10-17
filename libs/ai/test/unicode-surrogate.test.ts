@@ -377,7 +377,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider Unicode Handling", () => {

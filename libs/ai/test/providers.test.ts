@@ -97,7 +97,9 @@ describe("builtin providers", () => {
     expect(getCompatModel(unknownProvider, unknownModel)).toBeUndefined();
     expect(getCompatModels(unknownProvider)).toEqual([]);
   });
+});
 
+describe("builtin providers", () => {
   it("stores native constrained-sampling capabilities in model metadata", () => {
     const gpt4o = getBuiltinModel("openai", "gpt-4o");
     expect(gpt4o.compat?.supportsStrictMode).toBe(true);

@@ -182,7 +182,9 @@ describe("Responses API tool result images", () => {
       );
     },
   );
+});
 
+describe("Responses API tool result images", () => {
   describe("OpenAI Codex Responses Provider (gpt-5.5)", () => {
     const model = getModel("openai-codex", "gpt-5.5");
 

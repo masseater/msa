@@ -324,7 +324,9 @@ describe("Models with classifier models", () => {
         ).toBe(true);
       }),
     ));
+});
 
+describe("Models with classifier models", () => {
   it("routes OpenRouter classifier models through the System One API", () => {
     const models = builtinModels();
     for (const model of getBuiltinClassifierModels("openrouter")) {

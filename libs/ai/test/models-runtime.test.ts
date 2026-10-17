@@ -1569,7 +1569,9 @@ describe("Models runtime", () => {
         );
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("wraps api-key auth failures in ModelsError", () =>
     Effect.runPromise(
       Effect.gen(function* () {

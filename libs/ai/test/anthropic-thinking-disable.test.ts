@@ -162,7 +162,9 @@ describe("Anthropic thinking disable payload", () => {
         expect(payload.output_config).toBeUndefined();
       }),
     ));
+});
 
+describe("Anthropic thinking disable payload", () => {
   it("uses adaptive thinking for Claude Opus 4.8 when reasoning is enabled", () =>
     Effect.runPromise(
       Effect.gen(function* () {

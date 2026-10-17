@@ -77,7 +77,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         ),
     );
+  });
 
+  describe("Anthropic Provider", () => {
     it.skipIf(envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "")(
       "should use 1h cache TTL when MSA_CACHE_RETENTION=long",
       () =>
@@ -107,7 +109,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         ),
     );
+  });
 
+  describe("Anthropic Provider", () => {
     it("should add ttl for non-api.anthropic.com baseUrl by default", async () => {
       vi.stubEnv("MSA_CACHE_RETENTION", "long");
 
@@ -143,7 +147,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(capturedPayload).not.toBeNull();
       expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
     });
+  });
 
+  describe("Anthropic Provider", () => {
     it("should omit ttl when supportsLongCacheRetention is false", async () => {
       const baseModel = getModel("anthropic", "claude-haiku-4-5");
       const proxyModel = {
@@ -178,7 +184,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(capturedPayload).not.toBeNull();
       expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral" });
     });
+  });
 
+  describe("Anthropic Provider", () => {
     it("should omit cache_control when cacheRetention is none", async () => {
       const baseModel = getModel("anthropic", "claude-haiku-4-5");
       let capturedPayload: any = null;
@@ -208,7 +216,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(capturedPayload).not.toBeNull();
       expect(capturedPayload.system[0].cache_control).toBeUndefined();
     });
+  });
 
+  describe("Anthropic Provider", () => {
     it("should add cache_control to string user messages", async () => {
       const baseModel = getModel("anthropic", "claude-haiku-4-5");
       let capturedPayload: any = null;
@@ -240,7 +250,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       const lastBlock = lastMessage.content[lastMessage.content.length - 1];
       expect(lastBlock.cache_control).toEqual({ type: "ephemeral" });
     });
+  });
 
+  describe("Anthropic Provider", () => {
     it("should set 1h cache TTL when cacheRetention is long", async () => {
       const baseModel = getModel("anthropic", "claude-haiku-4-5");
       let capturedPayload: any = null;
@@ -325,7 +337,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         ),
     );
+  });
 
+  describe("OpenAI Responses Provider", () => {
     it.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
       "should set prompt_cache_retention to 24h when MSA_CACHE_RETENTION=long",
       () =>
@@ -351,7 +365,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
           }),
         ),
     );
+  });
 
+  describe("OpenAI Responses Provider", () => {
     it("should set prompt_cache_retention for non-api.openai.com baseUrl by default", async () => {
       vi.stubEnv("MSA_CACHE_RETENTION", "long");
 
@@ -387,7 +403,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(capturedPayload).not.toBeNull();
       expect(capturedPayload.prompt_cache_retention).toBe("24h");
     });
+  });
 
+  describe("OpenAI Responses Provider", () => {
     it("should omit prompt_cache_retention when supportsLongCacheRetention is false", async () => {
       const model = {
         ...getModel("openai", "gpt-4o-mini"),
@@ -421,7 +439,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(capturedPayload).not.toBeNull();
       expect(capturedPayload.prompt_cache_retention).toBeUndefined();
     });
+  });
 
+  describe("OpenAI Responses Provider", () => {
     it("should omit prompt_cache_key and disable implicit writes when cacheRetention is none", async () => {
       const model = getModel("openai", "gpt-5.6-sol");
       let capturedPayload: OpenAIResponsesCachePayload | undefined;
@@ -454,7 +474,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(capturedPayload?.prompt_cache_retention).toBeUndefined();
       expect(capturedPayload?.prompt_cache_options).toEqual({ mode: "explicit" });
     });
+  });
 
+  describe("OpenAI Responses Provider", () => {
     it("should omit prompt_cache_options for models that reject it", async () => {
       const model = getModel("openai", "gpt-4o-mini");
       let capturedPayload: OpenAIResponsesCachePayload | undefined;
@@ -486,7 +508,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(capturedPayload?.prompt_cache_key).toBeUndefined();
       expect(capturedPayload?.prompt_cache_options).toBeUndefined();
     });
+  });
 
+  describe("OpenAI Responses Provider", () => {
     it.each([
       ["gpt-4o-mini", "24h", undefined],
       ["gpt-6-astra", undefined, { ttl: "30m" }],
@@ -563,7 +587,6 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
         compat,
       };
     }
-
     it("should set prompt_cache_retention for non-api.openai.com baseUrl by default", async () => {
       let capturedPayload: any = null;
 
@@ -594,7 +617,26 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(capturedPayload.prompt_cache_key).toBe("session-completions");
       expect(capturedPayload.prompt_cache_retention).toBe("24h");
     });
+  });
 
+  describe("OpenAI Completions Provider", () => {
+    function createCompletionsModel(
+      compat?: Model<"openai-completions">["compat"],
+    ): Model<"openai-completions"> {
+      return {
+        id: "test-model",
+        name: "Test Model",
+        api: "openai-completions",
+        provider: "test-openai-completions",
+        baseUrl: "https://my-proxy.example.com/v1",
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128000,
+        maxTokens: 4096,
+        compat,
+      };
+    }
     it("should omit prompt_cache_retention when supportsLongCacheRetention is false", async () => {
       let capturedPayload: any = null;
 
@@ -629,7 +671,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(capturedPayload.prompt_cache_key).toBeUndefined();
       expect(capturedPayload.prompt_cache_retention).toBeUndefined();
     });
+  });
 
+  describe("OpenAI Completions Provider", () => {
     it.each([
       MODELS.opencode["deepseek-v4-flash"],
       MODELS.opencode["deepseek-v4-pro"],
@@ -668,7 +712,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(capturedPayload?.prompt_cache_key).toBeUndefined();
       expect(capturedPayload?.prompt_cache_retention).toBeUndefined();
     });
+  });
 
+  describe("OpenAI Completions Provider", () => {
     it.each([MODELS.cerebras["gpt-oss-120b"], MODELS.cerebras["qwen-3.8-27b"]] as const)(
       "should omit strict field on tools for cerebras/$id",
       async (metadata) => {

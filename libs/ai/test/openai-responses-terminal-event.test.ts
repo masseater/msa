@@ -541,7 +541,9 @@ describe("OpenAI Responses terminal event handling", () => {
         expect(output.errorMessage).toBe("Response incomplete: max_time_limit");
       }),
     ));
+});
 
+describe("OpenAI Responses terminal event handling", () => {
   it("rejects failed terminal events with the provider error", () =>
     Effect.runPromise(
       Effect.gen(function* () {

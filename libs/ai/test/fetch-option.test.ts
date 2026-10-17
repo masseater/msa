@@ -204,7 +204,9 @@ describe("fetch stream option", () => {
         expect(globalThis.fetch).toBe(ambient);
       }),
     ));
+});
 
+describe("fetch stream option", () => {
   it("uses fetch for image generation", () =>
     Effect.runPromise(
       Effect.gen(function* () {

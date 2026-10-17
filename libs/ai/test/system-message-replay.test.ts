@@ -72,7 +72,9 @@ describe("system message replay", () => {
     expect(getCurrentSystemPrompt(context.messages)).toBe("");
     expect(collapseSystemMessages(context).messages).toEqual(context.messages);
   });
+});
 
+describe("system message replay", () => {
   test("a late full patch on a transcript without a leading message replays as the prompt", () => {
     const context: TranscriptContext = normalizeContext({
       messages: [

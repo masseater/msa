@@ -129,7 +129,9 @@ describe("Token Statistics on Abort", () => {
       );
     },
   );
+});
 
+describe("Token Statistics on Abort", () => {
   describe.skipIf(!hasAzureOpenAICredentials())("Azure OpenAI Responses Provider", () => {
     const llm = getModel("azure", "gpt-4o-mini");
     const azureDeploymentName = resolveAzureDeploymentName(llm.id);
@@ -358,7 +360,9 @@ describe("Token Statistics on Abort", () => {
       () => testTokensOnAbort(llm),
     );
   });
+});
 
+describe("Token Statistics on Abort", () => {
   describe.skipIf(
     envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === undefined ||
       envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === "",

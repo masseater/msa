@@ -518,7 +518,9 @@ describe("llama.cpp classifier", () => {
         expect(server.requests).toEqual([]);
       }),
     ));
+});
 
+describe("llama.cpp classifier", () => {
   it("derives the server root from OpenAI-compatible base URLs", () => {
     expect(llamaServerRoot("http://127.0.0.1:8080/v1/")).toBe("http://127.0.0.1:8080");
     expect(llamaServerRoot("https://example.com/prefix/v1")).toBe("https://example.com/prefix");

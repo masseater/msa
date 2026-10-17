@@ -115,7 +115,9 @@ describe("Radius provider catalogs", () => {
         ]);
       }),
     ));
+});
 
+describe("Radius provider catalogs", () => {
   it("exposes no models when the organization disabled all of them", () =>
     Effect.runPromise(
       Effect.gen(function* () {

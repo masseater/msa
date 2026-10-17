@@ -176,7 +176,9 @@ describe("AI Providers Empty Message Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Completions Provider Empty Messages",
     () => {
@@ -385,7 +387,9 @@ describe("AI Providers Empty Message Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(!hasCloudflareAiGatewayCredentials())(
     "Cloudflare AI Gateway Provider Empty Messages",
     () => {
@@ -514,7 +518,9 @@ describe("AI Providers Empty Message Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(envValue("MISTRAL_API_KEY") === undefined || envValue("MISTRAL_API_KEY") === "")(
     "Mistral Provider Empty Messages",
     () => {
@@ -566,7 +572,9 @@ describe("AI Providers Empty Message Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(envValue("XIAOMI_API_KEY") === undefined || envValue("XIAOMI_API_KEY") === "")(
     "Xiaomi MiMo (API billing) Provider Empty Messages",
     () => {

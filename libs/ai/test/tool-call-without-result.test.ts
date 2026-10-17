@@ -255,7 +255,9 @@ describe("Tool Call Without Result Tests", () => {
       );
     },
   );
+});
 
+describe("Tool Call Without Result Tests", () => {
   describe.skipIf(envValue("ZAI_API_KEY") === undefined || envValue("ZAI_API_KEY") === "")(
     "zAI Provider",
     () => {
@@ -309,7 +311,9 @@ describe("Tool Call Without Result Tests", () => {
       );
     },
   );
+});
 
+describe("Tool Call Without Result Tests", () => {
   describe.skipIf(
     envValue("XIAOMI_TOKEN_PLAN_CN_API_KEY") === undefined ||
       envValue("XIAOMI_TOKEN_PLAN_CN_API_KEY") === "",
@@ -362,7 +366,9 @@ describe("Tool Call Without Result Tests", () => {
       () => Effect.runPromise(testToolCallWithoutResult(model)),
     );
   });
+});
 
+describe("Tool Call Without Result Tests", () => {
   describe.skipIf(
     envValue("QWEN_TOKEN_PLAN_API_KEY") === undefined || envValue("QWEN_TOKEN_PLAN_API_KEY") === "",
   )("Qwen Token Plan Individual Provider", () => {

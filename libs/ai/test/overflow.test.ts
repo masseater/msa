@@ -226,7 +226,37 @@ describe("isContextOverflow", () => {
     const message = createLengthStopMessage({ input: 4062, cacheRead: 0, output: 1024 });
     expect(isRecoverableLength(message, 1024)).toBe(false);
   });
+});
 
+describe("isContextOverflow", () => {
+  function createLengthStopMessage(options: {
+    input: number;
+    cacheRead: number;
+    output: number;
+    cacheWrite?: number;
+    api?: AssistantMessage["api"];
+    provider?: string;
+    model?: string;
+  }): AssistantMessage {
+    const cacheWrite = options.cacheWrite ?? 0;
+    return {
+      role: "assistant",
+      content: [],
+      api: options.api ?? "openai-completions",
+      provider: options.provider ?? "test-provider",
+      model: options.model ?? "test-model",
+      usage: {
+        input: options.input,
+        output: options.output,
+        cacheRead: options.cacheRead,
+        cacheWrite,
+        totalTokens: options.input + options.cacheRead + cacheWrite + options.output,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "length",
+      timestamp: currentTimeMillis(),
+    };
+  }
   it("treats zero-output length stops as recoverable without context metadata", () => {
     const message = createLengthStopMessage({ input: 100, cacheRead: 0, output: 0 });
     expect(isRecoverableLength(message, 128000)).toBe(true);

@@ -45,7 +45,9 @@ describe("Fireworks models", () => {
     expect(fast.compat).toEqual(base.compat);
     expect(fast.thinkingLevelMap).toEqual(base.thinkingLevelMap);
   });
+});
 
+describe("Fireworks models", () => {
   it.each([
     "accounts/fireworks/models/glm-5p3",
     "accounts/fireworks/routers/glm-5p3-fast",

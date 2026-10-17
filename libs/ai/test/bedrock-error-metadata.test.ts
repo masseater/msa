@@ -186,7 +186,9 @@ describe("bedrock failure diagnostics", () => {
         });
       }),
     ));
+});
 
+describe("bedrock failure diagnostics", () => {
   it("emits no diagnostic when the failure carries no provider metadata", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -235,7 +237,9 @@ describe("bedrock failure diagnostics", () => {
         });
       }),
     ));
+});
 
+describe("bedrock failure diagnostics", () => {
   it("omits the SDK's Unknown placeholder instead of reporting it as a code", () =>
     Effect.runPromise(
       Effect.gen(function* () {

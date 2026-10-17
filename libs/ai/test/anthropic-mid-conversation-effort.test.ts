@@ -170,7 +170,9 @@ describe("Anthropic mid-conversation effort", () => {
         expect(message.providerThinkingLevel).toBe("high");
       }),
     ));
+});
 
+describe("Anthropic mid-conversation effort", () => {
   it("does not invent markers for legacy or other-provider assistants", () =>
     Effect.runPromise(
       Effect.gen(function* () {

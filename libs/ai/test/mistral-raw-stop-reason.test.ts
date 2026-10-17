@@ -70,7 +70,9 @@ describe("Mistral raw stop reasons", () => {
         expect(isRetryableAssistantError(message)).toBe(true);
       }),
     ));
+});
 
+describe("Mistral raw stop reasons", () => {
   it("treats unknown Mistral finish reasons as provider error stops", () =>
     Effect.runPromise(
       Effect.gen(function* () {

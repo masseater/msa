@@ -311,7 +311,9 @@ describe("TypeSafe System One", () => {
         expect(signals[0]).not.toBe(signals[1]);
       }),
     ));
+});
 
+describe("TypeSafe System One", () => {
   it("returns malformed responses as classifier errors", () =>
     Effect.runPromise(
       Effect.gen(function* () {

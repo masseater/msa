@@ -176,7 +176,9 @@ describe("azure base URL normalization", () => {
         expect(baseURL).toBe("https://my-resource.cognitiveservices.azure.com/openai/v1");
       }),
     ));
+});
 
+describe("azure base URL normalization", () => {
   it("preserves /openai/v1 endpoints", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -224,7 +226,9 @@ describe("azure base URL normalization", () => {
         expect(baseURL).toBe("https://my-proxy.example.com/v1?custom=true");
       }),
     ));
+});
 
+describe("azure base URL normalization", () => {
   it("throws on invalid URLs", () =>
     Effect.runPromise(
       Effect.gen(function* () {

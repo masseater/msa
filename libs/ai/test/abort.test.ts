@@ -297,7 +297,9 @@ describe("AI Providers Abort Tests", () => {
       Effect.runPromise(testImmediateAbort(llm)),
     );
   });
+});
 
+describe("AI Providers Abort Tests", () => {
   describe.skipIf(
     envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === undefined ||
       envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === "",
@@ -349,7 +351,9 @@ describe("AI Providers Abort Tests", () => {
       Effect.runPromise(testImmediateAbort(llm)),
     );
   });
+});
 
+describe("AI Providers Abort Tests", () => {
   describe.skipIf(envValue("KIMI_API_KEY") === undefined || envValue("KIMI_API_KEY") === "")(
     "Kimi For Coding Provider Abort",
     () => {

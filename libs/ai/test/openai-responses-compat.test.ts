@@ -470,7 +470,12 @@ describe("openai-responses provider defaults", () => {
         expect(captured.clientRequestId).toBe("session-123");
       }),
     ));
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("uses OpenRouter session-affinity header when configured", () =>
     Effect.runPromise(
       Effect.gen(function* () {

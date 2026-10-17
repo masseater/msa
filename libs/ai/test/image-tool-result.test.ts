@@ -211,7 +211,9 @@ describe("Tool Results with Images", () => {
       );
     },
   );
+});
 
+describe("Tool Results with Images", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Responses Provider (gpt-5-mini)",
     () => {

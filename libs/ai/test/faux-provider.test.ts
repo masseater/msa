@@ -241,7 +241,9 @@ describe("faux provider", () => {
         expect(response.content).toEqual([{ type: "text", text: "1:1" }]);
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("emits an error when a response factory throws", () =>
     Effect.runPromise(
       Effect.gen(function* () {

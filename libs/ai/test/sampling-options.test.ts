@@ -199,7 +199,9 @@ describe("sampling params", () => {
         expect(payload.temperature).toBe(0.7);
       }),
     ));
+});
 
+describe("sampling params", () => {
   it("merges stream-option keys over thinking-level keys", () =>
     Effect.runPromise(
       Effect.gen(function* () {

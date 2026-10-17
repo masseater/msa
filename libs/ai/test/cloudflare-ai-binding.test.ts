@@ -71,7 +71,9 @@ describe("createAiBindingFetch", () => {
         expect(yield* Effect.promise(() => response.text())).toBe("data: {}\n\n");
       }),
     ));
+});
 
+describe("createAiBindingFetch", () => {
   it("rejects a binding with no fetch() at construction, not on first request", () => {
     expect(() => createAiBindingFetch({ aiGatewayLogId: null })).toThrow("does not expose fetch()");
   });

@@ -213,7 +213,9 @@ describe("bedrock endpoint resolution", () => {
         expect(config["region"]).toBe("us-gov-west-1");
       }),
     ));
+});
 
+describe("bedrock endpoint resolution", () => {
   it("preserves ambient AWS auth for custom model IDs through compat dispatch", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -147,7 +147,9 @@ describe("provider retry classification", () => {
       isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage })),
     ).toBe(true);
   });
+});
 
+describe("provider retry classification", () => {
   it("classifies assistant error messages", () => {
     expect(
       isRetryableAssistantError(
@@ -209,7 +211,10 @@ describe("retryAssistantCall", () => {
         expect(onRetryScheduled).not.toHaveBeenCalled();
       }),
     ));
+});
 
+describe("retryAssistantCall", () => {
+  const enabled: RetryPolicy = { enabled: true, maxRetries: 3, baseDelayMs: 0 };
   it("does not retry a non-retryable error (quota/billing)", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -340,7 +340,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(!hasCloudflareWorkersAICredentials())("Cloudflare Workers AI", () => {
     it(
       "@cf/moonshotai/kimi-k2.6 - should return totalTokens equal to sum of components",
@@ -872,7 +874,11 @@ describe("totalTokens field", () => {
           }),
         ),
     );
+  });
 
+  describe.skipIf(
+    envValue("OPENROUTER_API_KEY") === undefined || envValue("OPENROUTER_API_KEY") === "",
+  )("OpenRouter", () => {
     it(
       "mistralai/mistral-small-3.2-24b-instruct - should return totalTokens equal to sum of components",
       { retry: 3, timeout: 60000 },
@@ -916,7 +922,11 @@ describe("totalTokens field", () => {
           }),
         ),
     );
+  });
 
+  describe.skipIf(
+    envValue("OPENROUTER_API_KEY") === undefined || envValue("OPENROUTER_API_KEY") === "",
+  )("OpenRouter", () => {
     it(
       "deepseek/deepseek-chat - should return totalTokens equal to sum of components",
       { retry: 3, timeout: 60000 },

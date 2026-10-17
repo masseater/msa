@@ -231,7 +231,9 @@ describe("getSupportedThinkingLevels", () => {
     expect(model).toBeDefined();
     expect(getSupportedThinkingLevels(model!)).toEqual(["low", "high", "max"]);
   });
+});
 
+describe("getSupportedThinkingLevels", () => {
   it("excludes off for always-thinking Kimi Coding Highspeed", () => {
     const model = getModel("kimi-coding", "kimi-for-coding-highspeed");
     expect(model).toBeDefined();

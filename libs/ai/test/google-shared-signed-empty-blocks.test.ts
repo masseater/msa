@@ -84,7 +84,9 @@ describe("google-shared convertMessages — signed empty blocks", () => {
     const signed = modelTurn?.parts?.filter((p) => p.thoughtSignature === VALID_SIG) ?? [];
     expect(signed).toHaveLength(1);
   });
+});
 
+describe("google-shared convertMessages — signed empty blocks", () => {
   it("still drops unsigned empty blocks", () => {
     const model = makeModel();
     const contents = convertMessages(

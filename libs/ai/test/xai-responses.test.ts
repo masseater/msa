@@ -368,7 +368,12 @@ describe("xAI Responses provider", () => {
         expect(captured.headers.get("user-agent")).toBe("custom-agent");
       }),
     ));
+});
 
+describe("xAI Responses provider", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("uses msa's User-Agent by default for Completions requests", () =>
     Effect.runPromise(
       Effect.gen(function* () {

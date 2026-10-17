@@ -94,7 +94,16 @@ describe("openai-completions provider retries", () => {
         expect(mockState.requestOptions).toEqual([expect.objectContaining({ maxRetries: 0 })]);
       }),
     ));
+});
 
+describe("openai-completions provider retries", () => {
+  beforeEach(() => {
+    mockState.requestOptions = [];
+    mockState.requestErrors = [];
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it("honors provider retries while keeping SDK retries disabled", () =>
     Effect.runPromise(
       Effect.gen(function* () {

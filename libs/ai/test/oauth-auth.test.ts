@@ -107,7 +107,12 @@ describe("OAuthAuth adapters", () => {
         ).toBe(credential);
       }),
     ));
+});
 
+describe("OAuthAuth adapters", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("xAI toAuth derives the api key from the access token", () =>
     Effect.runPromise(
       Effect.gen(function* () {

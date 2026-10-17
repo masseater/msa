@@ -291,7 +291,9 @@ describe("msa-messages", () => {
         expect(message.diagnostics?.[0]?.details?.["status"]).toBe(401);
       }),
     ));
+});
 
+describe("msa-messages", () => {
   it("propagates server-sent error events", () =>
     Effect.runPromise(
       Effect.gen(function* () {

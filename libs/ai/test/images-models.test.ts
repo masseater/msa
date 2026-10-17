@@ -181,7 +181,9 @@ describe("Models with image models", () => {
         ]);
       }),
     ));
+});
 
+describe("Models with image models", () => {
   it("lists chat, image, and all models through typed accessors", () => {
     const models = createModels();
     models.setProvider(
@@ -414,7 +416,9 @@ describe("Models with image models", () => {
         expect(result.errorMessage).toContain("is not a chat model");
       }),
     ));
+});
 
+describe("Models with image models", () => {
   it("requires at least one concrete operation implementation", () => {
     const createEmptyProvider = (
       implementations: Pick<CreateProviderOptions, "api" | "images" | "classifiers">,
