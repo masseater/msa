@@ -11,6 +11,7 @@ import {
   addAccount,
   authStatus,
   blockOf,
+  describeLogin,
   clearBlocks,
   loadAccounts,
   loginAccount,
@@ -18,6 +19,7 @@ import {
   preferAccount,
   removeAccount,
   setAutoRotation,
+  withAuthStatus,
   type Account,
 } from "./claude-accounts.ts";
 
@@ -33,19 +35,15 @@ const ACTIONS: Record<string, string> = {
 };
 
 async function describeAccounts(): Promise<string> {
-  const accounts = loadAccounts();
-  const statuses = await Promise.all(accounts.map((account) => authStatus(account)));
-  return accounts
-    .map((account, index) => {
-      const status = statuses[index]!;
+  return (await withAuthStatus(loadAccounts()))
+    .map(({ account, status }, index) => {
       const auth = account.configDir
         ? `configDir ${account.configDir}`
         : account.tokenCommand
           ? "tokenCommand"
           : "msa environment";
-      const loginText = status.loggedIn
-        ? `logged in${status.email ? ` as ${status.email}` : ""}`
-        : `not logged in${status.detail ? ` (${status.detail})` : ""}`;
+      const loginText =
+        describeLogin(status) || `not logged in${status.detail ? ` (${status.detail})` : ""}`;
       const block = blockOf(account);
       const state = block
         ? `blocked until ${new Date(block.until).toLocaleString()} (${block.reason})`

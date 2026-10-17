@@ -18,6 +18,7 @@ import { resolvePath } from "../../utils/paths.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
 import { execCommand } from "../exec.ts";
+import type { ExternalService } from "../external-services.ts";
 import { readMsaManifest } from "../manifest.ts";
 import {
   type McpServerConfig,
@@ -380,6 +381,11 @@ function createExtensionAPI(
     registerMarkdownTransformer(transformer: MarkdownTransformer): void {
       assertActive();
       extension.markdownTransformer = transformer;
+    },
+
+    registerExternalService(service: ExternalService): void {
+      assertActive();
+      extension.externalServices = [...(extension.externalServices ?? []), service];
     },
 
     registerEntryRenderer<T>(customType: string, renderer: EntryRenderer<T>): void {

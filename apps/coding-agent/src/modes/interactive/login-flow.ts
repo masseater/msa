@@ -6,11 +6,7 @@ import type { TUI } from "@msa/tui";
 
 import { APP_NAME, getAgentDir, getAuthPath, getDocsPath } from "../../config.ts";
 import type { AgentSession } from "../../core/agent-session.ts";
-import {
-  EXTERNAL_SERVICES,
-  type ExternalService,
-  findExternalService,
-} from "../../core/external-services.ts";
+import { type ExternalService, findExternalService } from "../../core/external-services.ts";
 import type { McpHttpServerConfig } from "../../core/mcp-servers.ts";
 import { defaultModelPerProvider } from "../../core/model-resolver.ts";
 import { CredentialSynchronizationError } from "../../core/model-runtime.ts";
@@ -179,7 +175,7 @@ export class LoginFlow {
       this.showAuthTypeSelector();
       return;
     }
-    const service = findExternalService(normalizedRef);
+    const service = findExternalService(this.host.session.getExternalServices(), normalizedRef);
     if (service) {
       await this.loginService(service);
       return;
@@ -210,9 +206,13 @@ export class LoginFlow {
       host.showError(`Could not read stored credentials: ${toErrorMessage(error)}`);
       return;
     }
-    const services = EXTERNAL_SERVICES.filter((service) => {
-      const status = service.status();
-      return status.installed && status.signedIn;
+    const allServices = host.session.getExternalServices();
+    const statuses = await Promise.all(
+      allServices.map((service) => service.status().catch(() => undefined)),
+    );
+    const services = allServices.filter((_, index) => {
+      const status = statuses[index];
+      return status?.installed && status.signedIn;
     });
     providerOptions = [
       ...providerOptions,
@@ -326,7 +326,9 @@ export class LoginFlow {
       ? new Set(providerOptions.map((provider) => provider.authType))
       : new Set<AuthType>(["oauth", "api_key"]);
     const serviceLabel =
-      !providerOptions && EXTERNAL_SERVICES.length > 0 ? "Sign in to a service" : undefined;
+      !providerOptions && host.session.getExternalServices().length > 0
+        ? "Sign in to a service"
+        : undefined;
     const options: string[] = [];
     if (availableAuthTypes.has("oauth")) options.push(subscriptionLabel);
     if (availableAuthTypes.has("api_key")) options.push(apiKeyLabel);
@@ -353,7 +355,7 @@ export class LoginFlow {
       const onSelect = (option: string) => {
         done();
         if (option === serviceLabel) {
-          this.showServiceSelector();
+          void this.showServiceSelector();
           return;
         }
         if (radiusOption && option === radiusLabel) {
@@ -391,11 +393,21 @@ export class LoginFlow {
     });
   }
 
-  private showServiceSelector(): void {
+  private async showServiceSelector(): Promise<void> {
     const { host } = this;
-    const entries = EXTERNAL_SERVICES.map((service) => {
-      const status = service.status();
-      const state = !status.installed ? "not installed" : status.signedIn ? "signed in" : "";
+    const services = host.session.getExternalServices();
+    const statuses = await Promise.all(
+      services.map((service) => service.status().catch(() => undefined)),
+    );
+    const entries = services.map((service, index) => {
+      const status = statuses[index];
+      const state = !status
+        ? ""
+        : !status.installed
+          ? "not installed"
+          : status.signedIn
+            ? "signed in"
+            : "";
       return {
         service,
         label: `${service.name} · ${service.purpose}${state ? ` (${state})` : ""}`,
@@ -408,7 +420,7 @@ export class LoginFlow {
         (option) => {
           done();
           const entry = entries.find((candidate) => candidate.label === option);
-          if (entry) void this.loginService(entry.service, () => this.showServiceSelector());
+          if (entry) void this.loginService(entry.service, () => void this.showServiceSelector());
         },
         () => {
           done();
@@ -419,10 +431,36 @@ export class LoginFlow {
     });
   }
 
+  /** Asks the user to pick an option in the editor slot, then shows `after` again if given. */
+  private select(title: string, options: string[], after?: LoginDialogComponent): Promise<string> {
+    const { host } = this;
+    return new Promise((resolve, reject) => {
+      host.editorSlot.showSelector((done) => {
+        const finish = () => {
+          done();
+          if (after) host.editorSlot.show(after);
+        };
+        const selector = new ExtensionSelectorComponent(
+          title,
+          options,
+          (option) => {
+            finish();
+            resolve(option);
+          },
+          () => {
+            finish();
+            reject(new Error(LOGIN_CANCELLED));
+          },
+        );
+        return { component: selector, focus: selector };
+      });
+    });
+  }
+
   /** Signs in to an external service through its own sign-in, then registers the tools it brings. */
   private async loginService(service: ExternalService, onBack?: () => void): Promise<void> {
     const { host } = this;
-    const status = service.status();
+    const status = await service.status().catch(() => undefined);
     const dialog = new LoginDialogComponent(
       host.ui,
       service.id,
@@ -433,7 +471,7 @@ export class LoginFlow {
       service.name,
     );
     host.editorSlot.show(dialog);
-    if (!status.installed) {
+    if (status && !status.installed) {
       dialog.showInfo(
         `${service.name} provides ${service.purpose}. Install it first, then run /login ${service.id}:`,
         [],
@@ -442,24 +480,32 @@ export class LoginFlow {
       dialog.showInfo("", [], true);
       return;
     }
-    dialog.showWaiting(`Opening the ${service.name} sign-in page in your browser…`);
+    dialog.showWaiting(`Signing in to ${service.name}…`);
     host.programStatus.setBlocked("login", { kind: "auth", message: `Log in to ${service.name}` });
     try {
-      await service.login((page) => {
-        dialog.showDetails([theme.fg("text", "If the browser did not open, visit:")]);
-        dialog.showInfo("", [{ url: page.url }]);
-        if (page.code) {
-          dialog.showInfo(`The sign-in page shows this code; check it matches: ${page.code}`);
-        }
-        dialog.showWaiting("Waiting for you to approve the sign-in…");
-      }, dialog.signal);
+      await service.login(
+        {
+          showPage: (page) => {
+            dialog.showDetails([theme.fg("text", "Open this page to sign in:")]);
+            dialog.showInfo("", [{ url: page.url }]);
+            if (page.code) {
+              dialog.showInfo(`The page shows this code; check it matches: ${page.code}`);
+            }
+            dialog.showWaiting("Waiting for you to approve the sign-in…");
+          },
+          prompt: (message, placeholder) => dialog.showPrompt(message, placeholder),
+          select: (title, options) => this.select(title, options, dialog),
+        },
+        dialog.signal,
+      );
       host.editorSlot.restoreEditor();
       host.session.refreshExternalServiceTools();
       host.showStatus(`Signed in to ${service.name}; ${service.purpose} is available.`);
     } catch (error: unknown) {
       host.editorSlot.restoreEditor();
-      if (dialog.signal.aborted) onBack?.();
-      else host.showError(`Failed to sign in to ${service.name}: ${toErrorMessage(error)}`);
+      const message = toErrorMessage(error);
+      if (dialog.signal.aborted || message === LOGIN_CANCELLED) onBack?.();
+      else host.showError(`Failed to sign in to ${service.name}: ${message}`);
     } finally {
       host.programStatus.setBlocked("login", undefined);
     }
@@ -468,12 +514,15 @@ export class LoginFlow {
   private async logoutService(service: ExternalService): Promise<void> {
     const { host } = this;
     try {
-      await service.logout();
+      await service.logout({ select: (title, options) => this.select(title, options) });
       host.showStatus(
         `Signed out of ${service.name}. Its tools stay registered until /reload or a new session.`,
       );
     } catch (error: unknown) {
-      host.showError(`Failed to sign out of ${service.name}: ${toErrorMessage(error)}`);
+      const message = toErrorMessage(error);
+      if (message !== LOGIN_CANCELLED) {
+        host.showError(`Failed to sign out of ${service.name}: ${message}`);
+      }
     }
   }
 

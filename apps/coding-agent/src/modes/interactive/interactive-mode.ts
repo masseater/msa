@@ -99,7 +99,6 @@ import type {
   UserBashEventResult,
   WorkingIndicatorOptions,
 } from "../../core/extensions/index.ts";
-import { EXTERNAL_SERVICES } from "../../core/external-services.ts";
 import {
   FooterDataProvider,
   type ReadonlyFooterDataProvider,
@@ -746,7 +745,7 @@ export class InteractiveMode {
               description: formatLoginProviderCompletionDescription(provider),
             },
           })),
-          ...EXTERNAL_SERVICES.map((service) => ({
+          ...this.session.getExternalServices().map((service) => ({
             searchText: `${service.id} ${service.name} ${service.purpose}`,
             item: { value: service.id, label: service.id, description: service.purpose },
           })),

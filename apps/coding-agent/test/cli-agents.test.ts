@@ -11,7 +11,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { AssistantMessageEvent, Model, TranscriptContext } from "@msa/ai/compat";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ENV_AGENT_DIR } from "../src/config.ts";
 import type {
@@ -34,6 +34,7 @@ import {
   removeAccount,
   setAutoRotation,
 } from "../src/extensions/cli-agents/claude-accounts.ts";
+import { claudeCodeService } from "../src/extensions/cli-agents/claude-service.ts";
 import { registerOpenCode } from "../src/extensions/cli-agents/opencode.ts";
 
 let dir: string;
@@ -45,7 +46,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  process.env = { ...savedEnv };
+  // Restore in place: from Node 26 a child process ignores a replaced process.env object, so later
+  // tests that change PATH would still spawn with the original one.
+  for (const key of Object.keys(process.env)) if (!(key in savedEnv)) delete process.env[key];
+  Object.assign(process.env, savedEnv);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -206,6 +210,65 @@ describe("managing Claude Code accounts", () => {
     await expect(loginAccount(account, { askCode: async () => undefined })).rejects.toThrow(
       /cancelled/,
     );
+  });
+  const claudeWithLogin = [
+    `if [ "$1 $2" = "auth status" ]; then`,
+    `  if [ -f "$CLAUDE_CONFIG_DIR/token" ]; then echo '{"loggedIn":true,"email":"a@example.com"}'; else echo '{"loggedIn":false}'; exit 1; fi`,
+    `  exit 0`,
+    `fi`,
+    `if [ "$1 $2" = "auth logout" ]; then rm -f "$CLAUDE_CONFIG_DIR/token"; exit 0; fi`,
+    `echo "If the browser didn't open, visit: https://claude.com/oauth?x=1"`,
+    `read code`,
+    `printf %s "$code" > "$CLAUDE_CONFIG_DIR/token"`,
+  ].join("\n");
+
+  function interaction(answers: { select?: string; prompts: string[] }) {
+    return {
+      showPage: vi.fn(),
+      select: vi.fn(async () => answers.select!),
+      prompt: vi.fn(async () => answers.prompts.shift()!),
+    };
+  }
+
+  it("tells /login how to install Claude Code when it is missing", async () => {
+    process.env["CLAUDE_BIN"] = "";
+    process.env["PATH"] = join(dir, "empty");
+    expect(await claudeCodeService.status()).toEqual({
+      installed: false,
+      install: "curl -fsSL https://claude.ai/install.sh | bash",
+    });
+  });
+
+  it("signs the only account in from /login without asking which", async () => {
+    fakeClaude(claudeWithLogin);
+    writeAccounts([{ name: "work", configDir: managed("work") }]);
+    expect(await claudeCodeService.status()).toEqual({ installed: true, signedIn: false });
+    const ui = interaction({ prompts: ["the-code"] });
+    await claudeCodeService.login(ui, new AbortController().signal);
+    expect(ui.select).not.toHaveBeenCalled();
+    expect(ui.showPage).toHaveBeenCalledWith({ url: "https://claude.com/oauth?x=1" });
+    expect(await claudeCodeService.status()).toEqual({ installed: true, signedIn: true });
+
+    await claudeCodeService.logout(interaction({ prompts: [] }));
+    expect(await claudeCodeService.status()).toEqual({ installed: true, signedIn: false });
+  });
+
+  it("adds a new account from /login when there are several", async () => {
+    fakeClaude(claudeWithLogin);
+    writeAccounts([
+      { name: "main", configDir: managed("main") },
+      { name: "token", tokenCommand: "echo token" },
+      { name: "sub", configDir: managed("sub") },
+    ]);
+    const ui = interaction({ select: "Add a new account", prompts: ["work", "the-code"] });
+    await claudeCodeService.login(ui, new AbortController().signal);
+    expect(ui.select).toHaveBeenCalledWith("Sign in which Claude account?", [
+      "main",
+      "sub",
+      "Add a new account",
+    ]);
+    expect(loadAccounts().at(-1)).toEqual({ name: "work", configDir: managed("work") });
+    expect(readFileSync(join(managed("work"), "token"), "utf8")).toBe("the-code");
   });
 });
 

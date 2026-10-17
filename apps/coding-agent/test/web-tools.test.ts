@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { getModel } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { findExternalService } from "../src/core/external-services.ts";
+import { EXTERNAL_SERVICES, findExternalService } from "../src/core/external-services.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -322,22 +322,24 @@ describe("treg sign-in", () => {
     );
   });
 
-  it("tells /login how to install treg when it is missing", () => {
+  const treg = () => findExternalService(EXTERNAL_SERVICES, "TREG")!;
+
+  it("tells /login how to install treg when it is missing", async () => {
     vi.stubEnv("PATH", bin);
-    expect(findExternalService("treg")?.status()).toEqual({
+    expect(await treg().status()).toEqual({
       installed: false,
       install: "curl -fsSL https://treg.to/install.sh | sh",
     });
-    expect(findExternalService("TREG")?.tools()).toEqual([]);
+    expect(treg().tools?.()).toEqual([]);
   });
 
-  it("reports whether treg is signed in", () => {
+  it("reports whether treg is signed in and brings the web tools once it is", async () => {
     fakeTreg(bin, true);
     vi.stubEnv("PATH", `${bin}:${process.env["PATH"]}`);
-    expect(findExternalService("treg")?.status()).toEqual({ installed: true, signedIn: true });
+    expect(await treg().status()).toEqual({ installed: true, signedIn: true });
     expect(
-      findExternalService("treg")
-        ?.tools()
+      treg()
+        .tools?.()
         .map((tool) => tool.name),
     ).toEqual(["web_search", "web_fetch"]);
   });

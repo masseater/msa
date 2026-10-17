@@ -65,6 +65,7 @@ import type {
 import type { CompactionPreparation, CompactionResult } from "../compaction/index.ts";
 import type { EventBus } from "../event-bus.ts";
 import type { ExecOptions, ExecResult } from "../exec.ts";
+import type { ExternalService } from "../external-services.ts";
 import type { ReadonlyFooterDataProvider } from "../footer-data-provider.ts";
 import type { KeybindingsManager } from "../keybindings.ts";
 import type { McpServerConfig, McpServerRegistry, RegisteredMcpServer } from "../mcp-servers.ts";
@@ -1820,6 +1821,9 @@ export interface ExtensionAPI {
   /** Register a transformer for user and assistant Markdown before msa renders it in the interactive transcript. */
   registerMarkdownTransformer(transformer: MarkdownTransformer): void;
 
+  /** Register a SaaS the user signs in to from `/login` (and out of from `/logout`). */
+  registerExternalService(service: ExternalService): void;
+
   /** Register a custom renderer for CustomEntry. Custom entries do not participate in LLM context. */
   registerEntryRenderer<T = unknown>(customType: string, renderer: EntryRenderer<T>): void;
 
@@ -2404,6 +2408,7 @@ export interface Extension {
   messageRenderers: Map<string, MessageRenderer>;
   toolRenderers?: ToolRendererResolver[];
   markdownTransformer?: MarkdownTransformer;
+  externalServices?: ExternalService[];
   entryRenderers?: Map<string, EntryRenderer>;
   commands: Map<string, RegisteredCommand>;
   flags: Map<string, ExtensionFlag>;

@@ -28,6 +28,7 @@ describe("LoginFlow", () => {
     const session = {
       model: undefined,
       settingsManager: { getOrCreateDeviceId: () => "device" },
+      getExternalServices: () => [],
       modelRuntime: {
         getProviders: () => [provider],
         getProviderAuthStatus: () => ({ configured: false }),
