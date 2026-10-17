@@ -16,6 +16,9 @@ const webCrypto =
 export const randomBytes = (size: number): Uint8Array =>
   Effect.runSync(Effect.orDie(webCrypto.randomBytes(size)));
 
+export const randomHex = (size: number): string =>
+  Array.from(randomBytes(size), (byte) => byte.toString(16).padStart(2, "0")).join("");
+
 export const digest: {
   (data: Uint8Array): (algorithm: DigestAlgorithm) => Effect.Effect<Uint8Array>;
   (algorithm: DigestAlgorithm, data: Uint8Array): Effect.Effect<Uint8Array>;

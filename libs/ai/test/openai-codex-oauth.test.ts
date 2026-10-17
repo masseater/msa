@@ -101,7 +101,7 @@ describe("OpenAI Codex OAuth", () => {
 
           if (url === "https://auth.openai.com/api/accounts/deviceauth/usercode") {
             expect(init?.method).toBe("POST");
-            expect(init?.headers).toMatchObject({ "Content-Type": "application/json" });
+            expect(init?.headers).toMatchObject({ "content-type": "application/json" });
             expect(JSON.parse(String(init?.body))).toEqual({
               client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
             });
@@ -117,7 +117,7 @@ describe("OpenAI Codex OAuth", () => {
           if (url === "https://auth.openai.com/api/accounts/deviceauth/token") {
             pollTimes.push(Date.now());
             expect(init?.method).toBe("POST");
-            expect(init?.headers).toMatchObject({ "Content-Type": "application/json" });
+            expect(init?.headers).toMatchObject({ "content-type": "application/json" });
             expect(JSON.parse(String(init?.body))).toEqual({
               device_auth_id: "device-auth-id",
               user_code: "ABCD-1234",
@@ -132,7 +132,7 @@ describe("OpenAI Codex OAuth", () => {
           if (url === "https://auth.openai.com/oauth/token") {
             expect(init?.method).toBe("POST");
             expect(init?.headers).toMatchObject({
-              "Content-Type": "application/x-www-form-urlencoded",
+              "content-type": "application/x-www-form-urlencoded",
             });
             const params = new URLSearchParams(String(init?.body));
             expect(params.get("grant_type")).toBe("authorization_code");

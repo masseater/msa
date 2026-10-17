@@ -10,10 +10,10 @@ import {
   COPY_CODE_LOGIN_METHOD,
   COPY_CODE_REDIRECT_URI,
   exchangeAuthorizationCode,
-  parseAuthorizationInput,
   REDIRECT_URI,
   refreshAnthropicToken,
 } from "./anthropic-shared.ts";
+import { parseAuthorizationInput } from "./authorization-input.ts";
 import {
   type OAuthCallbackServer,
   startOAuthCallbackServer,

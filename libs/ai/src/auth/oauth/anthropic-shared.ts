@@ -24,39 +24,6 @@ export const SCOPES =
 const REQUEST_TIMEOUT_MS = 30_000;
 const EXPIRY_MARGIN_MS = 5 * 60 * 1000;
 
-export interface AuthorizationInput {
-  readonly code?: string | undefined;
-  readonly state?: string | undefined;
-}
-
-export const parseAuthorizationInput = (input: string): AuthorizationInput => {
-  const value = input.trim();
-  if (value === "") return {};
-
-  try {
-    const url = new URL(value);
-    return {
-      code: url.searchParams.get("code") ?? undefined,
-      state: url.searchParams.get("state") ?? undefined,
-    };
-  } catch {}
-
-  if (value.includes("#")) {
-    const [code, state] = value.split("#", 2);
-    return { code, state };
-  }
-
-  if (value.includes("code=")) {
-    const params = new URLSearchParams(value);
-    return {
-      code: params.get("code") ?? undefined,
-      state: params.get("state") ?? undefined,
-    };
-  }
-
-  return { code: value };
-};
-
 export const formatErrorDetails = (error: unknown): string => {
   if (error instanceof Error) {
     const details: string[] = [`${error.name}: ${error.message}`];
