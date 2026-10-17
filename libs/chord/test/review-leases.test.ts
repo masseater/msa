@@ -97,67 +97,94 @@ const case6ARegistryConflictFoundWhile = Effect.gen(function* () {
   );
 });
 
-describe("review: leases, invocations, activation", () => {
-  const Store = local("t.store", {
-    version: 1,
-    input: Type.Object({}),
-    members: { count: Type.Unknown() },
-  });
+const Store = local("t.store", {
+  version: 1,
+  input: Type.Object({}),
+  members: { count: Type.Unknown() },
+});
 
-  it("#4 a running listener holds a lease: the gate waits for it before migrating", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const events = emitter<number>();
-        const go = latch();
-        const seen: unknown[] = [];
-        host.install({
-          name: "store",
-          setup: (api) =>
-            api.serve(Store, (_input, _principal, self) => {
-              const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 1 });
-              self.on("slow", events, () =>
-                Effect.runPromiseWith(services)(
-                  Effect.gen(function* () {
-                    yield* go.wait;
-                    seen.push(count.value);
-                  }),
-                ),
-              );
-              return { count };
+const case4ARunningListenerHoldsA = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const events = emitter<number>();
+  const go = latch();
+  const seen: unknown[] = [];
+  host.install({
+    name: "store",
+    setup: (api) =>
+      api.serve(Store, (_input, _principal, self) => {
+        const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 1 });
+        self.on("slow", events, () =>
+          Effect.runPromiseWith(services)(
+            Effect.gen(function* () {
+              yield* go.wait;
+              seen.push(count.value);
             }),
-        });
-        const ref = host.hold(Store, {});
-        yield* Effect.promise(() => ref.ready);
-        events.emit(1);
-        yield* tick;
-        const codeVersion = host.codeVersion;
-        const reload = host.reload(
-          [
-            {
-              name: "store",
-              setup: (api) =>
-                api.serve(Store, (_input, _principal, self) => ({
-                  count: self.state(
-                    "count",
-                    Type.Object({ total: Type.Number() }),
-                    { total: 0 },
-                    { version: 2, migrate: (old) => ({ total: (old as { n: number }).n }) },
-                  ),
-                })),
-            },
-          ],
-          { gateDeadline: 2000 },
+          ),
         );
-        yield* ticks(20);
-        assert.equal(host.codeVersion, codeVersion, "the gate must wait for the listener");
-        go.open();
-        yield* Effect.promise(() => reload);
-        assert.deepEqual(seen, [{ n: 1 }]);
-        assert.deepEqual(ref.count.value, { total: 1 });
+        return { count };
       }),
-    ));
+  });
+  const ref = host.hold(Store, {});
+  yield* Effect.promise(() => ref.ready);
+  events.emit(1);
+  yield* tick;
+  const codeVersion = host.codeVersion;
+  const reload = host.reload(
+    [
+      {
+        name: "store",
+        setup: (api) =>
+          api.serve(Store, (_input, _principal, self) => ({
+            count: self.state(
+              "count",
+              Type.Object({ total: Type.Number() }),
+              { total: 0 },
+              { version: 2, migrate: (old) => ({ total: (old as { n: number }).n }) },
+            ),
+          })),
+      },
+    ],
+    { gateDeadline: 2000 },
+  );
+  yield* ticks(20);
+  assert.equal(host.codeVersion, codeVersion, "the gate must wait for the listener");
+  go.open();
+  yield* Effect.promise(() => reload);
+  assert.deepEqual(seen, [{ n: 1 }]);
+  assert.deepEqual(ref.count.value, { total: 1 });
+});
+
+const case6ReleasingTheLastHoldWhile = Effect.gen(function* () {
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const log: string[] = [];
+  let ref: Ref<typeof Store> | undefined;
+  let runs = 0;
+  host.serve(Store, (_input, _principal, self) => {
+    runs++;
+    const count = self.state("count", Type.Number(), 0);
+    self.resource("r", {
+      version: 1,
+      open: () => void log.push("open"),
+      close: () => void log.push("close"),
+    });
+    self.on("drop", count, () => ref?.release());
+    return { count };
+  });
+  const held = host.hold(Store, {});
+  ref = held;
+  yield* Effect.promise(() => held.ready.catch(() => {}));
+  yield* ticks(20);
+  assert.deepEqual(log, ["open", "close"]);
+  const again = host.hold(Store, {});
+  ref = undefined;
+  yield* Effect.promise(() => again.ready);
+  assert.equal(runs, 2);
+});
+
+describe("review: leases, invocations, activation", () => {
+  it("#4 a running listener holds a lease: the gate waits for it before migrating", () =>
+    Effect.runPromise(case4ARunningListenerHoldsA));
 
   it("#5 disposal waits for running methods before closing resources (released and forced)", () =>
     Effect.runPromise(case5DisposalWaitsForRunningMethods));
@@ -166,32 +193,5 @@ describe("review: leases, invocations, activation", () => {
     Effect.runPromise(case6ARegistryConflictFoundWhile));
 
   it("#6 releasing the last hold while listeners start up does not resurrect the object", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const log: string[] = [];
-        let ref: Ref<typeof Store> | undefined;
-        let runs = 0;
-        host.serve(Store, (_input, _principal, self) => {
-          runs++;
-          const count = self.state("count", Type.Number(), 0);
-          self.resource("r", {
-            version: 1,
-            open: () => void log.push("open"),
-            close: () => void log.push("close"),
-          });
-          self.on("drop", count, () => ref?.release());
-          return { count };
-        });
-        const held = host.hold(Store, {});
-        ref = held;
-        yield* Effect.promise(() => held.ready.catch(() => {}));
-        yield* ticks(20);
-        assert.deepEqual(log, ["open", "close"]);
-        const again = host.hold(Store, {});
-        ref = undefined;
-        yield* Effect.promise(() => again.ready);
-        assert.equal(runs, 2);
-      }),
-    ));
+    Effect.runPromise(case6ReleasingTheLastHoldWhile));
 });

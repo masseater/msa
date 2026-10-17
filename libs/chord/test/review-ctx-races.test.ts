@@ -63,88 +63,86 @@ const aRemoteReferenceRefusesAForeign = Effect.gen(function* () {
   assert.equal(hits, 1);
 });
 
-describe("review: ctx races", () => {
-  const Target = local("t.target", {
-    version: 1,
-    input: Type.Object({}),
-    members: { hit: method() },
-  });
+const Target = local("t.target", {
+  version: 1,
+  input: Type.Object({}),
+  members: { hit: method() },
+});
 
-  it("an aborted task ctx cannot start fresh calls", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const Runner = local("t.runner", { version: 1, input: Type.Object({}) });
-        let hits = 0;
-        const go = latch();
-        let outcome: unknown;
-        host.serve(Target, () => ({
-          hit: () => {
-            hits++;
-          },
-        }));
-        host.serve(Runner, (_input, _principal, self) => {
-          const target = self.get(Target, {});
-          self.task((ctx) =>
-            Effect.runPromiseWith(services)(
-              Effect.gen(function* () {
-                yield* go.wait;
-                outcome = yield* Effect.promise(() =>
-                  target.hit(ctx).catch((error: unknown) => error),
-                );
-              }),
+const anAbortedTaskCtxCannotStart = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const Runner = local("t.runner", { version: 1, input: Type.Object({}) });
+  let hits = 0;
+  const go = latch();
+  let outcome: unknown;
+  host.serve(Target, () => ({
+    hit: () => {
+      hits++;
+    },
+  }));
+  host.serve(Runner, (_input, _principal, self) => {
+    const target = self.get(Target, {});
+    self.task((ctx) =>
+      Effect.runPromiseWith(services)(
+        Effect.gen(function* () {
+          yield* go.wait;
+          outcome = yield* Effect.promise(() => target.hit(ctx).catch((error: unknown) => error));
+        }),
+      ),
+    );
+    return {};
+  });
+  const runner = host.hold(Runner, {});
+  yield* Effect.promise(() => runner.ready);
+  const target = host.hold(Target, {});
+  yield* Effect.promise(() => target.ready);
+  runner.release();
+  yield* ticks();
+  go.open();
+  yield* ticks(20);
+  assert.equal(hits, 0);
+  assert.ok(isChordError(outcome, "aborted"));
+});
+
+const anExpiredCtxAndAForeign = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const other = createHost({ self: { kind: "host" }, onError: () => {} });
+  host.serve(Target, () => ({ hit: () => {} }));
+  const target = host.hold(Target, {});
+  yield* Effect.promise(() => target.ready);
+  const expired = yield* Effect.promise(() => host.root((ctx) => ctx));
+  yield* Effect.promise(() =>
+    assert.rejects(
+      target.hit(expired),
+      (error) => isChordError(error, "aborted") && error.reason === "expired",
+    ),
+  );
+  const foreign = yield* Effect.promise(() =>
+    other.root((ctx) =>
+      Effect.runPromiseWith(services)(
+        Effect.gen(function* () {
+          yield* Effect.promise(() =>
+            assert.rejects(
+              target.hit(ctx),
+              (error) => isChordError(error, "invalid") && error.reason === "foreign_ctx",
             ),
           );
-          return {};
-        });
-        const runner = host.hold(Runner, {});
-        yield* Effect.promise(() => runner.ready);
-        const target = host.hold(Target, {});
-        yield* Effect.promise(() => target.ready);
-        runner.release();
-        yield* ticks();
-        go.open();
-        yield* ticks(20);
-        assert.equal(hits, 0);
-        assert.ok(isChordError(outcome, "aborted"));
-      }),
-    ));
+          return true;
+        }),
+      ),
+    ),
+  );
+  assert.ok(foreign);
+});
+
+describe("review: ctx races", () => {
+  it("an aborted task ctx cannot start fresh calls", () =>
+    Effect.runPromise(anAbortedTaskCtxCannotStart));
 
   it("an expired ctx and a foreign ctx are refused", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const other = createHost({ self: { kind: "host" }, onError: () => {} });
-        host.serve(Target, () => ({ hit: () => {} }));
-        const target = host.hold(Target, {});
-        yield* Effect.promise(() => target.ready);
-        const expired = yield* Effect.promise(() => host.root((ctx) => ctx));
-        yield* Effect.promise(() =>
-          assert.rejects(
-            target.hit(expired),
-            (error) => isChordError(error, "aborted") && error.reason === "expired",
-          ),
-        );
-        const foreign = yield* Effect.promise(() =>
-          other.root((ctx) =>
-            Effect.runPromiseWith(services)(
-              Effect.gen(function* () {
-                yield* Effect.promise(() =>
-                  assert.rejects(
-                    target.hit(ctx),
-                    (error) => isChordError(error, "invalid") && error.reason === "foreign_ctx",
-                  ),
-                );
-                return true;
-              }),
-            ),
-          ),
-        );
-        assert.ok(foreign);
-      }),
-    ));
+    Effect.runPromise(anExpiredCtxAndAForeign));
 
   it("a remote reference refuses a foreign ctx and a ctx not made by Chord, without calling", () =>
     Effect.runPromise(aRemoteReferenceRefusesAForeign));

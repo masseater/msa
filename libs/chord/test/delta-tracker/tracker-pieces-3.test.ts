@@ -59,62 +59,62 @@ describe("delta tracker piece arrays", () => {
   );
 });
 
-describe("delta tracker randomized transactions", () => {
-  type Document = {
-    values: { id: number; score: number }[];
-    text: string;
-    meta: { revision: number; label?: string };
+type Document = {
+  values: { id: number; score: number }[];
+  text: string;
+  meta: { revision: number; label?: string };
+};
+const random =
+  (seed: number): (() => number) =>
+  () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let value = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
   };
-  const random =
-    (seed: number): (() => number) =>
-    () => {
-      seed = (seed + 0x6d2b79f5) | 0;
-      let value = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-      value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
-      return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
-    };
-  const mutate = (document: Document | Draft<Document>, choice: number, value: number): void => {
-    const item = (): { id: number; score: number } => ({ id: value, score: value % 7 });
-    switch (choice) {
-      case 0:
-        document.text += `-${value}`;
-        break;
-      case 1:
-        document.values.push(item());
-        break;
-      case 2:
-        document.values.unshift(item());
-        break;
-      case 3:
-        if (document.values.length > 0) document.values.shift();
-        break;
-      case 4:
-        if (document.values.length > 0) document.values.pop();
-        break;
-      case 5: {
-        const index = document.values.length === 0 ? 0 : value % (document.values.length + 1);
-        document.values.splice(index, document.values.length === 0 ? 0 : value % 2, item());
-        break;
-      }
-      case 6:
-        document.values.reverse();
-        break;
-      case 7:
-        document.values.sort((left, right) => left.id - right.id);
-        break;
-      case 8:
-        if (document.values.length > 0)
-          document.values[value % document.values.length]!.score = value;
-        break;
-      case 9:
-        document.meta.revision++;
-        document.meta.label = `r-${value}`;
-        break;
-      default:
-        delete document.meta.label;
+const mutate = (document: Document | Draft<Document>, choice: number, value: number): void => {
+  const item = (): { id: number; score: number } => ({ id: value, score: value % 7 });
+  switch (choice) {
+    case 0:
+      document.text += `-${value}`;
+      break;
+    case 1:
+      document.values.push(item());
+      break;
+    case 2:
+      document.values.unshift(item());
+      break;
+    case 3:
+      if (document.values.length > 0) document.values.shift();
+      break;
+    case 4:
+      if (document.values.length > 0) document.values.pop();
+      break;
+    case 5: {
+      const index = document.values.length === 0 ? 0 : value % (document.values.length + 1);
+      document.values.splice(index, document.values.length === 0 ? 0 : value % 2, item());
+      break;
     }
-  };
+    case 6:
+      document.values.reverse();
+      break;
+    case 7:
+      document.values.sort((left, right) => left.id - right.id);
+      break;
+    case 8:
+      if (document.values.length > 0)
+        document.values[value % document.values.length]!.score = value;
+      break;
+    case 9:
+      document.meta.revision++;
+      document.meta.label = `r-${value}`;
+      break;
+    default:
+      delete document.meta.label;
+  }
+};
 
+describe("delta tracker randomized transactions", () => {
   it("matches policy, detached replay, and adopted state after multi-operation transactions", () => {
     for (let seed = 1; seed <= 40; seed++) {
       const rng = random(seed);

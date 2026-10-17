@@ -16,9 +16,27 @@ import {
 import { quiet } from "./fixtures/host.ts";
 import { tick } from "./fixtures/timing.ts";
 
-describe("host: registries", () => {
-  const Routes = defineRegistry<string>("t.routes");
+const Routes = defineRegistry<string>("t.routes");
 
+const rejectsConflictingRegistrations = Effect.gen(function* () {
+  const errors: unknown[] = [];
+  const host = quiet(errors);
+  for (const name of ["t.conflict-a", "t.conflict-b"]) {
+    host.serve(
+      local(name, { version: 1, input: Type.Object({}) }),
+      (_input, _principal, self) => {
+        self.register(Routes, { same: name });
+        return {};
+      },
+      { lifetime: "host" },
+    );
+  }
+  yield* tick;
+  yield* tick;
+  assert.ok(errors.some((error) => /registry_conflict/u.test(String(error))));
+});
+
+describe("host: registries", () => {
   it('only objects of lifetime "host" register; tables follow registration order', () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -63,26 +81,7 @@ describe("host: registries", () => {
       }),
     ));
 
-  it("rejects conflicting registrations", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const errors: unknown[] = [];
-        const host = quiet(errors);
-        for (const name of ["t.conflict-a", "t.conflict-b"]) {
-          host.serve(
-            local(name, { version: 1, input: Type.Object({}) }),
-            (_input, _principal, self) => {
-              self.register(Routes, { same: name });
-              return {};
-            },
-            { lifetime: "host" },
-          );
-        }
-        yield* tick;
-        yield* tick;
-        assert.ok(errors.some((error) => /registry_conflict/u.test(String(error))));
-      }),
-    ));
+  it("rejects conflicting registrations", () => Effect.runPromise(rejectsConflictingRegistrations));
 });
 
 const ctxGetActsAsTheRoot = Effect.gen(function* () {
@@ -152,72 +151,72 @@ const aChorderrorFromAFactoryKeeps = Effect.gen(function* () {
   );
 });
 
-describe("host: composition", () => {
-  const Source = local("t.source", {
-    version: 1,
-    input: Type.Object({}),
-    members: { n: Type.Number(), set: method(Type.Number()) },
-  });
-  const Mirror = local("t.mirror", {
-    version: 1,
-    input: Type.Object({}),
-    members: { copy: Type.Number(), doubled: Type.Number() },
-  });
+const Source = local("t.source", {
+  version: 1,
+  input: Type.Object({}),
+  members: { n: Type.Number(), set: method(Type.Number()) },
+});
+const Mirror = local("t.mirror", {
+  version: 1,
+  input: Type.Object({}),
+  members: { copy: Type.Number(), doubled: Type.Number() },
+});
 
+const referenceStateMembersAreSourcesFor = Effect.gen(function* () {
+  const host = quiet();
+  host.serve(Source, (_input, _principal, self) => {
+    const n = self.state("n", Type.Number(), 1);
+    return {
+      n,
+      set: (value: number, ctx: Ctx) => {
+        n.replace(ctx, value);
+      },
+    };
+  });
+  host.serve(Mirror, (_input, _principal, self) => {
+    const source = self.get(Source, {});
+    const copy = self.state("copy", Type.Number(), 0);
+    self.on("follow", source.n, (value, ctx) => copy.replace(ctx, value ?? 0));
+    const doubled = self.derive([source.n], (n) => (n ?? 0) * 2);
+    return { copy, doubled };
+  });
+  const mirror = host.hold(Mirror, {});
+  yield* Effect.promise(() => mirror.ready);
+  yield* tick;
+  assert.equal(mirror.copy.value, 1);
+  assert.equal(mirror.doubled.value, 2);
+  yield* Effect.promise(() => host.hold(Source, {}).set(5));
+  yield* tick;
+  assert.equal(mirror.copy.value, 5);
+  assert.equal(mirror.doubled.value, 10);
+});
+
+const callingAReferenceInsideAFactory = Effect.gen(function* () {
+  const host = quiet();
+  host.serve(Source, (_input, _principal, self) => ({
+    n: self.state("n", Type.Number(), 0),
+    set: () => {},
+  }));
+  const Eager = local("t.eager-call", { version: 1, input: Type.Object({}) });
+  host.serve(Eager, (_input, _principal, self) => {
+    const source = self.get(Source, {});
+    void source.set(1);
+    return {};
+  });
+  yield* Effect.promise(() =>
+    assert.rejects(host.hold(Eager, {}).ready, (error) => isChordError(error, "not_ready")),
+  );
+});
+
+describe("host: composition", () => {
   it("reference state members are sources for listeners and derivations", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = quiet();
-        host.serve(Source, (_input, _principal, self) => {
-          const n = self.state("n", Type.Number(), 1);
-          return {
-            n,
-            set: (value: number, ctx: Ctx) => {
-              n.replace(ctx, value);
-            },
-          };
-        });
-        host.serve(Mirror, (_input, _principal, self) => {
-          const source = self.get(Source, {});
-          const copy = self.state("copy", Type.Number(), 0);
-          self.on("follow", source.n, (value, ctx) => copy.replace(ctx, value ?? 0));
-          const doubled = self.derive([source.n], (n) => (n ?? 0) * 2);
-          return { copy, doubled };
-        });
-        const mirror = host.hold(Mirror, {});
-        yield* Effect.promise(() => mirror.ready);
-        yield* tick;
-        assert.equal(mirror.copy.value, 1);
-        assert.equal(mirror.doubled.value, 2);
-        yield* Effect.promise(() => host.hold(Source, {}).set(5));
-        yield* tick;
-        assert.equal(mirror.copy.value, 5);
-        assert.equal(mirror.doubled.value, 10);
-      }),
-    ));
+    Effect.runPromise(referenceStateMembersAreSourcesFor));
 
   it("ctx.get acts as the root principal at ingress and as the host inside objects", () =>
     Effect.runPromise(ctxGetActsAsTheRoot));
 
   it("calling a reference inside a factory throws not_ready", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = quiet();
-        host.serve(Source, (_input, _principal, self) => ({
-          n: self.state("n", Type.Number(), 0),
-          set: () => {},
-        }));
-        const Eager = local("t.eager-call", { version: 1, input: Type.Object({}) });
-        host.serve(Eager, (_input, _principal, self) => {
-          const source = self.get(Source, {});
-          void source.set(1);
-          return {};
-        });
-        yield* Effect.promise(() =>
-          assert.rejects(host.hold(Eager, {}).ready, (error) => isChordError(error, "not_ready")),
-        );
-      }),
-    ));
+    Effect.runPromise(callingAReferenceInsideAFactory));
 
   it("a ChordError from a factory keeps its code through dependents", () =>
     Effect.runPromise(aChorderrorFromAFactoryKeeps));
