@@ -1,92 +1,128 @@
+import { createRequire } from "node:module";
 import { Worker } from "node:worker_threads";
 
-import type { CodemodeSandboxOptions } from "../types.ts";
-import { type CodemodeWasmModule, loadQuickJSWasm } from "../wasm.ts";
-import { CodemodeSandboxBase, errorMessage, type VmLauncher } from "./execution.ts";
-import type { WorkerData } from "./protocol.ts";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
+
+import type { CodemodeSandboxOptions, CodemodeWasmModule } from "../types.ts";
+import { RuntimeError } from "./bridge.ts";
+import { loadWasm } from "./inline.ts";
+import { errorMessage } from "./prelude-source.ts";
+import type { VmChannel, VmEvents, VmLauncher, WorkerData } from "./protocol.ts";
+import { CodemodeSandboxBase } from "./sandbox-base.ts";
+const runtime = ManagedRuntime.make(
+  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- FileSystem (effect/unstable) is the only Effect API for reading files
+  NodeFileSystem.layer,
+);
+
+const readFileBytes = (path: string): Promise<Uint8Array> =>
+  runtime.runPromise(
+    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- FileSystem (effect/unstable) is the only Effect API for reading files
+    FileSystem.FileSystem.use((fs) => fs.readFile(path)).pipe(
+      Effect.mapError((error) => error.cause ?? error),
+    ),
+  );
+
+interface WebAssemblyGlobal {
+  compile(bytes: Uint8Array): Promise<CodemodeWasmModule>;
+}
+
+const modules = new Map<string, Promise<CodemodeWasmModule>>();
+
+export function loadQuickJSWasm(path?: string): Promise<CodemodeWasmModule> {
+  const resolved = path ?? createRequire(import.meta.url).resolve("quickjs-wasi/quickjs.wasm");
+  let module = modules.get(resolved);
+  if (module === undefined) {
+    const { WebAssembly } = globalThis as unknown as { WebAssembly: WebAssemblyGlobal };
+    module = readFileBytes(resolved)
+      .then((bytes) => WebAssembly.compile(bytes))
+      .catch((error: unknown) => {
+        modules.delete(resolved);
+        throw error;
+      });
+    modules.set(resolved, module);
+  }
+  return module;
+}
 
 function defaultWorkerUrl(): URL {
-  // `.ts` when running from source (tests, tsx), `.js` from the published dist.
   return new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./worker.js", import.meta.url);
 }
 
-/**
- * Each execution gets its own worker thread and QuickJS VM. A fresh worker per run keeps
- * termination simple: a runaway script, including one that only spins the microtask queue, is
- * killed with `terminate()` and cannot poison a later run. Before terminating, the host sets a
- * shared interrupt flag that the VM polls, because Bun's `terminate()` cannot stop a thread that
- * is spinning in wasm. Stopping requests termination without waiting for exit: some built-ins do
- * not poll the flag, so on Bun a worker can outlive the script's result.
- */
-function workerLauncher(options: CodemodeSandboxOptions): VmLauncher {
-  return async (data, events) => {
-    let module: CodemodeWasmModule;
-    try {
-      module = await (options.wasm ?? loadQuickJSWasm());
-    } catch (error) {
-      throw new Error(`Failed to load QuickJS: ${errorMessage(error)}`, { cause: error });
-    }
-    const interrupt = new SharedArrayBuffer(4);
-    const workerData: WorkerData = { ...data, wasm: module, interrupt };
-    const releaseWorker = options.acquireWorker?.();
-    let worker: Worker;
-    try {
-      worker = new Worker(options.workerUrl ?? defaultWorkerUrl(), { workerData });
-    } catch (error) {
-      releaseWorker?.();
-      throw new Error(`Failed to start worker: ${errorMessage(error)}`, { cause: error });
-    }
-    if (releaseWorker) worker.once("exit", releaseWorker);
-    worker.on("message", (message: unknown) => {
-      // Node 24/26 --watch leaks dependency reports onto the worker channel (nodejs/node#65044).
-      if (
-        typeof message === "object" &&
-        message !== null &&
-        ("watch:import" in message || "watch:require" in message)
-      )
-        return;
-      events.message(message);
+const isWatchMessage = (message: unknown): boolean =>
+  typeof message === "object" &&
+  message !== null &&
+  ("watch:import" in message || "watch:require" in message);
+
+function forwardEvents(worker: Worker, events: VmEvents): void {
+  worker.on("message", (message: unknown) => {
+    if (!isWatchMessage(message)) events.message(message);
+  });
+  worker.on("error", (error: unknown) => {
+    events.failure({
+      kind: "sandbox",
+      name: error instanceof Error ? error.name : undefined,
+      message: errorMessage(error),
     });
-    worker.on("error", (error: unknown) => {
-      events.failure({
-        kind: "sandbox",
-        name: error instanceof Error ? error.name : undefined,
-        message: errorMessage(error),
-      });
+  });
+  worker.on("exit", (code) => {
+    events.failure({
+      kind: "sandbox",
+      message: `Worker exited with code ${code} before the script settled`,
     });
-    worker.on("exit", (code) => {
-      events.failure({
-        kind: "sandbox",
-        message: `Worker exited with code ${code} before the script settled`,
-      });
-    });
-    const stop = async (): Promise<void> => {
-      Atomics.store(new Int32Array(interrupt), 0, 1);
-      // A non-interruptible built-in can delay Bun's terminate() until it returns (#10748).
-      // Do not hold up the result while that worker exits.
-      void worker.terminate().catch(() => undefined);
-      // terminate() refs the worker internally; unref it after requesting termination.
-      worker.unref();
-    };
-    try {
-      options.onWorkerStarted?.(
-        new Promise<void>((resolve) => worker.once("exit", () => resolve())),
-      );
-    } catch (error) {
-      void stop();
-      throw error;
-    }
-    return { post: (message) => worker.postMessage(message), stop };
-  };
+  });
 }
 
-/**
- * Runs JavaScript in a QuickJS VM (a separate wasm instance) inside a worker thread. The worker
- * keeps script execution off the host thread: QuickJS runs synchronously, so a spinning script on
- * the host thread would block its event loop. Requires `node:worker_threads` (Node or Bun); see
- * `InlineCodemodeSandbox` and `RemoteCodemodeSandbox` in `@msa/codemode/portable`
- * for other runtimes.
- */
+const spawnWorker = (options: CodemodeSandboxOptions, workerData: WorkerData) =>
+  Effect.try({
+    try: () => new Worker(options.workerUrl ?? defaultWorkerUrl(), { workerData }),
+    catch: (cause) =>
+      new RuntimeError({
+        reason: "launch",
+        message: `Failed to start worker: ${errorMessage(cause)}`,
+        cause,
+      }),
+  });
+
+const channelOf = (worker: Worker, interrupt: SharedArrayBuffer): VmChannel => ({
+  post: (message) => worker.postMessage(message),
+  stop: Effect.sync(() => {
+    Atomics.store(new Int32Array(interrupt), 0, 1);
+    void worker.terminate().catch(() => undefined);
+    worker.unref();
+  }),
+});
+
+const exited = (worker: Worker): Promise<void> =>
+  Effect.runPromise(
+    Effect.callback<void>((resume) => {
+      worker.once("exit", () => resume(Effect.void));
+    }),
+  );
+
+const reportStarted = (options: CodemodeSandboxOptions, channel: VmChannel, worker: Worker) =>
+  Effect.try({
+    try: () => options.onWorkerStarted?.(exited(worker)),
+    catch: (cause) => new RuntimeError({ reason: "launch", message: errorMessage(cause), cause }),
+  }).pipe(Effect.tapError(() => channel.stop));
+
+function workerLauncher(options: CodemodeSandboxOptions): VmLauncher {
+  return (data, events) =>
+    Effect.gen(function* () {
+      const module = yield* loadWasm(() => options.wasm ?? loadQuickJSWasm());
+      const interrupt = new SharedArrayBuffer(4);
+      const releaseWorker = options.acquireWorker?.();
+      const worker = yield* spawnWorker(options, { ...data, wasm: module, interrupt }).pipe(
+        Effect.tapError(() => Effect.sync(() => releaseWorker?.())),
+      );
+      if (releaseWorker !== undefined) worker.once("exit", releaseWorker);
+      forwardEvents(worker, events);
+      const channel = channelOf(worker, interrupt);
+      yield* reportStarted(options, channel, worker);
+      return channel;
+    });
+}
+
 export class CodemodeSandbox extends CodemodeSandboxBase {
   constructor(options: CodemodeSandboxOptions = {}) {
     super(options, workerLauncher(options));

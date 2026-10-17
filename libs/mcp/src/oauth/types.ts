@@ -1,9 +1,3 @@
-/*
- * Adapted from modelcontextprotocol/typescript-sdk v1.29.0.
- * Copyright (c) 2024 Anthropic, PBC. Licensed under MIT; see LICENSES/.
- * Modified to use dependency-free structural validation.
- */
-
 import { isObject } from "../protocol/jsonrpc.ts";
 
 export interface OAuthProtectedResourceMetadata {
@@ -24,7 +18,6 @@ export interface AuthorizationServerMetadata {
   token_endpoint_auth_methods_supported?: string[];
   code_challenge_methods_supported?: string[];
   client_id_metadata_document_supported?: boolean;
-  /** Whether authorization responses carry an `iss` parameter (RFC 9207). */
   authorization_response_iss_parameter_supported?: boolean;
   [key: string]: unknown;
 }
@@ -43,10 +36,6 @@ export interface OAuthClientMetadata {
   token_endpoint_auth_method?: string;
   grant_types?: string[];
   response_types?: string[];
-  /**
-   * OpenID Connect client type, `native` or `web`. Dynamic client registration derives it from
-   * `redirect_uris` when absent (MCP SEP-837).
-   */
   application_type?: string;
   client_name?: string;
   client_uri?: string;
@@ -97,14 +86,12 @@ function object(value: unknown, name: string): Record<string, unknown> {
   return value;
 }
 
-/** `T` with the properties that may be `undefined` made optional and `undefined`-free. */
 type Compacted<T> = {
   [K in keyof T as undefined extends T[K] ? never : K]: T[K];
 } & {
   [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<T[K], undefined>;
 };
 
-/** Drops `undefined` values so optional fields are absent rather than present-but-undefined. */
 function compact<T extends object>(value: T): Compacted<T> {
   return Object.fromEntries(
     Object.entries(value).filter(([, item]) => item !== undefined),
@@ -116,7 +103,6 @@ function requiredString(value: unknown, name: string): string {
   return value;
 }
 
-/** Treats `null` and `""` as absent: servers send them for fields they have no value for, like `scope: ""`. */
 function absent(value: unknown): value is undefined | null | "" {
   return value === undefined || value === null || value === "";
 }
@@ -135,7 +121,6 @@ function optionalStrings(value: unknown, name: string): string[] | undefined {
 
 function safeUrl(value: unknown, name: string): string {
   const text = requiredString(value, name);
-  // URL parsing throws a `TypeError`, which discovery reserves for network failures.
   if (!URL.canParse(text)) throw new Error(`Invalid ${name}`);
   const url = new URL(text);
   if (["javascript:", "data:", "vbscript:"].includes(url.protocol))
@@ -166,7 +151,7 @@ export function parseAuthorizationServerMetadata(value: unknown): AuthorizationS
     input["response_types_supported"],
     "response_types_supported",
   );
-  if (!responseTypes) throw new Error("Invalid response_types_supported");
+  if (responseTypes === undefined) throw new Error("Invalid response_types_supported");
   return compact({
     ...input,
     issuer: safeUrl(input["issuer"], "authorization server issuer"),
@@ -197,7 +182,6 @@ export function parseAuthorizationServerMetadata(value: unknown): AuthorizationS
 
 export function parseOAuthTokens(value: unknown): OAuthTokens {
   const input = object(value, "OAuth token response");
-  // `Number(null)` is 0, which would mark the token as expired at once.
   const expires = absent(input["expires_in"]) ? undefined : Number(input["expires_in"]);
   if (expires !== undefined && !Number.isFinite(expires)) throw new Error("Invalid expires_in");
   return compact({

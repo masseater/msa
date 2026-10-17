@@ -1,4 +1,5 @@
 export type { AuthProvider, McpFetch, UnauthorizedContext } from "./auth-provider.ts";
+export { McpForeignError, toPromise, unwrapForeign } from "./foreign.ts";
 export { McpClient, type McpClientOptions, type McpRequestOptions } from "./client.ts";
 export {
   type AudioContent,
@@ -28,6 +29,7 @@ export {
   type JsonRpcResponse,
   type JsonRpcSuccessResponse,
   McpAbortError,
+  McpClientError,
   McpConnectionClosedError,
   McpError,
   McpTimeoutError,
@@ -60,6 +62,7 @@ export {
   McpAuthRequiredError,
   McpHttpError,
   McpSessionExpiredError,
+  McpTransportError,
   StreamableHttpTransport,
   type StreamableHttpTransportOptions,
 } from "./transports/streamable-http.ts";

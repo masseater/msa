@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { codingAgentName } from "../../../scripts/coding-agent-smoke.mjs";
+import { codingAgentName } from "../../../scripts/coding-agent-smoke.ts";
 import { installConsumer } from "../../../scripts/local-package-install.mjs";
 import { produceArtifactSet } from "../../../scripts/package-artifacts.mjs";
 

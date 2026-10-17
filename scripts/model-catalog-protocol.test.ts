@@ -43,11 +43,10 @@ test("orders Pi versions with semver precedence", () => {
   assert.ok(compareModelCatalogPiVersions("0.85.0-rc.1", "0.85.0") < 0);
   assert.ok(compareModelCatalogPiVersions("0.85.0-rc.2", "0.85.0-rc.10") < 0);
   assert.equal(compareModelCatalogPiVersions("v1.0.0", "1.0.0+build"), 0);
-  assert.throws(() => compareModelCatalogPiVersions("0.85", "0.85.0"), /Invalid Pi version/);
+  assert.throws(() => compareModelCatalogPiVersions("0.85", "0.85.0"), /Invalid Pi version/u);
 });
 
 test("selects the newest catalog a Pi version supports", () => {
-  // Regression test for #9099: released clients before 0.85.0 cannot use the mixed-API catalog.
   assert.equal(selectModelCatalog(index, "0.84.4")?.revision, legacyRevision);
   assert.equal(selectModelCatalog(index, "0.85.0-rc.1")?.revision, legacyRevision);
   assert.equal(selectModelCatalog(index, "0.85.0")?.revision, mixedApiRevision);
@@ -57,7 +56,6 @@ test("selects the newest catalog a Pi version supports", () => {
 });
 
 test("redirects Pi user agents to an explicit catalog version", () => {
-  // Regression test for #9099: released clients identify themselves only by User-Agent.
   assert.deepEqual(
     parseModelCatalogRequest(
       "https://pi.dev/api/models/providers/openrouter?types=chat%2Cimage",
@@ -123,10 +121,10 @@ test("validates stored indexes and drops publication metadata", () => {
     }),
     index,
   );
-  assert.throws(() => parseModelCatalogIndex({ ...index, schemaVersion: 2 }), /index is invalid/);
+  assert.throws(() => parseModelCatalogIndex({ ...index, schemaVersion: 2 }), /index is invalid/u);
   assert.throws(
     () => parseModelCatalogIndex({ ...index, defaultRevision: `sha256-${"c".repeat(64)}` }),
-    /invalid/,
+    /invalid/u,
   );
   assert.throws(
     () =>
@@ -134,6 +132,6 @@ test("validates stored indexes and drops publication metadata", () => {
         ...index,
         catalogs: [{ minimumPiVersion: "latest", revision: legacyRevision }],
       }),
-    /invalid/,
+    /invalid/u,
   );
 });

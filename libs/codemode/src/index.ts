@@ -1,14 +1,16 @@
 export {
   DEFAULT_INPUT_SCHEMA_MAX_CHARS,
   type RenderDeclarationsOptions,
+  type RenderToolOptions,
   renderDeclarations,
   renderToolOutputType,
   renderToolSample,
   renderToolSignature,
   schemaToType,
+  schemaToTypeWithin,
 } from "./declarations.ts";
-export { toCodemodeIdentifier } from "./identifier.ts";
-export { CodemodeSandboxBase } from "./runtime/execution.ts";
+export { toCodemodeIdentifier } from "./runtime/bridge.ts";
+export { CodemodeSandboxBase } from "./runtime/sandbox-base.ts";
 export { CodemodeSandbox } from "./runtime/host.ts";
 export {
   DEFAULT_INTERRUPT_BUDGET,
@@ -61,5 +63,6 @@ export type {
   CodemodeStoreWrites,
   CodemodeTool,
   CodemodeToolContext,
+  CodemodeWasmModule,
 } from "./types.ts";
-export { type CodemodeWasmModule, loadQuickJSWasm } from "./wasm.ts";
+export { loadQuickJSWasm } from "./runtime/host.ts";

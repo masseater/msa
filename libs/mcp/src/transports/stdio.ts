@@ -1,22 +1,24 @@
-import { type ChildProcess, spawn } from "node:child_process";
 import process from "node:process";
 
 import crossSpawn from "cross-spawn";
+import { Effect } from "effect";
 
+import { foreign, type McpForeignError, toPromise } from "../foreign.ts";
 import {
   type JsonRpcMessage,
   McpConnectionClosedError,
   parseJsonRpcMessage,
 } from "../protocol/jsonrpc.ts";
+import { McpTransportError } from "./errors/transport-error.ts";
 import { DEFAULT_MAX_MESSAGE_BYTES, type McpTransport, TransportEvents } from "./transport.ts";
 
 const DEFAULT_MAX_STDERR_BYTES = 64 * 1024;
 const DEFAULT_CLOSE_TIMEOUT_MS = 2_000;
-/** How long a server gets to exit on its own after stdin closes, before it is sent SIGTERM. */
 const STDIN_CLOSE_GRACE_MS = 500;
 const USE_PROCESS_GROUPS = process.platform !== "win32";
 
-/** Process groups of running servers, killed if the host exits without closing them. */
+type ChildProcess = ReturnType<typeof crossSpawn>;
+
 const liveProcessGroups = new Set<number>();
 let exitHookInstalled = false;
 
@@ -24,22 +26,17 @@ function killProcessTree(child: ChildProcess, signal: NodeJS.Signals): void {
   const pid = child.pid;
   if (process.platform === "win32" && pid !== undefined) {
     if (child.exitCode !== null) return;
-    // Windows has no graceful signals, and cross-spawn runs `.cmd` shims through cmd.exe; killing only
-    // that would leave the server running.
-    spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }).on(
-      "error",
-      () => {},
-    );
+    crossSpawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+    }).on("error", () => undefined);
     return;
   }
   if (USE_PROCESS_GROUPS && pid !== undefined) {
     try {
-      // Negative pid: the whole group, so wrappers like `npx` or `uvx` do not leave the server behind.
       process.kill(-pid, signal);
       return;
-    } catch {
-      // The group is gone or was never created; fall back to the direct child.
-    }
+    } catch {}
   }
   try {
     child.kill(signal);
@@ -68,9 +65,24 @@ export interface StdioTransportOptions {
   onStderr?: (chunk: string) => void;
   maxMessageBytes?: number;
   maxStderrBytes?: number;
-  /** Time to wait for the server to exit after SIGTERM before sending SIGKILL. Default: 2000. */
   closeTimeoutMs?: number;
 }
+
+type StartFailure = McpForeignError | McpTransportError | McpConnectionClosedError;
+
+const waitForSpawn = (child: ChildProcess): Effect.Effect<void, McpForeignError> =>
+  Effect.callback<void, McpForeignError>((resume) => {
+    const onSpawn = () => {
+      child.off("error", onError);
+      resume(Effect.void);
+    };
+    const onError = (error: Error) => {
+      child.off("spawn", onSpawn);
+      resume(Effect.fail(foreign(error)));
+    };
+    child.once("spawn", onSpawn);
+    child.once("error", onError);
+  });
 
 export class StdioTransport extends TransportEvents implements McpTransport {
   readonly options: Readonly<StdioTransportOptions>;
@@ -84,7 +96,7 @@ export class StdioTransport extends TransportEvents implements McpTransport {
     super();
     this.options = Object.freeze({
       ...options,
-      args: options.args ? [...options.args] : undefined,
+      args: options.args === undefined ? undefined : [...options.args],
     });
   }
 
@@ -96,10 +108,76 @@ export class StdioTransport extends TransportEvents implements McpTransport {
     return this.stderrBuffer.toString("utf8");
   }
 
-  async start(): Promise<void> {
-    if (this.started) throw new Error("MCP stdio transport already started");
-    if (this.closed) throw new McpConnectionClosedError();
-    this.started = true;
+  start(): Promise<void> {
+    return toPromise(
+      Effect.suspend((): Effect.Effect<void, StartFailure> => {
+        if (this.started)
+          return Effect.fail(new McpTransportError("MCP stdio transport already started"));
+        if (this.closed) return Effect.fail(new McpConnectionClosedError());
+        this.started = true;
+        const child = this.spawnChild();
+        return waitForSpawn(child).pipe(
+          Effect.tap(() =>
+            Effect.sync(() => {
+              child.on("error", (error) => {
+                if (!this.closed) this.emitError(error);
+              });
+            }),
+          ),
+        );
+      }),
+    );
+  }
+
+  send(message: JsonRpcMessage): Promise<void> {
+    const stdin = this.child?.stdin;
+    if (!this.started || this.closed || stdin === null || stdin === undefined || !stdin.writable)
+      return toPromise(Effect.fail(new McpConnectionClosedError()));
+    const payload = `${JSON.stringify(message)}\n`;
+    return toPromise(
+      Effect.callback<void, McpForeignError>((resume) => {
+        stdin.write(payload, (error) =>
+          resume(error === null || error === undefined ? Effect.void : Effect.fail(foreign(error))),
+        );
+      }),
+    );
+  }
+
+  close(): Promise<void> {
+    if (this.closed) return Promise.resolve();
+    this.closed = true;
+    const child = this.child;
+    if (child === undefined) {
+      this.emitClose();
+      return Promise.resolve();
+    }
+    if (child.exitCode !== null || child.signalCode !== null) {
+      child.stdin?.end();
+      return Promise.resolve();
+    }
+    const closeTimeoutMs = this.options.closeTimeoutMs ?? DEFAULT_CLOSE_TIMEOUT_MS;
+    return toPromise(
+      Effect.callback<void>((resume) => {
+        const grace = Math.min(STDIN_CLOSE_GRACE_MS, closeTimeoutMs);
+        const killAfter = (millis: number, signal: NodeJS.Signals) =>
+          Effect.runFork(
+            Effect.delay(
+              Effect.sync(() => killProcessTree(child, signal)),
+              millis,
+            ),
+          );
+        const timers = [killAfter(grace, "SIGTERM"), killAfter(grace + closeTimeoutMs, "SIGKILL")];
+        child.once("close", () => {
+          for (const timer of timers) timer.interruptUnsafe();
+          killProcessTree(child, "SIGTERM");
+          resume(Effect.void);
+        });
+        child.stdin?.end();
+      }),
+    );
+  }
+
+  private spawnChild(): ChildProcess {
     const env =
       this.options.inheritEnv === false
         ? { ...this.options.env }
@@ -109,7 +187,6 @@ export class StdioTransport extends TransportEvents implements McpTransport {
       env,
       stdio: ["pipe", "pipe", this.options.stderr === "inherit" ? "inherit" : "pipe"],
       windowsHide: true,
-      // Own process group, so closing the transport can terminate the server's children too.
       detached: USE_PROCESS_GROUPS,
     });
     this.child = child;
@@ -128,66 +205,13 @@ export class StdioTransport extends TransportEvents implements McpTransport {
     child.stderr?.on("error", (error) => this.emitError(error));
     child.on("close", () => {
       this.child = undefined;
-      if (this.stdoutBuffer.toString("utf8").trim()) {
+      if (this.stdoutBuffer.toString("utf8").trim() !== "") {
         this.emitError(new Error("MCP stdio server closed with an incomplete JSON-RPC message"));
       }
       this.stdoutBuffer = Buffer.alloc(0);
       this.emitClose();
     });
-
-    await new Promise<void>((resolve, reject) => {
-      const onSpawn = () => {
-        child.off("error", onError);
-        resolve();
-      };
-      const onError = (error: Error) => {
-        child.off("spawn", onSpawn);
-        reject(error);
-      };
-      child.once("spawn", onSpawn);
-      child.once("error", onError);
-    });
-    child.on("error", (error) => {
-      if (!this.closed) this.emitError(error);
-    });
-  }
-
-  async send(message: JsonRpcMessage): Promise<void> {
-    const stdin = this.child?.stdin;
-    if (!this.started || this.closed || !stdin?.writable) throw new McpConnectionClosedError();
-    const payload = `${JSON.stringify(message)}\n`;
-    await new Promise<void>((resolve, reject) => {
-      stdin.write(payload, (error) => (error ? reject(error) : resolve()));
-    });
-  }
-
-  async close(): Promise<void> {
-    if (this.closed) return;
-    this.closed = true;
-    const child = this.child;
-    if (!child) {
-      this.emitClose();
-      return;
-    }
-    if (child.exitCode !== null || child.signalCode !== null) {
-      child.stdin?.end();
-      return;
-    }
-    // Shutdown per the spec: close stdin and let the server exit, then SIGTERM, then SIGKILL.
-    const closeTimeoutMs = this.options.closeTimeoutMs ?? DEFAULT_CLOSE_TIMEOUT_MS;
-    await new Promise<void>((resolve) => {
-      const timers: ReturnType<typeof setTimeout>[] = [];
-      child.once("close", () => {
-        for (const timer of timers) clearTimeout(timer);
-        // Children of the server that ignored stdin closing would otherwise outlive it.
-        killProcessTree(child, "SIGTERM");
-        resolve();
-      });
-      const grace = Math.min(STDIN_CLOSE_GRACE_MS, closeTimeoutMs);
-      timers.push(setTimeout(() => killProcessTree(child, "SIGTERM"), grace));
-      timers.push(setTimeout(() => killProcessTree(child, "SIGKILL"), grace + closeTimeoutMs));
-      child.stdin?.end();
-    });
+    return child;
   }
 
   private handleStdout(chunk: Buffer | string): void {
@@ -211,8 +235,8 @@ export class StdioTransport extends TransportEvents implements McpTransport {
         this.emitError(new Error(`MCP stdio message exceeds ${maxMessageBytes} bytes`));
         continue;
       }
-      const text = line.toString("utf8").replace(/\r$/, "");
-      if (!text.trim()) continue;
+      const text = line.toString("utf8").replace(/\r$/u, "");
+      if (text.trim() === "") continue;
       try {
         this.emitMessage(parseJsonRpcMessage(JSON.parse(text)));
       } catch (error) {

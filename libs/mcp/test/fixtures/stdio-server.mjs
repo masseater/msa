@@ -1,6 +1,8 @@
 import { createInterface } from "node:readline";
 
-console.error("stdio fixture ready");
+import { Console, Effect } from "effect";
+
+Effect.runSync(Console.error("stdio fixture ready"));
 const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
 
 for await (const line of lines) {

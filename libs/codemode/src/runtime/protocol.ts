@@ -1,100 +1,172 @@
-import type { CodemodeDuring, CodemodeOutputItem } from "../types.ts";
-import type { CodemodeWasmModule } from "../wasm.ts";
+import type * as Deferred from "effect/Deferred";
+import type * as Effect from "effect/Effect";
+import type * as Fiber from "effect/Fiber";
 
-/**
- * Messages between the host (main thread) and the worker. Tool arguments,
- * results, and values cross as JSON strings: the worker passes them into and
- * out of the QuickJS VM as strings and never builds structured values itself.
- */
+import type {
+  CodemodeCall,
+  CodemodeDeclaredGlobal,
+  CodemodeDeclaredTool,
+  CodemodeDuring,
+  CodemodeError,
+  CodemodeOutputItem,
+  CodemodeResult,
+  CodemodeRunOptions,
+  CodemodeSandboxBaseOptions,
+  CodemodeTool,
+  CodemodeWasmModule,
+} from "../types.ts";
+import type { RuntimeError } from "./bridge.ts";
 
-/**
- * Everything a VM needs to run one script, independent of where it runs. Plain data, so it can
- * cross a `postMessage` or a Workers RPC call unchanged.
- */
+export interface VmEvents {
+  message(message: unknown): void;
+  failure(error: CodemodeError): void;
+}
+
+export interface VmChannel {
+  post(message: HostToWorkerMessage): void;
+  readonly stop: Effect.Effect<void>;
+}
+
+export type VmLauncher = (
+  data: VmStartData,
+  events: VmEvents,
+) => Effect.Effect<VmChannel, RuntimeError>;
+
+export type Control = { [K in "onStarted" | "onCall" | "onIdle"]: CodemodeRunOptions[K] };
+export type CallMessage = Extract<WorkerToHostMessage, { type: "call" }>;
+export type DoneMessage = Extract<WorkerToHostMessage, { type: "done" }>;
+export type Executors = ExecutionOptions["executors"];
+
+export interface ExecutionOptions {
+  code: string;
+  tools: readonly CodemodeDeclaredTool[];
+  globals: readonly CodemodeDeclaredGlobal[];
+  executors: {
+    tools: ReadonlyMap<string, CodemodeTool>;
+    globals: ReadonlyMap<string, CodemodeTool>;
+  };
+  timeoutMs: number;
+  signal: AbortSignal | undefined;
+  memoryLimitBytes: number | undefined;
+  store: Record<string, string>;
+  deterministic?: { startedAt: number; seed: number };
+  control?: Control;
+  launch: VmLauncher;
+}
+
 export interface VmStartData {
   code: string;
-  /** `jsName` is the identifier the script uses; `description` is listed in `ALL_TOOLS`. */
   tools: { name: string; jsName: string; description: string }[];
   globals: { name: string; spread: boolean }[];
   memoryLimitBytes: number | undefined;
-  /** Snapshot for `load()`: key to JSON text. */
   store: Record<string, string>;
-  /**
-   * The execution's `timeoutMs`, absent when unlimited. In-thread launchers measure it on their own
-   * clock from launch, because the host's deadline timer cannot fire while the VM computes.
-   */
   timeoutMs?: number;
-  /**
-   * Run deterministically (`CodemodeSandboxBase.start()`): UTC, a virtual clock starting at `startedAt` (ms since
-   * the epoch) that moves only with delivered results, randomness from `seed`, no `WeakRef`, results applied in
-   * `seq` order, and `started`/`idle` messages.
-   */
   deterministic?: { startedAt: number; seed: number };
 }
 
 export interface WorkerData extends VmStartData {
-  /** Compiled `quickjs-wasi` module. Structured clone shares the compiled code with the worker. */
   wasm: CodemodeWasmModule;
-  /**
-   * One Int32 the host sets to non-zero before terminating the worker. The VM's interrupt handler
-   * polls it, because Bun's `worker.terminate()` cannot stop a thread that is spinning in wasm.
-   */
   interrupt: SharedArrayBuffer;
 }
 
-/** JSON-encoded `{ name?, message, stack? }` of an error thrown by the script. */
 export type ScriptErrorJson = string;
 
 export type WorkerToHostMessage =
   | { type: "call"; id: number; target: "tool" | "global"; name: string; args: string | undefined }
   | { type: "output"; item: CodemodeOutputItem }
-  /**
-   * `writes` is a JSON array of `[key, json]` for `store()` and `[key]` for deletions. Deterministic mode: `during`
-   * is the result the VM was processing when the script finished (0: its first run) and the calls issued by then.
-   */
   | { type: "done"; ok: true; value: string | undefined; writes: string; during?: CodemodeDuring }
   | { type: "done"; ok: false; error: ScriptErrorJson; during?: CodemodeDuring }
-  /** The VM failed outside the script's control, for example a wasm trap. */
   | { type: "crash"; message: string }
-  /** Deterministic mode, before the script runs: what the VM is, so a replay can refuse a different one. */
   | { type: "started"; fingerprint: string }
-  /**
-   * Deterministic mode, after the script waits again: having processed result `seq` (0: the script's first run), it
-   * has issued `issued` calls in total.
-   */
   | { type: "idle"; seq: number; issued: number };
 
-export type HostToWorkerMessage =
-  /**
-   * `payload` is the JSON result when `ok`, otherwise the error message. Deterministic mode: `seq` numbers the
-   * results from 1 in the order the VM applies them, and the VM's clock reads `now` while it processes this one.
-   */
-  {
-    type: "result";
-    id: number;
-    ok: boolean;
-    payload: string | undefined;
-    seq?: number;
-    now?: number;
-    /** Deterministic mode, `ok: false`: a JSON object whose properties the script's `Error` gets. */
-    properties?: string;
-  };
+export type HostToWorkerMessage = {
+  type: "result";
+  id: number;
+  ok: boolean;
+  payload: string | undefined;
+  seq?: number;
+  now?: number;
+  properties?: string;
+};
 
-export function isWorkerToHostMessage(value: unknown): value is WorkerToHostMessage {
-  if (typeof value !== "object" || value === null) return false;
-  const type = (value as { type?: unknown }).type;
-  return (
-    type === "call" ||
-    type === "output" ||
-    type === "done" ||
-    type === "crash" ||
-    type === "started" ||
-    type === "idle"
-  );
+export interface VmSession {
+  deliver(message: HostToWorkerMessage): void;
+  dispose(): void;
 }
 
-export function isHostToWorkerMessage(value: unknown): value is HostToWorkerMessage {
-  return (
-    typeof value === "object" && value !== null && (value as { type?: unknown }).type === "result"
-  );
+export interface StartVmOptions {
+  data: VmStartData;
+  wasm: CodemodeWasmModule;
+  maxStackSize?: number;
+  interruptBudget?: number;
+  post(message: WorkerToHostMessage): void;
+  shouldInterrupt(): boolean;
+}
+
+export interface VmControllerOptions {
+  data: VmStartData;
+  maxStackSize: number;
+  interruptBudget: number | undefined;
+  post(message: WorkerToHostMessage): void;
+  shouldInterrupt(): boolean;
+}
+
+export interface InlineCodemodeSandboxOptions extends CodemodeSandboxBaseOptions {
+  wasm: CodemodeWasmModule | Promise<CodemodeWasmModule>;
+  interruptBudget?: number;
+}
+
+export interface InlineLauncherOptions {
+  wasm: CodemodeWasmModule | Promise<CodemodeWasmModule>;
+  interruptBudget?: number | undefined;
+}
+
+export interface CodemodeRemoteRequest {
+  data: VmStartData;
+  interruptBudget?: number;
+}
+
+export type CodemodeRemoteMessage = WorkerToHostMessage | { type: "failure"; error: CodemodeError };
+
+export type CodemodeRemoteReply = HostToWorkerMessage | { type: "stop" } | null;
+
+export type CodemodeRemoteExchange = (
+  messages: CodemodeRemoteMessage[],
+) => Promise<CodemodeRemoteReply>;
+
+export interface CodemodeRemote {
+  execute(request: CodemodeRemoteRequest, exchange: CodemodeRemoteExchange): Promise<void>;
+}
+
+export interface CodemodeServeOptions {
+  wasm: CodemodeWasmModule | Promise<CodemodeWasmModule>;
+  maxInterruptBudget?: number;
+  maxMemoryLimitBytes?: number;
+}
+
+export interface RemoteCodemodeSandboxOptions extends CodemodeSandboxBaseOptions {
+  remote: () => CodemodeRemote;
+  interruptBudget?: number;
+}
+
+export interface PendingCall {
+  record: CodemodeCall | undefined;
+  startedAt: number;
+  controller: AbortController;
+}
+
+export interface Execution {
+  readonly options: ExecutionOptions;
+  readonly result: Deferred.Deferred<CodemodeResult>;
+  readonly promise: Promise<CodemodeResult>;
+  readonly delivered: Set<number>;
+  readonly output: CodemodeOutputItem[];
+  readonly calls: CodemodeCall[];
+  readonly pending: Map<number, PendingCall>;
+  readonly onAbort: () => void;
+  channel: VmChannel | undefined;
+  unsent: HostToWorkerMessage[];
+  timer: Fiber.Fiber<void> | undefined;
+  finished: boolean;
 }

@@ -69,16 +69,11 @@ export type ContentBlock =
 
 export interface CallToolResult {
   content: ContentBlock[];
-  /** Any JSON value, including arrays and `null` (MCP 2026-07-28; earlier revisions allowed only objects). */
   structuredContent?: unknown;
   isError?: boolean;
   _meta?: Record<string, unknown>;
 }
 
-/**
- * Tool result content in the shape LLM APIs accept: text and base64 images. Matches the
- * `TextContent` and `ImageContent` types of `@msa/ai`.
- */
 export type LlmContent =
   | { type: "text"; text: string }
   | { type: "image"; data: string; mimeType: string };
@@ -96,7 +91,7 @@ function blockToLlmContent(block: ContentBlock): LlmContent {
     case "resource": {
       const resource = block.resource;
       if ("text" in resource) return { type: "text", text: resource.text };
-      if (resource.mimeType?.startsWith("image/")) {
+      if (resource.mimeType?.startsWith("image/") === true) {
         return { type: "image", data: resource.blob, mimeType: resource.mimeType };
       }
       return {
@@ -112,13 +107,6 @@ function blockToLlmContent(block: ContentBlock): LlmContent {
   }
 }
 
-/**
- * Convert a tool result to text and image content for a model. Text and images pass through,
- * embedded text resources become text, embedded image resources become images, and other blocks
- * (audio, resource links, binary resources) become a short text placeholder. A result without
- * content blocks but with `structuredContent` becomes its JSON, since servers should, but do not
- * always, mirror structured results as text.
- */
 export function toLlmContent(
   result: Pick<CallToolResult, "content" | "structuredContent">,
 ): LlmContent[] {

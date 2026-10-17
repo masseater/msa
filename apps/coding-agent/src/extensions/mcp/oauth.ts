@@ -15,7 +15,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { oauthErrorHtml, oauthSuccessHtml } from "@msa/ai/utils/oauth-page";
-import type { AuthProvider, McpFetch } from "@msa/mcp";
+import { type AuthProvider, type McpFetch, toPromise } from "@msa/mcp";
 import {
   type AuthorizationServerMetadata,
   authorizeMcp,
@@ -350,13 +350,15 @@ export function createMcpAuthProvider(options: {
         const resourceMetadataUrl = challenge?.resourceMetadataUrl;
         const authorizationServerMetadataUrl = settings.authServerMetadataUrl;
         const scope = challenge?.scope;
-        const result = await authorizeMcp(provider, {
-          serverUrl,
-          ...(resourceMetadataUrl ? { resourceMetadataUrl } : {}),
-          ...(authorizationServerMetadataUrl ? { authorizationServerMetadataUrl } : {}),
-          ...(scope !== undefined ? { scope } : {}),
-          fetch: timedFetch(fetch),
-        });
+        const result = await toPromise(
+          authorizeMcp(provider, {
+            serverUrl,
+            ...(resourceMetadataUrl ? { resourceMetadataUrl } : {}),
+            ...(authorizationServerMetadataUrl ? { authorizationServerMetadataUrl } : {}),
+            ...(scope !== undefined ? { scope } : {}),
+            fetch: timedFetch(fetch),
+          }),
+        );
         if (result === "REDIRECT") throw new McpOAuthAuthorizationRequiredError();
       })
       .finally(() => {
@@ -564,7 +566,8 @@ export async function signInMcpServer(options: {
     };
     // A refresh keeps the granted scope; a server asking for more needs the browser flow.
     const skipRefresh = stepUp;
-    if ((await authorizeMcp(provider, { ...flow, skipRefresh })) === "AUTHORIZED") return;
+    if ((await toPromise(authorizeMcp(provider, { ...flow, skipRefresh }))) === "AUTHORIZED")
+      return;
     if (!authorizationUrl) throw new Error("OAuth flow did not produce an authorization URL");
 
     const state = await provider.state();
@@ -580,11 +583,13 @@ export async function signInMcpServer(options: {
       options.prompt,
       signal,
     );
-    await authorizeMcp(provider, {
-      ...flow,
-      authorizationCode: code,
-      ...(iss !== undefined ? { iss } : {}),
-    });
+    await toPromise(
+      authorizeMcp(provider, {
+        ...flow,
+        authorizationCode: code,
+        ...(iss !== undefined ? { iss } : {}),
+      }),
+    );
   } catch (error) {
     // Aborted requests fail with the signal's reason; report them as the cancellation they are.
     if (signal?.aborted) throw new McpSignInCancelledError();

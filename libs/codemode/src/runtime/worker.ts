@@ -1,43 +1,38 @@
-/**
- * Worker thread entry. One worker runs one script inside a fresh QuickJS VM
- * (a separate wasm instance), relays tool calls and output to the host, and
- * reports the result. The host terminates the worker when the script settles,
- * times out, or is aborted; the worker exists so that a spinning script never
- * blocks the host thread.
- *
- * Importing this module starts the worker. Hosts that bundle their code (for
- * example a Bun compiled executable) add a file that imports
- * `@msa/codemode/worker` as a separate entrypoint and pass its URL
- * or embedded-module string specifier as `workerUrl`.
- */
 import { parentPort, workerData } from "node:worker_threads";
 
-import { isHostToWorkerMessage, type WorkerData, type WorkerToHostMessage } from "./protocol.ts";
-import { startVm } from "./vm.ts";
+import * as Cause from "effect/Cause";
+import * as Effect from "effect/Effect";
+
+import { RuntimeError } from "./bridge.ts";
+import { startVm } from "./inline.ts";
+import type { WorkerData, WorkerToHostMessage } from "./protocol.ts";
+import { crashMessage, isHostToWorkerMessage } from "./vm-session.ts";
 
 function post(message: WorkerToHostMessage): void {
   parentPort?.postMessage(message);
 }
 
-async function main(data: WorkerData): Promise<void> {
-  const interrupt = new Int32Array(data.interrupt);
-  // The VM lives until the host terminates the worker, so the session is never disposed.
-  const session = await startVm({
-    data,
-    wasm: data.wasm,
-    post,
-    shouldInterrupt: () => Atomics.load(interrupt, 0) !== 0,
-  });
-  parentPort?.on("message", (message: unknown) => {
-    if (isHostToWorkerMessage(message)) session.deliver(message);
-  });
-}
+const original = (error: unknown): unknown =>
+  error instanceof RuntimeError && error.reason === "launch" ? error.cause : error;
 
-if (parentPort) {
-  main(workerData as WorkerData).catch((error: unknown) => {
-    post({
-      type: "crash",
-      message: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+const main = (data: WorkerData) =>
+  Effect.suspend(() => {
+    const interrupt = new Int32Array(data.interrupt);
+    return startVm({
+      data,
+      wasm: data.wasm,
+      post,
+      shouldInterrupt: () => Atomics.load(interrupt, 0) !== 0,
     });
-  });
-}
+  }).pipe(
+    Effect.map((session) =>
+      parentPort?.on("message", (message: unknown) => {
+        if (isHostToWorkerMessage(message)) session.deliver(message);
+      }),
+    ),
+    Effect.catchCause((cause) =>
+      Effect.sync(() => post(cause.pipe(Cause.squash, original, crashMessage))),
+    ),
+  );
+
+if (parentPort !== null) Effect.runFork(main(workerData as WorkerData));

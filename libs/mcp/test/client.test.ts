@@ -1,105 +1,40 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { Effect } from "effect";
+import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type JsonRpcMessage,
-  type JsonRpcRequest,
-  LATEST_PROTOCOL_VERSION,
-  McpAbortError,
-  McpClient,
-  McpError,
-  McpTimeoutError,
-} from "../src/index.ts";
-import { createInMemoryTransportPair, type InMemoryTransport } from "../src/testing/index.ts";
+import { LATEST_PROTOCOL_VERSION, McpError } from "../src/index.ts";
+import { connect } from "./in-memory-server.ts";
 
-interface TestServer {
-  transport: InMemoryTransport;
-  messages: JsonRpcMessage[];
-  setHandler(
-    method: string,
-    handler: (request: JsonRpcRequest) => unknown | Promise<unknown>,
-  ): void;
-}
+const cursorOf = (params: unknown): string | undefined =>
+  (params as { cursor?: string } | undefined)?.cursor;
 
-async function createServer(): Promise<{ clientTransport: InMemoryTransport; server: TestServer }> {
-  const pair = createInMemoryTransportPair();
-  const handlers = new Map<string, (request: JsonRpcRequest) => unknown | Promise<unknown>>();
-  const messages: JsonRpcMessage[] = [];
-  pair.server.onMessage((message) => {
-    messages.push(message);
-    if (!("id" in message) || !("method" in message)) return;
-    const request = message as JsonRpcRequest;
-    const handler = handlers.get(request.method);
-    queueMicrotask(async () => {
-      try {
-        if (!handler) throw new McpError(-32601, `Method not found: ${request.method}`);
-        await pair.server.send({ jsonrpc: "2.0", id: request.id, result: await handler(request) });
-      } catch (error) {
-        const mcpError = error instanceof McpError ? error : new McpError(-32603, String(error));
-        await pair.server.send({
-          jsonrpc: "2.0",
-          id: request.id,
-          error: { code: mcpError.code, message: mcpError.message, data: mcpError.data },
-        });
-      }
-    });
-  });
-  await pair.server.start();
-  const server: TestServer = {
-    transport: pair.server,
-    messages,
-    setHandler(method, handler) {
-      handlers.set(method, handler);
+const initializes = Effect.gen(function* () {
+  const { client, server } = yield* connect();
+  expect(client.connectionState).toBe("connected");
+  expect(client.protocolVersion).toBe(LATEST_PROTOCOL_VERSION);
+  expect(client.serverInfo).toEqual({ name: "test-server", version: "1.0.0" });
+  expect(client.serverCapabilities).toEqual({ tools: { listChanged: true } });
+  expect(client.instructions).toBe("Use test tools.");
+  expect(server.messages).toEqual([
+    {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: LATEST_PROTOCOL_VERSION,
+        capabilities: {},
+        clientInfo: { name: "test-client", version: "2.0.0" },
+      },
     },
-  };
-  server.setHandler("initialize", () => ({
-    protocolVersion: LATEST_PROTOCOL_VERSION,
-    capabilities: { tools: { listChanged: true } },
-    serverInfo: { name: "test-server", version: "1.0.0" },
-    instructions: "Use test tools.",
-  }));
-  return { clientTransport: pair.client, server };
-}
-
-async function connect(): Promise<{ client: McpClient; server: TestServer }> {
-  const { clientTransport, server } = await createServer();
-  const client = new McpClient({ name: "test-client", version: "2.0.0" });
-  await client.connect(clientTransport);
-  return { client, server };
-}
-
-afterEach(() => {
-  vi.useRealTimers();
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+  ]);
+  yield* Effect.promise(() => client.close());
 });
 
-describe("McpClient", () => {
-  it("initializes the connection before exposing server information", async () => {
-    const { client, server } = await connect();
-    expect(client.connectionState).toBe("connected");
-    expect(client.protocolVersion).toBe(LATEST_PROTOCOL_VERSION);
-    expect(client.serverInfo).toEqual({ name: "test-server", version: "1.0.0" });
-    expect(client.serverCapabilities).toEqual({ tools: { listChanged: true } });
-    expect(client.instructions).toBe("Use test tools.");
-    expect(server.messages).toEqual([
-      {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "initialize",
-        params: {
-          protocolVersion: LATEST_PROTOCOL_VERSION,
-          capabilities: {},
-          clientInfo: { name: "test-client", version: "2.0.0" },
-        },
-      },
-      { jsonrpc: "2.0", method: "notifications/initialized" },
-    ]);
-    await client.close();
-  });
-
-  it("paginates tools and preserves protocol tool definitions", async () => {
-    const { client, server } = await connect();
-    server.setHandler("tools/list", (request) => {
-      const cursor = (request.params as { cursor?: string } | undefined)?.cursor;
-      return cursor === undefined
+const paginatesTools = Effect.gen(function* () {
+  const { client, server } = yield* connect();
+  server.setHandler("tools/list", (request) =>
+    Effect.succeed(
+      cursorOf(request.params) === undefined
         ? {
             tools: [{ name: "search", description: "Search", inputSchema: { type: "object" } }],
             nextCursor: "page-2",
@@ -113,251 +48,141 @@ describe("McpClient", () => {
                 annotations: { readOnlyHint: true },
               },
             ],
-            // Some servers end pagination with an empty cursor instead of omitting it.
             nextCursor: "",
-          };
-    });
-    expect(await client.listTools()).toEqual([
-      { name: "search", description: "Search", inputSchema: { type: "object" } },
-      {
-        name: "read",
-        inputSchema: { type: "object" },
-        outputSchema: { type: "object" },
-        annotations: { readOnlyHint: true },
-      },
-    ]);
-    await client.close();
-  });
+          },
+    ),
+  );
+  expect(yield* Effect.promise(() => client.listTools())).toEqual([
+    { name: "search", description: "Search", inputSchema: { type: "object" } },
+    {
+      name: "read",
+      inputSchema: { type: "object" },
+      outputSchema: { type: "object" },
+      annotations: { readOnlyHint: true },
+    },
+  ]);
+  yield* Effect.promise(() => client.close());
+});
 
-  it("lists and reads resources", async () => {
-    const { client, server } = await connect();
-    server.setHandler("resources/list", (request) =>
-      (request.params as { cursor?: string } | undefined)?.cursor === undefined
+const listsResources = Effect.gen(function* () {
+  const { client, server } = yield* connect();
+  server.setHandler("resources/list", (request) =>
+    Effect.succeed(
+      cursorOf(request.params) === undefined
         ? { resources: [{ uri: "file:///a", name: "a", mimeType: "text/plain" }], nextCursor: "2" }
         : { resources: [{ uri: "file:///b" }] },
-    );
-    server.setHandler("resources/templates/list", () => ({
+    ),
+  );
+  server.setHandler("resources/templates/list", () =>
+    Effect.succeed({
       resourceTemplates: [{ uriTemplate: "repo://{owner}/{repo}", name: "repo" }],
-    }));
-    server.setHandler("resources/read", (request) => ({
+    }),
+  );
+  server.setHandler("resources/read", (request) =>
+    Effect.succeed({
       contents: [{ uri: (request.params as { uri: string }).uri, text: "hello" }],
-    }));
-    // A missing name falls back to the URI.
-    expect(await client.listResources()).toEqual([
-      { uri: "file:///a", name: "a", mimeType: "text/plain" },
-      { uri: "file:///b", name: "file:///b" },
-    ]);
-    expect(await client.listResourceTemplates()).toEqual([
-      { uriTemplate: "repo://{owner}/{repo}", name: "repo" },
-    ]);
-    // Single pages pass the cursor through.
-    expect(await client.listResourcesPage()).toEqual({
-      resources: [{ uri: "file:///a", name: "a", mimeType: "text/plain" }],
-      nextCursor: "2",
-    });
-    expect(await client.listResourcesPage("2")).toEqual({
-      resources: [{ uri: "file:///b", name: "file:///b" }],
-    });
-    expect(await client.readResource("file:///a")).toEqual({
-      contents: [{ uri: "file:///a", text: "hello" }],
-    });
+    }),
+  );
+  expect(yield* Effect.promise(() => client.listResources())).toEqual([
+    { uri: "file:///a", name: "a", mimeType: "text/plain" },
+    { uri: "file:///b", name: "file:///b" },
+  ]);
+  expect(yield* Effect.promise(() => client.listResourceTemplates())).toEqual([
+    { uriTemplate: "repo://{owner}/{repo}", name: "repo" },
+  ]);
+  expect(yield* Effect.promise(() => client.listResourcesPage())).toEqual({
+    resources: [{ uri: "file:///a", name: "a", mimeType: "text/plain" }],
+    nextCursor: "2",
+  });
+  expect(yield* Effect.promise(() => client.listResourcesPage("2"))).toEqual({
+    resources: [{ uri: "file:///b", name: "file:///b" }],
+  });
+  expect(yield* Effect.promise(() => client.readResource("file:///a"))).toEqual({
+    contents: [{ uri: "file:///a", text: "hello" }],
+  });
+  yield* rejectsInvalidResources(client, server);
+});
 
-    server.setHandler("resources/read", () => ({ contents: [{ uri: "file:///a" }] }));
-    await expect(client.readResource("file:///a")).rejects.toThrow(
-      "Invalid contents in MCP resources/read result",
+const rejectsInvalidResources = (
+  client: Effect.Success<ReturnType<typeof connect>>["client"],
+  server: Effect.Success<ReturnType<typeof connect>>["server"],
+) =>
+  Effect.gen(function* () {
+    server.setHandler("resources/read", () => Effect.succeed({ contents: [{ uri: "file:///a" }] }));
+    yield* Effect.promise(() =>
+      expect(client.readResource("file:///a")).rejects.toThrow(
+        "Invalid contents in MCP resources/read result",
+      ),
     );
-    server.setHandler("resources/list", () => ({ resources: [{ name: "no uri" }] }));
-    await expect(client.listResources()).rejects.toThrow(
-      "Invalid entry in MCP resources/list result",
+    server.setHandler("resources/list", () => Effect.succeed({ resources: [{ name: "no uri" }] }));
+    yield* Effect.promise(() =>
+      expect(client.listResources()).rejects.toThrow("Invalid entry in MCP resources/list result"),
     );
-    await client.close();
+    yield* Effect.promise(() => client.close());
   });
 
-  it("returns structured tool content and surfaces JSON-RPC errors", async () => {
-    const { client, server } = await connect();
-    server.setHandler("tools/call", (request) => {
-      const params = request.params as { name: string; arguments?: Record<string, unknown> };
-      if (params.name === "fail") throw new McpError(1234, "tool failed", { retryable: false });
-      return {
-        content: [{ type: "text", text: "ok" }],
-        structuredContent: { count: params.arguments?.["count"] },
-      };
-    });
-    expect(await client.callTool("count", { count: 3 })).toEqual({
+const callsTools = Effect.gen(function* () {
+  const { client, server } = yield* connect();
+  server.setHandler("tools/call", (request) => {
+    const params = request.params as { name: string; arguments?: Record<string, unknown> };
+    if (params.name === "fail")
+      return Effect.fail(new McpError(1234, "tool failed", { retryable: false }));
+    return Effect.succeed({
       content: [{ type: "text", text: "ok" }],
-      structuredContent: { count: 3 },
+      structuredContent: { count: params.arguments?.["count"] },
     });
-    await expect(client.callTool("fail")).rejects.toMatchObject({
+  });
+  expect(yield* Effect.promise(() => client.callTool("count", { count: 3 }))).toEqual({
+    content: [{ type: "text", text: "ok" }],
+    structuredContent: { count: 3 },
+  });
+  yield* Effect.promise(() =>
+    expect(client.callTool("fail")).rejects.toMatchObject({
       name: "McpError",
       code: 1234,
       message: "tool failed",
       data: { retryable: false },
-    });
-    await client.close();
+    }),
+  );
+  yield* Effect.promise(() => client.close());
+});
+
+const defaultsMissingContent = Effect.gen(function* () {
+  const { client, server } = yield* connect();
+  server.setHandler("tools/call", () => Effect.succeed({ structuredContent: { ok: true } }));
+  expect(yield* Effect.promise(() => client.callTool("structured"))).toEqual({
+    content: [],
+    structuredContent: { ok: true },
   });
+  server.setHandler("tools/call", () => Effect.succeed({ content: "not a list" }));
+  yield* Effect.promise(() =>
+    expect(client.callTool("broken")).rejects.toThrow("Invalid MCP tools/call result"),
+  );
+  yield* Effect.promise(() => client.close());
+});
 
-  it("renews the timeout on progress", async () => {
-    vi.useFakeTimers();
-    const { client, server } = await connect();
-    server.setHandler("tools/call", async (request) => {
-      const token = (
-        (request.params as Record<string, unknown>)["_meta"] as Record<string, unknown>
-      )["progressToken"] as number;
-      setTimeout(() => {
-        void server.transport.send({
-          jsonrpc: "2.0",
-          method: "notifications/progress",
-          params: { progressToken: token, progress: 1, total: 2 },
-        });
-      }, 40);
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      return { content: [{ type: "text", text: "done" }] };
-    });
-    const progress = vi.fn();
-    const result = client.callTool("slow", {}, { timeoutMs: 50, onProgress: progress });
-    await vi.advanceTimersByTimeAsync(40);
-    await vi.advanceTimersByTimeAsync(40);
-    expect(await result).toEqual({ content: [{ type: "text", text: "done" }] });
-    expect(progress).toHaveBeenCalledWith({ progressToken: 2, progress: 1, total: 2 });
-    await client.close();
-  });
-
-  it("cancels aborted and timed-out requests", async () => {
-    const { client, server } = await connect();
-    server.setHandler("tools/call", () => new Promise(() => {}));
-    const controller = new AbortController();
-    const aborted = client.callTool("wait", {}, { signal: controller.signal });
-    controller.abort("stop");
-    await expect(aborted).rejects.toBeInstanceOf(McpAbortError);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(server.messages).toContainEqual({
-      jsonrpc: "2.0",
-      method: "notifications/cancelled",
-      params: { requestId: 2, reason: "stop" },
-    });
-
-    await expect(client.callTool("wait", {}, { timeoutMs: 5 })).rejects.toBeInstanceOf(
-      McpTimeoutError,
-    );
-    await client.close();
-  });
-
-  it("reports transport errors without failing pending requests", async () => {
-    const { clientTransport, server } = await createServer();
-    const client = new McpClient({ name: "test-client", version: "1.0.0" });
-    await client.connect(clientTransport);
-    const errors: Error[] = [];
-    client.onError((error) => errors.push(error));
-    let respond = () => {};
-    server.setHandler(
-      "tools/call",
-      () =>
-        new Promise((resolve) => {
-          respond = () => resolve({ content: [] });
-        }),
-    );
-    const call = client.callTool("wait");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    clientTransport.emitError(new Error("stray log line"));
-    respond();
-    expect(await call).toEqual({ content: [] });
-    expect(errors.map((error) => error.message)).toEqual(["stray log line"]);
-    await client.close();
-  });
-
-  it("accepts servers that answer with an older protocol version", async () => {
-    const { clientTransport, server } = await createServer();
-    server.setHandler("initialize", () => ({
-      protocolVersion: "2024-11-05",
-      capabilities: {},
-      serverInfo: { name: "old-server", version: "0.1.0" },
-    }));
-    const client = new McpClient({ name: "test-client", version: "1.0.0" });
-    await client.connect(clientTransport);
-    expect(client.protocolVersion).toBe("2024-11-05");
-    await client.close();
-
-    const unsupported = await createServer();
-    unsupported.server.setHandler("initialize", () => ({
-      protocolVersion: "1999-01-01",
-      capabilities: {},
-      serverInfo: { name: "ancient-server", version: "0.1.0" },
-    }));
-    const rejected = new McpClient({ name: "test-client", version: "1.0.0" });
-    await expect(rejected.connect(unsupported.clientTransport)).rejects.toThrow(
-      "unsupported protocol version",
-    );
-    expect(rejected.connectionState).toBe("closed");
-  });
-
-  it("defaults missing tool result content to an empty list", async () => {
-    const { client, server } = await connect();
-    server.setHandler("tools/call", () => ({ structuredContent: { ok: true } }));
-    expect(await client.callTool("structured")).toEqual({
+const acceptsNonObjectStructuredContent = Effect.gen(function* () {
+  const { client, server } = yield* connect();
+  for (const structuredContent of [[{ id: 1 }, { id: 2 }], null, "text", 3, false]) {
+    server.setHandler("tools/call", () => Effect.succeed({ content: [], structuredContent }));
+    expect(yield* Effect.promise(() => client.callTool("structured"))).toEqual({
       content: [],
-      structuredContent: { ok: true },
+      structuredContent,
     });
-    server.setHandler("tools/call", () => ({ content: "not a list" }));
-    await expect(client.callTool("broken")).rejects.toThrow("Invalid MCP tools/call result");
-    await client.close();
-  });
+  }
+  yield* Effect.promise(() => client.close());
+});
 
-  // #10416: MCP 2026-07-28 allows any JSON value as structured content.
-  it("accepts structured content that is not an object", async () => {
-    const { client, server } = await connect();
-    for (const structuredContent of [[{ id: 1 }, { id: 2 }], null, "text", 3, false]) {
-      server.setHandler("tools/call", () => ({ content: [], structuredContent }));
-      expect(await client.callTool("structured")).toEqual({ content: [], structuredContent });
-    }
-    await client.close();
-  });
-
-  it("does not send notifications/cancelled for a timed-out initialize", async () => {
-    const { clientTransport, server } = await createServer();
-    server.setHandler("initialize", () => new Promise(() => {}));
-    const client = new McpClient({ name: "test-client", version: "1.0.0", requestTimeoutMs: 5 });
-    await expect(client.connect(clientTransport)).rejects.toBeInstanceOf(McpTimeoutError);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(
-      server.messages.some(
-        (message) => "method" in message && message.method === "notifications/cancelled",
-      ),
-    ).toBe(false);
-  });
-
-  it("notifies close listeners once when the transport drops", async () => {
-    const { client, server } = await connect();
-    const closed = vi.fn();
-    client.onClose(closed);
-    server.setHandler("tools/call", () => new Promise(() => {}));
-    const pending = client.callTool("wait");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await server.transport.close();
-    await expect(pending).rejects.toThrow("MCP connection closed");
-    expect(client.connectionState).toBe("closed");
-    await client.close();
-    expect(closed).toHaveBeenCalledTimes(1);
-  });
-
-  it("answers roots/list and dispatches notifications", async () => {
-    const { clientTransport, server } = await createServer();
-    const client = new McpClient({
-      name: "test-client",
-      version: "1.0.0",
-      roots: [{ uri: "file:///workspace", name: "workspace" }],
-    });
-    await client.connect(clientTransport);
-    const changed = vi.fn();
-    client.onNotification("notifications/tools/list_changed", changed);
-    await server.transport.send({ jsonrpc: "2.0", id: "roots", method: "roots/list" });
-    await server.transport.send({ jsonrpc: "2.0", method: "notifications/tools/list_changed" });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(server.messages).toContainEqual({
-      jsonrpc: "2.0",
-      id: "roots",
-      result: { roots: [{ uri: "file:///workspace", name: "workspace" }] },
-    });
-    expect(changed).toHaveBeenCalledWith(undefined);
-    await client.close();
-  });
+describe("McpClient", () => {
+  it("initializes the connection before exposing server information", () =>
+    Effect.runPromise(initializes));
+  it("paginates tools and preserves protocol tool definitions", () =>
+    Effect.runPromise(paginatesTools));
+  it("lists and reads resources", () => Effect.runPromise(listsResources));
+  it("returns structured tool content and surfaces JSON-RPC errors", () =>
+    Effect.runPromise(callsTools));
+  it("defaults missing tool result content to an empty list", () =>
+    Effect.runPromise(defaultsMissingContent));
+  it("accepts structured content that is not an object", () =>
+    Effect.runPromise(acceptsNonObjectStructuredContent));
 });

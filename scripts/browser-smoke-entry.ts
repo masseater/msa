@@ -3,8 +3,6 @@ import { createAssistantMessageEventStream, Type } from "@msa/ai";
 import { complete, getModel, getProviders, streamSimple } from "@msa/ai/compat";
 import { createHost, memoryLinkPair, replicatedState } from "@msa/chord";
 
-// Keep this entry browser-safe. It is bundled by scripts/check-browser-smoke.mjs
-// to catch accidental Node-only runtime imports in browser-facing package exports.
 const model = getModel("google", "gemini-2.5-flash");
 const schema = Type.Object({ prompt: Type.String() });
 const stream = createAssistantMessageEventStream();
@@ -12,7 +10,7 @@ const stream = createAssistantMessageEventStream();
 const agent = new Agent({ initialState: { model }, streamFn: streamSimple });
 agent.steer({ role: "user", content: [{ type: "text", text: "queued" }], timestamp: 0 });
 
-console.log(
+export const liveBindings = [
   model.id,
   getProviders().length,
   typeof complete,
@@ -23,4 +21,4 @@ console.log(
   typeof createHost,
   typeof memoryLinkPair,
   replicatedState({ browser: true }).value.browser,
-);
+];
