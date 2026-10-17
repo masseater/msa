@@ -389,6 +389,12 @@ export const SettingsSchema = Type.Object(
         description: "Command for Ctrl+G external editor; takes precedence over VISUAL and EDITOR.",
       }),
     ),
+    clipboardImageCommand: Type.Optional(
+      Type.String({
+        description:
+          "Shell command whose stdout is the clipboard image, read by the paste key in place of the local clipboard. Global setting only.",
+      }),
+    ),
     shellPath: Type.Optional(
       Type.String({
         description:

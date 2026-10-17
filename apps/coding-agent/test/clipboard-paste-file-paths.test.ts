@@ -1,4 +1,6 @@
-import { beforeEach, expect, test, vi } from "vite-plus/test";
+import { readFileSync, rmSync } from "node:fs";
+
+import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 
@@ -6,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   readClipboardFilePaths: vi.fn<() => Promise<string[] | null>>(),
   readClipboardImage: vi.fn<() => Promise<{ bytes: Uint8Array; mimeType: string } | null>>(),
   readClipboardText: vi.fn<() => Promise<string | null>>(),
+  readClipboardImageFromCommand:
+    vi.fn<() => Promise<{ bytes: Uint8Array; mimeType: string } | null | undefined>>(),
 }));
 
 vi.mock("../src/utils/clipboard.ts", () => ({
@@ -16,6 +20,7 @@ vi.mock("../src/utils/clipboard.ts", () => ({
 vi.mock("../src/utils/clipboard-image.ts", () => ({
   extensionForImageMimeType: () => "png",
   readClipboardImage: mocks.readClipboardImage,
+  readClipboardImageFromCommand: mocks.readClipboardImageFromCommand,
 }));
 
 beforeEach(() => vi.resetAllMocks());
@@ -34,6 +39,7 @@ test("Finder file paths take precedence over their icon image", async () => {
     editor: { insertTextAtCursor },
     showError: vi.fn(),
     ui: { requestRender: vi.fn() },
+    settingsManager: { getClipboardImageCommand: () => undefined },
   };
   const prototype = InteractiveMode.prototype as unknown as {
     handleClipboardPaste(this: typeof context): Promise<void>;
@@ -52,6 +58,7 @@ test("clipboard file paths containing terminal control characters are rejected",
     editor: { insertTextAtCursor },
     showError,
     ui: { requestRender: vi.fn() },
+    settingsManager: { getClipboardImageCommand: () => undefined },
   };
   const prototype = InteractiveMode.prototype as unknown as {
     handleClipboardPaste(this: typeof context): Promise<void>;
@@ -73,6 +80,7 @@ test("native file-path errors are shown without falling through to the icon imag
     editor: { insertTextAtCursor: vi.fn() },
     showError,
     ui: { requestRender: vi.fn() },
+    settingsManager: { getClipboardImageCommand: () => undefined },
   };
   const prototype = InteractiveMode.prototype as unknown as {
     handleClipboardPaste(this: typeof context): Promise<void>;
@@ -103,6 +111,7 @@ test.each([
       },
       showError: vi.fn(),
       ui: { requestRender: vi.fn() },
+      settingsManager: { getClipboardImageCommand: () => undefined },
     };
     const prototype = InteractiveMode.prototype as unknown as {
       handleClipboardPaste(this: typeof context): Promise<void>;
@@ -131,6 +140,7 @@ test("bash mode shell-quotes file paths and inserts them as arguments", async ()
     isBashMode: true,
     showError: vi.fn(),
     ui: { requestRender: vi.fn() },
+    settingsManager: { getClipboardImageCommand: () => undefined },
   };
   const prototype = InteractiveMode.prototype as unknown as {
     handleClipboardPaste(this: typeof context): Promise<void>;
@@ -142,4 +152,58 @@ test("bash mode shell-quotes file paths and inserts them as arguments", async ()
     " '/tmp/My Photos/photo.png' '/tmp/$(touch hacked).png' /tmp/plain.png ",
   );
   expect(mocks.readClipboardImage).not.toHaveBeenCalled();
+});
+
+describe("with clipboardImageCommand", () => {
+  function pasteContext() {
+    return {
+      editor: { insertTextAtCursor: vi.fn<(text: string) => void>() },
+      showError: vi.fn<(message: string) => void>(),
+      showStatus: vi.fn<(message: string) => void>(),
+      ui: { requestRender: vi.fn() },
+      settingsManager: { getClipboardImageCommand: () => "remote-clipboard" },
+      insertClipboardImage: (
+        InteractiveMode.prototype as unknown as { insertClipboardImage: unknown }
+      ).insertClipboardImage,
+    };
+  }
+  const paste = (context: ReturnType<typeof pasteContext>) =>
+    (
+      InteractiveMode.prototype as unknown as {
+        handleClipboardPaste(this: typeof context): Promise<void>;
+      }
+    ).handleClipboardPaste.call(context);
+
+  test("inserts the command's image and ignores the local clipboard", async () => {
+    mocks.readClipboardImageFromCommand.mockResolvedValue({
+      bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+      mimeType: "image/png",
+    });
+    const context = pasteContext();
+
+    await paste(context);
+
+    expect(mocks.readClipboardImageFromCommand).toHaveBeenCalledWith("remote-clipboard");
+    const inserted = context.editor.insertTextAtCursor.mock.calls[0]?.[0] ?? "";
+    expect(inserted).toMatch(/msa-clipboard-.*\.png$/);
+    expect([...readFileSync(inserted)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    rmSync(inserted);
+    expect(mocks.readClipboardFilePaths).not.toHaveBeenCalled();
+    expect(mocks.readClipboardImage).not.toHaveBeenCalled();
+    expect(mocks.readClipboardText).not.toHaveBeenCalled();
+  });
+
+  test("says when the clipboard has no image, and when the command fails", async () => {
+    const empty = pasteContext();
+    mocks.readClipboardImageFromCommand.mockResolvedValue(null);
+    await paste(empty);
+    expect(empty.showStatus).toHaveBeenLastCalledWith("No image in the clipboard");
+    expect(empty.editor.insertTextAtCursor).not.toHaveBeenCalled();
+
+    const failed = pasteContext();
+    mocks.readClipboardImageFromCommand.mockResolvedValue(undefined);
+    await paste(failed);
+    expect(failed.showError).toHaveBeenCalledOnce();
+    expect(mocks.readClipboardText).not.toHaveBeenCalled();
+  });
 });

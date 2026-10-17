@@ -97,7 +97,7 @@ describe("generateSystemThemeColors", () => {
   it("uses the terminal foreground and palette hues", () => {
     expect(generateSystemThemeColors(DRACULA).colors.text).toBe("");
     // Solarized's foreground is below 4.5:1 on its own background, so text is darkened.
-    expect(generateSystemThemeColors(TERMINALS.solarizedLight).colors.text).not.toBe("");
+    expect(generateSystemThemeColors(TERMINALS["solarizedLight"]).colors.text).not.toBe("");
     const hue = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).h;
     const red = DRACULA.palette?.[1];
     if (red === undefined) throw new Error("expected Dracula's red palette entry");
