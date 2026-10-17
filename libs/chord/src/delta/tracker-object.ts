@@ -9,13 +9,13 @@ import {
   storeValue,
 } from "./tracker-context.ts";
 import { createPieceNode } from "./tracker-pieces.ts";
-import {
-  type ArrayOverlay,
-  type InsertSource,
-  type JsonValue,
-  type OverlayNode,
-  type Stored,
-  type StoredRef,
+import type {
+  ArrayOverlay,
+  InsertSource,
+  JsonValue,
+  OverlayNode,
+  Stored,
+  StoredRef,
 } from "./tracker-types.ts";
 
 function hasObjectWriteImpl(node: OverlayNode, key: string): boolean {

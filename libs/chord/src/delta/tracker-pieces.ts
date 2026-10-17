@@ -2,12 +2,7 @@ import { dual } from "effect/Function";
 
 import { mergePieces } from "./tracker-array-pieces.ts";
 import { nextPiecePriority } from "./tracker-object.ts";
-import {
-  type ArrayOverlay,
-  type InsertPiece,
-  type Piece,
-  type PieceNode,
-} from "./tracker-types.ts";
+import type { ArrayOverlay, InsertPiece, Piece, PieceNode } from "./tracker-types.ts";
 
 function treeElements(node: PieceNode | undefined): number {
   return node?.elements ?? 0;

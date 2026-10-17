@@ -1,5 +1,5 @@
 import type { Context } from "./context/index.ts";
-import { type Prepared, type Tracker, track } from "./delta/index.ts";
+import { type Prepared, type Tracker, track } from "./delta/tracker.ts";
 import { ReplicatedStatePublisher } from "./state-publisher.ts";
 import { isPromiseLike } from "./state-report.ts";
 import type { MutableReplicatedState, StateListener } from "./state-types.ts";

@@ -3,13 +3,13 @@ import { dual } from "effect/Function";
 import { nodeBase, nodeParent, storedValue } from "./tracker-context.ts";
 import { arrayOverlay } from "./tracker-object.ts";
 import { resolvePath } from "./tracker-paths.ts";
-import {
-  type DenseCandidates,
-  type DenseRegion,
-  type JsonValue,
-  type OverlayContext,
-  type OverlayNode,
-  type Path,
+import type {
+  DenseCandidates,
+  DenseRegion,
+  JsonValue,
+  OverlayContext,
+  OverlayNode,
+  Path,
 } from "./tracker-types.ts";
 
 let locatedDenseArray: OverlayNode | undefined;

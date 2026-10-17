@@ -10,14 +10,14 @@ import {
   treeFromPieces,
   updatePieceNode,
 } from "./tracker-pieces.ts";
-import {
-  type ArrayOverlay,
-  type InsertPiece,
-  type JsonValue,
-  type OverlayNode,
-  type Piece,
-  type PieceNode,
-  type Stored,
+import type {
+  ArrayOverlay,
+  InsertPiece,
+  JsonValue,
+  OverlayNode,
+  Piece,
+  PieceNode,
+  Stored,
 } from "./tracker-types.ts";
 
 function entryValueAtImpl(node: OverlayNode, piece: Piece, sourceIndex: number): Stored {

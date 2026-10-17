@@ -7,14 +7,14 @@ import { nodeBase, storedValue } from "./tracker-context.ts";
 import { arrayOverlay, markDirty } from "./tracker-object.ts";
 import { arrayLength, piecesOf, replaceAllPieces } from "./tracker-pieces.ts";
 import { publicSortValue, restoreSortOverride, sameSortTokenAt } from "./tracker-sort-order.ts";
-import {
-  type ArrayOverlay,
-  type InsertPiece,
-  type InsertSource,
-  type JsonValue,
-  type OverlayNode,
-  type Piece,
-  type Stored,
+import type {
+  ArrayOverlay,
+  InsertPiece,
+  InsertSource,
+  JsonValue,
+  OverlayNode,
+  Piece,
+  Stored,
 } from "./tracker-types.ts";
 
 function deduplicateArrayEntries(node: OverlayNode): void {

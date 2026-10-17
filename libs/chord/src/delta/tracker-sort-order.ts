@@ -11,12 +11,12 @@ import {
 import { arrayOverlay, baseOverridesForWrite, insertOverridesForWrite } from "./tracker-object.ts";
 import { isContainer } from "./tracker-paths.ts";
 import { locatePiece } from "./tracker-pieces.ts";
-import {
-  type ArrayOverlay,
-  type InsertSource,
-  type JsonValue,
-  type OverlayNode,
-  type Stored,
+import type {
+  ArrayOverlay,
+  InsertSource,
+  JsonValue,
+  OverlayNode,
+  Stored,
 } from "./tracker-types.ts";
 
 function sortTokenSource(

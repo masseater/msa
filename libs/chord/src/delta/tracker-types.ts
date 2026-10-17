@@ -1,7 +1,7 @@
 import type { JsonValue } from "../json.ts";
-import { type Draft } from "./draft.ts";
+import type { Draft } from "./draft.ts";
 import type { NonEmptyPath, Op, Path, Seg } from "./ops.ts";
-import { TrackerImpl } from "./tracker-impl.ts";
+import type { TrackerImpl } from "./tracker-impl.ts";
 
 export type { JsonValue };
 export { RESERVED_SEGMENTS } from "./ops.ts";

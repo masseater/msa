@@ -1,13 +1,8 @@
-import { type Draft } from "./draft.ts";
+import type { Draft } from "./draft.ts";
 import { assertWritable, materializePrepared } from "./tracker-context.ts";
 import { emitOperations } from "./tracker-emit.ts";
 import { abortContext, clearContext } from "./tracker-paths.ts";
-import {
-  type Change,
-  type OverlayContext,
-  type Prepared,
-  type StatusCell,
-} from "./tracker-types.ts";
+import type { Change, OverlayContext, Prepared, StatusCell } from "./tracker-types.ts";
 
 export class ChangeImpl<T extends object> implements Change<T> {
   #context: OverlayContext | undefined;
