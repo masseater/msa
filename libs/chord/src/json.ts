@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 export type JsonValue =
   | null
   | boolean
@@ -32,7 +34,7 @@ export type CopyJsonOptions = {
   readonly omitUndefinedProperties?: boolean;
 };
 
-export function copyJson(value: unknown, options?: CopyJsonOptions): JsonValue {
+function copied(value: unknown, options?: CopyJsonOptions): JsonValue {
   return copy(value, undefined, options?.omitUndefinedProperties === true);
 }
 
@@ -152,3 +154,8 @@ function check(value: unknown, ancestors: Set<object>): boolean {
     ancestors.delete(value);
   }
 }
+
+export const copyJson: {
+  (options?: CopyJsonOptions): (value: unknown) => JsonValue;
+  (value: unknown, options?: CopyJsonOptions): JsonValue;
+} = dual((args) => args.length >= 1, copied);

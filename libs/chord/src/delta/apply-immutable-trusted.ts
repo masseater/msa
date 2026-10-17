@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 import type { JsonValue } from "../json.ts";
 import type { Op, Path, Seg } from "./index.ts";
 
@@ -11,7 +13,7 @@ const DATA_DESCRIPTOR: PropertyDescriptor = {
   configurable: true,
 };
 
-export function applyImmutableTrusted<T>(target: T, operations: readonly Op[]): T {
+function appliedTrusted<T>(target: T, operations: readonly Op[]): T {
   let root = target as unknown as JsonValue;
   const owned = new WeakSet<object>();
   for (const operation of operations) {
@@ -137,3 +139,8 @@ function permuteTrusted(target: JsonValue[], permutation: readonly number[]): vo
 function isContainer(value: unknown): value is JsonContainer {
   return value !== null && typeof value === "object";
 }
+
+export const applyImmutableTrusted: {
+  (operations: readonly Op[]): <T>(target: T) => T;
+  <T>(target: T, operations: readonly Op[]): T;
+} = dual(2, appliedTrusted);

@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 export interface ContextKey<T> {
   readonly token: symbol;
   readonly valueType?: (value: T) => T;
@@ -68,11 +70,16 @@ export function createContextKey<T>(description: string): ContextKey<T> {
   return Object.freeze({ token: Symbol(description) });
 }
 
-export function withContextValue<T>(key: ContextKey<T>, value: T, parent: Context): Context {
-  return new ContextValue(parent, key, value);
-}
+export const withContextValue: {
+  <T>(value: T, parent: Context): (key: ContextKey<T>) => Context;
+  <T>(key: ContextKey<T>, value: T, parent: Context): Context;
+} = dual(
+  3,
+  <T>(key: ContextKey<T>, value: T, parent: Context): Context =>
+    new ContextValue(parent, key, value),
+);
 
-export function withAbortSignal(signal: AbortSignal, context: Context): Context {
+function contextWithSignal(signal: AbortSignal, context: Context): Context {
   const parentSignal = context.abortSignal;
   const combined = parentSignal === undefined ? signal : AbortSignal.any([parentSignal, signal]);
   return withContextValue(ABORT_SIGNAL_CONTEXT_KEY, combined, context);
@@ -93,7 +100,7 @@ export function withCancel(context: Context): {
   };
 }
 
-export function awaitWithContext<T>(promise: Promise<T>, context: Context): Promise<T> {
+function awaitedWithContext<T>(promise: Promise<T>, context: Context): Promise<T> {
   const signal = context.abortSignal;
   if (signal === undefined) return promise;
   if (signal.aborted) return Promise.reject(abortError(signal));
@@ -120,3 +127,13 @@ function abortError(signal: AbortSignal): Error {
     ? reason
     : new DOMException("The operation was aborted", "AbortError");
 }
+
+export const withAbortSignal: {
+  (context: Context): (signal: AbortSignal) => Context;
+  (signal: AbortSignal, context: Context): Context;
+} = dual(2, contextWithSignal);
+
+export const awaitWithContext: {
+  (context: Context): <T>(promise: Promise<T>) => Promise<T>;
+  <T>(promise: Promise<T>, context: Context): Promise<T>;
+} = dual(2, awaitedWithContext);

@@ -1,3 +1,4 @@
+import { dual } from "effect/Function";
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 
@@ -32,31 +33,40 @@ export function hash64(text: string): string {
   return (a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
 }
 
-export function deepEqual(a: unknown, b: unknown): boolean {
-  return a === b || canonicalJson(a) === canonicalJson(b);
-}
+export const deepEqual: {
+  (b: unknown): (a: unknown) => boolean;
+  (a: unknown, b: unknown): boolean;
+} = dual(2, (a: unknown, b: unknown): boolean => a === b || canonicalJson(a) === canonicalJson(b));
 
-export function assertValid(
-  reason: ChordErrorReason,
-  what: string,
-  schema: TSchema,
-  value: unknown,
-): void {
+function checkValid(reason: ChordErrorReason, what: string, schema: TSchema, value: unknown): void {
   if (Value.Check(schema, value)) return;
   const errors = [...Value.Errors(schema, value)].slice(0, 3);
   const summary = errors.map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ");
   throw invalid(reason, `${what}: ${summary}`, errors);
 }
 
-export function normalize(schema: TSchema, value: unknown, what: string): unknown {
-  const normalized = Value.Clean(schema, Value.Default(schema, Value.Clone(value ?? {})));
-  assertValid("input", what, schema, normalized);
-  return normalized;
+function normalized(schema: TSchema, value: unknown, what: string): unknown {
+  const clean = Value.Clean(schema, Value.Default(schema, Value.Clone(value ?? {})));
+  assertValid("input", what, schema, clean);
+  return clean;
 }
 
-export function canonicalIdentity(schema: TSchema, value: unknown): string {
-  return canonicalJson(stripDefaults(asSchema(schema), value));
-}
+export const canonicalIdentity: {
+  (value: unknown): (schema: TSchema) => string;
+  (schema: TSchema, value: unknown): string;
+} = dual(2, (schema: TSchema, value: unknown): string =>
+  canonicalJson(stripDefaults(asSchema(schema), value)),
+);
+
+export const assertValid: {
+  (what: string, schema: TSchema, value: unknown): (reason: ChordErrorReason) => void;
+  (reason: ChordErrorReason, what: string, schema: TSchema, value: unknown): void;
+} = dual(4, checkValid);
+
+export const normalize: {
+  (value: unknown, what: string): (schema: TSchema) => unknown;
+  (schema: TSchema, value: unknown, what: string): unknown;
+} = dual(3, normalized);
 
 function stripDefaults(schema: Schema, value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -132,7 +142,7 @@ const ANNOTATIONS: ReadonlySet<string> = new Set([
 const withoutAnnotations = (schema: Schema): Schema =>
   Object.fromEntries(Object.entries(schema).filter(([key]) => !ANNOTATIONS.has(key)));
 
-export function fits(subSchema: unknown, supSchema: unknown): boolean {
+function schemaFits(subSchema: unknown, supSchema: unknown): boolean {
   const sub = withoutAnnotations(asSchema(subSchema));
   const sup = withoutAnnotations(asSchema(supSchema));
   if (Object.keys(sup).length === 0) return true;
@@ -230,3 +240,8 @@ function functionFits(sub: Schema, sup: Schema): boolean {
     return false;
   return fits(sub["returnType"], sup["returnType"]);
 }
+
+export const fits: {
+  (supSchema: unknown): (subSchema: unknown) => boolean;
+  (subSchema: unknown, supSchema: unknown): boolean;
+} = dual(2, schemaFits);

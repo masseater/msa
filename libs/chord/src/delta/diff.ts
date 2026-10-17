@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 import type { JsonValue } from "../json.ts";
 import {
   type NonEmptyPath,
@@ -584,7 +586,7 @@ const operationCost = (operation: Op): number => {
   }
 };
 
-export function diffRevisions(before: JsonValue, after: JsonValue): Op[] {
+function revisionOps(before: JsonValue, after: JsonValue): Op[] {
   const operations: Op[] = [];
   diffValue(before, after, [], operations);
   if (overflowedBatches.has(operations)) return [["r", after]];
@@ -595,3 +597,8 @@ export function diffRevisions(before: JsonValue, after: JsonValue): Op[] {
   const snapshotCost = jsonCost(after) + 6;
   return deltaCost >= snapshotCost ? [["r", after]] : operations;
 }
+
+export const diffRevisions: {
+  (after: JsonValue): (before: JsonValue) => Op[];
+  (before: JsonValue, after: JsonValue): Op[];
+} = dual(2, revisionOps);

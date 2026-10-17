@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 import type { HostCore } from "./core.ts";
 import { refOf } from "./core.ts";
 import type { Resource, ResourceDeclaration } from "./declare.ts";
@@ -23,7 +25,7 @@ const resolveDeps = (name: string, declaration: ResourceDeclaration<unknown>) =>
     return resolved;
   });
 
-export function declareResource<T>(
+function resourceDeclared<T>(
   scope: ResourceScope,
   name: string,
   declaration: ResourceDeclaration<T>,
@@ -47,10 +49,20 @@ export function declareResource<T>(
   return new ResourceFacade(resource, scope.host) as unknown as Resource<T>;
 }
 
-export function exposeResource<T>(decls: Decls, resource: Resource<T>): Exposed<T> {
+function resourceExposed<T>(decls: Decls, resource: Resource<T>): Exposed<T> {
   const resolved = resourceOf(resource);
   if (resolved === undefined || ![...decls.resources.values()].includes(resolved)) {
     throw new TypeError("expose takes a resource declared by this object");
   }
   return new ExposedImpl(resolved) as unknown as Exposed<T>;
 }
+
+export const declareResource: {
+  <T>(name: string, declaration: ResourceDeclaration<T>): (scope: ResourceScope) => Resource<T>;
+  <T>(scope: ResourceScope, name: string, declaration: ResourceDeclaration<T>): Resource<T>;
+} = dual(3, resourceDeclared);
+
+export const exposeResource: {
+  <T>(resource: Resource<T>): (decls: Decls) => Exposed<T>;
+  <T>(decls: Decls, resource: Resource<T>): Exposed<T>;
+} = dual(2, resourceExposed);

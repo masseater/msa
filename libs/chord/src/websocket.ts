@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 import type { AcceptOptions } from "./connection.ts";
 import type { Host } from "./host-types.ts";
 import { type WebSocketLike, webSocketLink } from "./link.ts";
@@ -13,7 +15,7 @@ export interface WebSocketAcceptOptions<Request, P = unknown> extends Omit<
   principal(request: Request): P | undefined | Promise<P | undefined>;
 }
 
-export function acceptWebSockets<Request, P = unknown>(
+function webSocketsAccepted<Request, P = unknown>(
   server: WebSocketServerLike<Request>,
   host: Host<P>,
   options: WebSocketAcceptOptions<Request, P>,
@@ -30,3 +32,15 @@ export function acceptWebSockets<Request, P = unknown>(
     );
   });
 }
+
+export const acceptWebSockets: {
+  <Request, P = unknown>(
+    host: Host<P>,
+    options: WebSocketAcceptOptions<Request, P>,
+  ): (server: WebSocketServerLike<Request>) => void;
+  <Request, P = unknown>(
+    server: WebSocketServerLike<Request>,
+    host: Host<P>,
+    options: WebSocketAcceptOptions<Request, P>,
+  ): void;
+} = dual(3, webSocketsAccepted);

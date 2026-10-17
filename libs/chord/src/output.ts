@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 export type OutputLimits = {
   readonly maxBytes: number;
   readonly maxLines: number;
@@ -32,7 +34,7 @@ export function sanitizeOutput(text: string): string {
   return text.replace(INVALID_OUTPUT, "");
 }
 
-export function boundOutput(text: string, limits: OutputLimits): OutputSlice {
+function outputBounded(text: string, limits: OutputLimits): OutputSlice {
   const bytes = encoder.encode(text);
   const [from, to] = limits.retain === "head" ? headRange(bytes, limits) : tailRange(bytes, limits);
   const kept = bytes.subarray(from, to);
@@ -87,7 +89,7 @@ function tailRange(bytes: Uint8Array, limits: OutputLimits): [number, number] {
   return [start, bytes.length];
 }
 
-export function characterEnd(bytes: Uint8Array, index: number): number {
+function endOfCharacter(bytes: Uint8Array, index: number): number {
   let end = index;
   while (end > 0 && ((bytes[end] ?? 0) & 0xc0) === 0x80) end--;
   return end;
@@ -345,3 +347,13 @@ export class Progress {
       });
   }
 }
+
+export const boundOutput: {
+  (limits: OutputLimits): (text: string) => OutputSlice;
+  (text: string, limits: OutputLimits): OutputSlice;
+} = dual(2, outputBounded);
+
+export const characterEnd: {
+  (index: number): (bytes: Uint8Array) => number;
+  (bytes: Uint8Array, index: number): number;
+} = dual(2, endOfCharacter);

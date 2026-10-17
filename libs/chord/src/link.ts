@@ -1,5 +1,7 @@
 import type * as Zlib from "node:zlib";
 
+import { dual } from "effect/Function";
+
 import type { Frame } from "./wire.ts";
 
 export interface Link {
@@ -363,7 +365,11 @@ export class WebSocketLink extends BaseLink {
   }
 }
 
-export const webSocketLink = (
-  socket: WebSocketLike,
-  options?: WebSocketLinkOptions,
-): WebSocketLink => new WebSocketLink(socket, options);
+export const webSocketLink: {
+  (options?: WebSocketLinkOptions): (socket: WebSocketLike) => WebSocketLink;
+  (socket: WebSocketLike, options?: WebSocketLinkOptions): WebSocketLink;
+} = dual(
+  (args) => args.length >= 1,
+  (socket: WebSocketLike, options?: WebSocketLinkOptions): WebSocketLink =>
+    new WebSocketLink(socket, options),
+);

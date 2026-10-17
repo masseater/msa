@@ -1,5 +1,7 @@
 import type { TSchema } from "typebox";
 
+import { computeDependents, type Derived, sharesStructure } from "./cell-derived.ts";
+import { Source, type SourceOptions, type WriteGuard } from "./cell-source.ts";
 import {
   type Draft,
   diffRevisions,
@@ -9,115 +11,26 @@ import {
   track,
 } from "./delta/index.ts";
 import { ChordError } from "./errors.ts";
-import { enqueue, holdPublications } from "./publish.ts";
+import { holdPublications } from "./publish.ts";
 import { assertValid } from "./schema.ts";
-import type { Ctx, Readable, StateEvent } from "./types.ts";
+import type { Ctx } from "./types.ts";
 
-export interface SourceOptions {
-  readonly dev: boolean;
-  readonly report: (error: unknown) => void;
-}
-
-export type WriteGuard = (ctx: Ctx) => void;
-
-let sequence = 0;
-function nextSequence(): number {
-  sequence += 1;
-  return sequence;
-}
-
-class Fanout<T> {
-  readonly #values = new Set<(value: T) => void>();
-  readonly #events = new Set<(event: StateEvent<T>) => void>();
-  readonly #report: (error: unknown) => void;
-
-  constructor(report: (error: unknown) => void) {
-    this.#report = report;
-  }
-
-  subscribe(listener: (value: T) => void, current: T): () => void {
-    this.#values.add(listener);
-    this.#call(listener, current);
-    return () => this.#values.delete(listener);
-  }
-
-  events(listener: (event: StateEvent<T>) => void, current: T): () => void {
-    this.#events.add(listener);
-    this.#call(listener, { type: "snap", value: current });
-    return () => this.#events.delete(listener);
-  }
-
-  emit(event: StateEvent<T>): void {
-    const events = [...this.#events];
-    const values = [...this.#values];
-    enqueue(() => {
-      for (const listener of events) if (this.#events.has(listener)) this.#call(listener, event);
-      for (const listener of values)
-        if (this.#values.has(listener)) this.#call(listener, event.value);
-    });
-  }
-
-  #call<V>(listener: (value: V) => void, value: V): void {
-    try {
-      listener(value);
-    } catch (error) {
-      this.#report(error);
-    }
-  }
-}
-
-export const HYDRATION: unique symbol = Symbol("chord.hydration");
-
-export interface Hydration {
-  readonly hydrated: boolean;
-  whenHydrated(): Promise<void>;
-}
-
-export function hydrationOf(value: unknown): Hydration | undefined {
-  if (value === null || typeof value !== "object") return undefined;
-  return (value as { readonly [HYDRATION]?: Hydration })[HYDRATION];
-}
-
-export const unhydrated = (sources: Iterable<unknown>): Hydration[] =>
-  [...sources]
-    .map(hydrationOf)
-    .filter((hydration): hydration is Hydration => hydration?.hydrated === false);
-
-export abstract class Source<T> implements Readable<T> {
-  readonly key: string;
-  readonly seq = nextSequence();
-  readonly dependents = new Set<Derived<unknown>>();
-  schemas: readonly TSchema[] = [];
-  protected readonly options: SourceOptions;
-  protected readonly fanout: Fanout<T>;
-
-  constructor(key: string, options: SourceOptions) {
-    this.key = key;
-    this.options = options;
-    this.fanout = new Fanout(options.report);
-  }
-
-  abstract get value(): T;
-
-  subscribe(listener: (value: T) => void): () => void {
-    return this.fanout.subscribe(listener, this.value);
-  }
-
-  events(listener: (event: StateEvent<T>) => void): () => void {
-    return this.fanout.events(listener, this.value);
-  }
-
-  validate(value: unknown): void {
-    if (!this.options.dev) return;
-    for (const schema of this.ownSchemas())
-      assertValid("state", `state ${this.key}`, schema, value);
-    for (const schema of this.schemas) assertValid("state", `state ${this.key}`, schema, value);
-  }
-
-  protected ownSchemas(): readonly TSchema[] {
-    return [];
-  }
-}
+export {
+  HYDRATION,
+  type Hydration,
+  hydrationOf,
+  Source,
+  type SourceOptions,
+  unhydrated,
+  type WriteGuard,
+} from "./cell-source.ts";
+export {
+  computeDependents,
+  Derived,
+  sharesStructure,
+  type Sources,
+  type SourceValues,
+} from "./cell-derived.ts";
 
 interface Box<T> {
   v: T;
@@ -245,142 +158,6 @@ export class Cell<T> extends Source<T> {
       this.fanout.emit(type === "reset" ? { type, value } : { type, ops: published, value });
       for (const [derived, next] of candidates) derived.install(next);
     });
-  }
-}
-
-function sharesStructure(a: unknown, b: unknown): boolean {
-  if (a === null || b === null || typeof a !== "object" || typeof b !== "object" || a === b)
-    return false;
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
-  for (const [key, child] of Object.entries(b)) {
-    if (
-      child !== null &&
-      typeof child === "object" &&
-      (a as Record<string, unknown>)[key] === child
-    )
-      return true;
-  }
-  return false;
-}
-
-function computeDependents(
-  changed: Source<unknown>,
-  value: unknown,
-  validate = true,
-): Map<Derived<unknown>, unknown> {
-  const pending = new Set<Derived<unknown>>();
-  const visit = (source: Source<unknown>): void => {
-    for (const derived of source.dependents) {
-      if (pending.has(derived)) continue;
-      pending.add(derived);
-      visit(derived);
-    }
-  };
-  visit(changed);
-  const values = new Map<Readable<unknown>, unknown>([[changed, value]]);
-  const result = new Map<Derived<unknown>, unknown>();
-  for (const derived of [...pending].sort((a, b) => a.seq - b.seq)) {
-    const next = derived.compute((source) =>
-      values.has(source) ? values.get(source) : source.value,
-    );
-    if (validate) derived.validate(next);
-    values.set(derived, next);
-    result.set(derived, next);
-  }
-  return result;
-}
-
-export type Sources = readonly Readable<unknown>[];
-export type SourceValues<S extends Sources> = {
-  [K in keyof S]: S[K] extends Readable<infer T> ? T : never;
-};
-
-const isReadable = (value: unknown): value is Readable<unknown> =>
-  value !== null &&
-  typeof value === "object" &&
-  typeof (value as Readable<unknown>).subscribe === "function" &&
-  "value" in value;
-
-export class Derived<T> extends Source<T> {
-  readonly sources: readonly Readable<unknown>[];
-  readonly #fn: (...values: never[]) => unknown;
-  #value: T;
-  #external: (() => void)[] = [];
-
-  constructor(
-    key: string,
-    sources: Sources,
-    fn: (...values: never[]) => unknown,
-    options: SourceOptions,
-  ) {
-    super(key, options);
-    this.sources = sources.map((source) => {
-      if (!isReadable(source)) throw new TypeError(`derive ${key}: sources must be readables`);
-      return source;
-    });
-    this.#fn = fn;
-    this.#value = undefined as T;
-  }
-
-  get value(): T {
-    return this.#value;
-  }
-
-  get [HYDRATION](): Hydration | undefined {
-    const pending = unhydrated(this.sources);
-    if (pending.length === 0) return undefined;
-    return {
-      hydrated: false,
-      whenHydrated: () =>
-        Promise.all(pending.map((hydration) => hydration.whenHydrated())).then(() => undefined),
-    };
-  }
-
-  attach(precomputed?: ReadonlyMap<unknown, unknown>): void {
-    this.#value =
-      precomputed?.has(this) === true
-        ? (precomputed.get(this) as T)
-        : this.compute((source) => source.value);
-    for (const source of this.sources) {
-      if (source instanceof Source) source.dependents.add(this as Derived<unknown>);
-      else this.#external.push(source.subscribe(() => this.refresh()));
-    }
-  }
-
-  detach(): void {
-    for (const source of this.sources)
-      if (source instanceof Source) source.dependents.delete(this as Derived<unknown>);
-    for (const unsubscribe of this.#external.splice(0)) unsubscribe();
-  }
-
-  compute(read: (source: Readable<unknown>) => unknown): T {
-    const result: unknown = this.#fn(...(this.sources.map(read) as never[]));
-    if (result instanceof Promise)
-      throw new TypeError(`derive ${this.key}: fn must be synchronous`);
-    return result as T;
-  }
-
-  refresh(): void {
-    try {
-      const next = this.compute((source) => source.value);
-      const dependents = computeDependents(this as Derived<unknown>, next);
-      holdPublications(() => {
-        this.install(next);
-        for (const [derived, value] of dependents) derived.install(value);
-      });
-    } catch (error) {
-      this.options.report(error);
-    }
-  }
-
-  install(next: T): void {
-    const before = this.#value;
-    this.#value = next;
-    const ops: Op[] =
-      before === undefined || next === undefined
-        ? [["r", (next ?? null) as JsonValue]]
-        : diffRevisions(before as JsonValue, next as JsonValue);
-    if (ops.length > 0) this.fanout.emit({ type: "ops", ops, value: next });
   }
 }
 

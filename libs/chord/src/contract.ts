@@ -1,11 +1,9 @@
+import { dual } from "effect/Function";
 import { type Static, type TSchema, Type } from "typebox";
-import { Value } from "typebox/value";
 
-import { ChordError, invalid } from "./errors.ts";
-import { canonicalJson, fits, hash64 } from "./schema.ts";
-import type { Ctx, Exposed, Readable, RefBase, StateSource } from "./types.ts";
+import { invalid } from "./errors.ts";
 
-const MEMBER = Symbol("chord.member");
+export const MEMBER: unique symbol = Symbol("chord.member");
 
 export interface MethodSpec<
   A extends TSchema | undefined = TSchema | undefined,
@@ -58,7 +56,7 @@ export function hostNamed(name: string): HostNamed {
   return { name };
 }
 
-export function hostFamily<const K extends string>(prefix: string, key: K): HostFamily<K> {
+function familyOfHosts<const K extends string>(prefix: string, key: K): HostFamily<K> {
   if (typeof prefix !== "string" || prefix === "")
     throw new TypeError("hostFamily needs a host-name prefix");
   if (typeof key !== "string" || key === "")
@@ -69,7 +67,7 @@ export function hostFamily<const K extends string>(prefix: string, key: K): Host
 type StringKeys<I> = { [K in keyof I]-?: I[K] extends string ? K : never }[keyof I] & string;
 export type PlacementFor<I> = HostNamed | HostFamily<StringKeys<I>>;
 
-export function resolveHost(typeName: string, placement: Placement, input: unknown): string {
+function hostOf(typeName: string, placement: Placement, input: unknown): string {
   if ("name" in placement) return placement.name;
   const value =
     input !== null && typeof input === "object"
@@ -80,10 +78,14 @@ export function resolveHost(typeName: string, placement: Placement, input: unkno
   return placement.prefix + value;
 }
 
-export const placedOn = (placement: Placement, hostName: string): boolean =>
+export const placedOn: {
+  (hostName: string): (placement: Placement) => boolean;
+  (placement: Placement, hostName: string): boolean;
+} = dual(2, (placement: Placement, hostName: string): boolean =>
   "name" in placement
     ? placement.name === hostName
-    : hostName.startsWith(placement.prefix) && hostName.length > placement.prefix.length;
+    : hostName.startsWith(placement.prefix) && hostName.length > placement.prefix.length,
+);
 
 export const placementText = (placement: Placement): string =>
   "name" in placement ? placement.name : `${placement.prefix}<${placement.key}>`;
@@ -118,7 +120,7 @@ export type MemberDescription = Static<typeof MemberDescriptionSchema>;
 
 export const LOCAL_VARIANT = "";
 
-const PlacementSchema = Type.Union([
+export const PlacementSchema = Type.Union([
   Type.Object({ name: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
   Type.Object(
     { prefix: Type.String({ minLength: 1 }), key: Type.String({ minLength: 1 }) },
@@ -169,289 +171,26 @@ export const RESERVED_MEMBERS: ReadonlySet<string> = new Set([
   "contract",
 ]);
 
-function describeMember(
-  name: string,
-  member: unknown,
-  scope: "remote" | "local",
-): MemberDescription {
-  if (RESERVED_MEMBERS.has(name)) throw new TypeError(`member name is reserved: ${name}`);
-  const brand = (member as { [MEMBER]?: string })[MEMBER];
-  if (brand === "method") {
-    const spec = member as MethodSpec;
-    return {
-      kind: "method",
-      ...(spec.args === undefined ? {} : { args: spec.args }),
-      ...(spec.result === undefined ? {} : { result: spec.result }),
-    };
-  }
-  if (brand === "opaque") {
-    if (scope === "remote")
-      throw new TypeError(`remote contracts cannot expose opaque members: ${name}`);
-    return { kind: "opaque", id: (member as OpaqueSpec).id };
-  }
-  return { kind: "state", schema: member as TSchema };
-}
-
-function finish<C extends AnyContract>(contract: Omit<C, "fingerprint">): C {
-  return { ...contract, fingerprint: hash64(canonicalJson(contract.description)) } as C;
-}
-
-function checkHeader(name: string, version: number): void {
-  if (typeof name !== "string" || name === "") throw new TypeError("contract name is empty");
-  if (!Number.isInteger(version) || version < 1)
-    throw new TypeError(`contract version must be a positive integer`);
-}
-
-export function remote<const D extends RemoteDef>(
-  name: string,
-  def: D & { readonly host: PlacementFor<Static<D["input"]>> },
-): RemoteContract<D> {
-  checkHeader(name, def.version);
-  const placement = def.host as Placement | undefined;
-  if (placement === undefined || !Value.Check(PlacementSchema, placement))
-    throw new TypeError(`remote contract ${name} needs \`host\`: hostNamed(…) or hostFamily(…)`);
-  const host: Placement =
-    "name" in placement
-      ? { name: placement.name }
-      : { prefix: placement.prefix, key: placement.key };
-  const variants: Record<string, Record<string, MemberDescription>> = {};
-  if (Object.keys(def.variants).length === 0)
-    throw new TypeError(`remote contract ${name} has no variants`);
-  for (const [kind, variant] of Object.entries(def.variants)) {
-    const members: Record<string, MemberDescription> = {};
-    for (const [key, schema] of Object.entries(variant.state ?? {}))
-      members[key] = describeMember(key, schema, "remote");
-    for (const [key, spec] of Object.entries(variant.methods ?? {})) {
-      if (key in members)
-        throw new TypeError(`member ${key} is both state and method in ${name}.${kind}`);
-      members[key] = describeMember(key, spec, "remote");
-      if (members[key].kind !== "method") throw new TypeError(`methods.${key} is not a method()`);
-    }
-    variants[kind] = members;
-  }
-  const description: Description = {
-    name,
-    scope: "remote",
-    version: def.version,
-    input: def.input,
-    host,
-    variants,
-  };
-  return finish<RemoteContract<D>>({
-    scope: "remote",
-    name,
-    version: def.version,
-    input: def.input,
-    def,
-    description,
-  });
-}
-
-export function local<const D extends LocalDef>(name: string, def: D): LocalContract<D> {
-  checkHeader(name, def.version);
-  const members: Record<string, MemberDescription> = {};
-  for (const [key, member] of Object.entries(def.members ?? {}))
-    members[key] = describeMember(key, member, "local");
-  const description: Description = {
-    name,
-    scope: "local",
-    version: def.version,
-    input: def.input,
-    variants: { [LOCAL_VARIANT]: members },
-  };
-  return finish<LocalContract<D>>({
-    scope: "local",
-    name,
-    version: def.version,
-    input: def.input,
-    def,
-    description,
-  });
-}
-
-export function contractFromDescription(description: Description): AnyContract {
-  const { name, scope, version, input, host } = description;
-  if (
-    typeof name !== "string" ||
-    (scope !== "remote" && scope !== "local") ||
-    !Number.isInteger(version) ||
-    (scope === "remote") !== (host !== undefined)
-  ) {
-    throw new ChordError("invalid", "malformed contract token", { reason: "token" });
-  }
-  const base = {
-    name,
-    version,
-    input,
-    description,
-    fingerprint: hash64(canonicalJson(description)),
-  };
-  return scope === "remote"
-    ? { ...base, scope, def: { version, input, host: host!, variants: {} } }
-    : { ...base, scope, def: { version, input } };
-}
-
-export function coverage(provider: Description, consumer: Description): string | undefined {
-  if (provider.name !== consumer.name || provider.scope !== consumer.scope) return "different type";
-  if (!samePlacement(provider, consumer)) return "host";
-  if (!fits(consumer.input, provider.input)) return "input";
-  for (const [kind, consumerMembers] of Object.entries(consumer.variants)) {
-    const providerMembers = provider.variants[kind];
-    if (providerMembers === undefined) return `variant ${kind} missing`;
-    for (const [name, wanted] of Object.entries(consumerMembers)) {
-      const offered = providerMembers[name];
-      if (offered === undefined || offered.kind !== wanted.kind)
-        return `${kind}.${name} missing or of another kind`;
-      if (offered.kind === "method" && wanted.kind === "method") {
-        if ((wanted.args === undefined) !== (offered.args === undefined))
-          return `${kind}.${name} arguments`;
-        if (
-          wanted.args !== undefined &&
-          offered.args !== undefined &&
-          !fits(wanted.args, offered.args)
-        )
-          return `${kind}.${name} arguments`;
-        if (
-          wanted.result !== undefined &&
-          (offered.result === undefined || !fits(offered.result, wanted.result))
-        )
-          return `${kind}.${name} result`;
-      } else if (offered.kind === "state" && wanted.kind === "state") {
-        if (!fits(offered.schema, wanted.schema)) return `${kind}.${name} state`;
-      } else if (
-        offered.kind === "opaque" &&
-        wanted.kind === "opaque" &&
-        offered.id !== wanted.id
-      ) {
-        return `${kind}.${name} opaque ${offered.id} != ${wanted.id}`;
-      }
-    }
-  }
-  return undefined;
-}
-
-const samePlacement = (a: Description, b: Description): boolean =>
-  canonicalJson(a.host ?? null) === canonicalJson(b.host ?? null);
-const placementOf = (description: Description): string =>
-  description.host === undefined ? "(local)" : placementText(description.host);
-
 export type Adapter = (current: Record<string, unknown>) => Record<string, unknown>;
 export type Accepts = Readonly<Record<number, Adapter>>;
 
-export function bind(
-  provider: AnyContract,
-  accepts: Accepts | undefined,
-  consumer: AnyContract,
-): Adapter | undefined {
-  if (provider.fingerprint === consumer.fingerprint) return undefined;
-  if (!samePlacement(provider.description, consumer.description)) {
-    throw new ChordError(
-      "contract_mismatch",
-      `${provider.name} lives on ${placementOf(provider.description)}, the consumer expects ${placementOf(consumer.description)}`,
-    );
-  }
-  if (provider.version === consumer.version) {
-    const reason = coverage(provider.description, consumer.description);
-    if (reason === undefined) return undefined;
-    throw new ChordError(
-      "contract_mismatch",
-      `${provider.name}@${provider.version} does not cover the consumer's description (${reason}); forgotten version bump?`,
-    );
-  }
-  const adapter = accepts?.[consumer.version];
-  if (adapter === undefined) {
-    throw new ChordError(
-      "contract_mismatch",
-      `${provider.name}: provider version ${provider.version}, consumer version ${consumer.version}, no accepts adapter`,
-    );
-  }
-  return adapter;
-}
+export { bind, coverage, takesNoArgs } from "./contract-compat.ts";
+export type {
+  Call,
+  ImplementationOf,
+  InputOf,
+  MethodImplementation,
+  Ref,
+} from "./contract-shapes.ts";
 
-type Empty = Record<never, never>;
-type StateOf<V> = V extends { readonly state: infer S extends Readonly<Record<string, TSchema>> }
-  ? S
-  : Empty;
-type StaticOf<S> = S extends TSchema ? Static<S> : never;
-type MethodsOf<V> = V extends {
-  readonly methods: infer M extends Readonly<Record<string, MethodSpec>>;
-}
-  ? M
-  : Empty;
+export const hostFamily: {
+  <const K extends string>(key: K): (prefix: string) => HostFamily<K>;
+  <const K extends string>(prefix: string, key: K): HostFamily<K>;
+} = dual(2, familyOfHosts);
 
-type Returned<R> = [R] extends [TSchema] ? Static<R> | Promise<Static<R>> : void | Promise<void>;
-type Resolved<R> = [R] extends [TSchema] ? Static<R> : undefined;
+export const resolveHost: {
+  (placement: Placement, input: unknown): (typeName: string) => string;
+  (typeName: string, placement: Placement, input: unknown): string;
+} = dual(3, hostOf);
 
-export type MethodImplementation<M, P = unknown> =
-  M extends MethodSpec<infer A, infer R>
-    ? [A] extends [TSchema]
-      ? (args: Static<A>, ctx: Ctx<P>) => Returned<R>
-      : (ctx: Ctx<P>) => Returned<R>
-    : never;
-export type Call<M> =
-  M extends MethodSpec<infer A, infer R>
-    ? [A] extends [TSchema]
-      ? (args: Static<A>, ctx?: Ctx) => Promise<Resolved<R>>
-      : (ctx?: Ctx) => Promise<Resolved<R>>
-    : never;
-
-export function takesNoArgs(contract: AnyContract, name: string): boolean {
-  for (const members of Object.values(contract.description.variants)) {
-    const member = members[name];
-    if (member?.kind === "method") return member.args === undefined;
-  }
-  return false;
-}
-
-type VariantImplementation<K, V, P> = { readonly variant: K } & {
-  readonly [S in keyof StateOf<V>]: StateSource<StaticOf<StateOf<V>[S]>>;
-} & {
-  readonly [M in keyof MethodsOf<V>]: MethodImplementation<MethodsOf<V>[M], P>;
-};
-type VariantRef<C extends AnyContract, K, V> = RefBase<C> & { readonly variant: K } & {
-  readonly [S in keyof StateOf<V>]: Readable<StaticOf<StateOf<V>[S]>>;
-} & {
-  readonly [M in keyof MethodsOf<V>]: Call<MethodsOf<V>[M]>;
-};
-
-type LocalImplementationMember<M, P> = M extends MethodSpec
-  ? MethodImplementation<M, P>
-  : M extends OpaqueSpec<infer T>
-    ? T | Exposed<T>
-    : M extends TSchema
-      ? StateSource<Static<M>>
-      : never;
-type LocalRefMember<M> = M extends MethodSpec
-  ? Call<M>
-  : M extends OpaqueSpec<infer T>
-    ? T | undefined
-    : M extends TSchema
-      ? Readable<Static<M>>
-      : never;
-type LocalMembers<D> = D extends {
-  readonly members: infer M extends Readonly<Record<string, LocalMember>>;
-}
-  ? M
-  : Empty;
-
-export type InputOf<C> = C extends { readonly def: { readonly input: infer I extends TSchema } }
-  ? Static<I>
-  : never;
-
-export type ImplementationOf<C, P = unknown> =
-  C extends RemoteContract<infer D>
-    ? {
-        [K in keyof D["variants"]]: VariantImplementation<K, D["variants"][K], P>;
-      }[keyof D["variants"]]
-    : C extends LocalContract<infer D>
-      ? {
-          readonly [K in keyof LocalMembers<D>]: LocalImplementationMember<LocalMembers<D>[K], P>;
-        } & Record<string, unknown>
-      : never;
-
-export type Ref<C extends AnyContract = AnyContract> =
-  C extends RemoteContract<infer D>
-    ? { [K in keyof D["variants"]]: VariantRef<C, K, D["variants"][K]> }[keyof D["variants"]]
-    : C extends LocalContract<infer D>
-      ? RefBase<C> & { readonly [K in keyof LocalMembers<D>]: LocalRefMember<LocalMembers<D>[K]> }
-      : never;
+export { contractFromDescription, local, remote } from "./contract-build.ts";
