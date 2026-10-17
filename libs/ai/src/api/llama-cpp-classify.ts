@@ -1,3 +1,5 @@
+import { Clock, Effect } from "effect";
+
 import type {
   ClassifierAnswer,
   ClassifierApi,
@@ -9,10 +11,10 @@ import type {
   ClassifierResult,
   JsonObject,
 } from "../types.ts";
-import { currentTimeMillis } from "../utils/clock.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
-import { retryProviderRequest } from "../utils/provider-retry.ts";
+import { encodeJson } from "../utils/json-codec.ts";
+import { retryProviderEffect } from "../utils/provider-retry.ts";
 
 const LABEL = "llama.cpp";
 
@@ -183,53 +185,73 @@ interface RequestContext {
   options: ClassifierOptions | undefined;
 }
 
-async function post(
-  request: RequestContext,
-  path: string,
-  body: unknown,
-  observe: boolean,
-): Promise<unknown> {
-  const { model, root, options } = request;
-  let payload = body;
-  if (observe) {
-    const transformed = await options?.onPayload?.(payload, model);
-    if (transformed !== undefined) payload = transformed;
-  }
-  const requestFetch = options?.fetch ?? globalThis.fetch;
-  const headers =
-    providerHeadersToRecord(
-      {
-        "content-type": "application/json",
-        ...(options?.apiKey !== undefined && options?.apiKey !== ""
-          ? { authorization: `Bearer ${options.apiKey}` }
-          : {}),
-      },
-      model.headers,
-      options?.headers,
-    ) ?? {};
-  const { response, json } = await retryProviderRequest(
-    async () => {
-      const timeoutSignal =
-        options?.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs);
-      const signal =
-        options?.signal !== undefined && timeoutSignal !== undefined
-          ? AbortSignal.any([options.signal, timeoutSignal])
-          : (options?.signal ?? timeoutSignal);
-      try {
-        const next = await requestFetch(`${root}${path}`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(payload),
-          signal: signal ?? null,
-        });
-        if (!next.ok) throw httpError(next, await next.text());
-        return { response: next, json: (await next.json()) as unknown };
-      } catch (error) {
-        if (timeoutSignal?.aborted === true && options?.signal?.aborted !== true)
-          throw timeoutError(options!.timeoutMs!);
-        throw error;
-      }
+const observePayload = (request: RequestContext, body: unknown): Effect.Effect<unknown> =>
+  Effect.promise(() => Promise.resolve(request.options?.onPayload?.(body, request.model))).pipe(
+    Effect.map((transformed) => (transformed === undefined ? body : transformed)),
+  );
+
+const requestHeaders = ({ model, options }: RequestContext): Record<string, string> =>
+  providerHeadersToRecord(
+    {
+      "content-type": "application/json",
+      ...(options?.apiKey !== undefined && options?.apiKey !== ""
+        ? { authorization: `Bearer ${options.apiKey}` }
+        : {}),
     },
+    model.headers,
+    options?.headers,
+  ) ?? {};
+
+const sendOnce = (request: RequestContext, url: string, payload: string) =>
+  Effect.suspend(() => {
+    const { options } = request;
+    const timeoutSignal =
+      options?.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs);
+    const signal =
+      options?.signal !== undefined && timeoutSignal !== undefined
+        ? AbortSignal.any([options.signal, timeoutSignal])
+        : (options?.signal ?? timeoutSignal);
+    const requestFetch = options?.fetch ?? globalThis.fetch;
+    return Effect.gen(function* () {
+      const next = yield* Effect.promise(() =>
+        requestFetch(url, {
+          method: "POST",
+          headers: requestHeaders(request),
+          body: payload,
+          signal: signal ?? null,
+        }),
+      );
+      if (!next.ok) {
+        const text = yield* Effect.promise(() => next.text());
+        return yield* Effect.die(httpError(next, text));
+      }
+      const json: unknown = yield* Effect.promise((): Promise<unknown> => next.json());
+      return { response: next, json };
+    }).pipe(
+      Effect.catchDefect((error) =>
+        Effect.die(
+          timeoutSignal?.aborted === true && options?.signal?.aborted !== true
+            ? timeoutError(options?.timeoutMs ?? 0)
+            : error,
+        ),
+      ),
+    );
+  });
+
+interface PostRequest {
+  readonly path: string;
+  readonly body: unknown;
+  readonly observe: boolean;
+}
+
+const post = Effect.fn("post")(function* (
+  request: RequestContext,
+  { path, body, observe }: PostRequest,
+) {
+  const { model, root, options } = request;
+  const payload = yield* encodeJson(observe ? yield* observePayload(request, body) : body);
+  const { response, json } = yield* retryProviderEffect(
+    sendOnce(request, `${root}${path}`, payload),
     {
       maxRetries: options?.maxRetries ?? 2,
       maxRetryDelayMs: options?.maxRetryDelayMs,
@@ -237,13 +259,17 @@ async function post(
     },
   );
   if (observe) {
-    await options?.onResponse?.(
-      { status: response.status, headers: headersToRecord(response.headers) },
-      model,
+    yield* Effect.promise(() =>
+      Promise.resolve(
+        options?.onResponse?.(
+          { status: response.status, headers: headersToRecord(response.headers) },
+          model,
+        ),
+      ),
     );
   }
   return json;
-}
+});
 
 function tokenIds(body: unknown): number[] {
   if (!isRecord(body) || !Array.isArray(body["tokens"]))
@@ -255,66 +281,71 @@ function tokenIds(body: unknown): number[] {
   });
 }
 
-async function tokenize(request: RequestContext, content: string): Promise<number[]> {
-  return tokenIds(
-    await post(
-      request,
-      "/tokenize",
-      { model: request.model.id, content, add_special: false, parse_special: false },
-      false,
-    ),
-  );
-}
+const tokenize = (request: RequestContext, content: string): Effect.Effect<number[]> =>
+  post(request, {
+    path: "/tokenize",
+    body: { model: request.model.id, content, add_special: false, parse_special: false },
+    observe: false,
+  }).pipe(Effect.flatMap((body) => Effect.sync(() => tokenIds(body))));
 
 const labelTokenCache = new Map<string, Promise<number | undefined>>();
 
-async function resolveLabelToken(
+const resolveLabelToken = Effect.fn("resolveLabelToken")(function* (
   request: RequestContext,
   label: string,
-): Promise<number | undefined> {
-  const [newline, withLabel] = await Promise.all([
-    tokenize(request, "\n"),
-    tokenize(request, `\n${label}`),
-  ]);
+) {
+  const [newline, withLabel] = yield* Effect.all(
+    [tokenize(request, "\n"), tokenize(request, `\n${label}`)],
+    { concurrency: "unbounded" },
+  );
   if (
     withLabel.length === newline.length + 1 &&
     newline.every((id, index) => withLabel[index] === id)
   ) {
     return withLabel[newline.length];
   }
-  const alone = await tokenize(request, label);
+  const alone = yield* tokenize(request, label);
   return alone.length === 1 ? alone[0] : undefined;
-}
+});
 
-async function labelTokens(request: RequestContext, labels: readonly string[]): Promise<number[]> {
-  const ids = await Promise.all(
-    labels.map((label) => {
-      const key = `${request.root}\u0000${request.model.id}\u0000${label}`;
-      let pending = labelTokenCache.get(key);
-      if (pending === undefined) {
-        pending = resolveLabelToken(request, label);
-        labelTokenCache.set(key, pending);
-        pending.catch(() => labelTokenCache.delete(key));
-      }
-      return pending;
-    }),
-  );
+const cachedLabelToken = (request: RequestContext, label: string): Promise<number | undefined> => {
+  const key = `${request.root}\u0000${request.model.id}\u0000${label}`;
+  const cached = labelTokenCache.get(key);
+  if (cached !== undefined) return cached;
+  const pending = Effect.runPromise(resolveLabelToken(request, label));
+  labelTokenCache.set(key, pending);
+  pending.catch(() => labelTokenCache.delete(key));
+  return pending;
+};
+
+const labelTokens = Effect.fn("labelTokens")(function* (
+  request: RequestContext,
+  labels: readonly string[],
+) {
+  const pending = labels.map((label) => cachedLabelToken(request, label));
+  const ids = yield* Effect.promise(() => Promise.all(pending));
   const tokens: number[] = [];
   for (const [index, id] of ids.entries()) {
     if (id === undefined)
-      throw new Error(`Label "${labels[index]}" is not a single token for ${request.model.id}`);
+      return yield* Effect.die(
+        new Error(`Label "${labels[index]}" is not a single token for ${request.model.id}`),
+      );
     if (tokens.includes(id))
-      throw new Error(`Labels share a token for ${request.model.id}: ${labels.join(", ")}`);
+      return yield* Effect.die(
+        new Error(`Labels share a token for ${request.model.id}: ${labels.join(", ")}`),
+      );
     tokens.push(id);
   }
   return tokens;
-}
+});
 
-async function renderPrompt(request: RequestContext, content: string): Promise<string> {
-  const body = await post(
-    request,
-    "/apply-template",
-    {
+const renderPrompt = Effect.fn("renderPrompt")(function* (
+  request: RequestContext,
+  content: string,
+) {
+  const body = yield* post(request, {
+    path: "/apply-template",
+    body: {
       model: request.model.id,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -322,33 +353,14 @@ async function renderPrompt(request: RequestContext, content: string): Promise<s
       ],
       chat_template_kwargs: { enable_thinking: false },
     },
-    false,
-  );
+    observe: false,
+  });
   if (!isRecord(body) || typeof body["prompt"] !== "string")
-    throw new Error(`${LABEL} did not return a prompt`);
+    return yield* Effect.die(new Error(`${LABEL} did not return a prompt`));
   return body["prompt"].endsWith("<think>") ? `${body["prompt"]}</think>` : body["prompt"];
-}
+});
 
-async function nextTokenLogprobs(
-  request: RequestContext,
-  prompt: string,
-  tokens: readonly number[],
-  depth: number,
-): Promise<Array<number | undefined>> {
-  const body = await post(
-    request,
-    "/completion",
-    {
-      model: request.model.id,
-      prompt,
-      n_predict: 1,
-      n_probs: depth,
-      post_sampling_probs: false,
-      cache_prompt: true,
-      temperature: 0,
-    },
-    true,
-  );
+function readLogprobs(body: unknown, tokens: readonly number[]): Array<number | undefined> {
   const first =
     isRecord(body) && Array.isArray(body["completion_probabilities"])
       ? body["completion_probabilities"][0]
@@ -369,71 +381,133 @@ async function nextTokenLogprobs(
   return tokens.map((token) => byToken.get(token));
 }
 
-async function classifyQuestion(
+interface LogprobRequest {
+  readonly prompt: string;
+  readonly tokens: readonly number[];
+  readonly depth: number;
+}
+
+const nextTokenLogprobs = (
   request: RequestContext,
-  context: ClassifierContext,
-  id: string,
-  question: ClassifierQuestion,
-  temperature: number,
-): Promise<ClassifierAnswer> {
+  { prompt, tokens, depth }: LogprobRequest,
+): Effect.Effect<Array<number | undefined>> =>
+  post(request, {
+    path: "/completion",
+    body: {
+      model: request.model.id,
+      prompt,
+      n_predict: 1,
+      n_probs: depth,
+      post_sampling_probs: false,
+      cache_prompt: true,
+      temperature: 0,
+    },
+    observe: true,
+  }).pipe(Effect.flatMap((body) => Effect.sync(() => readLogprobs(body, tokens))));
+
+const readoutUntilRanked = Effect.fn("readoutUntilRanked")(function* (
+  request: RequestContext,
+  prompt: string,
+  tokens: readonly number[],
+  depths: readonly number[],
+) {
+  let logprobs: Array<number | undefined> = [];
+  for (const depth of depths) {
+    logprobs = yield* nextTokenLogprobs(request, { prompt, tokens, depth });
+    if (logprobs.every((logprob) => logprob !== undefined)) break;
+  }
+  return logprobs;
+});
+
+interface QuestionRequest {
+  readonly context: ClassifierContext;
+  readonly id: string;
+  readonly question: ClassifierQuestion;
+  readonly temperature: number;
+}
+
+const classifyQuestion = Effect.fn("classifyQuestion")(function* (
+  request: RequestContext,
+  { context, id, question, temperature }: QuestionRequest,
+) {
   const rendered = renderQuestion(context, id);
-  const [tokens, prompt] = await Promise.all([
-    labelTokens(request, rendered.labels),
-    renderPrompt(request, rendered.content),
-  ]);
+  const [tokens, prompt] = yield* Effect.all(
+    [labelTokens(request, rendered.labels), renderPrompt(request, rendered.content)],
+    { concurrency: "unbounded" },
+  );
   const depths = [
     Math.max(MIN_READOUT_DEPTH, READOUT_DEPTH_PER_LABEL * tokens.length),
     ...READOUT_ESCALATION,
   ];
-  let logprobs: Array<number | undefined> = [];
-  for (const depth of depths) {
-    logprobs = await nextTokenLogprobs(request, prompt, tokens, depth);
-    if (logprobs.every((logprob) => logprob !== undefined)) break;
-  }
+  const logprobs = yield* readoutUntilRanked(request, prompt, tokens, depths);
   const missing = rendered.labels.filter((_label, index) => logprobs[index] === undefined);
   if (missing.length > 0) {
-    throw new Error(
-      `${LABEL} did not rank labels ${missing.join(", ")} for ${id} within the top ${depths.at(-1)} tokens`,
+    return yield* Effect.die(
+      new Error(
+        `${LABEL} did not rank labels ${missing.join(", ")} for ${id} within the top ${depths.at(-1)} tokens`,
+      ),
     );
   }
   const values = logprobs as number[];
   if (values.every((logprob) => logprob <= UNDERFLOW_LOGPROB)) {
-    throw new Error(`${request.model.id} gave no probability to any answer label for ${id}`);
+    return yield* Effect.die(
+      new Error(`${request.model.id} gave no probability to any answer label for ${id}`),
+    );
   }
   return answerFromProbabilities(question, rendered.keys, labelProbabilities(values, temperature));
-}
+});
 
-export const classify: ClassifierFunction<ClassifierOptions> = async (model, context, options) => {
-  const output: ClassifierResult = {
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    answers: {},
-    stopReason: "stop",
-    timestamp: currentTimeMillis(),
-  };
-
-  try {
-    if (model.api !== "llama-cpp-classify")
-      throw new Error(`Unsupported classifier API: ${model.api}`);
-    if (context.images?.length !== undefined && context.images?.length > 0)
-      throw new Error(`${LABEL} classification does not support image input`);
-    const temperature = options?.temperature ?? 1;
-    if (!(temperature > 0) || !Number.isFinite(temperature)) {
-      throw new Error(`Temperature must be a positive number, got ${temperature}`);
-    }
-    for (const id of Object.keys(context.questions)) renderQuestion(context, id);
-    const request: RequestContext = { model, root: llamaServerRoot(model.baseUrl), options };
-    const answers: Array<[string, ClassifierAnswer]> = [];
-    for (const [id, question] of Object.entries(context.questions)) {
-      answers.push([id, await classifyQuestion(request, context, id, question, temperature)]);
-    }
-    output.answers = Object.fromEntries(answers);
-    return output;
-  } catch (error) {
-    output.answers = {};
-    output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-    output.errorMessage = formatProviderError(normalizeProviderError(error), `${LABEL} error`);
-    return output;
+const classifyAll = Effect.fn("classifyAll")(function* (
+  model: ClassifierModel<ClassifierApi>,
+  context: ClassifierContext,
+  options: ClassifierOptions | undefined,
+) {
+  if (model.api !== "llama-cpp-classify")
+    return yield* Effect.die(new Error(`Unsupported classifier API: ${model.api}`));
+  if (context.images?.length !== undefined && context.images?.length > 0)
+    return yield* Effect.die(new Error(`${LABEL} classification does not support image input`));
+  const temperature = options?.temperature ?? 1;
+  if (!(temperature > 0) || !Number.isFinite(temperature)) {
+    return yield* Effect.die(
+      new Error(`Temperature must be a positive number, got ${temperature}`),
+    );
   }
-};
+  for (const id of Object.keys(context.questions)) renderQuestion(context, id);
+  const request: RequestContext = { model, root: llamaServerRoot(model.baseUrl), options };
+  const answers: Array<[string, ClassifierAnswer]> = [];
+  for (const [id, question] of Object.entries(context.questions)) {
+    answers.push([id, yield* classifyQuestion(request, { context, id, question, temperature })]);
+  }
+  return Object.fromEntries(answers);
+});
+
+export const classify: ClassifierFunction<ClassifierOptions> = (model, context, options) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const output: ClassifierResult = {
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        answers: {},
+        stopReason: "stop",
+        timestamp: yield* Clock.currentTimeMillis,
+      };
+      return yield* classifyAll(model, context, options).pipe(
+        Effect.map((answers): ClassifierResult => {
+          output.answers = answers;
+          return output;
+        }),
+        Effect.catchDefect((error) =>
+          Effect.sync((): ClassifierResult => {
+            output.answers = {};
+            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+            output.errorMessage = formatProviderError(
+              normalizeProviderError(error),
+              `${LABEL} error`,
+            );
+            return output;
+          }),
+        ),
+      );
+    }),
+  );
