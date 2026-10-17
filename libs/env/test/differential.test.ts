@@ -337,6 +337,7 @@ describe("RemoteExecutionEnv against NodeExecutionEnv", () => {
         env,
         outputWindow: undefined,
         output: (chunk: string | Uint8Array) => output.push(String(chunk)),
+        retainedOutput: () => ({ text: output.join(""), truncated: false }),
         diagnostic: () => {},
         details: async () => {},
       }) as unknown as ToolExecutionApi;
@@ -362,7 +363,8 @@ describe("RemoteExecutionEnv against NodeExecutionEnv", () => {
         [createReadTool(), { path: "bom.txt" }],
         [createReadTool(), { path: "bad.txt" }],
         [createReadTool(), { path: "missing.txt" }],
-        [createBashTool(), { command: "cat text.txt; echo err >&2; exit 0" }],
+        [createBashTool(), { command: "cat text.txt; exit 0" }],
+        [createBashTool(), { command: "echo err >&2; exit 0" }],
         [createBashTool(), { command: "exit 3" }],
         [createBashTool(), { command: "printf 'a\\nb'; ls" }],
       ];
