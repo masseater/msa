@@ -25,37 +25,24 @@ const forwardToGlobalFetch: typeof globalThis.fetch = (input, init) => globalFet
 
 const httpLayer = Layer.mergeAll(
   Layer.succeed(Tracer.DisablePropagation, true),
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- FetchHttpClient.layer (effect/http) is the only Effect HTTP client
   FetchHttpClient.layer,
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- FetchHttpClient.Fetch (effect/http) is the only Effect HTTP client
   Layer.succeed(FetchHttpClient.Fetch, forwardToGlobalFetch),
 );
 
 const buildRequest = (request: HttpRequest) => {
   const url = request.url instanceof URL ? request.url.href : request.url;
-  const base =
-    request.method === "POST"
-      ? // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpClientRequest.post (effect/http) builds requests for the only Effect HTTP client
-        HttpClientRequest.post(url)
-      : // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpClientRequest.get (effect/http) builds requests for the only Effect HTTP client
-        HttpClientRequest.get(url);
-  const withHeaders =
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpClientRequest.setHeaders (effect/http) builds requests for the only Effect HTTP client
-    HttpClientRequest.setHeaders(base, request.headers ?? {});
+  const base = request.method === "POST" ? HttpClientRequest.post(url) : HttpClientRequest.get(url);
+  const withHeaders = HttpClientRequest.setHeaders(base, request.headers ?? {});
   const body = request.body;
   if (body === undefined) return withHeaders;
   const contentType = Object.entries(request.headers ?? {}).find(
     ([name]) => name.toLowerCase() === "content-type",
   )?.[1];
-  return (
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpClientRequest.setBody (effect/http) builds requests for the only Effect HTTP client
-    HttpClientRequest.setBody(withHeaders, HttpBody.raw(body, { contentType }))
-  );
+  return HttpClientRequest.setBody(withHeaders, HttpBody.raw(body, { contentType }));
 };
 
 const send = (request: HttpRequest) =>
   Effect.gen(function* () {
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpClient.HttpClient (effect/http) is the only Effect HTTP client
     const client = yield* HttpClient.HttpClient;
     const execute = Effect.orDie(client.execute(buildRequest(request)));
     const signal = request.signal;
