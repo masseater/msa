@@ -46,175 +46,175 @@ const Store = local("t.gen-store", {
 const Routes = defineRegistry<() => number>("t.gen-routes");
 const RELOADS = 6;
 
-describe("generation GC", () => {
-  it("a reference held across reloads keeps only the current generation alive", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const generations = tracker();
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const facet = (generation: number): Facet => {
-          const sentinel = generations.track(generation, { generation });
-          return {
-            name: "store",
-            setup: (api) =>
-              api.serve(Store, (_input, _principal, self) => {
-                const count = self.state("count", Type.Number(), 0);
-                return { count, get: () => sentinel.generation };
-              }),
-          };
-        };
-        host.install(facet(0));
-        const ref = host.hold(Store, {});
-        yield* Effect.promise(() => ref.ready);
-        for (let generation = 1; generation <= RELOADS; generation++) {
-          yield* Effect.promise(() => host.reload([facet(generation)]));
-          assert.equal(yield* Effect.promise(() => ref.get()), generation);
-        }
-        assert.deepEqual(yield* Effect.promise(() => generations.collect([RELOADS])), [RELOADS]);
-        yield* Effect.promise(() => host.close());
-      }),
-    ));
+const aReferenceHeldAcrossReloadsKeeps = Effect.gen(function* () {
+  const generations = tracker();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const facet = (generation: number): Facet => {
+    const sentinel = generations.track(generation, { generation });
+    return {
+      name: "store",
+      setup: (api) =>
+        api.serve(Store, (_input, _principal, self) => {
+          const count = self.state("count", Type.Number(), 0);
+          return { count, get: () => sentinel.generation };
+        }),
+    };
+  };
+  host.install(facet(0));
+  const ref = host.hold(Store, {});
+  yield* Effect.promise(() => ref.ready);
+  for (let generation = 1; generation <= RELOADS; generation++) {
+    yield* Effect.promise(() => host.reload([facet(generation)]));
+    assert.equal(yield* Effect.promise(() => ref.get()), generation);
+  }
+  assert.deepEqual(yield* Effect.promise(() => generations.collect([RELOADS])), [RELOADS]);
+  yield* Effect.promise(() => host.close());
+});
 
-  it('a lifetime "host" object with state, a kept resource, a listener, a task and registrations keeps only the current generation alive', () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const generations = tracker();
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const facet = (generation: number): Facet => {
-          const sentinel = generations.track(generation, { generation });
-          return {
-            name: "store",
-            setup: (api) =>
-              api.serve(
-                Store,
-                (_input, _principal, self) => {
-                  const count = self.state("count", Type.Number(), 0);
-                  self.resource("conn", {
-                    version: 1,
-                    open: () => ({ open: true }),
-                    close: () => void sentinel.generation,
-                  });
-                  self.on("count", count, () => void sentinel.generation);
-                  self.task((ctx) =>
-                    Effect.runPromiseWith(services)(
-                      Effect.gen(function* () {
-                        yield* Effect.promise(
-                          () =>
-                            new Promise<void>((resolve) =>
-                              ctx.signal.addEventListener("abort", () => resolve()),
-                            ),
-                        );
-                        void sentinel.generation;
-                      }),
-                    ),
+const aLifetimeHostObjectWithState = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const generations = tracker();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const facet = (generation: number): Facet => {
+    const sentinel = generations.track(generation, { generation });
+    return {
+      name: "store",
+      setup: (api) =>
+        api.serve(
+          Store,
+          (_input, _principal, self) => {
+            const count = self.state("count", Type.Number(), 0);
+            self.resource("conn", {
+              version: 1,
+              open: () => ({ open: true }),
+              close: () => void sentinel.generation,
+            });
+            self.on("count", count, () => void sentinel.generation);
+            self.task((ctx) =>
+              Effect.runPromiseWith(services)(
+                Effect.gen(function* () {
+                  yield* Effect.promise(
+                    () =>
+                      new Promise<void>((resolve) =>
+                        ctx.signal.addEventListener("abort", () => resolve()),
+                      ),
                   );
-                  self.register(Routes, { generation: () => sentinel.generation });
-                  return { count, get: () => sentinel.generation };
-                },
-                { lifetime: "host" },
+                  void sentinel.generation;
+                }),
               ),
-          };
-        };
-        yield* Effect.promise(() => host.install(facet(0)));
-        for (let generation = 1; generation <= RELOADS; generation++) {
-          yield* Effect.promise(() => host.reload([facet(generation)]));
-          assert.equal(host.registry(Routes).get("generation")?.(), generation);
-        }
-        assert.deepEqual(yield* Effect.promise(() => generations.collect([RELOADS])), [RELOADS]);
-        yield* Effect.promise(() => host.close());
-      }),
-    ));
+            );
+            self.register(Routes, { generation: () => sentinel.generation });
+            return { count, get: () => sentinel.generation };
+          },
+          { lifetime: "host" },
+        ),
+    };
+  };
+  yield* Effect.promise(() => host.install(facet(0)));
+  for (let generation = 1; generation <= RELOADS; generation++) {
+    yield* Effect.promise(() => host.reload([facet(generation)]));
+    assert.equal(host.registry(Routes).get("generation")?.(), generation);
+  }
+  assert.deepEqual(yield* Effect.promise(() => generations.collect([RELOADS])), [RELOADS]);
+  yield* Effect.promise(() => host.close());
+});
 
-  it("abort listeners that calls and tasks add to their ctx.signal do not outlive them", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const generations = tracker();
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const facet = (generation: number): Facet => {
-          const sentinel = generations.track(generation, { generation });
-          return {
-            name: "store",
-            setup: (api) =>
-              api.serve(
-                Store,
-                (_input, _principal, self) => {
-                  const count = self.state("count", Type.Number(), 0);
-                  self.task((ctx) =>
-                    Effect.runPromiseWith(services)(
-                      Effect.gen(function* () {
-                        yield* Effect.promise(
-                          () =>
-                            new Promise<void>((resolve) =>
-                              ctx.signal.addEventListener("abort", () => resolve()),
-                            ),
-                        );
-                        void sentinel.generation;
-                      }),
-                    ),
+const abortListenersThatCallsAndTasks = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const generations = tracker();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const facet = (generation: number): Facet => {
+    const sentinel = generations.track(generation, { generation });
+    return {
+      name: "store",
+      setup: (api) =>
+        api.serve(
+          Store,
+          (_input, _principal, self) => {
+            const count = self.state("count", Type.Number(), 0);
+            self.task((ctx) =>
+              Effect.runPromiseWith(services)(
+                Effect.gen(function* () {
+                  yield* Effect.promise(
+                    () =>
+                      new Promise<void>((resolve) =>
+                        ctx.signal.addEventListener("abort", () => resolve()),
+                      ),
                   );
-                  return {
-                    count,
-                    get: (ctx) => {
-                      ctx.signal.addEventListener("abort", () => void sentinel.generation);
-                      return sentinel.generation;
-                    },
-                  };
-                },
-                { lifetime: "host" },
+                  void sentinel.generation;
+                }),
               ),
-          };
-        };
-        yield* Effect.promise(() => host.install(facet(0)));
-        for (let generation = 1; generation <= RELOADS; generation++) {
-          yield* Effect.promise(() => host.reload([facet(generation)]));
-          assert.equal(
-            yield* Effect.promise(() =>
-              host.root((ctx) =>
-                Effect.runPromiseWith(services)(
-                  Effect.gen(function* () {
-                    const remote = yield* Effect.promise(() => ctx.get(Store, {}));
-                    return yield* Effect.promise(() => remote.get(ctx));
-                  }),
-                ),
-              ),
-            ),
-            generation,
-          );
-        }
-        assert.deepEqual(yield* Effect.promise(() => generations.collect([RELOADS])), [RELOADS]);
-        yield* Effect.promise(() => host.close());
-      }),
-    ));
-
-  it("disposed objects are not kept once their disposal finished", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const objects = tracker();
-        const Item = local("t.gen-item", {
-          version: 1,
-          input: Type.Object({ id: Type.Number() }),
-          members: { id: method(undefined, Type.Number()) },
-        });
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        host.serve(Item, (input) => {
-          const { id } = objects.track(input.id, input);
-          return { id: () => id };
-        });
-        const use = (id: number): Promise<void> =>
+            );
+            return {
+              count,
+              get: (ctx) => {
+                ctx.signal.addEventListener("abort", () => void sentinel.generation);
+                return sentinel.generation;
+              },
+            };
+          },
+          { lifetime: "host" },
+        ),
+    };
+  };
+  yield* Effect.promise(() => host.install(facet(0)));
+  for (let generation = 1; generation <= RELOADS; generation++) {
+    yield* Effect.promise(() => host.reload([facet(generation)]));
+    assert.equal(
+      yield* Effect.promise(() =>
+        host.root((ctx) =>
           Effect.runPromiseWith(services)(
             Effect.gen(function* () {
-              const ref = host.hold(Item, { id });
-              assert.equal(yield* Effect.promise(() => ref.id()), id);
-              ref.release();
+              const remote = yield* Effect.promise(() => ctx.get(Store, {}));
+              return yield* Effect.promise(() => remote.get(ctx));
             }),
-          );
-        for (let id = 0; id < 50; id++) yield* Effect.promise(() => use(id));
-        yield* Effect.sleep(10);
-        assert.deepEqual(yield* Effect.promise(() => objects.collect([])), []);
-        yield* Effect.promise(() => host.close());
+          ),
+        ),
+      ),
+      generation,
+    );
+  }
+  assert.deepEqual(yield* Effect.promise(() => generations.collect([RELOADS])), [RELOADS]);
+  yield* Effect.promise(() => host.close());
+});
+
+const disposedObjectsAreNotKeptOnce = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const objects = tracker();
+  const Item = local("t.gen-item", {
+    version: 1,
+    input: Type.Object({ id: Type.Number() }),
+    members: { id: method(undefined, Type.Number()) },
+  });
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  host.serve(Item, (input) => {
+    const { id } = objects.track(input.id, input);
+    return { id: () => id };
+  });
+  const use = (id: number): Promise<void> =>
+    Effect.runPromiseWith(services)(
+      Effect.gen(function* () {
+        const ref = host.hold(Item, { id });
+        assert.equal(yield* Effect.promise(() => ref.id()), id);
+        ref.release();
       }),
-    ));
+    );
+  for (let id = 0; id < 50; id++) yield* Effect.promise(() => use(id));
+  yield* Effect.sleep(10);
+  assert.deepEqual(yield* Effect.promise(() => objects.collect([])), []);
+  yield* Effect.promise(() => host.close());
+});
+
+describe("generation GC", () => {
+  it("a reference held across reloads keeps only the current generation alive", () =>
+    Effect.runPromise(aReferenceHeldAcrossReloadsKeeps));
+
+  it('a lifetime "host" object with state, a kept resource, a listener, a task and registrations keeps only the current generation alive', () =>
+    Effect.runPromise(aLifetimeHostObjectWithState));
+
+  it("abort listeners that calls and tasks add to their ctx.signal do not outlive them", () =>
+    Effect.runPromise(abortListenersThatCallsAndTasks));
+
+  it("disposed objects are not kept once their disposal finished", () =>
+    Effect.runPromise(disposedObjectsAreNotKeptOnce));
 });

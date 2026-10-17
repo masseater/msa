@@ -58,90 +58,86 @@ function setup(readyTimeout?: number) {
 
 const abortController = (): AbortController => new AbortController();
 
+const anAbortedGetRejectsAndReleases = Effect.gen(function* () {
+  const { server, browser, link, open } = setup();
+  const abort = abortController();
+  const first = browser.get(Slow, {}, { signal: abort.signal });
+  const second = browser.get(Slow, {});
+  yield* Effect.promise(() => sleep(5));
+  abort.abort();
+  yield* Effect.promise(() => assert.rejects(first, (error) => isChordError(error, "aborted")));
+  yield* Effect.promise(() => sleep(5));
+  assert.equal(link.count("sent", "release"), 0, "the other awaiting get keeps the hold");
+  open();
+  const ref = yield* Effect.promise(() => second);
+  assert.equal(ref.n.value, 1);
+  assert.equal(link.count("sent", "hold"), 1);
+  ref.release();
+  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  yield* Effect.promise(() => server.close());
+});
+
+const aCtxGetStillWaitingWhen = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const { server, browser, link, open } = setup();
+  let pending: Promise<unknown> | undefined;
+  yield* Effect.promise(() =>
+    browser.root((ctx: Ctx) =>
+      Effect.runPromiseWith(services)(
+        Effect.sync(() => {
+          pending = ctx.get(Slow, {});
+          pending.catch(() => {});
+        }),
+      ),
+    ),
+  );
+  yield* Effect.promise(() => assert.rejects(pending!, (error) => isChordError(error, "aborted")));
+  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  open();
+  yield* Effect.promise(() => server.close());
+});
+
+const aGetTimesOutAfterReadytimeout = Effect.gen(function* () {
+  const { server, browser, link } = setup(30);
+  yield* Effect.promise(() =>
+    assert.rejects(
+      browser.get(Slow, {}),
+      (error) => isChordError(error, "unavailable") && error.reason === "ready_timeout",
+    ),
+  );
+  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  yield* Effect.promise(() => server.close());
+});
+
+const ctxGetResolvesHydratedTheCall = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const { server, browser, link, open } = setup();
+  open();
+  const value = yield* Effect.promise(() =>
+    browser.root((ctx: Ctx) =>
+      Effect.runPromiseWith(services)(
+        Effect.gen(function* () {
+          const slow = yield* Effect.promise(() => ctx.get(Slow, {}));
+          return slow.n.value;
+        }),
+      ),
+    ),
+  );
+  assert.equal(value, 1);
+  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  yield* Effect.promise(() => server.close());
+});
+
 describe("awaited gets", () => {
   it("an aborted get rejects and releases only its reference; the binding stays for the others", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { server, browser, link, open } = setup();
-        const abort = abortController();
-        const first = browser.get(Slow, {}, { signal: abort.signal });
-        const second = browser.get(Slow, {});
-        yield* Effect.promise(() => sleep(5));
-        abort.abort();
-        yield* Effect.promise(() =>
-          assert.rejects(first, (error) => isChordError(error, "aborted")),
-        );
-        yield* Effect.promise(() => sleep(5));
-        assert.equal(link.count("sent", "release"), 0, "the other awaiting get keeps the hold");
-        open();
-        const ref = yield* Effect.promise(() => second);
-        assert.equal(ref.n.value, 1);
-        assert.equal(link.count("sent", "hold"), 1);
-        ref.release();
-        yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(anAbortedGetRejectsAndReleases));
 
   it("a ctx.get still waiting when its call settles rejects aborted and releases its reference", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const { server, browser, link, open } = setup();
-        let pending: Promise<unknown> | undefined;
-        yield* Effect.promise(() =>
-          browser.root((ctx: Ctx) =>
-            Effect.runPromiseWith(services)(
-              Effect.sync(() => {
-                pending = ctx.get(Slow, {});
-                pending.catch(() => {});
-              }),
-            ),
-          ),
-        );
-        yield* Effect.promise(() =>
-          assert.rejects(pending!, (error) => isChordError(error, "aborted")),
-        );
-        yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
-        open();
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(aCtxGetStillWaitingWhen));
 
   it("a get times out after readyTimeout with ready_timeout and releases its hold", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { server, browser, link } = setup(30);
-        yield* Effect.promise(() =>
-          assert.rejects(
-            browser.get(Slow, {}),
-            (error) => isChordError(error, "unavailable") && error.reason === "ready_timeout",
-          ),
-        );
-        yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(aGetTimesOutAfterReadytimeout));
 
   it("ctx.get resolves hydrated; the call's reference is released when the call ends", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const { server, browser, link, open } = setup();
-        open();
-        const value = yield* Effect.promise(() =>
-          browser.root((ctx: Ctx) =>
-            Effect.runPromiseWith(services)(
-              Effect.gen(function* () {
-                const slow = yield* Effect.promise(() => ctx.get(Slow, {}));
-                return slow.n.value;
-              }),
-            ),
-          ),
-        );
-        assert.equal(value, 1);
-        yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(ctxGetResolvesHydratedTheCall));
 });

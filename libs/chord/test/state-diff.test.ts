@@ -17,23 +17,27 @@ const expectDiff = (before: JsonValue, after: JsonValue, expected: unknown): voi
   expect(applyImmutable(before, operations)).toEqual(after);
 };
 
-describe("immutable revision diff", () => {
-  it("emits sets and deletes", () => {
-    expectDiff({ keep: 1, change: 1, remove: true }, { keep: 1, change: 2, add: 3 }, [
-      ["s", ["change"], 2],
-      ["s", ["add"], 3],
-      ["d", ["remove"]],
-    ]);
-  });
+const emitsSetsAndDeletes = (): void => {
+  expectDiff({ keep: 1, change: 1, remove: true }, { keep: 1, change: 2, add: 3 }, [
+    ["s", ["change"], 2],
+    ["s", ["add"], 3],
+    ["d", ["remove"]],
+  ]);
+};
 
-  it("emits string append and front truncation", () => {
-    expectDiff({ text: "hello" }, { text: "hello world" }, [["a", ["text"], " world"]]);
-    expectDiff({ text: "hello world" }, { text: "world" }, [["t", ["text"], 6]]);
-    expectDiff({ text: "abcdefgh" }, { text: "defghxyz" }, [
-      ["t", ["text"], 3],
-      ["a", ["text"], "xyz"],
-    ]);
-  });
+const emitsStringAppendAndFrontTruncation = (): void => {
+  expectDiff({ text: "hello" }, { text: "hello world" }, [["a", ["text"], " world"]]);
+  expectDiff({ text: "hello world" }, { text: "world" }, [["t", ["text"], 6]]);
+  expectDiff({ text: "abcdefgh" }, { text: "defghxyz" }, [
+    ["t", ["text"], 3],
+    ["a", ["text"], "xyz"],
+  ]);
+};
+
+describe("immutable revision diff", () => {
+  it("emits sets and deletes", emitsSetsAndDeletes);
+
+  it("emits string append and front truncation", emitsStringAppendAndFrontTruncation);
 
   it("represents array insertion, removal, and shift with splices", () => {
     const a = { id: "a" };

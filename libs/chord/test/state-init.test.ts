@@ -38,154 +38,153 @@ const Notes = local("t.notes", {
 
 const NotesSchema = Type.Array(Type.String());
 
+const runsAfterTheResourcesAreOpen = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const loaded = latch<string[]>();
+  const log: string[] = [];
+  host.serve(Notes, (_input, _principal, self) => {
+    const db = self.resource("db", {
+      version: 1,
+      open: () => {
+        log.push("open");
+        return { load: () => loaded.promise };
+      },
+    });
+    const notes = self.state("notes", NotesSchema, {
+      init: () =>
+        Effect.runPromiseWith(services)(
+          Effect.gen(function* () {
+            log.push("init");
+            return yield* Effect.promise(() => db.value.load());
+          }),
+        ),
+    });
+    const count = self.derive([notes], (list) => list.length);
+    self.on("notes", notes, (list) => {
+      log.push(`listener ${list.join(",")}`);
+    });
+    self.task(() =>
+      Effect.runPromiseWith(services)(
+        Effect.sync(() => {
+          log.push(`task ${notes.value.join(",")}`);
+        }),
+      ),
+    );
+    return {
+      notes,
+      count,
+      has: (note) => notes.value.includes(note),
+      add: (note, ctx) => {
+        notes.change(ctx, (draft) => {
+          draft.push(note);
+        });
+      },
+    };
+  });
+  const ref = host.hold(Notes, {});
+  const seen: unknown[] = [];
+  ref.notes.subscribe((value) => seen.push(value));
+  const has = host.root((ctx) => ref.has("a", ctx));
+  yield* Effect.promise(() => until(() => log.includes("init")));
+  assert.equal(ref.status, "loading");
+  loaded.open(["a", "b"]);
+  assert.equal(yield* Effect.promise(() => has), true);
+  assert.equal(ref.count.value, 2);
+  yield* Effect.promise(() => until(() => log.length === 4));
+  assert.deepEqual(log, ["open", "init", "listener a,b", "task a,b"]);
+  assert.deepEqual(
+    seen.filter((value) => value !== undefined),
+    [["a", "b"]],
+  );
+});
+
+const anInitCellCannotBeRead = Effect.gen(function* () {
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  host.serve(Notes, (_input, _principal, self) => {
+    const notes = self.state("notes", NotesSchema, { init: () => [] });
+    const count = self.derive([notes], (list) => list.length);
+    void notes.value;
+    return { notes, count, has: () => false, add: () => {} };
+  });
+  yield* Effect.promise(() =>
+    assert.rejects(
+      host.hold(Notes, {}).ready,
+      (error) => isChordError(error) && error.code === "not_ready",
+    ),
+  );
+});
+
+const aThrowingOrInvalidInitFails = Effect.gen(function* () {
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  let result: () => unknown = () => {
+    throw new Error("db down");
+  };
+  const closed: string[] = [];
+  host.serve(Notes, (_input, _principal, self) => {
+    self.resource("db", {
+      version: 1,
+      open: () => "db",
+      close: (db) => void closed.push(db),
+    });
+    const notes = self.state("notes", NotesSchema, { init: () => result() as string[] });
+    const count = self.derive([notes], (list) => list.length);
+    return { notes, count, has: () => false, add: () => {} };
+  });
+  yield* Effect.promise(() => assert.rejects(host.hold(Notes, {}).ready, /db down/u));
+  assert.deepEqual(closed, ["db"]);
+  result = () => [1];
+  yield* Effect.promise(() =>
+    assert.rejects(
+      host.hold(Notes, {}).ready,
+      (error) => isChordError(error) && error.code === "invalid",
+    ),
+  );
+  assert.deepEqual(closed, ["db", "db"]);
+  result = () => ["ok"];
+  const ref = host.hold(Notes, {});
+  yield* Effect.promise(() => ref.ready);
+  assert.deepEqual(ref.notes.value, ["ok"]);
+});
+
+const initRunsInARootIt = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const Source = local("t.source", {
+    version: 1,
+    input: Type.Object({}),
+    members: { all: method(undefined, NotesSchema) },
+  });
+  host.serve(Source, () => ({ all: () => ["from source"] }));
+  host.serve(Notes, (_input, _principal, self) => {
+    const notes = self.state("notes", NotesSchema, {
+      init: (ctx: Ctx) =>
+        Effect.runPromiseWith(services)(
+          Effect.gen(function* () {
+            const remote = yield* Effect.promise(() => ctx.get(Source, {}));
+            return yield* Effect.promise(() => remote.all(ctx));
+          }),
+        ),
+    });
+    const count = self.derive([notes], (list) => list.length);
+    return { notes, count, has: () => false, add: () => {} };
+  });
+  const ref = host.hold(Notes, {});
+  yield* Effect.promise(() => ref.ready);
+  assert.deepEqual(ref.notes.value, ["from source"]);
+});
+
 describe("state init", () => {
   it("runs after the resources are open and before the object goes live: nothing sees another value", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const loaded = latch<string[]>();
-        const log: string[] = [];
-        host.serve(Notes, (_input, _principal, self) => {
-          const db = self.resource("db", {
-            version: 1,
-            open: () => {
-              log.push("open");
-              return { load: () => loaded.promise };
-            },
-          });
-          const notes = self.state("notes", NotesSchema, {
-            init: () =>
-              Effect.runPromiseWith(services)(
-                Effect.gen(function* () {
-                  log.push("init");
-                  return yield* Effect.promise(() => db.value.load());
-                }),
-              ),
-          });
-          const count = self.derive([notes], (list) => list.length);
-          self.on("notes", notes, (list) => {
-            log.push(`listener ${list.join(",")}`);
-          });
-          self.task(() =>
-            Effect.runPromiseWith(services)(
-              Effect.sync(() => {
-                log.push(`task ${notes.value.join(",")}`);
-              }),
-            ),
-          );
-          return {
-            notes,
-            count,
-            has: (note) => notes.value.includes(note),
-            add: (note, ctx) => {
-              notes.change(ctx, (draft) => {
-                draft.push(note);
-              });
-            },
-          };
-        });
-        const ref = host.hold(Notes, {});
-        const seen: unknown[] = [];
-        ref.notes.subscribe((value) => seen.push(value));
-        const has = host.root((ctx) => ref.has("a", ctx));
-        yield* Effect.promise(() => until(() => log.includes("init")));
-        assert.equal(ref.status, "loading");
-        loaded.open(["a", "b"]);
-        assert.equal(yield* Effect.promise(() => has), true);
-        assert.equal(ref.count.value, 2);
-        yield* Effect.promise(() => until(() => log.length === 4));
-        assert.deepEqual(log, ["open", "init", "listener a,b", "task a,b"]);
-        assert.deepEqual(
-          seen.filter((value) => value !== undefined),
-          [["a", "b"]],
-        );
-      }),
-    ));
+    Effect.runPromise(runsAfterTheResourcesAreOpen));
 
   it("an init cell cannot be read inside the factory", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        host.serve(Notes, (_input, _principal, self) => {
-          const notes = self.state("notes", NotesSchema, { init: () => [] });
-          const count = self.derive([notes], (list) => list.length);
-          void notes.value;
-          return { notes, count, has: () => false, add: () => {} };
-        });
-        yield* Effect.promise(() =>
-          assert.rejects(
-            host.hold(Notes, {}).ready,
-            (error) => isChordError(error) && error.code === "not_ready",
-          ),
-        );
-      }),
-    ));
+    Effect.runPromise(anInitCellCannotBeRead));
 
   it("a throwing or invalid init fails the activation and closes its resources; the next get tries again", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        let result: () => unknown = () => {
-          throw new Error("db down");
-        };
-        const closed: string[] = [];
-        host.serve(Notes, (_input, _principal, self) => {
-          self.resource("db", {
-            version: 1,
-            open: () => "db",
-            close: (db) => void closed.push(db),
-          });
-          const notes = self.state("notes", NotesSchema, { init: () => result() as string[] });
-          const count = self.derive([notes], (list) => list.length);
-          return { notes, count, has: () => false, add: () => {} };
-        });
-        yield* Effect.promise(() => assert.rejects(host.hold(Notes, {}).ready, /db down/u));
-        assert.deepEqual(closed, ["db"]);
-        result = () => [1];
-        yield* Effect.promise(() =>
-          assert.rejects(
-            host.hold(Notes, {}).ready,
-            (error) => isChordError(error) && error.code === "invalid",
-          ),
-        );
-        assert.deepEqual(closed, ["db", "db"]);
-        result = () => ["ok"];
-        const ref = host.hold(Notes, {});
-        yield* Effect.promise(() => ref.ready);
-        assert.deepEqual(ref.notes.value, ["ok"]);
-      }),
-    ));
+    Effect.runPromise(aThrowingOrInvalidInitFails));
 
-  it("init runs in a root: it can call other objects", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const Source = local("t.source", {
-          version: 1,
-          input: Type.Object({}),
-          members: { all: method(undefined, NotesSchema) },
-        });
-        host.serve(Source, () => ({ all: () => ["from source"] }));
-        host.serve(Notes, (_input, _principal, self) => {
-          const notes = self.state("notes", NotesSchema, {
-            init: (ctx: Ctx) =>
-              Effect.runPromiseWith(services)(
-                Effect.gen(function* () {
-                  const remote = yield* Effect.promise(() => ctx.get(Source, {}));
-                  return yield* Effect.promise(() => remote.all(ctx));
-                }),
-              ),
-          });
-          const count = self.derive([notes], (list) => list.length);
-          return { notes, count, has: () => false, add: () => {} };
-        });
-        const ref = host.hold(Notes, {});
-        yield* Effect.promise(() => ref.ready);
-        assert.deepEqual(ref.notes.value, ["from source"]);
-      }),
-    ));
+  it("init runs in a root: it can call other objects", () => Effect.runPromise(initRunsInARootIt));
 
   describe("reload", () => {
     const facet = (spec: {

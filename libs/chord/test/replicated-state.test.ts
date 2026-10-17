@@ -10,166 +10,203 @@ import {
   replicatedState,
 } from "../src/index.ts";
 
-describe("transactional replicated state", () => {
-  it("publishes one immutable structurally shared revision", () => {
-    const initial = { changed: { value: 1 }, retained: { value: 2 } };
-    const state = replicatedState(initial);
-    const previous = state.value;
-    const deliveries: number[] = [];
-    state.subscribe((_value, _context, delivery) => deliveries.push(delivery.sequence));
+const publishesOneImmutableStructurallySharedRevision = (): void => {
+  const initial = { changed: { value: 1 }, retained: { value: 2 } };
+  const state = replicatedState(initial);
+  const previous = state.value;
+  const deliveries: number[] = [];
+  state.subscribe((_value, _context, delivery) => deliveries.push(delivery.sequence));
+  state.change(BACKGROUND_CONTEXT, (draft) => {
+    draft.changed.value = 3;
+    draft.changed.value = 4;
+  });
+  expect(state.value).toEqual({ changed: { value: 4 }, retained: { value: 2 } });
+  expect(state.value).not.toBe(previous);
+  expect(state.value.changed).not.toBe(previous.changed);
+  expect(state.value.retained).toBe(previous.retained);
+  expect(Object.isFrozen(state.value)).toBe(false);
+  expect(deliveries).toEqual([0, 1]);
+};
+
+const rollsBackCallbackFailuresAndRevokes = (): void => {
+  const state = replicatedState({ nested: { value: 1 } });
+  const previous = state.value;
+  let escaped: Draft<{ value: number }> | undefined;
+  expect(() =>
     state.change(BACKGROUND_CONTEXT, (draft) => {
-      draft.changed.value = 3;
-      draft.changed.value = 4;
-    });
-    expect(state.value).toEqual({ changed: { value: 4 }, retained: { value: 2 } });
-    expect(state.value).not.toBe(previous);
-    expect(state.value.changed).not.toBe(previous.changed);
-    expect(state.value.retained).toBe(previous.retained);
-    expect(Object.isFrozen(state.value)).toBe(false);
-    expect(deliveries).toEqual([0, 1]);
-  });
+      escaped = draft.nested;
+      draft.nested.value = 2;
+      throw new Error("stop");
+    }),
+  ).toThrow("stop");
+  expect(state.value).toBe(previous);
+  expect(() => escaped?.value).toThrow(TypeError);
+};
 
-  it("rolls back callback failures and revokes escaped drafts", () => {
-    const state = replicatedState({ nested: { value: 1 } });
-    const previous = state.value;
-    let escaped: Draft<{ value: number }> | undefined;
-    expect(() =>
-      state.change(BACKGROUND_CONTEXT, (draft) => {
-        escaped = draft.nested;
-        draft.nested.value = 2;
-        throw new Error("stop");
-      }),
-    ).toThrow("stop");
-    expect(state.value).toBe(previous);
-    expect(() => escaped?.value).toThrow(TypeError);
-  });
-
-  it("rejects PromiseLike callbacks and aborts their draft", () => {
-    const state = replicatedState({ value: 0 });
-    const previous = state.value;
-    expect(() =>
-      state.change(BACKGROUND_CONTEXT, ((draft: Draft<{ value: number }>) => {
-        draft.value = 1;
-        return Promise.resolve();
-      }) as (draft: Draft<{ value: number }>) => void),
-    ).toThrow(/synchronous/u);
-    expect(state.value).toBe(previous);
-  });
-
-  it("rejects nested changes and replacements without losing the outer rollback", () => {
-    const state = replicatedState({ left: 0, right: 0 });
-    expect(() =>
-      state.change(BACKGROUND_CONTEXT, (draft) => {
-        draft.left = 1;
-        state.change(BACKGROUND_CONTEXT, (nested) => {
-          nested.right = 2;
-        });
-      }),
-    ).toThrow(/reentrantly/u);
-    expect(state.value).toEqual({ left: 0, right: 0 });
-    expect(() =>
-      state.change(BACKGROUND_CONTEXT, () => {
-        state.replace(BACKGROUND_CONTEXT, { left: 1, right: 2 });
-      }),
-    ).toThrow(/change callback/u);
-    expect(state.value).toEqual({ left: 0, right: 0 });
-  });
-
-  it("queues listener-triggered changes in sequence order", () => {
-    const state = replicatedState({ value: 0 });
-    const deliveries: Array<{ value: number; sequence: number }> = [];
-    const lateDeliveries: Array<{ kind: string; sequence: number }> = [];
-    let nested = false;
-    state.subscribe((_value, _context, delivery) => {
-      if (delivery.kind !== "update" || nested) return;
-      nested = true;
-      state.change(BACKGROUND_CONTEXT, (draft) => {
-        draft.value = 2;
-      });
-      state.subscribe((_lateValue, _lateContext, lateDelivery) =>
-        lateDeliveries.push(lateDelivery),
-      );
-    });
-    state.subscribe((value, _context, delivery) => {
-      if (delivery.kind === "update")
-        deliveries.push({ value: value.value, sequence: delivery.sequence });
-    });
-    state.change(BACKGROUND_CONTEXT, (draft) => {
+const rejectsPromiselikeCallbacksAndAbortsTheir = (): void => {
+  const state = replicatedState({ value: 0 });
+  const previous = state.value;
+  expect(() =>
+    state.change(BACKGROUND_CONTEXT, ((draft: Draft<{ value: number }>) => {
       draft.value = 1;
-    });
-    expect(deliveries).toEqual([
-      { value: 1, sequence: 1 },
-      { value: 2, sequence: 2 },
-    ]);
-    expect(lateDeliveries).toEqual([{ kind: "hydrate", sequence: 2 }]);
-  });
+      return Promise.resolve();
+    }) as (draft: Draft<{ value: number }>) => void),
+  ).toThrow(/synchronous/u);
+  expect(state.value).toBe(previous);
+};
 
-  it("isolates listener failures after committing the revision", () => {
-    const reports: (() => void)[] = [];
-    const spy = vi.spyOn(globalThis, "queueMicrotask").mockImplementation((report) => {
-      reports.push(report);
-    });
-    try {
-      const state = replicatedState({ value: 0 });
-      const received: number[] = [];
-      state.subscribe((_value, _context, delivery) => {
-        if (delivery.kind === "update") throw new Error("listener failed");
+const rejectsNestedChangesAndReplacementsWithout = (): void => {
+  const state = replicatedState({ left: 0, right: 0 });
+  expect(() =>
+    state.change(BACKGROUND_CONTEXT, (draft) => {
+      draft.left = 1;
+      state.change(BACKGROUND_CONTEXT, (nested) => {
+        nested.right = 2;
       });
-      state.subscribe((_value, _context, delivery) => received.push(delivery.sequence));
-      expect(() =>
-        state.change(BACKGROUND_CONTEXT, (draft) => {
-          draft.value = 1;
-        }),
-      ).not.toThrow();
-      expect(state.value).toEqual({ value: 1 });
-      expect(received).toEqual([0, 1]);
-      expect(reports).toHaveLength(1);
-      expect(reports[0]).toThrow("listener failed");
-    } finally {
-      spy.mockRestore();
-    }
-  });
+    }),
+  ).toThrow(/reentrantly/u);
+  expect(state.value).toEqual({ left: 0, right: 0 });
+  expect(() =>
+    state.change(BACKGROUND_CONTEXT, () => {
+      state.replace(BACKGROUND_CONTEXT, { left: 1, right: 2 });
+    }),
+  ).toThrow(/change callback/u);
+  expect(state.value).toEqual({ left: 0, right: 0 });
+};
 
-  it("copies assigned values by value", () => {
-    const external = { value: 1 };
-    const state = replicatedState<{
-      left: { value: number } | null;
-      right: { value: number } | null;
-    }>({
-      left: null,
-      right: null,
-    });
+const queuesListenerTriggeredChangesInSequence = (): void => {
+  const state = replicatedState({ value: 0 });
+  const deliveries: Array<{ value: number; sequence: number }> = [];
+  const lateDeliveries: Array<{ kind: string; sequence: number }> = [];
+  let nested = false;
+  state.subscribe((_value, _context, delivery) => {
+    if (delivery.kind !== "update" || nested) return;
+    nested = true;
     state.change(BACKGROUND_CONTEXT, (draft) => {
-      draft.left = external;
-      draft.right = external;
-      draft.left.value = 2;
+      draft.value = 2;
     });
-    expect(external.value).toBe(1);
-    expect(state.value).toEqual({ left: { value: 2 }, right: { value: 1 } });
-    expect(state.value.left).not.toBe(state.value.right);
+    state.subscribe((_lateValue, _lateContext, lateDelivery) => lateDeliveries.push(lateDelivery));
   });
+  state.subscribe((value, _context, delivery) => {
+    if (delivery.kind === "update")
+      deliveries.push({ value: value.value, sequence: delivery.sequence });
+  });
+  state.change(BACKGROUND_CONTEXT, (draft) => {
+    draft.value = 1;
+  });
+  expect(deliveries).toEqual([
+    { value: 1, sequence: 1 },
+    { value: 2, sequence: 2 },
+  ]);
+  expect(lateDeliveries).toEqual([{ kind: "hydrate", sequence: 2 }]);
+};
 
-  it("takes immutable ownership of alias-free replacements", () => {
-    const state = replicatedState({ left: { value: 1 }, right: { value: 2 } });
-    const replacement = { left: { ...state.value.left }, right: { ...state.value.left } };
-    state.replace(BACKGROUND_CONTEXT, replacement);
-    expect(state.value).toBe(replacement);
-    expect(state.value.left).not.toBe(state.value.right);
-    state.change(BACKGROUND_CONTEXT, (draft) => {
-      draft.left.value = 9;
+const isolatesListenerFailuresAfterCommittingThe = (): void => {
+  const reports: (() => void)[] = [];
+  const spy = vi.spyOn(globalThis, "queueMicrotask").mockImplementation((report) => {
+    reports.push(report);
+  });
+  try {
+    const state = replicatedState({ value: 0 });
+    const received: number[] = [];
+    state.subscribe((_value, _context, delivery) => {
+      if (delivery.kind === "update") throw new Error("listener failed");
     });
-    expect(state.value).toEqual({ left: { value: 9 }, right: { value: 1 } });
-  });
+    state.subscribe((_value, _context, delivery) => received.push(delivery.sequence));
+    expect(() =>
+      state.change(BACKGROUND_CONTEXT, (draft) => {
+        draft.value = 1;
+      }),
+    ).not.toThrow();
+    expect(state.value).toEqual({ value: 1 });
+    expect(received).toEqual([0, 1]);
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toThrow("listener failed");
+  } finally {
+    spy.mockRestore();
+  }
+};
 
-  it("replaces atomically and ignores deeply equal replacements", () => {
-    const state = replicatedState({ value: { nested: 1 }, retained: { nested: 2 } });
-    const previous = state.value;
-    state.replace(BACKGROUND_CONTEXT, { value: { nested: 1 }, retained: { nested: 2 } });
-    expect(state.value).toBe(previous);
-    state.replace(BACKGROUND_CONTEXT, { ...state.value, value: { nested: 2 } });
-    expect(state.value).toEqual({ value: { nested: 2 }, retained: { nested: 2 } });
-    expect(state.value.retained).toBe(previous.retained);
+const copiesAssignedValuesByValue = (): void => {
+  const external = { value: 1 };
+  const state = replicatedState<{
+    left: { value: number } | null;
+    right: { value: number } | null;
+  }>({
+    left: null,
+    right: null,
   });
+  state.change(BACKGROUND_CONTEXT, (draft) => {
+    draft.left = external;
+    draft.right = external;
+    draft.left.value = 2;
+  });
+  expect(external.value).toBe(1);
+  expect(state.value).toEqual({ left: { value: 2 }, right: { value: 1 } });
+  expect(state.value.left).not.toBe(state.value.right);
+};
+
+const takesImmutableOwnershipOfAliasFree = (): void => {
+  const state = replicatedState({ left: { value: 1 }, right: { value: 2 } });
+  const replacement = { left: { ...state.value.left }, right: { ...state.value.left } };
+  state.replace(BACKGROUND_CONTEXT, replacement);
+  expect(state.value).toBe(replacement);
+  expect(state.value.left).not.toBe(state.value.right);
+  state.change(BACKGROUND_CONTEXT, (draft) => {
+    draft.left.value = 9;
+  });
+  expect(state.value).toEqual({ left: { value: 9 }, right: { value: 1 } });
+};
+
+const replacesAtomicallyAndIgnoresDeeplyEqual = (): void => {
+  const state = replicatedState({ value: { nested: 1 }, retained: { nested: 2 } });
+  const previous = state.value;
+  state.replace(BACKGROUND_CONTEXT, { value: { nested: 1 }, retained: { nested: 2 } });
+  expect(state.value).toBe(previous);
+  state.replace(BACKGROUND_CONTEXT, { ...state.value, value: { nested: 2 } });
+  expect(state.value).toEqual({ value: { nested: 2 }, retained: { nested: 2 } });
+  expect(state.value.retained).toBe(previous.retained);
+};
+
+describe("transactional replicated state", () => {
+  it(
+    "publishes one immutable structurally shared revision",
+    publishesOneImmutableStructurallySharedRevision,
+  );
+
+  it(
+    "rolls back callback failures and revokes escaped drafts",
+    rollsBackCallbackFailuresAndRevokes,
+  );
+
+  it(
+    "rejects PromiseLike callbacks and aborts their draft",
+    rejectsPromiselikeCallbacksAndAbortsTheir,
+  );
+
+  it(
+    "rejects nested changes and replacements without losing the outer rollback",
+    rejectsNestedChangesAndReplacementsWithout,
+  );
+
+  it(
+    "queues listener-triggered changes in sequence order",
+    queuesListenerTriggeredChangesInSequence,
+  );
+
+  it(
+    "isolates listener failures after committing the revision",
+    isolatesListenerFailuresAfterCommittingThe,
+  );
+
+  it("copies assigned values by value", copiesAssignedValuesByValue);
+
+  it("takes immutable ownership of alias-free replacements", takesImmutableOwnershipOfAliasFree);
+
+  it(
+    "replaces atomically and ignores deeply equal replacements",
+    replacesAtomicallyAndIgnoresDeeplyEqual,
+  );
 });
 
 type SourceValue = Readonly<{ value: number }>;
@@ -242,136 +279,171 @@ class TestSourceAttachment<T> implements ReplicatedStateSourceAttachment<T> {
   }
 }
 
+const capturesBeforeActivationAndDrainsQueued = (): void => {
+  const initial = Object.freeze({ value: 0 });
+  const first = Object.freeze({ value: 1 });
+  const second = Object.freeze({ value: 2 });
+  const firstOps = Object.freeze([["s", ["value"], 1] as const]);
+  const secondOps = Object.freeze([["s", ["value"], 2] as const]);
+  const source = new TestSource<SourceValue>(initial, 10);
+  source.onAttach = () => {
+    source.commit(first, firstOps);
+    source.commit(second, secondOps);
+  };
+
+  const state = replicatedState(source);
+  const deliveries: Array<{ value: SourceValue; sequence: number }> = [];
+  state.subscribe((value, _context, delivery) =>
+    deliveries.push({ value, sequence: delivery.sequence }),
+  );
+  expect(state.value).toBe(second);
+  expect(deliveries).toEqual([{ value: second, sequence: 2 }]);
+};
+
+const hydratesAtSequenceZeroWhenAttaching = (): void => {
+  const initial = Object.freeze({ value: 0 });
+  const current = Object.freeze({ value: 1 });
+  const source = new TestSource<SourceValue>(initial, 40);
+  source.commit(current, Object.freeze([["s", ["value"], 1] as const]));
+  const state = replicatedState(source);
+  const deliveries: number[] = [];
+  state.subscribe((_value, _context, delivery) => deliveries.push(delivery.sequence));
+  expect(state.value).toBe(current);
+  expect(deliveries).toEqual([0]);
+};
+
+const publishesExactSourceValuesWithoutApplying = (): void => {
+  const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
+  const state = replicatedState(source);
+  const next = Object.freeze({ value: 1 });
+  const ops = Object.freeze([["s", ["value"], 7] as const]);
+  let publishedValue: SourceValue | undefined;
+  state.subscribe((value, _context, delivery) => {
+    if (delivery.kind === "update") publishedValue = value;
+  });
+
+  source.commit(next, ops);
+  expect(state.value).toBe(next);
+  expect(publishedValue).toBe(next);
+};
+
+const buffersReentrantFramesAndSkipsUpdates = (): void => {
+  const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
+  const state = replicatedState(source);
+  const received: number[] = [];
+  const late: Array<{ kind: string; sequence: number; value: number }> = [];
+  let nested = false;
+  state.subscribe((_value, _context, delivery) => {
+    if (delivery.kind !== "update" || delivery.sequence !== 1 || nested) return;
+    nested = true;
+    source.commit(Object.freeze({ value: 2 }), Object.freeze([["s", ["value"], 2] as const]));
+    state.subscribe((lateValue, _lateContext, lateDelivery) =>
+      late.push({ ...lateDelivery, value: lateValue.value }),
+    );
+  });
+  state.subscribe((value, _context, delivery) => {
+    if (delivery.kind === "update") received.push(value.value);
+  });
+
+  source.commit(Object.freeze({ value: 1 }), Object.freeze([["s", ["value"], 1] as const]));
+  expect(received).toEqual([1, 2]);
+  expect(late).toEqual([{ kind: "hydrate", sequence: 2, value: 2 }]);
+};
+
+const reportsListenerFailuresWithoutThrowingThem = (): void => {
+  const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
+  const errors: Error[] = [];
+  const state = replicatedState(source, { onError: (error) => errors.push(error) });
+  const received: number[] = [];
+  state.subscribe((_value, _context, delivery) => {
+    if (delivery.kind === "update") throw new Error("listener failed");
+  });
+  state.subscribe((value, _context, delivery) => {
+    if (delivery.kind === "update") received.push(value.value);
+  });
+
+  expect(() =>
+    source.commit(Object.freeze({ value: 1 }), Object.freeze([["s", ["value"], 1] as const])),
+  ).not.toThrow();
+  source.commit(Object.freeze({ value: 2 }), Object.freeze([["s", ["value"], 2] as const]));
+  expect(received).toEqual([1, 2]);
+  expect(errors.map((error) => error.message)).toEqual(["listener failed", "listener failed"]);
+};
+
+const reportsCursorGapsDisposesTheBroken = (): void => {
+  const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }), 5);
+  const errors: Error[] = [];
+  const state = replicatedState(source, { onError: (error) => errors.push(error) });
+  source.commit(
+    Object.freeze({ value: 2 }),
+    Object.freeze([["s", ["value"], 2] as const]),
+    BACKGROUND_CONTEXT,
+    7,
+  );
+  expect(errors[0]?.message).toContain("expected 6, received 7");
+  expect(source.attachments.size).toBe(0);
+  expect(state.value).toEqual({ value: 0 });
+  source.commit(
+    Object.freeze({ value: 3 }),
+    Object.freeze([["s", ["value"], 3] as const]),
+    BACKGROUND_CONTEXT,
+    8,
+  );
+  expect(state.value).toEqual({ value: 0 });
+};
+
+const keepsAttachmentsIndependentAndDisposesEach = (): void => {
+  const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
+  const first = replicatedState(source);
+  const second = replicatedState(source);
+  expect(source.attachments.size).toBe(2);
+  source.commit(Object.freeze({ value: 1 }), Object.freeze([["s", ["value"], 1] as const]));
+  expect(first.value.value).toBe(1);
+  expect(second.value.value).toBe(1);
+
+  first.dispose();
+  first.dispose();
+  expect(source.attachments.size).toBe(1);
+  source.commit(Object.freeze({ value: 2 }), Object.freeze([["s", ["value"], 2] as const]));
+  expect(first.value.value).toBe(1);
+  expect(second.value.value).toBe(2);
+  second.dispose();
+  expect(source.attachments.size).toBe(0);
+};
+
 describe("authoritative replicated state sources", () => {
-  it("captures before activation and drains queued commits in order", () => {
-    const initial = Object.freeze({ value: 0 });
-    const first = Object.freeze({ value: 1 });
-    const second = Object.freeze({ value: 2 });
-    const firstOps = Object.freeze([["s", ["value"], 1] as const]);
-    const secondOps = Object.freeze([["s", ["value"], 2] as const]);
-    const source = new TestSource<SourceValue>(initial, 10);
-    source.onAttach = () => {
-      source.commit(first, firstOps);
-      source.commit(second, secondOps);
-    };
+  it(
+    "captures before activation and drains queued commits in order",
+    capturesBeforeActivationAndDrainsQueued,
+  );
 
-    const state = replicatedState(source);
-    const deliveries: Array<{ value: SourceValue; sequence: number }> = [];
-    state.subscribe((value, _context, delivery) =>
-      deliveries.push({ value, sequence: delivery.sequence }),
-    );
-    expect(state.value).toBe(second);
-    expect(deliveries).toEqual([{ value: second, sequence: 2 }]);
-  });
+  it(
+    "hydrates at sequence zero when attaching after existing commits",
+    hydratesAtSequenceZeroWhenAttaching,
+  );
 
-  it("hydrates at sequence zero when attaching after existing commits", () => {
-    const initial = Object.freeze({ value: 0 });
-    const current = Object.freeze({ value: 1 });
-    const source = new TestSource<SourceValue>(initial, 40);
-    source.commit(current, Object.freeze([["s", ["value"], 1] as const]));
-    const state = replicatedState(source);
-    const deliveries: number[] = [];
-    state.subscribe((_value, _context, delivery) => deliveries.push(delivery.sequence));
-    expect(state.value).toBe(current);
-    expect(deliveries).toEqual([0]);
-  });
+  it(
+    "publishes exact source values without applying or re-diffing",
+    publishesExactSourceValuesWithoutApplying,
+  );
 
-  it("publishes exact source values without applying or re-diffing", () => {
-    const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
-    const state = replicatedState(source);
-    const next = Object.freeze({ value: 1 });
-    const ops = Object.freeze([["s", ["value"], 7] as const]);
-    let publishedValue: SourceValue | undefined;
-    state.subscribe((value, _context, delivery) => {
-      if (delivery.kind === "update") publishedValue = value;
-    });
+  it(
+    "buffers reentrant frames and skips updates covered by a late hydration",
+    buffersReentrantFramesAndSkipsUpdates,
+  );
 
-    source.commit(next, ops);
-    expect(state.value).toBe(next);
-    expect(publishedValue).toBe(next);
-  });
+  it(
+    "reports listener failures without throwing them into the source",
+    reportsListenerFailuresWithoutThrowingThem,
+  );
 
-  it("buffers reentrant frames and skips updates covered by a late hydration", () => {
-    const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
-    const state = replicatedState(source);
-    const received: number[] = [];
-    const late: Array<{ kind: string; sequence: number; value: number }> = [];
-    let nested = false;
-    state.subscribe((_value, _context, delivery) => {
-      if (delivery.kind !== "update" || delivery.sequence !== 1 || nested) return;
-      nested = true;
-      source.commit(Object.freeze({ value: 2 }), Object.freeze([["s", ["value"], 2] as const]));
-      state.subscribe((lateValue, _lateContext, lateDelivery) =>
-        late.push({ ...lateDelivery, value: lateValue.value }),
-      );
-    });
-    state.subscribe((value, _context, delivery) => {
-      if (delivery.kind === "update") received.push(value.value);
-    });
+  it(
+    "reports cursor gaps, disposes the broken attachment, and ignores later frames",
+    reportsCursorGapsDisposesTheBroken,
+  );
 
-    source.commit(Object.freeze({ value: 1 }), Object.freeze([["s", ["value"], 1] as const]));
-    expect(received).toEqual([1, 2]);
-    expect(late).toEqual([{ kind: "hydrate", sequence: 2, value: 2 }]);
-  });
-
-  it("reports listener failures without throwing them into the source", () => {
-    const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
-    const errors: Error[] = [];
-    const state = replicatedState(source, { onError: (error) => errors.push(error) });
-    const received: number[] = [];
-    state.subscribe((_value, _context, delivery) => {
-      if (delivery.kind === "update") throw new Error("listener failed");
-    });
-    state.subscribe((value, _context, delivery) => {
-      if (delivery.kind === "update") received.push(value.value);
-    });
-
-    expect(() =>
-      source.commit(Object.freeze({ value: 1 }), Object.freeze([["s", ["value"], 1] as const])),
-    ).not.toThrow();
-    source.commit(Object.freeze({ value: 2 }), Object.freeze([["s", ["value"], 2] as const]));
-    expect(received).toEqual([1, 2]);
-    expect(errors.map((error) => error.message)).toEqual(["listener failed", "listener failed"]);
-  });
-
-  it("reports cursor gaps, disposes the broken attachment, and ignores later frames", () => {
-    const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }), 5);
-    const errors: Error[] = [];
-    const state = replicatedState(source, { onError: (error) => errors.push(error) });
-    source.commit(
-      Object.freeze({ value: 2 }),
-      Object.freeze([["s", ["value"], 2] as const]),
-      BACKGROUND_CONTEXT,
-      7,
-    );
-    expect(errors[0]?.message).toContain("expected 6, received 7");
-    expect(source.attachments.size).toBe(0);
-    expect(state.value).toEqual({ value: 0 });
-    source.commit(
-      Object.freeze({ value: 3 }),
-      Object.freeze([["s", ["value"], 3] as const]),
-      BACKGROUND_CONTEXT,
-      8,
-    );
-    expect(state.value).toEqual({ value: 0 });
-  });
-
-  it("keeps attachments independent and disposes each idempotently", () => {
-    const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
-    const first = replicatedState(source);
-    const second = replicatedState(source);
-    expect(source.attachments.size).toBe(2);
-    source.commit(Object.freeze({ value: 1 }), Object.freeze([["s", ["value"], 1] as const]));
-    expect(first.value.value).toBe(1);
-    expect(second.value.value).toBe(1);
-
-    first.dispose();
-    first.dispose();
-    expect(source.attachments.size).toBe(1);
-    source.commit(Object.freeze({ value: 2 }), Object.freeze([["s", ["value"], 2] as const]));
-    expect(first.value.value).toBe(1);
-    expect(second.value.value).toBe(2);
-    second.dispose();
-    expect(source.attachments.size).toBe(0);
-  });
+  it(
+    "keeps attachments independent and disposes each idempotently",
+    keepsAttachmentsIndependentAndDisposesEach,
+  );
 });

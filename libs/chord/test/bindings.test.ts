@@ -92,200 +92,205 @@ function setup(
   return { server, browser, link, errors };
 }
 
+const nReferencesToOneObjectOne = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const { server, browser, link } = setup();
+  const Panel = local("t.e8-panel", {
+    version: 1,
+    input: Type.Object({}),
+    members: { count: Type.Number() },
+  });
+  browser.serve(Panel, (_input, _principal, self) => {
+    const notes = self.get(Notes, {});
+    return { count: self.derive([notes.notes], (list) => list.length) };
+  });
+  const a = browser.hold(Notes, {});
+  const b = browser.hold(Notes, { list: "main" });
+  const panel = browser.hold(Panel, {});
+  yield* Effect.promise(() => Promise.all([a.ready, b.ready, panel.ready]));
+  const viaCtx = yield* Effect.promise(() =>
+    browser.root((ctx) =>
+      Effect.runPromiseWith(services)(
+        Effect.gen(function* () {
+          const ref = yield* Effect.promise(() => ctx.get(Notes, {}));
+          return ref.title.value;
+        }),
+      ),
+    ),
+  );
+  assert.equal(viaCtx, "untitled");
+  assert.equal(link.count("sent", "hold"), 1, "one hold for every reference");
+  const snaps = stateFrames(link.received).filter((frame) => frame.as === "snap");
+  assert.deepEqual(snaps.map((frame) => frame.m).sort(), ["notes", "title"]);
+
+  const before = stateFrames(link.received).length;
+  yield* Effect.promise(() => a.add("milk"));
+  yield* Effect.promise(() =>
+    until(
+      () => a.notes.value.length === 1 && b.notes.value.length === 1 && panel.count.value === 1,
+    ),
+  );
+  yield* Effect.promise(() => tick());
+  assert.equal(
+    stateFrames(link.received).length - before,
+    1,
+    "one delta frame for one change, whatever N",
+  );
+
+  const sent = link.traffic("sent").length;
+  a.release();
+  panel.release();
+  yield* Effect.promise(() => sleep(5));
+  assert.equal(link.traffic("sent").length, sent, "releasing all but one reference sends nothing");
+  b.release();
+  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  yield* Effect.promise(() => browser.close());
+  yield* Effect.promise(() => server.close());
+});
+
+const aHeldReferenceStaysSubscribedWithout = Effect.gen(function* () {
+  const { server, browser } = setup();
+  const notes = browser.hold(Notes, {});
+  yield* Effect.promise(() => notes.ready);
+  assert.deepEqual(notes.notes.value, []);
+  yield* Effect.promise(() => notes.add("bread"));
+  yield* Effect.promise(() => until(() => notes.notes.value.length === 1));
+  assert.equal(notes.title.value, "untitled");
+  yield* Effect.promise(() => browser.close());
+  yield* Effect.promise(() => server.close());
+});
+
 describe("shared bindings: traffic", () => {
   it("N references to one object: one hold, one snapshot per member, one frame per change, one release", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const { server, browser, link } = setup();
-        const Panel = local("t.e8-panel", {
-          version: 1,
-          input: Type.Object({}),
-          members: { count: Type.Number() },
-        });
-        browser.serve(Panel, (_input, _principal, self) => {
-          const notes = self.get(Notes, {});
-          return { count: self.derive([notes.notes], (list) => list.length) };
-        });
-        const a = browser.hold(Notes, {});
-        const b = browser.hold(Notes, { list: "main" });
-        const panel = browser.hold(Panel, {});
-        yield* Effect.promise(() => Promise.all([a.ready, b.ready, panel.ready]));
-        const viaCtx = yield* Effect.promise(() =>
-          browser.root((ctx) =>
-            Effect.runPromiseWith(services)(
-              Effect.gen(function* () {
-                const ref = yield* Effect.promise(() => ctx.get(Notes, {}));
-                return ref.title.value;
-              }),
-            ),
-          ),
-        );
-        assert.equal(viaCtx, "untitled");
-        assert.equal(link.count("sent", "hold"), 1, "one hold for every reference");
-        const snaps = stateFrames(link.received).filter((frame) => frame.as === "snap");
-        assert.deepEqual(snaps.map((frame) => frame.m).sort(), ["notes", "title"]);
-
-        const before = stateFrames(link.received).length;
-        yield* Effect.promise(() => a.add("milk"));
-        yield* Effect.promise(() =>
-          until(
-            () =>
-              a.notes.value.length === 1 && b.notes.value.length === 1 && panel.count.value === 1,
-          ),
-        );
-        yield* Effect.promise(() => tick());
-        assert.equal(
-          stateFrames(link.received).length - before,
-          1,
-          "one delta frame for one change, whatever N",
-        );
-
-        const sent = link.traffic("sent").length;
-        a.release();
-        panel.release();
-        yield* Effect.promise(() => sleep(5));
-        assert.equal(
-          link.traffic("sent").length,
-          sent,
-          "releasing all but one reference sends nothing",
-        );
-        b.release();
-        yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
-        yield* Effect.promise(() => browser.close());
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(nReferencesToOneObjectOne));
 
   it("a held reference stays subscribed without listeners; values are readable at once after ready", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { server, browser } = setup();
-        const notes = browser.hold(Notes, {});
-        yield* Effect.promise(() => notes.ready);
-        assert.deepEqual(notes.notes.value, []);
-        yield* Effect.promise(() => notes.add("bread"));
-        yield* Effect.promise(() => until(() => notes.notes.value.length === 1));
-        assert.equal(notes.title.value, "untitled");
-        yield* Effect.promise(() => browser.close());
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(aHeldReferenceStaysSubscribedWithout));
+});
+
+const aLingeringBindingKeepsItsHold = Effect.gen(function* () {
+  const { server, browser, link } = setup({ linger: { types: { [Notes.name]: 40 } } });
+  const first = yield* Effect.promise(() => browser.get(Notes, {}));
+  const frames = link.traffic("received").length;
+  first.release();
+  yield* Effect.promise(() => sleep(10));
+  assert.equal(link.count("sent", "release"), 0, "not released before the linger");
+  for (let i = 0; i < 3; i++) {
+    const again = yield* Effect.promise(() => browser.get(Notes, {}));
+    assert.deepEqual(again.notes.value, []);
+    again.release();
+  }
+  assert.equal(link.count("sent", "hold"), 1);
+  assert.equal(link.traffic("received").length, frames, "nothing new crossed the link");
+  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  yield* Effect.promise(() => browser.close());
+  yield* Effect.promise(() => server.close());
+});
+
+const atMostCapBindingsLingerThe = Effect.gen(function* () {
+  const { server, browser, link } = setup({
+    linger: { types: { [Notes.name]: 10_000 }, cap: 1 },
+  });
+  const a = yield* Effect.promise(() => browser.get(Notes, { list: "a" }));
+  const b = yield* Effect.promise(() => browser.get(Notes, { list: "b" }));
+  a.release();
+  yield* Effect.promise(() => sleep(5));
+  assert.equal(link.count("sent", "release"), 0);
+  b.release();
+  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  const release = link.sent.find((frame) => frame.t === "release");
+  const holdOfA = link.sent.find(
+    (frame) => frame.t === "hold" && (frame.input as { list: string }).list === "a",
+  );
+  assert.equal(release?.t === "release" ? release.id : 0, holdOfA?.t === "hold" ? holdOfA.id : -1);
+  yield* Effect.promise(() => browser.close());
+  yield* Effect.promise(() => server.close());
 });
 
 describe("shared bindings: linger", () => {
   it("a lingering binding keeps its hold and state; a reference taken meanwhile costs nothing on the link", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { server, browser, link } = setup({ linger: { types: { [Notes.name]: 40 } } });
-        const first = yield* Effect.promise(() => browser.get(Notes, {}));
-        const frames = link.traffic("received").length;
-        first.release();
-        yield* Effect.promise(() => sleep(10));
-        assert.equal(link.count("sent", "release"), 0, "not released before the linger");
-        for (let i = 0; i < 3; i++) {
-          const again = yield* Effect.promise(() => browser.get(Notes, {}));
-          assert.deepEqual(again.notes.value, []);
-          again.release();
-        }
-        assert.equal(link.count("sent", "hold"), 1);
-        assert.equal(link.traffic("received").length, frames, "nothing new crossed the link");
-        yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
-        yield* Effect.promise(() => browser.close());
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(aLingeringBindingKeepsItsHold));
 
   it("at most `cap` bindings linger: the least recently released goes first", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { server, browser, link } = setup({
-          linger: { types: { [Notes.name]: 10_000 }, cap: 1 },
-        });
-        const a = yield* Effect.promise(() => browser.get(Notes, { list: "a" }));
-        const b = yield* Effect.promise(() => browser.get(Notes, { list: "b" }));
-        a.release();
-        yield* Effect.promise(() => sleep(5));
-        assert.equal(link.count("sent", "release"), 0);
-        b.release();
-        yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
-        const release = link.sent.find((frame) => frame.t === "release");
-        const holdOfA = link.sent.find(
-          (frame) => frame.t === "hold" && (frame.input as { list: string }).list === "a",
-        );
-        assert.equal(
-          release?.t === "release" ? release.id : 0,
-          holdOfA?.t === "hold" ? holdOfA.id : -1,
-        );
-        yield* Effect.promise(() => browser.close());
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(atMostCapBindingsLingerThe));
+});
+
+const normalizedEqualInputsAndEqualPrincipal = Effect.gen(function* () {
+  const server = createHost({
+    self: { kind: "host" },
+    name: "server",
+    onError: () => {},
+  });
+  const NotesV2 = remote("t.e8-notes", {
+    version: 2,
+    input: Type.Object({ list: Type.Optional(Type.String({ default: "main" })) }),
+    host: hostNamed("server"),
+    variants: {
+      main: {
+        state: { notes: NoteSchema, title: Type.String() },
+        methods: {
+          add: method(Type.String()),
+          rename: method(Type.String()),
+          clear: method(),
+        },
+      },
+    },
+  });
+  server.serve(
+    NotesV2,
+    (_input, _principal, self) => {
+      const notes = self.state("notes", NoteSchema, []);
+      const title = self.state("title", Type.String(), "untitled");
+      return {
+        variant: "main",
+        notes,
+        title,
+        add: () => {},
+        rename: () => {},
+        clear: () => {},
+      };
+    },
+    { accepts: { 1: (current) => current } },
+  );
+  const [down, up] = memoryLinkPair();
+  server.accept(down, { principal: { worker: "w" }, kind: "host", name: "session:w" });
+  const link = new CountingLink(up);
+  const worker = createHost<unknown>({
+    self: { kind: "host" },
+    name: "session:w",
+    upstream: { link, principal: { kind: "server" } },
+    onError: () => {},
+  });
+  const refs = [
+    worker.hold(Notes, {}),
+    worker.hold(Notes, { list: "main" }),
+    worker.hold(Notes, {}, { principal: { user: "a", grant: 1 } }),
+    worker.hold(Notes, {}, { principal: { grant: 1, user: "a" } }),
+    worker.hold(Notes, {}, { principal: { user: "a", grant: 2 } }),
+    worker.hold(NotesV2, {}),
+  ];
+  yield* Effect.promise(() => Promise.all(refs.map((ref) => ref.ready)));
+  assert.equal(link.count("sent", "hold"), 4);
+  yield* Effect.promise(() => worker.close());
+  yield* Effect.promise(() => server.close());
 });
 
 describe("shared bindings: identity", () => {
   it("normalized-equal inputs and equal principal keys share; other principals and fingerprints do not", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const server = createHost({
-          self: { kind: "host" },
-          name: "server",
-          onError: () => {},
-        });
-        const NotesV2 = remote("t.e8-notes", {
-          version: 2,
-          input: Type.Object({ list: Type.Optional(Type.String({ default: "main" })) }),
-          host: hostNamed("server"),
-          variants: {
-            main: {
-              state: { notes: NoteSchema, title: Type.String() },
-              methods: {
-                add: method(Type.String()),
-                rename: method(Type.String()),
-                clear: method(),
-              },
-            },
-          },
-        });
-        server.serve(
-          NotesV2,
-          (_input, _principal, self) => {
-            const notes = self.state("notes", NoteSchema, []);
-            const title = self.state("title", Type.String(), "untitled");
-            return {
-              variant: "main",
-              notes,
-              title,
-              add: () => {},
-              rename: () => {},
-              clear: () => {},
-            };
-          },
-          { accepts: { 1: (current) => current } },
-        );
-        const [down, up] = memoryLinkPair();
-        server.accept(down, { principal: { worker: "w" }, kind: "host", name: "session:w" });
-        const link = new CountingLink(up);
-        const worker = createHost<unknown>({
-          self: { kind: "host" },
-          name: "session:w",
-          upstream: { link, principal: { kind: "server" } },
-          onError: () => {},
-        });
-        const refs = [
-          worker.hold(Notes, {}),
-          worker.hold(Notes, { list: "main" }),
-          worker.hold(Notes, {}, { principal: { user: "a", grant: 1 } }),
-          worker.hold(Notes, {}, { principal: { grant: 1, user: "a" } }),
-          worker.hold(Notes, {}, { principal: { user: "a", grant: 2 } }),
-          worker.hold(NotesV2, {}),
-        ];
-        yield* Effect.promise(() => Promise.all(refs.map((ref) => ref.ready)));
-        assert.equal(link.count("sent", "hold"), 4);
-        yield* Effect.promise(() => worker.close());
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(normalizedEqualInputsAndEqualPrincipal));
+});
+
+const readingBeforeTheFirstHydrationThrows = Effect.gen(function* () {
+  const { server, browser } = setup();
+  const notes = browser.hold(Notes, {});
+  assert.throws(
+    () => notes.notes.value,
+    (error) => isChordError(error, "not_ready"),
+  );
+  yield* Effect.promise(() => notes.ready);
+  assert.deepEqual(notes.notes.value, []);
+  yield* Effect.promise(() => browser.close());
+  yield* Effect.promise(() => server.close());
 });
 
 describe("hydration over a link", () => {
@@ -358,57 +363,44 @@ describe("hydration over a link", () => {
     ));
 
   it("reading before the first hydration throws not_ready", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { server, browser } = setup();
-        const notes = browser.hold(Notes, {});
-        assert.throws(
-          () => notes.notes.value,
-          (error) => isChordError(error, "not_ready"),
-        );
-        yield* Effect.promise(() => notes.ready);
-        assert.deepEqual(notes.notes.value, []);
-        yield* Effect.promise(() => browser.close());
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(readingBeforeTheFirstHydrationThrows));
+});
+
+const transferNoStateAloneAFull = Effect.gen(function* () {
+  const { server, browser, link } = setup();
+  const caller = browser.hold(Notes, {}, { state: false });
+  yield* Effect.promise(() => caller.ready);
+  yield* Effect.promise(() => caller.add("x"));
+  const hold = link.sent.find((frame) => frame.t === "hold");
+  assert.ok(hold?.t === "hold" && hold.state === false);
+  assert.deepEqual(stateFrames(link.received), []);
+  assert.throws(
+    () => caller.notes.value,
+    (error) => isChordError(error, "not_ready"),
+  );
+
+  const viewer = browser.hold(Notes, {});
+  yield* Effect.promise(() => viewer.ready);
+  assert.deepEqual(viewer.notes.value, ["x"]);
+  assert.equal(link.count("sent", "sub"), 1);
+  assert.equal(link.count("sent", "hold"), 1, "the same hold");
+  viewer.release();
+  yield* Effect.promise(() => until(() => link.count("sent", "unsub") === 1));
+  const after = stateFrames(link.received).length;
+  yield* Effect.promise(() => caller.add("y"));
+  yield* Effect.promise(() => sleep(5));
+  assert.equal(
+    stateFrames(link.received).length,
+    after,
+    "no state once only method-only references remain",
+  );
+  yield* Effect.promise(() => browser.close());
+  yield* Effect.promise(() => server.close());
 });
 
 describe("method-only references (state: false)", () => {
   it("transfer no state alone; a full reference joining starts it once; its release stops it", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { server, browser, link } = setup();
-        const caller = browser.hold(Notes, {}, { state: false });
-        yield* Effect.promise(() => caller.ready);
-        yield* Effect.promise(() => caller.add("x"));
-        const hold = link.sent.find((frame) => frame.t === "hold");
-        assert.ok(hold?.t === "hold" && hold.state === false);
-        assert.deepEqual(stateFrames(link.received), []);
-        assert.throws(
-          () => caller.notes.value,
-          (error) => isChordError(error, "not_ready"),
-        );
-
-        const viewer = browser.hold(Notes, {});
-        yield* Effect.promise(() => viewer.ready);
-        assert.deepEqual(viewer.notes.value, ["x"]);
-        assert.equal(link.count("sent", "sub"), 1);
-        assert.equal(link.count("sent", "hold"), 1, "the same hold");
-        viewer.release();
-        yield* Effect.promise(() => until(() => link.count("sent", "unsub") === 1));
-        const after = stateFrames(link.received).length;
-        yield* Effect.promise(() => caller.add("y"));
-        yield* Effect.promise(() => sleep(5));
-        assert.equal(
-          stateFrames(link.received).length,
-          after,
-          "no state once only method-only references remain",
-        );
-        yield* Effect.promise(() => browser.close());
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(transferNoStateAloneAFull));
 });
 
 describe("origins of client holds", () => {
@@ -540,25 +532,25 @@ describe("origins of client holds", () => {
     ));
 });
 
+const aVersion3PeerIsRefused = Effect.gen(function* () {
+  const { server, browser, link } = setup();
+  yield* Effect.promise(() => browser.hold(Notes, {}).ready);
+  const shape = link.received.find((frame) => frame.t === "shape");
+  assert.ok(shape !== undefined && !("codeVersion" in shape));
+  assert.deepEqual(shape.t === "shape" ? [...shape.state].sort() : [], ["notes", "title"]);
+
+  const [down, raw] = memoryLinkPair();
+  server.accept(down, { principal: { user: "old" } });
+  const closed = new Promise<string>((resolve) => (raw as Link).onClose(resolve));
+  raw.receive(() => {});
+  raw.send({ t: "hello", protocol: 3, name: "old", kind: "client", codeVersion: 0 });
+  assert.equal(yield* Effect.promise(() => closed), `protocol-version ${PROTOCOL_VERSION}`);
+  assert.equal(PROTOCOL_VERSION, 4);
+  yield* Effect.promise(() => browser.close());
+  yield* Effect.promise(() => server.close());
+});
+
 describe("protocol version 4", () => {
   it("a version 3 peer is refused; shapes carry no code version", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { server, browser, link } = setup();
-        yield* Effect.promise(() => browser.hold(Notes, {}).ready);
-        const shape = link.received.find((frame) => frame.t === "shape");
-        assert.ok(shape !== undefined && !("codeVersion" in shape));
-        assert.deepEqual(shape.t === "shape" ? [...shape.state].sort() : [], ["notes", "title"]);
-
-        const [down, raw] = memoryLinkPair();
-        server.accept(down, { principal: { user: "old" } });
-        const closed = new Promise<string>((resolve) => (raw as Link).onClose(resolve));
-        raw.receive(() => {});
-        raw.send({ t: "hello", protocol: 3, name: "old", kind: "client", codeVersion: 0 });
-        assert.equal(yield* Effect.promise(() => closed), `protocol-version ${PROTOCOL_VERSION}`);
-        assert.equal(PROTOCOL_VERSION, 4);
-        yield* Effect.promise(() => browser.close());
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(aVersion3PeerIsRefused));
 });

@@ -62,162 +62,249 @@ const Item = local("t.item", {
 
 const abortController = (): AbortController => new AbortController();
 
+const case1AFailingListenerSubscriptionFails = Effect.gen(function* () {
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const sources = {
+    a: emitter<number>(),
+    b: emitter<number>({ failSubscribe: true }),
+    c: emitter<number>(),
+  };
+  const facet = (version: string, listen: boolean): Facet => ({
+    name: "item",
+    setup: (api) =>
+      api.serve(Item, ({ id }, _principal, self) => {
+        if (listen) self.on("events", sources[id as "a"], () => {});
+        return { version: () => version };
+      }),
+  });
+  host.install(facet("v1", false));
+  const refs = ["a", "b", "c"].map((id) => host.hold(Item, { id }));
+  yield* Effect.promise(() => Promise.all(refs.map((ref) => ref.ready)));
+  const codeVersion = host.codeVersion;
+  yield* Effect.promise(() => assert.rejects(host.reload([facet("v2", true)]), /subscribe fails/u));
+  assert.equal(host.codeVersion, codeVersion);
+  assert.deepEqual(yield* Effect.promise(() => Promise.all(refs.map((ref) => ref.version()))), [
+    "v1",
+    "v1",
+    "v1",
+  ]);
+  assert.equal(sources.a.size, 0);
+  assert.equal(sources.c.size, 0);
+});
+
+const case2MigrationIsValidatedAgainstThe = Effect.gen(function* () {
+  const host = createHost({ self: { kind: "host" }, dev: true, onError: () => {} });
+  const V1 = remote("t.counted", {
+    version: 1,
+    input: Type.Object({}),
+    host: hostNamed("host"),
+    variants: { main: { state: { count: Type.Object({ n: Type.Number() }) } } },
+  });
+  const V2 = remote("t.counted", {
+    version: 2,
+    input: Type.Object({}),
+    host: hostNamed("host"),
+    variants: { main: { state: { count: Type.Object({ total: Type.Number() }) } } },
+  });
+  host.install({
+    name: "counted",
+    setup: (api) =>
+      api.serve(
+        V1,
+        (_input, _principal, self) => ({
+          variant: "main",
+          count: self.state("count", Type.Object({ n: Type.Number() }), { n: 3 }),
+        }),
+        { linger: 60_000 },
+      ),
+  });
+  const first = host.hold(V1, {});
+  yield* Effect.promise(() => first.ready);
+  first.release();
+  yield* Effect.promise(() =>
+    host.reload([
+      {
+        name: "counted",
+        setup: (api) =>
+          api.serve(
+            V2,
+            (_input, _principal, self) => ({
+              variant: "main",
+              count: self.state(
+                "count",
+                Type.Object({ total: Type.Number() }),
+                { total: 0 },
+                { version: 2, migrate: (old) => ({ total: (old as { n: number }).n }) },
+              ),
+            }),
+            { linger: 60_000 },
+          ),
+      },
+    ]),
+  );
+  const second = host.hold(V2, {});
+  const values: unknown[] = [];
+  second.count.subscribe((value) => values.push(value));
+  yield* Effect.promise(() => second.ready);
+  yield* Effect.promise(() => ticks());
+  assert.deepEqual(second.count.value, { total: 3 });
+});
+
+const case1ACommitThatStillFails = Effect.gen(function* () {
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  host.install({
+    name: "item",
+    setup: (api) => api.serve(Item, () => ({ version: () => "v1" })),
+  });
+  const ref = host.hold(Item, { id: "a" });
+  yield* Effect.promise(() => ref.ready);
+  const objects = (host as unknown as { objects: Map<string, { startTasks(): void }> }).objects;
+  for (const object of objects.values()) {
+    object.startTasks = () => {
+      throw new Error("install step fails");
+    };
+  }
+  yield* Effect.promise(() =>
+    assert.rejects(
+      host.reload([
+        { name: "item", setup: (api) => api.serve(Item, () => ({ version: () => "v2" })) },
+      ]),
+      /install step fails/u,
+    ),
+  );
+  yield* Effect.promise(() =>
+    assert.rejects(
+      ref.version(),
+      (error) => isChordError(error, "unavailable") && error.reason === "host_failed",
+    ),
+  );
+});
+
+const reentrantObserversCallingAnotherObjectDuring = Effect.gen(function* () {
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const Other = local("t.other", {
+    version: 1,
+    input: Type.Object({}),
+    members: { version: method(undefined, Type.String()) },
+  });
+  const facet = (version: string): Facet => ({
+    name: "pair",
+    setup: (api) => {
+      api.serve(Item, () => ({ version: () => version }));
+      api.serve(Other, () => ({ version: () => version }));
+    },
+  });
+  host.install(facet("v1"));
+  const item = host.hold(Item, { id: "a" });
+  const other = host.hold(Other, {});
+  yield* Effect.promise(() => Promise.all([item.ready, other.ready]));
+  const seen: Promise<string>[] = [];
+  item.onShape(() => seen.push(other.version()));
+  yield* Effect.promise(() => host.reload([facet("v2")]));
+  assert.deepEqual(yield* Effect.promise(() => Promise.all(seen)), ["v2"]);
+});
+
 describe("review: reload commit", () => {
   it("#1 a failing listener subscription fails prepare; the code version and all objects stay unchanged", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const sources = {
-          a: emitter<number>(),
-          b: emitter<number>({ failSubscribe: true }),
-          c: emitter<number>(),
-        };
-        const facet = (version: string, listen: boolean): Facet => ({
-          name: "item",
-          setup: (api) =>
-            api.serve(Item, ({ id }, _principal, self) => {
-              if (listen) self.on("events", sources[id as "a"], () => {});
-              return { version: () => version };
-            }),
-        });
-        host.install(facet("v1", false));
-        const refs = ["a", "b", "c"].map((id) => host.hold(Item, { id }));
-        yield* Effect.promise(() => Promise.all(refs.map((ref) => ref.ready)));
-        const codeVersion = host.codeVersion;
-        yield* Effect.promise(() =>
-          assert.rejects(host.reload([facet("v2", true)]), /subscribe fails/u),
-        );
-        assert.equal(host.codeVersion, codeVersion);
-        assert.deepEqual(
-          yield* Effect.promise(() => Promise.all(refs.map((ref) => ref.version()))),
-          ["v1", "v1", "v1"],
-        );
-        assert.equal(sources.a.size, 0);
-        assert.equal(sources.c.size, 0);
-      }),
-    ));
+    Effect.runPromise(case1AFailingListenerSubscriptionFails));
 
   it("#2 migration is validated against the new remote schemas, not the obsolete ones (dev mode)", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = createHost({ self: { kind: "host" }, dev: true, onError: () => {} });
-        const V1 = remote("t.counted", {
-          version: 1,
-          input: Type.Object({}),
-          host: hostNamed("host"),
-          variants: { main: { state: { count: Type.Object({ n: Type.Number() }) } } },
-        });
-        const V2 = remote("t.counted", {
-          version: 2,
-          input: Type.Object({}),
-          host: hostNamed("host"),
-          variants: { main: { state: { count: Type.Object({ total: Type.Number() }) } } },
-        });
-        host.install({
-          name: "counted",
-          setup: (api) =>
-            api.serve(
-              V1,
-              (_input, _principal, self) => ({
-                variant: "main",
-                count: self.state("count", Type.Object({ n: Type.Number() }), { n: 3 }),
-              }),
-              { linger: 60_000 },
-            ),
-        });
-        const first = host.hold(V1, {});
-        yield* Effect.promise(() => first.ready);
-        first.release();
-        yield* Effect.promise(() =>
-          host.reload([
-            {
-              name: "counted",
-              setup: (api) =>
-                api.serve(
-                  V2,
-                  (_input, _principal, self) => ({
-                    variant: "main",
-                    count: self.state(
-                      "count",
-                      Type.Object({ total: Type.Number() }),
-                      { total: 0 },
-                      { version: 2, migrate: (old) => ({ total: (old as { n: number }).n }) },
-                    ),
-                  }),
-                  { linger: 60_000 },
-                ),
-            },
-          ]),
-        );
-        const second = host.hold(V2, {});
-        const values: unknown[] = [];
-        second.count.subscribe((value) => values.push(value));
-        yield* Effect.promise(() => second.ready);
-        yield* Effect.promise(() => ticks());
-        assert.deepEqual(second.count.value, { total: 3 });
-      }),
-    ));
+    Effect.runPromise(case2MigrationIsValidatedAgainstThe));
 
   it("#1 a commit that still fails midway fails the host terminally (no half-published code version serving work)", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        host.install({
-          name: "item",
-          setup: (api) => api.serve(Item, () => ({ version: () => "v1" })),
-        });
-        const ref = host.hold(Item, { id: "a" });
-        yield* Effect.promise(() => ref.ready);
-        const objects = (host as unknown as { objects: Map<string, { startTasks(): void }> })
-          .objects;
-        for (const object of objects.values()) {
-          object.startTasks = () => {
-            throw new Error("install step fails");
-          };
-        }
-        yield* Effect.promise(() =>
-          assert.rejects(
-            host.reload([
-              { name: "item", setup: (api) => api.serve(Item, () => ({ version: () => "v2" })) },
-            ]),
-            /install step fails/u,
-          ),
-        );
-        yield* Effect.promise(() =>
-          assert.rejects(
-            ref.version(),
-            (error) => isChordError(error, "unavailable") && error.reason === "host_failed",
-          ),
-        );
-      }),
-    ));
+    Effect.runPromise(case1ACommitThatStillFails));
 
   it("reentrant observers calling another object during a commit see the whole new code version", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const Other = local("t.other", {
+    Effect.runPromise(reentrantObserversCallingAnotherObjectDuring));
+});
+
+const case5DisposalWaitsForRunningMethods = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const Worker = local("t.busy", {
+    version: 1,
+    input: Type.Object({ id: Type.String() }),
+    members: { work: method(undefined, Type.Boolean()) },
+  });
+  const log: string[] = [];
+  let go = latch();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  host.serve(Worker, ({ id }, _principal, self) => {
+    const connResource = self.resource("conn", {
+      version: 1,
+      open: () => ({ closed: false }),
+      close: (conn) => {
+        conn.closed = true;
+        log.push(`close ${id}`);
+      },
+    });
+    return {
+      work: () =>
+        Effect.runPromiseWith(services)(
+          Effect.gen(function* () {
+            yield* Effect.promise(() => go.promise);
+            log.push(`done ${id}`);
+            return connResource.value.closed;
+          }),
+        ),
+    };
+  });
+  const released = host.hold(Worker, { id: "r" });
+  const call = released.work();
+  yield* Effect.promise(() => ticks());
+  released.release();
+  yield* Effect.promise(() => ticks());
+  go.open();
+  assert.equal(yield* Effect.promise(() => call), false);
+  yield* Effect.promise(() => ticks());
+  assert.deepEqual(log, ["done r", "close r"]);
+
+  go = latch();
+  log.length = 0;
+  const forced = host.hold(Worker, { id: "f" }, { principal: { user: "u" } });
+  const forcedCall = forced.work();
+  yield* Effect.promise(() => ticks());
+  const invalidated = host.invalidatePrincipal(
+    (principal) => (principal as { user?: string }).user === "u",
+  );
+  yield* Effect.promise(() => ticks());
+  assert.equal(forced.status, "gone");
+  assert.deepEqual(log, []);
+  go.open();
+  yield* Effect.promise(() => invalidated);
+  assert.equal(yield* Effect.promise(() => forcedCall), false);
+  assert.deepEqual(log, ["done f", "close f"]);
+});
+
+const case6ARegistryConflictFoundWhile = Effect.gen(function* () {
+  const errors: unknown[] = [];
+  const host = createHost({ self: { kind: "host" }, onError: (error) => errors.push(error) });
+  const Routes = defineRegistry<string>("t.review-routes");
+  const log: string[] = [];
+  const types = ["t.eager-a", "t.eager-b"].map((name) =>
+    local(name, { version: 1, input: Type.Object({}) }),
+  );
+  for (const type of types) {
+    host.serve(
+      type,
+      (_input, _principal, self) => {
+        self.resource("r", {
           version: 1,
-          input: Type.Object({}),
-          members: { version: method(undefined, Type.String()) },
+          open: () => void log.push(`open ${type.name}`),
+          close: () => void log.push(`close ${type.name}`),
         });
-        const facet = (version: string): Facet => ({
-          name: "pair",
-          setup: (api) => {
-            api.serve(Item, () => ({ version: () => version }));
-            api.serve(Other, () => ({ version: () => version }));
-          },
-        });
-        host.install(facet("v1"));
-        const item = host.hold(Item, { id: "a" });
-        const other = host.hold(Other, {});
-        yield* Effect.promise(() => Promise.all([item.ready, other.ready]));
-        const seen: Promise<string>[] = [];
-        item.onShape(() => seen.push(other.version()));
-        yield* Effect.promise(() => host.reload([facet("v2")]));
-        assert.deepEqual(yield* Effect.promise(() => Promise.all(seen)), ["v2"]);
-      }),
-    ));
+        self.register(Routes, { same: type.name });
+        return {};
+      },
+      { lifetime: "host" },
+    );
+  }
+  yield* Effect.promise(() => ticks(20));
+  assert.equal(log.filter((entry) => entry.startsWith("open")).length, 2);
+  assert.equal(log.filter((entry) => entry.startsWith("close")).length, 1);
+  assert.equal(host.registry(Routes).table().size, 1);
+  assert.ok(
+    errors.some((error) => isChordError(error, "invalid") && error.reason === "registry_conflict"),
+  );
 });
 
 describe("review: leases, invocations, activation", () => {
@@ -283,101 +370,10 @@ describe("review: leases, invocations, activation", () => {
     ));
 
   it("#5 disposal waits for running methods before closing resources (released and forced)", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const Worker = local("t.busy", {
-          version: 1,
-          input: Type.Object({ id: Type.String() }),
-          members: { work: method(undefined, Type.Boolean()) },
-        });
-        const log: string[] = [];
-        let go = latch();
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        host.serve(Worker, ({ id }, _principal, self) => {
-          const connResource = self.resource("conn", {
-            version: 1,
-            open: () => ({ closed: false }),
-            close: (conn) => {
-              conn.closed = true;
-              log.push(`close ${id}`);
-            },
-          });
-          return {
-            work: () =>
-              Effect.runPromiseWith(services)(
-                Effect.gen(function* () {
-                  yield* Effect.promise(() => go.promise);
-                  log.push(`done ${id}`);
-                  return connResource.value.closed;
-                }),
-              ),
-          };
-        });
-        const released = host.hold(Worker, { id: "r" });
-        const call = released.work();
-        yield* Effect.promise(() => ticks());
-        released.release();
-        yield* Effect.promise(() => ticks());
-        go.open();
-        assert.equal(yield* Effect.promise(() => call), false);
-        yield* Effect.promise(() => ticks());
-        assert.deepEqual(log, ["done r", "close r"]);
-
-        go = latch();
-        log.length = 0;
-        const forced = host.hold(Worker, { id: "f" }, { principal: { user: "u" } });
-        const forcedCall = forced.work();
-        yield* Effect.promise(() => ticks());
-        const invalidated = host.invalidatePrincipal(
-          (principal) => (principal as { user?: string }).user === "u",
-        );
-        yield* Effect.promise(() => ticks());
-        assert.equal(forced.status, "gone");
-        assert.deepEqual(log, []);
-        go.open();
-        yield* Effect.promise(() => invalidated);
-        assert.equal(yield* Effect.promise(() => forcedCall), false);
-        assert.deepEqual(log, ["done f", "close f"]);
-      }),
-    ));
+    Effect.runPromise(case5DisposalWaitsForRunningMethods));
 
   it("#6 a registry conflict found while finalizing activation unwinds the loser completely", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const errors: unknown[] = [];
-        const host = createHost({ self: { kind: "host" }, onError: (error) => errors.push(error) });
-        const Routes = defineRegistry<string>("t.review-routes");
-        const log: string[] = [];
-        const types = ["t.eager-a", "t.eager-b"].map((name) =>
-          local(name, { version: 1, input: Type.Object({}) }),
-        );
-        for (const type of types) {
-          host.serve(
-            type,
-            (_input, _principal, self) => {
-              self.resource("r", {
-                version: 1,
-                open: () => void log.push(`open ${type.name}`),
-                close: () => void log.push(`close ${type.name}`),
-              });
-              self.register(Routes, { same: type.name });
-              return {};
-            },
-            { lifetime: "host" },
-          );
-        }
-        yield* Effect.promise(() => ticks(20));
-        assert.equal(log.filter((entry) => entry.startsWith("open")).length, 2);
-        assert.equal(log.filter((entry) => entry.startsWith("close")).length, 1);
-        assert.equal(host.registry(Routes).table().size, 1);
-        assert.ok(
-          errors.some(
-            (error) => isChordError(error, "invalid") && error.reason === "registry_conflict",
-          ),
-        );
-      }),
-    ));
+    Effect.runPromise(case6ARegistryConflictFoundWhile));
 
   it("#6 releasing the last hold while listeners start up does not resurrect the object", () =>
     Effect.runPromise(
@@ -408,6 +404,219 @@ describe("review: leases, invocations, activation", () => {
         assert.equal(runs, 2);
       }),
     ));
+});
+
+const case7ObjectsOfTypesAReload = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const log: string[] = [];
+  const Fresh = local("t.fresh", { version: 1, input: Type.Object({}) });
+  host.install({
+    name: "item",
+    setup: (api) => api.serve(Item, () => ({ version: () => "v1" })),
+  });
+  yield* Effect.promise(() => Promise.all(["a", "b"].map((id) => host.hold(Item, { id }).ready)));
+  const plugins = (fail: boolean): Facet[] => [
+    {
+      name: "fresh",
+      setup: (api) =>
+        api.serve(Fresh, (_input, _principal, self) => {
+          self.task(() =>
+            Effect.runPromiseWith(services)(
+              Effect.sync(() => {
+                log.push("task started");
+              }),
+            ),
+          );
+          return {};
+        }),
+    },
+    {
+      name: "item",
+      setup: (api) =>
+        api.serve(Item, ({ id }, _principal, self) => {
+          self.get(Fresh, {});
+          if (fail && id === "b") throw new Error("b fails");
+          return { version: () => "v2" };
+        }),
+    },
+  ];
+  yield* Effect.promise(() => assert.rejects(host.reload(plugins(true)), /b fails/u));
+  yield* Effect.promise(() => ticks());
+  assert.deepEqual(log, []);
+  yield* Effect.promise(() => host.reload(plugins(false)));
+  yield* Effect.promise(() => ticks());
+  assert.deepEqual(log, ["task started"]);
+});
+
+const case8ABreakingProviderChangeAnd = Effect.gen(function* () {
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const P1 = remote("t.provider", {
+    version: 1,
+    input: Type.Object({}),
+    host: hostNamed("host"),
+    variants: { main: { methods: { get: method(undefined, Type.String()) } } },
+  });
+  const P2 = remote("t.provider", {
+    version: 2,
+    input: Type.Object({}),
+    host: hostNamed("host"),
+    variants: { main: { methods: { fetch: method(undefined, Type.String()) } } },
+  });
+  const Consumer = local("t.consumer", {
+    version: 1,
+    input: Type.Object({}),
+    members: { ask: method(undefined, Type.String()) },
+  });
+  host.install({
+    name: "both",
+    setup: (api) => {
+      api.serve(P1, () => ({ variant: "main", get: () => "old" }));
+      api.serve(Consumer, (_input, _principal, self) => {
+        const provider = self.get(P1, {});
+        return { ask: (ctx: Ctx) => provider.get(ctx) };
+      });
+    },
+  });
+  const consumer = host.hold(Consumer, {});
+  assert.equal(yield* Effect.promise(() => consumer.ask()), "old");
+  yield* Effect.promise(() =>
+    host.reload([
+      {
+        name: "both",
+        setup: (api) => {
+          api.serve(P2, () => ({ variant: "main", fetch: () => "new" }));
+          api.serve(Consumer, (_input, _principal, self) => {
+            const provider = self.get(P2, {});
+            return { ask: (ctx: Ctx) => provider.fetch(ctx) };
+          });
+        },
+      },
+    ]),
+  );
+  assert.equal(yield* Effect.promise(() => consumer.ask()), "new");
+});
+
+const case10RetirementClosesDroppedResourcesBefore = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const log: string[] = [];
+  const Dep = local("t.dep", { version: 1, input: Type.Object({}) });
+  const facet = (withDecls: boolean): Facet => ({
+    name: "item",
+    setup: (api) => {
+      api.serve(Dep, (_input, _principal, self) => {
+        self.resource("r", {
+          version: 1,
+          open: () => {},
+          close: () => void log.push("dep closed"),
+        });
+        return {};
+      });
+      api.serve(Item, (_input, _principal, self) => {
+        if (withDecls) {
+          self.get(Dep, {});
+          self.resource("own", {
+            version: 1,
+            open: () => {},
+            close: () =>
+              Effect.runPromiseWith(services)(
+                Effect.gen(function* () {
+                  yield* Effect.promise(() => ticks(3));
+                  log.push("own closed");
+                }),
+              ),
+          });
+        }
+        return { version: () => (withDecls ? "v1" : "v2") };
+      });
+    },
+  });
+  host.install(facet(true));
+  const ref = host.hold(Item, { id: "a" });
+  yield* Effect.promise(() => ref.ready);
+  const go = latch();
+  const pinned = host.root((ctx) =>
+    Effect.runPromiseWith(services)(
+      Effect.gen(function* () {
+        yield* Effect.promise(() => ref.version(ctx));
+        yield* Effect.promise(() => go.promise);
+      }),
+    ),
+  );
+  yield* Effect.promise(() => tick());
+  yield* Effect.promise(() => host.reload([facet(false)]));
+  assert.deepEqual(log, []);
+  go.open();
+  yield* Effect.promise(() => pinned);
+  yield* Effect.promise(() => ticks(20));
+  assert.deepEqual(log, ["own closed", "dep closed"]);
+});
+
+const case11FitsHasNoFalsePositives = (): void => {
+  const cases = [
+    [Type.String(), Type.String({ not: { const: "x" } }), "x"],
+    [Type.Array(Type.Number()), Type.Array(Type.Number(), { contains: Type.Literal(1) }), [2]],
+    [
+      Type.Object({ a: Type.String() }),
+      Type.Object({ a: Type.String() }, { additionalProperties: Type.Number() }),
+      { a: "s", b: "t" },
+    ],
+    [
+      Type.Object({ x: Type.String() }),
+      Type.Object({}, { patternProperties: { "^x$": Type.Number() } }),
+      { x: "s" },
+    ],
+    [Type.Number(), Type.Intersect([Type.Number(), Type.Number({ minimum: 1 })]), 0],
+    [
+      Type.Object({ a: Type.String() }, { additionalProperties: Type.Number() }),
+      Type.Object({ a: Type.String(), b: Type.Optional(Type.String()) }),
+      { a: "", b: 1 },
+    ],
+  ] as const;
+  for (const [sub, sup, value] of cases) {
+    assert.ok(
+      Value.Check(sub, value) && !Value.Check(sup, value),
+      `bad counterexample ${JSON.stringify(value)}`,
+    );
+    assert.equal(fits(sub, sup), false, `fits(${JSON.stringify(sub)}, ${JSON.stringify(sup)})`);
+  }
+  assert.ok(
+    fits(
+      Type.Object({ a: Type.String() }),
+      Type.Object({ a: Type.String(), b: Type.Optional(Type.Number()) }),
+    ),
+  );
+  assert.ok(
+    fits(
+      Type.Object({ a: Type.String(), extra: Type.Number() }),
+      Type.Object({ a: Type.String() }),
+    ),
+  );
+};
+
+const case11ArgumentsAreStrippedToWhat = Effect.gen(function* () {
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const Strict = remote("t.strict", {
+    version: 1,
+    input: Type.Object({}),
+    host: hostNamed("host"),
+    variants: {
+      main: {
+        methods: {
+          echo: method(
+            Type.Object({ a: Type.String() }, { additionalProperties: false }),
+            Type.Unknown(),
+          ),
+        },
+      },
+    },
+  });
+  host.serve(Strict, () => ({ variant: "main", echo: (args) => args }));
+  const ref = host.hold(Strict, {});
+  assert.deepEqual(yield* Effect.promise(() => ref.echo({ a: "x", junk: 1 } as never)), {
+    a: "x",
+  });
 });
 
 describe("review: prepare isolation and contracts", () => {
@@ -443,103 +652,10 @@ describe("review: prepare isolation and contracts", () => {
     ));
 
   it("#7 objects of types a reload adds start listeners and tasks only at commit", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const log: string[] = [];
-        const Fresh = local("t.fresh", { version: 1, input: Type.Object({}) });
-        host.install({
-          name: "item",
-          setup: (api) => api.serve(Item, () => ({ version: () => "v1" })),
-        });
-        yield* Effect.promise(() =>
-          Promise.all(["a", "b"].map((id) => host.hold(Item, { id }).ready)),
-        );
-        const plugins = (fail: boolean): Facet[] => [
-          {
-            name: "fresh",
-            setup: (api) =>
-              api.serve(Fresh, (_input, _principal, self) => {
-                self.task(() =>
-                  Effect.runPromiseWith(services)(
-                    Effect.sync(() => {
-                      log.push("task started");
-                    }),
-                  ),
-                );
-                return {};
-              }),
-          },
-          {
-            name: "item",
-            setup: (api) =>
-              api.serve(Item, ({ id }, _principal, self) => {
-                self.get(Fresh, {});
-                if (fail && id === "b") throw new Error("b fails");
-                return { version: () => "v2" };
-              }),
-          },
-        ];
-        yield* Effect.promise(() => assert.rejects(host.reload(plugins(true)), /b fails/u));
-        yield* Effect.promise(() => ticks());
-        assert.deepEqual(log, []);
-        yield* Effect.promise(() => host.reload(plugins(false)));
-        yield* Effect.promise(() => ticks());
-        assert.deepEqual(log, ["task started"]);
-      }),
-    ));
+    Effect.runPromise(case7ObjectsOfTypesAReload));
 
   it("#8 a breaking provider change and its updated consumer reload in one batch", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const P1 = remote("t.provider", {
-          version: 1,
-          input: Type.Object({}),
-          host: hostNamed("host"),
-          variants: { main: { methods: { get: method(undefined, Type.String()) } } },
-        });
-        const P2 = remote("t.provider", {
-          version: 2,
-          input: Type.Object({}),
-          host: hostNamed("host"),
-          variants: { main: { methods: { fetch: method(undefined, Type.String()) } } },
-        });
-        const Consumer = local("t.consumer", {
-          version: 1,
-          input: Type.Object({}),
-          members: { ask: method(undefined, Type.String()) },
-        });
-        host.install({
-          name: "both",
-          setup: (api) => {
-            api.serve(P1, () => ({ variant: "main", get: () => "old" }));
-            api.serve(Consumer, (_input, _principal, self) => {
-              const provider = self.get(P1, {});
-              return { ask: (ctx: Ctx) => provider.get(ctx) };
-            });
-          },
-        });
-        const consumer = host.hold(Consumer, {});
-        assert.equal(yield* Effect.promise(() => consumer.ask()), "old");
-        yield* Effect.promise(() =>
-          host.reload([
-            {
-              name: "both",
-              setup: (api) => {
-                api.serve(P2, () => ({ variant: "main", fetch: () => "new" }));
-                api.serve(Consumer, (_input, _principal, self) => {
-                  const provider = self.get(P2, {});
-                  return { ask: (ctx: Ctx) => provider.fetch(ctx) };
-                });
-              },
-            },
-          ]),
-        );
-        assert.equal(yield* Effect.promise(() => consumer.ask()), "new");
-      }),
-    ));
+    Effect.runPromise(case8ABreakingProviderChangeAnd));
 
   it("#9 an exclusive resource whose close failed is restored on rollback, or marked unavailable", () =>
     Effect.runPromise(
@@ -586,132 +702,60 @@ describe("review: prepare isolation and contracts", () => {
     ));
 
   it("#10 retirement closes dropped resources before releasing dropped holds", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const services = yield* Effect.context<never>();
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const log: string[] = [];
-        const Dep = local("t.dep", { version: 1, input: Type.Object({}) });
-        const facet = (withDecls: boolean): Facet => ({
-          name: "item",
-          setup: (api) => {
-            api.serve(Dep, (_input, _principal, self) => {
-              self.resource("r", {
-                version: 1,
-                open: () => {},
-                close: () => void log.push("dep closed"),
-              });
-              return {};
-            });
-            api.serve(Item, (_input, _principal, self) => {
-              if (withDecls) {
-                self.get(Dep, {});
-                self.resource("own", {
-                  version: 1,
-                  open: () => {},
-                  close: () =>
-                    Effect.runPromiseWith(services)(
-                      Effect.gen(function* () {
-                        yield* Effect.promise(() => ticks(3));
-                        log.push("own closed");
-                      }),
-                    ),
-                });
-              }
-              return { version: () => (withDecls ? "v1" : "v2") };
-            });
-          },
-        });
-        host.install(facet(true));
-        const ref = host.hold(Item, { id: "a" });
-        yield* Effect.promise(() => ref.ready);
-        const go = latch();
-        const pinned = host.root((ctx) =>
-          Effect.runPromiseWith(services)(
-            Effect.gen(function* () {
-              yield* Effect.promise(() => ref.version(ctx));
-              yield* Effect.promise(() => go.promise);
-            }),
-          ),
-        );
-        yield* Effect.promise(() => tick());
-        yield* Effect.promise(() => host.reload([facet(false)]));
-        assert.deepEqual(log, []);
-        go.open();
-        yield* Effect.promise(() => pinned);
-        yield* Effect.promise(() => ticks(20));
-        assert.deepEqual(log, ["own closed", "dep closed"]);
-      }),
-    ));
+    Effect.runPromise(case10RetirementClosesDroppedResourcesBefore));
 
-  it("#11 fits has no false positives for unmodelled keywords; counterexamples checked with Value.Check", () => {
-    const cases = [
-      [Type.String(), Type.String({ not: { const: "x" } }), "x"],
-      [Type.Array(Type.Number()), Type.Array(Type.Number(), { contains: Type.Literal(1) }), [2]],
-      [
-        Type.Object({ a: Type.String() }),
-        Type.Object({ a: Type.String() }, { additionalProperties: Type.Number() }),
-        { a: "s", b: "t" },
-      ],
-      [
-        Type.Object({ x: Type.String() }),
-        Type.Object({}, { patternProperties: { "^x$": Type.Number() } }),
-        { x: "s" },
-      ],
-      [Type.Number(), Type.Intersect([Type.Number(), Type.Number({ minimum: 1 })]), 0],
-      [
-        Type.Object({ a: Type.String() }, { additionalProperties: Type.Number() }),
-        Type.Object({ a: Type.String(), b: Type.Optional(Type.String()) }),
-        { a: "", b: 1 },
-      ],
-    ] as const;
-    for (const [sub, sup, value] of cases) {
-      assert.ok(
-        Value.Check(sub, value) && !Value.Check(sup, value),
-        `bad counterexample ${JSON.stringify(value)}`,
-      );
-      assert.equal(fits(sub, sup), false, `fits(${JSON.stringify(sub)}, ${JSON.stringify(sup)})`);
-    }
-    assert.ok(
-      fits(
-        Type.Object({ a: Type.String() }),
-        Type.Object({ a: Type.String(), b: Type.Optional(Type.Number()) }),
-      ),
-    );
-    assert.ok(
-      fits(
-        Type.Object({ a: Type.String(), extra: Type.Number() }),
-        Type.Object({ a: Type.String() }),
-      ),
-    );
-  });
+  it(
+    "#11 fits has no false positives for unmodelled keywords; counterexamples checked with Value.Check",
+    case11FitsHasNoFalsePositives,
+  );
 
   it("#11 arguments are stripped to what the consumer knows, then to what the provider knows", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const Strict = remote("t.strict", {
-          version: 1,
-          input: Type.Object({}),
-          host: hostNamed("host"),
-          variants: {
-            main: {
-              methods: {
-                echo: method(
-                  Type.Object({ a: Type.String() }, { additionalProperties: false }),
-                  Type.Unknown(),
-                ),
-              },
-            },
-          },
-        });
-        host.serve(Strict, () => ({ variant: "main", echo: (args) => args }));
-        const ref = host.hold(Strict, {});
-        assert.deepEqual(yield* Effect.promise(() => ref.echo({ a: "x", junk: 1 } as never)), {
-          a: "x",
-        });
-      }),
-    ));
+    Effect.runPromise(case11ArgumentsAreStrippedToWhat));
+});
+
+const aRemoteReferenceRefusesAForeign = Effect.gen(function* () {
+  const RemoteTarget = remote("t.remote-target", {
+    version: 1,
+    input: Type.Object({}),
+    host: hostNamed("server"),
+    variants: { main: { state: {}, methods: { hit: method() } } },
+  });
+  let hits = 0;
+  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  server.serve(RemoteTarget, () => ({
+    variant: "main",
+    hit: () => {
+      hits++;
+    },
+  }));
+  const [down, up] = memoryLinkPair();
+  server.accept(down, { kind: "host", name: "worker", principal: { worker: true } });
+  const link = new CountingLink(up);
+  const worker = createHost({ self: { kind: "host" }, name: "worker", onError: () => {} });
+  worker.connect(link, { principal: { kind: "server" } });
+  const other = createHost({ self: { kind: "host" }, name: "other", onError: () => {} });
+  const target = worker.hold(RemoteTarget, {});
+  yield* Effect.promise(() => target.ready);
+  const foreign = yield* Effect.promise(() =>
+    other.root((ctx) => target.hit(ctx).catch((error: unknown) => error)),
+  );
+  assert.ok(isChordError(foreign, "invalid") && foreign.reason === "foreign_ctx", String(foreign));
+  const forged = {
+    rootId: "forged",
+    codeVersion: 1,
+    signal: abortController().signal,
+  } as unknown as Ctx;
+  yield* Effect.promise(() =>
+    assert.rejects(
+      target.hit(forged),
+      (error) => isChordError(error, "invalid") && error.reason === "foreign_ctx",
+    ),
+  );
+  yield* Effect.promise(() => ticks());
+  assert.equal(hits, 0);
+  assert.equal(link.count("sent", "call"), 0);
+  yield* Effect.promise(() => worker.root((ctx) => target.hit(ctx)));
+  assert.equal(hits, 1);
 });
 
 describe("review: ctx races", () => {
@@ -798,53 +842,5 @@ describe("review: ctx races", () => {
     ));
 
   it("a remote reference refuses a foreign ctx and a ctx not made by Chord, without calling", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const RemoteTarget = remote("t.remote-target", {
-          version: 1,
-          input: Type.Object({}),
-          host: hostNamed("server"),
-          variants: { main: { state: {}, methods: { hit: method() } } },
-        });
-        let hits = 0;
-        const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
-        server.serve(RemoteTarget, () => ({
-          variant: "main",
-          hit: () => {
-            hits++;
-          },
-        }));
-        const [down, up] = memoryLinkPair();
-        server.accept(down, { kind: "host", name: "worker", principal: { worker: true } });
-        const link = new CountingLink(up);
-        const worker = createHost({ self: { kind: "host" }, name: "worker", onError: () => {} });
-        worker.connect(link, { principal: { kind: "server" } });
-        const other = createHost({ self: { kind: "host" }, name: "other", onError: () => {} });
-        const target = worker.hold(RemoteTarget, {});
-        yield* Effect.promise(() => target.ready);
-        const foreign = yield* Effect.promise(() =>
-          other.root((ctx) => target.hit(ctx).catch((error: unknown) => error)),
-        );
-        assert.ok(
-          isChordError(foreign, "invalid") && foreign.reason === "foreign_ctx",
-          String(foreign),
-        );
-        const forged = {
-          rootId: "forged",
-          codeVersion: 1,
-          signal: abortController().signal,
-        } as unknown as Ctx;
-        yield* Effect.promise(() =>
-          assert.rejects(
-            target.hit(forged),
-            (error) => isChordError(error, "invalid") && error.reason === "foreign_ctx",
-          ),
-        );
-        yield* Effect.promise(() => ticks());
-        assert.equal(hits, 0);
-        assert.equal(link.count("sent", "call"), 0);
-        yield* Effect.promise(() => worker.root((ctx) => target.hit(ctx)));
-        assert.equal(hits, 1);
-      }),
-    ));
+    Effect.runPromise(aRemoteReferenceRefusesAForeign));
 });

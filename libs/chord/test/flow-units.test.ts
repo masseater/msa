@@ -80,120 +80,111 @@ function client(server: Host, window: number, pendingCap?: number) {
   return { host, link, connection };
 }
 
+const withLargeStreamsWaitingBehindA = Effect.gen(function* () {
+  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  serveBlob(server, (name) => (name === "small" ? 1 : 500));
+  const { host, link } = client(server, 64 * 1024);
+  const bigs = ["a", "b", "c"].map((name) => host.hold(Blob, { name }));
+  yield* Effect.promise(() => Promise.all(bigs.map((big) => big.ready)));
+  link.paused = true;
+  for (const big of bigs)
+    for (let i = 0; i < 50; i++) yield* Effect.promise(() => big.push(`${i}:${"y".repeat(2000)}`));
+  const small = host.hold(Blob, { name: "small" });
+  yield* Effect.promise(() => small.ready);
+  assert.equal(small.lines.value.length, 1);
+  assert.equal(yield* Effect.promise(() => bigs[0]!.ping()), "pong");
+  assert.ok(bigs[0]!.lines.value.length < 550, "the large streams still wait");
+  link.release();
+  yield* Effect.promise(() => until(() => bigs.every((big) => big.lines.value.length === 550)));
+  yield* Effect.promise(() => server.close());
+});
+
+const aSnapshotLargerThanTheWindow = Effect.gen(function* () {
+  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  serveBlob(server, () => 300);
+  const { host, link } = client(server, 16 * 1024);
+  link.paused = true;
+  const big = host.hold(Blob, { name: "chat" });
+  yield* Effect.promise(() => big.ready);
+  assert.equal(big.lines.value.length, 300);
+  for (let i = 0; i < 40; i++) yield* Effect.promise(() => big.push(`${i}:${"z".repeat(1000)}`));
+  assert.ok(big.lines.value.length < 340);
+  link.release();
+  yield* Effect.promise(() => until(() => big.lines.value.length === 340));
+  yield* Effect.promise(() => server.close());
+});
+
+const aLinkThatReportsNoSizes = Effect.gen(function* () {
+  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  serveBlob(server, () => 1);
+  const [down, up] = memoryLinkPair();
+  const unsized: Link = {
+    get closed() {
+      return down.closed;
+    },
+    send: (frame: Frame) => {
+      down.send(frame);
+      return undefined;
+    },
+    receive: (handler) => down.receive(handler),
+    onClose: (handler) => down.onClose(handler),
+    close: (reason) => down.close(reason),
+  };
+  server.accept(unsized, { principal: { user: "u" }, window: 1 });
+  const link = new CountingLink(up);
+  const host = createHost({
+    self: { kind: "host" },
+    name: "worker",
+    kind: "client",
+    upstream: { link, principal: { kind: "server" } },
+    onError: () => {},
+  });
+  link.paused = true;
+  const blob = host.hold(Blob, { name: "x" });
+  yield* Effect.promise(() => blob.ready);
+  for (let i = 0; i < 20; i++) yield* Effect.promise(() => blob.push(`${i}`));
+  yield* Effect.promise(() => until(() => blob.lines.value.length === 21));
+  yield* Effect.promise(() => server.close());
+});
+
+const waitingOpsStayUnderThePer = Effect.gen(function* () {
+  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  serveBlob(server, () => 1);
+  const cap = 8 * 1024;
+  const { host, link, connection } = client(server, 1024, cap);
+  const K = 6;
+  const blobs = Array.from({ length: K }, (_, i) => host.hold(Blob, { name: `s${i}` }));
+  yield* Effect.promise(() => Promise.all(blobs.map((blob) => blob.ready)));
+  link.paused = true;
+  let peak = 0;
+  for (let round = 0; round < 30; round++) {
+    for (const blob of blobs) yield* Effect.promise(() => blob.push(`${round}:${"w".repeat(200)}`));
+    peak = Math.max(peak, connection().waiting.bytes);
+  }
+  assert.ok(peak <= cap, `waiting ops ${peak} exceed the cap ${cap}`);
+  const before = link.received.length;
+  link.release();
+  yield* Effect.promise(() => until(() => blobs.every((blob) => blob.lines.value.length === 31)));
+  const resets = stateFrames(link.received.slice(before)).filter((frame) => frame.as === "reset");
+  const per = new Map<number, number>();
+  for (const frame of resets) per.set(frame.hold, (per.get(frame.hold) ?? 0) + 1);
+  assert.ok(resets.length >= 1, "dropped streams came back as resets");
+  for (const count of per.values()) assert.ok(count <= 2, "about one reset per stream");
+  yield* Effect.promise(() => server.close());
+});
+
 describe("flow control with units", () => {
   it("with large streams waiting behind a full window, a new get resolves at once and calls are answered", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
-        serveBlob(server, (name) => (name === "small" ? 1 : 500));
-        const { host, link } = client(server, 64 * 1024);
-        const bigs = ["a", "b", "c"].map((name) => host.hold(Blob, { name }));
-        yield* Effect.promise(() => Promise.all(bigs.map((big) => big.ready)));
-        link.paused = true;
-        for (const big of bigs)
-          for (let i = 0; i < 50; i++)
-            yield* Effect.promise(() => big.push(`${i}:${"y".repeat(2000)}`));
-        const small = host.hold(Blob, { name: "small" });
-        yield* Effect.promise(() => small.ready);
-        assert.equal(small.lines.value.length, 1);
-        assert.equal(yield* Effect.promise(() => bigs[0]!.ping()), "pong");
-        assert.ok(bigs[0]!.lines.value.length < 550, "the large streams still wait");
-        link.release();
-        yield* Effect.promise(() =>
-          until(() => bigs.every((big) => big.lines.value.length === 550)),
-        );
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(withLargeStreamsWaitingBehindA));
 
   it("a snapshot larger than the window arrives whole; later changes wait for acknowledgements", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
-        serveBlob(server, () => 300);
-        const { host, link } = client(server, 16 * 1024);
-        link.paused = true;
-        const big = host.hold(Blob, { name: "chat" });
-        yield* Effect.promise(() => big.ready);
-        assert.equal(big.lines.value.length, 300);
-        for (let i = 0; i < 40; i++)
-          yield* Effect.promise(() => big.push(`${i}:${"z".repeat(1000)}`));
-        assert.ok(big.lines.value.length < 340);
-        link.release();
-        yield* Effect.promise(() => until(() => big.lines.value.length === 340));
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(aSnapshotLargerThanTheWindow));
 
   it("a link that reports no sizes (IPC) never holds state back", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
-        serveBlob(server, () => 1);
-        const [down, up] = memoryLinkPair();
-        const unsized: Link = {
-          get closed() {
-            return down.closed;
-          },
-          send: (frame: Frame) => {
-            down.send(frame);
-            return undefined;
-          },
-          receive: (handler) => down.receive(handler),
-          onClose: (handler) => down.onClose(handler),
-          close: (reason) => down.close(reason),
-        };
-        server.accept(unsized, { principal: { user: "u" }, window: 1 });
-        const link = new CountingLink(up);
-        const host = createHost({
-          self: { kind: "host" },
-          name: "worker",
-          kind: "client",
-          upstream: { link, principal: { kind: "server" } },
-          onError: () => {},
-        });
-        link.paused = true;
-        const blob = host.hold(Blob, { name: "x" });
-        yield* Effect.promise(() => blob.ready);
-        for (let i = 0; i < 20; i++) yield* Effect.promise(() => blob.push(`${i}`));
-        yield* Effect.promise(() => until(() => blob.lines.value.length === 21));
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(aLinkThatReportsNoSizes));
 
   it("waiting ops stay under the per-link cap however many streams stall; each then gets one reset", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
-        serveBlob(server, () => 1);
-        const cap = 8 * 1024;
-        const { host, link, connection } = client(server, 1024, cap);
-        const K = 6;
-        const blobs = Array.from({ length: K }, (_, i) => host.hold(Blob, { name: `s${i}` }));
-        yield* Effect.promise(() => Promise.all(blobs.map((blob) => blob.ready)));
-        link.paused = true;
-        let peak = 0;
-        for (let round = 0; round < 30; round++) {
-          for (const blob of blobs)
-            yield* Effect.promise(() => blob.push(`${round}:${"w".repeat(200)}`));
-          peak = Math.max(peak, connection().waiting.bytes);
-        }
-        assert.ok(peak <= cap, `waiting ops ${peak} exceed the cap ${cap}`);
-        const before = link.received.length;
-        link.release();
-        yield* Effect.promise(() =>
-          until(() => blobs.every((blob) => blob.lines.value.length === 31)),
-        );
-        const resets = stateFrames(link.received.slice(before)).filter(
-          (frame) => frame.as === "reset",
-        );
-        const per = new Map<number, number>();
-        for (const frame of resets) per.set(frame.hold, (per.get(frame.hold) ?? 0) + 1);
-        assert.ok(resets.length >= 1, "dropped streams came back as resets");
-        for (const count of per.values()) assert.ok(count <= 2, "about one reset per stream");
-        yield* Effect.promise(() => server.close());
-      }),
-    ));
+    Effect.runPromise(waitingOpsStayUnderThePer));
 });
 
 describe("relay topology", () => {
