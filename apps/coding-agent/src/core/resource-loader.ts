@@ -326,6 +326,7 @@ export interface DefaultResourceLoaderOptions {
 }
 
 export class DefaultResourceLoader implements ResourceLoader {
+  private readonly options: DefaultResourceLoaderOptions;
   private cwd: string;
   private agentDir: string;
   private settingsManager: SettingsManager;
@@ -390,7 +391,13 @@ export class DefaultResourceLoader implements ResourceLoader {
   private lastThemePaths: string[];
   private loaded: boolean;
 
+  /** A loader with the same options and nothing loaded yet, for another session of this process. */
+  fork(): DefaultResourceLoader {
+    return new DefaultResourceLoader(this.options);
+  }
+
   constructor(options: DefaultResourceLoaderOptions) {
+    this.options = options;
     this.cwd = resolvePath(options.cwd);
     this.agentDir = resolvePath(options.agentDir);
     this.settingsManager =

@@ -80,5 +80,11 @@ for name in CI GITHUB_ACTIONS; do
 	[[ -z "$value" ]] || test_env+=("$name=$value")
 done
 
+# The orchestrator graph tests also run against Neo4j when it is configured.
+for name in NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD; do
+	value="${!name-}"
+	[[ -z "$value" ]] || test_env+=("$name=$value")
+done
+
 echo "Running tests without API keys in isolated home: $test_root/home"
 env -i "${test_env[@]}" vp run test

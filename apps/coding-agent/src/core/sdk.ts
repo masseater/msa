@@ -20,6 +20,7 @@ import { createToolNameMatcher } from "./mcp-servers.ts";
 import { convertToLlm } from "./messages.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { ModelRuntime } from "./model-runtime.ts";
+import { isOrchestratorTool, ORCHESTRATOR_TOOL_NAMES } from "./orchestrator/tools.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
 import type { ResourceLoader } from "./resource-loader.ts";
 import { DefaultResourceLoader } from "./resource-loader.ts";
@@ -110,6 +111,11 @@ export interface CreateAgentSessionOptions {
   settingsManager?: SettingsManager;
   /** Session start event metadata for extension runtime startup. */
   sessionStartEvent?: SessionStartEvent;
+  /**
+   * Register the orchestrator tools (`start_session` and the rest). They start inactive; activate
+   * them with `tools` or the `defaultTools` setting.
+   */
+  orchestrator?: boolean;
 }
 
 /** Result from createAgentSession */
@@ -503,6 +509,44 @@ export async function createAgentSession(
     excludedToolNames,
     extensionRunnerRef,
     sessionStartEvent: options.sessionStartEvent,
+    // Workers get the orchestrator's settings, project trust, resources, and tool selection, minus
+    // the orchestrator tools; the worker cwd only moves their tools and transcripts.
+    createWorkerSession:
+      options.orchestrator && resourceLoader instanceof DefaultResourceLoader
+        ? async (worker) => {
+            const workerResourceLoader = resourceLoader.fork();
+            await workerResourceLoader.reload();
+            // Extension flags from the orchestrator's command line apply to its workers too.
+            const workerFlagValues = workerResourceLoader.getExtensions().runtime.flagValues;
+            for (const [name, value] of session.extensionRunner.getFlagValues()) {
+              workerFlagValues.set(name, value);
+            }
+            const workerTools = options.tools?.filter(
+              (entry) => !isOrchestratorTool(entry.replace(/^[+-]/, "")),
+            );
+            const { session: workerSession } = await createAgentSession({
+              cwd: worker.cwd,
+              agentDir,
+              modelRuntime,
+              settingsManager,
+              resourceLoader: workerResourceLoader,
+              ...(options.customTools ? { customTools: options.customTools } : {}),
+              model: worker.model,
+              thinkingLevel: worker.thinkingLevel,
+              // An emptied allowlist still means no tools; emptied +/- entries mean the defaults.
+              ...(workerTools && !(workerTools.length === 0 && toolModifiers)
+                ? { tools: workerTools }
+                : {}),
+              excludeTools: [...(options.excludeTools ?? []), ...ORCHESTRATOR_TOOL_NAMES],
+              ...(options.noTools ? { noTools: options.noTools } : {}),
+              sessionManager: worker.sessionFile
+                ? SessionManager.open(worker.sessionFile)
+                : SessionManager.create(worker.cwd, getDefaultSessionDir(worker.cwd, agentDir)),
+            });
+            await workerSession.bindExtensions({ mode: "print" });
+            return workerSession;
+          }
+        : undefined,
   });
 
   const extensionsResult = resourceLoader.getExtensions();

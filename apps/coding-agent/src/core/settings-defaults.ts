@@ -24,6 +24,9 @@ export const SETTINGS_DEFAULTS = {
       maxRetryDelayMs: 60000,
     },
   },
+  orchestrator: {
+    maxConcurrentSessions: 4,
+  },
   hideThinkingBlock: true,
   showCacheMissNotices: false,
   quietStartup: false,
