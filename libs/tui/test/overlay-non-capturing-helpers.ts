@@ -23,6 +23,7 @@ export interface OverlayTuiContext {
 
 export interface OverlayTuiSetup {
   readonly focus?: Component;
+  readonly root?: Component;
   readonly width?: number;
   readonly height?: number;
 }
@@ -44,7 +45,7 @@ export const withOverlayTui: {
     Effect.suspend(() => {
       const terminal = new VirtualTerminal(setup.width ?? 80, setup.height ?? 24);
       const tui: TUI = new TuiMainScreen(terminal);
-      tui.addChild(new EmptyContent());
+      tui.addChild(setup.root ?? new EmptyContent());
       if (setup.focus !== undefined) tui.setFocus(setup.focus);
       tui.start();
       return body({ tui, terminal }).pipe(

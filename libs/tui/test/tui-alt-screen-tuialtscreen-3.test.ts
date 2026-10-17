@@ -3,16 +3,17 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { ScrollView } from "../src/components/scroll-view.ts";
-import { Text } from "../src/components/text.ts";
-import { VStack } from "../src/components/v-stack.ts";
 import {
   getKeybindings,
   KeybindingsManager,
+  ScrollView,
   setKeybindings,
+  Text,
   TUI_KEYBINDINGS,
-} from "../src/keybindings.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
+  TuiAltScreen,
+  VStack,
+} from "../src/index.ts";
+import { someWriteSince, viewportHas } from "./tui-alt-screen-helpers.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
@@ -37,8 +38,8 @@ function tuialtscreenCases3(): void {
         terminal.sendInput("needle");
         yield* Effect.promise(() => terminal.waitForRender());
         let viewport = terminal.getViewport();
-        assert.ok(viewport.some((line) => line.includes("1/2")));
-        assert.ok(viewport.some((line) => line.includes("↑ Shift+Enter · ↓ Enter")));
+        assert.ok(viewportHas(terminal, "1/2"));
+        assert.ok(viewportHas(terminal, "↑ Shift+Enter · ↓ Enter"));
 
         let arrowRow = viewport.findIndex((line) => line.includes("↑") && line.includes("↓"));
         let arrowColumn = viewport[arrowRow]?.lastIndexOf("Enter") ?? -1;
@@ -46,30 +47,24 @@ function tuialtscreenCases3(): void {
         const hoverEventCount = terminal.events.length;
         terminal.sendInput(`\x1b[<35;${arrowColumn + 1};${arrowRow + 1}M`);
         yield* Effect.promise(() => terminal.waitForRender());
-        assert.ok(
-          terminal.events
-            .slice(hoverEventCount)
-            .some(
-              (event) => event.type === "write" && event.data.includes("\x1b[45m↓ Enter\x1b[49m"),
-            ),
-        );
+        assert.ok(someWriteSince(terminal, hoverEventCount, "\x1b[45m↓ Enter\x1b[49m"));
         terminal.sendInput(`\x1b[<0;${arrowColumn + 1};${arrowRow + 1}M`);
         yield* Effect.promise(() => terminal.waitForRender());
         viewport = terminal.getViewport();
-        assert.ok(viewport.some((line) => line.includes("2/2")));
-        assert.ok(viewport.some((line) => line.includes("↑ Shift+Enter · ↓ Enter")));
+        assert.ok(viewportHas(terminal, "2/2"));
+        assert.ok(viewportHas(terminal, "↑ Shift+Enter · ↓ Enter"));
 
         arrowRow = viewport.findIndex((line) => line.includes("↑") && line.includes("↓"));
         arrowColumn = (viewport[arrowRow]?.indexOf("Shift+Enter") ?? -3) + 3;
         assert.ok(arrowRow >= 0 && arrowColumn >= 0);
         terminal.sendInput(`\x1b[<0;${arrowColumn + 1};${arrowRow + 1}M`);
         yield* Effect.promise(() => terminal.waitForRender());
-        assert.ok(terminal.getViewport().some((line) => line.includes("1/2")));
-        assert.ok(terminal.getViewport().some((line) => line.includes("↑ Shift+Enter · ↓ Enter")));
+        assert.ok(viewportHas(terminal, "1/2"));
+        assert.ok(viewportHas(terminal, "↑ Shift+Enter · ↓ Enter"));
 
         terminal.sendInput("\x1b[102;6u");
         yield* Effect.promise(() => terminal.waitForRender());
-        assert.ok(!terminal.getViewport().some((line) => line.includes("↑ Shift+Enter · ↓ Enter")));
+        assert.ok(!viewportHas(terminal, "↑ Shift+Enter · ↓ Enter"));
         tui.stop();
       }),
     ));
@@ -137,16 +132,8 @@ describe("TuiAltScreen", () => {
         terminal.sendInput("needle");
         yield* Effect.promise(() => terminal.waitForRender());
 
-        assert.ok(
-          terminal.events.some(
-            (event) => event.type === "write" && event.data.includes("\x1b[42mneedle\x1b[49m"),
-          ),
-        );
-        assert.ok(
-          terminal.events.some(
-            (event) => event.type === "write" && event.data.includes("\x1b[41mneedle\x1b[49m"),
-          ),
-        );
+        assert.ok(someWriteSince(terminal, 0, "\x1b[42mneedle\x1b[49m"));
+        assert.ok(someWriteSince(terminal, 0, "\x1b[41mneedle\x1b[49m"));
         tui.stop();
       }),
     ));
@@ -156,77 +143,89 @@ describe("TuiAltScreen", () => {
   tuialtscreenCases4();
 });
 
+function createSearchFixture() {
+  const terminal = new RecordingTerminal(60, 8);
+  const tui = new TuiAltScreen(terminal);
+  const transcriptText = new Text(
+    Array.from({ length: 12 }, (_, index) => {
+      if (index === 4) return "line 5 needle one";
+      if (index === 9) return "line 10 needle two";
+      return `line ${index + 1}`;
+    }).join("\n"),
+    0,
+    0,
+  );
+  const transcript = new ScrollView(transcriptText, { follow: "end", primary: true });
+  const editorInputs: string[] = [];
+  const editor = {
+    focused: false,
+    render: () => ["editor"],
+    invalidate: () => {},
+    handleInput: (data: string) => editorInputs.push(data),
+  };
+  tui.setLayoutRoot(
+    new VStack([
+      { component: transcript, basis: 0, grow: 1, minSize: 1 },
+      { component: editor, basis: 1, shrink: 0 },
+    ]),
+  );
+  tui.setFocus(editor);
+  return { terminal, tui, transcript, editorInputs };
+}
+
+const openSearch = (fixture: ReturnType<typeof createSearchFixture>): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const { terminal, transcript, editorInputs } = fixture;
+    terminal.sendInput("\x1b[102;6u");
+    terminal.sendInput("needle");
+    yield* Effect.promise(() => terminal.waitForRender());
+    assert.strictEqual(transcript.isFollowingEnd, false);
+    assert.ok(viewportHas(terminal, "2/2"));
+    assert.ok(viewportHas(terminal, "↑ Shift+Enter · ↓ Enter"));
+    assert.ok(viewportHas(terminal, "line 10 needle two"));
+    assert.deepStrictEqual(editorInputs, []);
+    assert.ok(someWriteSince(terminal, 0, "\x1b[1;7mneedle\x1b[22;27m"));
+
+    for (let index = 0; index < 6; index++) terminal.sendInput("\x1b[<64;1;4M");
+    yield* Effect.promise(() => terminal.waitForRender());
+    assert.strictEqual(transcript.scrollTop, 0);
+    assert.ok(
+      terminal.getViewport().some((line) => line.includes("needle") && line.includes("2/2")),
+    );
+  });
+
+const navigateAndCloseSearch = (
+  fixture: ReturnType<typeof createSearchFixture>,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const { terminal, editorInputs } = fixture;
+    terminal.sendInput("\x07");
+    yield* Effect.promise(() => terminal.waitForRender());
+    assert.ok(viewportHas(terminal, "1/2"));
+    assert.ok(viewportHas(terminal, "line 5 needle one"));
+
+    terminal.sendInput("\x1b[103;6u");
+    yield* Effect.promise(() => terminal.waitForRender());
+    assert.ok(viewportHas(terminal, "2/2"));
+    assert.ok(viewportHas(terminal, "line 10 needle two"));
+
+    terminal.sendInput("\x1b");
+    terminal.sendInput("x");
+    yield* Effect.promise(() => terminal.waitForRender());
+    assert.ok(!viewportHas(terminal, "↑ Shift+Enter · ↓ Enter"));
+    assert.deepStrictEqual(editorInputs, ["x"]);
+  });
+
 function tuialtscreenCases4(): void {
   it("searches the transcript with Ctrl+Shift+F and restores editor focus on close", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const terminal = new RecordingTerminal(60, 8);
-        const tui = new TuiAltScreen(terminal);
-        const transcriptText = new Text(
-          Array.from({ length: 12 }, (_, index) => {
-            if (index === 4) return "line 5 needle one";
-            if (index === 9) return "line 10 needle two";
-            return `line ${index + 1}`;
-          }).join("\n"),
-          0,
-          0,
-        );
-        const transcript = new ScrollView(transcriptText, { follow: "end", primary: true });
-        const editorInputs: string[] = [];
-        const editor = {
-          focused: false,
-          render: () => ["editor"],
-          invalidate: () => {},
-          handleInput: (data: string) => editorInputs.push(data),
-        };
-        tui.setLayoutRoot(
-          new VStack([
-            { component: transcript, basis: 0, grow: 1, minSize: 1 },
-            { component: editor, basis: 1, shrink: 0 },
-          ]),
-        );
-        tui.setFocus(editor);
-        tui.start();
-        yield* Effect.promise(() => terminal.waitForRender());
-
-        terminal.sendInput("\x1b[102;6u");
-        terminal.sendInput("needle");
-        yield* Effect.promise(() => terminal.waitForRender());
-        assert.strictEqual(transcript.isFollowingEnd, false);
-        assert.ok(terminal.getViewport().some((line) => line.includes("2/2")));
-        assert.ok(terminal.getViewport().some((line) => line.includes("↑ Shift+Enter · ↓ Enter")));
-        assert.ok(terminal.getViewport().some((line) => line.includes("line 10 needle two")));
-        assert.deepStrictEqual(editorInputs, []);
-        assert.ok(
-          terminal.events.some(
-            (event) => event.type === "write" && event.data.includes("\x1b[1;7mneedle\x1b[22;27m"),
-          ),
-        );
-
-        for (let index = 0; index < 6; index++) terminal.sendInput("\x1b[<64;1;4M");
-        yield* Effect.promise(() => terminal.waitForRender());
-        assert.strictEqual(transcript.scrollTop, 0);
-        assert.ok(
-          terminal.getViewport().some((line) => line.includes("needle") && line.includes("2/2")),
-        );
-
-        terminal.sendInput("\x07");
-        yield* Effect.promise(() => terminal.waitForRender());
-        assert.ok(terminal.getViewport().some((line) => line.includes("1/2")));
-        assert.ok(terminal.getViewport().some((line) => line.includes("line 5 needle one")));
-
-        terminal.sendInput("\x1b[103;6u");
-        yield* Effect.promise(() => terminal.waitForRender());
-        assert.ok(terminal.getViewport().some((line) => line.includes("2/2")));
-        assert.ok(terminal.getViewport().some((line) => line.includes("line 10 needle two")));
-
-        terminal.sendInput("\x1b");
-        terminal.sendInput("x");
-        yield* Effect.promise(() => terminal.waitForRender());
-        assert.ok(!terminal.getViewport().some((line) => line.includes("↑ Shift+Enter · ↓ Enter")));
-        assert.deepStrictEqual(editorInputs, ["x"]);
-
-        tui.stop();
+        const fixture = createSearchFixture();
+        fixture.tui.start();
+        yield* Effect.promise(() => fixture.terminal.waitForRender());
+        yield* openSearch(fixture);
+        yield* navigateAndCloseSearch(fixture);
+        fixture.tui.stop();
       }),
     ));
 }

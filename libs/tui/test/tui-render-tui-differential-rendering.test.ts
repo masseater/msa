@@ -200,6 +200,29 @@ describe("TUI differential rendering", () => {
     ));
 });
 
+const expectedAfterSwitch = [
+  "Chat 5",
+  "Chat 6",
+  "Chat 7",
+  "Chat 8",
+  "Chat 9",
+  "Chat 10",
+  "Chat 11",
+  "Editor 0",
+  "Editor 1",
+  "Editor 2",
+];
+
+function assertNoStaleChat(viewport: string[]): void {
+  for (let i = 0; i < 10; i++) {
+    const line = viewport[i] ?? "";
+    assert.ok(!line.includes("Chat 12"), `Stale "Chat 12" at viewport row ${i}`);
+    assert.ok(!line.includes("Chat 13"), `Stale "Chat 13" at viewport row ${i}`);
+    assert.ok(!line.includes("Chat 14"), `Stale "Chat 14" at viewport row ${i}`);
+  }
+  assert.deepStrictEqual(viewport, expectedAfterSwitch);
+}
+
 describe("TUI differential rendering", () => {
   tuiDifferentialRenderingCases3();
 });
@@ -243,26 +266,7 @@ function tuiDifferentialRenderingCases3(): void {
           "Branch switch should trigger a full redraw",
         );
 
-        const viewport = terminal.getViewport();
-        for (let i = 0; i < 10; i++) {
-          const line = viewport[i] ?? "";
-          assert.ok(!line.includes("Chat 12"), `Stale "Chat 12" at viewport row ${i}`);
-          assert.ok(!line.includes("Chat 13"), `Stale "Chat 13" at viewport row ${i}`);
-          assert.ok(!line.includes("Chat 14"), `Stale "Chat 14" at viewport row ${i}`);
-        }
-
-        assert.deepStrictEqual(viewport, [
-          "Chat 5",
-          "Chat 6",
-          "Chat 7",
-          "Chat 8",
-          "Chat 9",
-          "Chat 10",
-          "Chat 11",
-          "Editor 0",
-          "Editor 1",
-          "Editor 2",
-        ]);
+        assertNoStaleChat(terminal.getViewport());
 
         tui.stop();
       }),

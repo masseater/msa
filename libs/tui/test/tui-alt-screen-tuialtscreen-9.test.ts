@@ -3,10 +3,8 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { MouseRegion } from "../src/components/mouse-region.ts";
-import { Text } from "../src/components/text.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { type TuiMouseEvent } from "../src/tui.ts";
+import { MouseRegion, Text, TuiAltScreen, type TuiMouseEvent } from "../src/index.ts";
+import { viewportHas } from "./tui-alt-screen-helpers.ts";
 import { InputOverlay } from "./tui-alt-screen-input-overlay.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
@@ -266,13 +264,13 @@ describe("TuiAltScreen", () => {
 
         terminal.sendInput("\x1b[102;6u");
         yield* Effect.promise(() => terminal.waitForRender());
-        assert.ok(terminal.getViewport().some((line) => line.includes("↑ ↓")));
+        assert.ok(viewportHas(terminal, "↑ ↓"));
 
         terminal.sendInput("\x1b[5~");
         terminal.sendInput("\x1b[<64;1;4M");
         yield* Effect.promise(() => terminal.waitForRender());
         assert.ok(tui.viewportTop < topBefore);
-        assert.ok(terminal.getViewport().some((line) => line.includes("↑ ↓")));
+        assert.ok(viewportHas(terminal, "↑ ↓"));
         tui.stop();
       }),
     ));

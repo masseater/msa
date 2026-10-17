@@ -6,6 +6,7 @@ import { Effect } from "effect";
 import { AltScreenSearchIndex, findAltScreenSearchMatches } from "../src/alt-screen-search.ts";
 import { Text } from "../src/components/text.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
+import { numberedLines, trimmedViewport } from "./tui-alt-screen-helpers.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("TuiAltScreen", () => {
@@ -23,32 +24,20 @@ describe("TuiAltScreen", () => {
         terminal.sendInput("\x1b[57421u");
         terminal.sendInput("\x1b[57421;1:3u");
         yield* Effect.promise(() => terminal.waitForRender());
-        assert.deepStrictEqual(
-          terminal.getViewport().map((line) => line.trimEnd()),
-          ["line 1", "line 2", "line 3", "line 4", "line 5", "line 6", "line 7", "line 8"],
-        );
+        assert.deepStrictEqual(trimmedViewport(terminal), numberedLines(1, 8));
 
         terminal.sendInput("\x1b[57422u");
         terminal.sendInput("\x1b[57422;1:3u");
         yield* Effect.promise(() => terminal.waitForRender());
-        assert.deepStrictEqual(
-          terminal.getViewport().map((line) => line.trimEnd()),
-          ["line 5", "line 6", "line 7", "line 8", "line 9", "line 10", "line 11", "line 12"],
-        );
+        assert.deepStrictEqual(trimmedViewport(terminal), numberedLines(5, 12));
 
         terminal.sendInput("\x1b[7^");
         yield* Effect.promise(() => terminal.waitForRender());
-        assert.deepStrictEqual(
-          terminal.getViewport().map((line) => line.trimEnd()),
-          ["line 1", "line 2", "line 3", "line 4", "line 5", "line 6", "line 7", "line 8"],
-        );
+        assert.deepStrictEqual(trimmedViewport(terminal), numberedLines(1, 8));
 
         terminal.sendInput("\x1b[8^");
         yield* Effect.promise(() => terminal.waitForRender());
-        assert.deepStrictEqual(
-          terminal.getViewport().map((line) => line.trimEnd()),
-          ["line 5", "line 6", "line 7", "line 8", "line 9", "line 10", "line 11", "line 12"],
-        );
+        assert.deepStrictEqual(trimmedViewport(terminal), numberedLines(5, 12));
 
         tui.stop();
       }),

@@ -3,10 +3,9 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { MouseRegion } from "../src/components/mouse-region.ts";
-import { Text } from "../src/components/text.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
+import { MouseRegion, Text, TuiAltScreen } from "../src/index.ts";
 import { toJson } from "./effect-helpers.ts";
+import { someWriteSince, trimmedViewport, writesSince } from "./tui-alt-screen-helpers.ts";
 import { InputOverlay } from "./tui-alt-screen-input-overlay.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
@@ -38,11 +37,7 @@ describe("TuiAltScreen", () => {
 
         const redrawEventCount = terminal.events.length;
         tui.renderNow(true);
-        const redrawWrites = terminal.events
-          .slice(redrawEventCount)
-          .filter((event): event is { type: "write"; data: string } => event.type === "write")
-          .map((event) => event.data)
-          .join("");
+        const redrawWrites = writesSince(terminal, redrawEventCount);
         assert.ok(redrawWrites.includes("alpha"));
         assert.ok(redrawWrites.includes("beta"));
         assert.ok(redrawWrites.includes("\x1b[7m"));
@@ -188,10 +183,7 @@ describe("TuiAltScreen", () => {
         terminal.sendInput("\x1b[<67;1;1M");
         yield* Effect.promise(() => terminal.waitForRender());
         assert.strictEqual(tui.viewportTop, 4);
-        assert.deepStrictEqual(
-          terminal.getViewport().map((line) => line.trimEnd()),
-          ["line 5", "line 6", "line 7", "line 8"],
-        );
+        assert.deepStrictEqual(trimmedViewport(terminal), ["line 5", "line 6", "line 7", "line 8"]);
 
         tui.stop();
       }),
@@ -225,11 +217,7 @@ describe("TuiAltScreen", () => {
         terminal.sendInput("\x1b[<0;4;2m");
         yield* Effect.promise(() => terminal.waitForRender());
         assert.strictEqual(clicks, 1);
-        assert.ok(
-          terminal.events.some(
-            (event) => event.type === "write" && event.data.includes("\x1b]52;c;"),
-          ),
-        );
+        assert.ok(someWriteSince(terminal, 0, "\x1b]52;c;"));
         tui.stop();
       }),
     ));

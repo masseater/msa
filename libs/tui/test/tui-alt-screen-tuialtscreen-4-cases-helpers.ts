@@ -5,8 +5,8 @@ import { Effect } from "effect";
 
 import { ScrollView } from "../src/components/scroll-view.ts";
 import { Text } from "../src/components/text.ts";
-import { VStack } from "../src/components/v-stack.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
+import { mountTranscriptWithEditor } from "./tui-alt-screen-helpers.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 export function tuialtscreenCases5(): void {
@@ -19,20 +19,7 @@ export function tuialtscreenCases5(): void {
           new Text(Array.from({ length: 12 }, (_, index) => `line ${index + 1}`).join("\n"), 0, 0),
           { follow: "end", primary: true },
         );
-        const editorInputs: string[] = [];
-        const editor = {
-          focused: false,
-          render: () => ["editor"],
-          invalidate: () => {},
-          handleInput: (data: string) => editorInputs.push(data),
-        };
-        tui.setLayoutRoot(
-          new VStack([
-            { component: transcript, basis: 0, grow: 1, minSize: 1 },
-            { component: editor, basis: 1, shrink: 0 },
-          ]),
-        );
-        tui.setFocus(editor);
+        const editorInputs = mountTranscriptWithEditor(tui, transcript);
         tui.start();
         yield* Effect.promise(() => terminal.waitForRender());
 

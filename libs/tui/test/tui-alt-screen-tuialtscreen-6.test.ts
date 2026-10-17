@@ -8,6 +8,7 @@ import { hyperlink } from "../src/terminal-image.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
 import { renderFakeCursor } from "../src/tui.ts";
 import { toJson } from "./effect-helpers.ts";
+import { someWriteSince, viewportHas } from "./tui-alt-screen-helpers.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
 
 describe("TuiAltScreen", () => {
@@ -83,16 +84,14 @@ describe("TuiAltScreen", () => {
           ),
           yield* toJson(clipboardWrites),
         );
-        assert.ok(
-          terminal.events.some((event) => event.type === "write" && event.data.includes("\x1b[7m")),
-        );
+        assert.ok(someWriteSince(terminal, 0, "\x1b[7m"));
         assert.ok(
           terminal.events.some(
             (event) => event.type === "write" && event.data.includes("al\x1b[0m\x1b[7mpha"),
           ),
           "selection inverse must be reapplied after a reset inside the selection",
         );
-        assert.ok(terminal.getViewport().some((line) => line.includes("Copied!")));
+        assert.ok(viewportHas(terminal, "Copied!"));
 
         tui.stop();
       }),
@@ -154,7 +153,7 @@ describe("TuiAltScreen", () => {
           ),
           "must not emit OSC 52 when a copySelection handler is provided",
         );
-        assert.ok(terminal.getViewport().some((line) => line.includes("Copied!")));
+        assert.ok(viewportHas(terminal, "Copied!"));
 
         tui.stop();
       }),
@@ -185,9 +184,7 @@ describe("TuiAltScreen", () => {
 
         assert.deepStrictEqual(copied, []);
         assert.strictEqual(tui.hasActiveSelection(), true);
-        assert.ok(
-          terminal.events.some((event) => event.type === "write" && event.data.includes("\x1b[7m")),
-        );
+        assert.ok(someWriteSince(terminal, 0, "\x1b[7m"));
         assert.ok(terminal.getViewport().every((line) => !line.includes("Copied!")));
 
         tui.stop();
@@ -230,7 +227,7 @@ describe("TuiAltScreen", () => {
         yield* Effect.promise(() => terminal.waitForRender());
 
         assert.deepStrictEqual(copied, ["alpha\nbeta"]);
-        assert.ok(terminal.getViewport().some((line) => line.includes("Copied!")));
+        assert.ok(viewportHas(terminal, "Copied!"));
 
         tui.stop();
       }),
@@ -254,7 +251,7 @@ describe("TuiAltScreen", () => {
         terminal.sendInput("\x1b[<0;4;2m");
         yield* Effect.promise(() => terminal.waitForRender());
 
-        assert.ok(terminal.getViewport().some((line) => line.includes("Copy failed")));
+        assert.ok(viewportHas(terminal, "Copy failed"));
         assert.ok(
           terminal.events.every(
             (event) => event.type !== "write" || !event.data.includes("\x1b]52;c;"),

@@ -3,11 +3,9 @@ import { describe, it } from "node:test";
 
 import { Deferred, Effect } from "effect";
 
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { Container, type TUI } from "../src/tui.ts";
+import { Container } from "../src/tui.ts";
 import { FocusableOverlay } from "./overlay-non-capturing-focusable-overlay.ts";
 import { renderAndFlush, withOverlayTui } from "./overlay-non-capturing-helpers.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("TUI overlay non-capturing", () => {
   describe("focus management", () => {
@@ -191,55 +189,46 @@ function focusManagementCases2(): void {
   it("blocked replacement can move focus internally before overlay restore", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const terminal = new VirtualTerminal(80, 24);
-        const tui: TUI = new TuiMainScreen(terminal);
         const base = new Container();
         const editor = new FocusableOverlay(["EDITOR"]);
         const firstReplacement = new FocusableOverlay(["FIRST"]);
         const secondReplacement = new FocusableOverlay(["SECOND"]);
         const overlay = new FocusableOverlay(["OVERLAY"]);
-        overlay.handleInput = (data: string) => {
-          overlay.inputs.push(data);
-          if (data === "b") tui.setFocus(firstReplacement);
-        };
-        firstReplacement.handleInput = (data: string) => {
-          firstReplacement.inputs.push(data);
-          if (data === "n") tui.setFocus(secondReplacement);
-        };
-        secondReplacement.handleInput = (data: string) => {
-          secondReplacement.inputs.push(data);
-          if (data === "\r") {
-            base.clear();
-            base.addChild(editor);
-            tui.setFocus(editor);
-          }
-        };
         base.addChild(editor);
         base.addChild(firstReplacement);
         base.addChild(secondReplacement);
-        tui.addChild(base);
-        tui.setFocus(editor);
-        tui.start();
-        yield* Effect.gen(function* () {
-          tui.showOverlay(overlay);
-          terminal.sendInput("b");
-          yield* renderAndFlush(tui, terminal);
-          terminal.sendInput("n");
-          yield* renderAndFlush(tui, terminal);
-          terminal.sendInput("2");
-          terminal.sendInput("\r");
-          yield* renderAndFlush(tui, terminal);
+        yield* withOverlayTui({ focus: editor, root: base }, ({ tui, terminal }) =>
+          Effect.gen(function* () {
+            overlay.handleInput = (data: string) => {
+              overlay.inputs.push(data);
+              if (data === "b") tui.setFocus(firstReplacement);
+            };
+            firstReplacement.handleInput = (data: string) => {
+              firstReplacement.inputs.push(data);
+              if (data === "n") tui.setFocus(secondReplacement);
+            };
+            secondReplacement.handleInput = (data: string) => {
+              secondReplacement.inputs.push(data);
+              if (data === "\r") {
+                base.clear();
+                base.addChild(editor);
+                tui.setFocus(editor);
+              }
+            };
+            tui.showOverlay(overlay);
+            terminal.sendInput("b");
+            yield* renderAndFlush(tui, terminal);
+            terminal.sendInput("n");
+            yield* renderAndFlush(tui, terminal);
+            terminal.sendInput("2");
+            terminal.sendInput("\r");
+            yield* renderAndFlush(tui, terminal);
 
-          assert.deepStrictEqual(overlay.inputs, ["b"]);
-          assert.deepStrictEqual(firstReplacement.inputs, ["n"]);
-          assert.deepStrictEqual(secondReplacement.inputs, ["2", "\r"]);
-          assert.strictEqual(overlay.focused, true);
-        }).pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              tui.stop();
-            }),
-          ),
+            assert.deepStrictEqual(overlay.inputs, ["b"]);
+            assert.deepStrictEqual(firstReplacement.inputs, ["n"]);
+            assert.deepStrictEqual(secondReplacement.inputs, ["2", "\r"]);
+            assert.strictEqual(overlay.focused, true);
+          }),
         );
       }),
     ));
