@@ -2,6 +2,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { Clock, DateTime, Effect, Random } from "effect";
+
+import { isEnvSet, readEnv } from "./env.ts";
 import { deleteKittyImage, isImageLine } from "./terminal-image.ts";
 import { type TUI, TuiBase, type TuiStopOptions } from "./tui.ts";
 import { visibleWidth } from "./utils.ts";
@@ -96,7 +99,7 @@ function extractKittyImageRows(line: string): number {
 }
 
 function isTermuxSession(): boolean {
-  return Boolean(process.env["TERMUX_VERSION"]);
+  return isEnvSet("TERMUX_VERSION");
 }
 
 export interface TuiMainScreenRenderState {
@@ -310,11 +313,11 @@ export class TuiMainScreen extends TuiBase implements TUI {
     };
 
     const redrawLogDirectory =
-      process.env["MSA_TUI_DEBUG_REDRAW"] === "1" ? this.logDirectory : undefined;
+      readEnv("MSA_TUI_DEBUG_REDRAW") === "1" ? this.logDirectory : undefined;
     const logRedraw = (reason: string): void => {
       if (redrawLogDirectory === undefined) return;
       const logPath = path.join(redrawLogDirectory, "msa-tui-debug.log");
-      const msg = `[${new Date().toISOString()}] fullRender: ${reason} (prev=${this.previousLines.length}, new=${newLines.length}, height=${height})\n`;
+      const msg = `[${DateTime.formatIso(Effect.runSync(DateTime.now))}] fullRender: ${reason} (prev=${this.previousLines.length}, new=${newLines.length}, height=${height})\n`;
       fs.mkdirSync(path.dirname(logPath), { recursive: true });
       fs.appendFileSync(logPath, msg);
     };
@@ -504,7 +507,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
       if (!isImage && visibleWidth(line) > width) {
         const crashLogPath = path.join(this.logDirectory ?? os.tmpdir(), "msa-tui-crash.log");
         const crashData = [
-          `Crash at ${new Date().toISOString()}`,
+          `Crash at ${DateTime.formatIso(Effect.runSync(DateTime.now))}`,
           `Terminal width: ${width}`,
           `Line ${i} visible width: ${visibleWidth(line)}`,
           "",
@@ -547,12 +550,12 @@ export class TuiMainScreen extends TuiBase implements TUI {
 
     output.append("\x1b[?2026l");
 
-    if (process.env["MSA_TUI_DEBUG"] === "1") {
+    if (readEnv("MSA_TUI_DEBUG") === "1") {
       const debugDir = "/tmp/tui";
       fs.mkdirSync(debugDir, { recursive: true });
       const debugPath = path.join(
         debugDir,
-        `render-${Date.now()}-${Math.random().toString(36).slice(2)}.log`,
+        `render-${Effect.runSync(Clock.currentTimeMillis)}-${Effect.runSync(Random.next).toString(36).slice(2)}.log`,
       );
       const debugData = [
         `firstChanged: ${firstChanged}`,

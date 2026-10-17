@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 import type { ScrollView } from "./components/scroll-view.ts";
 import { allocateStackSizes, visibleStackEntries } from "./components/stack.ts";
 import { getLayoutNode } from "./layout-node.ts";
@@ -302,39 +304,43 @@ function replaceScrollbarCell(
   return `${before}${beforePadding}${targetStyle}${cellPaddingBefore}${replacement}${cellPaddingAfter}${after}`;
 }
 
-export function getScrollbarGeometry(
-  box: LayoutBox,
-  includeHiddenAuto = false,
-): ScrollbarGeometry | undefined {
-  if (box.scrollView === undefined || box.rect.width <= 0 || box.rect.height <= 0) return undefined;
+export const getScrollbarGeometry: {
+  (box: LayoutBox, includeHiddenAuto?: boolean): ScrollbarGeometry | undefined;
+  (includeHiddenAuto?: boolean): (box: LayoutBox) => ScrollbarGeometry | undefined;
+} = dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && !Array.isArray(args[0]),
+  (box: LayoutBox, includeHiddenAuto: boolean = false): ScrollbarGeometry | undefined => {
+    if (box.scrollView === undefined || box.rect.width <= 0 || box.rect.height <= 0)
+      return undefined;
 
-  const contentHeight = box.children[0]?.rect.height ?? box.scrollContentLines?.length ?? 0;
-  const trackHeight = box.rect.height;
-  const canRevealHiddenAuto =
-    includeHiddenAuto && box.scrollView.scrollbar === "auto" && contentHeight > trackHeight;
-  if (!box.scrollView.isScrollbarVisible && !canRevealHiddenAuto) return undefined;
+    const contentHeight = box.children[0]?.rect.height ?? box.scrollContentLines?.length ?? 0;
+    const trackHeight = box.rect.height;
+    const canRevealHiddenAuto =
+      includeHiddenAuto && box.scrollView.scrollbar === "auto" && contentHeight > trackHeight;
+    if (!box.scrollView.isScrollbarVisible && !canRevealHiddenAuto) return undefined;
 
-  const minThumbHeight = Math.min(2, trackHeight);
-  const thumbHeight = Math.max(
-    minThumbHeight,
-    Math.min(trackHeight, Math.round((trackHeight * trackHeight) / contentHeight)),
-  );
-  const maxScrollTop = Math.max(0, contentHeight - trackHeight);
-  const maxThumbTop = trackHeight - thumbHeight;
-  const thumbOffset =
-    maxScrollTop === 0 ? 0 : Math.round((box.scrollView.scrollTop / maxScrollTop) * maxThumbTop);
-  const column = box.rect.x + box.rect.width - 1;
-  if (column < box.clip.x || column >= box.clip.x + box.clip.width) return undefined;
+    const minThumbHeight = Math.min(2, trackHeight);
+    const thumbHeight = Math.max(
+      minThumbHeight,
+      Math.min(trackHeight, Math.round((trackHeight * trackHeight) / contentHeight)),
+    );
+    const maxScrollTop = Math.max(0, contentHeight - trackHeight);
+    const maxThumbTop = trackHeight - thumbHeight;
+    const thumbOffset =
+      maxScrollTop === 0 ? 0 : Math.round((box.scrollView.scrollTop / maxScrollTop) * maxThumbTop);
+    const column = box.rect.x + box.rect.width - 1;
+    if (column < box.clip.x || column >= box.clip.x + box.clip.width) return undefined;
 
-  return {
-    column,
-    trackTop: box.rect.y,
-    trackHeight,
-    thumbTop: box.rect.y + thumbOffset,
-    thumbHeight,
-    maxScrollTop,
-  };
-}
+    return {
+      column,
+      trackTop: box.rect.y,
+      trackHeight,
+      thumbTop: box.rect.y + thumbOffset,
+      thumbHeight,
+      maxScrollTop,
+    };
+  },
+);
 
 function paintScrollbar(box: LayoutBox, screen: string[], totalWidth: number): void {
   const geometry = getScrollbarGeometry(box);
@@ -421,44 +427,48 @@ function paintBox(box: LayoutBox, screen: string[], totalWidth: number): void {
   paintScrollbar(box, screen, totalWidth);
 }
 
-export function renderLayoutFrame(
-  root: Component,
-  width: number,
-  height: number,
-  requestRender: () => void,
-): LayoutFrame {
-  const safeWidth = Math.max(1, Math.floor(width));
-  const safeHeight = Math.max(1, Math.floor(height));
-  const context: LayoutContext = {
-    viewport: { width: safeWidth, height: safeHeight },
-    renderCache: new Map(),
-    requestRender,
-    primaryScrollView: undefined,
-  };
-  const rootBox = layoutComponent(context, root, 0, 0, safeWidth, safeHeight, {
-    x: 0,
-    y: 0,
-    width: safeWidth,
-    height: safeHeight,
-  });
-  const lines = Array.from({ length: safeHeight }, () => "");
-  paintBox(rootBox, lines, safeWidth);
-  return {
-    root: rootBox,
-    width: safeWidth,
-    height: safeHeight,
-    lines,
-    ...(context.primaryScrollView === undefined
-      ? {}
-      : { primaryScrollView: context.primaryScrollView }),
-  };
-}
+export const renderLayoutFrame: {
+  (root: Component, width: number, height: number, requestRender: () => void): LayoutFrame;
+  (width: number, height: number, requestRender: () => void): (root: Component) => LayoutFrame;
+} = dual(
+  4,
+  (root: Component, width: number, height: number, requestRender: () => void): LayoutFrame => {
+    const safeWidth = Math.max(1, Math.floor(width));
+    const safeHeight = Math.max(1, Math.floor(height));
+    const context: LayoutContext = {
+      viewport: { width: safeWidth, height: safeHeight },
+      renderCache: new Map(),
+      requestRender,
+      primaryScrollView: undefined,
+    };
+    const rootBox = layoutComponent(context, root, 0, 0, safeWidth, safeHeight, {
+      x: 0,
+      y: 0,
+      width: safeWidth,
+      height: safeHeight,
+    });
+    const lines = Array.from({ length: safeHeight }, () => "");
+    paintBox(rootBox, lines, safeWidth);
+    return {
+      root: rootBox,
+      width: safeWidth,
+      height: safeHeight,
+      lines,
+      ...(context.primaryScrollView === undefined
+        ? {}
+        : { primaryScrollView: context.primaryScrollView }),
+    };
+  },
+);
 
 function containsPoint(rect: LayoutRect, x: number, y: number): boolean {
   return x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
 }
 
-export function getLayoutBoxesAt(frame: LayoutFrame, x: number, y: number): LayoutBox[] {
+export const getLayoutBoxesAt: {
+  (frame: LayoutFrame, x: number, y: number): LayoutBox[];
+  (x: number, y: number): (frame: LayoutFrame) => LayoutBox[];
+} = dual(3, (frame: LayoutFrame, x: number, y: number): LayoutBox[] => {
   const result: Array<{ box: LayoutBox; depth: number }> = [];
   const visit = (box: LayoutBox, depth: number): void => {
     if (!containsPoint(box.clip, x, y)) return;
@@ -468,12 +478,12 @@ export function getLayoutBoxesAt(frame: LayoutFrame, x: number, y: number): Layo
   visit(frame.root, 0);
   result.sort((a, b) => b.box.layer - a.box.layer || b.depth - a.depth);
   return result.map(({ box }) => box);
-}
+});
 
-export function getScrollViewBox(
-  frame: LayoutFrame,
-  scrollView: ScrollView,
-): LayoutBox | undefined {
+export const getScrollViewBox: {
+  (frame: LayoutFrame, scrollView: ScrollView): LayoutBox | undefined;
+  (scrollView: ScrollView): (frame: LayoutFrame) => LayoutBox | undefined;
+} = dual(2, (frame: LayoutFrame, scrollView: ScrollView): LayoutBox | undefined => {
   const visit = (box: LayoutBox): LayoutBox | undefined => {
     if (box.scrollView === scrollView) return box;
     for (const child of box.children) {
@@ -483,9 +493,12 @@ export function getScrollViewBox(
     return undefined;
   };
   return visit(frame.root);
-}
+});
 
-export function getScrollViewsAt(frame: LayoutFrame, x: number, y: number): ScrollView[] {
+export const getScrollViewsAt: {
+  (frame: LayoutFrame, x: number, y: number): ScrollView[];
+  (x: number, y: number): (frame: LayoutFrame) => ScrollView[];
+} = dual(3, (frame: LayoutFrame, x: number, y: number): ScrollView[] => {
   const result: Array<{ scrollView: ScrollView; depth: number }> = [];
   const visit = (box: LayoutBox, depth: number): void => {
     if (!containsPoint(box.clip, x, y)) return;
@@ -496,4 +509,4 @@ export function getScrollViewsAt(frame: LayoutFrame, x: number, y: number): Scro
   visit(frame.root, 0);
   result.sort((a, b) => b.depth - a.depth);
   return result.map((entry) => entry.scrollView);
-}
+});

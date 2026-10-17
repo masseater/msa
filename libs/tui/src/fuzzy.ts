@@ -1,9 +1,13 @@
+import { dual } from "effect/Function";
 export interface FuzzyMatch {
   matches: boolean;
   score: number;
 }
 
-export function fuzzyMatch(query: string, text: string): FuzzyMatch {
+export const fuzzyMatch: {
+  (query: string, text: string): FuzzyMatch;
+  (text: string): (query: string) => FuzzyMatch;
+} = dual(2, (query: string, text: string): FuzzyMatch => {
   const queryLower = query.toLowerCase();
   const textLower = text.toLowerCase();
 
@@ -82,9 +86,12 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatch {
   }
 
   return { matches: true, score: swappedMatch.score + 5 };
-}
+});
 
-export function fuzzyFilter<T>(items: T[], query: string, getText: (item: T) => string): T[] {
+export const fuzzyFilter: {
+  <T>(items: T[], query: string, getText: (item: T) => string): T[];
+  <T>(query: string, getText: (item: T) => string): (items: T[]) => T[];
+} = dual(3, <T>(items: T[], query: string, getText: (item: T) => string): T[] => {
   if (query.trim() === "") {
     return items;
   }
@@ -122,4 +129,4 @@ export function fuzzyFilter<T>(items: T[], query: string, getText: (item: T) => 
 
   results.sort((a, b) => a.totalScore - b.totalScore);
   return results.map((r) => r.item);
-}
+});

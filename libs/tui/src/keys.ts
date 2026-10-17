@@ -1,3 +1,6 @@
+import { dual } from "effect/Function";
+
+import { isEnvSet } from "./env.ts";
 let _kittyProtocolActive = false;
 
 export function setKittyProtocolActive(active: boolean): void {
@@ -644,10 +647,10 @@ function matchesModifyOtherKeys(
 
 function isWindowsTerminalSession(): boolean {
   return (
-    Boolean(process.env["WT_SESSION"]) &&
-    (process.env["SSH_CONNECTION"] === undefined || process.env["SSH_CONNECTION"] === "") &&
-    (process.env["SSH_CLIENT"] === undefined || process.env["SSH_CLIENT"] === "") &&
-    (process.env["SSH_TTY"] === undefined || process.env["SSH_TTY"] === "")
+    isEnvSet("WT_SESSION") &&
+    !isEnvSet("SSH_CONNECTION") &&
+    !isEnvSet("SSH_CLIENT") &&
+    !isEnvSet("SSH_TTY")
   );
 }
 
@@ -740,7 +743,10 @@ function parseKeyId(
   };
 }
 
-export function matchesKey(data: string, keyId: KeyId): boolean {
+export const matchesKey: {
+  (data: string, keyId: KeyId): boolean;
+  (keyId: KeyId): (data: string) => boolean;
+} = dual(2, (data: string, keyId: KeyId): boolean => {
   const parsed = parseKeyId(keyId);
   if (parsed === null) return false;
 
@@ -1117,7 +1123,7 @@ export function matchesKey(data: string, keyId: KeyId): boolean {
   }
 
   return false;
-}
+});
 
 function formatParsedKey(
   codepoint: number,

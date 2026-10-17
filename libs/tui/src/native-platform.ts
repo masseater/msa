@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import * as path from "node:path";
 
+import { isEnvSet } from "./env.ts";
 import { getNativeModuleCandidates } from "./native-module-path.ts";
 
 const cjsRequire = createRequire(import.meta.url);
@@ -53,6 +54,6 @@ export function getNativePlatformHelper(): NativePlatformHelper | undefined {
 
 export function getNativeClipboard(): NativeClipboard | undefined {
   if (process.platform !== "linux") return getNativePlatformHelper();
-  if (process.env["DISPLAY"] === undefined || process.env["DISPLAY"] === "") return undefined;
+  if (!isEnvSet("DISPLAY")) return undefined;
   return loadNativePlatformHelper("linux", "-x11");
 }

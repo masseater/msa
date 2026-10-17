@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 import type { RgbColor } from "./terminal-colors.ts";
 
 type Vector = [number, number, number];
@@ -169,7 +171,10 @@ function chromaStops(L: number, a: number, b: number): [number, number, number] 
   return [c0, cMid, cMax];
 }
 
-export function okhslToRgb(hue: number, saturation: number, lightness: number): RgbColor {
+export const okhslToRgb: {
+  (hue: number, saturation: number, lightness: number): RgbColor;
+  (saturation: number, lightness: number): (hue: number) => RgbColor;
+} = dual(3, (hue: number, saturation: number, lightness: number): RgbColor => {
   const L = okhslToOklabLightness(lightness);
   let lab: Vector = [L, 0, 0];
   if (L > 0 && L < 1 && saturation > 0) {
@@ -190,7 +195,7 @@ export function okhslToRgb(hue: number, saturation: number, lightness: number): 
     lab = [L, chroma * a, chroma * b];
   }
   return linearSrgbToRgb(oklabToLinearSrgb(lab));
-}
+});
 
 export function rgbToOkhsl(rgb: RgbColor): { h: number; s: number; l: number } {
   const [L, labA, labB] = rgbToOklab(rgb);

@@ -3,7 +3,11 @@ import { homedir } from "node:os";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { Effect, Random } from "effect";
+import { dual } from "effect/Function";
+
 import type { TerminalColorMode } from "./colors.ts";
+import { isEnvSet, readEnv } from "./env.ts";
 
 export type ImageProtocol = "kitty" | "iterm2" | null;
 
@@ -63,18 +67,15 @@ function probeTmuxHyperlinks(): boolean {
 function detectCapabilitiesFromEnvironment(
   tmuxForwardsHyperlink: () => boolean,
 ): TerminalCapabilities {
-  const termProgram = process.env["TERM_PROGRAM"]?.toLowerCase() || "";
-  const terminalEmulator = process.env["TERMINAL_EMULATOR"]?.toLowerCase() || "";
-  const term = process.env["TERM"]?.toLowerCase() || "";
-  const colorTerm = process.env["COLORTERM"]?.toLowerCase() || "";
+  const termProgram = readEnv("TERM_PROGRAM")?.toLowerCase() ?? "";
+  const terminalEmulator = readEnv("TERMINAL_EMULATOR")?.toLowerCase() ?? "";
+  const term = readEnv("TERM")?.toLowerCase() ?? "";
+  const colorTerm = readEnv("COLORTERM")?.toLowerCase() ?? "";
   const hasTrueColorHint =
     colorTerm === "truecolor" || colorTerm === "24bit" || term.endsWith("-direct");
   const isWindowsConsole = process.platform === "win32";
 
-  if (
-    (process.env["TMUX"] !== undefined && process.env["TMUX"] !== "") ||
-    term.startsWith("tmux")
-  ) {
+  if (isEnvSet("TMUX") || term.startsWith("tmux")) {
     return { images: null, trueColor: hasTrueColorHint, hyperlinks: tmuxForwardsHyperlink() };
   }
 
@@ -86,46 +87,31 @@ function detectCapabilitiesFromEnvironment(
     return { images: "kitty", trueColor: hasTrueColorHint, hyperlinks: true };
   }
 
-  if (
-    (process.env["KITTY_WINDOW_ID"] !== undefined && process.env["KITTY_WINDOW_ID"] !== "") ||
-    termProgram === "kitty"
-  ) {
+  if (isEnvSet("KITTY_WINDOW_ID") || termProgram === "kitty") {
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
-  if (
-    termProgram === "ghostty" ||
-    term.includes("ghostty") ||
-    (process.env["GHOSTTY_RESOURCES_DIR"] !== undefined &&
-      process.env["GHOSTTY_RESOURCES_DIR"] !== "")
-  ) {
+  if (termProgram === "ghostty" || term.includes("ghostty") || isEnvSet("GHOSTTY_RESOURCES_DIR")) {
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
-  if (
-    (process.env["WEZTERM_PANE"] !== undefined && process.env["WEZTERM_PANE"] !== "") ||
-    termProgram === "wezterm"
-  ) {
+  if (isEnvSet("WEZTERM_PANE") || termProgram === "wezterm") {
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
   if (
     termProgram === "warpterminal" ||
-    (process.env["WARP_SESSION_ID"] !== undefined && process.env["WARP_SESSION_ID"] !== "") ||
-    (process.env["WARP_TERMINAL_SESSION_UUID"] !== undefined &&
-      process.env["WARP_TERMINAL_SESSION_UUID"] !== "")
+    isEnvSet("WARP_SESSION_ID") ||
+    isEnvSet("WARP_TERMINAL_SESSION_UUID")
   ) {
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
-  if (
-    (process.env["ITERM_SESSION_ID"] !== undefined && process.env["ITERM_SESSION_ID"] !== "") ||
-    termProgram === "iterm.app"
-  ) {
+  if (isEnvSet("ITERM_SESSION_ID") || termProgram === "iterm.app") {
     return { images: "iterm2", trueColor: true, hyperlinks: true };
   }
 
-  if (process.env["WT_SESSION"] !== undefined && process.env["WT_SESSION"] !== "") {
+  if (isEnvSet("WT_SESSION")) {
     return { images: null, trueColor: true, hyperlinks: true };
   }
 
@@ -151,18 +137,18 @@ function parseBooleanCapabilityOverride(value: string | undefined): boolean | un
 export function detectCapabilities(
   tmuxForwardsHyperlink: () => boolean = probeTmuxHyperlinks,
 ): TerminalCapabilities {
-  const hyperlinks = parseBooleanCapabilityOverride(process.env["MSA_HYPERLINKS"]);
+  const hyperlinks = parseBooleanCapabilityOverride(readEnv("MSA_HYPERLINKS"));
   const detected = detectCapabilitiesFromEnvironment(
     hyperlinks === undefined ? tmuxForwardsHyperlink : () => hyperlinks,
   );
-  const imageProtocol = process.env["MSA_IMAGE_PROTOCOL"]?.toLowerCase();
+  const imageProtocol = readEnv("MSA_IMAGE_PROTOCOL")?.toLowerCase();
   const images =
     imageProtocol === "kitty" || imageProtocol === "iterm2"
       ? imageProtocol
       : imageProtocol === "none" || imageProtocol === "0"
         ? null
         : undefined;
-  const trueColor = parseBooleanCapabilityOverride(process.env["MSA_TRUE_COLOR"]);
+  const trueColor = parseBooleanCapabilityOverride(readEnv("MSA_TRUE_COLOR"));
   return {
     ...detected,
     ...(images === undefined ? {} : { images }),
@@ -219,53 +205,72 @@ export function isImageLine(line: string): boolean {
 }
 
 export function allocateImageId(): number {
-  return Math.floor(Math.random() * 0xfffffffe) + 1;
+  return Math.floor(Effect.runSync(Random.next) * 0xfffffffe) + 1;
 }
 
-export function encodeKitty(
-  base64Data: string,
-  options: {
+export const encodeKitty: {
+  (
+    base64Data: string,
+    options?: {
+      columns?: number;
+      rows?: number;
+      imageId?: number | undefined;
+      moveCursor?: boolean | undefined;
+    },
+  ): string;
+  (options?: {
     columns?: number;
     rows?: number;
     imageId?: number | undefined;
     moveCursor?: boolean | undefined;
-  } = {},
-): string {
-  const CHUNK_SIZE = 4096;
+  }): (base64Data: string) => string;
+} = dual(
+  (args) => typeof args[0] === "string",
+  (
+    base64Data: string,
+    options: {
+      columns?: number;
+      rows?: number;
+      imageId?: number | undefined;
+      moveCursor?: boolean | undefined;
+    } = {},
+  ): string => {
+    const CHUNK_SIZE = 4096;
 
-  const params: string[] = ["a=T", "f=100", "q=2"];
+    const params: string[] = ["a=T", "f=100", "q=2"];
 
-  if (options.moveCursor === false) params.push("C=1");
-  if (options.columns !== undefined && options.columns !== 0) params.push(`c=${options.columns}`);
-  if (options.rows !== undefined && options.rows !== 0) params.push(`r=${options.rows}`);
-  if (options.imageId !== undefined && options.imageId !== 0) params.push(`i=${options.imageId}`);
+    if (options.moveCursor === false) params.push("C=1");
+    if (options.columns !== undefined && options.columns !== 0) params.push(`c=${options.columns}`);
+    if (options.rows !== undefined && options.rows !== 0) params.push(`r=${options.rows}`);
+    if (options.imageId !== undefined && options.imageId !== 0) params.push(`i=${options.imageId}`);
 
-  if (base64Data.length <= CHUNK_SIZE) {
-    return `\x1b_G${params.join(",")};${base64Data}\x1b\\`;
-  }
-
-  const chunks: string[] = [];
-  let offset = 0;
-  let isFirst = true;
-
-  while (offset < base64Data.length) {
-    const chunk = base64Data.slice(offset, offset + CHUNK_SIZE);
-    const isLast = offset + CHUNK_SIZE >= base64Data.length;
-
-    if (isFirst) {
-      chunks.push(`\x1b_G${params.join(",")},m=1;${chunk}\x1b\\`);
-      isFirst = false;
-    } else if (isLast) {
-      chunks.push(`\x1b_Gm=0;${chunk}\x1b\\`);
-    } else {
-      chunks.push(`\x1b_Gm=1;${chunk}\x1b\\`);
+    if (base64Data.length <= CHUNK_SIZE) {
+      return `\x1b_G${params.join(",")};${base64Data}\x1b\\`;
     }
 
-    offset += CHUNK_SIZE;
-  }
+    const chunks: string[] = [];
+    let offset = 0;
+    let isFirst = true;
 
-  return chunks.join("");
-}
+    while (offset < base64Data.length) {
+      const chunk = base64Data.slice(offset, offset + CHUNK_SIZE);
+      const isLast = offset + CHUNK_SIZE >= base64Data.length;
+
+      if (isFirst) {
+        chunks.push(`\x1b_G${params.join(",")},m=1;${chunk}\x1b\\`);
+        isFirst = false;
+      } else if (isLast) {
+        chunks.push(`\x1b_Gm=0;${chunk}\x1b\\`);
+      } else {
+        chunks.push(`\x1b_Gm=1;${chunk}\x1b\\`);
+      }
+
+      offset += CHUNK_SIZE;
+    }
+
+    return chunks.join("");
+  },
+);
 
 export function deleteKittyImage(imageId: number): string {
   return `\x1b_Ga=d,d=I,i=${imageId},q=2\x1b\\`;
@@ -279,33 +284,54 @@ export function deleteAllKittyPlacements(): string {
   return "\x1b_Ga=d,d=a,q=2\x1b\\";
 }
 
-export function encodeITerm2(
-  base64Data: string,
-  options: {
+export const encodeITerm2: {
+  (
+    base64Data: string,
+    options?: {
+      width?: number | string;
+      height?: number | string;
+      name?: string;
+      preserveAspectRatio?: boolean;
+      inline?: boolean;
+    },
+  ): string;
+  (options?: {
     width?: number | string;
     height?: number | string;
     name?: string;
     preserveAspectRatio?: boolean;
     inline?: boolean;
-  } = {},
-): string {
-  const params: string[] = [
-    `inline=${options.inline === false ? 0 : 1}`,
-    `size=${Buffer.byteLength(base64Data, "base64")}`,
-  ];
+  }): (base64Data: string) => string;
+} = dual(
+  (args) => typeof args[0] === "string",
+  (
+    base64Data: string,
+    options: {
+      width?: number | string;
+      height?: number | string;
+      name?: string;
+      preserveAspectRatio?: boolean;
+      inline?: boolean;
+    } = {},
+  ): string => {
+    const params: string[] = [
+      `inline=${options.inline === false ? 0 : 1}`,
+      `size=${Buffer.byteLength(base64Data, "base64")}`,
+    ];
 
-  if (options.width !== undefined) params.push(`width=${options.width}`);
-  if (options.height !== undefined) params.push(`height=${options.height}`);
-  if (options.name !== undefined && options.name !== "") {
-    const nameBase64 = Buffer.from(options.name).toString("base64");
-    params.push(`name=${nameBase64}`);
-  }
-  if (options.preserveAspectRatio === false) {
-    params.push("preserveAspectRatio=0");
-  }
+    if (options.width !== undefined) params.push(`width=${options.width}`);
+    if (options.height !== undefined) params.push(`height=${options.height}`);
+    if (options.name !== undefined && options.name !== "") {
+      const nameBase64 = Buffer.from(options.name).toString("base64");
+      params.push(`name=${nameBase64}`);
+    }
+    if (options.preserveAspectRatio === false) {
+      params.push("preserveAspectRatio=0");
+    }
 
-  return `\x1b]1337;File=${params.join(";")}:${base64Data}\x07`;
-}
+    return `\x1b]1337;File=${params.join(";")}:${base64Data}\x07`;
+  },
+);
 
 export interface ImageCellSize {
   columns: number;
@@ -448,7 +474,10 @@ export function getKittyImagePlacement(line: string): KittyImagePlacement | unde
   };
 }
 
-export function cropKittyImageLine(line: string, hiddenRows: number, visibleRows: number): string {
+export const cropKittyImageLine: {
+  (line: string, hiddenRows: number, visibleRows: number): string;
+  (hiddenRows: number, visibleRows: number): (line: string) => string;
+} = dual(3, (line: string, hiddenRows: number, visibleRows: number): string => {
   const metadata = getKittyImageMetadata(line);
   const match = /\x1b_G([^;]*);/u.exec(line);
   const imageControls = match?.[1];
@@ -469,7 +498,7 @@ export function cropKittyImageLine(line: string, hiddenRows: number, visibleRows
   const controls = imageControls.split(",").filter((control) => !/^[yhr]=/u.test(control));
   controls.push(`y=${sourceY}`, `h=${sourceHeight}`, `r=${croppedRows}`);
   return `${line.slice(0, match.index)}\x1b_G${controls.join(",")};${line.slice(match.index + match[0].length)}`;
-}
+});
 
 function chooseLessDistortedCellCount(upperCount: number, idealCount: number): number {
   if (upperCount <= 1) return upperCount;
@@ -480,57 +509,81 @@ function chooseLessDistortedCellCount(upperCount: number, idealCount: number): n
   return lowerDistortion < upperDistortion ? lowerCount : upperCount;
 }
 
-export function calculateImageCellSize(
-  imageDimensions: ImageDimensions,
-  maxWidthCells: number,
-  maxHeightCells?: number,
-  cellSize: CellDimensions = { widthPx: 9, heightPx: 18 },
-  optimizeAspectRatio = false,
-): ImageCellSize {
-  const maxWidth = Math.max(1, Math.floor(maxWidthCells));
-  const maxHeight =
-    maxHeightCells === undefined ? undefined : Math.max(1, Math.floor(maxHeightCells));
-  const imageWidth = Math.max(1, imageDimensions.widthPx);
-  const imageHeight = Math.max(1, imageDimensions.heightPx);
+export const calculateImageCellSize: {
+  (
+    imageDimensions: ImageDimensions,
+    maxWidthCells: number,
+    maxHeightCells?: number,
+    cellSize?: CellDimensions,
+    optimizeAspectRatio?: boolean,
+  ): ImageCellSize;
+  (
+    maxWidthCells: number,
+    maxHeightCells?: number,
+    cellSize?: CellDimensions,
+    optimizeAspectRatio?: boolean,
+  ): (imageDimensions: ImageDimensions) => ImageCellSize;
+} = dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && !Array.isArray(args[0]),
+  (
+    imageDimensions: ImageDimensions,
+    maxWidthCells: number,
+    maxHeightCells?: number,
+    cellSize: CellDimensions = { widthPx: 9, heightPx: 18 },
+    optimizeAspectRatio: boolean = false,
+  ): ImageCellSize => {
+    const maxWidth = Math.max(1, Math.floor(maxWidthCells));
+    const maxHeight =
+      maxHeightCells === undefined ? undefined : Math.max(1, Math.floor(maxHeightCells));
+    const imageWidth = Math.max(1, imageDimensions.widthPx);
+    const imageHeight = Math.max(1, imageDimensions.heightPx);
 
-  const widthScale = (maxWidth * cellSize.widthPx) / imageWidth;
-  const heightScale =
-    maxHeight === undefined ? widthScale : (maxHeight * cellSize.heightPx) / imageHeight;
-  const scale = Math.min(widthScale, heightScale);
+    const widthScale = (maxWidth * cellSize.widthPx) / imageWidth;
+    const heightScale =
+      maxHeight === undefined ? widthScale : (maxHeight * cellSize.heightPx) / imageHeight;
+    const scale = Math.min(widthScale, heightScale);
 
-  const scaledWidthPx = imageWidth * scale;
-  const scaledHeightPx = imageHeight * scale;
-  let columns = Math.max(1, Math.min(maxWidth, Math.ceil(scaledWidthPx / cellSize.widthPx)));
-  const heightRows = scaledHeightPx / cellSize.heightPx;
-  let rows = Math.max(1, Math.ceil(heightRows));
-  if (maxHeight !== undefined) {
-    rows = Math.min(maxHeight, rows);
-  }
+    const scaledWidthPx = imageWidth * scale;
+    const scaledHeightPx = imageHeight * scale;
+    let columns = Math.max(1, Math.min(maxWidth, Math.ceil(scaledWidthPx / cellSize.widthPx)));
+    const heightRows = scaledHeightPx / cellSize.heightPx;
+    let rows = Math.max(1, Math.ceil(heightRows));
+    if (maxHeight !== undefined) {
+      rows = Math.min(maxHeight, rows);
+    }
 
-  if (!optimizeAspectRatio) {
+    if (!optimizeAspectRatio) {
+      return { columns, rows };
+    }
+
+    if (widthScale <= heightScale) {
+      const idealRows =
+        (columns * cellSize.widthPx * imageHeight) / (imageWidth * cellDimensions.heightPx);
+      rows = chooseLessDistortedCellCount(rows, idealRows);
+    } else {
+      const idealColumns =
+        (rows * cellSize.heightPx * imageWidth) / (imageHeight * cellDimensions.widthPx);
+      columns = chooseLessDistortedCellCount(columns, idealColumns);
+    }
+
     return { columns, rows };
-  }
+  },
+);
 
-  if (widthScale <= heightScale) {
-    const idealRows =
-      (columns * cellSize.widthPx * imageHeight) / (imageWidth * cellDimensions.heightPx);
-    rows = chooseLessDistortedCellCount(rows, idealRows);
-  } else {
-    const idealColumns =
-      (rows * cellSize.heightPx * imageWidth) / (imageHeight * cellDimensions.widthPx);
-    columns = chooseLessDistortedCellCount(columns, idealColumns);
-  }
-
-  return { columns, rows };
-}
-
-export function calculateImageRows(
-  imageDimensions: ImageDimensions,
-  targetWidthCells: number,
-  cellSize: CellDimensions = { widthPx: 9, heightPx: 18 },
-): number {
-  return calculateImageCellSize(imageDimensions, targetWidthCells, undefined, cellSize).rows;
-}
+export const calculateImageRows: {
+  (imageDimensions: ImageDimensions, targetWidthCells: number, cellSize?: CellDimensions): number;
+  (
+    targetWidthCells: number,
+    cellSize?: CellDimensions,
+  ): (imageDimensions: ImageDimensions) => number;
+} = dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && !Array.isArray(args[0]),
+  (
+    imageDimensions: ImageDimensions,
+    targetWidthCells: number,
+    cellSize: CellDimensions = { widthPx: 9, heightPx: 18 },
+  ): number => calculateImageCellSize(imageDimensions, targetWidthCells, undefined, cellSize).rows,
+);
 
 export function getPngDimensions(base64Data: string): ImageDimensions | null {
   try {
@@ -657,7 +710,10 @@ export function getWebpDimensions(base64Data: string): ImageDimensions | null {
   }
 }
 
-export function getImageDimensions(base64Data: string, mimeType: string): ImageDimensions | null {
+export const getImageDimensions: {
+  (base64Data: string, mimeType: string): ImageDimensions | null;
+  (mimeType: string): (base64Data: string) => ImageDimensions | null;
+} = dual(2, (base64Data: string, mimeType: string): ImageDimensions | null => {
   if (mimeType === "image/png") {
     return getPngDimensions(base64Data);
   }
@@ -671,62 +727,78 @@ export function getImageDimensions(base64Data: string, mimeType: string): ImageD
     return getWebpDimensions(base64Data);
   }
   return null;
-}
+});
 
-export function renderImage(
-  base64Data: string,
-  imageDimensions: ImageDimensions,
-  options: ImageRenderOptions = {},
-): { sequence: string; columns: number; rows: number; imageId?: number | undefined } | null {
-  const caps = getCapabilities();
+export const renderImage: {
+  (
+    base64Data: string,
+    imageDimensions: ImageDimensions,
+    options?: ImageRenderOptions,
+  ): { sequence: string; columns: number; rows: number; imageId?: number | undefined } | null;
+  (
+    imageDimensions: ImageDimensions,
+    options?: ImageRenderOptions,
+  ): (
+    base64Data: string,
+  ) => { sequence: string; columns: number; rows: number; imageId?: number | undefined } | null;
+} = dual(
+  (args) => typeof args[0] === "string",
+  (
+    base64Data: string,
+    imageDimensions: ImageDimensions,
+    options: ImageRenderOptions = {},
+  ): { sequence: string; columns: number; rows: number; imageId?: number | undefined } | null => {
+    const caps = getCapabilities();
 
-  if (caps.images === null) {
-    return null;
-  }
+    if (caps.images === null) {
+      return null;
+    }
 
-  const maxWidth = options.maxWidthCells ?? 80;
-  const size = calculateImageCellSize(
-    imageDimensions,
-    maxWidth,
-    options.maxHeightCells,
-    getCellDimensions(),
-    caps.images === "kitty",
-  );
+    const maxWidth = options.maxWidthCells ?? 80;
+    const size = calculateImageCellSize(
+      imageDimensions,
+      maxWidth,
+      options.maxHeightCells,
+      getCellDimensions(),
+      caps.images === "kitty",
+    );
 
-  if (caps.images === "kitty") {
-    if (options.imageId !== undefined) {
-      registerKittyImageMetadata({
-        imageId: options.imageId,
+    if (caps.images === "kitty") {
+      if (options.imageId !== undefined) {
+        registerKittyImageMetadata({
+          imageId: options.imageId,
+          columns: size.columns,
+          rows: size.rows,
+          widthPx: imageDimensions.widthPx,
+          heightPx: imageDimensions.heightPx,
+        });
+      }
+      const sequence = encodeKitty(base64Data, {
         columns: size.columns,
         rows: size.rows,
-        widthPx: imageDimensions.widthPx,
-        heightPx: imageDimensions.heightPx,
+        imageId: options.imageId,
+        moveCursor: options.moveCursor,
       });
+      return { sequence, columns: size.columns, rows: size.rows, imageId: options.imageId };
     }
-    const sequence = encodeKitty(base64Data, {
-      columns: size.columns,
-      rows: size.rows,
-      imageId: options.imageId,
-      moveCursor: options.moveCursor,
-    });
-    return { sequence, columns: size.columns, rows: size.rows, imageId: options.imageId };
-  }
 
-  if (caps.images === "iterm2") {
-    const sequence = encodeITerm2(base64Data, {
-      width: size.columns,
-      height: "auto",
-      preserveAspectRatio: options.preserveAspectRatio ?? true,
-    });
-    return { sequence, columns: size.columns, rows: size.rows };
-  }
+    if (caps.images === "iterm2") {
+      const sequence = encodeITerm2(base64Data, {
+        width: size.columns,
+        height: "auto",
+        preserveAspectRatio: options.preserveAspectRatio ?? true,
+      });
+      return { sequence, columns: size.columns, rows: size.rows };
+    }
 
-  return null;
-}
+    return null;
+  },
+);
 
-export function hyperlink(text: string, url: string): string {
-  return `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
-}
+export const hyperlink: {
+  (text: string, url: string): string;
+  (url: string): (text: string) => string;
+} = dual(2, (text: string, url: string): string => `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`);
 
 function shortenImagePath(filename: string): string {
   const home = homedir();
@@ -739,21 +811,23 @@ function shortenImagePath(filename: string): string {
   return filename;
 }
 
-export function imageFallback(
-  mimeType: string,
-  dimensions?: ImageDimensions,
-  filename?: string,
-): string {
-  const parts: string[] = [];
-  if (filename !== undefined && filename !== "") {
-    const display = shortenImagePath(filename);
-    if (getCapabilities().hyperlinks && isAbsolute(filename)) {
-      parts.push(hyperlink(display, pathToFileURL(filename).href));
-    } else {
-      parts.push(display);
+export const imageFallback: {
+  (mimeType: string, dimensions?: ImageDimensions, filename?: string): string;
+  (dimensions?: ImageDimensions, filename?: string): (mimeType: string) => string;
+} = dual(
+  (args) => typeof args[0] === "string",
+  (mimeType: string, dimensions?: ImageDimensions, filename?: string): string => {
+    const parts: string[] = [];
+    if (filename !== undefined && filename !== "") {
+      const display = shortenImagePath(filename);
+      if (getCapabilities().hyperlinks && isAbsolute(filename)) {
+        parts.push(hyperlink(display, pathToFileURL(filename).href));
+      } else {
+        parts.push(display);
+      }
     }
-  }
-  parts.push(`[${mimeType}]`);
-  if (dimensions !== undefined) parts.push(`${dimensions.widthPx}x${dimensions.heightPx}`);
-  return `[Image: ${parts.join(" ")}]`;
-}
+    parts.push(`[${mimeType}]`);
+    if (dimensions !== undefined) parts.push(`${dimensions.widthPx}x${dimensions.heightPx}`);
+    return `[Image: ${parts.join(" ")}]`;
+  },
+);

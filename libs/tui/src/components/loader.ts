@@ -1,3 +1,4 @@
+import { type CancelDelay, runEvery } from "../delay.ts";
 import type { TUI } from "../tui.ts";
 import { Text } from "./text.ts";
 
@@ -13,7 +14,7 @@ export class Loader extends Text {
   private frames = [...DEFAULT_FRAMES];
   private intervalMs = DEFAULT_INTERVAL_MS;
   private currentFrame = 0;
-  private intervalId: NodeJS.Timeout | null = null;
+  private cancelAnimation: CancelDelay | null = null;
   private ui: TUI | null = null;
   private renderIndicatorVerbatim = false;
   private spinnerColorFn: (str: string) => string;
@@ -45,9 +46,9 @@ export class Loader extends Text {
   }
 
   stop(): void {
-    if (this.intervalId !== null) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+    if (this.cancelAnimation !== null) {
+      this.cancelAnimation();
+      this.cancelAnimation = null;
     }
   }
 
@@ -77,10 +78,10 @@ export class Loader extends Text {
     if (this.frames.length <= 1) {
       return;
     }
-    this.intervalId = setInterval(() => {
+    this.cancelAnimation = runEvery(this.intervalMs, () => {
       this.currentFrame = (this.currentFrame + 1) % this.frames.length;
       this.updateDisplay();
-    }, this.intervalMs);
+    });
   }
 
   protected getRenderedIndicator(): string {

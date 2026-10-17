@@ -1,5 +1,7 @@
 import { EventEmitter } from "events";
 
+import { type CancelDelay, runAfter } from "./delay.ts";
+
 const ESC = "\x1b";
 const DEFAULT_SEQUENCE_TIMEOUT_MS = 50;
 const DEFAULT_ESCAPE_TIMEOUT_MS = 10;
@@ -210,7 +212,7 @@ export type StdinBufferEventMap = {
 
 export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
   private buffer: string = "";
-  private timeout: ReturnType<typeof setTimeout> | null = null;
+  private cancelTimeout: CancelDelay | null = null;
   private readonly timeoutMs: number;
   private readonly escapeTimeoutMs: number;
   private pasteMode: boolean = false;
@@ -224,9 +226,9 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
   }
 
   public process(data: string | Buffer): void {
-    if (this.timeout !== null) {
-      clearTimeout(this.timeout);
-      this.timeout = null;
+    if (this.cancelTimeout !== null) {
+      this.cancelTimeout();
+      this.cancelTimeout = null;
     }
 
     let str: string;
@@ -314,7 +316,7 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
     if (this.buffer.length > 0) {
       if (TERMINAL_REPLY_HEADER_PATTERN.test(this.buffer)) return;
       const timeoutMs = this.buffer === ESC ? this.escapeTimeoutMs : this.timeoutMs;
-      this.timeout = setTimeout(() => {
+      this.cancelTimeout = runAfter(timeoutMs, () => {
         const flushed = this.flush();
 
         for (const sequence of flushed) {
@@ -325,7 +327,7 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
             this.emitDataSequence(sequence);
           }
         }
-      }, timeoutMs);
+      });
     }
   }
 
@@ -341,9 +343,9 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
   }
 
   flush(): string[] {
-    if (this.timeout !== null) {
-      clearTimeout(this.timeout);
-      this.timeout = null;
+    if (this.cancelTimeout !== null) {
+      this.cancelTimeout();
+      this.cancelTimeout = null;
     }
 
     if (this.buffer.length === 0) {
@@ -357,9 +359,9 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
   }
 
   clear(): void {
-    if (this.timeout !== null) {
-      clearTimeout(this.timeout);
-      this.timeout = null;
+    if (this.cancelTimeout !== null) {
+      this.cancelTimeout();
+      this.cancelTimeout = null;
     }
     this.buffer = "";
     this.pasteMode = false;
