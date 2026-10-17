@@ -32,12 +32,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([
-  resolveApiKey("anthropic"),
-  resolveApiKey("github-copilot"),
-  resolveApiKey("openai-codex"),
-]);
-const [anthropicOAuthToken, githubCopilotToken, openaiCodexToken] = oauthTokens;
+const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
+const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
 
 // Calculator tool definition (same as examples)
 // Note: Using StringEnum helper because Google's API doesn't support anyOf/const patterns
@@ -1525,80 +1521,6 @@ describe("Generate E2E Tests", () => {
 
     it.skipIf(!anthropicOAuthToken)("should handle image input", { retry: 3 }, async () => {
       await handleImage(model, { apiKey: anthropicOAuthToken });
-    });
-  });
-
-  describe("GitHub Copilot Provider (gpt-5.3-codex via OpenAI Completions)", () => {
-    const llm = getModel("github-copilot", "gpt-5.3-codex");
-
-    it.skipIf(!githubCopilotToken)(
-      "should complete basic text generation",
-      { retry: 3 },
-      async () => {
-        await basicTextGeneration(llm, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(llm, { apiKey: githubCopilotToken });
-    });
-
-    it.skipIf(!githubCopilotToken)("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(llm, { apiKey: githubCopilotToken });
-    });
-
-    it.skipIf(!githubCopilotToken)("should handle thinking", { retry: 2 }, async () => {
-      const thinkingModel = getModel("github-copilot", "gpt-5-mini");
-      await handleThinking(thinkingModel, { apiKey: githubCopilotToken, reasoningEffort: "high" });
-    });
-
-    it.skipIf(!githubCopilotToken)(
-      "should handle multi-turn with thinking and tools",
-      { retry: 3 },
-      async () => {
-        const thinkingModel = getModel("github-copilot", "gpt-5-mini");
-        await multiTurn(thinkingModel, { apiKey: githubCopilotToken, reasoningEffort: "high" });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)("should handle image input", { retry: 3 }, async () => {
-      await handleImage(llm, { apiKey: githubCopilotToken });
-    });
-  });
-
-  describe("GitHub Copilot Provider (claude-sonnet-4 via Anthropic Messages)", () => {
-    const llm = getModel("github-copilot", "claude-sonnet-4.6");
-
-    it.skipIf(!githubCopilotToken)(
-      "should complete basic text generation",
-      { retry: 3 },
-      async () => {
-        await basicTextGeneration(llm, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(llm, { apiKey: githubCopilotToken });
-    });
-
-    it.skipIf(!githubCopilotToken)("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(llm, { apiKey: githubCopilotToken });
-    });
-
-    it.skipIf(!githubCopilotToken)("should handle thinking", { retry: 2 }, async () => {
-      await handleThinking(llm, { apiKey: githubCopilotToken, thinkingEnabled: true });
-    });
-
-    it.skipIf(!githubCopilotToken)(
-      "should handle multi-turn with thinking and tools",
-      { retry: 3 },
-      async () => {
-        await multiTurn(llm, { apiKey: githubCopilotToken, thinkingEnabled: true });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)("should handle image input", { retry: 3 }, async () => {
-      await handleImage(llm, { apiKey: githubCopilotToken });
     });
   });
 

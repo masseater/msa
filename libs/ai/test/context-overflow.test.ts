@@ -24,11 +24,7 @@ import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([
-  resolveApiKey("github-copilot"),
-  resolveApiKey("openai-codex"),
-]);
-const [githubCopilotToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 // Lorem ipsum paragraph for realistic token estimation
 const LOREM_IPSUM = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. `;
@@ -120,46 +116,6 @@ describe("Context overflow error handling", () => {
       expect(result.errorMessage).toMatch(/prompt is too long/i);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
-  });
-
-  // =============================================================================
-  // GitHub Copilot (OAuth)
-  // Tests both Google and Anthropic models via Copilot
-  // =============================================================================
-
-  describe("GitHub Copilot (OAuth)", () => {
-    // Google model via Copilot
-    it.skipIf(!githubCopilotToken)(
-      "Google model - should detect overflow via isContextOverflow",
-      async () => {
-        const model = getModels("github-copilot").find((candidate) =>
-          candidate.id.startsWith("gemini-"),
-        );
-        if (!model) throw new Error("No Google models available through GitHub Copilot");
-        const result = await testContextOverflow(model, githubCopilotToken!);
-        logResult(result);
-
-        expect(result.stopReason).toBe("error");
-        expect(result.errorMessage).toMatch(/exceeds the limit of \d+/i);
-        expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-      },
-      120000,
-    );
-
-    // Anthropic model via Copilot
-    it.skipIf(!githubCopilotToken)(
-      "claude-sonnet-4 - should detect overflow via isContextOverflow",
-      async () => {
-        const model = getModel("github-copilot", "claude-sonnet-4.6");
-        const result = await testContextOverflow(model, githubCopilotToken!);
-        logResult(result);
-
-        expect(result.stopReason).toBe("error");
-        expect(result.errorMessage).toMatch(/exceeds the limit of \d+|input is too long/i);
-        expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-      },
-      120000,
-    );
   });
 
   // =============================================================================

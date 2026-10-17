@@ -98,7 +98,6 @@ export type KnownProvider =
   | "typesafe"
   | "nvidia"
   | "deepseek"
-  | "github-copilot"
   | "xai"
   | "groq"
   | "cerebras"

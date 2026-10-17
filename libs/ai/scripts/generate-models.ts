@@ -178,13 +178,6 @@ interface AiGatewayModel {
   pricing?: AiGatewayPricing;
 }
 
-const COPILOT_STATIC_HEADERS = {
-  "User-Agent": "GitHubCopilotChat/0.35.0",
-  "Editor-Version": "vscode/1.107.0",
-  "Editor-Plugin-Version": "copilot-chat/0.35.0",
-  "Copilot-Integration-Id": "vscode-chat",
-} as const;
-
 const TOGETHER_BASE_URL = "https://api.together.ai/v1";
 const TOGETHER_BASE_COMPAT: OpenAICompletionsCompat = {
   supportsStore: false,
@@ -288,11 +281,6 @@ const OPENCODE_GO_GLM52_THINKING_LEVEL_MAP = {
   high: "high",
   max: "max",
 } as const;
-const EAGER_TOOL_INPUT_STREAMING_UNSUPPORTED_ANTHROPIC_MODELS = new Set([
-  "github-copilot:claude-haiku-4.5",
-  "github-copilot:claude-sonnet-4",
-  "github-copilot:claude-sonnet-4.5",
-]);
 const ANTHROPIC_ALLOWED_FALLBACK_MODELS = {
   "claude-fable-5": ["claude-opus-4-8", "claude-opus-5"],
   "claude-opus-5": ["claude-opus-4-8"],
@@ -525,34 +513,6 @@ const OPENCODE_OPENAI_COMPLETIONS_LONG_CACHE_RETENTION_UNSUPPORTED_MODELS = new 
   "opencode:minimax-m2.7",
   "opencode-go:kimi-k2.6",
 ]);
-
-// GitHub's "Models with extended capabilities" table lists these Copilot models as supporting
-// the extended 1 million token context window.
-const GITHUB_COPILOT_EXTENDED_CONTEXT_MODELS = new Set([
-  "claude-fable-5",
-  "claude-opus-4.6",
-  "claude-opus-4.7",
-  "claude-opus-4.8",
-  "claude-opus-5",
-  "claude-opus-5.5",
-  "claude-sonnet-4.6",
-  "claude-sonnet-5",
-  "gpt-5.3-codex",
-  "gpt-5.4",
-  "gpt-5.5",
-  "gpt-6-astra",
-  "gpt-6-luna",
-  "gpt-6-sol",
-]);
-
-// Checked manually against the authenticated GitHub Copilot /models endpoint on 2026-06-15.
-// Keep this to narrow corrections over models.dev metadata instead of snapshotting Copilot's catalog.
-const GITHUB_COPILOT_THINKING_LEVEL_OVERRIDES = {
-  "claude-opus-4.7": { minimal: "low" },
-  "claude-opus-4.8": { minimal: "low" },
-  "claude-opus-5": { minimal: "low" },
-  "claude-sonnet-4.6": { minimal: "low", max: "max" },
-} satisfies Record<string, NonNullable<Model<Api>["thinkingLevelMap"]>>;
 
 function mergeThinkingLevelMap(
   model: Model<any>,
@@ -977,15 +937,13 @@ function applyStrictToolCompatMetadata(model: Model<Api>): void {
   }
 }
 
-// Responses endpoints verified (OpenAI, ChatGPT Codex backend, GitHub Copilot,
-// opencode zen) or documented (Azure OpenAI, Cloudflare AI Gateway) to pass
+// Responses endpoints verified (OpenAI, ChatGPT Codex backend, opencode zen) or documented (Azure OpenAI, Cloudflare AI Gateway) to pass
 // OpenAI custom grammar tools through. OpenAI rejects `type: "custom"` tools
 // for pre-GPT-5 models (gpt-4.x, gpt-4o, o-series).
 const OPENAI_GRAMMAR_TOOL_PROVIDERS = new Set([
   "openai",
   "openai-codex",
   "azure",
-  "github-copilot",
   "opencode",
   "cloudflare-ai-gateway",
 ]);
@@ -1025,8 +983,7 @@ function applyOpenAIToolSearchMetadata(model: Model<Api>): void {
 
 // Moonshot Kimi K2.6/K2.7 accept system text after the conversation starts but reject
 // tool-bearing system messages. Kimi K3 accepts both forms; Fireworks and OpenCode pass
-// its tool-bearing form through. GitHub Copilot forwards K3 text but silently drops its
-// tool-bearing message. DeepSeek V4 Pro and OpenAI models behind OpenRouter also accept
+// its tool-bearing form through. DeepSeek V4 Pro and OpenAI models behind OpenRouter also accept
 // plain system text in place. Kimi Coding sets these flags in createKimiCodingModels().
 function applyOpenAICompletionsTranscriptMetadata(model: Model<Api>): void {
   if (model.api !== "openai-completions") return;
@@ -1041,7 +998,6 @@ function applyOpenAICompletionsTranscriptMetadata(model: Model<Api>): void {
       model.id === "kimi-k2.7-code-highspeed");
   const isTextOnly =
     isMoonshotKimiK2 ||
-    (model.provider === "github-copilot" && model.id === "kimi-k3") ||
     (model.provider === "deepseek" && model.id === "deepseek-v4-pro") ||
     (model.provider === "openrouter" &&
       model.id.startsWith("openai/") &&
@@ -1055,10 +1011,10 @@ function applyOpenAICompletionsTranscriptMetadata(model: Model<Api>): void {
 }
 
 // Newer OpenAI Responses models accept developer messages after the conversation has started.
-// OpenCode Zen, OpenCode Go, and GitHub Copilot pass both those messages and
+// OpenCode Zen and OpenCode Go pass both those messages and
 // `additional_tools` items through to OpenAI unchanged; tool search is not verified
 // through those proxies.
-const OPENAI_RESPONSES_PROXY_PROVIDERS = new Set(["opencode", "opencode-go", "github-copilot"]);
+const OPENAI_RESPONSES_PROXY_PROVIDERS = new Set(["opencode", "opencode-go"]);
 
 function applyOpenAIResponsesTranscriptMetadata(model: Model<Api>): void {
   const isOpenAIResponses = model.provider === "openai" && model.api === "openai-responses";
@@ -1189,9 +1145,6 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
       xhigh: "xhigh",
       max: "max",
     });
-  }
-  if (model.provider === "github-copilot" && model.id.startsWith("gpt-5")) {
-    mergeThinkingLevelMap(model, { minimal: "low" });
   }
   if (
     model.api === "openai-responses" &&
@@ -1351,12 +1304,6 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
     // Ring reasons by default. Only high/xhigh have documented explicit effort controls.
     mergeThinkingLevelMap(model, ANT_LING_RING_THINKING_LEVEL_MAP);
   }
-  if (model.provider === "github-copilot") {
-    const override = GITHUB_COPILOT_THINKING_LEVEL_OVERRIDES[model.id];
-    if (override) {
-      mergeThinkingLevelMap(model, override);
-    }
-  }
 }
 
 function getAnthropicMessagesCompat(
@@ -1375,16 +1322,10 @@ function getAnthropicMessagesCompat(
     compat.supportsMidConvoSystemMessages = true;
     compat.supportsMidConvoToolChanges = true;
   }
-  // OpenCode Zen and GitHub Copilot forward mid-conversation system messages but reject
+  // OpenCode Zen forwards mid-conversation system messages but rejects
   // `tool_addition`/`tool_removal` blocks, so tool changes stay top-level there.
-  if (
-    (provider === "opencode" || provider === "github-copilot") &&
-    supportsAnthropicMidConvoSystemMessages(modelId)
-  ) {
+  if (provider === "opencode" && supportsAnthropicMidConvoSystemMessages(modelId)) {
     compat.supportsMidConvoSystemMessages = true;
-  }
-  if (EAGER_TOOL_INPUT_STREAMING_UNSUPPORTED_ANTHROPIC_MODELS.has(`${provider}:${modelId}`)) {
-    compat.supportsEagerToolInputStreaming = false;
   }
   if (provider === "xiaomi" || provider.startsWith("xiaomi-token-plan-")) {
     compat.allowEmptySignature = true;
@@ -2471,64 +2412,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process GitHub Copilot models
-    if (data["github-copilot"]?.models) {
-      for (const [modelId, model] of Object.entries(data["github-copilot"].models)) {
-        const m = model as ModelsDevModel;
-        if (m.tool_call !== true) continue;
-        if (m.status === "deprecated") continue;
-
-        // Claude 4.x and 5.x models route to Anthropic Messages API
-        const isCopilotClaude = /^claude-(haiku|sonnet|opus|fable)-[45]([.\-]|$)/.test(modelId);
-        // GPT, Grok, OSWE, and MAI-Code models are only served through
-        // the Copilot /responses endpoint.
-        const needsResponsesApi =
-          modelId.startsWith("gpt-") ||
-          modelId.startsWith("grok-") ||
-          modelId.startsWith("oswe") ||
-          modelId.startsWith("mai-");
-
-        const api: Api = isCopilotClaude
-          ? "anthropic-messages"
-          : needsResponsesApi
-            ? "openai-responses"
-            : "openai-completions";
-
-        const anthropicCompat =
-          api === "anthropic-messages"
-            ? getAnthropicMessagesCompat("github-copilot", modelId)
-            : undefined;
-
-        const copilotModel: Model<any> = {
-          id: modelId,
-          name: m.name || modelId,
-          api,
-          provider: "github-copilot",
-          baseUrl: "https://api.individual.githubcopilot.com",
-          reasoning: m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
-          cost: getModelsDevCost(m.cost),
-          contextWindow: m.limit?.context || 128000,
-          maxTokens: m.limit?.output || 8192,
-          headers: { ...COPILOT_STATIC_HEADERS },
-          ...(anthropicCompat ? { compat: anthropicCompat } : {}),
-          // compat only applies to openai-completions
-          ...(api === "openai-completions"
-            ? {
-                compat: {
-                  supportsStore: false,
-                  supportsDeveloperRole: false,
-                  supportsReasoningEffort: false,
-                },
-              }
-            : {}),
-        };
-
-        models.push(copilotModel);
-        recordModelsDevReasoningOptions("github-copilot", modelId, m);
-      }
-    }
-
     // Process MiniMax models
     const minimaxVariants = [
       { key: "minimax", provider: "minimax", baseUrl: "https://api.minimax.io/anthropic" },
@@ -2913,71 +2796,14 @@ async function generateModels() {
       ),
   );
 
-  // The authenticated Copilot catalog advertised these models on 2026-09-22,
-  // but models.dev did not include them yet.
-  const missingCopilotModels: Model<Api>[] = [
-    {
-      id: "claude-opus-5.5",
-      name: "Claude Opus 5.5",
-      api: "anthropic-messages",
-      provider: "github-copilot",
-      baseUrl: "https://api.individual.githubcopilot.com",
-      reasoning: true,
-      thinkingLevelMap: {
-        off: null,
-        minimal: null,
-        low: "low",
-        medium: "medium",
-        high: "high",
-        xhigh: "xhigh",
-        max: "max",
-      },
-      input: ["text", "image"],
-      cost: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
-      contextWindow: 1000000,
-      maxTokens: 128000,
-      headers: { ...COPILOT_STATIC_HEADERS },
-    },
-    ...(["gpt-6-sol", "gpt-6-luna"] as const).map((id) => ({
-      id,
-      name: id === "gpt-6-sol" ? "GPT-6 Sol" : "GPT-6 Luna",
-      api: "openai-responses" as const,
-      provider: "github-copilot" as const,
-      baseUrl: "https://api.individual.githubcopilot.com",
-      reasoning: true,
-      input: ["text", "image"] as ("text" | "image")[],
-      cost: withOpenAiLongContextPricing(OPENAI_STANDARD_COSTS[id]),
-      contextWindow: 1000000,
-      maxTokens: 128000,
-      headers: { ...COPILOT_STATIC_HEADERS },
-    })),
-  ];
-  for (const model of missingCopilotModels) {
-    if (
-      !allModels.some(
-        (candidate) => candidate.provider === model.provider && candidate.id === model.id,
-      )
-    ) {
-      allModels.push(model);
-    }
-  }
-
   // Temporary overrides until upstream model metadata is corrected.
   for (const candidate of allModels) {
-    if (
-      candidate.provider === "github-copilot" &&
-      GITHUB_COPILOT_EXTENDED_CONTEXT_MODELS.has(candidate.id)
-    ) {
-      candidate.contextWindow = 1000000;
-    }
-
     // models.dev may list Opus 5.5, Sonnet 5.5, and Haiku 5.5 before their effort metadata is complete.
     if (
-      (candidate.provider === "anthropic" &&
-        (candidate.id === "claude-opus-5-5" ||
-          candidate.id === "claude-sonnet-5-5" ||
-          candidate.id === "claude-haiku-5-5")) ||
-      (candidate.provider === "github-copilot" && candidate.id === "claude-opus-5.5")
+      candidate.provider === "anthropic" &&
+      (candidate.id === "claude-opus-5-5" ||
+        candidate.id === "claude-sonnet-5-5" ||
+        candidate.id === "claude-haiku-5-5")
     ) {
       mergeThinkingLevelMap(candidate, {
         // Haiku 5.5 accepts disabled thinking; Opus 5.5 and Sonnet 5.5 reject it.

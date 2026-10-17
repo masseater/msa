@@ -2,9 +2,9 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { normalizeContext } from "@msa/ai";
+import { createProvider, normalizeContext } from "@msa/ai";
 import type { AnthropicMessagesCompat, Api, Model, OpenAICompletionsCompat } from "@msa/ai/compat";
-import { getApiProvider, getModels, getSupportedThinkingLevels } from "@msa/ai/compat";
+import { getApiProvider, getSupportedThinkingLevels } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -1180,7 +1180,7 @@ describe("ModelRegistry", () => {
       const registry = await createModelRegistry(authStorage, modelsJsonPath);
 
       expect(registry.getProviderDisplayName("openai")).toBe("OpenAI");
-      expect(registry.getProviderDisplayName("github-copilot")).toBe("GitHub Copilot");
+      expect(registry.getProviderDisplayName("openai-codex")).toBe("OpenAI Codex (legacy)");
       expect(registry.getProviderDisplayName("zai")).toBe("Z.AI");
       expect(registry.getProviderDisplayName("unknown-provider")).toBe("unknown-provider");
 
@@ -2111,26 +2111,58 @@ describe("ModelRegistry", () => {
         expect(count).toBe(0);
       });
 
-      test("getAvailable filters GitHub Copilot OAuth models to account picker availability", async () => {
-        const copilotModel = getModels("github-copilot")[0];
-        if (!copilotModel) throw new Error("Expected at least one GitHub Copilot model");
-
-        await authStorage.modify("github-copilot", async () => ({
-          type: "oauth",
-          refresh: "github-access-token",
-          access: "tid=test;exp=9999999999;proxy-ep=proxy.individual.githubcopilot.com;",
-          expires: Date.now() + 60_000,
-          availableModelIds: [copilotModel.id],
+      test("getAvailable applies the provider's credential-specific filterModels", async () => {
+        const chatModel = (id: string): Model<"openai-completions"> => ({
+          id,
+          name: id,
+          api: "openai-completions",
+          provider: "filtered-provider",
+          baseUrl: "https://provider.test/v1",
+          reasoning: false,
+          input: ["text"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 1000,
+          maxTokens: 100,
+        });
+        await authStorage.modify("filtered-provider", async () => ({
+          type: "api_key",
+          key: "limited-key",
         }));
 
         const registry = await createModelRegistry(authStorage, modelsJsonPath);
+        registry.registerProvider(
+          createProvider({
+            id: "filtered-provider",
+            auth: {
+              apiKey: {
+                name: "Filtered",
+                resolve: async ({ credential }) =>
+                  credential?.key ? { auth: { apiKey: credential.key } } : undefined,
+              },
+            },
+            models: [chatModel("allowed"), chatModel("denied")],
+            filterModels: (models, credential) =>
+              credential?.type === "api_key" && credential.key === "limited-key"
+                ? models.filter((m) => m.id === "allowed")
+                : models,
+            api: {
+              stream: () => {
+                throw new Error("not used");
+              },
+              streamSimple: () => {
+                throw new Error("not used");
+              },
+            },
+          }),
+        );
+        await registry.refresh();
 
         expect(
           registry
             .getAvailable()
-            .filter((m) => m.provider === "github-copilot")
+            .filter((m) => m.provider === "filtered-provider")
             .map((m) => m.id),
-        ).toEqual([copilotModel.id]);
+        ).toEqual(["allowed"]);
       });
 
       test("getApiKeyAndHeaders resolves authHeader on every request", async () => {
