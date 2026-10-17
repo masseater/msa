@@ -67,8 +67,8 @@ describe("session context edits", () => {
     session.appendContextEdit(targetId, { content: [{ type: "text", text: "restored" }] });
 
     const projected = session.buildSessionProjection().messages[0];
-    expect(projected.role).toBe("assistant");
-    if (projected.role !== "assistant") throw new Error("expected assistant");
+    expect(projected?.role).toBe("assistant");
+    if (projected?.role !== "assistant") throw new Error("expected assistant");
     expect(text(projected)).toBe("restored");
     expect(projected.usage.totalTokens).toBe(11);
     expect(text((session.getEntry(targetId) as { message: AssistantMessage }).message)).toBe(

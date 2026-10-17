@@ -156,7 +156,7 @@ describe("ModelRuntime virtual models", () => {
     expect(low.model.id).toBe("small");
     // The router asked for "high", but the small model does not reason.
     expect(low.thinkingLevel).toBe("off");
-    expect(requests[0].previous).toEqual({ model: large, thinkingLevel: "medium" });
+    expect(requests[0]?.previous).toEqual({ model: large, thinkingLevel: "medium" });
 
     const high = await runtime.resolveModel(virtual, messages, {
       reason: "user",
@@ -195,9 +195,11 @@ describe("ModelRuntime virtual models", () => {
       failed: failedRoute,
     });
 
-    expect(requests[0].previous?.model).toBe(small);
-    expect(requests[0].failed).toEqual({ model: large, thinkingLevel: "high", message: failed });
-    expect(requests[1].failed).toBeUndefined();
+    expect(requests[0]?.previous?.model).toBe(small);
+    expect(requests[0]?.failed).toEqual({ model: large, thinkingLevel: "high", message: failed });
+    const secondRequest = requests[1];
+    if (secondRequest === undefined) throw new Error("expected a second routing request");
+    expect(secondRequest.failed).toBeUndefined();
   });
 
   it("lists several virtual models under a provider with physical models", async () => {
@@ -301,8 +303,10 @@ describe("ModelRuntime virtual models", () => {
     await runtime.completeSimple(runtime.getModel("faux", "auto")!, context, options);
 
     // The router provider's credentials stay with it; the faux provider's own virtual model keeps them.
-    expect(seen[0].apiKey).not.toBe("caller-key");
-    expect(seen[0].headers?.["x-caller"]).toBeUndefined();
+    const [routed] = seen;
+    if (routed === undefined) throw new Error("expected the routed request to be seen");
+    expect(routed.apiKey).not.toBe("caller-key");
+    expect(routed.headers?.["x-caller"]).toBeUndefined();
     expect(seen[1]).toMatchObject({ apiKey: "caller-key", headers: { "x-caller": "1" } });
   });
 
@@ -437,7 +441,7 @@ describe("createAgentSession with virtual models", () => {
     for (const [before, after] of [
       [virtual, large],
       [large, virtual],
-    ]) {
+    ] as const) {
       const sessionManager = SessionManager.inMemory(tempDir);
       const session = await open(sessionManager, before);
       await session.prompt("one");

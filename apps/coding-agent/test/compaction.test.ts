@@ -314,7 +314,7 @@ describe("findCutPoint", () => {
     const result = findCutPoint(entries, 0, entries.length, 2500);
 
     // Should cut at a valid cut point (user or assistant message)
-    expect(entries[result.firstKeptEntryIndex].type).toBe("message");
+    expect(entries[result.firstKeptEntryIndex]?.type).toBe("message");
     const role = (entries[result.firstKeptEntryIndex] as SessionMessageEntry).message.role;
     expect(role === "user" || role === "assistant").toBe(true);
   });
@@ -445,7 +445,7 @@ describe("buildSessionContext", () => {
     const loaded = buildSessionContext(entries);
     // summary + kept (u2, a2) + after (u3, a3) = 5
     expect(loaded.messages.length).toBe(5);
-    expect(loaded.messages[0].role).toBe("compactionSummary");
+    expect(loaded.messages[0]?.role).toBe("compactionSummary");
     expect((loaded.messages[0] as any).summary).toContain("Summary of 1,a,2,b");
   });
 
@@ -607,7 +607,7 @@ describe("Large session fixture", () => {
     );
 
     // Cut point should be at a message entry (user or assistant)
-    expect(entries[result.firstKeptEntryIndex].type).toBe("message");
+    expect(entries[result.firstKeptEntryIndex]?.type).toBe("message");
     const role = (entries[result.firstKeptEntryIndex] as SessionMessageEntry).message.role;
     expect(role === "user" || role === "assistant").toBe(true);
   });
@@ -665,7 +665,8 @@ describe.skipIf(!process.env["ANTHROPIC_OAUTH_TOKEN"])("LLM summarization", () =
     );
 
     // Simulate appending compaction to entries by creating a proper entry
-    const lastEntry = entries[entries.length - 1];
+    const lastEntry = entries.at(-1);
+    if (lastEntry === undefined) throw new Error("expected session entries");
     const parentId = lastEntry.id;
     const compactionEntry: CompactionEntry = {
       type: "compaction",
@@ -679,7 +680,7 @@ describe.skipIf(!process.env["ANTHROPIC_OAUTH_TOKEN"])("LLM summarization", () =
 
     // Should have summary + kept messages
     expect(reloaded.messages.length).toBeLessThan(loaded.messages.length);
-    expect(reloaded.messages[0].role).toBe("compactionSummary");
+    expect(reloaded.messages[0]?.role).toBe("compactionSummary");
     expect((reloaded.messages[0] as any).summary).toContain(compactionResult.summary);
 
     console.log("Original messages:", loaded.messages.length);

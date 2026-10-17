@@ -60,7 +60,9 @@ describe("Node SEA extension loading", () => {
     expect(result.extensions).toHaveLength(1);
     expect(state.createJiti).toHaveBeenCalledOnce();
 
-    const options = state.createJiti.mock.calls[0][1] as JitiOptionsProbe;
+    const [call] = state.createJiti.mock.calls;
+    if (call === undefined) throw new Error("expected createJiti to be called");
+    const options = call[1] as JitiOptionsProbe;
     // Source TypeScript also uses virtual modules, so tryNative: false is what
     // proves the compiled-binary branch took precedence over the source branch.
     expect(options.tryNative).toBe(false);

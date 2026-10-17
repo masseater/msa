@@ -41,7 +41,9 @@ describe("SessionManager.inMemory with preloaded entries", () => {
       source.appendMessage(userMessage("hello"));
       source.appendMessage(userMessage("again"));
     });
-    const lastId = entries[entries.length - 1].id;
+    const lastEntry = entries.at(-1);
+    if (lastEntry === undefined) throw new Error("expected stored entries");
+    const lastId = lastEntry.id;
 
     const session = SessionManager.inMemory("/project", undefined, entries);
     const appendedId = session.appendMessage(userMessage("continued"));
@@ -73,7 +75,7 @@ describe("SessionManager.inMemory with preloaded entries", () => {
     const roots = session.getTree();
 
     expect(roots).toHaveLength(1);
-    expect(roots[0].children).toHaveLength(2);
+    expect(roots[0]?.children).toHaveLength(2);
   });
 
   it("rebuilds labels", () => {

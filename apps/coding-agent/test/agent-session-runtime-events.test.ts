@@ -251,6 +251,7 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 
     await runtimeHost.session.prompt("hello");
     const userMessage = runtimeHost.session.getUserMessagesForForking()[0];
+    if (userMessage === undefined) throw new Error("expected a user message to fork from");
     const previousSessionFile = runtimeHost.session.sessionFile;
 
     const successResult = await runtimeHost.fork(userMessage.entryId);

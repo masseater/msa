@@ -201,7 +201,7 @@ describe("SessionManager labels", () => {
 
     const ctx = session.buildSessionContext();
     expect(ctx.messages).toHaveLength(1);
-    expect(ctx.messages[0].role).toBe("user");
+    expect(ctx.messages[0]?.role).toBe("user");
   });
 
   it("throws when labeling non-existent entry", () => {

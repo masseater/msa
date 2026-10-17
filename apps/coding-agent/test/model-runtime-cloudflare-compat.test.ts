@@ -66,8 +66,8 @@ describe("ModelRegistry Cloudflare compat streaming", () => {
 
     expect(result.stopReason).toBe("stop");
     expect(requests).toHaveLength(1);
-    expect(requests[0].url).toBe(CLOUDFLARE_COMPAT_URL);
-    expect(requests[0].headers.get("cf-aig-authorization")).toBe("Bearer test-token");
+    expect(requests[0]?.url).toBe(CLOUDFLARE_COMPAT_URL);
+    expect(requests[0]?.headers.get("cf-aig-authorization")).toBe("Bearer test-token");
   });
 
   it("materializes the Cloudflare endpoint after extension-style auth resolution", async () => {
@@ -93,9 +93,9 @@ describe("ModelRegistry Cloudflare compat streaming", () => {
 
     expect(result.stopReason).toBe("stop");
     expect(requests).toHaveLength(1);
-    expect(requests[0].url).toBe(CLOUDFLARE_COMPAT_URL);
-    expect(requests[0].headers.get("cf-aig-authorization")).toBe("Bearer test-token");
-    expect(requests[0].headers.has("authorization")).toBe(false);
-    expect(requests[0].headers.has("x-api-key")).toBe(false);
+    expect(requests[0]?.url).toBe(CLOUDFLARE_COMPAT_URL);
+    expect(requests[0]?.headers.get("cf-aig-authorization")).toBe("Bearer test-token");
+    expect(requests[0]?.headers.has("authorization")).toBe(false);
+    expect(requests[0]?.headers.has("x-api-key")).toBe(false);
   });
 });

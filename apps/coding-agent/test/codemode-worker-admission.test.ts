@@ -88,7 +88,9 @@ describe("codemode worker admission", () => {
       expect(terminations.size).toBe(2);
 
       // Releasing one actual worker, not its result, permits exactly one new execution.
-      const [worker, resolve] = [...terminations][0];
+      const [termination] = terminations;
+      if (termination === undefined) throw new Error("expected a pending worker termination");
+      const [worker, resolve] = termination;
       resolve(await terminate.call(worker));
       terminations.delete(worker);
       expect((await run("return 42")).isError).toBeUndefined();

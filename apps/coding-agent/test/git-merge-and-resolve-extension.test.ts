@@ -111,7 +111,9 @@ describe("git-merge-and-resolve example", () => {
     // Should not attempt a new fetch/merge
     expect(exec).not.toHaveBeenCalledWith("git", ["fetch", "origin"]);
     expect(sendUserMessage).toHaveBeenCalledTimes(1);
-    const message = sendUserMessage.mock.calls[0][0] as string;
+    const [call] = sendUserMessage.mock.calls;
+    if (call === undefined) throw new Error("expected sendUserMessage to be called");
+    const message = call[0] as string;
     expect(message).toContain("file.ts:1-5");
   });
 
@@ -179,7 +181,9 @@ describe("git-merge-and-resolve example", () => {
     await trigger();
 
     expect(sendUserMessage).toHaveBeenCalledTimes(1);
-    const [message, options] = sendUserMessage.mock.calls[0];
+    const [call] = sendUserMessage.mock.calls;
+    if (call === undefined) throw new Error("expected sendUserMessage to be called");
+    const [message, options] = call;
     expect(message).toContain("src/index.ts:2-6 (ours 3, theirs 5)");
     expect(message).toContain("src/index.ts:8-12 (ours 9, theirs 11)");
     expect(options).toEqual({ deliverAs: "followUp" });
@@ -201,7 +205,9 @@ describe("git-merge-and-resolve example", () => {
     await trigger();
 
     expect(sendUserMessage).toHaveBeenCalledTimes(1);
-    const message = sendUserMessage.mock.calls[0][0] as string;
+    const [call] = sendUserMessage.mock.calls;
+    if (call === undefined) throw new Error("expected sendUserMessage to be called");
+    const message = call[0] as string;
     expect(message).toContain("empty-ours.ts:1-4 (ours empty, theirs 3)");
   });
 

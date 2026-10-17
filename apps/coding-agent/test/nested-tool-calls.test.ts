@@ -239,11 +239,11 @@ describe("NestedCallRecorder", () => {
     const snapshot = recorder.snapshot();
     expect(snapshot?.complete).toBe(false);
     expect(snapshot?.calls[1]).toMatchObject({ id: "b", status: "error" });
-    expect(snapshot?.calls[1].arguments).toBeUndefined();
-    expect(snapshot?.calls[1].argumentsBytes).toBeGreaterThan(
+    expect(snapshot?.calls[1]?.arguments).toBeUndefined();
+    expect(snapshot?.calls[1]?.argumentsBytes).toBeGreaterThan(
       NESTED_CALL_LIMITS.maxArgumentBytesPerCall,
     );
-    expect(snapshot?.calls[1].error).toHaveLength(NESTED_CALL_LIMITS.maxErrorChars);
+    expect(snapshot?.calls[1]?.error).toHaveLength(NESTED_CALL_LIMITS.maxErrorChars);
 
     for (let i = 0; i < NESTED_CALL_LIMITS.maxCalls; i++)
       recorder.finish(recorder.start(call(`c${i}`, {})), false, "");

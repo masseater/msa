@@ -100,7 +100,7 @@ describe("generateSummary reasoning options", () => {
     expect(result.usage).toEqual(mockSummaryResponse.usage);
 
     expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-    expect(completeSimpleMock.mock.calls[0][2]).toMatchObject({
+    expect(completeSimpleMock.mock.calls[0]?.[2]).toMatchObject({
       reasoning: "medium",
       apiKey: "test-key",
     });
@@ -135,7 +135,7 @@ describe("generateSummary reasoning options", () => {
       },
     );
 
-    expect(completeSimpleMock.mock.calls[0][2]).toMatchObject({
+    expect(completeSimpleMock.mock.calls[0]?.[2]).toMatchObject({
       sessionId: "current-routing-session",
       cacheRetention: "none",
       toolChoice: "auto",
@@ -158,7 +158,9 @@ describe("generateSummary reasoning options", () => {
 
     expect(completeSimpleMock).toHaveBeenCalledTimes(1);
     expect(result.summary).toContain("previous checkpoint");
-    const requestContext = completeSimpleMock.mock.calls[0][1] as TranscriptContext;
+    const [call] = completeSimpleMock.mock.calls;
+    if (call === undefined) throw new Error("expected completeSimple to be called");
+    const requestContext = call[1] as TranscriptContext;
     const prompt = JSON.stringify(requestContext.messages);
     // Regression test for #9652: clear boundaries and continuation wording avoid the reasoning-extraction false positive.
     expect(prompt).toContain("# Conversation\\n[User]: Summarize this.");
@@ -239,10 +241,10 @@ describe("generateSummary reasoning options", () => {
     );
 
     expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-    expect(completeSimpleMock.mock.calls[0][2]).toMatchObject({
+    expect(completeSimpleMock.mock.calls[0]?.[2]).toMatchObject({
       apiKey: "test-key",
     });
-    expect(completeSimpleMock.mock.calls[0][2]).not.toHaveProperty("reasoning");
+    expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("reasoning");
   });
 
   it("does not set reasoning for non-reasoning models", async () => {
@@ -259,10 +261,10 @@ describe("generateSummary reasoning options", () => {
     );
 
     expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-    expect(completeSimpleMock.mock.calls[0][2]).toMatchObject({
+    expect(completeSimpleMock.mock.calls[0]?.[2]).toMatchObject({
       apiKey: "test-key",
     });
-    expect(completeSimpleMock.mock.calls[0][2]).not.toHaveProperty("reasoning");
+    expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("reasoning");
   });
 
   it("leaves Anthropic refusal fallback handling to msa-ai model metadata", async () => {
@@ -282,14 +284,14 @@ describe("generateSummary reasoning options", () => {
     );
 
     expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-    expect(completeSimpleMock.mock.calls[0][2]).not.toHaveProperty("refusalFallbacks");
+    expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("refusalFallbacks");
   });
 
   it("does not set Anthropic refusal fallback for models without allowed fallback targets", async () => {
     await generateSummary(messages, createModel(true), 2000, "test-key");
 
     expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-    expect(completeSimpleMock.mock.calls[0][2]).not.toHaveProperty("refusalFallbacks");
+    expect(completeSimpleMock.mock.calls[0]?.[2]).not.toHaveProperty("refusalFallbacks");
   });
 
   it("clamps compaction summary maxTokens to the model output cap", async () => {

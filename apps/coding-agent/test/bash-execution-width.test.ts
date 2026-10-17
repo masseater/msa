@@ -51,8 +51,8 @@ describe("BashExecutionComponent width handling (#2569)", () => {
     const lines = component.render(narrowWidth);
 
     // Every rendered line must fit within the narrow width
-    for (let i = 0; i < lines.length; i++) {
-      const w = visibleWidth(lines[i]);
+    for (const [i, line] of lines.entries()) {
+      const w = visibleWidth(line);
       expect(w, `Line ${i} visibleWidth=${w} > ${narrowWidth}`).toBeLessThanOrEqual(narrowWidth);
     }
   });
@@ -73,8 +73,8 @@ describe("BashExecutionComponent width handling (#2569)", () => {
 
     // Second render at width 60 (split pane scenario)
     const lines60 = component.render(60);
-    for (let i = 0; i < lines60.length; i++) {
-      const w = visibleWidth(lines60[i]);
+    for (const [i, line] of lines60.entries()) {
+      const w = visibleWidth(line);
       expect(w, `Line ${i} visibleWidth=${w} > 60`).toBeLessThanOrEqual(60);
     }
   });

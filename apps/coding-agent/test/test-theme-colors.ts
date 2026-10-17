@@ -5,9 +5,9 @@ import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 // --- Color utilities ---
 
 function hexToRgb(hex: string): [number, number, number] {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result
-    ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)]
+  const [, r, g, b] = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex) ?? [];
+  return r !== undefined && g !== undefined && b !== undefined
+    ? [parseInt(r, 16), parseInt(g, 16), parseInt(b, 16)]
     : [0, 0, 0];
 }
 
@@ -157,8 +157,8 @@ function cmdContrast(targetContrast: number): void {
   }
 }
 
-function cmdTest(filePath: string): void {
-  if (!fs.existsSync(filePath)) {
+function cmdTest(filePath: string | undefined): void {
+  if (filePath === undefined || !fs.existsSync(filePath)) {
     console.error(`File not found: ${filePath}`);
     process.exit(1);
   }
@@ -186,8 +186,10 @@ function cmdTheme(themeName: string): void {
   initTheme(themeName);
 
   const parseAnsiRgb = (ansi: string): [number, number, number] | null => {
-    const match = ansi.match(/38;2;(\d+);(\d+);(\d+)/);
-    return match ? [parseInt(match[1], 10), parseInt(match[2], 10), parseInt(match[3], 10)] : null;
+    const [, r, g, b] = ansi.match(/38;2;(\d+);(\d+);(\d+)/) ?? [];
+    return r !== undefined && g !== undefined && b !== undefined
+      ? [parseInt(r, 10), parseInt(g, 10), parseInt(b, 10)]
+      : null;
   };
 
   const getContrastVsWhite = (colorName: string): string => {
@@ -265,7 +267,7 @@ function cmdTheme(themeName: string): void {
 const [cmd, arg] = process.argv.slice(2);
 
 if (cmd === "contrast") {
-  cmdContrast(parseFloat(arg) || 4.5);
+  cmdContrast(parseFloat(arg ?? "") || 4.5);
 } else if (cmd === "test") {
   cmdTest(arg);
 } else if (cmd === "light" || cmd === "dark") {

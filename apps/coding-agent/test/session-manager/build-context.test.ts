@@ -129,7 +129,7 @@ describe("buildSessionContext", () => {
       const entries: SessionEntry[] = [msg("1", null, "user", "hello")];
       const ctx = buildSessionContext(entries);
       expect(ctx.messages).toHaveLength(1);
-      expect(ctx.messages[0].role).toBe("user");
+      expect(ctx.messages[0]?.role).toBe("user");
     });
 
     it("simple conversation", () => {

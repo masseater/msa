@@ -112,7 +112,7 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toEqual([]);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].commands.has("physical-dependency")).toBe(true);
+    expect(result.extensions[0]?.commands.has("physical-dependency")).toBe(true);
     expect(result.warnings).toEqual([]);
   });
 
@@ -141,7 +141,9 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(path.basename(result.extensions[0].path)).toBe("foo.js");
+    const [extension] = result.extensions;
+    if (extension === undefined) throw new Error("expected a loaded extension");
+    expect(path.basename(extension.path)).toBe("foo.js");
   });
 
   it("discovers subdirectory with index.ts", async () => {
@@ -153,8 +155,8 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].path).toContain("my-extension");
-    expect(result.extensions[0].path).toContain("index.ts");
+    expect(result.extensions[0]?.path).toContain("my-extension");
+    expect(result.extensions[0]?.path).toContain("index.ts");
   });
 
   it("discovers subdirectory with index.js", async () => {
@@ -166,7 +168,7 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].path).toContain("index.js");
+    expect(result.extensions[0]?.path).toContain("index.js");
   });
 
   it("prefers index.ts over index.js", async () => {
@@ -179,7 +181,7 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].path).toContain("index.ts");
+    expect(result.extensions[0]?.path).toContain("index.ts");
   });
 
   it("discovers subdirectory with package.json msa field", async () => {
@@ -202,8 +204,8 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].path).toContain("src");
-    expect(result.extensions[0].path).toContain("main.ts");
+    expect(result.extensions[0]?.path).toContain("src");
+    expect(result.extensions[0]?.path).toContain("main.ts");
   });
 
   it("keeps package.json msa extension entries with leading tilde package-relative", async () => {
@@ -271,10 +273,10 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].path).toContain("custom.ts");
+    expect(result.extensions[0]?.path).toContain("custom.ts");
     // Verify the right tool was registered
-    expect(result.extensions[0].tools.has("from-custom")).toBe(true);
-    expect(result.extensions[0].tools.has("from-index")).toBe(false);
+    expect(result.extensions[0]?.tools.has("from-custom")).toBe(true);
+    expect(result.extensions[0]?.tools.has("from-index")).toBe(false);
   });
 
   it("ignores package.json without msa field, falls back to index.ts", async () => {
@@ -293,7 +295,7 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].path).toContain("index.ts");
+    expect(result.extensions[0]?.path).toContain("index.ts");
   });
 
   it("ignores subdirectory without index or package.json", async () => {
@@ -363,7 +365,7 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].path).toContain("exists.ts");
+    expect(result.extensions[0]?.path).toContain("exists.ts");
   });
 
   it("loads extensions and registers commands", async () => {
@@ -373,7 +375,7 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].commands.has("test")).toBe(true);
+    expect(result.extensions[0]?.commands.has("test")).toBe(true);
   });
 
   it("loads extensions and registers tools", async () => {
@@ -383,7 +385,7 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].tools.has("my-tool")).toBe(true);
+    expect(result.extensions[0]?.tools.has("my-tool")).toBe(true);
   });
 
   it("reports errors for invalid extension code", async () => {
@@ -392,7 +394,7 @@ describe("extensions discovery", () => {
     const result = await discoverAndLoadExtensions([], tempDir, tempDir);
 
     expect(result.errors).toHaveLength(1);
-    expect(result.errors[0].path).toContain("invalid.ts");
+    expect(result.errors[0]?.path).toContain("invalid.ts");
     expect(result.extensions).toHaveLength(0);
   });
 
@@ -405,7 +407,7 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].path).toContain("my-ext.ts");
+    expect(result.extensions[0]?.path).toContain("my-ext.ts");
   });
 
   it("resolves dependencies from extension's own node_modules", async () => {
@@ -416,9 +418,9 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].path).toContain("with-deps");
+    expect(result.extensions[0]?.path).toContain("with-deps");
     // The extension registers a 'parse_duration' tool
-    expect(result.extensions[0].tools.has("parse_duration")).toBe(true);
+    expect(result.extensions[0]?.tools.has("parse_duration")).toBe(true);
   });
 
   it("registers message and entry renderers", async () => {
@@ -441,9 +443,9 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].markdownTransformer).toBeDefined();
-    expect(result.extensions[0].messageRenderers.has("my-custom-type")).toBe(true);
-    expect(result.extensions[0].entryRenderers?.has("my-entry-type")).toBe(true);
+    expect(result.extensions[0]?.markdownTransformer).toBeDefined();
+    expect(result.extensions[0]?.messageRenderers.has("my-custom-type")).toBe(true);
+    expect(result.extensions[0]?.entryRenderers?.has("my-entry-type")).toBe(true);
   });
 
   it("reports error when extension throws during initialization", async () => {
@@ -457,7 +459,7 @@ describe("extensions discovery", () => {
     const result = await discoverAndLoadExtensions([], tempDir, tempDir);
 
     expect(result.errors).toHaveLength(1);
-    expect(result.errors[0].error).toContain("Initialization failed!");
+    expect(result.errors[0]?.error).toContain("Initialization failed!");
     expect(result.extensions).toHaveLength(0);
   });
 
@@ -472,7 +474,7 @@ describe("extensions discovery", () => {
     const result = await discoverAndLoadExtensions([], tempDir, tempDir);
 
     expect(result.errors).toHaveLength(1);
-    expect(result.errors[0].error).toContain("does not export a valid factory function");
+    expect(result.errors[0]?.error).toContain("does not export a valid factory function");
     expect(result.extensions).toHaveLength(0);
   });
 
@@ -509,9 +511,9 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].handlers.has("agent_start")).toBe(true);
-    expect(result.extensions[0].handlers.has("tool_call")).toBe(true);
-    expect(result.extensions[0].handlers.has("agent_end")).toBe(true);
+    expect(result.extensions[0]?.handlers.has("agent_start")).toBe(true);
+    expect(result.extensions[0]?.handlers.has("tool_call")).toBe(true);
+    expect(result.extensions[0]?.handlers.has("agent_end")).toBe(true);
   });
 
   it("loads extension with shortcuts", async () => {
@@ -529,7 +531,7 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].shortcuts.has("ctrl+t")).toBe(true);
+    expect(result.extensions[0]?.shortcuts.has("ctrl+t")).toBe(true);
   });
 
   it("loads extension with flags", async () => {
@@ -547,7 +549,7 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].flags.has("my-flag")).toBe(true);
+    expect(result.extensions[0]?.flags.has("my-flag")).toBe(true);
   });
 
   it("loadExtensions only loads explicit paths without discovery", async () => {
@@ -567,8 +569,8 @@ describe("extensions discovery", () => {
 
     expect(result.errors).toHaveLength(0);
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].tools.has("explicit")).toBe(true);
-    expect(result.extensions[0].tools.has("discovered")).toBe(false);
+    expect(result.extensions[0]?.tools.has("explicit")).toBe(true);
+    expect(result.extensions[0]?.tools.has("discovered")).toBe(false);
   });
 
   it("loadExtensions with no paths loads nothing", async () => {

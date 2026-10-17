@@ -217,26 +217,26 @@ describe("MCP OAuth client ID metadata documents", () => {
     const { server, signIn } = await startServer({ cimd: true, issParameter: true });
     await signIn({});
     expect(server.registrations).toHaveLength(1);
-    expect(server.authorizations[0].get("client_id")).toBe("client-1");
+    expect(server.authorizations[0]?.get("client_id")).toBe("client-1");
   });
 
   it("uses msa's document when authorization responses name their issuer", async () => {
     const { server, store, signIn } = await startServer({ cimd: true, issParameter: true });
     await signIn(cimd);
     const [authorization] = server.authorizations;
-    expect(authorization.get("client_id")).toBe("https://pi.dev/oauth/client.json");
-    const redirect = new URL(authorization.get("redirect_uri") ?? "");
+    expect(authorization?.get("client_id")).toBe("https://pi.dev/oauth/client.json");
+    const redirect = new URL(authorization?.get("redirect_uri") ?? "");
     expect(`${redirect.hostname}${redirect.pathname}`).toBe("127.0.0.1/callback");
     expect(redirect.port).not.toBe("");
     expect(server.registrations).toEqual([]);
-    expect(server.tokenRequests[0].get("client_id")).toBe("https://pi.dev/oauth/client.json");
-    expect(server.tokenRequests[0].get("redirect_uri")).toBe(redirect.href);
+    expect(server.tokenRequests[0]?.get("client_id")).toBe("https://pi.dev/oauth/client.json");
+    expect(server.tokenRequests[0]?.get("redirect_uri")).toBe(redirect.href);
     // The document is not stored, so signing in again refreshes the tokens instead of discarding them.
     expect((await store.load())?.clientInformation).toBeUndefined();
     await signIn(cimd);
     expect(server.authorizations).toHaveLength(1);
-    expect(server.tokenRequests[1].get("grant_type")).toBe("refresh_token");
-    expect(server.tokenRequests[1].get("client_id")).toBe("https://pi.dev/oauth/client.json");
+    expect(server.tokenRequests[1]?.get("grant_type")).toBe("refresh_token");
+    expect(server.tokenRequests[1]?.get("client_id")).toBe("https://pi.dev/oauth/client.json");
   });
 
   it("uses a document and callback path specific to the MCP server without the iss parameter", async () => {
@@ -249,11 +249,11 @@ describe("MCP OAuth client ID metadata documents", () => {
       .subarray(0, 9)
       .toString("base64url");
     const [authorization] = server.authorizations;
-    expect(authorization.get("client_id")).toBe(`https://pi.dev/oauth/${id}/client.json`);
-    const redirect = new URL(authorization.get("redirect_uri") ?? "");
+    expect(authorization?.get("client_id")).toBe(`https://pi.dev/oauth/${id}/client.json`);
+    const redirect = new URL(authorization?.get("redirect_uri") ?? "");
     expect(redirect.pathname).toBe(`/callback/${id}`);
     expect(server.registrations).toEqual([]);
-    expect(server.tokenRequests[0].get("redirect_uri")).toBe(redirect.href);
+    expect(server.tokenRequests[0]?.get("redirect_uri")).toBe(redirect.href);
   });
 
   it("replaces a registered client when switching to the document", async () => {

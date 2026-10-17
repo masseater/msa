@@ -167,13 +167,17 @@ describe("AgentSession bash and persistence characterization", () => {
     const firstBash = harness.session.executeBash("first", undefined, { operations });
     const secondBash = harness.session.executeBash("second", undefined, { operations });
 
-    invocations[0].finish();
+    const firstInvocation = invocations[0];
+    if (firstInvocation === undefined) throw new Error("expected the first bash invocation");
+    firstInvocation.finish();
     const firstResult = await firstBash;
     const runningAfterFirstSettles = harness.session.isBashRunning;
 
     harness.session.abortBash();
-    const secondWasAborted = invocations[1].signal?.aborted;
-    invocations[1].finish();
+    const secondInvocation = invocations[1];
+    if (secondInvocation === undefined) throw new Error("expected the second bash invocation");
+    const secondWasAborted = secondInvocation.signal?.aborted;
+    secondInvocation.finish();
     const secondResult = await secondBash;
 
     expect(firstResult.cancelled).toBe(false);

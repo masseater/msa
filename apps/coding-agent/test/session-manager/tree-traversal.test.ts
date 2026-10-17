@@ -19,15 +19,15 @@ describe("SessionManager append and tree traversal", () => {
       const entries = session.getEntries();
       expect(entries).toHaveLength(3);
 
-      expect(entries[0].id).toBe(id1);
-      expect(entries[0].parentId).toBeNull();
-      expect(entries[0].type).toBe("message");
+      expect(entries[0]?.id).toBe(id1);
+      expect(entries[0]?.parentId).toBeNull();
+      expect(entries[0]?.type).toBe("message");
 
-      expect(entries[1].id).toBe(id2);
-      expect(entries[1].parentId).toBe(id1);
+      expect(entries[1]?.id).toBe(id2);
+      expect(entries[1]?.parentId).toBe(id1);
 
-      expect(entries[2].id).toBe(id3);
-      expect(entries[2].parentId).toBe(id2);
+      expect(entries[2]?.id).toBe(id3);
+      expect(entries[2]?.parentId).toBe(id2);
     });
 
     it("appendThinkingLevelChange integrates into tree", () => {
@@ -45,7 +45,7 @@ describe("SessionManager append and tree traversal", () => {
       expect(thinkingEntry!.id).toBe(thinkingId);
       expect(thinkingEntry!.parentId).toBe(msgId);
 
-      expect(entries[2].parentId).toBe(thinkingId);
+      expect(entries[2]?.parentId).toBe(thinkingId);
     });
 
     it("appendModelChange integrates into tree", () => {
@@ -65,7 +65,7 @@ describe("SessionManager append and tree traversal", () => {
         expect(modelEntry.modelId).toBe("gpt-4");
       }
 
-      expect(entries[2].parentId).toBe(modelId);
+      expect(entries[2]?.parentId).toBe(modelId);
     });
 
     it("appendCompaction integrates into tree", () => {
@@ -96,7 +96,7 @@ describe("SessionManager append and tree traversal", () => {
         expect(compactionEntry.usage).toEqual(usage);
       }
 
-      expect(entries[3].parentId).toBe(compactionId);
+      expect(entries[3]?.parentId).toBe(compactionId);
     });
 
     it("appendCustomEntry integrates into tree", () => {
@@ -114,7 +114,7 @@ describe("SessionManager append and tree traversal", () => {
       expect(customEntry.customType).toBe("my_data");
       expect(customEntry.data).toEqual({ key: "value" });
 
-      expect(entries[2].parentId).toBe(customId);
+      expect(entries[2]?.parentId).toBe(customId);
     });
 
     it("leaf pointer advances after each append", () => {
@@ -145,7 +145,7 @@ describe("SessionManager append and tree traversal", () => {
 
       const path = session.getBranch();
       expect(path).toHaveLength(1);
-      expect(path[0].id).toBe(id);
+      expect(path[0]?.id).toBe(id);
     });
 
     it("returns full path from root to leaf", () => {
@@ -192,12 +192,13 @@ describe("SessionManager append and tree traversal", () => {
       expect(tree).toHaveLength(1);
 
       const root = tree[0];
+      if (root === undefined) throw new Error("expected a root node");
       expect(root.entry.id).toBe(id1);
       expect(root.children).toHaveLength(1);
-      expect(root.children[0].entry.id).toBe(id2);
-      expect(root.children[0].children).toHaveLength(1);
-      expect(root.children[0].children[0].entry.id).toBe(id3);
-      expect(root.children[0].children[0].children).toHaveLength(0);
+      expect(root.children[0]?.entry.id).toBe(id2);
+      expect(root.children[0]?.children).toHaveLength(1);
+      expect(root.children[0]?.children[0]?.entry.id).toBe(id3);
+      expect(root.children[0]?.children[0]?.children).toHaveLength(0);
     });
 
     it("returns tree with branches after branch", () => {
@@ -216,10 +217,12 @@ describe("SessionManager append and tree traversal", () => {
       expect(tree).toHaveLength(1);
 
       const root = tree[0];
+      if (root === undefined) throw new Error("expected a root node");
       expect(root.entry.id).toBe(id1);
       expect(root.children).toHaveLength(1);
 
       const node2 = root.children[0];
+      if (node2 === undefined) throw new Error("expected node 2");
       expect(node2.entry.id).toBe(id2);
       expect(node2.children).toHaveLength(2); // id3 and id4 are siblings
 
@@ -246,7 +249,8 @@ describe("SessionManager append and tree traversal", () => {
       const idC = session.appendMessage(userMsg("branch-C"));
 
       const tree = session.getTree();
-      const node2 = tree[0].children[0];
+      const node2 = tree[0]?.children[0];
+      if (node2 === undefined) throw new Error("expected node 2");
       expect(node2.entry.id).toBe(id2);
       expect(node2.children).toHaveLength(3);
 
@@ -275,7 +279,8 @@ describe("SessionManager append and tree traversal", () => {
       const tree = session.getTree();
 
       // Verify structure
-      const node2 = tree[0].children[0];
+      const node2 = tree[0]?.children[0];
+      if (node2 === undefined) throw new Error("expected node 2");
       expect(node2.children).toHaveLength(2); // id3 and id5
 
       const node5 = node2.children.find((c) => c.entry.id === id5)!;
@@ -467,8 +472,8 @@ describe("createBranchedSession", () => {
     // Session should now only have entries 1 and 2
     const entries = session.getEntries();
     expect(entries).toHaveLength(2);
-    expect(entries[0].id).toBe(id1);
-    expect(entries[1].id).toBe(id2);
+    expect(entries[0]?.id).toBe(id1);
+    expect(entries[1]?.id).toBe(id2);
   });
 
   it("extracts correct path from branched tree", () => {

@@ -54,8 +54,8 @@ describe("inline extension naming", () => {
     const result = loader.getExtensions();
 
     expect(result.extensions).toHaveLength(2);
-    expect(result.extensions[0].path).toBe("<inline:1>");
-    expect(result.extensions[1].path).toBe("<inline:2>");
+    expect(result.extensions[0]?.path).toBe("<inline:1>");
+    expect(result.extensions[1]?.path).toBe("<inline:2>");
   });
 
   it("displays named wrappers as <inline:name>", async () => {
@@ -77,8 +77,8 @@ describe("inline extension naming", () => {
     const result = loader.getExtensions();
 
     expect(result.extensions).toHaveLength(2);
-    expect(result.extensions[0].path).toBe("<inline:my-provider>");
-    expect(result.extensions[1].path).toBe("<inline:my-commands>");
+    expect(result.extensions[0]?.path).toBe("<inline:my-provider>");
+    expect(result.extensions[1]?.path).toBe("<inline:my-commands>");
   });
 
   it("preserves hidden state for named factories", async () => {
@@ -97,8 +97,8 @@ describe("inline extension naming", () => {
     const result = loader.getExtensions();
 
     expect(result.extensions).toHaveLength(1);
-    expect(result.extensions[0].path).toBe("<inline:built-in>");
-    expect(result.extensions[0].hidden).toBe(true);
+    expect(result.extensions[0]?.path).toBe("<inline:built-in>");
+    expect(result.extensions[0]?.hidden).toBe(true);
   });
 
   it("supports mixed bare and named factories", async () => {
@@ -117,8 +117,8 @@ describe("inline extension naming", () => {
     const result = loader.getExtensions();
 
     expect(result.extensions).toHaveLength(3);
-    expect(result.extensions[0].path).toBe("<inline:1>");
-    expect(result.extensions[1].path).toBe("<inline:named-ext>");
-    expect(result.extensions[2].path).toBe("<inline:3>");
+    expect(result.extensions[0]?.path).toBe("<inline:1>");
+    expect(result.extensions[1]?.path).toBe("<inline:named-ext>");
+    expect(result.extensions[2]?.path).toBe("<inline:3>");
   });
 });

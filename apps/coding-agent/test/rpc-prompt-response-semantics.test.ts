@@ -269,7 +269,7 @@ describe("RPC prompt response semantics", () => {
       for (const [id, message] of [
         ["command", "/handled"],
         ["input", "handled input"],
-      ]) {
+      ] as const) {
         lineHandler(JSON.stringify({ id, type: "prompt", message }));
         await vi.waitFor(() => {
           expect(getPromptResponses(rpcIo.outputLines, id)).toEqual([

@@ -28,7 +28,9 @@ describe("RPC JSONL framing", () => {
     await done;
 
     expect(lines).toHaveLength(1);
-    expect(JSON.parse(lines[0])).toEqual({ text: "a\u2028b\u2029c" });
+    const [firstLine] = lines;
+    if (firstLine === undefined) throw new Error("expected one JSONL line");
+    expect(JSON.parse(firstLine)).toEqual({ text: "a\u2028b\u2029c" });
   });
 
   test("handles CRLF-delimited input", async () => {

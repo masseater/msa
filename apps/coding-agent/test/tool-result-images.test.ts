@@ -85,14 +85,14 @@ describe("normalizeToolResultImages", () => {
     expect(normalized).not.toBe(content);
     expect(normalized).toHaveLength(2);
     const image = normalized[0];
-    expect(image.type).toBe("image");
-    if (image.type !== "image") return;
+    expect(image?.type).toBe("image");
+    if (image?.type !== "image") return;
     const { width, height } = readPngDimensions(image.data);
     expect(width).toBeLessThanOrEqual(2000);
     expect(height).toBeLessThanOrEqual(2000);
     const note = normalized[1];
-    expect(note.type).toBe("text");
-    if (note.type !== "text") return;
+    expect(note?.type).toBe("text");
+    if (note?.type !== "text") return;
     expect(note.text).toContain("original 2400x4800");
   });
 

@@ -200,8 +200,8 @@ describe("AgentSession MCP OAuth", () => {
 
     await harness.session.prompt("/mcp login issues");
     expect(notifications.at(-1)).toBe('Signed in to MCP server "issues" (1 tools).');
-    expect(opened[0].searchParams.get("redirect_uri")).toBe(callbackUrl);
-    expect(opened[0].searchParams.get("scope")).toBe("issues:read");
+    expect(opened[0]?.searchParams.get("redirect_uri")).toBe(callbackUrl);
+    expect(opened[0]?.searchParams.get("scope")).toBe("issues:read");
     expect(getMessageText(await callWhoami(harness))).toBe("token access-1");
   });
 
@@ -231,7 +231,7 @@ describe("AgentSession MCP OAuth", () => {
     });
     await harness.session.prompt("/mcp login issues");
     expect(notifications.at(-1)).toBe('Signed in to MCP server "issues" (1 tools).');
-    expect(opened[0].searchParams.get("redirect_uri")).toMatch(
+    expect(opened[0]?.searchParams.get("redirect_uri")).toMatch(
       /^http:\/\/127\.0\.0\.1:\d+\/oauth\/done$/,
     );
 
@@ -241,7 +241,7 @@ describe("AgentSession MCP OAuth", () => {
       callbackPort: port,
     });
     await fixed.harness.session.prompt("/mcp login issues");
-    expect(fixed.opened[0].searchParams.get("redirect_uri")).toBe(
+    expect(fixed.opened[0]?.searchParams.get("redirect_uri")).toBe(
       `http://127.0.0.1:${port}/oauth/done`,
     );
   });

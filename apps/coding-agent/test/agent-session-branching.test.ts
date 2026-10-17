@@ -101,9 +101,11 @@ describe.skipIf(!API_KEY)("AgentSession forking", () => {
 
     const userMessages = session.getUserMessagesForForking();
     expect(userMessages.length).toBe(1);
-    expect(userMessages[0].text).toBe("Say hello");
+    const [userMessage] = userMessages;
+    if (userMessage === undefined) throw new Error("expected a user message to fork from");
+    expect(userMessage.text).toBe("Say hello");
 
-    const result = await runtimeHost.fork(userMessages[0].entryId);
+    const result = await runtimeHost.fork(userMessage.entryId);
     expect(result.cancelled).toBe(false);
     session = runtimeHost.session;
     expect(result.selectedText).toBe("Say hello");
@@ -125,7 +127,9 @@ describe.skipIf(!API_KEY)("AgentSession forking", () => {
     expect(userMessages.length).toBe(1);
     expect(session.messages.length).toBeGreaterThan(0);
 
-    const result = await runtimeHost.fork(userMessages[0].entryId);
+    const [userMessage] = userMessages;
+    if (userMessage === undefined) throw new Error("expected a user message to fork from");
+    const result = await runtimeHost.fork(userMessage.entryId);
     expect(result.cancelled).toBe(false);
     session = runtimeHost.session;
     expect(result.selectedText).toBe("Say hi");
@@ -150,13 +154,14 @@ describe.skipIf(!API_KEY)("AgentSession forking", () => {
     expect(userMessages.length).toBe(3);
 
     const secondMessage = userMessages[1];
+    if (secondMessage === undefined) throw new Error("expected a second user message");
     const result = await runtimeHost.fork(secondMessage.entryId);
     expect(result.cancelled).toBe(false);
     session = runtimeHost.session;
     expect(result.selectedText).toBe("Say two");
 
     expect(session.messages.length).toBe(2);
-    expect(session.messages[0].role).toBe("user");
-    expect(session.messages[1].role).toBe("assistant");
+    expect(session.messages[0]?.role).toBe("user");
+    expect(session.messages[1]?.role).toBe("assistant");
   }, 60000);
 });

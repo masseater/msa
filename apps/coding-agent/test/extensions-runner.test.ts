@@ -757,8 +757,8 @@ describe("ExtensionRunner", () => {
       await runner.emitContext([]);
 
       expect(errors.length).toBe(1);
-      expect(errors[0].error).toContain("Handler error!");
-      expect(errors[0].event).toBe("context");
+      expect(errors[0]?.error).toContain("Handler error!");
+      expect(errors[0]?.event).toBe("context");
     });
 
     // Regression test for #9068.
@@ -1548,6 +1548,9 @@ describe("ExtensionRunner", () => {
         unsubscribers.push(msa.on("agent_end", shared));
       });
       const [stopFirst, stopB, stopSecond] = unsubscribers;
+      if (stopFirst === undefined || stopB === undefined || stopSecond === undefined) {
+        throw new Error("expected three unsubscribers");
+      }
 
       stopSecond();
       stopSecond();
@@ -1709,8 +1712,8 @@ describe("ExtensionRunner", () => {
       expect(headers["X-Good"]).toBe("yes");
       expect(headers["User-Agent"]).toBe("x");
       expect(errors).toHaveLength(1);
-      expect(errors[0].event).toBe("before_provider_headers");
-      expect(errors[0].error).toContain("header handler boom");
+      expect(errors[0]?.event).toBe("before_provider_headers");
+      expect(errors[0]?.error).toContain("header handler boom");
     });
   });
 });

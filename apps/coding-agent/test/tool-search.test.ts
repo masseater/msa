@@ -54,7 +54,7 @@ describe("Bm25Ranker", () => {
       "mcp__linear__search_issues",
       "mcp__github__list_issues",
     ]);
-    expect(ranker.rank("pull requests", documents, 8)[0].name).toBe(
+    expect(ranker.rank("pull requests", documents, 8)[0]?.name).toBe(
       "mcp__github__create_pull_request",
     );
     expect(ranker.rank("search", documents, 1)).toHaveLength(1);

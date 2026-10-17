@@ -274,7 +274,7 @@ Project skill`,
 
       // mergePaths processes project paths before user paths, so the project
       // alias is the canonical survivor.
-      expect(extensionsResult.extensions[0].path).toBe(
+      expect(extensionsResult.extensions[0]?.path).toBe(
         join(cwd, ".msa", "extensions", "shared.ts"),
       );
     });
@@ -949,7 +949,7 @@ Content`,
 
       const { skills } = loader.getSkills();
       expect(skills).toHaveLength(1);
-      expect(skills[0].name).toBe("injected");
+      expect(skills[0]?.name).toBe("injected");
     });
 
     it("should apply systemPromptOverride", async () => {
@@ -1153,11 +1153,11 @@ export default function(msa: ExtensionAPI) {
       expect(loader.getExtensions().extensions.map((extension) => extension.path)).toEqual([
         "builtin:llama",
       ]);
-      expect(loader.getExtensions().extensions[0].sourceInfo).toMatchObject({
+      expect(loader.getExtensions().extensions[0]?.sourceInfo).toMatchObject({
         path: "builtin:llama",
         source: "builtin",
       });
-      expect(loader.getExtensions().extensions[0].hidden).toBe(true);
+      expect(loader.getExtensions().extensions[0]?.hidden).toBe(true);
       expect(loaded).toEqual(["llama"]);
     });
 
