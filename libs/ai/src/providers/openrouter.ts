@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import { anthropicMessagesApi } from "../api/anthropic-messages.lazy.ts";
 import { openAICompletionsApi } from "../api/openai-completions.lazy.ts";
 import { openrouterImagesApi } from "../api/openrouter-images.lazy.ts";
@@ -6,6 +8,8 @@ import { envApiKeyAuth, lazyOAuth } from "../auth/helpers.ts";
 import { loadOpenRouterOAuth } from "../auth/oauth/load.ts";
 import { createProvider, type Provider, type RefreshModelsContext } from "../models.ts";
 import type { AnyModel } from "../types.ts";
+import { httpRequest } from "../utils/http.ts";
+import { decodeJsonOrDie } from "../utils/json-codec.ts";
 import { isModelType } from "../utils/model-operations.ts";
 import { type OpenRouterModel, openRouterCost } from "./openrouter-api.ts";
 import {
@@ -17,31 +21,53 @@ import {
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const OPENROUTER_USER_MODELS_TIMEOUT_MS = 15_000;
 
-export async function personalizeOpenRouterCatalog(
+const requestUserModels = Effect.fn("requestUserModels")(function* (
+  key: string,
+  context: RefreshModelsContext,
+) {
+  const reply = yield* httpRequest({
+    url: `${(context.baseUrl ?? OPENROUTER_BASE_URL).replace(/\/+$/u, "")}/models/user`,
+    headers: { accept: "application/json", authorization: `Bearer ${key}` },
+    signal: AbortSignal.any([
+      context.signal,
+      AbortSignal.timeout(OPENROUTER_USER_MODELS_TIMEOUT_MS),
+    ]),
+  });
+  if (reply.status === 401 || reply.status === 403 || reply.status === 404) return undefined;
+  if (!reply.ok)
+    return yield* Effect.die(new Error(`OpenRouter model list request failed: ${reply.status}`));
+  const body = yield* Effect.flatMap(reply.text, decodeJsonOrDie);
+  if (typeof body !== "object" || body === null || !("data" in body) || !Array.isArray(body.data)) {
+    return yield* Effect.die(new Error("Invalid OpenRouter model list response"));
+  }
+  return body.data as unknown[];
+});
+
+const personalizeCatalog = Effect.fn("personalizeCatalog")(function* (
   catalog: readonly AnyModel[],
   context: RefreshModelsContext,
-): Promise<readonly AnyModel[]> {
+) {
   const key =
     context.credential?.type === "oauth" ? context.credential.access : context.credential?.key;
   if (key === undefined || key === "") return catalog;
-  const response = await fetch(
-    `${(context.baseUrl ?? OPENROUTER_BASE_URL).replace(/\/+$/u, "")}/models/user`,
-    {
-      headers: { accept: "application/json", authorization: `Bearer ${key}` },
-      signal: AbortSignal.any([
-        context.signal,
-        AbortSignal.timeout(OPENROUTER_USER_MODELS_TIMEOUT_MS),
-      ]),
-    },
-  );
-  if (response.status === 401 || response.status === 403 || response.status === 404) return catalog;
-  if (!response.ok) throw new Error(`OpenRouter model list request failed: ${response.status}`);
-  const body: unknown = await response.json();
-  if (typeof body !== "object" || body === null || !("data" in body) || !Array.isArray(body.data)) {
-    throw new Error("Invalid OpenRouter model list response");
-  }
+  const entries = yield* requestUserModels(key, context);
+  if (entries === undefined) return catalog;
+  return restrictCatalog(catalog, entries);
+});
+
+export function personalizeOpenRouterCatalog(
+  catalog: readonly AnyModel[],
+  context: RefreshModelsContext,
+): Promise<readonly AnyModel[]> {
+  return Effect.runPromise(personalizeCatalog(catalog, context));
+}
+
+function restrictCatalog(
+  catalog: readonly AnyModel[],
+  entries: readonly unknown[],
+): readonly AnyModel[] {
   const allowed = new Map<string, OpenRouterModel>();
-  for (const entry of body.data as unknown[]) {
+  for (const entry of entries) {
     if (
       typeof entry === "object" &&
       entry !== null &&

@@ -1,6 +1,37 @@
 import { Effect, Function } from "effect";
 
-import type { ApiKeyAuth, OAuthAuth } from "./types.ts";
+import type {
+  ApiKeyAuth,
+  AuthContext,
+  AuthPrompt,
+  OAuthAuth,
+  ProviderAuthInteraction,
+} from "./types.ts";
+
+export const promptUser: {
+  (prompt: AuthPrompt): (interaction: ProviderAuthInteraction) => Effect.Effect<string>;
+  (interaction: ProviderAuthInteraction, prompt: AuthPrompt): Effect.Effect<string>;
+} = Function.dual(
+  2,
+  (interaction: ProviderAuthInteraction, prompt: AuthPrompt): Effect.Effect<string> =>
+    Effect.promise(() => interaction.prompt(prompt)),
+);
+
+export const throwIfAborted = (signal: AbortSignal): Effect.Effect<void> =>
+  Effect.sync(() => signal.throwIfAborted());
+
+interface AuthEnvSource {
+  readonly ctx: AuthContext;
+  readonly signal: AbortSignal;
+}
+
+export const authEnv =
+  ({ ctx, signal }: AuthEnvSource) =>
+  (name: string): Effect.Effect<string | undefined> =>
+    throwIfAborted(signal).pipe(
+      Effect.andThen(Effect.promise(() => ctx.env(name))),
+      Effect.tap(throwIfAborted(signal)),
+    );
 
 export const envApiKeyAuth: {
   (envVars: readonly string[]): (name: string) => ApiKeyAuth;
