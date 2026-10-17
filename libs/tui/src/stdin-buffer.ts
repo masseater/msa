@@ -1,218 +1,28 @@
 import { EventEmitter } from "events";
 
-import { type EscapeKind, introducerOf, matchCsiSequence } from "./ansi-sequences.ts";
 import { type CancelDelay, runAfter } from "./delay.ts";
+import {
+  ESC,
+  extractCompleteSequences,
+  isControlString,
+  parseUnmodifiedKittyPrintableCodepoint,
+  startsWithTerminalReplyHeader,
+} from "./stdin-sequences.ts";
 
-const KITTY_PRINTABLE_BODY = /^(\d+)(?::\d*)?(?::\d+)?$/u;
-
-const ESC = "\x1b";
 const DEFAULT_SEQUENCE_TIMEOUT_MS = 50;
 const DEFAULT_ESCAPE_TIMEOUT_MS = 10;
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
-const TERMINAL_REPLY_HEADER_BODIES: ReadonlyArray<readonly [EscapeKind, RegExp]> = [
-  ["osc", /^(?:1[01];|4;\d{1,3};|7501;\?)/u],
-  ["dcs", /^>\|/u],
-  ["apc", /^G(?:[a-z]=\d+,)*[a-z]=\d+;/u],
-];
 
-function startsWithTerminalReplyHeader(data: string): boolean {
-  return TERMINAL_REPLY_HEADER_BODIES.some(
-    ([kind, body]) => data.startsWith(introducerOf(kind)) && body.test(data.slice(2)),
-  );
-}
-
-function isControlString(data: string): boolean {
-  return data.startsWith(`${ESC}]`) || data.startsWith(`${ESC}P`) || data.startsWith(`${ESC}_`);
-}
-
-function isCompleteSequence(data: string): "complete" | "incomplete" | "not-escape" {
-  if (!data.startsWith(ESC)) {
-    return "not-escape";
+function decodeInput(data: string | Buffer): string {
+  if (!Buffer.isBuffer(data)) {
+    return data;
   }
-
-  if (data.length === 1) {
-    return "incomplete";
+  if (data.length === 1 && data[0]! > 127) {
+    const byte = data[0]! - 128;
+    return `\x1b${String.fromCharCode(byte)}`;
   }
-
-  const afterEsc = data.slice(1);
-
-  if (afterEsc.startsWith("[")) {
-    if (afterEsc.startsWith("[M")) {
-      return data.length >= 6 ? "complete" : "incomplete";
-    }
-    return isCompleteCsiSequence(data);
-  }
-
-  if (afterEsc.startsWith("]")) {
-    return isCompleteOscSequence(data);
-  }
-
-  if (afterEsc.startsWith("P")) {
-    return isCompleteDcsSequence(data);
-  }
-
-  if (afterEsc.startsWith("_")) {
-    return isCompleteApcSequence(data);
-  }
-
-  if (afterEsc.startsWith("O")) {
-    return afterEsc.length >= 2 ? "complete" : "incomplete";
-  }
-
-  if (afterEsc.length === 1) {
-    return "complete";
-  }
-
-  return "complete";
-}
-
-function isCompleteCsiSequence(data: string): "complete" | "incomplete" {
-  if (!data.startsWith(`${ESC}[`)) {
-    return "complete";
-  }
-
-  if (data.length < 3) {
-    return "incomplete";
-  }
-
-  const payload = data.slice(2);
-
-  const lastChar = payload.charAt(payload.length - 1);
-  const lastCharCode = lastChar.charCodeAt(0);
-
-  if (lastCharCode >= 0x40 && lastCharCode <= 0x7e) {
-    if (payload.startsWith("<")) {
-      const mouseMatch = /^<\d+;\d+;\d+[Mm]$/u.test(payload);
-      if (mouseMatch) {
-        return "complete";
-      }
-      if (lastChar === "M" || lastChar === "m") {
-        const parts = payload.slice(1, -1).split(";");
-        if (parts.length === 3 && parts.every((p) => /^\d+$/u.test(p))) {
-          return "complete";
-        }
-      }
-
-      return "incomplete";
-    }
-
-    return "complete";
-  }
-
-  return "incomplete";
-}
-
-function isCompleteOscSequence(data: string): "complete" | "incomplete" {
-  if (!data.startsWith(`${ESC}]`)) {
-    return "complete";
-  }
-
-  if (data.endsWith(`${ESC}\\`) || data.endsWith("\x07")) {
-    return "complete";
-  }
-
-  return "incomplete";
-}
-
-function isCompleteDcsSequence(data: string): "complete" | "incomplete" {
-  if (!data.startsWith(`${ESC}P`)) {
-    return "complete";
-  }
-
-  if (data.endsWith(`${ESC}\\`)) {
-    return "complete";
-  }
-
-  return "incomplete";
-}
-
-function isCompleteApcSequence(data: string): "complete" | "incomplete" {
-  if (!data.startsWith(`${ESC}_`)) {
-    return "complete";
-  }
-
-  if (data.endsWith(`${ESC}\\`)) {
-    return "complete";
-  }
-
-  return "incomplete";
-}
-
-function parseUnmodifiedKittyPrintableCodepoint(sequence: string): number | undefined {
-  const match = matchCsiSequence({
-    data: sequence,
-    finals: "u",
-    body: KITTY_PRINTABLE_BODY,
-  })?.groups;
-  if (match === undefined || match === null) return undefined;
-
-  const codepoint = parseInt(match[1]!, 10);
-  return codepoint >= 32 ? codepoint : undefined;
-}
-
-function extractCompleteSequences(buffer: string): { sequences: string[]; remainder: string } {
-  const sequences: string[] = [];
-  let pos = 0;
-
-  while (pos < buffer.length) {
-    const remaining = buffer.slice(pos);
-
-    if (remaining.startsWith(ESC)) {
-      const terminalReply = isControlString(remaining) && startsWithTerminalReplyHeader(remaining);
-      let seqEnd = 1;
-      while (seqEnd <= remaining.length) {
-        if (terminalReply && seqEnd > 2) {
-          const char = remaining[seqEnd - 1];
-          if (char === "\x18" || char === "\x1a") {
-            pos += seqEnd;
-            break;
-          }
-          if (char === ESC && seqEnd < remaining.length && remaining[seqEnd] !== "\\") {
-            pos += seqEnd - 1;
-            break;
-          }
-        }
-        const candidate = remaining.slice(0, seqEnd);
-        const status = isCompleteSequence(candidate);
-
-        if (status === "complete") {
-          if (candidate === "\x1b\x1b") {
-            const nextChar = remaining[seqEnd];
-            if (
-              nextChar === "[" ||
-              nextChar === "]" ||
-              nextChar === "O" ||
-              nextChar === "P" ||
-              nextChar === "_"
-            ) {
-              sequences.push(ESC);
-              pos += 1;
-              break;
-            }
-          }
-          sequences.push(candidate);
-          pos += seqEnd;
-          break;
-        } else if (status === "incomplete") {
-          seqEnd++;
-        } else {
-          sequences.push(candidate);
-          pos += seqEnd;
-          break;
-        }
-      }
-
-      if (seqEnd > remaining.length) {
-        return { sequences, remainder: remaining };
-      }
-    } else {
-      sequences.push(remaining[0]!);
-      pos++;
-    }
-  }
-
-  return { sequences, remainder: "" };
+  return data.toString();
 }
 
 export type StdinBufferOptions = {
@@ -241,23 +51,9 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
   }
 
   public process(data: string | Buffer): void {
-    if (this.cancelTimeout !== null) {
-      this.cancelTimeout();
-      this.cancelTimeout = null;
-    }
+    this.cancelPendingTimeout();
 
-    let str: string;
-    if (Buffer.isBuffer(data)) {
-      if (data.length === 1 && data[0]! > 127) {
-        const byte = data[0]! - 128;
-        str = `\x1b${String.fromCharCode(byte)}`;
-      } else {
-        str = data.toString();
-      }
-    } else {
-      str = data;
-    }
-
+    const str = decodeInput(data);
     if (str.length === 0 && this.buffer.length === 0) {
       this.emitDataSequence("");
       return;
@@ -268,59 +64,54 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
     if (this.pasteMode) {
       this.pasteBuffer += this.buffer;
       this.buffer = "";
-
-      const endIndex = this.pasteBuffer.indexOf(BRACKETED_PASTE_END);
-      if (endIndex !== -1) {
-        const pastedContent = this.pasteBuffer.slice(0, endIndex);
-        const remaining = this.pasteBuffer.slice(endIndex + BRACKETED_PASTE_END.length);
-
-        this.pasteMode = false;
-        this.pasteBuffer = "";
-        this.pendingKittyPrintableCodepoint = undefined;
-
-        this.emit("paste", pastedContent);
-
-        if (remaining.length > 0) {
-          this.process(remaining);
-        }
-      }
+      this.finishPasteIfComplete();
       return;
     }
 
     const startIndex = this.buffer.indexOf(BRACKETED_PASTE_START);
     if (startIndex !== -1) {
-      if (startIndex > 0) {
-        const beforePaste = this.buffer.slice(0, startIndex);
-        const result = extractCompleteSequences(beforePaste);
-        for (const sequence of result.sequences) {
-          this.emitDataSequence(sequence);
-        }
-      }
-
-      this.pendingKittyPrintableCodepoint = undefined;
-      this.buffer = this.buffer.slice(startIndex + BRACKETED_PASTE_START.length);
-      this.pasteMode = true;
-      this.pasteBuffer = this.buffer;
-      this.buffer = "";
-
-      const endIndex = this.pasteBuffer.indexOf(BRACKETED_PASTE_END);
-      if (endIndex !== -1) {
-        const pastedContent = this.pasteBuffer.slice(0, endIndex);
-        const remaining = this.pasteBuffer.slice(endIndex + BRACKETED_PASTE_END.length);
-
-        this.pasteMode = false;
-        this.pasteBuffer = "";
-        this.pendingKittyPrintableCodepoint = undefined;
-
-        this.emit("paste", pastedContent);
-
-        if (remaining.length > 0) {
-          this.process(remaining);
-        }
-      }
+      this.startPaste(startIndex);
       return;
     }
 
+    this.processSequences();
+  }
+
+  private startPaste(startIndex: number): void {
+    if (startIndex > 0) {
+      const result = extractCompleteSequences(this.buffer.slice(0, startIndex));
+      for (const sequence of result.sequences) {
+        this.emitDataSequence(sequence);
+      }
+    }
+
+    this.pendingKittyPrintableCodepoint = undefined;
+    this.pasteMode = true;
+    this.pasteBuffer = this.buffer.slice(startIndex + BRACKETED_PASTE_START.length);
+    this.buffer = "";
+    this.finishPasteIfComplete();
+  }
+
+  private finishPasteIfComplete(): void {
+    const endIndex = this.pasteBuffer.indexOf(BRACKETED_PASTE_END);
+    if (endIndex === -1) {
+      return;
+    }
+    const pastedContent = this.pasteBuffer.slice(0, endIndex);
+    const remaining = this.pasteBuffer.slice(endIndex + BRACKETED_PASTE_END.length);
+
+    this.pasteMode = false;
+    this.pasteBuffer = "";
+    this.pendingKittyPrintableCodepoint = undefined;
+
+    this.emit("paste", pastedContent);
+
+    if (remaining.length > 0) {
+      this.process(remaining);
+    }
+  }
+
+  private processSequences(): void {
     const result = extractCompleteSequences(this.buffer);
     this.buffer = result.remainder;
 
@@ -328,21 +119,21 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
       this.emitDataSequence(sequence);
     }
 
-    if (this.buffer.length > 0) {
-      if (startsWithTerminalReplyHeader(this.buffer)) return;
-      const timeoutMs = this.buffer === ESC ? this.escapeTimeoutMs : this.timeoutMs;
-      this.cancelTimeout = runAfter(timeoutMs, () => {
-        const flushed = this.flush();
+    if (this.buffer.length === 0 || startsWithTerminalReplyHeader(this.buffer)) {
+      return;
+    }
+    const timeoutMs = this.buffer === ESC ? this.escapeTimeoutMs : this.timeoutMs;
+    this.cancelTimeout = runAfter(timeoutMs, () => this.flushPending());
+  }
 
-        for (const sequence of flushed) {
-          if (sequence.length > 2 && isControlString(sequence)) {
-            this.emitDataSequence(sequence.slice(0, 2));
-            this.process(sequence.slice(2));
-          } else {
-            this.emitDataSequence(sequence);
-          }
-        }
-      });
+  private flushPending(): void {
+    for (const sequence of this.flush()) {
+      if (sequence.length > 2 && isControlString(sequence)) {
+        this.emitDataSequence(sequence.slice(0, 2));
+        this.process(sequence.slice(2));
+      } else {
+        this.emitDataSequence(sequence);
+      }
     }
   }
 
@@ -357,11 +148,15 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
     this.emit("data", sequence);
   }
 
-  flush(): string[] {
+  private cancelPendingTimeout(): void {
     if (this.cancelTimeout !== null) {
       this.cancelTimeout();
       this.cancelTimeout = null;
     }
+  }
+
+  flush(): string[] {
+    this.cancelPendingTimeout();
 
     if (this.buffer.length === 0) {
       return [];
@@ -374,10 +169,7 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
   }
 
   clear(): void {
-    if (this.cancelTimeout !== null) {
-      this.cancelTimeout();
-      this.cancelTimeout = null;
-    }
+    this.cancelPendingTimeout();
     this.buffer = "";
     this.pasteMode = false;
     this.pasteBuffer = "";

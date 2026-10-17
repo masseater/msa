@@ -4,12 +4,8 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { Text } from "../src/components/text.ts";
-import {
-  getKeybindings,
-  KeybindingsManager,
-  setKeybindings,
-  TUI_KEYBINDINGS,
-} from "../src/keybindings.ts";
+import { TUI_KEYBINDINGS } from "../src/keybinding-definitions.ts";
+import { getKeybindings, KeybindingsManager, setKeybindings } from "../src/keybindings.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
 import { OSC133_ZONE_START } from "./tui-alt-screen-helpers.ts";
 import { tuialtscreenCases5 } from "./tui-alt-screen-tuialtscreen-4-cases-helpers.ts";

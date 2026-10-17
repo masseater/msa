@@ -1,5 +1,6 @@
 import { isControlCharacter } from "../ansi-sequences.ts";
-import { getKeybindings, type Keybinding } from "../keybindings.ts";
+import type { Keybinding } from "../keybinding-definitions.ts";
+import { getKeybindings } from "../keybindings.ts";
 import { decodeKittyPrintable } from "../keys.ts";
 import {
   type Component,

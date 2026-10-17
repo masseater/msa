@@ -1,7 +1,8 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { KeybindingsManager, TUI_KEYBINDINGS } from "../src/keybindings.ts";
+import { TUI_KEYBINDINGS } from "../src/keybinding-definitions.ts";
+import { KeybindingsManager } from "../src/keybindings.ts";
 
 describe("KeybindingsManager", () => {
   it("binds Ctrl+J as a default newline alias", () => {
