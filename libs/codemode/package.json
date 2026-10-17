@@ -55,6 +55,11 @@
       "source": "./src/runtime/worker.ts",
       "types": "./dist/runtime/worker.d.ts",
       "import": "./dist/runtime/worker.js"
+    },
+    "./worker-main": {
+      "source": "./src/runtime/worker-main.ts",
+      "types": "./dist/runtime/worker-main.d.ts",
+      "import": "./dist/runtime/worker-main.js"
     }
   },
   "scripts": {

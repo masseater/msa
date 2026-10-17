@@ -9,6 +9,7 @@ import {
   type Storage,
   type TaskId,
 } from "@msa/durable";
+import { vi } from "vite-plus/test";
 
 import { context } from "./session-support.ts";
 import { aborted, type Deferred, deferred, openTasks } from "./task-support.ts";
@@ -192,7 +193,6 @@ export async function openHarness(storage: Storage = new MemoryStorage()) {
 // Run `measured` and count the entries Set iteration yields meanwhile.
 export async function setEntriesDuring(measured: () => Promise<void>): Promise<number> {
   const values = Set.prototype.values;
-  const iterator = Set.prototype[Symbol.iterator];
   let entries = 0;
   function* counted(this: Set<unknown>) {
     for (const value of values.call(this)) {
@@ -200,13 +200,13 @@ export async function setEntriesDuring(measured: () => Promise<void>): Promise<n
       yield value;
     }
   }
-  // oxlint-disable-next-line eslint/no-extend-native -- Set のイテレーション回数を計測するため、prototype を差し替える
-  Set.prototype[Symbol.iterator] = counted as unknown as typeof iterator;
+  const spy = vi
+    .spyOn(Set.prototype, Symbol.iterator)
+    .mockImplementation(counted as unknown as () => SetIterator<unknown>);
   try {
     await measured();
   } finally {
-    // oxlint-disable-next-line eslint/no-extend-native -- 計測用に差し替えた Set のイテレータを戻す
-    Set.prototype[Symbol.iterator] = iterator;
+    spy.mockRestore();
   }
   return entries;
 }
