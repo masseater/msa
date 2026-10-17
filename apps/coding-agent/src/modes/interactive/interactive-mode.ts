@@ -99,6 +99,7 @@ import type {
   UserBashEventResult,
   WorkingIndicatorOptions,
 } from "../../core/extensions/index.ts";
+import { EXTERNAL_SERVICES } from "../../core/external-services.ts";
 import {
   FooterDataProvider,
   type ReadonlyFooterDataProvider,
@@ -736,15 +737,25 @@ export class InteractiveMode {
     if (loginCommand) {
       loginCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
         const providers = getLoginProviderCompletionOptions(this.loginFlow.getProviderOptions());
+        const items = [
+          ...providers.map((provider) => ({
+            searchText: getLoginProviderSearchText(provider),
+            item: {
+              value: provider.id,
+              label: provider.id,
+              description: formatLoginProviderCompletionDescription(provider),
+            },
+          })),
+          ...EXTERNAL_SERVICES.map((service) => ({
+            searchText: `${service.id} ${service.name} ${service.purpose}`,
+            item: { value: service.id, label: service.id, description: service.purpose },
+          })),
+        ];
         return createFuzzyAutocompleteItems(
-          providers,
+          items,
           prefix,
-          getLoginProviderSearchText,
-          (provider) => ({
-            value: provider.id,
-            label: provider.id,
-            description: formatLoginProviderCompletionDescription(provider),
-          }),
+          (entry) => entry.searchText,
+          (entry) => entry.item,
         );
       };
     }

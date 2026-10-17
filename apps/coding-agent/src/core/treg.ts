@@ -84,13 +84,87 @@ function isSignedIn(command: string, env: NodeJS.ProcessEnv): boolean {
   });
 }
 
+/** Where to get the CLI when it is not installed. */
+export const TREG_INSTALL_COMMAND = "curl -fsSL https://treg.to/install.sh | sh";
+
+/** The installed `treg` CLI and whether it has a login to call with. */
+export function findTregCli(
+  find: (executable: string) => string | null = findExecutableOnPath,
+  env: NodeJS.ProcessEnv = process.env,
+): { command: string; signedIn: boolean } | undefined {
+  const command = find("treg");
+  return command ? { command, signedIn: isSignedIn(command, env) } : undefined;
+}
+
 /** The installed and signed-in `treg` CLI, or undefined when the web tools are unavailable. */
 export function findTreg(
   find: (executable: string) => string | null = findExecutableOnPath,
   env: NodeJS.ProcessEnv = process.env,
 ): TregOptions | undefined {
-  const command = find("treg");
-  return command && isSignedIn(command, env) ? { run: spawnRunner(command) } : undefined;
+  const cli = findTregCli(find, env);
+  return cli?.signedIn ? { run: spawnRunner(cli.command) } : undefined;
+}
+
+export interface TregSignInPage {
+  url: string;
+  /** The code the sign-in page shows, for the user to check it matches. */
+  code?: string;
+}
+
+/**
+ * Run `treg login`, which opens the browser sign-in page itself and waits until the user approves
+ * it there. `onPage` receives the page as the CLI prints it, for showing when no browser opens.
+ */
+export async function loginTreg(
+  command: string,
+  onPage: (page: TregSignInPage) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const child = spawnProcess(command, ["login"], {
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+    env: { ...process.env, PYTHONUNBUFFERED: "1" },
+    ...(signal ? { signal } : {}),
+  });
+  let output = "";
+  let shown = false;
+  const onOutput = (chunk: string) => {
+    output = (output + chunk).slice(-4_000);
+    const url = /https:\/\/\S+/.exec(output)?.[0];
+    if (shown || !url) return;
+    const code = /matches:\s*(\S+)/.exec(output)?.[1];
+    if (!code && !/Waiting/.test(output)) return;
+    shown = true;
+    onPage(code ? { url, code } : { url });
+  };
+  child.stdout?.setEncoding("utf8").on("data", onOutput);
+  child.stderr?.setEncoding("utf8").on("data", onOutput);
+  const exitCode = await waitForChildProcess(child).catch((error: unknown) => {
+    signal?.throwIfAborted();
+    throw error;
+  });
+  signal?.throwIfAborted();
+  if (exitCode !== 0) {
+    const lines = output
+      .trim()
+      .split("\n")
+      .filter((line) => line.trim() && !line.includes("https://"));
+    throw new Error(`treg login failed: ${lines.at(-1)?.trim() || `exit ${exitCode}`}`);
+  }
+}
+
+/** Run `treg logout`, which clears the login `treg login` stored on this machine. */
+export async function logoutTreg(command: string): Promise<void> {
+  const child = spawnProcess(command, ["logout"], {
+    stdio: ["ignore", "ignore", "pipe"],
+    windowsHide: true,
+  });
+  let stderr = "";
+  child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
+  const exitCode = await waitForChildProcess(child);
+  if (exitCode !== 0) {
+    throw new Error(`treg logout failed: ${stderr.trim() || `exit ${exitCode}`}`);
+  }
 }
 
 function describeFailure(status: number, body: unknown): string {
