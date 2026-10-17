@@ -22,14 +22,9 @@ const scratch = (name: string) => join(tmpdir(), `chord2-${process.pid}-${name}`
 const alive = (pid: number): boolean => {
   try {
     process.kill(pid, 0);
+    return true;
   } catch {
     return false;
-  }
-  // An orphan is a zombie until PID 1 reaps it, and a container's PID 1 may never do so.
-  try {
-    return readFileSync(`/proc/${pid}/stat`, "utf8").split(") ").at(-1)?.[0] !== "Z";
-  } catch {
-    return true;
   }
 };
 
