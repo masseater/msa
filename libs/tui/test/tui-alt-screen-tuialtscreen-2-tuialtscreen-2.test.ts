@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { AltScreenSearchComponent } from "../src/alt-screen-search.ts";
+import { AltScreenSearchComponent } from "../src/alt-screen-search-component.ts";
 import { stripTerminalSequences, visibleWidth } from "../src/utils.ts";
 
 describe("TuiAltScreen", () => {

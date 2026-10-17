@@ -1,14 +1,6 @@
 import { dual } from "effect/Function";
 
-import { Input } from "./components/input.ts";
-import { getKeybindings } from "./keybindings.ts";
-import type { Component, Focusable } from "./tui.ts";
-import {
-  getGraphemeSegmenter,
-  stripTerminalSequences,
-  truncateToWidth,
-  visibleWidth,
-} from "./utils.ts";
+import { getGraphemeSegmenter, stripTerminalSequences, visibleWidth } from "./utils.ts";
 
 const segmenter = getGraphemeSegmenter();
 
@@ -38,76 +30,91 @@ export interface AltScreenSearchMatch {
 
 const PRINTABLE_ASCII = /^[\x20-\x7e]*$/u;
 
+interface CorpusState {
+  chunks: string[];
+  spans: SearchSourceSpan[];
+  textLength: number;
+  pendingSeparator: boolean;
+}
+
+interface CorpusToken {
+  text: string;
+  row: number;
+  startCol: number;
+  endCol: number;
+  linearColumns: boolean;
+}
+
+function markSeparator(state: CorpusState): void {
+  if (state.textLength > 0) state.pendingSeparator = true;
+}
+
+function appendToken(state: CorpusState, token: CorpusToken): void {
+  if (state.pendingSeparator) {
+    state.chunks.push(" ");
+    state.textLength += 1;
+    state.pendingSeparator = false;
+  }
+  state.chunks.push(token.text);
+  state.spans.push({
+    textStart: state.textLength,
+    textEnd: state.textLength + token.text.length,
+    row: token.row,
+    startCol: token.startCol,
+    endCol: token.endCol,
+    linearColumns: token.linearColumns,
+  });
+  state.textLength += token.text.length;
+}
+
+function appendAsciiLine(state: CorpusState, line: string, row: number): void {
+  let index = 0;
+  while (index < line.length) {
+    if (line.charCodeAt(index) === 0x20) {
+      markSeparator(state);
+      index += 1;
+      continue;
+    }
+    let end = index + 1;
+    while (end < line.length && line.charCodeAt(end) !== 0x20) end += 1;
+    const text = line.slice(index, end);
+    appendToken(state, { text, row, startCol: index, endCol: end, linearColumns: true });
+    index = end;
+  }
+}
+
+function appendGraphemeLine(state: CorpusState, line: string, row: number): void {
+  let column = 0;
+  for (const grapheme of segmenter.segment(line)) {
+    const text = grapheme.segment;
+    const width = visibleWidth(text);
+    if (/^\s+$/u.test(text)) {
+      markSeparator(state);
+    } else {
+      appendToken(state, {
+        text,
+        row,
+        startCol: column,
+        endCol: column + width,
+        linearColumns: false,
+      });
+    }
+    column += width;
+  }
+}
+
 function buildSearchCorpus(lines: readonly string[]): SearchCorpus {
-  const chunks: string[] = [];
-  const spans: SearchSourceSpan[] = [];
-  let textLength = 0;
-  let pendingSeparator = false;
-
-  const appendSeparator = (): void => {
-    if (!pendingSeparator) return;
-    chunks.push(" ");
-    textLength += 1;
-    pendingSeparator = false;
-  };
-
+  const state: CorpusState = { chunks: [], spans: [], textLength: 0, pendingSeparator: false };
   for (let row = 0; row < lines.length; row++) {
     const line = stripTerminalSequences(lines[row] ?? "");
-    let column = 0;
-
     if (PRINTABLE_ASCII.test(line)) {
-      let index = 0;
-      while (index < line.length) {
-        if (line.charCodeAt(index) === 0x20) {
-          if (textLength > 0) pendingSeparator = true;
-          column += 1;
-          index += 1;
-          continue;
-        }
-        let end = index + 1;
-        while (end < line.length && line.charCodeAt(end) !== 0x20) end += 1;
-        appendSeparator();
-        const text = line.slice(index, end);
-        chunks.push(text);
-        spans.push({
-          textStart: textLength,
-          textEnd: textLength + text.length,
-          row,
-          startCol: column,
-          endCol: column + text.length,
-          linearColumns: true,
-        });
-        textLength += text.length;
-        column += text.length;
-        index = end;
-      }
+      appendAsciiLine(state, line, row);
     } else {
-      for (const grapheme of segmenter.segment(line)) {
-        const text = grapheme.segment;
-        const width = visibleWidth(text);
-        if (/^\s+$/u.test(text)) {
-          if (textLength > 0) pendingSeparator = true;
-          column += width;
-          continue;
-        }
-        appendSeparator();
-        chunks.push(text);
-        spans.push({
-          textStart: textLength,
-          textEnd: textLength + text.length,
-          row,
-          startCol: column,
-          endCol: column + width,
-          linearColumns: false,
-        });
-        textLength += text.length;
-        column += width;
-      }
+      appendGraphemeLine(state, line, row);
     }
-    if (textLength > 0) pendingSeparator = true;
+    markSeparator(state);
   }
-
-  return { text: chunks.join(""), spans };
+  return { text: state.chunks.join(""), spans: state.spans };
 }
 
 function normalizeQuery(query: string): string {
@@ -210,144 +217,4 @@ export function getAltScreenSearchMatchKey(match: AltScreenSearchMatch): string 
   return first !== undefined && last !== undefined
     ? `${first.row}:${first.startCol}:${last.row}:${last.endCol}`
     : "";
-}
-
-export class AltScreenSearchComponent implements Component, Focusable {
-  private readonly input = new Input({
-    prompt: " ",
-    placeholder: "Find in transcript",
-    placeholderStyle: (text) => `\x1b[2m${text}\x1b[22m`,
-  });
-  private readonly onQueryChange: (query: string) => void;
-  private readonly navigationButtonStyle: (text: string, hovered: boolean) => string;
-  private resultCount = 0;
-  private resultIndex = -1;
-  private previousButtonStart = -1;
-  private previousButtonEnd = -1;
-  private nextButtonStart = -1;
-  private nextButtonEnd = -1;
-  private hoveredNavigationDirection: -1 | 1 | undefined;
-  #focused = false;
-
-  constructor(
-    onQueryChange: (query: string) => void,
-    navigationButtonStyle: (text: string, hovered: boolean) => string = (text) => text,
-  ) {
-    this.onQueryChange = onQueryChange;
-    this.navigationButtonStyle = navigationButtonStyle;
-  }
-
-  get focused(): boolean {
-    return this.#focused;
-  }
-
-  set focused(value: boolean) {
-    this.#focused = value;
-    this.input.focused = value;
-  }
-
-  setResult(index: number, count: number): void {
-    this.resultIndex = index;
-    this.resultCount = count;
-  }
-
-  getNavigationDirectionAt(row: number, column: number): -1 | 1 | undefined {
-    if (row !== 2) return undefined;
-    if (column >= this.previousButtonStart && column < this.previousButtonEnd) return -1;
-    if (column >= this.nextButtonStart && column < this.nextButtonEnd) return 1;
-    return undefined;
-  }
-
-  setHoveredNavigationDirection(direction: -1 | 1 | undefined): boolean {
-    if (direction === this.hoveredNavigationDirection) return false;
-    this.hoveredNavigationDirection = direction;
-    return true;
-  }
-
-  handleInput(data: string): void {
-    const previous = this.input.getValue();
-    this.input.handleInput(data);
-    const query = this.input.getValue();
-    if (query !== previous) this.onQueryChange(query);
-  }
-
-  invalidate(): void {
-    this.input.invalidate();
-  }
-
-  render(width: number): string[] {
-    const safeWidth = Math.max(1, width);
-    const innerWidth = Math.max(0, safeWidth - 2);
-    const formatKey = (key: string | undefined): string =>
-      key !== undefined && key !== ""
-        ? key
-            .split("+")
-            .map((part) => {
-              if (process.platform === "darwin" && part.toLowerCase() === "alt") return "Option";
-              return part.charAt(0).toUpperCase() + part.slice(1);
-            })
-            .join("+")
-        : "Unbound";
-    const keybindings = getKeybindings();
-    const previousKey = formatKey(keybindings.getKeys("tui.altScreen.searchPrevious")[0]);
-    const nextKey = formatKey(keybindings.getKeys("tui.altScreen.searchNext")[0]);
-    const query = this.input.getValue();
-    const result =
-      query === ""
-        ? ""
-        : this.resultCount === 0
-          ? "No matches"
-          : `${this.resultIndex + 1}/${this.resultCount}`;
-    const resultSpace = Math.max(0, innerWidth - 3);
-    const visibleResult = truncateToWidth(result, resultSpace, "");
-    const resultText = visibleResult === "" ? "" : `\x1b[2m ${visibleResult} \x1b[22m`;
-    const inputWidth = Math.max(0, innerWidth - visibleWidth(resultText));
-    const inputLine = truncateToWidth(
-      this.input.render(Math.max(1, inputWidth))[0] ?? "",
-      inputWidth,
-      "",
-    );
-    const inputPadding = " ".repeat(Math.max(0, inputWidth - visibleWidth(inputLine)));
-    const content = `${inputLine}${inputPadding}${resultText}`;
-
-    let previousButton = `↑ ${previousKey}`;
-    let nextButton = `↓ ${nextKey}`;
-    let separator = " · ";
-    const outerGapWidth = 1;
-    const availableControlsWidth = Math.max(0, innerWidth - outerGapWidth * 2 - 1);
-    let controlsWidth =
-      visibleWidth(previousButton) + visibleWidth(separator) + visibleWidth(nextButton);
-    if (controlsWidth > availableControlsWidth) {
-      previousButton = "↑";
-      nextButton = "↓";
-      separator = " ";
-      controlsWidth =
-        visibleWidth(previousButton) + visibleWidth(separator) + visibleWidth(nextButton);
-    }
-    const showButtons = controlsWidth <= availableControlsWidth;
-    const renderedButtons = showButtons
-      ? this.navigationButtonStyle(previousButton, this.hoveredNavigationDirection === -1) +
-        separator +
-        this.navigationButtonStyle(nextButton, this.hoveredNavigationDirection === 1)
-      : "";
-    const outerGapsWidth = showButtons ? outerGapWidth * 2 : 0;
-    const rightRuleWidth =
-      renderedButtons !== "" && innerWidth > controlsWidth + outerGapsWidth ? 1 : 0;
-    const leftRuleWidth = Math.max(
-      0,
-      innerWidth - (showButtons ? controlsWidth : 0) - outerGapsWidth - rightRuleWidth,
-    );
-    const previousStart = 1 + leftRuleWidth + outerGapWidth;
-    this.previousButtonStart = showButtons ? previousStart : -1;
-    this.previousButtonEnd = showButtons ? previousStart + visibleWidth(previousButton) : -1;
-    this.nextButtonStart = showButtons ? this.previousButtonEnd + visibleWidth(separator) : -1;
-    this.nextButtonEnd = showButtons ? this.nextButtonStart + visibleWidth(nextButton) : -1;
-
-    if (safeWidth === 1) return ["┌", "│", "└"];
-    return [
-      `┌${"─".repeat(innerWidth)}┐`,
-      `│${content}│`,
-      `└${"─".repeat(leftRuleWidth)}${renderedButtons === "" ? "" : " "}${renderedButtons}${renderedButtons === "" ? "" : " "}${"─".repeat(rightRuleWidth)}┘`,
-    ];
-  }
 }
