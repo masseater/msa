@@ -245,6 +245,10 @@
       "type": "string",
       "description": "Command for Ctrl+G external editor; takes precedence over VISUAL and EDITOR."
     },
+    "clipboardImageCommand": {
+      "type": "string",
+      "description": "Shell command whose stdout is the clipboard image, read by the paste key in place of the local clipboard. Global setting only."
+    },
     "shellPath": {
       "type": "string",
       "description": "Custom shell path, for example for Cygwin on Windows, with support for leading ~ expansion."
