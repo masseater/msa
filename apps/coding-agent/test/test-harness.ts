@@ -160,7 +160,7 @@ function buildAssistantMessage(resp: FauxResponse): AssistantMessage {
     model: resp.model?.id ?? FAUX_MODEL_ID,
     usage: buildUsage(resp.usage),
     stopReason,
-    errorMessage: resp.error,
+    ...(resp.error !== undefined ? { errorMessage: resp.error } : {}),
     timestamp: Date.now(),
   };
 }
@@ -446,7 +446,9 @@ async function createHarnessWithResourceLoader(
     cwd: tempDir,
     modelRuntime: getModelRuntime(modelRegistry),
     resourceLoader,
-    baseToolsOverride: options.baseToolsOverride,
+    ...(options.baseToolsOverride !== undefined
+      ? { baseToolsOverride: options.baseToolsOverride }
+      : {}),
   });
 
   const events: AgentSessionEvent[] = [];

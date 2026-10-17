@@ -201,9 +201,9 @@ function detectAppearance(foregrounds: Color[], backgrounds: Color[]): ThemeAppe
 // ============================================================================
 
 export class Theme {
-  readonly name?: string;
-  readonly sourcePath?: string;
-  sourceInfo?: SourceInfo;
+  readonly name?: string | undefined;
+  readonly sourcePath?: string | undefined;
+  sourceInfo?: SourceInfo | undefined;
   private mode: TerminalColorMode;
   // Precomputed escape sequences keep fg()/bg() on the render hot path to a lookup and concat.
   private readonly fgAnsi = new Map<ThemeColor, string>();
@@ -224,12 +224,12 @@ export class Theme {
     bgColors: Pick<ThemeColorValues<string | number>, ThemeBg>,
     mode: TerminalColorMode,
     options: {
-      name?: string;
-      sourcePath?: string;
-      sourceInfo?: SourceInfo;
-      appearance?: ThemeAppearance;
+      name?: string | undefined;
+      sourcePath?: string | undefined;
+      sourceInfo?: SourceInfo | undefined;
+      appearance?: ThemeAppearance | undefined;
       /** Foreground tokens to render faint (SGR 2). */
-      dim?: readonly ThemeColor[];
+      dim?: readonly ThemeColor[] | undefined;
     } = {},
   ) {
     this.name = options.name;
@@ -881,9 +881,9 @@ export function isLightTheme(themeName?: string): boolean {
  * Returns undefined for each color that isn't explicitly set.
  */
 export function getThemeExportColors(themeName?: string): {
-  pageBg?: string;
-  cardBg?: string;
-  infoBg?: string;
+  pageBg?: string | undefined;
+  cardBg?: string | undefined;
+  infoBg?: string | undefined;
 } {
   const name = themeName ?? currentThemeName ?? SYSTEM_THEME_NAME;
   if (name === SYSTEM_THEME_NAME) return {};

@@ -130,8 +130,9 @@ async function run(serverUrl: string, scenario: string): Promise<void> {
     // Pre-registered clients are configured in `mcp.json`.
     config.oauth = {
       clientId: context["client_id"],
-      clientSecret:
-        typeof context["client_secret"] === "string" ? context["client_secret"] : undefined,
+      ...(typeof context["client_secret"] === "string"
+        ? { clientSecret: context["client_secret"] }
+        : {}),
     };
   }
   const entry: McpServerEntry = { name: "conformance", config, source: "conformance" };
@@ -163,7 +164,7 @@ async function run(serverUrl: string, scenario: string): Promise<void> {
           serverUrl: url,
           store: credentials.forServer(entry.name, url),
           settings: connection.oauthSettings(),
-          challenge: connection.challenge,
+          ...(connection.challenge !== undefined ? { challenge: connection.challenge } : {}),
           prompt: simulatedBrowser(),
         });
         connection.challenge = undefined;

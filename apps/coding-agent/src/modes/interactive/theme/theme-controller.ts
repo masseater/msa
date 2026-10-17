@@ -81,7 +81,7 @@ export class InteractiveThemeController {
       getSettingsManager: () => SettingsManager;
       showError: (message: string) => void;
       onChanged: () => void;
-      initialThemeSetting?: string;
+      initialThemeSetting?: string | undefined;
     },
   ) {
     this.ui = ui;
@@ -213,10 +213,13 @@ export class InteractiveThemeController {
    */
   private applyTerminalColors(reported: TerminalColors): void {
     const previous = this.terminalColors;
+    const foreground = reported.foreground ?? previous?.foreground;
+    const background = reported.background ?? previous?.background;
+    const palette = reported.palette ?? previous?.palette;
     const next: TerminalColors = {
-      foreground: reported.foreground ?? previous?.foreground,
-      background: reported.background ?? previous?.background,
-      palette: reported.palette ?? previous?.palette,
+      ...(foreground ? { foreground } : {}),
+      ...(background ? { background } : {}),
+      ...(palette ? { palette } : {}),
     };
     // Re-rendering rebuilds every component, so skip it when nothing changed (including timeouts).
     if (previous && sameTerminalColors(previous, next)) return;

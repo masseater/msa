@@ -43,16 +43,16 @@ export interface AgentSessionRuntimeDiagnostic {
  */
 export interface CreateAgentSessionServicesOptions {
   cwd: string;
-  agentDir?: string;
-  settingsManager?: SettingsManager;
-  modelRuntime?: ModelRuntime;
-  modelRuntimeSignal?: AbortSignal;
-  extensionFlagValues?: Map<string, boolean | string>;
+  agentDir?: string | undefined;
+  settingsManager?: SettingsManager | undefined;
+  modelRuntime?: ModelRuntime | undefined;
+  modelRuntimeSignal?: AbortSignal | undefined;
+  extensionFlagValues?: Map<string, boolean | string> | undefined;
   resourceLoaderOptions?: Omit<
     DefaultResourceLoaderOptions,
     "cwd" | "agentDir" | "settingsManager"
   >;
-  resourceLoaderReloadOptions?: ResourceLoaderReloadOptions;
+  resourceLoaderReloadOptions?: ResourceLoaderReloadOptions | undefined;
 }
 
 /**
@@ -64,15 +64,17 @@ export interface CreateAgentSessionServicesOptions {
 export interface CreateAgentSessionFromServicesOptions {
   services: AgentSessionServices;
   sessionManager: SessionManager;
-  sessionStartEvent?: SessionStartEvent;
-  model?: Model<any>;
-  thinkingLevel?: ThinkingLevel;
-  scopedModels?: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel }>;
-  tools?: string[];
-  excludeTools?: CreateAgentSessionOptions["excludeTools"];
-  noTools?: CreateAgentSessionOptions["noTools"];
-  customTools?: ToolDefinition[];
-  orchestrator?: boolean;
+  sessionStartEvent?: SessionStartEvent | undefined;
+  model?: Model<any> | undefined;
+  thinkingLevel?: ThinkingLevel | undefined;
+  scopedModels?:
+    | Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel | undefined }>
+    | undefined;
+  tools?: string[] | undefined;
+  excludeTools?: CreateAgentSessionOptions["excludeTools"] | undefined;
+  noTools?: CreateAgentSessionOptions["noTools"] | undefined;
+  customTools?: ToolDefinition[] | undefined;
+  orchestrator?: boolean | undefined;
 }
 
 /**

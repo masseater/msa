@@ -26,11 +26,11 @@ export interface PrintModeOptions {
   /** Output mode: "text" for final response only, "json" for all events */
   mode: "text" | "json";
   /** Array of additional prompts to send after initialMessage */
-  messages?: string[];
+  messages?: string[] | undefined;
   /** First message to send (may contain @file content) */
-  initialMessage?: string;
+  initialMessage?: string | undefined;
   /** Images to attach to the initial message */
-  initialImages?: ImageContent[];
+  initialImages?: ImageContent[] | undefined;
 }
 
 /**

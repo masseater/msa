@@ -26,8 +26,8 @@ import {
 } from "./report.ts";
 
 type EvalCliOptions = {
-  provider?: string;
-  model?: string;
+  provider?: string | undefined;
+  model?: string | undefined;
   runsPerVariant: number;
   requestedFiles: string[];
   discoveryArgs: string[];

@@ -29,8 +29,8 @@ type DeviceAuthorization = {
   deviceCode: string;
   userCode: string;
   verificationUri: string;
-  intervalSeconds?: number;
-  expiresInSeconds?: number;
+  intervalSeconds?: number | undefined;
+  expiresInSeconds?: number | undefined;
 };
 
 function requestSignal(signal: AbortSignal): AbortSignal {

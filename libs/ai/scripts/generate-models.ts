@@ -1261,9 +1261,10 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
       // Qwen Max currently advertises only a toggle. Prefer upstream effort
       // metadata once available instead of replacing it with this fallback.
       if (model.id === "accounts/fireworks/models/qwen3p8-max" && !model.thinkingLevelMap) {
-        model.thinkingLevelMap = getEffortThinkingLevelMap([
+        const thinkingLevelMap = getEffortThinkingLevelMap([
           { type: "effort", values: ["low", "medium", "xhigh"] },
         ]);
+        if (thinkingLevelMap) model.thinkingLevelMap = thinkingLevelMap;
       }
       const reasoningOptions = modelsDevReasoningOptions.get(getModelKey(model));
       if (
@@ -3012,10 +3013,10 @@ async function generateModels() {
     }
   }
 
-  const deepseekCompat: OpenAICompletionsCompat = {
+  const deepseekCompat = {
     requiresReasoningContentOnAssistantMessages: true,
     thinkingFormat: "deepseek",
-  };
+  } satisfies OpenAICompletionsCompat;
   const deepseekModels: Model<"openai-completions">[] = [
     {
       id: "deepseek-flash",
@@ -3268,6 +3269,9 @@ async function generateModels() {
 
   // Add missing Mistral Medium 3.5 model until models.dev includes it
   if (!allModels.some((m) => m.provider === "mistral" && m.id === "mistral-medium-3.5")) {
+    const thinkingLevelMap = getEffortThinkingLevelMap([
+      { type: "effort", values: ["none", "high"] },
+    ]);
     allModels.push({
       id: "mistral-medium-3.5",
       name: "Mistral Medium 3.5",
@@ -3275,7 +3279,7 @@ async function generateModels() {
       provider: "mistral",
       baseUrl: "https://api.mistral.ai",
       reasoning: true,
-      thinkingLevelMap: getEffortThinkingLevelMap([{ type: "effort", values: ["none", "high"] }]),
+      ...(thinkingLevelMap !== undefined ? { thinkingLevelMap } : {}),
       input: ["text", "image"],
       cost: {
         input: 1.5,

@@ -4,7 +4,7 @@ interface HighlightJsResult {
 
 interface HighlightJsOptions {
   language: string;
-  ignoreIllegals?: boolean;
+  ignoreIllegals?: boolean | undefined;
 }
 
 interface HighlightJsLanguageDefinition {

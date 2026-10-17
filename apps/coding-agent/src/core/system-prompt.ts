@@ -9,32 +9,32 @@ import { formatSkillsForPrompt, type Skill } from "./skills.ts";
 
 export interface BuildSystemPromptOptions {
   /** Custom system prompt (replaces the default prefix). */
-  customPrompt?: string;
+  customPrompt?: string | undefined;
   /** Exact full prompt replacement set by a before_agent_start handler. */
-  forceSystemPrompt?: string;
+  forceSystemPrompt?: string | undefined;
   /** Tools to include in prompt. Default: [read, bash, edit, write]. */
-  selectedTools?: string[];
+  selectedTools?: string[] | undefined;
   /**
    * Selected tools whose declarations requests leave out (`prepareLoadout` hidden declarations).
    * They are reachable only through another tool, so the tool list and rules leave them out too.
    */
-  hiddenTools?: string[];
+  hiddenTools?: string[] | undefined;
   /** Optional one-line tool snippets keyed by tool name. */
-  toolSnippets?: Record<string, string>;
+  toolSnippets?: Record<string, string> | undefined;
   /** Guideline bullets contributed by each tool, keyed by tool name. */
-  toolGuidelines?: Record<string, string[]>;
+  toolGuidelines?: Record<string, string[]> | undefined;
   /** Additional guideline bullets appended to the default system prompt rules. */
-  promptGuidelines?: string[];
+  promptGuidelines?: string[] | undefined;
   /** Text appended from user configuration before project context, skills, and cwd. */
-  appendSystemPrompt?: string;
+  appendSystemPrompt?: string | undefined;
   /** Additional XML-wrapped prompt sections keyed by tag name. */
-  sections?: Record<string, string>;
+  sections?: Record<string, string> | undefined;
   /** Working directory. */
   cwd: string;
   /** Pre-loaded context files. */
-  contextFiles?: Array<{ path: string; content: string }>;
+  contextFiles?: Array<{ path: string; content: string }> | undefined;
   /** Pre-loaded skills. */
-  skills?: Skill[];
+  skills?: Skill[] | undefined;
 }
 
 export type NormalizedBuildSystemPromptOptions = BuildSystemPromptOptions & {

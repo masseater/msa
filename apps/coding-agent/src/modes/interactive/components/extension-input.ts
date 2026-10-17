@@ -10,10 +10,10 @@ import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint } from "./keybinding-hints.ts";
 
 export interface ExtensionInputOptions {
-  tui?: TUI;
-  timeout?: number;
-  initialValue?: string;
-  description?: string;
+  tui?: TUI | undefined;
+  timeout?: number | undefined;
+  initialValue?: string | undefined;
+  description?: string | undefined;
 }
 
 export class ExtensionInputComponent extends Container implements Focusable {

@@ -3,8 +3,11 @@ import { createServer } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { openaiCodexOAuth } from "../src/auth/oauth/openai-codex.ts";
+import type { AuthEvent } from "../src/auth/types.ts";
 
 const neverAbortedSignal = new AbortController().signal;
+
+type DeviceCodeInfo = Omit<Extract<AuthEvent, { type: "device_code" }>, "type">;
 
 function jsonResponse(body: unknown, status: number = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -47,12 +50,7 @@ function deviceAuthPendingResponse(): Response {
 }
 
 function loginOpenAICodexDeviceCodeForTest(options: {
-  onDeviceCode(info: {
-    userCode: string;
-    verificationUri: string;
-    intervalSeconds?: number;
-    expiresInSeconds?: number;
-  }): void;
+  onDeviceCode(info: DeviceCodeInfo): void;
   signal?: AbortSignal;
 }) {
   return openaiCodexOAuth.login({
@@ -83,13 +81,7 @@ describe("OpenAI Codex OAuth", () => {
     vi.setSystemTime(startTime);
 
     const accessToken = createAccessToken("account-123");
-    const deviceInfos: Array<{
-      userCode: string;
-      verificationUri: string;
-      instructions?: string;
-      intervalSeconds?: number;
-      expiresInSeconds?: number;
-    }> = [];
+    const deviceInfos: DeviceCodeInfo[] = [];
     const pollTimes: number[] = [];
     const pollResponses = [
       deviceAuthPendingResponse(),
@@ -190,12 +182,7 @@ describe("OpenAI Codex OAuth", () => {
       message: string;
       options: readonly { id: string; label: string }[];
     }> = [];
-    const deviceInfos: Array<{
-      userCode: string;
-      verificationUri: string;
-      intervalSeconds?: number;
-      expiresInSeconds?: number;
-    }> = [];
+    const deviceInfos: DeviceCodeInfo[] = [];
 
     vi.stubGlobal(
       "fetch",

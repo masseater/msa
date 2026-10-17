@@ -64,7 +64,7 @@ export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
 export interface ScopedModel {
   model: Model<Api>;
   /** Thinking level if explicitly specified in pattern (e.g., "model:high"), undefined otherwise */
-  thinkingLevel?: ThinkingLevel;
+  thinkingLevel?: ThinkingLevel | undefined;
 }
 
 /*
@@ -77,7 +77,7 @@ export interface ModelReferenceRequest {
   /** Bare model id or `provider/id`, optionally followed by `:<thinking>`. */
   text: string;
   /** Only consider models from this provider. */
-  provider?: string;
+  provider?: string | undefined;
   /**
    * A trailing `:<suffix>` is only considered when the full text matches no model, since ids such as
    * OpenRouter's `qwen/qwen3-coder:exacto` contain colons.
@@ -91,12 +91,17 @@ export interface ModelReferenceRequest {
 }
 
 export type ModelReferenceResult =
-  | { status: "resolved"; model: Model<Api>; thinkingLevel?: ThinkingLevel; warning?: string }
+  | {
+      status: "resolved";
+      model: Model<Api>;
+      thinkingLevel?: ThinkingLevel | undefined;
+      warning?: string;
+    }
   | {
       status: "ambiguous";
       candidates: Model<Api>[];
       usableCount: number;
-      thinkingLevel?: ThinkingLevel;
+      thinkingLevel?: ThinkingLevel | undefined;
       warning?: string;
     }
   | {
@@ -112,7 +117,7 @@ export interface ModelReferenceTarget {
   modelText: string;
   /** `modelText` without a valid thinking suffix (unless `thinkingSuffix` is `none`). */
   modelId: string;
-  thinkingLevel?: ThinkingLevel;
+  thinkingLevel?: ThinkingLevel | undefined;
 }
 
 type ResolvedOrAmbiguous = Exclude<ModelReferenceResult, { status: "not-found" }>;
@@ -456,7 +461,7 @@ export async function resolveModelScope(
 
 export interface ResolveCliModelResult {
   model: Model<Api> | undefined;
-  thinkingLevel?: ThinkingLevel;
+  thinkingLevel?: ThinkingLevel | undefined;
   warning: string | undefined;
   /**
    * Error message suitable for CLI display.
@@ -477,11 +482,11 @@ export interface ResolveCliModelResult {
  * return a thinking level from "<pattern>:<thinking>" so the caller can apply it.
  */
 export function resolveCliModel(options: {
-  cliProvider?: string;
-  cliModel?: string;
-  cliThinking?: ThinkingLevel;
+  cliProvider?: string | undefined;
+  cliModel?: string | undefined;
+  cliThinking?: ThinkingLevel | undefined;
   /** `--api-key` was supplied for the selected provider. */
-  inlineApiKey?: boolean;
+  inlineApiKey?: boolean | undefined;
   modelRuntime: ModelRuntime;
 }): ResolveCliModelResult {
   const { cliProvider, cliModel, cliThinking, inlineApiKey, modelRuntime } = options;
@@ -585,10 +590,10 @@ export interface InitialModelResult {
 export async function findInitialModel(options: {
   scopedModels: ScopedModel[];
   isContinuing: boolean;
-  defaultProvider?: string;
-  defaultModelId?: string;
-  defaultThinkingLevel?: ThinkingLevel;
-  modelThinkingLevels?: Record<string, ThinkingLevel>;
+  defaultProvider?: string | undefined;
+  defaultModelId?: string | undefined;
+  defaultThinkingLevel?: ThinkingLevel | undefined;
+  modelThinkingLevels?: Record<string, ThinkingLevel> | undefined;
   modelRuntime: ModelRuntime;
 }): Promise<InitialModelResult> {
   const {

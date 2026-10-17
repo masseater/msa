@@ -21,7 +21,7 @@ export interface OAuthCallbackServerOptions<T> {
   /** Host in `redirectUri` when it differs from `host`, for example `localhost`. */
   redirectHost?: string;
   /** Expected `state` parameter. Omit when the provider does not send one. */
-  state?: string;
+  state?: string | undefined;
   /**
    * Finishes the sign-in with the received code before the browser page is sent, so the page can
    * show exchange failures. Pass `async (code) => code` to exchange the code later.

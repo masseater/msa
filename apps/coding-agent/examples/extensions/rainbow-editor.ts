@@ -42,7 +42,7 @@ function colorize(text: string, shinePos: number): string {
 }
 
 class RainbowEditor extends CustomEditor {
-  private animationTimer?: ReturnType<typeof setInterval>;
+  private animationTimer?: ReturnType<typeof setInterval> | undefined;
   private frame = 0;
 
   private hasUltrathink(): boolean {

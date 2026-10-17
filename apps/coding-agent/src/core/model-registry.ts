@@ -34,10 +34,10 @@ export type { ProviderConfigInput } from "./provider-composer.ts";
 export type ResolvedRequestAuth =
   | {
       ok: true;
-      apiKey?: string;
-      headers?: ProviderHeaders;
-      baseUrl?: string;
-      env?: Record<string, string>;
+      apiKey?: string | undefined;
+      headers?: ProviderHeaders | undefined;
+      baseUrl?: string | undefined;
+      env?: Record<string, string> | undefined;
     }
   | { ok: false; error: string };
 export { clearApiKeyCache } from "./provider-composer.ts";

@@ -82,11 +82,11 @@ const CODEX_RESPONSE_STATUSES = new Set<CodexResponseStatus>([
 // ============================================================================
 
 export interface OpenAICodexResponsesOptions extends StreamOptions {
-  reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-  reasoningSummary?: "auto" | "concise" | "detailed" | "off" | "on" | null;
-  serviceTier?: ResponseCreateParamsStreaming["service_tier"];
-  textVerbosity?: "low" | "medium" | "high";
-  toolChoice?: "auto" | "none" | "required";
+  reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | undefined;
+  reasoningSummary?: "auto" | "concise" | "detailed" | "off" | "on" | null | undefined;
+  serviceTier?: ResponseCreateParamsStreaming["service_tier"] | undefined;
+  textVerbosity?: "low" | "medium" | "high" | undefined;
+  toolChoice?: "auto" | "none" | "required" | undefined;
 }
 
 type CodexResponseStatus =
@@ -112,7 +112,7 @@ interface RequestBody {
   service_tier?: ResponseCreateParamsStreaming["service_tier"];
   text?: { verbosity?: string };
   include?: string[];
-  prompt_cache_key?: string;
+  prompt_cache_key?: string | undefined;
   [key: string]: unknown;
 }
 
@@ -438,7 +438,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
               method: "POST",
               headers: sseHeaders,
               body: sseBody,
-              signal: combinedSignal.signal,
+              signal: combinedSignal.signal ?? null,
             });
           } catch (error) {
             if (headerTimeoutSignal?.aborted && !options?.signal?.aborted) {
@@ -734,12 +734,12 @@ async function processStream(
 }
 
 class CodexApiError extends Error {
-  readonly code?: string;
-  readonly payload?: Record<string, unknown>;
+  readonly code?: string | undefined;
+  readonly payload?: Record<string, unknown> | undefined;
 
   constructor(
     message: string,
-    options?: { code?: string; payload?: Record<string, unknown>; cause?: unknown },
+    options?: { code?: string | undefined; payload?: Record<string, unknown>; cause?: unknown },
   ) {
     super(message);
     this.name = "CodexApiError";
@@ -785,8 +785,8 @@ function isPreviousResponseNotFoundError(error: unknown): boolean {
 }
 
 function extractCodexEventError(event: Record<string, unknown>): {
-  code?: string;
-  message?: string;
+  code?: string | undefined;
+  message?: string | undefined;
 } {
   const nested =
     event["error"] && typeof event["error"] === "object"
@@ -968,8 +968,8 @@ interface CachedWebSocketConnection {
   socket: WebSocketLike;
   busy: boolean;
   createdAt: number;
-  idleTimer?: ReturnType<typeof setTimeout>;
-  continuation?: CachedWebSocketContinuationState;
+  idleTimer?: ReturnType<typeof setTimeout> | undefined;
+  continuation?: CachedWebSocketContinuationState | undefined;
 }
 
 export interface OpenAICodexWebSocketDebugStats {
@@ -981,8 +981,8 @@ export interface OpenAICodexWebSocketDebugStats {
   fullContextRequests: number;
   deltaRequests: number;
   lastInputItems: number;
-  lastDeltaInputItems?: number;
-  lastPreviousResponseId?: string;
+  lastDeltaInputItems?: number | undefined;
+  lastPreviousResponseId?: string | undefined;
   websocketFailures: number;
   sseFallbacks: number;
   websocketFallbackActive?: boolean;
@@ -1109,11 +1109,18 @@ async function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketCons
 }
 
 class WebSocketCloseError extends Error {
-  readonly code?: number;
-  readonly reason?: string;
-  readonly wasClean?: boolean;
+  readonly code?: number | undefined;
+  readonly reason?: string | undefined;
+  readonly wasClean?: boolean | undefined;
 
-  constructor(message: string, options?: { code?: number; reason?: string; wasClean?: boolean }) {
+  constructor(
+    message: string,
+    options?: {
+      code?: number | undefined;
+      reason?: string | undefined;
+      wasClean?: boolean | undefined;
+    },
+  ) {
     super(message);
     this.name = "WebSocketCloseError";
     this.code = options?.code;
@@ -1701,7 +1708,7 @@ async function processWebSocketStream(
 
 async function parseErrorResponse(
   response: Response,
-): Promise<{ message: string; friendlyMessage?: string }> {
+): Promise<{ message: string; friendlyMessage?: string | undefined }> {
   const raw = await response.text();
   let message = raw || response.statusText || "Request failed";
   let friendlyMessage: string | undefined;

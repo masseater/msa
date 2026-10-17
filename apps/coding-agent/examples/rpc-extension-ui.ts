@@ -216,11 +216,11 @@ class InputDialog implements Component {
     if (prefill) this.dialogInput.setValue(prefill);
   }
 
-  set onSubmit(fn: ((value: string) => void) | undefined) {
+  set onSubmit(fn: (value: string) => void) {
     this.dialogInput.onSubmit = fn;
   }
 
-  set onEscape(fn: (() => void) | undefined) {
+  set onEscape(fn: () => void) {
     this.dialogInput.onEscape = fn;
   }
 

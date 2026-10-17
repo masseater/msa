@@ -28,7 +28,7 @@ interface ImagesApiProviderInternal {
 
 type RegisteredImagesApiProvider = {
   provider: ImagesApiProviderInternal;
-  sourceId?: string;
+  sourceId?: string | undefined;
 };
 
 const imagesApiProviderRegistry = new Map<string, RegisteredImagesApiProvider>();

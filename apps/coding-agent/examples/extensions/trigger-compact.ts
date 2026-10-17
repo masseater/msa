@@ -10,7 +10,7 @@ export default function (msa: ExtensionAPI) {
       ctx.ui.notify("Compaction started", "info");
     }
     ctx.compact({
-      customInstructions,
+      ...(customInstructions !== undefined ? { customInstructions } : {}),
       onComplete: () => {
         if (ctx.hasUI) {
           ctx.ui.notify("Compaction completed", "info");

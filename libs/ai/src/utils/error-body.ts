@@ -17,9 +17,9 @@ export const MAX_PROVIDER_ERROR_BODY_CHARS = 4000;
 
 export interface NormalizedProviderError {
   /** HTTP status code, when one could be extracted from the SDK error object. */
-  status?: number;
+  status?: number | undefined;
   /** Raw HTTP body reason, already trimmed and truncated to the cap. */
-  body?: string;
+  body?: string | undefined;
   /** `error.message`, or `safeJsonStringify(error)` for a non-`Error` throw. */
   message: string;
   /** True when `message` already contains the body (no separate body to add). */

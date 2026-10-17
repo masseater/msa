@@ -67,7 +67,7 @@ export interface ForkDriverOptions {
    * A lock name: one live process per name, across managers and processes. The child acquires it as a kernel lock
    * (`childControl().lock()`, before opening its storage); a second child fails to start with `unavailable/locked`.
    */
-  readonly lock?: string;
+  readonly lock?: string | undefined;
   /** Optional stdout/stderr tap. Streams are still mirrored to the parent's standard output. */
   readonly onOutput?: (stream: "stdout" | "stderr", chunk: Uint8Array) => void;
   /** Optional application metadata tap; control messages and chord frames keep their normal handling. */

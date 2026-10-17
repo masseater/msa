@@ -49,7 +49,9 @@ export class BorderedLoader extends Container {
 
   set onAbort(fn: (() => void) | undefined) {
     if (this.cancellable) {
-      (this.loader as CancellableLoader).onAbort = fn;
+      const loader = this.loader as CancellableLoader;
+      if (fn) loader.onAbort = fn;
+      else delete loader.onAbort;
     }
   }
 

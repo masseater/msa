@@ -61,7 +61,7 @@ interface ProviderModelConfigBase {
   api?: string;
   baseUrl?: string;
   input: ("text" | "image")[];
-  inputLimits?: AnyModel["inputLimits"];
+  inputLimits?: NonNullable<AnyModel["inputLimits"]>;
   cost: AnyModel["cost"];
   headers?: Record<string, string>;
 }
@@ -70,12 +70,12 @@ export interface ProviderChatModelConfig extends ProviderModelConfigBase {
   type?: "chat";
   api?: Api;
   reasoning: boolean;
-  thinkingLevelMap?: Model<Api>["thinkingLevelMap"];
-  promptCache?: Model<Api>["promptCache"];
+  thinkingLevelMap?: NonNullable<Model<Api>["thinkingLevelMap"]>;
+  promptCache?: NonNullable<Model<Api>["promptCache"]>;
   contextWindow: number;
   maxTokens: number;
-  samplingParams?: Model<Api>["samplingParams"];
-  samplingParamsByThinkingLevel?: Model<Api>["samplingParamsByThinkingLevel"];
+  samplingParams?: NonNullable<Model<Api>["samplingParams"]>;
+  samplingParamsByThinkingLevel?: NonNullable<Model<Api>["samplingParamsByThinkingLevel"]>;
   compat?: Model<Api>["compat"];
 }
 
@@ -125,7 +125,7 @@ export type AuthStatus = {
     | "fallback"
     | "models_json_key"
     | "models_json_command";
-  label?: string;
+  label?: string | undefined;
 };
 
 export const clearApiKeyCache = clearConfigValueCache;
@@ -172,15 +172,17 @@ function mergeInputLimits(
   return {
     ...base,
     ...override,
-    images: override.images
+    ...(override.images
       ? {
-          ...base?.images,
-          ...override.images,
-          resize: override.images.resize
-            ? { ...base?.images?.resize, ...override.images.resize }
-            : base?.images?.resize,
+          images: {
+            ...base?.images,
+            ...override.images,
+            ...(override.images.resize
+              ? { resize: { ...base?.images?.resize, ...override.images.resize } }
+              : {}),
+          },
         }
-      : base?.images,
+      : {}),
   };
 }
 
@@ -198,37 +200,41 @@ function mergeSamplingParamsByThinkingLevel(
 }
 
 function applyModelOverride(model: Model<Api>, override: ModelsJsonModelOverride): Model<Api> {
+  const inputLimits = mergeInputLimits(model.inputLimits, override.inputLimits);
+  const tiers = override.cost?.tiers ?? model.cost.tiers;
+  const samplingParamsByThinkingLevel = mergeSamplingParamsByThinkingLevel(
+    model.samplingParamsByThinkingLevel,
+    override.samplingParamsByThinkingLevel,
+  );
+  const compat = mergeCompat(model.compat, override.compat);
   return {
     ...model,
     name: override.name ?? model.name,
     reasoning: override.reasoning ?? model.reasoning,
-    thinkingLevelMap: override.thinkingLevelMap
-      ? { ...model.thinkingLevelMap, ...override.thinkingLevelMap }
-      : model.thinkingLevelMap,
+    ...(override.thinkingLevelMap
+      ? { thinkingLevelMap: { ...model.thinkingLevelMap, ...override.thinkingLevelMap } }
+      : {}),
     input: (override.input as ("text" | "image")[] | undefined) ?? model.input,
-    inputLimits: mergeInputLimits(model.inputLimits, override.inputLimits),
+    ...(inputLimits ? { inputLimits } : {}),
     cost: override.cost
       ? {
           input: override.cost.input ?? model.cost.input,
           output: override.cost.output ?? model.cost.output,
           cacheRead: override.cost.cacheRead ?? model.cost.cacheRead,
           cacheWrite: override.cost.cacheWrite ?? model.cost.cacheWrite,
-          tiers: override.cost.tiers ?? model.cost.tiers,
+          ...(tiers ? { tiers } : {}),
         }
       : model.cost,
-    promptCache: override.promptCache
-      ? { ...model.promptCache, ...override.promptCache }
-      : model.promptCache,
+    ...(override.promptCache
+      ? { promptCache: { ...model.promptCache, ...override.promptCache } }
+      : {}),
     contextWindow: override.contextWindow ?? model.contextWindow,
     maxTokens: override.maxTokens ?? model.maxTokens,
-    samplingParams: override.samplingParams
-      ? { ...model.samplingParams, ...override.samplingParams }
-      : model.samplingParams,
-    samplingParamsByThinkingLevel: mergeSamplingParamsByThinkingLevel(
-      model.samplingParamsByThinkingLevel,
-      override.samplingParamsByThinkingLevel,
-    ),
-    compat: mergeCompat(model.compat, override.compat),
+    ...(override.samplingParams
+      ? { samplingParams: { ...model.samplingParams, ...override.samplingParams } }
+      : {}),
+    ...(samplingParamsByThinkingLevel ? { samplingParamsByThinkingLevel } : {}),
+    ...(compat ? { compat } : {}),
   };
 }
 
@@ -253,6 +259,7 @@ function modelFromJson(
   if (definition.maxTokens !== undefined && definition.maxTokens <= 0) {
     throw new Error(`Provider ${providerId}, model ${definition.id}: invalid maxTokens`);
   }
+  const compat = mergeCompat(providerConfig.compat, definition.compat);
   return {
     id: definition.id,
     name: definition.name ?? definition.id,
@@ -260,17 +267,18 @@ function modelFromJson(
     provider: providerId,
     baseUrl,
     reasoning: definition.reasoning ?? false,
-    thinkingLevelMap: definition.thinkingLevelMap,
+    ...(definition.thinkingLevelMap ? { thinkingLevelMap: definition.thinkingLevelMap } : {}),
     input: (definition.input ?? ["text"]) as ("text" | "image")[],
-    inputLimits: definition.inputLimits,
+    ...(definition.inputLimits ? { inputLimits: definition.inputLimits } : {}),
     cost: definition.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    promptCache: definition.promptCache,
+    ...(definition.promptCache ? { promptCache: definition.promptCache } : {}),
     contextWindow: definition.contextWindow ?? 128000,
     maxTokens: definition.maxTokens ?? 16384,
-    samplingParams: definition.samplingParams,
-    samplingParamsByThinkingLevel: definition.samplingParamsByThinkingLevel,
-    headers: undefined,
-    compat: mergeCompat(providerConfig.compat, definition.compat),
+    ...(definition.samplingParams ? { samplingParams: definition.samplingParams } : {}),
+    ...(definition.samplingParamsByThinkingLevel
+      ? { samplingParamsByThinkingLevel: definition.samplingParamsByThinkingLevel }
+      : {}),
+    ...(compat ? { compat } : {}),
   };
 }
 
@@ -321,25 +329,14 @@ function extensionModelFromDefinition(
   const baseUrl = definition.baseUrl ?? config.baseUrl ?? defaults?.baseUrl;
   if (!baseUrl)
     throw new Error(`Provider ${providerId}: "baseUrl" is required when defining custom models.`);
-  if (definition.type === "image") {
-    return {
-      ...definition,
-      api: api as ImageApi,
-      provider: providerId,
-      baseUrl,
-      headers: undefined,
-    };
+  const { headers: _headers, ...fields } = definition;
+  if (fields.type === "image") {
+    return { ...fields, api: api as ImageApi, provider: providerId, baseUrl };
   }
-  if (definition.type === "classifier") {
-    return {
-      ...definition,
-      api: api as ClassifierApi,
-      provider: providerId,
-      baseUrl,
-      headers: undefined,
-    };
+  if (fields.type === "classifier") {
+    return { ...fields, api: api as ClassifierApi, provider: providerId, baseUrl };
   }
-  return { ...definition, api: api as Api, provider: providerId, baseUrl, headers: undefined };
+  return { ...fields, api: api as Api, provider: providerId, baseUrl };
 }
 
 function applyModelsJson(
@@ -681,9 +678,9 @@ export function composeModelProvider(
     auth: { ...(apiKey ? { apiKey } : {}), ...(oauth ? { oauth } : {}) },
     getModels: () => getAllModels().filter((model) => isModelType(model, "chat")),
     getAllModels,
-    refreshModels:
-      base?.refreshModels || extension?.refreshModels || extension?.oauth?.modifyModels
-        ? async (context) => {
+    ...(base?.refreshModels || extension?.refreshModels || extension?.oauth?.modifyModels
+      ? {
+          refreshModels: async (context: RefreshModelsContext) => {
             await base?.refreshModels?.(context);
             let refreshed: NonNullable<ProviderConfigInput["models"]> | undefined;
             if (extension?.refreshModels) refreshed = await extension.refreshModels(context);
@@ -707,14 +704,21 @@ export function composeModelProvider(
                 extensionOAuthCredential = oauthCredential;
               },
             });
-          }
-        : undefined,
-    filterModels: base?.filterModels
-      ? (models, credential: Credential | undefined) => base.filterModels!(models, credential)
-      : undefined,
-    filterAllModels: base?.filterAllModels
-      ? (models, credential: Credential | undefined) => base.filterAllModels!(models, credential)
-      : undefined,
+          },
+        }
+      : {}),
+    ...(base?.filterModels
+      ? {
+          filterModels: (models: readonly Model<Api>[], credential: Credential | undefined) =>
+            base.filterModels!(models, credential),
+        }
+      : {}),
+    ...(base?.filterAllModels
+      ? {
+          filterAllModels: (models: readonly AnyModel[], credential: Credential | undefined) =>
+            base.filterAllModels!(models, credential),
+        }
+      : {}),
     stream: (model, context, options) => streamWith(model, context, options, false),
     streamSimple: (model, context, options) => streamWith(model, context, options, true),
   };
@@ -775,7 +779,7 @@ export function resolveConfiguredModelHeaders(
 }
 
 export interface CompatibilityRequestConfig {
-  headers?: ProviderHeaders;
+  headers?: ProviderHeaders | undefined;
   authHeader: boolean;
 }
 

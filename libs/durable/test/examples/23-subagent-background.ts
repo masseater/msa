@@ -112,7 +112,10 @@ const Reporter = defineTask<ReporterInput, ReporterState, null>({
       // One commit decides the report and records the answer as delivered, so a restart does not decide again.
       await runtime.commit(async (tx) => {
         const next = (report?: string) =>
-          ({ status: "running", checkpoint: { phase: "report", report } }) as const;
+          ({
+            status: "running",
+            checkpoint: { phase: "report", ...(report === undefined ? {} : { report }) },
+          }) as const;
         // `aborted`: stopped, or withdrawn while queued. Nothing to report.
         if (settled.status === "unanswered") {
           return next(

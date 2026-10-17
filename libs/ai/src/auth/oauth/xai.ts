@@ -25,8 +25,8 @@ type XaiDeviceCode = {
   deviceCode: string;
   userCode: string;
   verificationUri: string;
-  verificationUriComplete?: string;
-  intervalSeconds?: number;
+  verificationUriComplete?: string | undefined;
+  intervalSeconds?: number | undefined;
   expiresInSeconds: number;
 };
 

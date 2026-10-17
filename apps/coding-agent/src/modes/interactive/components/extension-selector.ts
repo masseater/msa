@@ -11,10 +11,10 @@ import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
 
 export interface ExtensionSelectorOptions {
-  tui?: TUI;
-  timeout?: number;
-  onToggleToolsExpanded?: () => void;
-  description?: string;
+  tui?: TUI | undefined;
+  timeout?: number | undefined;
+  onToggleToolsExpanded?: (() => void) | undefined;
+  description?: string | undefined;
 }
 
 export class ExtensionSelectorComponent extends Container {

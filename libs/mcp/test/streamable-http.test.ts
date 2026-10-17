@@ -315,7 +315,7 @@ describe("StreamableHttpTransport", () => {
   });
 
   it("hands 401 and insufficient-scope 403 responses to the auth provider with the rejected token", async () => {
-    const seen: { status: number; token?: string }[] = [];
+    const seen: { status: number; token?: string | undefined }[] = [];
     let token = "old";
     const { url } = await startServer(async (request, response, requests) => {
       if (request.method !== "POST") return protocolHandler(request, response, requests);
@@ -459,7 +459,7 @@ describe("StreamableHttpTransport", () => {
       await client.connect(
         new StreamableHttpTransport({
           url,
-          fetch,
+          ...(fetch !== undefined ? { fetch } : {}),
           openGetStream: false,
           authProvider: {
             token: async () => token,

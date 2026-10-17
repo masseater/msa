@@ -47,9 +47,9 @@ function createAssistant(
   const model = harness.getModel();
   return {
     ...fauxAssistantMessage("", {
-      stopReason: options.stopReason,
-      errorMessage: options.errorMessage,
-      timestamp: options.timestamp,
+      ...(options.stopReason !== undefined ? { stopReason: options.stopReason } : {}),
+      ...(options.errorMessage !== undefined ? { errorMessage: options.errorMessage } : {}),
+      ...(options.timestamp !== undefined ? { timestamp: options.timestamp } : {}),
     }),
     api: model.api,
     provider: model.provider,
@@ -427,7 +427,7 @@ describe("AgentSession compaction characterization", () => {
   it("notifies extensions when auto-compaction fails", async () => {
     const failedEvents: Array<{
       reason: "manual" | "threshold" | "overflow";
-      errorMessage?: string;
+      errorMessage?: string | undefined;
       aborted: boolean;
       willRetry: boolean;
       fromExtension: boolean;

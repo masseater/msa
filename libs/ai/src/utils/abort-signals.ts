@@ -7,11 +7,12 @@ export function combineAbortSignals(
   signals: readonly (AbortSignal | undefined)[],
 ): CombinedAbortSignal {
   const activeSignals = signals.filter((signal): signal is AbortSignal => signal !== undefined);
-  if (activeSignals.length === 0) {
+  const [first, ...rest] = activeSignals;
+  if (first === undefined) {
     return { cleanup: () => {} };
   }
-  if (activeSignals.length === 1) {
-    return { signal: activeSignals[0], cleanup: () => {} };
+  if (rest.length === 0) {
+    return { signal: first, cleanup: () => {} };
   }
 
   const controller = new AbortController();

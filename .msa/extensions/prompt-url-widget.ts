@@ -15,8 +15,8 @@ type PromptMatch = {
 };
 
 type GhMetadata = {
-  title?: string;
-  detail?: string;
+  title?: string | undefined;
+  detail?: string | undefined;
   displayUrl?: string;
   author?: {
     login?: string;

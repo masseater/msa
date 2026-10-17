@@ -152,7 +152,7 @@ type Metrics = {
   replayMs?: number;
   finalKiB?: number;
   peakRssMiB: number;
-  heapAfterGcMiB?: number;
+  heapAfterGcMiB?: number | undefined;
 };
 
 async function runScenario(scenario: Scenario): Promise<Metrics> {

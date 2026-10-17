@@ -685,7 +685,7 @@ describe("NodeExecutionEnv shell", () => {
       const collected = await collectShellOutput(
         env,
         `printf '%s:%s|%s|%s' "\${MSA_SESSION_FILE+x}" "\${MSA_SESSION_FILE-}" "$MSA_CODING_AGENT" "$MSA_NODE_ENV_PRESERVED_TEST"`,
-        { env: overrides },
+        overrides === undefined ? {} : { env: overrides },
         BACKGROUND_CONTEXT,
       );
       getOrThrow(collected.result);

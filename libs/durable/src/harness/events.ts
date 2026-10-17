@@ -168,7 +168,7 @@ function snapshotOf(view: ConversationView): SnapshotEvent {
     ...(live.run === undefined ? {} : { run: { inputs: live.run.inputs } }),
     ...(live.generation === undefined
       ? {}
-      : { generation: live.generation as SnapshotEvent["generation"] }),
+      : { generation: live.generation as NonNullable<SnapshotEvent["generation"]> }),
     tools: live.tools ?? [],
     nestedTools: live.nestedTools ?? [],
     compactions: live.compactions ?? [],

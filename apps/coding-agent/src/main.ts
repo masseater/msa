@@ -254,8 +254,8 @@ async function prepareInitialMessage(
   parsed: Args,
   stdinContent?: string,
 ): Promise<{
-  initialMessage?: string;
-  initialImages?: ImageContent[];
+  initialMessage?: string | undefined;
+  initialImages?: ImageContent[] | undefined;
 }> {
   if (parsed.fileArgs.length === 0) {
     return buildInitialMessage({ parsed, stdinContent });

@@ -578,10 +578,11 @@ async function finalResult(
       : retained.text === ""
         ? []
         : [{ type: "text", text: retained.text }];
+  const details = result.details === undefined ? reported.details : result.details;
   let final: ToolExecutionResult = {
     ...result,
     output,
-    details: result.details === undefined ? reported.details : result.details,
+    ...(details === undefined ? {} : { details }),
     diagnostics: [...reported.diagnostics, ...(result.diagnostics ?? [])],
   };
   await runtime.hooks.each("afterTool", async (hook) => {
@@ -925,7 +926,13 @@ function summaryOf(result: NestedToolExecutionResult, output: Content): NestedTo
   return {
     isError: result.isError,
     ...(result.durationMs === undefined ? {} : { durationMs: result.durationMs }),
-    ...(result.usage === undefined ? {} : { usage: result.usage }),
+    ...(result.usage === undefined
+      ? {}
+      : {
+          usage: copyJson(result.usage, { omitUndefinedProperties: true }) as NonNullable<
+            NestedToolSummary["usage"]
+          >,
+        }),
     ...(error === "" ? {} : { error }),
   };
 }
@@ -946,7 +953,7 @@ export async function appendToolResult(
   conversationId: ConversationId,
   call: ToolCall,
   result: ToolExecutionResult,
-  meta: { readonly timestamp: number; readonly durationMs?: number },
+  meta: { readonly timestamp: number; readonly durationMs?: number | undefined },
 ): Promise<TypedEntry<{ diagnostics: ToolDiagnostic[] }>> {
   const { timestamp, durationMs } = meta;
   const diagnostics = [...(result.diagnostics ?? [])];

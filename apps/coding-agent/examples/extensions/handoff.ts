@@ -173,7 +173,7 @@ export default function (msa: ExtensionAPI) {
       // context for post-switch UI work; the original ctx is stale after a
       // successful session replacement.
       const newSessionResult = await ctx.newSession({
-        parentSession: currentSessionFile,
+        ...(currentSessionFile !== undefined ? { parentSession: currentSessionFile } : {}),
         withSession: async (replacementCtx) => {
           replacementCtx.ui.setEditorText(editedPrompt);
           replacementCtx.ui.notify("Handoff ready. Submit when ready.", "info");

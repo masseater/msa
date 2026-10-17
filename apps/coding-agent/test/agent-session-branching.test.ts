@@ -75,7 +75,7 @@ describe.skipIf(!API_KEY)("AgentSession forking", () => {
         ...(await createAgentSessionFromServices({
           services,
           sessionManager,
-          sessionStartEvent,
+          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
           model,
           tools: ["read", "bash", "edit", "write"],
         })),

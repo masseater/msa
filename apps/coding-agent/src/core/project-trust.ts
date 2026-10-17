@@ -15,11 +15,11 @@ export type AppMode = "interactive" | "print" | "json" | "rpc";
 export interface ResolveProjectTrustedOptions {
   cwd: string;
   trustStore: ProjectTrustStore;
-  trustOverride?: boolean;
-  defaultProjectTrust?: DefaultProjectTrust;
-  extensionsResult?: LoadExtensionsResult;
+  trustOverride?: boolean | undefined;
+  defaultProjectTrust?: DefaultProjectTrust | undefined;
+  extensionsResult?: LoadExtensionsResult | undefined;
   projectTrustContext: ProjectTrustContext;
-  onExtensionError?: (message: string) => void;
+  onExtensionError?: ((message: string) => void) | undefined;
 }
 
 function formatProjectTrustPrompt(cwd: string): string {

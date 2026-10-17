@@ -107,8 +107,10 @@ export class ProgramStatusReporter {
     if (blocked) return { state: "blocked", ...blocked };
     if (this.compacting) return { state: "working", message: "Compacting context" };
     const status = this.runActive ? { state: "working" as const } : this.restingStatus;
-    if (status.state === "working" || status.state === "done")
-      return { ...status, message: this.getSessionName() };
+    if (status.state === "working" || status.state === "done") {
+      const message = this.getSessionName();
+      return { ...status, ...(message !== undefined ? { message } : {}) };
+    }
     return status;
   }
 }

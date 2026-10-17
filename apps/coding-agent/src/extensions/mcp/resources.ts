@@ -240,7 +240,7 @@ export function createMcpResourceToolDefinitions(options: {
       options: McpRequestOptions,
     ) => Promise<{
       items: T[];
-      nextCursor?: string;
+      nextCursor?: string | undefined;
     }>,
     all: (server: McpResourceServer, options: McpRequestOptions) => Promise<T[]>,
   ): Promise<Record<string, unknown>> => {
@@ -250,7 +250,10 @@ export function createMcpResourceToolDefinitions(options: {
       !isMcpAppResource(item as { uri?: string; uriTemplate?: string; mimeType?: string });
     if (serverName) {
       const server = findServer(serverName);
-      const result = await page(server, cursor, { signal, timeoutMs: server.timeoutMs });
+      const result = await page(server, cursor, {
+        ...(signal ? { signal } : {}),
+        timeoutMs: server.timeoutMs,
+      });
       return {
         server: server.name,
         [key]: result.items.filter(visible).map((item) => listed(server.name, item)),
@@ -260,7 +263,9 @@ export function createMcpResourceToolDefinitions(options: {
     if (cursor) throw new Error("cursor can only be used when a server is specified");
     const servers = [...options.servers()].sort((a, b) => a.name.localeCompare(b.name));
     const results = await Promise.allSettled(
-      servers.map((server) => all(server, { signal, timeoutMs: server.timeoutMs })),
+      servers.map((server) =>
+        all(server, { ...(signal ? { signal } : {}), timeoutMs: server.timeoutMs }),
+      ),
     );
     const items: Record<string, unknown>[] = [];
     const errors: { server: string; error: string }[] = [];
@@ -341,7 +346,10 @@ export function createMcpResourceToolDefinitions(options: {
       if (!serverName) throw new Error("server must be provided");
       if (!uri) throw new Error("uri must be provided");
       const server = findServer(serverName);
-      const result = await server.readResource(uri, { signal, timeoutMs: server.timeoutMs });
+      const result = await server.readResource(uri, {
+        ...(signal ? { signal } : {}),
+        timeoutMs: server.timeoutMs,
+      });
       // Several contents (for example a directory) are labeled with their URIs.
       const blocks: ContentBlock[] = result.contents.flatMap((contents) => [
         ...(result.contents.length > 1

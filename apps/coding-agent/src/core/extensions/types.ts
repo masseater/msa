@@ -398,9 +398,9 @@ export interface ExtensionContext {
 /** Options for {@link ExtensionToolContext.executeTool}. */
 export interface ExecuteToolOptions {
   /** Defaults to the calling tool's signal. */
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   /** Receives partial results of the nested tool, in addition to `tool_execution_update` events. */
-  onUpdate?: AgentToolUpdateCallback;
+  onUpdate?: AgentToolUpdateCallback | undefined;
 }
 
 /**
@@ -633,22 +633,22 @@ export interface ToolDefinition<
   /** Optional one-line snippet for the Available tools section in the default system prompt. Custom tools are omitted from that section when this is not provided. */
   promptSnippet?: string;
   /** Optional guideline bullets appended to the default system prompt Guidelines section when this tool is active. */
-  promptGuidelines?: string[];
+  promptGuidelines?: string[] | undefined;
   /** Parameter schema (TypeBox) */
   parameters: TParams;
   /** Optional provider-side constrained sampling request for this tool. Set false to explicitly disable it, equivalent to leaving it undefined. */
-  constrainedSampling?: false | ConstrainedSamplingConfig;
+  constrainedSampling?: false | ConstrainedSamplingConfig | undefined;
   /** Controls whether ToolExecutionComponent renders the standard colored shell or the tool renders its own framing. */
   renderShell?: "default" | "self";
 
   /** Optional compatibility shim to prepare raw tool call arguments before schema validation. Must return an object conforming to TParams. */
-  prepareArguments?: (args: unknown) => Static<TParams>;
+  prepareArguments?: ((args: unknown) => Static<TParams>) | undefined;
 
   /**
    * JSON Schema of `structuredContent` in successful results. Tools that declare it should always
    * set `structuredContent`; codemode scripts then receive it instead of the text content.
    */
-  outputSchema?: TSchema;
+  outputSchema?: TSchema | undefined;
 
   /**
    * How the model reaches the tool. Default: `"direct"`. See {@link ToolExposure}.
@@ -691,7 +691,7 @@ export interface ToolDefinition<
    *
    * If omitted, the default execution mode applies.
    */
-  executionMode?: ToolExecutionMode;
+  executionMode?: ToolExecutionMode | undefined;
 
   /** Execute the tool. */
   execute(
@@ -808,7 +808,7 @@ export interface SessionStartEvent {
   /** Why this session start happened. */
   reason: "startup" | "reload" | "new" | "resume" | "fork";
   /** Previously active session file. Present for "new", "resume", and "fork". */
-  previousSessionFile?: string;
+  previousSessionFile?: string | undefined;
 }
 
 /** Fired when the current session metadata changes. */
@@ -822,7 +822,7 @@ export interface SessionInfoChangedEvent {
 export interface SessionBeforeSwitchEvent {
   type: "session_before_switch";
   reason: "new" | "resume";
-  targetSessionFile?: string;
+  targetSessionFile?: string | undefined;
 }
 
 /** Fired before forking a session (can be cancelled) */
@@ -837,7 +837,7 @@ export interface SessionBeforeCompactEvent {
   type: "session_before_compact";
   preparation: CompactionPreparation;
   branchEntries: SessionEntry[];
-  customInstructions?: string;
+  customInstructions?: string | undefined;
   /** What triggered the compaction: manual /compact, the context threshold, or context overflow recovery */
   reason: "manual" | "threshold" | "overflow";
   /** True when the aborted turn is retried after this compaction (overflow recovery) */
@@ -862,7 +862,7 @@ export interface SessionCompactFailedEvent {
   /** What triggered the compaction: manual /compact, the context threshold, or context overflow recovery */
   reason: "manual" | "threshold" | "overflow";
   /** Error text when compaction failed for a non-abort reason. */
-  errorMessage?: string;
+  errorMessage?: string | undefined;
   /** True when compaction was cancelled or aborted. */
   aborted: boolean;
   /** True when the aborted turn would have been retried after this compaction (overflow recovery) */
@@ -876,7 +876,7 @@ export interface SessionShutdownEvent {
   type: "session_shutdown";
   reason: "quit" | "reload" | "new" | "resume" | "fork";
   /** Destination session file when shutting down due to session replacement. */
-  targetSessionFile?: string;
+  targetSessionFile?: string | undefined;
 }
 
 /** Preparation data for tree navigation */
@@ -887,11 +887,11 @@ export interface TreePreparation {
   entriesToSummarize: SessionEntry[];
   userWantsSummary: boolean;
   /** Custom instructions for summarization */
-  customInstructions?: string;
+  customInstructions?: string | undefined;
   /** If true, customInstructions replaces the default prompt instead of being appended */
-  replaceInstructions?: boolean;
+  replaceInstructions?: boolean | undefined;
   /** Label to attach to the branch summary entry */
-  label?: string;
+  label?: string | undefined;
 }
 
 /** Fired before navigating in the session tree (can be cancelled) */
@@ -906,8 +906,8 @@ export interface SessionTreeEvent {
   type: "session_tree";
   newLeafId: string | null;
   oldLeafId: string | null;
-  summaryEntry?: BranchSummaryEntry;
-  fromExtension?: boolean;
+  summaryEntry?: BranchSummaryEntry | undefined;
+  fromExtension?: boolean | undefined;
 }
 
 export type SessionEvent =
@@ -994,7 +994,7 @@ export interface BeforeAgentStartUserEvent extends BeforeAgentStartEventBase {
   /** The raw user prompt text (after expansion). */
   prompt: string;
   /** Images attached to the user prompt, if any. */
-  images?: ImageContent[];
+  images?: ImageContent[] | undefined;
 }
 
 /** A run started by `msa.sendMessage(..., { triggerTurn: true })` while idle. */
@@ -1224,17 +1224,17 @@ export interface InputEvent {
   /** The input text */
   text: string;
   /** Attached images, if any */
-  images?: ImageContent[];
+  images?: ImageContent[] | undefined;
   /** Where the input came from */
   source: InputSource;
   /** How the input will be delivered during streaming, or undefined when idle */
-  streamingBehavior?: "steer" | "followUp";
+  streamingBehavior?: "steer" | "followUp" | undefined;
 }
 
 /** Result from input event handler */
 export type InputEventResult =
   | { action: "continue" }
-  | { action: "transform"; text: string; images?: ImageContent[] }
+  | { action: "transform"; text: string; images?: ImageContent[] | undefined }
   | { action: "handled" };
 
 // ============================================================================
@@ -1330,7 +1330,7 @@ interface ToolResultEventBase {
   structuredContent?: JsonValue;
   isError: boolean;
   /** Usage from the tool execution itself, if available. */
-  usage?: Usage;
+  usage?: Usage | undefined;
 }
 
 export interface BashToolResultEvent extends ToolResultEventBase {
@@ -1556,11 +1556,11 @@ export type UserBashEventResult =
  * longer match. Return it along with `content` to keep it.
  */
 export interface ToolResultEventResult {
-  content?: (TextContent | ImageContent)[];
+  content?: (TextContent | ImageContent)[] | undefined;
   details?: unknown;
-  structuredContent?: JsonValue;
-  isError?: boolean;
-  usage?: Usage;
+  structuredContent?: JsonValue | undefined;
+  isError?: boolean | undefined;
+  usage?: Usage | undefined;
 }
 
 export interface MessageEndEventResult {
@@ -2111,7 +2111,7 @@ interface ProviderModelConfigBase {
   /** Supported input types. */
   input: ("text" | "image")[];
   /** Provider input limits and cache-safe image preprocessing metadata. */
-  inputLimits?: AnyModel["inputLimits"];
+  inputLimits?: NonNullable<AnyModel["inputLimits"]>;
   /** Per-million-token cost rates and optional request-wide input pricing tiers. */
   cost: AnyModel["cost"];
   /** Custom headers for this model. */
@@ -2125,9 +2125,9 @@ export interface ProviderChatModelConfig extends ProviderModelConfigBase {
   /** Whether the model supports extended thinking. */
   reasoning: boolean;
   /** Maps msa thinking levels to provider/model-specific values; null marks a level unsupported. */
-  thinkingLevelMap?: Model<Api>["thinkingLevelMap"];
+  thinkingLevelMap?: NonNullable<Model<Api>["thinkingLevelMap"]>;
   /** Best-effort prompt cache lifetime in seconds per retention tier. Unset disables cache warming. */
-  promptCache?: Model<Api>["promptCache"];
+  promptCache?: NonNullable<Model<Api>["promptCache"]>;
   /** Maximum context window size in tokens. */
   contextWindow: number;
   /** Maximum output tokens. */
@@ -2432,5 +2432,5 @@ export interface ExtensionError {
   extensionPath: string;
   event: string;
   error: string;
-  stack?: string;
+  stack?: string | undefined;
 }

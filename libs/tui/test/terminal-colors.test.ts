@@ -13,8 +13,8 @@ import { StdinBuffer } from "../src/stdin-buffer.ts";
 import { parseOscColorResponse } from "../src/terminal-colors.ts";
 
 class TestTerminal implements Terminal {
-  private inputHandler?: (data: string) => void;
-  private resizeHandler?: () => void;
+  private inputHandler?: ((data: string) => void) | undefined;
+  private resizeHandler?: (() => void) | undefined;
   private readonly columnCount: number;
   private readonly rowCount: number;
   readonly writes: string[] = [];

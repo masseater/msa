@@ -41,7 +41,7 @@ async function countingSetup(
 ) {
   const scanned = { rows: 0 };
   /** When set, the next range scan waits for it; bounds probes (one row, on the Session line) do not. */
-  const hold: { scan?: Promise<void> } = {};
+  const hold: { scan?: Promise<void> | undefined } = {};
   const memory = new MemoryStorage();
   const storage = new Proxy<Storage>(memory, {
     get(target, key) {
@@ -490,7 +490,11 @@ describe("conversation context", () => {
             }, taskContext);
           const read = async (at?: EntryId): Promise<{ view: ContextView; rows: number }> => {
             const before = scanned.rows;
-            const view = await runtime.context(root.id, taskContext, { at });
+            const view = await runtime.context(
+              root.id,
+              taskContext,
+              at === undefined ? {} : { at },
+            );
             return { view, rows: scanned.rows - before };
           };
           const initial = await read();

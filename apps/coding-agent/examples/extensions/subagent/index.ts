@@ -158,10 +158,10 @@ interface SingleResult {
   messages: Message[];
   stderr: string;
   usage: UsageStats;
-  model?: string;
+  model?: string | undefined;
   stopReason?: string;
   errorMessage?: string;
-  step?: number;
+  step?: number | undefined;
 }
 
 interface SubagentDetails {
@@ -275,8 +275,8 @@ function getMsaInvocation(args: string[]): { command: string; args: string[] } {
 type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
 
 interface DispatchDefaults {
-  model?: string;
-  thinkingLevel?: ThinkingLevel;
+  model?: string | undefined;
+  thinkingLevel?: ThinkingLevel | undefined;
 }
 
 async function runSingleAgent(

@@ -55,7 +55,7 @@ export interface McpClientOptions extends Implementation {
 }
 
 export interface McpRequestOptions {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   timeoutMs?: number;
   onProgress?: (progress: ProgressNotification) => void;
 }

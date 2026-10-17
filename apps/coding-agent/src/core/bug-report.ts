@@ -145,14 +145,14 @@ function describeExtension(extension: Extension) {
 }
 
 interface CollectBugReportMetadataOptions {
-  id?: string;
-  hint?: string;
+  id?: string | undefined;
+  hint?: string | undefined;
   sessionId: string;
   cwd: string;
   includeSession: boolean;
   includeSummary: boolean;
   messageCount: number;
-  model?: Model<Api>;
+  model?: Model<Api> | undefined;
   modelRuntime: ModelRuntime;
   thinkingLevel: ThinkingLevel;
   extensions: readonly Extension[];
@@ -240,8 +240,8 @@ export type BugReportDiagnostics = ReturnType<typeof collectBugReportDiagnostics
 export interface BugReportBundle {
   metadata: BugReportMetadata;
   diagnostics: BugReportDiagnostics;
-  sessionJsonl?: string;
-  summary?: string;
+  sessionJsonl?: string | undefined;
+  summary?: string | undefined;
 }
 
 export interface BugReportSessionEntryData {
@@ -335,11 +335,11 @@ function selectMessages(messages: readonly AgentMessage[], tokenBudget: number):
 
 interface GenerateBugReportSummaryOptions {
   messages: readonly AgentMessage[];
-  hint?: string;
+  hint?: string | undefined;
   model: Model<Api>;
-  apiKey?: string;
-  headers?: Record<string, string>;
-  env?: Record<string, string>;
+  apiKey?: string | undefined;
+  headers?: Record<string, string> | undefined;
+  env?: Record<string, string> | undefined;
   signal: AbortSignal;
   thinkingLevel?: ThinkingLevel;
   streamFn?: StreamFn;

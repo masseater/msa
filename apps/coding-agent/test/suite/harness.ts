@@ -122,14 +122,14 @@ export interface HarnessOptions {
   settings?: Partial<Settings>;
   tools?: AgentTool[];
   initialActiveToolNames?: string[];
-  allowedToolNames?: string[];
-  excludedToolNames?: string[];
+  allowedToolNames?: string[] | undefined;
+  excludedToolNames?: string[] | undefined;
   resourceLoader?: ResourceLoader;
-  extensionFactories?: Array<InlineExtension | CreateTestExtensionsResultInput>;
+  extensionFactories?: Array<InlineExtension | CreateTestExtensionsResultInput> | undefined;
   withConfiguredAuth?: boolean;
   modelsJson?: Record<string, unknown>;
   /** Session to continue, for example to test a resume. Default: a new in-memory session. */
-  sessionManager?: SessionManager;
+  sessionManager?: SessionManager | undefined;
 }
 
 export interface Harness {
@@ -160,9 +160,9 @@ function createTempDir(): string {
 
 export async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
   const tempDir = createTempDir();
-  const fauxProvider: FauxProviderRegistration = registerFauxProvider({
-    models: options.models,
-  });
+  const fauxProvider: FauxProviderRegistration = registerFauxProvider(
+    options.models !== undefined ? { models: options.models } : {},
+  );
   fauxProvider.setResponses([]);
   const model = fauxProvider.getModel();
   const toolMap = options.tools
@@ -197,7 +197,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
         api: registeredModel.api,
         reasoning: registeredModel.reasoning,
         input: registeredModel.input,
-        inputLimits: registeredModel.inputLimits,
+        ...(registeredModel.inputLimits ? { inputLimits: registeredModel.inputLimits } : {}),
         cost: registeredModel.cost,
         contextWindow: registeredModel.contextWindow,
         maxTokens: registeredModel.maxTokens,
@@ -253,11 +253,17 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
     cwd: tempDir,
     modelRuntime: getModelRuntime(modelRegistry),
     resourceLoader,
-    baseToolsOverride: toolMap,
-    initialActiveToolNames: options.initialActiveToolNames,
+    ...(toolMap !== undefined ? { baseToolsOverride: toolMap } : {}),
+    ...(options.initialActiveToolNames !== undefined
+      ? { initialActiveToolNames: options.initialActiveToolNames }
+      : {}),
     usesDefaultTools: options.initialActiveToolNames === undefined,
-    allowedToolNames: options.allowedToolNames,
-    excludedToolNames: options.excludedToolNames,
+    ...(options.allowedToolNames !== undefined
+      ? { allowedToolNames: options.allowedToolNames }
+      : {}),
+    ...(options.excludedToolNames !== undefined
+      ? { excludedToolNames: options.excludedToolNames }
+      : {}),
     extensionRunnerRef,
   });
 

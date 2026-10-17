@@ -1016,10 +1016,10 @@ describe("durable code mode output and tool search", () => {
     );
     await (await root.submit({ type: "input", content: "go" }, context)).wait(context);
     const entry = (await allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
-    const message = entry.model![0] as {
-      content: { type: string; text?: string }[];
-      isError: boolean;
-      details?: CodemodeToolDetails;
+    const model = entry.model![0];
+    const message = {
+      ...(model as { content: { type: string; text?: string }[]; isError: boolean }),
+      details: (model as { details?: CodemodeToolDetails }).details,
     };
     await harness.close(context);
     return { text: message.content.map((item) => item.text ?? `<${item.type}>`).join(""), message };

@@ -105,7 +105,7 @@ export function parseAuthCommand(args: string[]): AuthCommand | undefined {
 export function validateAuthCommandArgs(
   args: Args,
   kind: AuthCommandKind,
-): { provider?: string; model?: string } {
+): { provider?: string | undefined; model?: string | undefined } {
   const provider = args.provider?.trim() || undefined;
   const model = args.model?.trim() || undefined;
   if (args.unknownFlags.size > 0) {

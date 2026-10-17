@@ -50,7 +50,7 @@ import {
 import { buildBaseOptions } from "./simple-options.ts";
 
 export interface GoogleOptions extends StreamOptions {
-  toolChoice?: "auto" | "none" | "any";
+  toolChoice?: "auto" | "none" | "any" | undefined;
   thinking?: {
     enabled: boolean;
     budgetTokens?: number; // -1 for dynamic, 0 to disable
@@ -392,8 +392,8 @@ function createClient(
   }
 
   return new GoogleGenAI({
-    apiKey,
-    httpOptions: Object.keys(httpOptions).length > 0 ? httpOptions : undefined,
+    ...(apiKey !== undefined ? { apiKey } : {}),
+    ...(Object.keys(httpOptions).length > 0 ? { httpOptions } : {}),
   });
 }
 
@@ -420,12 +420,11 @@ function buildParams(
       ? resolveGoogleFunctionCallingMode(currentTools, options.toolChoice, supportsStrictMode)
       : undefined;
   const systemInstruction = initialSystemMessage ? getSystemMessageText(initialSystemMessage) : "";
+  const tools = convertTools(currentTools, false, supportsStrictMode);
   const config: GenerateContentConfig = {
     ...(Object.keys(generationConfig).length > 0 && generationConfig),
     ...(systemInstruction && { systemInstruction: sanitizeSurrogates(systemInstruction) }),
-    ...(currentTools.length > 0 && {
-      tools: convertTools(currentTools, false, supportsStrictMode),
-    }),
+    ...(tools !== undefined && { tools }),
     ...(functionCallingMode !== undefined && {
       toolConfig: { functionCallingConfig: { mode: functionCallingMode } },
     }),

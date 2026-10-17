@@ -40,8 +40,8 @@ export type CreateAgentSessionRuntimeFactory = (options: {
   cwd: string;
   agentDir: string;
   sessionManager: SessionManager;
-  sessionStartEvent?: SessionStartEvent;
-  projectTrustContext?: ProjectTrustContext;
+  sessionStartEvent?: SessionStartEvent | undefined;
+  projectTrustContext?: ProjectTrustContext | undefined;
 }) => Promise<CreateAgentSessionRuntimeResult>;
 
 /**
@@ -79,13 +79,13 @@ function extractUserMessageText(content: string | Array<{ type: string; text?: s
  * caller. The caller is responsible for user-facing error handling.
  */
 export class AgentSessionRuntime {
-  private rebindSession?: (session: AgentSession) => Promise<void>;
-  private beforeSessionInvalidate?: () => void;
+  private rebindSession?: ((session: AgentSession) => Promise<void>) | undefined;
+  private beforeSessionInvalidate?: (() => void) | undefined;
   private _session: AgentSession;
   private _services: AgentSessionServices;
   private readonly createRuntime: CreateAgentSessionRuntimeFactory;
   private _diagnostics: AgentSessionRuntimeDiagnostic[];
-  private _modelFallbackMessage?: string;
+  private _modelFallbackMessage?: string | undefined;
 
   constructor(
     _session: AgentSession,
@@ -208,9 +208,9 @@ export class AgentSessionRuntime {
   async switchSession(
     sessionPath: string,
     options?: {
-      cwdOverride?: string;
-      withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
-      projectTrustContextFactory?: (cwd: string) => ProjectTrustContext;
+      cwdOverride?: string | undefined;
+      withSession?: ((ctx: ReplacedSessionContext) => Promise<void>) | undefined;
+      projectTrustContextFactory?: ((cwd: string) => ProjectTrustContext) | undefined;
     },
   ): Promise<{ cancelled: boolean }> {
     const beforeResult = await this.emitBeforeSwitch("resume", sessionPath);
@@ -277,7 +277,7 @@ export class AgentSessionRuntime {
       position?: "before" | "at";
       withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
     },
-  ): Promise<{ cancelled: boolean; selectedText?: string }> {
+  ): Promise<{ cancelled: boolean; selectedText?: string | undefined }> {
     const position = options?.position ?? "before";
     const beforeResult = await this.emitBeforeFork(entryId, { position });
     if (beforeResult.cancelled) {

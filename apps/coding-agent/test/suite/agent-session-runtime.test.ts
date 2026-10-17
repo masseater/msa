@@ -110,9 +110,11 @@ describe("AgentSessionRuntime characterization", () => {
         ...(await createAgentSessionFromServices({
           services,
           sessionManager,
-          sessionStartEvent,
-          model: runtimeOptions.model,
-          thinkingLevel: runtimeOptions.thinkingLevel,
+          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
+          ...(runtimeOptions.model !== undefined ? { model: runtimeOptions.model } : {}),
+          ...(runtimeOptions.thinkingLevel !== undefined
+            ? { thinkingLevel: runtimeOptions.thinkingLevel }
+            : {}),
         })),
         services,
         diagnostics: services.diagnostics,
@@ -524,7 +526,7 @@ describe("AgentSessionRuntime characterization", () => {
         ...(await createAgentSessionFromServices({
           services,
           sessionManager,
-          sessionStartEvent,
+          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
           model: runtimeOptions.model,
         })),
         services,
@@ -646,7 +648,7 @@ describe("AgentSessionRuntime characterization", () => {
         ...(await createAgentSessionFromServices({
           services,
           sessionManager,
-          sessionStartEvent,
+          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
         })),
         services,
         diagnostics: services.diagnostics,
@@ -722,7 +724,7 @@ describe("AgentSessionRuntime characterization", () => {
         ...(await createAgentSessionFromServices({
           services,
           sessionManager,
-          sessionStartEvent,
+          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
         })),
         services,
         diagnostics: services.diagnostics,

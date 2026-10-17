@@ -58,20 +58,20 @@ const REFRESH_LOCK_WAIT_MS = 25_000;
 const REFRESH_LOCK_RETRY_MS = 100;
 
 export interface McpOAuthSettings {
-  clientId?: string;
+  clientId?: string | undefined;
   /** Already resolved. */
-  clientSecret?: string;
-  callbackPort?: number;
+  clientSecret?: string | undefined;
+  callbackPort?: number | undefined;
   /** Loopback redirect URI; see `McpOAuthConfig.callbackUrl`. */
-  callbackUrl?: string;
+  callbackUrl?: string | undefined;
   /** Scopes to request, separated by spaces. */
-  scope?: string;
+  scope?: string | undefined;
   /** `client_name` for dynamic client registration. Default: `APP_NAME`. */
-  clientName?: string;
+  clientName?: string | undefined;
   /** See `McpOAuthConfig.clientRegistration`. */
-  clientRegistration?: "dcr" | "cimd";
+  clientRegistration?: "dcr" | "cimd" | undefined;
   /** See `McpOAuthConfig.authServerMetadataUrl`. */
-  authServerMetadataUrl?: URL;
+  authServerMetadataUrl?: URL | undefined;
 }
 
 /** Where the loopback callback server listens and the redirect URI it serves. */
@@ -288,12 +288,14 @@ function createProvider(
     serverUrl,
     redirectUrl,
     clientMetadata: { client_name: settings.clientName ?? APP_NAME },
-    clientMetadataDocument:
-      settings.clientRegistration === "cimd"
-        ? (metadata) => clientMetadataDocument(serverUrl, redirectUrl, metadata)
-        : undefined,
-    clientId: settings.clientId,
-    clientSecret: settings.clientSecret,
+    ...(settings.clientRegistration === "cimd"
+      ? {
+          clientMetadataDocument: (metadata: AuthorizationServerMetadata | undefined) =>
+            clientMetadataDocument(serverUrl, redirectUrl, metadata),
+        }
+      : {}),
+    ...(settings.clientId !== undefined ? { clientId: settings.clientId } : {}),
+    ...(settings.clientSecret !== undefined ? { clientSecret: settings.clientSecret } : {}),
     store,
     onRedirect,
   });
@@ -345,11 +347,14 @@ export function createMcpAuthProvider(options: {
         const provider = createProvider(serverUrl, store, settings, redirectUrl, () => {});
         // Refreshes the tokens, or reports that a new sign-in is needed. Not cancellable: a refresh the
         // server answered may have rotated the refresh token, so its answer must be saved.
+        const resourceMetadataUrl = challenge?.resourceMetadataUrl;
+        const authorizationServerMetadataUrl = settings.authServerMetadataUrl;
+        const scope = challenge?.scope;
         const result = await authorizeMcp(provider, {
           serverUrl,
-          resourceMetadataUrl: challenge?.resourceMetadataUrl,
-          authorizationServerMetadataUrl: settings.authServerMetadataUrl,
-          scope: challenge?.scope,
+          ...(resourceMetadataUrl ? { resourceMetadataUrl } : {}),
+          ...(authorizationServerMetadataUrl ? { authorizationServerMetadataUrl } : {}),
+          ...(scope !== undefined ? { scope } : {}),
           fetch: timedFetch(fetch),
         });
         if (result === "REDIRECT") throw new McpOAuthAuthorizationRequiredError();
@@ -426,7 +431,8 @@ function responseFromRedirectUrl(
     throw new Error("The redirect URL belongs to a different sign-in");
   const code = url.searchParams.get("code");
   if (!code) throw new Error("The redirect URL does not contain an authorization code");
-  return { code, iss: url.searchParams.get("iss") ?? undefined };
+  const iss = url.searchParams.get("iss");
+  return { code, ...(iss !== null ? { iss } : {}) };
 }
 
 /**
@@ -491,9 +497,9 @@ export async function signInMcpServer(options: {
   serverUrl: string;
   store: McpOAuthStateStore;
   settings: McpOAuthSettings;
-  challenge?: OAuthChallenge;
+  challenge?: OAuthChallenge | undefined;
   prompt: McpSignInPrompt;
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 }): Promise<void> {
   const { serverUrl, store, settings, signal } = options;
   if (signal?.aborted) throw new McpSignInCancelledError();
@@ -538,20 +544,23 @@ export async function signInMcpServer(options: {
     const provider = createProvider(serverUrl, store, settings, redirectUrl, (url) => {
       authorizationUrl = url;
     });
+    const resourceMetadataUrl = options.challenge?.resourceMetadataUrl;
+    const authorizationServerMetadataUrl = settings.authServerMetadataUrl;
+    // A server asking for more scope gets it on top of the configured scope and, since the challenge
+    // may list only the missing scopes, on top of the scope granted so far.
+    const scope = mergeScopes(
+      settings.scope,
+      stepUp
+        ? stepUpScope(stored?.tokens?.scope, options.challenge?.scope)
+        : options.challenge?.scope,
+    );
     const flow = {
       serverUrl,
       fetch: timedFetch(),
-      signal,
-      resourceMetadataUrl: options.challenge?.resourceMetadataUrl,
-      authorizationServerMetadataUrl: settings.authServerMetadataUrl,
-      // A server asking for more scope gets it on top of the configured scope and, since the challenge
-      // may list only the missing scopes, on top of the scope granted so far.
-      scope: mergeScopes(
-        settings.scope,
-        stepUp
-          ? stepUpScope(stored?.tokens?.scope, options.challenge?.scope)
-          : options.challenge?.scope,
-      ),
+      ...(signal ? { signal } : {}),
+      ...(resourceMetadataUrl ? { resourceMetadataUrl } : {}),
+      ...(authorizationServerMetadataUrl ? { authorizationServerMetadataUrl } : {}),
+      ...(scope !== undefined ? { scope } : {}),
     };
     // A refresh keeps the granted scope; a server asking for more needs the browser flow.
     const skipRefresh = stepUp;
@@ -571,7 +580,11 @@ export async function signInMcpServer(options: {
       options.prompt,
       signal,
     );
-    await authorizeMcp(provider, { ...flow, authorizationCode: code, iss });
+    await authorizeMcp(provider, {
+      ...flow,
+      authorizationCode: code,
+      ...(iss !== undefined ? { iss } : {}),
+    });
   } catch (error) {
     // Aborted requests fail with the signal's reason; report them as the cancellation they are.
     if (signal?.aborted) throw new McpSignInCancelledError();

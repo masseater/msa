@@ -221,9 +221,9 @@ export async function limitMcpContent(
 
 export interface ConvertMcpResultOptions {
   /** Saves truncated text and binary resources. Default: a temp file. */
-  saveOutput?: McpOutputSaver;
+  saveOutput?: McpOutputSaver | undefined;
   /** Whether the server's resources can be read with `read_mcp_resource`, which resource links then name. */
-  readableResources?: boolean;
+  readableResources?: boolean | undefined;
 }
 
 /** File extension for a saved binary resource: the one its URI ends in, else `.bin`. */
@@ -379,7 +379,7 @@ export function createMcpToolDefinition(options: {
     async execute(_toolCallId, params, signal, onUpdate) {
       const client = await options.getClient();
       const result = await client.callTool(tool.name, (params ?? {}) as Record<string, unknown>, {
-        signal,
+        ...(signal ? { signal } : {}),
         timeoutMs: options.timeoutMs,
         onProgress: (progress) => {
           const total = progress.total === undefined ? "" : `/${progress.total}`;

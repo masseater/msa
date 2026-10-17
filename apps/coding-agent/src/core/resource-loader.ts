@@ -289,23 +289,23 @@ export function loadProjectContextFiles(options: {
 export interface DefaultResourceLoaderOptions {
   cwd: string;
   agentDir: string;
-  settingsManager?: SettingsManager;
-  eventBus?: EventBus;
-  additionalExtensionPaths?: string[];
-  additionalSkillPaths?: string[];
-  additionalPromptTemplatePaths?: string[];
-  additionalThemePaths?: string[];
-  extensionFactories?: InlineExtension[];
-  noExtensions?: boolean;
+  settingsManager?: SettingsManager | undefined;
+  eventBus?: EventBus | undefined;
+  additionalExtensionPaths?: string[] | undefined;
+  additionalSkillPaths?: string[] | undefined;
+  additionalPromptTemplatePaths?: string[] | undefined;
+  additionalThemePaths?: string[] | undefined;
+  extensionFactories?: InlineExtension[] | undefined;
+  noExtensions?: boolean | undefined;
   /** Built-in extensions not to load, by name (such as `mcp`), even when settings or `-e` enable them. */
-  disabledBuiltinExtensions?: string[];
-  noSkills?: boolean;
-  noPromptTemplates?: boolean;
-  noThemes?: boolean;
-  noContextFiles?: boolean;
-  systemPrompt?: string;
-  appendSystemPrompt?: string[];
-  extensionsOverride?: (base: LoadExtensionsResult) => LoadExtensionsResult;
+  disabledBuiltinExtensions?: string[] | undefined;
+  noSkills?: boolean | undefined;
+  noPromptTemplates?: boolean | undefined;
+  noThemes?: boolean | undefined;
+  noContextFiles?: boolean | undefined;
+  systemPrompt?: string | undefined;
+  appendSystemPrompt?: string[] | undefined;
+  extensionsOverride?: ((base: LoadExtensionsResult) => LoadExtensionsResult) | undefined;
   skillsOverride?: (base: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => {
     skills: Skill[];
     diagnostics: ResourceDiagnostic[];
@@ -322,7 +322,7 @@ export interface DefaultResourceLoaderOptions {
     agentsFiles: Array<{ path: string; content: string }>;
   };
   systemPromptOverride?: (base: string | undefined) => string | undefined;
-  appendSystemPromptOverride?: (base: string[]) => string[];
+  appendSystemPromptOverride?: ((base: string[]) => string[]) | undefined;
 }
 
 export class DefaultResourceLoader implements ResourceLoader {
@@ -344,31 +344,15 @@ export class DefaultResourceLoader implements ResourceLoader {
   private noPromptTemplates: boolean;
   private noThemes: boolean;
   private noContextFiles: boolean;
-  private systemPromptSource?: string;
-  private appendSystemPromptSource?: string[];
-  private extensionsOverride?: (base: LoadExtensionsResult) => LoadExtensionsResult;
-  private skillsOverride?: (base: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => {
-    skills: Skill[];
-    diagnostics: ResourceDiagnostic[];
-  };
-  private promptsOverride?: (base: {
-    prompts: PromptTemplate[];
-    diagnostics: ResourceDiagnostic[];
-  }) => {
-    prompts: PromptTemplate[];
-    diagnostics: ResourceDiagnostic[];
-  };
-  private themesOverride?: (base: { themes: Theme[]; diagnostics: ResourceDiagnostic[] }) => {
-    themes: Theme[];
-    diagnostics: ResourceDiagnostic[];
-  };
-  private agentsFilesOverride?: (base: {
-    agentsFiles: Array<{ path: string; content: string }>;
-  }) => {
-    agentsFiles: Array<{ path: string; content: string }>;
-  };
-  private systemPromptOverride?: (base: string | undefined) => string | undefined;
-  private appendSystemPromptOverride?: (base: string[]) => string[];
+  private systemPromptSource?: string | undefined;
+  private appendSystemPromptSource?: string[] | undefined;
+  private extensionsOverride: DefaultResourceLoaderOptions["extensionsOverride"];
+  private skillsOverride: DefaultResourceLoaderOptions["skillsOverride"];
+  private promptsOverride: DefaultResourceLoaderOptions["promptsOverride"];
+  private themesOverride: DefaultResourceLoaderOptions["themesOverride"];
+  private agentsFilesOverride: DefaultResourceLoaderOptions["agentsFilesOverride"];
+  private systemPromptOverride: DefaultResourceLoaderOptions["systemPromptOverride"];
+  private appendSystemPromptOverride: DefaultResourceLoaderOptions["appendSystemPromptOverride"];
 
   private extensionsResult: LoadExtensionsResult;
   private skills: Skill[];
@@ -378,8 +362,8 @@ export class DefaultResourceLoader implements ResourceLoader {
   private themes: Theme[];
   private themeDiagnostics: ResourceDiagnostic[];
   private agentsFiles: Array<{ path: string; content: string }>;
-  private systemPrompt?: string;
-  private systemPromptSourcePath?: string;
+  private systemPrompt?: string | undefined;
+  private systemPromptSourcePath?: string | undefined;
   private appendSystemPrompt: string[];
   private appendSystemPromptSourcePaths: string[];
   private lastSkillPaths: string[];
@@ -1289,7 +1273,7 @@ export class DefaultResourceLoader implements ResourceLoader {
           runtime,
           extensionPath,
         );
-        extension.hidden = isNamed && input.hidden;
+        extension.hidden = isNamed && input.hidden === true;
         extension.replaceable = isNamed && input.replaceable === true;
         extensions.push(extension);
       } catch (error) {

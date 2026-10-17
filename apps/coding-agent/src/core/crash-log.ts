@@ -129,7 +129,12 @@ export function findExtensionStackMatches(
 
 /** Best-effort persistence for callers that are already crashing. */
 export function recordCrash(
-  crash: { kind: CrashRecord["kind"]; error: unknown; sessionFile?: string; cwd: string },
+  crash: {
+    kind: CrashRecord["kind"];
+    error: unknown;
+    sessionFile?: string | undefined;
+    cwd: string;
+  },
   path = crashLogPath(),
 ): CrashRecord | undefined {
   try {

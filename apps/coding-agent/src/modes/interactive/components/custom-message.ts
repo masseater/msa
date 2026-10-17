@@ -12,9 +12,9 @@ import { getMarkdownTheme, theme } from "../theme/theme.ts";
  */
 export class CustomMessageComponent extends Container {
   private message: CustomMessage<unknown>;
-  private customRenderer?: MessageRenderer;
+  private customRenderer?: MessageRenderer | undefined;
   private box: Box;
-  private customComponent?: Component;
+  private customComponent?: Component | undefined;
   private markdownTheme: MarkdownTheme;
   private _expanded = false;
   private outputPad: number;

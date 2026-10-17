@@ -65,7 +65,7 @@ describe("OAuthSelectorComponent", () => {
   it("renders an option without compiled auth status as not configured", () => {
     const selector = new OAuthSelectorComponent(
       "login",
-      [{ id: "google", name: "Google", authType: "api_key", status: undefined }],
+      [{ id: "google", name: "Google", authType: "api_key" }],
       () => {},
       () => {},
     );

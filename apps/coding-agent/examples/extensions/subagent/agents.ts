@@ -12,8 +12,8 @@ export type AgentScope = "user" | "project" | "both";
 export interface AgentConfig {
   name: string;
   description: string;
-  tools?: string[];
-  model?: string;
+  tools?: string[] | undefined;
+  model?: string | undefined;
   systemPrompt: string;
   source: "user" | "project";
   filePath: string;

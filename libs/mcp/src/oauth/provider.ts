@@ -74,7 +74,8 @@ export class McpOAuthProvider implements OAuthClientProvider {
         options.clientMetadata.token_endpoint_auth_method ??
         (options.clientSecret ? "client_secret_post" : "none"),
     };
-    this.clientMetadataDocument = options.clientMetadataDocument;
+    if (options.clientMetadataDocument !== undefined)
+      this.clientMetadataDocument = options.clientMetadataDocument;
     this.configuredClient = options.clientId
       ? {
           client_id: options.clientId,

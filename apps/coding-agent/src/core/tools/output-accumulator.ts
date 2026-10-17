@@ -18,7 +18,7 @@ export interface OutputAccumulatorOptions {
 export interface OutputSnapshot {
   content: string;
   truncation: TruncationResult;
-  fullOutputPath?: string;
+  fullOutputPath?: string | undefined;
 }
 
 export interface FullOutput {

@@ -157,7 +157,7 @@ interface ActiveRun extends CacheWarmRequest {
   nextWarmAt: number;
   /** Set while a refresh that an extension forced is in flight. */
   extensionOverride: boolean;
-  timer?: ReturnType<typeof setTimeout>;
+  timer?: ReturnType<typeof setTimeout> | undefined;
 }
 
 /**
@@ -166,7 +166,7 @@ interface ActiveRun extends CacheWarmRequest {
  * previous run; warm requests never extend the fixed safety windows.
  */
 export class CacheWarmer {
-  private run?: ActiveRun;
+  private run?: ActiveRun | undefined;
   private inactive: CacheWarmingStatus;
   private readonly models: Pick<ModelRuntime, "streamSimple">;
   private readonly sessionManager: Pick<SessionManager, "appendUsage" | "getBranch">;
@@ -174,7 +174,7 @@ export class CacheWarmer {
   /** Lets extensions override `event.action`; failures fall back to msa's decision. */
   private readonly decide: (event: CacheWarmingDecisionEvent) => Promise<CacheWarmingAction>;
   /** Called with the persisted usage entry after each successful refresh. */
-  onWarmed?: (entry: UsageEntry) => void;
+  onWarmed?: ((entry: UsageEntry) => void) | undefined;
 
   constructor(
     models: Pick<ModelRuntime, "streamSimple">,

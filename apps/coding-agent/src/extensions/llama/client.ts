@@ -41,8 +41,8 @@ export interface LlamaModelEvent {
 
 export interface LlamaProgress {
   message: string;
-  ratio?: number;
-  detail?: string;
+  ratio?: number | undefined;
+  detail?: string | undefined;
 }
 
 function errorMessage(payload: unknown, fallback: string): string {
@@ -195,9 +195,11 @@ export class LlamaClient {
     return payload;
   }
 
-  async list(options: { reload?: boolean; signal?: AbortSignal } = {}): Promise<LlamaModelInfo[]> {
+  async list(
+    options: { reload?: boolean; signal?: AbortSignal | undefined } = {},
+  ): Promise<LlamaModelInfo[]> {
     const payload = await this.request(`/models${options.reload ? "?reload=1" : ""}`, {
-      signal: options.signal,
+      signal: options.signal ?? null,
     });
     if (
       typeof payload !== "object" ||
@@ -215,7 +217,7 @@ export class LlamaClient {
     const query = options.model
       ? `?${new URLSearchParams({ model: options.model, autoload: "false" })}`
       : "";
-    const payload = await this.request(`/props${query}`, { signal: options.signal });
+    const payload = await this.request(`/props${query}`, { signal: options.signal ?? null });
     if (typeof payload !== "object" || payload === null) return {};
     const { models_autoload: modelsAutoload, chat_template: chatTemplate } = payload as Record<
       string,
@@ -228,14 +230,18 @@ export class LlamaClient {
   }
 
   async load(model: string, signal?: AbortSignal): Promise<void> {
-    await this.request("/models/load", { method: "POST", body: JSON.stringify({ model }), signal });
+    await this.request("/models/load", {
+      method: "POST",
+      body: JSON.stringify({ model }),
+      signal: signal ?? null,
+    });
   }
 
   async unload(model: string, signal?: AbortSignal): Promise<void> {
     await this.request("/models/unload", {
       method: "POST",
       body: JSON.stringify({ model }),
-      signal,
+      signal: signal ?? null,
     });
   }
 
@@ -249,13 +255,20 @@ export class LlamaClient {
   }
 
   async download(model: string, signal?: AbortSignal): Promise<void> {
-    await this.request("/models", { method: "POST", body: JSON.stringify({ model }), signal });
+    await this.request("/models", {
+      method: "POST",
+      body: JSON.stringify({ model }),
+      signal: signal ?? null,
+    });
   }
 
   async watch(onEvent: (event: LlamaModelEvent) => void, signal?: AbortSignal): Promise<void> {
     const headers = new Headers();
     if (this.apiKey) headers.set("Authorization", `Bearer ${this.apiKey}`);
-    const response = await fetch(`${this.serverUrl}/models/sse`, { headers, signal });
+    const response = await fetch(`${this.serverUrl}/models/sse`, {
+      headers,
+      signal: signal ?? null,
+    });
     if (!response.ok || !response.body)
       throw new Error(`llama.cpp SSE returned HTTP ${response.status}`);
     const reader = response.body.getReader();

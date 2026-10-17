@@ -64,7 +64,7 @@ describe("regression #2835: tool allowlists filter extension tools", () => {
       settingsManager,
       sessionManager,
       resourceLoader,
-      tools: allowedToolNames,
+      ...(allowedToolNames !== undefined ? { tools: allowedToolNames } : {}),
     });
     await session.bindExtensions({});
     return session;

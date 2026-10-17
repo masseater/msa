@@ -159,8 +159,8 @@ export interface Component {
 export type TuiInputListenerResult = { consume?: boolean; data?: string } | undefined;
 export type TuiInputListener = (data: string) => TuiInputListenerResult;
 type PendingTerminalColorQuery = {
-  foreground?: RgbColor;
-  background?: RgbColor;
+  foreground?: RgbColor | undefined;
+  background?: RgbColor | undefined;
   palette: Array<RgbColor | undefined>;
   /** Targets that already replied, so duplicates do not count twice. */
   replied: Set<string>;
@@ -344,7 +344,7 @@ type OverlayStackEntry = {
   preFocus: Component | null;
   hidden: boolean;
   focusOrder: number;
-  bounds?: OverlayBounds;
+  bounds?: OverlayBounds | undefined;
 };
 
 type RenderedOverlayLayout = {

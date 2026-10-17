@@ -652,8 +652,9 @@ describe("task runtime", () => {
       const [first, second] = [...(await runtime.context(runtime.conversationId, ctx)).entries].map(
         (entry) => entry.id,
       );
+      if (first === undefined || second === undefined) throw new Error("expected two entries");
       seen.push((await runtime.snapshot(Notes, runtime.conversationId, ctx))?.text);
-      seen.push((await runtime.snapshotAsOf(Notes, runtime.conversationId, first!, ctx))?.text);
+      seen.push((await runtime.snapshotAsOf(Notes, runtime.conversationId, first, ctx))?.text);
       seen.push((await runtime.context(runtime.conversationId, ctx, { at: first })).entries.length);
       seen.push(
         (await runtime.context(runtime.conversationId, ctx, { at: second })).messages.length,

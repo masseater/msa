@@ -44,7 +44,9 @@ async function createWaitingHarness(
   };
   const harness = await createHarness({
     tools: [waitTool, ...(options.tools ?? [])],
-    extensionFactories: options.extensionFactories,
+    ...(options.extensionFactories !== undefined
+      ? { extensionFactories: options.extensionFactories }
+      : {}),
   });
 
   const waitForToolStart = new Promise<void>((resolve) => {
@@ -172,7 +174,9 @@ describe("AgentSession queue characterization", () => {
             inputEvents.push({
               text: event.text,
               source: event.source,
-              streamingBehavior: event.streamingBehavior,
+              ...(event.streamingBehavior !== undefined
+                ? { streamingBehavior: event.streamingBehavior }
+                : {}),
             });
             if (event.text.startsWith("handle")) return { action: "handled" };
             return { action: "transform", text: `transformed: ${event.text}` };

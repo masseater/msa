@@ -9,11 +9,11 @@ export type TerminalColorScheme = "dark" | "light";
 /** Colors the terminal reports for its current theme. */
 export interface TerminalColors {
   /** Default foreground (OSC 10). */
-  foreground?: RgbColor;
+  foreground?: RgbColor | undefined;
   /** Default background (OSC 11). */
-  background?: RgbColor;
+  background?: RgbColor | undefined;
   /** ANSI colors 0-15 (OSC 4). Only set when the terminal reported all 16. */
-  palette?: RgbColor[];
+  palette?: RgbColor[] | undefined;
 }
 
 function hexToRgb(hex: string): RgbColor {

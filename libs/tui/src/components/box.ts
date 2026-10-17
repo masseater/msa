@@ -20,10 +20,10 @@ export class Box implements Component {
   children: Component[] = [];
   private paddingX: number;
   private paddingY: number;
-  private bgFn?: (text: string) => string;
+  private bgFn?: ((text: string) => string) | undefined;
 
   // Cache for rendered output
-  private cache?: RenderCache;
+  private cache?: RenderCache | undefined;
   private mouseLayout?: {
     width: number;
     children: Array<{ component: Component; height: number }>;

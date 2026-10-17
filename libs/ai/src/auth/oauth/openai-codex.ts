@@ -72,7 +72,10 @@ function createState(): string {
   return _randomBytes(16).toString("hex");
 }
 
-function parseAuthorizationInput(input: string): { code?: string; state?: string } {
+function parseAuthorizationInput(input: string): {
+  code?: string | undefined;
+  state?: string | undefined;
+} {
   const value = input.trim();
   if (!value) return {};
 

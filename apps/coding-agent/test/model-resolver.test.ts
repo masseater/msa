@@ -340,7 +340,7 @@ describe("resolveModelReference", () => {
     const usable = new Set(testCase.usable);
     const request: ModelReferenceRequest = {
       text: testCase.text,
-      provider: testCase.provider,
+      ...(testCase.provider !== undefined ? { provider: testCase.provider } : {}),
       thinkingSuffix: testCase.thinkingSuffix ?? "strict",
       fuzzy: testCase.fuzzy ?? true,
     };

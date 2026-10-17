@@ -3,9 +3,9 @@ import { bugReportFiles } from "./bug-report.ts";
 import { getRadiusGatewayUrl } from "./radius.ts";
 
 interface UploadBugReportOptions {
-  token?: string;
-  signal?: AbortSignal;
-  gatewayUrl?: string;
+  token?: string | undefined;
+  signal?: AbortSignal | undefined;
+  gatewayUrl?: string | undefined;
 }
 
 /** Upload a report as multipart form data, anonymously or attributed to a Radius account. */
@@ -21,9 +21,9 @@ export async function uploadBugReport(
     new URL("/v1/bug-reports", options.gatewayUrl ?? getRadiusGatewayUrl()),
     {
       method: "POST",
-      headers: options.token ? { Authorization: `Bearer ${options.token}` } : undefined,
+      ...(options.token ? { headers: { Authorization: `Bearer ${options.token}` } } : {}),
       body,
-      signal: options.signal,
+      signal: options.signal ?? null,
     },
   );
   const json = (await response.json().catch(() => null)) as {

@@ -397,7 +397,7 @@ export default function (msa: ExtensionAPI) {
         id,
         name,
         reasoning,
-        thinkingLevelMap,
+        ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
         input,
         cost,
         contextWindow,

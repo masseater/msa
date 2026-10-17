@@ -336,7 +336,7 @@ export type LoadedResourcesOptions = {
   showListing: boolean;
   showDiagnostics: boolean;
   /** Extensions to list instead of the visible ones the resource loader holds. */
-  extensions?: readonly ResourceItem[];
+  extensions?: readonly ResourceItem[] | undefined;
 };
 
 /**

@@ -32,14 +32,14 @@ export interface ToolHtmlRenderer {
 
 /** Pre-rendered HTML for a custom tool call and result */
 interface RenderedToolHtml {
-  callHtml?: string;
-  resultHtmlCollapsed?: string;
-  resultHtmlExpanded?: string;
+  callHtml?: string | undefined;
+  resultHtmlCollapsed?: string | undefined;
+  resultHtmlExpanded?: string | undefined;
 }
 
 export interface ExportOptions {
-  outputPath?: string;
-  themeName?: string;
+  outputPath?: string | undefined;
+  themeName?: string | undefined;
   /** Optional tool renderer for custom tools */
   toolRenderer?: ToolHtmlRenderer;
 }
@@ -138,10 +138,10 @@ interface SessionData {
   header: ReturnType<SessionManager["getHeader"]>;
   entries: ReturnType<SessionManager["getEntries"]>;
   leafId: string | null;
-  systemPrompt?: string;
-  tools?: Array<Pick<ToolDefinition, "name" | "description" | "parameters">>;
+  systemPrompt?: string | undefined;
+  tools?: Array<Pick<ToolDefinition, "name" | "description" | "parameters">> | undefined;
   /** Pre-rendered HTML for custom tool calls/results, keyed by tool call ID */
-  renderedTools?: Record<string, RenderedToolHtml>;
+  renderedTools?: Record<string, RenderedToolHtml> | undefined;
 }
 
 /**

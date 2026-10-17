@@ -5,7 +5,7 @@ export type SlashCommandSource = "extension" | "prompt" | "skill";
 
 export interface SlashCommandInfo {
   name: string;
-  description?: string;
+  description?: string | undefined;
   source: SlashCommandSource;
   sourceInfo: SourceInfo;
 }

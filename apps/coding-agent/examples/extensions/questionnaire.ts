@@ -39,7 +39,7 @@ interface Answer {
   value: string;
   label: string;
   wasCustom: boolean;
-  index?: number;
+  index?: number | undefined;
 }
 
 interface QuestionnaireResult {

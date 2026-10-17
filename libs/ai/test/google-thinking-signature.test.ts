@@ -4,7 +4,7 @@ import { isThinkingPart, retainThoughtSignature } from "../src/api/google-shared
 
 describe("Google thinking detection (thoughtSignature)", () => {
   it("treats part.thought === true as thinking", () => {
-    expect(isThinkingPart({ thought: true, thoughtSignature: undefined })).toBe(true);
+    expect(isThinkingPart({ thought: true })).toBe(true);
     expect(isThinkingPart({ thought: true, thoughtSignature: "opaque-signature" })).toBe(true);
   });
 
@@ -12,14 +12,12 @@ describe("Google thinking detection (thoughtSignature)", () => {
     // Per Google docs, thoughtSignature is for context replay and can appear on any part type.
     // Only thought === true indicates thinking content.
     // See: https://ai.google.dev/gemini-api/docs/thought-signatures
-    expect(isThinkingPart({ thought: undefined, thoughtSignature: "opaque-signature" })).toBe(
-      false,
-    );
+    expect(isThinkingPart({ thoughtSignature: "opaque-signature" })).toBe(false);
     expect(isThinkingPart({ thought: false, thoughtSignature: "opaque-signature" })).toBe(false);
   });
 
   it("does not treat empty/missing signatures as thinking if thought is not set", () => {
-    expect(isThinkingPart({ thought: undefined, thoughtSignature: undefined })).toBe(false);
+    expect(isThinkingPart({})).toBe(false);
     expect(isThinkingPart({ thought: false, thoughtSignature: "" })).toBe(false);
   });
 

@@ -155,34 +155,33 @@ export interface ProviderResponse {
 
 /** Authentication, HTTP transport, and lifecycle callbacks shared by provider requests. */
 export interface ProviderRequestOptions<TModel = Model<Api>> {
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   /** Explicit parent context for telemetry produced by this logical request. */
-  telemetryContext?: TelemetryContext;
-  apiKey?: string;
+  telemetryContext?: TelemetryContext | undefined;
+  apiKey?: string | undefined;
   /**
    * Optional fetch implementation for provider HTTP requests.
    * Defaults to `globalThis.fetch`. Provider adapters that cannot inject a custom implementation may reject it.
    * This does not affect WebSocket transports.
    */
-  fetch?: FetchFunction;
+  fetch?: FetchFunction | undefined;
   /**
    * Provider-scoped environment values. These take precedence over process.env for
    * provider configuration such as regional settings, endpoint placeholders, and
    * proxy variables.
    */
-  env?: ProviderEnv;
+  env?: ProviderEnv | undefined;
   /**
    * Optional callback for inspecting or replacing provider payloads before sending.
    * Return undefined to keep the payload unchanged.
    */
-  onPayload?: (
-    payload: unknown,
-    model: TModel,
-  ) => unknown | undefined | Promise<unknown | undefined>;
+  onPayload?:
+    | ((payload: unknown, model: TModel) => unknown | undefined | Promise<unknown | undefined>)
+    | undefined;
   /**
    * Optional callback invoked after an HTTP response is received.
    */
-  onResponse?: (response: ProviderResponse, model: TModel) => void | Promise<void>;
+  onResponse?: ((response: ProviderResponse, model: TModel) => void | Promise<void>) | undefined;
   /**
    * Optional custom HTTP headers to include in API requests.
    * Merged with provider defaults; caller values override default headers.
@@ -191,17 +190,17 @@ export interface ProviderRequestOptions<TModel = Model<Api>> {
    * `authorization`, `host`) are silently ignored to preserve SigV4 / bearer auth.
    * A null value suppresses a provider/API default header with the same name.
    */
-  headers?: ProviderHeaders;
+  headers?: ProviderHeaders | undefined;
   /**
    * HTTP request timeout in milliseconds for providers/SDKs that support it.
    * For example, OpenAI and Anthropic SDK clients default to 10 minutes.
    */
-  timeoutMs?: number;
+  timeoutMs?: number | undefined;
   /**
    * Maximum retry attempts for providers/SDKs that support client-side retries.
    * For example, OpenAI and Anthropic SDK clients default to 2.
    */
-  maxRetries?: number;
+  maxRetries?: number | undefined;
   /**
    * Maximum delay in milliseconds to wait for a retry when the server requests a long wait.
    * If the server's requested delay exceeds this value, the request fails immediately
@@ -209,7 +208,7 @@ export interface ProviderRequestOptions<TModel = Model<Api>> {
    * to handle it with user visibility.
    * Default: 60000 (60 seconds). Set to 0 to disable the cap.
    */
-  maxRetryDelayMs?: number;
+  maxRetryDelayMs?: number | undefined;
 }
 
 export interface StreamOptions extends ProviderRequestOptions<Model<Api>> {
@@ -217,14 +216,16 @@ export interface StreamOptions extends ProviderRequestOptions<Model<Api>> {
    * Optional callback invoked after an HTTP response is received and before
    * its body stream is consumed.
    */
-  onResponse?: (response: ProviderResponse, model: Model<Api>) => void | Promise<void>;
+  onResponse?:
+    | ((response: ProviderResponse, model: Model<Api>) => void | Promise<void>)
+    | undefined;
   /**
    * Optional observer for each parsed provider stream event before msa normalization.
    * Event data is adapter-owned and must be treated as read-only.
    * Adapter support is explicit; unsupported adapters do not invoke it.
    */
-  onProviderStreamEvent?: (data: unknown, model: Model<Api>) => void | Promise<void>;
-  temperature?: number;
+  onProviderStreamEvent?: ((data: unknown, model: Model<Api>) => void | Promise<void>) | undefined;
+  temperature?: number | undefined;
   /**
    * Arbitrary sampling parameters merged into the request body as-is, after the named request
    * fields, so keys here override them. Lets custom OpenAI-compatible servers (llama.cpp, vLLM,
@@ -232,36 +233,36 @@ export interface StreamOptions extends ProviderRequestOptions<Model<Api>> {
    * `repetition_penalty`. Merged over `Model.samplingParams` per key. Only applied by
    * OpenAI-compatible adapters (completions, responses, Azure responses); other APIs ignore it.
    */
-  samplingParams?: SamplingParams;
-  maxTokens?: number;
+  samplingParams?: SamplingParams | undefined;
+  maxTokens?: number | undefined;
   /**
    * Preferred transport for providers that support multiple transports.
    * Providers that do not support this option ignore it.
    */
-  transport?: Transport;
+  transport?: Transport | undefined;
   /**
    * Prompt cache retention preference. Providers map this to their supported values.
    * Default: "short".
    */
-  cacheRetention?: CacheRetention;
+  cacheRetention?: CacheRetention | undefined;
   /**
    * Optional session identifier for providers that support session-based caching.
    * Providers can use this to enable prompt caching, request routing, or other
    * session-aware features. Ignored by providers that don't support it.
    */
-  sessionId?: string;
+  sessionId?: string | undefined;
   /**
    * WebSocket connect timeout in milliseconds for providers that support
    * WebSocket transports. This covers the connection/open handshake only;
    * stream idleness after connection uses timeoutMs.
    */
-  websocketConnectTimeoutMs?: number;
+  websocketConnectTimeoutMs?: number | undefined;
   /**
    * Optional metadata to include in API requests.
    * Providers extract the fields they understand and ignore the rest.
    * For example, Anthropic uses `user_id` for abuse tracking and rate limiting.
    */
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> | undefined;
 }
 
 export type ProviderStreamOptions = StreamOptions & Record<string, unknown>;
@@ -379,12 +380,12 @@ export type ProviderImagesOptions = ImagesOptions & Record<string, unknown>;
 // Unified options with reasoning passed to streamSimple() and completeSimple()
 export interface SimpleStreamOptions extends StreamOptions {
   /** Provider-neutral tool selection for simple requests. When omitted, adapters use provider-specific behavior. */
-  toolChoice?: ToolChoice;
-  reasoning?: ThinkingLevel;
+  toolChoice?: ToolChoice | undefined;
+  reasoning?: ThinkingLevel | undefined;
   /** Ask a capable provider to return a durable handle and continue the request asynchronously. */
-  deferred?: boolean | { window?: "15m" | "1h" | "24h" };
+  deferred?: boolean | { window?: "15m" | "1h" | "24h" } | undefined;
   /** Custom token budgets for thinking levels (token-based providers only) */
-  thinkingBudgets?: ThinkingBudgets;
+  thinkingBudgets?: ThinkingBudgets | undefined;
 }
 
 // Generic StreamFunction with typed options.
@@ -428,13 +429,13 @@ export interface TextSignatureV1 {
 export interface TextContent {
   type: "text";
   text: string;
-  textSignature?: string; // e.g., for OpenAI responses, message metadata (legacy id string or TextSignatureV1 JSON)
+  textSignature?: string | undefined; // e.g., for OpenAI responses, message metadata (legacy id string or TextSignatureV1 JSON)
 }
 
 export interface ThinkingContent {
   type: "thinking";
   thinking: string;
-  thinkingSignature?: string; // Provider-specific opaque or serialized reasoning replay data
+  thinkingSignature?: string | undefined; // Provider-specific opaque or serialized reasoning replay data
   /** When true, the thinking content was redacted by safety filters. The opaque
    *  encrypted payload is stored in `thinkingSignature` so it can be passed back
    *  to the API for multi-turn continuity. */
@@ -452,7 +453,7 @@ export interface ToolCall {
   id: string;
   name: string;
   arguments: JsonObject;
-  thoughtSignature?: string; // Google-specific: opaque signature for reusing thought context
+  thoughtSignature?: string | undefined; // Google-specific: opaque signature for reusing thought context
   /** OpenAI Responses namespace for calls to dynamically loaded or namespaced tools. */
   namespace?: string;
   /**
@@ -468,7 +469,7 @@ export interface Usage {
   cacheRead: number;
   cacheWrite: number;
   /** Subset of `cacheWrite` written with 1h retention. Only Anthropic reports this split. */
-  cacheWrite1h?: number;
+  cacheWrite1h?: number | undefined;
   /**
    * Reasoning/thinking tokens, when the provider reports them. This is a subset of
    * `output`: `output` already includes these tokens. Set to a number (possibly 0) by
@@ -606,7 +607,7 @@ export interface AssistantMessage {
   provider: ProviderId;
   model: string;
   responseModel?: string; // Concrete model reported by the provider when different from the requested `model`
-  responseId?: string; // Provider-specific response/message identifier when the upstream API exposes one
+  responseId?: string | undefined; // Provider-specific response/message identifier when the upstream API exposes one
   /** Exact provider-native effort level used for this response. Absent for legacy or unmanaged responses. */
   providerThinkingLevel?: string;
   /** msa thinking level the agent loop requested for this response. Absent outside the agent loop and for legacy responses. */
@@ -616,7 +617,7 @@ export interface AssistantMessage {
   stopReason: StopReason;
   deferred?: DeferredHandle;
   errorMessage?: string;
-  rawStopReason?: string;
+  rawStopReason?: string | undefined;
   /**
    * Provider indication of whether the model explicitly ended its turn.
    * Preserved for debugging and does not currently affect agent control flow.
@@ -794,7 +795,7 @@ export interface Tool<TParameters extends TSchema = TSchema> {
   name: string;
   description: string;
   parameters: TParameters;
-  constrainedSampling?: false | ConstrainedSamplingConfig;
+  constrainedSampling?: false | ConstrainedSamplingConfig | undefined;
 }
 
 export interface ToolReference {
@@ -897,17 +898,19 @@ export interface Model<TApi extends Api> extends BaseModel<TApi> {
   /** Sampling parameter overrides selected by the effective msa thinking level. */
   samplingParamsByThinkingLevel?: SamplingParamsByThinkingLevel;
   /** Compatibility overrides for OpenAI-compatible APIs. If not set, auto-detected from baseUrl. */
-  compat?: TApi extends "openai-completions"
-    ? OpenAICompletionsCompat
-    : TApi extends "openai-responses" | "azure-openai-responses" | "openai-codex-responses"
-      ? OpenAIResponsesCompat
-      : TApi extends "anthropic-messages"
-        ? AnthropicMessagesCompat
-        : TApi extends "bedrock-converse-stream"
-          ? BedrockCompat
-          : TApi extends "mistral-conversations"
-            ? MistralConversationsCompat
-            : never;
+  compat?:
+    | (TApi extends "openai-completions"
+        ? OpenAICompletionsCompat
+        : TApi extends "openai-responses" | "azure-openai-responses" | "openai-codex-responses"
+          ? OpenAIResponsesCompat
+          : TApi extends "anthropic-messages"
+            ? AnthropicMessagesCompat
+            : TApi extends "bedrock-converse-stream"
+              ? BedrockCompat
+              : TApi extends "mistral-conversations"
+                ? MistralConversationsCompat
+                : never)
+    | undefined;
 }
 
 /** Image-generation model: usable with `generateImages()` only. */

@@ -97,7 +97,7 @@ function cluster() {
     slowGate: latch(),
     browser(principal: unknown, restamp?: (p: unknown) => unknown | undefined) {
       const [down, up] = memoryLinkPair();
-      server.accept(down, { principal, restamp });
+      server.accept(down, { principal, ...(restamp !== undefined ? { restamp } : {}) });
       return {
         host: createHost({
           self: { kind: "host" },

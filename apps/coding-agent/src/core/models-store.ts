@@ -18,8 +18,8 @@ type ModelsFileReload = {
 
 type ModelsFileReadState = {
   data: StoredModels;
-  revision?: string;
-  reload?: ModelsFileReload;
+  revision?: string | undefined;
+  reload?: ModelsFileReload | undefined;
 };
 
 // Optimize the common path without retaining an unbounded set of custom paths.

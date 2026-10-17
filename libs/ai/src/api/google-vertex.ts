@@ -54,14 +54,14 @@ import {
 import { buildBaseOptions } from "./simple-options.ts";
 
 export interface GoogleVertexOptions extends StreamOptions {
-  toolChoice?: "auto" | "none" | "any";
+  toolChoice?: "auto" | "none" | "any" | undefined;
   thinking?: {
     enabled: boolean;
     budgetTokens?: number; // -1 for dynamic, 0 to disable
     level?: GoogleApiThinkingLevel;
   };
-  project?: string;
-  location?: string;
+  project?: string | undefined;
+  location?: string | undefined;
 }
 
 const API_VERSION = "v1";
@@ -388,13 +388,14 @@ function createClient(
   env?: ProviderEnv,
 ): GoogleGenAI {
   const googleAuthOptions = buildGoogleAuthOptions(env);
+  const httpOptions = buildHttpOptions(model, optionsHeaders);
   return new GoogleGenAI({
     vertexai: true,
     project,
     location,
     apiVersion: API_VERSION,
     ...(googleAuthOptions ? { googleAuthOptions } : {}),
-    httpOptions: buildHttpOptions(model, optionsHeaders),
+    ...(httpOptions !== undefined ? { httpOptions } : {}),
   });
 }
 
@@ -403,11 +404,12 @@ function createClientWithApiKey(
   apiKey: string,
   optionsHeaders?: ProviderHeaders,
 ): GoogleGenAI {
+  const httpOptions = buildHttpOptions(model, optionsHeaders);
   return new GoogleGenAI({
     vertexai: true,
     apiKey,
     apiVersion: API_VERSION,
-    httpOptions: buildHttpOptions(model, optionsHeaders),
+    ...(httpOptions !== undefined ? { httpOptions } : {}),
   });
 }
 
@@ -517,12 +519,11 @@ function buildParams(
       ? resolveGoogleFunctionCallingMode(currentTools, options.toolChoice, supportsStrictMode)
       : undefined;
   const systemInstruction = initialSystemMessage ? getSystemMessageText(initialSystemMessage) : "";
+  const tools = convertTools(currentTools, false, supportsStrictMode);
   const config: GenerateContentConfig = {
     ...(Object.keys(generationConfig).length > 0 && generationConfig),
     ...(systemInstruction && { systemInstruction: sanitizeSurrogates(systemInstruction) }),
-    ...(currentTools.length > 0 && {
-      tools: convertTools(currentTools, false, supportsStrictMode),
-    }),
+    ...(tools !== undefined && { tools }),
     ...(functionCallingMode !== undefined && {
       toolConfig: { functionCallingConfig: { mode: functionCallingMode } },
     }),

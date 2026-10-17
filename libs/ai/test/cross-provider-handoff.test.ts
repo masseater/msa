@@ -438,7 +438,7 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
 
       console.log("\n=== Testing Cross-Provider Handoffs ===\n");
 
-      const results: { target: string; success: boolean; error?: string }[] = [];
+      const results: { target: string; success: boolean; error?: string | undefined }[] = [];
 
       for (const targetPair of availablePairs) {
         const apiKey = await getApiKey(targetPair.provider);

@@ -191,7 +191,7 @@ type DocumentPlan = {
     readonly definition?: AnyDocDefinition;
   };
   /** Resolved before Storage admission so adoption performs no reads. */
-  conversationId?: ConversationId;
+  conversationId?: ConversationId | undefined;
 };
 
 /**
