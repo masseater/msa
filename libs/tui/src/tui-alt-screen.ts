@@ -42,6 +42,8 @@ import {
   isImageLine,
 } from "./terminal-image-kitty.ts";
 import type { Terminal } from "./terminal-protocol.ts";
+import { getGraphemeCellRange, getOsc8LinkAtColumn, sliceByColumn } from "./text-slice.ts";
+import { truncateToWidth } from "./text-truncate.ts";
 import {
   type Component,
   Container,
@@ -61,12 +63,8 @@ import {
 } from "./tui.ts";
 import {
   extractAnsiCode,
-  getGraphemeCellRange,
-  getOsc8LinkAtColumn,
   getWordSegmenter,
-  sliceByColumn,
   stripTerminalSequences,
-  truncateToWidth,
   visibleWidth,
 } from "./utils.ts";
 import { WheelScrollAccelerator, type WheelScrollLines } from "./wheel-scroll.ts";

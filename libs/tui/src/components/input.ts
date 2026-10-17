@@ -2,6 +2,8 @@ import { isControlCharacter } from "../ansi-sequences.ts";
 import type { Keybinding } from "../keybinding-definitions.ts";
 import { getKeybindings } from "../keybindings.ts";
 import { decodeKittyPrintable } from "../keys.ts";
+import { sliceByColumn } from "../text-slice.ts";
+import { truncateToWidth } from "../text-truncate.ts";
 import {
   type Component,
   CURSOR_MARKER,
@@ -10,7 +12,7 @@ import {
   type TuiMouseEvent,
   type TuiMouseEventResult,
 } from "../tui.ts";
-import { getGraphemeSegmenter, sliceByColumn, truncateToWidth, visibleWidth } from "../utils.ts";
+import { getGraphemeSegmenter, visibleWidth } from "../utils.ts";
 import { InputTextField } from "./input-text-field.ts";
 
 const segmenter = getGraphemeSegmenter();

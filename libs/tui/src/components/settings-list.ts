@@ -1,7 +1,9 @@
 import { fuzzyFilter } from "../fuzzy.ts";
 import { getKeybindings } from "../keybindings.ts";
+import { truncateToWidth } from "../text-truncate.ts";
+import { wrapTextWithAnsi } from "../text-wrap.ts";
 import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../tui.ts";
-import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
+import { visibleWidth } from "../utils.ts";
 import { Input } from "./input.ts";
 import {
   type SettingItem,

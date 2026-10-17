@@ -1,17 +1,13 @@
 import { dual } from "effect/Function";
 
 import { stripOsc133ZonePrefix } from "./ansi-sequences.ts";
+import { getActiveBackgroundAnsi } from "./ansi-tracker.ts";
 import type { ScrollView } from "./components/scroll-view.ts";
 import { type LayoutContext, layoutComponent } from "./layout-tree.ts";
 import { cropKittyImageLine, getKittyImageMetadata, isImageLine } from "./terminal-image-kitty.ts";
+import { getGraphemeCellRange, sliceByColumn } from "./text-slice.ts";
 import { type Component, compositeTuiLine } from "./tui.ts";
-import {
-  extractAnsiCode,
-  getActiveBackgroundAnsi,
-  getGraphemeCellRange,
-  sliceByColumn,
-  visibleWidth,
-} from "./utils.ts";
+import { extractAnsiCode, visibleWidth } from "./utils.ts";
 
 export interface LayoutRect {
   x: number;

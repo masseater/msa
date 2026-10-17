@@ -3,9 +3,9 @@ import { Console, Effect } from "effect";
 import { runEvery } from "../src/delay.ts";
 import { matchesKey } from "../src/keys.ts";
 import { ProcessTerminal } from "../src/terminal.ts";
+import { truncateToWidth } from "../src/text-truncate.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import type { Component, TUI } from "../src/tui.ts";
-import { truncateToWidth } from "../src/utils.ts";
 
 const CONTROL_NAMES = new Map([
   ["\u001b", "\\x1b"],

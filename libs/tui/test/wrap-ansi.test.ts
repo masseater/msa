@@ -1,7 +1,8 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { visibleWidth, wrapTextWithAnsi } from "../src/utils.ts";
+import { wrapTextWithAnsi } from "../src/text-wrap.ts";
+import { visibleWidth } from "../src/utils.ts";
 
 describe("wrapTextWithAnsi", () => {
   describe("underline styling", () => {

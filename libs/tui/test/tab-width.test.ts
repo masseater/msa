@@ -3,14 +3,10 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
+import { extractSegments, sliceWithWidth } from "../src/text-slice.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import type { TUI } from "../src/tui.ts";
-import {
-  extractSegments,
-  normalizeTerminalOutput,
-  sliceWithWidth,
-  visibleWidth,
-} from "../src/utils.ts";
+import { normalizeTerminalOutput, visibleWidth } from "../src/utils.ts";
 import { CapturingVirtualTerminal } from "./tab-width-capturing-virtual-terminal.ts";
 import { FullViewportContent } from "./tab-width-full-viewport-content.ts";
 import { TabStatusOverlay } from "./tab-width-tab-status-overlay.ts";

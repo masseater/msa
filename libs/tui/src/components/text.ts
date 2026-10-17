@@ -1,5 +1,6 @@
+import { applyBackgroundToLine, wrapTextWithAnsi } from "../text-wrap.ts";
 import type { Component } from "../tui.ts";
-import { applyBackgroundToLine, flattenLines, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
+import { flattenLines, visibleWidth } from "../utils.ts";
 
 export class Text implements Component {
   private text: string;

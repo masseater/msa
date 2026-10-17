@@ -4,9 +4,9 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { Input } from "../src/components/input.ts";
+import { sliceByColumn } from "../src/text-slice.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import { CURSOR_MARKER, renderFakeCursor, type TUI } from "../src/tui.ts";
-import { sliceByColumn } from "../src/utils.ts";
 import { LoggingVirtualTerminal } from "./tui-render-logging-virtual-terminal.ts";
 import { TestComponent } from "./tui-render-test-component.ts";
 

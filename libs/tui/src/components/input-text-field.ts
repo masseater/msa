@@ -1,6 +1,7 @@
 import { KillRing } from "../kill-ring.ts";
+import { isWhitespaceChar } from "../text-boundaries.ts";
 import { UndoStack } from "../undo-stack.ts";
-import { getGraphemeSegmenter, isWhitespaceChar } from "../utils.ts";
+import { getGraphemeSegmenter } from "../utils.ts";
 import { findWordBackward, findWordForward } from "../word-navigation.ts";
 
 const segmenter = getGraphemeSegmenter();
