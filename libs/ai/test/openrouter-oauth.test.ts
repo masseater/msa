@@ -70,6 +70,75 @@ describe("OpenRouter OAuth", () => {
     ));
 });
 
+const runsPKCEOnAOneShotFirst = Effect.fn("runsPKCEOnAOneShotFirst")(function* () {
+  let exchangeBody: Record<string, unknown> | undefined;
+  const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url !== TOKEN_URL) return Promise.resolve(nativeFetch(input, init));
+    exchangeBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return Promise.resolve(jsonResponse({ key: "sk-or-test" }));
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  let authorizeUrl: URL | undefined;
+  let callbackResponse: Promise<Response> | undefined;
+  let manualSignal: AbortSignal | undefined;
+  const credential = yield* Effect.promise(() =>
+    openRouterOAuth.login({
+      signal: neverAbortedSignal,
+      prompt: (prompt) => {
+        manualSignal = prompt.signal;
+        return new Promise<string>(() => {});
+      },
+      notify: (event) => {
+        if (event.type !== "auth_url") return;
+        authorizeUrl = new URL(event.url);
+        const callbackUrl = new URL(authorizeUrl.searchParams.get("callback_url") ?? "");
+        callbackUrl.searchParams.set("code", "authorization-code");
+        callbackResponse = requestCallback(callbackUrl);
+      },
+    }),
+  );
+  return { credential, callbackResponse, manualSignal, authorizeUrl, exchangeBody, fetchMock };
+});
+
+const runsPKCEOnAOneShotRest = Effect.fn("runsPKCEOnAOneShotRest")(function* ({
+  credential,
+  callbackResponse,
+  manualSignal,
+  authorizeUrl,
+  exchangeBody,
+  fetchMock,
+}: Effect.Success<ReturnType<typeof runsPKCEOnAOneShotFirst>>) {
+  expect(credential).toEqual({
+    type: "oauth",
+    access: "sk-or-test",
+    refresh: "",
+    expires: Number.MAX_SAFE_INTEGER,
+  });
+  expect((yield* Effect.promise(() => Promise.resolve(callbackResponse)))?.status).toBe(200);
+  expect(manualSignal?.aborted).toBe(true);
+  expect(authorizeUrl?.origin).toBe("https://openrouter.ai");
+  expect(authorizeUrl?.pathname).toBe("/auth");
+  expect(authorizeUrl?.searchParams.get("code_challenge_method")).toBe("S256");
+
+  const callbackUrl = new URL(authorizeUrl?.searchParams.get("callback_url") ?? "");
+  expect(callbackUrl.hostname).toBe("127.0.0.1");
+  expect(callbackUrl.pathname).toMatch(/^\/oauth\/callback\/[0-9a-f-]+$/u);
+
+  expect(exchangeBody).toMatchObject({
+    code: "authorization-code",
+    code_challenge_method: "S256",
+  });
+  const verifier = exchangeBody?.["code_verifier"];
+  expect(typeof verifier).toBe("string");
+  const digest = yield* Effect.promise(() =>
+    crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(verifier))),
+  );
+  expect(authorizeUrl?.searchParams.get("code_challenge")).toBe(base64url(new Uint8Array(digest)));
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+
 describe("OpenRouter OAuth", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -78,64 +147,22 @@ describe("OpenRouter OAuth", () => {
   it("runs PKCE on a one-shot loopback callback and exchanges the code for a permanent API key", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        let exchangeBody: Record<string, unknown> | undefined;
-        const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
-          const url = input instanceof Request ? input.url : String(input);
-          if (url !== TOKEN_URL) return Promise.resolve(nativeFetch(input, init));
-          exchangeBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
-          return Promise.resolve(jsonResponse({ key: "sk-or-test" }));
+        const {
+          credential,
+          callbackResponse,
+          manualSignal,
+          authorizeUrl,
+          exchangeBody,
+          fetchMock,
+        } = yield* runsPKCEOnAOneShotFirst();
+        return yield* runsPKCEOnAOneShotRest({
+          credential,
+          callbackResponse,
+          manualSignal,
+          authorizeUrl,
+          exchangeBody,
+          fetchMock,
         });
-        vi.stubGlobal("fetch", fetchMock);
-
-        let authorizeUrl: URL | undefined;
-        let callbackResponse: Promise<Response> | undefined;
-        let manualSignal: AbortSignal | undefined;
-        const credential = yield* Effect.promise(() =>
-          openRouterOAuth.login({
-            signal: neverAbortedSignal,
-            prompt: (prompt) => {
-              manualSignal = prompt.signal;
-              return new Promise<string>(() => {});
-            },
-            notify: (event) => {
-              if (event.type !== "auth_url") return;
-              authorizeUrl = new URL(event.url);
-              const callbackUrl = new URL(authorizeUrl.searchParams.get("callback_url") ?? "");
-              callbackUrl.searchParams.set("code", "authorization-code");
-              callbackResponse = requestCallback(callbackUrl);
-            },
-          }),
-        );
-
-        expect(credential).toEqual({
-          type: "oauth",
-          access: "sk-or-test",
-          refresh: "",
-          expires: Number.MAX_SAFE_INTEGER,
-        });
-        expect((yield* Effect.promise(() => Promise.resolve(callbackResponse)))?.status).toBe(200);
-        expect(manualSignal?.aborted).toBe(true);
-        expect(authorizeUrl?.origin).toBe("https://openrouter.ai");
-        expect(authorizeUrl?.pathname).toBe("/auth");
-        expect(authorizeUrl?.searchParams.get("code_challenge_method")).toBe("S256");
-
-        const callbackUrl = new URL(authorizeUrl?.searchParams.get("callback_url") ?? "");
-        expect(callbackUrl.hostname).toBe("127.0.0.1");
-        expect(callbackUrl.pathname).toMatch(/^\/oauth\/callback\/[0-9a-f-]+$/u);
-
-        expect(exchangeBody).toMatchObject({
-          code: "authorization-code",
-          code_challenge_method: "S256",
-        });
-        const verifier = exchangeBody?.["code_verifier"];
-        expect(typeof verifier).toBe("string");
-        const digest = yield* Effect.promise(() =>
-          crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(verifier))),
-        );
-        expect(authorizeUrl?.searchParams.get("code_challenge")).toBe(
-          base64url(new Uint8Array(digest)),
-        );
-        expect(fetchMock).toHaveBeenCalledTimes(1);
       }),
     ));
 });

@@ -73,6 +73,87 @@ function refreshXaiForTest(refreshToken: string): Promise<OAuthCredential> {
   );
 }
 
+const usesTheDeviceGrantDelaysPollingFirst = () =>
+  Effect.sync(() => {
+    vi.useFakeTimers();
+    const startTime = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-07-09T20:00:00Z"));
+    vi.setSystemTime(startTime);
+    const pollTimes: number[] = [];
+    const tokenReplies = [
+      jsonResponse({ error: "authorization_pending" }, 400),
+      jsonResponse({ error: "slow_down", interval: 10 }, 400),
+      jsonResponse(tokenResponse()),
+    ];
+
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
+      const url = requestUrl(input);
+
+      if (url === "https://auth.x.ai/oauth2/device/code") {
+        const form = requestForm(init);
+        expect(form.get("client_id")).toBe("b1a00492-073a-47ea-816f-4c329264a828");
+        expect(form.get("scope")).toBe(
+          "openid profile email offline_access grok-cli:access api:access",
+        );
+        expect(form.get("referrer")).toBe("pi");
+        return Promise.resolve(jsonResponse(deviceCodeResponse()));
+      }
+
+      if (url === "https://auth.x.ai/oauth2/token") {
+        pollTimes.push(currentTimeMillis());
+        const form = requestForm(init);
+        expect(form.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
+        expect(form.get("client_id")).toBe("b1a00492-073a-47ea-816f-4c329264a828");
+        expect(form.get("device_code")).toBe("device-code");
+        const reply = tokenReplies.shift();
+        if (reply === undefined) return Promise.reject(new Error("Unexpected token poll"));
+        return Promise.resolve(reply);
+      }
+
+      return Promise.reject(new Error(`Unexpected request: ${url}`));
+    });
+    return { fetchMock, pollTimes, startTime };
+  });
+
+const usesTheDeviceGrantDelaysPollingRest = Effect.fn("usesTheDeviceGrantDelaysPollingRest")(
+  function* ({
+    fetchMock,
+    pollTimes,
+    startTime,
+  }: Effect.Success<ReturnType<typeof usesTheDeviceGrantDelaysPollingFirst>>) {
+    vi.stubGlobal("fetch", fetchMock);
+
+    const deviceCodes: DeviceCodeInfo[] = [];
+    const loginPromise = loginXaiForTest({ onDeviceCode: (info) => deviceCodes.push(info) });
+
+    yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
+    expect(deviceCodes).toEqual([
+      {
+        userCode: "ABCD-1234",
+        verificationUri: "https://accounts.x.ai/oauth2/device",
+        intervalSeconds: 5,
+        expiresInSeconds: 900,
+      },
+    ]);
+    expect(pollTimes).toEqual([]);
+
+    yield* Effect.promise(() => vi.advanceTimersByTimeAsync(5000));
+    expect(pollTimes).toEqual([startTime + 5000]);
+
+    yield* Effect.promise(() => vi.advanceTimersByTimeAsync(5000));
+    expect(pollTimes).toEqual([startTime + 5000, startTime + 10_000]);
+
+    yield* Effect.promise(() => vi.advanceTimersByTimeAsync(10_000));
+    const credentials = yield* Effect.promise(() => loginPromise);
+    expect(pollTimes).toEqual([startTime + 5000, startTime + 10_000, startTime + 20_000]);
+    expect(credentials).toEqual({
+      type: "oauth",
+      access: "access-token",
+      refresh: "refresh-token",
+      expires: startTime + 20_000 + 21_600_000 - 300_000,
+    });
+  },
+);
+
 describe("xAI OAuth device flow", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -82,73 +163,8 @@ describe("xAI OAuth device flow", () => {
   it("uses the device grant, delays polling, and handles pending and slow_down", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        vi.useFakeTimers();
-        const startTime = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-07-09T20:00:00Z"));
-        vi.setSystemTime(startTime);
-        const pollTimes: number[] = [];
-        const tokenReplies = [
-          jsonResponse({ error: "authorization_pending" }, 400),
-          jsonResponse({ error: "slow_down", interval: 10 }, 400),
-          jsonResponse(tokenResponse()),
-        ];
-
-        const fetchMock = vi.fn((input: unknown, init?: RequestInit) => {
-          const url = requestUrl(input);
-
-          if (url === "https://auth.x.ai/oauth2/device/code") {
-            const form = requestForm(init);
-            expect(form.get("client_id")).toBe("b1a00492-073a-47ea-816f-4c329264a828");
-            expect(form.get("scope")).toBe(
-              "openid profile email offline_access grok-cli:access api:access",
-            );
-            expect(form.get("referrer")).toBe("pi");
-            return Promise.resolve(jsonResponse(deviceCodeResponse()));
-          }
-
-          if (url === "https://auth.x.ai/oauth2/token") {
-            pollTimes.push(currentTimeMillis());
-            const form = requestForm(init);
-            expect(form.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
-            expect(form.get("client_id")).toBe("b1a00492-073a-47ea-816f-4c329264a828");
-            expect(form.get("device_code")).toBe("device-code");
-            const reply = tokenReplies.shift();
-            if (reply === undefined) return Promise.reject(new Error("Unexpected token poll"));
-            return Promise.resolve(reply);
-          }
-
-          return Promise.reject(new Error(`Unexpected request: ${url}`));
-        });
-        vi.stubGlobal("fetch", fetchMock);
-
-        const deviceCodes: DeviceCodeInfo[] = [];
-        const loginPromise = loginXaiForTest({ onDeviceCode: (info) => deviceCodes.push(info) });
-
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-        expect(deviceCodes).toEqual([
-          {
-            userCode: "ABCD-1234",
-            verificationUri: "https://accounts.x.ai/oauth2/device",
-            intervalSeconds: 5,
-            expiresInSeconds: 900,
-          },
-        ]);
-        expect(pollTimes).toEqual([]);
-
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(5000));
-        expect(pollTimes).toEqual([startTime + 5000]);
-
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(5000));
-        expect(pollTimes).toEqual([startTime + 5000, startTime + 10_000]);
-
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(10_000));
-        const credentials = yield* Effect.promise(() => loginPromise);
-        expect(pollTimes).toEqual([startTime + 5000, startTime + 10_000, startTime + 20_000]);
-        expect(credentials).toEqual({
-          type: "oauth",
-          access: "access-token",
-          refresh: "refresh-token",
-          expires: startTime + 20_000 + 21_600_000 - 300_000,
-        });
+        const { fetchMock, pollTimes, startTime } = yield* usesTheDeviceGrantDelaysPollingFirst();
+        return yield* usesTheDeviceGrantDelaysPollingRest({ fetchMock, pollTimes, startTime });
       }),
     ));
 });

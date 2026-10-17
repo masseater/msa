@@ -165,56 +165,68 @@ describe("OpenAI Responses configuration_update", () => {
     ));
 });
 
+const addsItemsOnlyBeforeRepliesRecordedFirst = Effect.fn(
+  "addsItemsOnlyBeforeRepliesRecordedFirst",
+)(function* () {
+  const unstamped = (yield* runOpenAI([user("one")], "high", { model: openAIModel({}) })).message;
+  const otherProvider: AssistantMessage = {
+    ...unstamped,
+    provider: "opencode",
+    providerThinkingLevel: "high",
+  };
+  const otherModel: AssistantMessage = {
+    ...unstamped,
+    model: "gpt-6-sol",
+    providerThinkingLevel: "high",
+  };
+  const recorded: AssistantMessage = { ...unstamped, providerThinkingLevel: "high" };
+
+  const { payload } = yield* runOpenAI(
+    [
+      user("one"),
+      unstamped,
+      user("two"),
+      otherProvider,
+      user("three"),
+      otherModel,
+      user("four"),
+      recorded,
+      user("five"),
+    ],
+    "low",
+  );
+  return { payload };
+});
+
+const addsItemsOnlyBeforeRepliesRecordedRest = ({
+  payload,
+}: Effect.Success<ReturnType<typeof addsItemsOnlyBeforeRepliesRecordedFirst>>) =>
+  Effect.sync(() => {
+    expect(payload.input.map((item) => item["type"] ?? item["role"])).toEqual([
+      "user",
+      "message",
+      "user",
+      "message",
+      "user",
+      "message",
+      "user",
+      "configuration_update",
+      "message",
+      "user",
+      "configuration_update",
+    ]);
+    expect(payload.input.filter((item) => item["type"] === "configuration_update")).toEqual([
+      update("high"),
+      update("low"),
+    ]);
+  });
+
 describe("OpenAI Responses configuration_update", () => {
   it("adds items only before replies recorded by this model", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const unstamped = (yield* runOpenAI([user("one")], "high", { model: openAIModel({}) }))
-          .message;
-        const otherProvider: AssistantMessage = {
-          ...unstamped,
-          provider: "opencode",
-          providerThinkingLevel: "high",
-        };
-        const otherModel: AssistantMessage = {
-          ...unstamped,
-          model: "gpt-6-sol",
-          providerThinkingLevel: "high",
-        };
-        const recorded: AssistantMessage = { ...unstamped, providerThinkingLevel: "high" };
-
-        const { payload } = yield* runOpenAI(
-          [
-            user("one"),
-            unstamped,
-            user("two"),
-            otherProvider,
-            user("three"),
-            otherModel,
-            user("four"),
-            recorded,
-            user("five"),
-          ],
-          "low",
-        );
-
-        expect(payload.input.map((item) => item["type"] ?? item["role"])).toEqual([
-          "user",
-          "message",
-          "user",
-          "message",
-          "user",
-          "message",
-          "user",
-          "configuration_update",
-          "message",
-          "user",
-          "configuration_update",
-        ]);
-        expect(payload.input.filter((item) => item["type"] === "configuration_update")).toEqual([
-          update("high"),
-          update("low"),
-        ]);
+        const { payload } = yield* addsItemsOnlyBeforeRepliesRecordedFirst();
+        return yield* addsItemsOnlyBeforeRepliesRecordedRest({ payload });
       }),
     ));
 });

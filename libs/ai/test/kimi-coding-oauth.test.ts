@@ -44,6 +44,91 @@ function createInteraction(events: Array<Record<string, unknown>>): ProviderAuth
 
 const neverAbortedSignal = new AbortController().signal;
 
+const logsInWithTheDeviceAuthorizationFirst = () =>
+  Effect.sync(() => {
+    vi.useFakeTimers();
+    const startTime = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-07-20T00:00:00Z"));
+    vi.setSystemTime(startTime);
+
+    const events: Array<Record<string, unknown>> = [];
+    const pollResponses = [
+      jsonResponse({ error: "authorization_pending" }, 400),
+      jsonResponse({
+        access_token: "access-token",
+        refresh_token: "refresh-token",
+        expires_in: 3600,
+      }),
+    ];
+    const pollTimes: number[] = [];
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
+        const url = getUrl(input);
+        if (url === `${OAUTH_HOST}/api/oauth/device_authorization`) {
+          expect(init?.method).toBe("POST");
+          expect(init?.headers).toMatchObject({
+            "content-type": "application/x-www-form-urlencoded",
+            accept: "application/json",
+          });
+          expect(new URLSearchParams(String(init?.body)).get("client_id")).toBe(CLIENT_ID);
+          return Promise.resolve(deviceAuthorizationResponse());
+        }
+        if (url === `${OAUTH_HOST}/api/oauth/token`) {
+          pollTimes.push(currentTimeMillis());
+          const params = new URLSearchParams(String(init?.body));
+          expect(params.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
+          expect(params.get("client_id")).toBe(CLIENT_ID);
+          expect(params.get("device_code")).toBe("device-code-123");
+          const response = pollResponses.shift();
+          if (response === undefined)
+            return Promise.reject(new Error("Unexpected extra token poll"));
+          return Promise.resolve(response);
+        }
+        return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
+      }),
+    );
+    return { events, pollTimes, startTime };
+  });
+
+const logsInWithTheDeviceAuthorizationRest = Effect.fn("logsInWithTheDeviceAuthorizationRest")(
+  function* ({
+    events,
+    pollTimes,
+    startTime,
+  }: Effect.Success<ReturnType<typeof logsInWithTheDeviceAuthorizationFirst>>) {
+    const credentialPromise = kimiCodingOAuth.login(createInteraction(events));
+    for (let i = 0; i < 5 && events.length === 0; i++) {
+      yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
+    }
+    expect(events).toEqual([
+      {
+        type: "device_code",
+        userCode: "ABCD-1234",
+        verificationUri: "https://www.kimi.com/code?user_code=ABCD-1234",
+        intervalSeconds: 5,
+        expiresInSeconds: 600,
+      },
+    ]);
+
+    yield* Effect.promise(() => vi.advanceTimersByTimeAsync(4999));
+    expect(pollTimes).toEqual([]);
+    yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1));
+    expect(pollTimes).toEqual([startTime + 5000]);
+
+    yield* Effect.promise(() => vi.advanceTimersByTimeAsync(5000));
+    yield* Effect.promise(() =>
+      expect(credentialPromise).resolves.toEqual({
+        type: "oauth",
+        access: "access-token",
+        refresh: "refresh-token",
+        expires: startTime + 10000 + 3600 * 1000,
+      }),
+    );
+    expect(pollTimes).toEqual([startTime + 5000, startTime + 10000]);
+  },
+);
+
 describe("Kimi Code OAuth", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -54,78 +139,8 @@ describe("Kimi Code OAuth", () => {
   it("logs in with the device authorization flow", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        vi.useFakeTimers();
-        const startTime = DateTime.toEpochMillis(DateTime.makeUnsafe("2026-07-20T00:00:00Z"));
-        vi.setSystemTime(startTime);
-
-        const events: Array<Record<string, unknown>> = [];
-        const pollResponses = [
-          jsonResponse({ error: "authorization_pending" }, 400),
-          jsonResponse({
-            access_token: "access-token",
-            refresh_token: "refresh-token",
-            expires_in: 3600,
-          }),
-        ];
-        const pollTimes: number[] = [];
-
-        vi.stubGlobal(
-          "fetch",
-          vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
-            const url = getUrl(input);
-            if (url === `${OAUTH_HOST}/api/oauth/device_authorization`) {
-              expect(init?.method).toBe("POST");
-              expect(init?.headers).toMatchObject({
-                "content-type": "application/x-www-form-urlencoded",
-                accept: "application/json",
-              });
-              expect(new URLSearchParams(String(init?.body)).get("client_id")).toBe(CLIENT_ID);
-              return Promise.resolve(deviceAuthorizationResponse());
-            }
-            if (url === `${OAUTH_HOST}/api/oauth/token`) {
-              pollTimes.push(currentTimeMillis());
-              const params = new URLSearchParams(String(init?.body));
-              expect(params.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
-              expect(params.get("client_id")).toBe(CLIENT_ID);
-              expect(params.get("device_code")).toBe("device-code-123");
-              const response = pollResponses.shift();
-              if (response === undefined)
-                return Promise.reject(new Error("Unexpected extra token poll"));
-              return Promise.resolve(response);
-            }
-            return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
-          }),
-        );
-
-        const credentialPromise = kimiCodingOAuth.login(createInteraction(events));
-        for (let i = 0; i < 5 && events.length === 0; i++) {
-          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
-        }
-        expect(events).toEqual([
-          {
-            type: "device_code",
-            userCode: "ABCD-1234",
-            verificationUri: "https://www.kimi.com/code?user_code=ABCD-1234",
-            intervalSeconds: 5,
-            expiresInSeconds: 600,
-          },
-        ]);
-
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(4999));
-        expect(pollTimes).toEqual([]);
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1));
-        expect(pollTimes).toEqual([startTime + 5000]);
-
-        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(5000));
-        yield* Effect.promise(() =>
-          expect(credentialPromise).resolves.toEqual({
-            type: "oauth",
-            access: "access-token",
-            refresh: "refresh-token",
-            expires: startTime + 10000 + 3600 * 1000,
-          }),
-        );
-        expect(pollTimes).toEqual([startTime + 5000, startTime + 10000]);
+        const { events, pollTimes, startTime } = yield* logsInWithTheDeviceAuthorizationFirst();
+        return yield* logsInWithTheDeviceAuthorizationRest({ events, pollTimes, startTime });
       }),
     ));
 });

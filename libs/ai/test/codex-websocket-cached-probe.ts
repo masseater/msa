@@ -16,8 +16,18 @@ import type {
   AssistantMessage,
   Message,
   Model,
+  ModelCost,
+  ModelInputLimits,
+  ModelInputModality,
+  ModelPromptCache,
+  OpenAIResponsesCompat,
+  ProviderId,
+  SamplingParams,
+  SamplingParamsByThinkingLevel,
+  ThinkingLevelMap,
   Tool,
   ToolResultMessage,
+  TranscriptContext,
   Transport,
 } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
@@ -182,148 +192,192 @@ function percentile(values: number[], p: number): number {
   );
 }
 
+const mainFirst = Effect.fn("mainFirst")(function* () {
+  const args = parseArgs(process.argv.slice(2));
+  const model = getModel("openai-codex", "gpt-5.5") as Model<"openai-codex-responses"> | undefined;
+  if (model === undefined) throw new Error("Model openai-codex/gpt-5.5 not found");
+  const modelWithMaxTokens = { ...model, maxTokens: args.maxTokens };
+  const modelRuntime = yield* Effect.promise(() => ModelRuntime.create());
+  const apiKey =
+    (yield* Effect.promise(() => modelRuntime.getAuth("openai-codex")))?.auth.apiKey ??
+    (yield* Effect.promise(() => modelRuntime.getAuth("openai")))?.auth.apiKey;
+  if (apiKey === undefined || apiKey === "") {
+    throw new Error("No OpenAI Codex API key found in coding-agent auth storage.");
+  }
+  const context = normalizeContext({
+    systemPrompt:
+      "You are participating in a benchmark. For each benchmark turn, call deterministic_probe exactly once before the final answer. Keep final answers minimal.",
+    messages: [],
+    tools: [deterministicProbeTool()],
+  });
+  const elapsed: number[] = [];
+  resetOpenAICodexWebSocketDebugStats(args.sessionId);
+
+  yield* Console.log(`provider openai-codex, model gpt-5.5`);
+  yield* Console.log(`sessionId ${args.sessionId}`);
+  yield* Console.log(
+    `turns ${args.turns}, transport ${args.transport}, reasoning ${args.reasoning}, maxTokens ${args.maxTokens}`,
+  );
+  yield* Console.log(`scratch ${resolve(join(tmpdir(), args.sessionId))}`);
+  yield* Console.log("");
+  return { args, context, modelWithMaxTokens, apiKey, elapsed };
+});
+
+const mainFirst2 = Effect.fn("mainFirst2")(function* (
+  args: Args,
+  context: TranscriptContext,
+  modelWithMaxTokens: {
+    maxTokens: number;
+    type?: "chat";
+    reasoning: boolean;
+    thinkingLevelMap?: ThinkingLevelMap;
+    promptCache?: ModelPromptCache;
+    contextWindow: number;
+    samplingParams?: SamplingParams;
+    samplingParamsByThinkingLevel?: SamplingParamsByThinkingLevel;
+    compat?: OpenAIResponsesCompat | undefined;
+    id: string;
+    name: string;
+    api: "openai-codex-responses";
+    provider: ProviderId;
+    baseUrl: string;
+    input: ModelInputModality[];
+    inputLimits?: ModelInputLimits;
+    cost: ModelCost;
+    headers?: Record<string, string>;
+  },
+  apiKey: string,
+  elapsed: number[],
+) {
+  for (let turn = 1; turn <= args.turns; turn++) {
+    context.messages.push({
+      role: "user",
+      content: buildPrompt(turn),
+      timestamp: yield* Clock.currentTimeMillis,
+    });
+    const beforeStats = getOpenAICodexWebSocketDebugStats(args.sessionId);
+    const started = yield* Clock.currentTimeMillis;
+    let requests = 0;
+    let assistantCount = 0;
+    let toolResults = 0;
+    let finalText = "";
+    let turnInput = 0;
+    let turnOutput = 0;
+    let turnCacheRead = 0;
+    let turnCacheWrite = 0;
+
+    while (true) {
+      requests++;
+      const message = yield* Effect.promise(() =>
+        streamOpenAICodexResponses(modelWithMaxTokens, context, {
+          apiKey,
+          sessionId: args.sessionId,
+          transport: args.transport,
+          reasoningEffort: args.reasoning,
+          maxTokens: args.maxTokens,
+        }).result(),
+      );
+      assistantCount++;
+      context.messages.push(message);
+      turnInput += message.usage.input;
+      turnOutput += message.usage.output;
+      turnCacheRead += message.usage.cacheRead;
+      turnCacheWrite += message.usage.cacheWrite;
+      const toolCalls = message.content.filter(
+        (block): block is Extract<AssistantMessage["content"][number], { type: "toolCall" }> =>
+          block.type === "toolCall",
+      );
+      yield* Console.log(
+        [
+          `turn ${String(turn).padStart(2, "0")}.${requests}`,
+          `stop ${message.stopReason}`,
+          `in ${message.usage.input}`,
+          `out ${message.usage.output}`,
+          `cache ${message.usage.cacheRead}/${message.usage.cacheWrite}`,
+          `tools ${toolCalls.length}`,
+        ].join(" | "),
+      );
+      if (message.stopReason === "error" || message.stopReason === "aborted") {
+        throw new Error(message.errorMessage ?? `request failed on turn ${turn}.${requests}`);
+      }
+      if (toolCalls.length === 0) {
+        finalText = textOf(message);
+        break;
+      }
+      for (const call of toolCalls) {
+        context.messages.push(executeTool(call) as Message);
+        toolResults++;
+      }
+      if (requests > 4) throw new Error(`Too many requests for turn ${turn}`);
+    }
+
+    const elapsedMs = (yield* Clock.currentTimeMillis) - started;
+    elapsed.push(elapsedMs);
+    const afterStats = getOpenAICodexWebSocketDebugStats(args.sessionId);
+    const statLine =
+      afterStats === undefined
+        ? "ws none"
+        : `ws requests ${afterStats.requests - (beforeStats?.requests ?? 0)} | new/reused ${afterStats.connectionsCreated - (beforeStats?.connectionsCreated ?? 0)}/${afterStats.connectionsReused - (beforeStats?.connectionsReused ?? 0)} | cached ${afterStats.cachedContextRequests - (beforeStats?.cachedContextRequests ?? 0)} | store ${afterStats.storeTrueRequests - (beforeStats?.storeTrueRequests ?? 0)} | full/delta ${afterStats.fullContextRequests - (beforeStats?.fullContextRequests ?? 0)}/${afterStats.deltaRequests - (beforeStats?.deltaRequests ?? 0)}`;
+    yield* Console.log(
+      [
+        `turn ${String(turn).padStart(2, "0")} agg`,
+        `elapsed ${(elapsedMs / 1000).toFixed(1)}s`,
+        `assistant ${assistantCount}`,
+        `toolResults ${toolResults}`,
+        `in ${turnInput}`,
+        `out ${turnOutput}`,
+        `cache ${turnCacheRead}/${turnCacheWrite}`,
+        statLine,
+        `final ${(yield* encodeJson(finalText)).slice(0, 80)}`,
+      ].join(" | "),
+    );
+  }
+});
+
+const mainRest2 = Effect.fn("mainRest2")(function* (args: Args, elapsed: number[]) {
+  const stats = getOpenAICodexWebSocketDebugStats(args.sessionId);
+  yield* Console.log("");
+  yield* Console.log(
+    [
+      "timing",
+      `turns ${elapsed.length}`,
+      `total ${(elapsed.reduce((sum, value) => sum + value, 0) / 1000).toFixed(1)}s`,
+      `avg ${(average(elapsed) / 1000).toFixed(2)}s`,
+      `p50 ${(percentile(elapsed, 50) / 1000).toFixed(2)}s`,
+      `p95 ${(percentile(elapsed, 95) / 1000).toFixed(2)}s`,
+      `max ${(Math.max(...elapsed) / 1000).toFixed(2)}s`,
+    ].join(" | "),
+  );
+  yield* Console.log(
+    [
+      "transport summary",
+      `requested ${args.transport}`,
+      `observed ${stats !== undefined && stats.requests > 0 ? "websocket" : "sse/no-websocket"}`,
+      `storeTrue ${stats === undefined ? "0/0" : `${stats.storeTrueRequests}/${stats.requests}`}`,
+      `full/delta ${stats === undefined ? "0/0" : `${stats.fullContextRequests}/${stats.deltaRequests}`}`,
+      `connections created/reused ${stats === undefined ? "0/0" : `${stats.connectionsCreated}/${stats.connectionsReused}`}`,
+      `lastPreviousResponseId ${stats?.lastPreviousResponseId ?? "n/a"}`,
+    ].join(" | "),
+  );
+  closeOpenAICodexWebSocketSessions(args.sessionId);
+});
+
+const mainRest = Effect.fn("mainRest")(function* ({
+  args,
+  context,
+  modelWithMaxTokens,
+  apiKey,
+  elapsed,
+}: Effect.Success<ReturnType<typeof mainFirst>>) {
+  yield* mainFirst2(args, context, modelWithMaxTokens, apiKey, elapsed);
+  return yield* mainRest2(args, elapsed);
+});
+
 function main(): Promise<void> {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const args = parseArgs(process.argv.slice(2));
-      const model = getModel("openai-codex", "gpt-5.5") as
-        | Model<"openai-codex-responses">
-        | undefined;
-      if (model === undefined) throw new Error("Model openai-codex/gpt-5.5 not found");
-      const modelWithMaxTokens = { ...model, maxTokens: args.maxTokens };
-      const modelRuntime = yield* Effect.promise(() => ModelRuntime.create());
-      const apiKey =
-        (yield* Effect.promise(() => modelRuntime.getAuth("openai-codex")))?.auth.apiKey ??
-        (yield* Effect.promise(() => modelRuntime.getAuth("openai")))?.auth.apiKey;
-      if (apiKey === undefined || apiKey === "") {
-        throw new Error("No OpenAI Codex API key found in coding-agent auth storage.");
-      }
-      const context = normalizeContext({
-        systemPrompt:
-          "You are participating in a benchmark. For each benchmark turn, call deterministic_probe exactly once before the final answer. Keep final answers minimal.",
-        messages: [],
-        tools: [deterministicProbeTool()],
-      });
-      const elapsed: number[] = [];
-      resetOpenAICodexWebSocketDebugStats(args.sessionId);
-
-      yield* Console.log(`provider openai-codex, model gpt-5.5`);
-      yield* Console.log(`sessionId ${args.sessionId}`);
-      yield* Console.log(
-        `turns ${args.turns}, transport ${args.transport}, reasoning ${args.reasoning}, maxTokens ${args.maxTokens}`,
-      );
-      yield* Console.log(`scratch ${resolve(join(tmpdir(), args.sessionId))}`);
-      yield* Console.log("");
-
-      for (let turn = 1; turn <= args.turns; turn++) {
-        context.messages.push({
-          role: "user",
-          content: buildPrompt(turn),
-          timestamp: yield* Clock.currentTimeMillis,
-        });
-        const beforeStats = getOpenAICodexWebSocketDebugStats(args.sessionId);
-        const started = yield* Clock.currentTimeMillis;
-        let requests = 0;
-        let assistantCount = 0;
-        let toolResults = 0;
-        let finalText = "";
-        let turnInput = 0;
-        let turnOutput = 0;
-        let turnCacheRead = 0;
-        let turnCacheWrite = 0;
-
-        while (true) {
-          requests++;
-          const message = yield* Effect.promise(() =>
-            streamOpenAICodexResponses(modelWithMaxTokens, context, {
-              apiKey,
-              sessionId: args.sessionId,
-              transport: args.transport,
-              reasoningEffort: args.reasoning,
-              maxTokens: args.maxTokens,
-            }).result(),
-          );
-          assistantCount++;
-          context.messages.push(message);
-          turnInput += message.usage.input;
-          turnOutput += message.usage.output;
-          turnCacheRead += message.usage.cacheRead;
-          turnCacheWrite += message.usage.cacheWrite;
-          const toolCalls = message.content.filter(
-            (block): block is Extract<AssistantMessage["content"][number], { type: "toolCall" }> =>
-              block.type === "toolCall",
-          );
-          yield* Console.log(
-            [
-              `turn ${String(turn).padStart(2, "0")}.${requests}`,
-              `stop ${message.stopReason}`,
-              `in ${message.usage.input}`,
-              `out ${message.usage.output}`,
-              `cache ${message.usage.cacheRead}/${message.usage.cacheWrite}`,
-              `tools ${toolCalls.length}`,
-            ].join(" | "),
-          );
-          if (message.stopReason === "error" || message.stopReason === "aborted") {
-            throw new Error(message.errorMessage ?? `request failed on turn ${turn}.${requests}`);
-          }
-          if (toolCalls.length === 0) {
-            finalText = textOf(message);
-            break;
-          }
-          for (const call of toolCalls) {
-            context.messages.push(executeTool(call) as Message);
-            toolResults++;
-          }
-          if (requests > 4) throw new Error(`Too many requests for turn ${turn}`);
-        }
-
-        const elapsedMs = (yield* Clock.currentTimeMillis) - started;
-        elapsed.push(elapsedMs);
-        const afterStats = getOpenAICodexWebSocketDebugStats(args.sessionId);
-        const statLine =
-          afterStats === undefined
-            ? "ws none"
-            : `ws requests ${afterStats.requests - (beforeStats?.requests ?? 0)} | new/reused ${afterStats.connectionsCreated - (beforeStats?.connectionsCreated ?? 0)}/${afterStats.connectionsReused - (beforeStats?.connectionsReused ?? 0)} | cached ${afterStats.cachedContextRequests - (beforeStats?.cachedContextRequests ?? 0)} | store ${afterStats.storeTrueRequests - (beforeStats?.storeTrueRequests ?? 0)} | full/delta ${afterStats.fullContextRequests - (beforeStats?.fullContextRequests ?? 0)}/${afterStats.deltaRequests - (beforeStats?.deltaRequests ?? 0)}`;
-        yield* Console.log(
-          [
-            `turn ${String(turn).padStart(2, "0")} agg`,
-            `elapsed ${(elapsedMs / 1000).toFixed(1)}s`,
-            `assistant ${assistantCount}`,
-            `toolResults ${toolResults}`,
-            `in ${turnInput}`,
-            `out ${turnOutput}`,
-            `cache ${turnCacheRead}/${turnCacheWrite}`,
-            statLine,
-            `final ${(yield* encodeJson(finalText)).slice(0, 80)}`,
-          ].join(" | "),
-        );
-      }
-
-      const stats = getOpenAICodexWebSocketDebugStats(args.sessionId);
-      yield* Console.log("");
-      yield* Console.log(
-        [
-          "timing",
-          `turns ${elapsed.length}`,
-          `total ${(elapsed.reduce((sum, value) => sum + value, 0) / 1000).toFixed(1)}s`,
-          `avg ${(average(elapsed) / 1000).toFixed(2)}s`,
-          `p50 ${(percentile(elapsed, 50) / 1000).toFixed(2)}s`,
-          `p95 ${(percentile(elapsed, 95) / 1000).toFixed(2)}s`,
-          `max ${(Math.max(...elapsed) / 1000).toFixed(2)}s`,
-        ].join(" | "),
-      );
-      yield* Console.log(
-        [
-          "transport summary",
-          `requested ${args.transport}`,
-          `observed ${stats !== undefined && stats.requests > 0 ? "websocket" : "sse/no-websocket"}`,
-          `storeTrue ${stats === undefined ? "0/0" : `${stats.storeTrueRequests}/${stats.requests}`}`,
-          `full/delta ${stats === undefined ? "0/0" : `${stats.fullContextRequests}/${stats.deltaRequests}`}`,
-          `connections created/reused ${stats === undefined ? "0/0" : `${stats.connectionsCreated}/${stats.connectionsReused}`}`,
-          `lastPreviousResponseId ${stats?.lastPreviousResponseId ?? "n/a"}`,
-        ].join(" | "),
-      );
-      closeOpenAICodexWebSocketSessions(args.sessionId);
+      const { args, context, modelWithMaxTokens, apiKey, elapsed } = yield* mainFirst();
+      return yield* mainRest({ args, context, modelWithMaxTokens, apiKey, elapsed });
     }),
   );
 }

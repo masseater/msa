@@ -232,6 +232,95 @@ describe("openai-completions reasoning_details streaming", () => {
     ));
 });
 
+const mergesConsecutiveTextAndSummaryReasoningFirst = () =>
+  Effect.sync(() => {
+    const textDelta = { type: "reasoning.text", text: "The", index: 0 };
+    const textDeltaWithSignature = {
+      type: "reasoning.text",
+      text: " user wants the time.",
+      signature: "sha256:text-signature",
+      format: "openai-responses-v1",
+      index: 0,
+    };
+    const summaryDelta = { type: "reasoning.summary", summary: "Looked", index: 0 };
+    const summaryDeltaWithFormat = {
+      type: "reasoning.summary",
+      summary: " up time.",
+      format: "openai-responses-v1",
+      index: 0,
+    };
+    const laterSummaryDelta = {
+      type: "reasoning.summary",
+      summary: "After encrypted block.",
+      format: "openai-responses-v1",
+      index: 0,
+    };
+    const expectedReasoningDetails = [
+      {
+        type: "reasoning.text",
+        text: "The user wants the time.",
+        index: 0,
+        signature: "sha256:text-signature",
+        format: "openai-responses-v1",
+      },
+      {
+        type: "reasoning.summary",
+        summary: "Looked up time.",
+        index: 0,
+        format: "openai-responses-v1",
+      },
+      reasoningDetail,
+      laterSummaryDelta,
+    ];
+    return {
+      textDelta,
+      textDeltaWithSignature,
+      summaryDelta,
+      summaryDeltaWithFormat,
+      laterSummaryDelta,
+      expectedReasoningDetails,
+    };
+  });
+
+const mergesConsecutiveTextAndSummaryReasoningRest = Effect.fn(
+  "mergesConsecutiveTextAndSummaryReasoningRest",
+)(function* ({
+  textDelta,
+  textDeltaWithSignature,
+  summaryDelta,
+  summaryDeltaWithFormat,
+  laterSummaryDelta,
+  expectedReasoningDetails,
+}: Effect.Success<ReturnType<typeof mergesConsecutiveTextAndSummaryReasoningFirst>>) {
+  mockState.chunkSets = [
+    [
+      chunk({ reasoning_details: [textDelta] }),
+      chunk({ reasoning_details: [textDeltaWithSignature] }),
+      chunk({ reasoning_details: [summaryDelta] }),
+      chunk({ reasoning_details: [summaryDeltaWithFormat] }),
+      chunk({ reasoning_details: [reasoningDetail] }),
+      chunk({ reasoning_details: [laterSummaryDelta] }),
+      toolCallChunk(),
+      chunk({}, "tool_calls"),
+    ],
+    [chunk({ content: "ok" }), chunk({}, "stop")],
+  ];
+
+  const assistantMessage = yield* Effect.promise(() => runOpenAICompletionsStream());
+  const thinking = assistantMessage.content.find((block) => block.type === "thinking");
+  expect(thinking).toEqual({
+    type: "thinking",
+    thinking: "",
+    thinkingSignature: yield* encodeJson(expectedReasoningDetails),
+  });
+
+  yield* Effect.promise(() => runOpenAICompletionsStream([assistantMessage]));
+
+  expect(getAssistantPayload(mockState.payloads[1])?.reasoning_details).toEqual(
+    expectedReasoningDetails,
+  );
+});
+
 describe("openai-completions reasoning_details streaming", () => {
   beforeEach(() => {
     mockState.chunkSets = [];
@@ -240,72 +329,22 @@ describe("openai-completions reasoning_details streaming", () => {
   it("merges consecutive text and summary reasoning_details deltas before replay", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const textDelta = { type: "reasoning.text", text: "The", index: 0 };
-        const textDeltaWithSignature = {
-          type: "reasoning.text",
-          text: " user wants the time.",
-          signature: "sha256:text-signature",
-          format: "openai-responses-v1",
-          index: 0,
-        };
-        const summaryDelta = { type: "reasoning.summary", summary: "Looked", index: 0 };
-        const summaryDeltaWithFormat = {
-          type: "reasoning.summary",
-          summary: " up time.",
-          format: "openai-responses-v1",
-          index: 0,
-        };
-        const laterSummaryDelta = {
-          type: "reasoning.summary",
-          summary: "After encrypted block.",
-          format: "openai-responses-v1",
-          index: 0,
-        };
-        const expectedReasoningDetails = [
-          {
-            type: "reasoning.text",
-            text: "The user wants the time.",
-            index: 0,
-            signature: "sha256:text-signature",
-            format: "openai-responses-v1",
-          },
-          {
-            type: "reasoning.summary",
-            summary: "Looked up time.",
-            index: 0,
-            format: "openai-responses-v1",
-          },
-          reasoningDetail,
+        const {
+          textDelta,
+          textDeltaWithSignature,
+          summaryDelta,
+          summaryDeltaWithFormat,
           laterSummaryDelta,
-        ];
-
-        mockState.chunkSets = [
-          [
-            chunk({ reasoning_details: [textDelta] }),
-            chunk({ reasoning_details: [textDeltaWithSignature] }),
-            chunk({ reasoning_details: [summaryDelta] }),
-            chunk({ reasoning_details: [summaryDeltaWithFormat] }),
-            chunk({ reasoning_details: [reasoningDetail] }),
-            chunk({ reasoning_details: [laterSummaryDelta] }),
-            toolCallChunk(),
-            chunk({}, "tool_calls"),
-          ],
-          [chunk({ content: "ok" }), chunk({}, "stop")],
-        ];
-
-        const assistantMessage = yield* Effect.promise(() => runOpenAICompletionsStream());
-        const thinking = assistantMessage.content.find((block) => block.type === "thinking");
-        expect(thinking).toEqual({
-          type: "thinking",
-          thinking: "",
-          thinkingSignature: yield* encodeJson(expectedReasoningDetails),
-        });
-
-        yield* Effect.promise(() => runOpenAICompletionsStream([assistantMessage]));
-
-        expect(getAssistantPayload(mockState.payloads[1])?.reasoning_details).toEqual(
           expectedReasoningDetails,
-        );
+        } = yield* mergesConsecutiveTextAndSummaryReasoningFirst();
+        return yield* mergesConsecutiveTextAndSummaryReasoningRest({
+          textDelta,
+          textDeltaWithSignature,
+          summaryDelta,
+          summaryDeltaWithFormat,
+          laterSummaryDelta,
+          expectedReasoningDetails,
+        });
       }),
     ));
 });

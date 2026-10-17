@@ -78,58 +78,73 @@ describe("Fireworks models", () => {
   );
 });
 
+const routesKimiK3ThroughTheOpenAIFirst = () =>
+  Effect.sync(() => {
+    const base = getModel("fireworks", "accounts/fireworks/models/kimi-k3");
+    const fast = getModel("fireworks", "accounts/fireworks/routers/kimi-k3-fast");
+    const compat = {
+      supportsStore: false,
+      supportsDeveloperRole: false,
+      supportsStrictMode: true,
+      requiresReasoningContentOnAssistantMessages: true,
+      thinkingFormat: "openai",
+      supportsMidConvoSystemMessages: true,
+      supportsMidConvoToolAdditions: true,
+      sendSessionAffinityHeaders: true,
+      supportsLongCacheRetention: false,
+    };
+    const thinkingLevelMap = {
+      off: null,
+      minimal: null,
+      low: "low",
+      medium: null,
+      high: "high",
+      xhigh: null,
+      max: "max",
+    };
+
+    expect(base.api).toBe("openai-completions");
+    return { base, compat, thinkingLevelMap, fast };
+  });
+
+const routesKimiK3ThroughTheOpenAIRest = Effect.fn("routesKimiK3ThroughTheOpenAIRest")(function* ({
+  base,
+  compat,
+  thinkingLevelMap,
+  fast,
+}: Effect.Success<ReturnType<typeof routesKimiK3ThroughTheOpenAIFirst>>) {
+  expect(base.baseUrl).toBe("https://api.fireworks.ai/inference/v1");
+  expect(base.compat).toEqual(compat);
+  expect(base.thinkingLevelMap).toEqual(thinkingLevelMap);
+  expect(fast.api).toBe(base.api);
+  expect(fast.baseUrl).toBe(base.baseUrl);
+  expect(fast.compat).toEqual(compat);
+  expect(fast.thinkingLevelMap).toEqual(thinkingLevelMap);
+
+  let payload: Record<string, unknown> | undefined;
+  const response = streamSimple(
+    base,
+    { messages: [{ role: "user", content: "test", timestamp: 0 }] },
+    {
+      apiKey: "test-fireworks-key",
+      reasoning: "max",
+      onPayload: (value) => {
+        payload = value as Record<string, unknown>;
+        throw new Error("payload captured");
+      },
+    },
+  );
+  yield* Effect.promise(() => response.result());
+
+  expect(payload?.["reasoning_effort"]).toBe("max");
+});
+
 describe("Fireworks models", () => {
   it("routes Kimi K3 through the OpenAI-compatible API with native effort controls", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const base = getModel("fireworks", "accounts/fireworks/models/kimi-k3");
-        const fast = getModel("fireworks", "accounts/fireworks/routers/kimi-k3-fast");
-        const compat = {
-          supportsStore: false,
-          supportsDeveloperRole: false,
-          supportsStrictMode: true,
-          requiresReasoningContentOnAssistantMessages: true,
-          thinkingFormat: "openai",
-          supportsMidConvoSystemMessages: true,
-          supportsMidConvoToolAdditions: true,
-          sendSessionAffinityHeaders: true,
-          supportsLongCacheRetention: false,
-        };
-        const thinkingLevelMap = {
-          off: null,
-          minimal: null,
-          low: "low",
-          medium: null,
-          high: "high",
-          xhigh: null,
-          max: "max",
-        };
-
-        expect(base.api).toBe("openai-completions");
-        expect(base.baseUrl).toBe("https://api.fireworks.ai/inference/v1");
-        expect(base.compat).toEqual(compat);
-        expect(base.thinkingLevelMap).toEqual(thinkingLevelMap);
-        expect(fast.api).toBe(base.api);
-        expect(fast.baseUrl).toBe(base.baseUrl);
-        expect(fast.compat).toEqual(compat);
-        expect(fast.thinkingLevelMap).toEqual(thinkingLevelMap);
-
-        let payload: Record<string, unknown> | undefined;
-        const response = streamSimple(
-          base,
-          { messages: [{ role: "user", content: "test", timestamp: 0 }] },
-          {
-            apiKey: "test-fireworks-key",
-            reasoning: "max",
-            onPayload: (value) => {
-              payload = value as Record<string, unknown>;
-              throw new Error("payload captured");
-            },
-          },
-        );
-        yield* Effect.promise(() => response.result());
-
-        expect(payload?.["reasoning_effort"]).toBe("max");
+        const { base, compat, thinkingLevelMap, fast } = yield* routesKimiK3ThroughTheOpenAIFirst();
+        return yield* routesKimiK3ThroughTheOpenAIRest({ base, compat, thinkingLevelMap, fast });
       }),
     ));
 });

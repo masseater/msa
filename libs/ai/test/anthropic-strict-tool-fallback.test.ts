@@ -80,6 +80,86 @@ function harness(respond: (payload: MessageCreateParamsStreaming, attempt: numbe
   };
 }
 
+const retriesSWithOriginalNonStrictFirst = Effect.fn("retriesSWithOriginalNonStrictFirst")(
+  function* (message: string) {
+    const preferred = tool("preferred", "prefer");
+    const required = tool("required", "require");
+    const ordinary = tool("ordinary");
+    const transcript = context([preferred, required, ordinary]);
+    const original = yield* encodeJson(transcript);
+    const { payloads, options } = harness((_payload, attempt) =>
+      attempt === 1 ? errorResponse(message) : successResponse(),
+    );
+    const onPayload = vi.fn((payload: unknown) => ({
+      ...(payload as MessageCreateParamsStreaming),
+      inference_geo: "us",
+      stream: false,
+    }));
+    const onResponse = vi.fn();
+    const stream = streamAnthropic(model, transcript, {
+      ...options,
+      onPayload,
+      onResponse,
+      cacheRetention: "long",
+    });
+    const events: string[] = [];
+    yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
+      Stream.orDie,
+      Stream.runForEach((event) =>
+        Effect.sync(() => {
+          events.push(event.type);
+        }),
+      ),
+    );
+    const result = yield* Effect.promise(() => stream.result());
+    return { result, events, payloads, onPayload, onResponse, transcript, original };
+  },
+);
+
+const retriesSWithOriginalNonStrictRest = Effect.fn("retriesSWithOriginalNonStrictRest")(
+  function* ({
+    result,
+    events,
+    payloads,
+    onPayload,
+    onResponse,
+    transcript,
+    original,
+  }: Effect.Success<ReturnType<typeof retriesSWithOriginalNonStrictFirst>>) {
+    expect(result.stopReason).toBe("stop");
+    expect(events).toEqual(["start", "done"]);
+    expect(payloads).toHaveLength(2);
+    expect(onPayload).toHaveBeenCalledTimes(2);
+    expect(onResponse).toHaveBeenCalledTimes(1);
+    const first = payloads[0]?.tools as BetaTool[];
+    const second = payloads[1]?.tools as BetaTool[];
+    expect(first[0]).toMatchObject({
+      strict: true,
+      input_schema: {
+        required: ["value", "optional"],
+        properties: { optional: { anyOf: [{ type: "number" }, { type: "null" }] } },
+      },
+    });
+    expect(second[0]?.strict).toBeUndefined();
+    expect(second[0]?.input_schema).toEqual({
+      type: "object",
+      properties: { value: { type: "string" }, optional: { type: "number" } },
+      required: ["value"],
+    });
+    expect(second[1]).toEqual(first[1]);
+    expect(second[1]?.strict).toBe(true);
+    expect(second[2]).toEqual(first[2]);
+    expect(second[2]?.cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
+    expect(payloads.map((payload) => payload.stream)).toEqual([true, true]);
+    expect(payloads[1]).toMatchObject({ inference_geo: "us" });
+    expect(yield* encodeJson(transcript)).toBe(original);
+    expect(result.diagnostics?.[0]).toMatchObject({
+      type: "anthropic_strict_tools_fallback",
+      details: { reason: "strict_tool_limits_exceeded" },
+    });
+  },
+);
+
 describe("Anthropic preferred strict tool fallback", () => {
   it.each([
     grammarError,
@@ -88,67 +168,16 @@ describe("Anthropic preferred strict tool fallback", () => {
   ])("retries %s with original non-strict schemas and preserves required tools", (message) =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const preferred = tool("preferred", "prefer");
-        const required = tool("required", "require");
-        const ordinary = tool("ordinary");
-        const transcript = context([preferred, required, ordinary]);
-        const original = yield* encodeJson(transcript);
-        const { payloads, options } = harness((_payload, attempt) =>
-          attempt === 1 ? errorResponse(message) : successResponse(),
-        );
-        const onPayload = vi.fn((payload: unknown) => ({
-          ...(payload as MessageCreateParamsStreaming),
-          inference_geo: "us",
-          stream: false,
-        }));
-        const onResponse = vi.fn();
-        const stream = streamAnthropic(model, transcript, {
-          ...options,
+        const { result, events, payloads, onPayload, onResponse, transcript, original } =
+          yield* retriesSWithOriginalNonStrictFirst(message);
+        return yield* retriesSWithOriginalNonStrictRest({
+          result,
+          events,
+          payloads,
           onPayload,
           onResponse,
-          cacheRetention: "long",
-        });
-        const events: string[] = [];
-        yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
-          Stream.orDie,
-          Stream.runForEach((event) =>
-            Effect.sync(() => {
-              events.push(event.type);
-            }),
-          ),
-        );
-        const result = yield* Effect.promise(() => stream.result());
-
-        expect(result.stopReason).toBe("stop");
-        expect(events).toEqual(["start", "done"]);
-        expect(payloads).toHaveLength(2);
-        expect(onPayload).toHaveBeenCalledTimes(2);
-        expect(onResponse).toHaveBeenCalledTimes(1);
-        const first = payloads[0]?.tools as BetaTool[];
-        const second = payloads[1]?.tools as BetaTool[];
-        expect(first[0]).toMatchObject({
-          strict: true,
-          input_schema: {
-            required: ["value", "optional"],
-            properties: { optional: { anyOf: [{ type: "number" }, { type: "null" }] } },
-          },
-        });
-        expect(second[0]?.strict).toBeUndefined();
-        expect(second[0]?.input_schema).toEqual({
-          type: "object",
-          properties: { value: { type: "string" }, optional: { type: "number" } },
-          required: ["value"],
-        });
-        expect(second[1]).toEqual(first[1]);
-        expect(second[1]?.strict).toBe(true);
-        expect(second[2]).toEqual(first[2]);
-        expect(second[2]?.cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
-        expect(payloads.map((payload) => payload.stream)).toEqual([true, true]);
-        expect(payloads[1]).toMatchObject({ inference_geo: "us" });
-        expect(yield* encodeJson(transcript)).toBe(original);
-        expect(result.diagnostics?.[0]).toMatchObject({
-          type: "anthropic_strict_tools_fallback",
-          details: { reason: "strict_tool_limits_exceeded" },
+          transcript,
+          original,
         });
       }),
     ),

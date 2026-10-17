@@ -302,59 +302,74 @@ describe("faux provider", () => {
     ));
 });
 
+const estimatesPromptAndOutputTokensFromFirst = () =>
+  Effect.sync(() => {
+    const registration = registerFauxProvider();
+    registrations.push(registration);
+    registration.setResponses([fauxAssistantMessage("done")]);
+
+    const tool = {
+      name: "echo",
+      description: "Echo back text",
+      parameters: Type.Object({ text: Type.String() }),
+    };
+    const context: Context = {
+      systemPrompt: "sys",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "hello" },
+            { type: "image", mimeType: "image/png", data: "abcd" },
+          ],
+          timestamp: 1,
+        },
+        fauxAssistantMessage("prior"),
+        {
+          role: "toolResult",
+          toolCallId: "tool-1",
+          toolName: "echo",
+          content: [{ type: "text", text: "tool out" }],
+          isError: false,
+          timestamp: 2,
+        },
+      ],
+      tools: [tool],
+    };
+    return { registration, context, tool };
+  });
+
+const estimatesPromptAndOutputTokensFromRest = Effect.fn("estimatesPromptAndOutputTokensFromRest")(
+  function* ({
+    registration,
+    context,
+    tool,
+  }: Effect.Success<ReturnType<typeof estimatesPromptAndOutputTokensFromFirst>>) {
+    const response = yield* Effect.promise(() => complete(registration.getModel(), context));
+    const promptText = [
+      "system:sys",
+      "user:hello\n[image:image/png:4]",
+      "assistant:prior",
+      "toolResult:echo\ntool out",
+      `tools:${yield* encodeJson([tool])}`,
+    ].join("\n\n");
+    const expectedPromptTokens = Math.ceil(promptText.length / 4);
+    const expectedOutputTokens = Math.ceil("done".length / 4);
+
+    expect(response.usage.input).toBe(expectedPromptTokens);
+    expect(response.usage.output).toBe(expectedOutputTokens);
+    expect(response.usage.cacheRead).toBe(0);
+    expect(response.usage.cacheWrite).toBe(0);
+    expect(response.usage.totalTokens).toBe(expectedPromptTokens + expectedOutputTokens);
+  },
+);
+
 describe("faux provider", () => {
   it("estimates prompt and output tokens from serialized context", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const registration = registerFauxProvider();
-        registrations.push(registration);
-        registration.setResponses([fauxAssistantMessage("done")]);
-
-        const tool = {
-          name: "echo",
-          description: "Echo back text",
-          parameters: Type.Object({ text: Type.String() }),
-        };
-        const context: Context = {
-          systemPrompt: "sys",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: "hello" },
-                { type: "image", mimeType: "image/png", data: "abcd" },
-              ],
-              timestamp: 1,
-            },
-            fauxAssistantMessage("prior"),
-            {
-              role: "toolResult",
-              toolCallId: "tool-1",
-              toolName: "echo",
-              content: [{ type: "text", text: "tool out" }],
-              isError: false,
-              timestamp: 2,
-            },
-          ],
-          tools: [tool],
-        };
-
-        const response = yield* Effect.promise(() => complete(registration.getModel(), context));
-        const promptText = [
-          "system:sys",
-          "user:hello\n[image:image/png:4]",
-          "assistant:prior",
-          "toolResult:echo\ntool out",
-          `tools:${yield* encodeJson([tool])}`,
-        ].join("\n\n");
-        const expectedPromptTokens = Math.ceil(promptText.length / 4);
-        const expectedOutputTokens = Math.ceil("done".length / 4);
-
-        expect(response.usage.input).toBe(expectedPromptTokens);
-        expect(response.usage.output).toBe(expectedOutputTokens);
-        expect(response.usage.cacheRead).toBe(0);
-        expect(response.usage.cacheWrite).toBe(0);
-        expect(response.usage.totalTokens).toBe(expectedPromptTokens + expectedOutputTokens);
+        const { registration, context, tool } = yield* estimatesPromptAndOutputTokensFromFirst();
+        return yield* estimatesPromptAndOutputTokensFromRest({ registration, context, tool });
       }),
     ));
 });
