@@ -67,7 +67,10 @@ interface HostShape {
   readonly lines: (path: string) => Stream.Stream<string>;
   readonly makeDirectory: (path: string) => Effect.Effect<void>;
   readonly makeTempDirectory: (prefix: string) => Effect.Effect<string>;
-  readonly readDirectory: (path: string) => Effect.Effect<ReadonlyArray<string>>;
+  readonly readDirectory: (
+    path: string,
+    options?: { readonly recursive?: boolean },
+  ) => Effect.Effect<ReadonlyArray<string>>;
   readonly readText: (path: string) => Effect.Effect<string>;
   readonly relative: (from: string, to: string) => string;
   readonly remove: (path: string) => Effect.Effect<void>;
@@ -129,7 +132,8 @@ const makeFiles = Effect.gen(function* () {
     makeDirectory: (target: string) =>
       fs.makeDirectory(target, { recursive: true }).pipe(Effect.orDie),
     makeTempDirectory: (prefix: string) => fs.makeTempDirectory({ prefix }).pipe(Effect.orDie),
-    readDirectory: (target: string) => fs.readDirectory(target).pipe(Effect.orDie),
+    readDirectory: (target: string, options?: { readonly recursive?: boolean }) =>
+      fs.readDirectory(target, options).pipe(Effect.orDie),
     readText: (target: string) => fs.readFileString(target).pipe(Effect.orDie),
     remove: (target: string) =>
       fs.remove(target, { recursive: true, force: true }).pipe(Effect.orDie),
