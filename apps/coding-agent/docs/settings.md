@@ -182,11 +182,10 @@ Resource arrays support glob exclusions with `!pattern`, exact inclusion with `+
 
 The built-in extensions are named `builtin:mcp`, `builtin:llama.cpp`, `builtin:codemode`, and `builtin:tool-search` in `extensions`. They load by default; `-builtin:mcp` disables one. A `+builtin:<name>` or `-builtin:<name>` entry in project settings overrides the user setting. `msa config` lists them under Built-in. `--no-extensions` disables them too, and `-e builtin:<name>` loads one explicitly.
 
-## Updates, telemetry, and warnings
+## Updates and telemetry
 
-| Setting                        | Type    | Default | Description                                                                                         |
-| ------------------------------ | ------- | ------- | --------------------------------------------------------------------------------------------------- |
-| `collapseChangelog`            | boolean | `false` | Show a condensed changelog after an update.                                                         |
-| `enableInstallTelemetry`       | boolean | `true`  | Send attribution headers to OpenRouter, NVIDIA NIM, and Cloudflare. Does not control update checks. |
-| `enableAnalytics`              | boolean | `false` | Opt in to analytics data sharing. Currently used only by the experimental first-run setup.          |
-| `warnings.anthropicExtraUsage` | boolean | `true`  | Warn when Anthropic subscription authentication may use paid extra usage.                           |
+| Setting                  | Type    | Default | Description                                                                                         |
+| ------------------------ | ------- | ------- | --------------------------------------------------------------------------------------------------- |
+| `collapseChangelog`      | boolean | `false` | Show a condensed changelog after an update.                                                         |
+| `enableInstallTelemetry` | boolean | `true`  | Send attribution headers to OpenRouter, NVIDIA NIM, and Cloudflare. Does not control update checks. |
+| `enableAnalytics`        | boolean | `false` | Opt in to analytics data sharing. Currently used only by the experimental first-run setup.          |
