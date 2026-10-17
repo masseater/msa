@@ -3,6 +3,8 @@ import { homedir } from "node:os";
 import { Console, Data, Effect, Schema } from "effect";
 
 import { resolveSince } from "./auto-since.ts";
+import { flagOption, helpOptions, parseOptions, stringOption } from "./cli-options.ts";
+import type { CliOption } from "./cli-options.ts";
 import { buildEditTextReport } from "./edit-tool-report.ts";
 import { scanEditCalls } from "./edit-tool-scan.ts";
 import type { EditRecord } from "./edit-tool-scan.ts";
@@ -10,6 +12,7 @@ import { buildEditSummary } from "./edit-tool-summary.ts";
 import { Host, runScript } from "./host.ts";
 import type { HostShape } from "./host.ts";
 import { IndentedJson } from "./json.ts";
+import { matchesModelFilter, scanOptions } from "./scan-options.ts";
 
 const DEFAULT_TOP = 20;
 
@@ -46,15 +49,6 @@ class EditToolStatsError extends Data.TaggedError("EditToolStatsError")<{
   readonly message: string;
 }> {}
 
-const VALUE_ARGS = new Set([
-  "--auto-since-path",
-  "--ext",
-  "--model",
-  "--sessions-dir",
-  "--since",
-  "--top",
-]);
-
 const encodeIndentedJson = Schema.encodeEffect(IndentedJson);
 
 const defaultArgs = (host: HostShape): Args => ({
@@ -70,65 +64,38 @@ const defaultArgs = (host: HostShape): Args => ({
   top: DEFAULT_TOP,
 });
 
-const applyFlagArg = (parsed: Args, arg: string): boolean => {
-  if (arg === "--json") parsed.json = true;
-  else if (arg === "--include-records") parsed.includeRecords = true;
-  else if (arg === "--failed-only") parsed.failedOnly = true;
-  else if (arg === "--all-sessions") parsed.allSessions = true;
-  else return false;
-  return true;
-};
-
-const applyValueArg = (parsed: Args, arg: string, value: string) =>
-  Effect.gen(function* () {
-    if (arg === "--sessions-dir") parsed.sessionsDir = value;
-    else if (arg === "--since") parsed.since = value;
-    else if (arg === "--auto-since-path") parsed.autoSincePath = value;
-    else if (arg === "--model") parsed.modelFilter = value;
-    else if (arg === "--ext") parsed.extFilter = value.toLowerCase();
-    else {
-      const top = Number.parseInt(value, 10);
-      if (!Number.isFinite(top) || top <= 0) {
-        return yield* new EditToolStatsError({ message: "--top must be a positive integer" });
-      }
-      parsed.top = top;
-    }
-  });
+const OPTIONS = new Map<string, CliOption<Args, EditToolStatsError>>([
+  ...scanOptions<Args, EditToolStatsError>((message) => new EditToolStatsError({ message })),
+  [
+    "--ext",
+    stringOption((parsed, value) => {
+      parsed.extFilter = value.toLowerCase();
+    }),
+  ],
+  [
+    "--failed-only",
+    flagOption((parsed) => {
+      parsed.failedOnly = true;
+    }),
+  ],
+  ...helpOptions(HELP),
+]);
 
 const parseArgs = (host: HostShape) =>
-  Effect.gen(function* () {
-    const args = process.argv.slice(2);
-    const parsed = defaultArgs(host);
-    for (let index = 0; index < args.length; index += 1) {
-      const arg = args[index] ?? "";
-      if (arg === "--help" || arg === "-h") {
-        yield* Console.log(HELP);
-        return yield* Effect.sync(() => process.exit(0));
-      }
-      if (VALUE_ARGS.has(arg)) {
-        yield* applyValueArg(parsed, arg, args[index + 1] ?? "");
-        index += 1;
-      } else if (!applyFlagArg(parsed, arg)) {
-        return yield* new EditToolStatsError({ message: `Unknown argument: ${arg}` });
-      }
-    }
-    return parsed;
+  parseOptions({
+    args: process.argv.slice(2),
+    options: OPTIONS,
+    parsed: defaultArgs(host),
+    unknown: (arg) => Effect.fail(new EditToolStatsError({ message: `Unknown argument: ${arg}` })),
   });
 
-const matchesFilters = (record: EditRecord, args: Args): boolean => {
-  const model = args.modelFilter?.toLowerCase();
-  if (model !== undefined && model !== "" && !record.providerModel.toLowerCase().includes(model)) {
-    return false;
-  }
-  if (
-    args.extFilter !== undefined &&
-    args.extFilter !== "" &&
-    record.extension !== args.extFilter
-  ) {
-    return false;
-  }
-  return !(args.failedOnly && record.success !== false);
-};
+const matchesExtension = (record: EditRecord, extFilter: string | undefined): boolean =>
+  extFilter === undefined || extFilter === "" || record.extension === extFilter;
+
+const matchesFilters = (record: EditRecord, args: Args): boolean =>
+  matchesModelFilter({ modelFilter: args.modelFilter, providerModel: record.providerModel }) &&
+  matchesExtension(record, args.extFilter) &&
+  !(args.failedOnly && record.success !== false);
 
 const program = Effect.gen(function* () {
   const host = yield* Host;

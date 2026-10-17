@@ -2,6 +2,8 @@ import { homedir } from "node:os";
 
 import { Console, Data, DateTime, Effect, Option, Schema } from "effect";
 
+import { flagOption, helpOptions, parseOptions, requiredOption } from "./cli-options.ts";
+import type { CliOption } from "./cli-options.ts";
 import { Host, runScript } from "./host.ts";
 import type { HostShape } from "./host.ts";
 import { IndentedJson } from "./json.ts";
@@ -44,15 +46,6 @@ class SessionContextStatsError extends Data.TaggedError("SessionContextStatsErro
   readonly message: string;
 }> {}
 
-const VALUE_ARGS = new Set([
-  "--bash-contains",
-  "--cwd",
-  "--model",
-  "--model-prefix",
-  "--sessions-dir",
-  "--since",
-]);
-
 const encodeIndentedJson = Schema.encodeEffect(IndentedJson);
 
 const defaultArgs = (host: HostShape): Args => ({
@@ -67,54 +60,66 @@ const defaultArgs = (host: HostShape): Args => ({
   text: false,
 });
 
-const takeValue = (args: ReadonlyArray<string>, index: number) =>
-  Effect.gen(function* () {
-    const value = args[index + 1];
-    if (value === undefined) {
-      return yield* new SessionContextStatsError({
-        message: `Missing value for argument: ${args[index] ?? ""}`,
-      });
-    }
-    return value;
+const fail = (message: string) => new SessionContextStatsError({ message });
+
+const requiredValue = (
+  name: string,
+  set: (parsed: Args, value: string) => void,
+): readonly [string, CliOption<Args, SessionContextStatsError>] =>
+  requiredOption({
+    apply: (parsed, value) => Effect.sync(() => set(parsed, value)),
+    missing: (option) => fail(`Missing value for argument: ${option}`),
+    name,
   });
 
-const applyValueArg = (parsed: Args, arg: string, value: string): void => {
-  if (arg === "--sessions-dir") parsed.sessionsDir = value;
-  else if (arg === "--since") parsed.since = value;
-  else if (arg === "--model") parsed.modelFilter = value;
-  else if (arg === "--cwd") parsed.cwd = value;
-  else if (arg === "--model-prefix") parsed.modelPrefixes.push(value);
-  else parsed.bashContains.push(value);
-};
+const flag = (
+  name: string,
+  set: (parsed: Args) => void,
+): readonly [string, CliOption<Args, SessionContextStatsError>] => [name, flagOption(set)];
 
-const applyFlagArg = (parsed: Args, arg: string): boolean => {
-  if (arg === "--json") parsed.json = true;
-  else if (arg === "--text") parsed.text = true;
-  else if (arg === "--all-sessions") parsed.allSessions = true;
-  else if (arg === "--all-cwds") parsed.cwd = undefined;
-  else if (arg === "--git-commit-or-push") parsed.bashContains.push("git commit", "git push");
-  else return false;
-  return true;
-};
+const OPTIONS = new Map<string, CliOption<Args, SessionContextStatsError>>([
+  requiredValue("--sessions-dir", (parsed, value) => {
+    parsed.sessionsDir = value;
+  }),
+  requiredValue("--since", (parsed, value) => {
+    parsed.since = value;
+  }),
+  requiredValue("--model", (parsed, value) => {
+    parsed.modelFilter = value;
+  }),
+  requiredValue("--cwd", (parsed, value) => {
+    parsed.cwd = value;
+  }),
+  requiredValue("--model-prefix", (parsed, value) => {
+    parsed.modelPrefixes.push(value);
+  }),
+  requiredValue("--bash-contains", (parsed, value) => {
+    parsed.bashContains.push(value);
+  }),
+  flag("--json", (parsed) => {
+    parsed.json = true;
+  }),
+  flag("--text", (parsed) => {
+    parsed.text = true;
+  }),
+  flag("--all-sessions", (parsed) => {
+    parsed.allSessions = true;
+  }),
+  flag("--all-cwds", (parsed) => {
+    parsed.cwd = undefined;
+  }),
+  flag("--git-commit-or-push", (parsed) => {
+    parsed.bashContains.push("git commit", "git push");
+  }),
+  ...helpOptions(HELP),
+]);
 
 const parseArgs = (host: HostShape) =>
-  Effect.gen(function* () {
-    const args = process.argv.slice(2);
-    const parsed = defaultArgs(host);
-    for (let index = 0; index < args.length; index += 1) {
-      const arg = args[index] ?? "";
-      if (arg === "--help" || arg === "-h") {
-        yield* Console.log(HELP);
-        return yield* Effect.sync(() => process.exit(0));
-      }
-      if (VALUE_ARGS.has(arg)) {
-        applyValueArg(parsed, arg, yield* takeValue(args, index));
-        index += 1;
-      } else if (!applyFlagArg(parsed, arg)) {
-        return yield* new SessionContextStatsError({ message: `Unknown argument: ${arg}` });
-      }
-    }
-    return parsed;
+  parseOptions({
+    args: process.argv.slice(2),
+    options: OPTIONS,
+    parsed: defaultArgs(host),
+    unknown: (arg) => Effect.fail(fail(`Unknown argument: ${arg}`)),
   });
 
 const sinceMillisOf = (since: string | undefined) =>
@@ -122,7 +127,7 @@ const sinceMillisOf = (since: string | undefined) =>
     if (since === undefined) return null;
     const parsed = DateTime.make(since);
     if (Option.isNone(parsed)) {
-      return yield* new SessionContextStatsError({ message: `Invalid --since value: ${since}` });
+      return yield* fail(`Invalid --since value: ${since}`);
     }
     return DateTime.toEpochMillis(parsed.value);
   });
