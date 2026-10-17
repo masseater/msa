@@ -1,11 +1,13 @@
 import { contractFromDescription, LOCAL_VARIANT, resolveHost } from "./contract.ts";
+import type { CtxImpl } from "./ctx.ts";
 import { type Encoder, encoder } from "./delta/index.ts";
 import { ChordError, invalid } from "./errors.ts";
 import type { HostImpl } from "./host.ts";
 import { type Link, Packed, unpack } from "./link.ts";
-import { type CtxImpl, RefImpl, variantOf } from "./object.ts";
+import { RefImpl } from "./ref.ts";
 import type { RemoteBinding, RemoteChannel } from "./remote.ts";
 import { assertValid } from "./schema.ts";
+import { variantOf } from "./service.ts";
 import type { Ctx, Readable, Shape, StateEvent } from "./types.ts";
 import {
   type Frame,
@@ -1006,7 +1008,7 @@ export class Connection implements RemoteChannel {
     const run =
       served.kind === "local"
         ? (ctx: Ctx) =>
-            served.ref.object.callMember(
+            served.ref.object.calls.run(
               served.ref,
               frame.member,
               unpack(frame.args),

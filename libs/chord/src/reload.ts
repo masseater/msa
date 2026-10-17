@@ -1,23 +1,25 @@
+import { Effect } from "effect";
+
 import type { Cell } from "./cell.ts";
 import { type AnyContract, bind, coverage } from "./contract.ts";
+import type { StagedListeners } from "./core.ts";
+import type { Run } from "./decls.ts";
 import { asChordError, ChordError, invalid, isChordError } from "./errors.ts";
 import type { CodeVersionState, Facet, HostImpl, PluginRef, Serve } from "./host.ts";
+import type { ObjectImpl } from "./object.ts";
+import { holdPublications } from "./publish.ts";
+import { RefImpl } from "./ref.ts";
+import type { RegistryTable } from "./registry.ts";
+import type { ResourceImpl } from "./resource.ts";
+import { assertValid, deepEqual } from "./schema.ts";
 import {
   type Factory,
   hostLifetime,
   makeService,
   memberSchemas,
-  type ObjectImpl,
-  RefImpl,
-  type ResourceImpl,
-  type Run,
   type ServeOptions,
   type Service,
-  type StagedListeners,
-} from "./object.ts";
-import { holdPublications } from "./publish.ts";
-import type { RegistryTable } from "./registry.ts";
-import { assertValid, deepEqual } from "./schema.ts";
+} from "./service.ts";
 import type { Readable } from "./types.ts";
 
 export interface ReloadOptions {
@@ -214,11 +216,11 @@ export class Reload {
   #stage(): void {
     for (const candidate of this.candidates.values()) {
       if (candidate.object.status === "live")
-        candidate.staged = candidate.object.stageListeners(candidate.run.decls);
+        candidate.staged = candidate.object.listeners.stage(candidate.run.decls);
     }
     for (const object of this.host.objects.values()) {
       if (object.status === "live" && object.deferredRuntime)
-        this.deferred.set(object, object.stageListeners(object.decls));
+        this.deferred.set(object, object.listeners.stage(object.decls));
     }
   }
 
@@ -339,7 +341,7 @@ export class Reload {
 
   async prepareObject(object: ObjectImpl): Promise<void> {
     const service = this.services.get(object.typeName)!;
-    const run = object.run(service, object.decls);
+    const run = object.activation.run(service, object.decls);
     const candidate: Candidate = {
       object,
       service,
@@ -380,14 +382,16 @@ export class Reload {
         candidate.replaced.push(old);
     }
     if (deferred.size > 0) candidate.reasons.push("exclusive resource replaced");
-    await object.open(
-      run.created.resources.filter((resource) => !deferred.has(resource)),
-      run.created.refs,
-      this.abort.signal,
+    await Effect.runPromise(
+      object.activation.open(
+        run.created.resources.filter((resource) => !deferred.has(resource)),
+        run.created.refs,
+        this.abort.signal,
+      ),
     );
-    await object.waitHydrated(run);
+    await Effect.runPromise(object.activation.waitHydrated(run));
     if (candidate.reasons.length === 0) {
-      await object.initCells(run, this.abort.signal);
+      await Effect.runPromise(object.activation.initCells(run, this.abort.signal));
       dryRun(candidate);
     }
   }
@@ -424,7 +428,7 @@ export class Reload {
       const grandfathered = new Set(object.leases.keys());
       return new Promise<void>((resolve) => {
         object.gate = { grandfathered, queue: [], drained: resolve };
-        object.stopTasks();
+        object.tasks.stop();
         if (grandfathered.size === 0) resolve();
       });
     });
@@ -453,11 +457,11 @@ export class Reload {
       const { object } = candidate;
       for (const old of candidate.replaced) {
         this.closed.push([object, old]);
-        await old.close(object.openOrder);
+        await Effect.runPromise(old.close(object.activation.openOrder));
       }
-      await object.open(candidate.atGate, [], this.abort.signal);
+      await Effect.runPromise(object.activation.open(candidate.atGate, [], this.abort.signal));
       this.#alive();
-      await object.initCells(candidate.run, this.abort.signal);
+      await Effect.runPromise(object.activation.initCells(candidate.run, this.abort.signal));
       this.#alive();
     }
     for (const candidate of this.gated) this.migrate(candidate);
@@ -492,24 +496,24 @@ export class Reload {
     for (const staged of this.deferred.values()) staged.discard();
     for (const { object, run } of this.candidates.values()) {
       object.pending.delete(run.decls);
-      await object.unwind(run).catch(report);
+      await Effect.runPromise(object.activation.unwind(run)).catch(report);
     }
     for (const [object, resource] of this.closed) {
       if (resource.state !== "closed") continue;
-      await resource
-        .open(new AbortController().signal, object.openOrder)
-        .catch((error: unknown) => {
-          resource.markUnavailable();
-          report(
-            new ChordError(
-              "unavailable",
-              `${object.address}: resource ${resource.key} could not be restored`,
-              {
-                cause: error,
-              },
-            ),
-          );
-        });
+      await Effect.runPromise(
+        resource.open(new AbortController().signal, object.activation.openOrder),
+      ).catch((error: unknown) => {
+        resource.markUnavailable();
+        report(
+          new ChordError(
+            "unavailable",
+            `${object.address}: resource ${resource.key} could not be restored`,
+            {
+              cause: error,
+            },
+          ),
+        );
+      });
     }
     for (const { object } of this.gated) {
       if (object.gate === undefined) continue;
@@ -567,7 +571,9 @@ export class Reload {
       if (object.status === "live") continue;
       staged?.discard();
       object.pending.delete(run.decls);
-      object.unwind(run).catch((error: unknown) => host.report(error));
+      Effect.runPromise(object.activation.unwind(run)).catch((error: unknown) =>
+        host.report(error),
+      );
     }
     for (const [object, staged] of this.deferred) {
       if (object.status !== "live") {
@@ -620,7 +626,7 @@ export class Reload {
     const { object, run, service } = candidate;
     const gated = candidate.reasons.length > 0;
     object.pending.delete(run.decls);
-    object.stopTasks();
+    object.tasks.stop();
     if (gated) {
       const kept = new Set(run.decls.derives.values());
       for (const derived of object.decls.derives.values()) if (!kept.has(derived)) derived.detach();
@@ -639,7 +645,7 @@ export class Reload {
       for (const old of [...object.implementations.keys()])
         if (old !== codeVersion) this.host.retireImplementation(object, old);
     }
-    object.refreshSchemas();
+    object.lifecycle.refreshSchemas();
     for (const [name, cell] of run.decls.cells) {
       const schema = run.decls.cellSchemas.get(name)!;
       if (candidate.migrated.has(cell)) cell.reset(candidate.migrated.get(cell), schema);

@@ -1,3 +1,5 @@
+import { Cause, Effect } from "effect";
+
 import { ChildReloads, reconcileChild, runClusterReload } from "./cluster.ts";
 import { type AcceptOptions, Connection, type LinkOptions, type RelayRef } from "./connection.ts";
 import {
@@ -14,29 +16,27 @@ import {
   type RemoteDef,
   resolveHost,
 } from "./contract.ts";
+import type { HostCore, RefCore, RefOwner } from "./core.ts";
+import { CtxImpl } from "./ctx.ts";
+import type { Decls } from "./decls.ts";
 import { ChordError, invalid, runAll } from "./errors.ts";
 import type { Link } from "./link.ts";
-import {
-  awaitReady,
-  CtxImpl,
-  type Decls,
-  type Factory,
-  type HostCore,
-  hostLifetime,
-  makeService,
-  ObjectImpl,
-  type RefCore,
-  RefImpl,
-  type RefOwner,
-  type ServeOptions,
-  type ServeOptionsFor,
-  type Service,
-} from "./object.ts";
+import { ObjectImpl } from "./object.ts";
 import { enqueue } from "./publish.ts";
+import { RefImpl } from "./ref.ts";
 import type { Registry, RegistryTable, RegistryView } from "./registry.ts";
 import { type ReloadOptions, type ReloadReport, runReload } from "./reload.ts";
 import { RemoteBinding, RemoteRef } from "./remote.ts";
 import { canonicalIdentity, canonicalJson, deepEqual, normalize } from "./schema.ts";
+import {
+  type Factory,
+  hostLifetime,
+  makeService,
+  type ServeOptions,
+  type ServeOptionsFor,
+  type Service,
+} from "./service.ts";
+import { awaitReady } from "./signal.ts";
 import type { Ctx, GetOptions } from "./types.ts";
 import type { Frame } from "./wire.ts";
 
@@ -639,18 +639,21 @@ export class HostImpl implements Host, HostCore {
     const derives = keep((decls) => decls.derives.values());
     for (const derived of installed.decls.derives.values())
       if (!derives.has(derived)) derived.detach();
+    const order = object.activation.openOrder;
     const closing = [...installed.decls.resources.values()]
       .filter((resource) => !resources.has(resource))
-      .sort((a, b) => object.openOrder.indexOf(b) - object.openOrder.indexOf(a));
+      .sort((a, b) => order.indexOf(b) - order.indexOf(a));
     const releasing = [...installed.decls.refs.values()].filter((ref) => !refs.has(ref));
-    object.refreshSchemas();
-    runAll(
-      [
-        ...closing.map((resource) => () => resource.close(object.openOrder)),
-        ...releasing.map((ref) => () => ref.release()),
-      ],
-      `${object.address}: retiring code version ${codeVersion} failed`,
-    ).catch((error: unknown) => this.report(error));
+    object.lifecycle.refreshSchemas();
+    Effect.runFork(
+      runAll(
+        [
+          ...closing.map((resource) => resource.close(order)),
+          ...releasing.map((ref) => Effect.sync(() => ref.release())),
+        ],
+        `${object.address}: retiring code version ${codeVersion} failed`,
+      ).pipe(Effect.catchCause((cause) => Effect.sync(() => this.report(Cause.squash(cause))))),
+    );
   }
 
   registry<V>(registry: Registry<V>): RegistryView<V> {
@@ -769,7 +772,9 @@ export class HostImpl implements Host, HostCore {
     options?: GetOptions & { readonly signal?: AbortSignal },
   ): Promise<Ref<C>> {
     const ref = this.acquire(type, input, options, "external");
-    await awaitReady(ref, options?.signal === undefined ? [] : [options.signal], this.readyTimeout);
+    await Effect.runPromise(
+      awaitReady(ref, options?.signal === undefined ? [] : [options.signal], this.readyTimeout),
+    );
     return ref.proxy as Ref<C>;
   }
 

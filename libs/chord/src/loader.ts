@@ -1,6 +1,8 @@
 import { registerHooks } from "node:module";
 import { pathToFileURL } from "node:url";
 
+import { Effect } from "effect";
+
 import type { Facet, FacetDefinition, FacetLoader } from "./host.ts";
 
 const PARAM = "chord2-reload";
@@ -32,25 +34,32 @@ const toUrl = (module: string | URL): URL =>
     ? new URL(module.href)
     : new URL(module.startsWith("file:") ? module : pathToFileURL(module).href);
 
-export const nodeLoader: FacetLoader = async (modules) => {
-  hook();
-  const version = String(++generation);
-  const facets: Facet[] = [];
-  const urls = modules.map((module) => {
-    const url = toUrl(module);
-    url.search = "";
-    return url;
-  });
-  for (const url of urls) roots.add(new URL(".", url).href);
-  for (const url of urls) {
+const loadFacet = (url: URL, version: string): Effect.Effect<Facet> =>
+  Effect.gen(function* () {
     const name = url.href;
     url.searchParams.set(PARAM, version);
-    const loaded = (await import(url.href)) as { default?: FacetDefinition };
+    const loaded = yield* Effect.promise(
+      () => import(url.href) as Promise<{ default?: FacetDefinition }>,
+    );
     const definition = loaded.default;
     if (definition === undefined || typeof definition.setup !== "function") {
       throw new TypeError(`${name}: default export must be a facet (defineFacet)`);
     }
-    facets.push({ name, setup: definition.setup, uses: definition.uses });
-  }
-  return facets;
-};
+    return { name, setup: definition.setup, uses: definition.uses };
+  });
+
+export const nodeLoader: FacetLoader = (modules) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      hook();
+      generation += 1;
+      const version = String(generation);
+      const urls = modules.map((module) => {
+        const url = toUrl(module);
+        url.search = "";
+        return url;
+      });
+      for (const url of urls) roots.add(new URL(".", url).href);
+      return yield* Effect.forEach(urls, (url) => loadFacet(url, version));
+    }),
+  );

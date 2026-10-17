@@ -1,19 +1,20 @@
+import { Effect } from "effect";
 import { Value } from "typebox/value";
 
 import { HYDRATION, type Hydration } from "./cell.ts";
 import { type AnyContract, takesNoArgs } from "./contract.ts";
-import { applyImmutable, type Decoder, decoder } from "./delta/index.ts";
-import { ChordError, invalid } from "./errors.ts";
 import {
-  CtxImpl,
   notifyStatus,
   REF_BASE,
   type RefCore,
   type RefOwner,
-  raceSignal,
   refsByProxy,
   type StatusListener,
-} from "./object.ts";
+} from "./core.ts";
+import { CtxImpl } from "./ctx.ts";
+import { applyImmutable, type Decoder, decoder } from "./delta/index.ts";
+import { ChordError, invalid } from "./errors.ts";
+import { raceSignal } from "./signal.ts";
 import type { Ctx, Readable, RefStatus, Shape, StateEvent } from "./types.ts";
 import { fromWireError, type RootRef, type WireError } from "./wire.ts";
 
@@ -311,7 +312,7 @@ export class RemoteBinding {
     for (;;) {
       if (this.ended) throw this.terminalError();
       if (this.status !== "live" || this.hold === undefined)
-        await raceSignal(this.#live.promise, ctx.signal);
+        await Effect.runPromise(raceSignal(this.#live.promise, ctx.signal));
       const hold = this.hold;
       if (hold === undefined || this.status !== "live") continue;
       const variant = this.shape?.variant;

@@ -1,3 +1,6 @@
+import { Cause, Data, Effect, Exit } from "effect";
+import { dual } from "effect/Function";
+
 export const CHORD_ERROR_CODES = [
   "aborted",
   "contract_mismatch",
@@ -18,57 +21,81 @@ export type ChordErrorReason = string;
 
 const RETRYABLE: ReadonlySet<ChordErrorCode> = new Set(["superseded", "upgrade_conflict"]);
 
-export class ChordError extends Error {
+const isChordErrorCode = (value: unknown): value is ChordErrorCode =>
+  CHORD_ERROR_CODES.some((code) => code === value);
+
+export interface ChordErrorOptions {
+  cause?: unknown;
+  details?: unknown;
+  reason?: ChordErrorReason | undefined;
+}
+
+export class ChordError extends Data.TaggedError("ChordError")<{
   readonly code: ChordErrorCode;
   readonly reason: ChordErrorReason | undefined;
   readonly retryable: boolean;
   readonly details: unknown;
-  constructor(
-    code: ChordErrorCode,
-    message: string,
-    options?: { cause?: unknown; details?: unknown; reason?: ChordErrorReason | undefined },
-  ) {
+  readonly message: string;
+  readonly cause?: unknown;
+}> {
+  constructor(code: ChordErrorCode, message: string, options?: ChordErrorOptions) {
     const reason = options?.reason;
-    super(`${code}${reason === undefined || reason === "" ? "" : `/${reason}`}: ${message}`, {
+    super({
+      code,
+      reason,
+      retryable: RETRYABLE.has(code),
+      details: options?.details,
+      message: `${code}${reason === undefined || reason === "" ? "" : `/${reason}`}: ${message}`,
       cause: options?.cause,
     });
-    this.name = "ChordError";
-    this.code = code;
-    this.reason = options?.reason;
-    this.retryable = RETRYABLE.has(code);
-    this.details = options?.details;
   }
 }
 
-export const isChordError = (error: unknown, code?: ChordErrorCode): error is ChordError =>
-  error instanceof ChordError && (code === undefined || error.code === code);
+export const isChordError: {
+  (code?: ChordErrorCode): (error: unknown) => error is ChordError;
+  (error: unknown, code?: ChordErrorCode): error is ChordError;
+} = dual(
+  (args) => args.length >= 2 || !isChordErrorCode(args[0]),
+  (error: unknown, code?: ChordErrorCode): error is ChordError =>
+    error instanceof ChordError && (code === undefined || error.code === code),
+);
 
 export const forbidden = (message = "forbidden"): ChordError =>
   new ChordError("forbidden", message);
 
-export const invalid = (reason: ChordErrorReason, message: string, details?: unknown): ChordError =>
-  new ChordError("invalid", message, { reason, details });
+export const invalid: {
+  (message: string, details?: unknown): (reason: ChordErrorReason) => ChordError;
+  (reason: ChordErrorReason, message: string, details?: unknown): ChordError;
+} = dual(
+  (args) => args.length >= 2,
+  (reason: ChordErrorReason, message: string, details?: unknown): ChordError =>
+    new ChordError("invalid", message, { reason, details }),
+);
 
-export const asChordError = (error: unknown, context: string): ChordError =>
+export const asChordError: {
+  (context: string): (error: unknown) => ChordError;
+  (error: unknown, context: string): ChordError;
+} = dual(2, (error: unknown, context: string): ChordError =>
   error instanceof ChordError
     ? error
     : new ChordError(
         "unavailable",
         `${context}: ${error instanceof Error ? error.message : String(error)}`,
-        {
-          cause: error,
-        },
-      );
+        { cause: error },
+      ),
+);
 
-export async function runAll(steps: readonly (() => unknown)[], message: string): Promise<void> {
-  const errors: unknown[] = [];
-  for (const step of steps) {
-    try {
-      await step();
-    } catch (error) {
-      errors.push(error);
+export const runAll: {
+  (message: string): (steps: readonly Effect.Effect<unknown>[]) => Effect.Effect<void>;
+  (steps: readonly Effect.Effect<unknown>[], message: string): Effect.Effect<void>;
+} = dual(2, (steps: readonly Effect.Effect<unknown>[], message: string): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const errors: unknown[] = [];
+    for (const step of steps) {
+      const exit = yield* Effect.exit(step);
+      if (Exit.isFailure(exit)) errors.push(Cause.squash(exit.cause));
     }
-  }
-  if (errors.length === 1) throw errors[0];
-  if (errors.length > 1) throw new AggregateError(errors, message);
-}
+    if (errors.length === 1) return yield* Effect.die(errors[0]);
+    if (errors.length > 1) return yield* Effect.die(new AggregateError(errors, message));
+  }),
+);

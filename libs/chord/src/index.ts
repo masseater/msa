@@ -69,7 +69,7 @@ export type {
   ServeOptionsFor,
   StateInit,
   StateOptions,
-} from "./object.ts";
+} from "./service.ts";
 export {
   defineRegistry,
   type Registry,
