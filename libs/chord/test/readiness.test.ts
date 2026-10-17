@@ -68,6 +68,33 @@ const missingEagerDependenciesRejectLoadInstead = Effect.gen(function* () {
   ).pipe(Effect.ensuring(Effect.promise(() => host.close())));
 });
 
+const readyIncludesDirectHostServesBut = Effect.gen(function* () {
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const First = local("ready.first", { version: 1, input: Type.Object({}) });
+  let created = 0;
+  yield* Effect.gen(function* () {
+    host.serve(
+      First,
+      () => {
+        created++;
+        return {};
+      },
+      { lifetime: "host" },
+    );
+    const first = host.ready();
+    host.serve(
+      Eager,
+      () => {
+        throw forbidden("later");
+      },
+      { lifetime: "host" },
+    );
+    yield* Effect.promise(() => first);
+    assert.equal(created, 1);
+    yield* Effect.promise(() => assert.rejects(host.ready(), /later/u));
+  }).pipe(Effect.ensuring(Effect.promise(() => host.close())));
+});
+
 describe("host: eager readiness", () => {
   for (const operation of ["install", "load"] as const) {
     it(`${operation} awaits resource activation and registration, leaving lazy objects lazy`, () =>
@@ -176,34 +203,7 @@ describe("host: eager readiness", () => {
     Effect.runPromise(missingEagerDependenciesRejectLoadInstead));
 
   it("ready includes direct host serves, but not later serves", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const First = local("ready.first", { version: 1, input: Type.Object({}) });
-        let created = 0;
-        yield* Effect.gen(function* () {
-          host.serve(
-            First,
-            () => {
-              created++;
-              return {};
-            },
-            { lifetime: "host" },
-          );
-          const first = host.ready();
-          host.serve(
-            Eager,
-            () => {
-              throw forbidden("later");
-            },
-            { lifetime: "host" },
-          );
-          yield* Effect.promise(() => first);
-          assert.equal(created, 1);
-          yield* Effect.promise(() => assert.rejects(host.ready(), /later/u));
-        }).pipe(Effect.ensuring(Effect.promise(() => host.close())));
-      }),
-    ));
+    Effect.runPromise(readyIncludesDirectHostServesBut));
 
   for (const operation of ["install", "load"] as const) {
     it(

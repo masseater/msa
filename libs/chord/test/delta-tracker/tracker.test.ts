@@ -1211,367 +1211,454 @@ const foldsDenseChildAndDirectIndex = (): void => {
   valuesTracker.adopt(valuesPrepared);
 };
 
-describe("delta tracker piece arrays", () => {
-  it("emits one insert for an append to a long array", () => {
-    const tracker = track({ values: Array.from({ length: 10_000 }, (_, index) => index) });
+const emitsOneInsertForAnAppend = (): void => {
+  const tracker = track({ values: Array.from({ length: 10_000 }, (_, index) => index) });
+  const change = tracker.beginChange();
+  change.state.values.push(-1);
+  const prepared = change.prepare();
+  expect(prepared.ops).toEqual([["p", ["values"], 10_000, 0, [-1]]]);
+  tracker.adopt(prepared);
+  expect(tracker.value.values.at(-1)).toBe(-1);
+  expect(tracker.value.values).toHaveLength(10_001);
+};
+
+const emitsRemovalsFromTheEndBackwards = (): void => {
+  const tracker = track({ values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] });
+  const values = settle(tracker, (draft) => {
+    draft.values.shift();
+    draft.values.splice(1, 2, 20);
+    draft.values.splice(5, 1);
+    draft.values.pop();
+    draft.values.push(30);
+  });
+  expect(values.values).toEqual([1, 20, 4, 5, 6, 8, 30]);
+  const change = track({ values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] }).beginChange();
+  change.state.values.shift();
+  change.state.values.splice(1, 2, 20);
+  change.state.values.splice(5, 1);
+  change.state.values.pop();
+  change.state.values.push(30);
+  expect(change.prepare().ops).toEqual([
+    ["p", ["values"], 9, 1, []],
+    ["p", ["values"], 7, 1, []],
+    ["p", ["values"], 2, 2, []],
+    ["p", ["values"], 0, 1, []],
+    ["p", ["values"], 1, 0, [20]],
+    ["p", ["values"], 6, 0, [30]],
+  ]);
+};
+
+const emitsAPermutationWhenKeptElements = (): void => {
+  for (const mutate of [
+    (values: number[]) => values.reverse(),
+    (values: number[]) => values.sort((left, right) => (left % 2) - (right % 2) || left - right),
+  ]) {
+    const tracker = track({ values: [0, 1, 2, 3, 4] });
+    const expected = [0, 1, 2, 3, 4];
+    mutate(expected);
     const change = tracker.beginChange();
-    change.state.values.push(-1);
+    mutate(change.state.values);
     const prepared = change.prepare();
-    expect(prepared.ops).toEqual([["p", ["values"], 10_000, 0, [-1]]]);
-    tracker.adopt(prepared);
-    expect(tracker.value.values.at(-1)).toBe(-1);
-    expect(tracker.value.values).toHaveLength(10_001);
-  });
+    expect(prepared.ops.some((operation) => operation[0] === "m")).toBe(true);
+    expect(replay(tracker.value, prepared.ops)).toEqual({ values: expected });
+  }
+};
 
-  it("emits removals from the end backwards, then inserts, when kept elements keep their order", () => {
-    const tracker = track({ values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] });
-    const values = settle(tracker, (draft) => {
-      draft.values.shift();
-      draft.values.splice(1, 2, 20);
-      draft.values.splice(5, 1);
-      draft.values.pop();
-      draft.values.push(30);
-    });
-    expect(values.values).toEqual([1, 20, 4, 5, 6, 8, 30]);
-    const change = track({ values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] }).beginChange();
-    change.state.values.shift();
-    change.state.values.splice(1, 2, 20);
-    change.state.values.splice(5, 1);
-    change.state.values.pop();
-    change.state.values.push(30);
-    expect(change.prepare().ops).toEqual([
-      ["p", ["values"], 9, 1, []],
-      ["p", ["values"], 7, 1, []],
-      ["p", ["values"], 2, 2, []],
-      ["p", ["values"], 0, 1, []],
-      ["p", ["values"], 1, 0, [20]],
-      ["p", ["values"], 6, 0, [30]],
-    ]);
-  });
+const keepsAdoptionIndependentFromMutableDetached = (): void => {
+  const tracker = track({ values: [3, 1, 2] });
+  const change = tracker.beginChange();
+  change.state.values.sort((left, right) => left - right);
+  const prepared = change.prepare();
+  const permutation = prepared.ops.find((operation) => operation[0] === "m");
+  if (permutation?.[0] !== "m") throw new Error("expected permutation");
+  permutation[2].reverse();
+  tracker.adopt(prepared);
+  expect(tracker.value.values).toEqual([1, 2, 3]);
+};
 
-  it("emits a permutation when kept elements change order", () => {
-    for (const mutate of [
-      (values: number[]) => values.reverse(),
-      (values: number[]) => values.sort((left, right) => (left % 2) - (right % 2) || left - right),
-    ]) {
-      const tracker = track({ values: [0, 1, 2, 3, 4] });
-      const expected = [0, 1, 2, 3, 4];
-      mutate(expected);
-      const change = tracker.beginChange();
-      mutate(change.state.values);
-      const prepared = change.prepare();
-      expect(prepared.ops.some((operation) => operation[0] === "m")).toBe(true);
-      expect(replay(tracker.value, prepared.ops)).toEqual({ values: expected });
+const supportsAllStructuralMutatorsAndNative = (): void => {
+  const tracker = track({ values: [3, 1, 2] });
+  const base = clone(tracker.value);
+  const change = tracker.beginChange();
+  expect(change.state.values.push(4)).toBe(4);
+  expect(change.state.values.pop()).toBe(4);
+  expect(change.state.values.unshift(0)).toBe(4);
+  expect(change.state.values.shift()).toBe(0);
+  expect(change.state.values.splice(1, 1, 5, 4)).toEqual([1]);
+  expect(change.state.values.sort((left, right) => left - right)).toBe(change.state.values);
+  expect(change.state.values.reverse()).toBe(change.state.values);
+  change.state.values.fill(9, 1, 3);
+  change.state.values.copyWithin(1, 0, 2);
+  const prepared = change.prepare();
+  expect(prepared.value).toEqual({ values: [5, 5, 9, 2] });
+  expect(replay(base, prepared.ops)).toEqual(prepared.value);
+  tracker.adopt(prepared);
+};
+
+const tracksHeldHandlesAfterReindexAnd = (): void => {
+  const tracker = track({ values: [{ value: "a" }, { value: "b" }, { value: "c" }] });
+  const change = tracker.beginChange();
+  const held = change.state.values[1]!;
+  change.state.values.unshift({ value: "front" });
+  held.value = "moved";
+  expect(change.state.values[2]!.value).toBe("moved");
+  change.state.values.splice(2, 1);
+  held.value = "detached";
+  const prepared = change.prepare();
+  expect(prepared.value).toEqual({
+    values: [{ value: "front" }, { value: "a" }, { value: "c" }],
+  });
+  expect(replay(tracker.value, prepared.ops)).toEqual(prepared.value);
+  tracker.adopt(prepared);
+};
+
+const replaysIntroducedMovedThenEditedArray = (): void => {
+  const tracker = track({ values: [] as { id: number; nested: number[] }[] });
+  const base = clone(tracker.value);
+  const change = tracker.beginChange();
+  change.state.values.push({ id: 1, nested: [1] });
+  const held = change.state.values[0]!;
+  change.state.values.unshift({ id: 0, nested: [] });
+  held.nested.push(2);
+  change.state.values.reverse();
+  held.nested.push(3);
+  const prepared = change.prepare();
+  expect(prepared.value).toEqual({
+    values: [
+      { id: 1, nested: [1, 2, 3] },
+      { id: 0, nested: [] },
+    ],
+  });
+  expect(replay(base, prepared.ops)).toEqual(prepared.value);
+  tracker.adopt(prepared);
+};
+
+const combinesMovementAndEditsWithPermutation = (): void => {
+  const tracker = track({
+    values: [
+      { rank: 3, edited: 0 },
+      { rank: 1, edited: 0 },
+      { rank: 2, edited: 0 },
+    ],
+  });
+  const base = clone(tracker.value);
+  const change = tracker.beginChange();
+  const held = change.state.values[0]!;
+  change.state.values.sort((left, right) => left.rank - right.rank);
+  held.edited = 1;
+  const prepared = change.prepare();
+  expect(prepared.ops[0]).toEqual(["m", ["values"], [1, 2, 0]]);
+  expect(replay(base, prepared.ops)).toEqual(prepared.value);
+  tracker.adopt(prepared);
+};
+
+const keepsComparatorWritesAndStructurallyReentrant = (): void => {
+  const tracker = track({
+    values: [
+      { rank: 2, comparisons: 0 },
+      { rank: 1, comparisons: 0 },
+    ],
+  });
+  const base = clone(tracker.value);
+  const change = tracker.beginChange();
+  let appended = false;
+  change.state.values.sort((left, right) => {
+    left.comparisons++;
+    right.comparisons++;
+    if (!appended) {
+      appended = true;
+      change.state.values[0] = { rank: 9, comparisons: 0 };
+      change.state.values.push({ rank: 3, comparisons: 0 });
     }
+    return left.rank - right.rank;
   });
+  const prepared = change.prepare();
+  expect(prepared.value.values.map((value) => value.rank)).toEqual([1, 2, 3]);
+  expect(prepared.value.values.map((value) => value.comparisons)).toEqual([1, 1, 0]);
+  expect(replay(base, prepared.ops)).toEqual(prepared.value);
+  tracker.adopt(prepared);
+};
 
-  it("keeps adoption independent from mutable detached permutation metadata", () => {
-    const tracker = track({ values: [3, 1, 2] });
-    const change = tracker.beginChange();
-    change.state.values.sort((left, right) => left - right);
-    const prepared = change.prepare();
-    const permutation = prepared.ops.find((operation) => operation[0] === "m");
-    if (permutation?.[0] !== "m") throw new Error("expected permutation");
-    permutation[2].reverse();
-    tracker.adopt(prepared);
-    expect(tracker.value.values).toEqual([1, 2, 3]);
+const normalizesDuplicateEntriesCreatedByStructurally = (): void => {
+  const tracker = track({
+    values: [
+      { rank: 2, edited: 0, nested: { value: 0 } },
+      { rank: 1, edited: 0, nested: { value: 0 } },
+    ],
   });
+  const base = clone(tracker.value);
+  const change = tracker.beginChange();
+  let inserted = false;
+  change.state.values.sort((left, right) => {
+    left.edited = left.rank * 10;
+    left.nested.value = left.rank * 100;
+    right.edited = right.rank * 10;
+    right.nested.value = right.rank * 100;
+    if (!inserted) {
+      inserted = true;
+      change.state.values.unshift({ rank: 4, edited: 0, nested: { value: 0 } });
+    }
+    return left.rank - right.rank;
+  });
+  const prepared = change.prepare();
+  expect(prepared.value.values.map((value) => value.rank)).toEqual([1, 2, 1]);
+  expect(prepared.value.values.map((value) => value.edited)).toEqual([10, 20, 10]);
+  expect(prepared.value.values.map((value) => value.nested.value)).toEqual([100, 200, 100]);
+  expect(prepared.value.values[0]).not.toBe(prepared.value.values[2]);
+  expect(prepared.value.values[0]!.nested).not.toBe(prepared.value.values[2]!.nested);
+  expect(replay(base, prepared.ops)).toEqual(prepared.value);
+  expectAliasFree(prepared.value);
+  tracker.adopt(prepared);
+};
+
+const foldsOnlyADeeplyNestedDense = (): void => {
+  const tracker = track({
+    rows: Array.from({ length: 2_000 }, (_, value) => ({ nested: { value } })),
+  });
+  const base = clone(tracker.value);
+  const change = tracker.beginChange();
+  change.state.rows[0]!.nested.value = -1;
+  for (let index = 500; index < 1_000; index++) change.state.rows[index]!.nested.value = -index;
+  const prepared = change.prepare();
+  const splice = prepared.ops.find((operation) => operation[0] === "p");
+  expect(splice?.slice(0, 4)).toEqual(["p", ["rows"], 500, 500]);
+  if (splice?.[0] !== "p") throw new Error("expected regional splice");
+  expect(splice[4]).toHaveLength(500);
+  expect(prepared.ops).toHaveLength(2);
+  expect(replay(base, prepared.ops)).toEqual(prepared.value);
+  tracker.adopt(prepared);
+};
+
+const doesNotCacheEmissionPathsFor = (): void => {
+  type Row = { flag: number; special?: { __proto__: { values: number[] } } };
+  const rows: Row[] = Array.from({ length: 400 }, () => ({ flag: 0 }));
+  rows[100]!.special = JSON.parse(
+    `{"__proto__":{"values":[${Array.from({ length: 400 }, (_, value) => value).join(",")}]}}`,
+  ) as NonNullable<Row["special"]>;
+  const tracker = track({ rows });
+  const base = clone(tracker.value);
+  const change = tracker.beginChange();
+  for (let index = 0; index < 256; index++) change.state.rows[index]!.flag = 1;
+  for (let index = 0; index < 256; index++) {
+    change.state.rows[100]!.special!.__proto__.values[index] = -index - 1;
+  }
+  const prepared = change.prepare();
+  expect(prepared.ops).toHaveLength(1);
+  expect(prepared.ops[0]?.slice(0, 4)).toEqual(["p", ["rows"], 0, 256]);
+  expect(replay(base, prepared.ops)).toEqual(prepared.value);
+  tracker.adopt(prepared);
+};
+
+const suppressesNestedStructuralAndLeafOperations = (): void => {
+  const tracker = track({
+    rows: Array.from({ length: 400 }, (_, index) => ({
+      flag: 0,
+      values: index === 100 ? Array.from({ length: 400 }, (_cell, value) => ({ value })) : [],
+    })),
+  });
+  const base = clone(tracker.value);
+  const change = tracker.beginChange();
+  for (let index = 0; index < 256; index++) change.state.rows[index]!.flag = 1;
+  for (let index = 0; index < 256; index++)
+    change.state.rows[100]!.values[index]!.value = -index - 1;
+  change.state.rows[100]!.values.push({ value: 999 });
+  const prepared = change.prepare();
+  expect(prepared.ops).toHaveLength(1);
+  expect(prepared.ops[0]?.slice(0, 4)).toEqual(["p", ["rows"], 0, 256]);
+  expect(prepared.value.rows[100]!.values).toHaveLength(401);
+  expect(replay(base, prepared.ops)).toEqual(prepared.value);
+  tracker.adopt(prepared);
+};
+
+const emitsMultipleDisjointDenseRegionsAnd = (): void => {
+  const tracker = track({ values: Array.from({ length: 1_400 }, (_, value) => ({ value })) });
+  const base = clone(tracker.value);
+  const change = tracker.beginChange();
+  for (const index of [97, 358, 897, 1_158]) change.state.values[index]!.value = -index - 1;
+  for (let index = 100; index < 356; index++) change.state.values[index]!.value = -index - 1;
+  for (let index = 900; index < 1_156; index++) change.state.values[index]!.value = -index - 1;
+  const prepared = change.prepare();
+  const splices = prepared.ops.filter((operation) => operation[0] === "p");
+  expect(splices.map((operation) => operation.slice(0, 4))).toEqual([
+    ["p", ["values"], 100, 256],
+    ["p", ["values"], 900, 256],
+  ]);
+  for (const index of [97, 358, 897, 1_158]) {
+    expect(prepared.ops).toContainEqual(["s", ["values", index, "value"], -index - 1]);
+  }
+  expect(prepared.ops).toHaveLength(6);
+  expect(replay(base, prepared.ops)).toEqual(prepared.value);
+  tracker.adopt(prepared);
+};
+
+const normalizesA20000OperationQueue = (): void => {
+  const tracker = track({ values: Array.from({ length: 20_000 }, (_, value) => ({ value })) });
+  const base = clone(tracker.value);
+  const change = tracker.beginChange();
+  for (let index = 0; index < 10_000; index++) {
+    change.state.values.shift();
+    change.state.values.push({ value: 20_000 + index });
+  }
+  const prepared = change.prepare();
+  expect(prepared.ops).toHaveLength(2);
+  expect(replay(base, prepared.ops)).toEqual(prepared.value);
+  tracker.adopt(prepared);
+};
+
+const handlesAdversarialFragmentationAndResolvesHeld = (): void => {
+  const size = 20_000;
+  const tracker = track({ values: Array.from({ length: size }, (_, value) => ({ value })) });
+  const expected = clone(tracker.value);
+  const base = clone(tracker.value);
+  const change = tracker.beginChange();
+  const held = [1, 1_001, 5_001, 10_001, 15_001, 19_999].map(
+    (index) => change.state.values[index]!,
+  );
+  for (let index = 0; index < size; index += 2) {
+    change.state.values.splice(index, 1, { value: -index - 1 });
+    expected.values.splice(index, 1, { value: -index - 1 });
+  }
+  for (const value of held) value.value += 100_000;
+  for (const index of [1, 1_001, 5_001, 10_001, 15_001, 19_999])
+    expected.values[index]!.value += 100_000;
+  const prepared = change.prepare();
+  expect(prepared.value).toEqual(expected);
+  expect(replay(base, prepared.ops)).toEqual(prepared.value);
+  tracker.adopt(prepared);
+};
+
+const normalizesRestoredOverridesAndCancelledStructural = (): void => {
+  const tracker = track({ values: [1, 2, 3] });
+  const change = tracker.beginChange();
+  change.state.values[1] = 9;
+  change.state.values[1] = 2;
+  change.state.values.reverse();
+  change.state.values.reverse();
+  change.state.values.push(4);
+  expect(change.state.values.pop()).toBe(4);
+  const prepared = change.prepare();
+  expect(prepared.value).toEqual({ values: [1, 2, 3] });
+  expect(prepared.ops).toEqual([]);
+  tracker.adopt(prepared);
+};
+
+const handlesNullSparseOverridesWithoutConfusing = (): void => {
+  const tracker = track({
+    values: Array.from({ length: 10_000 }, (_, value): number | null => value),
+  });
+  settle(tracker, (draft) => {
+    draft.values[17] = null;
+    draft.values[9_000] = null;
+  });
+  expect(tracker.value.values[17]).toBeNull();
+  expect(tracker.value.values[9_000]).toBeNull();
+};
+
+const supportsSelfOverlappingFillAndCopywithin = (): void => {
+  const tracker = track({ values: [{ n: 0 }, { n: 1 }, { n: 2 }, { n: 3 }] });
+  settle(tracker, (draft) => {
+    draft.values.copyWithin(1, 0, 3);
+    draft.values.fill(draft.values[1]!, 0, 2);
+    draft.values[0]!.n = 9;
+  });
+  expect(tracker.value.values.map((value) => value.n)).toEqual([9, 0, 1, 2]);
+  expect(tracker.value.values[0]).not.toBe(tracker.value.values[1]);
+};
+
+describe("delta tracker piece arrays", () => {
+  it("emits one insert for an append to a long array", emitsOneInsertForAnAppend);
+
+  it(
+    "emits removals from the end backwards, then inserts, when kept elements keep their order",
+    emitsRemovalsFromTheEndBackwards,
+  );
+
+  it("emits a permutation when kept elements change order", emitsAPermutationWhenKeptElements);
+
+  it(
+    "keeps adoption independent from mutable detached permutation metadata",
+    keepsAdoptionIndependentFromMutableDetached,
+  );
 
   it("matches native splice with zero or one argument", matchesNativeSpliceWithZeroOr);
 
-  it("supports all structural mutators and native return values", () => {
-    const tracker = track({ values: [3, 1, 2] });
-    const base = clone(tracker.value);
-    const change = tracker.beginChange();
-    expect(change.state.values.push(4)).toBe(4);
-    expect(change.state.values.pop()).toBe(4);
-    expect(change.state.values.unshift(0)).toBe(4);
-    expect(change.state.values.shift()).toBe(0);
-    expect(change.state.values.splice(1, 1, 5, 4)).toEqual([1]);
-    expect(change.state.values.sort((left, right) => left - right)).toBe(change.state.values);
-    expect(change.state.values.reverse()).toBe(change.state.values);
-    change.state.values.fill(9, 1, 3);
-    change.state.values.copyWithin(1, 0, 2);
-    const prepared = change.prepare();
-    expect(prepared.value).toEqual({ values: [5, 5, 9, 2] });
-    expect(replay(base, prepared.ops)).toEqual(prepared.value);
-    tracker.adopt(prepared);
-  });
+  it(
+    "supports all structural mutators and native return values",
+    supportsAllStructuralMutatorsAndNative,
+  );
 
-  it("tracks held handles after reindex and suppresses detached writes", () => {
-    const tracker = track({ values: [{ value: "a" }, { value: "b" }, { value: "c" }] });
-    const change = tracker.beginChange();
-    const held = change.state.values[1]!;
-    change.state.values.unshift({ value: "front" });
-    held.value = "moved";
-    expect(change.state.values[2]!.value).toBe("moved");
-    change.state.values.splice(2, 1);
-    held.value = "detached";
-    const prepared = change.prepare();
-    expect(prepared.value).toEqual({
-      values: [{ value: "front" }, { value: "a" }, { value: "c" }],
-    });
-    expect(replay(tracker.value, prepared.ops)).toEqual(prepared.value);
-    tracker.adopt(prepared);
-  });
+  it(
+    "tracks held handles after reindex and suppresses detached writes",
+    tracksHeldHandlesAfterReindexAnd,
+  );
 
-  it("replays introduced, moved, then edited array descendants", () => {
-    const tracker = track({ values: [] as { id: number; nested: number[] }[] });
-    const base = clone(tracker.value);
-    const change = tracker.beginChange();
-    change.state.values.push({ id: 1, nested: [1] });
-    const held = change.state.values[0]!;
-    change.state.values.unshift({ id: 0, nested: [] });
-    held.nested.push(2);
-    change.state.values.reverse();
-    held.nested.push(3);
-    const prepared = change.prepare();
-    expect(prepared.value).toEqual({
-      values: [
-        { id: 1, nested: [1, 2, 3] },
-        { id: 0, nested: [] },
-      ],
-    });
-    expect(replay(base, prepared.ops)).toEqual(prepared.value);
-    tracker.adopt(prepared);
-  });
+  it(
+    "replays introduced, moved, then edited array descendants",
+    replaysIntroducedMovedThenEditedArray,
+  );
 
-  it("combines movement and edits with permutation plus final paths", () => {
-    const tracker = track({
-      values: [
-        { rank: 3, edited: 0 },
-        { rank: 1, edited: 0 },
-        { rank: 2, edited: 0 },
-      ],
-    });
-    const base = clone(tracker.value);
-    const change = tracker.beginChange();
-    const held = change.state.values[0]!;
-    change.state.values.sort((left, right) => left.rank - right.rank);
-    held.edited = 1;
-    const prepared = change.prepare();
-    expect(prepared.ops[0]).toEqual(["m", ["values"], [1, 2, 0]]);
-    expect(replay(base, prepared.ops)).toEqual(prepared.value);
-    tracker.adopt(prepared);
-  });
+  it(
+    "combines movement and edits with permutation plus final paths",
+    combinesMovementAndEditsWithPermutation,
+  );
 
-  it("keeps comparator writes and structurally reentrant appends", () => {
-    const tracker = track({
-      values: [
-        { rank: 2, comparisons: 0 },
-        { rank: 1, comparisons: 0 },
-      ],
-    });
-    const base = clone(tracker.value);
-    const change = tracker.beginChange();
-    let appended = false;
-    change.state.values.sort((left, right) => {
-      left.comparisons++;
-      right.comparisons++;
-      if (!appended) {
-        appended = true;
-        change.state.values[0] = { rank: 9, comparisons: 0 };
-        change.state.values.push({ rank: 3, comparisons: 0 });
-      }
-      return left.rank - right.rank;
-    });
-    const prepared = change.prepare();
-    expect(prepared.value.values.map((value) => value.rank)).toEqual([1, 2, 3]);
-    expect(prepared.value.values.map((value) => value.comparisons)).toEqual([1, 1, 0]);
-    expect(replay(base, prepared.ops)).toEqual(prepared.value);
-    tracker.adopt(prepared);
-  });
+  it(
+    "keeps comparator writes and structurally reentrant appends",
+    keepsComparatorWritesAndStructurallyReentrant,
+  );
 
-  it("normalizes duplicate entries created by structurally reentrant sort callbacks", () => {
-    const tracker = track({
-      values: [
-        { rank: 2, edited: 0, nested: { value: 0 } },
-        { rank: 1, edited: 0, nested: { value: 0 } },
-      ],
-    });
-    const base = clone(tracker.value);
-    const change = tracker.beginChange();
-    let inserted = false;
-    change.state.values.sort((left, right) => {
-      left.edited = left.rank * 10;
-      left.nested.value = left.rank * 100;
-      right.edited = right.rank * 10;
-      right.nested.value = right.rank * 100;
-      if (!inserted) {
-        inserted = true;
-        change.state.values.unshift({ rank: 4, edited: 0, nested: { value: 0 } });
-      }
-      return left.rank - right.rank;
-    });
-    const prepared = change.prepare();
-    expect(prepared.value.values.map((value) => value.rank)).toEqual([1, 2, 1]);
-    expect(prepared.value.values.map((value) => value.edited)).toEqual([10, 20, 10]);
-    expect(prepared.value.values.map((value) => value.nested.value)).toEqual([100, 200, 100]);
-    expect(prepared.value.values[0]).not.toBe(prepared.value.values[2]);
-    expect(prepared.value.values[0]!.nested).not.toBe(prepared.value.values[2]!.nested);
-    expect(replay(base, prepared.ops)).toEqual(prepared.value);
-    expectAliasFree(prepared.value);
-    tracker.adopt(prepared);
-  });
+  it(
+    "normalizes duplicate entries created by structurally reentrant sort callbacks",
+    normalizesDuplicateEntriesCreatedByStructurally,
+  );
 
   it(
     "folds dense child and direct-index edits into one full-array operation",
     foldsDenseChildAndDirectIndex,
   );
 
-  it("folds only a deeply nested dense array region", () => {
-    const tracker = track({
-      rows: Array.from({ length: 2_000 }, (_, value) => ({ nested: { value } })),
-    });
-    const base = clone(tracker.value);
-    const change = tracker.beginChange();
-    change.state.rows[0]!.nested.value = -1;
-    for (let index = 500; index < 1_000; index++) change.state.rows[index]!.nested.value = -index;
-    const prepared = change.prepare();
-    const splice = prepared.ops.find((operation) => operation[0] === "p");
-    expect(splice?.slice(0, 4)).toEqual(["p", ["rows"], 500, 500]);
-    if (splice?.[0] !== "p") throw new Error("expected regional splice");
-    expect(splice[4]).toHaveLength(500);
-    expect(prepared.ops).toHaveLength(2);
-    expect(replay(base, prepared.ops)).toEqual(prepared.value);
-    tracker.adopt(prepared);
-  });
+  it("folds only a deeply nested dense array region", foldsOnlyADeeplyNestedDense);
 
-  it("does not cache emission paths for nested reserved-key folds covered by an outer region", () => {
-    type Row = { flag: number; special?: { __proto__: { values: number[] } } };
-    const rows: Row[] = Array.from({ length: 400 }, () => ({ flag: 0 }));
-    rows[100]!.special = JSON.parse(
-      `{"__proto__":{"values":[${Array.from({ length: 400 }, (_, value) => value).join(",")}]}}`,
-    ) as NonNullable<Row["special"]>;
-    const tracker = track({ rows });
-    const base = clone(tracker.value);
-    const change = tracker.beginChange();
-    for (let index = 0; index < 256; index++) change.state.rows[index]!.flag = 1;
-    for (let index = 0; index < 256; index++) {
-      change.state.rows[100]!.special!.__proto__.values[index] = -index - 1;
-    }
-    const prepared = change.prepare();
-    expect(prepared.ops).toHaveLength(1);
-    expect(prepared.ops[0]?.slice(0, 4)).toEqual(["p", ["rows"], 0, 256]);
-    expect(replay(base, prepared.ops)).toEqual(prepared.value);
-    tracker.adopt(prepared);
-  });
+  it(
+    "does not cache emission paths for nested reserved-key folds covered by an outer region",
+    doesNotCacheEmissionPathsFor,
+  );
 
-  it("suppresses nested structural and leaf operations covered by an outer dense region", () => {
-    const tracker = track({
-      rows: Array.from({ length: 400 }, (_, index) => ({
-        flag: 0,
-        values: index === 100 ? Array.from({ length: 400 }, (_cell, value) => ({ value })) : [],
-      })),
-    });
-    const base = clone(tracker.value);
-    const change = tracker.beginChange();
-    for (let index = 0; index < 256; index++) change.state.rows[index]!.flag = 1;
-    for (let index = 0; index < 256; index++)
-      change.state.rows[100]!.values[index]!.value = -index - 1;
-    change.state.rows[100]!.values.push({ value: 999 });
-    const prepared = change.prepare();
-    expect(prepared.ops).toHaveLength(1);
-    expect(prepared.ops[0]?.slice(0, 4)).toEqual(["p", ["rows"], 0, 256]);
-    expect(prepared.value.rows[100]!.values).toHaveLength(401);
-    expect(replay(base, prepared.ops)).toEqual(prepared.value);
-    tracker.adopt(prepared);
-  });
+  it(
+    "suppresses nested structural and leaf operations covered by an outer dense region",
+    suppressesNestedStructuralAndLeafOperations,
+  );
 
-  it("emits multiple disjoint dense regions and preserves operations outside their boundaries", () => {
-    const tracker = track({ values: Array.from({ length: 1_400 }, (_, value) => ({ value })) });
-    const base = clone(tracker.value);
-    const change = tracker.beginChange();
-    for (const index of [97, 358, 897, 1_158]) change.state.values[index]!.value = -index - 1;
-    for (let index = 100; index < 356; index++) change.state.values[index]!.value = -index - 1;
-    for (let index = 900; index < 1_156; index++) change.state.values[index]!.value = -index - 1;
-    const prepared = change.prepare();
-    const splices = prepared.ops.filter((operation) => operation[0] === "p");
-    expect(splices.map((operation) => operation.slice(0, 4))).toEqual([
-      ["p", ["values"], 100, 256],
-      ["p", ["values"], 900, 256],
-    ]);
-    for (const index of [97, 358, 897, 1_158]) {
-      expect(prepared.ops).toContainEqual(["s", ["values", index, "value"], -index - 1]);
-    }
-    expect(prepared.ops).toHaveLength(6);
-    expect(replay(base, prepared.ops)).toEqual(prepared.value);
-    tracker.adopt(prepared);
-  });
+  it(
+    "emits multiple disjoint dense regions and preserves operations outside their boundaries",
+    emitsMultipleDisjointDenseRegionsAnd,
+  );
 
-  it("normalizes a 20,000-operation queue transaction to two operations", () => {
-    const tracker = track({ values: Array.from({ length: 20_000 }, (_, value) => ({ value })) });
-    const base = clone(tracker.value);
-    const change = tracker.beginChange();
-    for (let index = 0; index < 10_000; index++) {
-      change.state.values.shift();
-      change.state.values.push({ value: 20_000 + index });
-    }
-    const prepared = change.prepare();
-    expect(prepared.ops).toHaveLength(2);
-    expect(replay(base, prepared.ops)).toEqual(prepared.value);
-    tracker.adopt(prepared);
-  });
+  it(
+    "normalizes a 20,000-operation queue transaction to two operations",
+    normalizesA20000OperationQueue,
+  );
 
-  it("handles adversarial fragmentation and resolves held handles without piece scans", () => {
-    const size = 20_000;
-    const tracker = track({ values: Array.from({ length: size }, (_, value) => ({ value })) });
-    const expected = clone(tracker.value);
-    const base = clone(tracker.value);
-    const change = tracker.beginChange();
-    const held = [1, 1_001, 5_001, 10_001, 15_001, 19_999].map(
-      (index) => change.state.values[index]!,
-    );
-    for (let index = 0; index < size; index += 2) {
-      change.state.values.splice(index, 1, { value: -index - 1 });
-      expected.values.splice(index, 1, { value: -index - 1 });
-    }
-    for (const value of held) value.value += 100_000;
-    for (const index of [1, 1_001, 5_001, 10_001, 15_001, 19_999])
-      expected.values[index]!.value += 100_000;
-    const prepared = change.prepare();
-    expect(prepared.value).toEqual(expected);
-    expect(replay(base, prepared.ops)).toEqual(prepared.value);
-    tracker.adopt(prepared);
-  }, 30_000);
+  it(
+    "handles adversarial fragmentation and resolves held handles without piece scans",
+    handlesAdversarialFragmentationAndResolvesHeld,
+    30_000,
+  );
 
-  it("normalizes restored overrides and cancelled structural edits to no operations", () => {
-    const tracker = track({ values: [1, 2, 3] });
-    const change = tracker.beginChange();
-    change.state.values[1] = 9;
-    change.state.values[1] = 2;
-    change.state.values.reverse();
-    change.state.values.reverse();
-    change.state.values.push(4);
-    expect(change.state.values.pop()).toBe(4);
-    const prepared = change.prepare();
-    expect(prepared.value).toEqual({ values: [1, 2, 3] });
-    expect(prepared.ops).toEqual([]);
-    tracker.adopt(prepared);
-  });
+  it(
+    "normalizes restored overrides and cancelled structural edits to no operations",
+    normalizesRestoredOverridesAndCancelledStructural,
+  );
 
-  it("handles null sparse overrides without confusing absence", () => {
-    const tracker = track({
-      values: Array.from({ length: 10_000 }, (_, value): number | null => value),
-    });
-    settle(tracker, (draft) => {
-      draft.values[17] = null;
-      draft.values[9_000] = null;
-    });
-    expect(tracker.value.values[17]).toBeNull();
-    expect(tracker.value.values[9_000]).toBeNull();
-  });
+  it(
+    "handles null sparse overrides without confusing absence",
+    handlesNullSparseOverridesWithoutConfusing,
+  );
 
-  it("supports self-overlapping fill and copyWithin by value", () => {
-    const tracker = track({ values: [{ n: 0 }, { n: 1 }, { n: 2 }, { n: 3 }] });
-    settle(tracker, (draft) => {
-      draft.values.copyWithin(1, 0, 3);
-      draft.values.fill(draft.values[1]!, 0, 2);
-      draft.values[0]!.n = 9;
-    });
-    expect(tracker.value.values.map((value) => value.n)).toEqual([9, 0, 1, 2]);
-    expect(tracker.value.values[0]).not.toBe(tracker.value.values[1]);
-  });
+  it(
+    "supports self-overlapping fill and copyWithin by value",
+    supportsSelfOverlappingFillAndCopywithin,
+  );
 
   it.each(["unshift", "splice"] as const)(
     "inserts 100,000 items with %s",

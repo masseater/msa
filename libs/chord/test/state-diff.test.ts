@@ -34,95 +34,225 @@ const emitsStringAppendAndFrontTruncation = (): void => {
   ]);
 };
 
+const normalizesReorderedDistinctDeeplyEqualObjects = (): void => {
+  const first = { nested: { value: 1 } };
+  const second = { nested: { value: 1 } };
+  expect(first).not.toBe(second);
+  expect(diffRevisions({ values: [first, second] }, { values: [second, first] })).toEqual([]);
+};
+
+const emitsNothingForDeeplyEqualReconstructed = (): void => {
+  expect(diffRevisions({ value: { nested: [1, 2] } }, { value: { nested: [1, 2] } })).toEqual([]);
+  expect(
+    diffRevisions({ values: [{ id: 1 }, { id: 2 }] }, { values: [{ id: 1 }, { id: 2 }] }),
+  ).toEqual([]);
+  expect(diffRevisions({ values: [true, true, true] }, { values: [true, true, true] })).toEqual([]);
+};
+
+const representsArrayInsertionRemovalAndShift = (): void => {
+  const a = { id: "a" };
+  const b = { id: "b" };
+  const c = { id: "c" };
+  expectDiff({ values: [a, b] }, { values: [a, c, b] }, [["p", ["values"], 1, 0, [c]]]);
+  expectDiff({ values: [a, b, c] }, { values: [b, c] }, [["p", ["values"], 0, 1, []]]);
+};
+
+const collapsesASameLengthQueueUpdate = (): void => {
+  const a = { id: "a" };
+  const b = { id: "b" };
+  const c = { id: "c" };
+  const d = { id: "d" };
+  expectDiff({ values: [a, b, c] }, { values: [b, c, d] }, [
+    ["p", ["values"], 0, 1, []],
+    ["p", ["values"], 2, 0, [d]],
+  ]);
+};
+
+const emitsAPermutationForAPure = (): void => {
+  const a = { id: "a" };
+  const b = { id: "b" };
+  const c = { id: "c" };
+  expectDiff({ values: [a, b, c] }, { values: [c, a, b] }, [["m", ["values"], [2, 0, 1]]]);
+};
+
+const validatesAndEncodesPermutations = (): void => {
+  const operations: Op[] = [
+    ["m", ["values"], [2, 0, 1]],
+    ["m", ["values"], [1, 2, 0]],
+  ];
+  for (const operation of operations) assertValidOp(operation);
+  const wire = encoder().encode(operations);
+  expect(wire).toEqual([
+    ["m", ["values"], [2, 0, 1]],
+    ["m", [1, 2, 0]],
+  ]);
+  for (const operation of wire) assertValidWireOp(operation);
+  expect(decoder().decode(wire)).toEqual(operations);
+  expect(() => assertValidOp(["m", ["values"], [0, 0]])).toThrow(/bijection/u);
+};
+
+const keepsALeafEditInsideA = (): void => {
+  expectDiff(
+    {
+      values: [
+        { id: 1, label: "one" },
+        { id: 2, label: "two" },
+      ],
+    },
+    {
+      values: [
+        { id: 1, label: "one" },
+        { id: 2, label: "changed" },
+      ],
+    },
+    [["s", ["values", 1, "label"], "changed"]],
+  );
+};
+
+const emitsPayloadFreeSplicesForScattered = (): void => {
+  const [a, b, c, d, e] = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }, { id: "e" }];
+  expectDiff({ values: [a, b, c, d, e] }, { values: [a, c, e] }, [
+    ["p", ["values"], 1, 1, []],
+    ["p", ["values"], 2, 1, []],
+  ]);
+};
+
+const doesNotFieldDiffUnrelatedShifted = (): void => {
+  const before = [1, 2, 3].map((value) => ({ type: "row", value }));
+  const after = [2, 3, 4].map((value) => ({ type: "row", value }));
+  expectDiff({ values: before }, { values: after }, [
+    ["p", ["values"], 0, 1, []],
+    ["p", ["values"], 2, 0, [{ type: "row", value: 4 }]],
+  ]);
+};
+
+const doesNotTreatCoincidentalIdOr = (): void => {
+  const left = { value: "left" };
+  const right = { value: "right" };
+  const before = [
+    left,
+    { id: 1, key: "a", value: "first" },
+    { id: 2, key: "b", value: "second" },
+    right,
+  ];
+  const replacements = [
+    { id: 2, key: "b", value: "edited-second" },
+    { id: 1, key: "a", value: "edited-first" },
+  ];
+  const after = [left, ...replacements, right];
+  expectDiff({ values: before }, { values: after }, [["p", ["values"], 1, 2, replacements]]);
+};
+
+const combinesRemovalsAppendAndAShared = (): void => {
+  const a = { id: "a", stable: {}, detail: { text: "a" } };
+  const b = { id: "b", stable: {}, detail: { text: "b" } };
+  const c = { id: "c", stable: {}, detail: { text: "c" } };
+  const d = { id: "d", stable: {}, detail: { text: "d" } };
+  const changedC = { id: "c", stable: c.stable, detail: { text: "changed" } };
+  const appended = { id: "e", stable: {}, detail: { text: "e" } };
+  expectDiff({ values: [a, b, c, d] }, { values: [a, changedC, d, appended] }, [
+    ["p", ["values"], 1, 1, []],
+    ["a", ["values", 1, "detail", "text"], "hanged"],
+    ["p", ["values"], 3, 0, [appended]],
+  ]);
+};
+
+const keepsFortyThousandRowSparseEdits = (): void => {
+  const values = Array.from({ length: 40_000 }, (_, value) => ({ value, stable: { value } }));
+  const after = values.slice();
+  const changed: number[] = [];
+  for (let index = 100; index < after.length; index += 400) {
+    after[index] = { value: -index, stable: values[index]!.stable };
+    changed.push(index);
+  }
+  const operations = diffRevisions({ values }, { values: after });
+  expect(operations).toEqual(changed.map((index) => ["s", ["values", index, "value"], -index]));
+  expect(JSON.stringify(operations).length).toBeLessThan(7_500);
+  expect(applyImmutable({ values }, operations)).toEqual({ values: after });
+};
+
+const keepsAReconstructedLargeArrayLeaf = (): void => {
+  const before = Array.from({ length: 1_000 }, (_, value) => ({ value, label: `row-${value}` }));
+  const after = structuredClone(before);
+  after[700]!.label = "changed";
+  const operations = diffRevisions({ values: before }, { values: after });
+  expect(operations).toEqual([["s", ["values", 700, "label"], "changed"]]);
+  expect(JSON.stringify(operations).length).toBeLessThan(100);
+  expect(applyImmutable({ values: before }, operations)).toEqual({ values: after });
+};
+
+const splicesAnAmbiguousEqualCountMoved = (): void => {
+  const left = { value: "left" };
+  const right = { value: "right" };
+  const before = [left, { id: 1, value: "a" }, { id: 2, value: "b" }, right];
+  const replacements = [
+    { id: 2, value: "edited" },
+    { id: 1, value: "also-edited" },
+  ];
+  const after = [left, ...replacements, right];
+  expectDiff({ values: before }, { values: after }, [["p", ["values"], 1, 2, replacements]]);
+};
+
+const encodesFiveHundredUnshiftsWithoutSnapshotting = (): void => {
+  const retained = Array.from({ length: 10_000 }, (_, value) => ({
+    value,
+    payload: "x".repeat(100),
+  }));
+  const inserted = Array.from({ length: 500 }, (_, value) => ({ value: -value - 1 }));
+  const operations = diffRevisions({ values: retained }, { values: [...inserted, ...retained] });
+  expect(operations).toEqual([["p", ["values"], 0, 0, inserted]]);
+  expect(JSON.stringify(operations).length).toBeLessThan(20_000);
+  expect(applyImmutable({ values: retained }, operations)).toEqual({
+    values: [...inserted, ...retained],
+  });
+};
+
+const boundsWideObjectOperationEmissionWith = (): void => {
+  const before: Record<string, JsonValue> = {};
+  const after: Record<string, JsonValue> = {};
+  for (let index = 0; index < 20_000; index++) {
+    before[`field${index}`] = 0;
+    after[`field${index}`] = 1;
+  }
+  expect(diffRevisions(before, after)).toEqual([["r", after]]);
+};
+
+const fallsBackToABaseOperation = (): void => {
+  const before = { values: Array.from({ length: 40_000 }, () => 0) };
+  const after = { values: Array.from({ length: 40_000 }, () => 1) };
+  const operations = diffRevisions(before, after);
+  expect(operations).toEqual([["r", after]]);
+};
+
 describe("immutable revision diff", () => {
   it("emits sets and deletes", emitsSetsAndDeletes);
 
   it("emits string append and front truncation", emitsStringAppendAndFrontTruncation);
 
-  it("represents array insertion, removal, and shift with splices", () => {
-    const a = { id: "a" };
-    const b = { id: "b" };
-    const c = { id: "c" };
-    expectDiff({ values: [a, b] }, { values: [a, c, b] }, [["p", ["values"], 1, 0, [c]]]);
-    expectDiff({ values: [a, b, c] }, { values: [b, c] }, [["p", ["values"], 0, 1, []]]);
-  });
+  it(
+    "represents array insertion, removal, and shift with splices",
+    representsArrayInsertionRemovalAndShift,
+  );
 
-  it("collapses a same-length queue update to two splices", () => {
-    const a = { id: "a" };
-    const b = { id: "b" };
-    const c = { id: "c" };
-    const d = { id: "d" };
-    expectDiff({ values: [a, b, c] }, { values: [b, c, d] }, [
-      ["p", ["values"], 0, 1, []],
-      ["p", ["values"], 2, 0, [d]],
-    ]);
-  });
+  it("collapses a same-length queue update to two splices", collapsesASameLengthQueueUpdate);
 
-  it("emits a permutation for a pure reorder", () => {
-    const a = { id: "a" };
-    const b = { id: "b" };
-    const c = { id: "c" };
-    expectDiff({ values: [a, b, c] }, { values: [c, a, b] }, [["m", ["values"], [2, 0, 1]]]);
-  });
+  it("emits a permutation for a pure reorder", emitsAPermutationForAPure);
 
-  it("normalizes reordered distinct deeply-equal objects to a no-op", () => {
-    const first = { nested: { value: 1 } };
-    const second = { nested: { value: 1 } };
-    expect(first).not.toBe(second);
-    expect(diffRevisions({ values: [first, second] }, { values: [second, first] })).toEqual([]);
-  });
+  it(
+    "normalizes reordered distinct deeply-equal objects to a no-op",
+    normalizesReorderedDistinctDeeplyEqualObjects,
+  );
 
-  it("validates and encodes permutations", () => {
-    const operations: Op[] = [
-      ["m", ["values"], [2, 0, 1]],
-      ["m", ["values"], [1, 2, 0]],
-    ];
-    for (const operation of operations) assertValidOp(operation);
-    const wire = encoder().encode(operations);
-    expect(wire).toEqual([
-      ["m", ["values"], [2, 0, 1]],
-      ["m", [1, 2, 0]],
-    ]);
-    for (const operation of wire) assertValidWireOp(operation);
-    expect(decoder().decode(wire)).toEqual(operations);
-    expect(() => assertValidOp(["m", ["values"], [0, 0]])).toThrow(/bijection/u);
-  });
+  it("validates and encodes permutations", validatesAndEncodesPermutations);
 
-  it("emits nothing for deeply equal reconstructed values", () => {
-    expect(diffRevisions({ value: { nested: [1, 2] } }, { value: { nested: [1, 2] } })).toEqual([]);
-    expect(
-      diffRevisions({ values: [{ id: 1 }, { id: 2 }] }, { values: [{ id: 1 }, { id: 2 }] }),
-    ).toEqual([]);
-    expect(diffRevisions({ values: [true, true, true] }, { values: [true, true, true] })).toEqual(
-      [],
-    );
-  });
+  it(
+    "emits nothing for deeply equal reconstructed values",
+    emitsNothingForDeeplyEqualReconstructed,
+  );
 
-  it("keeps a leaf edit inside a reconstructed array narrow", () => {
-    expectDiff(
-      {
-        values: [
-          { id: 1, label: "one" },
-          { id: 2, label: "two" },
-        ],
-      },
-      {
-        values: [
-          { id: 1, label: "one" },
-          { id: 2, label: "changed" },
-        ],
-      },
-      [["s", ["values", 1, "label"], "changed"]],
-    );
-  });
+  it("keeps a leaf edit inside a reconstructed array narrow", keepsALeafEditInsideA);
 
-  it("emits payload-free splices for scattered removals", () => {
-    const [a, b, c, d, e] = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }, { id: "e" }];
-    expectDiff({ values: [a, b, c, d, e] }, { values: [a, c, e] }, [
-      ["p", ["values"], 1, 1, []],
-      ["p", ["values"], 2, 1, []],
-    ]);
-  });
+  it("emits payload-free splices for scattered removals", emitsPayloadFreeSplicesForScattered);
 
   it.each([
     ["front", [1, 2, 3, 4], [2, 3, 4], [["p", ["values"], 0, 1, []]]],
@@ -134,45 +264,20 @@ describe("immutable revision diff", () => {
     expectDiff({ values: [...before] }, { values: [...after] }, expected);
   });
 
-  it("does not field-diff unrelated shifted objects with common fields", () => {
-    const before = [1, 2, 3].map((value) => ({ type: "row", value }));
-    const after = [2, 3, 4].map((value) => ({ type: "row", value }));
-    expectDiff({ values: before }, { values: after }, [
-      ["p", ["values"], 0, 1, []],
-      ["p", ["values"], 2, 0, [{ type: "row", value: 4 }]],
-    ]);
-  });
+  it(
+    "does not field-diff unrelated shifted objects with common fields",
+    doesNotFieldDiffUnrelatedShifted,
+  );
 
-  it("does not treat coincidental id or key fields as structural identity", () => {
-    const left = { value: "left" };
-    const right = { value: "right" };
-    const before = [
-      left,
-      { id: 1, key: "a", value: "first" },
-      { id: 2, key: "b", value: "second" },
-      right,
-    ];
-    const replacements = [
-      { id: 2, key: "b", value: "edited-second" },
-      { id: 1, key: "a", value: "edited-first" },
-    ];
-    const after = [left, ...replacements, right];
-    expectDiff({ values: before }, { values: after }, [["p", ["values"], 1, 2, replacements]]);
-  });
+  it(
+    "does not treat coincidental id or key fields as structural identity",
+    doesNotTreatCoincidentalIdOr,
+  );
 
-  it("combines removals, append, and a shared-subtree survivor edit", () => {
-    const a = { id: "a", stable: {}, detail: { text: "a" } };
-    const b = { id: "b", stable: {}, detail: { text: "b" } };
-    const c = { id: "c", stable: {}, detail: { text: "c" } };
-    const d = { id: "d", stable: {}, detail: { text: "d" } };
-    const changedC = { id: "c", stable: c.stable, detail: { text: "changed" } };
-    const appended = { id: "e", stable: {}, detail: { text: "e" } };
-    expectDiff({ values: [a, b, c, d] }, { values: [a, changedC, d, appended] }, [
-      ["p", ["values"], 1, 1, []],
-      ["a", ["values", 1, "detail", "text"], "hanged"],
-      ["p", ["values"], 3, 0, [appended]],
-    ]);
-  });
+  it(
+    "combines removals, append, and a shared-subtree survivor edit",
+    combinesRemovalsAppendAndAShared,
+  );
 
   it.each([256 * 1024, 1024 * 1024])(
     "does not retain a %i-byte removed-neighbor payload",
@@ -216,70 +321,21 @@ describe("immutable revision diff", () => {
     ]);
   });
 
-  it("keeps forty-thousand-row sparse edits narrow", () => {
-    const values = Array.from({ length: 40_000 }, (_, value) => ({ value, stable: { value } }));
-    const after = values.slice();
-    const changed: number[] = [];
-    for (let index = 100; index < after.length; index += 400) {
-      after[index] = { value: -index, stable: values[index]!.stable };
-      changed.push(index);
-    }
-    const operations = diffRevisions({ values }, { values: after });
-    expect(operations).toEqual(changed.map((index) => ["s", ["values", index, "value"], -index]));
-    expect(JSON.stringify(operations).length).toBeLessThan(7_500);
-    expect(applyImmutable({ values }, operations)).toEqual({ values: after });
-  });
+  it("keeps forty-thousand-row sparse edits narrow", keepsFortyThousandRowSparseEdits);
 
-  it("keeps a reconstructed large-array leaf edit narrow", () => {
-    const before = Array.from({ length: 1_000 }, (_, value) => ({ value, label: `row-${value}` }));
-    const after = structuredClone(before);
-    after[700]!.label = "changed";
-    const operations = diffRevisions({ values: before }, { values: after });
-    expect(operations).toEqual([["s", ["values", 700, "label"], "changed"]]);
-    expect(JSON.stringify(operations).length).toBeLessThan(100);
-    expect(applyImmutable({ values: before }, operations)).toEqual({ values: after });
-  });
+  it("keeps a reconstructed large-array leaf edit narrow", keepsAReconstructedLargeArrayLeaf);
 
-  it("splices an ambiguous equal-count moved-and-edited gap", () => {
-    const left = { value: "left" };
-    const right = { value: "right" };
-    const before = [left, { id: 1, value: "a" }, { id: 2, value: "b" }, right];
-    const replacements = [
-      { id: 2, value: "edited" },
-      { id: 1, value: "also-edited" },
-    ];
-    const after = [left, ...replacements, right];
-    expectDiff({ values: before }, { values: after }, [["p", ["values"], 1, 2, replacements]]);
-  });
+  it("splices an ambiguous equal-count moved-and-edited gap", splicesAnAmbiguousEqualCountMoved);
 
-  it("encodes five hundred unshifts without snapshotting retained rows", () => {
-    const retained = Array.from({ length: 10_000 }, (_, value) => ({
-      value,
-      payload: "x".repeat(100),
-    }));
-    const inserted = Array.from({ length: 500 }, (_, value) => ({ value: -value - 1 }));
-    const operations = diffRevisions({ values: retained }, { values: [...inserted, ...retained] });
-    expect(operations).toEqual([["p", ["values"], 0, 0, inserted]]);
-    expect(JSON.stringify(operations).length).toBeLessThan(20_000);
-    expect(applyImmutable({ values: retained }, operations)).toEqual({
-      values: [...inserted, ...retained],
-    });
-  });
+  it(
+    "encodes five hundred unshifts without snapshotting retained rows",
+    encodesFiveHundredUnshiftsWithoutSnapshotting,
+  );
 
-  it("bounds wide-object operation emission with a root replacement", () => {
-    const before: Record<string, JsonValue> = {};
-    const after: Record<string, JsonValue> = {};
-    for (let index = 0; index < 20_000; index++) {
-      before[`field${index}`] = 0;
-      after[`field${index}`] = 1;
-    }
-    expect(diffRevisions(before, after)).toEqual([["r", after]]);
-  });
+  it(
+    "bounds wide-object operation emission with a root replacement",
+    boundsWideObjectOperationEmissionWith,
+  );
 
-  it("falls back to a base operation when leaf operations are larger", () => {
-    const before = { values: Array.from({ length: 40_000 }, () => 0) };
-    const after = { values: Array.from({ length: 40_000 }, () => 1) };
-    const operations = diffRevisions(before, after);
-    expect(operations).toEqual([["r", after]]);
-  });
+  it("falls back to a base operation when leaf operations are larger", fallsBackToABaseOperation);
 });
