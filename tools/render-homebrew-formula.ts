@@ -65,9 +65,7 @@ const makeContext = (flags: Flags) =>
       repoRoot,
       version: packageVersion,
     } = yield* workspace.loadCodingAgentPackage;
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const fs = yield* FileSystem.FileSystem;
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const path = yield* Path.Path;
     const { description, license } = yield* Schema.decodeEffect(packageJsonJson)(packageJsonText);
     const version = yield* requireVersion(flags.version ?? packageVersion);
@@ -198,7 +196,6 @@ const program = Effect.gen(function* () {
   );
 });
 
-// oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
 const mainLayer = Layer.mergeAll(NodeServices.layer, workspaceLayer);
 
 runMainWith(program, mainLayer);

@@ -18,9 +18,7 @@ const makeContext = () =>
   Effect.gen(function* () {
     const workspace = yield* Workspace;
     const { repoRoot, version } = yield* workspace.loadCodingAgentPackage;
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const fs = yield* FileSystem.FileSystem;
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const path = yield* Path.Path;
     const platform = RELEASE_PLATFORMS.find((candidate) => candidate.name === hostPlatformName());
     if (platform === undefined) {
@@ -103,7 +101,6 @@ const program = Effect.gen(function* () {
   yield* verifyInstall(context);
 });
 
-// oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
 const mainLayer = Layer.mergeAll(NodeServices.layer, processRunnerLayer, workspaceLayer);
 
 runMainWith(program, mainLayer);

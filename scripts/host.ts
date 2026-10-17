@@ -102,13 +102,11 @@ const processOptions = (options: CommandOptions, input: Queue.Queue<string, Caus
 });
 
 const makeSpawn = Effect.gen(function* () {
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess/FileSystem/Path (effect/unstable) are the only Effect platform APIs
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   return (options: CommandOptions): Effect.Effect<RunningCommand, never, Scope.Scope> =>
     Effect.gen(function* () {
       const input = yield* Queue.unbounded<string, Cause.Done>();
       const handle = yield* spawner.spawn(
-        // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess/FileSystem/Path (effect/unstable) are the only Effect platform APIs
         ChildProcess.make(options.command, options.args, processOptions(options, input)),
       );
       return {
@@ -125,7 +123,6 @@ const makeSpawn = Effect.gen(function* () {
 });
 
 const makeFiles = Effect.gen(function* () {
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess/FileSystem/Path (effect/unstable) are the only Effect platform APIs
   const fs = yield* FileSystem.FileSystem;
   return {
     chmod: (target: string, mode: number) => fs.chmod(target, mode).pipe(Effect.orDie),
@@ -157,7 +154,6 @@ const makeFiles = Effect.gen(function* () {
 });
 
 const makePaths = Effect.gen(function* () {
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess/FileSystem/Path (effect/unstable) are the only Effect platform APIs
   const path = yield* Path.Path;
   return {
     basename: (target: string, suffix?: string) => path.basename(target, suffix),
@@ -188,9 +184,7 @@ const hostLayer: Layer.Layer<Host> = Layer.effect(
       );
     return Host.of({ ...(yield* makeFiles), ...(yield* makePaths), run, spawn });
   }),
-)
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess/FileSystem/Path (effect/unstable) are the only Effect platform APIs
-  .pipe(Layer.provide(NodeServices.layer));
+).pipe(Layer.provide(NodeServices.layer));
 
 const scriptLayer = Layer.mergeAll(hostLayer, DateTime.layerCurrentZoneLocal);
 

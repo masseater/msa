@@ -93,19 +93,19 @@ const readRecords = (options: {
   const model = message.model ?? "[unknown]";
   const entryMillis = entry.timestamp === undefined ? null : parseMillis(entry.timestamp);
   return content.flatMap((block) => {
-    if (block.type !== "toolCall" || block.name !== "read") return [];
+    if (block["type"] !== "toolCall" || block["name"] !== "read") return [];
     return [
       {
         sessionFile,
         assistantEntryId: entry.id,
-        toolCallId: Predicate.isString(block.id) ? block.id : "",
+        toolCallId: Predicate.isString(block["id"]) ? block["id"] : "",
         timestamp: entry.timestamp,
         timestampMs: entryMillis ?? sessionMillis ?? 0,
         api: message.api ?? null,
         provider,
         model,
         providerModel: `${provider}/${model}`,
-        ...classifyRead(block.arguments),
+        ...classifyRead(block["arguments"]),
       },
     ];
   });

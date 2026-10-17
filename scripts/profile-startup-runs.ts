@@ -107,11 +107,11 @@ const benchmarkEnv = (params: RunParams, isolatedAgentDir: string | undefined) =
   const { options } = params;
   const env: Record<string, string> = { MSA_TIMING: "1" };
   const agentDir = options.agentDir ?? isolatedAgentDir;
-  if (agentDir !== undefined) env.MSA_CODING_AGENT_DIR = agentDir;
-  if (options.mode === "tui") env.MSA_STARTUP_BENCHMARK = "1";
+  if (agentDir !== undefined) env["MSA_CODING_AGENT_DIR"] = agentDir;
+  if (options.mode === "tui") env["MSA_STARTUP_BENCHMARK"] = "1";
   if (options.offline) {
-    env.MSA_OFFLINE = "1";
-    env.MSA_SKIP_VERSION_CHECK = "1";
+    env["MSA_OFFLINE"] = "1";
+    env["MSA_SKIP_VERSION_CHECK"] = "1";
   }
   return env;
 };

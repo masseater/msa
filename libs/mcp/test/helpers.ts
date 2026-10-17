@@ -60,7 +60,6 @@ const unavailable = (closing: Deferred.Deferred<void>) =>
   Deferred.await(closing).pipe(Effect.as(new Response(null, { status: 503 })));
 
 const respondWith = (handler: HttpHandler, origin: { value: string }, server: Running) =>
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpServer/NodeHttpServer (effect/unstable) is the only Effect HTTP server
   HttpEffect.fromWebHandler((request) =>
     Effect.runPromise(
       handler(request, origin.value).pipe(
@@ -74,17 +73,13 @@ const respondWith = (handler: HttpHandler, origin: { value: string }, server: Ru
 const serveIn = (server: Running, handler: HttpHandler) =>
   Effect.gen(function* () {
     const origin = { value: "" };
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpServer/NodeHttpServer (effect/unstable) is the only Effect HTTP server
     const serving = HttpServer.serve(respondWith(handler, origin, server)).pipe(
-      // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpServer/NodeHttpServer (effect/unstable) is the only Effect HTTP server
       Layer.provideMerge(NodeHttpServer.layerTest),
     );
     const services = yield* Layer.buildWithScope(serving, server.scope).pipe(
       Effect.mapError((error) => new HttpTestError({ message: error.message })),
     );
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpServer/NodeHttpServer (effect/unstable) is the only Effect HTTP server
     const { address } = Context.get(services, HttpServer.HttpServer);
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpServer/NodeHttpServer (effect/unstable) is the only Effect HTTP server
     if (NetAddress.isUnixPathAddress(address))
       return yield* new HttpTestError({ message: "HTTP test server did not bind to TCP" });
     origin.value = `http://127.0.0.1:${address.port}`;

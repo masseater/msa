@@ -31,10 +31,10 @@ const extractTextContent = (content: unknown): string => {
       (block: unknown): block is { readonly text: string } =>
         Predicate.isObject(block) &&
         "type" in block &&
-        block.type === "text" &&
+        block["type"] === "text" &&
         "text" in block &&
-        Predicate.isString(block.text) &&
-        block.text !== "",
+        Predicate.isString(block["text"]) &&
+        block["text"] !== "",
     )
     .map((block) => block.text)
     .join("\n");

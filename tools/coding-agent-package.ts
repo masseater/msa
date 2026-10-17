@@ -21,9 +21,7 @@ class Workspace extends Context.Service<
 const workspaceLayer: Layer.Layer<Workspace> = Layer.effect(
   Workspace,
   Effect.gen(function* () {
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const fs = yield* FileSystem.FileSystem;
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const path = yield* Path.Path;
     const repoRoot = path.resolve(import.meta.dirname, "..");
     return Workspace.of({
@@ -39,9 +37,7 @@ const workspaceLayer: Layer.Layer<Workspace> = Layer.effect(
       }).pipe(Effect.orDie),
     });
   }),
-)
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
-  .pipe(Layer.provide(NodeServices.layer));
+).pipe(Layer.provide(NodeServices.layer));
 
 export type { PackageInfo };
 export { Workspace, workspaceLayer };

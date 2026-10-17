@@ -63,7 +63,6 @@ const sseBody = (chunks: ReadonlyArray<Record<string, unknown>>) =>
 const sseResponse = (chunks: ReadonlyArray<Record<string, unknown>>) =>
   Effect.gen(function* () {
     const body = yield* sseBody(chunks);
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpServer (effect/unstable) is the only Effect HTTP server
     return HttpServerResponse.text(body, {
       contentType: "text/event-stream",
       headers: { "cache-control": "no-cache", connection: "close" },
@@ -117,10 +116,8 @@ const secondTurnChunks = (id: string, marker: string): ReadonlyArray<Record<stri
 
 const handler = (requestCount: Ref.Ref<number>) =>
   Effect.gen(function* () {
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpServer (effect/unstable) is the only Effect HTTP server
     const request = yield* HttpServerRequest.HttpServerRequest;
     if (request.method !== "POST" || !request.url.endsWith("/chat/completions")) {
-      // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpServer (effect/unstable) is the only Effect HTTP server
       return HttpServerResponse.empty({ status: 404 });
     }
     const body = yield* request.text.pipe(Effect.orElseSucceed(() => ""));
@@ -197,10 +194,8 @@ const program = Effect.gen(function* () {
   const binary = host.resolve(binaryArg);
   const tempDir = yield* host.makeTempDirectory("msa-codemode-binary-smoke-");
   const requestCount = yield* Ref.make(0);
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- HttpServer (effect/unstable) is the only Effect HTTP server
   const server = yield* HttpServer.HttpServer;
   const address = server.address;
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- NetAddress (effect/unstable) types the HttpServer address
   if (!NetAddress.isInetAddress(address)) {
     return yield* new SmokeError({ message: "Smoke-test server did not bind to a TCP port" });
   }
@@ -231,7 +226,4 @@ const program = Effect.gen(function* () {
   Effect.scoped,
 );
 
-runScriptWith(
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- NodeHttpServer (effect/unstable) is the only Effect HTTP server
-  NodeHttpServer.layerTest,
-)(program);
+runScriptWith(NodeHttpServer.layerTest)(program);
