@@ -3,9 +3,14 @@ name: verify
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
@@ -48,10 +53,22 @@ jobs:
           commits="$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE_SHA...$HEAD_SHA" --jq .total_commits)"
           git fetch --no-tags --depth="$((commits + 1))" origin "$HEAD_SHA"
           vp exec commitlint --from "$BEFORE_SHA" --to "$HEAD_SHA" --verbose
+      - if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMITS: ${{ github.event.pull_request.commits }}
+        run: |
+          gh auth setup-git
+          git fetch --no-tags --depth="$((COMMITS + 2))" origin "$GITHUB_SHA"
+          vp exec commitlint --from HEAD^1 --to HEAD^2 --verbose
       - if: github.event_name == 'push'
         run: vp run gitleaks
         env:
           GITLEAKS_BASE: ${{ github.event.before }}
+      - if: github.event_name == 'pull_request'
+        run: vp run gitleaks
+        env:
+          GITLEAKS_BASE: HEAD^1
       - name: Hydrate model data
         run: vp run hydrate:model-data
       - run: vp run --log grouped verify
@@ -60,15 +77,17 @@ jobs:
 
   autofix:
     needs: verify
-    if: failure()
+    if: >-
+      failure() && github.actor != 'github-actions[bot]' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     permissions:
       actions: write
     steps:
       - env:
           GH_TOKEN: ${{ github.token }}
-          HEAD_BRANCH: ${{ github.ref_name }}
-          HEAD_SHA: ${{ github.sha }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           FAILED_RUN_ID: ${{ github.run_id }}
         run: >-
           gh workflow run autofix.yml --repo "$GITHUB_REPOSITORY" --ref "$HEAD_BRANCH"

@@ -29,7 +29,7 @@ release. Add a tool name to select part of the graph. For example, run
 ## コマンド
 
 - pnpm は直接呼ばない。install・add・remove は `vp install`・`vp add`・`vp remove`、script は `vp run <script>`、binary は `vp exec <bin>`。`vp` が持たないサブコマンドだけ `vp pm <subcommand>` を使う。
-- `vp run verify` が唯一のゲート。pre-push フックも同じ verify を走らせる。
+- `vp run verify` が唯一のゲート。PR と main への push で CI の verify が走る。pre-push フックは gitleaks だけを走らせる。
 - テストは `bash test.sh`（verify の `test-all` が回す）。API キーを抜いた隔離環境で全 package をテストする。1 つだけ走らせるときは package のルートで `node "$(git rev-parse --show-toplevel)/node_modules/vitest/dist/cli.js" --run test/<file>.test.ts`（`libs/tui` は `node --test`）。
 - パッケージは `apps/`（配布する CLI と eval）・`libs/`（共有するライブラリ）・`tools/`（リポジトリの道具）に置く。`packages/` は作らない（verify の `workspace-layout` が落とす）。
 - `libs/ai/src/models.generated.ts` は直接編集せず、`vp run generate:models` で作り直す。clone 直後に typecheck が通らないときは `vp run hydrate:model-data` を回す。
@@ -50,8 +50,8 @@ release. Add a tool name to select part of the graph. For example, run
 
 ## PR とマージ
 
-- PR のレビュー、PR ごとの CI・動作検証・デプロイはしない。動作は main にマージしてから確かめる。
-- マージ前に base を取り込み、手元の `vp run verify` を通してから自分でマージする。マージしてよいかは聞かない。ルールセットのバイパスや `--admin` は使わない。
+- PR のレビュー、PR ごとの動作検証・デプロイはしない。動作は main にマージしてから確かめる。
+- マージ前に base を取り込み、PR の `verify` と `up-to-date` が通ってから自分でマージする。マージしてよいかは聞かない。ルールセットのバイパスや `--admin` は使わない。
 
 ## 公開先
 
