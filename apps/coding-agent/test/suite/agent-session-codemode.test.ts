@@ -1,5 +1,7 @@
+import { once } from "node:events";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { Worker } from "node:worker_threads";
 
 import type { AgentTool } from "@msa/agent-core";
 import {
@@ -16,7 +18,7 @@ import {
 } from "@msa/ai";
 import type { ToolResultMessage, Usage } from "@msa/ai/compat";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 
 import type { ExtensionAPI } from "../../src/core/extensions/types.ts";
 import type { CustomEntry } from "../../src/core/session-manager.ts";
@@ -118,6 +120,32 @@ function checkSavedImages(text: string): string {
       return "<saved>";
     })
     .join("\n");
+}
+
+/**
+ * Codemode admits a worker only while fewer than two are alive, and counts each one until it
+ * actually exits, which can be after its result returns (#10748). Runs in this file follow one
+ * another, so each waits for the workers of the runs before it, as a caller would after "worker
+ * limit reached".
+ */
+let workerOnce: MockInstance<Worker["once"]>;
+
+beforeEach(() => {
+  workerOnce = vi.spyOn(Worker.prototype, "once");
+});
+
+afterEach(async () => {
+  await workersExited();
+  workerOnce.mockRestore();
+});
+
+async function workersExited(): Promise<void> {
+  const running = new Set(
+    workerOnce.mock.contexts.filter(
+      (worker): worker is Worker => worker instanceof Worker && worker.threadId !== -1,
+    ),
+  );
+  await Promise.all([...running].map((worker) => once(worker, "exit")));
 }
 
 describe("AgentSession codemode tool", () => {
@@ -497,6 +525,7 @@ describe("codemode options and store", () => {
       fauxAssistantMessage("done"),
     ]);
     await harness.session.prompt("go");
+    await workersExited();
     return codemodeResult(harness);
   }
 
@@ -842,6 +871,7 @@ describe("codemode models", () => {
       fauxAssistantMessage("done"),
     ]);
     await harness.session.prompt("go");
+    await workersExited();
     return codemodeResult(harness);
   }
 

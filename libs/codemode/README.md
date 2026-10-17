@@ -244,7 +244,7 @@ const result = await sandbox.execute(code);
 
 `createInlineCodemodeSandbox()` passes the QuickJS module Wrangler compiled to `InlineCodemodeSandbox`. With another bundler, import `InlineCodemodeSandbox` from `/portable` and pass your own compiled module as `wasm`.
 
-- **Blocking.** A script that computes blocks the caller until it awaits a tool or uses up its `interruptBudget`.
+- **Blocking.** A script that computes blocks the caller until it awaits a tool or uses up its `interruptBudget`. Where the clock runs while a script computes (Node, Bun), it also stops once `timeoutMs` has passed.
 - **Stack.** QuickJS's stack guard is reduced to `INLINE_MAX_STACK_SIZE`, so that it trips before the caller's smaller stack runs out.
 
 ## Declarations for the model

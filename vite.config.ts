@@ -155,7 +155,10 @@ export default defineConfig({
         command:
           "node scripts/check-ts-relative-imports.mjs && node scripts/check-entry-graphs.mjs && node scripts/check-browser-smoke.mjs",
       },
-      "fence-check": "node tools/fence-counts.ts",
+      "fence-check": {
+        command: "node tools/fence-counts.ts",
+        dependsOn: ["build"],
+      },
       "workspace-layout": "node tools/workspace-layout.ts",
       "actions-lint": {
         command:

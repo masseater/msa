@@ -20,6 +20,11 @@ export interface VmStartData {
   /** Snapshot for `load()`: key to JSON text. */
   store: Record<string, string>;
   /**
+   * The execution's `timeoutMs`, absent when unlimited. In-thread launchers measure it on their own
+   * clock from launch, because the host's deadline timer cannot fire while the VM computes.
+   */
+  timeoutMs?: number;
+  /**
    * Run deterministically (`CodemodeSandboxBase.start()`): UTC, a virtual clock starting at `startedAt` (ms since
    * the epoch) that moves only with delivered results, randomness from `seed`, no `WeakRef`, results applied in
    * `seq` order, and `started`/`idle` messages.

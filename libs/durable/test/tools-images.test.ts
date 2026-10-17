@@ -381,12 +381,12 @@ describe("read of images, with the Photon image processor", () => {
     ]);
     expect(jpeg.data.length).toBeLessThanOrEqual(DEFAULT_IMAGE_LIMITS.maxBytes);
     expect(decodedImage(jpeg.data)).toMatchObject({ width: 1100, height: 1100 });
-    const tight = { ...DEFAULT_IMAGE_LIMITS, maxBytes: 200_000 };
-    const shrunk = await processor.prepare(noisyPng(2000, 2000), "image/png", tight);
+    const tight = { ...DEFAULT_IMAGE_LIMITS, maxBytes: 20_000 };
+    const shrunk = await processor.prepare(noisyPng(400, 400), "image/png", tight);
     expect(shrunk!.data.length).toBeLessThanOrEqual(tight.maxBytes);
-    expect(shrunk!.resized?.from).toEqual({ width: 2000, height: 2000 });
-    expect(shrunk!.resized!.to.width).toBeLessThan(2000);
-  }, 60_000);
+    expect(shrunk!.resized?.from).toEqual({ width: 400, height: 400 });
+    expect(shrunk!.resized!.to.width).toBeLessThan(400);
+  });
 
   it("keeps at least one pixel on each side of an extreme aspect ratio", async () => {
     const result = await processor.prepare(
@@ -617,20 +617,25 @@ describe("createNodePhotonImages", () => {
     };
     const inline = await prepareOn(await createNodePhotonImages({ worker: false }));
     const threaded = await prepareOn(processor);
+    // Compared with each other, not with fixed times: a busy machine stretches every gap.
     expect(inline).toBeGreaterThan(200);
-    expect(threaded).toBeLessThan(100);
+    expect(threaded).toBeLessThan(inline / 4);
   }, 60_000);
 
   it("gives the same result as the calling thread, and keeps the caller's bytes", async () => {
-    const png = noisyPng(1100, 1100);
+    // A small byte limit sends a small image through re-encoding and shrinking, as a large one would.
+    const limits = { ...DEFAULT_IMAGE_LIMITS, maxBytes: 20_000 };
+    const png = noisyPng(200, 200);
     const copy = png.slice();
-    const threaded = await processor.prepare(png, "image/png", DEFAULT_IMAGE_LIMITS);
+    const threaded = await processor.prepare(png, "image/png", limits);
     const inline = await (
       await createNodePhotonImages({ worker: false })
-    ).prepare(png, "image/png", DEFAULT_IMAGE_LIMITS);
+    ).prepare(png, "image/png", limits);
+    expect(threaded?.mimeType).toBe("image/jpeg");
+    expect(threaded?.resized?.from).toEqual({ width: 200, height: 200 });
     expect(threaded).toEqual(inline);
     expect(png).toEqual(copy);
-  }, 60_000);
+  });
 
   it("prepares concurrent images, and starts a new worker after the idle one exited", async () => {
     const images = await createNodePhotonImages({ idleMs: 10 });
