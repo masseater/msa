@@ -345,12 +345,12 @@ export class Editor implements Component, Focusable {
   private autocompleteTriggerCharacters = [...DEFAULT_AUTOCOMPLETE_TRIGGER_CHARACTERS];
   private autocompleteTriggerPattern = buildTriggerPattern(this.autocompleteTriggerCharacters);
   private autocompleteDebouncePattern = buildDebouncePattern(this.autocompleteTriggerCharacters);
-  private autocompleteList?: SelectList;
+  private autocompleteList?: SelectList | undefined;
   private autocompleteState: "regular" | "force" | null = null;
   private autocompletePrefix: string = "";
   private autocompleteMaxVisible: number = 5;
-  private autocompleteAbort?: AbortController;
-  private autocompleteDebounceTimer?: ReturnType<typeof setTimeout>;
+  private autocompleteAbort?: AbortController | undefined;
+  private autocompleteDebounceTimer?: ReturnType<typeof setTimeout> | undefined;
   private autocompleteRequestTask: Promise<void> = Promise.resolve();
   private autocompleteStartToken: number = 0;
   private autocompleteRequestId: number = 0;

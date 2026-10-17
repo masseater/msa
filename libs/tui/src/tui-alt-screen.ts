@@ -110,7 +110,7 @@ interface ClickTarget {
   timestamp: number;
   count: number;
   row: number;
-  scrollView?: ScrollView;
+  scrollView?: ScrollView | undefined;
   wordStart: number;
   wordEnd: number;
 }
@@ -154,7 +154,7 @@ interface ActiveSearch {
   query: string;
   matches: AltScreenSearchMatch[];
   selectedIndex: number;
-  selectedKey?: string;
+  selectedKey?: string | undefined;
   anchorRow: number;
   selectionMode: SearchSelectionMode;
 }
@@ -213,44 +213,46 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
   private readonly flashes: AltScreenFlashContainer;
   private altScreenActive = false;
   private imageProtocol: ImageProtocol = null;
-  private savedCapabilities?: TerminalCapabilities;
+  private savedCapabilities?: TerminalCapabilities | undefined;
   private readonly uploadedKittyImages = new Map<number, CachedKittyImage>();
-  private selectionAnchor?: SelectionPoint;
-  private selectionFocus?: SelectionPoint;
+  private selectionAnchor?: SelectionPoint | undefined;
+  private selectionFocus?: SelectionPoint | undefined;
   private selectionGranularity: SelectionGranularity = "character";
-  private selectionInitialRange?: SelectionRange;
-  private lastClick?: ClickTarget;
-  private selectionDragPointer?: { x: number; y: number };
+  private selectionInitialRange?: SelectionRange | undefined;
+  private lastClick?: ClickTarget | undefined;
+  private selectionDragPointer?: { x: number; y: number } | undefined;
   private selectionAutoScrollDirection: -1 | 0 | 1 = 0;
-  private selectionAutoScrollTimer?: NodeJS.Timeout;
+  private selectionAutoScrollTimer?: NodeJS.Timeout | undefined;
   private selectionPressActive = false;
-  private scrollbarDrag?: ScrollbarDrag;
-  private scrollbarHover?: ScrollView;
-  private scrollToEndIndicatorRect?: ScrollToEndIndicatorRect;
-  private activeSearch?: ActiveSearch;
-  private pressedUrl?: string;
+  private scrollbarDrag?: ScrollbarDrag | undefined;
+  private scrollbarHover?: ScrollView | undefined;
+  private scrollToEndIndicatorRect?: ScrollToEndIndicatorRect | undefined;
+  private activeSearch?: ActiveSearch | undefined;
+  private pressedUrl?: string | undefined;
   private selectionDragged = false;
-  private mouseCapture?: TuiMouseDispatchTarget;
-  private mousePressTarget?: TuiMouseDispatchTarget;
-  private mousePressPoint?: { x: number; y: number };
+  private mouseCapture?: TuiMouseDispatchTarget | undefined;
+  private mousePressTarget?: TuiMouseDispatchTarget | undefined;
+  private mousePressPoint?: { x: number; y: number } | undefined;
   private mousePressMoved = false;
-  private lastComponentClick?: {
-    timestamp: number;
-    count: number;
-    component: Component;
-    x: number;
-    y: number;
-  };
+  private lastComponentClick?:
+    | {
+        timestamp: number;
+        count: number;
+        component: Component;
+        x: number;
+        y: number;
+      }
+    | undefined;
   private readonly wheelScroll: WheelScrollAccelerator;
   private readonly mouseEnabled: boolean;
   private readonly searchMatchStyle: (text: string) => string;
   private readonly searchCurrentMatchStyle: (text: string) => string;
   private readonly searchNavigationButtonStyle: (text: string, hovered: boolean) => string;
-  private readonly scrollToEndIndicator?: () => string;
-  private readonly openUrl?: (url: string) => void;
-  private readonly onRightClickPaste?: () => void;
+  private readonly scrollToEndIndicator?: (() => string) | undefined;
+  private readonly openUrl?: ((url: string) => void) | undefined;
+  private readonly onRightClickPaste?: (() => void) | undefined;
   private copyOnSelect: boolean;
-  private readonly copySelection?: (text: string) => Promise<boolean | string>;
+  private readonly copySelection?: ((text: string) => Promise<boolean | string>) | undefined;
 
   constructor(
     terminal: Terminal,

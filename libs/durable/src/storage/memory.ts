@@ -195,7 +195,11 @@ const addressKey = (address: DocumentAddress): string =>
   ]);
 
 const recordAddressKey = (record: DocumentRecord | DocumentCreate): string =>
-  addressKey({ kind: record.kind, scope: record.scope, key: record.key });
+  addressKey({
+    kind: record.kind,
+    scope: record.scope,
+    ...(record.key === undefined ? {} : { key: record.key }),
+  });
 
 const isAliveAt = (record: DocumentRecord, at: DocumentPoint): boolean => {
   if (at === "current") return record.retiredAt === undefined;

@@ -127,7 +127,7 @@ export interface StreamableHttpReconnectOptions {
 
 export interface StreamableHttpTransportOptions {
   url: string | URL;
-  headers?: Record<string, string>;
+  headers?: Record<string, string> | undefined;
   fetch?: McpFetch;
   /** Open the server-to-client GET stream after initialization. Default: true. */
   openGetStream?: boolean;
@@ -333,7 +333,7 @@ export class StreamableHttpTransport extends TransportEvents implements McpTrans
       const response = await this.fetch(this.url, {
         method,
         headers,
-        body: init.body,
+        ...(init.body !== undefined ? { body: init.body } : {}),
         signal: this.controller.signal,
       });
       if (attempt > 0 || !onUnauthorized || !needsAuthorization(response)) return response;

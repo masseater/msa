@@ -549,7 +549,7 @@ function launchCommand(remote: RemotePlatform, file: string, loginShell: boolean
 }
 
 /** What an SSH connection learned about its remote system, and the daemon it verified last. */
-type SshState = { remote?: RemotePlatform; verified?: string };
+type SshState = { remote?: RemotePlatform; verified?: string | undefined };
 
 /** A `Connection` whose every start detects the remote system (once), verifies or deploys the daemon, then starts it. */
 function sshConnectionFor(options: SshConnectOptions, state: SshState): Connection {

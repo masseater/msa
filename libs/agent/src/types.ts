@@ -241,7 +241,9 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
    * }
    * ```
    */
-  transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>;
+  transformContext?:
+    | ((messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>)
+    | undefined;
 
   /**
    * Resolves an API key dynamically for each LLM call.
@@ -251,7 +253,7 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
    *
    * Contract: must not throw or reject. Return undefined when no key is available.
    */
-  getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
+  getApiKey?: ((provider: string) => Promise<string | undefined> | string | undefined) | undefined;
 
   /**
    * Called after the assistant message and all tool-result messages have been emitted, immediately before `turn_end`.
@@ -261,23 +263,25 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
    * with the current context. Returning undefined preserves normal scheduling. Error and aborted responses remain
    * hard exits.
    */
-  finishTurn?: FinishTurn;
+  finishTurn?: FinishTurn | undefined;
 
   /**
    * Called immediately before every conversational provider request, including the first.
    * Pending messages have already been appended. The returned context, model, and thinking level
    * replace the runtime values for this and later requests in the run. This hook does not poll queues.
    */
-  prepareRequest?: PrepareRequest;
+  prepareRequest?: PrepareRequest | undefined;
 
   /**
    * Called after `turn_end` when the loop will continue, immediately before the next turn starts.
    * Return replacement context/model/thinking state or messages to append to affect that turn.
    * Return undefined to keep using the current context/config.
    */
-  prepareNextTurn?: (
-    context: PrepareNextTurnContext,
-  ) => AgentLoopTurnUpdate | undefined | Promise<AgentLoopTurnUpdate | undefined>;
+  prepareNextTurn?:
+    | ((
+        context: PrepareNextTurnContext,
+      ) => AgentLoopTurnUpdate | undefined | Promise<AgentLoopTurnUpdate | undefined>)
+    | undefined;
 
   /**
    * Returns steering messages to inject into the conversation mid-run.
@@ -323,10 +327,12 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
    * A blocked result can also set `terminate: true` to participate in the batch early-termination rule.
    * The hook receives the agent abort signal and is responsible for honoring it.
    */
-  beforeToolCall?: (
-    context: BeforeToolCallContext,
-    signal?: AbortSignal,
-  ) => Promise<BeforeToolCallResult | undefined>;
+  beforeToolCall?:
+    | ((
+        context: BeforeToolCallContext,
+        signal?: AbortSignal,
+      ) => Promise<BeforeToolCallResult | undefined>)
+    | undefined;
 
   /**
    * Called after a tool finishes executing, before `tool_execution_end` and tool-result message events are emitted.
@@ -341,10 +347,12 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
    * Any omitted fields keep their original values. No deep merge is performed.
    * The hook receives the agent abort signal and is responsible for honoring it.
    */
-  afterToolCall?: (
-    context: AfterToolCallContext,
-    signal?: AbortSignal,
-  ) => Promise<AfterToolCallResult | undefined>;
+  afterToolCall?:
+    | ((
+        context: AfterToolCallContext,
+        signal?: AbortSignal,
+      ) => Promise<AfterToolCallResult | undefined>)
+    | undefined;
 }
 
 /**
@@ -419,11 +427,11 @@ export interface AgentState {
    */
   readonly isStreaming: boolean;
   /** Partial assistant message for the current streamed response, if any. */
-  readonly streamingMessage?: AgentMessage;
+  readonly streamingMessage?: AgentMessage | undefined;
   /** Tool call ids currently executing. */
   readonly pendingToolCalls: ReadonlySet<string>;
   /** Error message from the most recent failed or aborted assistant turn, if any. */
-  readonly errorMessage?: string;
+  readonly errorMessage?: string | undefined;
 }
 
 /** Final or partial result produced by a tool. */
@@ -438,7 +446,7 @@ export interface AgentToolResult<T = JsonValue | undefined> {
    */
   structuredContent?: JsonValue;
   /** Usage from the final tool execution itself, if available. Not used for main LLM context accounting. */
-  usage?: Usage;
+  usage?: Usage | undefined;
   /**
    * Report a failure without throwing. The model sees `content` as an error result, like a thrown
    * error, but `details` and `structuredContent` are kept for the UI and programmatic callers.
@@ -448,7 +456,7 @@ export interface AgentToolResult<T = JsonValue | undefined> {
    * Hint that the agent should stop after the current tool batch.
    * Early termination only happens when every finalized tool result in the batch sets this to true.
    */
-  terminate?: boolean;
+  terminate?: boolean | undefined;
 }
 
 /** Final outcome of a tool call after hooks ran. */

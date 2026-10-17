@@ -120,7 +120,7 @@ describe("contracts", () => {
   });
 
   it("methods without arguments or result: described without them; their presence must match, a void consumer accepts a result", () => {
-    const of = (members: Parameters<typeof local>[1]["members"]) =>
+    const of = (members: NonNullable<Parameters<typeof local>[1]["members"]>) =>
       local("t.methods", { version: 1, input: Type.Object({}), members }).description;
     const none = of({ m: method() });
     assert.deepEqual(none.variants[""]?.["m"], { kind: "method" });

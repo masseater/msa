@@ -176,7 +176,7 @@ function checkGlobals(globals: readonly CodemodeDeclaredGlobal[]): void {
 }
 
 /** Callbacks of a host-controlled run: its calls go to the caller, which answers them with `deliver()`. */
-type Control = Pick<CodemodeRunOptions, "onStarted" | "onCall" | "onIdle">;
+type Control = { [K in "onStarted" | "onCall" | "onIdle"]: CodemodeRunOptions[K] };
 
 interface ExecutionOptions {
   code: string;

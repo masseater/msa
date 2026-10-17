@@ -76,37 +76,37 @@ export interface OAuthClientProvider {
 
 export interface OAuthFlowOptions {
   serverUrl: string | URL;
-  authorizationCode?: string;
+  authorizationCode?: string | undefined;
   /** `iss` parameter of the authorization response that delivered `authorizationCode` (RFC 9207). */
-  iss?: string;
-  scope?: string;
-  resourceMetadataUrl?: URL;
+  iss?: string | undefined;
+  scope?: string | undefined;
+  resourceMetadataUrl?: URL | undefined;
   /**
    * Authorization server metadata document to use instead of discovery, for servers that advertise a
    * wrong authorization server or none. It is trusted as configured. Must use https, except on loopback.
    */
-  authorizationServerMetadataUrl?: URL;
-  fetch?: McpFetch;
+  authorizationServerMetadataUrl?: URL | undefined;
+  fetch?: McpFetch | undefined;
   /** Aborts every request of the flow. Requests have no time limit of their own; combine with a timeout as needed. */
-  signal?: AbortSignal;
-  skipIssuerValidation?: boolean;
+  signal?: AbortSignal | undefined;
+  skipIssuerValidation?: boolean | undefined;
   /**
    * Go straight to the authorization redirect instead of refreshing stored tokens, for example when the
    * server asks for scopes the current grant lacks (a refresh keeps the old scope).
    */
-  skipRefresh?: boolean;
+  skipRefresh?: boolean | undefined;
 }
 
 export type OAuthFlowResult = "AUTHORIZED" | "REDIRECT";
 type ClientAuthMethod = "client_secret_basic" | "client_secret_post" | "none";
 
 export interface TokenRequestOptions {
-  metadata?: AuthorizationServerMetadata;
+  metadata?: AuthorizationServerMetadata | undefined;
   clientInformation: OAuthClientInformationMixed;
-  resource?: string;
-  addClientAuthentication?: AddClientAuthentication;
-  fetch?: McpFetch;
-  signal?: AbortSignal;
+  resource?: string | undefined;
+  addClientAuthentication?: AddClientAuthentication | undefined;
+  fetch?: McpFetch | undefined;
+  signal?: AbortSignal | undefined;
 }
 
 function loopback(hostname: string): boolean {
@@ -191,12 +191,12 @@ async function pkce(): Promise<{ verifier: string; challenge: string }> {
 export async function startAuthorization(
   authorizationServerUrl: string | URL,
   options: {
-    metadata?: AuthorizationServerMetadata;
+    metadata?: AuthorizationServerMetadata | undefined;
     clientInformation: OAuthClientInformationMixed;
     redirectUrl: string | URL;
-    scope?: string;
-    state?: string;
-    resource?: string;
+    scope?: string | undefined;
+    state?: string | undefined;
+    resource?: string | undefined;
   },
 ): Promise<{ authorizationUrl: URL; codeVerifier: string }> {
   const metadata = options.metadata;
@@ -256,7 +256,7 @@ async function tokenRequest(
     method: "POST",
     headers,
     body: params,
-    signal: options.signal,
+    signal: options.signal ?? null,
   });
   const text = await response.text();
   let value: unknown;
@@ -278,11 +278,11 @@ async function tokenRequest(
 export async function registerClient(
   authorizationServerUrl: string | URL,
   options: {
-    metadata?: AuthorizationServerMetadata;
+    metadata?: AuthorizationServerMetadata | undefined;
     clientMetadata: OAuthClientMetadata;
-    scope?: string;
-    fetch?: McpFetch;
-    signal?: AbortSignal;
+    scope?: string | undefined;
+    fetch?: McpFetch | undefined;
+    signal?: AbortSignal | undefined;
   },
 ): Promise<OAuthClientInformationFull> {
   const endpoint = options.metadata?.registration_endpoint;
@@ -300,7 +300,7 @@ export async function registerClient(
           applicationType(options.clientMetadata.redirect_uris),
         ...(options.scope ? { scope: options.scope } : {}),
       }),
-      signal: options.signal,
+      signal: options.signal ?? null,
     },
   );
   if (!response.ok) throw new OAuthRegistrationError(response.status, await response.text());

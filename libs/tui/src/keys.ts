@@ -528,8 +528,8 @@ export type KeyEventType = "press" | "repeat" | "release";
 
 interface ParsedKittySequence {
   codepoint: number;
-  shiftedKey?: number; // Shifted version of the key (when shift is pressed)
-  baseLayoutKey?: number; // Key in standard PC-101 layout (for non-Latin layouts)
+  shiftedKey?: number | undefined; // Shifted version of the key (when shift is pressed)
+  baseLayoutKey?: number | undefined; // Key in standard PC-101 layout (for non-Latin layouts)
   modifier: number;
   eventType: KeyEventType;
 }

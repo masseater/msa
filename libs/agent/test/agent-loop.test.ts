@@ -1577,7 +1577,7 @@ describe("agentLoop with AgentMessage", () => {
         return {
           context: {
             messages: currentContext.messages.slice(),
-            tools: currentContext.tools,
+            ...(currentContext.tools !== undefined ? { tools: currentContext.tools } : {}),
           },
           messages: [{ role: "system", content: "updated guidance", timestamp: 1 }],
         };

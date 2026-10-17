@@ -60,7 +60,7 @@ function installExitHook(): void {
 
 export interface StdioTransportOptions {
   command: string;
-  args?: readonly string[];
+  args?: readonly string[] | undefined;
   cwd?: string;
   env?: Record<string, string>;
   inheritEnv?: boolean;

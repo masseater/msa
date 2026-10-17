@@ -171,7 +171,11 @@ function cluster(options: { pingInterval?: number; pingTimeout?: number } = {}):
     allow: () => true,
     browser(principal, browserOptions = {}) {
       const [down, up] = memoryLinkPair();
-      server.accept(down, { principal, restamp: browserOptions.restamp, ...options });
+      server.accept(down, {
+        principal,
+        ...(browserOptions.restamp !== undefined ? { restamp: browserOptions.restamp } : {}),
+        ...options,
+      });
       const host = createHost({
         self: { kind: "host" },
         name: "browser",

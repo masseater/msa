@@ -405,7 +405,7 @@ function examples() {
       await session.commit(async (tx) => {
         escaped = await tx.doc(LiveDoc, conversationId);
       }, context);
-      escaped!.generation = undefined; // throws: the draft was revoked
+      escaped!.generation = { attempt: 1 }; // throws: the draft was revoked
     },
   };
   return { sequences, Payment };

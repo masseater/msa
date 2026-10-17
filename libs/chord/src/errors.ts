@@ -31,7 +31,7 @@ export class ChordError extends Error {
   constructor(
     code: ChordErrorCode,
     message: string,
-    options?: { cause?: unknown; details?: unknown; reason?: ChordErrorReason },
+    options?: { cause?: unknown; details?: unknown; reason?: ChordErrorReason | undefined },
   ) {
     super(`${code}${options?.reason ? `/${options.reason}` : ""}: ${message}`, {
       cause: options?.cause,

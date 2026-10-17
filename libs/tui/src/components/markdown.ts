@@ -243,15 +243,15 @@ export class Markdown implements Component {
   private text: string;
   private paddingX: number; // Left/right padding
   private paddingY: number; // Top/bottom padding
-  private defaultTextStyle?: DefaultTextStyle;
+  private defaultTextStyle?: DefaultTextStyle | undefined;
   private theme: MarkdownTheme;
   private options: MarkdownOptions;
   private defaultStylePrefix?: string;
 
   // Cache for rendered output
-  private cachedText?: string;
-  private cachedWidth?: number;
-  private cachedLines?: string[];
+  private cachedText?: string | undefined;
+  private cachedWidth?: number | undefined;
+  private cachedLines?: string[] | undefined;
   // Parsed tokens depend only on the source, so they survive theme and width invalidation. Held weakly: a token tree is
   // about ten times the size of its source, and every message of a long transcript keeps a Markdown component. The
   // tokens survive a burst of re-renders, such as a theme preview, and are collected afterwards.

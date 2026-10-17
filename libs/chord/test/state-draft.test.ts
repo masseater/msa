@@ -21,7 +21,8 @@ describe("transactional overlay drafts", () => {
   });
 
   it("supports frozen bases, deletion, and native array mutators", () => {
-    const tracker = track({ optional: "remove" as string | undefined, values: [3, 1, 2] });
+    const base: { optional?: string; values: number[] } = { optional: "remove", values: [3, 1, 2] };
+    const tracker = track(base);
     const change = tracker.beginChange();
     delete change.state.optional;
     change.state.values.push(4);
