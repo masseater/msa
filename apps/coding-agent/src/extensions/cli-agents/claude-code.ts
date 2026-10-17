@@ -38,6 +38,7 @@ import {
   claudeExecutable,
   loadAccounts,
   type Account,
+  type RunFailure,
 } from "./claude-accounts.ts";
 import { createReply, type ReplyBuilder } from "./reply.ts";
 import { flattenTranscript, textFromContent } from "./transcript.ts";
@@ -432,12 +433,6 @@ async function attach(messages: readonly Message[], config: SessionConfig): Prom
   return session;
 }
 
-interface Failure {
-  error: string;
-  /** The account hit a usage limit. */
-  limited: boolean;
-}
-
 /** Claude Code reports a usage limit as `api_error`, a field the SDK's types do not declare. */
 function hitUsageLimit(event: object): boolean {
   return "api_error" in event && event.api_error === "usage_limit_reached";
@@ -453,8 +448,10 @@ async function pump(
   reply: ReplyBuilder,
   model: Model<string>,
   options?: SimpleStreamOptions,
-): Promise<Failure | undefined> {
+): Promise<RunFailure | undefined> {
   let messageId = "";
+  let apiError: RunFailure["cause"];
+  let rejectedResetsAt: number | undefined;
   let stopReason = "";
   let sawPartials = false;
   let calledTools = 0;
@@ -462,7 +459,7 @@ async function pump(
 
   while (true) {
     const next = await session.next();
-    if (next.done) return { error: session.exitDetail || "Claude Code exited", limited: false };
+    if (next.done) return { error: session.exitDetail || "Claude Code exited" };
     const event = next.value;
     try {
       await options?.onProviderStreamEvent?.(event, model);
@@ -500,7 +497,10 @@ async function pump(
     } else if (event.type === "assistant") {
       const message = event.message;
       // Claude Code's own error notices (usage limit, logged out); the result event reports them.
-      if (message.model === "<synthetic>") continue;
+      if (message.model === "<synthetic>") {
+        apiError = event.error;
+        continue;
+      }
       message.content.forEach((block, index) => {
         if (block.type === "tool_use" && block.name.startsWith(TOOL_PREFIX)) {
           session.pending.add(block.id);
@@ -514,10 +514,19 @@ async function pump(
           reply.setText(`${message.id}:${index}`, block.text);
         }
       });
+    } else if (event.type === "rate_limit_event") {
+      const info = event.rate_limit_info;
+      // resetsAt is in seconds.
+      if (info.status === "rejected") rejectedResetsAt = (info.resetsAt ?? 0) * 1000 || undefined;
     } else if (event.type === "result") {
       if (event.is_error) {
         const error = event.subtype === "success" ? event.result : event.errors.join("\n");
-        return { error: error || "Claude Code run failed", limited: hitUsageLimit(event) };
+        const limited = hitUsageLimit(event) || rejectedResetsAt !== undefined;
+        return {
+          error: error || "Claude Code run failed",
+          ...(limited ? { cause: "usage_limit" } : apiError ? { cause: apiError } : {}),
+          ...(rejectedResetsAt ? { resetsAt: rejectedResetsAt } : {}),
+        };
       }
       reply.done("stop");
       session.lastReply = replyKey(reply.message.content);
@@ -575,15 +584,12 @@ const streamFor =
             );
             return undefined;
           }
-          let failure: Failure | undefined;
+          let failure: RunFailure | undefined;
           try {
             session = await attach(messages, config);
           } catch (error) {
             // Starting under this account failed (e.g. its tokenCommand failed).
-            failure = {
-              error: error instanceof Error ? error.message : String(error),
-              limited: false,
-            };
+            failure = { error: error instanceof Error ? error.message : String(error) };
           }
           if (session) {
             account = session.account;
@@ -594,7 +600,7 @@ const streamFor =
           }
           if (!failure) return undefined;
           const failed = account;
-          const blocked = blockIfUnusable(failed, failure.error, failure.limited);
+          const blocked = blockIfUnusable(failed, failure);
           const detail = `${failed.name}: ${failure.error}`;
           failures.push(detail);
           if (fixed || !blocked || reply.hasContent) {

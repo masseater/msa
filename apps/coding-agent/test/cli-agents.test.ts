@@ -30,7 +30,6 @@ import {
   clearBlocks,
   loadAccounts,
   loginAccount,
-  parseReset,
   preferAccount,
   removeAccount,
   setAutoRotation,
@@ -54,26 +53,6 @@ function writeAccounts(accounts: unknown[]): void {
   writeFileSync(join(dir, "claude-code-accounts.json"), JSON.stringify({ accounts }));
 }
 
-describe("parseReset", () => {
-  const now = new Date(2026, 9, 17, 16, 0);
-
-  it("reads a reset date and time", () => {
-    expect(parseReset("You've hit your weekly limit · resets Oct 19 at 3pm", now)).toBe(
-      new Date(2026, 9, 19, 15, 0).getTime(),
-    );
-  });
-
-  it("puts a time already past today on the next day", () => {
-    expect(parseReset("limit reached · resets 3:30pm", now)).toBe(
-      new Date(2026, 9, 18, 15, 30).getTime(),
-    );
-  });
-
-  it("returns undefined without a reset time", () => {
-    expect(parseReset("something else", now)).toBeUndefined();
-  });
-});
-
 describe("Claude Code accounts", () => {
   it("uses msa's environment when no accounts are configured", () => {
     expect(loadAccounts()).toEqual([{ name: "default" }]);
@@ -86,20 +65,34 @@ describe("Claude Code accounts", () => {
 
   it("blocks an account that hit its usage limit until the reset", () => {
     const account = { name: "main" };
+    const resetsAt = new Date(2026, 9, 19, 15, 0).getTime();
     expect(
-      blockIfUnusable(account, "You've hit your weekly limit · resets Oct 19 at 3pm", true),
+      blockIfUnusable(account, {
+        error: "You've hit your weekly limit",
+        cause: "usage_limit",
+        resetsAt,
+      }),
     ).toBe(true);
-    expect(blockOf(account, new Date(2026, 9, 19, 14, 0).getTime())?.reason).toContain(
-      "weekly limit",
-    );
-    expect(blockOf(account, new Date(2026, 9, 19, 15, 1).getTime())).toBeUndefined();
+    expect(blockOf(account, resetsAt - 60_000)?.reason).toContain("weekly limit");
+    expect(blockOf(account, resetsAt + 60_000)).toBeUndefined();
     clearBlocks();
-    expect(blockOf(account, new Date(2026, 9, 19, 14, 0).getTime())).toBeUndefined();
+    expect(blockOf(account, resetsAt - 60_000)).toBeUndefined();
+  });
+
+  it("blocks an account by the error Claude Code classified", () => {
+    const now = Date.now();
+    const account = { name: "main" };
+    expect(blockIfUnusable(account, { error: "401", cause: "authentication_failed" })).toBe(true);
+    expect(blockOf(account, now + 60_000)).toBeDefined();
+    expect(blockOf(account, now + 11 * 60_000)).toBeUndefined();
+    expect(blockIfUnusable(account, { error: "on hold", cause: "account_on_hold" })).toBe(true);
+    expect(blockOf(account, now + 23 * 60 * 60_000)).toBeDefined();
   });
 
   it("does not block an account for an ordinary failure", () => {
     const account = { name: "main" };
-    expect(blockIfUnusable(account, "overloaded", false)).toBe(false);
+    expect(blockIfUnusable(account, { error: "overloaded", cause: "overloaded" })).toBe(false);
+    expect(blockIfUnusable(account, { error: "429", cause: "rate_limit" })).toBe(false);
     expect(blockOf(account)).toBeUndefined();
   });
 
@@ -118,7 +111,7 @@ describe("Claude Code accounts", () => {
     const account = { name: "broken", tokenCommand: "echo nope >&2; exit 1" };
     const error = await accountEnv(account).catch((caught: Error) => caught.message);
     expect(error).toMatch(/^tokenCommand .*: nope$/);
-    expect(blockIfUnusable(account, String(error), false)).toBe(true);
+    expect(blockIfUnusable(account, { error: String(error) })).toBe(true);
   });
 });
 
@@ -163,7 +156,7 @@ describe("managing Claude Code accounts", () => {
   it("deletes the config dir msa made for a removed account", () => {
     const account = addAccount("work");
     mkdirSync(account.configDir!, { recursive: true });
-    blockIfUnusable(account, "You've hit your limit", true);
+    blockIfUnusable(account, { error: "You've hit your limit", cause: "usage_limit" });
     removeAccount("work");
     expect(existsSync(managed("work"))).toBe(false);
     expect(blockOf(account)).toBeUndefined();
@@ -193,7 +186,7 @@ describe("managing Claude Code accounts", () => {
     );
     const account = addAccount("work");
     expect(await authStatus(account)).toEqual({ loggedIn: false });
-    blockIfUnusable(account, "Not logged in · Please run /login", false);
+    blockIfUnusable(account, { error: "Not logged in · Please run /login" });
     let shown = "";
     await loginAccount(account, {
       askCode: async (url) => {

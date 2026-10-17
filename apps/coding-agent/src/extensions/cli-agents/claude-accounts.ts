@@ -23,6 +23,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 
+import type { SDKAssistantMessageError } from "@anthropic-ai/claude-agent-sdk";
+
 import { expandTildePath, getAgentDir } from "../../config.ts";
 import { findExecutableOnPath } from "../../utils/shell.ts";
 
@@ -289,50 +291,38 @@ export function clearBlocks(): void {
   saveBlocks({});
 }
 
-const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-
-/** Parse "resets Oct 19 at 3pm" / "resets 3:30pm" (local time) from a usage-limit message. */
-export function parseReset(message: string, now = new Date()): number | undefined {
-  const match =
-    /resets\s+(?:([A-Za-z]{3})[a-z]*\s+(\d{1,2})(?:\s+at)?\s+)?(\d{1,2})(?::(\d{2}))?\s*([ap]m)/i.exec(
-      message,
-    );
-  if (!match) return undefined;
-  const [, month, day, hour, minute, meridiem] = match;
-  const at = new Date(now);
-  at.setSeconds(0, 0);
-  at.setHours(
-    (Number(hour) % 12) + (meridiem!.toLowerCase() === "pm" ? 12 : 0),
-    Number(minute ?? 0),
-  );
-  if (month && day) {
-    const monthIndex = MONTHS.indexOf(month.toLowerCase());
-    if (monthIndex < 0) return undefined;
-    at.setMonth(monthIndex, Number(day));
-    if (at.getTime() < now.getTime() - 24 * 60 * 60_000) at.setFullYear(at.getFullYear() + 1);
-  } else if (at.getTime() <= now.getTime()) {
-    at.setDate(at.getDate() + 1);
-  }
-  return at.getTime();
+export interface RunFailure {
+  error: string;
+  /** Claude Code's classification: a used-up plan limit, or the API error of its error notice. */
+  cause?: "usage_limit" | SDKAssistantMessageError;
+  /** When the rejected plan limit resets, in ms. */
+  resetsAt?: number;
 }
 
+const DISABLED_CAUSES = new Set<RunFailure["cause"]>([
+  "oauth_org_not_allowed",
+  "account_on_hold",
+  "billing_error",
+]);
+
 /** If a failed run means the account cannot serve requests for a while, record it and return true. */
-export function blockIfUnusable(account: Account, message: string, limited: boolean): boolean {
+export function blockIfUnusable(account: Account, failure: RunFailure): boolean {
+  const { error, cause } = failure;
   let until: number | undefined;
-  if (limited || /hit your .*limit/i.test(message))
-    until = parseReset(message) ?? Date.now() + FALLBACK_BLOCK_MS;
+  if (cause === "usage_limit") until = failure.resetsAt ?? Date.now() + FALLBACK_BLOCK_MS;
+  // Failures before any API call (no login, a failed tokenCommand) come without a classification.
   else if (
-    /not logged in|please run \/login|invalid api key|oauth token has expired/i.test(message)
+    cause === "authentication_failed" ||
+    /^tokenCommand /.test(error) ||
+    /not logged in|please run \/login/i.test(error)
   ) {
     until = Date.now() + LOGGED_OUT_BLOCK_MS;
-  } else if (/^tokenCommand /.test(message)) {
-    until = Date.now() + LOGGED_OUT_BLOCK_MS;
-  } else if (/disabled claude subscription access|organization has been disabled/i.test(message)) {
+  } else if (DISABLED_CAUSES.has(cause)) {
     until = Date.now() + DISABLED_BLOCK_MS;
   }
   if (until === undefined) return false;
   const blocks = loadBlocks();
-  blocks[account.name] = { until, reason: message.split("\n")[0]!.slice(0, 200) };
+  blocks[account.name] = { until, reason: error.split("\n")[0]!.slice(0, 200) };
   saveBlocks(blocks);
   return true;
 }
