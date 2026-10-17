@@ -1057,7 +1057,7 @@ import {
 } from "./fixtures/tutorial.ts";
 ```
 
-and those in `test/tutorial-2.test.ts` (7 to 11) import:
+and those in `test/tutorial-tasks-plugins-reload.test.ts` (7 to 11) import:
 
 <!-- example:imports-2 -->
 
@@ -1094,7 +1094,7 @@ import {
 From `libs/chord`, run:
 
 ```sh
-node ../../node_modules/vitest/dist/cli.js --run test/tutorial.test.ts test/tutorial-2.test.ts
+node ../../node_modules/vitest/dist/cli.js --run test/tutorial.test.ts test/tutorial-tasks-plugins-reload.test.ts
 ```
 
 There is one test per numbered section. Every TypeScript block is matched
