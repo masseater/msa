@@ -49,7 +49,7 @@ const buildRequest = (request: HttpRequest) => {
   )?.[1];
   return (
     // oxlint-disable-next-line effecttsgo/unstable-api-usage -- effect/http は 4.0.2 で pre-GA
-    HttpClientRequest.setBody(withHeaders, HttpBody.text(body, contentType))
+    HttpClientRequest.setBody(withHeaders, HttpBody.raw(body, { contentType }))
   );
 };
 
