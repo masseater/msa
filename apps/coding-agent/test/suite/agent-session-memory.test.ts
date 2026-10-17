@@ -1,5 +1,5 @@
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai/compat";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { MEMORY_RECALL_MESSAGE_TYPE } from "../../src/core/memory/memory.ts";
 import { MemoryStore } from "../../src/core/memory/store.ts";
