@@ -80,5 +80,16 @@ for name in CI GITHUB_ACTIONS; do
 	[[ -z "$value" ]] || test_env+=("$name=$value")
 done
 
+# Wrap the run so it holds in cloud containers, where CI's conditions differ:
+# - Root bypasses file permissions, so tests that expect EACCES hold only without CAP_DAC_OVERRIDE and CAP_DAC_READ_SEARCH.
+# - PID 1 never reaps orphans, so killed grandchildren stay zombies; tini as a subreaper reaps them.
+wrapper=(env -i)
+if [[ "$(id -u)" == 0 ]]; then
+	wrapper=(setpriv --bounding-set=-dac_override,-dac_read_search --inh-caps=-dac_override,-dac_read_search "${wrapper[@]}")
+fi
+if [[ "${CLAUDE_CODE_REMOTE-}" == true ]]; then
+	wrapper=(tini -s -- "${wrapper[@]}")
+fi
+
 echo "Running tests without API keys in isolated home: $test_root/home"
-env -i "${test_env[@]}" vp run test
+"${wrapper[@]}" "${test_env[@]}" vp run test
