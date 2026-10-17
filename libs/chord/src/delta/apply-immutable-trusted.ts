@@ -32,38 +32,45 @@ function appliedTrusted<T>(target: T, operations: readonly Op[]): T {
       continue;
     }
 
-    const path = operation[1];
-    const copied = copyPath(root, path, path.length - 1, owned);
-    root = copied.root;
-    const key = path[path.length - 1]!;
-    switch (operation[0]) {
-      case "s":
-        defineData(copied.target, key, operation[2]);
-        break;
-      case "d":
-        if (Array.isArray(copied.target)) {
-          if (typeof key !== "number")
-            throw new TypeError("Trusted array deletion key is not numeric");
-          spliceTrusted(copied.target, key, 1, []);
-        } else Reflect.deleteProperty(copied.target, key);
-        break;
-      case "a": {
-        const current = read(copied.target, key);
-        if (typeof current !== "string")
-          throw new TypeError("Trusted append target is not a string");
-        defineData(copied.target, key, `${current}${operation[2]}`);
-        break;
-      }
-      case "t": {
-        const current = read(copied.target, key);
-        if (typeof current !== "string")
-          throw new TypeError("Trusted truncate target is not a string");
-        defineData(copied.target, key, current.slice(operation[2]));
-        break;
-      }
-    }
+    root = applyLeafTrusted(root, operation, owned);
   }
   return root as unknown as T;
+}
+
+function applyLeafTrusted(
+  root: JsonValue,
+  operation: Extract<Op, { 0: "s" | "d" | "a" | "t" }>,
+  owned: WeakSet<object>,
+): JsonValue {
+  const path = operation[1];
+  const copied = copyPath(root, path, path.length - 1, owned);
+  const key = path[path.length - 1]!;
+  switch (operation[0]) {
+    case "s":
+      defineData(copied.target, key, operation[2]);
+      break;
+    case "d":
+      if (Array.isArray(copied.target)) {
+        if (typeof key !== "number")
+          throw new TypeError("Trusted array deletion key is not numeric");
+        spliceTrusted(copied.target, key, 1, []);
+      } else Reflect.deleteProperty(copied.target, key);
+      break;
+    case "a": {
+      const current = read(copied.target, key);
+      if (typeof current !== "string") throw new TypeError("Trusted append target is not a string");
+      defineData(copied.target, key, `${current}${operation[2]}`);
+      break;
+    }
+    case "t": {
+      const current = read(copied.target, key);
+      if (typeof current !== "string")
+        throw new TypeError("Trusted truncate target is not a string");
+      defineData(copied.target, key, current.slice(operation[2]));
+      break;
+    }
+  }
+  return copied.root;
 }
 
 function copyPath(root: JsonValue, path: Path, length: number, owned: WeakSet<object>): CopiedPath {
