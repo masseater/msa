@@ -123,6 +123,10 @@ const APP_KEYBINDINGS = {
     defaultKeys: "ctrl+backspace",
     description: "Delete session when query is empty",
   },
+  "app.orchestrator.start": {
+    defaultKeys: "n",
+    description: "Start a session for a task you type",
+  },
   "app.orchestrator.stop": {
     defaultKeys: "s",
     description: "Stop the selected orchestrated session",

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vite-plus/test";
 
 import { KEYBINDINGS, useWindowsKeybindings } from "../src/core/keybindings.ts";
@@ -49,5 +52,16 @@ describe("Windows keybinding defaults", () => {
     expect(KEYBINDINGS["app.message.dequeue"].defaultKeys).toBe(
       windowsKeybindings ? "alt+q" : "alt+up",
     );
+  });
+});
+
+describe("documented keybindings", () => {
+  it("lists every keybinding id in docs/keybindings.md", () => {
+    const documentation = readFileSync(
+      resolve(import.meta.dirname, "../docs/keybindings.md"),
+      "utf8",
+    );
+    const missing = Object.keys(KEYBINDINGS).filter((id) => !documentation.includes(`\`${id}\``));
+    expect(missing).toEqual([]);
   });
 });

@@ -144,6 +144,7 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 | `app.session.rename`            | `ctrl+r`         | Rename session                                     |
 | `app.session.delete`            | `ctrl+d`         | Delete session                                     |
 | `app.session.deleteNoninvasive` | `ctrl+backspace` | Delete session when query is empty                 |
+| `app.orchestrator.start`        | `n`              | Start a session for a task you type in `/sessions` |
 | `app.orchestrator.stop`         | `s`              | Stop the selected session in `/sessions`           |
 | `app.orchestrator.model`        | `m`              | Switch the selected session's model in `/sessions` |
 

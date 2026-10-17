@@ -315,6 +315,10 @@
       "$ref": "#/$defs/KeybindingValue",
       "description": "Delete session when query is empty"
     },
+    "app.orchestrator.start": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Start a session for a task you type"
+    },
     "app.orchestrator.stop": {
       "$ref": "#/$defs/KeybindingValue",
       "description": "Stop the selected orchestrated session"

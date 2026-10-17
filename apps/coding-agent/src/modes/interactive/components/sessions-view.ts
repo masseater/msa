@@ -68,6 +68,12 @@ function modelName(reference: string): string {
   return slash === -1 ? reference : reference.slice(slash + 1);
 }
 
+/** Names a session the user started by hand after the first line of the task they typed. */
+function titleOf(prompt: string): string {
+  const line = firstLine(prompt);
+  return line.length > 60 ? `${line.slice(0, 59)}…` : line;
+}
+
 function firstLine(text: string | undefined): string {
   return (
     (text ?? "")
@@ -172,16 +178,22 @@ export interface SessionsViewOptions {
   maxHeight: () => number;
 }
 
+/** What the input composes: a message to a session, or the task of a session to start. */
+type Composing =
+  | { kind: "message"; id: string }
+  | { kind: "start"; dependsOn: readonly string[]; after: string | undefined };
+
 /**
  * `/sessions`: the sessions the orchestrator started, grouped by status, and one session in detail
- * with its progress, dependencies, and report, where the user steers, stops, or switches its model.
+ * with its progress, dependencies, and report, where the user starts sessions of their own, steers,
+ * stops, or switches a session's model.
  */
 export class SessionsView implements Component, Focusable {
   private readonly options: SessionsViewOptions;
   private selectedId: string | undefined;
   private openId: string | undefined;
-  private readonly input = new Input({ prompt: "› ", placeholder: "Message to this session" });
-  private composing = false;
+  private readonly input = new Input({ prompt: "› " });
+  private composing: Composing | undefined;
   private _focused = false;
 
   constructor(options: SessionsViewOptions, initialId?: string) {
@@ -197,7 +209,7 @@ export class SessionsView implements Component, Focusable {
 
   set focused(value: boolean) {
     this._focused = value;
-    this.input.focused = value && this.composing;
+    this.input.focused = value && this.composing !== undefined;
   }
 
   invalidate(): void {}
@@ -239,7 +251,11 @@ export class SessionsView implements Component, Focusable {
   private renderList(rows: readonly SessionNodeWithDependencies[], width: number): string[] {
     const lines = this.header("Sessions", describeSessionCounts(rows, "") ?? "", width);
     if (rows.length === 0) {
-      lines.push("", ` ${keyHint("tui.select.cancel", "close")}`);
+      if (this.composing) return [...lines, "", ...this.renderComposer(width)];
+      lines.push(
+        "",
+        ` ${keyHint("app.orchestrator.start", "start a session")}  ${keyHint("tui.select.cancel", "close")}`,
+      );
       return lines;
     }
     const selected = this.selected(rows);
@@ -262,10 +278,15 @@ export class SessionsView implements Component, Focusable {
       if (detail) lines.push(truncateToWidth(`       ${theme.fg("muted", detail)}`, width));
     }
     lines.push("");
+    if (this.composing) {
+      lines.push(...this.renderComposer(width));
+      return lines;
+    }
     lines.push(
       ` ${[
         rawKeyHint(`${keyText("tui.select.up")}/${keyText("tui.select.down")}`, "select"),
         keyHint("tui.select.confirm", "open"),
+        keyHint("app.orchestrator.start", "start"),
         selected && stoppable(selected) ? keyHint("app.orchestrator.stop", "stop") : undefined,
         keyHint("app.orchestrator.model", "model"),
         keyHint("tui.select.cancel", "close"),
@@ -358,16 +379,14 @@ export class SessionsView implements Component, Focusable {
     }
     lines.push("");
     if (this.composing) {
-      lines.push(...this.input.render(width));
-      lines.push(
-        ` ${keyHint("tui.input.submit", "send")}  ${keyHint("tui.select.cancel", "cancel")}`,
-      );
+      lines.push(...this.renderComposer(width));
     } else {
       lines.push(
         ` ${[
           node.status === "queued"
             ? undefined
             : keyHint("tui.select.confirm", node.status === "running" ? "steer" : "rerun"),
+          keyHint("app.orchestrator.start", "start after this"),
           stoppable(node) ? keyHint("app.orchestrator.stop", "stop") : undefined,
           keyHint("app.orchestrator.model", "model"),
           keyHint("tui.select.cancel", "back"),
@@ -377,6 +396,23 @@ export class SessionsView implements Component, Focusable {
       );
     }
     return lines;
+  }
+
+  /** The input the user types into, labelled with what the text will do. */
+  private renderComposer(width: number): string[] {
+    const composing = this.composing;
+    if (!composing) return [];
+    const label =
+      composing.kind === "message"
+        ? "Message to this session"
+        : composing.after
+          ? `Task of a session that starts after ${composing.after}`
+          : "Task of a session to start now";
+    return [
+      truncateToWidth(` ${theme.fg("accent", label)}`, width),
+      ...this.input.render(width),
+      ` ${keyHint("tui.input.submit", composing.kind === "message" ? "send" : "start")}  ${keyHint("tui.select.cancel", "cancel")}`,
+    ];
   }
 
   handleInput(data: string): void {
@@ -399,7 +435,14 @@ export class SessionsView implements Component, Focusable {
       this.move(rows, 1);
     } else if (kb.matches(data, "tui.select.confirm") && selected) {
       if (!this.openId) this.openId = selected.id;
-      else if (selected.status !== "queued") this.startComposing();
+      else if (selected.status !== "queued")
+        this.startComposing({ kind: "message", id: selected.id });
+    } else if (kb.matches(data, "app.orchestrator.start")) {
+      this.startComposing(
+        this.openId && selected
+          ? { kind: "start", dependsOn: [selected.id], after: selected.title }
+          : { kind: "start", dependsOn: [], after: undefined },
+      );
     } else if (kb.matches(data, "app.orchestrator.stop") && selected && stoppable(selected)) {
       this.options.orchestrator.stop(selected.id).catch((error: unknown) => {
         this.options.onError(toErrorMessage(error));
@@ -417,24 +460,37 @@ export class SessionsView implements Component, Focusable {
     this.selectedId = rows[(index + step + rows.length) % rows.length]?.id;
   }
 
-  private startComposing(): void {
-    this.composing = true;
+  private startComposing(composing: Composing): void {
+    this.composing = composing;
     this.input.setValue("");
     this.input.focused = this._focused;
   }
 
   private stopComposing(): void {
-    this.composing = false;
+    this.composing = undefined;
     this.input.focused = false;
     this.options.requestRender();
   }
 
   private submit(value: string): void {
-    const id = this.openId;
+    const composing = this.composing;
+    const prompt = value.trim();
     this.stopComposing();
-    if (!id || !value.trim()) return;
-    this.options.orchestrator.send(id, value.trim()).catch((error: unknown) => {
+    if (!composing || !prompt) return;
+    const failed = (error: unknown) => {
       this.options.onError(toErrorMessage(error));
-    });
+    };
+    if (composing.kind === "message") {
+      this.options.orchestrator.send(composing.id, prompt).catch(failed);
+      return;
+    }
+    this.options.orchestrator
+      .start({ title: titleOf(prompt), prompt, dependsOn: composing.dependsOn })
+      .then(({ session }) => {
+        this.selectedId = session.id;
+        this.openId = undefined;
+        this.options.requestRender();
+      })
+      .catch(failed);
   }
 }
