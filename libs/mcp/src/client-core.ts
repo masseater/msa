@@ -134,7 +134,7 @@ export abstract class McpClientCore {
       const entry: PendingRequest = {
         deferred: Deferred.makeUnsafe<unknown, McpForeignError>(),
         timeoutMs: options.timeoutMs ?? this.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
-        cancelTimer: undefined,
+        timer: undefined,
         signal: options.signal,
         onAbort: () =>
           this.pending.cancel(

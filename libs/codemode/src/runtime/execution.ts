@@ -1,7 +1,7 @@
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import { dual } from "effect/Function";
+import type * as Fiber from "effect/Fiber";
 
 import type {
   CodemodeCall,
@@ -34,14 +34,6 @@ import {
 } from "./launcher.ts";
 import { invokeTool } from "./tool-call.ts";
 
-export const schedule: {
-  (task: () => void): (millis: number) => () => void;
-  (millis: number, task: () => void): () => void;
-} = dual(2, (millis: number, task: () => void): (() => void) => {
-  const fiber = Effect.runFork(Effect.sleep(millis).pipe(Effect.andThen(Effect.sync(task))));
-  return () => fiber.interruptUnsafe();
-});
-
 interface PendingCall {
   record: CodemodeCall | undefined;
   startedAt: number;
@@ -60,7 +52,7 @@ export class Execution {
   private readonly control: Control | undefined;
   private readonly delivered = new Set<number>();
   private readonly signal: AbortSignal | undefined;
-  private cancelTimer: (() => void) | undefined;
+  private timer: Fiber.Fiber<void> | undefined;
   private readonly output: CodemodeOutputItem[] = [];
   private readonly calls: CodemodeCall[] = [];
   private readonly pending = new Map<number, PendingCall>();
@@ -71,12 +63,13 @@ export class Execution {
     this.control = options.control;
     this.signal = options.signal;
     if (Number.isFinite(options.timeoutMs)) {
-      this.cancelTimer = schedule(options.timeoutMs, () =>
+      const timedOut = Effect.sync(() =>
         this.finish({
           kind: "timeout",
           message: `Execution timed out after ${options.timeoutMs} ms`,
         }),
       );
+      this.timer = Effect.runFork(Effect.delay(timedOut, options.timeoutMs));
     }
     if (options.signal?.aborted === true) this.onAbort();
     else options.signal?.addEventListener("abort", this.onAbort, { once: true });
@@ -266,7 +259,7 @@ export class Execution {
   ): void {
     if (this.finished) return;
     this.finished = true;
-    this.cancelTimer?.();
+    this.timer?.interruptUnsafe();
     this.signal?.removeEventListener("abort", this.onAbort);
     const now = performance.now();
     for (const pending of this.pending.values()) {

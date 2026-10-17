@@ -1,9 +1,9 @@
-import { Effect } from "effect";
+import { Effect, Latch } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
 import { MAX_OUTPUT_CHARS, MAX_OUTPUT_ITEMS } from "../src/index.ts";
 import { closeSandboxes, createSandbox, delayed, describeBackends } from "./sandbox-support.ts";
-import { abortController, gate, hang } from "./support.ts";
+import { abortController, hang } from "./support.ts";
 
 const terminatesASynchronousInfiniteLoopOn = Effect.gen(function* () {
   const sandbox = createSandbox();
@@ -55,20 +55,20 @@ const terminatesAMicrotaskSpinningLoopOn = Effect.gen(function* () {
 const abortsViaSignalAndCancelsIn = Effect.gen(function* () {
   const controller = abortController();
   let toolSignal: AbortSignal | undefined;
-  let call = gate();
+  let call = Latch.makeUnsafe(false);
   const sandbox = createSandbox([
     {
       name: "hang",
       execute: (_args, { signal }) => {
         toolSignal = signal;
-        call.open();
+        call.openUnsafe();
         return hang();
       },
     },
   ]);
   const firstCall = call;
   const promise = sandbox.execute("await tools.hang(); return 'never'");
-  yield* firstCall.opened;
+  yield* firstCall.await;
   controller.abort(new Error("user cancelled"));
   expect(toolSignal?.aborted).toBe(false);
   const result = yield* Effect.promise(() =>
@@ -80,12 +80,12 @@ const abortsViaSignalAndCancelsIn = Effect.gen(function* () {
   });
 
   const second = abortController();
-  call = gate();
+  call = Latch.makeUnsafe(false);
   const secondCall = call;
   const pending = sandbox.execute("await tools.hang(); return 'never'", {
     signal: second.signal,
   });
-  yield* secondCall.opened;
+  yield* secondCall.await;
   second.abort();
   const aborted = yield* Effect.promise(() => pending);
   expect(aborted).toMatchObject({ ok: false, error: { kind: "aborted" } });

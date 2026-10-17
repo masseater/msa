@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Latch } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -11,7 +11,7 @@ import {
   RemoteCodemodeSandbox,
   serveCodemodeRemote,
 } from "../src/index.ts";
-import { abortController, gate, hang, toJson } from "./support.ts";
+import { abortController, hang, toJson } from "./support.ts";
 
 const wasm = loadQuickJSWasm();
 
@@ -118,14 +118,14 @@ const capsTheInterruptBudgetAndMemory = Effect.gen(function* () {
 
 const tellsTheRemoteToStopWhen = Effect.gen(function* () {
   const { remote, served } = recordingRemote();
-  const call = gate();
+  const call = Latch.makeUnsafe(false);
   const sandbox = new RemoteCodemodeSandbox({
     remote: () => remote,
     tools: [
       {
         name: "hang",
         execute: () => {
-          call.open();
+          call.openUnsafe();
           return hang();
         },
       },
@@ -135,7 +135,7 @@ const tellsTheRemoteToStopWhen = Effect.gen(function* () {
   const pending = sandbox.execute("await tools.hang(); return 'never'", {
     signal: controller.signal,
   });
-  yield* call.opened;
+  yield* call.await;
   controller.abort();
   expect(yield* Effect.promise(() => pending)).toMatchObject({
     ok: false,

@@ -1,14 +1,13 @@
-import { Deferred, Effect } from "effect";
+import { Deferred, Effect, type Fiber } from "effect";
 
 import { foreign, type McpForeignError } from "./foreign.ts";
 import { type JsonRpcId, McpTimeoutError } from "./protocol/jsonrpc.ts";
 import type { ProgressNotification } from "./protocol/types.ts";
-import { schedule } from "./timer.ts";
 
 export interface PendingRequest {
   deferred: Deferred.Deferred<unknown, McpForeignError>;
   timeoutMs: number;
-  cancelTimer: (() => void) | undefined;
+  timer: Fiber.Fiber<void> | undefined;
   signal: AbortSignal | undefined;
   onAbort: () => void;
   sendController: AbortController;
@@ -64,17 +63,18 @@ export class PendingRequests {
   }
 
   private armTimeout(id: JsonRpcId, entry: PendingRequest): void {
-    entry.cancelTimer?.();
-    entry.cancelTimer = undefined;
+    entry.timer?.interruptUnsafe();
+    entry.timer = undefined;
     if (!Number.isFinite(entry.timeoutMs) || entry.timeoutMs <= 0) return;
-    entry.cancelTimer = schedule(entry.timeoutMs, () => {
+    const timedOut = Effect.sync(() => {
       this.cancel(id, new McpTimeoutError(entry.timeoutMs), entry.cancellable, "Request timed out");
     });
+    entry.timer = Effect.runFork(Effect.delay(timedOut, entry.timeoutMs));
   }
 
   private remove(id: JsonRpcId, entry: PendingRequest): void {
     this.pending.delete(id);
-    entry.cancelTimer?.();
+    entry.timer?.interruptUnsafe();
     if (entry.progressToken !== undefined) this.progressRequests.delete(entry.progressToken);
     entry.signal?.removeEventListener("abort", entry.onAbort);
     entry.sendController.abort();

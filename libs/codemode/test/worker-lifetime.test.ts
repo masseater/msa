@@ -1,10 +1,10 @@
 import { Worker } from "node:worker_threads";
 
-import { Deferred, Effect } from "effect";
+import { Deferred, Effect, Latch } from "effect";
 import { afterEach, describe, expect, it, type MockInstance, vi } from "vite-plus/test";
 
 import { type CodemodeResult, CodemodeSandbox } from "../src/index.ts";
-import { abortController, type Gate, gate, hang } from "./support.ts";
+import { abortController, hang } from "./support.ts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -153,7 +153,7 @@ function spyOnTermination() {
   return { spy, spied, release };
 }
 
-function hangingSandbox(observed: Observed, called: Gate): CodemodeSandbox {
+function hangingSandbox(observed: Observed, called: Latch.Latch): CodemodeSandbox {
   return new CodemodeSandbox({
     timeoutMs: 100,
     onWorkerStarted: (promise) => {
@@ -168,7 +168,7 @@ function hangingSandbox(observed: Observed, called: Gate): CodemodeSandbox {
         name: "hang",
         execute: (_args, { signal }) => {
           observed.toolSignal = signal;
-          called.open();
+          called.openUnsafe();
           return hang();
         },
       },
@@ -225,7 +225,7 @@ const settlesWithoutWaitingForExit = Effect.fn(function* (how: StopMode) {
     ref: vi.spyOn(Worker.prototype, "ref"),
     unref: vi.spyOn(Worker.prototype, "unref"),
   };
-  const called = gate();
+  const called = Latch.makeUnsafe(false);
   const observed = newObserved();
   const sandbox = hangingSandbox(observed, called);
   const controller = abortController();
@@ -237,7 +237,7 @@ const settlesWithoutWaitingForExit = Effect.fn(function* (how: StopMode) {
     return value;
   });
   yield* Effect.gen(function* () {
-    yield* called.opened;
+    yield* called.await;
     yield* stop(how, sandbox, controller, observed);
     yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
     expectSettledEarly(how, observed, spies);

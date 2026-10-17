@@ -1,9 +1,8 @@
 import { createServer, type Server, type ServerResponse } from "node:http";
 
-import { Deferred, Effect } from "effect";
+import { Deferred, Effect, type Fiber } from "effect";
 
 import { foreign, type McpForeignError, toPromise } from "../foreign.ts";
-import { schedule } from "../timer.ts";
 import { OAuthCallbackError } from "./errors.ts";
 
 export interface OAuthCallback {
@@ -26,7 +25,7 @@ export interface OAuthCallbackServerOptions {
 
 interface PendingCallback {
   deferred: Deferred.Deferred<OAuthCallback, OAuthCallbackError>;
-  cancelTimer: () => void;
+  timer: Fiber.Fiber<void>;
   path: string | undefined;
 }
 
@@ -112,20 +111,21 @@ export class OAuthCallbackServer {
   waitForCallback(state: string, path?: string): Promise<OAuthCallback> {
     if (this.pending.has(state)) throw new OAuthCallbackError("OAuth state is already pending");
     const deferred = Deferred.makeUnsafe<OAuthCallback, OAuthCallbackError>();
-    const cancelTimer = schedule(this.timeoutMs, () => {
+    const timedOut = Effect.sync(() => {
       this.pending.delete(state);
       Deferred.doneUnsafe(
         deferred,
         Effect.fail(new OAuthCallbackError("OAuth callback timed out")),
       );
     });
-    this.pending.set(state, { deferred, cancelTimer, path });
+    const timer = Effect.runFork(Effect.delay(timedOut, this.timeoutMs));
+    this.pending.set(state, { deferred, timer, path });
     return toPromise(Deferred.await(deferred));
   }
 
   close(): Promise<void> {
     for (const pending of this.pending.values()) {
-      pending.cancelTimer();
+      pending.timer.interruptUnsafe();
       Deferred.doneUnsafe(
         pending.deferred,
         Effect.fail(new OAuthCallbackError("OAuth callback server closed")),
@@ -168,7 +168,7 @@ export class OAuthCallbackServer {
       this.reply(response, 400, { ok: false, message: "Invalid or expired OAuth state" });
       return;
     }
-    pending.cancelTimer();
+    pending.timer.interruptUnsafe();
     this.pending.delete(state);
     this.complete(url, state, pending, response);
   }

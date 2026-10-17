@@ -9,7 +9,6 @@ import {
   McpConnectionClosedError,
   parseJsonRpcMessage,
 } from "../protocol/jsonrpc.ts";
-import { schedule } from "../timer.ts";
 import { McpTransportError } from "./errors/transport-error.ts";
 import { DEFAULT_MAX_MESSAGE_BYTES, type McpTransport, TransportEvents } from "./transport.ts";
 
@@ -160,14 +159,19 @@ export class StdioTransport extends TransportEvents implements McpTransport {
     return toPromise(
       Effect.callback<void>((resume) => {
         const grace = Math.min(STDIN_CLOSE_GRACE_MS, closeTimeoutMs);
-        const cancels: (() => void)[] = [];
+        const killAfter = (millis: number, signal: NodeJS.Signals) =>
+          Effect.runFork(
+            Effect.delay(
+              Effect.sync(() => killProcessTree(child, signal)),
+              millis,
+            ),
+          );
+        const timers = [killAfter(grace, "SIGTERM"), killAfter(grace + closeTimeoutMs, "SIGKILL")];
         child.once("close", () => {
-          for (const cancel of cancels) cancel();
+          for (const timer of timers) timer.interruptUnsafe();
           killProcessTree(child, "SIGTERM");
           resume(Effect.void);
         });
-        cancels.push(schedule(grace, () => killProcessTree(child, "SIGTERM")));
-        cancels.push(schedule(grace + closeTimeoutMs, () => killProcessTree(child, "SIGKILL")));
         child.stdin?.end();
       }),
     );
