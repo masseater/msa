@@ -22,7 +22,14 @@ function settingsForView(): ResolvedMemorySettings {
   return {
     enabled: true,
     database: join(dir, "memory.db"),
-    embedding: { enabled: false, baseUrl: "http://127.0.0.1:1/v1", model: "test", timeoutMs: 500 },
+    embedding: {
+      enabled: false,
+      baseUrl: "http://127.0.0.1:1/v1",
+      model: "test",
+      queryPrefix: "",
+      documentPrefix: "",
+      timeoutMs: 500,
+    },
     recall: { enabled: true, limit: 5, minScore: 0.35 },
   };
 }

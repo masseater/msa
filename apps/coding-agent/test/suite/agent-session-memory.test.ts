@@ -36,7 +36,7 @@ describe("agent session memory", () => {
     );
 
     harness.setResponses([fauxAssistantMessage("the tap")]);
-    await harness.session.prompt("how does the release work?");
+    await harness.session.prompt("the release goes to the Homebrew tap?");
     const recall = harness.session.messages.find(
       (message) => message.role === "custom" && message.customType === MEMORY_RECALL_MESSAGE_TYPE,
     );
@@ -83,7 +83,7 @@ describe("agent session memory", () => {
     store.close();
 
     harness.setResponses([fauxAssistantMessage("ok")]);
-    await harness.session.prompt("explain the release process");
+    await harness.session.prompt("the release goes to the Homebrew tap?");
     const recall = harness.session.messages.find(
       (message) => message.role === "custom" && message.customType === MEMORY_RECALL_MESSAGE_TYPE,
     );

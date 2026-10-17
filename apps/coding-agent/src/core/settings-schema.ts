@@ -150,6 +150,19 @@ const MemoryEmbeddingSettingsSchema = Type.Object({
       default: SETTINGS_DEFAULTS.memory.embedding.model,
     }),
   ),
+  queryPrefix: Type.Optional(
+    Type.String({
+      description:
+        "Prepended to search queries, for models trained with task prefixes (EmbeddingGemma). Clear it for models that use none.",
+      default: SETTINGS_DEFAULTS.memory.embedding.queryPrefix,
+    }),
+  ),
+  documentPrefix: Type.Optional(
+    Type.String({
+      description: "Prepended to memory text before embedding.",
+      default: SETTINGS_DEFAULTS.memory.embedding.documentPrefix,
+    }),
+  ),
   apiKeyEnv: Type.Optional(
     Type.String({
       description: "Environment variable holding the API key, for endpoints that need one.",
@@ -178,7 +191,8 @@ const MemoryRecallSettingsSchema = Type.Object({
   ),
   minScore: Type.Optional(
     Type.Number({
-      description: "Minimum hybrid score (0-1) for a memory to be recalled.",
+      description:
+        "Minimum relevance (0-1) for a memory to be recalled: the better of the embedding similarity and the share of query terms found. Embedding models differ in their score range, so tune this with the model.",
       default: SETTINGS_DEFAULTS.memory.recall.minScore,
     }),
   ),

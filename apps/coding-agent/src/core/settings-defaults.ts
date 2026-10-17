@@ -50,13 +50,15 @@ export const SETTINGS_DEFAULTS = {
     embedding: {
       enabled: true,
       baseUrl: "http://127.0.0.1:11434/v1",
-      model: "bge-m3",
+      model: "embeddinggemma-2",
+      queryPrefix: "task: search result | query: ",
+      documentPrefix: "title: none | text: ",
       timeoutMs: 5000,
     },
     recall: {
       enabled: true,
       limit: 5,
-      minScore: 0.35,
+      minScore: 0.72,
     },
   },
   doubleEscapeAction: "tree",

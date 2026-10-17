@@ -1400,6 +1400,8 @@ export class SettingsManager {
         enabled: memory?.embedding?.enabled ?? defaults.embedding.enabled,
         baseUrl: memory?.embedding?.baseUrl?.trim() || defaults.embedding.baseUrl,
         model: memory?.embedding?.model?.trim() || defaults.embedding.model,
+        queryPrefix: memory?.embedding?.queryPrefix ?? defaults.embedding.queryPrefix,
+        documentPrefix: memory?.embedding?.documentPrefix ?? defaults.embedding.documentPrefix,
         ...(apiKey ? { apiKey } : {}),
         timeoutMs:
           typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs >= 0

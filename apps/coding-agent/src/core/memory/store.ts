@@ -46,7 +46,10 @@ export interface MemoryStoreSearchOptions {
 
 export interface MemoryScore {
   record: MemoryRecord;
+  /** Ranking score: relevance plus the recency and use boosts. */
   score: number;
+  /** Relevance alone: the better of the vector and keyword signals, 0 when neither matched. */
+  relevance: number;
   keyword: number;
   vector: number | undefined;
 }
@@ -74,8 +77,6 @@ export interface MemoryStoreStats {
   byKind: Record<string, number>;
 }
 
-const VECTOR_WEIGHT = 0.7;
-const KEYWORD_WEIGHT = 0.3;
 const RECENCY_BOOST = 0.08;
 const USE_BOOST = 0.05;
 const RECENCY_HALF_LIFE_DAYS = 180;
@@ -136,7 +137,11 @@ function recencyScore(updatedAt: number, now: number): number {
   return Math.pow(0.5, ageDays / RECENCY_HALF_LIFE_DAYS);
 }
 
-/** Hybrid score of one record: weighted vector and keyword scores plus recency and use boosts. */
+/**
+ * Score of one record. Relevance is the better of the vector and keyword signals, so a keyword hit
+ * cannot dilute a strong vector match (or the other way around); recency and use only order the
+ * relevant ones. The recall gate applies to relevance, not to the boosts.
+ */
 export function scoreMemory(
   record: MemoryRecord,
   query: { text: string; embedding?: Float32Array },
@@ -146,19 +151,17 @@ export function scoreMemory(
   const vector =
     query.embedding && record.embedding ? cosineSimilarity(query.embedding, record.embedding) : 0;
   const hasVector = vector > 0;
-  const hasKeyword = keyword > 0;
-  let base = 0;
-  if (hasVector && hasKeyword) {
-    base = (VECTOR_WEIGHT * vector + KEYWORD_WEIGHT * keyword) / (VECTOR_WEIGHT + KEYWORD_WEIGHT);
-  } else if (hasVector) {
-    base = vector;
-  } else if (hasKeyword) {
-    base = keyword;
-  }
+  const relevance = Math.max(hasVector ? vector : 0, keyword);
   const useBoost =
     (USE_BOOST * Math.min(record.useCount, MAX_USE_BOOST_COUNT)) / MAX_USE_BOOST_COUNT;
   const boost = RECENCY_BOOST * recencyScore(record.updatedAt, now) + useBoost;
-  return { record, keyword, vector: hasVector ? vector : undefined, score: base + boost };
+  return {
+    record,
+    keyword,
+    vector: hasVector ? vector : undefined,
+    relevance,
+    score: relevance + boost,
+  };
 }
 
 function encodeVector(vector: Float32Array): Uint8Array {
@@ -300,7 +303,7 @@ export class MemoryStore {
     const scores: MemoryScore[] = [];
     for (const row of this.scoped(options.project)) {
       const scored = scoreMemory(toRecord(row), options, now);
-      if (scored.score >= options.minScore) scores.push(scored);
+      if (scored.relevance >= options.minScore) scores.push(scored);
     }
     scores.sort((left, right) => right.score - left.score);
     return scores.slice(0, options.limit);
@@ -319,6 +322,24 @@ export class MemoryStore {
       | MemoryRow
       | undefined;
     return row ? toRecord(row) : undefined;
+  }
+
+  /** Memories without a vector or with one from another model, newest first. */
+  listStale(embeddingModel: string, limit: number): MemoryRecord[] {
+    return (
+      this.statement(
+        `SELECT * FROM memories WHERE embedding IS NULL OR embedding_model IS NOT ? ORDER BY updated_at DESC LIMIT ?`,
+      ).all(embeddingModel, limit) as unknown as MemoryRow[]
+    ).map(toRecord);
+  }
+
+  /** Replace the stored vector of a memory, for example after the embedding model changed. */
+  setEmbedding(id: string, embedding: Float32Array, embeddingModel: string): void {
+    this.statement(`UPDATE memories SET embedding = ?, embedding_model = ? WHERE id = ?`).run(
+      encodeVector(embedding),
+      embeddingModel,
+      id,
+    );
   }
 
   forget(id: string): boolean {

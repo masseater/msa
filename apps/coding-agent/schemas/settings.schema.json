@@ -526,7 +526,17 @@
             "model": {
               "type": "string",
               "description": "Embedding model name at that endpoint.",
-              "default": "bge-m3"
+              "default": "embeddinggemma-2"
+            },
+            "queryPrefix": {
+              "type": "string",
+              "description": "Prepended to search queries, for models trained with task prefixes (EmbeddingGemma). Clear it for models that use none.",
+              "default": "task: search result | query: "
+            },
+            "documentPrefix": {
+              "type": "string",
+              "description": "Prepended to memory text before embedding.",
+              "default": "title: none | text: "
             },
             "apiKeyEnv": {
               "type": "string",
@@ -558,8 +568,8 @@
             },
             "minScore": {
               "type": "number",
-              "description": "Minimum hybrid score (0-1) for a memory to be recalled.",
-              "default": 0.35
+              "description": "Minimum relevance (0-1) for a memory to be recalled: the better of the embedding similarity and the share of query terms found. Embedding models differ in their score range, so tune this with the model.",
+              "default": 0.72
             }
           }
         }

@@ -45,11 +45,20 @@ function vector(values: number[]): Float32Array {
   return new Float32Array(values);
 }
 
-async function embeddingServer(responses: number[][]): Promise<string> {
+async function embeddingServer(
+  responses: number[][],
+): Promise<{ baseUrl: string; inputs: string[] }> {
   let index = 0;
+  const inputs: string[] = [];
   const server = createServer((request, response) => {
-    request.on("data", () => {});
+    let body = "";
+    request.on("data", (chunk) => (body += String(chunk)));
     request.on("end", () => {
+      try {
+        inputs.push(String(JSON.parse(body).input));
+      } catch {
+        inputs.push("");
+      }
       const values = responses[Math.min(index, responses.length - 1)];
       index++;
       response.setHeader("content-type", "application/json");
@@ -60,16 +69,34 @@ async function embeddingServer(responses: number[][]): Promise<string> {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("no port");
-  return `http://127.0.0.1:${address.port}/v1`;
+  return { baseUrl: `http://127.0.0.1:${address.port}/v1`, inputs };
 }
 
 function settings(overrides: Partial<ResolvedMemorySettings> = {}): ResolvedMemorySettings {
   return {
     enabled: true,
     database: join(tempDir(), "memory.db"),
-    embedding: { enabled: false, baseUrl: "http://127.0.0.1:1/v1", model: "test", timeoutMs: 500 },
+    embedding: {
+      enabled: false,
+      baseUrl: "http://127.0.0.1:1/v1",
+      model: "test",
+      queryPrefix: "",
+      documentPrefix: "",
+      timeoutMs: 500,
+    },
     recall: { enabled: true, limit: 5, minScore: 0.35 },
     ...overrides,
+  };
+}
+
+function embeddingSettings(baseUrl: string): ResolvedMemorySettings["embedding"] {
+  return {
+    enabled: true,
+    baseUrl,
+    model: "test",
+    queryPrefix: "Q: ",
+    documentPrefix: "D: ",
+    timeoutMs: 2_000,
   };
 }
 
@@ -253,7 +280,7 @@ describe("parseMemoryCommand", () => {
 
 describe("EmbeddingClient", () => {
   it("normalizes vectors and rejects dimension changes", async () => {
-    const baseUrl = await embeddingServer([
+    const { baseUrl } = await embeddingServer([
       [3, 4],
       [1, 0, 0],
     ]);
@@ -268,11 +295,9 @@ describe("EmbeddingClient", () => {
 
 describe("MemoryService", () => {
   it("saves with an embedding and recalls by meaning", async () => {
-    const baseUrl = await embeddingServer([[1, 0]]);
+    const { baseUrl, inputs } = await embeddingServer([[1, 0]]);
     const service = new MemoryService({
-      settings: settings({
-        embedding: { enabled: true, baseUrl, model: "test", timeoutMs: 2_000 },
-      }),
+      settings: settings({ embedding: embeddingSettings(baseUrl) }),
       cwd: tempDir(),
     });
     try {
@@ -284,8 +309,35 @@ describe("MemoryService", () => {
       expect(service.list()).toHaveLength(1);
       expect(service.forget(saved.record.id)).toBe(true);
       expect(service.describeStatus()).toContain("Memory is enabled.");
+      expect(inputs).toEqual([
+        "D: リリースは Homebrew tap に配信する",
+        "Q: パッケージの配布方法は？",
+      ]);
     } finally {
       service.close();
+    }
+  });
+
+  it("re-embeds memories that were saved without a vector", async () => {
+    const dir = tempDir();
+    const database = join(dir, "memory.db");
+    const first = new MemoryService({ settings: settings({ database }), cwd: dir });
+    const saved = await first.save({ content: "reembed this memory" });
+    expect(saved.embedded).toBe(false);
+    first.close();
+
+    const { baseUrl, inputs } = await embeddingServer([[1, 0]]);
+    const second = new MemoryService({
+      settings: settings({ database, embedding: embeddingSettings(baseUrl) }),
+      cwd: dir,
+    });
+    try {
+      expect(await second.reembedStale()).toBe(1);
+      expect(second.stats().embedded).toBe(1);
+      expect(inputs).toEqual(["D: reembed this memory"]);
+      expect(await second.reembedStale()).toBe(0);
+    } finally {
+      second.close();
     }
   });
 
