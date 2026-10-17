@@ -1,11 +1,12 @@
 import { homedir } from "node:os";
 
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import { NodeServices } from "@effect/platform-node";
 import { Console, Data, Effect, FileSystem, Layer, Path } from "effect";
 
 import { captureProcess, processRunnerLayer, runInherit } from "./capture-process.ts";
 import { Workspace, workspaceLayer } from "./coding-agent-package.ts";
 import { archiveFileNameFor, hostPlatformName, RELEASE_PLATFORMS } from "./release-platforms.ts";
+import { runMainWith } from "./run-main.ts";
 
 const DEFAULT_OUT_DIR = [".artifacts", "binaries"];
 
@@ -105,5 +106,4 @@ const program = Effect.gen(function* () {
 // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
 const mainLayer = Layer.mergeAll(NodeServices.layer, processRunnerLayer, workspaceLayer);
 
-// oxlint-disable-next-line effecttsgo/unstable-api-usage, effecttsgo/strict-effect-provide -- application entry point on pre-GA v4 platform APIs
-NodeRuntime.runMain(program.pipe(Effect.provide(mainLayer)));
+runMainWith(program, mainLayer);

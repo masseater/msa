@@ -1,10 +1,11 @@
 import { parseArgs } from "node:util";
 
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import { NodeServices } from "@effect/platform-node";
 import { Console, Data, Effect, FileSystem, Layer, Path, Schema } from "effect";
 
 import { Workspace, workspaceLayer } from "./coding-agent-package.ts";
 import { archiveFileNameFor, RELEASE_PLATFORMS } from "./release-platforms.ts";
+import { runMainWith } from "./run-main.ts";
 
 const DEFAULT_SUMS = [".artifacts", "binaries", "SHA256SUMS"];
 const DEFAULT_OUT = [".artifacts", "homebrew", "msa.rb"];
@@ -200,5 +201,4 @@ const program = Effect.gen(function* () {
 // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
 const mainLayer = Layer.mergeAll(NodeServices.layer, workspaceLayer);
 
-// oxlint-disable-next-line effecttsgo/unstable-api-usage, effecttsgo/strict-effect-provide -- application entry point on pre-GA v4 platform APIs
-NodeRuntime.runMain(program.pipe(Effect.provide(mainLayer)));
+runMainWith(program, mainLayer);
