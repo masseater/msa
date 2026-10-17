@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 import { ReplicatedStatePublisher } from "./state-publisher.ts";
 import { reportErrorAsync, toError } from "./state-report.ts";
 import type {
@@ -86,9 +88,9 @@ export class AttachedReplicatedStateImpl<T> implements AttachedReplicatedState<T
   }
 }
 
-export function attachReplicatedStateSource<T>(
+function attachSource<T>(
   source: ReplicatedStateSource<T>,
-  options: ReplicatedStateSourceOptions = {},
+  options: ReplicatedStateSourceOptions,
 ): AttachedReplicatedState<T> {
   const attachment = source.attach();
   try {
@@ -106,6 +108,16 @@ export function attachReplicatedStateSource<T>(
     throw error;
   }
 }
+
+export const attachReplicatedStateSource: {
+  (
+    options: ReplicatedStateSourceOptions,
+  ): <T>(source: ReplicatedStateSource<T>) => AttachedReplicatedState<T>;
+  <T>(
+    source: ReplicatedStateSource<T>,
+    options: ReplicatedStateSourceOptions,
+  ): AttachedReplicatedState<T>;
+} = dual(2, attachSource);
 
 function assertCursor(cursor: number, kind: "snapshot" | "frame"): void {
   if (!Number.isSafeInteger(cursor))

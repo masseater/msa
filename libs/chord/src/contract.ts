@@ -20,13 +20,12 @@ export interface OpaqueSpec<T = unknown> {
   readonly type?: T;
 }
 
-export function method(): MethodSpec<undefined, undefined>;
-export function method<A extends TSchema>(args: A): MethodSpec<A, undefined>;
+export function method(...input: []): MethodSpec<undefined, undefined>;
+export function method<A extends TSchema>(...input: [args: A]): MethodSpec<A, undefined>;
 export function method<A extends TSchema | undefined, R extends TSchema>(
-  args: A,
-  result: R,
+  ...input: [args: A, result: R]
 ): MethodSpec<A, R>;
-export function method(args?: TSchema, result?: TSchema): MethodSpec {
+export function method(...[args, result]: [args?: TSchema, result?: TSchema]): MethodSpec {
   return { [MEMBER]: "method", args, result };
 }
 

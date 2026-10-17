@@ -56,11 +56,11 @@ export class WebSocketLink extends BaseLink {
               : undefined;
         if (bytes === undefined) throw new TypeError("unknown message type");
         const { envelope, field, bytes: payload } = splitMessage(bytes);
-        if (!zlibAvailable)
+        if (zlibAvailable) this.deliver({ ...envelope, [field]: new Packed(payload) } as Frame);
+        else
           this.deliverLater(
             inflate(payload).then((value) => ({ ...envelope, [field]: value }) as Frame),
           );
-        else this.deliver({ ...envelope, [field]: new Packed(payload) } as Frame);
       } catch {
         this.close("protocol error");
       }

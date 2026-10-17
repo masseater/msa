@@ -691,6 +691,9 @@ importers:
 
   libs/chord:
     dependencies:
+      '@effect/platform-node':
+        specifier: 'catalog:'
+        version: 4.0.2(effect@4.0.2)(redis@6.3.0)
       effect:
         specifier: 4.0.2
         version: 4.0.2

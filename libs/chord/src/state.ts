@@ -25,7 +25,7 @@ function stateReplicated(
   options?: ReplicatedStateSourceOptions,
 ): MutableReplicatedState<object> | AttachedReplicatedState<unknown> {
   if (isReplicatedStateSource(initialOrSource))
-    return attachReplicatedStateSource(initialOrSource, options);
+    return attachReplicatedStateSource(initialOrSource, options ?? {});
   return new MutableReplicatedStateImpl(initialOrSource);
 }
 

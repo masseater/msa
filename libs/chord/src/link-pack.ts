@@ -1,5 +1,7 @@
 import type * as Zlib from "node:zlib";
 
+import { dual } from "effect/Function";
+
 import type { Frame } from "./wire.ts";
 
 export const PACK_THRESHOLD = 64 * 1024;
@@ -46,7 +48,7 @@ function packedBytes(value: unknown, compress: boolean, json?: string): Uint8Arr
   return zlib.deflateRawSync(json, { level: 1 });
 }
 
-export function packObject(frame: Frame, compress: boolean): unknown {
+function packObjectImpl(frame: Frame, compress: boolean): unknown {
   const field = payloadField(frame);
   if (field === undefined) return frame;
   const value = (frame as Record<string, unknown>)[field];
@@ -73,7 +75,7 @@ export function unpackObject(message: unknown): unknown {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-export function packMessage(frame: Frame, compress: boolean): string | Uint8Array {
+function packMessageImpl(frame: Frame, compress: boolean): string | Uint8Array {
   const field = payloadField(frame);
   if (field === undefined) return JSON.stringify(frame);
   const value = (frame as Record<string, unknown>)[field];
@@ -91,6 +93,16 @@ export function packMessage(frame: Frame, compress: boolean): string | Uint8Arra
   message.set(bytes, 4 + head.byteLength);
   return message;
 }
+
+export const packObject: {
+  (compress: boolean): (frame: Frame) => unknown;
+  (frame: Frame, compress: boolean): unknown;
+} = dual(2, packObjectImpl);
+
+export const packMessage: {
+  (compress: boolean): (frame: Frame) => string | Uint8Array;
+  (frame: Frame, compress: boolean): string | Uint8Array;
+} = dual(2, packMessageImpl);
 
 export function splitMessage(data: Uint8Array): {
   envelope: Record<string, unknown>;

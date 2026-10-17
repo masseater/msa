@@ -61,6 +61,7 @@
     "test": "vitest --run"
   },
   "dependencies": {
+    "@effect/platform-node": "catalog:",
     "effect": "catalog:stack",
     "typebox": "catalog:"
   },
