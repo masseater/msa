@@ -127,7 +127,7 @@ export const loadDocument: Dual5<
   Effect.Effect<LoadedDocument | undefined>
 > = Function.dual(
   5,
-  Effect.fn("loadDocument")(function* (
+  Effect.fnUntraced(function* (
     state: SessionState,
     definition: AnyDocDefinition,
     addressId: string,

@@ -48,7 +48,7 @@ type Scan<T> = (cursor: Cursor | undefined) => Promise<Page<T, Cursor>>;
 const scanPage = <T>(scan: Scan<T>, cursor: Cursor | undefined) =>
   Effect.promise(() => scan(cursor));
 
-export const scanAll = Effect.fn("scanAll")(function* <T>(scan: Scan<T>) {
+export const scanAll = Effect.fnUntraced(function* <T>(scan: Scan<T>) {
   const items: T[] = [];
   let cursor: Cursor | undefined;
   do {

@@ -61,11 +61,7 @@ export const prepareBoundary: Dual3<
   Effect.Effect<Boundary>
 > = Function.dual(
   3,
-  Effect.fn("prepareBoundary")(function* (
-    tx: Tx,
-    conversationId: ConversationId,
-    modes: QueueModes,
-  ) {
+  Effect.fnUntraced(function* (tx: Tx, conversationId: ConversationId, modes: QueueModes) {
     const marker = yield* Effect.promise(() => tx.latestHeadMarker(conversationId));
     const inbox = yield* Effect.promise(() => tx.doc(InboxDoc, conversationId));
     return {
@@ -87,7 +83,7 @@ const pickIndexes = (
   return queueMode === "all" ? indexes : indexes.slice(0, 1);
 };
 
-const applyWrite = Effect.fn("applyWrite")(function* (
+const applyWrite = Effect.fnUntraced(function* (
   tx: Tx,
   boundary: Boundary,
   item: Draft<Extract<InboxItem, { mode: "write" }>>,
@@ -102,7 +98,7 @@ const applyWrite = Effect.fn("applyWrite")(function* (
   tx.placeSubmission(item.id, entry.id);
 });
 
-const applyUser = Effect.fn("applyUser")(function* (
+const applyUser = Effect.fnUntraced(function* (
   tx: Tx,
   conversationId: ConversationId,
   item: Draft<Extract<InboxItem, { mode: "steer" | "followUp" }>>,
@@ -127,12 +123,7 @@ export const applyBoundary: Dual4<
   Effect.Effect<BoundaryResult>
 > = Function.dual(
   4,
-  Effect.fn("applyBoundary")(function* (
-    tx: Tx,
-    boundary: Boundary,
-    at: "postTools" | "final",
-    now: number,
-  ) {
+  Effect.fnUntraced(function* (tx: Tx, boundary: Boundary, at: "postTools" | "final", now: number) {
     const { conversationId, inbox } = boundary;
     const items = inbox.items;
     const reset = hasQueuedReset(items);
@@ -214,11 +205,7 @@ export const removeInboxItem: Dual3<
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fn("removeInboxItem")(function* (
-    tx: Tx,
-    conversationId: ConversationId,
-    id: SubmissionId,
-  ) {
+  Effect.fnUntraced(function* (tx: Tx, conversationId: ConversationId, id: SubmissionId) {
     const items = (yield* Effect.promise(() => tx.doc(InboxDoc, conversationId))).items;
     const index = items.findIndex((item) => item.id === id);
     if (index >= 0) items.splice(index, 1);
@@ -227,7 +214,7 @@ export const removeInboxItem: Dual3<
 
 export const withdrawQueuedInputs: Dual2<Tx, ConversationId, Effect.Effect<void>> = Function.dual(
   2,
-  Effect.fn("withdrawQueuedInputs")(function* (tx: Tx, conversationId: ConversationId) {
+  Effect.fnUntraced(function* (tx: Tx, conversationId: ConversationId) {
     const items = (yield* Effect.promise(() => tx.doc(InboxDoc, conversationId))).items;
     for (let index = items.length - 1; index >= 0; index--) {
       const item = items[index]!;

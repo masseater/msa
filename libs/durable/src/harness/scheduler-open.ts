@@ -8,7 +8,7 @@ import type { SchedulerState } from "./scheduler-state.ts";
 import { LIVE_STATUSES, SCAN_PAGE_SIZE, type Transaction } from "./scheduler-types.ts";
 import { scanAll } from "./util.ts";
 
-const openIn = Effect.fn("openSchedulerIn")(function* (state: SchedulerState, tx: Transaction) {
+const openIn = Effect.fnUntraced(function* (state: SchedulerState, tx: Transaction) {
   const { graph } = state;
   const scans = yield* Effect.forEach(LIVE_STATUSES, (status) =>
     scanAll((cursor) => tx.scanTasks({ status }, SCAN_PAGE_SIZE, cursor)),
@@ -25,10 +25,7 @@ const openIn = Effect.fn("openSchedulerIn")(function* (state: SchedulerState, tx
   }
 });
 
-export const openScheduler = Effect.fn("openScheduler")(function* (
-  state: SchedulerState,
-  context: Context,
-) {
+export const openScheduler = Effect.fnUntraced(function* (state: SchedulerState, context: Context) {
   const { session, registry } = state.options;
   session.observeCommits((publication) => observePublication(state, publication));
   session.subscribeClose(() => state.seal());
@@ -39,7 +36,7 @@ export const openScheduler = Effect.fn("openScheduler")(function* (
   state.wake.reconcile();
 });
 
-export const joinScheduler = Effect.fn("joinScheduler")(function* (state: SchedulerState) {
+export const joinScheduler = Effect.fnUntraced(function* (state: SchedulerState) {
   const invocations = [...state.invocations.values()];
   for (const invocation of invocations) invocation.controller.abort();
   yield* Effect.promise(() =>

@@ -29,7 +29,7 @@ type PhaseTask<P extends ToolTaskCheckpoint["phase"]> = RunningTask<
   ToolTaskResult
 >;
 
-const commitIntent = Effect.fn("commitToolIntent")(function* (
+const commitIntent = Effect.fnUntraced(function* (
   runtime: ToolRuntime,
   input: ToolTaskInput,
   tool: ToolRegistration,
@@ -55,7 +55,7 @@ const commitIntent = Effect.fn("commitToolIntent")(function* (
   );
 });
 
-export const callPhase = Effect.fn("toolCallPhase")(function* (
+export const callPhase = Effect.fnUntraced(function* (
   task: PhaseTask<"call">,
   runtime: ToolRuntime,
   context: Context,
@@ -97,7 +97,7 @@ export const callPhase = Effect.fn("toolCallPhase")(function* (
   yield* run(runtime, task.input, call, tool, final, context);
 });
 
-export const executePhase = Effect.fn("toolExecutePhase")(function* (
+export const executePhase = Effect.fnUntraced(function* (
   task: PhaseTask<"execute">,
   runtime: ToolRuntime,
   context: Context,
@@ -130,7 +130,7 @@ export const executePhase = Effect.fn("toolExecutePhase")(function* (
   );
 });
 
-export const abortPhase = Effect.fn("toolAbortPhase")(function* (
+export const abortPhase = Effect.fnUntraced(function* (
   task: RunningTask<ToolTaskInput, ToolTaskCheckpoint, ToolTaskResult> & {
     readonly abortReason?: string;
   },

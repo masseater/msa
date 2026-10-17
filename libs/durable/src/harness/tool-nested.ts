@@ -20,7 +20,7 @@ export type NestedOptions = {
   readonly abandonOnRestart: boolean;
 };
 
-const reuseExisting = Effect.fn("reuseExistingNestedCall")(function* (
+const reuseExisting = Effect.fnUntraced(function* (
   tx: Tx,
   existing: TaskId<ToolTaskResult>,
   call: ToolCall,
@@ -39,7 +39,7 @@ const reuseExisting = Effect.fn("reuseExistingNestedCall")(function* (
   return existing;
 });
 
-const createNested = Effect.fn("createNestedCall")(function* (
+const createNested = Effect.fnUntraced(function* (
   tx: Tx,
   runtime: ToolRuntime,
   call: ToolCall,
@@ -75,7 +75,7 @@ const createNested = Effect.fn("createNestedCall")(function* (
   return created;
 });
 
-export const startNestedCall = Effect.fn("startNestedCall")(function* (
+export const startNestedCall = Effect.fnUntraced(function* (
   runtime: ToolRuntime,
   parentCallId: string,
   name: string,

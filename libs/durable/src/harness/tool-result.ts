@@ -67,7 +67,7 @@ export const appendToolResult: Dual5<
   Effect.Effect<TypedEntry<{ diagnostics: ToolDiagnostic[] }>>
 > = Function.dual(
   5,
-  Effect.fn("appendToolResult")(function* (
+  Effect.fnUntraced(function* (
     tx: Tx,
     conversationId: ConversationId,
     call: ToolCall,

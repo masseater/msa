@@ -34,7 +34,7 @@ export type MainAnalysis = {
   readonly latestBases: ReadonlyMap<DocumentId, SidecarRecord>;
 };
 
-export const readMain = Effect.fn("readMain")(function* (files: JsonlFiles, context: Context) {
+export const readMain = Effect.fnUntraced(function* (files: JsonlFiles, context: Context) {
   const main = yield* readLines(files.fs, files.mainPath, MAIN_FILE, context, (text, line) =>
     parseMainMarker(text, line),
   );
@@ -69,7 +69,7 @@ const checkOrder = (file: string, lines: readonly ParsedLine<SidecarRecord>[]): 
   }
 };
 
-const readSidecar = Effect.fn("readSidecar")(function* (
+const readSidecar = Effect.fnUntraced(function* (
   files: JsonlFiles,
   file: string,
   context: Context,
@@ -83,10 +83,7 @@ const readSidecar = Effect.fn("readSidecar")(function* (
   );
 });
 
-export const readSidecars = Effect.fn("readSidecars")(function* (
-  files: JsonlFiles,
-  context: Context,
-) {
+export const readSidecars = Effect.fnUntraced(function* (files: JsonlFiles, context: Context) {
   const listed = yield* Effect.promise(() => files.fs.listDir(files.directory, context));
   if (!listed.ok) throw errorFromFile("directory listing", listed.error);
   yield* removeReclaimFiles(files, listed.value, context);

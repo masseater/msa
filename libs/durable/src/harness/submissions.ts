@@ -129,7 +129,7 @@ export class Submissions {
     );
   }
 
-  #abort = Effect.fn("abortSubmission")(function* (
+  #abort = Effect.fnUntraced(function* (
     this: Submissions,
     tx: Transaction,
     id: SubmissionId,
@@ -151,11 +151,7 @@ export class Submissions {
     );
   });
 
-  #pending = Effect.fn("pendingSubmission")(function* (
-    this: Submissions,
-    id: SubmissionId,
-    context: Context,
-  ) {
+  #pending = Effect.fnUntraced(function* (this: Submissions, id: SubmissionId, context: Context) {
     const record = yield* Effect.promise(() => this.#storage.submission(id, context));
     if (record === undefined)
       return yield* Effect.die(new Error(`Submission ${id} does not exist`));

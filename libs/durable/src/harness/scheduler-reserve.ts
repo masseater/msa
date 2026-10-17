@@ -1,9 +1,10 @@
 import { withAbortSignal } from "@msa/chord/context";
 import { Cause, Effect, Exit } from "effect";
 
+import { eachStep, settleStep, thenStep } from "../step.ts";
 import { toPromise } from "./bridge.ts";
 import { terminate } from "./scheduler-finalize.ts";
-import { loadScopes } from "./scheduler-load.ts";
+import { loadPending } from "./scheduler-load.ts";
 import {
   erased,
   missingMigration,
@@ -52,12 +53,12 @@ const createInvocation = (
   return invocation;
 };
 
-const reserveOne = Effect.fn("reserveOne")(function* (
+const reserveOne = (
   state: SchedulerState,
   tx: Transaction,
   id: TaskId,
   reserving: Reserving,
-) {
+): Effect.Effect<void> => {
   const { graph } = state;
   const record = graph.live.get(id);
   if (
@@ -67,22 +68,22 @@ const reserveOne = Effect.fn("reserveOne")(function* (
     graph.waitingOn(record, true).length > 0
   ) {
     graph.runnable.delete(id);
-    return;
+    return Effect.void;
   }
   const runnable = record as RunnableTaskRecord;
   const mode = record.abortRequested ? "abort" : "run";
   if (mode === "run" && !record.background && graph.belowCancelled(parentOf(record))) {
     state.cascadePending = true;
     state.wake.reconcile();
-    return;
+    return Effect.void;
   }
   const snapshot = (reserving.snapshot ??= state.options.registry.snapshot());
   const resolution = state.resolve(runnable, snapshot);
   if (resolution.kind === "blocked") {
     if (mode === "abort" && record.abortReason === undefined) {
-      yield* terminate(state, tx, record, { status: "orphaned", reason: resolution.reason });
+      return terminate(state, tx, record, { status: "orphaned", reason: resolution.reason });
     }
-    return;
+    return Effect.void;
   }
   if (resolution.record !== runnable || record.state.status !== "running") {
     tx.setTask(
@@ -95,14 +96,15 @@ const reserveOne = Effect.fn("reserveOne")(function* (
   graph.runnable.delete(id);
   const invocation = createInvocation(state, record, mode);
   reserving.reservations.push({ invocation, task: resolution.task, snapshot });
-});
+  return Effect.void;
+};
 
-const reserveIn = Effect.fn("reserveIn")(function* (
+const reserveIn = (
   state: SchedulerState,
   tx: Transaction,
   reserving: Reserving,
-) {
-  if (!state.enabled || state.closing) return;
+): Reservation[] | Promise<Reservation[]> => {
+  if (!state.enabled || state.closing) return reserving.reservations;
   for (const id of state.abandoned) {
     const record = state.graph.live.get(id);
     if (record !== undefined && !record.abortRequested)
@@ -110,19 +112,23 @@ const reserveIn = Effect.fn("reserveIn")(function* (
   }
   if (state.abandoned.size > 0) {
     reserving.abandoned = [...state.abandoned];
-    return;
+    return reserving.reservations;
   }
-  yield* loadScopes(state, false);
-  yield* Effect.forEach([...state.graph.runnable], (id) => reserveOne(state, tx, id, reserving), {
-    discard: true,
-  });
-});
+  const pending = thenStep(loadPending(state), () =>
+    eachStep([...state.graph.runnable], (id: TaskId) => reserveOne(state, tx, id, reserving)),
+  );
+  return settleStep(pending, () => reserving.reservations);
+};
 
-const reserve = Effect.fn("reserve")(function* (state: SchedulerState) {
+const reserve = Effect.fnUntraced(function* (state: SchedulerState) {
   const reserving: Reserving = { reservations: [], abandoned: [], snapshot: undefined };
-  const change = yield* toPromise((tx: Transaction) => reserveIn(state, tx, reserving));
   const exit = yield* Effect.exit(
-    Effect.promise(() => state.options.session.commitWith(change, state.options.context)),
+    Effect.promise(() =>
+      state.options.session.commitWith(
+        (tx: Transaction) => reserveIn(state, tx, reserving),
+        state.options.context,
+      ),
+    ),
   );
   if (Exit.isFailure(exit)) {
     for (const { invocation } of reserving.reservations) {
@@ -137,7 +143,7 @@ const reserve = Effect.fn("reserve")(function* (state: SchedulerState) {
   return reserving.reservations;
 });
 
-const drainPasses = Effect.fn("drainPasses")(function* (state: SchedulerState) {
+const drainPasses = Effect.fnUntraced(function* (state: SchedulerState) {
   const start = yield* toPromise((reservation: Reservation) => runReservation(state, reservation));
   while (state.dirty && state.enabled && !state.closing) {
     state.dirty = false;
@@ -145,7 +151,7 @@ const drainPasses = Effect.fn("drainPasses")(function* (state: SchedulerState) {
   }
 });
 
-const drain = Effect.fn("drain")(function* (state: SchedulerState) {
+const drain = Effect.fnUntraced(function* (state: SchedulerState) {
   const exit = yield* Effect.exit(drainPasses(state));
   if (Exit.isFailure(exit)) state.failSession(Cause.squash(exit.cause));
   state.draining = false;
@@ -180,11 +186,11 @@ const inspectTask = (
   return { kind: "ready", migrates: fit.migrates };
 };
 
-export const inspectScheduler = Effect.fn("inspectScheduler")(function* (
+export const inspectScheduler = Effect.fnUntraced(function* (
   state: SchedulerState,
   snapshot: RegistrySnapshot,
 ) {
-  yield* loadScopes(state, false);
+  yield* loadPending(state);
   const tasks: TaskInspection[] = [];
   for (const record of state.graph.live.values())
     tasks.push({ record, state: inspectTask(state, record, snapshot) });

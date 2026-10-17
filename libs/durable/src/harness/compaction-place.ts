@@ -19,7 +19,7 @@ export const placeSummary: Dual4<
   Effect.Effect<CompactionNext>
 > = Function.dual(
   4,
-  Effect.fn("placeSummary")(function* (
+  Effect.fnUntraced(function* (
     tx: Tx,
     runtime: CompactionRuntime,
     state: { readonly current: Current; readonly live: Draft<LiveState> },
@@ -62,7 +62,7 @@ export const place: Dual4<
   Effect.Effect<void>
 > = Function.dual(
   4,
-  Effect.fn("place")(function* (
+  Effect.fnUntraced(function* (
     runtime: CompactionRuntime,
     firstKept: EntryId,
     summary: string,
@@ -82,7 +82,7 @@ export const place: Dual4<
 
 export const complete: Dual2Context = Function.dual(
   2,
-  Effect.fn("complete")(function* (runtime: CompactionRuntime, context: Context) {
+  Effect.fnUntraced(function* (runtime: CompactionRuntime, context: Context) {
     yield* commitTask(
       runtime,
       (tx: Tx): Effect.Effect<CompactionNext> =>
@@ -98,7 +98,7 @@ export const complete: Dual2Context = Function.dual(
 
 export const abortCompaction: Dual2Context = Function.dual(
   2,
-  Effect.fn("abortCompaction")(function* (runtime: CompactionRuntime, context: Context) {
+  Effect.fnUntraced(function* (runtime: CompactionRuntime, context: Context) {
     yield* commitTask(
       runtime,
       (tx: Tx): Effect.Effect<CompactionNext> =>
@@ -124,7 +124,7 @@ export const failNoModel: Dual3<
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fn("failNoModel")(function* (
+  Effect.fnUntraced(function* (
     runtime: CompactionRuntime,
     ref: { readonly provider: string; readonly modelId: string } | undefined,
     context: Context,

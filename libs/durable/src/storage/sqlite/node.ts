@@ -2,8 +2,9 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { Cause, Effect, Exit, Function } from "effect";
+import { Effect, Function } from "effect";
 
+import { promiseTry } from "../../promise-try.ts";
 import type { SqliteDatabase, SqliteExecutor } from "./database.ts";
 import { NodeSqliteExecutor } from "./node-executor.ts";
 import { SerialOperationQueue } from "./node-queue.ts";
@@ -40,31 +41,21 @@ export class NodeSqliteDatabase extends NodeSqliteExecutor implements SqliteData
 
   transaction<T>(callback: (transaction: SqliteExecutor) => Promise<T>): Promise<T> {
     const { database, statements } = this;
-    return this.access.runAsync(() =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          database.exec("BEGIN IMMEDIATE");
-          const scope = { active: true };
-          const exit = yield* Effect.exit(
-            Effect.promise(() =>
-              callback(new NodeSqliteTransaction(database, statements, scope)),
-            ).pipe(
-              Effect.tap(() =>
-                Effect.sync(() => {
-                  scope.active = false;
-                  database.exec("COMMIT");
-                }),
-              ),
-            ),
-          );
-          if (Exit.isSuccess(exit)) return exit.value;
+    return this.access.runAsync(() => {
+      database.exec("BEGIN IMMEDIATE");
+      const scope = { active: true };
+      return promiseTry(() => callback(new NodeSqliteTransaction(database, statements, scope)))
+        .then((result) => {
           scope.active = false;
-          const error = Cause.squash(exit.cause);
+          database.exec("COMMIT");
+          return result;
+        })
+        .catch((error: unknown) => {
+          scope.active = false;
           rollback(database, error);
-          return yield* Effect.die(error);
-        }),
-      ),
-    );
+          throw error;
+        });
+    });
   }
 
   close(): Promise<void> {
@@ -90,7 +81,7 @@ const prepareDirectory = (path: string): Effect.Effect<void> =>
     ? Effect.void
     : Effect.asVoid(Effect.promise(() => mkdir(dirname(path), { recursive: true })));
 
-const configure = Effect.fn("configure")(function* (
+const configure = Effect.fnUntraced(function* (
   adapter: NodeSqliteDatabase,
   checkpointPages: number,
 ) {
@@ -99,10 +90,7 @@ const configure = Effect.fn("configure")(function* (
   yield* Effect.promise(() => adapter.exec(`PRAGMA wal_autocheckpoint = ${checkpointPages}`));
 });
 
-const openDatabase = Effect.fn("openDatabase")(function* (
-  path: string,
-  options: NodeSqliteStorageOptions,
-) {
+const openDatabase = Effect.fnUntraced(function* (path: string, options: NodeSqliteStorageOptions) {
   const checkpointPages = options.walAutoCheckpointPages ?? DEFAULT_WAL_AUTO_CHECKPOINT_PAGES;
   const timeout = options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS;
   yield* prepareDirectory(path);

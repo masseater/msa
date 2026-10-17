@@ -52,7 +52,7 @@ export const ensureProviderSessionId: {
   ): Effect.Effect<string>;
 } = Function.dual(
   2,
-  Effect.fn("ensureProviderSessionId")(function* <I, S, R, H extends object>(
+  Effect.fnUntraced(function* <I, S, R, H extends object>(
     runtime: TaskRuntime<I, S, R, H>,
     context: Context,
   ) {

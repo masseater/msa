@@ -64,7 +64,7 @@ const writeSlot = (
     return undefined;
   });
 
-const publish = Effect.fn("publishToolProgress")(function* (
+const publish = Effect.fnUntraced(function* (
   runtime: ToolRuntime,
   reported: Reported,
   written: Written,

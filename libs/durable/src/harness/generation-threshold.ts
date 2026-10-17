@@ -61,7 +61,7 @@ const compactionFailure = (
   }
 };
 
-export const compactedFailure = Effect.fn("compactedFailure")(function* (
+export const compactedFailure = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   checkpoint: Extract<GenerationCheckpoint, { phase: "prepare" }>,
   context: Context,

@@ -212,7 +212,7 @@ export function clearProgress(slot: Draft<SlotProgress>): void {
   delete slot.diagnostics;
 }
 
-const settleToolOutcome = Effect.fn("settleToolOutcome")(function* (
+const settleToolOutcome = Effect.fnUntraced(function* (
   tx: Transaction,
   record: TaskRecord<JsonValue, JsonValue, JsonValue>,
 ) {
@@ -222,7 +222,7 @@ const settleToolOutcome = Effect.fn("settleToolOutcome")(function* (
   removeNestedSlots(live, record.id);
 });
 
-const settleRunOutcome = Effect.fn("settleRunOutcome")(function* (
+const settleRunOutcome = Effect.fnUntraced(function* (
   tx: Transaction,
   record: TaskRecord<JsonValue, JsonValue, JsonValue>,
   outcome: SchedulerOutcome,
@@ -247,7 +247,7 @@ export const settleSchedulerOutcome: Dual3<
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fn("settleSchedulerOutcome")(function* (
+  Effect.fnUntraced(function* (
     tx: Transaction,
     record: TaskRecord<JsonValue, JsonValue, JsonValue>,
     outcome: SchedulerOutcome,

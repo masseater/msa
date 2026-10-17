@@ -1,14 +1,15 @@
 import type { Context } from "@msa/chord";
 import { withAbortSignal } from "@msa/chord/context";
-import { Clock, Effect, Function } from "effect";
+import { Function } from "effect";
 
 import { promiseTry } from "../promise-try.ts";
+import { currentTimeMillis } from "../session/session-state.ts";
 import { contained } from "../session/session.ts";
 import type { InvocationBinding, TaskScheduler } from "./scheduler.ts";
 import type { Submissions } from "./submissions.ts";
 import type { ConversationHandle, ConversationId } from "./types.ts";
 
-const clockNow = (): number => Effect.runSync(Clock.currentTimeMillis);
+const clockNow = currentTimeMillis;
 
 export const safeReport =
   (onReport: ((error: unknown) => void) | undefined) =>

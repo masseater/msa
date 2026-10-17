@@ -11,7 +11,7 @@ export const recoverJsonl: {
   (files: JsonlFiles, memory: MemoryStorage, context: Context): Effect.Effect<MainAnalysis>;
 } = Function.dual(
   3,
-  Effect.fn("recoverJsonl")(function* (files: JsonlFiles, memory: MemoryStorage, context: Context) {
+  Effect.fnUntraced(function* (files: JsonlFiles, memory: MemoryStorage, context: Context) {
     const main = yield* readMain(files, context);
     const index = yield* readSidecars(files, context);
     const analysis = analyzeMain(main, index);

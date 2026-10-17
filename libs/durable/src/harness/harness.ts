@@ -20,7 +20,7 @@ const checkBuiltins = <Tool extends ToolRegistration>(options: HarnessOptions<To
   }
 };
 
-const openHarness = Effect.fn("openHarness")(function* <Tool extends ToolRegistration>(
+const openHarness = Effect.fnUntraced(function* <Tool extends ToolRegistration>(
   storage: Storage,
   options: HarnessOptions<Tool>,
   context: Context,

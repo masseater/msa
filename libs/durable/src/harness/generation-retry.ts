@@ -14,7 +14,7 @@ import {
 import { endRun, LiveDoc } from "./live.ts";
 import type { Tx } from "./types.ts";
 
-export const deferPoll = Effect.fn("deferPoll")(function* (
+export const deferPoll = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   request: GenerationRequest,
   message: AssistantMessage & { deferred: NonNullable<AssistantMessage["deferred"]> },
@@ -47,7 +47,7 @@ export const deferPoll = Effect.fn("deferPoll")(function* (
   );
 });
 
-export const settleModelError = Effect.fn("settleModelError")(function* (
+export const settleModelError = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   request: GenerationRequest,
   message: AssistantMessage,

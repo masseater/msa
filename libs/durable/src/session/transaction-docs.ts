@@ -28,10 +28,7 @@ import type {
   TxState,
 } from "./transaction-types.ts";
 
-const requireScope = Effect.fn("requireScope")(function* (
-  state: TxState,
-  scope: DocumentAddress["scope"],
-) {
+const requireScope = Effect.fnUntraced(function* (state: TxState, scope: DocumentAddress["scope"]) {
   if (scope.kind === "conversation") yield* requireConversation(state, scope.conversationId);
   if (scope.kind !== "task") return;
   const task = yield* currentTask(state, scope.taskId);
@@ -51,7 +48,7 @@ const adoptLoaded = (
   return entry.change.state;
 };
 
-const acquire = Effect.fn("acquire")(function* (
+const acquire = Effect.fnUntraced(function* (
   state: TxState,
   entry: DocumentEntry,
   seed: JsonValue | undefined,
@@ -83,7 +80,7 @@ const acquire = Effect.fn("acquire")(function* (
   return entry.change.state;
 });
 
-const acquireForkCopy = Effect.fn("acquireForkCopy")(function* (
+const acquireForkCopy = Effect.fnUntraced(function* (
   state: TxState,
   entry: DocumentEntry,
   definition: AnyDocDefinition,
@@ -113,10 +110,7 @@ const acquireForkCopy = Effect.fn("acquireForkCopy")(function* (
   return entry.change.state;
 });
 
-const findRetirement = Effect.fn("findRetirement")(function* (
-  state: TxState,
-  entry: DocumentEntry,
-) {
+const findRetirement = Effect.fnUntraced(function* (state: TxState, entry: DocumentEntry) {
   const record =
     state.host.cached(entry.addressId)?.record ??
     (yield* Effect.promise(() =>

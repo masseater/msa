@@ -25,11 +25,7 @@ export const appendAssistant: Dual3<
   Effect.Effect<TypedEntry<never>>
 > = Function.dual(
   3,
-  Effect.fn("appendAssistant")(function* (
-    tx: Tx,
-    conversationId: ConversationId,
-    message: AssistantMessage,
-  ) {
+  Effect.fnUntraced(function* (tx: Tx, conversationId: ConversationId, message: AssistantMessage) {
     yield* recordUsage(
       tx,
       conversationId,
@@ -50,11 +46,7 @@ export const convertPartial: Dual3<
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fn("convertPartial")(function* (
-    tx: Tx,
-    live: Draft<LiveState>,
-    conversationId: ConversationId,
-  ) {
+  Effect.fnUntraced(function* (tx: Tx, live: Draft<LiveState>, conversationId: ConversationId) {
     const partial = live.generation?.message;
     if (partial === undefined) return;
     const message = copyJson(partial) as unknown as AssistantMessage;
@@ -80,7 +72,7 @@ export const startRun: Dual4<
   Effect.Effect<void>
 > = Function.dual(
   4,
-  Effect.fn("startRun")(function* (
+  Effect.fnUntraced(function* (
     tx: Tx,
     conversationId: ConversationId,
     live: Draft<LiveState>,

@@ -28,7 +28,7 @@ export const captureContextBounds: Dual4<
   Effect.Effect<ContextBounds | undefined>
 > = Function.dual(
   4,
-  Effect.fn("captureContextBounds")(function* (
+  Effect.fnUntraced(function* (
     storage: Storage,
     conversationId: ConversationId,
     context: Context,
@@ -57,7 +57,7 @@ export const captureContextBounds: Dual4<
   }),
 );
 
-const rangeFrom = Effect.fn("rangeFrom")(function* (
+const rangeFrom = Effect.fnUntraced(function* (
   storage: Storage,
   conversationId: ConversationId,
   bounds: ContextBounds,
@@ -104,7 +104,7 @@ export const readContextFrom: {
   ): Effect.Effect<{ readonly view: ContextView; readonly range: ContextRange | undefined }>;
 } = Function.dual(
   6,
-  Effect.fn("readContextFrom")(function* (
+  Effect.fnUntraced(function* (
     session: SessionImpl,
     storage: Storage,
     conversationId: ConversationId,
@@ -148,7 +148,7 @@ export const readContext: {
   ): Effect.Effect<ContextView>;
 } = Function.dual(
   (args: IArguments) => args.length >= 4 && typeof args[1] !== "number",
-  Effect.fn("readContext")(function* (
+  Effect.fnUntraced(function* (
     session: SessionImpl,
     storage: Storage,
     conversationId: ConversationId,
@@ -171,7 +171,7 @@ export const deriveContext: Dual4<
   Effect.Effect<ContextView>
 > = Function.dual(
   4,
-  Effect.fn("deriveContext")(function* (
+  Effect.fnUntraced(function* (
     storage: Storage,
     conversationId: ConversationId,
     bounds: ContextBounds | undefined,
@@ -191,7 +191,7 @@ export const activeEntries: Dual4<
   Effect.Effect<readonly EntryRecord[]>
 > = Function.dual(
   4,
-  Effect.fn("activeEntries")(function* (
+  Effect.fnUntraced(function* (
     storage: Storage,
     conversationId: ConversationId,
     bounds: ContextBounds | undefined,

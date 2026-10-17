@@ -57,13 +57,13 @@ export const track: {
 });
 
 export const readTable: {
-  <T>(method: string, read: Effect.Effect<T>): (state: TxState) => Promise<T>;
-  <T>(state: TxState, method: string, read: Effect.Effect<T>): Promise<T>;
-} = Function.dual(3, <T>(state: TxState, method: string, read: Effect.Effect<T>): Promise<T> => {
+  <T>(method: string, read: () => Promise<T>): (state: TxState) => Promise<T>;
+  <T>(state: TxState, method: string, read: () => Promise<T>): Promise<T>;
+} = Function.dual(3, <T>(state: TxState, method: string, read: () => Promise<T>): Promise<T> => {
   try {
     assertOpen(state);
     if (state.hasTableWrite) throw new ReadAfterWrite(method);
-    return track(state, Effect.runPromise(read));
+    return track(state, read());
   } catch (error) {
     return Promise.reject(error);
   }
@@ -85,12 +85,7 @@ export const readStorage: {
     state: TxState,
     method: string,
     read: (storage: TransactionHost["storage"], context: TxState["context"]) => Promise<T>,
-  ): Promise<T> =>
-    readTable(
-      state,
-      method,
-      Effect.promise(() => read(state.host.storage, state.context)),
-    ),
+  ): Promise<T> => readTable(state, method, () => read(state.host.storage, state.context)),
 );
 
 export const writeTable: {
@@ -149,7 +144,7 @@ export const requireConversation: Dual2<
   Effect.Effect<void>
 > = Function.dual(
   2,
-  Effect.fn("requireConversation")(function* (state: TxState, id: ConversationId) {
+  Effect.fnUntraced(function* (state: TxState, id: ConversationId) {
     if (state.createdConversationIds.has(id)) return;
     const record = yield* Effect.promise(() => state.host.storage.conversation(id, state.context));
     if (record === undefined) throw new Error(`Conversation ${id} does not exist`);

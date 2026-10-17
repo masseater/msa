@@ -30,10 +30,7 @@ import { recordUsage } from "./usage.ts";
 
 type SlotOf = ReturnType<typeof toolSlot>;
 
-const abortNested = Effect.fn("abortNestedCalls")(function* (
-  runtime: ToolRuntime,
-  context: Context,
-) {
+const abortNested = Effect.fnUntraced(function* (runtime: ToolRuntime, context: Context) {
   const owned = yield* Effect.promise(() => runtime.ownedTasks(context));
   const nestedIds = owned
     .filter(
@@ -50,7 +47,7 @@ const abortNested = Effect.fn("abortNestedCalls")(function* (
   return madeNested;
 });
 
-const settleNested = Effect.fn("settleNestedResult")(function* (
+const settleNested = Effect.fnUntraced(function* (
   tx: Tx,
   runtime: ToolRuntime,
   state: { readonly input: Extract<ToolTaskInput, { kind: "nested" }>; readonly slot: SlotOf },
@@ -79,7 +76,7 @@ const settleNested = Effect.fn("settleNestedResult")(function* (
   return { kind: "nested" } satisfies ToolTaskResult;
 });
 
-const settleModelCall = Effect.fn("settleModelCall")(function* (
+const settleModelCall = Effect.fnUntraced(function* (
   tx: Tx,
   runtime: ToolRuntime,
   slot: SlotOf,
@@ -120,7 +117,7 @@ const terminalOf = (ending: Ending, settled: ToolTaskResult) => {
   return { status: "terminal", outcome: { status: "completed", result: settled } } as const;
 };
 
-export const settle = Effect.fn("settleToolTask")(function* (
+export const settle = Effect.fnUntraced(function* (
   runtime: ToolRuntime,
   input: ToolTaskInput,
   call: ToolHookCall,

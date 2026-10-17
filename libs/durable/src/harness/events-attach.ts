@@ -17,7 +17,7 @@ export type Attached = {
   readonly snapshot: SnapshotEvent;
 };
 
-const heldTasks = Effect.fn("readCompletingGenerations")(function* (
+const heldTasks = Effect.fnUntraced(function* (
   storage: Storage,
   conversationId: ConversationId,
   context: Context,
@@ -29,7 +29,7 @@ const heldTasks = Effect.fn("readCompletingGenerations")(function* (
   return new Set<TaskId>(completing.map((record) => record.id));
 });
 
-export const attachEvents = Effect.fn("attachAgentEvents")(function* (
+export const attachEvents = Effect.fnUntraced(function* (
   views: ConversationViews,
   conversationId: ConversationId,
   context: Context,

@@ -29,7 +29,7 @@ type Executed =
     }
   | { readonly kind: "aborted"; readonly error: unknown };
 
-const invoke = Effect.fn("invokeTool")(function* (
+const invoke = Effect.fnUntraced(function* (
   runtime: ToolRuntime,
   tool: ToolRegistration,
   args: JsonObject,
@@ -59,7 +59,7 @@ const failed = (
         durationMs,
       };
 
-export const execute = Effect.fn("executeTool")(function* (
+export const execute = Effect.fnUntraced(function* (
   runtime: ToolRuntime,
   call: ToolHookCall,
   tool: ToolRegistration,

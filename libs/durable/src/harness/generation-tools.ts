@@ -50,7 +50,7 @@ type Round = {
   readonly pending: string[];
 };
 
-const placeCall = Effect.fn("placeCall")(function* (
+const placeCall = Effect.fnUntraced(function* (
   tx: Tx,
   runtime: GenerationRuntime,
   round: Round,
@@ -80,7 +80,7 @@ const placeCall = Effect.fn("placeCall")(function* (
   round.slots.push({ callId: call.id, name: call.name, taskId, status: "pending" });
 });
 
-const isSequential = Effect.fn("isSequential")(function* (
+const isSequential = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   calls: readonly ToolCall[],
   offered: ReadonlySet<string>,
@@ -95,7 +95,7 @@ const isSequential = Effect.fn("isSequential")(function* (
   );
 });
 
-export const startToolRound = Effect.fn("startToolRound")(function* (
+export const startToolRound = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   request: GenerationRequest,
   message: AssistantMessage,

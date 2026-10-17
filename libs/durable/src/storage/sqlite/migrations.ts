@@ -106,7 +106,7 @@ const checkContiguous = (migrations: readonly SqliteMigration[]): void => {
   }
 };
 
-const migrate = Effect.fn("migrate")(function* (
+const migrate = Effect.fnUntraced(function* (
   transaction: SqliteExecutor,
   migrations: readonly SqliteMigration[],
 ) {

@@ -35,7 +35,7 @@ export const commitTask: {
   ): Effect.Effect<void>;
 } = Function.dual(
   3,
-  Effect.fn("commitTask")(function* <I, S, R, H extends object>(
+  Effect.fnUntraced(function* <I, S, R, H extends object>(
     runtime: TaskRuntime<I, S, R, H>,
     change: TaskChange<I, S, R>,
     context: Context,

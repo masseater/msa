@@ -1,4 +1,8 @@
-import { Effect } from "effect";
-
-export const promiseTry = <T>(run: () => T | PromiseLike<T>): Promise<T> =>
-  Effect.runPromise(Effect.promise(() => Promise.resolve(run())));
+export const promiseTry = <T>(run: () => T | PromiseLike<T>): Promise<T> => {
+  try {
+    const value = run();
+    return Promise.resolve().then(() => value);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+};

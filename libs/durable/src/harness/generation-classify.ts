@@ -9,7 +9,7 @@ import { deferPoll, settleModelError } from "./generation-retry.ts";
 import { startToolRound } from "./generation-tools.ts";
 import type { GenerationRequest, GenerationRuntime } from "./generation-types.ts";
 
-export const classify = Effect.fn("classify")(function* (
+export const classify = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   request: GenerationRequest,
   message: AssistantMessage,

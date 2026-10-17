@@ -204,7 +204,7 @@ const retainedLinesOf = (
   );
 };
 
-const settleSidecar = Effect.fn("settleSidecar")(function* (
+const settleSidecar = Effect.fnUntraced(function* (
   files: JsonlFiles,
   file: string,
   parsed: ParsedFile<SidecarRecord>,
@@ -239,7 +239,7 @@ export const settleSidecars: {
   ): Effect.Effect<ReadonlyMap<string, string>>;
 } = Function.dual(
   5,
-  Effect.fn("settleSidecars")(function* (
+  Effect.fnUntraced(function* (
     files: JsonlFiles,
     index: SidecarIndex,
     analysis: MainAnalysis,

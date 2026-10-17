@@ -58,7 +58,7 @@ const summaryChange =
       };
     });
 
-export const settleSummary = Effect.fn("settleSummary")(function* (
+export const settleSummary = Effect.fnUntraced(function* (
   runtime: CompactionRuntime,
   request: SummaryRequest,
   message: AssistantMessage,
@@ -82,7 +82,7 @@ export const retryPhase: Dual3<
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fn("compactionRetryPhase")(function* (
+  Effect.fnUntraced(function* (
     runtime: CompactionRuntime,
     checkpoint: SummaryRequest & { readonly until: number },
     context: Context,

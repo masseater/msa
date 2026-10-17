@@ -62,7 +62,7 @@ const scanPage = (
     collection.storage.scanDocuments({ scope, at }, SCAN_PAGE_SIZE, cursor, collection.context),
   );
 
-const collectCopies = Effect.fn("collectCopies")(function* (
+const collectCopies = Effect.fnUntraced(function* (
   collection: CopyCollection,
   scope: ConversationScope,
   at: DocumentPoint,
@@ -97,7 +97,7 @@ export const prepareForkDocumentCopies: Dual5<
   Effect.Effect<readonly ForkDocumentCopy[]>
 > = Function.dual(
   5,
-  Effect.fn("prepareForkDocumentCopies")(function* (
+  Effect.fnUntraced(function* (
     storage: Storage,
     parentConversationId: ConversationId,
     at: EntryId,

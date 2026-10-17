@@ -41,7 +41,7 @@ const withoutDeferred = (
   return forwarded;
 };
 
-const summaryOptions = Effect.fn("summaryOptions")(function* (
+const summaryOptions = Effect.fnUntraced(function* (
   runtime: CompactionRuntime,
   request: SummaryRequest,
   context: Context,
@@ -66,7 +66,7 @@ export const summarizePhase: Dual4<
   Effect.Effect<void>
 > = Function.dual(
   4,
-  Effect.fn("summarizePhase")(function* (
+  Effect.fnUntraced(function* (
     runtime: CompactionRuntime,
     request: SummaryRequest,
     input: CompactionInput,

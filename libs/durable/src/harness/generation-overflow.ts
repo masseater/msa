@@ -9,7 +9,7 @@ import type { GenerationNext, GenerationRequest, GenerationRuntime } from "./gen
 import { LiveDoc } from "./live.ts";
 import type { Tx } from "./types.ts";
 
-export const compactOverflow = Effect.fn("compactOverflow")(function* (
+export const compactOverflow = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   request: GenerationRequest,
   message: AssistantMessage,

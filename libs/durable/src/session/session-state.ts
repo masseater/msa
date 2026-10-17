@@ -1,5 +1,5 @@
 import type { Context } from "@msa/chord";
-import { Clock, Effect, Function } from "effect";
+import { Clock, Context as EffectContext, Effect, Function } from "effect";
 
 import type { Dual2 } from "../dual.ts";
 import { SessionFailed } from "../errors.ts";
@@ -58,7 +58,9 @@ export const setDefaultDocumentRetention = (ms: number): void => {
 export const documentRetention = (ms: number | undefined): number =>
   typeof ms === "number" && ms >= 0 ? ms : defaultRetention;
 
-export const currentTimeMillis = (): number => Effect.runSync(Clock.currentTimeMillis);
+const clock = EffectContext.get(EffectContext.empty(), Clock.Clock);
+
+export const currentTimeMillis = (): number => clock.currentTimeMillisUnsafe();
 
 const guardedClock = (now: () => number) => (): number => {
   try {

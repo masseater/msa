@@ -72,7 +72,7 @@ export function resolveSettings(settings: HarnessSettings | undefined): Settings
   };
 }
 
-const configureDoc = Effect.fn("configure")(function* (
+const configureDoc = Effect.fnUntraced(function* (
   tx: Tx,
   conversationId: ConversationId,
   change: AgentChange,
@@ -106,11 +106,7 @@ export const addTools: Dual3<
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fn("addTools")(function* (
-    tx: Tx,
-    conversationId: ConversationId,
-    added: readonly string[],
-  ) {
+  Effect.fnUntraced(function* (tx: Tx, conversationId: ConversationId, added: readonly string[]) {
     const state = yield* Effect.promise(() => tx.doc(AgentDoc, conversationId));
     const tools = state.tools;
     if (Array.isArray(tools)) {
@@ -180,7 +176,7 @@ function names(items: readonly { readonly name: string }[]): string[] {
 
 export const createAgent: Dual2<Tx, ConversationRecord, Effect.Effect<void>> = Function.dual(
   2,
-  Effect.fn("createAgent")(function* (tx: Tx, conversation: ConversationRecord) {
+  Effect.fnUntraced(function* (tx: Tx, conversation: ConversationRecord) {
     if (conversation.parent !== undefined) return;
     const agent = yield* Effect.promise(() => tx.doc(AgentDoc, conversation.id));
     if (conversation.owner === undefined) return;

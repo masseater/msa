@@ -15,7 +15,7 @@ import type {
 import { LiveDoc } from "./live.ts";
 import type { Tx } from "./types.ts";
 
-export const retryPhase = Effect.fn("retryPhase")(function* (
+export const retryPhase = Effect.fnUntraced(function* (
   task: PhaseTask<"retry">,
   runtime: GenerationRuntime,
   context: Context,
@@ -41,7 +41,7 @@ export const retryPhase = Effect.fn("retryPhase")(function* (
   );
 });
 
-export const pollPhase = Effect.fn("pollPhase")(function* (
+export const pollPhase = Effect.fnUntraced(function* (
   task: PhaseTask<"poll">,
   runtime: GenerationRuntime,
   context: Context,
@@ -56,7 +56,7 @@ export const pollPhase = Effect.fn("pollPhase")(function* (
   yield* classify(runtime, { attempt, compacted, model: ref, cutoff, pollAt }, message, context);
 });
 
-export const toolsPhase = Effect.fn("toolsPhase")(function* (
+export const toolsPhase = Effect.fnUntraced(function* (
   task: PhaseTask<"tools">,
   runtime: GenerationRuntime,
   context: Context,

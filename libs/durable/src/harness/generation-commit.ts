@@ -13,7 +13,7 @@ import { LiveDoc } from "./live.ts";
 import type { SystemDraft } from "./prompt.ts";
 import type { Tx } from "./types.ts";
 
-export const waitForBlockingCompaction = Effect.fn("waitForBlockingCompaction")(function* (
+export const waitForBlockingCompaction = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   attempt: number,
   context: Context,
@@ -49,7 +49,7 @@ const appendPlanned = (
     Effect.promise(() => tx.appendEntry(SystemEntry, conversationId, entry)),
   );
 
-export const commitRequest = Effect.fn("commitRequest")(function* (
+export const commitRequest = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   entries: readonly SystemDraft[],
   request: Omit<Extract<GenerationCheckpoint, { phase: "request" }>, "phase" | "cutoff">,

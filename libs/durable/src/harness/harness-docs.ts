@@ -26,11 +26,7 @@ export const createConversation: {
   (tx: Transaction, target: CreateTarget, options: CreateOptions): Effect.Effect<ConversationId>;
 } = Function.dual(
   3,
-  Effect.fn("createConversation")(function* (
-    tx: Transaction,
-    target: CreateTarget,
-    options: CreateOptions,
-  ) {
+  Effect.fnUntraced(function* (tx: Transaction, target: CreateTarget, options: CreateOptions) {
     if (target.kind === "root") {
       const existing = yield* Effect.promise(() => tx.conversation(ROOT_CONVERSATION_ID));
       if (existing !== undefined) return ROOT_CONVERSATION_ID;
@@ -55,7 +51,7 @@ export const initializeConversation: {
   ): Effect.Effect<void>;
 } = Function.dual(
   3,
-  Effect.fn("initializeConversation")(function* (
+  Effect.fnUntraced(function* (
     tx: Transaction,
     record: ConversationRecord,
     hook: ((tx: Transaction, record: ConversationRecord) => unknown) | undefined,

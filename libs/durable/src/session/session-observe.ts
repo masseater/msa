@@ -110,7 +110,7 @@ export const documentStateOf: Dual3<
     try {
       assertUsable(state);
       const read = resolveRead(token, args);
-      const attach = Effect.fn("attachState")(function* () {
+      const attach = Effect.fnUntraced(function* () {
         const loaded = yield* loadResolved(state, read);
         if (loaded === undefined) return undefined;
         const { observer: source, detach } = attachDocument(

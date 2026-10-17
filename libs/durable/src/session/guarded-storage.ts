@@ -1,7 +1,8 @@
 import type { Context, JsonValue } from "@msa/chord";
-import { Cause, Deferred, Effect } from "effect";
+import { Deferred, Effect } from "effect";
 
 import { SessionFailed, StorageRequestError } from "../errors.ts";
+import { promiseTry } from "../promise-try.ts";
 import type {
   ConversationId,
   ConversationQuery,
@@ -197,26 +198,26 @@ export class GuardedStorage implements Storage {
   }
 
   #call<T>(read: Context | undefined, run: () => Promise<T>): Promise<T> {
-    return Effect.runPromise(
-      Effect.gen({ self: this }, function* () {
-        this.#assertHealthy();
-        if (this.#closing) throw new Error("Session is closed");
-        this.#underway += 1;
-        const value = yield* this.#attempt(read, run).pipe(
-          Effect.ensuring(Effect.sync(() => this.#settle())),
-        );
+    try {
+      this.#assertHealthy();
+      if (this.#closing) throw new Error("Session is closed");
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    this.#underway += 1;
+    return promiseTry(run).then(
+      (value) => {
+        this.#settle();
         this.#assertHealthy();
         return value;
-      }),
-    );
-  }
-
-  #attempt<T>(read: Context | undefined, run: () => Promise<T>): Effect.Effect<T> {
-    return Effect.catchCause(Effect.promise(run), (cause) =>
-      Effect.flatMap(
-        Effect.sync(() => this.#failed(read, Cause.squash(cause))),
-        Effect.die,
-      ),
+      },
+      (error: unknown) => {
+        try {
+          throw this.#failed(read, error);
+        } finally {
+          this.#settle();
+        }
+      },
     );
   }
 

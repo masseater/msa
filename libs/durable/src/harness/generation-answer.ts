@@ -10,7 +10,7 @@ import { applyBoundary, prepareBoundary } from "./inbox.ts";
 import { endRun, LiveDoc } from "./live.ts";
 import type { Tx, UserInput } from "./types.ts";
 
-const askContinuation = Effect.fn("askContinuation")(function* (
+const askContinuation = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   message: AssistantMessage,
   context: Context,
@@ -29,7 +29,7 @@ const askContinuation = Effect.fn("askContinuation")(function* (
   return continuation;
 });
 
-export const answer = Effect.fn("answer")(function* (
+export const answer = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   message: AssistantMessage,
   context: Context,

@@ -18,7 +18,7 @@ import type { EntryId, RunningTask, Tx } from "./types.ts";
 
 type AbortTask = RunningTask<GenerationInput, GenerationCheckpoint, GenerationResult>;
 
-const readCalls = Effect.fn("readCalls")(function* (
+const readCalls = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   assistant: EntryId,
   callIds: readonly string[],
@@ -33,7 +33,7 @@ const readCalls = Effect.fn("readCalls")(function* (
   return callIds.flatMap((id) => calls.filter((call) => call.id === id).slice(0, 1));
 });
 
-const cancelDeferred = Effect.fn("cancelDeferred")(function* (
+const cancelDeferred = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   checkpoint: Extract<GenerationCheckpoint, { phase: "poll" }>,
 ) {
@@ -47,7 +47,7 @@ const cancelDeferred = Effect.fn("cancelDeferred")(function* (
   );
 });
 
-export const abortGeneration = Effect.fn("abortGeneration")(function* (
+export const abortGeneration = Effect.fnUntraced(function* (
   task: AbortTask,
   runtime: GenerationRuntime,
   context: Context,

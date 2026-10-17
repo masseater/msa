@@ -13,11 +13,7 @@ export const failModelError: Dual3<
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fn("failModelError")(function* (
-    runtime: GenerationRuntime,
-    text: string,
-    context: Context,
-  ) {
+  Effect.fnUntraced(function* (runtime: GenerationRuntime, text: string, context: Context) {
     yield* commitTask(
       runtime,
       (tx) =>
@@ -48,7 +44,7 @@ export const failNoModel: Dual3<
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fn("failNoModel")(function* (
+  Effect.fnUntraced(function* (
     runtime: GenerationRuntime,
     ref: ModelRef | undefined,
     context: Context,

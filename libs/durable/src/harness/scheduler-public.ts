@@ -22,7 +22,7 @@ type Marked = {
   readonly run?: Invocation | undefined;
 };
 
-const orphanIfBlocked = Effect.fn("orphanIfBlocked")(function* (
+const orphanIfBlocked = Effect.fnUntraced(function* (
   state: SchedulerState,
   tx: Transaction,
   current: RunnableTaskRecord,
@@ -35,7 +35,7 @@ const orphanIfBlocked = Effect.fn("orphanIfBlocked")(function* (
   return true;
 });
 
-const abortIn = Effect.fn("abortTaskIn")(function* (
+const abortIn = Effect.fnUntraced(function* (
   state: SchedulerState,
   tx: Transaction,
   id: TaskId,
@@ -59,7 +59,7 @@ const abortIn = Effect.fn("abortTaskIn")(function* (
   } satisfies Marked;
 });
 
-export const abortTask = Effect.fn("abortTask")(function* (
+export const abortTask = Effect.fnUntraced(function* (
   state: SchedulerState,
   id: TaskId,
   context: Context,
@@ -79,7 +79,7 @@ export const abortTask = Effect.fn("abortTask")(function* (
   return marked.result;
 });
 
-export const waitForTask = Effect.fn("waitForTask")(function* (
+export const waitForTask = Effect.fnUntraced(function* (
   state: SchedulerState,
   id: TaskId,
   context: Context,
@@ -98,7 +98,7 @@ export const waitForTask = Effect.fn("waitForTask")(function* (
   return yield* Effect.promise(() => found.promise);
 });
 
-const abortConversationIn = Effect.fn("abortConversationIn")(function* (
+const abortConversationIn = Effect.fnUntraced(function* (
   state: SchedulerState,
   tx: Transaction,
   conversationId: ConversationId,
@@ -122,7 +122,7 @@ const abortConversationIn = Effect.fn("abortConversationIn")(function* (
   return reached;
 });
 
-export const abortConversation = Effect.fn("abortConversation")(function* (
+export const abortConversation = Effect.fnUntraced(function* (
   state: SchedulerState,
   conversationId: ConversationId,
   background: boolean,

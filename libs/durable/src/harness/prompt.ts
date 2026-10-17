@@ -74,7 +74,7 @@ export const renderSections: {
   ): Effect.Effect<Map<string, string>>;
 } = Function.dual(
   5,
-  Effect.fn("renderSections")(function* <Tool extends ToolRegistration>(
+  Effect.fnUntraced(function* <Tool extends ToolRegistration>(
     sections: readonly PromptSection<Tool>[],
     input: PromptInput<Tool>,
     shown: ReadonlyMap<string, string>,

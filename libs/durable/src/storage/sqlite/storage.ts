@@ -69,32 +69,27 @@ export class SqliteStorage implements Storage {
   }
 
   commit(writes: readonly StorageWrite[], _context: Context): Promise<Seq> {
-    return this.run(() => {
+    return this.query(() => {
       const documentActions = prepareDocumentActions(writes);
       const nextId = candidateNextId(this.nextId, writes);
-      return Effect.map(
-        Effect.promise(() =>
-          this.db.transaction((transaction) =>
-            Effect.runPromise(commitIn(transaction, writes, documentActions, nextId)),
-          ),
-        ),
-        (seq) => {
+      return this.db
+        .transaction((transaction) => commitIn(transaction, writes, documentActions, nextId))
+        .then((seq) => {
           this.nextId = Math.max(this.nextId, nextId);
           return seq;
-        },
-      );
+        });
     });
   }
 
   mintId<I extends Id<string>>(): Promise<I> {
-    return this.run(() => {
+    return this.query(() => {
       if (!Number.isSafeInteger(this.nextId)) throw new Error("ID space is exhausted");
-      return Effect.succeed(idFromNumber<I>(this.nextId++));
+      return Promise.resolve(idFromNumber<I>(this.nextId++));
     });
   }
 
   conversation(id: ConversationId, _context: Context): Promise<ConversationRecord | undefined> {
-    return this.run(() => recordById<ConversationRecord>(this.db, "conversations", id));
+    return this.query(() => recordById<ConversationRecord>(this.db, "conversations", id));
   }
 
   scanConversations(
@@ -103,7 +98,7 @@ export class SqliteStorage implements Storage {
     cursor: Cursor | undefined,
     _context: Context,
   ): Promise<Page<ConversationRecord, Cursor>> {
-    return this.run(() => scanConversationRows(this.db, query, limit, cursor));
+    return this.query(() => scanConversationRows(this.db, query, limit, cursor));
   }
 
   entry(id: EntryId, context: Context): Promise<EntryRead | undefined>;
@@ -138,7 +133,7 @@ export class SqliteStorage implements Storage {
   }
 
   task(id: TaskId, _context: Context): Promise<StoredTask | undefined> {
-    return this.run(() => recordById<StoredTask>(this.db, "tasks", id));
+    return this.query(() => recordById<StoredTask>(this.db, "tasks", id));
   }
 
   scanTasks(
@@ -147,11 +142,11 @@ export class SqliteStorage implements Storage {
     cursor: Cursor | undefined,
     _context: Context,
   ): Promise<Page<StoredTask, Cursor>> {
-    return this.run(() => scanTaskRows(this.db, query, limit, cursor));
+    return this.query(() => scanTaskRows(this.db, query, limit, cursor));
   }
 
   submission(id: SubmissionId, _context: Context): Promise<SubmissionRecord | undefined> {
-    return this.run(() => recordById<SubmissionRecord>(this.db, "submissions", id));
+    return this.query(() => recordById<SubmissionRecord>(this.db, "submissions", id));
   }
 
   scanSubmissions(
@@ -160,7 +155,7 @@ export class SqliteStorage implements Storage {
     cursor: Cursor | undefined,
     _context: Context,
   ): Promise<Page<SubmissionRecord, Cursor>> {
-    return this.run(() => scanSubmissionRows(this.db, query, limit, cursor));
+    return this.query(() => scanSubmissionRows(this.db, query, limit, cursor));
   }
 
   submissionByRequest(
@@ -168,7 +163,7 @@ export class SqliteStorage implements Storage {
     requestId: string,
     _context: Context,
   ): Promise<SubmissionRecord | undefined> {
-    return this.run(() => submissionByRequestRow(this.db, conversationId, requestId));
+    return this.query(() => submissionByRequestRow(this.db, conversationId, requestId));
   }
 
   findDocument(
@@ -176,7 +171,7 @@ export class SqliteStorage implements Storage {
     at: DocumentPoint,
     _context: Context,
   ): Promise<DocumentRecord | undefined> {
-    return this.run(() => findDocumentRow(this.db, address, at));
+    return this.query(() => findDocumentRow(this.db, address, at));
   }
 
   document(
@@ -199,7 +194,7 @@ export class SqliteStorage implements Storage {
     cursor: Cursor | undefined,
     _context: Context,
   ): Promise<Page<DocumentRecord, Cursor>> {
-    return this.run(() => scanDocumentRows(this.db, query, limit, cursor));
+    return this.query(() => scanDocumentRows(this.db, query, limit, cursor));
   }
 
   close(_context: Context): Promise<void> {
@@ -242,6 +237,16 @@ export class SqliteStorage implements Storage {
         return start();
       }),
     );
+  }
+
+  private query<T>(start: () => Promise<T>): Promise<T> {
+    try {
+      this.assertOpen();
+      const pending = start();
+      return Promise.resolve().then(() => pending);
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   private assertOpen(): void {

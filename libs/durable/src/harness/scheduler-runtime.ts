@@ -3,12 +3,15 @@ import { awaitWithContext } from "@msa/chord/context";
 import { Cause, Duration, Effect, Exit } from "effect";
 
 import { promiseTry } from "../promise-try.ts";
+import { settleStep } from "../step.ts";
 import { agentHooks } from "./agent.ts";
 import { commitState } from "./scheduler-finalize.ts";
 import { endedError, memoOf, sessionMethod } from "./scheduler-records.ts";
 import { type RuntimeParts, runtimeReads } from "./scheduler-runtime-reads.ts";
 import {
   type AnyTaskRecord,
+  type Checkpoint,
+  type NextTaskState,
   type ErasedRunningTask,
   type ErasedRuntime,
   MAX_TIMER_DELAY,
@@ -22,6 +25,11 @@ import {
 } from "./scheduler-types.ts";
 
 type RuntimeInput = RuntimeParts & { readonly phase: Phase };
+
+type NextState = NextTaskState<Checkpoint, JsonValue>;
+
+const isPromiseLike = <T>(value: T | PromiseLike<T>): value is PromiseLike<T> =>
+  typeof (value as { then?: unknown } | undefined)?.then === "function";
 
 const agentOf =
   ({ state, invocation, phase }: RuntimeInput) =>
@@ -38,7 +46,7 @@ const agentOf =
     return phase.agent;
   };
 
-const eachHandler = Effect.fn("eachHandler")(function* (
+const eachHandler = Effect.fnUntraced(function* (
   input: RuntimeInput,
   agent: () => Promise<Agent>,
   name: PropertyKey,
@@ -67,7 +75,7 @@ const aborted = (signal: AbortSignal): Effect.Effect<never> =>
     return Effect.sync(() => signal.removeEventListener("abort", onAbort));
   });
 
-const sleepUntil = Effect.fn("sleepUntil")(function* (
+const sleepUntil = Effect.fnUntraced(function* (
   { state, invocation }: RuntimeParts,
   until: number,
   context: Context,
@@ -87,7 +95,7 @@ const sleepUntil = Effect.fn("sleepUntil")(function* (
   }
 });
 
-const watchDoc = Effect.fn("watchDoc")(function* (
+const watchDoc = Effect.fnUntraced(function* (
   { state, invocation }: RuntimeParts,
   args: readonly unknown[],
 ) {
@@ -132,16 +140,14 @@ const runtimeWrites = (input: RuntimeInput) => {
     commit: (change: Parameters<ErasedRuntime["commit"]>[0], context: Context): Promise<void> =>
       state.gated(
         invocation,
-        (tx: Transaction, current: ErasedRunningTask) =>
-          Effect.runPromise(
-            Effect.flatMap(
-              Effect.promise(() => Promise.resolve(change(tx, current))),
-              (next) =>
-                next === undefined
-                  ? Effect.void
-                  : commitState(state, tx, invocation, current, next),
-            ),
-          ),
+        (tx: Transaction, current: ErasedRunningTask) => {
+          const settle = (next: NextState | undefined): void | Promise<void> =>
+            next === undefined
+              ? undefined
+              : settleStep(commitState(state, tx, invocation, current, next), () => undefined);
+          const next = change(tx, current);
+          return isPromiseLike(next) ? Promise.resolve(next).then(settle) : settle(next);
+        },
         context,
       ),
     memo: memo(input),

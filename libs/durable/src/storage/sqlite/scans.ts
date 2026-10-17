@@ -1,4 +1,4 @@
-import { Effect, Function } from "effect";
+import { Function } from "effect";
 
 import type {
   ConversationId,
@@ -38,33 +38,30 @@ const scanTable = <T extends { readonly id: Id<string> }>(
   cursor: Cursor | undefined,
   limit: number,
   filters: readonly Filter[],
-): Effect.Effect<Page<T, Cursor>> =>
-  Effect.suspend(() => {
-    const start = scanStart(order, cursor, "ascending");
-    const scan = scanSql(start);
-    const clauses = [scan.clause];
-    const params: SqliteValue[] = [scan.param];
-    for (const filter of filters) {
-      if (filter === undefined) continue;
-      clauses.push(filter[0]);
-      params.push(filter[1]);
-    }
-    params.push(limit + 1);
-    return Effect.map(
-      Effect.promise(() =>
-        db.all<JsonRow>(
-          `SELECT record FROM ${table} WHERE ${clauses.join(" AND ")} ORDER BY id ${scan.direction} LIMIT ?`,
-          ...params,
-        ),
+): Promise<Page<T, Cursor>> => {
+  const start = scanStart(order, cursor, "ascending");
+  const scan = scanSql(start);
+  const clauses = [scan.clause];
+  const params: SqliteValue[] = [scan.param];
+  for (const filter of filters) {
+    if (filter === undefined) continue;
+    clauses.push(filter[0]);
+    params.push(filter[1]);
+  }
+  params.push(limit + 1);
+  return db
+    .all<JsonRow>(
+      `SELECT record FROM ${table} WHERE ${clauses.join(" AND ")} ORDER BY id ${scan.direction} LIMIT ?`,
+      ...params,
+    )
+    .then((rows) =>
+      page(
+        rows.map((row) => parseJson<T>(row.record)),
+        limit,
+        start.order,
       ),
-      (rows) =>
-        page(
-          rows.map((row) => parseJson<T>(row.record)),
-          limit,
-          start.order,
-        ),
     );
-  });
+};
 
 const filter = <V>(clause: string, value: V | undefined, encode: (value: V) => SqliteValue) =>
   value === undefined ? undefined : ([clause, encode(value)] as const);
@@ -77,13 +74,13 @@ type Scan<Q, T> = {
     query: Q,
     limit: number,
     cursor: Cursor | undefined,
-  ): (db: SqliteExecutor) => Effect.Effect<Page<T, Cursor>>;
+  ): (db: SqliteExecutor) => Promise<Page<T, Cursor>>;
   (
     db: SqliteExecutor,
     query: Q,
     limit: number,
     cursor: Cursor | undefined,
-  ): Effect.Effect<Page<T, Cursor>>;
+  ): Promise<Page<T, Cursor>>;
 };
 
 export const scanConversationRows: Scan<ConversationQuery, ConversationRecord> = Function.dual(
@@ -118,36 +115,33 @@ export const scanSubmissionRows: Scan<SubmissionQuery, SubmissionRecord> = Funct
 
 export const scanDocumentRows: Scan<DocumentQuery, DocumentRecord> = Function.dual(
   4,
-  (db: SqliteExecutor, query: DocumentQuery, limit: number, cursor: Cursor | undefined) =>
-    Effect.suspend(() => {
-      const scope = scopeColumns(query.scope);
-      const clauses = ["scope_kind = ?", "owner_id = ?", "id > ?"];
-      const params: SqliteValue[] = [scope.scopeKind, scope.ownerId, cursorId(cursor) ?? -1];
-      if (query.kind !== undefined) {
-        clauses.push("kind = ?");
-        params.push(encodeIndexedString(query.kind));
-      }
-      if (query.at === "current") {
-        clauses.push("retired_at IS NULL");
-      } else {
-        clauses.push("created_at <= ?", "(retired_at IS NULL OR retired_at > ?)");
-        params.push(query.at, query.at);
-      }
-      params.push(limit + 1);
-      return Effect.map(
-        Effect.promise(() =>
-          db.all<JsonRow>(
-            `SELECT record FROM documents WHERE ${clauses.join(" AND ")} ORDER BY id LIMIT ?`,
-            ...params,
-          ),
+  (db: SqliteExecutor, query: DocumentQuery, limit: number, cursor: Cursor | undefined) => {
+    const scope = scopeColumns(query.scope);
+    const clauses = ["scope_kind = ?", "owner_id = ?", "id > ?"];
+    const params: SqliteValue[] = [scope.scopeKind, scope.ownerId, cursorId(cursor) ?? -1];
+    if (query.kind !== undefined) {
+      clauses.push("kind = ?");
+      params.push(encodeIndexedString(query.kind));
+    }
+    if (query.at === "current") {
+      clauses.push("retired_at IS NULL");
+    } else {
+      clauses.push("created_at <= ?", "(retired_at IS NULL OR retired_at > ?)");
+      params.push(query.at, query.at);
+    }
+    params.push(limit + 1);
+    return db
+      .all<JsonRow>(
+        `SELECT record FROM documents WHERE ${clauses.join(" AND ")} ORDER BY id LIMIT ?`,
+        ...params,
+      )
+      .then((rows) =>
+        page(
+          rows.map((row) => parseJson<DocumentRecord>(row.record)),
+          limit,
         ),
-        (rows) =>
-          page(
-            rows.map((row) => parseJson<DocumentRecord>(row.record)),
-            limit,
-          ),
       );
-    }),
+  },
 );
 
 const CURRENT_DOCUMENT = `SELECT record FROM documents
@@ -163,63 +157,54 @@ export const findDocumentRow: {
   (
     address: DocumentAddress,
     at: DocumentPoint,
-  ): (db: SqliteExecutor) => Effect.Effect<DocumentRecord | undefined>;
+  ): (db: SqliteExecutor) => Promise<DocumentRecord | undefined>;
   (
     db: SqliteExecutor,
     address: DocumentAddress,
     at: DocumentPoint,
-  ): Effect.Effect<DocumentRecord | undefined>;
-} = Function.dual(3, (db: SqliteExecutor, address: DocumentAddress, at: DocumentPoint) =>
-  Effect.suspend(() => {
-    const parts = addressParts(address);
-    const params: SqliteValue[] = [
-      parts.kind,
-      parts.scopeKind,
-      parts.ownerId,
-      parts.family,
-      parts.keyValue,
-    ];
-    if (at !== "current") params.push(at, at);
-    return Effect.map(
-      Effect.promise(() =>
-        db.get<JsonRow>(at === "current" ? CURRENT_DOCUMENT : HISTORICAL_DOCUMENT, ...params),
-      ),
-      (row) => (row === undefined ? undefined : parseJson<DocumentRecord>(row.record)),
-    );
-  }),
-);
+  ): Promise<DocumentRecord | undefined>;
+} = Function.dual(3, (db: SqliteExecutor, address: DocumentAddress, at: DocumentPoint) => {
+  const parts = addressParts(address);
+  const params: SqliteValue[] = [
+    parts.kind,
+    parts.scopeKind,
+    parts.ownerId,
+    parts.family,
+    parts.keyValue,
+  ];
+  if (at !== "current") params.push(at, at);
+  return db
+    .get<JsonRow>(at === "current" ? CURRENT_DOCUMENT : HISTORICAL_DOCUMENT, ...params)
+    .then((row) => (row === undefined ? undefined : parseJson<DocumentRecord>(row.record)));
+});
 
 export const recordById: {
-  <T>(table: string, id: SqliteValue): (db: SqliteExecutor) => Effect.Effect<T | undefined>;
-  <T>(db: SqliteExecutor, table: string, id: SqliteValue): Effect.Effect<T | undefined>;
+  <T>(table: string, id: SqliteValue): (db: SqliteExecutor) => Promise<T | undefined>;
+  <T>(db: SqliteExecutor, table: string, id: SqliteValue): Promise<T | undefined>;
 } = Function.dual(3, <T>(db: SqliteExecutor, table: string, id: SqliteValue) =>
-  Effect.map(
-    Effect.promise(() => db.get<JsonRow>(`SELECT record FROM ${table} WHERE id = ?`, id)),
-    (row) => (row === undefined ? undefined : parseJson<T>(row.record)),
-  ),
+  db
+    .get<JsonRow>(`SELECT record FROM ${table} WHERE id = ?`, id)
+    .then((row) => (row === undefined ? undefined : parseJson<T>(row.record))),
 );
 
 export const submissionByRequestRow: {
   (
     conversationId: ConversationId,
     requestId: string,
-  ): (executor: SqliteExecutor) => Effect.Effect<SubmissionRecord | undefined>;
+  ): (executor: SqliteExecutor) => Promise<SubmissionRecord | undefined>;
   (
     executor: SqliteExecutor,
     conversationId: ConversationId,
     requestId: string,
-  ): Effect.Effect<SubmissionRecord | undefined>;
+  ): Promise<SubmissionRecord | undefined>;
 } = Function.dual(
   3,
   (executor: SqliteExecutor, conversationId: ConversationId, requestId: string) =>
-    Effect.map(
-      Effect.promise(() =>
-        executor.get<JsonRow>(
-          "SELECT record FROM submissions WHERE conversation_id = ? AND request_id = ?",
-          conversationId,
-          encodeIndexedString(requestId),
-        ),
-      ),
-      (row) => (row === undefined ? undefined : parseJson<SubmissionRecord>(row.record)),
-    ),
+    executor
+      .get<JsonRow>(
+        "SELECT record FROM submissions WHERE conversation_id = ? AND request_id = ?",
+        conversationId,
+        encodeIndexedString(requestId),
+      )
+      .then((row) => (row === undefined ? undefined : parseJson<SubmissionRecord>(row.record))),
 );

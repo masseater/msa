@@ -1,7 +1,7 @@
 import { Cause, Effect, Exit } from "effect";
 
 import { errorMessage } from "../errors.ts";
-import { toPromise } from "./bridge.ts";
+import { settleStep } from "../step.ts";
 import { terminate } from "./scheduler-finalize.ts";
 import { canReserve, erased, jsonEqual, parentOf, withState } from "./scheduler-records.ts";
 import { buildRuntime } from "./scheduler-runtime.ts";
@@ -67,32 +67,37 @@ const decide = (
   return true;
 };
 
-const stepIn = Effect.fn("stepIn")(function* (
+const stepIn = (
   state: SchedulerState,
   tx: Transaction,
   invocation: Invocation,
   choose: (tx: Transaction, current: ErasedRunningTask) => Decision,
-) {
+): ErasedRunningTask | undefined | Promise<undefined> => {
   const found = state.graph.live.get(invocation.taskId);
   const current = found?.state.status === "running" ? (found as ErasedRunningTask) : undefined;
   const decision = current !== undefined && !state.closing ? choose(tx, current) : false;
   if (decision === true) return current;
   state.end(invocation);
-  if (decision !== false) {
-    const message = errorMessage(decision.fault);
-    yield* terminate(state, tx, current!, { status: "faulted", error: { message } });
-  }
-  return undefined;
-});
+  if (decision === false) return undefined;
+  const message = errorMessage(decision.fault);
+  return settleStep(
+    terminate(state, tx, current!, { status: "faulted", error: { message } }),
+    () => undefined,
+  );
+};
 
-const step = Effect.fn("step")(function* (
+const step = Effect.fnUntraced(function* (
   state: SchedulerState,
   invocation: Invocation,
   choose: (tx: Transaction, current: ErasedRunningTask) => Decision,
 ) {
-  const change = yield* toPromise((tx: Transaction) => stepIn(state, tx, invocation, choose));
   const exit = yield* Effect.exit(
-    Effect.promise(() => state.options.session.commitWith(change, state.options.context)),
+    Effect.promise(() =>
+      state.options.session.commitWith(
+        (tx: Transaction) => stepIn(state, tx, invocation, choose),
+        state.options.context,
+      ),
+    ),
   );
   if (Exit.isSuccess(exit)) return exit.value;
   state.end(invocation);
@@ -100,10 +105,7 @@ const step = Effect.fn("step")(function* (
   return undefined;
 });
 
-const runPhases = Effect.fn("runPhases")(function* (
-  state: SchedulerState,
-  reservation: Reservation,
-) {
+const runPhases = Effect.fnUntraced(function* (state: SchedulerState, reservation: Reservation) {
   const invocation = reservation.invocation;
   const running: Running = {
     task: reservation.task,
@@ -136,7 +138,7 @@ const runPhases = Effect.fn("runPhases")(function* (
   }
 });
 
-const runAbort = Effect.fn("runAbort")(function* (state: SchedulerState, reservation: Reservation) {
+const runAbort = Effect.fnUntraced(function* (state: SchedulerState, reservation: Reservation) {
   const invocation = reservation.invocation;
   const current = state.graph.live.get(invocation.taskId) as ErasedRunningTask | undefined;
   if (current === undefined || state.closing) return;
@@ -156,7 +158,7 @@ const runAbort = Effect.fn("runAbort")(function* (state: SchedulerState, reserva
   yield* step(state, invocation, () => ({ fault: failure?.error ?? new Error(message) }));
 });
 
-export const runReservation = Effect.fn("runReservation")(function* (
+export const runReservation = Effect.fnUntraced(function* (
   state: SchedulerState,
   reservation: Reservation,
 ) {

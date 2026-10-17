@@ -27,7 +27,7 @@ import {
 
 type ConversationParent = NonNullable<ConversationRecord["parent"]>;
 
-const conversationOwner = Effect.fn("conversationOwner")(function* (
+const conversationOwner = Effect.fnUntraced(function* (
   state: TxState,
   ownership: ConversationOwnership,
 ) {
@@ -39,7 +39,7 @@ const conversationOwner = Effect.fn("conversationOwner")(function* (
   return { conversationId: task.conversationId, taskId: ownership.taskId };
 });
 
-const stageForkCopies = Effect.fn("stageForkCopies")(function* (
+const stageForkCopies = Effect.fnUntraced(function* (
   state: TxState,
   parent: ConversationParent | undefined,
   id: ConversationId,
@@ -75,7 +75,7 @@ export const stageConversation: Dual4<
   Effect.Effect<ConversationRecord>
 > = Function.dual(
   4,
-  Effect.fn("stageConversation")(function* (
+  Effect.fnUntraced(function* (
     state: TxState,
     parent: ConversationParent | undefined,
     ownership: ConversationOwnership,
@@ -106,11 +106,7 @@ export const appendEntry: Dual3<
   Effect.Effect<EntryRecord>
 > = Function.dual(
   3,
-  Effect.fn("appendEntry")(function* (
-    state: TxState,
-    conversationId: ConversationId,
-    value: EntryDraft,
-  ) {
+  Effect.fnUntraced(function* (state: TxState, conversationId: ConversationId, value: EntryDraft) {
     yield* requireConversation(state, conversationId);
     assertOpen(state);
     const id = yield* mintId<EntryId>(state);
@@ -128,7 +124,7 @@ export const appendEntry: Dual3<
   }),
 );
 
-const taskOwner = Effect.fn("taskOwner")(function* (state: TxState, options: TaskOptions) {
+const taskOwner = Effect.fnUntraced(function* (state: TxState, options: TaskOptions) {
   const ownership = options.ownership;
   if (ownership.kind !== "task") return undefined;
   const owner = yield* currentTask(state, ownership.taskId);
@@ -179,7 +175,7 @@ export const createTask: {
   ): Effect.Effect<TaskId<R>>;
 } = Function.dual(
   4,
-  Effect.fn("createTask")(function* <I, S extends { phase: string }, R, H extends object>(
+  Effect.fnUntraced(function* <I, S extends { phase: string }, R, H extends object>(
     state: TxState,
     task: Task<I, S, R, H>,
     input: I,
@@ -216,7 +212,7 @@ export const createSubmission: Dual2<
   Effect.Effect<SubmissionRecord>
 > = Function.dual(
   2,
-  Effect.fn("createSubmission")(function* (state: TxState, create: SubmissionCreate) {
+  Effect.fnUntraced(function* (state: TxState, create: SubmissionCreate) {
     yield* requireConversation(state, create.conversationId);
     assertOpen(state);
     const id = yield* mintId<SubmissionId>(state);

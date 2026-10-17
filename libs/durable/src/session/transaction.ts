@@ -86,11 +86,8 @@ export class Transaction implements Tx {
     const kind = typeof first === "number" ? undefined : first.kind;
     const id = typeof first === "number" ? first : second!;
     const { host, context } = this.#state;
-    const read = Effect.promise(() => host.storage.entry(id, context));
-    return readTable(
-      this.#state,
-      "entry",
-      Effect.map(read, (found) => {
+    return readTable(this.#state, "entry", () =>
+      host.storage.entry(id, context).then((found) => {
         const entry = found?.entry;
         return kind === undefined || entry?.kind === kind ? entry : undefined;
       }),
@@ -99,11 +96,7 @@ export class Transaction implements Tx {
 
   task(id: TaskId): Promise<AnyTaskRecord | undefined> {
     const state = this.#state;
-    return readTable(
-      state,
-      "task",
-      Effect.promise(() => committedTask(state, id)),
-    );
+    return readTable(state, "task", () => committedTask(state, id));
   }
 
   scanConversations(query: ConversationQuery, limit: number, cursor?: Cursor) {
@@ -268,12 +261,12 @@ export class Transaction implements Tx {
     return retireDoc(this.#state, token, args);
   }
 
-  settleFailure(): Promise<void> {
-    return Effect.runPromise(settleFailure(this.#state));
+  settleFailure(): Effect.Effect<void> {
+    return settleFailure(this.#state);
   }
 
-  settleSuccess(): Promise<readonly StorageWrite[]> {
-    return Effect.runPromise(settleSuccess(this.#state));
+  settleSuccess(): Effect.Effect<readonly StorageWrite[]> {
+    return settleSuccess(this.#state);
   }
 
   discard(): void {

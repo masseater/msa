@@ -86,45 +86,25 @@ const failWith = (cause: Cause.Cause<never>, cleanup: () => void): Effect.Effect
     return Effect.die(Cause.squash(cause));
   });
 
-const runChange = Effect.fn("runChange")(function* <T>(
+const applyChange = <T>(
   state: SessionState,
   tx: Transaction,
   change: (tx: Transaction) => T | Promise<T>,
-) {
-  const result = yield* Effect.exit(
-    Effect.promise(() => Promise.resolve(change(tx))).pipe(
-      Effect.tap(() => Effect.sync(() => assertHealthy(state))),
-    ),
-  );
-  if (Exit.isSuccess(result)) return result.value;
-  yield* Effect.promise(() => tx.settleFailure());
-  return yield* failWith(result.cause, () => sweepDocuments(state));
-});
-
-const settle = (state: SessionState, tx: Transaction) =>
-  Effect.catchCause(
-    Effect.promise(() => tx.settleSuccess()),
-    (cause) => failWith(cause, () => sweepDocuments(state)),
+): Effect.Effect<T> =>
+  Effect.promise(() => Promise.resolve(change(tx))).pipe(
+    Effect.tap(() => Effect.sync(() => assertHealthy(state))),
   );
 
-const store = (
-  state: SessionState,
-  tx: Transaction,
-  writes: readonly StorageWrite[],
-  context: Context,
-) =>
-  Effect.catchCause(
-    Effect.promise(() => state.storage.commit(writes, withoutAbortSignal(context))),
-    (cause) => failWith(cause, () => tx.discard()),
-  );
+const adopt = (state: SessionState, tx: Transaction, seq: Seq): DocumentCommitChange[] => {
+  try {
+    return tx.adopt(seq);
+  } catch (error) {
+    state.hooks.fail(error);
+    throw error;
+  }
+};
 
-const adopt = (state: SessionState, tx: Transaction, seq: Seq) =>
-  Effect.catchCause(
-    Effect.sync(() => tx.adopt(seq)),
-    (cause) => failWith(cause, () => state.hooks.fail(Cause.squash(cause))),
-  );
-
-export const runCommit = Effect.fn("runCommit")(function* <T>(
+export const runCommit = Effect.fnUntraced(function* <T>(
   state: SessionState,
   host: TransactionHost,
   change: (tx: Transaction) => T | Promise<T>,
@@ -134,19 +114,29 @@ export const runCommit = Effect.fn("runCommit")(function* <T>(
   assertHealthy(state);
   context.abortSignal?.throwIfAborted();
   const tx = new Transaction(host, context, scope);
-  const result = yield* runChange(state, tx, change);
-  const writes = yield* settle(state, tx);
+  const changed = yield* Effect.exit(applyChange(state, tx, change));
+  if (Exit.isFailure(changed)) {
+    yield* tx.settleFailure();
+    return yield* failWith(changed.cause, () => sweepDocuments(state));
+  }
+  const settled = yield* Effect.exit(tx.settleSuccess());
+  if (Exit.isFailure(settled)) return yield* failWith(settled.cause, () => sweepDocuments(state));
+  const writes = settled.value;
   if (writes.length === 0) {
     tx.discard();
     sweepDocuments(state);
-    return result;
+    return changed.value;
   }
-  const seq = yield* store(state, tx, writes, context);
-  const documents = yield* adopt(state, tx, seq);
+  const stored = yield* Effect.exit(
+    Effect.promise(() => state.storage.commit(writes, withoutAbortSignal(context))),
+  );
+  if (Exit.isFailure(stored)) return yield* failWith(stored.cause, () => tx.discard());
+  const seq = stored.value;
+  const documents = adopt(state, tx, seq);
   for (const document of documents) touchDocument(state, documentAddressId(document.record));
   publishCommit(state, { seq, writes, documents }, context);
   sweepDocuments(state);
-  return result;
+  return changed.value;
 });
 
 export const commitOnLine: {

@@ -39,7 +39,7 @@ const checkInputEntry = (entry: InputEntry): void => {
   }
 };
 
-const existingSubmission = Effect.fn("existingSubmission")(function* (
+const existingSubmission = Effect.fnUntraced(function* (
   tx: Tx,
   conversationId: ConversationId,
   draft: SubmissionDraft,
@@ -58,7 +58,7 @@ const existingSubmission = Effect.fn("existingSubmission")(function* (
   return existing.id;
 });
 
-const writeDirectly = Effect.fn("writeDirectly")(function* (
+const writeDirectly = Effect.fnUntraced(function* (
   tx: Tx,
   conversationId: ConversationId,
   requestId: RequestId,
@@ -75,7 +75,7 @@ const writeDirectly = Effect.fn("writeDirectly")(function* (
   return (yield* Effect.promise(() => tx.createSubmission(write))).id;
 });
 
-const queueDraft = Effect.fn("queueDraft")(function* (
+const queueDraft = Effect.fnUntraced(function* (
   tx: Tx,
   conversationId: ConversationId,
   state: { readonly draft: SubmissionDraft; readonly requestId: RequestId },
@@ -99,7 +99,7 @@ const queueDraft = Effect.fn("queueDraft")(function* (
   return id;
 });
 
-const placeInput = Effect.fn("placeInput")(function* (
+const placeInput = Effect.fnUntraced(function* (
   tx: Tx,
   conversationId: ConversationId,
   state: {
@@ -124,7 +124,7 @@ const placeInput = Effect.fn("placeInput")(function* (
   return id;
 });
 
-const placeWrite = Effect.fn("placeWrite")(function* (
+const placeWrite = Effect.fnUntraced(function* (
   tx: Tx,
   conversationId: ConversationId,
   state: {
@@ -153,7 +153,7 @@ export const admitSubmission: Dual5<
   Effect.Effect<SubmissionId>
 > = Function.dual(
   5,
-  Effect.fn("admitSubmission")(function* (
+  Effect.fnUntraced(function* (
     tx: Tx,
     conversationId: ConversationId,
     draft: SubmissionDraft,

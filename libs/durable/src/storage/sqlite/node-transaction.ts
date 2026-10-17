@@ -1,7 +1,6 @@
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 
-import { Effect } from "effect";
-
+import { promiseTry } from "../../promise-try.ts";
 import { NodeSqliteExecutor } from "./node-executor.ts";
 
 export type TransactionScope = { active: boolean };
@@ -19,11 +18,9 @@ export class NodeSqliteTransaction extends NodeSqliteExecutor {
   }
 
   protected runOperation<T>(operation: () => T): Promise<T> {
-    return Effect.runPromise(
-      Effect.sync(() => {
-        if (!this.scope.active) throw new Error("SQLite transaction handle is no longer active");
-        return operation();
-      }),
-    );
+    return promiseTry(() => {
+      if (!this.scope.active) throw new Error("SQLite transaction handle is no longer active");
+      return operation();
+    });
   }
 }

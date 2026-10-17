@@ -67,7 +67,7 @@ export const readLines: {
   ): Effect.Effect<ParsedFile<T>>;
 } = Function.dual(
   5,
-  Effect.fn("readLines")(function* <T>(
+  Effect.fnUntraced(function* <T>(
     fs: FileSystem,
     path: string,
     name: string,
@@ -90,7 +90,7 @@ export const readLines: {
   }),
 );
 
-const replaceWithContent = Effect.fn("replaceWithContent")(function* (
+const replaceWithContent = Effect.fnUntraced(function* (
   files: JsonlFiles,
   file: string,
   path: string,
@@ -111,7 +111,7 @@ const replaceWithContent = Effect.fn("replaceWithContent")(function* (
   yield* Effect.promise(() => fs.renameFile(temporaryPath.value, path, context));
 });
 
-const replaceSidecar = Effect.fn("replaceSidecar")(function* (
+const replaceSidecar = Effect.fnUntraced(function* (
   files: JsonlFiles,
   file: string,
   content: string,
@@ -138,7 +138,7 @@ export const reclaimSidecars: {
   ): Effect.Effect<void>;
 } = Function.dual(
   3,
-  Effect.fn("reclaimSidecars")(function* (
+  Effect.fnUntraced(function* (
     files: JsonlFiles,
     replacements: ReadonlyMap<string, string>,
     context: Context,
@@ -161,7 +161,7 @@ export const resolveFile: {
   (files: JsonlFiles, file: string, context: Context): Effect.Effect<string>;
 } = Function.dual(
   3,
-  Effect.fn("resolveFile")(function* (files: JsonlFiles, file: string, context: Context) {
+  Effect.fnUntraced(function* (files: JsonlFiles, file: string, context: Context) {
     const path = yield* Effect.promise(() => files.fs.joinPath([files.directory, file], context));
     if (!path.ok) throw errorFromFile("path join", path.error);
     return path.value;
@@ -175,7 +175,7 @@ export const resolveLayout: {
   (directory: string, fs: FileSystem, context: Context): Effect.Effect<Layout>;
 } = Function.dual(
   3,
-  Effect.fn("resolveLayout")(function* (directory: string, fs: FileSystem, context: Context) {
+  Effect.fnUntraced(function* (directory: string, fs: FileSystem, context: Context) {
     const absolute = yield* Effect.promise(() => fs.absolutePath(directory, context));
     if (!absolute.ok) throw errorFromFile("path resolution", absolute.error);
     const created = yield* Effect.promise(() =>
@@ -190,7 +190,7 @@ export const resolveLayout: {
 
 type ResolvedSidecar = { readonly file: string; readonly content: string; readonly path: string };
 
-const appendSidecars = Effect.fn("appendSidecars")(function* (
+const appendSidecars = Effect.fnUntraced(function* (
   files: JsonlFiles,
   sidecars: readonly ResolvedSidecar[],
   context: Context,
@@ -217,11 +217,7 @@ export const appendEncoded: {
   (files: JsonlFiles, encoded: EncodedCommit, context: Context): Effect.Effect<Error | undefined>;
 } = Function.dual(
   3,
-  Effect.fn("appendEncoded")(function* (
-    files: JsonlFiles,
-    encoded: EncodedCommit,
-    context: Context,
-  ) {
+  Effect.fnUntraced(function* (files: JsonlFiles, encoded: EncodedCommit, context: Context) {
     const sidecars = yield* Effect.forEach(
       [...encoded.sidecars],
       ([file, content]) =>

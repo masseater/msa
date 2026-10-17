@@ -14,7 +14,7 @@ export type {
   ToolEventCall,
 } from "./events-types.ts";
 
-const openStream = Effect.fn("openAgentEventStream")(function* (
+const openStream = Effect.fnUntraced(function* (
   harness: Harness,
   conversationId: ConversationId,
   context: Context,

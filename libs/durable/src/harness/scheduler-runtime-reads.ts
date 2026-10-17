@@ -33,7 +33,7 @@ const ownedTasks = ({ state, invocation }: RuntimeParts, context: Context): AnyT
     .map((record) => copyJson(record as unknown as JsonValue) as unknown as AnyTaskRecord);
 };
 
-const abortOwned = Effect.fn("abortOwned")(function* (
+const abortOwned = Effect.fnUntraced(function* (
   { state, invocation }: RuntimeParts,
   id: TaskId,
   context: Context,
@@ -49,7 +49,7 @@ const abortOwned = Effect.fn("abortOwned")(function* (
   yield* waitForTask(state, id, bound);
 });
 
-const outcomes = Effect.fn("outcomes")(function* (
+const outcomes = Effect.fnUntraced(function* (
   state: SchedulerState,
   ids: readonly TaskId[],
   context: Context,
@@ -64,7 +64,7 @@ const outcomes = Effect.fn("outcomes")(function* (
   return found;
 });
 
-const readEntry = Effect.fn("readEntry")(function* (
+const readEntry = Effect.fnUntraced(function* (
   { state, invocation }: RuntimeParts,
   token: { readonly kind: string } | undefined,
   id: EntryId,
@@ -102,7 +102,7 @@ const keepContext = (
   }
 };
 
-const readContext = Effect.fn("readRuntimeContext")(function* (
+const readContext = Effect.fnUntraced(function* (
   parts: RuntimeParts,
   conversationId: ConversationId,
   context: Context,

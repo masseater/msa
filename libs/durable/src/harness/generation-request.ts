@@ -10,7 +10,7 @@ import type { GenerationRuntime, PhaseTask } from "./generation-types.ts";
 import { LiveDoc } from "./live.ts";
 import type { Tx } from "./types.ts";
 
-export const requestPhase = Effect.fn("requestPhase")(function* (
+export const requestPhase = Effect.fnUntraced(function* (
   task: PhaseTask<"request">,
   runtime: GenerationRuntime,
   context: Context,

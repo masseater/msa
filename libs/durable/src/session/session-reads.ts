@@ -62,7 +62,7 @@ export const conversationDocumentOnLine: Dual3<
   >
 > = Function.dual(
   3,
-  Effect.fn("conversationDocumentOnLine")(function* (
+  Effect.fnUntraced(function* (
     state: SessionState,
     token: AnyDocToken,
     args: readonly [ConversationId, Context],
@@ -82,11 +82,7 @@ export const snapshotDocument: Dual3<
   Effect.Effect<JsonObject | undefined>
 > = Function.dual(
   3,
-  Effect.fn("snapshotDocument")(function* (
-    state: SessionState,
-    token: AnyDocToken,
-    args: readonly unknown[],
-  ) {
+  Effect.fnUntraced(function* (state: SessionState, token: AnyDocToken, args: readonly unknown[]) {
     assertUsable(state);
     const read = resolveRead(token, args);
     const cached = state.documents.get(read.resolved.id);
@@ -99,7 +95,7 @@ export const snapshotDocument: Dual3<
   }),
 );
 
-const historicalDocument = Effect.fn("historicalDocument")(function* (
+const historicalDocument = Effect.fnUntraced(function* (
   state: SessionState,
   read: Resolved,
   conversationId: ConversationId,

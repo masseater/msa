@@ -101,7 +101,7 @@ export class ConversationViews {
     return this.#session.readOnLine(() => Effect.runPromise(this.#attach(id, create, context)));
   }
 
-  #attach = Effect.fn("attachConversationView")(function* <O extends ViewObserver>(
+  #attach = Effect.fnUntraced(function* <O extends ViewObserver>(
     this: ConversationViews,
     id: ConversationId,
     create: (value: ConversationView, release: () => void, storage: Storage) => O | Promise<O>,
@@ -123,7 +123,7 @@ export class ConversationViews {
     return { observer, detach };
   });
 
-  #build = Effect.fn("buildConversationView")(function* (
+  #build = Effect.fnUntraced(function* (
     this: ConversationViews,
     id: ConversationId,
     context: Context,

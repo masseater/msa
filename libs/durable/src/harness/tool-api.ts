@@ -58,7 +58,7 @@ const outputWindowOf = (input: ApiInput): ToolExecutionApi["outputWindow"] =>
       }
     : undefined;
 
-const readNested = Effect.fn("readNested")(function* (
+const readNested = Effect.fnUntraced(function* (
   runtime: ToolRuntime,
   id: TaskId<ToolTaskResult>,
   name: string,

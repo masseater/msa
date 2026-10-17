@@ -12,7 +12,7 @@ export type PromptPlan = {
   readonly threshold: ThresholdOutcome;
 };
 
-const readEnv = Effect.fn("readEnv")(function* (runtime: GenerationRuntime, context: Context) {
+const readEnv = Effect.fnUntraced(function* (runtime: GenerationRuntime, context: Context) {
   const exit = yield* Effect.exit(Effect.promise(() => runtime.env(context)));
   if (Exit.isSuccess(exit)) return exit.value;
   const error = Cause.squash(exit.cause);
@@ -21,7 +21,7 @@ const readEnv = Effect.fn("readEnv")(function* (runtime: GenerationRuntime, cont
   return undefined as ExecutionEnv | undefined;
 });
 
-export const planPrompt = Effect.fn("planPrompt")(function* (
+export const planPrompt = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   agent: Agent,
   compacted: boolean,

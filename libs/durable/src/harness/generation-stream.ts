@@ -13,7 +13,7 @@ type Partials = {
   stopped: boolean;
 };
 
-const storePartial = Effect.fn("storePartial")(function* (
+const storePartial = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   attempt: number,
   partial: AssistantMessage,
@@ -33,7 +33,7 @@ const storePartial = Effect.fn("storePartial")(function* (
   );
 });
 
-const flushPartials = Effect.fn("flushPartials")(function* (
+const flushPartials = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   partials: Partials,
   attempt: number,
@@ -56,7 +56,7 @@ const flushPartials = Effect.fn("flushPartials")(function* (
   }
 });
 
-const consumeEvents = Effect.fn("consumeEvents")(function* (
+const consumeEvents = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   model: Model<Api>,
   messages: readonly Message[],
@@ -75,7 +75,7 @@ const consumeEvents = Effect.fn("consumeEvents")(function* (
   return yield* Effect.promise(() => events.result());
 });
 
-export const streamResponse = Effect.fn("streamResponse")(function* (
+export const streamResponse = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   model: Model<Api>,
   messages: readonly Message[],
@@ -94,7 +94,7 @@ export const streamResponse = Effect.fn("streamResponse")(function* (
   );
 });
 
-export const replaceMessages = Effect.fn("replaceMessages")(function* (
+export const replaceMessages = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   initial: GenerationRuntimeMessages,
   context: Context,
@@ -113,7 +113,7 @@ export const replaceMessages = Effect.fn("replaceMessages")(function* (
 
 type GenerationRuntimeMessages = Awaited<ReturnType<GenerationRuntime["context"]>>["messages"];
 
-export const requestOptions = Effect.fn("requestOptions")(function* (
+export const requestOptions = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   streamOptions: Extract<GenerationCheckpoint, { phase: "request" }>["streamOptions"],
   thinkingLevel: Extract<GenerationCheckpoint, { phase: "request" }>["thinkingLevel"],

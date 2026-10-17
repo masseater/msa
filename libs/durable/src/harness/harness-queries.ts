@@ -22,7 +22,7 @@ const SCAN_PAGE_SIZE = 256;
 
 export type QuerySession = { readonly session: SessionImpl; readonly storage: Storage };
 
-export const totalUsage = Effect.fn("totalUsage")(function* (
+export const totalUsage = Effect.fnUntraced(function* (
   { session, storage }: QuerySession,
   context: Context,
 ) {
@@ -48,7 +48,7 @@ export const totalUsage = Effect.fn("totalUsage")(function* (
 const scanSubmissions = (storage: Storage, status: "queued" | "placed", context: Context) =>
   scanAll((cursor) => storage.scanSubmissions({ status }, SCAN_PAGE_SIZE, cursor, context));
 
-export const inspectHarness = Effect.fn("inspectHarness")(function* (
+export const inspectHarness = Effect.fnUntraced(function* (
   { session, storage }: QuerySession,
   tasks: Wired["tasks"],
   snapshot: RegistrySnapshot,
@@ -66,7 +66,7 @@ export const inspectHarness = Effect.fn("inspectHarness")(function* (
   return yield* Effect.promise(() => session.readOnLine(read));
 });
 
-export const buildEnv = Effect.fn("buildEnv")(function* <Tool extends ToolRegistration>(
+export const buildEnv = Effect.fnUntraced(function* <Tool extends ToolRegistration>(
   session: SessionImpl,
   options: HarnessOptions<Tool>,
   id: ConversationId,
@@ -90,9 +90,7 @@ export type AgentQuery<Tool extends ToolRegistration> = {
   readonly report: (error: unknown) => void;
 };
 
-export const conversationAgent = Effect.fn("conversationAgent")(function* <
-  Tool extends ToolRegistration,
->(
+export const conversationAgent = Effect.fnUntraced(function* <Tool extends ToolRegistration>(
   query: AgentQuery<Tool>,
   id: ConversationId,
   snapshot: RegistrySnapshot<Tool> | undefined,

@@ -1,7 +1,8 @@
 import type { JsonValue } from "@msa/chord";
-import { Effect } from "effect";
+import { Effect, Function } from "effect";
 
-import { loadChain, loadScopes } from "./scheduler-load.ts";
+import { eachStep, thenStep } from "../step.ts";
+import { loadChain, loadPending } from "./scheduler-load.ts";
 import { overlayOf, parentOf, withState } from "./scheduler-records.ts";
 import type { SchedulerState } from "./scheduler-state.ts";
 import type {
@@ -14,61 +15,97 @@ import type {
   SchedulerOutcome,
   TaskId,
   Transaction,
+  Dual2,
+  Dual4,
+  Dual5,
 } from "./scheduler-types.ts";
 
-const finalizeOne = Effect.fn("finalizeOne")(function* (
-  state: SchedulerState,
-  tx: Transaction,
-  record: AnyTaskRecord,
-  overlay: Overlay,
-) {
-  if (record.state.status !== "completing") return undefined;
+type Finalizing = {
+  readonly state: SchedulerState;
+  readonly tx: Transaction;
+  readonly done: Set<TaskId>;
+  readonly overlay: Overlay;
+};
+
+const climb = ({ state, overlay }: Finalizing, record: AnyTaskRecord, next: Set<TaskId>): void => {
+  const above = state.graph.nearestLiveAbove(record, overlay);
+  if (above?.state.status === "completing") next.add(above.id);
+};
+
+const finalizeOne = (run: Finalizing, id: TaskId, next: Set<TaskId>): Effect.Effect<void> => {
+  const { state, tx, done, overlay } = run;
+  const record = overlay.tasks.get(id) ?? state.graph.live.get(id);
+  if (record?.state.status !== "completing" || done.has(id)) return Effect.void;
+  if (state.graph.hasOwnedLive(id, overlay, done)) return Effect.void;
+  done.add(id);
   const outcome = record.state.outcome;
   const terminal = withState(record, { status: "terminal", outcome });
   tx.setTask(terminal);
   (overlay.tasks as Map<TaskId, AnyTaskRecord>).set(record.id, terminal);
-  if (outcome.status === "faulted" || outcome.status === "orphaned") {
-    yield* Effect.promise(() => state.options.settleOutcome(tx, record, outcome));
+  if (outcome.status !== "faulted" && outcome.status !== "orphaned") {
+    climb(run, record, next);
+    return Effect.void;
   }
-  return state.graph.nearestLiveAbove(record, overlay);
-});
+  return Effect.map(
+    Effect.promise(() => state.options.settleOutcome(tx, record, outcome)),
+    () => climb(run, record, next),
+  );
+};
 
-export const finalize = Effect.fn("finalize")(function* (state: SchedulerState, tx: Transaction) {
-  const { graph } = state;
-  let round = [...graph.finalizeChecks];
-  graph.finalizeChecks.clear();
-  const done = new Set<TaskId>();
-  const overlay = overlayOf(tx);
+const finalizeFrom = (run: Finalizing, first: readonly TaskId[]): Effect.Effect<void> => {
+  let round = first;
   while (round.length > 0) {
     const next = new Set<TaskId>();
-    for (const id of round) {
-      const record = overlay.tasks.get(id) ?? graph.live.get(id);
-      if (record?.state.status !== "completing" || done.has(id)) continue;
-      if (graph.hasOwnedLive(id, overlay, done)) continue;
-      done.add(id);
-      const above = yield* finalizeOne(state, tx, record, overlay);
-      if (above?.state.status === "completing") next.add(above.id);
+    const pending = eachStep(round, (id: TaskId) => finalizeOne(run, id, next));
+    if (pending !== Effect.void) {
+      return Effect.flatMap(pending, () => finalizeFrom(run, [...next]));
     }
     round = [...next];
   }
-});
+  return Effect.void;
+};
 
-export const terminate = Effect.fn("terminate")(function* (
+export const finalize: Dual2<SchedulerState, Transaction, Effect.Effect<void>> = Function.dual(
+  2,
+  (state: SchedulerState, tx: Transaction): Effect.Effect<void> => {
+    const round = [...state.graph.finalizeChecks];
+    state.graph.finalizeChecks.clear();
+    return finalizeFrom({ state, tx, done: new Set(), overlay: overlayOf(tx) }, round);
+  },
+);
+
+const settleTerminal = (
   state: SchedulerState,
   tx: Transaction,
   record: AnyTaskRecord,
   outcome: SchedulerOutcome,
-) {
-  yield* loadScopes(state, false);
+): Effect.Effect<void> => {
   if (state.graph.hasOwnedLive(record.id, overlayOf(tx))) {
     tx.setTask(withState(record, { status: "completing", outcome }));
-    return;
+    return Effect.void;
   }
   tx.setTask(withState(record, { status: "terminal", outcome }));
-  yield* Effect.promise(() => state.options.settleOutcome(tx, record, outcome));
-});
+  return Effect.promise(() => state.options.settleOutcome(tx, record, outcome));
+};
 
-const waitTargets = Effect.fn("waitTargets")(function* (
+export const terminate: Dual4<
+  SchedulerState,
+  Transaction,
+  AnyTaskRecord,
+  SchedulerOutcome,
+  Effect.Effect<void>
+> = Function.dual(
+  4,
+  (
+    state: SchedulerState,
+    tx: Transaction,
+    record: AnyTaskRecord,
+    outcome: SchedulerOutcome,
+  ): Effect.Effect<void> =>
+    thenStep(loadPending(state), () => settleTerminal(state, tx, record, outcome)),
+);
+
+const waitTargets = Effect.fnUntraced(function* (
   state: SchedulerState,
   current: ErasedRunningTask,
   on: readonly TaskId[],
@@ -92,13 +129,13 @@ const waitTargets = Effect.fn("waitTargets")(function* (
   return targets;
 });
 
-const waitCycle = Effect.fn("waitCycle")(function* (
+const waitCycle = Effect.fnUntraced(function* (
   state: SchedulerState,
   task: TaskId,
   on: readonly TaskId[],
   overlay: Overlay,
 ) {
-  yield* loadScopes(state, false);
+  yield* loadPending(state);
   return findCycle(state, { task, on, overlay });
 });
 
@@ -149,7 +186,7 @@ const pathTo = (from: ReadonlyMap<TaskId, TaskId | undefined>, end: TaskId): Tas
   return steps;
 };
 
-const validateWait = Effect.fn("validateWait")(function* (
+const validateWait = Effect.fnUntraced(function* (
   state: SchedulerState,
   tx: Transaction,
   invocation: Invocation,
@@ -169,26 +206,53 @@ const validateWait = Effect.fn("validateWait")(function* (
   }
 });
 
-export const commitState = Effect.fn("commitState")(function* (
+const settleState = (
   state: SchedulerState,
   tx: Transaction,
-  invocation: Invocation,
   current: ErasedRunningTask,
   next: NextTaskState<Checkpoint, JsonValue>,
-) {
-  if (next.status === "waiting") yield* validateWait(state, tx, invocation, current, next);
-  if (next.status === "terminal") {
-    const overlay = overlayOf(tx);
-    yield* loadScopes(state, false);
-    yield* Effect.forEach(
-      [...overlay.tasks.values()],
-      (record) => loadChain(state, parentOf(record), overlay),
-      { discard: true },
-    );
-    if (state.graph.hasOwnedLive(current.id, overlay)) {
-      tx.setTask(withState(current, { status: "completing", outcome: next.outcome }));
-      return;
-    }
+): void => {
+  if (next.status === "terminal" && state.graph.hasOwnedLive(current.id, overlayOf(tx))) {
+    tx.setTask(withState(current, { status: "completing", outcome: next.outcome }));
+    return;
   }
   tx.setTask(withState(current, next));
-});
+};
+
+const loadOverlay = (state: SchedulerState, tx: Transaction): Effect.Effect<void> => {
+  const overlay = overlayOf(tx);
+  return thenStep(loadPending(state), () =>
+    eachStep([...overlay.tasks.values()], (record: AnyTaskRecord) =>
+      loadChain(state, parentOf(record), overlay),
+    ),
+  );
+};
+
+export const commitState: Dual5<
+  SchedulerState,
+  Transaction,
+  Invocation,
+  ErasedRunningTask,
+  NextTaskState<Checkpoint, JsonValue>,
+  Effect.Effect<void>
+> = Function.dual(
+  5,
+  (
+    state: SchedulerState,
+    tx: Transaction,
+    invocation: Invocation,
+    current: ErasedRunningTask,
+    next: NextTaskState<Checkpoint, JsonValue>,
+  ): Effect.Effect<void> => {
+    const ready =
+      next.status === "waiting"
+        ? validateWait(state, tx, invocation, current, next)
+        : next.status === "terminal"
+          ? loadOverlay(state, tx)
+          : Effect.void;
+    return thenStep(ready, () => {
+      settleState(state, tx, current, next);
+      return Effect.void;
+    });
+  },
+);

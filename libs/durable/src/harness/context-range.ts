@@ -150,7 +150,7 @@ export function rangeQuery(bounds: ContextBounds): Omit<EntryQuery, "conversatio
     : { minEntryId: head.head, maxEntryId: bounds.tail };
 }
 
-export const scanRange = Effect.fn("scanRange")(function* (
+export const scanRange = Effect.fnUntraced(function* (
   storage: Storage,
   conversationId: ConversationId,
   range: Omit<EntryQuery, "conversationId">,

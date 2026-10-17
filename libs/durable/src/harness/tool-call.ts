@@ -9,7 +9,7 @@ import { eachHook, hookResult } from "./bridge.ts";
 import type { ToolRuntime, ToolTaskInput } from "./tool-types.ts";
 import type { Dual2, Dual3, JsonObject, ToolHookCall, ToolRegistration } from "./types.ts";
 
-export const resolveTool = Effect.fn("resolveTool")(function* (
+export const resolveTool = Effect.fnUntraced(function* (
   runtime: ToolRuntime,
   input: ToolTaskInput,
   name: string,
@@ -20,7 +20,7 @@ export const resolveTool = Effect.fn("resolveTool")(function* (
   return tools.find((tool) => tool.name === name);
 });
 
-export const readCall = Effect.fn("readCall")(function* (
+export const readCall = Effect.fnUntraced(function* (
   runtime: ToolRuntime,
   input: ToolTaskInput,
   context: Context,
@@ -102,7 +102,7 @@ export const jsonEqual: Dual2<JsonValue, JsonValue, boolean> = Function.dual(
   },
 );
 
-export const askHooks = Effect.fn("askToolHooks")(function* (
+export const askHooks = Effect.fnUntraced(function* (
   runtime: ToolRuntime,
   call: ToolHookCall,
   initial: JsonObject,

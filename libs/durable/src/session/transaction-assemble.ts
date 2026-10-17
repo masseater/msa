@@ -2,7 +2,8 @@ import { Effect } from "effect";
 
 import { addressId } from "../documents.ts";
 import { scanAll } from "../harness/util.ts";
-import type { DocumentId, StorageWrite, TaskId } from "../types.ts";
+import { eachStep, thenStep } from "../step.ts";
+import type { DocumentId, StorageWrite, SubmissionRecord, TaskId } from "../types.ts";
 import {
   applySubmissionChange,
   planDocument,
@@ -10,7 +11,12 @@ import {
   rejectForkSourceWrites,
 } from "./transaction-plan.ts";
 import { abortChanges, committedTask, currentTask, taskEntry } from "./transaction-state.ts";
-import { type DocumentPlan, INTERNAL_SCAN_PAGE_SIZE, type TxState } from "./transaction-types.ts";
+import {
+  type AnyTaskRecord,
+  type DocumentPlan,
+  INTERNAL_SCAN_PAGE_SIZE,
+  type TxState,
+} from "./transaction-types.ts";
 
 const ownerChecks = (state: TxState) => {
   const owners: { readonly what: string; readonly taskId: TaskId }[] = [];
@@ -25,29 +31,56 @@ const ownerChecks = (state: TxState) => {
   return owners;
 };
 
-const validateOwners = Effect.fn("validateOwners")(function* (state: TxState) {
-  for (const { what, taskId } of ownerChecks(state)) {
-    const task = yield* currentTask(state, taskId);
-    if (task === undefined) throw new Error(`${what} ${taskId} does not exist`);
-    if (task.state.status === "terminal" || task.state.status === "completing") {
-      throw new Error(`${what} ${taskId} is ${task.state.status}`);
-    }
-    if (task.abortRequested) throw new Error(`${what} ${taskId} is abort-marked`);
-  }
-});
+type OwnerCheck = { readonly what: string; readonly taskId: TaskId };
 
-const validateReplacements = Effect.fn("validateReplacements")(function* (state: TxState) {
-  for (const [id, task] of state.tasksById) {
-    if (task.write?.kind !== "replace") continue;
-    const record = task.write.record;
-    const committed = yield* Effect.promise(() => committedTask(state, id));
-    if (committed === undefined) throw new Error(`Task ${id} does not exist`);
-    if (committed.state.status === "terminal") throw new Error(`Task ${id} is already terminal`);
-    if (committed.conversationId !== record.conversationId) {
-      throw new Error(`Task ${id} cannot change conversations`);
-    }
+const checkOwner = ({ what, taskId }: OwnerCheck, task: AnyTaskRecord | undefined): void => {
+  if (task === undefined) throw new Error(`${what} ${taskId} does not exist`);
+  if (task.state.status === "terminal" || task.state.status === "completing") {
+    throw new Error(`${what} ${taskId} is ${task.state.status}`);
   }
-});
+  if (task.abortRequested) throw new Error(`${what} ${taskId} is abort-marked`);
+};
+
+const validateOwners = (state: TxState): Effect.Effect<void> => {
+  const checks = ownerChecks(state);
+  let at = 0;
+  for (; at < checks.length; at++) {
+    const staged = state.tasksById.get(checks[at]!.taskId)?.write?.record;
+    if (staged === undefined) break;
+    checkOwner(checks[at]!, staged);
+  }
+  if (at === checks.length) return Effect.void;
+  return Effect.forEach(
+    checks.slice(at),
+    (check) => Effect.map(currentTask(state, check.taskId), (task) => checkOwner(check, task)),
+    { discard: true },
+  );
+};
+
+const checkReplacement = (
+  id: TaskId,
+  record: AnyTaskRecord,
+  committed: AnyTaskRecord | undefined,
+): void => {
+  if (committed === undefined) throw new Error(`Task ${id} does not exist`);
+  if (committed.state.status === "terminal") throw new Error(`Task ${id} is already terminal`);
+  if (committed.conversationId !== record.conversationId) {
+    throw new Error(`Task ${id} cannot change conversations`);
+  }
+};
+
+const validateReplacements = (state: TxState): Effect.Effect<void> => {
+  const replacements: [TaskId, AnyTaskRecord][] = [];
+  for (const [id, task] of state.tasksById) {
+    if (task.write?.kind === "replace") replacements.push([id, task.write.record]);
+  }
+  return eachStep(replacements, ([id, record]) =>
+    Effect.map(
+      Effect.promise(() => committedTask(state, id)),
+      (committed) => checkReplacement(id, record, committed),
+    ),
+  );
+};
 
 const terminalTaskIds = (state: TxState): Set<TaskId> => {
   const ids = new Set<TaskId>();
@@ -67,11 +100,12 @@ const scanTaskDocuments = (state: TxState, taskId: TaskId) =>
     ),
   );
 
-const retireTerminalTaskDocuments = Effect.fn("retireTerminalTaskDocuments")(function* (
-  state: TxState,
-) {
+const retireTerminalTaskDocuments = (state: TxState): Effect.Effect<void> => {
   const terminal = terminalTaskIds(state);
-  if (terminal.size === 0) return;
+  return terminal.size === 0 ? Effect.void : retireTaskDocuments(state, terminal);
+};
+
+const retireTaskDocuments = Effect.fnUntraced(function* (state: TxState, terminal: Set<TaskId>) {
   const plans = state.plans;
   const retiring = new Set<DocumentId>();
   for (const plan of plans) {
@@ -91,31 +125,67 @@ const retireTerminalTaskDocuments = Effect.fn("retireTerminalTaskDocuments")(fun
   }
 });
 
-const assignPublications = Effect.fn("assignPublications")(function* (state: TxState) {
+const publicationTasks = (state: TxState): TaskId[] => {
+  const pending: TaskId[] = [];
+  for (const plan of state.plans) {
+    if (!publishes(plan)) continue;
+    const scope = plan.record.scope;
+    if (
+      scope.kind === "task" &&
+      taskEntry(state, scope.taskId).publicationConversationId === undefined
+    )
+      pending.push(scope.taskId);
+  }
+  return pending;
+};
+
+const loadPublications = (state: TxState): Effect.Effect<void> => {
+  const pending = publicationTasks(state);
+  if (pending.length === 0) return Effect.void;
+  return Effect.forEach(
+    pending,
+    (taskId) =>
+      Effect.suspend(() => {
+        const task = taskEntry(state, taskId);
+        if (task.publicationConversationId !== undefined) return Effect.void;
+        return Effect.map(currentTask(state, taskId), (current) => {
+          if (current !== undefined) task.publicationConversationId = current.conversationId;
+        });
+      }),
+    { discard: true },
+  );
+};
+
+const assignPublications = (state: TxState): void => {
   for (const plan of state.plans) {
     if (!publishes(plan)) continue;
     const scope = plan.record.scope;
     if (scope.kind === "conversation") plan.conversationId = scope.conversationId;
     if (scope.kind !== "task") continue;
-    const task = taskEntry(state, scope.taskId);
-    if (task.publicationConversationId === undefined) {
-      const current = yield* currentTask(state, scope.taskId);
-      if (current !== undefined) task.publicationConversationId = current.conversationId;
-    }
-    plan.conversationId = task.publicationConversationId;
+    plan.conversationId = taskEntry(state, scope.taskId).publicationConversationId;
   }
-});
+};
 
-const applySubmissionChanges = Effect.fn("applySubmissionChanges")(function* (state: TxState) {
-  for (const { id, change } of state.submissionChanges) {
-    const current =
-      state.submissions.get(id) ??
-      (yield* Effect.promise(() => state.host.storage.submission(id, state.context)));
-    if (current === undefined) throw new Error(`Submission ${id} does not exist`);
-    const next = applySubmissionChange(current, change);
-    if (next !== current) state.submissions.set(id, next);
-  }
-});
+const applySubmissionChanges = (state: TxState): Effect.Effect<void> => {
+  if (state.submissionChanges.length === 0) return Effect.void;
+  return Effect.forEach(
+    state.submissionChanges,
+    ({ id, change }) =>
+      Effect.map(
+        Effect.suspend(() => {
+          const known = state.submissions.get(id);
+          if (known !== undefined) return Effect.succeed<SubmissionRecord | undefined>(known);
+          return Effect.promise(() => state.host.storage.submission(id, state.context));
+        }),
+        (current) => {
+          if (current === undefined) throw new Error(`Submission ${id} does not exist`);
+          const next = applySubmissionChange(current, change);
+          if (next !== current) state.submissions.set(id, next);
+        },
+      ),
+    { discard: true },
+  );
+};
 
 type PlanContent = NonNullable<DocumentPlan["content"]>;
 
@@ -147,19 +217,25 @@ const collectWrites = (state: TxState): StorageWrite[] => {
   return writes;
 };
 
-const assemble = Effect.fn("assemble")(function* (state: TxState) {
+const assemble = (state: TxState): Effect.Effect<StorageWrite[]> => {
   for (const document of state.documents) {
     const plan = planDocument(document);
     if (plan !== undefined) state.plans.push(plan);
   }
   rejectForkSourceWrites(state);
-  yield* validateOwners(state);
-  yield* validateReplacements(state);
-  yield* retireTerminalTaskDocuments(state);
-  yield* assignPublications(state);
-  yield* applySubmissionChanges(state);
-  return collectWrites(state);
-});
+  return thenStep(validateOwners(state), () =>
+    thenStep(validateReplacements(state), () =>
+      thenStep(retireTerminalTaskDocuments(state), () =>
+        thenStep(loadPublications(state), () => {
+          assignPublications(state);
+          return thenStep(applySubmissionChanges(state), () =>
+            Effect.succeed(collectWrites(state)),
+          );
+        }),
+      ),
+    ),
+  );
+};
 
 const settlePending = (state: TxState) =>
   Effect.promise(() => Promise.allSettled(state.pendingOperations));
@@ -171,17 +247,21 @@ export const settleFailure = (state: TxState): Effect.Effect<void> =>
     return Effect.asVoid(settlePending(state));
   });
 
-export const settleSuccess = Effect.fn("settleSuccess")(function* (state: TxState) {
-  state.sealed = true;
-  if (state.pendingOperations.size > 0) {
-    abortChanges(state);
-    yield* settlePending(state);
-    throw new Error("Session commit callback settled before its pending Tx operations");
-  }
-  return yield* Effect.suspend(() => {
-    for (const document of state.documents) {
-      if (document.change !== undefined) document.prepared = document.change.prepare();
-    }
-    return assemble(state);
-  }).pipe(Effect.onError(() => Effect.sync(() => abortChanges(state))));
+const rejectPending = Effect.fnUntraced(function* (state: TxState) {
+  abortChanges(state);
+  yield* settlePending(state);
+  throw new Error("Session commit callback settled before its pending Tx operations");
 });
+
+export const settleSuccess = (state: TxState): Effect.Effect<readonly StorageWrite[]> =>
+  Effect.suspend(() => {
+    state.sealed = true;
+    if (state.pendingOperations.size > 0) return rejectPending(state);
+    const assembled = Effect.suspend(() => {
+      for (const document of state.documents) {
+        if (document.change !== undefined) document.prepared = document.change.prepare();
+      }
+      return assemble(state);
+    });
+    return Effect.onError(assembled, () => Effect.sync(() => abortChanges(state)));
+  });

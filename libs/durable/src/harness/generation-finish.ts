@@ -16,7 +16,7 @@ type RoundControls = {
   readonly handoff: string | undefined;
 };
 
-const readControls = Effect.fn("readControls")(function* (
+const readControls = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   assistant: EntryId,
   tools: readonly ToolTaskId[],
@@ -52,7 +52,7 @@ const readControls = Effect.fn("readControls")(function* (
   } satisfies RoundControls;
 });
 
-const settleHandoff = Effect.fn("settleHandoff")(function* (
+const settleHandoff = Effect.fnUntraced(function* (
   tx: Tx,
   runtime: GenerationRuntime,
   boundary: Boundary,
@@ -76,7 +76,7 @@ const settleHandoff = Effect.fn("settleHandoff")(function* (
   if (users.length > 0) yield* startRun(tx, conversationId, live, users);
 });
 
-const settleNextRound = Effect.fn("settleNextRound")(function* (
+const settleNextRound = Effect.fnUntraced(function* (
   tx: Tx,
   runtime: GenerationRuntime,
   boundary: Boundary,
@@ -96,7 +96,7 @@ const settleNextRound = Effect.fn("settleNextRound")(function* (
   handOver(live, runtime.taskId, yield* createGeneration(tx, conversationId));
 });
 
-export const finishToolRound = Effect.fn("finishToolRound")(function* (
+export const finishToolRound = Effect.fnUntraced(function* (
   runtime: GenerationRuntime,
   assistant: EntryId,
   tools: readonly ToolTaskId[],

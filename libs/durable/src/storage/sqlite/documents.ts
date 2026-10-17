@@ -26,7 +26,7 @@ import {
 import type { SqliteExecutor } from "./database.ts";
 import { recordById } from "./scans.ts";
 
-const readRevisions = Effect.fn("readRevisions")(function* (
+const readRevisions = Effect.fnUntraced(function* (
   executor: SqliteExecutor,
   id: DocumentId,
   upper: number,
@@ -64,12 +64,10 @@ export const materializeDocument: {
   ): Effect.Effect<StoredDocument | undefined>;
 } = Function.dual(
   3,
-  Effect.fn("materializeDocument")(function* (
-    executor: SqliteExecutor,
-    id: DocumentId,
-    at: DocumentPoint,
-  ) {
-    const record = yield* recordById<DocumentRecord>(executor, "documents", id);
+  Effect.fnUntraced(function* (executor: SqliteExecutor, id: DocumentId, at: DocumentPoint) {
+    const record = yield* Effect.promise(() =>
+      recordById<DocumentRecord>(executor, "documents", id),
+    );
     if (record === undefined) return undefined;
     if (at !== "current" && isCurrentOnly(record)) {
       throw new StorageRequestError(`Document ${id} does not retain historical content`);
@@ -155,7 +153,7 @@ export const prepareDocumentActions = (
   return actions;
 };
 
-const currentDocumentId = Effect.fn("currentDocumentId")(function* (
+const currentDocumentId = Effect.fnUntraced(function* (
   executor: SqliteExecutor,
   address: DocumentAddress | DocumentCreate | DocumentRecord,
 ) {
@@ -175,7 +173,7 @@ const currentDocumentId = Effect.fn("currentDocumentId")(function* (
   return row?.id === undefined ? undefined : idFromNumber<DocumentId>(row.id);
 });
 
-const checkDelta = Effect.fn("checkDelta")(function* (
+const checkDelta = Effect.fnUntraced(function* (
   executor: SqliteExecutor,
   id: DocumentId,
   action: DocumentAction,
@@ -194,7 +192,7 @@ const checkDelta = Effect.fn("checkDelta")(function* (
   }
 });
 
-const checkDocumentAction = Effect.fn("checkDocumentAction")(function* (
+const checkDocumentAction = Effect.fnUntraced(function* (
   executor: SqliteExecutor,
   actions: ReadonlyMap<DocumentId, DocumentAction>,
   id: DocumentId,
@@ -203,7 +201,9 @@ const checkDocumentAction = Effect.fn("checkDocumentAction")(function* (
   if (action.copy !== undefined && actions.has(action.copy.id)) {
     throw new Error(`Document copy ${id} source is changed in the copy batch`);
   }
-  const existing = yield* recordById<DocumentRecord>(executor, "documents", id);
+  const existing = yield* Effect.promise(() =>
+    recordById<DocumentRecord>(executor, "documents", id),
+  );
   if (action.create === undefined && existing === undefined)
     throw new Error(`Unknown document: ${id}`);
   if (action.create !== undefined && existing !== undefined)
@@ -220,7 +220,7 @@ export const checkDocumentActions: {
   (executor: SqliteExecutor, actions: ReadonlyMap<DocumentId, DocumentAction>): Effect.Effect<void>;
 } = Function.dual(
   2,
-  Effect.fn("checkDocumentActions")(function* (
+  Effect.fnUntraced(function* (
     executor: SqliteExecutor,
     actions: ReadonlyMap<DocumentId, DocumentAction>,
   ) {

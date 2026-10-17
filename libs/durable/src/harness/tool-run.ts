@@ -10,7 +10,7 @@ import { settle } from "./tool-settle.ts";
 import type { Reported, ToolRuntime, ToolTaskInput } from "./tool-types.ts";
 import type { JsonObject, ToolHookCall, ToolRegistration } from "./types.ts";
 
-export const run = Effect.fn("runToolCall")(function* (
+export const run = Effect.fnUntraced(function* (
   runtime: ToolRuntime,
   input: ToolTaskInput,
   call: ToolHookCall,

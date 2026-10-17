@@ -30,10 +30,7 @@ export const readConversation: {
   ),
 );
 
-const knownConversation = Effect.fn("knownConversation")(function* (
-  db: SqliteExecutor,
-  id: ConversationId,
-) {
+const knownConversation = Effect.fnUntraced(function* (db: SqliteExecutor, id: ConversationId) {
   const conversation = yield* readConversation(db, id);
   if (conversation === undefined) throw new StorageRequestError(`Unknown conversation: ${id}`);
   return conversation;
@@ -42,7 +39,7 @@ const knownConversation = Effect.fn("knownConversation")(function* (
 const parentOf = (db: SqliteExecutor, conversation: ConversationRecord) =>
   Effect.map(readConversation(db, conversation.parent!.conversationId), (parent) => parent!);
 
-const visibleFrom = Effect.fn("visibleFrom")(function* (
+const visibleFrom = Effect.fnUntraced(function* (
   db: SqliteExecutor,
   start: ConversationRecord,
   entry: EntryRecord,
@@ -81,7 +78,7 @@ export const readEntry: {
   ): Effect.Effect<EntryRead | undefined>;
 } = Function.dual(
   4,
-  Effect.fn("readEntry")(function* (
+  Effect.fnUntraced(function* (
     db: SqliteExecutor,
     idOrConversationId: EntryId | ConversationId,
     idOrContext: EntryId | Context,
@@ -132,7 +129,7 @@ export const readLatestHeadMarker: {
   ): Effect.Effect<HeadMarker | undefined>;
 } = Function.dual(
   3,
-  Effect.fn("readLatestHeadMarker")(function* (
+  Effect.fnUntraced(function* (
     db: SqliteExecutor,
     conversationId: ConversationId,
     atOrBeforeEntryId: EntryId | undefined,
@@ -179,7 +176,7 @@ const selectEntries = (
   );
 };
 
-const readDescending = Effect.fn("readDescending")(function* (
+const readDescending = Effect.fnUntraced(function* (
   db: SqliteExecutor,
   query: EntryQuery,
   limit: number,
@@ -207,7 +204,7 @@ const readDescending = Effect.fn("readDescending")(function* (
   return page(values, limit, "descending");
 });
 
-const forkSegments = Effect.fn("forkSegments")(function* (db: SqliteExecutor, query: EntryQuery) {
+const forkSegments = Effect.fnUntraced(function* (db: SqliteExecutor, query: EntryQuery) {
   let conversation = yield* knownConversation(db, query.conversationId);
   let upper: number | undefined = query.maxEntryId;
   const segments: ForkSegment[] = [];
@@ -221,7 +218,7 @@ const forkSegments = Effect.fn("forkSegments")(function* (db: SqliteExecutor, qu
   return segments;
 });
 
-const readAscending = Effect.fn("readAscending")(function* (
+const readAscending = Effect.fnUntraced(function* (
   db: SqliteExecutor,
   query: EntryQuery,
   limit: number,

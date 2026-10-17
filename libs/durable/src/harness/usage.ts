@@ -29,7 +29,7 @@ export const recordUsage: Dual5<
   Effect.Effect<void>
 > = Function.dual(
   5,
-  Effect.fn("recordUsage")(function* (
+  Effect.fnUntraced(function* (
     tx: Tx,
     conversationId: ConversationId,
     bucket: keyof UsageState,

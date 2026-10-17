@@ -113,7 +113,7 @@ const nestedStructured = (
   return final;
 };
 
-export const finalResult = Effect.fn("finalResult")(function* (
+export const finalResult = Effect.fnUntraced(function* (
   runtime: ToolRuntime,
   input: ToolTaskInput,
   call: ToolHookCall,

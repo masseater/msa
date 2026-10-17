@@ -29,7 +29,7 @@ export const createCompaction: {
   ): Effect.Effect<CompactionTaskId>;
 } = Function.dual(
   (args: IArguments) => typeof args[0] !== "number",
-  Effect.fn("createCompaction")(function* (
+  Effect.fnUntraced(function* (
     tx: Tx,
     conversationId: ConversationId,
     input: CompactionInput,
@@ -54,7 +54,7 @@ type Decision = { readonly decline: true } | { readonly summary: string } | unde
 
 type CompactionRequest = Parameters<NonNullable<CompactionHooks["beforeCompact"]>>[0];
 
-const askHooks = Effect.fn("askHooks")(function* (
+const askHooks = Effect.fnUntraced(function* (
   runtime: CompactionRuntime,
   compaction: CompactionRequest,
   context: Context,
@@ -80,7 +80,7 @@ export const selectPhase: Dual3<
   Effect.Effect<void>
 > = Function.dual(
   3,
-  Effect.fn("selectPhase")(function* (
+  Effect.fnUntraced(function* (
     runtime: CompactionRuntime,
     input: CompactionInput,
     context: Context,

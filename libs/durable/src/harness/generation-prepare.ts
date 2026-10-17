@@ -19,7 +19,7 @@ type PrepareTask = RunningTask<
   GenerationResult
 >;
 
-export const preparePhase = Effect.fn("preparePhase")(function* (
+export const preparePhase = Effect.fnUntraced(function* (
   task: PrepareTask,
   runtime: GenerationRuntime,
   context: Context,
