@@ -1,13 +1,12 @@
 import assert from "node:assert";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
-import os, { tmpdir } from "node:os";
-import { join } from "node:path";
+import os from "node:os";
 import { describe, it, mock } from "node:test";
 
 import { Effect } from "effect";
 
 import { Image } from "../src/components/image.ts";
+import { pathOperations } from "../src/platform.ts";
 import {
   resetCapabilitiesCache,
   setCapabilities,
@@ -15,6 +14,7 @@ import {
 } from "../src/terminal-image.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import { type TUI } from "../src/tui.ts";
+import { makeTempDirectory, readFileString, removeRecursive } from "./test-platform.ts";
 import { tuiKittyImageCleanupCases1 } from "./tui-render-cases-helpers.ts";
 import { LoggingVirtualTerminal } from "./tui-render-logging-virtual-terminal.ts";
 import { TestComponent } from "./tui-render-test-component.ts";
@@ -24,8 +24,8 @@ describe("TUI crash dump without configured log directory", () => {
   it("writes the crash dump to the OS temp directory instead of a home-directory default", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const crashDir = mkdtempSync(join(tmpdir(), "msa-tui-crash-"));
-        const crashLogPath = join(crashDir, "msa-tui-crash.log");
+        const crashDir = yield* makeTempDirectory("msa-tui-crash-");
+        const crashLogPath = pathOperations.join(crashDir, "msa-tui-crash.log");
         const tmpdirMock = mock.method(os, "tmpdir", () => crashDir);
         syncBuiltinESMExports();
         yield* Effect.gen(function* () {
@@ -49,14 +49,16 @@ describe("TUI crash dump without configured log directory", () => {
               return true;
             },
           );
-          assert.match(readFileSync(crashLogPath, "utf-8"), /Terminal width: 40/u);
+          assert.match(yield* readFileString(crashLogPath), /Terminal width: 40/u);
         }).pipe(
           Effect.ensuring(
-            Effect.sync(() => {
-              tmpdirMock.mock.restore();
-              syncBuiltinESMExports();
-              rmSync(crashDir, { recursive: true, force: true });
-            }),
+            Effect.andThen(
+              Effect.sync(() => {
+                tmpdirMock.mock.restore();
+                syncBuiltinESMExports();
+              }),
+              removeRecursive(crashDir),
+            ),
           ),
         );
       }),

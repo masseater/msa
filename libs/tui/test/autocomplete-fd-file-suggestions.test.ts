@@ -1,8 +1,5 @@
 import assert from "node:assert";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, test } from "node:test";
+import { describe, test } from "node:test";
 
 import { Effect } from "effect";
 
@@ -12,30 +9,19 @@ import {
   isFdInstalled,
   requireFdPath,
   setupFolder,
+  useTempWorkspace,
 } from "./autocomplete-helpers.ts";
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("completes quoted CJK attachments after prose without losing path segments or quotes", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           for (const separator of [" ", "\u3000", "，", "。"]) {
             const directory = `我的${separator}文档`;
-            setupFolder(baseDir, {
+            yield* setupFolder(ws.baseDir, {
               files: { [`${directory}/说明.md`]: "text", "文档/说明.md": "not the quoted path" },
             });
             const line = `查看：@"${directory}/说"后文`;
@@ -66,24 +52,14 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("does not interpret email addresses or @ after ASCII or CJK letters as attachment prefixes", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, { files: { "README.md": "readme", "example.com": "text" } });
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          yield* setupFolder(ws.baseDir, {
+            files: { "README.md": "readme", "example.com": "text" },
+          });
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           for (const before of [
             "user",
             "查看",
@@ -113,29 +89,17 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("matches file with extension in query", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             files: {
               "file.txt": "content",
             },
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           const line = "@file.txt";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length),
@@ -150,30 +114,18 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("filters are case insensitive", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             dirs: ["src"],
             files: {
               "README.md": "readme",
             },
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           const line = "@re";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length),
@@ -188,30 +140,18 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("ranks directories before files", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             dirs: ["src"],
             files: {
               "src.txt": "text",
             },
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           const line = "@src";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length),
@@ -228,29 +168,17 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("returns nested file paths", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             files: {
               "src/index.ts": "export {};\n",
             },
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           const line = "@index";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length),

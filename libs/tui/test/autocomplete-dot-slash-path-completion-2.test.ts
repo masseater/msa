@@ -1,29 +1,20 @@
 import assert from "node:assert";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, test } from "node:test";
+import { describe, test } from "node:test";
 
 import { Effect } from "effect";
 
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import { getSuggestions, setupFolder } from "./autocomplete-helpers.ts";
+import { getSuggestions, setupFolder, useTempDirectory } from "./autocomplete-helpers.ts";
 import { toJson } from "./effect-helpers.ts";
 
 describe("CombinedAutocompleteProvider", () => {
   describe("dot-slash path completion", () => {
-    let baseDir = "";
-    beforeEach(() => {
-      baseDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-"));
-    });
-    afterEach(() => {
-      rmSync(baseDir, { recursive: true, force: true });
-    });
+    const ws = useTempDirectory("msa-autocomplete-");
     test("preserves CJK characters in unprefixed Tab completions", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, { files: { "文档/说明.md": "text" } });
-          const provider = new CombinedAutocompleteProvider([], baseDir);
+          yield* setupFolder(ws.baseDir, { files: { "文档/说明.md": "text" } });
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir);
           const line = "文档/说";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length, true),
@@ -40,14 +31,14 @@ describe("CombinedAutocompleteProvider", () => {
     test("preserves ./ prefix when completing paths", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             files: {
               "update.sh": "#!/bin/bash",
               "utils.ts": "export {};",
             },
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir);
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir);
           const line = "./up";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length, true),
@@ -66,24 +57,18 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("dot-slash path completion", () => {
-    let baseDir = "";
-    beforeEach(() => {
-      baseDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-"));
-    });
-    afterEach(() => {
-      rmSync(baseDir, { recursive: true, force: true });
-    });
+    const ws = useTempDirectory("msa-autocomplete-");
     test("preserves ./ prefix for directory completions", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             dirs: ["src"],
             files: {
               "src/index.ts": "export {};",
             },
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir);
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir);
           const line = "./sr";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length, true),
@@ -102,20 +87,14 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("quoted path completion", () => {
-    let baseDir = "";
-    beforeEach(() => {
-      baseDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-"));
-    });
-    afterEach(() => {
-      rmSync(baseDir, { recursive: true, force: true });
-    });
+    const ws = useTempDirectory("msa-autocomplete-");
     test("quotes paths containing whitespace or CJK punctuation for direct completion", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const provider = new CombinedAutocompleteProvider([], baseDir);
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir);
           for (const separator of [" ", "\u3000", "，", "。"]) {
             const directory = `my${separator}folder`;
-            setupFolder(baseDir, { files: { [`${directory}/test.txt`]: "content" } });
+            yield* setupFolder(ws.baseDir, { files: { [`${directory}/test.txt`]: "content" } });
             const line = "my";
             const result = yield* Effect.promise(() =>
               getSuggestions(provider, [line], 0, line.length, true),
@@ -139,8 +118,11 @@ describe("CombinedAutocompleteProvider", () => {
     test("keeps quoted directories before files", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, { dirs: ["z folder", "z，folder"], files: { "a.txt": "text" } });
-          const provider = new CombinedAutocompleteProvider([], baseDir);
+          yield* setupFolder(ws.baseDir, {
+            dirs: ["z folder", "z，folder"],
+            files: { "a.txt": "text" },
+          });
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir);
           const result = yield* Effect.promise(() => getSuggestions(provider, [""], 0, 0, true));
           assert.ok(result);
           assert.deepStrictEqual(
@@ -154,24 +136,18 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("quoted path completion", () => {
-    let baseDir = "";
-    beforeEach(() => {
-      baseDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-"));
-    });
-    afterEach(() => {
-      rmSync(baseDir, { recursive: true, force: true });
-    });
+    const ws = useTempDirectory("msa-autocomplete-");
     test("continues completion inside quoted paths", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             files: {
               "my folder/test.txt": "content",
               "my folder/other.txt": "content",
             },
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir);
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir);
           const line = '"my folder/"';
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length - 1, true),
@@ -188,23 +164,17 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("quoted path completion", () => {
-    let baseDir = "";
-    beforeEach(() => {
-      baseDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-"));
-    });
-    afterEach(() => {
-      rmSync(baseDir, { recursive: true, force: true });
-    });
+    const ws = useTempDirectory("msa-autocomplete-");
     test("applies quoted completion without duplicating closing quote", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             files: {
               "my folder/test.txt": "content",
             },
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir);
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir);
           const line = '"my folder/te"';
           const cursorCol = line.length - 1;
           const result = yield* Effect.promise(() =>

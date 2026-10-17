@@ -1,10 +1,10 @@
 import assert from "node:assert";
 import { homedir } from "node:os";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
 import { stripHyperlinkSequences } from "../src/ansi-sequences.ts";
 import { Image } from "../src/components/image.ts";
+import { pathOperations } from "../src/platform.ts";
 import {
   cropKittyImageLine,
   getKittyImageMetadata,
@@ -15,6 +15,8 @@ import {
   setCapabilities,
   setCellDimensions,
 } from "../src/terminal-image.ts";
+
+const { join } = pathOperations;
 
 describe("image cell sizing", () => {
   describe("Kitty", () => {

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
 
 import { Cause, Console, Effect } from "effect";
+
+import { readFileBytes } from "../test-platform.ts";
 
 interface WorkerTestHelper {
   getText(): Promise<string | undefined>;
@@ -55,7 +56,7 @@ const concurrentReads = (helper: WorkerTestHelper): Effect.Effect<void> =>
     const concurrent = Array.from({ length: 20 }, (_, index) =>
       index % 2 === 1 ? helper.getText() : helper.getImage(),
     );
-    yield* Effect.promise(() => readFile(selfPath));
+    yield* readFileBytes(selfPath);
     assert.deepEqual(
       yield* Effect.promise(() => Promise.all(concurrent)),
       Array.from({ length: 20 }, () => undefined),

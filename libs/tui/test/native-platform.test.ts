@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { createRequire, Module } from "node:module";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -8,27 +7,38 @@ import { Effect } from "effect";
 
 import { overrideEnv, readEnv } from "../src/env.ts";
 import { getNativeClipboard, getNativePlatformHelper } from "../src/native-platform.ts";
+import { readFileBytes } from "./test-platform.ts";
 
-test("Linux ARM64 prebuild supports 64 KB system pages", () => {
-  const binary = readFileSync(
-    new URL("../native/linux/prebuilds/linux-arm64/linux-platform-x11.node", import.meta.url),
-  );
-  assert.equal(binary.subarray(0, 4).toString(), "\x7fELF");
-  const offset = Number(binary.readBigUInt64LE(32));
-  const entrySize = binary.readUInt16LE(54);
-  const count = binary.readUInt16LE(56);
-  let loadSegments = 0;
-  for (let index = 0; index < count; index++) {
-    const entry = offset + index * entrySize;
-    if (binary.readUInt32LE(entry) !== 1) continue;
-    loadSegments++;
-    const fileOffset = binary.readBigUInt64LE(entry + 8);
-    const address = binary.readBigUInt64LE(entry + 16);
-    assert.equal((address - fileOffset) % 65536n, 0n);
-    assert.ok(binary.readBigUInt64LE(entry + 48) >= 65536n);
-  }
-  assert.ok(loadSegments > 0);
-});
+test("Linux ARM64 prebuild supports 64 KB system pages", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const binary = Buffer.from(
+        yield* readFileBytes(
+          fileURLToPath(
+            new URL(
+              "../native/linux/prebuilds/linux-arm64/linux-platform-x11.node",
+              import.meta.url,
+            ),
+          ),
+        ),
+      );
+      assert.equal(binary.subarray(0, 4).toString(), "\x7fELF");
+      const offset = Number(binary.readBigUInt64LE(32));
+      const entrySize = binary.readUInt16LE(54);
+      const count = binary.readUInt16LE(56);
+      let loadSegments = 0;
+      for (let index = 0; index < count; index++) {
+        const entry = offset + index * entrySize;
+        if (binary.readUInt32LE(entry) !== 1) continue;
+        loadSegments++;
+        const fileOffset = binary.readBigUInt64LE(entry + 8);
+        const address = binary.readBigUInt64LE(entry + 16);
+        assert.equal((address - fileOffset) % 65536n, 0n);
+        assert.ok(binary.readBigUInt64LE(entry + 48) >= 65536n);
+      }
+      assert.ok(loadSegments > 0);
+    }),
+  ));
 
 test(
   "writes Windows clipboard text through the native helper without command fallbacks",

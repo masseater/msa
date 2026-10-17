@@ -1,8 +1,5 @@
 import assert from "node:assert";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, test } from "node:test";
+import { describe, test } from "node:test";
 
 import { Effect } from "effect";
 
@@ -12,34 +9,23 @@ import {
   isFdInstalled,
   requireFdPath,
   setupFolder,
+  useTempWorkspace,
 } from "./autocomplete-helpers.ts";
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("matches deeply nested paths", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             files: {
               "libs/tui/src/autocomplete.ts": "export {};",
               "libs/ai/src/autocomplete.ts": "export {};",
             },
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           const line = "@tui/src/auto";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length),
@@ -55,30 +41,18 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("matches directory in middle of path with --full-path", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             files: {
               "src/components/Button.tsx": "export {};",
               "src/utils/helpers.ts": "export {};",
             },
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           const line = "@components/";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length),
@@ -94,23 +68,11 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("scopes fuzzy search to relative directories and searches recursively", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(outsideDir, {
+          yield* setupFolder(ws.outsideDir, {
             files: {
               "nested/alpha.ts": "export {};",
               "nested/deeper/also-alpha.ts": "export {};",
@@ -118,7 +80,7 @@ describe("CombinedAutocompleteProvider", () => {
             },
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           const line = "@../outside/a";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length),
@@ -135,30 +97,18 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("ranks shallower same-score @ matches before deeper matches", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             dirs: [
               "scope/aaa/venv/lib/python3.12/site-packages/pkg/core/profile",
               "scope/projects",
             ],
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           const line = "@scope/pro";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length),
@@ -176,19 +126,7 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("includes scoped direct children when recursive @ matches are flooded", () =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -197,11 +135,11 @@ describe("CombinedAutocompleteProvider", () => {
             (_, index) =>
               `scope/a${String(index + 1).padStart(3, "0")}/venv/lib/python3.12/site-packages/pkg/core/profile`,
           );
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             dirs: ["scope/projects", ...floodedDirs],
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           const line = "@scope/pro";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length),
@@ -220,26 +158,14 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("quotes paths containing whitespace or CJK punctuation for @ suggestions", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           for (const separator of [" ", "\u3000", "，", "。"]) {
             const directory = `my${separator}folder`;
-            setupFolder(baseDir, { files: { [`${directory}/test.txt`]: "content" } });
+            yield* setupFolder(ws.baseDir, { files: { [`${directory}/test.txt`]: "content" } });
             const line = "@my";
             const result = yield* Effect.promise(() =>
               getSuggestions(provider, [line], 0, line.length),
@@ -261,23 +187,11 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    let rootDir = "";
-    let baseDir = "";
-    let outsideDir = "";
-    beforeEach(() => {
-      rootDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-root-"));
-      baseDir = join(rootDir, "cwd");
-      outsideDir = join(rootDir, "outside");
-      mkdirSync(baseDir, { recursive: true });
-      mkdirSync(outsideDir, { recursive: true });
-    });
-    afterEach(() => {
-      rmSync(rootDir, { recursive: true, force: true });
-    });
+    const ws = useTempWorkspace();
     test("includes hidden paths but excludes .git", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, {
+          yield* setupFolder(ws.baseDir, {
             dirs: [".msa", ".github", ".git"],
             files: {
               ".msa/config.json": "{}",
@@ -286,7 +200,7 @@ describe("CombinedAutocompleteProvider", () => {
             },
           });
 
-          const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
           const line = "@";
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length),

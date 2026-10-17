@@ -1,15 +1,16 @@
 import assert from "node:assert";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
+import { pathOperations } from "../src/platform.ts";
 import { applyCompletion, createTestTUI, flushAutocomplete } from "./editor-helpers.ts";
+import { makeTempDirectory, removeRecursive, writeFileString } from "./test-platform.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { join } = pathOperations;
 
 describe("Editor component", () => {
   describe("Autocomplete", () => {
@@ -152,10 +153,10 @@ describe("Editor component", () => {
     it("completes Chinese path prefixes after whitespace or CJK punctuation with Tab", (t) =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const baseDir = mkdtempSync(join(tmpdir(), "msa-editor-autocomplete-"));
-          t.after(() => rmSync(baseDir, { recursive: true, force: true }));
-          mkdirSync(join(baseDir, "文档"));
-          writeFileSync(join(baseDir, "文档", "说明.md"), "text");
+          const baseDir = yield* makeTempDirectory("msa-editor-autocomplete-");
+          const runPromise = Effect.runPromiseWith(yield* Effect.context());
+          t.after(() => runPromise(removeRecursive(baseDir)));
+          yield* writeFileString(join(baseDir, "文档", "说明.md"), "text");
           const editor = new Editor(createTestTUI(), defaultEditorTheme);
           editor.setAutocompleteProvider(new CombinedAutocompleteProvider([], baseDir));
           for (const separator of [" ", "\t", "\u3000", "\u00a0", "，", "。"]) {

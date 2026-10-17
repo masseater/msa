@@ -1,5 +1,3 @@
-import { readFileSync } from "fs";
-
 import { Console, Effect } from "effect";
 
 import { Image } from "../src/components/image.ts";
@@ -9,20 +7,25 @@ import { getCapabilities, getImageDimensions } from "../src/terminal-image.ts";
 import { ProcessTerminal } from "../src/terminal.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import type { TUI } from "../src/tui.ts";
+import { readFileBytes } from "./test-platform.ts";
 
 const testImagePath = process.argv[2] || "/tmp/test-image.png";
 
 Effect.runSync(Console.log("Terminal capabilities:", getCapabilities()));
 Effect.runSync(Console.log("Loading image from:", testImagePath));
 
-let imageBuffer: Buffer;
-try {
-  imageBuffer = readFileSync(testImagePath);
-} catch {
-  Effect.runSync(Console.error(`Failed to load image: ${testImagePath}`));
-  Effect.runSync(Console.error("Usage: node test/image-test.ts [path-to-image.png]"));
-  process.exit(1);
-}
+const imageBuffer = await Effect.runPromise(
+  readFileBytes(testImagePath).pipe(
+    Effect.map((bytes) => Buffer.from(bytes)),
+    Effect.catchDefect(() =>
+      Effect.gen(function* () {
+        yield* Console.error(`Failed to load image: ${testImagePath}`);
+        yield* Console.error("Usage: node test/image-test.ts [path-to-image.png]");
+        return process.exit(1);
+      }),
+    ),
+  ),
+);
 
 const base64Data = imageBuffer.toString("base64");
 const dims = getImageDimensions(base64Data, "image/png");
