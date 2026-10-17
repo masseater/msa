@@ -122,6 +122,8 @@ export async function runPrintMode(
       }
       if (event.type === "goal_status") {
         console.error(describeGoalStatus(event.goal, Date.now()).join("\n"));
+      } else if (event.type === "memory_status") {
+        console.error(event.text);
       } else if (event.type === "entry_appended") {
         const line = describeGoalEntry(event.entry);
         if (line) console.error(line.text);

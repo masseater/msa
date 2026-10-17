@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -98,6 +98,8 @@ async function createRuntimeHost(options: {
     `msa-rpc-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
   mkdirSync(tempDir, { recursive: true });
+  // Memory stays out of these tests: recall would add a real embedding request and timing noise.
+  writeFileSync(join(tempDir, "settings.json"), JSON.stringify({ memory: { enabled: false } }));
 
   const model = options.model ?? getModel("anthropic", "claude-sonnet-4-5");
   if (!model) {

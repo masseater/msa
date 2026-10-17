@@ -170,6 +170,7 @@ import {
   rawKeyHint,
 } from "./components/keybinding-hints.ts";
 import { wordmark } from "./components/logo.ts";
+import { MemoryView } from "./components/memory-view.ts";
 import { createMermaidMarkdownTransformer } from "./components/mermaid.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
@@ -2505,6 +2506,11 @@ export class InteractiveMode {
         this.editor.setText("");
         return;
       }
+      if (text === "/memory") {
+        this.showMemoryView();
+        this.editor.setText("");
+        return;
+      }
       if (text === "/quit") {
         this.editor.setText("");
         await this.shutdown();
@@ -3016,6 +3022,23 @@ export class InteractiveMode {
                 goal ? theme.fg("accent", theme.bold(heading)) : theme.fg("muted", heading),
                 ...rest.map((line) => theme.fg("muted", line)),
               ].join("\n"),
+            this.outputPad,
+            0,
+          ),
+        );
+        this.ui.requestRender();
+        break;
+      }
+
+      case "memory_status": {
+        this.chatContainer.addChild(new Spacer(1));
+        this.chatContainer.addChild(
+          new ThemedText(
+            () =>
+              event.text
+                .split("\n")
+                .map((line) => theme.fg("muted", line))
+                .join("\n"),
             this.outputPad,
             0,
           ),
@@ -5058,6 +5081,28 @@ export class InteractiveMode {
         initialId,
       );
       return { component: view, focus: view, dispose: () => clearInterval(tick) };
+    });
+  }
+
+  private showMemoryView(): void {
+    const memory = this.session.memory;
+    if (!memory) {
+      this.showStatus("Memory is disabled (settings: memory.enabled)");
+      return;
+    }
+    this.editorSlot.showSelector((done) => {
+      const view = new MemoryView({
+        service: memory,
+        onClose: () => {
+          done();
+          this.ui.requestRender();
+        },
+        confirm: (message) => this.extensionDialogs.confirm("Forget memory", message),
+        onError: (message) => this.showError(message),
+        requestRender: () => this.ui.requestRender(),
+        maxHeight: () => this.ui.terminal.rows - 4,
+      });
+      return { component: view, focus: view };
     });
   }
 

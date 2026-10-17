@@ -90,6 +90,7 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
       "find",
       "grep",
       "ls",
+      "memory",
       "powershell",
       "read",
       "write",
