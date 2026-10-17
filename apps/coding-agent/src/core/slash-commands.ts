@@ -48,6 +48,7 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
     argumentHint: "<condition>|clear",
   },
   { name: "resume", description: "Resume a different session" },
+  { name: "sessions", description: "Show the sessions the orchestrator started" },
   {
     name: "reload",
     description: "Reload keybindings, extensions, skills, prompts, themes, and context files",

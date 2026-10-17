@@ -83,6 +83,12 @@ class FakeWorker implements WorkerSession {
 
   dispose = () => {};
 
+  subscribe = () => () => {};
+
+  state = {} as WorkerSession["state"];
+
+  isRetrying = false;
+
   complete(reply: string) {
     this.pending.pop()?.finish(reply);
   }
@@ -168,6 +174,24 @@ describe("Orchestrator", () => {
       ["b", "completed"],
       ["c", "running"],
     ]);
+  });
+
+  it("shows a running session's partial reply, run time, and retries", async () => {
+    const { orchestrator, workers, settled } = setup();
+    const { session } = await orchestrator.start(task("a"));
+    const worker = at(workers, 0);
+    const partial = fauxAssistantMessage("half way");
+    worker.state = { streamingMessage: partial } as WorkerSession["state"];
+    worker.isRetrying = true;
+    expect(orchestrator.messages(session.id).at(-1)).toBe(partial);
+    expect(orchestrator.progress(session.id)).toEqual({
+      startedAt: expect.any(Number),
+      retrying: true,
+    });
+
+    worker.complete("done");
+    await settled(1);
+    expect(orchestrator.progress(session.id).startedAt).toBeUndefined();
   });
 
   it("starts one task on a smaller model and switches a running one", async () => {

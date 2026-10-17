@@ -276,6 +276,8 @@ export type AgentSessionEvent =
   | { type: "bash_execution_update"; id?: string; delta: string }
   /** The active `/goal` changed: set, evaluated, ended, or started or finished evaluating. */
   | { type: "goal_changed"; goal: GoalSnapshot | undefined }
+  /** A session the orchestrator started changed state or streamed. */
+  | { type: "orchestrator_changed" }
   /** `/goal` without arguments, or `/goal clear` without an active goal. */
   | { type: "goal_status"; goal: GoalSnapshot | undefined };
 
@@ -622,6 +624,14 @@ export class AgentSession {
             ),
         })
       : undefined;
+    // Workers stream token by token; listeners need a redraw, not every delta.
+    let orchestratorChangePending: ReturnType<typeof setTimeout> | undefined;
+    this._orchestrator?.onChange(() => {
+      orchestratorChangePending ??= setTimeout(() => {
+        orchestratorChangePending = undefined;
+        this._emit({ type: "orchestrator_changed" });
+      }, 100);
+    });
 
     // Always subscribe to agent events for internal handling
     // (session persistence, extensions, auto-compaction, retry logic)
@@ -2690,6 +2700,11 @@ export class AgentSession {
   // =========================================================================
 
   /** The active `/goal`, or undefined when none is set. */
+  /** Starts and tracks separate sessions; undefined for sessions that cannot start any. */
+  get orchestrator(): Orchestrator | undefined {
+    return this._orchestrator;
+  }
+
   get goal(): GoalSnapshot | undefined {
     return this._goal.snapshot;
   }

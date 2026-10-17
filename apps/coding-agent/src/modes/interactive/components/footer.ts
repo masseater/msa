@@ -13,6 +13,7 @@ import {
   type UsageTotals,
 } from "../../../core/usage-totals.ts";
 import { theme } from "../theme/theme.ts";
+import { describeSessionCounts } from "./sessions-view.ts";
 
 /**
  * Sanitize text for display in a single-line status.
@@ -315,6 +316,17 @@ export class FooterComponent implements Component {
       lines.push(
         truncateToWidth(
           theme.fg("accent", describeGoalIndicator(goal, Date.now())),
+          width,
+          theme.fg("dim", "..."),
+        ),
+      );
+    }
+
+    const sessions = describeSessionCounts(this.session.orchestrator?.sessions ?? []);
+    if (sessions) {
+      lines.push(
+        truncateToWidth(
+          `${sessions}  ${theme.fg("dim", "/sessions")}`,
           width,
           theme.fg("dim", "..."),
         ),
