@@ -19,32 +19,50 @@ export type ServiceStatus =
   /** `install` is a shell command that installs what the service needs. */
   { installed: false; install: string } | { installed: true; signedIn: boolean };
 
+/** What a service's sign-out can ask the user. */
+export interface ServiceLogoutInteraction {
+  /** Ask the user to pick one of `options`; rejects when they cancel. */
+  select(title: string, options: string[]): Promise<string>;
+}
+
+/** What a service's sign-in can show and ask the user while it runs. */
+export interface ServiceLoginInteraction extends ServiceLogoutInteraction {
+  /** Show the page the user approves the sign-in on. */
+  showPage(page: ServiceSignInPage): void;
+  /** Ask the user for text, such as a code the sign-in page shows; rejects when they cancel. */
+  prompt(message: string, placeholder?: string): Promise<string>;
+}
+
+/**
+ * A SaaS msa depends on, signed in to from `/login`. msa registers its own in
+ * {@link EXTERNAL_SERVICES}; extensions add theirs with `msa.registerExternalService()`.
+ */
 export interface ExternalService {
   id: string;
   name: string;
   /** What msa uses the service for, shown next to it in `/login`. */
   purpose: string;
-  status(): ServiceStatus;
-  login(onPage: (page: ServiceSignInPage) => void, signal: AbortSignal): Promise<void>;
-  logout(): Promise<void>;
+  status(): Promise<ServiceStatus>;
+  login(interaction: ServiceLoginInteraction, signal: AbortSignal): Promise<void>;
+  logout(interaction: ServiceLogoutInteraction): Promise<void>;
   /** The tools the service provides, empty until it is signed in. */
-  tools(): ToolDefinition[];
+  tools?(): ToolDefinition[];
 }
 
 const treg: ExternalService = {
   id: "treg",
   name: "treg",
   purpose: "web search and page reading",
-  status() {
+  async status() {
     const cli = findTregCli();
     return cli
       ? { installed: true, signedIn: cli.signedIn }
       : { installed: false, install: TREG_INSTALL_COMMAND };
   },
-  async login(onPage, signal) {
+  async login(interaction, signal) {
     const cli = findTregCli();
     if (!cli) throw new Error(`treg is not installed. Install it with: ${TREG_INSTALL_COMMAND}`);
-    await loginTreg(cli.command, onPage, signal);
+    await loginTreg(cli.command, (page) => interaction.showPage(page), signal);
   },
   async logout() {
     const cli = findTregCli();
@@ -63,9 +81,12 @@ const treg: ExternalService = {
 
 export const EXTERNAL_SERVICES: readonly ExternalService[] = [treg];
 
-export function findExternalService(ref: string): ExternalService | undefined {
+export function findExternalService(
+  services: readonly ExternalService[],
+  ref: string,
+): ExternalService | undefined {
   const normalized = ref.trim().toLowerCase();
-  return EXTERNAL_SERVICES.find(
+  return services.find(
     (service) => service.id === normalized || service.name.toLowerCase() === normalized,
   );
 }

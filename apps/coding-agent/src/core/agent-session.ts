@@ -117,7 +117,7 @@ import {
   wrapRegisteredTools,
 } from "./extensions/index.ts";
 import { type BeforeAgentStartTrigger, emitSessionShutdownEvent } from "./extensions/runner.ts";
-import { EXTERNAL_SERVICES } from "./external-services.ts";
+import { EXTERNAL_SERVICES, type ExternalService } from "./external-services.ts";
 import {
   findActiveGoalCondition,
   GOAL_CONTINUE_MESSAGE_TYPE,
@@ -4160,7 +4160,6 @@ export class AgentSession {
     this._baseToolDefinitions = new Map(
       Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
     );
-    if (!this._baseToolsOverride) this._addExternalServiceTools();
     if (this._orchestrator && !this._baseToolsOverride) {
       for (const [name, tool] of Object.entries(
         createOrchestratorToolDefinitions(this._orchestrator),
@@ -4189,6 +4188,8 @@ export class AgentSession {
     this._bindExtensionCore(this._extensionRunner);
     this._applyExtensionBindings(this._extensionRunner);
 
+    if (!this._baseToolsOverride) this._addExternalServiceTools();
+
     const defaultActiveToolNames = this._baseToolsOverride
       ? Object.keys(this._baseToolsOverride)
       : [...DEFAULT_TOOL_NAMES];
@@ -4199,11 +4200,16 @@ export class AgentSession {
     });
   }
 
+  /** msa's own external services, then the ones extensions registered. */
+  getExternalServices(): ExternalService[] {
+    return [...EXTERNAL_SERVICES, ...this._extensionRunner.getExternalServices()];
+  }
+
   /** Adds the tools of the external services that are signed in, and returns their names. */
   private _addExternalServiceTools(): string[] {
     const names: string[] = [];
-    for (const service of EXTERNAL_SERVICES) {
-      for (const tool of service.tools()) {
+    for (const service of this.getExternalServices()) {
+      for (const tool of service.tools?.() ?? []) {
         this._baseToolDefinitions.set(tool.name, tool);
         names.push(tool.name);
       }

@@ -427,6 +427,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
         promptTemplates: [];
         extensionRunner: { getRegisteredCommands: () => [] };
         resourceLoader: { getSkills: () => { skills: [] } };
+        getExternalServices: () => [];
       };
       settingsManager: { getEnableSkillCommands: () => boolean };
       skillCommands: Map<string, string>;
@@ -452,6 +453,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
         promptTemplates: [],
         extensionRunner: { getRegisteredCommands: () => [] },
         resourceLoader: { getSkills: () => ({ skills: [] }) },
+        getExternalServices: () => [],
       },
       settingsManager: { getEnableSkillCommands: () => false },
       skillCommands: new Map(),
@@ -479,6 +481,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
         promptTemplates: [];
         extensionRunner: { getRegisteredCommands: () => [] };
         resourceLoader: { getSkills: () => { skills: [] } };
+        getExternalServices: () => [];
       };
       settingsManager: { getEnableSkillCommands: () => boolean };
       skillCommands: Map<string, string>;
@@ -501,6 +504,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
         promptTemplates: [],
         extensionRunner: { getRegisteredCommands: () => [] },
         resourceLoader: { getSkills: () => ({ skills: [] }) },
+        getExternalServices: () => [],
       },
       settingsManager: { getEnableSkillCommands: () => false },
       skillCommands: new Map(),
