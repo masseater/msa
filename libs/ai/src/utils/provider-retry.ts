@@ -96,7 +96,7 @@ const createAbortError = (): Error => {
 };
 
 interface ProviderRetryRun<T> {
-  readonly request: () => Promise<T>;
+  readonly request: Effect.Effect<T>;
   readonly options: ProviderRetryOptions;
   readonly maxRetries: number;
 }
@@ -105,7 +105,7 @@ const attemptProviderRequest = <T>(
   run: ProviderRetryRun<T>,
   retriesRemaining: number,
 ): Effect.Effect<T> =>
-  Effect.promise(() => run.request()).pipe(
+  run.request.pipe(
     Effect.catchDefect((error) =>
       Effect.gen(function* () {
         if (run.options.signal?.aborted === true) return yield* Effect.die(createAbortError());
@@ -125,15 +125,27 @@ const attemptProviderRequest = <T>(
     ),
   );
 
+export const retryProviderEffect: {
+  (options?: ProviderRetryOptions): <T>(request: Effect.Effect<T>) => Effect.Effect<T>;
+  <T>(request: Effect.Effect<T>, options?: ProviderRetryOptions): Effect.Effect<T>;
+} = Function.dual(
+  (args) => Effect.isEffect(args[0]),
+  <T>(request: Effect.Effect<T>, options: ProviderRetryOptions = {}): Effect.Effect<T> => {
+    const maxRetries = options.maxRetries ?? 0;
+    return attemptProviderRequest({ request, options, maxRetries }, maxRetries);
+  },
+);
+
 export const providerRequestWithRetry: {
   (options?: ProviderRetryOptions): <T>(request: () => Promise<T>) => Effect.Effect<T>;
   <T>(request: () => Promise<T>, options?: ProviderRetryOptions): Effect.Effect<T>;
 } = Function.dual(
   (args) => typeof args[0] === "function",
-  <T>(request: () => Promise<T>, options: ProviderRetryOptions = {}): Effect.Effect<T> => {
-    const maxRetries = options.maxRetries ?? 0;
-    return attemptProviderRequest({ request, options, maxRetries }, maxRetries);
-  },
+  <T>(request: () => Promise<T>, options?: ProviderRetryOptions): Effect.Effect<T> =>
+    retryProviderEffect(
+      Effect.promise(() => request()),
+      options,
+    ),
 );
 
 export const retryProviderRequest: {

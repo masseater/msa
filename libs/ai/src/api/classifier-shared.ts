@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import { calculateCost } from "../models.ts";
 import type {
   ClassifierApi,
@@ -7,7 +9,8 @@ import type {
   Usage,
 } from "../types.ts";
 import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
-import { retryProviderRequest } from "../utils/provider-retry.ts";
+import { encodeJson } from "../utils/json-codec.ts";
+import { retryProviderEffect } from "../utils/provider-retry.ts";
 
 export interface ClassifierHttpError extends Error {
   status: number | undefined;
@@ -57,57 +60,89 @@ function requestHeaders(
   );
 }
 
-export async function postClassifierRequest(
-  label: string,
-  url: URL,
-  model: ClassifierModel<ClassifierApi>,
-  body: unknown,
-  options: ClassifierOptions | undefined,
-  noRetryStatuses?: readonly number[],
-): Promise<unknown> {
-  if (options?.apiKey === undefined || options?.apiKey === "")
-    throw new Error(`No API key for provider: ${model.provider}`);
-  const apiKey = options.apiKey;
-  let payload = body;
-  const transformed = await options.onPayload?.(payload, model);
-  if (transformed !== undefined) payload = transformed;
-  const requestFetch = options.fetch ?? globalThis.fetch;
-  const { response, json } = await retryProviderRequest(
-    async () => {
-      const timeoutSignal =
-        options.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs);
-      const signal =
-        options.signal !== undefined && timeoutSignal !== undefined
-          ? AbortSignal.any([options.signal, timeoutSignal])
-          : (options.signal ?? timeoutSignal);
-      try {
-        const next = await requestFetch(url, {
+export interface ClassifierRequest {
+  readonly label: string;
+  readonly url: URL;
+  readonly model: ClassifierModel<ClassifierApi>;
+  readonly body: unknown;
+  readonly options: ClassifierOptions | undefined;
+  readonly noRetryStatuses?: readonly number[] | undefined;
+}
+
+const combineSignals = (
+  signal: AbortSignal | undefined,
+  timeoutSignal: AbortSignal | undefined,
+): AbortSignal | undefined =>
+  signal !== undefined && timeoutSignal !== undefined
+    ? AbortSignal.any([signal, timeoutSignal])
+    : (signal ?? timeoutSignal);
+
+const sendClassifierRequest = (
+  { label, url, model, options }: ClassifierRequest,
+  apiKey: string,
+  payload: string,
+) =>
+  Effect.suspend(() => {
+    const timeoutSignal =
+      options?.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs);
+    const signal = combineSignals(options?.signal, timeoutSignal);
+    const requestFetch = options?.fetch ?? globalThis.fetch;
+    return Effect.gen(function* () {
+      const next = yield* Effect.promise(() =>
+        requestFetch(url, {
           method: "POST",
-          headers: requestHeaders(model, apiKey, options.headers),
-          body: JSON.stringify(payload),
+          headers: requestHeaders(model, apiKey, options?.headers),
+          body: payload,
           signal: signal ?? null,
-        });
-        if (!next.ok) throw httpError(label, next, await next.text());
-        return { response: next, json: (await next.json()) as unknown };
-      } catch (error) {
-        if (timeoutSignal?.aborted === true && options.signal?.aborted !== true)
-          throw timeoutError(options.timeoutMs!);
-        throw error;
+        }),
+      );
+      if (!next.ok) {
+        const text = yield* Effect.promise(() => next.text());
+        return yield* Effect.die(httpError(label, next, text));
       }
-    },
+      const json: unknown = yield* Effect.promise((): Promise<unknown> => next.json());
+      return { response: next, json };
+    }).pipe(
+      Effect.catchDefect((error) =>
+        Effect.die(
+          timeoutSignal?.aborted === true && options?.signal?.aborted !== true
+            ? timeoutError(options?.timeoutMs ?? 0)
+            : error,
+        ),
+      ),
+    );
+  });
+
+export const classifierRequest = Effect.fn("classifierRequest")(function* (
+  request: ClassifierRequest,
+) {
+  const { model, options } = request;
+  if (options?.apiKey === undefined || options?.apiKey === "")
+    return yield* Effect.die(new Error(`No API key for provider: ${model.provider}`));
+  const apiKey = options.apiKey;
+  const transformed = yield* Effect.promise(() =>
+    Promise.resolve(options.onPayload?.(request.body, model)),
+  );
+  const payload = yield* encodeJson(transformed === undefined ? request.body : transformed);
+  const { response, json } = yield* retryProviderEffect(
+    sendClassifierRequest(request, apiKey, payload),
     {
       maxRetries: options.maxRetries ?? 2,
       maxRetryDelayMs: options.maxRetryDelayMs,
       signal: options.signal,
-      noRetryStatuses,
+      noRetryStatuses: request.noRetryStatuses,
     },
   );
-  await options.onResponse?.(
-    { status: response.status, headers: headersToRecord(response.headers) },
-    model,
+  yield* Effect.promise(() =>
+    Promise.resolve(
+      options.onResponse?.(
+        { status: response.status, headers: headersToRecord(response.headers) },
+        model,
+      ),
+    ),
   );
   return json;
-}
+});
 
 function tokenCount(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;

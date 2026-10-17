@@ -1,18 +1,21 @@
+import { Clock, Effect } from "effect";
+
 import type {
+  ClassifierApi,
   ClassifierAnswer,
   ClassifierContext,
   ClassifierFunction,
+  ClassifierModel,
   ClassifierOptions,
   ClassifierQuestion,
   ClassifierResult,
 } from "../types.ts";
-import { currentTimeMillis } from "../utils/clock.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import {
   type ClassifierHttpError,
   isRecord,
   parseClassifierUsage,
-  postClassifierRequest,
+  classifierRequest,
   requiredNumber,
 } from "./classifier-shared.ts";
 
@@ -157,42 +160,56 @@ function errorMessage(error: unknown): string {
   return formatProviderError(normalizeProviderError(error), `${LABEL} error`);
 }
 
-export const classify: ClassifierFunction<ClassifierOptions> = async (model, context, options) => {
-  const output: ClassifierResult = {
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    answers: {},
-    stopReason: "stop",
-    timestamp: currentTimeMillis(),
-  };
+const requestDecisions = Effect.fn("requestDecisions")(function* (
+  model: ClassifierModel<ClassifierApi>,
+  context: ClassifierContext,
+  options: ClassifierOptions | undefined,
+  output: ClassifierResult,
+) {
+  if (model.api !== "openai-decisions")
+    return yield* Effect.die(new Error(`Unsupported classifier API: ${model.api}`));
+  const body = yield* classifierRequest({
+    label: LABEL,
+    url: new URL("decisions", `${model.baseUrl.replace(/\/+$/u, "")}/`),
+    model,
+    body: {
+      model: model.id,
+      input: wireInput(context),
+      questions: Object.entries(context.questions).map(([id, question]) =>
+        wireQuestion(id, question),
+      ),
+    },
+    options,
+    noRetryStatuses: NO_RETRY_STATUSES,
+  });
+  if (!isRecord(body))
+    return yield* Effect.die(new Error(`${LABEL} returned an unexpected response`));
+  const usage = parseClassifierUsage(body["usage"], model);
+  if (usage !== undefined) output.usage = usage;
+  output.answers = parseAnswers(body["answers"], context);
+  return output;
+});
 
-  try {
-    if (model.api !== "openai-decisions")
-      throw new Error(`Unsupported classifier API: ${model.api}`);
-    const body = await postClassifierRequest(
-      LABEL,
-      new URL("decisions", `${model.baseUrl.replace(/\/+$/u, "")}/`),
-      model,
-      {
+export const classify: ClassifierFunction<ClassifierOptions> = (model, context, options) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const output: ClassifierResult = {
+        api: model.api,
+        provider: model.provider,
         model: model.id,
-        input: wireInput(context),
-        questions: Object.entries(context.questions).map(([id, question]) =>
-          wireQuestion(id, question),
+        answers: {},
+        stopReason: "stop",
+        timestamp: yield* Clock.currentTimeMillis,
+      };
+      return yield* requestDecisions(model, context, options, output).pipe(
+        Effect.catchDefect((error) =>
+          Effect.sync((): ClassifierResult => {
+            output.answers = {};
+            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+            output.errorMessage = errorMessage(error);
+            return output;
+          }),
         ),
-      },
-      options,
-      NO_RETRY_STATUSES,
-    );
-    if (!isRecord(body)) throw new Error(`${LABEL} returned an unexpected response`);
-    const usage = parseClassifierUsage(body["usage"], model);
-    if (usage !== undefined) output.usage = usage;
-    output.answers = parseAnswers(body["answers"], context);
-    return output;
-  } catch (error) {
-    output.answers = {};
-    output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-    output.errorMessage = errorMessage(error);
-    return output;
-  }
-};
+      );
+    }),
+  );

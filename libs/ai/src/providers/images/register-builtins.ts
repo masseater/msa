@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import type { generateImages as generateImagesOpenRouterFunction } from "../../api/openrouter-images.ts";
 import { registerImagesApiProvider } from "../../images-api-registry.ts";
 import type {
@@ -36,18 +38,19 @@ function loadOpenRouterImagesProviderModule(): Promise<OpenRouterImagesProviderM
   return openRouterImagesProviderModulePromise;
 }
 
-export const generateImagesOpenRouter: ImagesFunction<ImagesOptions> = async (
+export const generateImagesOpenRouter: ImagesFunction<ImagesOptions> = (
   model: ImageModel<ImageApi>,
   context: ImagesContext,
   options?: ImagesOptions,
-) => {
-  try {
-    const module = await loadOpenRouterImagesProviderModule();
-    return await module.generateImages(model, context, options);
-  } catch (error) {
-    return createLazyLoadErrorImages(model, error);
-  }
-};
+) =>
+  Effect.runPromise(
+    Effect.promise(() => loadOpenRouterImagesProviderModule()).pipe(
+      Effect.flatMap((module) =>
+        Effect.promise(() => module.generateImages(model, context, options)),
+      ),
+      Effect.catchDefect((error) => Effect.succeed(createLazyLoadErrorImages(model, error))),
+    ),
+  );
 
 export function registerBuiltInImagesApiProviders(): void {
   registerImagesApiProvider({

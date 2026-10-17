@@ -1,3 +1,5 @@
+import { Clock, Effect } from "effect";
+
 import type {
   ClassifierAnswer,
   ClassifierApi,
@@ -6,12 +8,11 @@ import type {
   ClassifierOptions,
   ClassifierResult,
 } from "../types.ts";
-import { currentTimeMillis } from "../utils/clock.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import {
   isRecord,
   parseClassifierUsage,
-  postClassifierRequest,
+  classifierRequest,
   requiredNumber,
 } from "./classifier-shared.ts";
 
@@ -99,43 +100,59 @@ function wireRequest(context: ClassifierContext): SystemOneWireRequest {
   };
 }
 
-export async function classifySystemOne(
+const requestSystemOne = Effect.fn("requestSystemOne")(function* (
+  transport: SystemOneTransport,
+  model: ClassifierModel<ClassifierApi>,
+  context: ClassifierContext,
+  options: ClassifierOptions | undefined,
+  output: ClassifierResult,
+) {
+  if (model.api !== transport.api)
+    return yield* Effect.die(new Error(`Unsupported classifier API: ${model.api}`));
+  if (context.images?.length !== undefined && context.images?.length > 0)
+    return yield* Effect.die(new Error(`${transport.label} does not support image input`));
+  const body = yield* classifierRequest({
+    label: transport.label,
+    url: transport.url(model),
+    model,
+    body: transport.payload(model, wireRequest(context)),
+    options,
+  });
+  const result = transport.output(body);
+  const usage = parseClassifierUsage(result["usage"], model);
+  if (usage !== undefined) output.usage = usage;
+  output.answers = parseAnswers(transport.label, result["answers"], context);
+  return output;
+});
+
+export function classifySystemOne(
   transport: SystemOneTransport,
   model: ClassifierModel<ClassifierApi>,
   context: ClassifierContext,
   options: ClassifierOptions | undefined,
 ): Promise<ClassifierResult> {
-  const output: ClassifierResult = {
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    answers: {},
-    stopReason: "stop",
-    timestamp: currentTimeMillis(),
-  };
-
-  try {
-    if (model.api !== transport.api) throw new Error(`Unsupported classifier API: ${model.api}`);
-    if (context.images?.length !== undefined && context.images?.length > 0)
-      throw new Error(`${transport.label} does not support image input`);
-    const body = await postClassifierRequest(
-      transport.label,
-      transport.url(model),
-      model,
-      transport.payload(model, wireRequest(context)),
-      options,
-    );
-    const result = transport.output(body);
-    const usage = parseClassifierUsage(result["usage"], model);
-    if (usage !== undefined) output.usage = usage;
-    output.answers = parseAnswers(transport.label, result["answers"], context);
-    return output;
-  } catch (error) {
-    output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-    output.errorMessage = formatProviderError(
-      normalizeProviderError(error),
-      `${transport.label} error`,
-    );
-    return output;
-  }
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const output: ClassifierResult = {
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        answers: {},
+        stopReason: "stop",
+        timestamp: yield* Clock.currentTimeMillis,
+      };
+      return yield* requestSystemOne(transport, model, context, options, output).pipe(
+        Effect.catchDefect((error) =>
+          Effect.sync((): ClassifierResult => {
+            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+            output.errorMessage = formatProviderError(
+              normalizeProviderError(error),
+              `${transport.label} error`,
+            );
+            return output;
+          }),
+        ),
+      );
+    }),
+  );
 }
