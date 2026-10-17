@@ -183,7 +183,12 @@ const hostLayer: Layer.Layer<Host> = Layer.effect(
   // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
   .pipe(Layer.provide(NodeServices.layer));
 
-const runScript = runMainWith(Layer.mergeAll(hostLayer, DateTime.layerCurrentZoneLocal));
+const scriptLayer = Layer.mergeAll(hostLayer, DateTime.layerCurrentZoneLocal);
+
+const runScript = runMainWith(scriptLayer);
+
+const runScriptWith = <ROut, E>(layer: Layer.Layer<ROut, E>) =>
+  runMainWith(Layer.mergeAll(scriptLayer, layer));
 
 export type { CommandOptions, CommandResult, FileInfo, HostShape, RunningCommand };
-export { Host, runScript };
+export { Host, runScript, runScriptWith };
