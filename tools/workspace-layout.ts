@@ -1,6 +1,8 @@
-import { NodeRuntime, NodeServices } from "@effect/platform-node";
+import { NodeServices } from "@effect/platform-node";
 import { Data, Effect, FileSystem, Path, Schema } from "effect";
 import { parse } from "yaml";
+
+import { runMainWith } from "./run-main.ts";
 
 const PROJECT_ROOTS: readonly string[] = ["apps", "libs", "infra", "tools"];
 const WORKSPACE_ENTRIES_OUTSIDE_ROOTS: readonly string[] = [".claude"];
@@ -59,5 +61,5 @@ const program = Effect.gen(function* () {
   }
 });
 
-// oxlint-disable-next-line effecttsgo/unstable-api-usage, effecttsgo/strict-effect-provide -- application entry point on pre-GA v4 platform APIs
-NodeRuntime.runMain(program.pipe(Effect.provide(NodeServices.layer)));
+// oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
+runMainWith(program, NodeServices.layer);
