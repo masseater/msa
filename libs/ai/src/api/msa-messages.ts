@@ -1,3 +1,5 @@
+import { Effect, Option, Stream } from "effect";
+
 import type {
   AssistantMessage,
   AssistantMessageEvent,
@@ -21,6 +23,8 @@ import {
 import { toErrorMessage } from "../utils/errors.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
+import { callHook } from "../utils/hooks.ts";
+import { encodeJson } from "../utils/json-codec.ts";
 import { parseStreamingJson } from "../utils/json-parse.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 
@@ -279,43 +283,45 @@ function createEventConverter(model: Model<"msa-messages">) {
   };
 }
 
-async function* readMsaMessagesEvents(
-  stream: ReadableStream<Uint8Array>,
-): AsyncGenerator<MsaMessagesEvent> {
-  const decoder = new TextDecoder();
-  const reader = stream.getReader();
-  let buffer = "";
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
-      buffer = buffer.replace(/\r\n/gu, "\n");
-
-      let split = buffer.indexOf("\n\n");
-      while (split !== -1) {
-        const event = parseMsaMessagesEvent(buffer.slice(0, split));
-        if (event !== undefined) {
-          yield event;
-        }
-        buffer = buffer.slice(split + 2);
-        split = buffer.indexOf("\n\n");
-      }
-
-      if (done) {
-        break;
-      }
-    }
-
-    if (buffer.trim() !== "") {
-      const event = parseMsaMessagesEvent(buffer);
-      if (event !== undefined) {
-        yield event;
-      }
-    }
-  } finally {
-    reader.releaseLock();
+const splitMsaMessagesEvents = (
+  buffer: string,
+): readonly [rest: string, events: ReadonlyArray<MsaMessagesEvent>] => {
+  const events: MsaMessagesEvent[] = [];
+  let rest = buffer.replace(/\r\n/gu, "\n");
+  let split = rest.indexOf("\n\n");
+  while (split !== -1) {
+    const event = parseMsaMessagesEvent(rest.slice(0, split));
+    if (event !== undefined) events.push(event);
+    rest = rest.slice(split + 2);
+    split = rest.indexOf("\n\n");
   }
+  return [rest, events];
+};
+
+function readMsaMessagesEvents(
+  stream: ReadableStream<Uint8Array>,
+): Stream.Stream<MsaMessagesEvent> {
+  const decoder = new TextDecoder();
+  return Stream.fromReadableStream({
+    evaluate: () => stream,
+    onError: (error) => error,
+    releaseLockOnEnd: true,
+  }).pipe(
+    Stream.orDie,
+    Stream.map((value) => decoder.decode(value, { stream: true })),
+    Stream.concat(Stream.sync(() => decoder.decode())),
+    Stream.mapAccum(
+      () => "",
+      (buffer, text: string) => splitMsaMessagesEvents(buffer + text),
+      {
+        onHalt: (buffer) => {
+          if (buffer.trim() === "") return [];
+          const event = parseMsaMessagesEvent(buffer);
+          return event === undefined ? [] : [event];
+        },
+      },
+    ),
+  );
 }
 
 function parseMsaMessagesEvent(raw: string): MsaMessagesEvent | undefined {
@@ -372,6 +378,67 @@ function resolveCacheRetention(
   return getProviderEnvValue("MSA_CACHE_RETENTION", env) === "long" ? "long" : undefined;
 }
 
+const requestMsaMessages = Effect.fn("requestMsaMessages")(function* (
+  model: Model<"msa-messages">,
+  context: TranscriptContext,
+  options: MsaMessagesOptions | undefined,
+) {
+  const apiKey = options?.apiKey;
+  if (apiKey === undefined || apiKey === "") {
+    return yield* Effect.die(new Error(`No API key provided for provider "${model.provider}"`));
+  }
+
+  const url = new URL(`${model.baseUrl.replace(/\/+$/u, "")}/messages`);
+  if (options?.debug === true) {
+    url.searchParams.set("debug", "1");
+  }
+
+  const payload: unknown = {
+    model: model.id,
+    context,
+    options: {
+      temperature: options?.temperature,
+      maxTokens: options?.maxTokens,
+      reasoning: options?.reasoning,
+      cacheRetention: resolveCacheRetention(options?.cacheRetention, options?.env),
+      sessionId: options?.sessionId,
+      toolChoice: options?.toolChoice,
+    },
+  };
+  const nextPayload = yield* callHook(() => options?.onPayload?.(payload, model));
+  const body = yield* encodeJson(nextPayload === undefined ? payload : nextPayload);
+
+  const response = yield* Effect.promise(() =>
+    (options?.fetch ?? globalThis.fetch)(url, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        accept: "text/event-stream",
+        "content-type": "application/json",
+        ...providerHeadersToRecord(options?.headers),
+      },
+      body,
+      signal: options?.signal ?? null,
+    }),
+  );
+
+  yield* callHook(() =>
+    options?.onResponse?.(
+      { status: response.status, headers: headersToRecord(response.headers) },
+      model,
+    ),
+  );
+
+  if (!response.ok) {
+    const text = yield* Effect.promise(() => response.text());
+    return yield* Effect.die(createMsaMessagesResponseError(model, url, response, text));
+  }
+  if (response.body === null) {
+    return yield* Effect.die(new Error(`${model.provider} response has no body`));
+  }
+  return readMsaMessagesEvents(response.body);
+});
+
 export const stream: StreamFunction<"msa-messages", MsaMessagesOptions> = (
   model: Model<"msa-messages">,
   context: TranscriptContext,
@@ -380,74 +447,35 @@ export const stream: StreamFunction<"msa-messages", MsaMessagesOptions> = (
   const eventStream = new AssistantMessageEventStream();
   const convertEvent = createEventConverter(model);
 
-  void (async () => {
-    try {
-      const apiKey = options?.apiKey;
-      if (apiKey === undefined || apiKey === "") {
-        throw new Error(`No API key provided for provider "${model.provider}"`);
-      }
-
-      const url = new URL(`${model.baseUrl.replace(/\/+$/u, "")}/messages`);
-      if (options?.debug === true) {
-        url.searchParams.set("debug", "1");
-      }
-
-      let payload: unknown = {
-        model: model.id,
-        context,
-        options: {
-          temperature: options?.temperature,
-          maxTokens: options?.maxTokens,
-          reasoning: options?.reasoning,
-          cacheRetention: resolveCacheRetention(options?.cacheRetention, options?.env),
-          sessionId: options?.sessionId,
-          toolChoice: options?.toolChoice,
-        },
-      };
-      const nextPayload = await options?.onPayload?.(payload, model);
-      if (nextPayload !== undefined) {
-        payload = nextPayload;
-      }
-
-      const response = await (options?.fetch ?? globalThis.fetch)(url, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${apiKey}`,
-          accept: "text/event-stream",
-          "content-type": "application/json",
-          ...providerHeadersToRecord(options?.headers),
-        },
-        body: JSON.stringify(payload),
-        signal: options?.signal ?? null,
-      });
-
-      await options?.onResponse?.(
-        { status: response.status, headers: headersToRecord(response.headers) },
-        model,
-      );
-
-      if (!response.ok) {
-        const body = await response.text();
-        throw createMsaMessagesResponseError(model, url, response, body);
-      }
-      if (response.body === null) {
-        throw new Error(`${model.provider} response has no body`);
-      }
-
-      for await (const msaEvent of readMsaMessagesEvents(response.body)) {
-        await options?.onProviderStreamEvent?.(msaEvent, model);
-        const event = convertEvent(msaEvent);
-        eventStream.push(event);
-        if (event.type === "done" || event.type === "error") {
-          return;
-        }
-      }
-
-      throw new Error(`${model.provider} stream ended without a terminal event`);
-    } catch (error) {
-      eventStream.push(createErrorEvent(model, error, options?.signal?.aborted ?? false));
-    }
-  })();
+  Effect.runFork(
+    requestMsaMessages(model, context, options).pipe(
+      Effect.flatMap((events) =>
+        events.pipe(
+          Stream.mapEffect((msaEvent) =>
+            callHook(() => options?.onProviderStreamEvent?.(msaEvent, model)).pipe(
+              Effect.map(() => {
+                const event = convertEvent(msaEvent);
+                eventStream.push(event);
+                return event.type === "done" || event.type === "error";
+              }),
+            ),
+          ),
+          Stream.takeUntil((terminal) => terminal),
+          Stream.runLast,
+        ),
+      ),
+      Effect.flatMap((last) =>
+        Option.getOrElse(last, () => false)
+          ? Effect.void
+          : Effect.die(new Error(`${model.provider} stream ended without a terminal event`)),
+      ),
+      Effect.catchDefect((error) =>
+        Effect.sync(() =>
+          eventStream.push(createErrorEvent(model, error, options?.signal?.aborted ?? false)),
+        ),
+      ),
+    ),
+  );
 
   return eventStream;
 };
