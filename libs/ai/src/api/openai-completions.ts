@@ -642,7 +642,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
           hasFinishReason = true;
         }
 
-        if (choice.delta) {
+        if (choice.delta !== undefined && choice.delta !== null) {
           const reasoningFields = ["reasoning_content", "reasoning", "reasoning_text"];
           const deltaFields = choice.delta as Record<string, unknown>;
           let foundReasoningField: string | null = null;
