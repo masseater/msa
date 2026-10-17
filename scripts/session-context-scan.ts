@@ -1,10 +1,21 @@
-import { Effect, Result, Stream } from "effect";
+import { Effect } from "effect";
 
 import type { HostShape } from "./host.ts";
-import { bashCommandsOf, contextTokens, decodeContextEntry } from "./session-context-entry.ts";
+import {
+  bashCommandsOf,
+  contextTokens,
+  decodeContextEntry,
+  providerModelOf,
+} from "./session-context-entry.ts";
 import type { ContextEntry, ContextMessage } from "./session-context-entry.ts";
 import type { ContextWindows } from "./session-context-windows.ts";
-import { jsonlFilesRecursive, parseMillis, sessionFileMillis } from "./sessions.ts";
+import {
+  emptySessionFileCounts,
+  forEachDecodedLine,
+  forEachSessionFile,
+  messageOf,
+  timestampMillis,
+} from "./sessions.ts";
 
 interface SessionRecord {
   sessionFile: string;
@@ -61,22 +72,49 @@ const recordTokens = (session: SessionRecord, tokens: number): void => {
   if (!session.seenCompaction) session.preFirstCompactionTokens = tokens;
 };
 
+const applyAssistantMessage = (
+  session: SessionRecord,
+  message: ContextMessage,
+  windows: Map<string, number>,
+): void => {
+  session.bashCommands.push(...bashCommandsOf(message));
+  session.assistantMessages += 1;
+  session.providerModel = providerModelOf(message);
+  const contextWindow = windows.get(session.providerModel);
+  if (contextWindow !== undefined) session.contextWindow = contextWindow;
+  const tokens = contextTokens(message.usage);
+  if (tokens !== null) recordTokens(session, tokens);
+};
+
 const applyMessage = (
   session: SessionRecord,
   message: ContextMessage,
   windows: Map<string, number>,
 ): void => {
-  if (message.role === "assistant") {
-    for (const command of bashCommandsOf(message.content)) session.bashCommands.push(command);
-  }
   if (message.role === "user") session.userMessages += 1;
-  if (message.role !== "assistant") return;
-  session.assistantMessages += 1;
-  session.providerModel = `${message.provider ?? "[unknown]"}/${message.model ?? "[unknown]"}`;
-  const contextWindow = windows.get(session.providerModel);
-  if (contextWindow !== undefined) session.contextWindow = contextWindow;
-  const tokens = contextTokens(message.usage);
-  if (tokens !== null) recordTokens(session, tokens);
+  if (message.role === "assistant") applyAssistantMessage(session, message, windows);
+};
+
+const recordCwd = (session: SessionRecord, entry: ContextEntry): void => {
+  if (entry.type === "session" && entry.cwd !== undefined) session.cwd = entry.cwd;
+};
+
+const earlierMillis = (current: number, candidate: number): number =>
+  current === 0 || candidate < current ? candidate : current;
+
+const laterMillis = (current: number, candidate: number): number =>
+  current === 0 || candidate > current ? candidate : current;
+
+const extendTimeRange = (session: SessionRecord, entryMs: number | null): void => {
+  if (entryMs === null) return;
+  session.startMs = earlierMillis(session.startMs, entryMs);
+  session.endMs = laterMillis(session.endMs, entryMs);
+};
+
+const applyCompaction = (session: SessionRecord, entry: ContextEntry): void => {
+  session.compactions += 1;
+  if (entry.tokensBefore !== undefined) recordTokens(session, entry.tokensBefore);
+  session.seenCompaction = true;
 };
 
 const applyEntry = (
@@ -84,61 +122,60 @@ const applyEntry = (
   entry: ContextEntry,
   windows: Map<string, number>,
 ): void => {
-  if (entry.type === "session" && entry.cwd !== undefined) session.cwd = entry.cwd;
-  const entryMs = entry.timestamp === undefined ? null : parseMillis(entry.timestamp);
-  if (entryMs !== null) {
-    if (session.startMs === 0 || entryMs < session.startMs) session.startMs = entryMs;
-    if (session.endMs === 0 || entryMs > session.endMs) session.endMs = entryMs;
-  }
-  if (entry.type === "compaction") {
-    session.compactions += 1;
-    if (entry.tokensBefore !== undefined) recordTokens(session, entry.tokensBefore);
-    session.seenCompaction = true;
-    return;
-  }
-  if (entry.type !== "message" || entry.message === undefined) return;
-  applyMessage(session, entry.message, windows);
+  recordCwd(session, entry);
+  extendTimeRange(session, timestampMillis(entry.timestamp));
+  const message = messageOf(entry);
+  if (entry.type === "compaction") applyCompaction(session, entry);
+  else if (message !== undefined) applyMessage(session, message, windows);
 };
 
+const usagePercent = (tokens: number | null, contextWindow: number | null): number | null =>
+  tokens === null || contextWindow === null ? null : (tokens / contextWindow) * 100;
+
 const finalizeSession = (session: SessionRecord): void => {
-  if (session.maxPromptTokens !== null && session.contextWindow !== null) {
-    const percent = (session.maxPromptTokens / session.contextWindow) * 100;
+  const percent = usagePercent(session.maxPromptTokens, session.contextWindow);
+  if (percent !== null) {
     session.maxContextUsagePercent = percent;
     session.over80 = percent >= 80;
     session.over90 = percent >= 90;
     session.over100 = percent >= 100;
   }
-  if (session.preFirstCompactionTokens !== null && session.contextWindow !== null) {
-    session.preFirstCompactionUsagePercent =
-      (session.preFirstCompactionTokens / session.contextWindow) * 100;
-  }
+  session.preFirstCompactionUsagePercent = usagePercent(
+    session.preFirstCompactionTokens,
+    session.contextWindow,
+  );
 };
 
 const scanFile = (options: {
   readonly host: HostShape;
   readonly meta: ScanMeta;
   readonly sessionFile: string;
+  readonly sessionMillis: number | null;
   readonly windows: Map<string, number>;
 }) =>
   Effect.gen(function* () {
-    const { host, meta, sessionFile, windows } = options;
-    const session = emptySession(sessionFile, sessionFileMillis({ file: sessionFile, host }));
-    yield* host.lines(sessionFile).pipe(
-      Stream.filter((line) => line.trim() !== ""),
-      Stream.runForEach((line) =>
-        Effect.gen(function* () {
-          const parsed = yield* Effect.result(decodeContextEntry(line));
-          if (Result.isSuccess(parsed)) {
-            applyEntry(session, parsed.success, windows);
-            return;
-          }
-          meta.malformedLines += 1;
-        }),
-      ),
-    );
+    const { meta, windows } = options;
+    const session = emptySession(options.sessionFile, options.sessionMillis);
+    yield* forEachDecodedLine({
+      decode: decodeContextEntry,
+      file: options.sessionFile,
+      host: options.host,
+      onEntry: (entry) => applyEntry(session, entry, windows),
+      onMalformed: () => {
+        meta.malformedLines += 1;
+      },
+    });
     finalizeSession(session);
     return session;
   });
+
+const matchesCwd = (options: {
+  readonly cwdFilter: string | undefined;
+  readonly host: HostShape;
+  readonly session: SessionRecord;
+}): boolean =>
+  options.cwdFilter === undefined ||
+  options.host.resolve(options.session.cwd ?? "") === options.cwdFilter;
 
 const scanSessions = (options: {
   readonly cwdFilter: string | undefined;
@@ -148,32 +185,24 @@ const scanSessions = (options: {
   readonly windows: ContextWindows;
 }) =>
   Effect.gen(function* () {
-    const { cwdFilter, host, sessionsDir, sinceMs } = options;
+    const { cwdFilter, host } = options;
     const windows = options.windows.windows;
     const sessions: Array<SessionRecord> = [];
     const meta: ScanMeta = {
-      sessionsDir,
-      sessionFilesScanned: 0,
-      sessionFilesIncluded: 0,
-      sessionFilesSkippedOlderThanSince: 0,
+      sessionsDir: options.sessionsDir,
+      ...emptySessionFileCounts(),
       malformedLines: 0,
     };
-    const files = yield* jsonlFilesRecursive({ directory: sessionsDir, host });
-    yield* Effect.forEach(files, (sessionFile) =>
-      Effect.gen(function* () {
-        meta.sessionFilesScanned += 1;
-        const fileMillis = sessionFileMillis({ file: sessionFile, host });
-        if (sinceMs !== null && fileMillis !== null && fileMillis < sinceMs) {
-          meta.sessionFilesSkippedOlderThanSince += 1;
-          return;
-        }
-        meta.sessionFilesIncluded += 1;
-        const session = yield* scanFile({ host, meta, sessionFile, windows });
-        if (cwdFilter === undefined || host.resolve(session.cwd ?? "") === cwdFilter) {
-          sessions.push(session);
-        }
-      }),
-    );
+    yield* forEachSessionFile({
+      counts: meta,
+      host,
+      scan: ({ sessionFile, sessionMillis }) =>
+        Effect.map(scanFile({ host, meta, sessionFile, sessionMillis, windows }), (session) => {
+          if (matchesCwd({ cwdFilter, host, session })) sessions.push(session);
+        }),
+      sessionsDir: options.sessionsDir,
+      sinceMs: options.sinceMs,
+    });
     return { meta, sessions };
   });
 

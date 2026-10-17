@@ -1,3 +1,4 @@
+import { matchesModelFilter } from "./scan-options.ts";
 import type { ScanMeta, SessionRecord } from "./session-context-scan.ts";
 
 interface GroupSummary {
@@ -44,19 +45,24 @@ interface Summary {
   readonly byModelDay: ReadonlyArray<ModelSummary>;
 }
 
-const median = (values: ReadonlyArray<number | null>): number | null => {
-  const finite = values
-    .filter((value): value is number => value !== null && Number.isFinite(value))
-    .sort((left, right) => left - right);
-  if (finite.length === 0) return null;
-  const middle = Math.floor(finite.length / 2);
-  const lower = finite[middle - 1] ?? 0;
-  const upper = finite[middle] ?? 0;
-  return finite.length % 2 === 0 ? (lower + upper) / 2 : upper;
-};
-
 const average = (values: ReadonlyArray<number>): number | null =>
   values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length;
+
+const middleValues = (sorted: ReadonlyArray<number>): ReadonlyArray<number> => {
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? sorted.slice(middle - 1, middle + 1)
+    : sorted.slice(middle, middle + 1);
+};
+
+const median = (values: ReadonlyArray<number | null>): number | null =>
+  average(
+    middleValues(
+      values
+        .filter((value): value is number => value !== null && Number.isFinite(value))
+        .sort((left, right) => left - right),
+    ),
+  );
 
 const summarizeSessionGroup = (key: string, group: ReadonlyArray<SessionRecord>): GroupSummary => {
   const usage = group.flatMap((session) =>
@@ -124,6 +130,21 @@ const withByDay = (model: GroupSummary, byDay: ReadonlyArray<GroupSummary>): Mod
   byDay,
 });
 
+const matchesPrefixes = (providerModel: string, prefixes: ReadonlyArray<string>): boolean =>
+  prefixes.length === 0 ||
+  prefixes.some((prefix) => providerModel.toLowerCase().startsWith(prefix.toLowerCase()));
+
+const matchesBash = (
+  bashCommands: ReadonlyArray<string>,
+  bashContains: ReadonlyArray<string>,
+): boolean => {
+  if (bashContains.length === 0) return true;
+  const commands = bashCommands.map((command) => command.toLowerCase());
+  return bashContains.some((text) =>
+    commands.some((command) => command.includes(text.toLowerCase())),
+  );
+};
+
 const matchesFilters = (
   session: SessionRecord,
   options: {
@@ -131,25 +152,10 @@ const matchesFilters = (
     readonly modelFilter: string | undefined;
     readonly modelPrefixes: ReadonlyArray<string>;
   },
-): boolean => {
-  const providerModel = session.providerModel.toLowerCase();
-  if (
-    options.modelFilter !== undefined &&
-    options.modelFilter !== "" &&
-    !providerModel.includes(options.modelFilter.toLowerCase())
-  ) {
-    return false;
-  }
-  const prefixes = options.modelPrefixes.map((prefix) => prefix.toLowerCase());
-  if (prefixes.length > 0 && !prefixes.some((prefix) => providerModel.startsWith(prefix))) {
-    return false;
-  }
-  if (options.bashContains.length === 0) return true;
-  const commands = session.bashCommands.map((command) => command.toLowerCase());
-  return options.bashContains.some((text) =>
-    commands.some((command) => command.includes(text.toLowerCase())),
-  );
-};
+): boolean =>
+  matchesModelFilter({ modelFilter: options.modelFilter, providerModel: session.providerModel }) &&
+  matchesPrefixes(session.providerModel, options.modelPrefixes) &&
+  matchesBash(session.bashCommands, options.bashContains);
 
 const buildSummary = (options: {
   readonly bashContains: ReadonlyArray<string>;
@@ -184,5 +190,5 @@ const buildSummary = (options: {
   };
 };
 
-export type { GroupSummary, ModelSummary, Summary };
+export type { GroupSummary, ModelSummary, Summary, SummaryFilters };
 export { buildSummary };

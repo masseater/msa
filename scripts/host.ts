@@ -193,5 +193,13 @@ const runScript = runMainWith(scriptLayer);
 const runScriptWith = <ROut, E>(layer: Layer.Layer<ROut, E>) =>
   runMainWith(Layer.mergeAll(scriptLayer, layer));
 
-export type { CommandOptions, CommandResult, FileInfo, HostShape, RunningCommand };
+export type {
+  CommandOptions,
+  CommandResult,
+  FileInfo,
+  HostShape,
+  InputMode,
+  OutputMode,
+  RunningCommand,
+};
 export { Host, runScript, runScriptWith };

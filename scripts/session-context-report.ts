@@ -41,21 +41,26 @@ const lineForGroup = (group: GroupSummary, indent = "  "): string =>
 const METHOD_NOTE =
   "Context usage parses full session JSONL files. max context uses max assistant usage.totalTokens per session, falling back to input + output + cacheRead + cacheWrite, plus compaction tokensBefore. medPreCompactCtx uses the last assistant usage before the first compaction, or the first compaction tokensBefore when present, divided by model contextWindow from libs/ai/src/models.generated.ts when known.";
 
-const filterLines = (summary: Summary): ReadonlyArray<string> => {
-  const lines: Array<string> = [];
-  const { filters } = summary;
-  if (filters.model !== null && filters.model !== "") {
-    lines.push(`Filters: model contains "${filters.model}"`);
-  }
-  if (filters.modelPrefixes.length > 0) {
-    lines.push(`Filters: model prefixes = ${filters.modelPrefixes.join(", ")}`);
-  }
-  if (filters.bashContains.length > 0) {
-    lines.push(`Filters: bash contains any of = ${filters.bashContains.join(", ")}`);
-  }
-  if (filters.cwd !== null && filters.cwd !== "") lines.push(`Filters: cwd = ${filters.cwd}`);
-  return lines;
-};
+const isPresent = (value: string | null): value is string => value !== null && value !== "";
+
+const FILTER_LINES: ReadonlyArray<(filters: Summary["filters"]) => string | null> = [
+  (filters) => (isPresent(filters.model) ? `Filters: model contains "${filters.model}"` : null),
+  (filters) =>
+    filters.modelPrefixes.length > 0
+      ? `Filters: model prefixes = ${filters.modelPrefixes.join(", ")}`
+      : null,
+  (filters) =>
+    filters.bashContains.length > 0
+      ? `Filters: bash contains any of = ${filters.bashContains.join(", ")}`
+      : null,
+  (filters) => (isPresent(filters.cwd) ? `Filters: cwd = ${filters.cwd}` : null),
+];
+
+const filterLines = (summary: Summary): ReadonlyArray<string> =>
+  FILTER_LINES.flatMap((line) => {
+    const text = line(summary.filters);
+    return text === null ? [] : [text];
+  });
 
 const modelDayLines = (summary: Summary): ReadonlyArray<string> =>
   summary.byModelDay.flatMap((model) => [

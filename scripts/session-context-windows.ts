@@ -64,28 +64,42 @@ const generatedPath = (host: HostShape): string =>
 const configPath = (host: HostShape): string =>
   host.join(homedir(), ".msa", "agent", "models.json");
 
+interface WindowSource {
+  readonly entries: ReadonlyArray<readonly [string, number]>;
+  readonly source: string;
+}
+
+const readGeneratedWindows = (host: HostShape): Effect.Effect<WindowSource | null> =>
+  Effect.gen(function* () {
+    const generated = generatedPath(host);
+    if (!(yield* host.exists(generated))) return null;
+    return { entries: generatedWindows(yield* host.readText(generated)), source: generated };
+  });
+
+const configuredWindows = (
+  providers: Readonly<Record<string, typeof ProviderConfig.Type>> | undefined,
+): ReadonlyArray<readonly [string, number]> =>
+  Object.entries(providers ?? {}).flatMap(([provider, entry]) => overrideWindows(provider, entry));
+
+const readConfigWindows = (host: HostShape): Effect.Effect<WindowSource | null> =>
+  Effect.gen(function* () {
+    const config = configPath(host);
+    if (!(yield* host.exists(config))) return null;
+    const decoded = yield* decodeModelsConfig(yield* host.readText(config)).pipe(Effect.option);
+    return Option.isSome(decoded)
+      ? { entries: configuredWindows(decoded.value.providers), source: config }
+      : null;
+  });
+
 const loadContextWindows = (host: HostShape): Effect.Effect<ContextWindows> =>
   Effect.gen(function* () {
-    const windows = new Map<string, number>();
-    const sources: Array<string> = [];
-    const generated = generatedPath(host);
-    if (yield* host.exists(generated)) {
-      sources.push(generated);
-      for (const [key, value] of generatedWindows(yield* host.readText(generated))) {
-        windows.set(key, value);
-      }
-    }
-    const config = configPath(host);
-    if (yield* host.exists(config)) {
-      const decoded = yield* decodeModelsConfig(yield* host.readText(config)).pipe(Effect.option);
-      if (Option.isSome(decoded)) {
-        sources.push(config);
-        for (const [provider, entry] of Object.entries(decoded.value.providers ?? {})) {
-          for (const [key, value] of overrideWindows(provider, entry)) windows.set(key, value);
-        }
-      }
-    }
-    return { sources, windows };
+    const found = [yield* readGeneratedWindows(host), yield* readConfigWindows(host)].filter(
+      Predicate.isNotNull,
+    );
+    return {
+      sources: found.map((window) => window.source),
+      windows: new Map(found.flatMap((window) => window.entries)),
+    };
   });
 
 export type { ContextWindows };

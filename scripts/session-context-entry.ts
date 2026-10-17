@@ -1,5 +1,8 @@
 import { Predicate, Schema } from "effect";
 
+import { toolCallsOf } from "./tool-calls.ts";
+import type { Block } from "./tool-calls.ts";
+
 const ContentBlock = Schema.Record(Schema.String, Schema.Unknown);
 
 const UsageRecord = Schema.Record(Schema.String, Schema.Unknown);
@@ -28,27 +31,32 @@ const decodeEntry = Schema.decodeUnknownEffect(Schema.fromJsonString(ContextEntr
 
 const decodeContextEntry = (line: string) => decodeEntry(line);
 
-const contextTokens = (usage: ContextUsage | undefined): number | null => {
-  if (usage === undefined) return null;
-  const totalTokens = Number(usage["totalTokens"] ?? 0);
-  if (Number.isFinite(totalTokens) && totalTokens > 0) return totalTokens;
-  const value =
-    Number(usage["input"] ?? 0) +
-    Number(usage["output"] ?? 0) +
-    Number(usage["cacheRead"] ?? 0) +
-    Number(usage["cacheWrite"] ?? 0);
-  return Number.isFinite(value) && value > 0 ? value : null;
+const COMPONENT_TOKEN_KEYS = ["input", "output", "cacheRead", "cacheWrite"] as const;
+
+const usageNumber = (usage: ContextUsage, key: string): number => Number(usage[key] ?? 0);
+
+const positiveFinite = (value: number): number | null =>
+  Number.isFinite(value) && value > 0 ? value : null;
+
+const componentTokens = (usage: ContextUsage): number =>
+  COMPONENT_TOKEN_KEYS.reduce((sum, key) => sum + usageNumber(usage, key), 0);
+
+const contextTokens = (usage: ContextUsage | undefined): number | null =>
+  usage === undefined
+    ? null
+    : (positiveFinite(usageNumber(usage, "totalTokens")) ?? positiveFinite(componentTokens(usage)));
+
+const bashCommandOf = (block: Block): ReadonlyArray<string> => {
+  const args = block["arguments"];
+  const command = Predicate.hasProperty("command")(args) ? args.command : undefined;
+  return Predicate.isString(command) && command !== "" ? [command] : [];
 };
 
-const bashCommandsOf = (content: ContextMessage["content"]): ReadonlyArray<string> => {
-  if (content === undefined || Predicate.isString(content)) return [];
-  return content.flatMap((block) => {
-    if (block["type"] !== "toolCall" || block["name"] !== "bash") return [];
-    const args = block["arguments"];
-    const command = Predicate.hasProperty("command")(args) ? args.command : undefined;
-    return Predicate.isString(command) && command !== "" ? [command] : [];
-  });
-};
+const bashCommandsOf = (message: ContextMessage): ReadonlyArray<string> =>
+  toolCallsOf({ message, name: "bash" }).flatMap(bashCommandOf);
+
+const providerModelOf = (message: ContextMessage): string =>
+  `${message.provider ?? "[unknown]"}/${message.model ?? "[unknown]"}`;
 
 export type { ContextEntry, ContextMessage, ContextUsage };
-export { bashCommandsOf, contextTokens, decodeContextEntry };
+export { bashCommandsOf, contextTokens, decodeContextEntry, providerModelOf };
