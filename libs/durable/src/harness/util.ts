@@ -1,4 +1,5 @@
 import type { Context } from "@msa/chord";
+import { Effect } from "effect";
 
 import { SessionFailed } from "../errors.ts";
 import type { Cursor, Page } from "../types.ts";
@@ -8,7 +9,7 @@ export class Waiters<K, T> {
 
   add(key: K, context: Context): Promise<T> {
     const signal = context.abortSignal;
-    if (signal?.aborted) return Promise.reject(signal.reason);
+    if (signal?.aborted === true) return Promise.reject(signal.reason);
     const waiter = Promise.withResolvers<T>();
     const set = this.#sets.get(key) ?? new Set();
     this.#sets.set(key, set.add(waiter));
@@ -42,17 +43,21 @@ export class Waiters<K, T> {
   }
 }
 
-export function scanAll<T>(
-  scan: (cursor: Cursor | undefined) => Promise<Page<T, Cursor>>,
-): Promise<T[]> {
+type Scan<T> = (cursor: Cursor | undefined) => Promise<Page<T, Cursor>>;
+
+const scanPage = <T>(scan: Scan<T>, cursor: Cursor | undefined) =>
+  Effect.promise(() => scan(cursor));
+
+export const scanAll = Effect.fn("scanAll")(function* <T>(scan: Scan<T>) {
   const items: T[] = [];
-  const scanFrom = async (cursor: Cursor | undefined): Promise<T[]> => {
-    const page = await scan(cursor);
+  let cursor: Cursor | undefined;
+  do {
+    const page = yield* scanPage(scan, cursor);
     items.push(...page.items);
-    return page.next === undefined ? items : scanFrom(page.next);
-  };
-  return scanFrom(undefined);
-}
+    cursor = page.next;
+  } while (cursor !== undefined);
+  return items;
+});
 
 export function closedError(session: {
   readonly failure: { readonly error: unknown } | undefined;

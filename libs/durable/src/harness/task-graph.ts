@@ -6,6 +6,7 @@ import {
 } from "@msa/chord";
 import { withoutAbortSignal } from "@msa/chord/context";
 import { applyImmutable, type Op } from "@msa/chord/delta";
+import { Effect } from "effect";
 
 import { CommittedStateSource, CommittedWatch } from "../session/observation.ts";
 import { contained, type SessionImpl } from "../session/session.ts";
@@ -135,19 +136,21 @@ export class TaskGraphView {
     const records: AnyTaskRecord[] = [];
     for await (const status of LIVE_STATUSES) {
       records.push(
-        ...(await scanAll((cursor) =>
-          this.#storage.scanTasks({ status }, SCAN_PAGE_SIZE, cursor, context),
+        ...(await Effect.runPromise(
+          scanAll((cursor) => this.#storage.scanTasks({ status }, SCAN_PAGE_SIZE, cursor, context)),
         )),
       );
     }
     records.sort((a, b) => a.id - b.id);
     for await (const record of records) {
-      const owned = await scanAll((cursor) =>
-        this.#storage.scanConversations(
-          { ownerTaskId: record.id },
-          SCAN_PAGE_SIZE,
-          cursor,
-          context,
+      const owned = await Effect.runPromise(
+        scanAll((cursor) =>
+          this.#storage.scanConversations(
+            { ownerTaskId: record.id },
+            SCAN_PAGE_SIZE,
+            cursor,
+            context,
+          ),
         ),
       );
       const conversations = owned.map((conversation) => conversation.id).sort((a, b) => a - b);

@@ -1,6 +1,7 @@
 import type { AssistantMessage, Message, Usage } from "@msa/ai";
 import type { Context, JsonValue } from "@msa/chord";
 import type { Op, Path } from "@msa/chord/delta";
+import { Effect } from "effect";
 
 import { CommittedWatch } from "../session/observation.ts";
 import type {
@@ -168,7 +169,9 @@ export async function watchEvents(
     conversationId,
     async (initial, release, storage) => {
       const query = { conversationId, kind: "msa.generation", status: "completing" } as const;
-      const completing = await scanAll((cursor) => storage.scanTasks(query, 100, cursor, context));
+      const completing = await Effect.runPromise(
+        scanAll((cursor) => storage.scanTasks(query, 100, cursor, context)),
+      );
       const held = new Set<TaskId>(completing.map((record) => record.id));
       let current = initial;
       snapshot = snapshotOf(initial);

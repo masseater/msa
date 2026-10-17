@@ -1,6 +1,7 @@
 import type { Models } from "@msa/ai";
 import { type Context, copyJson, type JsonValue } from "@msa/chord";
 import { awaitWithContext, withAbortSignal } from "@msa/chord/context";
+import { Effect } from "effect";
 
 import type { ExecutionEnv } from "../env/index.ts";
 import { errorMessage } from "../errors.ts";
@@ -237,7 +238,11 @@ export class TaskScheduler {
     await this.#session.commitWith(async (tx) => {
       const scans = [];
       for await (const status of LIVE_STATUSES) {
-        scans.push(await scanAll((cursor) => tx.scanTasks({ status }, SCAN_PAGE_SIZE, cursor)));
+        scans.push(
+          await Effect.runPromise(
+            scanAll((cursor) => tx.scanTasks({ status }, SCAN_PAGE_SIZE, cursor)),
+          ),
+        );
       }
       for (const records of scans) {
         for (const record of records) {
@@ -589,8 +594,10 @@ export class TaskScheduler {
       if (this.#unloaded.has(id)) await this.#loadChain({ task: id });
     }
     if (!queued) return [];
-    const submissions = await scanAll((cursor) =>
-      this.#storage.scanSubmissions({ status: "queued" }, SCAN_PAGE_SIZE, cursor, this.#context),
+    const submissions = await Effect.runPromise(
+      scanAll((cursor) =>
+        this.#storage.scanSubmissions({ status: "queued" }, SCAN_PAGE_SIZE, cursor, this.#context),
+      ),
     );
     const inputs = submissions.filter((submission) => submission.type === "input");
     const conversations = [...new Set(inputs.map((submission) => submission.conversationId))];

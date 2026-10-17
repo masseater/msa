@@ -129,7 +129,7 @@ export type {
 } from "./harness/types.ts";
 export { UsageDoc, type UsageState } from "./harness/usage.ts";
 export type { ConversationView } from "./harness/view.ts";
-export { createSession } from "./session/session.ts";
+export { createSession } from "./session/create-session.ts";
 export { MemoryStorage } from "./storage/memory.ts";
 export { defineTask } from "./tasks.ts";
 export type {

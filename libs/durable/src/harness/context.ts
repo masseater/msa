@@ -1,5 +1,6 @@
 import type { AssistantMessage, Message, ToolCall, ToolResultMessage } from "@msa/ai";
 import type { Context } from "@msa/chord";
+import { Effect } from "effect";
 
 import { SystemEntry } from "../entries.ts";
 import { idFromNumber } from "../ids.ts";
@@ -261,8 +262,10 @@ async function scanRange(
   range: Omit<EntryQuery, "conversationId">,
   context: Context,
 ): Promise<EntryRecord[]> {
-  const entries = await scanAll((cursor) =>
-    storage.scanEntries({ conversationId, ...range }, SCAN_PAGE_SIZE, cursor, context),
+  const entries = await Effect.runPromise(
+    scanAll((cursor) =>
+      storage.scanEntries({ conversationId, ...range }, SCAN_PAGE_SIZE, cursor, context),
+    ),
   );
   return entries.reverse();
 }

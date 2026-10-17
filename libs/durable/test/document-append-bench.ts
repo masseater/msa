@@ -9,7 +9,7 @@ import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
 
 import { defineDoc, defineDocFamily } from "../src/documents.ts";
 import { MemoryStorage } from "../src/index.ts";
-import { createSession } from "../src/session/session.ts";
+import { createSession } from "../src/session/create-session.ts";
 
 type Entry = { key: string; issued: number; at: number };
 

@@ -1,5 +1,6 @@
 import type { AttachedReplicatedState, Context, JsonValue } from "@msa/chord";
 import { withAbortSignal, withoutAbortSignal } from "@msa/chord/context";
+import { Effect } from "effect";
 
 import { ResetEntry } from "../entries.ts";
 import type { ExecutionEnv } from "../env/index.ts";
@@ -269,8 +270,10 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
     return this.readOnLine(async () => {
       const { scheduling, tasks } = await this.#tasks.inspect(this.#options.registry.snapshot());
       const scan = (status: "queued" | "placed") =>
-        scanAll((cursor) =>
-          this.storage.scanSubmissions({ status }, SCAN_PAGE_SIZE, cursor, context),
+        Effect.runPromise(
+          scanAll((cursor) =>
+            this.storage.scanSubmissions({ status }, SCAN_PAGE_SIZE, cursor, context),
+          ),
         );
       const submissions = [...(await scan("queued")), ...(await scan("placed"))].sort(
         (a, b) => a.id - b.id,
@@ -307,7 +310,9 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
 
   async usage(context: Context): Promise<UsageState> {
     const conversations = await this.readOnLine(() =>
-      scanAll((cursor) => this.storage.scanConversations({}, SCAN_PAGE_SIZE, cursor, context)),
+      Effect.runPromise(
+        scanAll((cursor) => this.storage.scanConversations({}, SCAN_PAGE_SIZE, cursor, context)),
+      ),
     );
     const total = UsageDoc.definition.initial();
     for await (const { id } of conversations) {
