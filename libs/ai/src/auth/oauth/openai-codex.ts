@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 
 import { randomHex } from "../../utils/crypto.ts";
 import type {
@@ -57,16 +57,18 @@ const openCallbackServer = (
   interaction: ProviderAuthInteraction,
   state: string,
 ): Effect.Effect<OAuthCallbackServer<string> | undefined> =>
-  Effect.promise(() =>
-    startOAuthCallbackServer({
-      providerName: "OpenAI",
-      host: getCallbackHost(),
-      port: 1455,
-      path: "/auth/callback",
-      state,
-      complete: (code) => Promise.resolve(code),
-      signal: interaction.signal,
-    }).catch(() => undefined),
+  startOAuthCallbackServer({
+    providerName: "OpenAI",
+    host: getCallbackHost(),
+    port: 1455,
+    path: "/auth/callback",
+    state,
+    complete: (code) => Effect.succeed(code),
+    signal: interaction.signal,
+  }).pipe(
+    Effect.asSome,
+    Effect.catchDefect(() => Effect.succeedNone),
+    Effect.map(Option.getOrUndefined),
   );
 
 const readAuthorizationCode = (
@@ -75,13 +77,13 @@ const readAuthorizationCode = (
   state: string,
 ): Effect.Effect<string> =>
   Effect.gen(function* () {
-    const result = yield* Effect.promise(() =>
-      waitForCallbackOrManualInput(interaction, callback, {
-        message:
-          "Complete login in your browser, or paste the authorization code / redirect URL here:",
-        placeholder: REDIRECT_URI,
-      }),
-    );
+    const result = yield* waitForCallbackOrManualInput({
+      interaction,
+      callback,
+      message:
+        "Complete login in your browser, or paste the authorization code / redirect URL here:",
+      placeholder: REDIRECT_URI,
+    });
     if (result.type === "callback") return result.value;
 
     const parsed = parseAuthorizationInput(result.input);
@@ -116,7 +118,7 @@ const loginWithBrowser = (
         redirectUri: REDIRECT_URI,
         signal: interaction.signal,
       });
-    }).pipe(Effect.ensuring(Effect.sync(() => callback?.close())));
+    }).pipe(Effect.ensuring(callback === undefined ? Effect.void : callback.close));
   });
 
 const login = (

@@ -79,32 +79,25 @@ const startBrowserCallbackServer = (
   state: string,
   verifier: string,
 ) =>
-  Effect.gen(function* () {
-    const runExchange = Effect.runPromiseWith(yield* Effect.context<never>());
-    return yield* Effect.promise(() =>
-      startOAuthCallbackServer({
-        providerName: "Radius",
-        host: CALLBACK_HOST,
-        port: CALLBACK_PORT,
-        path: CALLBACK_PATH,
-        state,
-        complete: (code) =>
-          runExchange(
-            requestOAuthToken({
-              gateway,
-              body: new URLSearchParams({
-                grant_type: "authorization_code",
-                client_id: OAUTH_CLIENT_ID,
-                redirect_uri: REDIRECT_URI,
-                code,
-                code_verifier: verifier,
-              }),
-              signal: interaction.signal,
-            }).pipe(Effect.catchTag("RadiusOAuthResponseError", Effect.die)),
-          ),
+  startOAuthCallbackServer({
+    providerName: "Radius",
+    host: CALLBACK_HOST,
+    port: CALLBACK_PORT,
+    path: CALLBACK_PATH,
+    state,
+    complete: (code) =>
+      requestOAuthToken({
+        gateway,
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: OAUTH_CLIENT_ID,
+          redirect_uri: REDIRECT_URI,
+          code,
+          code_verifier: verifier,
+        }),
         signal: interaction.signal,
-      }),
-    );
+      }).pipe(Effect.catchTag("RadiusOAuthResponseError", Effect.die)),
+    signal: interaction.signal,
   });
 
 const loginWithBrowser = (login: BrowserLogin): Effect.Effect<OAuthCredential> =>
@@ -126,12 +119,12 @@ const loginWithBrowser = (login: BrowserLogin): Effect.Effect<OAuthCredential> =
     });
 
     return yield* Effect.gen(function* () {
-      const credential = yield* Effect.promise(() => callback.wait());
+      const credential = yield* callback.wait;
       if (credential === undefined) {
         return yield* Effect.die(new Error("OAuth callback did not complete."));
       }
       return credential;
-    }).pipe(Effect.ensuring(Effect.sync(() => callback.close())));
+    }).pipe(Effect.ensuring(callback.close));
   });
 
 export interface RadiusOAuthOptions {

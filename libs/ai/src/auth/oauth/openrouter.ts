@@ -52,33 +52,31 @@ const exchangeAuthorizationCode = (
   code: string,
   verifier: string,
   signal: AbortSignal,
-): Promise<OAuthCredential> =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      if (signal.aborted) return yield* Effect.die(new Error("Login cancelled"));
-      const timeout = AbortSignal.timeout(TOKEN_EXCHANGE_TIMEOUT_MS);
-      const reply = yield* httpRequest({
-        url: TOKEN_URL,
-        method: "POST",
-        headers: { accept: "application/json", "content-type": "application/json" },
-        body: yield* encodeJson({ code, code_verifier: verifier, code_challenge_method: "S256" }),
-        signal: AbortSignal.any([signal, timeout]),
-      }).pipe(
-        Effect.catchDefect((error) =>
-          Effect.die(
-            signal.aborted
-              ? new Error("Login cancelled", { cause: error })
-              : timeout.aborted
-                ? new Error("OpenRouter OAuth token exchange timed out", { cause: error })
-                : (error as Error),
-          ),
+): Effect.Effect<OAuthCredential> =>
+  Effect.gen(function* () {
+    if (signal.aborted) return yield* Effect.die(new Error("Login cancelled"));
+    const timeout = AbortSignal.timeout(TOKEN_EXCHANGE_TIMEOUT_MS);
+    const reply = yield* httpRequest({
+      url: TOKEN_URL,
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json" },
+      body: yield* encodeJson({ code, code_verifier: verifier, code_challenge_method: "S256" }),
+      signal: AbortSignal.any([signal, timeout]),
+    }).pipe(
+      Effect.catchDefect((error) =>
+        Effect.die(
+          signal.aborted
+            ? new Error("Login cancelled", { cause: error })
+            : timeout.aborted
+              ? new Error("OpenRouter OAuth token exchange timed out", { cause: error })
+              : (error as Error),
         ),
-      );
+      ),
+    );
 
-      const body = yield* readJsonBody(reply);
-      return yield* credentialFromBody(reply, body);
-    }),
-  );
+    const body = yield* readJsonBody(reply);
+    return yield* credentialFromBody(reply, body);
+  });
 
 const readJsonBody = (reply: HttpReply): Effect.Effect<JsonObject> =>
   reply.json.pipe(
@@ -124,13 +122,13 @@ const promptForManualCode = (
   verifier: string,
 ) =>
   Effect.gen(function* () {
-    const result = yield* Effect.promise(() =>
-      waitForCallbackOrManualInput(interaction, callback, {
-        message:
-          "Complete sign-in in your browser, or paste the authorization code / redirect URL here:",
-        placeholder: callback.redirectUri,
-      }),
-    );
+    const result = yield* waitForCallbackOrManualInput({
+      interaction,
+      callback,
+      message:
+        "Complete sign-in in your browser, or paste the authorization code / redirect URL here:",
+      placeholder: callback.redirectUri,
+    });
     if (result.type === "callback") return result.value;
     const code = parseAuthorizationInput(result.input);
     if (code === undefined || code === "") {
@@ -140,26 +138,22 @@ const promptForManualCode = (
       type: "progress",
       message: "Exchanging authorization code for an API key...",
     });
-    return yield* Effect.promise(() =>
-      exchangeAuthorizationCode(code, verifier, interaction.signal),
-    );
+    return yield* exchangeAuthorizationCode(code, verifier, interaction.signal);
   });
 
 const loginOpenRouter = (interaction: ProviderAuthInteraction): Promise<OAuthCredential> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { verifier, challenge } = yield* Effect.promise(() => generatePKCE());
-      const callback = yield* Effect.promise(() =>
-        startOAuthCallbackServer({
-          providerName: "OpenRouter",
-          host: getCallbackHost(),
-          port: 0,
-          path: `/oauth/callback/${randomUuid()}`,
-          complete: (code) => exchangeAuthorizationCode(code, verifier, interaction.signal),
-          signal: interaction.signal,
-          timeoutMs: LOGIN_TIMEOUT_MS,
-        }),
-      );
+      const callback = yield* startOAuthCallbackServer({
+        providerName: "OpenRouter",
+        host: getCallbackHost(),
+        port: 0,
+        path: `/oauth/callback/${randomUuid()}`,
+        complete: (code) => exchangeAuthorizationCode(code, verifier, interaction.signal),
+        signal: interaction.signal,
+        timeoutMs: LOGIN_TIMEOUT_MS,
+      });
 
       const authorizeUrl = new URL(AUTHORIZE_URL);
       authorizeUrl.search = new URLSearchParams({
@@ -180,7 +174,7 @@ const loginOpenRouter = (interaction: ProviderAuthInteraction): Promise<OAuthCre
       });
 
       return yield* promptForManualCode(interaction, callback, verifier).pipe(
-        Effect.ensuring(Effect.sync(() => callback.close())),
+        Effect.ensuring(callback.close),
       );
     }),
   );

@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import {
@@ -25,7 +25,7 @@ const startCallbackServer = (
   interaction: ProviderAuthInteraction,
   verifier: string,
   port: number,
-): Promise<OAuthCallbackServer<string>> =>
+): Effect.Effect<OAuthCallbackServer<string>> =>
   startOAuthCallbackServer({
     providerName: "Anthropic",
     host: CALLBACK_HOST,
@@ -33,7 +33,7 @@ const startCallbackServer = (
     path: CALLBACK_PATH,
     redirectHost: "localhost",
     state: verifier,
-    complete: (code) => Promise.resolve(code),
+    complete: (code) => Effect.succeed(code),
     signal: interaction.signal,
   });
 
@@ -41,10 +41,11 @@ const openCallbackServer = (
   interaction: ProviderAuthInteraction,
   verifier: string,
 ): Effect.Effect<OAuthCallbackServer<string> | undefined> =>
-  Effect.promise(() =>
-    startCallbackServer(interaction, verifier, CALLBACK_PORT)
-      .catch(() => startCallbackServer(interaction, verifier, 0))
-      .catch(() => undefined),
+  startCallbackServer(interaction, verifier, CALLBACK_PORT).pipe(
+    Effect.catchDefect(() => startCallbackServer(interaction, verifier, 0)),
+    Effect.asSome,
+    Effect.catchDefect(() => Effect.succeedNone),
+    Effect.map(Option.getOrUndefined),
   );
 
 interface AuthorizationCode {
@@ -59,13 +60,13 @@ const readAuthorizationCode = (
   redirectUri: string,
 ): Effect.Effect<AuthorizationCode> =>
   Effect.gen(function* () {
-    const result = yield* Effect.promise(() =>
-      waitForCallbackOrManualInput(interaction, callback, {
-        message:
-          "Complete login in your browser, or paste the authorization code / redirect URL here:",
-        placeholder: redirectUri,
-      }),
-    );
+    const result = yield* waitForCallbackOrManualInput({
+      interaction,
+      callback,
+      message:
+        "Complete login in your browser, or paste the authorization code / redirect URL here:",
+      placeholder: redirectUri,
+    });
     if (result.type === "callback") {
       return { code: result.value, state: verifier };
     }
@@ -110,7 +111,7 @@ const loginAnthropic = (interaction: ProviderAuthInteraction): Effect.Effect<OAu
         redirectUri,
         signal: interaction.signal,
       });
-    }).pipe(Effect.ensuring(Effect.sync(() => callback?.close())));
+    }).pipe(Effect.ensuring(callback === undefined ? Effect.void : callback.close));
   });
 
 const loginAnthropicCopyCode = (
