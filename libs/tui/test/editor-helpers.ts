@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
+import type { AutocompleteProvider, AutocompleteSuggestions } from "../src/autocomplete-types.ts";
 import { Editor } from "../src/components/editor.ts";
 import { type TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
@@ -80,3 +81,28 @@ export const typeText: {
 } = dual(2, (target: { handleInput(data: string): void }, text: string): void => {
   for (const char of text) target.handleInput(char);
 });
+
+export interface SettlingProvider {
+  readonly provider: AutocompleteProvider;
+  readonly settled: Effect.Effect<void>;
+}
+
+export function settlingProvider(provider: AutocompleteProvider): SettlingProvider {
+  let pending: Promise<AutocompleteSuggestions | null> = Promise.resolve(null);
+  const tracked: AutocompleteProvider = {
+    ...(provider.triggerCharacters === undefined
+      ? {}
+      : { triggerCharacters: provider.triggerCharacters }),
+    getSuggestions: (lines, cursorLine, cursorCol, options) => {
+      pending = provider.getSuggestions(lines, cursorLine, cursorCol, options);
+      return pending;
+    },
+    applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
+      provider.applyCompletion(lines, cursorLine, cursorCol, item, prefix),
+  };
+  const settled = flushAutocomplete.pipe(
+    Effect.andThen(Effect.promise(() => pending)),
+    Effect.andThen(flushAutocomplete),
+  );
+  return { provider: tracked, settled };
+}

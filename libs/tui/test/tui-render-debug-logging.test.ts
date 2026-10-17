@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
+import { flushBackgroundFileWrites } from "../src/file-log.ts";
 import { type TUI, TuiMainScreen } from "../src/index.ts";
 import { pathOperations } from "../src/platform.ts";
 import { makeTempDirectory, readFileString, removeRecursive } from "./test-platform.ts";
@@ -25,6 +26,7 @@ describe("TUI debug logging", () => {
             component.lines = ["test"];
             tui.start();
             yield* Effect.promise(() => terminal.waitForRender());
+            yield* Effect.promise(flushBackgroundFileWrites);
 
             assert.match(
               yield* readFileString(pathOperations.join(logDir, "msa-tui-debug.log")),

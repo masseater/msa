@@ -1,5 +1,3 @@
-import { execSync } from "node:child_process";
-
 import type { TerminalColorMode } from "./colors.ts";
 import { isEnvSet, readEnv } from "./env.ts";
 
@@ -29,20 +27,31 @@ export function setCellDimensions(dims: CellDimensions): void {
   cellDimensions = dims;
 }
 
-function probeTmuxHyperlinks(): boolean {
-  try {
-    const termfeatures = execSync("tmux display-message -p '#{client_termfeatures}'", {
-      encoding: "utf8",
-      timeout: 250,
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    return termfeatures
-      .split(",")
-      .map((feature) => feature.trim())
-      .includes("hyperlinks");
-  } catch {
-    return false;
-  }
+let tmuxHyperlinkProbe: boolean | undefined;
+
+function probedTmuxHyperlinks(): boolean {
+  return tmuxHyperlinkProbe ?? false;
+}
+
+export function needsTmuxHyperlinkProbe(): boolean {
+  if (tmuxHyperlinkProbe !== undefined) return false;
+  let needed = false;
+  const hyperlinks = capabilityOverrides.hyperlinks;
+  detectCapabilities(
+    hyperlinks === undefined
+      ? () => {
+          needed = true;
+          return false;
+        }
+      : () => hyperlinks,
+  );
+  return needed;
+}
+
+export function setTmuxHyperlinkProbe(forwardsHyperlinks: boolean): void {
+  if (tmuxHyperlinkProbe === forwardsHyperlinks) return;
+  tmuxHyperlinkProbe = forwardsHyperlinks;
+  cachedCapabilities = null;
 }
 
 interface TerminalHints {
@@ -141,7 +150,7 @@ function parseBooleanCapabilityOverride(value: string | undefined): boolean | un
 }
 
 export function detectCapabilities(
-  tmuxForwardsHyperlink: () => boolean = probeTmuxHyperlinks,
+  tmuxForwardsHyperlink: () => boolean = probedTmuxHyperlinks,
 ): TerminalCapabilities {
   const hyperlinks = parseBooleanCapabilityOverride(readEnv("MSA_HYPERLINKS"));
   const detected = detectCapabilitiesFromEnvironment(

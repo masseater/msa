@@ -124,6 +124,7 @@ export {
   deleteKittyImage,
   encodeKitty,
 } from "./terminal-image-kitty.ts";
+export { primeTerminalCapabilities } from "./terminal-capabilities-probe.ts";
 export {
   type CellDimensions,
   detectCapabilities,
