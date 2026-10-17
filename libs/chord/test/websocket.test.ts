@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import type { IncomingMessage } from "node:http";
 
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -51,7 +50,7 @@ const servesABrowserStyleClientOver = Effect.gen(function* () {
     wss.once("listening", () => resume(Effect.void));
   });
   acceptWebSockets(wss as never, server, {
-    principal: (request: IncomingMessage) => {
+    principal: (request: { readonly url?: string | undefined }) => {
       const token = new URL(request.url ?? "/", "http://x").searchParams.get("token");
       return token === "ok" ? { guest: "web" } : undefined;
     },

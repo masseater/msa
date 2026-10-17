@@ -3,7 +3,7 @@ import { isProxy } from "node:util/types";
 import { dual } from "effect/Function";
 import { expect } from "vite-plus/test";
 
-import { apply, type Draft, type Op, track } from "../../src/delta/index.ts";
+import { apply, type Draft, type Op, type Tracker } from "../../src/delta/index.ts";
 
 export const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
@@ -29,10 +29,7 @@ export function expectAliasFree(value: unknown): void {
   visit(value, "$root");
 }
 
-function settleImpl<T extends object>(
-  tracker: ReturnType<typeof track<T>>,
-  mutate: (draft: Draft<T>) => void,
-): T {
+function settleImpl<T extends object>(tracker: Tracker<T>, mutate: (draft: Draft<T>) => void): T {
   const baseRoot = tracker.value;
   const base = clone(baseRoot);
   const change = tracker.beginChange();
@@ -54,9 +51,9 @@ export const replay: {
   <T>(base: T, operations: readonly Op[]): T;
 } = dual(2, replayImpl);
 
+type Mutation<T extends object> = (draft: Draft<T>) => void;
+
 export const settle: {
-  <T extends object>(
-    mutate: (draft: Draft<T>) => void,
-  ): (tracker: ReturnType<typeof track<T>>) => T;
-  <T extends object>(tracker: ReturnType<typeof track<T>>, mutate: (draft: Draft<T>) => void): T;
+  <T extends object>(mutate: Mutation<T>): (tracker: Tracker<T>) => T;
+  <T extends object>(tracker: Tracker<T>, mutate: Mutation<T>): T;
 } = dual(2, settleImpl);

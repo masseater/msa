@@ -1,3 +1,4 @@
+import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { applyImmutable, type Draft, type JsonValue, track } from "../src/delta/index.ts";
@@ -94,7 +95,7 @@ const rejectsNonStrictJsonPlacementsWithout = (): void => {
     change.state.number = Number.NaN;
   }).toThrow(/strict JSON/u);
   expect(() => {
-    change.state.payload = new Date() as unknown as JsonValue;
+    change.state.payload = DateTime.toDateUtc(DateTime.nowUnsafe()) as unknown as JsonValue;
   }).toThrow(/plain objects/u);
   expect(change.state).toEqual(tracker.value);
   change.abort();

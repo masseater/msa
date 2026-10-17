@@ -17,7 +17,7 @@ import {
   type ServeOptionsFor,
 } from "../src/index.ts";
 import { quiet } from "./fixtures/host.ts";
-import { tick } from "./fixtures/timing.ts";
+import { abortOf, tick } from "./fixtures/timing.ts";
 
 describe("host: lifetime", () => {
   const Store = local("t.store", {
@@ -104,6 +104,7 @@ describe("host: lifetime", () => {
 });
 
 const forcedDisposalMakesReferencesGoneAnd = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
   const host = quiet();
   let seenAbort = false;
   const Slow = local("t.inflight", {
@@ -113,11 +114,14 @@ const forcedDisposalMakesReferencesGoneAnd = Effect.gen(function* () {
   });
   host.serve(Slow, () => ({
     wait: (ctx) =>
-      new Promise<void>((resolve) =>
-        ctx.signal.addEventListener("abort", () => {
-          seenAbort = true;
-          resolve();
-        }),
+      Effect.runPromiseWith(services)(
+        abortOf(ctx.signal).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              seenAbort = true;
+            }),
+          ),
+        ),
       ),
   }));
   const ref = host.hold(Slow, {}, { principal: { user: "u" } });

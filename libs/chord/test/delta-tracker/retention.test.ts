@@ -1,7 +1,18 @@
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
+
+import { runNode } from "../fixtures/platform.ts";
+
+const validatesRetention = (scenario: string) =>
+  Effect.gen(function* () {
+    const child = yield* runNode(
+      ["--expose-gc", fileURLToPath(new URL("./retention.worker.ts", import.meta.url)), scenario],
+      "60 seconds",
+    );
+    expect(child.status, `${child.stdout}\n${child.stderr}`).toBe(0);
+  });
 
 describe("delta tracker retention across GC jobs", () => {
   it.each([
@@ -21,15 +32,7 @@ describe("delta tracker retention across GC jobs", () => {
     "lifecycle-churn",
   ])(
     "validates %s retention semantics",
-    (scenario) => {
-      const child = spawnSync(
-        process.execPath,
-        ["--expose-gc", fileURLToPath(new URL("./retention.worker.ts", import.meta.url)), scenario],
-        { encoding: "utf8", timeout: 60_000 },
-      );
-      expect(child.error, child.stderr).toBeUndefined();
-      expect(child.status, `${child.stdout}\n${child.stderr}`).toBe(0);
-    },
+    (scenario) => Effect.runPromise(validatesRetention(scenario)),
     65_000,
   );
 });

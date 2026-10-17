@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
+import { Effect } from "effect";
 import { it } from "vite-plus/test";
 
-const tutorial = readFileSync(new URL("../docs/tutorial.md", import.meta.url), "utf8");
+import { readText } from "./fixtures/platform.ts";
+
+const readSibling = (path: string): Promise<string> =>
+  Effect.runPromise(readText(fileURLToPath(new URL(path, import.meta.url))));
+
+const tutorial = await readSibling("../docs/tutorial.md");
 const printed = [...tutorial.matchAll(/<!-- example:([\w-]+) -->\n+```ts\n([\s\S]*?)\n```/gu)];
 function normalize(text: string): string {
   const tokens = (
@@ -16,9 +22,7 @@ function normalize(text: string): string {
     .filter((token, index) => !(token === "," && closers.has(tokens[index + 1] ?? "")))
     .join(" ");
 }
-const runnable = ` ${normalize(
-  readFileSync(new URL("tutorial.test.ts", import.meta.url), "utf8"),
-)} `;
+const runnable = ` ${normalize(await readSibling("tutorial.test.ts"))} `;
 it("every TypeScript example in the tutorial is tracked under its own name", () => {
   assert.equal(new Set(printed.map((entry) => entry[1])).size, printed.length);
   assert.equal((tutorial.match(/```ts\n/gu) ?? []).length, printed.length);

@@ -61,7 +61,7 @@ function cluster(options: { readonly delay?: number; readonly readyTimeout?: num
   const admit = () =>
     server.accept(down, { principal: { kind: "worker" }, kind: "host", name: "w" });
   if (options.delay === undefined) admit();
-  else setTimeout(admit, options.delay);
+  else Effect.runFork(Effect.delay(Effect.sync(admit), options.delay));
   const browser = () => {
     const [down2, up2] = memoryLinkPair();
     server.accept(down2, { principal: { user: "u" } });

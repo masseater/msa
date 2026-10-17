@@ -1,3 +1,4 @@
+import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -216,7 +217,9 @@ const acceptsDecodedOperationsAndRejectsWire = (): void => {
 
 const doesNotRecursivelyInspectOperationPayloads = (): void => {
   expect(() => assertValidOp(["s", ["value"], new Map()] as never)).not.toThrow();
-  expect(() => assertValidWireOp(["r", new Date()] as never)).not.toThrow();
+  expect(() =>
+    assertValidWireOp(["r", DateTime.toDateUtc(DateTime.nowUnsafe())] as never),
+  ).not.toThrow();
 };
 
 describe("operation assertions", () => {

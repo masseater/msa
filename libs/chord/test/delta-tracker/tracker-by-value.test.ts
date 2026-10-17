@@ -1,3 +1,4 @@
+import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { type JsonValue, track } from "../../src/delta/index.ts";
@@ -68,7 +69,7 @@ const rejectsNonStrictJsonPlacementsBefore = (): void => {
     change.state.number = Number.POSITIVE_INFINITY;
   }).toThrow(/strict JSON/u);
   expect(() => {
-    change.state.payload = new Date() as unknown as JsonValue;
+    change.state.payload = DateTime.toDateUtc(DateTime.nowUnsafe()) as unknown as JsonValue;
   }).toThrow(/plain objects/u);
 
   const sparse: JsonValue[] = new Array<JsonValue>(1);

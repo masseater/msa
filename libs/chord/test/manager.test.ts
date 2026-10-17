@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Effect } from "effect";
@@ -17,10 +15,11 @@ import {
   processLock,
 } from "../src/manager.ts";
 import { Echo } from "./fixtures/echo.ts";
+import { makeDirectory, readText, removeAll } from "./fixtures/platform.ts";
 import { latch, tick } from "./fixtures/timing.ts";
 
 const entry = fileURLToPath(new URL("./fixtures/worker.ts", import.meta.url));
-const scratch = (name: string) => join(tmpdir(), `chord2-${process.pid}-${name}`);
+const scratch = (name: string) => `${tmpdir()}/chord2-${process.pid}-${name}`;
 
 const alive = (pid: number): boolean => {
   try {
@@ -35,8 +34,8 @@ const driver = (env: Record<string, string> = {}, lock?: string): Driver =>
   forkDriver({ entry, env: { HOST_NAME: "w1", ...env }, init: { greeting: "hi" }, lock });
 
 const admitsOneHolderWhenTheTemporary = Effect.gen(function* () {
-  const deep = join(scratch("deep"), "a".repeat(60), "b".repeat(60));
-  mkdirSync(deep, { recursive: true });
+  const deep = `${scratch("deep")}/${"a".repeat(60)}/${"b".repeat(60)}`;
+  yield* makeDirectory(deep);
   vi.stubEnv("TMPDIR", deep);
   yield* Effect.gen(function* () {
     const name = `deep-${process.pid}`;
@@ -54,8 +53,7 @@ const admitsOneHolderWhenTheTemporary = Effect.gen(function* () {
     Effect.ensuring(
       Effect.sync(() => {
         vi.unstubAllEnvs();
-        rmSync(scratch("deep"), { recursive: true, force: true });
-      }),
+      }).pipe(Effect.andThen(removeAll(scratch("deep")))),
     ),
   );
 });
@@ -129,15 +127,15 @@ const aChildOwnedKernelLockAdmits = Effect.gen(function* () {
 
 const aGracefulExitStillTakesThe = Effect.gen(function* () {
   const file = scratch("grandchild-graceful");
-  rmSync(file, { force: true });
+  yield* removeAll(file);
   const manager = createHostManager({ driver: driver({ GRANDCHILD_FILE: file }) });
   yield* Effect.promise(() => manager.start());
-  const grandchild = Number(readFileSync(file, "utf8"));
+  const grandchild = Number(yield* readText(file));
   assert.ok(alive(grandchild));
   yield* Effect.promise(() => manager.stop());
   for (let i = 0; i < 50 && alive(grandchild); i++) yield* Effect.sleep(20);
   assert.ok(!alive(grandchild));
-  rmSync(file, { force: true });
+  yield* removeAll(file);
 });
 
 const idleforCountsFromTheBusyIdle = Effect.gen(function* () {
@@ -174,19 +172,19 @@ const idleforCountsFromTheBusyIdle = Effect.gen(function* () {
 
 const killsTheProcessTreeWhenA = Effect.gen(function* () {
   const file = scratch("grandchild");
-  rmSync(file, { force: true });
+  yield* removeAll(file);
   const manager = createHostManager({
     driver: driver({ FIXTURE_MODE: "ignore-shutdown", GRANDCHILD_FILE: file }),
     grace: 300,
   });
   const instance = yield* Effect.promise(() => manager.start());
-  const grandchild = Number(readFileSync(file, "utf8"));
+  const grandchild = Number(yield* readText(file));
   assert.ok(alive(grandchild));
   yield* Effect.promise(() => manager.stop());
   assert.equal((yield* Effect.promise(() => instance.exited)).signal, "SIGKILL");
   for (let i = 0; i < 50 && alive(grandchild); i++) yield* Effect.sleep(20);
   assert.ok(!alive(grandchild));
-  rmSync(file, { force: true });
+  yield* removeAll(file);
 });
 
 const reportsAFatalChildAsA = Effect.gen(function* () {
