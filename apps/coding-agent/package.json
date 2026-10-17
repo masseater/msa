@@ -26,7 +26,8 @@
     "examples",
     "schemas",
     "containerization.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "LICENSES"
   ],
   "type": "module",
   "main": "./dist/index.js",
