@@ -86,27 +86,30 @@ class Host extends Context.Service<Host, HostShape>()("msa-monorepo/scripts/host
 
 const outputOption = (mode: OutputMode | undefined) => ({ stream: mode ?? "pipe" });
 
+const stdinOption = (mode: CommandOptions["stdin"], input: Queue.Queue<string, Cause.Done>) =>
+  mode === "pipe"
+    ? { stream: Stream.fromQueue(input).pipe(Stream.encodeText), endOnDone: true }
+    : { stream: mode ?? "ignore" };
+
+const processOptions = (options: CommandOptions, input: Queue.Queue<string, Cause.Done>) => ({
+  cwd: options.cwd,
+  env: options.env === undefined ? undefined : { ...options.env },
+  extendEnv: options.extendEnv ?? true,
+  shell: options.shell ?? false,
+  stdin: stdinOption(options.stdin, input),
+  stdout: outputOption(options.stdout),
+  stderr: outputOption(options.stderr),
+});
+
 const makeSpawn = Effect.gen(function* () {
   // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess/FileSystem/Path (effect/unstable) are the only Effect platform APIs
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   return (options: CommandOptions): Effect.Effect<RunningCommand, never, Scope.Scope> =>
     Effect.gen(function* () {
       const input = yield* Queue.unbounded<string, Cause.Done>();
-      const stdin =
-        options.stdin === "pipe"
-          ? { stream: Stream.fromQueue(input).pipe(Stream.encodeText), endOnDone: true }
-          : { stream: options.stdin ?? "ignore" };
       const handle = yield* spawner.spawn(
         // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess/FileSystem/Path (effect/unstable) are the only Effect platform APIs
-        ChildProcess.make(options.command, options.args, {
-          cwd: options.cwd,
-          env: options.env === undefined ? undefined : { ...options.env },
-          extendEnv: options.extendEnv ?? true,
-          shell: options.shell ?? false,
-          stdin,
-          stdout: outputOption(options.stdout),
-          stderr: outputOption(options.stderr),
-        }),
+        ChildProcess.make(options.command, options.args, processOptions(options, input)),
       );
       return {
         endInput: Queue.end(input).pipe(Effect.asVoid),
