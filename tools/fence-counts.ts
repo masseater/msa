@@ -1,8 +1,8 @@
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import getExePath from "@effect/tsgo/lib/getExePath";
-import { Console, Data, DateTime, Effect, FileSystem, Path, Schema } from "effect";
+import { Console, Data, DateTime, Effect, FileSystem, Layer, Path, Schema } from "effect";
 
-import { captureProcess } from "./capture-process.ts";
+import { captureProcess, processRunnerLayer } from "./capture-process.ts";
 
 const FLAGS: ReadonlyArray<Readonly<{ flag: string; enabled: boolean }>> = [
   { flag: "exactOptionalPropertyTypes", enabled: true },
@@ -81,7 +81,7 @@ const writeFlagConfig = (context: FenceContext, flag: string, enabled: boolean) 
         "../../*.ts",
         "../../tools/**",
         "../../**/dist/**",
-        "../../packages/coding-agent/examples/extensions/gondolin/**",
+        "../../apps/coding-agent/examples/extensions/gondolin/**",
       ],
     });
     yield* context.fs.writeFileString(configPath, `${content}\n`);
@@ -168,5 +168,8 @@ const program = Effect.gen(function* () {
   yield* compareWithBaseline(context, counts);
 });
 
+// oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
+const mainLayer = Layer.mergeAll(NodeServices.layer, processRunnerLayer);
+
 // oxlint-disable-next-line effecttsgo/unstable-api-usage, effecttsgo/strict-effect-provide -- application entry point on pre-GA v4 platform APIs
-NodeRuntime.runMain(program.pipe(Effect.provide(NodeServices.layer)));
+NodeRuntime.runMain(program.pipe(Effect.provide(mainLayer)));

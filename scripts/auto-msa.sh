@@ -65,7 +65,7 @@ if [[ "$use_stable" == true ]]; then
 	exec "$stable_msa" ${args[@]+"${args[@]}"}
 fi
 
-dev_msa="$repo_dir/packages/coding-agent/dist/bundle/cli.js"
+dev_msa="$repo_dir/apps/coding-agent/dist/bundle/cli.js"
 if [[ ! -x "$dev_msa" ]]; then
 	echo "error: development msa build not found; run \`npm run build\` in $repo_dir" >&2
 	exit 1

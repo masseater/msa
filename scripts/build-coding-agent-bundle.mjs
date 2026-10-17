@@ -9,12 +9,12 @@ import { build } from "esbuild";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
-const codingAgentDir = join(repoRoot, "packages", "coding-agent");
-const aiDistDir = join(repoRoot, "packages", "ai", "dist");
-// https-proxy-agent is declared by packages/ai. Resolve it from there instead of the repo root so the
+const codingAgentDir = join(repoRoot, "apps", "coding-agent");
+const aiDistDir = join(repoRoot, "libs", "ai", "dist");
+// https-proxy-agent is declared by libs/ai. Resolve it from there instead of the repo root so the
 // bundle works with pnpm's isolated node_modules, where the root has no hoisted copy.
 const httpsProxyAgentDir = dirname(
-  createRequire(join(repoRoot, "packages", "ai", "package.json")).resolve("https-proxy-agent"),
+  createRequire(join(repoRoot, "libs", "ai", "package.json")).resolve("https-proxy-agent"),
 );
 const codingAgentDistDir = join(codingAgentDir, "dist");
 const bundleDir = join(codingAgentDistDir, "bundle");
@@ -189,20 +189,17 @@ const mainResult = await build({
 
 const bedrockLoaderOutput = findContainingOutput(
   mainResult.metafile,
-  "packages/ai/dist/api/bedrock-converse-stream.lazy.js",
+  "libs/ai/dist/api/bedrock-converse-stream.lazy.js",
 );
 const oauthLoaderOutput = findContainingOutput(
   mainResult.metafile,
-  "packages/ai/dist/auth/oauth/load.js",
+  "libs/ai/dist/auth/oauth/load.js",
 );
 const imageResizeOutput = findContainingOutput(
   mainResult.metafile,
-  "packages/coding-agent/dist/utils/image-resize.js",
+  "apps/coding-agent/dist/utils/image-resize.js",
 );
-const configOutput = findContainingOutput(
-  mainResult.metafile,
-  "packages/coding-agent/dist/config.js",
-);
+const configOutput = findContainingOutput(mainResult.metafile, "apps/coding-agent/dist/config.js");
 if (dirname(bedrockLoaderOutput) !== dirname(oauthLoaderOutput)) {
   throw new Error("Bedrock and OAuth lazy loaders were emitted into different directories");
 }
@@ -227,7 +224,7 @@ const lazyEntryPoints = {
 // Every OAuth flow loaded through importOAuthModule() must have a lazy entry,
 // otherwise the flow fails at runtime with a missing module error.
 const oauthLoadSource = readFileSync(
-  join(repoRoot, "packages", "ai", "src", "auth", "oauth", "load.ts"),
+  join(repoRoot, "libs", "ai", "src", "auth", "oauth", "load.ts"),
   "utf8",
 );
 for (const match of oauthLoadSource.matchAll(/importOAuthModule\("\.\/([^"]+)\.ts"\)/g)) {

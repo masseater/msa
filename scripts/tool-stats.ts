@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { openBrowser } from "../packages/coding-agent/src/utils/open-browser.ts";
+import { openBrowser } from "../apps/coding-agent/src/utils/open-browser.ts";
 
 interface TextContent {
   type: "text";

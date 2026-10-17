@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "paths": {
+      "@msa/agent-core": ["../../libs/agent/dist/index.d.ts"],
+      "@msa/agent-core/*": ["../../libs/agent/dist/*.d.ts"],
+      "@msa/ai": ["../../libs/ai/dist/index.d.ts"],
+      "@msa/ai/*": ["../../libs/ai/dist/*.d.ts", "../../libs/ai/dist/providers/*.d.ts"],
+      "@msa/tui": ["../../libs/tui/dist/index.d.ts"],
+      "@msa/tui/*": ["../../libs/tui/dist/*.d.ts", "../../libs/tui/dist/components/*.d.ts"]
+    },
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts"],
+  "exclude": ["node_modules", "dist", "src/experimental"]
+}

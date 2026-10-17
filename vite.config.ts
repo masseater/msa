@@ -15,31 +15,31 @@ const effectRules = asErrors(
 );
 
 export const workspaceSourcePaths = {
-  chordIndex: fileURLToPath(new URL("./packages/chord/src/index.ts", import.meta.url)),
-  chordContext: fileURLToPath(new URL("./packages/chord/src/context/index.ts", import.meta.url)),
-  chordDelta: fileURLToPath(new URL("./packages/chord/src/delta/index.ts", import.meta.url)),
-  chordNode: fileURLToPath(new URL("./packages/chord/src/node.ts", import.meta.url)),
-  telemetryIndex: fileURLToPath(new URL("./packages/telemetry/src/index.ts", import.meta.url)),
+  chordIndex: fileURLToPath(new URL("./libs/chord/src/index.ts", import.meta.url)),
+  chordContext: fileURLToPath(new URL("./libs/chord/src/context/index.ts", import.meta.url)),
+  chordDelta: fileURLToPath(new URL("./libs/chord/src/delta/index.ts", import.meta.url)),
+  chordNode: fileURLToPath(new URL("./libs/chord/src/node.ts", import.meta.url)),
+  telemetryIndex: fileURLToPath(new URL("./libs/telemetry/src/index.ts", import.meta.url)),
   telemetryTesting: fileURLToPath(
-    new URL("./packages/telemetry/src/testing/index.ts", import.meta.url),
+    new URL("./libs/telemetry/src/testing/index.ts", import.meta.url),
   ),
-  mcpIndex: fileURLToPath(new URL("./packages/mcp/src/index.ts", import.meta.url)),
-  mcpOAuth: fileURLToPath(new URL("./packages/mcp/src/oauth/index.ts", import.meta.url)),
-  mcpTesting: fileURLToPath(new URL("./packages/mcp/src/testing/index.ts", import.meta.url)),
-  aiIndex: fileURLToPath(new URL("./packages/ai/src/index.ts", import.meta.url)),
-  aiCompat: fileURLToPath(new URL("./packages/ai/src/compat.ts", import.meta.url)),
-  aiOAuth: fileURLToPath(new URL("./packages/ai/src/oauth.ts", import.meta.url)),
-  aiApi: fileURLToPath(new URL("./packages/ai/src/api", import.meta.url)),
-  aiProviders: fileURLToPath(new URL("./packages/ai/src/providers", import.meta.url)),
-  aiUtils: fileURLToPath(new URL("./packages/ai/src/utils", import.meta.url)),
-  agentIndex: fileURLToPath(new URL("./packages/agent/src/index.ts", import.meta.url)),
-  codemodeIndex: fileURLToPath(new URL("./packages/codemode/src/index.ts", import.meta.url)),
+  mcpIndex: fileURLToPath(new URL("./libs/mcp/src/index.ts", import.meta.url)),
+  mcpOAuth: fileURLToPath(new URL("./libs/mcp/src/oauth/index.ts", import.meta.url)),
+  mcpTesting: fileURLToPath(new URL("./libs/mcp/src/testing/index.ts", import.meta.url)),
+  aiIndex: fileURLToPath(new URL("./libs/ai/src/index.ts", import.meta.url)),
+  aiCompat: fileURLToPath(new URL("./libs/ai/src/compat.ts", import.meta.url)),
+  aiOAuth: fileURLToPath(new URL("./libs/ai/src/oauth.ts", import.meta.url)),
+  aiApi: fileURLToPath(new URL("./libs/ai/src/api", import.meta.url)),
+  aiProviders: fileURLToPath(new URL("./libs/ai/src/providers", import.meta.url)),
+  aiUtils: fileURLToPath(new URL("./libs/ai/src/utils", import.meta.url)),
+  agentIndex: fileURLToPath(new URL("./libs/agent/src/index.ts", import.meta.url)),
+  codemodeIndex: fileURLToPath(new URL("./libs/codemode/src/index.ts", import.meta.url)),
   codemodeDeclarations: fileURLToPath(
-    new URL("./packages/codemode/src/declarations.ts", import.meta.url),
+    new URL("./libs/codemode/src/declarations.ts", import.meta.url),
   ),
-  codemodeSource: fileURLToPath(new URL("./packages/codemode/src/source.ts", import.meta.url)),
-  codingAgentIndex: fileURLToPath(new URL("./packages/coding-agent/src/index.ts", import.meta.url)),
-  tuiIndex: fileURLToPath(new URL("./packages/tui/src/index.ts", import.meta.url)),
+  codemodeSource: fileURLToPath(new URL("./libs/codemode/src/source.ts", import.meta.url)),
+  codingAgentIndex: fileURLToPath(new URL("./apps/coding-agent/src/index.ts", import.meta.url)),
+  tuiIndex: fileURLToPath(new URL("./libs/tui/src/index.ts", import.meta.url)),
 } as const;
 
 export const testBaseConfig = {
@@ -143,6 +143,7 @@ export default defineConfig({
         command: "vp check",
         dependsOn: [
           "engine-checks",
+          "workspace-layout",
           "fence-check",
           "syncpack",
           "actions-lint",
@@ -157,6 +158,7 @@ export default defineConfig({
           "node scripts/check-ts-relative-imports.mjs && node scripts/check-entry-graphs.mjs && node scripts/check-browser-smoke.mjs",
       },
       "fence-check": "node tools/fence-counts.ts",
+      "workspace-layout": "node tools/workspace-layout.ts",
       "actions-lint": {
         command:
           'uvx --from actionlint-py@1.7.12.25 actionlint && uvx zizmor@1.30.1 $(test -n "$CLAUDE_CODE_REMOTE" && echo --no-online-audits) .github && ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows',
@@ -173,7 +175,7 @@ export default defineConfig({
         },
       },
       "mcp-conformance": {
-        command: "node packages/coding-agent/test/mcp-conformance/run.ts",
+        command: "node apps/coding-agent/test/mcp-conformance/run.ts",
         cache: false,
       },
       "fallow-all": "vp run -r fallow",

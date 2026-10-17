@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync } from "node:fs";
 
-import { createBashTool } from "../packages/coding-agent/src/core/tools/bash.ts";
+import { createBashTool } from "../apps/coding-agent/src/core/tools/bash.ts";
 
 const shellPath = "C:\\Windows\\System32\\bash.exe";
 const nameExpansion = "$" + "{name}";

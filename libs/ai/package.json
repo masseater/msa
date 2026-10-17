@@ -1,0 +1,106 @@
+{
+  "name": "@msa/ai",
+  "version": "0.0.2",
+  "description": "Unified LLM API with automatic model discovery and provider configuration",
+  "keywords": [
+    "ai",
+    "anthropic",
+    "api",
+    "bedrock",
+    "gemini",
+    "llm",
+    "openai",
+    "unified"
+  ],
+  "license": "MIT",
+  "author": "Mario Zechner",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/masseater/msa.git",
+    "directory": "libs/ai"
+  },
+  "bin": {
+    "msa-ai": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "./dist/compat.js",
+    "./dist/images.js",
+    "./dist/providers/images/register-builtins.js"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./models": {
+      "types": "./dist/models.d.ts",
+      "import": "./dist/models.js"
+    },
+    "./compat": {
+      "types": "./dist/compat.d.ts",
+      "import": "./dist/compat.js"
+    },
+    "./providers/*": {
+      "types": "./dist/providers/*.d.ts",
+      "import": "./dist/providers/*.js"
+    },
+    "./api/*": {
+      "types": "./dist/api/*.d.ts",
+      "import": "./dist/api/*.js"
+    },
+    "./utils/*": {
+      "types": "./dist/utils/*.d.ts",
+      "import": "./dist/utils/*.js"
+    },
+    "./oauth": {
+      "types": "./dist/oauth.d.ts",
+      "import": "./dist/oauth.js"
+    },
+    "./bedrock-provider": {
+      "types": "./dist/bedrock-provider.d.ts",
+      "import": "./dist/bedrock-provider.js"
+    },
+    "./bun-oauth": {
+      "types": "./dist/bun-oauth.d.ts",
+      "import": "./dist/bun-oauth.js"
+    }
+  },
+  "scripts": {
+    "clean": "shx rm -rf dist",
+    "generate-models": "node scripts/generate-models.ts --strict",
+    "hydrate-model-data": "node scripts/generate-models.ts --strict --data-only",
+    "generate-model-catalog": "node scripts/generate-models.ts --strict --json-only --json-output ../../.artifacts/model-catalog",
+    "check:model-data": "node scripts/check-model-data.ts",
+    "build": "vp run generate-models && vp run build:offline",
+    "build:offline": "vp run check:model-data && tsc -p tsconfig.build.json && shx rm -rf dist/providers/data && shx cp -r src/providers/data dist/providers/data",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "catalog:",
+    "@aws-sdk/client-bedrock-runtime": "catalog:",
+    "@google/genai": "catalog:",
+    "@msa/telemetry": "workspace:*",
+    "@smithy/node-http-handler": "catalog:",
+    "@smithy/types": "4.19.0",
+    "http-proxy-agent": "catalog:",
+    "https-proxy-agent": "catalog:",
+    "openai": "catalog:",
+    "partial-json": "catalog:",
+    "typebox": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "canvas": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}
