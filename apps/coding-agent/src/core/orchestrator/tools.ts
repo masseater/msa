@@ -58,13 +58,14 @@ function tool<TParams extends TSchema>(
   },
 ): ToolDefinition {
   const { run, ...rest } = definition;
-  return {
+  const typed: ToolDefinition<TParams, undefined> = {
     ...rest,
     defaultActive: false,
     async execute(_toolCallId, params) {
       return text(await run(params));
     },
-  } as ToolDefinition;
+  };
+  return typed as ToolDefinition;
 }
 
 export function createOrchestratorToolDefinitions(

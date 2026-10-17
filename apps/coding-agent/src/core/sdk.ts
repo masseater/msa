@@ -527,7 +527,8 @@ export async function createAgentSession(
               resourceLoader: workerResourceLoader,
               model: worker.model,
               thinkingLevel: worker.thinkingLevel,
-              tools: workerTools?.length ? workerTools : undefined,
+              // An emptied allowlist still means no tools; emptied +/- entries mean the defaults.
+              tools: workerTools?.length === 0 && toolModifiers ? undefined : workerTools,
               excludeTools: [...(options.excludeTools ?? []), ...ORCHESTRATOR_TOOL_NAMES],
               noTools: options.noTools,
               sessionManager: worker.sessionFile
