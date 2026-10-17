@@ -305,6 +305,9 @@ export class SettingsList implements Component {
       const currentIndex = item.values.indexOf(item.currentValue);
       const nextIndex = (currentIndex + 1) % item.values.length;
       const newValue = item.values[nextIndex];
+      if (newValue === undefined) {
+        throw new Error(`Setting ${item.id} has no value at ${nextIndex}`);
+      }
       item.currentValue = newValue;
       this.onChange(item.id, newValue);
     }

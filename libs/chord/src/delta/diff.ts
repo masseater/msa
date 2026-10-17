@@ -144,8 +144,7 @@ const semanticallyAligned = (left: JsonValue, right: JsonValue): boolean => {
   }
   const leftObject = left as Record<string, JsonValue>;
   const rightObject = right as Record<string, JsonValue>;
-  for (const key of Object.keys(leftObject)) {
-    const value = leftObject[key];
+  for (const [key, value] of Object.entries(leftObject)) {
     if (isContainer(value) && Object.hasOwn(rightObject, key) && value === rightObject[key])
       return true;
   }

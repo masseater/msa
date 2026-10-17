@@ -64,14 +64,15 @@ describe("durable SQLite migrations", () => {
   it("rolls initial bootstrap and every pending migration back together", async () => {
     const database = await openNodeSqliteDatabase(await databasePath());
     try {
+      const first: SqliteMigration = {
+        version: 1,
+        statements: [
+          "CREATE TABLE migration_first (value TEXT) STRICT",
+          "INSERT INTO migration_first (value) VALUES ('retained')",
+        ],
+      };
       const failed: readonly SqliteMigration[] = [
-        {
-          version: 1,
-          statements: [
-            "CREATE TABLE migration_first (value TEXT) STRICT",
-            "INSERT INTO migration_first (value) VALUES ('retained')",
-          ],
-        },
+        first,
         {
           version: 2,
           statements: ["CREATE TABLE migration_second (value TEXT) STRICT", "THIS IS NOT SQL"],
@@ -85,7 +86,7 @@ describe("durable SQLite migrations", () => {
       ).toEqual({ count: 0 });
 
       await applySqliteMigrations(database, [
-        failed[0],
+        first,
         { version: 2, statements: ["CREATE TABLE migration_second (value TEXT) STRICT"] },
       ]);
       expect(await database.get("SELECT version FROM durable_schema WHERE singleton = 1")).toEqual({

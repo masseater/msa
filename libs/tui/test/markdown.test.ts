@@ -267,15 +267,15 @@ describe("Markdown component", () => {
 
       // Check the actual numbers
       assert.ok(
-        numberedLines[0].startsWith("1."),
+        numberedLines[0]?.startsWith("1."),
         `First item should be "1.", got: ${numberedLines[0]}`,
       );
       assert.ok(
-        numberedLines[1].startsWith("2."),
+        numberedLines[1]?.startsWith("2."),
         `Second item should be "2.", got: ${numberedLines[1]}`,
       );
       assert.ok(
-        numberedLines[2].startsWith("3."),
+        numberedLines[2]?.startsWith("3."),
         `Third item should be "3.", got: ${numberedLines[2]}`,
       );
     });
@@ -537,6 +537,7 @@ describe("Markdown component", () => {
               `Missing wrapped table row: ${JSON.stringify(viewport)}`,
             );
             const line = viewport[row];
+            assert.ok(line !== undefined);
             const linkCol = line.indexOf("one");
             const separatorCol = line.indexOf("│", linkCol);
             const plainCol = line.indexOf("norm");
@@ -556,6 +557,7 @@ describe("Markdown component", () => {
                 `Missing fallback URL row: ${JSON.stringify(viewport)}`,
               );
               const urlLine = viewport[urlRow];
+              assert.ok(urlLine !== undefined);
               const urlCol = urlLine.indexOf("https");
               const urlSeparatorCol = urlLine.indexOf("│", urlCol);
               const urlBorderCol = urlLine.lastIndexOf("│");
@@ -601,6 +603,7 @@ describe("Markdown component", () => {
           `Missing wrapped blockquote table row: ${JSON.stringify(viewport)}`,
         );
         const line = viewport[row];
+        assert.ok(line !== undefined);
         const linkCol = line.indexOf("one");
         const separatorCol = line.indexOf("│", linkCol);
         const plainCol = line.indexOf("normal");
@@ -617,6 +620,7 @@ describe("Markdown component", () => {
           `Missing final wrapped link row: ${JSON.stringify(viewport)}`,
         );
         const finalLine = viewport[finalRow];
+        assert.ok(finalLine !== undefined);
         const finalLinkCol = finalLine.indexOf("five six");
         const finalSeparatorCol = finalLine.indexOf("│", finalLinkCol);
         const finalBorderCol = finalLine.lastIndexOf("│");

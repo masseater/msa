@@ -442,12 +442,13 @@ export function getKittyImagePlacementRows(line: string): number | undefined {
 /** Build a placement-only command for an image line emitted by {@link renderImage}. */
 export function getKittyImagePlacement(line: string): KittyImagePlacement | undefined {
   const match = /\x1b_G([^;]*);/.exec(line);
-  if (!match) return undefined;
-  const metadata = getRegisteredKittyImageMetadataFromControls(match[1]);
+  const imageControls = match?.[1];
+  if (!match || imageControls === undefined) return undefined;
+  const metadata = getRegisteredKittyImageMetadataFromControls(imageControls);
   if (!metadata) return undefined;
 
   let commandStart = match.index;
-  let commandControls = match[1];
+  let commandControls = imageControls;
   let transmissionEnd: number;
   while (true) {
     const terminator = line.indexOf("\x1b\\", commandStart + KITTY_PREFIX.length);
@@ -461,7 +462,7 @@ export function getKittyImagePlacement(line: string): KittyImagePlacement | unde
     commandControls = line.slice(commandStart + KITTY_PREFIX.length, controlsEnd);
   }
 
-  const controls = match[1]
+  const controls = imageControls
     .split(",")
     .filter((control) => KITTY_PLACEMENT_CONTROL_KEYS.has(control.split("=", 1)[0] ?? ""));
   const sequence = `\x1b_Ga=p,q=2,${controls.join(",")}\x1b\\`;
@@ -470,7 +471,7 @@ export function getKittyImagePlacement(line: string): KittyImagePlacement | unde
     transmissionGeneration: metadata.transmissionGeneration,
     transmissionBytes: transmissionEnd - match.index,
     estimatedDecodedBytes: metadata.widthPx * metadata.heightPx * 4,
-    rows: getKittyImageRowsFromControls(match[1], metadata.rows),
+    rows: getKittyImageRowsFromControls(imageControls, metadata.rows),
     sequence,
     replacementLine: `${line.slice(0, match.index)}${sequence}${line.slice(transmissionEnd)}`,
   };
@@ -479,14 +480,22 @@ export function getKittyImagePlacement(line: string): KittyImagePlacement | unde
 export function cropKittyImageLine(line: string, hiddenRows: number, visibleRows: number): string {
   const metadata = getKittyImageMetadata(line);
   const match = /\x1b_G([^;]*);/.exec(line);
-  if (!metadata || !match || hiddenRows < 0 || hiddenRows >= metadata.rows || visibleRows <= 0)
+  const imageControls = match?.[1];
+  if (
+    !metadata ||
+    !match ||
+    imageControls === undefined ||
+    hiddenRows < 0 ||
+    hiddenRows >= metadata.rows ||
+    visibleRows <= 0
+  )
     return line;
   const croppedRows = Math.min(visibleRows, metadata.rows - hiddenRows);
   if (hiddenRows === 0 && croppedRows === metadata.rows) return line;
   const sourceY = Math.floor((metadata.heightPx * hiddenRows) / metadata.rows);
   const sourceEnd = Math.ceil((metadata.heightPx * (hiddenRows + croppedRows)) / metadata.rows);
   const sourceHeight = Math.max(1, Math.min(metadata.heightPx, sourceEnd) - sourceY);
-  const controls = match[1].split(",").filter((control) => !/^[yhr]=/.test(control));
+  const controls = imageControls.split(",").filter((control) => !/^[yhr]=/.test(control));
   controls.push(`y=${sourceY}`, `h=${sourceHeight}`, `r=${croppedRows}`);
   return `${line.slice(0, match.index)}\x1b_G${controls.join(",")};${line.slice(match.index + match[0].length)}`;
 }
@@ -592,7 +601,7 @@ export function getJpegDimensions(base64Data: string): ImageDimensions | null {
         continue;
       }
 
-      const marker = buffer[offset + 1];
+      const marker = buffer.readUInt8(offset + 1);
 
       if (marker >= 0xc0 && marker <= 0xc2) {
         const height = buffer.readUInt16BE(offset + 5);
@@ -666,8 +675,8 @@ export function getWebpDimensions(base64Data: string): ImageDimensions | null {
       return { widthPx: width, heightPx: height };
     } else if (chunk === "VP8X") {
       if (buffer.length < 30) return null;
-      const width = (buffer[24] | (buffer[25] << 8) | (buffer[26] << 16)) + 1;
-      const height = (buffer[27] | (buffer[28] << 8) | (buffer[29] << 16)) + 1;
+      const width = buffer.readUIntLE(24, 3) + 1;
+      const height = buffer.readUIntLE(27, 3) + 1;
       return { widthPx: width, heightPx: height };
     }
 

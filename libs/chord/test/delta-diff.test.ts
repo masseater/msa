@@ -113,7 +113,7 @@ describe("immutable revision diff", () => {
   });
 
   it("emits payload-free splices for scattered removals", () => {
-    const [a, b, c, d, e] = ["a", "b", "c", "d", "e"].map((id) => ({ id }));
+    const [a, b, c, d, e] = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }, { id: "e" }];
     expectDiff({ values: [a, b, c, d, e] }, { values: [a, c, e] }, [
       ["p", ["values"], 1, 1, []],
       ["p", ["values"], 2, 1, []],

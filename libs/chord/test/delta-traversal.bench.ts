@@ -71,13 +71,21 @@ function setup(mode: Mode, input: Drawing): { state: Drawing; finish(): void } {
 function prepare(mode: Mode, strokes: number, points: number) {
   return setup(mode, fixture(strokes, points));
 }
+function argumentAfter(index: number, flag: string): string {
+  const value = process.argv[index + 1];
+  if (value === undefined) throw new Error(`${flag} needs a value`);
+  return value;
+}
 function traverse(state: Drawing): number {
   let sum = 0;
   const strokes = state.strokes;
   for (let s = 0; s < strokes.length; s++) {
-    const points = strokes[s].points;
+    const stroke = strokes[s];
+    if (stroke === undefined) throw new Error(`Missing stroke ${s}`);
+    const points = stroke.points;
     for (let p = 0; p < points.length; p++) {
       const point = points[p];
+      if (point === undefined) throw new Error(`Missing point ${p} of stroke ${s}`);
       sum += point.x + point.y + point.pressure;
     }
   }
@@ -163,10 +171,10 @@ if (process.argv.includes("--worker")) {
 } else {
   const quick = process.argv.includes("--quick");
   const outIndex = process.argv.indexOf("--out");
-  const output = outIndex < 0 ? "/tmp/delta-traversal.json" : process.argv[outIndex + 1];
+  const output = outIndex < 0 ? "/tmp/delta-traversal.json" : argumentAfter(outIndex, "--out");
   const modeIndex = process.argv.indexOf("--modes");
   const selected = new Set(
-    modeIndex < 0 ? ["raw", "proxy", "delta"] : process.argv[modeIndex + 1].split(","),
+    modeIndex < 0 ? ["raw", "proxy", "delta"] : argumentAfter(modeIndex, "--modes").split(","),
   );
   for (const mode of selected)
     if (!["raw", "proxy", "delta"].includes(mode)) throw new Error(`unknown mode: ${mode}`);

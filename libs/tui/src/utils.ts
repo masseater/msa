@@ -578,10 +578,9 @@ class AnsiCodeTracker {
     }
 
     // Extract the parameters between \x1b[ and m
-    const match = ansiCode.match(/\x1b\[([\d;]*)m/);
-    if (!match) return;
+    const params = ansiCode.match(/\x1b\[([\d;]*)m/)?.[1];
+    if (params === undefined) return;
 
-    const params = match[1];
     if (params === "" || params === "0") {
       // Full reset
       this.reset();
@@ -592,7 +591,9 @@ class AnsiCodeTracker {
     const parts = params.split(";");
     let i = 0;
     while (i < parts.length) {
-      const code = Number.parseInt(parts[i], 10);
+      const part = parts[i];
+      if (part === undefined) break;
+      const code = Number.parseInt(part, 10);
 
       // Handle 256-color and RGB codes which consume multiple parameters
       if (code === 38 || code === 48) {
@@ -964,10 +965,10 @@ function wrapSingleLine(line: string, width: number): string[] {
 
       // Break long token - breakLongWord handles its own resets
       const broken = breakLongWord(token, width, tracker);
-      for (let i = 0; i < broken.length - 1; i++) {
-        wrapped.push(broken[i]!);
-      }
-      currentLine = broken[broken.length - 1];
+      const lastBroken = broken.pop();
+      if (lastBroken === undefined) throw new Error("breakLongWord returned no lines");
+      wrapped.push(...broken);
+      currentLine = lastBroken;
       currentVisibleLength = visibleWidth(currentLine);
       continue;
     }

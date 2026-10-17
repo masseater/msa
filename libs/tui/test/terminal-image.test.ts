@@ -633,7 +633,7 @@ describe("Kitty image cursor movement", () => {
       );
       const lines = image.render(12);
       assert.strictEqual(lines.length, 5);
-      assert.ok(lines[0].includes(",c=1,r=5"));
+      assert.ok(lines[0]?.includes(",c=1,r=5"));
     } finally {
       resetCapabilitiesCache();
       setCellDimensions({ widthPx: 9, heightPx: 18 });
@@ -654,10 +654,10 @@ describe("Kitty image cursor movement", () => {
       const lines = image.render(4);
       const imageId = image.getImageId();
       assert.strictEqual(typeof imageId, "number");
-      assert.ok(lines[0].startsWith("\x1b_G"));
-      assert.ok(lines[0].includes(",C=1,"));
-      assert.ok(lines[0].includes(`,i=${imageId}`));
-      assert.ok(lines[0].endsWith("\x1b\\"));
+      assert.ok(lines[0]?.startsWith("\x1b_G"));
+      assert.ok(lines[0]?.includes(",C=1,"));
+      assert.ok(lines[0]?.includes(`,i=${imageId}`));
+      assert.ok(lines[0]?.endsWith("\x1b\\"));
       assert.deepStrictEqual(lines.slice(1, lines.length), [""]);
     } finally {
       resetCapabilitiesCache();
@@ -683,12 +683,14 @@ describe("Kitty image cursor movement", () => {
       );
       const lines = image.render(width);
       assert.strictEqual(lines.length, 1);
+      const [line] = lines;
+      assert.ok(line !== undefined);
       assert.ok(
-        visibleWidth(lines[0]) <= width,
-        `fallback line wider than ${width}: visible=${visibleWidth(lines[0])} raw=${JSON.stringify(lines[0])}`,
+        visibleWidth(line) <= width,
+        `fallback line wider than ${width}: visible=${visibleWidth(line)} raw=${JSON.stringify(line)}`,
       );
-      assert.ok(lines[0].includes("..."), "expected ellipsis when truncating long fallback path");
-      assert.ok(lines[0].includes("~"), "expected home-shortened path in fallback");
+      assert.ok(line.includes("..."), "expected ellipsis when truncating long fallback path");
+      assert.ok(line.includes("~"), "expected home-shortened path in fallback");
     } finally {
       resetCapabilitiesCache();
     }
@@ -726,16 +728,18 @@ describe("image cell sizing", () => {
       );
       const lines = image.render(62);
       assert.strictEqual(lines.length, 4);
+      const [line] = lines;
+      assert.ok(line !== undefined);
       assert.deepStrictEqual(lines.slice(1), ["", "", ""]);
-      assert.ok(lines[0].includes(",c=60,r=4,i=8938;"));
-      assert.deepStrictEqual(getKittyImageMetadata(lines[0]), {
+      assert.ok(line.includes(",c=60,r=4,i=8938;"));
+      assert.deepStrictEqual(getKittyImageMetadata(line), {
         imageId: 8938,
         columns: 60,
         rows: 4,
         widthPx: 615,
         heightPx: 86,
       });
-      const cropped = cropKittyImageLine(lines[0], 1, 2);
+      const cropped = cropKittyImageLine(line, 1, 2);
       assert.strictEqual(
         getKittyImagePlacement(cropped)?.sequence,
         "\x1b_Ga=p,q=2,C=1,c=60,i=8938,y=21,h=44,r=2\x1b\\",
@@ -743,8 +747,10 @@ describe("image cell sizing", () => {
 
       const narrowerLines = image.render(32);
       assert.strictEqual(narrowerLines.length, 2);
-      assert.ok(narrowerLines[0].includes(",c=30,r=2,i=8938;"));
-      assert.strictEqual(getKittyImageMetadata(narrowerLines[0])?.rows, 2);
+      const [narrowerLine] = narrowerLines;
+      assert.ok(narrowerLine !== undefined);
+      assert.ok(narrowerLine.includes(",c=30,r=2,i=8938;"));
+      assert.strictEqual(getKittyImageMetadata(narrowerLine)?.rows, 2);
     });
 
     it("keeps the ceiling placement when rounding down would increase distortion", () => {
@@ -766,8 +772,10 @@ describe("image cell sizing", () => {
       );
       const lines = image.render(32);
       assert.strictEqual(lines.length, 15);
-      assert.ok(lines[0].includes(",c=13,r=15,i=8938;"));
-      assert.deepStrictEqual(getKittyImageMetadata(lines[0]), {
+      const [line] = lines;
+      assert.ok(line !== undefined);
+      assert.ok(line.includes(",c=13,r=15,i=8938;"));
+      assert.deepStrictEqual(getKittyImageMetadata(line), {
         imageId: 8938,
         columns: 13,
         rows: 15,
@@ -775,12 +783,12 @@ describe("image cell sizing", () => {
         heightPx: 900,
       });
       assert.strictEqual(
-        getKittyImagePlacement(cropKittyImageLine(lines[0], 1, 2))?.sequence,
+        getKittyImagePlacement(cropKittyImageLine(line, 1, 2))?.sequence,
         "\x1b_Ga=p,q=2,C=1,c=13,i=8938,y=60,h=120,r=2\x1b\\",
       );
       const narrowerLines = image.render(22);
       assert.strictEqual(narrowerLines.length, 10);
-      assert.ok(narrowerLines[0].includes(",c=9,r=10,i=8938;"));
+      assert.ok(narrowerLines[0]?.includes(",c=9,r=10,i=8938;"));
     });
 
     it("chooses thin Kitty widths by proportions while keeping at least one column", () => {
@@ -789,7 +797,7 @@ describe("image cell sizing", () => {
         [1, 1],
         [140, 1],
         [149, 2],
-      ]) {
+      ] as const) {
         const result = renderImage(
           "AAAA",
           { widthPx, heightPx: 1000 },
@@ -934,20 +942,20 @@ describe("Image transcoding", () => {
   it("sends converted PNG data sized from the PNG", () => {
     setImageTranscoder(transcode);
     const lines = render(jpeg, "image/jpeg");
-    assert.ok(lines[0].includes("f=100") && lines[0].includes(`;${png}\x1b\\`));
+    assert.ok(lines[0]?.includes("f=100") && lines[0]?.includes(`;${png}\x1b\\`));
     // 40x10 PNG at 18 columns: 5 rows, not the 18 rows of the 20x20 source dimensions.
     assert.strictEqual(lines.length, 5);
   });
 
   it("renders a text fallback until a working transcoder is registered", () => {
     const image = new Image(jpeg, "image/jpeg", { fallbackColor: (value) => value });
-    assert.match(image.render(80)[0], /^\[Image: \[image\/jpeg\]/);
+    assert.match(image.render(80)[0] ?? "", /^\[Image: \[image\/jpeg\]/);
     setImageTranscoder(() => null);
     image.invalidate();
-    assert.match(image.render(80)[0], /^\[Image: \[image\/jpeg\]/);
+    assert.match(image.render(80)[0] ?? "", /^\[Image: \[image\/jpeg\]/);
     setImageTranscoder(transcode);
     image.invalidate();
-    assert.ok(image.render(80)[0].includes("\x1b_G"));
+    assert.ok(image.render(80)[0]?.includes("\x1b_G"));
   });
 
   it("converts each image once", () => {
@@ -963,7 +971,7 @@ describe("Image transcoding", () => {
 
   it("does not convert PNG data or iTerm2 output", () => {
     setImageTranscoder(transcode);
-    assert.ok(render(png, "image/png")[0].includes(`;${png}\x1b\\`));
+    assert.ok(render(png, "image/png")[0]?.includes(`;${png}\x1b\\`));
     setCapabilities({ images: "iterm2", trueColor: true, hyperlinks: true });
     assert.ok(render(jpeg, "image/jpeg").at(-1)?.endsWith(`:${jpeg}\x07`));
     assert.deepStrictEqual(calls, []);

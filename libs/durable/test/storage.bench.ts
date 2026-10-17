@@ -57,23 +57,21 @@ async function createFixture(backend: StorageBenchmarkBackend): Promise<Fixture>
 }
 
 const readFixtures = await Promise.all(STORAGE_BENCHMARK_BACKENDS.map(createFixture));
-const readDatasets = await Promise.all(
-  readFixtures.map(({ storage }) => seedStorageBenchmark(storage)),
+const reads = await Promise.all(
+  readFixtures.map(async (fixture) => ({
+    fixture,
+    dataset: await seedStorageBenchmark(fixture.storage),
+  })),
 );
-for (let index = 0; index < readFixtures.length; index++) {
+for (const { fixture, dataset } of reads) {
   for (const scenario of STORAGE_READ_BENCHMARKS) {
-    strictEqual(
-      await scenario.run(readFixtures[index].storage, readDatasets[index]),
-      scenario.expected(readDatasets[index]),
-    );
+    strictEqual(await scenario.run(fixture.storage, dataset), scenario.expected(dataset));
   }
 }
 
 for (const scenario of STORAGE_READ_BENCHMARKS) {
   describe(scenario.name, () => {
-    for (let index = 0; index < readFixtures.length; index++) {
-      const fixture = readFixtures[index];
-      const dataset = readDatasets[index];
+    for (const { fixture, dataset } of reads) {
       bench(
         fixture.backend,
         async () => {

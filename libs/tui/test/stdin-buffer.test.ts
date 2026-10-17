@@ -238,7 +238,7 @@ describe("StdinBuffer", () => {
       t.mock.timers.tick(100);
       assert.deepStrictEqual(emittedSequences, []);
       processInput("\x07");
-      assert.deepStrictEqual(emittedSequences, [replies[0].reply]);
+      assert.deepStrictEqual(emittedSequences, [replies[0]?.reply]);
     });
 
     it("still times out bare string introducers as Alt keys", (t) => {
@@ -301,7 +301,7 @@ describe("StdinBuffer", () => {
       t.mock.timers.tick(5000);
       assert.deepStrictEqual(emittedSequences, []);
       processInput("rgb:ffff/ffff/ffff\x1b\\");
-      assert.deepStrictEqual(emittedSequences, [replies[1].reply]);
+      assert.deepStrictEqual(emittedSequences, [replies[1]?.reply]);
     });
 
     it("recovers from an unterminated reply when a new escape sequence arrives", (t) => {

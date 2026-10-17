@@ -1440,7 +1440,9 @@ export class Editor implements Component, Focusable {
       const graphemes = [...this.segment(beforeCursor, "grapheme")];
       const lastGrapheme = graphemes[graphemes.length - 1];
       const graphemeLength = lastGrapheme ? lastGrapheme.segment.length : 1;
-      const isPastedSegmented = PASTE_MARKER_SINGLE.exec(lastGrapheme.segment);
+      const isPastedSegmented = lastGrapheme
+        ? PASTE_MARKER_SINGLE.exec(lastGrapheme.segment)
+        : null;
 
       if (isPastedSegmented) {
         // This contains the id part e.g 4 from [paste #4 +123 lines]
@@ -1545,7 +1547,11 @@ export class Editor implements Component, Focusable {
         currentVL.logicalLine,
         this.snappedFromCursorCol,
       );
-      currentVisualCol = this.snappedFromCursorCol - visualLines[vlIndex].startCol;
+      const snappedVL = visualLines[vlIndex];
+      if (snappedVL === undefined) {
+        throw new Error(`Visual line ${vlIndex} does not exist`);
+      }
+      currentVisualCol = this.snappedFromCursorCol - snappedVL.startCol;
     } else {
       currentVisualCol = this.state.cursorCol - currentVL.startCol;
     }
@@ -1594,12 +1600,14 @@ export class Editor implements Component, Focusable {
           // continuation VLs and land on the first VL past it.
           const segEnd = seg.index + seg.segment.length;
           let next = targetVisualLine + 1;
+          let nextVL = visualLines[next];
           while (
-            next < visualLines.length &&
-            visualLines[next].logicalLine === targetVL.logicalLine &&
-            visualLines[next].startCol < segEnd
+            nextVL !== undefined &&
+            nextVL.logicalLine === targetVL.logicalLine &&
+            nextVL.startCol < segEnd
           ) {
             next++;
+            nextVL = visualLines[next];
           }
           if (next < visualLines.length) {
             this.moveToVisualLine(visualLines, currentVisualLine, next);

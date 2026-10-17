@@ -687,7 +687,9 @@ describe("waiting", () => {
       ids["top"] = await tx.createTask(Node, { name: "top" }, OWN_CONVERSATION);
     }, context);
     open("bottom");
-    expect(await outcomeOf(harness, ids["top"])).toBe("completed");
+    const topId = ids["top"];
+    if (topId === undefined) throw new Error("Expected the top task id");
+    expect(await outcomeOf(harness, topId)).toBe("completed");
     await harness.close(context);
   });
 

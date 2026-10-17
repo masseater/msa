@@ -131,11 +131,12 @@ describe("checked immutable operation application", () => {
       ] satisfies Op[],
     ];
 
-    const intermediate = applyImmutable(base, batches[0]);
+    const [firstBatch, ...laterBatches] = batches;
+    if (firstBatch === undefined) throw new Error("Expected a first batch");
+    const intermediate = applyImmutable(base, firstBatch);
     const intermediateSnapshot = clone(intermediate);
     let sequential = intermediate;
-    for (let index = 1; index < batches.length; index++)
-      sequential = applyImmutable(sequential, batches[index]!);
+    for (const batch of laterBatches) sequential = applyImmutable(sequential, batch);
     const streamed = applyImmutableBatches(base, batches);
     const flattened = applyImmutable(base, batches.flat());
 

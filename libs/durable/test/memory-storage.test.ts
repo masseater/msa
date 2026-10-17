@@ -29,7 +29,7 @@ it("does not expose retained state through a prepared commit", async () => {
     },
   ]);
   const exposed = prepared.writes[0];
-  if (exposed.type !== "entry") throw new Error("Expected an entry write");
+  if (exposed?.type !== "entry") throw new Error("Expected an entry write");
   expect(() => (exposed.value.data as { nested: number[] }).nested.push(2)).toThrow();
 
   expect(prepared.apply()).toBe(seqFromNumber(2));
