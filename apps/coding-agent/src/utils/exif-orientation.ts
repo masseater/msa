@@ -2,22 +2,35 @@ import type { PhotonImageType } from "./photon.ts";
 
 type Photon = typeof import("@silvia-odwyer/photon-node");
 
+function byteAt(bytes: Uint8Array, pos: number): number {
+  return bytes[pos] ?? 0;
+}
+
 function readOrientationFromTiff(bytes: Uint8Array, tiffStart: number): number {
   if (tiffStart + 8 > bytes.length) return 1;
 
-  const byteOrder = (bytes[tiffStart] << 8) | bytes[tiffStart + 1];
+  const byteOrder = (byteAt(bytes, tiffStart) << 8) | byteAt(bytes, tiffStart + 1);
   const le = byteOrder === 0x4949;
 
   const read16 = (pos: number): number => {
-    if (le) return bytes[pos] | (bytes[pos + 1] << 8);
-    return (bytes[pos] << 8) | bytes[pos + 1];
+    if (le) return byteAt(bytes, pos) | (byteAt(bytes, pos + 1) << 8);
+    return (byteAt(bytes, pos) << 8) | byteAt(bytes, pos + 1);
   };
 
   const read32 = (pos: number): number => {
     if (le)
-      return bytes[pos] | (bytes[pos + 1] << 8) | (bytes[pos + 2] << 16) | (bytes[pos + 3] << 24);
+      return (
+        byteAt(bytes, pos) |
+        (byteAt(bytes, pos + 1) << 8) |
+        (byteAt(bytes, pos + 2) << 16) |
+        (byteAt(bytes, pos + 3) << 24)
+      );
     return (
-      ((bytes[pos] << 24) | (bytes[pos + 1] << 16) | (bytes[pos + 2] << 8) | bytes[pos + 3]) >>> 0
+      ((byteAt(bytes, pos) << 24) |
+        (byteAt(bytes, pos + 1) << 16) |
+        (byteAt(bytes, pos + 2) << 8) |
+        byteAt(bytes, pos + 3)) >>>
+      0
     );
   };
 
@@ -57,7 +70,7 @@ function findJpegTiffOffset(bytes: Uint8Array): number {
     }
 
     if (offset + 4 > bytes.length) return -1;
-    const length = (bytes[offset + 2] << 8) | bytes[offset + 3];
+    const length = (byteAt(bytes, offset + 2) << 8) | byteAt(bytes, offset + 3);
     offset += 2 + length;
   }
 
@@ -67,17 +80,12 @@ function findJpegTiffOffset(bytes: Uint8Array): number {
 function findWebpTiffOffset(bytes: Uint8Array): number {
   let offset = 12;
   while (offset + 8 <= bytes.length) {
-    const chunkId = String.fromCharCode(
-      bytes[offset],
-      bytes[offset + 1],
-      bytes[offset + 2],
-      bytes[offset + 3],
-    );
+    const chunkId = String.fromCharCode(...bytes.subarray(offset, offset + 4));
     const chunkSize =
-      bytes[offset + 4] |
-      (bytes[offset + 5] << 8) |
-      (bytes[offset + 6] << 16) |
-      (bytes[offset + 7] << 24);
+      byteAt(bytes, offset + 4) |
+      (byteAt(bytes, offset + 5) << 8) |
+      (byteAt(bytes, offset + 6) << 16) |
+      (byteAt(bytes, offset + 7) << 24);
     const dataStart = offset + 8;
 
     if (chunkId === "EXIF") {
@@ -144,10 +152,7 @@ function rotate90(photon: Photon, image: PhotonImageType, dstIndex: DstIndexFn):
     for (let x = 0; x < w; x++) {
       const srcIdx = (y * w + x) * 4;
       const dstIdx = dstIndex(x, y, w, h) * 4;
-      dst[dstIdx] = src[srcIdx];
-      dst[dstIdx + 1] = src[srcIdx + 1];
-      dst[dstIdx + 2] = src[srcIdx + 2];
-      dst[dstIdx + 3] = src[srcIdx + 3];
+      dst.set(src.subarray(srcIdx, srcIdx + 4), dstIdx);
     }
   }
 

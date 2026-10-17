@@ -52,8 +52,8 @@ class UserMessageList implements Component {
     const endIndex = Math.min(startIndex + this.maxVisible, this.messages.length);
 
     // Render visible messages (2 lines per message + blank line)
-    for (let i = startIndex; i < endIndex; i++) {
-      const message = this.messages[i];
+    for (const [offset, message] of this.messages.slice(startIndex, endIndex).entries()) {
+      const i = startIndex + offset;
       const isSelected = i === this.selectedIndex;
 
       // Normalize message to single line

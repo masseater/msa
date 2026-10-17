@@ -167,6 +167,7 @@ export class AssistantMessageComponent extends Container {
     let thinkingRunIndex = 0;
     for (let i = 0; i < contentBlocks.length; i++) {
       const content = contentBlocks[i];
+      if (content === undefined) continue;
       if (content.type === "text" && content.text.trim()) {
         // Assistant text messages with no background - trim the text
         // Set paddingY=0 to avoid extra spacing before tool executions
@@ -183,7 +184,7 @@ export class AssistantMessageComponent extends Container {
         const thinkingBlocks: string[] = [];
         for (; i < contentBlocks.length; i++) {
           const thinkingContent = contentBlocks[i];
-          if (thinkingContent.type !== "thinking") {
+          if (thinkingContent?.type !== "thinking") {
             break;
           }
           const thinking = thinkingContent.thinking.trim();

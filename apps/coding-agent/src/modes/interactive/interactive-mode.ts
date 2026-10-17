@@ -3521,7 +3521,7 @@ export class InteractiveMode {
     const branch = this.sessionManager.getBranch();
     for (let i = branch.length - 1; i >= 0; i--) {
       const entry = branch[i];
-      if (entry.type === "message" && entry.message.role === "assistant") {
+      if (entry?.type === "message" && entry.message.role === "assistant") {
         previousDroppedCount = InteractiveMode.countDroppedThinkingBlocks(entry.message);
         break;
       }
@@ -4200,7 +4200,8 @@ export class InteractiveMode {
       const firstPromptIndex = queuedMessages.findIndex(
         (message) => !this.isExtensionCommand(message.text),
       );
-      if (firstPromptIndex === -1) {
+      const firstPrompt = queuedMessages[firstPromptIndex];
+      if (firstPrompt === undefined) {
         // All extension commands - execute them all
         for (const message of queuedMessages) {
           await this.session.prompt(message.text);
@@ -4210,7 +4211,6 @@ export class InteractiveMode {
 
       // Execute any extension commands before the first prompt
       const preCommands = queuedMessages.slice(0, firstPromptIndex);
-      const firstPrompt = queuedMessages[firstPromptIndex];
       const rest = queuedMessages.slice(firstPromptIndex + 1);
 
       for (const message of preCommands) {

@@ -139,9 +139,11 @@ function getSelfUpdateCommandForMethod(
       const match = readCommandOutput("pnpm", ["root", "-g"])
         ? undefined
         : /^(.*[\\/]global[\\/][^\\/]+)[\\/]\.pnpm[\\/]/.exec(getPackageDir());
-      const binDirArgs = match
-        ? [`--config.global-bin-dir=${process.env["PNPM_HOME"] || dirname(dirname(match[1]))}`]
-        : [];
+      const globalDir = match?.[1];
+      const binDirArgs =
+        globalDir !== undefined
+          ? [`--config.global-bin-dir=${process.env["PNPM_HOME"] || dirname(dirname(globalDir))}`]
+          : [];
       return makeSelfUpdateCommand(
         makeSelfUpdateCommandStep("pnpm", [
           "install",
@@ -264,7 +266,8 @@ function getGlobalPackageRoots(
       const root = readCommandOutput("pnpm", ["root", "-g"]);
       if (root) return [root, dirname(root)];
       const match = /^(.*[\\/]global[\\/][^\\/]+)[\\/]\.pnpm[\\/]/.exec(getPackageDir());
-      return match ? [match[1]] : [];
+      const globalDir = match?.[1];
+      return globalDir !== undefined ? [globalDir] : [];
     }
     case "yarn": {
       const dir = readCommandOutput("yarn", ["global", "dir"]);

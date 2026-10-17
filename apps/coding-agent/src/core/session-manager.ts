@@ -373,8 +373,9 @@ export function parseSessionEntries(content: string): FileEntry[] {
 
 export function getLatestCompactionEntry(entries: SessionEntry[]): CompactionEntry | null {
   for (let i = entries.length - 1; i >= 0; i--) {
-    if (entries[i].type === "compaction") {
-      return entries[i] as CompactionEntry;
+    const entry = entries[i];
+    if (entry?.type === "compaction") {
+      return entry;
     }
   }
   return null;
@@ -517,6 +518,7 @@ export function buildContextEntries(
   let foundFirstKept = false;
   for (let i = 0; i < compactionIdx; i++) {
     const entry = path[i];
+    if (entry === undefined) continue;
     if (entry.id === compaction.firstKeptEntryId) {
       foundFirstKept = true;
     }
@@ -678,8 +680,8 @@ export function loadEntriesFromFile(filePath: string): FileEntry[] {
   }
 
   // Validate session header before repairing the file.
-  if (entries.length === 0) return entries;
   const header = entries[0];
+  if (header === undefined) return entries;
   if (header.type !== "session" || typeof (header as { id?: unknown }).id !== "string") {
     return [];
   }
@@ -1356,7 +1358,7 @@ export class SessionManager {
     // calls this on every frame, and getEntries() copies the whole session.
     for (let i = this.fileEntries.length - 1; i >= 0; i--) {
       const entry = this.fileEntries[i];
-      if (entry.type === "session_info") {
+      if (entry?.type === "session_info") {
         return entry.name?.trim() || undefined;
       }
     }

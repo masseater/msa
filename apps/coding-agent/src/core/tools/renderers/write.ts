@@ -85,16 +85,14 @@ function updateWriteHighlightCacheIncremental(
     cache.highlightedLines.push("");
   }
 
-  const segments = deltaNormalized.split("\n");
+  const [firstSegment, ...moreSegments] = deltaNormalized.split("\n");
   const lastIndex = cache.normalizedLines.length - 1;
-  cache.normalizedLines[lastIndex] += segments[0];
-  cache.highlightedLines[lastIndex] = highlightSingleLine(
-    cache.normalizedLines[lastIndex],
-    cache.lang,
-  );
-  for (let i = 1; i < segments.length; i++) {
-    cache.normalizedLines.push(segments[i]);
-    cache.highlightedLines.push(highlightSingleLine(segments[i], cache.lang));
+  const lastLine = (cache.normalizedLines[lastIndex] ?? "") + (firstSegment ?? "");
+  cache.normalizedLines[lastIndex] = lastLine;
+  cache.highlightedLines[lastIndex] = highlightSingleLine(lastLine, cache.lang);
+  for (const segment of moreSegments) {
+    cache.normalizedLines.push(segment);
+    cache.highlightedLines.push(highlightSingleLine(segment, cache.lang));
   }
   refreshWriteHighlightPrefix(cache);
   return cache;

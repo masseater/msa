@@ -32,9 +32,9 @@ export function buildInitialMessage({
     parts.push(fileText);
   }
 
-  if (parsed.messages.length > 0) {
-    parts.push(parsed.messages[0]);
-    parsed.messages.shift();
+  const firstMessage = parsed.messages.shift();
+  if (firstMessage !== undefined) {
+    parts.push(firstMessage);
   }
 
   return {

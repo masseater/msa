@@ -556,7 +556,8 @@ function buildSessionOptions(
     }
   }
 
-  if (!options.model && scopedModels.length > 0 && !hasExistingSession) {
+  const firstScopedModel = scopedModels[0];
+  if (!options.model && firstScopedModel !== undefined && !hasExistingSession) {
     // Check if saved default is in scoped models - use it if so, otherwise first scoped model
     const savedProvider = settingsManager.getDefaultProvider();
     const savedModelId = settingsManager.getDefaultModel();
@@ -575,10 +576,10 @@ function buildSessionOptions(
         options.thinkingLevel = savedInScope.thinkingLevel;
       }
     } else {
-      options.model = scopedModels[0].model;
+      options.model = firstScopedModel.model;
       // Use thinking level from first scoped model if explicitly set
-      if (!parsed.thinking && scopedModels[0].thinkingLevel) {
-        options.thinkingLevel = scopedModels[0].thinkingLevel;
+      if (!parsed.thinking && firstScopedModel.thinkingLevel) {
+        options.thinkingLevel = firstScopedModel.thinkingLevel;
       }
     }
   }

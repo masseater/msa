@@ -256,12 +256,15 @@ function selectReference(
 
   const others = raw.filter((model) => model !== named);
   const candidates = named ? [named, ...others] : others;
-  if (candidates.length === 0) return undefined;
+  const [firstCandidate] = candidates;
+  if (firstCandidate === undefined) return undefined;
   if (new Set(candidates.map((model) => model.provider)).size === 1)
-    return { status: "resolved", model: candidates[0] };
+    return { status: "resolved", model: firstCandidate };
   if (named && usable(named.provider)) return { status: "resolved", model: named };
   const usableOthers = others.filter((model) => usable(model.provider));
-  if (usableOthers.length === 1) return { status: "resolved", model: usableOthers[0] };
+  const [onlyUsable] = usableOthers;
+  if (usableOthers.length === 1 && onlyUsable !== undefined)
+    return { status: "resolved", model: onlyUsable };
   if (usableOthers.length === 0 && named) return { status: "resolved", model: named };
   return { status: "ambiguous", candidates, usableCount: usableOthers.length };
 }
@@ -602,8 +605,8 @@ export async function findInitialModel(options: {
   let thinkingLevel: ThinkingLevel = DEFAULT_THINKING_LEVEL;
 
   // 1. Use first model from scoped models (skip if continuing/resuming)
-  if (scopedModels.length > 0 && !isContinuing) {
-    const scopedModel = scopedModels[0];
+  const scopedModel = scopedModels[0];
+  if (scopedModel !== undefined && !isContinuing) {
     const perModel = modelThinkingLevels?.[`${scopedModel.model.provider}/${scopedModel.model.id}`];
     return {
       model: scopedModel.model,
@@ -702,7 +705,8 @@ export async function restoreModelFromSession(
   // Try to find any available model
   const availableModels = [...modelRuntime.getAvailableSnapshot()];
 
-  if (availableModels.length > 0) {
+  const firstAvailableModel = availableModels[0];
+  if (firstAvailableModel !== undefined) {
     // Try to find a default model from known providers
     let fallbackModel: Model<Api> | undefined;
     for (const provider of Object.keys(defaultModelPerProvider) as KnownProvider[]) {
@@ -716,7 +720,7 @@ export async function restoreModelFromSession(
 
     // If no default found, use first available
     if (!fallbackModel) {
-      fallbackModel = availableModels[0];
+      fallbackModel = firstAvailableModel;
     }
 
     if (shouldPrintMessages) {

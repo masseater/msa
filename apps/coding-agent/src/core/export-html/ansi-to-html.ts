@@ -36,8 +36,9 @@ const ANSI_COLORS = [
  */
 function color256ToHex(index: number): string {
   // Standard colors (0-15)
-  if (index < 16) {
-    return ANSI_COLORS[index];
+  const standardColor = ANSI_COLORS[index];
+  if (index < 16 && standardColor !== undefined) {
+    return standardColor;
   }
 
   // Color cube (16-231): 6x6x6 = 216 colors
@@ -118,6 +119,7 @@ function applySgrCode(params: number[], style: TextStyle): void {
   let i = 0;
   while (i < params.length) {
     const code = params[i];
+    if (code === undefined) break;
 
     if (code === 0) {
       // Reset all
@@ -145,12 +147,13 @@ function applySgrCode(params: number[], style: TextStyle): void {
       style.underline = false;
     } else if (code >= 30 && code <= 37) {
       // Standard foreground colors
-      style.fg = ANSI_COLORS[code - 30];
+      style.fg = ANSI_COLORS[code - 30] ?? null;
     } else if (code === 38) {
       // Extended foreground color
-      if (params[i + 1] === 5 && params.length > i + 2) {
+      const colorIndex = params[i + 2];
+      if (params[i + 1] === 5 && colorIndex !== undefined) {
         // 256-color: 38;5;N
-        style.fg = color256ToHex(params[i + 2]);
+        style.fg = color256ToHex(colorIndex);
         i += 2;
       } else if (params[i + 1] === 2 && params.length > i + 4) {
         // RGB: 38;2;R;G;B
@@ -165,12 +168,13 @@ function applySgrCode(params: number[], style: TextStyle): void {
       style.fg = null;
     } else if (code >= 40 && code <= 47) {
       // Standard background colors
-      style.bg = ANSI_COLORS[code - 40];
+      style.bg = ANSI_COLORS[code - 40] ?? null;
     } else if (code === 48) {
       // Extended background color
-      if (params[i + 1] === 5 && params.length > i + 2) {
+      const colorIndex = params[i + 2];
+      if (params[i + 1] === 5 && colorIndex !== undefined) {
         // 256-color: 48;5;N
-        style.bg = color256ToHex(params[i + 2]);
+        style.bg = color256ToHex(colorIndex);
         i += 2;
       } else if (params[i + 1] === 2 && params.length > i + 4) {
         // RGB: 48;2;R;G;B
@@ -185,10 +189,10 @@ function applySgrCode(params: number[], style: TextStyle): void {
       style.bg = null;
     } else if (code >= 90 && code <= 97) {
       // Bright foreground colors
-      style.fg = ANSI_COLORS[code - 90 + 8];
+      style.fg = ANSI_COLORS[code - 90 + 8] ?? null;
     } else if (code >= 100 && code <= 107) {
       // Bright background colors
-      style.bg = ANSI_COLORS[code - 100 + 8];
+      style.bg = ANSI_COLORS[code - 100 + 8] ?? null;
     }
     // Ignore unrecognized codes
 

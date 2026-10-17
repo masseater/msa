@@ -33,7 +33,8 @@ function isSensitiveKey(key: string): boolean {
 /** Strip credentials and secret-looking query parameters from a URL. */
 export function redactUrl(value: string): string {
   const nested = /^([a-z][a-z0-9+.-]*:)([a-z][a-z0-9+.-]*:\/\/.*)$/i.exec(value);
-  if (nested) return `${nested[1]}${redactUrl(nested[2])}`;
+  const [, scheme, inner] = nested ?? [];
+  if (scheme !== undefined && inner !== undefined) return `${scheme}${redactUrl(inner)}`;
   try {
     const url = new URL(value);
     let changed = false;
@@ -323,6 +324,7 @@ function selectMessages(messages: readonly AgentMessage[], tokenBudget: number):
   let tokens = 0;
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
+    if (message === undefined) continue;
     const next = estimateTokens(message);
     if (selected.length > 0 && tokens + next > tokenBudget) break;
     selected.push(message);

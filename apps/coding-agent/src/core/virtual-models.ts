@@ -122,7 +122,7 @@ export function findLatestResponse(
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (
-      message.role === "assistant" &&
+      message?.role === "assistant" &&
       message.stopReason !== "error" &&
       message.stopReason !== "aborted"
     ) {
@@ -146,6 +146,7 @@ export function getBranchSelection(
 ): { provider: string; modelId: string } | undefined {
   for (let i = branch.length - 1; i >= 0; i--) {
     const entry = branch[i];
+    if (entry === undefined) continue;
     if (entry.type === "model_change") {
       return { provider: entry.provider, modelId: entry.modelId };
     }
@@ -169,7 +170,7 @@ function findLastModelChange(
 ): { provider: string; modelId: string } | undefined {
   for (let i = before - 1; i >= 0; i--) {
     const entry = branch[i];
-    if (entry.type === "model_change") return { provider: entry.provider, modelId: entry.modelId };
+    if (entry?.type === "model_change") return { provider: entry.provider, modelId: entry.modelId };
   }
   return undefined;
 }
@@ -182,7 +183,7 @@ export function getVirtualModelState(
 ): unknown {
   for (let i = branch.length - 1; i >= 0; i--) {
     const entry = branch[i];
-    if (entry.type !== "custom" || entry.customType !== VIRTUAL_MODEL_STATE_ENTRY) continue;
+    if (entry?.type !== "custom" || entry.customType !== VIRTUAL_MODEL_STATE_ENTRY) continue;
     const data = entry.data as VirtualModelStateData | undefined;
     if (data?.provider === provider && data.modelId === modelId) return data.state;
   }

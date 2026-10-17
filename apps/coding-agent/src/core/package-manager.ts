@@ -871,8 +871,8 @@ export class DefaultPackageManager implements PackageManager {
     const matchIndex = currentPackages.findIndex((existing) =>
       this.packageSourcesMatch(existing, source, scope),
     );
-    if (matchIndex !== -1) {
-      const existing = currentPackages[matchIndex];
+    const existing = currentPackages[matchIndex];
+    if (existing !== undefined) {
       if (this.getPackageSourceString(existing) === normalizedSource) {
         return false;
       }
@@ -1271,11 +1271,11 @@ export class DefaultPackageManager implements PackageManager {
       return;
     }
 
-    const sourceLabel = sources.length === 1 ? sources[0].source : `${scope} npm packages`;
-    const message =
-      sources.length === 1
-        ? `Updating ${sources[0].source}...`
-        : `Updating ${scope} npm packages...`;
+    const singleSource = sources.length === 1 ? sources[0] : undefined;
+    const sourceLabel = singleSource ? singleSource.source : `${scope} npm packages`;
+    const message = singleSource
+      ? `Updating ${singleSource.source}...`
+      : `Updating ${scope} npm packages...`;
     const specs = sources.map((entry) =>
       entry.parsed.version ? entry.parsed.spec : `${entry.parsed.name}@latest`,
     );
@@ -1824,10 +1824,11 @@ export class DefaultPackageManager implements PackageManager {
       while (true) {
         const index = nextIndex;
         nextIndex += 1;
-        if (index >= tasks.length) {
+        const task = tasks[index];
+        if (task === undefined) {
           return;
         }
-        results[index] = await tasks[index]();
+        results[index] = await task();
       }
     };
 

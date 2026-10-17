@@ -109,10 +109,10 @@ export class FirstTimeSetupComponent extends Container {
   }
 
   private addOptionList(labels: string[], selectedIndex: number): void {
-    for (let i = 0; i < labels.length; i++) {
+    for (const [i, text] of labels.entries()) {
       const isSelected = i === selectedIndex;
       const prefix = isSelected ? theme.fg("accent", "→ ") : "  ";
-      const label = isSelected ? theme.fg("accent", labels[i]) : theme.fg("text", labels[i]);
+      const label = isSelected ? theme.fg("accent", text) : theme.fg("text", text);
       this.addChild(new Text(`${prefix}${label}`, 1, 0));
     }
   }
@@ -120,9 +120,10 @@ export class FirstTimeSetupComponent extends Container {
   private moveSelection(delta: number): void {
     if (this.step === "theme") {
       const next = Math.max(0, Math.min(THEME_OPTIONS.length - 1, this.themeIndex + delta));
-      if (next !== this.themeIndex) {
+      const themeOption = THEME_OPTIONS[next];
+      if (next !== this.themeIndex && themeOption !== undefined) {
         this.themeIndex = next;
-        this.options.onThemePreview(THEME_OPTIONS[this.themeIndex].value);
+        this.options.onThemePreview(themeOption.value);
       }
     } else {
       this.analyticsIndex = Math.max(
@@ -144,9 +145,12 @@ export class FirstTimeSetupComponent extends Container {
         this.step = "analytics";
         this.update();
       } else {
+        const themeOption = THEME_OPTIONS[this.themeIndex];
+        const analyticsOption = ANALYTICS_OPTIONS[this.analyticsIndex];
+        if (themeOption === undefined || analyticsOption === undefined) return;
         this.options.onSubmit({
-          theme: THEME_OPTIONS[this.themeIndex].value,
-          shareAnalytics: ANALYTICS_OPTIONS[this.analyticsIndex].value,
+          theme: themeOption.value,
+          shareAnalytics: analyticsOption.value,
         });
       }
     } else if (kb.matches(keyData, "tui.select.cancel")) {

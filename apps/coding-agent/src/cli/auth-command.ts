@@ -74,6 +74,7 @@ export function parseAuthCommand(args: string[]): AuthCommand | undefined {
   let minExpiryMs: number | undefined;
   for (let index = 2; index < args.length; index++) {
     const arg = args[index];
+    if (arg === undefined) break;
     if (arg === "--min-expiry") {
       if (kind !== "bearer_token")
         throw new AuthCommandError("--min-expiry is only supported by print-bearer-token");

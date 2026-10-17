@@ -89,8 +89,7 @@ function getReplacementLineRange(lines: LineSpan[], replacement: TextReplacement
   const replacementEnd = replacement.matchIndex + replacement.matchLength;
 
   let startLine = -1;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  for (const [i, line] of lines.entries()) {
     if (replacementStart >= line.start && replacementStart < line.end) {
       startLine = i;
       break;
@@ -101,11 +100,13 @@ function getReplacementLineRange(lines: LineSpan[], replacement: TextReplacement
   }
 
   let endLine = startLine;
-  while (endLine < lines.length && lines[endLine].end < replacementEnd) {
+  while (true) {
+    const line = lines[endLine];
+    if (line === undefined) {
+      throw new Error("Replacement range is outside the base content.");
+    }
+    if (line.end >= replacementEnd) break;
     endLine++;
-  }
-  if (endLine >= lines.length) {
-    throw new Error("Replacement range is outside the base content.");
   }
 
   return { startLine, endLine: endLine + 1 };
@@ -113,8 +114,7 @@ function getReplacementLineRange(lines: LineSpan[], replacement: TextReplacement
 
 function applyReplacements(content: string, replacements: TextReplacement[], offset = 0): string {
   let result = content;
-  for (let i = replacements.length - 1; i >= 0; i--) {
-    const replacement = replacements[i];
+  for (const replacement of replacements.toReversed()) {
     const matchIndex = replacement.matchIndex - offset;
     result =
       result.substring(0, matchIndex) +
@@ -165,8 +165,13 @@ export function applyReplacementsPreservingUnchangedLines(
   for (const group of groups) {
     result += originalLines.slice(originalLineIndex, group.startLine).join("");
 
-    const groupStartOffset = baseLines[group.startLine].start;
-    const groupEndOffset = baseLines[group.endLine - 1].end;
+    const groupStartLine = baseLines[group.startLine];
+    const groupEndLine = baseLines[group.endLine - 1];
+    if (groupStartLine === undefined || groupEndLine === undefined) {
+      throw new Error("Replacement range is outside the base content.");
+    }
+    const groupStartOffset = groupStartLine.start;
+    const groupEndOffset = groupEndLine.end;
     result += applyReplacements(
       baseContent.slice(groupStartOffset, groupEndOffset),
       group.replacements,
@@ -319,8 +324,8 @@ export function applyEditsToNormalizedContent(
     newText: normalizeToLF(edit.newText),
   }));
 
-  for (let i = 0; i < normalizedEdits.length; i++) {
-    if (normalizedEdits[i].oldText.length === 0) {
+  for (const [i, edit] of normalizedEdits.entries()) {
+    if (edit.oldText.length === 0) {
       throw getEmptyOldTextError(path, i, normalizedEdits.length);
     }
   }
@@ -334,8 +339,7 @@ export function applyEditsToNormalizedContent(
     : normalizedContent;
 
   const matchedEdits: MatchedEdit[] = [];
-  for (let i = 0; i < normalizedEdits.length; i++) {
-    const edit = normalizedEdits[i];
+  for (const [i, edit] of normalizedEdits.entries()) {
     const matchResult = fuzzyFindText(replacementBaseContent, edit.oldText);
     if (!matchResult.found) {
       throw getNotFoundError(path, i, normalizedEdits.length);
@@ -355,9 +359,9 @@ export function applyEditsToNormalizedContent(
   }
 
   matchedEdits.sort((a, b) => a.matchIndex - b.matchIndex);
-  for (let i = 1; i < matchedEdits.length; i++) {
+  for (const [i, current] of matchedEdits.entries()) {
     const previous = matchedEdits[i - 1];
-    const current = matchedEdits[i];
+    if (previous === undefined) continue;
     if (previous.matchIndex + previous.matchLength > current.matchIndex) {
       throw new Error(
         `edits[${previous.editIndex}] and edits[${current.editIndex}] overlap in ${path}. Merge them into one edit or target disjoint regions.`,
@@ -416,8 +420,7 @@ export function generateDiffString(
   let lastWasChange = false;
   let firstChangedLine: number | undefined;
 
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
+  for (const [i, part] of parts.entries()) {
     const raw = part.value.split("\n");
     if (raw[raw.length - 1] === "") {
       raw.pop();
@@ -445,7 +448,8 @@ export function generateDiffString(
       lastWasChange = true;
     } else {
       // Context lines - only show a few before/after changes
-      const nextPartIsChange = i < parts.length - 1 && (parts[i + 1].added || parts[i + 1].removed);
+      const nextPart = parts[i + 1];
+      const nextPartIsChange = nextPart !== undefined && (nextPart.added || nextPart.removed);
       const hasLeadingChange = lastWasChange;
       const hasTrailingChange = nextPartIsChange;
 

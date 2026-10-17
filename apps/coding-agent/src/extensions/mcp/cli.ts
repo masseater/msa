@@ -154,7 +154,9 @@ function parseOptions(
   const values = new Map<string, string | true>();
   const lists = new Map<string, string[]>();
   for (let index = 0; index < args.length; index++) {
-    const arg = OPTION_ALIASES.get(args[index]) ?? args[index];
+    const rawArg = args[index];
+    if (rawArg === undefined) break;
+    const arg = OPTION_ALIASES.get(rawArg) ?? rawArg;
     if (arg === "--" || positional.length >= maxPositionals) {
       positional.push(...args.slice(arg === "--" ? index + 1 : index));
       break;

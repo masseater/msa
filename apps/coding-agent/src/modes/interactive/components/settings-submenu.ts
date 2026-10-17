@@ -206,6 +206,7 @@ export class SteppedSubmenu extends Container {
 
   private buildStep(stepIndex: number): Component {
     const step = this.steps[stepIndex];
+    if (step === undefined) throw new Error(`Step ${stepIndex} does not exist`);
     const total = this.steps.length;
     const stepLabel = total > 1 ? `Step ${stepIndex + 1}/${total} \u00b7 ` : "";
 

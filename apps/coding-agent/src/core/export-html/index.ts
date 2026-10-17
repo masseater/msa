@@ -47,19 +47,21 @@ export interface ExportOptions {
 /** Parse a color string to RGB values. Supports hex (#RRGGBB) and rgb(r,g,b) formats. */
 function parseColor(color: string): { r: number; g: number; b: number } | undefined {
   const hexMatch = color.match(/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/);
-  if (hexMatch) {
+  const [, hexR, hexG, hexB] = hexMatch ?? [];
+  if (hexR !== undefined && hexG !== undefined && hexB !== undefined) {
     return {
-      r: Number.parseInt(hexMatch[1], 16),
-      g: Number.parseInt(hexMatch[2], 16),
-      b: Number.parseInt(hexMatch[3], 16),
+      r: Number.parseInt(hexR, 16),
+      g: Number.parseInt(hexG, 16),
+      b: Number.parseInt(hexB, 16),
     };
   }
   const rgbMatch = color.match(/^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
-  if (rgbMatch) {
+  const [, rgbR, rgbG, rgbB] = rgbMatch ?? [];
+  if (rgbR !== undefined && rgbG !== undefined && rgbB !== undefined) {
     return {
-      r: Number.parseInt(rgbMatch[1], 10),
-      g: Number.parseInt(rgbMatch[2], 10),
-      b: Number.parseInt(rgbMatch[3], 10),
+      r: Number.parseInt(rgbR, 10),
+      g: Number.parseInt(rgbG, 10),
+      b: Number.parseInt(rgbB, 10),
     };
   }
   return undefined;

@@ -226,13 +226,10 @@ class TreeList implements Component {
         const node = preOrderStack.pop()!;
         allNodes.push(node);
         // Push children in reverse so they're processed left-to-right
-        for (let i = node.children.length - 1; i >= 0; i--) {
-          preOrderStack.push(node.children[i]);
-        }
+        preOrderStack.push(...node.children.toReversed());
       }
       // Process in reverse (post-order): children before parents
-      for (let i = allNodes.length - 1; i >= 0; i--) {
-        const node = allNodes[i];
+      for (const node of allNodes.toReversed()) {
         let has = leafId !== null && node.entry.id === leafId;
         for (const child of node.children) {
           if (containsActive.get(child)) {
@@ -250,9 +247,11 @@ class TreeList implements Component {
       (a, b) => Number(containsActive.get(b)) - Number(containsActive.get(a)),
     );
     for (let i = orderedRoots.length - 1; i >= 0; i--) {
+      const root = orderedRoots[i];
+      if (root === undefined) continue;
       const isLast = i === orderedRoots.length - 1;
       stack.push([
-        orderedRoots[i],
+        root,
         multipleRoots ? 1 : 0,
         multipleRoots,
         multipleRoots,
@@ -331,9 +330,11 @@ class TreeList implements Component {
 
       // Add children in reverse order
       for (let i = orderedChildren.length - 1; i >= 0; i--) {
+        const child = orderedChildren[i];
+        if (child === undefined) continue;
         const childIsLast = i === orderedChildren.length - 1;
         stack.push([
-          orderedChildren[i],
+          child,
           childIndent,
           multipleChildren,
           multipleChildren,
@@ -517,9 +518,11 @@ class TreeList implements Component {
 
     // Add visible roots in reverse order (to process in forward order via stack)
     for (let i = visibleRootIds.length - 1; i >= 0; i--) {
+      const rootId = visibleRootIds[i];
+      if (rootId === undefined) continue;
       const isLast = i === visibleRootIds.length - 1;
       stack.push([
-        visibleRootIds[i],
+        rootId,
         this.multipleRoots ? 1 : 0,
         this.multipleRoots,
         this.multipleRoots,
@@ -567,9 +570,11 @@ class TreeList implements Component {
 
       // Add children in reverse order (to process in forward order via stack)
       for (let i = children.length - 1; i >= 0; i--) {
+        const childId = children[i];
+        if (childId === undefined) continue;
         const childIsLast = i === children.length - 1;
         stack.push([
-          children[i],
+          childId,
           childIndent,
           multipleChildren,
           multipleChildren,
@@ -714,8 +719,8 @@ class TreeList implements Component {
     const endIndex = Math.min(startIndex + this.maxVisibleLines, this.filteredNodes.length);
 
     const renderedRows: HorizontalViewportRow[] = [];
-    for (let i = startIndex; i < endIndex; i++) {
-      const flatNode = this.filteredNodes[i];
+    for (const [offset, flatNode] of this.filteredNodes.slice(startIndex, endIndex).entries()) {
+      const i = startIndex + offset;
       const entry = flatNode.node.entry;
       const isSelected = i === this.selectedIndex;
 
@@ -1121,14 +1126,14 @@ class TreeList implements Component {
       // Cycle filter backwards
       const modes: FilterMode[] = ["default", "no-tools", "user-only", "labeled-only", "all"];
       const currentIndex = modes.indexOf(this.filterMode);
-      this.filterMode = modes[(currentIndex - 1 + modes.length) % modes.length];
+      this.filterMode = modes[(currentIndex - 1 + modes.length) % modes.length] ?? "default";
       this.foldedNodes.clear();
       this.applyFilter();
     } else if (kb.matches(keyData, "app.tree.filter.cycleForward")) {
       // Cycle filter forwards: default → no-tools → user-only → labeled-only → all → default
       const modes: FilterMode[] = ["default", "no-tools", "user-only", "labeled-only", "all"];
       const currentIndex = modes.indexOf(this.filterMode);
-      this.filterMode = modes[(currentIndex + 1) % modes.length];
+      this.filterMode = modes[(currentIndex + 1) % modes.length] ?? "default";
       this.foldedNodes.clear();
       this.applyFilter();
     } else if (kb.matches(keyData, "tui.editor.deleteCharBackward")) {
@@ -1187,9 +1192,10 @@ class TreeList implements Component {
     if (direction === "down") {
       while (true) {
         const children: string[] = this.visibleChildrenMap.get(currentId) ?? [];
-        if (children.length === 0) return indexByEntryId.get(currentId)!;
-        if (children.length > 1) return indexByEntryId.get(children[0])!;
-        currentId = children[0];
+        const [firstChild] = children;
+        if (firstChild === undefined) return indexByEntryId.get(currentId)!;
+        if (children.length > 1) return indexByEntryId.get(firstChild)!;
+        currentId = firstChild;
       }
     }
 

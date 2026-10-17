@@ -172,7 +172,7 @@ export class OutputAccumulator {
       // and the tail skips leading continuation bytes.
       const headText = new TextDecoder().decode(head, { stream: true });
       let tailStart = 0;
-      while (tailStart < tail.length && (tail[tailStart] & 0xc0) === 0x80) tailStart++;
+      while (tailStart < tail.length && ((tail[tailStart] ?? 0) & 0xc0) === 0x80) tailStart++;
       const tailText = new TextDecoder().decode(tail.subarray(tailStart));
       const omitted = size - headBytes - tailBytes;
       return {
@@ -227,7 +227,7 @@ export class OutputAccumulator {
     }
 
     let start = buffer.length - this.maxRollingBytes;
-    while (start < buffer.length && (buffer[start] & 0xc0) === 0x80) {
+    while (start < buffer.length && ((buffer[start] ?? 0) & 0xc0) === 0x80) {
       start++;
     }
 

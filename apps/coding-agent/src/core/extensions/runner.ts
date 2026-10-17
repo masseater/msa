@@ -847,8 +847,10 @@ export class ExtensionRunner {
     base: () => ToolRenderers | undefined,
   ): ToolRenderers | undefined {
     const resolvers = this.extensions.flatMap((ext) => ext.toolRenderers ?? []);
-    const resolve = (index: number): ToolRenderers | undefined =>
-      index < resolvers.length ? resolvers[index](toolName, () => resolve(index + 1)) : base();
+    const resolve = (index: number): ToolRenderers | undefined => {
+      const resolver = resolvers[index];
+      return resolver ? resolver(toolName, () => resolve(index + 1)) : base();
+    };
     return resolve(0);
   }
 

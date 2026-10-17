@@ -70,9 +70,10 @@ export function normalizeWindowsShellPath(filePath: string): string {
   if (!filePath.startsWith("/") || filePath.startsWith("//") || filePath.includes("\\"))
     return filePath;
   const match = filePath.match(/^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/i);
-  if (!match) return filePath;
-  const suffix = match[2]?.replaceAll("/", "\\");
-  return `${match[1].toUpperCase()}:\\${suffix ?? ""}`;
+  const [, drive, rest] = match ?? [];
+  if (drive === undefined) return filePath;
+  const suffix = rest?.replaceAll("/", "\\");
+  return `${drive.toUpperCase()}:\\${suffix ?? ""}`;
 }
 
 export function normalizePath(input: string, options: PathInputOptions = {}): string {

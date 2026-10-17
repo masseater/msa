@@ -265,7 +265,8 @@ export function createMcpResourceToolDefinitions(options: {
     const items: Record<string, unknown>[] = [];
     const errors: { server: string; error: string }[] = [];
     results.forEach((result, index) => {
-      const server = servers[index].name;
+      const server = servers[index]?.name;
+      if (server === undefined) return;
       if (result.status === "fulfilled")
         items.push(...result.value.filter(visible).map((item) => listed(server, item)));
       else errors.push({ server, error: toErrorMessage(result.reason) });

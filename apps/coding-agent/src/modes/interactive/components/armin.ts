@@ -35,7 +35,7 @@ export function isArminPixel(x: number, y: number): boolean {
   if (y >= HEIGHT) return false;
   const byteIndex = y * BYTES_PER_ROW + Math.floor(x / 8);
   const bitIndex = x % 8;
-  return ((BITS[byteIndex] >> bitIndex) & 1) === 0;
+  return (((BITS[byteIndex] ?? 0) >> bitIndex) & 1) === 0;
 }
 
 // Get the character for a cell (2 vertical pixels packed)
@@ -46,6 +46,18 @@ function getChar(x: number, row: number): string {
   if (upper) return "▀";
   if (lower) return "▄";
   return " ";
+}
+
+function shuffle<T>(items: T[]): void {
+  // Fisher-Yates shuffle
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const a = items[i];
+    const b = items[j];
+    if (a === undefined || b === undefined) continue;
+    items[i] = b;
+    items[j] = a;
+  }
 }
 
 // Build the final image grid
@@ -75,7 +87,7 @@ export class ArminComponent implements Component {
 
   constructor(ui: TUI) {
     this.ui = ui;
-    this.effect = EFFECTS[Math.floor(Math.random() * EFFECTS.length)];
+    this.effect = EFFECTS[Math.floor(Math.random() * EFFECTS.length)] ?? "typewriter";
     this.finalGrid = buildFinalGrid();
     this.currentGrid = this.createEmptyGrid();
 
@@ -142,11 +154,7 @@ export class ArminComponent implements Component {
             positions.push([row, x]);
           }
         }
-        // Fisher-Yates shuffle
-        for (let i = positions.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [positions[i], positions[j]] = [positions[j], positions[i]];
-        }
+        shuffle(positions);
         this.effectState = { positions, idx: 0 };
         break;
       }
@@ -161,7 +169,7 @@ export class ArminComponent implements Component {
         this.currentGrid = Array.from({ length: DISPLAY_HEIGHT }, () =>
           Array.from({ length: WIDTH }, () => {
             const chars = [" ", "░", "▒", "▓", "█", "▀", "▄"];
-            return chars[Math.floor(Math.random() * chars.length)];
+            return chars[Math.floor(Math.random() * chars.length)] ?? " ";
           }),
         );
         // Shuffle positions for gradual resolve
@@ -171,13 +179,7 @@ export class ArminComponent implements Component {
             dissolvePositions.push([row, x]);
           }
         }
-        for (let i = dissolvePositions.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [dissolvePositions[i], dissolvePositions[j]] = [
-            dissolvePositions[j],
-            dissolvePositions[i],
-          ];
-        }
+        shuffle(dissolvePositions);
         this.effectState = { positions: dissolvePositions, idx: 0 };
         break;
       }
@@ -232,7 +234,7 @@ export class ArminComponent implements Component {
       const row = Math.floor(state.pos / WIDTH);
       const x = state.pos % WIDTH;
       if (row >= DISPLAY_HEIGHT) return true;
-      this.currentGrid[row][x] = this.finalGrid[row][x];
+      this.copyCell(row, x);
       state.pos++;
     }
     return false;
@@ -244,7 +246,7 @@ export class ArminComponent implements Component {
 
     // Copy row
     for (let x = 0; x < WIDTH; x++) {
-      this.currentGrid[state.row][x] = this.finalGrid[state.row][x];
+      this.copyCell(state.row, x);
     }
     state.row++;
     return false;
@@ -258,13 +260,11 @@ export class ArminComponent implements Component {
     let allSettled = true;
     this.currentGrid = this.createEmptyGrid();
 
-    for (let x = 0; x < WIDTH; x++) {
-      const drop = state.drops[x];
-
+    for (const [x, drop] of state.drops.entries()) {
       // Draw settled pixels
       for (let row = DISPLAY_HEIGHT - 1; row >= DISPLAY_HEIGHT - drop.settled; row--) {
         if (row >= 0) {
-          this.currentGrid[row][x] = this.finalGrid[row][x];
+          this.copyCell(row, x);
         }
       }
 
@@ -276,7 +276,7 @@ export class ArminComponent implements Component {
       // Find the target row for this column (lowest non-space pixel)
       let targetRow = -1;
       for (let row = DISPLAY_HEIGHT - 1 - drop.settled; row >= 0; row--) {
-        if (this.finalGrid[row][x] !== " ") {
+        if (this.finalGrid[row]?.[x] !== " ") {
           targetRow = row;
           break;
         }
@@ -293,7 +293,7 @@ export class ArminComponent implements Component {
           drop.y = -Math.floor(Math.random() * 5) - 1;
         } else {
           // Still falling
-          this.currentGrid[drop.y][x] = "▓";
+          this.setCell(drop.y, x, "▓");
         }
       }
     }
@@ -306,9 +306,10 @@ export class ArminComponent implements Component {
     const pixelsPerFrame = 15;
 
     for (let i = 0; i < pixelsPerFrame; i++) {
-      if (state.idx >= state.positions.length) return true;
-      const [row, x] = state.positions[state.idx];
-      this.currentGrid[row][x] = this.finalGrid[row][x];
+      const position = state.positions[state.idx];
+      if (position === undefined) return true;
+      const [row, x] = position;
+      this.copyCell(row, x);
       state.idx++;
     }
     return false;
@@ -326,7 +327,7 @@ export class ArminComponent implements Component {
 
     for (let row = Math.max(0, top); row <= Math.min(DISPLAY_HEIGHT - 1, bottom); row++) {
       for (let x = 0; x < WIDTH; x++) {
-        this.currentGrid[row][x] = this.finalGrid[row][x];
+        this.copyCell(row, x);
       }
     }
 
@@ -352,7 +353,7 @@ export class ArminComponent implements Component {
         // Random vertical swap
         if (Math.random() < 0.2) {
           const swapRow = Math.floor(Math.random() * DISPLAY_HEIGHT);
-          return [...this.finalGrid[swapRow]];
+          return [...(this.finalGrid[swapRow] ?? row)];
         }
 
         return glitchRow;
@@ -371,12 +372,23 @@ export class ArminComponent implements Component {
     const pixelsPerFrame = 20;
 
     for (let i = 0; i < pixelsPerFrame; i++) {
-      if (state.idx >= state.positions.length) return true;
-      const [row, x] = state.positions[state.idx];
-      this.currentGrid[row][x] = this.finalGrid[row][x];
+      const position = state.positions[state.idx];
+      if (position === undefined) return true;
+      const [row, x] = position;
+      this.copyCell(row, x);
       state.idx++;
     }
     return false;
+  }
+
+  private copyCell(row: number, x: number): void {
+    const cell = this.finalGrid[row]?.[x];
+    if (cell !== undefined) this.setCell(row, x, cell);
+  }
+
+  private setCell(row: number, x: number, cell: string): void {
+    const line = this.currentGrid[row];
+    if (line !== undefined) line[x] = cell;
   }
 
   private updateDisplay(): void {

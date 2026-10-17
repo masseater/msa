@@ -9,7 +9,9 @@ import { theme } from "../theme/theme.ts";
 function parseDiffLine(line: string): { prefix: string; lineNum: string; content: string } | null {
   const match = line.match(/^([+-\s])(\s*\d*)\s(.*)$/);
   if (!match) return null;
-  return { prefix: match[1], lineNum: match[2], content: match[3] };
+  const [, prefix, lineNum, content] = match;
+  if (prefix === undefined || lineNum === undefined || content === undefined) return null;
+  return { prefix, lineNum, content };
 }
 
 /**
@@ -87,6 +89,7 @@ export function renderDiff(diffText: string, _options: RenderDiffOptions = {}): 
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
+    if (line === undefined) break;
     const parsed = parseDiffLine(line);
 
     if (!parsed) {
@@ -99,7 +102,9 @@ export function renderDiff(diffText: string, _options: RenderDiffOptions = {}): 
       // Collect consecutive removed lines
       const removedLines: { lineNum: string; content: string }[] = [];
       while (i < lines.length) {
-        const p = parseDiffLine(lines[i]);
+        const next = lines[i];
+        if (next === undefined) break;
+        const p = parseDiffLine(next);
         if (!p || p.prefix !== "-") break;
         removedLines.push({ lineNum: p.lineNum, content: p.content });
         i++;
@@ -108,7 +113,9 @@ export function renderDiff(diffText: string, _options: RenderDiffOptions = {}): 
       // Collect consecutive added lines
       const addedLines: { lineNum: string; content: string }[] = [];
       while (i < lines.length) {
-        const p = parseDiffLine(lines[i]);
+        const next = lines[i];
+        if (next === undefined) break;
+        const p = parseDiffLine(next);
         if (!p || p.prefix !== "+") break;
         addedLines.push({ lineNum: p.lineNum, content: p.content });
         i++;
@@ -116,17 +123,21 @@ export function renderDiff(diffText: string, _options: RenderDiffOptions = {}): 
 
       // Only do intra-line diffing when there's exactly one removed and one added line
       // (indicating a single line modification). Otherwise, show lines as-is.
-      if (removedLines.length === 1 && addedLines.length === 1) {
-        const removed = removedLines[0];
-        const added = addedLines[0];
-
+      const [onlyRemoved] = removedLines;
+      const [onlyAdded] = addedLines;
+      if (
+        removedLines.length === 1 &&
+        addedLines.length === 1 &&
+        onlyRemoved !== undefined &&
+        onlyAdded !== undefined
+      ) {
         const { removedLine, addedLine } = renderIntraLineDiff(
-          replaceTabs(removed.content),
-          replaceTabs(added.content),
+          replaceTabs(onlyRemoved.content),
+          replaceTabs(onlyAdded.content),
         );
 
-        result.push(theme.fg("toolDiffRemoved", `-${removed.lineNum} ${removedLine}`));
-        result.push(theme.fg("toolDiffAdded", `+${added.lineNum} ${addedLine}`));
+        result.push(theme.fg("toolDiffRemoved", `-${onlyRemoved.lineNum} ${removedLine}`));
+        result.push(theme.fg("toolDiffAdded", `+${onlyAdded.lineNum} ${addedLine}`));
       } else {
         // Show all removed lines first, then all added lines
         for (const removed of removedLines) {

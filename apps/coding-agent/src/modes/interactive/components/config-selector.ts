@@ -334,7 +334,7 @@ class ResourceList implements Component, Focusable {
   private findNextItem(fromIndex: number, direction: 1 | -1): number {
     let idx = fromIndex + direction;
     while (idx >= 0 && idx < this.filteredItems.length) {
-      if (this.filteredItems[idx].type === "item") {
+      if (this.filteredItems[idx]?.type === "item") {
         return idx;
       }
       idx += direction;
@@ -438,9 +438,8 @@ class ResourceList implements Component, Focusable {
     );
     const endIndex = Math.min(startIndex + this.maxVisible, this.filteredItems.length);
 
-    for (let i = startIndex; i < endIndex; i++) {
-      const entry = this.filteredItems[i];
-      const isSelected = i === this.selectedIndex;
+    for (const [offset, entry] of this.filteredItems.slice(startIndex, endIndex).entries()) {
+      const isSelected = startIndex + offset === this.selectedIndex;
 
       if (entry.type === "group") {
         // Main group header (no cursor)
@@ -496,7 +495,7 @@ class ResourceList implements Component, Focusable {
     if (kb.matches(data, "tui.select.pageUp")) {
       // Jump up by maxVisible, then find nearest item
       let target = Math.max(0, this.selectedIndex - this.maxVisible);
-      while (target < this.filteredItems.length && this.filteredItems[target].type !== "item") {
+      while (target < this.filteredItems.length && this.filteredItems[target]?.type !== "item") {
         target++;
       }
       if (target < this.filteredItems.length) {
@@ -507,7 +506,7 @@ class ResourceList implements Component, Focusable {
     if (kb.matches(data, "tui.select.pageDown")) {
       // Jump down by maxVisible, then find nearest item
       let target = Math.min(this.filteredItems.length - 1, this.selectedIndex + this.maxVisible);
-      while (target >= 0 && this.filteredItems[target].type !== "item") {
+      while (target >= 0 && this.filteredItems[target]?.type !== "item") {
         target--;
       }
       if (target >= 0) {
@@ -626,9 +625,8 @@ class ResourceList implements Component, Focusable {
       return source === item.metadata.source;
     });
 
-    if (pkgIndex === -1) return;
-
     let pkg = packages[pkgIndex];
+    if (pkg === undefined) return;
 
     // Convert string to object form if needed
     if (typeof pkg === "string") {

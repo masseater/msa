@@ -49,11 +49,10 @@ function isBlankRenderedLine(line: string): boolean {
 }
 
 function trimRenderedResultLines(lines: string[]): string[] {
-  let start = 0;
-  let end = lines.length;
-  while (start < end && isBlankRenderedLine(lines[start])) start++;
-  while (end > start && isBlankRenderedLine(lines[end - 1])) end--;
-  return lines.slice(start, end);
+  const start = lines.findIndex((line) => !isBlankRenderedLine(line));
+  if (start === -1) return [];
+  const end = lines.findLastIndex((line) => !isBlankRenderedLine(line));
+  return lines.slice(start, end + 1);
 }
 
 export function createToolHtmlRenderer(deps: ToolHtmlRendererDeps): ToolHtmlRenderer {
