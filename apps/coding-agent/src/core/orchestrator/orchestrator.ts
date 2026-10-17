@@ -5,6 +5,7 @@ import type { AssistantMessage, Model } from "@msa/ai/compat";
 
 import { toErrorMessage } from "../../utils/errors.ts";
 import type { AgentSession } from "../agent-session.ts";
+import { SessionManager } from "../session-manager.ts";
 import type {
   SessionGraph,
   SessionKind,
@@ -23,6 +24,9 @@ export type WorkerSession = Pick<
   | "isStreaming"
   | "messages"
   | "sessionFile"
+  | "state"
+  | "isRetrying"
+  | "subscribe"
   | "dispose"
 >;
 
@@ -159,7 +163,11 @@ export class Orchestrator {
   /** The current run of each running session. A run that is not current ended without effect. */
   private readonly runs = new Map<string, number>();
   private runCount = 0;
+  private readonly runStartedAt = new Map<string, number>();
   private queue: Promise<unknown> = Promise.resolve();
+  private snapshot: SessionNodeWithDependencies[] = [];
+  private readonly transcripts = new Map<string, readonly AgentMessage[]>();
+  private readonly listeners = new Set<() => void>();
 
   private readonly options: OrchestratorOptions;
 
@@ -168,9 +176,60 @@ export class Orchestrator {
   }
 
   private exclusive<T>(fn: () => Promise<T>): Promise<T> {
-    const result = this.queue.then(fn);
+    const result = this.queue.then(fn).finally(() => this.refresh());
     this.queue = result.catch(() => undefined);
     return result;
+  }
+
+  /** The sessions as of the last change, for screens that render synchronously. */
+  get sessions(): readonly SessionNodeWithDependencies[] {
+    return this.snapshot;
+  }
+
+  /** Calls `listener` whenever {@link sessions} changes. Returns the unsubscribe function. */
+  onChange(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  /** The messages of a session's transcript, read from its file when this process holds no worker. */
+  messages(id: string): readonly AgentMessage[] {
+    const worker = this.workers.get(id);
+    if (worker) {
+      const streaming = worker.state.streamingMessage;
+      return streaming ? [...worker.messages, streaming] : worker.messages;
+    }
+    const sessionFile = this.snapshot.find((node) => node.id === id)?.sessionFile;
+    if (!sessionFile) return [];
+    let cached = this.transcripts.get(sessionFile);
+    if (!cached) {
+      try {
+        cached = SessionManager.open(sessionFile).buildSessionContext().messages;
+      } catch {
+        cached = [];
+      }
+      this.transcripts.set(sessionFile, cached);
+    }
+    return cached;
+  }
+
+  /** When the current run of a session started, and whether it is waiting to retry a failed request. */
+  progress(id: string): { startedAt: number | undefined; retrying: boolean } {
+    return {
+      startedAt: this.runs.has(id) ? this.runStartedAt.get(id) : undefined,
+      retrying: this.workers.get(id)?.isRetrying ?? false,
+    };
+  }
+
+  /** Reloads {@link sessions} from the graph. Failures leave the last snapshot in place. */
+  async refresh(): Promise<void> {
+    try {
+      const graph = await this.connect();
+      this.snapshot = await graph.list(this.options.project);
+    } catch {
+      return;
+    }
+    for (const listener of this.listeners) listener();
   }
 
   private connect(): Promise<SessionGraph> {
@@ -393,11 +452,16 @@ export class Orchestrator {
         sessionFile: node.sessionFile,
       });
       this.workers.set(node.id, worker);
+      // Screens follow a running session's transcript as it streams.
+      worker.subscribe(() => {
+        for (const listener of this.listeners) listener();
+      });
     }
     await graph.update(node.id, { status: "running", sessionFile: worker.sessionFile });
     const session = worker;
     const run = ++this.runCount;
     this.runs.set(node.id, run);
+    this.runStartedAt.set(node.id, Date.now());
     void session.prompt(text).then(
       () => this.settle(node.id, run, session, undefined),
       (error: unknown) => this.settle(node.id, run, session, error),
