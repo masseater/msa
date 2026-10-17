@@ -1,211 +1,19 @@
-import { Effect } from "effect";
-import { dual } from "effect/Function";
-
-import { replaceEscapeSequences } from "../ansi-sequences.ts";
-import type { AutocompleteProvider, AutocompleteSuggestions } from "../autocomplete.ts";
-import { type CancelDelay, runAfter } from "../delay.ts";
-import { getKeybindings } from "../keybindings.ts";
-import { decodePrintableKey, matchesKey } from "../keys.ts";
-import { KillRing } from "../kill-ring.ts";
+import type { AutocompleteProvider } from "../autocomplete.ts";
+import { getKeybindings, type KeybindingsManager } from "../keybindings.ts";
+import type { Component, Focusable, TuiMouseEvent, TuiMouseEventResult } from "../tui-component.ts";
+import type { TUI } from "../tui-interface.ts";
+import { EditorAutocomplete } from "./editor-autocomplete.ts";
+import { EditorCommands } from "./editor-commands.ts";
+import { EditorDocument } from "./editor-document.ts";
+import { insertableInput, isNewLineInput, printableInput } from "./editor-keys.ts";
 import {
-  autocompleteBoundaryRegex,
-  autocompleteSeparatorRegex,
-  cjkBreakRegex,
-  isWhitespaceChar,
-} from "../text-boundaries.ts";
-import { sliceByColumn } from "../text-slice.ts";
-import {
-  type Component,
-  CURSOR_MARKER,
-  type Focusable,
-  renderFakeCursor,
-  type TuiMouseEvent,
-  type TuiMouseEventResult,
-} from "../tui-component.ts";
-import { type TUI } from "../tui-interface.ts";
-import { UndoStack } from "../undo-stack.ts";
-import { getGraphemeSegmenter, getWordSegmenter, visibleWidth } from "../utils.ts";
-import { findWordBackward, findWordForward } from "../word-navigation.ts";
-import { SelectList, type SelectListLayoutOptions, type SelectListTheme } from "./select-list.ts";
-
-const CTRL_CSI_U_BODY = /^(\d+);5$/u;
-
-const graphemeSegmenter = getGraphemeSegmenter();
-const wordSegmenter = getWordSegmenter();
-
-const PASTE_MARKER_REGEX = /\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]/gu;
-
-const PASTE_MARKER_SINGLE = /^\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]$/u;
-
-function isPasteMarker(segment: string): boolean {
-  return segment.length >= 10 && PASTE_MARKER_SINGLE.test(segment);
-}
-
-function segmentWithMarkers(
-  text: string,
-  baseSegmenter: Intl.Segmenter,
-  validIds: Set<number>,
-): Iterable<Intl.SegmentData> {
-  if (validIds.size === 0 || !text.includes("[paste #")) {
-    return baseSegmenter.segment(text);
-  }
-
-  const markers: Array<{ start: number; end: number }> = [];
-  for (const m of text.matchAll(PASTE_MARKER_REGEX)) {
-    const id = Number.parseInt(m[1]!, 10);
-    if (!validIds.has(id)) continue;
-    markers.push({ start: m.index, end: m.index + m[0].length });
-  }
-  if (markers.length === 0) {
-    return baseSegmenter.segment(text);
-  }
-
-  const baseSegments = baseSegmenter.segment(text);
-  const result: Intl.SegmentData[] = [];
-  let markerIdx = 0;
-
-  for (const seg of baseSegments) {
-    while (markerIdx < markers.length && markers[markerIdx]!.end <= seg.index) {
-      markerIdx++;
-    }
-
-    const marker = markerIdx < markers.length ? markers[markerIdx]! : null;
-
-    if (marker !== null && seg.index >= marker.start && seg.index < marker.end) {
-      if (seg.index === marker.start) {
-        const markerText = text.slice(marker.start, marker.end);
-        result.push({
-          segment: markerText,
-          index: marker.start,
-          input: text,
-        });
-      }
-    } else {
-      result.push(seg);
-    }
-  }
-
-  return result;
-}
-
-export interface TextChunk {
-  text: string;
-  startIndex: number;
-  endIndex: number;
-}
-
-export const wordWrapLine: {
-  (line: string, maxWidth: number, preSegmented?: Intl.SegmentData[]): TextChunk[];
-  (maxWidth: number, preSegmented?: Intl.SegmentData[]): (line: string) => TextChunk[];
-} = dual(
-  (args) => typeof args[0] === "string",
-  (line: string, maxWidth: number, preSegmented?: Intl.SegmentData[]): TextChunk[] => {
-    if (line === "" || maxWidth <= 0) {
-      return [{ text: "", startIndex: 0, endIndex: 0 }];
-    }
-
-    const lineWidth = visibleWidth(line);
-    if (lineWidth <= maxWidth) {
-      return [{ text: line, startIndex: 0, endIndex: line.length }];
-    }
-
-    const chunks: TextChunk[] = [];
-    const segments = preSegmented ?? [...graphemeSegmenter.segment(line)];
-
-    let currentWidth = 0;
-    let chunkStart = 0;
-
-    let wrapOppIndex = -1;
-    let wrapOppWidth = 0;
-
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i]!;
-      const grapheme = seg.segment;
-      const gWidth = visibleWidth(grapheme);
-      const charIndex = seg.index;
-      const isWs = !isPasteMarker(grapheme) && isWhitespaceChar(grapheme);
-
-      if (currentWidth + gWidth > maxWidth) {
-        if (wrapOppIndex >= 0 && currentWidth - wrapOppWidth + gWidth <= maxWidth) {
-          chunks.push({
-            text: line.slice(chunkStart, wrapOppIndex),
-            startIndex: chunkStart,
-            endIndex: wrapOppIndex,
-          });
-          chunkStart = wrapOppIndex;
-          currentWidth -= wrapOppWidth;
-        } else if (chunkStart < charIndex) {
-          chunks.push({
-            text: line.slice(chunkStart, charIndex),
-            startIndex: chunkStart,
-            endIndex: charIndex,
-          });
-          chunkStart = charIndex;
-          currentWidth = 0;
-        }
-        wrapOppIndex = -1;
-      }
-
-      if (gWidth > maxWidth) {
-        const subChunks = wordWrapLine(grapheme, maxWidth);
-        for (let j = 0; j < subChunks.length - 1; j++) {
-          const sc = subChunks[j]!;
-          chunks.push({
-            text: sc.text,
-            startIndex: charIndex + sc.startIndex,
-            endIndex: charIndex + sc.endIndex,
-          });
-        }
-        const last = subChunks[subChunks.length - 1]!;
-        chunkStart = charIndex + last.startIndex;
-        currentWidth = visibleWidth(last.text);
-        wrapOppIndex = -1;
-        continue;
-      }
-
-      currentWidth += gWidth;
-
-      const next = segments[i + 1];
-      if (
-        isWs &&
-        next !== undefined &&
-        (isPasteMarker(next.segment) || !isWhitespaceChar(next.segment))
-      ) {
-        wrapOppIndex = next.index;
-        wrapOppWidth = currentWidth;
-      } else if (!isWs && next !== undefined && !isWhitespaceChar(next.segment)) {
-        const isCjk = !isPasteMarker(grapheme) && cjkBreakRegex.test(grapheme);
-        const nextIsCjk = !isPasteMarker(next.segment) && cjkBreakRegex.test(next.segment);
-        if (isCjk || nextIsCjk) {
-          wrapOppIndex = next.index;
-          wrapOppWidth = currentWidth;
-        }
-      }
-    }
-
-    chunks.push({ text: line.slice(chunkStart), startIndex: chunkStart, endIndex: line.length });
-
-    return chunks;
-  },
-);
-
-interface EditorState {
-  lines: string[];
-  cursorLine: number;
-  cursorCol: number;
-}
-
-interface EditorSnapshot {
-  state: EditorState;
-  pastes: Map<number, string>;
-  pasteCounter: number;
-}
-
-interface LayoutLine {
-  text: string;
-  hasCursor: boolean;
-  cursorPos?: number;
-}
+  clampScrollOffset,
+  createScrollBorder,
+  editorPadding,
+  padContentLines,
+  renderContentLines,
+} from "./editor-render.ts";
+import type { SelectListTheme } from "./select-list.ts";
 
 export interface EditorTheme {
   borderColor: (str: string) => string;
@@ -217,140 +25,52 @@ export interface EditorOptions {
   autocompleteMaxVisible?: number;
 }
 
-const SLASH_COMMAND_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
-  minPrimaryColumnWidth: 12,
-  maxPrimaryColumnWidth: 32,
-};
+const PASTE_START = "\x1b[200~";
+const PASTE_END = "\x1b[201~";
 
-const ATTACHMENT_AUTOCOMPLETE_DEBOUNCE_MS = 20;
-const DEFAULT_AUTOCOMPLETE_TRIGGER_CHARACTERS = ["@", "#"];
-const unquotedAutocompleteSuffixRegex = new RegExp(
-  `(?:(?!${autocompleteSeparatorRegex.source}).)*`,
-  "u",
-);
-const autocompleteTokenStartSource = `${autocompleteBoundaryRegex.source}[([{<\`]*`;
-
-function escapeCharacterClass(value: string): string {
-  return value.replace(/[\\^$.*+?()[\]{}|-]/gu, "\\$&");
+function clampPadding(padding: number): number {
+  return Number.isFinite(padding) ? Math.max(0, Math.floor(padding)) : 0;
 }
 
-function buildTriggerPattern(triggerCharacters: string[]): RegExp {
-  return new RegExp(
-    `${autocompleteTokenStartSource}(?:@"[^"]*|[${triggerCharacters.map(escapeCharacterClass).join("")}]${unquotedAutocompleteSuffixRegex.source})$`,
-    "u",
-  );
-}
-
-function buildDebouncePattern(triggerCharacters: string[]): RegExp {
-  const escapedWithoutAt = triggerCharacters
-    .filter((character) => character !== "@")
-    .map(escapeCharacterClass);
-  return new RegExp(
-    `${autocompleteTokenStartSource}(?:@(?:"[^"]*|${unquotedAutocompleteSuffixRegex.source})|[${escapedWithoutAt.join("")}]${unquotedAutocompleteSuffixRegex.source})$`,
-    "u",
-  );
-}
-
-function createScrollBorder(direction: "↑" | "↓", hiddenLineCount: number, width: number): string {
-  const availableWidth = Math.max(0, width);
-  const label = ` ${direction} ${hiddenLineCount} more `;
-  const labelWidth = visibleWidth(label);
-  if (labelWidth + 2 <= availableWidth) {
-    const leftWidth = Math.floor((availableWidth - labelWidth) / 2);
-    return "─".repeat(leftWidth) + label + "─".repeat(availableWidth - leftWidth - labelWidth);
-  }
-
-  const indicator = `─── ${direction} ${hiddenLineCount} more `;
-  const remaining = availableWidth - visibleWidth(indicator);
-  if (remaining >= 0) return indicator + "─".repeat(remaining);
-
-  const ellipsis = "...".slice(0, availableWidth);
-  const indicatorWidth = availableWidth - visibleWidth(ellipsis);
-  return sliceByColumn(indicator, 0, indicatorWidth, true) + ellipsis;
+function clampMaxVisible(maxVisible: number): number {
+  return Number.isFinite(maxVisible) ? Math.max(3, Math.min(20, Math.floor(maxVisible))) : 5;
 }
 
 export class Editor implements Component, Focusable {
-  private state: EditorState = {
-    lines: [""],
-    cursorLine: 0,
-    cursorCol: 0,
-  };
-
   focused: boolean = false;
-
   protected tui: TUI;
-  private theme: EditorTheme;
-  private paddingX: number = 0;
-
-  private lastWidth: number = 80;
-  private renderedVisibleLineCount = 1;
-  private renderedAutocompleteHeight = 0;
-
-  private scrollOffset: number = 0;
-
   public borderColor: (str: string) => string;
-
-  private autocompleteProvider?: AutocompleteProvider;
-  private autocompleteTriggerCharacters = [...DEFAULT_AUTOCOMPLETE_TRIGGER_CHARACTERS];
-  private autocompleteTriggerPattern = buildTriggerPattern(this.autocompleteTriggerCharacters);
-  private autocompleteDebouncePattern = buildDebouncePattern(this.autocompleteTriggerCharacters);
-  private autocompleteList?: SelectList | undefined;
-  private autocompleteState: "regular" | "force" | null = null;
-  private autocompletePrefix: string = "";
-  private autocompleteMaxVisible: number = 5;
-  private autocompleteAbort?: AbortController | undefined;
-  private cancelAutocompleteDebounce?: CancelDelay | undefined;
-  private autocompleteRequestTask: Promise<void> = Promise.resolve();
-  private autocompleteStartToken: number = 0;
-  private autocompleteRequestId: number = 0;
-
-  private pastes: Map<number, string> = new Map();
-  private pasteCounter: number = 0;
-
-  private pasteBuffer: string = "";
-  private isInPaste: boolean = false;
-
-  private history: string[] = [];
-  private historyIndex: number = -1;
-  private historyDraft: EditorState | null = null;
-
-  private killRing = new KillRing();
-  private lastAction: "kill" | "yank" | "type-word" | null = null;
-
-  private jumpMode: "forward" | "backward" | null = null;
-
-  private preferredVisualCol: number | null = null;
-
-  private snappedFromCursorCol: number | null = null;
-
-  private undoStack = new UndoStack<EditorSnapshot>();
-
   public onSubmit?: (text: string) => void;
   public onChange?: (text: string) => void;
   public disableSubmit: boolean = false;
 
+  private paddingX: number;
+  private renderedVisibleLineCount = 1;
+  private renderedAutocompleteHeight = 0;
+  private pasteBuffer: string = "";
+  private isInPaste: boolean = false;
+  private jumpMode: "forward" | "backward" | null = null;
+  private readonly doc = new EditorDocument(() => this.onChange?.(this.getText()));
+  private readonly autocomplete: EditorAutocomplete;
+  private readonly commands: EditorCommands;
+
   constructor(tui: TUI, theme: EditorTheme, options: EditorOptions = {}) {
     this.tui = tui;
-    this.theme = theme;
     this.borderColor = theme.borderColor;
-    const paddingX = options.paddingX ?? 0;
-    this.paddingX = Number.isFinite(paddingX) ? Math.max(0, Math.floor(paddingX)) : 0;
-    const maxVisible = options.autocompleteMaxVisible ?? 5;
-    this.autocompleteMaxVisible = Number.isFinite(maxVisible)
-      ? Math.max(3, Math.min(20, Math.floor(maxVisible)))
-      : 5;
-  }
-
-  private validPasteIds(): Set<number> {
-    return new Set(this.pastes.keys());
-  }
-
-  private segment(text: string, mode: "word" | "grapheme"): Iterable<Intl.SegmentData> {
-    return segmentWithMarkers(
-      text,
-      mode === "word" ? wordSegmenter : graphemeSegmenter,
-      this.validPasteIds(),
-    );
+    this.paddingX = clampPadding(options.paddingX ?? 0);
+    this.autocomplete = new EditorAutocomplete(this.doc, {
+      theme: theme.selectList,
+      maxVisible: clampMaxVisible(options.autocompleteMaxVisible ?? 5),
+      requestRender: () => this.tui.requestRender(),
+    });
+    this.commands = new EditorCommands(this.doc, this.autocomplete, {
+      terminalRows: () => this.tui.terminal.rows,
+      isSubmitDisabled: () => this.disableSubmit,
+      submit: (text) => {
+        this.onChange?.("");
+        this.onSubmit?.(text);
+      },
+    });
   }
 
   getPaddingX(): number {
@@ -358,7 +78,7 @@ export class Editor implements Component, Focusable {
   }
 
   setPaddingX(padding: number): void {
-    const newPadding = Number.isFinite(padding) ? Math.max(0, Math.floor(padding)) : 0;
+    const newPadding = clampPadding(padding);
     if (this.paddingX !== newPadding) {
       this.paddingX = newPadding;
       this.tui.requestRender();
@@ -366,102 +86,23 @@ export class Editor implements Component, Focusable {
   }
 
   getAutocompleteMaxVisible(): number {
-    return this.autocompleteMaxVisible;
+    return this.autocomplete.maxVisible;
   }
 
   setAutocompleteMaxVisible(maxVisible: number): void {
-    const newMaxVisible = Number.isFinite(maxVisible)
-      ? Math.max(3, Math.min(20, Math.floor(maxVisible)))
-      : 5;
-    if (this.autocompleteMaxVisible !== newMaxVisible) {
-      this.autocompleteMaxVisible = newMaxVisible;
+    const newMaxVisible = clampMaxVisible(maxVisible);
+    if (this.autocomplete.maxVisible !== newMaxVisible) {
+      this.autocomplete.maxVisible = newMaxVisible;
       this.tui.requestRender();
     }
   }
 
   setAutocompleteProvider(provider: AutocompleteProvider): void {
-    this.cancelAutocomplete();
-    this.autocompleteProvider = provider;
-    this.setAutocompleteTriggerCharacters(provider.triggerCharacters ?? []);
+    this.autocomplete.setProvider(provider);
   }
 
   addToHistory(text: string): void {
-    const trimmed = text.trim();
-    if (trimmed === "") return;
-    if (this.history.length > 0 && this.history[0] === trimmed) return;
-    this.history.unshift(trimmed);
-    if (this.history.length > 100) {
-      this.history.pop();
-    }
-  }
-
-  private isEditorEmpty(): boolean {
-    return this.state.lines.length === 1 && this.state.lines[0] === "";
-  }
-
-  private isOnFirstVisualLine(): boolean {
-    const visualLines = this.buildVisualLineMap(this.lastWidth);
-    const currentVisualLine = this.findCurrentVisualLine(visualLines);
-    return currentVisualLine === 0;
-  }
-
-  private isOnLastVisualLine(): boolean {
-    const visualLines = this.buildVisualLineMap(this.lastWidth);
-    const currentVisualLine = this.findCurrentVisualLine(visualLines);
-    return currentVisualLine === visualLines.length - 1;
-  }
-
-  private navigateHistory(direction: 1 | -1): void {
-    this.lastAction = null;
-    if (this.history.length === 0) return;
-
-    const newIndex = this.historyIndex - direction;
-    if (newIndex < -1 || newIndex >= this.history.length) return;
-
-    if (this.historyIndex === -1 && newIndex >= 0) {
-      this.pushUndoSnapshot();
-      this.historyDraft = structuredClone(this.state);
-    }
-
-    this.historyIndex = newIndex;
-
-    if (this.historyIndex === -1) {
-      const draft = this.historyDraft;
-      this.historyDraft = null;
-      if (draft === null) {
-        this.setTextInternal("");
-      } else {
-        this.state = draft;
-        this.preferredVisualCol = null;
-        this.snappedFromCursorCol = null;
-        this.scrollOffset = 0;
-        if (this.onChange !== undefined) this.onChange(this.getText());
-      }
-    } else {
-      this.setTextInternal(
-        this.history[this.historyIndex] || "",
-        direction === -1 ? "start" : "end",
-      );
-    }
-  }
-
-  private exitHistoryBrowsing(): void {
-    this.historyIndex = -1;
-    this.historyDraft = null;
-  }
-
-  private setTextInternal(text: string, cursorPlacement: "start" | "end" = "end"): void {
-    const lines = text.split("\n");
-    this.state.lines = lines.length === 0 ? [""] : lines;
-    this.state.cursorLine = cursorPlacement === "start" ? 0 : this.state.lines.length - 1;
-    this.setCursorCol(
-      cursorPlacement === "start" ? 0 : (this.state.lines[this.state.cursorLine]?.length ?? 0),
-    );
-    this.scrollOffset = 0;
-
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
+    this.commands.history.add(text);
   }
 
   invalidate(): void {}
@@ -479,104 +120,46 @@ export class Editor implements Component, Focusable {
   }
 
   render(width: number): string[] {
-    const maxPadding = Math.max(0, Math.floor((width - 1) / 2));
-    const paddingX = Math.min(this.paddingX, maxPadding);
-    const contentWidth = Math.max(1, width - paddingX * 2);
-
-    const layoutWidth = Math.max(1, contentWidth - (paddingX === 0 ? 1 : 0));
-
-    this.lastWidth = layoutWidth;
-
-    const layoutLines = this.layoutText(layoutWidth);
-
-    const terminalRows = this.tui.terminal.rows;
-    const maxVisibleLines = Math.max(5, Math.floor(terminalRows * 0.3));
-
-    let cursorLineIndex = layoutLines.findIndex((line) => line.hasCursor);
-    if (cursorLineIndex === -1) cursorLineIndex = 0;
-
-    if (cursorLineIndex < this.scrollOffset) {
-      this.scrollOffset = cursorLineIndex;
-    } else if (cursorLineIndex >= this.scrollOffset + maxVisibleLines) {
-      this.scrollOffset = cursorLineIndex - maxVisibleLines + 1;
-    }
-
-    const maxScrollOffset = Math.max(0, layoutLines.length - maxVisibleLines);
-    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScrollOffset));
-
-    const visibleLines = layoutLines.slice(this.scrollOffset, this.scrollOffset + maxVisibleLines);
+    const padding = editorPadding(width, this.paddingX);
+    this.commands.layoutWidth = Math.max(
+      1,
+      padding.contentWidth - (padding.paddingX === 0 ? 1 : 0),
+    );
+    const layoutLines = this.doc.layout(this.commands.layoutWidth);
+    const maxVisibleLines = Math.max(5, Math.floor(this.tui.terminal.rows * 0.3));
+    const scrollOffset = clampScrollOffset({
+      layoutLines,
+      scrollOffset: this.doc.scrollOffset,
+      maxVisibleLines,
+    });
+    this.doc.scrollOffset = scrollOffset;
+    const visibleLines = layoutLines.slice(scrollOffset, scrollOffset + maxVisibleLines);
     this.renderedVisibleLineCount = visibleLines.length;
 
-    const result: string[] = [];
-    const leftPadding = " ".repeat(paddingX);
-    const rightPadding = leftPadding;
-
-    result.push(this.renderTopBorder(width, this.scrollOffset));
-
-    const emitCursorMarker = this.focused;
-
-    for (const layoutLine of visibleLines) {
-      let displayText = layoutLine.text;
-      let lineVisibleWidth = visibleWidth(layoutLine.text);
-      let cursorInPadding = false;
-
-      if (layoutLine.hasCursor && layoutLine.cursorPos !== undefined) {
-        const before = displayText.slice(0, layoutLine.cursorPos);
-        const after = displayText.slice(layoutLine.cursorPos);
-
-        const marker = emitCursorMarker ? CURSOR_MARKER : "";
-
-        if (after.length > 0) {
-          const afterGraphemes = [...this.segment(after, "grapheme")];
-          const firstGrapheme = afterGraphemes[0]?.segment || "";
-          const restAfter = after.slice(firstGrapheme.length);
-          const cursor = renderFakeCursor(firstGrapheme);
-          displayText = before + marker + cursor + restAfter;
-        } else {
-          const cursor = renderFakeCursor(" ");
-          displayText = before + marker + cursor;
-          lineVisibleWidth = lineVisibleWidth + 1;
-          if (lineVisibleWidth > contentWidth && paddingX > 0) {
-            cursorInPadding = true;
-          }
-        }
-      }
-
-      const padding = " ".repeat(Math.max(0, contentWidth - lineVisibleWidth));
-      const lineRightPadding = cursorInPadding ? rightPadding.slice(1) : rightPadding;
-
-      result.push(`${leftPadding}${displayText}${padding}${lineRightPadding}`);
-    }
-
-    const linesBelow = layoutLines.length - (this.scrollOffset + visibleLines.length);
-    result.push(this.renderBottomBorder(width, linesBelow));
-
-    this.renderedAutocompleteHeight = 0;
-    if (this.autocompleteState !== null && this.autocompleteList !== undefined) {
-      const autocompleteResult = this.autocompleteList.render(contentWidth);
-      this.renderedAutocompleteHeight = autocompleteResult.length;
-      for (const line of autocompleteResult) {
-        const lineWidth = visibleWidth(line);
-        const linePadding = " ".repeat(Math.max(0, contentWidth - lineWidth));
-        result.push(`${leftPadding}${line}${linePadding}${rightPadding}`);
-      }
-    }
-
-    return result;
+    const result = [
+      this.renderTopBorder(width, scrollOffset),
+      ...renderContentLines(visibleLines, {
+        ...padding,
+        focused: this.focused,
+        graphemes: (text) => this.doc.graphemes(text),
+      }),
+      this.renderBottomBorder(width, layoutLines.length - (scrollOffset + visibleLines.length)),
+    ];
+    const autocompleteLines = this.autocomplete.visibleList()?.render(padding.contentWidth) ?? [];
+    this.renderedAutocompleteHeight = autocompleteLines.length;
+    return [...result, ...padContentLines(autocompleteLines, padding)];
   }
 
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    const list = this.autocomplete.visibleList();
     const autocompleteStartRow = this.renderedVisibleLineCount + 2;
     if (
-      this.autocompleteState !== null &&
-      this.autocompleteList !== undefined &&
+      list !== undefined &&
       event.y >= autocompleteStartRow &&
       event.y < autocompleteStartRow + this.renderedAutocompleteHeight
     ) {
-      const maxPadding = Math.max(0, Math.floor((event.width - 1) / 2));
-      const paddingX = Math.min(this.paddingX, maxPadding);
-      const contentWidth = Math.max(1, event.width - paddingX * 2);
-      const result = this.autocompleteList.handleMouse?.({
+      const { paddingX, contentWidth } = editorPadding(event.width, this.paddingX);
+      const result = list.handleMouse?.({
         ...event,
         x: event.x - paddingX,
         y: event.y - autocompleteStartRow,
@@ -587,1681 +170,117 @@ export class Editor implements Component, Focusable {
     }
 
     if (event.type !== "click" || event.button !== "left") return undefined;
-    if (event.y <= 0 || event.y > this.renderedVisibleLineCount)
-      return { handled: true, focus: true };
-
-    const visualLines = this.buildVisualLineMap(this.lastWidth);
-    const visualLineIndex = this.scrollOffset + event.y - 1;
-    const visualLine = visualLines[visualLineIndex];
-    if (visualLine === undefined) return { handled: true, focus: true };
-    const logicalLine = this.state.lines[visualLine.logicalLine] ?? "";
-    const chunkEnd = visualLine.startCol + visualLine.length;
-    const chunk = logicalLine.slice(visualLine.startCol, chunkEnd);
-    const maxPadding = Math.max(0, Math.floor((event.width - 1) / 2));
-    const paddingX = Math.min(this.paddingX, maxPadding);
-    const targetColumn = Math.max(0, event.x - paddingX);
-    let visibleColumn = 0;
-    let targetIndex = chunk.length;
-    let lastGraphemeIndex = 0;
-    for (const grapheme of this.segment(chunk, "grapheme")) {
-      const nextColumn = visibleColumn + visibleWidth(grapheme.segment);
-      lastGraphemeIndex = grapheme.index;
-      if (targetColumn < nextColumn) {
-        targetIndex = grapheme.index;
-        break;
-      }
-      visibleColumn = nextColumn;
+    if (event.y > 0 && event.y <= this.renderedVisibleLineCount) {
+      const { paddingX } = editorPadding(event.width, this.paddingX);
+      this.commands.click(this.doc.scrollOffset + event.y - 1, Math.max(0, event.x - paddingX));
     }
-    const isLastSegment =
-      visualLineIndex === visualLines.length - 1 ||
-      visualLines[visualLineIndex + 1]?.logicalLine !== visualLine.logicalLine;
-    if (!isLastSegment && targetIndex === chunk.length && chunk.length > 0)
-      targetIndex = lastGraphemeIndex;
-
-    this.state.cursorLine = visualLine.logicalLine;
-    this.setCursorCol(visualLine.startCol + targetIndex);
-    this.lastAction = null;
-    this.exitHistoryBrowsing();
-    if (this.autocompleteState !== null) this.updateAutocomplete();
     return { handled: true, focus: true };
   }
 
   handleInput(data: string): void {
     const kb = getKeybindings();
-
-    if (this.jumpMode !== null) {
-      if (
-        kb.matches(data, "tui.editor.jumpForward") ||
-        kb.matches(data, "tui.editor.jumpBackward")
-      ) {
-        this.jumpMode = null;
-        return;
-      }
-
-      const printable = decodePrintableKey(data) ?? (data.charCodeAt(0) >= 32 ? data : undefined);
-      if (printable !== undefined) {
-        const direction = this.jumpMode;
-        this.jumpMode = null;
-        this.jumpToChar(printable, direction);
-        return;
-      }
-
-      this.jumpMode = null;
-    }
-
-    if (data.includes("\x1b[200~")) {
-      this.isInPaste = true;
-      this.pasteBuffer = "";
-      data = data.replace("\x1b[200~", "");
-    }
-
-    if (this.isInPaste) {
-      this.pasteBuffer += data;
-      const endIndex = this.pasteBuffer.indexOf("\x1b[201~");
-      if (endIndex !== -1) {
-        const pasteContent = this.pasteBuffer.substring(0, endIndex);
-        if (pasteContent.length > 0) {
-          this.handlePaste(pasteContent);
-        }
-        this.isInPaste = false;
-        const remaining = this.pasteBuffer.substring(endIndex + 6);
-        this.pasteBuffer = "";
-        if (remaining.length > 0) {
-          this.handleInput(remaining);
-        }
-        return;
-      }
+    if (this.jumpMode !== null && this.handleJumpInput(data, kb)) return;
+    const input = this.consumePaste(data);
+    if (input === undefined || kb.matches(input, "tui.input.copy")) return;
+    if (kb.matches(input, "tui.editor.undo")) {
+      this.commands.undo();
       return;
     }
-
-    if (kb.matches(data, "tui.input.copy")) {
+    if (this.autocomplete.handleKey(input, kb)) return;
+    if (kb.matches(input, "tui.input.tab") && !this.autocomplete.isShowing()) {
+      this.autocomplete.handleTab();
       return;
     }
-
-    if (kb.matches(data, "tui.editor.undo")) {
-      this.undo();
+    if (this.commands.runBinding(input, kb)) return;
+    if (isNewLineInput(input, kb)) {
+      this.commands.newLineOrSubmit(input, kb);
       return;
     }
-
-    if (this.autocompleteState !== null && this.autocompleteList !== undefined) {
-      if (kb.matches(data, "tui.select.cancel")) {
-        this.cancelAutocomplete();
-        return;
-      }
-
-      if (kb.matches(data, "tui.select.up") || kb.matches(data, "tui.select.down")) {
-        this.autocompleteList.handleInput(data);
-        return;
-      }
-
-      if (kb.matches(data, "tui.input.tab")) {
-        const selected = this.autocompleteList.getSelectedItem();
-        if (selected !== null && this.autocompleteProvider !== undefined) {
-          this.pushUndoSnapshot();
-          this.lastAction = null;
-          const result = this.autocompleteProvider.applyCompletion(
-            this.state.lines,
-            this.state.cursorLine,
-            this.state.cursorCol,
-            selected,
-            this.autocompletePrefix,
-          );
-          this.state.lines = result.lines;
-          this.state.cursorLine = result.cursorLine;
-          this.setCursorCol(result.cursorCol);
-          this.cancelAutocomplete();
-          if (this.onChange !== undefined) this.onChange(this.getText());
-        }
-        return;
-      }
-
-      if (kb.matches(data, "tui.select.confirm")) {
-        const selected = this.autocompleteList.getSelectedItem();
-        if (selected !== null && this.autocompleteProvider !== undefined) {
-          this.pushUndoSnapshot();
-          this.lastAction = null;
-          const result = this.autocompleteProvider.applyCompletion(
-            this.state.lines,
-            this.state.cursorLine,
-            this.state.cursorCol,
-            selected,
-            this.autocompletePrefix,
-          );
-          this.state.lines = result.lines;
-          this.state.cursorLine = result.cursorLine;
-          this.setCursorCol(result.cursorCol);
-
-          if (this.autocompletePrefix.startsWith("/")) {
-            this.cancelAutocomplete();
-          } else {
-            this.cancelAutocomplete();
-            if (this.onChange !== undefined) this.onChange(this.getText());
-            return;
-          }
-        }
-      }
-    }
-
-    if (kb.matches(data, "tui.input.tab") && this.autocompleteState === null) {
-      this.handleTabCompletion();
+    if (kb.matches(input, "tui.input.submit")) {
+      this.commands.submitOrContinue();
       return;
     }
-
-    if (kb.matches(data, "tui.editor.deleteToLineEnd")) {
-      this.deleteToEndOfLine();
-      return;
-    }
-    if (kb.matches(data, "tui.editor.deleteToLineStart")) {
-      this.deleteToStartOfLine();
-      return;
-    }
-    if (kb.matches(data, "tui.editor.deleteWordBackward")) {
-      this.deleteWordBackwards();
-      return;
-    }
-    if (kb.matches(data, "tui.editor.deleteWordForward")) {
-      this.deleteWordForward();
-      return;
-    }
-    if (kb.matches(data, "tui.editor.deleteCharBackward") || matchesKey(data, "shift+backspace")) {
-      this.handleBackspace();
-      return;
-    }
-    if (kb.matches(data, "tui.editor.deleteCharForward") || matchesKey(data, "shift+delete")) {
-      this.handleForwardDelete();
-      return;
-    }
-
-    if (kb.matches(data, "tui.editor.yank")) {
-      this.yank();
-      return;
-    }
-    if (kb.matches(data, "tui.editor.yankPop")) {
-      this.yankPop();
-      return;
-    }
-
-    if (kb.matches(data, "tui.editor.historyPrevious")) {
-      this.cancelAutocomplete();
-      this.navigateHistory(-1);
-      return;
-    }
-    if (kb.matches(data, "tui.editor.historyNext")) {
-      this.cancelAutocomplete();
-      this.navigateHistory(1);
-      return;
-    }
-
-    if (kb.matches(data, "tui.editor.cursorLineStart")) {
-      this.moveToLineStart();
-      return;
-    }
-    if (kb.matches(data, "tui.editor.cursorLineEnd")) {
-      this.moveToLineEnd();
-      return;
-    }
-    if (kb.matches(data, "tui.editor.cursorWordLeft")) {
-      this.moveWordBackwards();
-      return;
-    }
-    if (kb.matches(data, "tui.editor.cursorWordRight")) {
-      this.moveWordForwards();
-      return;
-    }
-
-    if (
-      kb.matches(data, "tui.input.newLine") ||
-      (data.charCodeAt(0) === 10 && data.length > 1) ||
-      data === "\x1b\r" ||
-      data === "\x1b[13;2~" ||
-      (data.length > 1 && data.includes("\x1b") && data.includes("\r")) ||
-      (data === "\n" && data.length === 1)
-    ) {
-      if (this.shouldSubmitOnBackslashEnter(data, kb)) {
-        this.handleBackspace();
-        this.submitValue();
-        return;
-      }
-      this.addNewLine();
-      return;
-    }
-
-    if (kb.matches(data, "tui.input.submit")) {
-      if (this.disableSubmit) return;
-
-      const currentLine = this.state.lines[this.state.cursorLine] || "";
-      if (this.state.cursorCol > 0 && currentLine[this.state.cursorCol - 1] === "\\") {
-        this.handleBackspace();
-        this.addNewLine();
-        return;
-      }
-
-      this.submitValue();
-      return;
-    }
-
-    if (kb.matches(data, "tui.editor.cursorUp")) {
-      if (
-        this.isOnFirstVisualLine() &&
-        (this.isEditorEmpty() || this.historyIndex > -1 || this.state.cursorCol === 0)
-      ) {
-        this.navigateHistory(-1);
-      } else if (this.isOnFirstVisualLine()) {
-        this.moveToLineStart();
-      } else {
-        this.moveCursor(-1, 0);
-      }
-      return;
-    }
-    if (kb.matches(data, "tui.editor.cursorDown")) {
-      if (this.historyIndex > -1 && this.isOnLastVisualLine()) {
-        this.navigateHistory(1);
-      } else if (this.isOnLastVisualLine()) {
-        this.moveToLineEnd();
-      } else {
-        this.moveCursor(1, 0);
-      }
-      return;
-    }
-    if (kb.matches(data, "tui.editor.cursorRight")) {
-      this.moveCursor(0, 1);
-      return;
-    }
-    if (kb.matches(data, "tui.editor.cursorLeft")) {
-      this.moveCursor(0, -1);
-      return;
-    }
-
-    if (kb.matches(data, "tui.editor.pageUp")) {
-      this.pageScroll(-1);
-      return;
-    }
-    if (kb.matches(data, "tui.editor.pageDown")) {
-      this.pageScroll(1);
-      return;
-    }
-
-    if (kb.matches(data, "tui.editor.jumpForward")) {
+    if (this.commands.runMotion(input, kb)) return;
+    if (kb.matches(input, "tui.editor.jumpForward")) {
       this.jumpMode = "forward";
       return;
     }
-    if (kb.matches(data, "tui.editor.jumpBackward")) {
+    if (kb.matches(input, "tui.editor.jumpBackward")) {
       this.jumpMode = "backward";
       return;
     }
-
-    if (matchesKey(data, "shift+space")) {
-      this.insertCharacter(" ");
-      return;
-    }
-
-    const printable = decodePrintableKey(data);
-    if (printable !== undefined) {
-      this.insertCharacter(printable);
-      return;
-    }
-
-    if (data.charCodeAt(0) >= 32) {
-      this.insertCharacter(data);
-    }
+    this.insertPrintable(input);
   }
 
-  private layoutText(contentWidth: number): LayoutLine[] {
-    const layoutLines: LayoutLine[] = [];
-
-    if (
-      this.state.lines.length === 0 ||
-      (this.state.lines.length === 1 && this.state.lines[0] === "")
-    ) {
-      layoutLines.push({
-        text: "",
-        hasCursor: true,
-        cursorPos: 0,
-      });
-      return layoutLines;
+  private handleJumpInput(data: string, kb: KeybindingsManager): boolean {
+    const direction = this.jumpMode;
+    this.jumpMode = null;
+    if (direction === null) return false;
+    if (kb.matches(data, "tui.editor.jumpForward") || kb.matches(data, "tui.editor.jumpBackward")) {
+      return true;
     }
+    const printable = printableInput(data);
+    if (printable === undefined) return false;
+    this.commands.jumpToChar(printable, direction);
+    return true;
+  }
 
-    for (let i = 0; i < this.state.lines.length; i++) {
-      const line = this.state.lines[i] || "";
-      const isCurrentLine = i === this.state.cursorLine;
-      const lineVisibleWidth = visibleWidth(line);
-
-      if (lineVisibleWidth <= contentWidth) {
-        if (isCurrentLine) {
-          layoutLines.push({
-            text: line,
-            hasCursor: true,
-            cursorPos: this.state.cursorCol,
-          });
-        } else {
-          layoutLines.push({
-            text: line,
-            hasCursor: false,
-          });
-        }
-      } else {
-        const chunks = wordWrapLine(line, contentWidth, [...this.segment(line, "grapheme")]);
-
-        for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-          const chunk = chunks[chunkIndex];
-          if (chunk === undefined) continue;
-
-          const cursorPos = this.state.cursorCol;
-          const isLastChunk = chunkIndex === chunks.length - 1;
-
-          let hasCursorInChunk = false;
-          let adjustedCursorPos = 0;
-
-          if (isCurrentLine) {
-            if (isLastChunk) {
-              hasCursorInChunk = cursorPos >= chunk.startIndex;
-              adjustedCursorPos = cursorPos - chunk.startIndex;
-            } else {
-              hasCursorInChunk = cursorPos >= chunk.startIndex && cursorPos < chunk.endIndex;
-              if (hasCursorInChunk) {
-                adjustedCursorPos = cursorPos - chunk.startIndex;
-                if (adjustedCursorPos > chunk.text.length) {
-                  adjustedCursorPos = chunk.text.length;
-                }
-              }
-            }
-          }
-
-          if (hasCursorInChunk) {
-            layoutLines.push({
-              text: chunk.text,
-              hasCursor: true,
-              cursorPos: adjustedCursorPos,
-            });
-          } else {
-            layoutLines.push({
-              text: chunk.text,
-              hasCursor: false,
-            });
-          }
-        }
-      }
+  private consumePaste(data: string): string | undefined {
+    let input = data;
+    if (input.includes(PASTE_START)) {
+      this.isInPaste = true;
+      this.pasteBuffer = "";
+      input = input.replace(PASTE_START, "");
     }
+    if (!this.isInPaste) return input;
+    this.pasteBuffer += input;
+    const endIndex = this.pasteBuffer.indexOf(PASTE_END);
+    if (endIndex === -1) return undefined;
+    const pasteContent = this.pasteBuffer.substring(0, endIndex);
+    if (pasteContent.length > 0) {
+      this.commands.paste(pasteContent);
+    }
+    this.isInPaste = false;
+    const remaining = this.pasteBuffer.substring(endIndex + PASTE_END.length);
+    this.pasteBuffer = "";
+    if (remaining.length > 0) {
+      this.handleInput(remaining);
+    }
+    return undefined;
+  }
 
-    return layoutLines;
+  private insertPrintable(input: string): void {
+    const text = insertableInput(input);
+    if (text !== undefined) {
+      this.commands.insertCharacter(text);
+    }
   }
 
   getText(): string {
-    return this.state.lines.join("\n");
-  }
-
-  private expandPasteMarkers(text: string): string {
-    let result = text;
-    for (const [pasteId, pasteContent] of this.pastes) {
-      const markerRegex = new RegExp(`\\[paste #${pasteId}( (\\+\\d+ lines|\\d+ chars))?\\]`, "gu");
-      result = result.replace(markerRegex, () => pasteContent);
-    }
-    return result;
+    return this.doc.getText();
   }
 
   getExpandedText(): string {
-    return this.expandPasteMarkers(this.state.lines.join("\n"));
+    return this.doc.expandedText();
   }
 
   getLines(): string[] {
-    return [...this.state.lines];
+    return [...this.doc.state.lines];
   }
 
   getCursor(): { line: number; col: number } {
-    return { line: this.state.cursorLine, col: this.state.cursorCol };
+    return { line: this.doc.state.cursorLine, col: this.doc.state.cursorCol };
   }
 
   setText(text: string): void {
-    this.cancelAutocomplete();
-    this.lastAction = null;
-    this.exitHistoryBrowsing();
-    const normalized = this.normalizeText(text);
-    if (this.getText() !== normalized) {
-      this.pushUndoSnapshot();
-    }
-    this.pastes.clear();
-    this.pasteCounter = 0;
-    this.setTextInternal(normalized);
+    this.commands.setText(text);
   }
 
   insertTextAtCursor(text: string): void {
-    if (text === "") return;
-    this.cancelAutocomplete();
-    this.pushUndoSnapshot();
-    this.lastAction = null;
-    this.exitHistoryBrowsing();
-    this.insertTextAtCursorInternal(text);
-  }
-
-  private normalizeText(text: string): string {
-    return text.replace(/\r\n/gu, "\n").replace(/\r/gu, "\n").replace(/\t/gu, "    ");
-  }
-
-  private insertTextAtCursorInternal(text: string): void {
-    if (text === "") return;
-
-    const normalized = this.normalizeText(text);
-    const insertedLines = normalized.split("\n");
-
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-    const beforeCursor = currentLine.slice(0, this.state.cursorCol);
-    const afterCursor = currentLine.slice(this.state.cursorCol);
-
-    if (insertedLines.length === 1) {
-      this.state.lines[this.state.cursorLine] = beforeCursor + normalized + afterCursor;
-      this.setCursorCol(this.state.cursorCol + normalized.length);
-    } else {
-      this.state.lines = [
-        ...this.state.lines.slice(0, this.state.cursorLine),
-
-        beforeCursor + insertedLines[0],
-
-        ...insertedLines.slice(1, -1),
-
-        insertedLines[insertedLines.length - 1] + afterCursor,
-
-        ...this.state.lines.slice(this.state.cursorLine + 1),
-      ];
-
-      this.state.cursorLine += insertedLines.length - 1;
-      this.setCursorCol((insertedLines[insertedLines.length - 1] || "").length);
-    }
-
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
-  }
-
-  private insertCharacter(char: string, skipUndoCoalescing?: boolean): void {
-    this.exitHistoryBrowsing();
-
-    if (skipUndoCoalescing !== true) {
-      if (isWhitespaceChar(char) || this.lastAction !== "type-word") {
-        this.pushUndoSnapshot();
-      }
-      this.lastAction = "type-word";
-    }
-
-    const line = this.state.lines[this.state.cursorLine] || "";
-
-    const before = line.slice(0, this.state.cursorCol);
-    const after = line.slice(this.state.cursorCol);
-
-    this.state.lines[this.state.cursorLine] = before + char + after;
-    this.setCursorCol(this.state.cursorCol + char.length);
-
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
-
-    if (this.autocompleteState === null) {
-      this.autoTriggerAutocomplete(char);
-    } else {
-      this.updateAutocomplete();
-    }
-  }
-
-  private autoTriggerAutocomplete(char: string): void {
-    if (char === "/" && this.isAtStartOfMessage()) {
-      this.tryTriggerAutocomplete();
-      return;
-    }
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-    const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
-    if (this.autocompleteTriggerCharacters.includes(char)) {
-      if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
-        this.tryTriggerAutocomplete();
-      }
-      return;
-    }
-    if (
-      (/[a-zA-Z0-9.\-_]/u.test(char) || cjkBreakRegex.test(char)) &&
-      (this.isInSlashCommandContext(textBeforeCursor) ||
-        this.autocompleteTriggerPattern.test(textBeforeCursor))
-    ) {
-      this.tryTriggerAutocomplete();
-    }
-  }
-
-  private handlePaste(pastedText: string): void {
-    this.cancelAutocomplete();
-    this.exitHistoryBrowsing();
-    this.lastAction = null;
-
-    this.pushUndoSnapshot();
-
-    const decodedText = replaceEscapeSequences(pastedText, (sequence) => {
-      const control =
-        sequence.kind === "csi" && sequence.final === "u"
-          ? CTRL_CSI_U_BODY.exec(sequence.body)
-          : null;
-      const codepoint = control === null ? Number.NaN : Number(control[1]);
-      if (codepoint >= 97 && codepoint <= 122) return String.fromCharCode(codepoint - 96);
-      if (codepoint >= 65 && codepoint <= 90) return String.fromCharCode(codepoint - 64);
-      return sequence.raw;
-    });
-
-    const cleanText = this.normalizeText(decodedText);
-
-    let filteredText = cleanText
-      .split("")
-      .filter((char) => char === "\n" || char.charCodeAt(0) >= 32)
-      .join("");
-
-    if (/^[/~.]/u.test(filteredText)) {
-      const currentLine = this.state.lines[this.state.cursorLine] || "";
-      const charBeforeCursor =
-        this.state.cursorCol > 0 ? currentLine[this.state.cursorCol - 1] : "";
-      if (
-        charBeforeCursor !== undefined &&
-        charBeforeCursor !== "" &&
-        /\w/u.test(charBeforeCursor)
-      ) {
-        filteredText = ` ${filteredText}`;
-      }
-    }
-
-    const pastedLines = filteredText.split("\n");
-
-    const totalChars = filteredText.length;
-    if (pastedLines.length > 10 || totalChars > 1000) {
-      this.pasteCounter++;
-      const pasteId = this.pasteCounter;
-      this.pastes.set(pasteId, filteredText);
-
-      const marker =
-        pastedLines.length > 10
-          ? `[paste #${pasteId} +${pastedLines.length} lines]`
-          : `[paste #${pasteId} ${totalChars} chars]`;
-      this.insertTextAtCursorInternal(marker);
-      return;
-    }
-
-    if (pastedLines.length === 1) {
-      this.insertTextAtCursorInternal(filteredText);
-      return;
-    }
-
-    this.insertTextAtCursorInternal(filteredText);
-  }
-
-  private addNewLine(): void {
-    this.cancelAutocomplete();
-    this.exitHistoryBrowsing();
-    this.lastAction = null;
-
-    this.pushUndoSnapshot();
-
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-
-    const before = currentLine.slice(0, this.state.cursorCol);
-    const after = currentLine.slice(this.state.cursorCol);
-
-    this.state.lines[this.state.cursorLine] = before;
-    this.state.lines.splice(this.state.cursorLine + 1, 0, after);
-
-    this.state.cursorLine++;
-    this.setCursorCol(0);
-
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
-  }
-
-  private shouldSubmitOnBackslashEnter(
-    data: string,
-    kb: ReturnType<typeof getKeybindings>,
-  ): boolean {
-    if (this.disableSubmit) return false;
-    if (!matchesKey(data, "enter")) return false;
-    const submitKeys = kb.getKeys("tui.input.submit");
-    const hasShiftEnter = submitKeys.includes("shift+enter") || submitKeys.includes("shift+return");
-    if (!hasShiftEnter) return false;
-
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-    return this.state.cursorCol > 0 && currentLine[this.state.cursorCol - 1] === "\\";
-  }
-
-  private submitValue(): void {
-    this.cancelAutocomplete();
-    const result = this.expandPasteMarkers(this.state.lines.join("\n")).trim();
-
-    this.state = { lines: [""], cursorLine: 0, cursorCol: 0 };
-    this.pastes.clear();
-    this.pasteCounter = 0;
-    this.exitHistoryBrowsing();
-    this.scrollOffset = 0;
-    this.undoStack.clear();
-    this.lastAction = null;
-
-    if (this.onChange !== undefined) this.onChange("");
-    if (this.onSubmit !== undefined) this.onSubmit(result);
-  }
-
-  private handleBackspace(): void {
-    this.exitHistoryBrowsing();
-    this.lastAction = null;
-
-    if (this.state.cursorCol > 0) {
-      this.pushUndoSnapshot();
-
-      let line = this.state.lines[this.state.cursorLine] || "";
-      const beforeCursor = line.slice(0, this.state.cursorCol);
-
-      const graphemes = [...this.segment(beforeCursor, "grapheme")];
-      const lastGrapheme = graphemes[graphemes.length - 1];
-      const graphemeLength = lastGrapheme === undefined ? 1 : lastGrapheme.segment.length;
-      const isPastedSegmented =
-        lastGrapheme === undefined ? null : PASTE_MARKER_SINGLE.exec(lastGrapheme.segment);
-
-      if (isPastedSegmented !== null) {
-        const targetId = Number(isPastedSegmented[1]);
-        this.pastes.delete(targetId);
-        this.pasteCounter--;
-
-        const higherIds = [...this.pastes.keys()]
-          .filter((id) => id > targetId)
-          .sort((a, b) => a - b);
-        for (const id of higherIds) {
-          this.pastes.set(id - 1, this.pastes.get(id)!);
-          this.pastes.delete(id);
-        }
-
-        this.state.lines = this.state.lines.map((lineText) =>
-          lineText.replace(PASTE_MARKER_REGEX, (fullMatch, idGroup, suffixGroup) => {
-            const x = Number(idGroup);
-            if (x <= targetId) return fullMatch;
-            return `[paste #${x - 1}${suffixGroup}]`;
-          }),
-        );
-      }
-
-      line = this.state.lines[this.state.cursorLine] || "";
-
-      const before = line.slice(0, this.state.cursorCol - graphemeLength);
-      const after = line.slice(this.state.cursorCol);
-
-      this.state.lines[this.state.cursorLine] = before + after;
-      this.setCursorCol(this.state.cursorCol - graphemeLength);
-    } else if (this.state.cursorLine > 0) {
-      this.pushUndoSnapshot();
-
-      const currentLine = this.state.lines[this.state.cursorLine] || "";
-      const previousLine = this.state.lines[this.state.cursorLine - 1] || "";
-
-      this.state.lines[this.state.cursorLine - 1] = previousLine + currentLine;
-      this.state.lines.splice(this.state.cursorLine, 1);
-
-      this.state.cursorLine--;
-      this.setCursorCol(previousLine.length);
-    }
-
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
-
-    if (this.autocompleteState === null) {
-      const currentLine = this.state.lines[this.state.cursorLine] || "";
-      const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
-      if (this.isInSlashCommandContext(textBeforeCursor)) {
-        this.tryTriggerAutocomplete();
-      } else if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
-        this.tryTriggerAutocomplete();
-      }
-    } else {
-      this.updateAutocomplete();
-    }
-  }
-
-  private setCursorCol(col: number): void {
-    this.state.cursorCol = col;
-    this.preferredVisualCol = null;
-    this.snappedFromCursorCol = null;
-  }
-
-  private moveToVisualLine(
-    visualLines: Array<{ logicalLine: number; startCol: number; length: number }>,
-    currentVisualLine: number,
-    targetVisualLine: number,
-  ): void {
-    const currentVL = visualLines[currentVisualLine];
-    const targetVL = visualLines[targetVisualLine];
-    if (currentVL === undefined || targetVL === undefined) return;
-
-    let currentVisualCol: number;
-    if (this.snappedFromCursorCol === null) {
-      currentVisualCol = this.state.cursorCol - currentVL.startCol;
-    } else {
-      const vlIndex = this.findVisualLineAt(
-        visualLines,
-        currentVL.logicalLine,
-        this.snappedFromCursorCol,
-      );
-      const snappedVL = visualLines[vlIndex];
-      if (snappedVL === undefined) {
-        throw new Error(`Visual line ${vlIndex} does not exist`);
-      }
-      currentVisualCol = this.snappedFromCursorCol - snappedVL.startCol;
-    }
-
-    const isLastSourceSegment =
-      currentVisualLine === visualLines.length - 1 ||
-      visualLines[currentVisualLine + 1]?.logicalLine !== currentVL.logicalLine;
-    const sourceMaxVisualCol = isLastSourceSegment
-      ? currentVL.length
-      : Math.max(0, currentVL.length - 1);
-
-    const isLastTargetSegment =
-      targetVisualLine === visualLines.length - 1 ||
-      visualLines[targetVisualLine + 1]?.logicalLine !== targetVL.logicalLine;
-    const targetMaxVisualCol = isLastTargetSegment
-      ? targetVL.length
-      : Math.max(0, targetVL.length - 1);
-
-    const moveToVisualCol = this.computeVerticalMoveColumn(
-      currentVisualCol,
-      sourceMaxVisualCol,
-      targetMaxVisualCol,
-    );
-
-    this.state.cursorLine = targetVL.logicalLine;
-    const targetCol = targetVL.startCol + moveToVisualCol;
-    const logicalLine = this.state.lines[targetVL.logicalLine] || "";
-    this.state.cursorCol = Math.min(targetCol, logicalLine.length);
-
-    const segments = [...this.segment(logicalLine, "grapheme")];
-    for (const seg of segments) {
-      if (seg.index > this.state.cursorCol) break;
-      if (seg.segment.length <= 1) continue;
-      if (this.state.cursorCol < seg.index + seg.segment.length) {
-        const isContinuation = seg.index < targetVL.startCol;
-        const isMovingDown = targetVisualLine > currentVisualLine;
-
-        if (isContinuation && isMovingDown) {
-          const segEnd = seg.index + seg.segment.length;
-          let next = targetVisualLine + 1;
-          let nextVL = visualLines[next];
-          while (
-            nextVL !== undefined &&
-            nextVL.logicalLine === targetVL.logicalLine &&
-            nextVL.startCol < segEnd
-          ) {
-            next++;
-            nextVL = visualLines[next];
-          }
-          if (next < visualLines.length) {
-            this.moveToVisualLine(visualLines, currentVisualLine, next);
-            return;
-          }
-        }
-
-        this.snappedFromCursorCol = this.state.cursorCol;
-        this.state.cursorCol = seg.index;
-        return;
-      }
-    }
-
-    this.snappedFromCursorCol = null;
-  }
-
-  private computeVerticalMoveColumn(
-    currentVisualCol: number,
-    sourceMaxVisualCol: number,
-    targetMaxVisualCol: number,
-  ): number {
-    const hasPreferred = this.preferredVisualCol !== null;
-    const cursorInMiddle = currentVisualCol < sourceMaxVisualCol;
-    const targetTooShort = targetMaxVisualCol < currentVisualCol;
-
-    if (!hasPreferred || cursorInMiddle) {
-      if (targetTooShort) {
-        this.preferredVisualCol = currentVisualCol;
-        return targetMaxVisualCol;
-      }
-
-      this.preferredVisualCol = null;
-      return currentVisualCol;
-    }
-
-    const targetCantFitPreferred = targetMaxVisualCol < this.preferredVisualCol!;
-    if (targetTooShort || targetCantFitPreferred) {
-      return targetMaxVisualCol;
-    }
-
-    const result = this.preferredVisualCol!;
-    this.preferredVisualCol = null;
-    return result;
-  }
-
-  private moveToLineStart(): void {
-    this.lastAction = null;
-    this.setCursorCol(0);
-  }
-
-  private moveToLineEnd(): void {
-    this.lastAction = null;
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-    this.setCursorCol(currentLine.length);
-  }
-
-  private deleteToStartOfLine(): void {
-    this.exitHistoryBrowsing();
-
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-
-    if (this.state.cursorCol > 0) {
-      this.pushUndoSnapshot();
-
-      const deletedText = currentLine.slice(0, this.state.cursorCol);
-      this.killRing.push(deletedText, { prepend: true, accumulate: this.lastAction === "kill" });
-      this.lastAction = "kill";
-
-      this.state.lines[this.state.cursorLine] = currentLine.slice(this.state.cursorCol);
-      this.setCursorCol(0);
-    } else if (this.state.cursorLine > 0) {
-      this.pushUndoSnapshot();
-
-      this.killRing.push("\n", { prepend: true, accumulate: this.lastAction === "kill" });
-      this.lastAction = "kill";
-
-      const previousLine = this.state.lines[this.state.cursorLine - 1] || "";
-      this.state.lines[this.state.cursorLine - 1] = previousLine + currentLine;
-      this.state.lines.splice(this.state.cursorLine, 1);
-      this.state.cursorLine--;
-      this.setCursorCol(previousLine.length);
-    }
-
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
-  }
-
-  private deleteToEndOfLine(): void {
-    this.exitHistoryBrowsing();
-
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-
-    if (this.state.cursorCol < currentLine.length) {
-      this.pushUndoSnapshot();
-
-      const deletedText = currentLine.slice(this.state.cursorCol);
-      this.killRing.push(deletedText, { prepend: false, accumulate: this.lastAction === "kill" });
-      this.lastAction = "kill";
-
-      this.state.lines[this.state.cursorLine] = currentLine.slice(0, this.state.cursorCol);
-    } else if (this.state.cursorLine < this.state.lines.length - 1) {
-      this.pushUndoSnapshot();
-
-      this.killRing.push("\n", { prepend: false, accumulate: this.lastAction === "kill" });
-      this.lastAction = "kill";
-
-      const nextLine = this.state.lines[this.state.cursorLine + 1] || "";
-      this.state.lines[this.state.cursorLine] = currentLine + nextLine;
-      this.state.lines.splice(this.state.cursorLine + 1, 1);
-    }
-
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
-  }
-
-  private deleteWordBackwards(): void {
-    this.exitHistoryBrowsing();
-
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-
-    if (this.state.cursorCol === 0) {
-      if (this.state.cursorLine > 0) {
-        this.pushUndoSnapshot();
-
-        this.killRing.push("\n", { prepend: true, accumulate: this.lastAction === "kill" });
-        this.lastAction = "kill";
-
-        const previousLine = this.state.lines[this.state.cursorLine - 1] || "";
-        this.state.lines[this.state.cursorLine - 1] = previousLine + currentLine;
-        this.state.lines.splice(this.state.cursorLine, 1);
-        this.state.cursorLine--;
-        this.setCursorCol(previousLine.length);
-      }
-    } else {
-      this.pushUndoSnapshot();
-
-      const wasKill = this.lastAction === "kill";
-
-      const oldCursorCol = this.state.cursorCol;
-      this.moveWordBackwards();
-      const deleteFrom = this.state.cursorCol;
-      this.setCursorCol(oldCursorCol);
-
-      const deletedText = currentLine.slice(deleteFrom, this.state.cursorCol);
-      this.killRing.push(deletedText, { prepend: true, accumulate: wasKill });
-      this.lastAction = "kill";
-
-      this.state.lines[this.state.cursorLine] =
-        currentLine.slice(0, deleteFrom) + currentLine.slice(this.state.cursorCol);
-      this.setCursorCol(deleteFrom);
-    }
-
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
-  }
-
-  private deleteWordForward(): void {
-    this.exitHistoryBrowsing();
-
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-
-    if (this.state.cursorCol >= currentLine.length) {
-      if (this.state.cursorLine < this.state.lines.length - 1) {
-        this.pushUndoSnapshot();
-
-        this.killRing.push("\n", { prepend: false, accumulate: this.lastAction === "kill" });
-        this.lastAction = "kill";
-
-        const nextLine = this.state.lines[this.state.cursorLine + 1] || "";
-        this.state.lines[this.state.cursorLine] = currentLine + nextLine;
-        this.state.lines.splice(this.state.cursorLine + 1, 1);
-      }
-    } else {
-      this.pushUndoSnapshot();
-
-      const wasKill = this.lastAction === "kill";
-
-      const oldCursorCol = this.state.cursorCol;
-      this.moveWordForwards();
-      const deleteTo = this.state.cursorCol;
-      this.setCursorCol(oldCursorCol);
-
-      const deletedText = currentLine.slice(this.state.cursorCol, deleteTo);
-      this.killRing.push(deletedText, { prepend: false, accumulate: wasKill });
-      this.lastAction = "kill";
-
-      this.state.lines[this.state.cursorLine] =
-        currentLine.slice(0, this.state.cursorCol) + currentLine.slice(deleteTo);
-    }
-
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
-  }
-
-  private handleForwardDelete(): void {
-    this.exitHistoryBrowsing();
-    this.lastAction = null;
-
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-
-    if (this.state.cursorCol < currentLine.length) {
-      this.pushUndoSnapshot();
-
-      const afterCursor = currentLine.slice(this.state.cursorCol);
-
-      const graphemes = [...this.segment(afterCursor, "grapheme")];
-      const firstGrapheme = graphemes[0];
-      const graphemeLength = firstGrapheme === undefined ? 1 : firstGrapheme.segment.length;
-
-      const before = currentLine.slice(0, this.state.cursorCol);
-      const after = currentLine.slice(this.state.cursorCol + graphemeLength);
-      this.state.lines[this.state.cursorLine] = before + after;
-    } else if (this.state.cursorLine < this.state.lines.length - 1) {
-      this.pushUndoSnapshot();
-
-      const nextLine = this.state.lines[this.state.cursorLine + 1] || "";
-      this.state.lines[this.state.cursorLine] = currentLine + nextLine;
-      this.state.lines.splice(this.state.cursorLine + 1, 1);
-    }
-
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
-
-    if (this.autocompleteState === null) {
-      const cursorText = this.state.lines[this.state.cursorLine] || "";
-      const textBeforeCursor = cursorText.slice(0, this.state.cursorCol);
-      if (this.isInSlashCommandContext(textBeforeCursor)) {
-        this.tryTriggerAutocomplete();
-      } else if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
-        this.tryTriggerAutocomplete();
-      }
-    } else {
-      this.updateAutocomplete();
-    }
-  }
-
-  private buildVisualLineMap(
-    width: number,
-  ): Array<{ logicalLine: number; startCol: number; length: number }> {
-    const visualLines: Array<{ logicalLine: number; startCol: number; length: number }> = [];
-
-    for (let i = 0; i < this.state.lines.length; i++) {
-      const line = this.state.lines[i] || "";
-      const lineVisWidth = visibleWidth(line);
-      if (line.length === 0) {
-        visualLines.push({ logicalLine: i, startCol: 0, length: 0 });
-      } else if (lineVisWidth <= width) {
-        visualLines.push({ logicalLine: i, startCol: 0, length: line.length });
-      } else {
-        const chunks = wordWrapLine(line, width, [...this.segment(line, "grapheme")]);
-        for (const chunk of chunks) {
-          visualLines.push({
-            logicalLine: i,
-            startCol: chunk.startIndex,
-            length: chunk.endIndex - chunk.startIndex,
-          });
-        }
-      }
-    }
-
-    return visualLines;
-  }
-
-  private findVisualLineAt(
-    visualLines: Array<{ logicalLine: number; startCol: number; length: number }>,
-    line: number,
-    col: number,
-  ): number {
-    for (let i = 0; i < visualLines.length; i++) {
-      const vl = visualLines[i];
-      if (vl === undefined || vl.logicalLine !== line) continue;
-      const offset = col - vl.startCol;
-      const isLastSegmentOfLine =
-        i === visualLines.length - 1 || visualLines[i + 1]?.logicalLine !== vl.logicalLine;
-      if (offset >= 0 && (offset < vl.length || (isLastSegmentOfLine && offset === vl.length))) {
-        return i;
-      }
-    }
-    return visualLines.length - 1;
-  }
-
-  private findCurrentVisualLine(
-    visualLines: Array<{ logicalLine: number; startCol: number; length: number }>,
-  ): number {
-    return this.findVisualLineAt(visualLines, this.state.cursorLine, this.state.cursorCol);
-  }
-
-  private moveCursorRight(currentVL: { startCol: number } | undefined): void {
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-    if (this.state.cursorCol < currentLine.length) {
-      const afterCursor = currentLine.slice(this.state.cursorCol);
-      const graphemes = [...this.segment(afterCursor, "grapheme")];
-      const firstGrapheme = graphemes[0];
-      this.setCursorCol(
-        this.state.cursorCol + (firstGrapheme === undefined ? 1 : firstGrapheme.segment.length),
-      );
-    } else if (this.state.cursorLine < this.state.lines.length - 1) {
-      this.state.cursorLine++;
-      this.setCursorCol(0);
-    } else if (currentVL !== undefined) {
-      this.preferredVisualCol = this.state.cursorCol - currentVL.startCol;
-    }
-  }
-
-  private moveCursorLeft(): void {
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-    if (this.state.cursorCol > 0) {
-      const beforeCursor = currentLine.slice(0, this.state.cursorCol);
-      const graphemes = [...this.segment(beforeCursor, "grapheme")];
-      const lastGrapheme = graphemes[graphemes.length - 1];
-      this.setCursorCol(
-        this.state.cursorCol - (lastGrapheme === undefined ? 1 : lastGrapheme.segment.length),
-      );
-    } else if (this.state.cursorLine > 0) {
-      this.state.cursorLine--;
-      const prevLine = this.state.lines[this.state.cursorLine] || "";
-      this.setCursorCol(prevLine.length);
-    }
-  }
-
-  private moveCursor(deltaLine: number, deltaCol: number): void {
-    this.lastAction = null;
-    const visualLines = this.buildVisualLineMap(this.lastWidth);
-    const currentVisualLine = this.findCurrentVisualLine(visualLines);
-
-    if (deltaLine !== 0) {
-      const targetVisualLine = currentVisualLine + deltaLine;
-
-      if (targetVisualLine >= 0 && targetVisualLine < visualLines.length) {
-        this.moveToVisualLine(visualLines, currentVisualLine, targetVisualLine);
-      }
-    }
-
-    if (deltaCol > 0) {
-      this.moveCursorRight(visualLines[currentVisualLine]);
-    } else if (deltaCol < 0) {
-      this.moveCursorLeft();
-    }
-
-    if (this.autocompleteState !== null) {
-      this.updateAutocomplete();
-    }
-  }
-
-  private pageScroll(direction: -1 | 1): void {
-    this.lastAction = null;
-    const terminalRows = this.tui.terminal.rows;
-    const pageSize = Math.max(5, Math.floor(terminalRows * 0.3));
-
-    const visualLines = this.buildVisualLineMap(this.lastWidth);
-    const currentVisualLine = this.findCurrentVisualLine(visualLines);
-    const targetVisualLine = Math.max(
-      0,
-      Math.min(visualLines.length - 1, currentVisualLine + direction * pageSize),
-    );
-
-    this.moveToVisualLine(visualLines, currentVisualLine, targetVisualLine);
-  }
-
-  private moveWordBackwards(): void {
-    this.lastAction = null;
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-
-    if (this.state.cursorCol === 0) {
-      if (this.state.cursorLine > 0) {
-        this.state.cursorLine--;
-        const prevLine = this.state.lines[this.state.cursorLine] || "";
-        this.setCursorCol(prevLine.length);
-      }
-      return;
-    }
-
-    this.setCursorCol(
-      findWordBackward(currentLine, this.state.cursorCol, {
-        segment: (text) => this.segment(text, "word"),
-        isAtomicSegment: isPasteMarker,
-      }),
-    );
-  }
-
-  private yank(): void {
-    if (this.killRing.length === 0) return;
-
-    this.pushUndoSnapshot();
-
-    const text = this.killRing.peek()!;
-    this.insertYankedText(text);
-
-    this.lastAction = "yank";
-  }
-
-  private yankPop(): void {
-    if (this.lastAction !== "yank" || this.killRing.length <= 1) return;
-
-    this.pushUndoSnapshot();
-
-    this.deleteYankedText();
-
-    this.killRing.rotate();
-
-    const text = this.killRing.peek()!;
-    this.insertYankedText(text);
-
-    this.lastAction = "yank";
-  }
-
-  private insertYankedText(text: string): void {
-    this.exitHistoryBrowsing();
-    const lines = text.split("\n");
-
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-    const before = currentLine.slice(0, this.state.cursorCol);
-    const after = currentLine.slice(this.state.cursorCol);
-
-    if (lines.length === 1) {
-      this.state.lines[this.state.cursorLine] = before + text + after;
-      this.setCursorCol(this.state.cursorCol + text.length);
-    } else {
-      this.state.lines[this.state.cursorLine] = before + (lines[0] || "");
-
-      for (let i = 1; i < lines.length - 1; i++) {
-        this.state.lines.splice(this.state.cursorLine + i, 0, lines[i] || "");
-      }
-
-      const lastLineIndex = this.state.cursorLine + lines.length - 1;
-      this.state.lines.splice(lastLineIndex, 0, (lines[lines.length - 1] || "") + after);
-
-      this.state.cursorLine = lastLineIndex;
-      this.setCursorCol((lines[lines.length - 1] || "").length);
-    }
-
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
-  }
-
-  private deleteYankedText(): void {
-    const yankedText = this.killRing.peek();
-    if (yankedText === undefined || yankedText === "") return;
-
-    const yankLines = yankedText.split("\n");
-
-    if (yankLines.length === 1) {
-      const currentLine = this.state.lines[this.state.cursorLine] || "";
-      const deleteLen = yankedText.length;
-      const before = currentLine.slice(0, this.state.cursorCol - deleteLen);
-      const after = currentLine.slice(this.state.cursorCol);
-      this.state.lines[this.state.cursorLine] = before + after;
-      this.setCursorCol(this.state.cursorCol - deleteLen);
-    } else {
-      const startLine = this.state.cursorLine - (yankLines.length - 1);
-      const startCol = (this.state.lines[startLine] || "").length - (yankLines[0] || "").length;
-
-      const afterCursor = (this.state.lines[this.state.cursorLine] || "").slice(
-        this.state.cursorCol,
-      );
-
-      const beforeYank = (this.state.lines[startLine] || "").slice(0, startCol);
-
-      this.state.lines.splice(startLine, yankLines.length, beforeYank + afterCursor);
-
-      this.state.cursorLine = startLine;
-      this.setCursorCol(startCol);
-    }
-
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
-  }
-
-  private pushUndoSnapshot(): void {
-    this.undoStack.push({
-      state: this.state,
-      pastes: this.pastes,
-      pasteCounter: this.pasteCounter,
-    });
-  }
-
-  private undo(): void {
-    this.exitHistoryBrowsing();
-    const snapshot = this.undoStack.pop();
-    if (snapshot === undefined) return;
-    Object.assign(this.state, snapshot.state);
-    this.pastes = snapshot.pastes;
-    this.pasteCounter = snapshot.pasteCounter;
-    this.lastAction = null;
-    this.preferredVisualCol = null;
-    if (this.onChange !== undefined) {
-      this.onChange(this.getText());
-    }
-  }
-
-  private jumpToChar(char: string, direction: "forward" | "backward"): void {
-    this.lastAction = null;
-    const isForward = direction === "forward";
-    const lines = this.state.lines;
-
-    const end = isForward ? lines.length : -1;
-    const step = isForward ? 1 : -1;
-
-    for (let lineIdx = this.state.cursorLine; lineIdx !== end; lineIdx += step) {
-      const line = lines[lineIdx] || "";
-      const isCurrentLine = lineIdx === this.state.cursorLine;
-
-      const searchFrom = isCurrentLine
-        ? isForward
-          ? this.state.cursorCol + 1
-          : this.state.cursorCol - 1
-        : undefined;
-
-      const idx = isForward ? line.indexOf(char, searchFrom) : line.lastIndexOf(char, searchFrom);
-
-      if (idx !== -1) {
-        this.state.cursorLine = lineIdx;
-        this.setCursorCol(idx);
-        return;
-      }
-    }
-  }
-
-  private moveWordForwards(): void {
-    this.lastAction = null;
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-
-    if (this.state.cursorCol >= currentLine.length) {
-      if (this.state.cursorLine < this.state.lines.length - 1) {
-        this.state.cursorLine++;
-        this.setCursorCol(0);
-      }
-      return;
-    }
-
-    this.setCursorCol(
-      findWordForward(currentLine, this.state.cursorCol, {
-        segment: (text) => this.segment(text, "word"),
-        isAtomicSegment: isPasteMarker,
-      }),
-    );
-  }
-
-  private isSlashMenuAllowed(): boolean {
-    return this.state.cursorLine === 0;
-  }
-
-  private isAtStartOfMessage(): boolean {
-    if (!this.isSlashMenuAllowed()) return false;
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-    const beforeCursor = currentLine.slice(0, this.state.cursorCol);
-    return beforeCursor.trim() === "" || beforeCursor.trim() === "/";
-  }
-
-  private isInSlashCommandContext(textBeforeCursor: string): boolean {
-    return this.isSlashMenuAllowed() && textBeforeCursor.trimStart().startsWith("/");
-  }
-
-  private getBestAutocompleteMatchIndex(
-    items: Array<{ value: string; label: string }>,
-    prefix: string,
-  ): number {
-    if (prefix === "") return -1;
-
-    let firstPrefixIndex = -1;
-
-    for (let i = 0; i < items.length; i++) {
-      const value = items[i]!.value;
-      if (value === prefix) {
-        return i;
-      }
-      if (firstPrefixIndex === -1 && value.startsWith(prefix)) {
-        firstPrefixIndex = i;
-      }
-    }
-
-    return firstPrefixIndex;
-  }
-
-  private createAutocompleteList(
-    prefix: string,
-    items: Array<{ value: string; label: string; description?: string }>,
-  ): SelectList {
-    const layout = prefix.startsWith("/") ? SLASH_COMMAND_SELECT_LIST_LAYOUT : undefined;
-    const list = new SelectList(items, this.autocompleteMaxVisible, this.theme.selectList, layout);
-    list.onSelect = (selected) => {
-      if (this.autocompleteProvider === undefined) return;
-      this.pushUndoSnapshot();
-      this.lastAction = null;
-      const result = this.autocompleteProvider.applyCompletion(
-        this.state.lines,
-        this.state.cursorLine,
-        this.state.cursorCol,
-        selected,
-        this.autocompletePrefix,
-      );
-      this.state.lines = result.lines;
-      this.state.cursorLine = result.cursorLine;
-      this.setCursorCol(result.cursorCol);
-      this.cancelAutocomplete();
-      this.onChange?.(this.getText());
-    };
-    return list;
-  }
-
-  private tryTriggerAutocomplete(explicitTab: boolean = false): void {
-    this.requestAutocomplete({ force: false, explicitTab });
-  }
-
-  private handleTabCompletion(): void {
-    if (this.autocompleteProvider === undefined) return;
-
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-    const beforeCursor = currentLine.slice(0, this.state.cursorCol);
-
-    if (this.isInSlashCommandContext(beforeCursor) && !beforeCursor.trimStart().includes(" ")) {
-      this.handleSlashCommandCompletion();
-    } else {
-      this.forceFileAutocomplete(true);
-    }
-  }
-
-  private handleSlashCommandCompletion(): void {
-    this.requestAutocomplete({ force: false, explicitTab: true });
-  }
-
-  private forceFileAutocomplete(explicitTab: boolean = false): void {
-    this.requestAutocomplete({ force: true, explicitTab });
-  }
-
-  private requestAutocomplete(options: { force: boolean; explicitTab: boolean }): void {
-    if (this.autocompleteProvider === undefined) return;
-
-    if (options.force) {
-      const shouldTrigger =
-        this.autocompleteProvider.shouldTriggerFileCompletion === undefined ||
-        this.autocompleteProvider.shouldTriggerFileCompletion(
-          this.state.lines,
-          this.state.cursorLine,
-          this.state.cursorCol,
-        );
-      if (!shouldTrigger) {
-        return;
-      }
-    }
-
-    this.cancelAutocompleteRequest();
-    const startToken = ++this.autocompleteStartToken;
-
-    const debounceMs = this.getAutocompleteDebounceMs(options);
-    if (debounceMs > 0) {
-      this.cancelAutocompleteDebounce = runAfter(debounceMs, () => {
-        this.cancelAutocompleteDebounce = undefined;
-        void this.startAutocompleteRequest(startToken, options);
-      });
-      return;
-    }
-
-    void this.startAutocompleteRequest(startToken, options);
-  }
-
-  private startAutocompleteRequest(
-    startToken: number,
-    options: { force: boolean; explicitTab: boolean },
-  ): Promise<void> {
-    const previousTask = this.autocompleteRequestTask;
-    const controller = new AbortController();
-    this.autocompleteRequestTask = Effect.runPromise(
-      Effect.gen({ self: this }, function* () {
-        yield* Effect.promise(() => previousTask);
-        if (startToken !== this.autocompleteStartToken || this.autocompleteProvider === undefined) {
-          return;
-        }
-
-        this.autocompleteAbort = controller;
-        const requestId = ++this.autocompleteRequestId;
-        const snapshotText = this.getText();
-        const snapshotLine = this.state.cursorLine;
-        const snapshotCol = this.state.cursorCol;
-
-        yield* this.runAutocompleteRequest(
-          requestId,
-          controller,
-          snapshotText,
-          snapshotLine,
-          snapshotCol,
-          options,
-        );
-      }),
-    );
-    return this.autocompleteRequestTask;
-  }
-
-  private setAutocompleteTriggerCharacters(triggerCharacters: string[]): void {
-    const next = [...DEFAULT_AUTOCOMPLETE_TRIGGER_CHARACTERS];
-    for (const character of triggerCharacters) {
-      if (
-        character.length !== 1 ||
-        character === "/" ||
-        isWhitespaceChar(character) ||
-        next.includes(character)
-      ) {
-        continue;
-      }
-      next.push(character);
-    }
-    this.autocompleteTriggerCharacters = next;
-    this.autocompleteTriggerPattern = buildTriggerPattern(next);
-    this.autocompleteDebouncePattern = buildDebouncePattern(next);
-  }
-
-  private getAutocompleteDebounceMs(options: { force: boolean; explicitTab: boolean }): number {
-    if (options.explicitTab || options.force) {
-      return 0;
-    }
-
-    const currentLine = this.state.lines[this.state.cursorLine] || "";
-    const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
-    return this.autocompleteDebouncePattern.test(textBeforeCursor)
-      ? ATTACHMENT_AUTOCOMPLETE_DEBOUNCE_MS
-      : 0;
-  }
-
-  private runAutocompleteRequest(
-    requestId: number,
-    controller: AbortController,
-    snapshotText: string,
-    snapshotLine: number,
-    snapshotCol: number,
-    options: { force: boolean; explicitTab: boolean },
-  ): Effect.Effect<void> {
-    const provider = this.autocompleteProvider;
-    if (provider === undefined) return Effect.void;
-    return Effect.promise(() =>
-      provider.getSuggestions(this.state.lines, this.state.cursorLine, this.state.cursorCol, {
-        signal: controller.signal,
-        force: options.force,
-      }),
-    ).pipe(
-      Effect.map((suggestions) =>
-        this.handleAutocompleteSuggestions(
-          provider,
-          suggestions,
-          requestId,
-          controller,
-          snapshotText,
-          snapshotLine,
-          snapshotCol,
-          options,
-        ),
-      ),
-    );
-  }
-
-  private handleAutocompleteSuggestions(
-    provider: AutocompleteProvider,
-    suggestions: AutocompleteSuggestions | null,
-    requestId: number,
-    controller: AbortController,
-    snapshotText: string,
-    snapshotLine: number,
-    snapshotCol: number,
-    options: { force: boolean; explicitTab: boolean },
-  ): void {
-    if (
-      !this.isAutocompleteRequestCurrent(
-        requestId,
-        controller,
-        snapshotText,
-        snapshotLine,
-        snapshotCol,
-      )
-    ) {
-      return;
-    }
-
-    this.autocompleteAbort = undefined;
-
-    if (
-      suggestions === null ||
-      !Array.isArray(suggestions.items) ||
-      suggestions.items.length === 0
-    ) {
-      this.cancelAutocomplete();
-      this.tui.requestRender();
-      return;
-    }
-
-    if (options.force && options.explicitTab && suggestions.items.length === 1) {
-      const item = suggestions.items[0]!;
-      this.pushUndoSnapshot();
-      this.lastAction = null;
-      const result = provider.applyCompletion(
-        this.state.lines,
-        this.state.cursorLine,
-        this.state.cursorCol,
-        item,
-        suggestions.prefix,
-      );
-      this.state.lines = result.lines;
-      this.state.cursorLine = result.cursorLine;
-      this.setCursorCol(result.cursorCol);
-      if (this.onChange !== undefined) this.onChange(this.getText());
-      this.tui.requestRender();
-      return;
-    }
-
-    this.applyAutocompleteSuggestions(suggestions, options.force ? "force" : "regular");
-    this.tui.requestRender();
-  }
-
-  private isAutocompleteRequestCurrent(
-    requestId: number,
-    controller: AbortController,
-    snapshotText: string,
-    snapshotLine: number,
-    snapshotCol: number,
-  ): boolean {
-    return (
-      !controller.signal.aborted &&
-      requestId === this.autocompleteRequestId &&
-      this.getText() === snapshotText &&
-      this.state.cursorLine === snapshotLine &&
-      this.state.cursorCol === snapshotCol
-    );
-  }
-
-  private applyAutocompleteSuggestions(
-    suggestions: AutocompleteSuggestions,
-    state: "regular" | "force",
-  ): void {
-    this.autocompletePrefix = suggestions.prefix;
-    this.autocompleteList = this.createAutocompleteList(suggestions.prefix, suggestions.items);
-
-    const bestMatchIndex = this.getBestAutocompleteMatchIndex(
-      suggestions.items,
-      suggestions.prefix,
-    );
-    if (bestMatchIndex >= 0) {
-      this.autocompleteList.setSelectedIndex(bestMatchIndex);
-    }
-
-    this.autocompleteState = state;
-  }
-
-  private cancelAutocompleteRequest(): void {
-    this.autocompleteStartToken += 1;
-    if (this.cancelAutocompleteDebounce !== undefined) {
-      this.cancelAutocompleteDebounce();
-      this.cancelAutocompleteDebounce = undefined;
-    }
-    this.autocompleteAbort?.abort();
-    this.autocompleteAbort = undefined;
-  }
-
-  private clearAutocompleteUi(): void {
-    this.autocompleteState = null;
-    this.autocompleteList = undefined;
-    this.autocompletePrefix = "";
-  }
-
-  private cancelAutocomplete(): void {
-    this.cancelAutocompleteRequest();
-    this.clearAutocompleteUi();
+    this.commands.insertTextAtCursor(text);
   }
 
   public isShowingAutocomplete(): boolean {
-    return this.autocompleteState !== null;
-  }
-
-  private updateAutocomplete(): void {
-    if (this.autocompleteState === null || this.autocompleteProvider === undefined) return;
-    this.requestAutocomplete({ force: this.autocompleteState === "force", explicitTab: false });
+    return this.autocomplete.isShowing();
   }
 }
