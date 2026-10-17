@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
 import type { AssistantMessage, Model } from "@msa/ai/compat";
+import { contentText } from "@msa/ai/utils/text";
 
 import { toErrorMessage } from "../../utils/errors.ts";
 import type { AgentSession } from "../agent-session.ts";
@@ -85,22 +86,6 @@ export interface StartSessionResult {
 export const ORCHESTRATOR_REPORT_MESSAGE_TYPE = "msa.orchestrator.report";
 
 const REPORT_LIMIT = 4000;
-
-function lastAssistant(messages: readonly AgentMessage[]): AssistantMessage | undefined {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (message?.role === "assistant") return message as AssistantMessage;
-  }
-  return undefined;
-}
-
-function assistantText(message: AssistantMessage | undefined): string {
-  if (!message) return "";
-  return message.content
-    .flatMap((part) => (part.type === "text" ? [part.text] : []))
-    .join("\n")
-    .trim();
-}
 
 function truncate(text: string, limit = REPORT_LIMIT): string {
   if (text.length <= limit) return text;
@@ -473,9 +458,11 @@ export class Orchestrator {
       if (this.runs.get(id) !== run) return;
       this.runs.delete(id);
       const graph = await this.connect();
-      const last = lastAssistant(worker.messages);
+      const last = worker.messages.findLast(
+        (message): message is AssistantMessage => message.role === "assistant",
+      );
       let status: SessionStatus = "completed";
-      let report = assistantText(last);
+      let report = last ? contentText(last.content).trim() : "";
       if (error !== undefined) {
         status = "failed";
         report = toErrorMessage(error);
