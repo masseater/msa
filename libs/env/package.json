@@ -1,6 +1,6 @@
 {
   "name": "@msa/env",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Remote execution environments for msa Durable: a small daemon deployed over SSH and its ExecutionEnv client",
   "keywords": [
     "agents",

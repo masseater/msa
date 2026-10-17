@@ -2,9 +2,36 @@
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-10-17
+
+v0.0.2 was never tagged, so this is the first release after 0.0.1 and also carries the 0.0.2 fixes below.
+
 ### Added
 
-- Long-term memory: the `memory` tool, prompt recall, and the `/memory` view keep durable facts across sessions in a local SQLite store, with embeddings from an OpenAI-compatible endpoint (local Ollama with EmbeddingGemma 2 by default, task prefixes included) and keyword search as the fallback ([docs](docs/memory.md))
+- Long-term memory: the `memory` tool, prompt recall, and the `/memory` view keep durable facts across sessions in a local SQLite store, with embeddings from an OpenAI-compatible endpoint (local Ollama with EmbeddingGemma 2 by default, task prefixes included) and keyword search (FTS5 with `Intl.Segmenter`, merged by RRF) as the fallback ([docs](docs/memory.md))
+- `/goal` keeps running across turns until a completion condition is met
+- An orchestrator that starts and instructs sessions, backed by Neo4j, and the `/sessions` view to watch and steer them
+- `/accounts` manages several Claude accounts
+- `web_search` and `web_fetch` tools that search and read the web through treg
+- `/login` signs in to external services (treg, Claude Code)
+- `claude-code` and `opencode-free` are built-in providers
+- `clipboardImageCommand` setting to paste clipboard images from another machine
+- Tool output and thinking fold to one or two lines and open on click; consecutive tool calls, and thinking in assistant messages with text, fold into one summary line
+- Release formulas are published to the `masseater/tap` Homebrew tap (`brew install masseater/tap/msa`)
+
+### Changed
+
+- Built-in commands follow Claude Code's names and order
+
+### Removed
+
+- The `github-copilot` provider
+- The subscription-auth extra usage warning and the `warnings` setting
+
+### Fixed
+
+- Closing a credential prompt with Esc is no longer reported as a failed login
+- Per-credential `filterModels` no longer drops after a late model update
 
 ## [0.0.2] - 2026-10-17
 

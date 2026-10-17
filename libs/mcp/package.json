@@ -1,6 +1,6 @@
 {
   "name": "@msa/mcp",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Standalone Model Context Protocol client for msa and other applications",
   "keywords": [
     "client",
