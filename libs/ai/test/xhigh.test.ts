@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { getModel, stream } from "../src/compat.ts";
 import type { Context, Model } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
+import { nextRandom } from "../src/utils/random.ts";
 import { envValue } from "./env.ts";
 
 function makeContext(): Context {
@@ -11,7 +12,7 @@ function makeContext(): Context {
     messages: [
       {
         role: "user",
-        content: `What is ${(Math.random() * 100) | 0} + ${(Math.random() * 100) | 0}? Think step by step.`,
+        content: `What is ${(nextRandom() * 100) | 0} + ${(nextRandom() * 100) | 0}? Think step by step.`,
         timestamp: currentTimeMillis(),
       },
     ],

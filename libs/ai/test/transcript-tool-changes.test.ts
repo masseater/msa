@@ -1,11 +1,11 @@
-import { Effect } from "effect";
+import { Data, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, test } from "vite-plus/test";
 
 import { getModel, streamSimple } from "../src/compat.ts";
 import type { Api, Context, Model, Tool } from "../src/types.ts";
 
-class PayloadCaptured extends Error {}
+class PayloadCaptured extends Data.TaggedError("PayloadCaptured") {}
 
 function tool(name: string): Tool {
   return { name, description: `${name} tool`, parameters: Type.Object({}) };

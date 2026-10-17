@@ -56,6 +56,7 @@ import type {
   StreamOptions,
   TranscriptContext,
 } from "./types.ts";
+import { nextRandom } from "./utils/random.ts";
 import { normalizeContext } from "./utils/transcript.ts";
 
 export const getModel = getBuiltinModel;
@@ -160,7 +161,7 @@ export function registerFauxProvider(
   options: RegisterFauxProviderOptions = {},
 ): FauxProviderRegistration {
   const core = createFauxCore(options);
-  const sourceId = `faux-provider-${Math.random().toString(36).slice(2, 10)}`;
+  const sourceId = `faux-provider-${nextRandom().toString(36).slice(2, 10)}`;
   registerApiProvider(
     { api: core.api, stream: core.stream, streamSimple: core.streamSimple },
     sourceId,

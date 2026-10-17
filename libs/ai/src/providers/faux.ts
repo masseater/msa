@@ -21,6 +21,7 @@ import type {
 import { currentTimeMillis } from "../utils/clock.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { createAssistantMessageEventStream } from "../utils/event-stream.ts";
+import { nextRandom } from "../utils/random.ts";
 import { getSystemMessageText } from "../utils/text.ts";
 
 const DEFAULT_API = "faux";
@@ -167,7 +168,7 @@ function estimateTokens(text: string): number {
 }
 
 function randomId(prefix: string): string {
-  return `${prefix}:${currentTimeMillis()}:${Math.random().toString(36).slice(2)}`;
+  return `${prefix}:${currentTimeMillis()}:${nextRandom().toString(36).slice(2)}`;
 }
 
 function contentToText(content: string | Array<TextContent | ImageContent>): string {
@@ -294,7 +295,7 @@ function splitStringByTokenSize(
   const chunks: string[] = [];
   let index = 0;
   while (index < text.length) {
-    const tokenSize = minTokenSize + Math.floor(Math.random() * (maxTokenSize - minTokenSize + 1));
+    const tokenSize = minTokenSize + Math.floor(nextRandom() * (maxTokenSize - minTokenSize + 1));
     const charSize = Math.max(1, tokenSize * 4);
     chunks.push(text.slice(index, index + charSize));
     index += charSize;

@@ -158,9 +158,7 @@ const logsInWithTheOpenAICodexFirst6 = (
 const logsInWithTheOpenAICodexRest6 = ({
   fetchMock,
 }: Effect.Success<ReturnType<typeof logsInWithTheOpenAICodexFirst6>>) =>
-  Effect.sync(() => {
-    return { fetchMock };
-  });
+  Effect.sync(() => ({ fetchMock }));
 
 const logsInWithTheOpenAICodexFirst5 = Effect.fn("logsInWithTheOpenAICodexFirst5")(function* (
   pollTimes: number[],
@@ -178,9 +176,7 @@ const logsInWithTheOpenAICodexFirst5 = Effect.fn("logsInWithTheOpenAICodexFirst5
 const logsInWithTheOpenAICodexRest5 = ({
   fetchMock,
 }: Effect.Success<ReturnType<typeof logsInWithTheOpenAICodexFirst5>>) =>
-  Effect.sync(() => {
-    return { fetchMock };
-  });
+  Effect.sync(() => ({ fetchMock }));
 
 const logsInWithTheOpenAICodexFirst4 = Effect.fn("logsInWithTheOpenAICodexFirst4")(function* (
   pollTimes: number[],
@@ -198,9 +194,7 @@ const logsInWithTheOpenAICodexFirst4 = Effect.fn("logsInWithTheOpenAICodexFirst4
 const logsInWithTheOpenAICodexRest4 = ({
   fetchMock,
 }: Effect.Success<ReturnType<typeof logsInWithTheOpenAICodexFirst4>>) =>
-  Effect.sync(() => {
-    return { fetchMock };
-  });
+  Effect.sync(() => ({ fetchMock }));
 
 const logsInWithTheOpenAICodexFirst3 = Effect.fn("logsInWithTheOpenAICodexFirst3")(function* (
   pollTimes: number[],
@@ -221,10 +215,7 @@ const logsInWithTheOpenAICodexRest3 = (
   deviceInfos: DeviceCodeInfo[],
   startTime: number,
   { fetchMock }: Effect.Success<ReturnType<typeof logsInWithTheOpenAICodexFirst3>>,
-) =>
-  Effect.sync(() => {
-    return { fetchMock, deviceInfos, pollTimes, startTime, accessToken };
-  });
+) => Effect.sync(() => ({ fetchMock, deviceInfos, pollTimes, startTime, accessToken }));
 
 const logsInWithTheOpenAICodexRest2 = Effect.fn("logsInWithTheOpenAICodexRest2")(function* ({
   pollTimes,

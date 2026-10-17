@@ -672,9 +672,7 @@ const preservesContentFromContentBlockStartFirst6 = Effect.fn(
 const preservesContentFromContentBlockStartRest6 = ({
   response,
 }: Effect.Success<ReturnType<typeof preservesContentFromContentBlockStartFirst6>>) =>
-  Effect.sync(() => {
-    return { response };
-  });
+  Effect.sync(() => ({ response }));
 
 const preservesContentFromContentBlockStartFirst5 = Effect.fn(
   "preservesContentFromContentBlockStartFirst5",
@@ -686,9 +684,7 @@ const preservesContentFromContentBlockStartFirst5 = Effect.fn(
 const preservesContentFromContentBlockStartRest5 = ({
   response,
 }: Effect.Success<ReturnType<typeof preservesContentFromContentBlockStartFirst5>>) =>
-  Effect.sync(() => {
-    return { response };
-  });
+  Effect.sync(() => ({ response }));
 
 const preservesContentFromContentBlockStartFirst4 = Effect.fn(
   "preservesContentFromContentBlockStartFirst4",
@@ -700,9 +696,7 @@ const preservesContentFromContentBlockStartFirst4 = Effect.fn(
 const preservesContentFromContentBlockStartRest4 = ({
   response,
 }: Effect.Success<ReturnType<typeof preservesContentFromContentBlockStartFirst4>>) =>
-  Effect.sync(() => {
-    return { response };
-  });
+  Effect.sync(() => ({ response }));
 
 const preservesContentFromContentBlockStartFirst3 = Effect.fn(
   "preservesContentFromContentBlockStartFirst3",
@@ -715,10 +709,7 @@ const preservesContentFromContentBlockStartRest3 = (
   model: Model<"anthropic-messages">,
   context: TranscriptContext,
   { response }: Effect.Success<ReturnType<typeof preservesContentFromContentBlockStartFirst3>>,
-) =>
-  Effect.sync(() => {
-    return { model, context, response };
-  });
+) => Effect.sync(() => ({ model, context, response }));
 
 const preservesContentFromContentBlockStartRest2 = Effect.fn(
   "preservesContentFromContentBlockStartRest2",

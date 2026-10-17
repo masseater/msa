@@ -1,4 +1,4 @@
-import { Clock, Effect, Stream } from "effect";
+import { Clock, Data, Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -32,12 +32,7 @@ const ADAPTIVE_WITH_BINDING = {
   block_binding: { prefix_mismatch_behavior: "drop_block" },
 };
 
-class PayloadCaptured extends Error {
-  constructor() {
-    super("payload captured");
-    this.name = "PayloadCaptured";
-  }
-}
+class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
 
 function makeContext(): Context {
   return {
@@ -57,7 +52,7 @@ function capturePayload(
         reasoning: options?.reasoning ?? "high",
         onPayload: (payload) => {
           capturedPayload = payload as BedrockThinkingPayload;
-          throw new PayloadCaptured();
+          throw new PayloadCaptured({ message: "payload captured" });
         },
       });
 
@@ -364,7 +359,7 @@ describe("Bedrock OpenAI reasoning payload", () => {
           {
             onPayload: (payload) => {
               captured = payload as BedrockThinkingPayload;
-              throw new PayloadCaptured();
+              throw new PayloadCaptured({ message: "payload captured" });
             },
           },
         );
@@ -469,7 +464,7 @@ describe("Application inference profile support", () => {
           {
             onPayload: (payload) => {
               capturedPayload = payload;
-              throw new PayloadCaptured();
+              throw new PayloadCaptured({ message: "payload captured" });
             },
           },
         );

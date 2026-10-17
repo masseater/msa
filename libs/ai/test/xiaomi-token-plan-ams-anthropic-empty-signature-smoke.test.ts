@@ -1,4 +1,4 @@
-import { Clock, Effect } from "effect";
+import { Clock, Data, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { completeSimple, getEnvApiKey, streamSimple } from "../src/compat.ts";
@@ -29,12 +29,7 @@ interface AnthropicPayload {
   }>;
 }
 
-class PayloadCaptured extends Error {
-  constructor() {
-    super("payload captured");
-    this.name = "PayloadCaptured";
-  }
-}
+class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
 
 function makeInitialContext(): Context {
   return {
@@ -62,7 +57,7 @@ const captureReplayPayload = Effect.fn("captureReplayPayload")(function* (contex
     reasoning: "high",
     onPayload: (payload) => {
       capturedPayload = payload as AnthropicPayload;
-      throw new PayloadCaptured();
+      throw new PayloadCaptured({ message: "payload captured" });
     },
   });
 

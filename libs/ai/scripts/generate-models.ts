@@ -10,6 +10,8 @@ import {
 } from "fs";
 import { join, resolve } from "path";
 
+import { DateTime } from "effect";
+
 import {
   CLOUDFLARE_AI_GATEWAY_ANTHROPIC_BASE_URL,
   CLOUDFLARE_AI_GATEWAY_COMPAT_BASE_URL,
@@ -3282,7 +3284,7 @@ async function generateModels() {
     modelDataStructure[providerId] = structure;
   }
 
-  const generatedAt = new Date().toISOString();
+  const generatedAt = DateTime.formatIso(DateTime.nowUnsafe());
 
   if (!generatorOptions.jsonOnly) {
     const providersDir = join(packageRoot, "src/providers");

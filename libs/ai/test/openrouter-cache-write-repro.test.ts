@@ -3,10 +3,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { completeSimple, getModel } from "../src/compat.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
+import { nextRandom } from "../src/utils/random.ts";
 import { envValue, readEnv } from "./env.ts";
 
 function createLongSystemPrompt(): string {
-  const nonce = `${currentTimeMillis()}-${Math.random()}`;
+  const nonce = `${currentTimeMillis()}-${nextRandom()}`;
   return `You are a concise assistant.\nCache nonce: ${nonce}\n\n${Array(80)
     .fill(
       "Prompt-caching probe content. Keep this exact text stable across requests so the provider can reuse prefix tokens and report cache read and cache write usage.",

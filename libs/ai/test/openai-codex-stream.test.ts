@@ -2890,7 +2890,9 @@ describe("openai-codex streaming", () => {
       "retry-after HTTP date",
       () => ({
         "content-type": "application/json",
-        "retry-after": new Date(currentTimeMillis() + 45_000).toUTCString(),
+        "retry-after": DateTime.toDateUtc(
+          DateTime.makeUnsafe(currentTimeMillis() + 45_000),
+        ).toUTCString(),
       }),
       45_000,
     ],

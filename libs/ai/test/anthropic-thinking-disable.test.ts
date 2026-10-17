@@ -1,4 +1,4 @@
-import { Effect, Stream } from "effect";
+import { Data, Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { getModel, streamSimple } from "../src/compat.ts";
@@ -11,12 +11,7 @@ interface AnthropicThinkingPayload {
   output_config?: { effort?: string };
 }
 
-class PayloadCaptured extends Error {
-  constructor() {
-    super("payload captured");
-    this.name = "PayloadCaptured";
-  }
-}
+class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
 
 function makePayloadCaptureContext(): Context {
   return {
@@ -39,7 +34,7 @@ const capturePayload = Effect.fn("capturePayload")(function* (
     apiKey: "fake-key",
     onPayload: (payload) => {
       capturedPayload = payload as AnthropicThinkingPayload;
-      throw new PayloadCaptured();
+      throw new PayloadCaptured({ message: "payload captured" });
     },
   });
 

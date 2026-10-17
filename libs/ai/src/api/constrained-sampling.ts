@@ -1,3 +1,5 @@
+import { Data } from "effect";
+
 import type { Tool } from "../types.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 
@@ -8,7 +10,9 @@ interface JsonSchemaObject {
   required?: unknown;
 }
 
-class UnsupportedStrictJsonSchemaError extends Error {}
+class UnsupportedStrictJsonSchemaError extends Data.TaggedError(
+  "UnsupportedStrictJsonSchemaError",
+)<{ readonly message: string }> {}
 
 export type UnsupportedStrictSchemaKeywordCheck = (key: string, value: unknown) => boolean;
 
@@ -63,30 +67,34 @@ function makeJsonSchemaNodeStrict(
   isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
 ): void {
   if (!isJsonSchemaObject(schema)) {
-    throw new UnsupportedStrictJsonSchemaError("boolean schemas are unsupported");
+    throw new UnsupportedStrictJsonSchemaError({ message: "boolean schemas are unsupported" });
   }
   for (const key of UNSUPPORTED_STRICT_SCHEMA_KEYS) {
     if (schema[key] !== undefined) {
-      throw new UnsupportedStrictJsonSchemaError(`${key} schemas are unsupported`);
+      throw new UnsupportedStrictJsonSchemaError({ message: `${key} schemas are unsupported` });
     }
   }
   if (isUnsupportedKeyword !== undefined) {
     for (const [key, value] of Object.entries(schema)) {
       if (isUnsupportedKeyword(key, value)) {
-        throw new UnsupportedStrictJsonSchemaError(
-          `${key}: ${JSON.stringify(value)} is unsupported`,
-        );
+        throw new UnsupportedStrictJsonSchemaError({
+          message: `${key}: ${JSON.stringify(value)} is unsupported`,
+        });
       }
     }
   }
 
   if (schema["anyOf"] !== undefined) {
     if (!Array.isArray(schema["anyOf"]) || schema["anyOf"].length === 0) {
-      throw new UnsupportedStrictJsonSchemaError("anyOf must contain at least one schema");
+      throw new UnsupportedStrictJsonSchemaError({
+        message: "anyOf must contain at least one schema",
+      });
     }
     for (const variant of schema["anyOf"]) {
       if (isStructuredSchema(variant)) {
-        throw new UnsupportedStrictJsonSchemaError("object and array unions are unsupported");
+        throw new UnsupportedStrictJsonSchemaError({
+          message: "object and array unions are unsupported",
+        });
       }
       makeJsonSchemaNodeStrict(variant, isUnsupportedKeyword);
     }
@@ -94,36 +102,42 @@ function makeJsonSchemaNodeStrict(
 
   if (schema["items"] !== undefined) {
     if (Array.isArray(schema["items"])) {
-      throw new UnsupportedStrictJsonSchemaError("tuple schemas are unsupported");
+      throw new UnsupportedStrictJsonSchemaError({ message: "tuple schemas are unsupported" });
     }
     makeJsonSchemaNodeStrict(schema["items"], isUnsupportedKeyword);
   }
 
   const isObjectSchema = schema.type === "object";
   if (schema.properties !== undefined && !isObjectSchema) {
-    throw new UnsupportedStrictJsonSchemaError("properties require type object");
+    throw new UnsupportedStrictJsonSchemaError({ message: "properties require type object" });
   }
   if (!isObjectSchema) return;
   if (schema["additionalProperties"] !== undefined && schema["additionalProperties"] !== false) {
-    throw new UnsupportedStrictJsonSchemaError(
-      "schema-valued or true additionalProperties is unsupported",
-    );
+    throw new UnsupportedStrictJsonSchemaError({
+      message: "schema-valued or true additionalProperties is unsupported",
+    });
   }
   if (schema.properties !== undefined && !isJsonSchemaObject(schema.properties)) {
-    throw new UnsupportedStrictJsonSchemaError("object properties must be a schema map");
+    throw new UnsupportedStrictJsonSchemaError({
+      message: "object properties must be a schema map",
+    });
   }
   if (
     schema.required !== undefined &&
     (!Array.isArray(schema.required) || schema.required.some((key) => typeof key !== "string"))
   ) {
-    throw new UnsupportedStrictJsonSchemaError("object required must be a string array");
+    throw new UnsupportedStrictJsonSchemaError({
+      message: "object required must be a string array",
+    });
   }
 
   const properties = schema.properties ?? {};
   const propertyNames = Object.keys(properties);
   const required = new Set(Array.isArray(schema.required) ? schema.required : []);
   if ([...required].some((key) => !propertyNames.includes(key))) {
-    throw new UnsupportedStrictJsonSchemaError("required contains an unknown property");
+    throw new UnsupportedStrictJsonSchemaError({
+      message: "required contains an unknown property",
+    });
   }
   for (const [key, property] of Object.entries(properties)) {
     makeJsonSchemaNodeStrict(property, isUnsupportedKeyword);
@@ -141,11 +155,11 @@ export function makeStrictJsonSchema(
 ): Record<string, unknown> {
   const cloned: unknown = structuredClone(schema);
   if (!isJsonSchemaObject(cloned)) {
-    throw new UnsupportedStrictJsonSchemaError("root schema must have type object");
+    throw new UnsupportedStrictJsonSchemaError({ message: "root schema must have type object" });
   }
   makeJsonSchemaNodeStrict(cloned, isUnsupportedKeyword);
   if (cloned.type !== "object") {
-    throw new UnsupportedStrictJsonSchemaError("root schema must have type object");
+    throw new UnsupportedStrictJsonSchemaError({ message: "root schema must have type object" });
   }
   return cloned;
 }

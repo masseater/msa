@@ -1,4 +1,4 @@
-import { Effect, Stream } from "effect";
+import { Data, Effect, Stream } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
@@ -10,12 +10,7 @@ import type { Model } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { envValue } from "./env.ts";
 
-class PayloadCaptured extends Error {
-  constructor() {
-    super("payload captured");
-    this.name = "PayloadCaptured";
-  }
-}
+class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
 
 interface OpenAICompletionsCachePayload {
   prompt_cache_key?: string;
@@ -31,7 +26,7 @@ function stopAfterPayload<TPayload>(
 ): (payload: unknown) => never {
   return (payload: unknown): never => {
     capture(payload as TPayload);
-    throw new PayloadCaptured();
+    throw new PayloadCaptured({ message: "payload captured" });
   };
 }
 
