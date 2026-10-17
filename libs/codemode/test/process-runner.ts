@@ -14,12 +14,12 @@ interface SpawnOptions {
 }
 
 const runtime = ManagedRuntime.make(
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- node:child_process has no stable Effect replacement
+  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess (effect/unstable) is the only Effect API for spawning processes
   NodeServices.layer,
 );
 
 const spawn = (command: string, args: string[], options: SpawnOptions) =>
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- node:child_process has no stable Effect replacement
+  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- ChildProcess (effect/unstable) is the only Effect API for spawning processes
   ChildProcess.make(command, args, options);
 
 export const isAvailable = (command: string): Promise<boolean> =>
