@@ -61,6 +61,7 @@ function setup(
     progress,
     stop: vi.fn(async () => undefined),
     send: vi.fn(async () => undefined),
+    start: vi.fn(async () => ({ session: node("new"), review: node("review") })),
   };
   const onClose = vi.fn();
   const onPickModel = vi.fn();
@@ -117,6 +118,38 @@ describe("SessionsView", () => {
     expect(orchestrator.send).toHaveBeenCalledWith("notes", "try again");
     view.handleInput(ESC);
     expect(screen().join("\n")).toContain("Failed");
+  });
+
+  it("starts a session for a task the user types, independent from the list", async () => {
+    const { view, orchestrator, screen } = setup();
+    view.handleInput("n");
+    expect(screen().join("\n")).toContain("Task of a session to start now");
+    for (const key of "write the changelog") view.handleInput(key);
+    view.handleInput(ENTER);
+    await vi.waitFor(() =>
+      expect(orchestrator.start).toHaveBeenCalledWith({
+        title: "write the changelog",
+        prompt: "write the changelog",
+        dependsOn: [],
+      }),
+    );
+  });
+
+  it("starts a session that waits for the open one", async () => {
+    const { view, orchestrator, screen } = setup();
+    view.handleInput(ENTER);
+    view.handleInput("n");
+    expect(screen().join("\n")).toContain("Task of a session that starts after notes");
+    for (const key of "retry it") view.handleInput(key);
+    view.handleInput(ENTER);
+    await vi.waitFor(() =>
+      expect(orchestrator.start).toHaveBeenCalledWith({
+        title: "retry it",
+        prompt: "retry it",
+        dependsOn: ["notes"],
+      }),
+    );
+    expect(orchestrator.send).not.toHaveBeenCalled();
   });
 
   it("stops only sessions that are running or waiting, and closes on escape", () => {
