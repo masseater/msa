@@ -201,6 +201,7 @@ export class ModelRuntime implements Models {
     auth: new Map(),
   };
   private availabilityRefreshSeq = 0;
+  private latestAvailabilityRefresh: { seq: number; pass: Promise<void> } | undefined;
   private availabilityErrorSeq = 0;
   private readonly providerAvailabilitySeq = new Map<string, number>();
   private availabilityError: string | undefined;
@@ -380,7 +381,12 @@ export class ModelRuntime implements Models {
       ),
       this.credentials.list({ signal }),
     ]);
-    if (seq !== this.availabilityRefreshSeq) return;
+    if (seq !== this.availabilityRefreshSeq) {
+      // A superseded pass settles with the pass that replaced it, so its caller reads a current snapshot.
+      const latest = this.latestAvailabilityRefresh;
+      if (latest && latest.seq > seq) await latest.pass;
+      return;
+    }
     const auth = new Map(checks);
     const configuredProviders = new Set(
       checks
@@ -404,12 +410,14 @@ export class ModelRuntime implements Models {
     }
     const errorSeq = ++this.availabilityErrorSeq;
     const effectiveSignal = operationSignal(signal);
-    return this.runAvailabilityRefresh(seq, errorSeq, effectiveSignal).catch((error) => {
+    const pass = this.runAvailabilityRefresh(seq, errorSeq, effectiveSignal).catch((error) => {
       if (errorSeq === this.availabilityErrorSeq && !effectiveSignal.aborted) {
         this.availabilityError = toErrorMessage(error);
       }
       throw error;
     });
+    this.latestAvailabilityRefresh = { seq, pass };
+    return pass;
   }
 
   private async refreshProviderAvailability(

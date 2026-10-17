@@ -466,6 +466,9 @@ importers:
       diff:
         specifier: 'catalog:'
         version: 8.0.4
+      effect:
+        specifier: 4.0.2
+        version: 4.0.2
       grok-mermaid:
         specifier: 'catalog:'
         version: 0.2.3

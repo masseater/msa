@@ -92,8 +92,19 @@ function deepMergeObjects(
   return result;
 }
 
-/** Tools enabled at startup when `defaultTools` does not change them. */
-export const DEFAULT_TOOL_NAMES: readonly string[] = ["read", "bash", "edit", "write", "memory"];
+/**
+ * Tools enabled at startup when `defaultTools` does not change them. `web_search` and `web_fetch`
+ * exist only when the `treg` CLI is installed; otherwise their names are ignored.
+ */
+export const DEFAULT_TOOL_NAMES: readonly string[] = [
+  "read",
+  "bash",
+  "edit",
+  "write",
+  "memory",
+  "web_search",
+  "web_fetch",
+];
 
 /** Whether a tool selection entry is a `+name` or `-name` modifier. */
 export function isToolModifier(entry: unknown): boolean {
