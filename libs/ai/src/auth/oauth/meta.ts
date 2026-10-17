@@ -1,3 +1,7 @@
+import { Clock, Effect } from "effect";
+
+import { type HttpReply, httpRequest } from "../../utils/http.ts";
+import { encodeJson } from "../../utils/json-codec.ts";
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import { pollOAuthDeviceCodeFlow } from "./device-code.ts";
 
@@ -17,28 +21,26 @@ type DeviceAuthorization = {
   expiresInSeconds?: number | undefined;
 };
 
-function requestSignal(signal: AbortSignal): AbortSignal {
-  return AbortSignal.any([AbortSignal.timeout(REQUEST_TIMEOUT_MS), signal]);
-}
+const requestSignal = (signal: AbortSignal): AbortSignal =>
+  AbortSignal.any([AbortSignal.timeout(REQUEST_TIMEOUT_MS), signal]);
 
-async function readJson(response: Response): Promise<Record<string, unknown> | null> {
-  try {
-    const json = await response.json();
-    return json && typeof json === "object" ? (json as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
+const readJson = (reply: HttpReply): Effect.Effect<Record<string, unknown> | null> =>
+  reply.json.pipe(
+    Effect.map((json) =>
+      json !== null && typeof json === "object" ? (json as Record<string, unknown>) : null,
+    ),
+    Effect.catchDefect(() => Effect.succeed(null)),
+  );
 
-function errorDetail(json: Record<string, unknown> | null): string {
+const errorDetail = (json: Record<string, unknown> | null): string => {
   for (const key of ["error_description", "detail", "message", "error"]) {
     const value = json?.[key];
     if (typeof value === "string" && value.trim() !== "") return `: ${value.trim()}`;
   }
   return "";
-}
+};
 
-function trustedHttpUrl(value: unknown): string | null {
+const trustedHttpUrl = (value: unknown): string | null => {
   if (typeof value !== "string" || value === "") return null;
   try {
     const url = new URL(value);
@@ -47,156 +49,183 @@ function trustedHttpUrl(value: unknown): string | null {
   } catch {
     return null;
   }
-}
+};
 
-function positiveNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
-}
+const positiveNumber = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 
-async function startDeviceAuthorization(signal: AbortSignal): Promise<DeviceAuthorization> {
-  const response = await fetch(DEVICE_AUTHORIZATION_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-    body: new URLSearchParams({ client_id: CLIENT_ID }).toString(),
-    signal: requestSignal(signal),
+const formHeaders = {
+  "Content-Type": "application/x-www-form-urlencoded",
+  Accept: "application/json",
+} as const;
+
+const startDeviceAuthorization = (signal: AbortSignal): Effect.Effect<DeviceAuthorization> =>
+  Effect.gen(function* () {
+    const reply = yield* httpRequest({
+      url: DEVICE_AUTHORIZATION_URL,
+      method: "POST",
+      headers: formHeaders,
+      body: new URLSearchParams({ client_id: CLIENT_ID }).toString(),
+      signal: requestSignal(signal),
+    });
+    const json = yield* readJson(reply);
+    if (!reply.ok) {
+      return yield* Effect.die(
+        new Error(
+          `Meta device authorization failed with status ${reply.status}${errorDetail(json)}`,
+        ),
+      );
+    }
+    const deviceCode = json?.["device_code"];
+    const userCode = json?.["user_code"];
+    const verificationUri =
+      trustedHttpUrl(json?.["verification_uri_complete"]) ??
+      trustedHttpUrl(json?.["verification_uri"]);
+    if (
+      typeof deviceCode !== "string" ||
+      deviceCode === "" ||
+      typeof userCode !== "string" ||
+      userCode === "" ||
+      verificationUri === null ||
+      verificationUri === ""
+    ) {
+      return yield* Effect.die(
+        new Error(`Invalid Meta device authorization response: ${yield* encodeJson(json)}`),
+      );
+    }
+    return {
+      deviceCode,
+      userCode,
+      verificationUri,
+      intervalSeconds: positiveNumber(json?.["interval"]),
+      expiresInSeconds: positiveNumber(json?.["expires_in"]),
+    };
   });
-  const json = await readJson(response);
-  if (!response.ok) {
-    throw new Error(
-      `Meta device authorization failed with status ${response.status}${errorDetail(json)}`,
-    );
-  }
-  const deviceCode = json?.["device_code"];
-  const userCode = json?.["user_code"];
-  const verificationUri =
-    trustedHttpUrl(json?.["verification_uri_complete"]) ??
-    trustedHttpUrl(json?.["verification_uri"]);
-  if (
-    typeof deviceCode !== "string" ||
-    deviceCode === "" ||
-    typeof userCode !== "string" ||
-    userCode === "" ||
-    verificationUri === null ||
-    verificationUri === ""
-  ) {
-    throw new Error(`Invalid Meta device authorization response: ${JSON.stringify(json)}`);
-  }
-  return {
-    deviceCode,
-    userCode,
-    verificationUri,
-    intervalSeconds: positiveNumber(json?.["interval"]),
-    expiresInSeconds: positiveNumber(json?.["expires_in"]),
-  };
-}
 
-function pollForIdentityToken(device: DeviceAuthorization, signal: AbortSignal): Promise<string> {
-  return pollOAuthDeviceCodeFlow<string>({
+const pollIdentityTokenOnce = (device: DeviceAuthorization, signal: AbortSignal) =>
+  Effect.gen(function* () {
+    const reply = yield* httpRequest({
+      url: DEVICE_TOKEN_URL,
+      method: "POST",
+      headers: formHeaders,
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+        device_code: device.deviceCode,
+        client_id: CLIENT_ID,
+      }).toString(),
+      signal: requestSignal(signal),
+    });
+    const json = yield* readJson(reply);
+    const accessToken = json?.["access_token"];
+    if (reply.ok && typeof accessToken === "string" && accessToken !== "") {
+      return { status: "complete" as const, value: accessToken };
+    }
+    switch (json?.["error"]) {
+      case "authorization_pending":
+        return { status: "pending" as const };
+      case "slow_down":
+        return {
+          status: "slow_down" as const,
+          intervalSeconds: positiveNumber(json?.["interval"]),
+        };
+      case "access_denied":
+        return { status: "failed" as const, message: "Meta login was denied." };
+      case "expired_token":
+        return {
+          status: "failed" as const,
+          message: "Meta device authorization expired. Please restart login.",
+        };
+      default:
+        return {
+          status: "failed" as const,
+          message: `Meta device token request failed with status ${reply.status}${errorDetail(json)}`,
+        };
+    }
+  });
+
+const pollForIdentityToken = (device: DeviceAuthorization, signal: AbortSignal): Promise<string> =>
+  pollOAuthDeviceCodeFlow<string>({
     intervalSeconds: device.intervalSeconds,
     expiresInSeconds: device.expiresInSeconds,
     waitBeforeFirstPoll: true,
     signal,
-    poll: async () => {
-      const response = await fetch(DEVICE_TOKEN_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json",
-        },
-        body: new URLSearchParams({
-          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-          device_code: device.deviceCode,
-          client_id: CLIENT_ID,
-        }).toString(),
-        signal: requestSignal(signal),
-      });
-      const json = await readJson(response);
-      if (
-        response.ok &&
-        typeof json?.["access_token"] === "string" &&
-        json["access_token"] !== ""
-      ) {
-        return { status: "complete", value: json["access_token"] };
-      }
-      switch (json?.["error"]) {
-        case "authorization_pending":
-          return { status: "pending" };
-        case "slow_down":
-          return { status: "slow_down", intervalSeconds: positiveNumber(json?.["interval"]) };
-        case "access_denied":
-          return { status: "failed", message: "Meta login was denied." };
-        case "expired_token":
-          return {
-            status: "failed",
-            message: "Meta device authorization expired. Please restart login.",
-          };
-        default:
-          return {
-            status: "failed",
-            message: `Meta device token request failed with status ${response.status}${errorDetail(json)}`,
-          };
-      }
-    },
+    poll: () => Effect.runPromise(pollIdentityTokenOnce(device, signal)),
   });
-}
 
-async function mintApiKey(identityToken: string, signal: AbortSignal): Promise<OAuthCredential> {
-  const response = await fetch(API_KEY_MINT_URL, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${identityToken}`,
-      "Content-Type": "application/json",
-      "x-api-version": "1.0.0",
-    },
-    body: "{}",
-    signal: requestSignal(signal),
-  });
-  const json = await readJson(response);
-  if (response.status === 401 || response.status === 403) {
-    throw new Error(
-      `Meta session expired (status ${response.status}). Run \`/login meta\` to sign in again.${errorDetail(json)}`,
-    );
-  }
-  if (!response.ok) {
-    throw new Error(`Meta API key mint failed with status ${response.status}${errorDetail(json)}`);
-  }
-  const apiKey = json?.["api_key"];
-  if (typeof apiKey !== "string" || apiKey === "") {
-    const actionUrl = trustedHttpUrl(json?.["action_url"]);
-    throw new Error(
-      `Meta did not issue an API key.${actionUrl !== null && actionUrl !== "" ? ` Complete setup at ${actionUrl}` : ""}`,
-    );
-  }
-  return {
-    type: "oauth",
-    refresh: identityToken,
-    access: apiKey,
-    expires: Date.now() + API_KEY_LIFETIME_MS,
-  };
-}
-
-async function loginMeta(interaction: ProviderAuthInteraction): Promise<OAuthCredential> {
-  try {
-    const device = await startDeviceAuthorization(interaction.signal);
-    interaction.notify({
-      type: "device_code",
-      userCode: device.userCode,
-      verificationUri: device.verificationUri,
-      intervalSeconds: device.intervalSeconds,
-      expiresInSeconds: device.expiresInSeconds,
+const mintApiKeyEffect = (
+  identityToken: string,
+  signal: AbortSignal,
+): Effect.Effect<OAuthCredential> =>
+  Effect.gen(function* () {
+    const reply = yield* httpRequest({
+      url: API_KEY_MINT_URL,
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${identityToken}`,
+        "Content-Type": "application/json",
+        "x-api-version": "1.0.0",
+      },
+      body: "{}",
+      signal: requestSignal(signal),
     });
-    const identityToken = await pollForIdentityToken(device, interaction.signal);
-    interaction.notify({ type: "progress", message: "Enabling Meta Model API access..." });
-    return await mintApiKey(identityToken, interaction.signal);
-  } catch (e) {
-    if (interaction.signal.aborted) throw new Error("Login cancelled", { cause: e });
-    throw e;
-  }
-}
+    const json = yield* readJson(reply);
+    if (reply.status === 401 || reply.status === 403) {
+      return yield* Effect.die(
+        new Error(
+          `Meta session expired (status ${reply.status}). Run \`/login meta\` to sign in again.${errorDetail(json)}`,
+        ),
+      );
+    }
+    if (!reply.ok) {
+      return yield* Effect.die(
+        new Error(`Meta API key mint failed with status ${reply.status}${errorDetail(json)}`),
+      );
+    }
+    const apiKey = json?.["api_key"];
+    if (typeof apiKey !== "string" || apiKey === "") {
+      const actionUrl = trustedHttpUrl(json?.["action_url"]);
+      return yield* Effect.die(
+        new Error(
+          `Meta did not issue an API key.${actionUrl !== null && actionUrl !== "" ? ` Complete setup at ${actionUrl}` : ""}`,
+        ),
+      );
+    }
+    const now = yield* Clock.currentTimeMillis;
+    return {
+      type: "oauth" as const,
+      refresh: identityToken,
+      access: apiKey,
+      expires: now + API_KEY_LIFETIME_MS,
+    };
+  });
+
+const loginMeta = (interaction: ProviderAuthInteraction): Promise<OAuthCredential> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const device = yield* startDeviceAuthorization(interaction.signal);
+      interaction.notify({
+        type: "device_code",
+        userCode: device.userCode,
+        verificationUri: device.verificationUri,
+        intervalSeconds: device.intervalSeconds,
+        expiresInSeconds: device.expiresInSeconds,
+      });
+      const identityToken = yield* Effect.promise(() =>
+        pollForIdentityToken(device, interaction.signal),
+      );
+      interaction.notify({ type: "progress", message: "Enabling Meta Model API access..." });
+      return yield* mintApiKeyEffect(identityToken, interaction.signal);
+    }).pipe(
+      Effect.catchDefect((error) =>
+        Effect.die(
+          interaction.signal.aborted
+            ? new Error("Login cancelled", { cause: error })
+            : (error as Error),
+        ),
+      ),
+    ),
+  );
 
 export const metaOAuth: OAuthAuth = {
   name: "Meta (Muse subscription)",
@@ -205,7 +234,7 @@ export const metaOAuth: OAuthAuth = {
 
   login: loginMeta,
 
-  refresh: (credential, signal) => mintApiKey(credential.refresh, signal),
+  refresh: (credential, signal) => Effect.runPromise(mintApiKeyEffect(credential.refresh, signal)),
 
   toAuth(credential) {
     return Promise.resolve({ apiKey: credential.access });

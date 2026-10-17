@@ -84,7 +84,7 @@ describe("Meta OAuth", () => {
             }
             if (url === MINT_URL) {
               expect(init?.method).toBe("POST");
-              expect(init?.headers).toMatchObject({ Authorization: "Bearer identity-token" });
+              expect(init?.headers).toMatchObject({ authorization: "Bearer identity-token" });
               return Promise.resolve(jsonResponse({ api_key: "LLM|minted-key" }));
             }
             return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
@@ -125,7 +125,7 @@ describe("Meta OAuth", () => {
           "fetch",
           vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
             expect(getUrl(input)).toBe(MINT_URL);
-            expect(init?.headers).toMatchObject({ Authorization: "Bearer identity-token" });
+            expect(init?.headers).toMatchObject({ authorization: "Bearer identity-token" });
             return Promise.resolve(jsonResponse({ api_key: "LLM|fresh-key" }));
           }),
         );

@@ -1,3 +1,6 @@
+import { Clock, Effect } from "effect";
+
+import { httpRequest } from "../../utils/http.ts";
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import { pollOAuthDeviceCodeFlow } from "./device-code.ts";
 
@@ -25,23 +28,23 @@ type XaiDeviceCode = {
   expiresInSeconds: number;
 };
 
-function requiredString(body: JsonObject, field: string): string {
+const requiredString = (body: JsonObject, field: string): string => {
   const value = body[field];
   if (typeof value !== "string" || value.length === 0) {
     throw new Error(`Invalid xAI OAuth response field: ${field}`);
   }
   return value;
-}
+};
 
-function positiveNumber(body: JsonObject, field: string): number {
+const positiveNumber = (body: JsonObject, field: string): number => {
   const value = body[field];
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw new Error(`Invalid xAI OAuth response field: ${field}`);
   }
   return value;
-}
+};
 
-function validateVerificationUri(raw: string): string {
+const validateVerificationUri = (raw: string): string => {
   let url: URL;
   try {
     url = new URL(raw);
@@ -52,71 +55,69 @@ function validateVerificationUri(raw: string): string {
     throw new Error("Untrusted verification URI in xAI OAuth response");
   }
   return url.href;
-}
+};
 
-async function postForm(
+const asJsonObject = (value: unknown): JsonObject =>
+  value !== null && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : {};
+
+const postForm = (
   url: string,
   fields: Record<string, string>,
   signal: AbortSignal,
-): Promise<OAuthHttpResponse> {
-  let response: Response;
-  try {
-    response = await fetch(url, {
+): Effect.Effect<OAuthHttpResponse> =>
+  Effect.gen(function* () {
+    const reply = yield* httpRequest({
+      url,
       method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams(fields),
+      body: new URLSearchParams(fields).toString(),
       signal,
-    });
-  } catch (error) {
-    if (signal.aborted) {
-      throw new Error("Login cancelled", { cause: error });
-    }
-    throw error;
-  }
+    }).pipe(
+      Effect.catchDefect((error) =>
+        Effect.die(
+          signal.aborted ? new Error("Login cancelled", { cause: error }) : (error as Error),
+        ),
+      ),
+    );
 
-  let body: JsonObject;
-  try {
-    const parsed = (await response.json()) as unknown;
-    body =
-      parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as JsonObject) : {};
-  } catch {
-    if (signal.aborted) {
-      throw new Error("Login cancelled");
-    }
-    throw new Error(`xAI OAuth returned invalid JSON (HTTP ${response.status})`);
-  }
-  return {
-    ok: response.ok,
-    status: response.status,
-    body,
-  };
-}
+    const body = yield* reply.json.pipe(
+      Effect.map(asJsonObject),
+      Effect.catchDefect(() =>
+        Effect.die(
+          signal.aborted
+            ? new Error("Login cancelled")
+            : new Error(`xAI OAuth returned invalid JSON (HTTP ${reply.status})`),
+        ),
+      ),
+    );
+    return { ok: reply.ok, status: reply.status, body };
+  });
 
-function requestFailure(action: string, response: OAuthHttpResponse): Error {
+const requestFailure = (action: string, response: OAuthHttpResponse): Error => {
   const error = typeof response.body["error"] === "string" ? response.body["error"] : undefined;
   const description =
     typeof response.body["error_description"] === "string"
       ? response.body["error_description"]
       : undefined;
-  const detail = [error, description].filter(Boolean).join(": ");
+  const detail = [error, description].filter((part) => part !== undefined).join(": ");
   return new Error(
     `xAI OAuth ${action} failed (HTTP ${response.status})${detail === "" ? "" : `: ${detail}`}`,
   );
-}
+};
 
-function parseDeviceCode(body: JsonObject): XaiDeviceCode {
+const parseDeviceCode = (body: JsonObject): XaiDeviceCode => {
   const interval = body["interval"];
   const intervalSeconds =
     typeof interval === "number" && Number.isFinite(interval) && interval > 0
       ? interval
       : undefined;
+  const complete = body["verification_uri_complete"];
   const verificationUriComplete =
-    typeof body["verification_uri_complete"] === "string" &&
-    body["verification_uri_complete"].length > 0
-      ? validateVerificationUri(body["verification_uri_complete"])
+    typeof complete === "string" && complete.length > 0
+      ? validateVerificationUri(complete)
       : undefined;
   return {
     deviceCode: requiredString(body, "device_code"),
@@ -126,123 +127,120 @@ function parseDeviceCode(body: JsonObject): XaiDeviceCode {
     intervalSeconds,
     expiresInSeconds: positiveNumber(body, "expires_in"),
   };
-}
+};
 
-function credentialsFromTokenResponse(
+const credentialsFromTokenResponse = (
   body: JsonObject,
   previousRefreshToken?: string,
-): OAuthCredential {
-  const access = requiredString(body, "access_token");
-  const refresh =
-    body["refresh_token"] === undefined &&
-    previousRefreshToken !== undefined &&
-    previousRefreshToken !== ""
-      ? previousRefreshToken
-      : requiredString(body, "refresh_token");
-  const expiresInSeconds =
-    body["expires_in"] === undefined
-      ? DEFAULT_TOKEN_LIFETIME_SECONDS
-      : positiveNumber(body, "expires_in");
-  return {
-    type: "oauth",
-    access,
-    refresh,
-    expires: Date.now() + expiresInSeconds * 1000 - REFRESH_SKEW_MS,
-  };
-}
+): Effect.Effect<OAuthCredential> =>
+  Effect.gen(function* () {
+    const access = requiredString(body, "access_token");
+    const refresh =
+      body["refresh_token"] === undefined &&
+      previousRefreshToken !== undefined &&
+      previousRefreshToken !== ""
+        ? previousRefreshToken
+        : requiredString(body, "refresh_token");
+    const expiresInSeconds =
+      body["expires_in"] === undefined
+        ? DEFAULT_TOKEN_LIFETIME_SECONDS
+        : positiveNumber(body, "expires_in");
+    const now = yield* Clock.currentTimeMillis;
+    return {
+      type: "oauth" as const,
+      access,
+      refresh,
+      expires: now + expiresInSeconds * 1000 - REFRESH_SKEW_MS,
+    };
+  });
 
-async function requestDeviceCode(signal: AbortSignal): Promise<XaiDeviceCode> {
-  const response = await postForm(
-    XAI_DEVICE_CODE_URL,
-    {
-      client_id: XAI_CLIENT_ID,
-      scope: XAI_SCOPE,
-      referrer: "pi",
-    },
-    signal,
-  );
-  if (!response.ok) {
-    throw requestFailure("device authorization", response);
-  }
-  return parseDeviceCode(response.body);
-}
+const requestDeviceCode = (signal: AbortSignal): Effect.Effect<XaiDeviceCode> =>
+  Effect.gen(function* () {
+    const response = yield* postForm(
+      XAI_DEVICE_CODE_URL,
+      { client_id: XAI_CLIENT_ID, scope: XAI_SCOPE, referrer: "pi" },
+      signal,
+    );
+    if (!response.ok) return yield* Effect.die(requestFailure("device authorization", response));
+    return parseDeviceCode(response.body);
+  });
 
-function pollForTokens(device: XaiDeviceCode, signal: AbortSignal): Promise<OAuthCredential> {
-  return pollOAuthDeviceCodeFlow<OAuthCredential>({
+const pollTokenOnce = (device: XaiDeviceCode, signal: AbortSignal) =>
+  Effect.gen(function* () {
+    const response = yield* postForm(
+      XAI_TOKEN_URL,
+      {
+        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+        client_id: XAI_CLIENT_ID,
+        device_code: device.deviceCode,
+      },
+      signal,
+    );
+
+    if (response.ok) {
+      return {
+        status: "complete" as const,
+        value: yield* credentialsFromTokenResponse(response.body),
+      };
+    }
+
+    const error = response.body["error"];
+    if (error === "authorization_pending") return { status: "pending" as const };
+    if (error === "slow_down") {
+      const interval = response.body["interval"];
+      return {
+        status: "slow_down" as const,
+        intervalSeconds: typeof interval === "number" ? interval : undefined,
+      };
+    }
+    if (error === "access_denied" || error === "authorization_denied") {
+      return { status: "failed" as const, message: "xAI device authorization was denied" };
+    }
+    if (error === "expired_token") {
+      return { status: "failed" as const, message: "xAI device code expired" };
+    }
+    return {
+      status: "failed" as const,
+      message: requestFailure("device token polling", response).message,
+    };
+  });
+
+const pollForTokens = (device: XaiDeviceCode, signal: AbortSignal): Promise<OAuthCredential> =>
+  pollOAuthDeviceCodeFlow<OAuthCredential>({
     intervalSeconds: device.intervalSeconds,
     expiresInSeconds: device.expiresInSeconds,
     waitBeforeFirstPoll: true,
     signal,
-    poll: async () => {
-      const response = await postForm(
+    poll: () => Effect.runPromise(pollTokenOnce(device, signal)),
+  });
+
+const loginXai = (interaction: ProviderAuthInteraction): Promise<OAuthCredential> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const device = yield* requestDeviceCode(interaction.signal);
+      interaction.notify({
+        type: "device_code",
+        userCode: device.userCode,
+        verificationUri: device.verificationUriComplete ?? device.verificationUri,
+        intervalSeconds: device.intervalSeconds,
+        expiresInSeconds: device.expiresInSeconds,
+      });
+      return yield* Effect.promise(() => pollForTokens(device, interaction.signal));
+    }),
+  );
+
+const refreshXaiToken = (refreshToken: string, signal: AbortSignal): Promise<OAuthCredential> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const response = yield* postForm(
         XAI_TOKEN_URL,
-        {
-          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-          client_id: XAI_CLIENT_ID,
-          device_code: device.deviceCode,
-        },
+        { grant_type: "refresh_token", client_id: XAI_CLIENT_ID, refresh_token: refreshToken },
         signal,
       );
-
-      if (response.ok) {
-        return { status: "complete", value: credentialsFromTokenResponse(response.body) };
-      }
-
-      const error = response.body["error"];
-      if (error === "authorization_pending") {
-        return { status: "pending" };
-      }
-      if (error === "slow_down") {
-        const interval = response.body["interval"];
-        return {
-          status: "slow_down",
-          intervalSeconds: typeof interval === "number" ? interval : undefined,
-        };
-      }
-      if (error === "access_denied" || error === "authorization_denied") {
-        return { status: "failed", message: "xAI device authorization was denied" };
-      }
-      if (error === "expired_token") {
-        return { status: "failed", message: "xAI device code expired" };
-      }
-      return {
-        status: "failed",
-        message: requestFailure("device token polling", response).message,
-      };
-    },
-  });
-}
-
-async function loginXai(interaction: ProviderAuthInteraction): Promise<OAuthCredential> {
-  const device = await requestDeviceCode(interaction.signal);
-  interaction.notify({
-    type: "device_code",
-    userCode: device.userCode,
-    verificationUri: device.verificationUriComplete ?? device.verificationUri,
-    intervalSeconds: device.intervalSeconds,
-    expiresInSeconds: device.expiresInSeconds,
-  });
-  return pollForTokens(device, interaction.signal);
-}
-
-async function refreshXaiToken(
-  refreshToken: string,
-  signal: AbortSignal,
-): Promise<OAuthCredential> {
-  const response = await postForm(
-    XAI_TOKEN_URL,
-    {
-      grant_type: "refresh_token",
-      client_id: XAI_CLIENT_ID,
-      refresh_token: refreshToken,
-    },
-    signal,
+      if (!response.ok) return yield* Effect.die(requestFailure("token refresh", response));
+      return yield* credentialsFromTokenResponse(response.body, refreshToken);
+    }),
   );
-  if (!response.ok) {
-    throw requestFailure("token refresh", response);
-  }
-  return credentialsFromTokenResponse(response.body, refreshToken);
-}
 
 export const xaiOAuth: OAuthAuth = {
   name: "xAI (Grok/X subscription)",

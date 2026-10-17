@@ -1,144 +1,59 @@
+import { Effect } from "effect";
+
 import { normalizeRadiusGatewayUrl } from "../../providers/radius-config.ts";
+import { randomUuid } from "../../utils/crypto.ts";
+import { httpRequest } from "../../utils/http.ts";
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import { startOAuthCallbackServer } from "./callback-server.ts";
-import { pollOAuthDeviceCodeFlow } from "./device-code.ts";
 import { generatePKCE } from "./pkce.ts";
+import { loginWithDeviceCode } from "./radius-device.ts";
+import {
+  CALLBACK_HOST,
+  CALLBACK_PATH,
+  CALLBACK_PORT,
+  OAUTH_CLIENT_ID,
+  OAUTH_SCOPE,
+  REDIRECT_URI,
+} from "./radius-shared.ts";
+import { requestOAuthToken } from "./radius-token.ts";
 
-const CALLBACK_HOST = "127.0.0.1";
-const CALLBACK_PORT = 1456;
-const CALLBACK_PATH = "/oauth/callback";
-const REDIRECT_URI = `http://${CALLBACK_HOST}:${CALLBACK_PORT}${CALLBACK_PATH}`;
-const TOKEN_EXPIRY_SKEW_MS = 60_000;
 const LOGIN_METHOD_BROWSER = "browser";
 const LOGIN_METHOD_DEVICE_CODE = "device-code";
-const OAUTH_CLIENT_ID = "msa-gateway";
-const OAUTH_SCOPE = "gateway offline_access";
-const OAUTH_DEVICE_CODE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code";
 
 type RadiusOAuthDiscovery = {
   authorizationEndpoint: string;
 };
 
-type DeviceAuthorizationResponse = {
-  device_code: string;
-  user_code: string;
-  verification_uri: string;
-  expires_in: number;
-  interval?: number | undefined;
-};
-
-async function loadRadiusOAuthDiscovery(
+const loadRadiusOAuthDiscovery = (
   gateway: string,
   signal: AbortSignal,
-): Promise<RadiusOAuthDiscovery> {
-  const response = await fetch(new URL("/v1/oauth", gateway), {
-    headers: { accept: "application/json" },
-    signal,
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Could not load Radius OAuth config from ${gateway}: ${response.status} ${await response.text()}`,
-    );
-  }
-
-  const discovery = (await response.json()) as Partial<RadiusOAuthDiscovery>;
-  if (typeof discovery.authorizationEndpoint !== "string") {
-    throw new Error(`Invalid Radius OAuth config from ${gateway}`);
-  }
-  return { authorizationEndpoint: discovery.authorizationEndpoint };
-}
-
-class OAuthResponseError extends Error {
-  readonly status: number;
-  readonly oauthError?: string | undefined;
-
-  constructor(
-    status: number,
-    oauthError: string | undefined,
-    description: string | undefined,
-    message: string,
-  ) {
-    const detail =
-      oauthError !== undefined && oauthError !== ""
-        ? description !== undefined && description !== ""
-          ? `${oauthError}: ${description}`
-          : oauthError
-        : description || String(status);
-    super(`${message}: ${detail}`);
-    this.status = status;
-    this.oauthError = oauthError;
-  }
-}
-
-async function readOAuthResponseError(
-  response: Response,
-  message: string,
-): Promise<OAuthResponseError> {
-  const text = await response.text().catch(() => "");
-  let oauthError: string | undefined;
-  let description: string | undefined;
-
-  if (text !== "") {
-    try {
-      const data = JSON.parse(text) as { error?: unknown; error_description?: unknown };
-      oauthError = typeof data.error === "string" ? data.error : undefined;
-      description = typeof data.error_description === "string" ? data.error_description : undefined;
-    } catch {
-      description = text;
-    }
-  }
-
-  return new OAuthResponseError(response.status, oauthError, description, message);
-}
-
-async function requestOAuthToken(
-  gateway: string,
-  body: URLSearchParams,
-  signal: AbortSignal,
-): Promise<OAuthCredential> {
-  let response: Response;
-  try {
-    response = await fetch(new URL("/v1/oauth/token", gateway), {
-      method: "POST",
-      headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded" },
-      body,
+): Effect.Effect<RadiusOAuthDiscovery> =>
+  Effect.gen(function* () {
+    const reply = yield* httpRequest({
+      url: new URL("/v1/oauth", gateway),
+      headers: { accept: "application/json" },
       signal,
     });
-  } catch (error) {
-    if (signal.aborted) {
-      throw new Error("Login cancelled", { cause: error });
+
+    if (!reply.ok) {
+      const text = yield* reply.text;
+      return yield* Effect.die(
+        new Error(`Could not load Radius OAuth config from ${gateway}: ${reply.status} ${text}`),
+      );
     }
-    throw error;
-  }
 
-  if (!response.ok) {
-    throw await readOAuthResponseError(response, "Radius OAuth token request failed");
-  }
+    const discovery = (yield* reply.json) as Partial<RadiusOAuthDiscovery>;
+    if (typeof discovery.authorizationEndpoint !== "string") {
+      return yield* Effect.die(new Error(`Invalid Radius OAuth config from ${gateway}`));
+    }
+    return { authorizationEndpoint: discovery.authorizationEndpoint };
+  });
 
-  const data = (await response.json()) as {
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
-    scope?: string;
-  };
-
-  return {
-    type: "oauth",
-    access: data.access_token,
-    refresh: data.refresh_token,
-    expires: Date.now() + data.expires_in * 1000 - TOKEN_EXPIRY_SKEW_MS,
-    scope: data.scope,
-  };
-}
-
-async function loginWithBrowser(
-  gateway: string,
+const browserAuthorizeUrl = (
   authorizationEndpoint: string,
-  interaction: ProviderAuthInteraction,
-): Promise<OAuthCredential> {
-  const { verifier, challenge } = await generatePKCE();
-  const state = crypto.randomUUID();
+  challenge: string,
+  state: string,
+): URL => {
   const authorizeUrl = new URL(authorizationEndpoint);
   authorizeUrl.search = new URLSearchParams({
     response_type: "code",
@@ -150,192 +65,139 @@ async function loginWithBrowser(
     handoff: "url",
     state,
   }).toString();
+  return authorizeUrl;
+};
 
-  const callback = await startOAuthCallbackServer({
-    providerName: "Radius",
-    host: CALLBACK_HOST,
-    port: CALLBACK_PORT,
-    path: CALLBACK_PATH,
-    state,
-    complete: (code) =>
-      requestOAuthToken(
-        gateway,
-        new URLSearchParams({
-          grant_type: "authorization_code",
-          client_id: OAUTH_CLIENT_ID,
-          redirect_uri: REDIRECT_URI,
-          code,
-          code_verifier: verifier,
-        }),
-        interaction.signal,
-      ),
-    signal: interaction.signal,
-  });
-  interaction.notify({
-    type: "progress",
-    message: `Listening for OAuth callback on ${REDIRECT_URI}`,
-  });
-  interaction.notify({
-    type: "auth_url",
-    url: authorizeUrl.toString(),
-    instructions: "Continue in your browser.",
-  });
-
-  try {
-    const credential = await callback.wait();
-    if (credential === undefined) throw new Error("OAuth callback did not complete.");
-    return credential;
-  } finally {
-    callback.close();
-  }
+interface BrowserLogin {
+  readonly gateway: string;
+  readonly authorizationEndpoint: string;
+  readonly interaction: ProviderAuthInteraction;
 }
 
-async function requestDeviceAuthorization(
-  gateway: string,
-  signal: AbortSignal,
-): Promise<DeviceAuthorizationResponse> {
-  let response: Response;
-  try {
-    response = await fetch(new URL("/v1/oauth/device", gateway), {
-      method: "POST",
-      headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ client_id: OAUTH_CLIENT_ID, scope: OAUTH_SCOPE }),
-      signal,
+const startBrowserCallbackServer = (
+  { gateway, interaction }: BrowserLogin,
+  state: string,
+  verifier: string,
+) =>
+  Effect.gen(function* () {
+    const runExchange = Effect.runPromiseWith(yield* Effect.context<never>());
+    return yield* Effect.promise(() =>
+      startOAuthCallbackServer({
+        providerName: "Radius",
+        host: CALLBACK_HOST,
+        port: CALLBACK_PORT,
+        path: CALLBACK_PATH,
+        state,
+        complete: (code) =>
+          runExchange(
+            requestOAuthToken({
+              gateway,
+              body: new URLSearchParams({
+                grant_type: "authorization_code",
+                client_id: OAUTH_CLIENT_ID,
+                redirect_uri: REDIRECT_URI,
+                code,
+                code_verifier: verifier,
+              }),
+              signal: interaction.signal,
+            }).pipe(Effect.catchTag("RadiusOAuthResponseError", Effect.die)),
+          ),
+        signal: interaction.signal,
+      }),
+    );
+  });
+
+const loginWithBrowser = (login: BrowserLogin): Effect.Effect<OAuthCredential> =>
+  Effect.gen(function* () {
+    const { interaction } = login;
+    const { verifier, challenge } = yield* Effect.promise(() => generatePKCE());
+    const state = randomUuid();
+    const authorizeUrl = browserAuthorizeUrl(login.authorizationEndpoint, challenge, state);
+    const callback = yield* startBrowserCallbackServer(login, state, verifier);
+
+    interaction.notify({
+      type: "progress",
+      message: `Listening for OAuth callback on ${REDIRECT_URI}`,
     });
-  } catch (error) {
-    if (signal.aborted) {
-      throw new Error("Login cancelled", { cause: error });
-    }
-    throw error;
-  }
+    interaction.notify({
+      type: "auth_url",
+      url: authorizeUrl.toString(),
+      instructions: "Continue in your browser.",
+    });
 
-  if (!response.ok) {
-    throw await readOAuthResponseError(response, "Radius OAuth device authorization failed");
-  }
-
-  const data = (await response.json()) as Partial<DeviceAuthorizationResponse>;
-  if (
-    data.device_code === undefined ||
-    data.device_code === "" ||
-    data.user_code === undefined ||
-    data.user_code === "" ||
-    data.verification_uri === undefined ||
-    data.verification_uri === "" ||
-    data.expires_in === undefined ||
-    data.expires_in === 0 ||
-    Number.isNaN(data.expires_in)
-  ) {
-    throw new Error("Radius OAuth device authorization response is missing required fields");
-  }
-
-  return {
-    device_code: data.device_code,
-    user_code: data.user_code,
-    verification_uri: data.verification_uri,
-    expires_in: data.expires_in,
-    interval: data.interval,
-  };
-}
-
-async function loginWithDeviceCode(
-  gateway: string,
-  interaction: ProviderAuthInteraction,
-): Promise<OAuthCredential> {
-  const device = await requestDeviceAuthorization(gateway, interaction.signal);
-  interaction.notify({
-    type: "device_code",
-    userCode: device.user_code,
-    verificationUri: device.verification_uri,
-    intervalSeconds: device.interval,
-    expiresInSeconds: device.expires_in,
-  });
-
-  return pollOAuthDeviceCodeFlow<OAuthCredential>({
-    intervalSeconds: device.interval,
-    expiresInSeconds: device.expires_in,
-    signal: interaction.signal,
-    poll: async () => {
-      try {
-        const credentials = await requestOAuthToken(
-          gateway,
-          new URLSearchParams({
-            grant_type: OAUTH_DEVICE_CODE_GRANT_TYPE,
-            client_id: OAUTH_CLIENT_ID,
-            device_code: device.device_code,
-          }),
-          interaction.signal,
-        );
-        return { status: "complete", value: credentials };
-      } catch (error) {
-        if (!(error instanceof OAuthResponseError)) {
-          throw error;
-        }
-        switch (error.oauthError) {
-          case "authorization_pending":
-            return { status: "pending" };
-          case "slow_down":
-            return { status: "slow_down" };
-          case "expired_token":
-            return { status: "failed", message: "Device authorization expired." };
-          case "access_denied":
-            return { status: "failed", message: "Device authorization was denied." };
-          default:
-            throw error;
-        }
+    return yield* Effect.gen(function* () {
+      const credential = yield* Effect.promise(() => callback.wait());
+      if (credential === undefined) {
+        return yield* Effect.die(new Error("OAuth callback did not complete."));
       }
-    },
+      return credential;
+    }).pipe(Effect.ensuring(Effect.sync(() => callback.close())));
   });
-}
 
 export interface RadiusOAuthOptions {
   name: string;
   gateway: string;
 }
 
-export function createRadiusOAuth(options: RadiusOAuthOptions): OAuthAuth {
+const promptLoginMethod = (interaction: ProviderAuthInteraction, name: string) =>
+  Effect.promise(() =>
+    interaction.prompt({
+      type: "select",
+      message: `Sign in to ${name}:`,
+      options: [
+        { id: LOGIN_METHOD_BROWSER, label: "Sign in with browser (recommended)" },
+        {
+          id: LOGIN_METHOD_DEVICE_CODE,
+          label: "Sign in with device code (when signing in from another device)",
+        },
+      ],
+    }),
+  );
+
+const loginRadius = (
+  options: RadiusOAuthOptions,
+  gateway: string,
+  interaction: ProviderAuthInteraction,
+): Effect.Effect<OAuthCredential> =>
+  Effect.gen(function* () {
+    const loginMethod = yield* promptLoginMethod(interaction, options.name);
+    if (loginMethod === LOGIN_METHOD_DEVICE_CODE) {
+      return yield* loginWithDeviceCode({ gateway, interaction });
+    }
+    if (loginMethod === LOGIN_METHOD_BROWSER) {
+      const discovery = yield* loadRadiusOAuthDiscovery(gateway, interaction.signal);
+      return yield* loginWithBrowser({
+        gateway,
+        authorizationEndpoint: discovery.authorizationEndpoint,
+        interaction,
+      });
+    }
+    return yield* Effect.die(new Error(`Unknown ${options.name} sign-in method: ${loginMethod}`));
+  });
+
+export const createRadiusOAuth = (options: RadiusOAuthOptions): OAuthAuth => {
   const gateway = normalizeRadiusGatewayUrl(options.gateway);
 
   return {
     name: options.name,
 
-    async login(interaction): Promise<OAuthCredential> {
-      const loginMethod = await interaction.prompt({
-        type: "select",
-        message: `Sign in to ${options.name}:`,
-        options: [
-          { id: LOGIN_METHOD_BROWSER, label: "Sign in with browser (recommended)" },
-          {
-            id: LOGIN_METHOD_DEVICE_CODE,
-            label: "Sign in with device code (when signing in from another device)",
-          },
-        ],
-      });
+    login: (interaction) => Effect.runPromise(loginRadius(options, gateway, interaction)),
 
-      if (loginMethod === LOGIN_METHOD_DEVICE_CODE) {
-        return loginWithDeviceCode(gateway, interaction);
-      }
-      if (loginMethod === LOGIN_METHOD_BROWSER) {
-        const discovery = await loadRadiusOAuthDiscovery(gateway, interaction.signal);
-        return loginWithBrowser(gateway, discovery.authorizationEndpoint, interaction);
-      }
-      throw new Error(`Unknown ${options.name} sign-in method: ${loginMethod}`);
-    },
-
-    async refresh(credential, signal): Promise<OAuthCredential> {
-      const refreshed = await requestOAuthToken(
-        gateway,
-        new URLSearchParams({
-          grant_type: "refresh_token",
-          client_id: OAUTH_CLIENT_ID,
-          refresh_token: credential.refresh,
-        }),
-        signal,
-      );
-      return refreshed;
-    },
+    refresh: (credential, signal) =>
+      Effect.runPromise(
+        requestOAuthToken({
+          gateway,
+          body: new URLSearchParams({
+            grant_type: "refresh_token",
+            client_id: OAUTH_CLIENT_ID,
+            refresh_token: credential.refresh,
+          }),
+          signal,
+        }).pipe(Effect.catchTag("RadiusOAuthResponseError", Effect.die)),
+      ),
 
     toAuth(credential) {
       return Promise.resolve({ apiKey: credential.access });
     },
   };
-}
+};
