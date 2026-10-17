@@ -1,4 +1,5 @@
 import { utf8ByteLength } from "@msa/chord/output";
+import * as Function from "effect/Function";
 
 export const DEFAULT_MAX_LINES = 2000;
 export const DEFAULT_MAX_BYTES = 50 * 1024;
@@ -41,96 +42,107 @@ export function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-export function truncateHead(content: string, options: TruncationOptions = {}): TruncationResult {
-  return truncateHeadOf(
-    content,
-    { lines: splitLinesForCounting(content).length, bytes: utf8ByteLength(content) },
-    options,
-  );
-}
+type Totals = { readonly lines: number; readonly bytes: number };
 
-export function truncateHeadOf(
-  prefix: string,
-  totals: { readonly lines: number; readonly bytes: number },
-  options: TruncationOptions = {},
-): TruncationResult {
-  const maxLines = options.maxLines ?? DEFAULT_MAX_LINES;
-  const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
+type Limits = {
+  readonly maxLines: number;
+  readonly maxBytes: number;
+  readonly totals: Totals;
+};
 
-  const totalBytes = totals.bytes;
-  const lines = splitLinesForCounting(prefix);
-  const totalLines = totals.lines;
+type Output = Pick<
+  TruncationResult,
+  "content" | "truncated" | "truncatedBy" | "outputLines" | "outputBytes" | "firstLineExceedsLimit"
+>;
 
-  if (totalLines <= maxLines && totalBytes <= maxBytes) {
-    return {
+const resultOf = ({ maxLines, maxBytes, totals }: Limits, output: Output): TruncationResult => ({
+  ...output,
+  totalLines: totals.lines,
+  totalBytes: totals.bytes,
+  lastLinePartial: false,
+  maxLines,
+  maxBytes,
+});
+
+const headLines = (
+  lines: readonly string[],
+  { maxLines, maxBytes }: Limits,
+): { readonly kept: string[]; readonly byBytes: boolean } => {
+  const kept: string[] = [];
+  let bytes = 0;
+  for (const [index, line] of lines.entries()) {
+    if (index >= maxLines) break;
+    const lineBytes = utf8ByteLength(line) + (index > 0 ? 1 : 0);
+    if (bytes + lineBytes > maxBytes) return { kept, byBytes: true };
+    kept.push(line);
+    bytes += lineBytes;
+  }
+  return { kept, byBytes: false };
+};
+
+const truncateLines = (prefix: string, limits: Limits): TruncationResult => {
+  const { totals, maxLines, maxBytes } = limits;
+  if (totals.lines <= maxLines && totals.bytes <= maxBytes) {
+    return resultOf(limits, {
       content: prefix,
       truncated: false,
       truncatedBy: null,
-      totalLines,
-      totalBytes,
-      outputLines: totalLines,
-      outputBytes: totalBytes,
-      lastLinePartial: false,
+      outputLines: totals.lines,
+      outputBytes: totals.bytes,
       firstLineExceedsLimit: false,
-      maxLines,
-      maxBytes,
-    };
+    });
   }
-
+  const lines = splitLinesForCounting(prefix);
   const firstLine = lines[0];
   if (firstLine === undefined) {
     throw new Error("truncateHeadOf needs a non-empty prefix when the text exceeds the limits");
   }
-  const firstLineBytes = utf8ByteLength(firstLine);
-  if (firstLineBytes > maxBytes) {
-    return {
+  if (utf8ByteLength(firstLine) > maxBytes) {
+    return resultOf(limits, {
       content: "",
       truncated: true,
       truncatedBy: "bytes",
-      totalLines,
-      totalBytes,
       outputLines: 0,
       outputBytes: 0,
-      lastLinePartial: false,
       firstLineExceedsLimit: true,
-      maxLines,
-      maxBytes,
-    };
+    });
   }
-
-  const outputLinesArr: string[] = [];
-  let outputBytesCount = 0;
-  let truncatedBy: "lines" | "bytes" = "lines";
-
-  for (const [i, line] of lines.entries()) {
-    if (i >= maxLines) break;
-    const lineBytes = utf8ByteLength(line) + (i > 0 ? 1 : 0);
-
-    if (outputBytesCount + lineBytes > maxBytes) {
-      truncatedBy = "bytes";
-      break;
-    }
-
-    outputLinesArr.push(line);
-    outputBytesCount += lineBytes;
-  }
-
-  if (truncatedBy !== "bytes") truncatedBy = outputLinesArr.length < totalLines ? "lines" : "bytes";
-
-  const outputContent = outputLinesArr.join("\n");
-  const finalOutputBytes = utf8ByteLength(outputContent);
-
-  return {
-    content: outputContent,
+  const { kept, byBytes } = headLines(lines, limits);
+  const content = kept.join("\n");
+  return resultOf(limits, {
+    content,
     truncated: true,
-    truncatedBy,
-    totalLines,
-    totalBytes,
-    outputLines: outputLinesArr.length,
-    outputBytes: finalOutputBytes,
-    lastLinePartial: false,
+    truncatedBy: byBytes || kept.length >= totals.lines ? "bytes" : "lines",
+    outputLines: kept.length,
+    outputBytes: utf8ByteLength(content),
     firstLineExceedsLimit: false,
-    maxLines,
-    maxBytes,
-  };
-}
+  });
+};
+
+const limitsOf = (totals: Totals, options: TruncationOptions): Limits => ({
+  maxLines: options.maxLines ?? DEFAULT_MAX_LINES,
+  maxBytes: options.maxBytes ?? DEFAULT_MAX_BYTES,
+  totals,
+});
+
+const isText = (args: IArguments): boolean => typeof args[0] === "string";
+
+export const truncateHeadOf: {
+  (totals: Totals, options?: TruncationOptions): (prefix: string) => TruncationResult;
+  (prefix: string, totals: Totals, options?: TruncationOptions): TruncationResult;
+} = Function.dual(
+  isText,
+  (prefix: string, totals: Totals, options: TruncationOptions = {}): TruncationResult =>
+    truncateLines(prefix, limitsOf(totals, options)),
+);
+
+export const truncateHead: {
+  (options?: TruncationOptions): (content: string) => TruncationResult;
+  (content: string, options?: TruncationOptions): TruncationResult;
+} = Function.dual(isText, (content: string, options: TruncationOptions = {}): TruncationResult =>
+  truncateHeadOf(
+    content,
+    { lines: splitLinesForCounting(content).length, bytes: utf8ByteLength(content) },
+    options,
+  ),
+);

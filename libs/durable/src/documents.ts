@@ -1,6 +1,8 @@
 import { copyJson, type JsonValue } from "@msa/chord";
 import type { Op } from "@msa/chord/delta";
+import { Function } from "effect";
 
+import type { Dual2, Dual3, Dual4 } from "./dual.ts";
 import { idFromNumber } from "./ids.ts";
 import type {
   CheckpointInfo,
@@ -100,31 +102,29 @@ export type ResolvedAddress = {
   readonly nextArgument: number;
 };
 
-export function resolveAddress(
-  definition: AnyDocDefinition,
-  args: readonly unknown[],
-): ResolvedAddress {
-  let index = 0;
-  let scope: DocumentAddress["scope"];
-  switch (definition.scope) {
-    case "session":
-      scope = { kind: "session" };
-      break;
-    case "conversation":
-      scope = {
-        kind: "conversation",
-        conversationId: ownerId<ConversationId>(args[index++], definition),
-      };
-      break;
-    case "task":
-      scope = { kind: "task", taskId: ownerId<TaskId>(args[index++], definition) };
-      break;
-  }
-  const key = definition.family === true ? (args[index++] as string) : undefined;
-  const address: DocumentAddress =
-    key === undefined ? { kind: definition.kind, scope } : { kind: definition.kind, scope, key };
-  return { address, id: addressId(address), nextArgument: index };
-}
+export const resolveAddress: Dual2<AnyDocDefinition, readonly unknown[], ResolvedAddress> =
+  Function.dual(2, (definition: AnyDocDefinition, args: readonly unknown[]): ResolvedAddress => {
+    let index = 0;
+    let scope: DocumentAddress["scope"];
+    switch (definition.scope) {
+      case "session":
+        scope = { kind: "session" };
+        break;
+      case "conversation":
+        scope = {
+          kind: "conversation",
+          conversationId: ownerId<ConversationId>(args[index++], definition),
+        };
+        break;
+      case "task":
+        scope = { kind: "task", taskId: ownerId<TaskId>(args[index++], definition) };
+        break;
+    }
+    const key = definition.family === true ? (args[index++] as string) : undefined;
+    const address: DocumentAddress =
+      key === undefined ? { kind: definition.kind, scope } : { kind: definition.kind, scope, key };
+    return { address, id: addressId(address), nextArgument: index };
+  });
 
 function ownerId<I extends Id<string>>(value: unknown, definition: AnyDocDefinition): I {
   if (typeof value !== "number" || !Number.isSafeInteger(value)) {
@@ -143,76 +143,92 @@ export function addressId(address: DocumentAddress): string {
   return JSON.stringify([address.kind, address.scope.kind, owner, address.key ?? null]);
 }
 
-export function documentCreate(
-  definition: AnyDocDefinition,
-  address: DocumentAddress,
-  id: DocumentId,
-): DocumentCreate {
-  const key = address.key === undefined ? {} : { key: address.key };
-  switch (address.scope.kind) {
-    case "session":
-      return { id, kind: address.kind, ...key, scope: address.scope };
-    case "task":
-      return { id, kind: address.kind, ...key, scope: address.scope };
-    case "conversation":
-      return {
-        id,
-        kind: address.kind,
-        ...key,
-        scope: address.scope,
-        history: definition.history!,
-        fork: definition.fork!,
-      } as DocumentCreate;
-  }
-}
+export const documentCreate: Dual3<AnyDocDefinition, DocumentAddress, DocumentId, DocumentCreate> =
+  Function.dual(
+    3,
+    (definition: AnyDocDefinition, address: DocumentAddress, id: DocumentId): DocumentCreate => {
+      const key = address.key === undefined ? {} : { key: address.key };
+      switch (address.scope.kind) {
+        case "session":
+          return { id, kind: address.kind, ...key, scope: address.scope };
+        case "task":
+          return { id, kind: address.kind, ...key, scope: address.scope };
+        case "conversation":
+          return {
+            id,
+            kind: address.kind,
+            ...key,
+            scope: address.scope,
+            history: definition.history!,
+            fork: definition.fork!,
+          } as DocumentCreate;
+      }
+    },
+  );
 
-export function checkRecordScope(
-  definition: AnyDocDefinition,
-  record: DocumentCreate | DocumentRecord,
-): void {
-  if (
-    record.scope.kind !== definition.scope ||
-    (record.scope.kind === "conversation" &&
-      (record.history !== definition.history || record.fork !== definition.fork))
-  ) {
-    throw new TypeError(
-      `Document ${record.id} (${record.kind}) does not match the supplied definition semantics`,
-    );
-  }
-}
+export const checkRecordScope: Dual2<AnyDocDefinition, DocumentCreate | DocumentRecord, void> =
+  Function.dual(
+    2,
+    (definition: AnyDocDefinition, record: DocumentCreate | DocumentRecord): void => {
+      if (
+        record.scope.kind !== definition.scope ||
+        (record.scope.kind === "conversation" &&
+          (record.history !== definition.history || record.fork !== definition.fork))
+      ) {
+        throw new TypeError(
+          `Document ${record.id} (${record.kind}) does not match the supplied definition semantics`,
+        );
+      }
+    },
+  );
 
-export function checkRecordVersion(
-  definition: AnyDocDefinition,
-  record: DocumentCreate | DocumentRecord,
-  version: number,
-): void {
-  if (version > definition.version) {
-    throw new Error(
-      `Document ${record.id} (${record.kind}) has newer version ${version} than ${definition.version}`,
-    );
-  }
-  if (version < definition.version && definition.migrate === undefined) {
-    throw new Error(
-      `Document ${record.id} (${record.kind}) requires migration from version ${version}`,
-    );
-  }
-}
+export const checkRecordVersion: Dual3<
+  AnyDocDefinition,
+  DocumentCreate | DocumentRecord,
+  number,
+  void
+> = Function.dual(
+  3,
+  (
+    definition: AnyDocDefinition,
+    record: DocumentCreate | DocumentRecord,
+    version: number,
+  ): void => {
+    if (version > definition.version) {
+      throw new Error(
+        `Document ${record.id} (${record.kind}) has newer version ${version} than ${definition.version}`,
+      );
+    }
+    if (version < definition.version && definition.migrate === undefined) {
+      throw new Error(
+        `Document ${record.id} (${record.kind}) requires migration from version ${version}`,
+      );
+    }
+  },
+);
 
-export function materializeDocument(
-  definition: AnyDocDefinition,
-  stored: StoredDocument,
-): JsonObject {
-  return materializeDocumentValue(definition, stored.record, stored.version, stored.value);
-}
+export const materializeDocument: Dual2<AnyDocDefinition, StoredDocument, JsonObject> =
+  Function.dual(2, (definition: AnyDocDefinition, stored: StoredDocument): JsonObject =>
+    materializeDocumentValue(definition, stored.record, stored.version, stored.value),
+  );
 
-export function materializeDocumentValue(
-  definition: AnyDocDefinition,
-  record: DocumentCreate | DocumentRecord,
-  version: number,
-  value: JsonObject,
-): JsonObject {
-  checkRecordScope(definition, record);
-  checkRecordVersion(definition, record, version);
-  if (version === definition.version) return value;
-  return copyJson(definition.migrate!(value, version)) as JsonObject;
-}
+export const materializeDocumentValue: Dual4<
+  AnyDocDefinition,
+  DocumentCreate | DocumentRecord,
+  number,
+  JsonObject,
+  JsonObject
+> = Function.dual(
+  4,
+  (
+    definition: AnyDocDefinition,
+    record: DocumentCreate | DocumentRecord,
+    version: number,
+    value: JsonObject,
+  ): JsonObject => {
+    checkRecordScope(definition, record);
+    checkRecordVersion(definition, record, version);
+    if (version === definition.version) return value;
+    return copyJson(definition.migrate!(value, version)) as JsonObject;
+  },
+);

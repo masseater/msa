@@ -14,7 +14,7 @@ import type {
   TaskRecord,
 } from "../types.ts";
 import { ROOT_CONVERSATION_ID } from "../types.ts";
-import { range } from "./range.ts";
+import { range, rangeBy } from "./range.ts";
 
 export type StorageBenchmarkScale = {
   readonly name: string;
@@ -95,7 +95,7 @@ export async function seedStorageBenchmark(
   );
 
   let firstEntryId: EntryId | undefined;
-  for await (const start of range(0, scale.entryCount, BATCH_SIZE)) {
+  for await (const start of rangeBy(0, scale.entryCount, BATCH_SIZE)) {
     const writes: StorageWrite[] = [];
     for await (const index of range(start, Math.min(start + BATCH_SIZE, scale.entryCount))) {
       const id = await storage.mintId<EntryId>();
@@ -114,7 +114,7 @@ export async function seedStorageBenchmark(
     await storage.commit(writes, BACKGROUND_CONTEXT);
   }
 
-  for await (const start of range(0, scale.taskCount, BATCH_SIZE)) {
+  for await (const start of rangeBy(0, scale.taskCount, BATCH_SIZE)) {
     const writes: StorageWrite[] = [];
     for await (const index of range(start, Math.min(start + BATCH_SIZE, scale.taskCount))) {
       writes.push({ type: "task", value: task(await storage.mintId<TaskId<JsonValue>>(), index) });
@@ -123,7 +123,7 @@ export async function seedStorageBenchmark(
   }
 
   let exactDocumentId: DocumentId | undefined;
-  for await (const start of range(0, scale.documentCount, BATCH_SIZE)) {
+  for await (const start of rangeBy(0, scale.documentCount, BATCH_SIZE)) {
     const writes: StorageWrite[] = [];
     for await (const index of range(start, Math.min(start + BATCH_SIZE, scale.documentCount))) {
       const id = await storage.mintId<DocumentId>();

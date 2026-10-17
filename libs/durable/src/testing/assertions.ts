@@ -32,8 +32,10 @@ export function createExpectAssertions(expect: ExpectLike): StorageConformanceAs
     greaterThan(actual, expected) {
       result(actual).toBeGreaterThan(expected);
     },
-    async rejects(operation, messageIncludes) {
-      await result(operation).rejects.toThrow(messageIncludes);
+    rejects(operation, messageIncludes) {
+      return Promise.resolve(result(operation).rejects.toThrow(messageIncludes)).then(
+        () => undefined,
+      );
     },
   };
 }

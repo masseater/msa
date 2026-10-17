@@ -1,4 +1,5 @@
 import { Type } from "@msa/ai";
+import { Effect } from "effect";
 
 import { defineExtension, defineTool } from "../harness/define.ts";
 import type { ToolRegistration } from "../harness/types.ts";
@@ -53,29 +54,34 @@ export function createToolSearchTool() {
     parameters: toolSearchSchema,
     callers: ["model"],
     replay: "safe",
-    async execute({ query, limit }, api, context) {
-      if (query.trim() === "") throw new Error("query must not be empty");
-      const max = limit ?? DEFAULT_TOOL_SEARCH_LIMIT;
-      if (!Number.isInteger(max) || max <= 0) throw new Error("limit must be a positive integer");
-      const candidates = (await api.agent(context)).deferred;
-      const documents = candidates.map((tool) => ({ name: tool.name, text: searchText(tool) }));
-      const loaded = rankDocuments(query, documents, max);
-      const text =
-        loaded.length === 0
-          ? "No matching tools found."
-          : `Loaded ${loaded.length} tool${loaded.length === 1 ? "" : "s"}. They are available from your next call:\n${loaded
-              .map((name) => {
-                const description =
-                  candidates.find((tool) => tool.name === name)?.description ?? "";
-                return `- ${name}: ${description.trim().split(/\r?\n/u)[0]}`;
-              })
-              .join("\n")}`;
-      const details: ToolSearchToolDetails = { loaded };
-      return {
-        output: [{ type: "text", text }],
-        details,
-        ...(loaded.length === 0 ? {} : { control: { addTools: loaded } }),
-      };
+    execute({ query, limit }, api, context) {
+      return Effect.runPromise(
+        Effect.gen(function* () {
+          if (query.trim() === "") throw new Error("query must not be empty");
+          const max = limit ?? DEFAULT_TOOL_SEARCH_LIMIT;
+          if (!Number.isInteger(max) || max <= 0)
+            throw new Error("limit must be a positive integer");
+          const candidates = (yield* Effect.promise(() => api.agent(context))).deferred;
+          const documents = candidates.map((tool) => ({ name: tool.name, text: searchText(tool) }));
+          const loaded = rankDocuments(query, documents, max);
+          const text =
+            loaded.length === 0
+              ? "No matching tools found."
+              : `Loaded ${loaded.length} tool${loaded.length === 1 ? "" : "s"}. They are available from your next call:\n${loaded
+                  .map((name) => {
+                    const description =
+                      candidates.find((tool) => tool.name === name)?.description ?? "";
+                    return `- ${name}: ${description.trim().split(/\r?\n/u)[0]}`;
+                  })
+                  .join("\n")}`;
+          const details: ToolSearchToolDetails = { loaded };
+          return {
+            output: [{ type: "text", text }],
+            details,
+            ...(loaded.length === 0 ? {} : { control: { addTools: loaded } }),
+          };
+        }),
+      );
     },
   });
 }
