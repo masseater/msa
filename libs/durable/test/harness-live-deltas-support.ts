@@ -18,7 +18,7 @@ export type Action = (api: ToolExecutionApi) => void | Promise<void>;
 
 // The tool `drive` runs: each queued action in turn, waiting for more until one returns false.
 export function drivenTool(
-  outputLimits: ToolRegistration["outputLimits"],
+  outputLimits: NonNullable<ToolRegistration["outputLimits"]>,
   actions: ((api: ToolExecutionApi) => Promise<boolean>)[],
   waker: { wake?: () => void },
 ) {
@@ -48,7 +48,7 @@ export function drivenTool(
 
 // Drive one tool call step by step and capture the exact Chord operations of every `msa.live` commit. Each `step()`
 // runs one action inside the tool and returns the operations of the commit it caused.
-export async function drive(outputLimits: ToolRegistration["outputLimits"] = {}) {
+export async function drive(outputLimits: NonNullable<ToolRegistration["outputLimits"]> = {}) {
   const setup = chatSetup();
   const actions: ((api: ToolExecutionApi) => Promise<boolean>)[] = [];
   const waker: { wake?: () => void } = {};

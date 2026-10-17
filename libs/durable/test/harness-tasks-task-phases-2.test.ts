@@ -161,7 +161,7 @@ function watcherTask() {
 
       return Promise.resolve();
     });
-    seen.watchClosed = watch?.closed;
+    seen.watchClosed = watch!.closed;
     await runtime.commit(() => completed(null), ctx);
   });
   return { Notes, seen, delivered, Watcher };
@@ -218,9 +218,11 @@ describe("task runtime", () => {
       );
       seen.push((await runtime.snapshot(Notes, runtime.conversationId, ctx))?.text);
       seen.push((await runtime.snapshotAsOf(Notes, runtime.conversationId, first!, ctx))?.text);
-      seen.push((await runtime.context(runtime.conversationId, ctx, { at: first })).entries.length);
       seen.push(
-        (await runtime.context(runtime.conversationId, ctx, { at: second })).messages.length,
+        (await runtime.context(runtime.conversationId, ctx, { at: first! })).entries.length,
+      );
+      seen.push(
+        (await runtime.context(runtime.conversationId, ctx, { at: second! })).messages.length,
       );
       seen.push(runtime.now());
       runtime.report(new Error("reported"));

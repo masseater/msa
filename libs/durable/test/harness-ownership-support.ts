@@ -1,4 +1,4 @@
-import { type AssistantMessage } from "@msa/ai";
+import { type AssistantMessage, type FauxResponseStep } from "@msa/ai";
 import {
   type Conversation,
   type ConversationId,
@@ -147,10 +147,14 @@ export function ownedChild(
 }
 
 // A faux response held until `release` or cancellation; `reached` resolves when the request is sent.
-export function gated(message: AssistantMessage) {
+export function gated(message: AssistantMessage): {
+  step: FauxResponseStep;
+  reached: Promise<void>;
+  release: () => void;
+} {
   const reached = deferred();
   const gate = deferred();
-  const step = async (_request: unknown, options?: { signal?: AbortSignal }) => {
+  const step: FauxResponseStep = async (_request, options) => {
     reached.resolve();
     await Promise.race([gate.promise, aborted(options!.signal!)]);
     return message;

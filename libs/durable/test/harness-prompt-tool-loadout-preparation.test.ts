@@ -18,7 +18,7 @@ async function applyTools(
   conversation: Conversation,
   tools: readonly Tool[],
   sections: Record<string, string> = {},
-): Promise<{ removed?: string[]; added?: string[]; sections?: Record<string, string | null> }[]> {
+): Promise<{ removed?: string[]; added?: string[]; sections?: SystemMessage["sections"] }[]> {
   const drafts = planSystemEntries(
     await conversation.context(context),
     new Map(Object.entries(sections)),

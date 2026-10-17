@@ -82,7 +82,7 @@ async function faultedGenerationSetup() {
           write.value.state.status === "terminal",
       );
       if (finalizes) {
-        faulted.reject = undefined;
+        delete faulted.reject;
         return Promise.reject(failure);
       }
       return Promise.resolve(super.commit(writes, ctx));
