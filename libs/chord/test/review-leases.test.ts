@@ -1,12 +1,21 @@
 import assert from "node:assert/strict";
 
-import { Effect } from "effect";
+import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { createHost, defineRegistry, isChordError, local, method, type Ref } from "../src/index.ts";
+import {
+  createHost,
+  defineRegistry,
+  type Facet,
+  type Host,
+  isChordError,
+  local,
+  method,
+  type Ref,
+} from "../src/index.ts";
 import { emitter } from "./fixtures/review.ts";
-import { latch, tick, ticks } from "./fixtures/timing.ts";
+import { type Latch, latch, tick, ticks } from "./fixtures/timing.ts";
 
 const Worker = local("t.busy", {
   version: 1,
@@ -14,11 +23,12 @@ const Worker = local("t.busy", {
   members: { work: method(undefined, Type.Boolean()) },
 });
 
-const case5DisposalWaitsForRunningMethods = Effect.gen(function* () {
-  const services = yield* Effect.context<never>();
-  const log: string[] = [];
-  let go = latch();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+const serveBusyWorker = (
+  host: Host,
+  log: string[],
+  gate: () => Latch,
+  services: Context.Context<never>,
+): void => {
   host.serve(Worker, ({ id }, _principal, self) => {
     const connResource = self.resource("conn", {
       version: 1,
@@ -32,13 +42,21 @@ const case5DisposalWaitsForRunningMethods = Effect.gen(function* () {
       work: () =>
         Effect.runPromiseWith(services)(
           Effect.gen(function* () {
-            yield* go.wait;
+            yield* gate().wait;
             log.push(`done ${id}`);
             return connResource.value.closed;
           }),
         ),
     };
   });
+};
+
+const case5DisposalWaitsForRunningMethods = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const log: string[] = [];
+  let go = latch();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  serveBusyWorker(host, log, () => go, services);
   const released = host.hold(Worker, { id: "r" });
   const call = released.work();
   yield* ticks();
@@ -104,6 +122,19 @@ const Store = local("t.store", {
   members: { count: Type.Unknown() },
 });
 
+const migratedStore: Facet = {
+  name: "store",
+  setup: (api) =>
+    api.serve(Store, (_input, _principal, self) => ({
+      count: self.state(
+        "count",
+        Type.Object({ total: Type.Number() }),
+        { total: 0 },
+        { version: 2, migrate: (old) => ({ total: (old as { n: number }).n }) },
+      ),
+    })),
+};
+
 const case4ARunningListenerHoldsA = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const host = createHost({ self: { kind: "host" }, onError: () => {} });
@@ -131,23 +162,7 @@ const case4ARunningListenerHoldsA = Effect.gen(function* () {
   events.emit(1);
   yield* tick;
   const codeVersion = host.codeVersion;
-  const reload = host.reload(
-    [
-      {
-        name: "store",
-        setup: (api) =>
-          api.serve(Store, (_input, _principal, self) => ({
-            count: self.state(
-              "count",
-              Type.Object({ total: Type.Number() }),
-              { total: 0 },
-              { version: 2, migrate: (old) => ({ total: (old as { n: number }).n }) },
-            ),
-          })),
-      },
-    ],
-    { gateDeadline: 2000 },
-  );
+  const reload = host.reload([migratedStore], { gateDeadline: 2000 });
   yield* ticks(20);
   assert.equal(host.codeVersion, codeVersion, "the gate must wait for the listener");
   go.open();

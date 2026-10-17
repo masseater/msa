@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
 
-import { Effect } from "effect";
+import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
-import { type Ctx, createHost, type Facet, isChordError, local, method } from "../src/index.ts";
-import { latch, pollUntil, tick } from "./fixtures/timing.ts";
+import {
+  type Ctx,
+  createHost,
+  type Facet,
+  type Host,
+  isChordError,
+  local,
+  method,
+} from "../src/index.ts";
+import { type Latch, latch, pollUntil, tick } from "./fixtures/timing.ts";
 
 const until = (check: () => boolean) => pollUntil(check, 200, tick);
 
@@ -22,11 +30,12 @@ const Notes = local("t.notes", {
 
 const NotesSchema = Type.Array(Type.String());
 
-const runsAfterTheResourcesAreOpen = Effect.gen(function* () {
-  const services = yield* Effect.context<never>();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
-  const loaded = latch<string[]>();
-  const log: string[] = [];
+const serveLoadingNotes = (
+  host: Host,
+  loaded: Latch<string[]>,
+  log: string[],
+  services: Context.Context<never>,
+): void => {
   host.serve(Notes, (_input, _principal, self) => {
     const db = self.resource("db", {
       version: 1,
@@ -66,6 +75,14 @@ const runsAfterTheResourcesAreOpen = Effect.gen(function* () {
       },
     };
   });
+};
+
+const runsAfterTheResourcesAreOpen = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const loaded = latch<string[]>();
+  const log: string[] = [];
+  serveLoadingNotes(host, loaded, log, services);
   const ref = host.hold(Notes, {});
   const seen: unknown[] = [];
   ref.notes.subscribe((value) => seen.push(value));

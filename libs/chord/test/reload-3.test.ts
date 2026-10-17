@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { Effect } from "effect";
+import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it, onTestFinished, vi } from "vite-plus/test";
 
@@ -175,20 +175,15 @@ const Sum = local("t.sum", {
   members: { sum: Type.Object({ v: Type.Number() }) },
 });
 
-const rebindsListenersToTheNewCode = Effect.gen(function* () {
-  const services = yield* Effect.context<never>();
-  const host = quiet();
-  const listeners = new Set<(event: number) => void>();
-  const events = {
-    subscribe: (fn: (event: number) => void) => {
-      listeners.add(fn);
-      return () => listeners.delete(fn);
-    },
-  };
-  const emit = (value: number) => {
-    for (const fn of listeners) fn(value);
-  };
-  const log: string[] = [];
+interface NumberEvents {
+  readonly subscribe: (fn: (event: number) => void) => () => boolean;
+}
+
+const summingFacet = (
+  events: NumberEvents,
+  log: string[],
+  services: Context.Context<never>,
+): ((factor: number) => Facet) => {
   const facet = (factor: number): Facet => ({
     name: "sum",
     setup: (api) =>
@@ -215,6 +210,24 @@ const rebindsListenersToTheNewCode = Effect.gen(function* () {
         return { sum };
       }),
   });
+  return facet;
+};
+
+const rebindsListenersToTheNewCode = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const host = quiet();
+  const listeners = new Set<(event: number) => void>();
+  const events = {
+    subscribe: (fn: (event: number) => void) => {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+  };
+  const emit = (value: number) => {
+    for (const fn of listeners) fn(value);
+  };
+  const log: string[] = [];
+  const facet = summingFacet(events, log, services);
   host.install(facet(1));
   const ref = host.hold(Sum, {});
   yield* Effect.promise(() => ref.ready);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { Effect } from "effect";
+import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
@@ -8,6 +8,7 @@ import {
   createHost,
   type Facet,
   type FacetLoader,
+  type Host,
   hostNamed,
   local,
   memoryLinkPair,
@@ -167,6 +168,28 @@ const Proc = local("t.proc", {
 
 const Chat = local("t.chat10", { version: 1, input: Type.Object({}) });
 
+const serveClosingChat = (worker: Host, log: string[], services: Context.Context<never>): void => {
+  worker.serve(Chat, (_input, _principal, self) => {
+    const proc = self.get(Proc, {});
+    const upstream = self.get(Remote, {});
+    self.resource("session", {
+      version: 1,
+      open: () => proc.tracker?.add("chat"),
+      close: () =>
+        Effect.runPromiseWith(services)(
+          Effect.gen(function* () {
+            proc.tracker?.delete("chat");
+            log.push(
+              `chat closed, proc ${proc.status}, tracker ${proc.tracker === undefined ? "gone" : "ok"}`,
+            );
+            yield* Effect.promise(() => upstream.note("bye"));
+          }),
+        ),
+    });
+    return {};
+  });
+};
+
 const case10HostCloseDisposesHoldersBefore = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const log: string[] = [];
@@ -198,25 +221,7 @@ const case10HostCloseDisposesHoldersBefore = Effect.gen(function* () {
     { lifetime: "host" },
   );
   yield* Effect.sleep(5);
-  worker.serve(Chat, (_input, _principal, self) => {
-    const proc = self.get(Proc, {});
-    const upstream = self.get(Remote, {});
-    self.resource("session", {
-      version: 1,
-      open: () => proc.tracker?.add("chat"),
-      close: () =>
-        Effect.runPromiseWith(services)(
-          Effect.gen(function* () {
-            proc.tracker?.delete("chat");
-            log.push(
-              `chat closed, proc ${proc.status}, tracker ${proc.tracker === undefined ? "gone" : "ok"}`,
-            );
-            yield* Effect.promise(() => upstream.note("bye"));
-          }),
-        ),
-    });
-    return {};
-  });
+  serveClosingChat(worker, log, services);
   yield* Effect.promise(() => worker.hold(Chat, {}).ready);
   yield* Effect.promise(() => worker.close());
   assert.deepEqual(log, ["chat closed, proc live, tracker ok", "server: bye", "proc closed"]);

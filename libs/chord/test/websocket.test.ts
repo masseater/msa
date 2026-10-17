@@ -8,6 +8,7 @@ import { WebSocketServer } from "ws";
 import {
   acceptWebSockets,
   createHost,
+  type Host,
   hostNamed,
   inflateMessage,
   isChordError,
@@ -30,8 +31,41 @@ const Board = remote("t.board", {
   },
 });
 
-const servesABrowserStyleClientOver = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+type Principal = (request: { readonly url?: string | undefined }) => unknown;
+
+const withSocketServer = <A>(
+  server: Host,
+  principal: Principal,
+  use: (port: number) => Effect.Effect<A>,
+): Effect.Effect<A> =>
+  Effect.gen(function* () {
+    const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
+    yield* Effect.callback<void>((resume) => {
+      wss.once("listening", () => resume(Effect.void));
+    });
+    acceptWebSockets(wss as never, server, { principal });
+    return yield* use((wss.address() as { port: number }).port).pipe(
+      Effect.ensuring(
+        Effect.callback<void>((resume) => {
+          wss.close(() => resume(Effect.void));
+        }),
+      ),
+    );
+  });
+
+const socketHost = (name: string, socket: WebSocket, client = true): Host =>
+  createHost({
+    self: { kind: "host" },
+    name,
+    ...(client ? { kind: "client" as const } : {}),
+    upstream: {
+      link: webSocketLink(socket as unknown as WebSocketLike),
+      principal: { kind: "server" },
+    },
+    onError: () => {},
+  });
+
+const serveBoard = (server: Host): void => {
   server.serve(Board, (_input, principal, self) => {
     const notes = self.state("notes", Type.Array(Type.String()), []);
     return {
@@ -45,32 +79,16 @@ const servesABrowserStyleClientOver = Effect.gen(function* () {
       who: () => principal,
     };
   });
-  const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
-  yield* Effect.callback<void>((resume) => {
-    wss.once("listening", () => resume(Effect.void));
-  });
-  acceptWebSockets(wss as never, server, {
-    principal: (request: { readonly url?: string | undefined }) => {
-      const token = new URL(request.url ?? "/", "http://x").searchParams.get("token");
-      return token === "ok" ? { guest: "web" } : undefined;
-    },
-  });
-  const port = (wss.address() as { port: number }).port;
-  const open = (token: string) =>
-    createHost({
-      self: { kind: "host" },
-      name: "browser",
-      kind: "client",
-      upstream: {
-        link: webSocketLink(
-          new WebSocket(`ws://127.0.0.1:${port}/?token=${token}`) as unknown as WebSocketLike,
-        ),
-        principal: { kind: "server" },
-      },
-      onError: () => {},
-    });
-  yield* Effect.gen(function* () {
-    const browser = open("ok");
+};
+
+const byToken: Principal = (request) => {
+  const token = new URL(request.url ?? "/", "http://x").searchParams.get("token");
+  return token === "ok" ? { guest: "web" } : undefined;
+};
+
+const stampsAcceptedBrowser = (port: number) =>
+  Effect.gen(function* () {
+    const browser = socketHost("browser", new WebSocket(`ws://127.0.0.1:${port}/?token=ok`));
     const board = browser.hold(Board, {});
     const seen: unknown[] = [];
     board.notes.subscribe((value) => seen.push(value));
@@ -80,18 +98,15 @@ const servesABrowserStyleClientOver = Effect.gen(function* () {
     assert.deepEqual(board.notes.value, ["hello"]);
     assert.deepEqual(seen.at(-1), ["hello"]);
     yield* Effect.promise(() => browser.close());
+  });
 
-    const impostor = createHost({
-      self: { kind: "host" },
-      name: "session:S1",
-      upstream: {
-        link: webSocketLink(
-          new WebSocket(`ws://127.0.0.1:${port}/?token=ok`) as unknown as WebSocketLike,
-        ),
-        principal: { kind: "server" },
-      },
-      onError: () => {},
-    });
+const refusesImpostorAndBadToken = (port: number) =>
+  Effect.gen(function* () {
+    const impostor = socketHost(
+      "session:S1",
+      new WebSocket(`ws://127.0.0.1:${port}/?token=ok`),
+      false,
+    );
     yield* Effect.promise(() =>
       assert.rejects(
         impostor.root((ctx) => impostor.hold(Board, {}).add("x", ctx), {
@@ -102,7 +117,7 @@ const servesABrowserStyleClientOver = Effect.gen(function* () {
     );
     yield* Effect.promise(() => impostor.close());
 
-    const refused = open("bad");
+    const refused = socketHost("browser", new WebSocket(`ws://127.0.0.1:${port}/?token=bad`));
     const denied = refused.hold(Board, {});
     yield* Effect.promise(() =>
       assert.rejects(
@@ -111,12 +126,13 @@ const servesABrowserStyleClientOver = Effect.gen(function* () {
       ),
     );
     yield* Effect.promise(() => refused.close());
-  }).pipe(
-    Effect.ensuring(
-      Effect.callback<void>((resume) => {
-        wss.close(() => resume(Effect.void));
-      }),
-    ),
+  });
+
+const servesABrowserStyleClientOver = Effect.gen(function* () {
+  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  serveBoard(server);
+  yield* withSocketServer(server, byToken, (port) =>
+    Effect.andThen(stampsAcceptedBrowser(port), refusesImpostorAndBadToken(port)),
   );
 });
 
@@ -125,35 +141,19 @@ describe("WebSocket links", () => {
     Effect.runPromise(servesABrowserStyleClientOver));
 });
 
-const largeSnapshotsAndResultsReachThe = Effect.gen(function* () {
-  const notes = Array.from({ length: 40 }, (_, i) => `${i}:${"x".repeat(4000)}`);
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
-  server.serve(Board, (_input, _principal, self) => {
-    const state = self.state("notes", Type.Array(Type.String()), notes);
-    return { variant: "main", notes: state, add: () => {}, who: () => notes };
-  });
-  const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
-  yield* Effect.callback<void>((resume) => {
-    wss.once("listening", () => resume(Effect.void));
-  });
-  acceptWebSockets(wss as never, server, { principal: () => ({ guest: "web" }) });
-  const url = `ws://127.0.0.1:${(wss.address() as { port: number }).port}/`;
-  yield* Effect.gen(function* () {
+const matchesNotes = (frames: readonly Record<string, unknown>[], t: string, notes: string[]) =>
+  frames.some(
+    (frame) => frame["t"] === t && JSON.stringify(frame["value"]) === JSON.stringify(notes),
+  );
+
+const deliversPackedPayloads = (url: string, notes: string[]) =>
+  Effect.gen(function* () {
     const binary: Uint8Array[] = [];
     const socket = new WebSocket(url);
     socket.addEventListener("message", (event) => {
       if (typeof event.data !== "string") binary.push(new Uint8Array(event.data as ArrayBuffer));
     });
-    const browser = createHost({
-      self: { kind: "host" },
-      name: "browser",
-      kind: "client",
-      upstream: {
-        link: webSocketLink(socket as unknown as WebSocketLike),
-        principal: { kind: "server" },
-      },
-      onError: () => {},
-    });
+    const browser = socketHost("browser", socket);
     const board = browser.hold(Board, {});
     assert.deepEqual(yield* Effect.promise(() => board.who()), notes);
     board.notes.subscribe(() => {});
@@ -163,20 +163,13 @@ const largeSnapshotsAndResultsReachThe = Effect.gen(function* () {
     const frames = binary.map(
       (message) => JSON.parse(inflateMessage(message)) as Record<string, unknown>,
     );
-    assert(
-      frames.some(
-        (frame) =>
-          frame["t"] === "result" && JSON.stringify(frame["value"]) === JSON.stringify(notes),
-      ),
-    );
-    assert(
-      frames.some(
-        (frame) =>
-          frame["t"] === "state" && JSON.stringify(frame["value"]) === JSON.stringify(notes),
-      ),
-    );
+    assert(matchesNotes(frames, "result", notes));
+    assert(matchesNotes(frames, "state", notes));
     yield* Effect.promise(() => browser.close());
+  });
 
+const closesOnPackedClientMessage = (url: string) =>
+  Effect.gen(function* () {
     const raw = new WebSocket(url);
     raw.binaryType = "arraybuffer";
     yield* Effect.callback<void>((resume) => {
@@ -186,12 +179,22 @@ const largeSnapshotsAndResultsReachThe = Effect.gen(function* () {
     raw.addEventListener("close", () => closed.open());
     raw.send(new Uint8Array([0, 0, 0, 2, 123, 125]));
     yield* closed.wait;
-  }).pipe(
-    Effect.ensuring(
-      Effect.callback<void>((resume) => {
-        wss.close(() => resume(Effect.void));
-      }),
-    ),
+  });
+
+const largeSnapshotsAndResultsReachThe = Effect.gen(function* () {
+  const notes = Array.from({ length: 40 }, (_, i) => `${i}:${"x".repeat(4000)}`);
+  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  server.serve(Board, (_input, _principal, self) => {
+    const state = self.state("notes", Type.Array(Type.String()), notes);
+    return { variant: "main", notes: state, add: () => {}, who: () => notes };
+  });
+  yield* withSocketServer(
+    server,
+    () => ({ guest: "web" }),
+    (port) => {
+      const url = `ws://127.0.0.1:${port}/`;
+      return Effect.andThen(deliversPackedPayloads(url, notes), closesOnPackedClientMessage(url));
+    },
   );
 });
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { Effect } from "effect";
+import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
@@ -84,10 +84,9 @@ const Reader = local("t.reader", {
   members: { read: method(undefined, Type.String()) },
 });
 
-const case2FacetsReachTheirOwnHost = Effect.gen(function* () {
-  const services = yield* Effect.context<never>();
-  const captured: FacetApi[] = [];
-  const facet = (value: string): Facet => ({
+const capturingConfigFacet =
+  (captured: FacetApi[]) =>
+  (value: string): Facet => ({
     name: "config",
     ...defineFacet((api) => {
       captured.push(api);
@@ -104,40 +103,33 @@ const case2FacetsReachTheirOwnHost = Effect.gen(function* () {
       }));
     }),
   });
+
+const readThrough = (api: FacetApi, services: Context.Context<never>): Effect.Effect<string> =>
+  Effect.promise(() =>
+    api.root((ctx) =>
+      Effect.runPromiseWith(services)(
+        Effect.gen(function* () {
+          const peer = yield* Effect.promise(() => ctx.get(Reader, {}));
+          return yield* Effect.promise(() => peer.read(ctx));
+        }),
+      ),
+    ),
+  );
+
+const case2FacetsReachTheirOwnHost = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const captured: FacetApi[] = [];
+  const facet = capturingConfigFacet(captured);
   const host = createHost({ self: { kind: "host" }, name: "worker", onError: () => {} });
   host.install(facet("v1"));
   yield* Effect.sleep(5);
   const api = captured[0]!;
   assert.equal(api.name, "worker");
-  assert.equal(
-    yield* Effect.promise(() =>
-      api.root((ctx) =>
-        Effect.runPromiseWith(services)(
-          Effect.gen(function* () {
-            const peer = yield* Effect.promise(() => ctx.get(Reader, {}));
-            return yield* Effect.promise(() => peer.read(ctx));
-          }),
-        ),
-      ),
-    ),
-    "v1",
-  );
+  assert.equal(yield* readThrough(api, services), "v1");
   yield* Effect.promise(() => host.reload([facet("v2")]));
   yield* Effect.sleep(5);
   assert.equal(captured[1]!.registry(Config).get("greeting"), "v2");
-  assert.equal(
-    yield* Effect.promise(() =>
-      api.root((ctx) =>
-        Effect.runPromiseWith(services)(
-          Effect.gen(function* () {
-            const peer = yield* Effect.promise(() => ctx.get(Reader, {}));
-            return yield* Effect.promise(() => peer.read(ctx));
-          }),
-        ),
-      ),
-    ),
-    "v2",
-  );
+  assert.equal(yield* readThrough(api, services), "v2");
 });
 
 const case3AListenerKeepsItsSubscription = Effect.gen(function* () {

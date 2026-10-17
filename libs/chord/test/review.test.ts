@@ -46,25 +46,27 @@ const case1AFailingListenerSubscriptionFails = Effect.gen(function* () {
   assert.equal(sources.c.size, 0);
 });
 
+const CountedV1 = remote("t.counted", {
+  version: 1,
+  input: Type.Object({}),
+  host: hostNamed("host"),
+  variants: { main: { state: { count: Type.Object({ n: Type.Number() }) } } },
+});
+
+const CountedV2 = remote("t.counted", {
+  version: 2,
+  input: Type.Object({}),
+  host: hostNamed("host"),
+  variants: { main: { state: { count: Type.Object({ total: Type.Number() }) } } },
+});
+
 const case2MigrationIsValidatedAgainstThe = Effect.gen(function* () {
   const host = createHost({ self: { kind: "host" }, dev: true, onError: () => {} });
-  const V1 = remote("t.counted", {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed("host"),
-    variants: { main: { state: { count: Type.Object({ n: Type.Number() }) } } },
-  });
-  const V2 = remote("t.counted", {
-    version: 2,
-    input: Type.Object({}),
-    host: hostNamed("host"),
-    variants: { main: { state: { count: Type.Object({ total: Type.Number() }) } } },
-  });
   host.install({
     name: "counted",
     setup: (api) =>
       api.serve(
-        V1,
+        CountedV1,
         (_input, _principal, self) => ({
           variant: "main",
           count: self.state("count", Type.Object({ n: Type.Number() }), { n: 3 }),
@@ -72,7 +74,7 @@ const case2MigrationIsValidatedAgainstThe = Effect.gen(function* () {
         { linger: 60_000 },
       ),
   });
-  const first = host.hold(V1, {});
+  const first = host.hold(CountedV1, {});
   yield* Effect.promise(() => first.ready);
   first.release();
   yield* Effect.promise(() =>
@@ -81,7 +83,7 @@ const case2MigrationIsValidatedAgainstThe = Effect.gen(function* () {
         name: "counted",
         setup: (api) =>
           api.serve(
-            V2,
+            CountedV2,
             (_input, _principal, self) => ({
               variant: "main",
               count: self.state(
@@ -96,7 +98,7 @@ const case2MigrationIsValidatedAgainstThe = Effect.gen(function* () {
       },
     ]),
   );
-  const second = host.hold(V2, {});
+  const second = host.hold(CountedV2, {});
   const values: unknown[] = [];
   second.count.subscribe((value) => values.push(value));
   yield* Effect.promise(() => second.ready);

@@ -38,18 +38,19 @@ const Echo = remote("t.echo", {
   variants: { main: { methods: { root: method(undefined, Type.String()) } } },
 });
 
+const rootEchoFacet = (version: number): Facet => ({
+  name: "echo",
+  setup: (api) =>
+    api.serve(Echo, (_input, _principal, self) => {
+      self.state("n", Type.Number(), 0, { version });
+      return { variant: "main", root: (ctx: Ctx) => ctx.rootId };
+    }),
+});
+
 const case1RootEndIsHonoredOnly = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
-  const facet = (version: number): Facet => ({
-    name: "echo",
-    setup: (api) =>
-      api.serve(Echo, (_input, _principal, self) => {
-        self.state("n", Type.Number(), 0, { version });
-        return { variant: "main", root: (ctx: Ctx) => ctx.rootId };
-      }),
-  });
-  server.install(facet(1));
+  server.install(rootEchoFacet(1));
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { worker: "w" }, kind: "host", name: "w" });
   const worker = createHost({
@@ -83,7 +84,7 @@ const case1RootEndIsHonoredOnly = Effect.gen(function* () {
   raw.send({ t: "root_end", rootId });
   yield* Effect.sleep(10);
   yield* Effect.promise(() =>
-    assert.rejects(server.reload([facet(2)], { gateDeadline: 40 }), (error) => {
+    assert.rejects(server.reload([rootEchoFacet(2)], { gateDeadline: 40 }), (error) => {
       assert.ok(isChordError(error, "aborted") && error.reason === "gate_deadline");
       assert.ok(error.message.includes(rootId));
       return true;
