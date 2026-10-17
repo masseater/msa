@@ -127,7 +127,6 @@ export interface RegisterFauxProviderOptions {
   provider?: string;
   models?: FauxModelDefinition[];
   deferred?: {
-    /** Number of fetches that return the original handle before the scripted response becomes ready. */
     pendingFetches?: number;
     pollAfterMs?: number;
   };
@@ -221,27 +220,12 @@ function messageToText(message: Message): string {
   return toolResultToText(message);
 }
 
-/**
- * Length of the prompt text that joins `messages` with blank lines.
- *
- * @param {readonly string[]} messages - prompt messages
- * @param {number} [count] - number of leading messages to join
- * @returns {number} the length of the joined text
- */
 function joinedLength(messages: readonly string[], count = messages.length): number {
   let length = count > 0 ? (count - 1) * 2 : 0;
   for (let index = 0; index < count; index++) length += messages[index]!.length;
   return length;
 }
 
-/**
- * Length of the common prefix of the two joined prompts. Equal messages are compared whole; characters are compared
- * only from the first message that differs.
- *
- * @param {readonly string[]} previous - messages of the previous prompt
- * @param {readonly string[]} current - messages of the current prompt
- * @returns {number} the length of the common prefix
- */
 function commonPromptPrefixLength(previous: readonly string[], current: readonly string[]): number {
   let index = 0;
   while (index < previous.length && index < current.length && previous[index] === current[index])
@@ -266,7 +250,6 @@ function withUsageEstimate(
   options: StreamOptions | undefined,
   promptCache: Map<string, readonly string[]>,
 ): AssistantMessage {
-  // One text per message; the whole prompt joins them with blank lines.
   const prompt = context.messages.map((entry) => `${entry.role}:${messageToText(entry)}`);
   const promptLength = joinedLength(prompt);
   const promptTokens = Math.ceil(promptLength / 4);
@@ -782,19 +765,6 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
   };
 }
 
-/**
- * Faux provider for tests built on explicit `Models` collections:
- *
- * ```ts
- * const faux = fauxProvider();
- * const models = createModels();
- * models.setProvider(faux.provider);
- * faux.setResponses([fauxAssistantMessage("hi")]);
- * ```
- *
- * @param {RegisterFauxProviderOptions} [options] - faux provider options
- * @returns {FauxProviderHandle} the provider and its response controls
- */
 export function fauxProvider(options: RegisterFauxProviderOptions = {}): FauxProviderHandle {
   const core = createFauxCore(options);
   const provider = createProvider({

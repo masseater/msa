@@ -6,7 +6,6 @@ import { describe, expect, it } from "vite-plus/test";
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 const sourceEntry = new URL("../src/models.ts", import.meta.url).href;
 
-// Install before linking the static imports, so unused barrel re-exports are checked too.
 const preload = `data:text/javascript,${encodeURIComponent(`
 	import { registerHooks } from "node:module";
 	const forbidden = [

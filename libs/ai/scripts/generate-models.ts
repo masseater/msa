@@ -231,8 +231,6 @@ const TOGETHER_TOGGLE_REASONING_LEVEL_MAP = {
 
 const AI_GATEWAY_MODELS_URL = "https://ai-gateway.vercel.sh/v1";
 const AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh";
-// TypeSafe-compatible System One endpoint for evaluation models.
-// https://vercel.com/docs/ai-gateway/sdks-and-apis/typesafe
 const AI_GATEWAY_TYPESAFE_BASE_URL = "https://ai-gateway.vercel.sh/typesafe/v1";
 const VERTEX_BASE_URL = "https://{location}-aiplatform.googleapis.com";
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
@@ -297,7 +295,6 @@ const DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP = {
   ...DEEPSEEK_V4_THINKING_LEVEL_MAP,
   low: "low",
 } as const;
-// Azure Foundry rejects DeepSeek's own max effort.
 const AZURE_DEEPSEEK_V4_THINKING_LEVEL_MAP = {
   minimal: null,
   low: "low",
@@ -306,9 +303,6 @@ const AZURE_DEEPSEEK_V4_THINKING_LEVEL_MAP = {
   xhigh: null,
   max: null,
 } as const;
-// Verified against Fireworks Messages raw_output on 2026-09-10 (#9323).
-// Fall back to verified support when models.dev omits effort metadata; this is
-// not an allowlist. Any Fireworks Messages model advertising effort uses adaptive thinking.
 const FIREWORKS_ADAPTIVE_THINKING_FALLBACK_MODELS = new Set([
   "accounts/fireworks/models/deepseek-v4-flash-0731",
   "accounts/fireworks/models/deepseek-v4-flash-vision-exp",
@@ -325,16 +319,12 @@ const QWEN_TOKEN_PLAN_FALLBACK_THINKING_LEVEL_MAP = {
   max: "max",
 } as const;
 const QWEN_TOKEN_PLAN_REASONING_EFFORT_FALLBACK_MODEL_IDS = new Set(["glm-5", "glm-5.1"]);
-// Retired preview id — models.dev may still list it after GA ships.
 const QWEN_TOKEN_PLAN_EXCLUDED_MODEL_IDS = new Set(["qwen3.8-max-preview"]);
 const QWEN_TOKEN_PLAN_PROVIDER_IDS = new Set<string>([
   "qwen-token-plan",
   "qwen-token-plan-cn",
   "qwen-token-plan-individual",
 ]);
-// QwenCloud Token Plan Individual text-model allowlist, verified 2026-09-03.
-// Retired models remain excluded above even if the public catalog lags.
-// https://docs.qwencloud.com/token-plan/personal/token-plan-personal-overview
 const QWEN_TOKEN_PLAN_INDIVIDUAL_MODEL_IDS = new Set<string>([
   "deepseek-v4-flash-0731",
   "deepseek-v4-pro",
@@ -354,7 +344,6 @@ const KIMI_K3_COST = {
   cacheRead: 0.3,
   cacheWrite: 0,
 } as const;
-// Kimi Chat Completions settings shared by Moonshot and Kimi Coding.
 const KIMI_OPENAI_COMPAT: OpenAICompletionsCompat = {
   supportsStore: false,
   supportsDeveloperRole: false,
@@ -363,7 +352,6 @@ const KIMI_OPENAI_COMPAT: OpenAICompletionsCompat = {
   supportsStrictMode: false,
   thinkingFormat: "deepseek",
 };
-// Kimi K3-style models take reasoning_effort and need earlier reasoning sent back.
 const KIMI_K3_OPENAI_COMPAT: OpenAICompletionsCompat = {
   ...KIMI_OPENAI_COMPAT,
   requiresReasoningContentOnAssistantMessages: true,
@@ -407,8 +395,6 @@ const OPENAI_CODEX_ADDITIONAL_TOOLS_MODEL_IDS = new Set([
   "gpt-6-luna",
   "gpt-6.1-sol",
 ]);
-// OpenAI documents configuration_update for the GPT-6 family.
-// https://developers.openai.com/api/docs/guides/reasoning
 const OPENAI_MID_CONVO_EFFORT_MODEL_IDS = new Set([
   "gpt-6-astra",
   "gpt-6-sol",
@@ -441,9 +427,6 @@ const OPENAI_LONG_CONTEXT_PRICING_MODEL_IDS = new Set([
   "gpt-6.1-sol",
 ]);
 
-// Keep the generated default no less restrictive than coding-agent's historical
-// image preprocessing. Provider limits can narrow this profile, but unknown
-// providers retain the cache-safe 2000px / 4.5 MiB behavior.
 const DEFAULT_IMAGE_RESIZE = {
   maxWidth: 2000,
   maxHeight: 2000,
@@ -466,9 +449,6 @@ function withOpenAiLongContextPricing(cost: Model<Api>["cost"]): Model<Api>["cos
   };
 }
 
-// Keep current OpenAI prices authoritative until models.dev and passthrough
-// catalogs catch up.
-// https://developers.openai.com/api/docs/pricing
 const OPENAI_STANDARD_COSTS = {
   "gpt-5.6-luna": { input: 0.2, output: 1.2, cacheRead: 0.02, cacheWrite: 0.25 },
   "gpt-5.6-sol": { input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5 },
@@ -609,9 +589,6 @@ function supportsOpenAiMax(model: Model<Api>): boolean {
 }
 
 const VERIFIED_ANTHROPIC_MID_CONVO_EFFORT_PROVIDERS = new Set(["anthropic", "openrouter"]);
-// OpenRouter rejects `configuration_update` system messages on Opus 5 ("Mid-conversation
-// reasoning effort (configuration_update) is not supported on anthropic/claude-opus-5-20260723")
-// while accepting them on Fable 5.1, so gate that model there.
 const MID_CONVO_EFFORT_UNSUPPORTED_ANTHROPIC_MODELS = new Set([
   "openrouter:anthropic/claude-opus-5",
 ]);
@@ -625,9 +602,6 @@ function supportsAnthropicMidConvoEffort(modelId: string): boolean {
   );
 }
 
-// Claude models that accept `thinking: {type: "disabled"}` alongside per-message effort.
-// Opus 5.5, Sonnet 5.5, Fable 5.1, and Mythos 5.1 reject it.
-// https://platform.claude.com/docs/en/build-with-claude/thinking#configuring-thinking
 const ANTHROPIC_DISABLED_THINKING_MODELS = new Set([
   "claude-opus-5",
   "claude-haiku-5-5",
@@ -635,7 +609,6 @@ const ANTHROPIC_DISABLED_THINKING_MODELS = new Set([
 ]);
 
 function supportsAnthropicDisabledThinkingWithMidConvoEffort(modelId: string): boolean {
-  // Strip OpenRouter's "anthropic/" or "~anthropic/" prefix and any dated snapshot suffix.
   const id = modelId
     .toLowerCase()
     .replace(/^~?anthropic\//u, "")
@@ -824,7 +797,6 @@ function detectOpenAICompletionsCompat(
     chatTemplateKwargs: {},
     chatTemplateArgs: {},
     zaiToolStream: false,
-    // Preserve built-in behavior as explicit metadata against the conservative runtime default.
     supportsStrictMode:
       !isMoonshot && !isTogether && !isCloudflareAiGateway && !isNvidia && !isCerebras,
     supportsOpenAIGrammarTools: false,
@@ -938,9 +910,6 @@ function applyStrictToolCompatMetadata(model: Model<Api>): void {
   }
 }
 
-// Responses endpoints verified (OpenAI, ChatGPT Codex backend, opencode zen) or documented (Azure OpenAI, Cloudflare AI Gateway) to pass
-// OpenAI custom grammar tools through. OpenAI rejects `type: "custom"` tools
-// for pre-GPT-5 models (gpt-4.x, gpt-4o, o-series).
 const OPENAI_GRAMMAR_TOOL_PROVIDERS = new Set([
   "openai",
   "openai-codex",
@@ -982,10 +951,6 @@ function applyOpenAIToolSearchMetadata(model: Model<Api>): void {
   };
 }
 
-// Moonshot Kimi K2.6/K2.7 accept system text after the conversation starts but reject
-// tool-bearing system messages. Kimi K3 accepts both forms; Fireworks and OpenCode pass
-// its tool-bearing form through. DeepSeek V4 Pro and OpenAI models behind OpenRouter also accept
-// plain system text in place. Kimi Coding sets these flags in createKimiCodingModels().
 function applyOpenAICompletionsTranscriptMetadata(model: Model<Api>): void {
   if (model.api !== "openai-completions") return;
   const isKimiK3 =
@@ -1011,10 +976,6 @@ function applyOpenAICompletionsTranscriptMetadata(model: Model<Api>): void {
   };
 }
 
-// Newer OpenAI Responses models accept developer messages after the conversation has started.
-// OpenCode Zen and OpenCode Go pass both those messages and
-// `additional_tools` items through to OpenAI unchanged; tool search is not verified
-// through those proxies.
 const OPENAI_RESPONSES_PROXY_PROVIDERS = new Set(["opencode", "opencode-go"]);
 
 function applyOpenAIResponsesTranscriptMetadata(model: Model<Api>): void {
@@ -1035,9 +996,6 @@ function applyOpenAIResponsesTranscriptMetadata(model: Model<Api>): void {
   };
 }
 
-// OpenAI charges prompt-cache writes starting with the GPT-5.6 family, and exactly
-// those models accept `prompt_cache_options`; older models reject the parameter.
-// https://developers.openai.com/api/docs/guides/prompt-caching
 function applyOpenAIExplicitPromptCacheMetadata(model: Model<Api>): void {
   if (model.provider !== "openai" || model.api !== "openai-responses") return;
   if (!(model.cost.cacheWrite > 0)) return;
@@ -1047,9 +1005,6 @@ function applyOpenAIExplicitPromptCacheMetadata(model: Model<Api>): void {
   };
 }
 
-// GPT-6 models accept `configuration_update` input items that change the reasoning effort
-// without changing the cached prompt prefix. Not enabled for openai-codex (Codex CLI keeps it
-// behind a flag that is off by default) or proxies.
 function applyOpenAIMidConvoEffortMetadata(model: Model<Api>): void {
   if (model.provider !== "openai" || model.api !== "openai-responses") return;
   if (!OPENAI_MID_CONVO_EFFORT_MODEL_IDS.has(model.id)) return;
@@ -1059,19 +1014,12 @@ function applyOpenAIMidConvoEffortMetadata(model: Model<Api>): void {
   };
 }
 
-// Anthropic ephemeral entries have a hard five-minute lifetime; `ttl: "1h"`
-// extends it to one hour. Only direct Anthropic is annotated so cache warming
-// does not assume equivalent behavior through proxies.
-// https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
 const ANTHROPIC_PROMPT_CACHE: ModelPromptCache = { short: 300, long: 3600 };
 
 function applyPromptCacheMetadata(model: Model<Api>): void {
   if (model.provider === "anthropic" && model.api === "anthropic-messages") {
     model.promptCache = ANTHROPIC_PROMPT_CACHE;
   }
-  // Do not add OpenAI lifetimes yet. Before enabling warming for explicit
-  // OpenAI caches, re-evaluate it using observed expiry, replay, and billing
-  // behavior; a documented TTL alone does not establish full cache loss.
 }
 
 function applyImageInputMetadata(model: AnyModel): void {
@@ -1137,7 +1085,6 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
       model.api === "openai-codex-responses")
   ) {
     mergeThinkingLevelMap(model, {
-      // GPT-6 Astra and GPT-6.1 Sol reject reasoning.effort "none".
       off: model.id === "gpt-6-astra" || model.id === "gpt-6.1-sol" ? null : "none",
       minimal: null,
       low: "low",
@@ -1154,8 +1101,6 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
   ) {
     mergeThinkingLevelMap(model, { off: "none" });
   }
-  // xAI models without verified effort options must not send the undocumented
-  // "none"/"minimal" efforts.
   if (
     model.provider === "xai" &&
     model.api === "openai-responses" &&
@@ -1175,9 +1120,6 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
   if (model.id.endsWith("gpt-5.5-pro")) {
     mergeThinkingLevelMap(model, { off: null, minimal: null, low: null });
   }
-  // Anthropic adaptive-thinking effort support (per Anthropic adaptive thinking docs):
-  // - "max" is available on all adaptive-thinking Claude models.
-  // - "xhigh" is only available on Opus 4.7/4.8/5, Sonnet 5, Haiku 5.5, and Fable 5.
   if (
     model.id.includes("opus-4-6") ||
     model.id.includes("opus-4.6") ||
@@ -1238,16 +1180,9 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
     (model.provider === "moonshotai" || model.provider === "moonshotai-cn") &&
     (model.id === "kimi-k2.7-code" || model.id === "kimi-k2.7-code-highspeed")
   ) {
-    // Kimi K2.7 Code is always-thinking. Official docs say
-    // `thinking: { type: "disabled" }` is rejected, and callers can omit
-    // the thinking parameter to use the enabled default.
     mergeThinkingLevelMap(model, { off: null });
   }
   if (model.provider === "openrouter" && model.id.startsWith("inception/mercury-2")) {
-    // Mercury 2 in instant mode (reasoning_effort: "none") disables tool calling.
-    // Mark "off" unsupported so the openai-completions provider omits the reasoning param
-    // instead of defaulting to {reasoning:{effort:"none"}} (see openai-completions.ts:575).
-    // msa's low/medium/high pass through verbatim; OpenRouter normalizes to Mercury's vocabulary.
     mergeThinkingLevelMap(model, { off: null });
   }
   if (model.provider === "openrouter" && model.id === "z-ai/glm-5.2") {
@@ -1258,8 +1193,6 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
       model.api === "anthropic-messages" &&
       (model.compat as AnthropicMessagesCompat | undefined)?.forceAdaptiveThinking
     ) {
-      // Qwen Max currently advertises only a toggle. Prefer upstream effort
-      // metadata once available instead of replacing it with this fallback.
       if (model.id === "accounts/fireworks/models/qwen3p8-max" && !model.thinkingLevelMap) {
         const thinkingLevelMap = getEffortThinkingLevelMap([
           { type: "effort", values: ["low", "medium", "xhigh"] },
@@ -1269,7 +1202,6 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
       const reasoningOptions = modelsDevReasoningOptions.get(getModelKey(model));
       if (
         reasoningOptions?.some((option) => option.type === "toggle") ||
-        // The 2.4T alias omits the verified toggle in models.dev.
         model.id === "accounts/fireworks/models/qwen3p8-2p4t-a95b"
       ) {
         mergeThinkingLevelMap(model, { off: "none" });
@@ -1279,8 +1211,6 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
       }
     }
     if (model.id.includes("glm-5p2")) {
-      // GLM 5.2 and its fast router support off/high/max. Fireworks maps low
-      // and medium to high, so do not expose those aliases as distinct levels.
       mergeThinkingLevelMap(model, {
         off: "none",
         minimal: null,
@@ -1290,7 +1220,6 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
       });
     }
     if (model.id.includes("kimi-k3")) {
-      // Fireworks maps medium to high on both APIs; do not expose it as a distinct level.
       mergeThinkingLevelMap(model, { medium: null });
     }
   }
@@ -1298,15 +1227,12 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
     mergeThinkingLevelMap(model, OPENCODE_GO_GLM52_THINKING_LEVEL_MAP);
   }
   if (model.provider === "opencode-go" && model.id === "kimi-k2.6") {
-    // OpenCode Go exposes Kimi K2.6 thinking as on/off, not distinct effort tiers.
     mergeThinkingLevelMap(model, { minimal: null, low: null, medium: null });
   }
   if (model.provider === "opencode" && model.id === "grok-build-0.1") {
-    // OpenCode Zen Grok Build reasons by default but rejects explicit reasoningEffort.
     mergeThinkingLevelMap(model, { off: null, minimal: null, low: null, medium: null });
   }
   if (model.provider === "ant-ling" && model.reasoning) {
-    // Ring reasons by default. Only high/xhigh have documented explicit effort controls.
     mergeThinkingLevelMap(model, ANT_LING_RING_THINKING_LEVEL_MAP);
   }
 }
@@ -1327,15 +1253,12 @@ function getAnthropicMessagesCompat(
     compat.supportsMidConvoSystemMessages = true;
     compat.supportsMidConvoToolChanges = true;
   }
-  // OpenCode Zen forwards mid-conversation system messages but rejects
-  // `tool_addition`/`tool_removal` blocks, so tool changes stay top-level there.
   if (provider === "opencode" && supportsAnthropicMidConvoSystemMessages(modelId)) {
     compat.supportsMidConvoSystemMessages = true;
   }
   if (provider === "xiaomi" || provider.startsWith("xiaomi-token-plan-")) {
     compat.allowEmptySignature = true;
   }
-  // OpenCode Qwen 3.8 Flash emits and accepts thinking blocks with empty signatures.
   if ((provider === "opencode" || provider === "opencode-go") && modelId === "qwen3.8-flash") {
     compat.allowEmptySignature = true;
   }
@@ -1363,7 +1286,6 @@ function getModelsDevCost(cost: ModelsDevModel["cost"]): ModelCost {
     cacheRead: cost?.cache_read || 0,
     cacheWrite: cost?.cache_write || 0,
   };
-  // Rates a tier does not list keep the base price.
   const tiers = cost?.tiers?.flatMap((tier) => {
     const context = tier.tier;
     if (context?.type !== "context" || context.size === undefined) return [];
@@ -1470,8 +1392,6 @@ async function fetchAiGatewayModels(): Promise<{
 
     const items = Array.isArray(data.data) ? (data.data as AiGatewayModel[]) : [];
     for (const model of items) {
-      // Evaluation models such as TypeSafe's Jev are served through the
-      // TypeSafe-compatible System One endpoint.
       if (model.type === "evaluation") {
         classifiers.push({
           type: "classifier",
@@ -1492,7 +1412,6 @@ async function fetchAiGatewayModels(): Promise<{
         continue;
       }
       const tags = Array.isArray(model.tags) ? model.tags : [];
-      // Only include models that support tools
       if (!tags.includes("tool-use")) continue;
 
       const input: ("text" | "image")[] = ["text"];
@@ -1592,9 +1511,6 @@ function processBasetenModels(provider: ModelsDevProvider | undefined): Model<Ap
     supportsUsageInStreaming: true,
     maxTokensField: "max_tokens",
     supportsStrictMode: true,
-    // Baseten automatic prompt caching needs session affinity so related
-    // requests land on the same replica. See:
-    // https://docs.baseten.co/inference/model-apis/pricing-and-limits
     sendSessionAffinityHeaders: true,
     supportsLongCacheRetention: false,
   };
@@ -1654,7 +1570,6 @@ function processBasetenModels(provider: ModelsDevProvider | undefined): Model<Ap
       : supportsToggle
         ? toggleThinkingLevelMap
         : getEffortThinkingLevelMap(reasoningOptions);
-    // Baseten's GLM-5.2 endpoints are text-only despite models.dev reporting image input.
     const supportsImageInput = !isGlm52 && model.modalities?.input?.includes("image");
 
     models.push({
@@ -1706,8 +1621,6 @@ function processGoogleModels(data: ModelsDevCatalog): Model<Api>[] {
     }
   }
 
-  // The google-vertex models.dev catalog also includes Claude, OpenAI, and other
-  // MaaS models that do not use the @google/genai Gemini streaming path.
   const vertexModels = data["google-vertex"]?.models;
   if (vertexModels) {
     for (const [modelId, model] of Object.entries(vertexModels)) {
@@ -1720,9 +1633,6 @@ function processGoogleModels(data: ModelsDevCatalog): Model<Api>[] {
             ? (vertexModels["gemini-3.1-flash-lite"] ?? model)
             : model;
       const thinkingLevelMap = getGoogleThinkingLevelMap(modelId, source.reasoning_options ?? []);
-      // models.dev reports Vertex cache_read/cache_write values for Gemini 2.5 Flash that
-      // do not match the official Gemini API standard pricing table. msa only accounts
-      // cachedContentTokenCount as cacheRead.
       const cacheRead = modelId === "gemini-2.5-flash" ? 0.03 : source.cost?.cache_read || 0;
 
       models.push({
@@ -1807,14 +1717,7 @@ function processFireworksModels(provider: ModelsDevProvider | undefined): Model<
       models.push({
         ...common,
         api: "anthropic-messages",
-        // Fireworks Anthropic-compatible API - SDK appends /v1/messages.
         baseUrl: "https://api.fireworks.ai/inference",
-        // Fireworks prompt caching uses automatic prefix matching + session affinity.
-        // x-session-affinity routes requests to the same replica for cache hits.
-        // cache_control on tools and eager_input_streaming are not supported.
-        // See: https://docs.fireworks.ai/tools-sdks/anthropic-compatibility
-        // Use adaptive thinking for cataloged effort controls, with verified
-        // fallbacks where models.dev is incomplete. New models need no allowlist entry.
         compat: {
           ...anthropicCompat,
           ...(model.reasoning_options?.some((option) => option.type === "effort") ||
@@ -1830,19 +1733,13 @@ function processFireworksModels(provider: ModelsDevProvider | undefined): Model<
   return models;
 }
 
-// Kimi Coding is subscription-backed, so models.dev reports zero cost. Use the
-// equivalent Moonshot API rates to estimate the value of subscription usage.
 const KIMI_CODING_IMPLIED_COSTS: Record<string, Model<Api>["cost"]> = {
   k3: KIMI_K3_COST,
   "kimi-for-coding": { input: 0.95, output: 4, cacheRead: 0.19, cacheWrite: 0 },
   "kimi-for-coding-highspeed": { input: 1.9, output: 8, cacheRead: 0.38, cacheWrite: 0 },
 };
-// Models whose https://api.kimi.com/coding/v1/models entry reports effort levels and
-// dynamic tool loading (tools declared in later system messages). Highspeed reports
-// neither and rejects tool-bearing system messages with a 400.
 const KIMI_CODING_K3_STYLE_MODEL_IDS = new Set(["k3", "k3-256k", "kimi-for-coding"]);
 
-// Kimi Coding uses Chat Completions, the same protocol as the official Kimi Code client.
 function createKimiCodingModels(
   kimiModels: Record<string, ModelsDevModel>,
 ): Model<"openai-completions">[] {
@@ -1852,7 +1749,6 @@ function createKimiCodingModels(
 
     const isK3Style = KIMI_CODING_K3_STYLE_MODEL_IDS.has(modelId);
     const impliedCost = KIMI_CODING_IMPLIED_COSTS[modelId];
-    // K3-style models send reasoning_effort, so expose the effort values models.dev lists.
     const effortLevels =
       isK3Style && m.reasoning_options ? getEffortThinkingLevelMap(m.reasoning_options) : undefined;
 
@@ -1864,7 +1760,6 @@ function createKimiCodingModels(
       baseUrl: "https://api.kimi.com/coding/v1",
       compat: {
         ...(isK3Style ? KIMI_K3_OPENAI_COMPAT : KIMI_OPENAI_COMPAT),
-        // All models accept system text after the conversation starts.
         supportsMidConvoSystemMessages: true,
         ...(isK3Style ? { supportsMidConvoToolAdditions: true } : {}),
       },
@@ -1878,7 +1773,6 @@ function createKimiCodingModels(
       },
       contextWindow: m.limit?.context || 4096,
       maxTokens: m.limit?.output || 4096,
-      // Kimi Code reports every model as always-thinking.
       thinkingLevelMap: { ...effortLevels, off: null },
     });
   }
@@ -1897,7 +1791,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       ? await fetchNvidiaNimModelIds()
       : new Map<string, string>();
 
-    // Process Amazon Bedrock models
     if (data["amazon-bedrock"]?.models) {
       for (const [modelId, model] of Object.entries(data["amazon-bedrock"].models)) {
         const m = model as ModelsDevModel;
@@ -1907,12 +1800,10 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
         let id = modelId;
 
         if (id.startsWith("ai21.jamba")) {
-          // These models doesn't support tool use in streaming mode
           continue;
         }
 
         if (id.startsWith("mistral.mistral-7b-instruct-v0")) {
-          // These models doesn't support system messages
           continue;
         }
 
@@ -1927,7 +1818,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
             | "text"
             | "image"
           )[],
-          // Includes models.dev pricing tiers, e.g. the long-context tier for OpenAI models (#10326).
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
@@ -1937,7 +1827,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process Anthropic models
     if (data["anthropic"]?.models) {
       for (const [modelId, model] of Object.entries(data["anthropic"].models)) {
         const m = model as ModelsDevModel;
@@ -1961,12 +1850,10 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
     models.push(...processGoogleModels(data));
 
-    // Process OpenAI models
     if (data["openai"]?.models) {
       for (const [modelId, model] of Object.entries(data["openai"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
-        // models.dev lists this alias, but it is not accepted by OpenAI APIs.
         if (MODELS_DEV_OPENAI_UNSUPPORTED_MODEL_IDS.has(modelId)) continue;
 
         models.push({
@@ -1985,7 +1872,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process Groq models
     if (data["groq"]?.models) {
       for (const [modelId, model] of Object.entries(data["groq"].models)) {
         const m = model as ModelsDevModel;
@@ -2007,7 +1893,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process Cerebras models
     if (data["cerebras"]?.models) {
       for (const [modelId, model] of Object.entries(data["cerebras"].models)) {
         const m = model as ModelsDevModel;
@@ -2029,7 +1914,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process Cloudflare Workers AI models
     if (data["cloudflare-workers-ai"]?.models) {
       for (const [modelId, model] of Object.entries(data["cloudflare-workers-ai"].models)) {
         const m = model as ModelsDevModel;
@@ -2052,7 +1936,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process Cloudflare AI Gateway models
     const cloudflareAIGatewayModelIds = new Set<string>();
     if (data["cloudflare-ai-gateway"]?.models) {
       for (const [prefixedId, model] of Object.entries(data["cloudflare-ai-gateway"].models)) {
@@ -2074,9 +1957,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
         } else if (upstream === "anthropic") {
           api = "anthropic-messages";
           baseUrl = CLOUDFLARE_AI_GATEWAY_ANTHROPIC_BASE_URL;
-          // The /anthropic passthrough forwards the model ID to Anthropic unchanged.
-          // models.dev lists dotted versions (claude-opus-5.5), but Anthropic only
-          // accepts dashed IDs (claude-opus-5-5).
           id = nativeId.replaceAll(".", "-");
         } else if (upstream === "workers-ai") {
           api = "openai-completions";
@@ -2086,8 +1966,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           continue;
         }
 
-        // Gateway passthroughs forward session affinity headers to upstreams that
-        // use them for cache/routing affinity.
         const compat =
           upstream === "anthropic" || upstream === "workers-ai"
             ? { sendSessionAffinityHeaders: true }
@@ -2111,10 +1989,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // The gateway proxies Workers AI through its OpenAI-compatible /compat endpoint,
-    // but models.dev may omit or intermittently drop those `workers-ai/*` entries
-    // from the AI Gateway catalog. Mirror the Workers AI catalog under the documented
-    // prefix so the gateway keeps its OpenAI-compatible models stable.
     if (data["cloudflare-workers-ai"]?.models) {
       for (const [modelId, model] of Object.entries(data["cloudflare-workers-ai"].models)) {
         const m = model as ModelsDevModel;
@@ -2141,7 +2015,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process xAi models
     if (data["xai"]?.models) {
       for (const [modelId, model] of Object.entries(data["xai"].models)) {
         const m = model as ModelsDevModel;
@@ -2164,7 +2037,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process Meta models
     if (data["meta"]?.models) {
       for (const [modelId, model] of Object.entries(data["meta"].models)) {
         const m = model as ModelsDevModel;
@@ -2188,14 +2060,11 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
     models.push(...processZaiModels(data));
 
-    // Process Mistral models
     if (data["mistral"]?.models) {
       for (const [modelId, model] of Object.entries(data["mistral"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
 
-        // Models with effort values use `reasoning_effort` with these levels.
-        // Reasoning models without them (Magistral) use `prompt_mode`.
         const thinkingLevelMap = getEffortThinkingLevelMap(m.reasoning_options ?? []);
 
         models.push({
@@ -2219,7 +2088,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process Hugging Face models
     if (data["huggingface"]?.models) {
       for (const [modelId, model] of Object.entries(data["huggingface"].models)) {
         const m = model as ModelsDevModel;
@@ -2246,7 +2114,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
     models.push(...processFireworksModels(data["fireworks-ai"]));
 
-    // Process NVIDIA NIM models
     if (data["nvidia"]?.models) {
       for (const [modelId, model] of Object.entries(data["nvidia"].models)) {
         const m = model as ModelsDevModel;
@@ -2277,7 +2144,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process Together AI models
     const togetherProvider = data["together"] ?? data["togetherai"] ?? data["together-ai"];
     if (togetherProvider?.models) {
       for (const [modelId, model] of Object.entries(togetherProvider.models)) {
@@ -2307,12 +2173,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
     models.push(...processBasetenModels(data["baseten"]));
 
-    // Process OpenCode models (Zen and Go)
-    // API mapping based on provider.npm field:
-    // - @ai-sdk/openai → openai-responses
-    // - @ai-sdk/anthropic → anthropic-messages
-    // - @ai-sdk/google → google-generative-ai
-    // - null/undefined/@ai-sdk/openai-compatible → openai-completions
     const opencodeVariants = [
       { key: "opencode", provider: "opencode", basePath: "https://opencode.ai/inference" },
       { key: "opencode-go", provider: "opencode-go", basePath: "https://opencode.ai/inference/go" },
@@ -2338,7 +2198,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           compat = { sessionAffinityFormat: "openai-nosession" };
         } else if (npm === "@ai-sdk/anthropic") {
           api = "anthropic-messages";
-          // Anthropic SDK appends /v1/messages to baseURL
           baseUrl = variant.basePath;
         } else if (npm === "@ai-sdk/google") {
           api = "google-generative-ai";
@@ -2348,7 +2207,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           baseUrl = `${variant.basePath}/v1`;
           compat = { cacheControlFormat: "anthropic" };
         } else {
-          // null, undefined, or @ai-sdk/openai-compatible
           api = "openai-completions";
           baseUrl = `${variant.basePath}/v1`;
         }
@@ -2361,8 +2219,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           (variant.provider === "opencode" || variant.provider === "opencode-go") &&
           modelId === "kimi-k2.6"
         ) {
-          // OpenCode Kimi K2.6 accepts Anthropic-style thinking objects
-          // and rejects string thinking values or combined reasoning_effort.
           compat = {
             ...(compat ?? {}),
             thinkingFormat: "deepseek",
@@ -2370,15 +2226,10 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           };
         }
 
-        // Fix known mismatches between models.dev npm data and actual
-        // OpenCode Go endpoint behaviour. models.dev reports these models
-        // as @ai-sdk/anthropic, but OpenCode Go serves them through the
-        // OpenAI-compatible /v1/chat/completions path.
         if (variant.provider === "opencode-go") {
           if (modelId === "qwen3.5-plus" || modelId === "qwen3.6-plus") {
             api = "openai-completions";
             baseUrl = `${variant.basePath}/v1`;
-            // Qwen/DashScope uses enable_thinking at the top level.
             compat = { ...(compat ?? {}), thinkingFormat: "qwen" };
           }
         }
@@ -2418,7 +2269,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process MiniMax models
     const minimaxVariants = [
       { key: "minimax", provider: "minimax", baseUrl: "https://api.minimax.io/anthropic" },
       { key: "minimax-cn", provider: "minimax-cn", baseUrl: "https://api.minimaxi.com/anthropic" },
@@ -2435,7 +2285,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
             name: m.name || modelId,
             api: "anthropic-messages",
             provider,
-            // MiniMax's Anthropic-compatible API - SDK appends /v1/messages
             baseUrl,
             reasoning: m.reasoning === true,
             input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
@@ -2448,7 +2297,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process Kimi For Coding models
     if (data["kimi-code-plan-global"]?.models) {
       models.push(
         ...createKimiCodingModels(
@@ -2457,7 +2305,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       );
     }
 
-    // Process Moonshot AI models
     const moonshotVariants = [
       { key: "moonshotai", provider: "moonshotai", baseUrl: "https://api.moonshot.ai/v1" },
       { key: "moonshotai-cn", provider: "moonshotai-cn", baseUrl: "https://api.moonshot.cn/v1" },
@@ -2487,7 +2334,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           baseUrl,
           reasoning: isKimiK3 || m.reasoning === true,
           input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
-          // Moonshot does not bill cache writes; models.dev lists the input rate as cache_write for Kimi K3.
           cost: isKimiK3
             ? { ...KIMI_K3_COST }
             : {
@@ -2504,13 +2350,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process Xiaomi MiMo models
-    // Built-in `xiaomi` targets the API billing endpoint (single stable URL,
-    // keys from platform.xiaomimimo.com). The three `xiaomi-token-plan-*`
-    // providers cover prepaid Token Plan endpoints in cn / ams / sgp.
-    // MiMo Chat Completions only documents thinking.type enabled/disabled and
-    // rejects some reasoning_effort values (e.g. "minimal"). Xiaomi documents
-    // all effort levels as identical, so expose only off and high.
     const xiaomiCompat: OpenAICompletionsCompat = {
       supportsReasoningEffort: false,
       requiresReasoningContentOnAssistantMessages: true,
@@ -2570,11 +2409,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    // Process Alibaba Cloud Model Studio Token Plan models. International and
-    // China use separate endpoints and API keys (sk-sp- prefix). The Individual
-    // provider reuses the international source and endpoint with a narrower catalog.
-    // models.dev keys are "alibaba-token-plan[-cn]"; msa exposes them as
-    // "qwen-token-plan[-cn]" plus the Individual catalog view.
     const qwenTokenPlanCompat: OpenAICompletionsCompat = {
       thinkingFormat: "qwen",
       supportsDeveloperRole: false,
@@ -2669,8 +2503,6 @@ async function loadModelsDevClassifierModels(): Promise<ClassifierModel<"typesaf
         provider: "typesafe",
         baseUrl: "https://api.typesafe.ai/v1/",
         input: metadata.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
-        // The canonical models.dev entry has no direct-provider pricing. System One reports token usage,
-        // so classify() results carry token counts but price them at zero.
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: metadata.limit?.context || 64000,
       },
@@ -2682,12 +2514,6 @@ async function loadModelsDevClassifierModels(): Promise<ClassifierModel<"typesaf
   }
 }
 
-// Workers AI has no unauthenticated catalog and models.dev does not list its
-// System One models yet. Cloudflare publishes pricing only in the dashboard.
-// https://developers.cloudflare.com/ai/models/typesafe/jev/
-// OpenCode Zen serves Jev through its TypeSafe-compatible System One endpoint.
-// Neither its /inference/v1/models listing nor models.dev carries metadata for it.
-// https://opencode.ai/docs/zen
 const OPENCODE_CLASSIFIER_MODELS: ClassifierModel<"typesafe-system-one">[] = [
   {
     type: "classifier",
@@ -2715,10 +2541,6 @@ const OPENCODE_CLASSIFIER_MODELS: ClassifierModel<"typesafe-system-one">[] = [
 
 const CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS: ClassifierModel<"cloudflare-workers-ai-system-one">[] =
   [
-    // Cloudflare-hosted Clef decision models. They accept images, but classifier
-    // contexts carry text or JSON state only, so the catalog advertises text.
-    // Pricing: https://developers.cloudflare.com/workers-ai/models/clef/
-    // and https://developers.cloudflare.com/workers-ai/models/clef-flash/
     {
       type: "classifier",
       id: "@cf/cloudflare/clef",
@@ -2754,13 +2576,6 @@ const CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS: ClassifierModel<"cloudflare-worke
     },
   ];
 
-// OpenAI Decisions API (public beta): gpt-6-luna is its only model. It bills input tokens only,
-// with the same long-context multiplier as chat requests. Only API keys work: Sign in with ChatGPT
-// tokens are rejected on /v1/decisions, and the Codex backend has no Decisions route.
-// The endpoint rejects inputs above 922K tokens (the model's documented maximum input), but
-// requests running longer than about five seconds, currently above roughly 600K input tokens,
-// fail with a gateway timeout.
-// https://developers.openai.com/api/docs/guides/decisions
 const OPENAI_CLASSIFIER_MODELS: ClassifierModel<"openai-decisions">[] = [
   {
     type: "classifier",
@@ -2776,18 +2591,12 @@ const OPENAI_CLASSIFIER_MODELS: ClassifierModel<"openai-decisions">[] = [
 ];
 
 async function generateModels() {
-  // Fetch models from all upstream catalogs.
-  // models.dev: Anthropic, Google, OpenAI, Groq, Cerebras, and others
-  // OpenRouter: its tool-capable routed catalog
-  // AI Gateway: OpenAI-compatible catalog with tool-capable models
-  // Radius: its unauthenticated public catalog; authenticated clients overlay it at runtime
   const modelsDevModels = await loadModelsDevData();
   const modelsDevClassifierModels = await loadModelsDevClassifierModels();
   const openRouterCatalog = await fetchOpenRouterModels();
   const aiGatewayCatalog = await fetchAiGatewayModels();
   const radiusModels = await fetchRadiusModels();
 
-  // Combine chat models (models.dev has priority where sources overlap).
   const allModels = [
     ...modelsDevModels,
     ...openRouterCatalog.chat,
@@ -2802,9 +2611,7 @@ async function generateModels() {
       ),
   );
 
-  // Temporary overrides until upstream model metadata is corrected.
   for (const candidate of allModels) {
-    // models.dev may list Opus 5.5, Sonnet 5.5, and Haiku 5.5 before their effort metadata is complete.
     if (
       candidate.provider === "anthropic" &&
       (candidate.id === "claude-opus-5-5" ||
@@ -2812,7 +2619,6 @@ async function generateModels() {
         candidate.id === "claude-haiku-5-5")
     ) {
       mergeThinkingLevelMap(candidate, {
-        // Haiku 5.5 accepts disabled thinking; Opus 5.5 and Sonnet 5.5 reject it.
         ...(candidate.id === "claude-haiku-5-5" ? {} : { off: null }),
         minimal: null,
         low: "low",
@@ -2835,7 +2641,6 @@ async function generateModels() {
       candidate.contextWindow = 1000000;
     }
 
-    // OpenCode variants list Claude Sonnet 4/4.5 with 1M context, actual limit is 200K
     if (
       (candidate.provider === "opencode" || candidate.provider === "opencode-go") &&
       (candidate.id === "claude-sonnet-4-5" || candidate.id === "claude-sonnet-4")
@@ -2849,8 +2654,6 @@ async function generateModels() {
       candidate.contextWindow = 272000;
       candidate.maxTokens = 128000;
     }
-    // Keep direct OpenAI requests in the short-context pricing tier by default. Users can opt into the
-    // larger context through model overrides, so retain long-context cost metadata on the capped models.
     if (
       candidate.provider === "openai" &&
       OPENAI_SHORT_CONTEXT_CAPPED_MODEL_IDS.has(candidate.id)
@@ -2865,24 +2668,19 @@ async function generateModels() {
       const standardCost = OPENAI_STANDARD_COSTS_BY_ID[candidate.id];
       candidate.cost = withOpenAiLongContextPricing(standardCost ?? candidate.cost);
     }
-    // Cloudflare AI Gateway passes OpenAI usage through at OpenAI list prices.
     if (candidate.provider === "cloudflare-ai-gateway") {
       const standardCost = OPENAI_STANDARD_COSTS_BY_ID[candidate.id];
       if (standardCost) candidate.cost = withOpenAiLongContextPricing(standardCost);
     }
-    // models.dev reports gpt-5-pro output as 272000 (a duplicate of the input sub-limit);
-    // the actual max output is 128000. Also propagates to the derived Azure clone.
     if (candidate.provider === "openai" && candidate.id === "gpt-5-pro") {
       candidate.maxTokens = 128000;
     }
-    // Keep Kimi K3's canonical output limit when gateway metadata is missing or incorrect.
     if (
       (candidate.provider === "openrouter" && OPENROUTER_KIMI_K3_MODEL_IDS.has(candidate.id)) ||
       (candidate.provider === "vercel-ai-gateway" && candidate.id === "moonshotai/kimi-k3")
     ) {
       candidate.maxTokens = KIMI_K3_MAX_TOKENS;
     }
-    // Keep selected OpenRouter model metadata stable until upstream settles.
     if (candidate.provider === "openrouter" && candidate.id === "moonshotai/kimi-k2.5") {
       candidate.cost.input = 0.41;
       candidate.cost.output = 2.06;
@@ -2903,7 +2701,6 @@ async function generateModels() {
     }
   }
 
-  // Add missing gpt models
   const missingOpenAiModels: Model<"openai-responses">[] = [
     {
       id: "gpt-6.1-sol",
@@ -3028,7 +2825,6 @@ async function generateModels() {
       thinkingLevelMap: DEEPSEEK_V4_FLASH_THINKING_LEVEL_MAP,
       input: ["text", "image"],
       cost: {
-        // DeepSeek also offers time-based off-peak rates, which the cost schema cannot represent yet.
         input: 0.3,
         output: 1.2,
         cacheRead: 0.006,
@@ -3047,7 +2843,6 @@ async function generateModels() {
       reasoning: true,
       input: ["text"],
       cost: {
-        // DeepSeek also offers time-based off-peak rates, which the cost schema cannot represent yet.
         input: 1.32,
         output: 3.96,
         cacheRead: 0.044,
@@ -3145,10 +2940,6 @@ async function generateModels() {
     }
   }
 
-  // OpenAI Codex (ChatGPT OAuth) models
-  // NOTE: These are not fetched from models.dev; we keep a small, explicit list to avoid aliases.
-  // Older model limits are based on observed server behavior; GPT-5.6 and GPT-6 use Codex's 272k default catalog limit.
-  // GPT-6.1 Sol uses the 500k default returned by /backend-api/codex/models.
   const CODEX_BASE_URL = "https://chatgpt.com/backend-api";
   const CODEX_CONTEXT = 272000;
   const CODEX_GPT_61_SOL_CONTEXT = 500000;
@@ -3267,7 +3058,6 @@ async function generateModels() {
   ];
   allModels.push(...codexModels);
 
-  // Add missing Mistral Medium 3.5 model until models.dev includes it
   if (!allModels.some((m) => m.provider === "mistral" && m.id === "mistral-medium-3.5")) {
     const thinkingLevelMap = getEffortThinkingLevelMap([
       { type: "effort", values: ["none", "high"] },
@@ -3287,13 +3077,11 @@ async function generateModels() {
         cacheRead: 0,
         cacheWrite: 0,
       },
-      // 256k tokens
       contextWindow: 262144,
       maxTokens: 262144,
     });
   }
 
-  // Add "auto" alias for openrouter/auto
   if (!allModels.some((m) => m.provider === "openrouter" && m.id === "auto")) {
     allModels.push({
       id: "auto",
@@ -3304,8 +3092,6 @@ async function generateModels() {
       reasoning: true,
       input: ["text", "image"],
       cost: {
-        // we dont know about the costs because OpenRouter auto routes to different models
-        // and then charges you for the underlying used model
         input: 0,
         output: 0,
         cacheRead: 0,
@@ -3316,10 +3102,6 @@ async function generateModels() {
     });
   }
 
-  // Add "fusion" alias for openrouter/fusion. OpenRouter exposes Fusion as a
-  // router alias/plugin entry point; its model metadata does not advertise
-  // tools, but the alias resolves to a concrete model that can invoke caller
-  // tools and has the openrouter:fusion server tool auto-injected.
   if (!allModels.some((m) => m.provider === "openrouter" && m.id === "openrouter/fusion")) {
     allModels.push({
       id: "openrouter/fusion",
@@ -3330,8 +3112,6 @@ async function generateModels() {
       reasoning: true,
       input: ["text"],
       cost: {
-        // we dont know about the costs because Fusion routes to multiple models
-        // and then charges you for the underlying used models
         input: 0,
         output: 0,
         cacheRead: 0,
@@ -3342,8 +3122,6 @@ async function generateModels() {
     });
   }
 
-  // Azure Foundry deploys these with larger context windows than OpenAI's own short-tier defaults.
-  // See models-sold-directly-by-azure docs.
   const AZURE_CONTEXT_WINDOW_OVERRIDES: Record<string, number> = {
     "gpt-5.4": 1050000,
     "gpt-5.5": 1050000,
@@ -3369,16 +3147,12 @@ async function generateModels() {
     );
   allModels.push(...azureOpenAiModels);
 
-  // Azure resells DeepSeek at its own rates. US data zone, checked 2026-09-16.
-  // https://azure.microsoft.com/en-us/pricing/details/ai-foundry-models/deepseek/
   const AZURE_DEEPSEEK_V4_PRO_COST: ModelCost = {
     input: 1.925,
     output: 3.828,
     cacheRead: 0.165,
     cacheWrite: 0,
   };
-  // Azure 400s on DeepSeek's `thinking` field and on every prompt cache parameter, discards a
-  // `developer` system message unbilled once reasoning_effort is set, and honours mid-convo ones (#9645).
   const azureDeepSeekModels: Model<Api>[] = allModels
     .filter((model) => model.provider === "deepseek" && model.id === "deepseek-v4-pro")
     .map((model) =>
@@ -3414,8 +3188,6 @@ async function generateModels() {
   }
   applyAnthropicAllowedFallbackModelMetadata(allModels.filter(isAnthropicFallbackMetadataModel));
 
-  // Keep chat and image catalogs separate so one upstream ID can expose both
-  // operations with different API implementations.
   type ProviderCatalog = {
     chat: Record<string, Model<Api>>;
     image: Record<string, ImageModel<ImageApi>>;
@@ -3425,7 +3197,6 @@ async function generateModels() {
   const providerCatalog = (provider: string): ProviderCatalog =>
     (providers[provider] ??= { chat: {}, image: {}, classifier: {} });
   for (const model of allModels) {
-    // Only add if not already present (models.dev takes priority over OpenRouter).
     providerCatalog(model.provider).chat[model.id] ??= { ...model, type: "chat" };
   }
   for (const model of openRouterCatalog.images) {
@@ -3488,7 +3259,6 @@ async function generateModels() {
     throw new Error(`Cannot hydrate missing providers: ${missingProviderIds.join(", ")}`);
   }
 
-  // Only the ignored internal data is grouped by API for type derivation.
   const generatedDataProviders: Record<string, Record<string, Record<string, AnyModel>>> = {};
   const modelDataStructure: ModelDataStructure = {};
   for (const providerId of generatedDataProviderIds) {
@@ -3504,7 +3274,6 @@ async function generateModels() {
   const generatedAt = new Date().toISOString();
 
   if (!generatorOptions.jsonOnly) {
-    // Stage and validate all provider values before replacing the current generated data.
     const providersDir = join(packageRoot, "src/providers");
     const dataDir = join(providersDir, "data");
     const stagingRoot = mkdtempSync(join(providersDir, ".model-generation-"));
@@ -3632,8 +3401,6 @@ async function generateModels() {
   }
 
   if (generatorOptions.jsonOutputDir) {
-    // `models.json` and `providers/{id}.json` retain the legacy keyed chat catalog.
-    // The `.all` variants are arrays so the same upstream id can appear once per type.
     const providerOutputDir = join(generatorOptions.jsonOutputDir, "providers");
     rmSync(generatorOptions.jsonOutputDir, { recursive: true, force: true });
     mkdirSync(providerOutputDir, { recursive: true });
@@ -3647,7 +3414,6 @@ async function generateModels() {
     console.log(`Generated JSON model catalog under ${generatorOptions.jsonOutputDir}`);
   }
 
-  // Print statistics
   const totalModels = allModels.length;
   const reasoningModels = allModels.filter((model) => model.reasoning).length;
 
@@ -3662,7 +3428,6 @@ async function generateModels() {
   }
 }
 
-// Run the generator
 generateModels().catch((error) => {
   console.error(error);
   process.exitCode = 1;

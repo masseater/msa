@@ -73,7 +73,6 @@ export function buildBaseOptions(
   };
 }
 
-/** Tokens always left for the answer when a thinking budget shares the response ceiling. */
 export const MIN_ANSWER_TOKENS = 1024;
 
 export const DEFAULT_THINKING_BUDGETS: ThinkingBudgets = {
@@ -98,19 +97,11 @@ export function thinkingBudgetForLevel(
   return budgets[level]!;
 }
 
-/**
- * Cap a thinking budget so at least MIN_ANSWER_TOKENS remain under a shared response ceiling.
- *
- * @param {number} thinkingBudget - requested thinking budget
- * @param {number} ceiling - shared response token ceiling
- * @returns {number} the capped budget
- */
 export function clampThinkingBudgetToAnswerRoom(thinkingBudget: number, ceiling: number): number {
   return Math.min(thinkingBudget, Math.max(0, ceiling - MIN_ANSWER_TOKENS));
 }
 
 export function adjustMaxTokensForThinking(
-  // Undefined means no explicit caller cap. Use the model cap and fit thinking inside it.
   baseMaxTokens: number | undefined,
   modelMaxTokens: number,
   reasoningLevel: ThinkingLevel,

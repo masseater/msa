@@ -107,7 +107,6 @@ describe("Kimi Code OAuth", () => {
       },
     ]);
 
-    // waitBeforeFirstPoll: first poll happens after the 5s interval.
     await vi.advanceTimersByTimeAsync(4999);
     expect(pollTimes).toEqual([]);
     await vi.advanceTimersByTimeAsync(1);
@@ -244,7 +243,6 @@ describe("Kimi Code OAuth", () => {
   it("retries refresh on 429 and fails unauthorized on invalid_grant", async () => {
     vi.useFakeTimers();
 
-    // 429 once, then success.
     let calls = 0;
     vi.stubGlobal(
       "fetch",
@@ -271,7 +269,6 @@ describe("Kimi Code OAuth", () => {
     await expect(refreshPromise).resolves.toMatchObject({ access: "a" });
     expect(calls).toBe(2);
 
-    // invalid_grant is not retried.
     vi.stubGlobal(
       "fetch",
       vi.fn((): Promise<Response> =>

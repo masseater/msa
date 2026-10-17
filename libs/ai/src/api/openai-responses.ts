@@ -38,20 +38,10 @@ import {
 import { buildBaseOptions, resolveSamplingParams } from "./simple-options.ts";
 
 const OPENAI_TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode"]);
-// OpenAI Responses rejects max_output_tokens below 16: https://github.com/earendil-works/pi/issues/6265
 const OPENAI_RESPONSES_MIN_OUTPUT_TOKENS = 16;
 const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
-// Fixed reasoning.effort while configuration_update items carry the thinking level.
 const CONFIGURATION_UPDATE_REQUEST_EFFORT = "medium";
 
-/**
- * OpenAI API keys start with `sk-`; a different credential sent directly to OpenAI
- * is a Sign in with ChatGPT access token.
- *
- * @param {Model<"openai-responses">} model - model the request targets
- * @param {string | undefined} apiKey - credential sent with the request
- * @returns {boolean} whether the credential is a Sign in with ChatGPT access token
- */
 function isChatGPTSignIn(model: Model<"openai-responses">, apiKey: string | undefined): boolean {
   return (
     model.provider === "openai" &&
@@ -89,14 +79,6 @@ function detectSessionAffinityFormat(
     : "openai";
 }
 
-/**
- * Resolve cache retention preference.
- * Defaults to "short" and uses MSA_CACHE_RETENTION for backward compatibility.
- *
- * @param {CacheRetention} [cacheRetention] - caller preference
- * @param {ProviderEnv} [env] - scoped provider env overrides
- * @returns {CacheRetention} the cache retention to use
- */
 function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEnv): CacheRetention {
   if (cacheRetention) {
     return cacheRetention;
@@ -124,14 +106,6 @@ function getCompat(model: Model<"openai-responses">): Required<OpenAIResponsesCo
   };
 }
 
-/**
- * Effort to send in configuration_update items, or undefined to send it as reasoning.effort.
- *
- * @param {Model<"openai-responses">} model - model the request targets
- * @param {OpenAIResponsesOptions | undefined} options - caller stream options
- * @param {Required<OpenAIResponsesCompat>} compat - resolved compat settings of the model
- * @returns {string | undefined} the effort for configuration_update items, or undefined to send reasoning.effort
- */
 function getConfigurationUpdateEffort(
   model: Model<"openai-responses">,
   options: OpenAIResponsesOptions | undefined,
@@ -140,7 +114,6 @@ function getConfigurationUpdateEffort(
   if (
     !compat.supportsMidConvoEffort ||
     !options?.reasoningEffort ||
-    // Sign in with ChatGPT rejects configuration_update items.
     isChatGPTSignIn(model, options.apiKey)
   ) {
     return undefined;
@@ -169,7 +142,6 @@ function getPromptCacheOptions(
   return undefined;
 }
 
-// OpenAI Responses-specific options
 export interface OpenAIResponsesOptions extends StreamOptions {
   reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | undefined;
   reasoningSummary?: "auto" | "detailed" | "concise" | null | undefined;
@@ -188,7 +160,6 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
     getCompat(model).supportsMidConvoSystemMessages,
   );
 
-  // Start async processing
   (async () => {
     const compat = getCompat(model);
     const configurationUpdateEffort = getConfigurationUpdateEffort(model, options, compat);
@@ -214,7 +185,6 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
     };
 
     try {
-      // Create OpenAI client
       const apiKey = getClientApiKey(model.provider, options?.apiKey, options?.headers);
       const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
       const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
@@ -278,7 +248,6 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
     } catch (error) {
       for (const block of output.content) {
         delete (block as { index?: number }).index;
-        // Streaming scratch buffers are only used during parsing; never persist them.
         delete (block as { partialJson?: string }).partialJson;
         delete (block as { customInput?: unknown }).customInput;
       }
@@ -287,7 +256,6 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
         normalizeProviderError(error),
         `${model.provider === "openai" ? "OpenAI" : model.provider} API error`,
       );
-      // Sign in with ChatGPT shares the subscription's usage limit with other apps.
       output.errorMessage = errorMessage.includes("subscription_sharing_usage_limit_exceeded")
         ? `${errorMessage}\nCheck your ChatGPT usage: ${CHATGPT_USAGE_URL}`
         : errorMessage;
@@ -342,7 +310,6 @@ function createClient(
     }
   }
 
-  // Merge options headers last so they can override defaults
   if (optionsHeaders) {
     Object.assign(headers, optionsHeaders);
   }
@@ -381,7 +348,6 @@ function buildParams(
   });
 
   const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
-  // Sign in with ChatGPT rejects these request fields.
   const omitUnsupportedFields = isChatGPTSignIn(model, options?.apiKey);
   const promptCacheKey =
     cacheRetention === "none" ? undefined : clampOpenAIPromptCacheKey(options?.sessionId);
@@ -448,7 +414,6 @@ function buildParams(
     if (model.provider === "xai") params.include = ["reasoning.encrypted_content"];
   }
 
-  // Last so model and request sampling parameters override named request fields.
   const samplingParams = resolveSamplingParams(
     model,
     reasoningEffort ?? "off",

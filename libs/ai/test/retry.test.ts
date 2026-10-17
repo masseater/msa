@@ -85,16 +85,13 @@ describe("provider retry classification", () => {
     "The pending stream has been canceled",
     "The pending stream has been canceled (caused by: socket closed)",
   ])("matches HTTP/2 pending stream cancellation: %s", (errorMessage) => {
-    // Regression for #10379.
     expect(
       isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage })),
     ).toBe(true);
   });
 
   it.each([
-    // Regression for #10965 (provider unknown, no status code in the message).
     "The service is temporarily unavailable. Please retry later.",
-    // Bedrock ServiceUnavailableException as formatted by formatBedrockError.
     "Service unavailable: The service is temporarily unavailable.",
   ])("matches service unavailable wording: %s", (errorMessage) => {
     expect(
@@ -114,7 +111,6 @@ describe("provider retry classification", () => {
   });
 
   it("matches Azure peak-load capacity errors", () => {
-    // Regression for #9669.
     expect(
       isRetryableAssistantError(
         fauxAssistantMessage("", { stopReason: "error", errorMessage: azurePeakLoadError }),
@@ -153,7 +149,6 @@ describe("provider retry classification", () => {
         fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
       ),
     ).toBe(true);
-    // Regression for #9627.
     expect(
       isRetryableAssistantError(
         fauxAssistantMessage("", {
@@ -176,7 +171,6 @@ describe("provider retry classification", () => {
 
 describe("retryDelayMs", () => {
   it("caps agent retry delay", () => {
-    // Regression for #8826.
     expect(retryDelayMs({ baseDelayMs: 2000 }, 6)).toBe(60000);
     expect(retryDelayMs({ baseDelayMs: 2000, maxAgentDelayMs: 5000 }, 5)).toBe(5000);
     expect(retryDelayMs({ baseDelayMs: 2000, maxAgentDelayMs: 0 }, 5)).toBe(0);
@@ -236,14 +230,12 @@ describe("retryAssistantCall", () => {
       onRetryFinished,
     });
     expect(res.stopReason).toBe("error");
-    // 1 initial + 3 retries
     expect(produce).toHaveBeenCalledTimes(4);
     expect(onRetryScheduled).toHaveBeenCalledTimes(3);
     expect(onRetryFinished).toHaveBeenCalledWith(false, 3, "terminated");
   });
 
   it("reports capped retry delays", async () => {
-    // Regression for #8826.
     let n = 0;
     const policy: RetryPolicy = {
       enabled: true,
@@ -364,7 +356,6 @@ describe("retryAssistantCall", () => {
     const policy: RetryPolicy = { enabled: true, maxRetries: 5, baseDelayMs: 10_000 };
     const onRetryFinished = vi.fn();
     const p = retryAssistantCall(produce, policy, controller.signal, { onRetryFinished });
-    // Let one error call resolve and the first backoff sleep start, then abort.
     await vi.waitFor(() => expect(produce).toHaveBeenCalled());
     controller.abort();
     const res = await p;

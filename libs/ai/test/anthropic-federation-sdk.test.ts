@@ -8,10 +8,6 @@ import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import type { Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
-// Runs the real Anthropic SDK against a fake fetch to check how often the
-// workload identity federation token exchange happens.
-// https://github.com/earendil-works/pi/issues/10177
-
 function sseResponse(): Response {
   const body = [
     `event: message_start\ndata: ${JSON.stringify({

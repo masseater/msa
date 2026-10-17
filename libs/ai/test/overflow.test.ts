@@ -39,13 +39,11 @@ describe("isContextOverflow", () => {
   });
 
   it("detects z.ai prompt-too-long errors", () => {
-    // Regression for #9805.
     const message = createErrorMessage('400 {"code":"1261","message":"Prompt too long"}', "zai");
     expect(isContextOverflow(message, 1048576)).toBe(true);
   });
 
   it("detects z.ai CN endpoint prompt-exceeds-max-length errors", () => {
-    // Regression for #10208.
     const message = createErrorMessage(
       '400 {"code":"1261","message":"Prompt exceeds max length"}',
       "zai",
@@ -99,7 +97,6 @@ describe("isContextOverflow", () => {
   });
 
   it("only treats bodyless 400 and 413 errors as overflow for Cerebras", () => {
-    // Regression for #9482.
     for (const errorMessage of ["400 status code (no body)", "413 status code (no body)"]) {
       expect(isContextOverflow(createErrorMessage(errorMessage, "cerebras"), 131072)).toBe(true);
       expect(isContextOverflow(createErrorMessage(errorMessage, "opencode-go"), 1000000)).toBe(
@@ -109,8 +106,6 @@ describe("isContextOverflow", () => {
   });
 
   it("does not treat Bedrock throttling 'Too many tokens' as overflow", () => {
-    // Bedrock returns this for HTTP 429 rate limiting, NOT context overflow.
-    // formatBedrockError uses a human-readable prefix for ThrottlingException.
     const message = createErrorMessage(
       "Throttling error: Too many tokens, please wait before trying again.",
     );

@@ -231,7 +231,6 @@ async function* createUnfinishedToolCallEvents(): AsyncIterable<ResponseStreamEv
   } as ResponseStreamEvent;
 }
 
-// llama.cpp omits output_index from every event and sends both done events after all deltas.
 async function* createToolCallsWithoutOutputIndexEvents(): AsyncIterable<ResponseStreamEvent> {
   const call = (n: string) => ({
     type: "function_call",
@@ -291,7 +290,6 @@ describe("OpenAI Responses terminal event handling", () => {
     );
   });
 
-  // https://github.com/earendil-works/pi/issues/9974
   it("rejects parallel tool calls without output_index instead of running mixed-up calls", async () => {
     const model = createModel();
 

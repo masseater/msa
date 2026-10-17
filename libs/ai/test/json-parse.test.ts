@@ -3,7 +3,6 @@ import { describe, expect, it } from "vite-plus/test";
 import { parseStreamingJson, parseToolCallArguments } from "../src/utils/json-parse.ts";
 
 describe("parseStreamingJson", () => {
-  // #10868
   it("keeps invalid \\u escapes as literal text without dropping fields", () => {
     expect(parseStreamingJson(String.raw`{"text":"\url{x}"}`)).toEqual({ text: "\\url{x}" });
     expect(

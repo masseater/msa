@@ -246,7 +246,6 @@ describe("openai-codex streaming", () => {
     expect(providerEventModels).toEqual([model, model, model, model, model]);
   });
 
-  // Regression test for https://github.com/earendil-works/pi/issues/9047
   it("processes a terminal SSE event without a trailing blank line", async () => {
     const token = mockToken();
     const sse = buildSSEPayload({ status: "completed" }).trimEnd();
@@ -659,12 +658,10 @@ describe("openai-codex streaming", () => {
       }
       if (url === "https://chatgpt.com/backend-api/codex/responses") {
         const headers = init?.headers instanceof Headers ? init.headers : undefined;
-        // Verify sessionId is set in headers
         expect(headers?.get("session-id")).toBe(sessionId);
         expect(headers?.has("session_id")).toBe(false);
         expect(headers?.get("x-client-request-id")).toBe(sessionId);
 
-        // Verify sessionId is set in request body as prompt_cache_key
         const body = decodeCodexRequestBody(init?.body);
         expect(body?.["prompt_cache_key"]).toBe(sessionId);
 
@@ -1406,7 +1403,6 @@ describe("openai-codex streaming", () => {
       }
       if (url === "https://chatgpt.com/backend-api/codex/responses") {
         const headers = init?.headers instanceof Headers ? init.headers : undefined;
-        // Verify headers are not set when sessionId is not provided
         expect(headers?.has("session-id")).toBe(false);
         expect(headers?.has("session_id")).toBe(false);
         expect(headers?.has("x-client-request-id")).toBe(false);
@@ -1441,7 +1437,6 @@ describe("openai-codex streaming", () => {
       messages: [{ role: "user", content: "Say hello", timestamp: Date.now() }],
     });
 
-    // No sessionId provided
     const streamResult = streamOpenAICodexResponses(model, context, {
       apiKey: token,
       transport: "sse",
@@ -1591,7 +1586,6 @@ describe("openai-codex streaming", () => {
   });
 
   it("scopes cached websockets to the authenticated account", async () => {
-    // Regression for #7284: rotating accounts must not reuse a socket authenticated by another account.
     const connectedHeaders: Record<string, string>[] = [];
     let responseId = 0;
 

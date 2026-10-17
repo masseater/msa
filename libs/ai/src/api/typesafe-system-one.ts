@@ -2,10 +2,6 @@ import type { ClassifierFunction, ClassifierOptions } from "../types.ts";
 import { isRecord } from "./classifier-shared.ts";
 import { classifySystemOne, type SystemOneTransport } from "./system-one-shared.ts";
 
-/**
- * TypeSafe's native System One protocol. OpenRouter serves the same protocol,
- * so both providers use this API with different base URLs.
- */
 const transport: SystemOneTransport = {
   api: "typesafe-system-one",
   label: "System One API",
@@ -17,13 +13,5 @@ const transport: SystemOneTransport = {
   },
 };
 
-/**
- * TypeSafe System One classification with public `bool` values mapped to wire-level `noul`.
- *
- * @param {ClassifierModel<ClassifierApi>} model - classifier model
- * @param {ClassifierContext} context - classifier request
- * @param {ClassifierOptions} [options] - request options
- * @returns {Promise<ClassifierResult>} the classification result
- */
 export const classify: ClassifierFunction<ClassifierOptions> = (model, context, options) =>
   classifySystemOne(transport, model, context, options);

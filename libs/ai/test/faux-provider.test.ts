@@ -356,7 +356,6 @@ describe("faux provider", () => {
     const options = { sessionId: "session-1", cacheRetention: "short" } as const;
     const user = (content: string) => ({ role: "user" as const, content, timestamp: 1 });
 
-    // Prompt texts: "user:hello world" (16 characters), then 16 + 2 + "user:next" (9) = 27.
     await complete(registration.getModel(), { messages: [user("hello world")] }, options);
     const extended = await complete(
       registration.getModel(),
@@ -365,7 +364,6 @@ describe("faux provider", () => {
     );
     expect(extended.usage).toMatchObject({ input: 3, cacheRead: 4, cacheWrite: 3 });
 
-    // The first message now differs after "user:hello w" (12 characters): "user:hello wide" + 2 + 9 = 26.
     const edited = await complete(
       registration.getModel(),
       { messages: [user("hello wide"), user("next")] },

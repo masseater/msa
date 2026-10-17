@@ -105,14 +105,12 @@ describe("Anthropic empty thinking signature compat", () => {
     ]);
   });
 
-  // Regression for #9676: Vercel AI Gateway emits unsigned thinking for translated models.
   it("allows empty thinking signatures for every Vercel AI Gateway model", () => {
     const models = getModels("vercel-ai-gateway");
     expect(models.length).toBeGreaterThan(0);
     expect(models.every((model) => model.compat?.allowEmptySignature === true)).toBe(true);
   });
 
-  // Regression for #9323: Fireworks emits unsigned thinking that must survive replay.
   it.each([
     "accounts/fireworks/models/deepseek-v4p1-flash",
     "accounts/fireworks/models/qwen3p8-max",
@@ -131,7 +129,6 @@ describe("Anthropic empty thinking signature compat", () => {
     ]);
   });
 
-  // Regression for #9323: opting into unsigned replay must not change cross-model conversion.
   it("still converts cross-model Fireworks thinking to text", async () => {
     const model = getModel("fireworks", "accounts/fireworks/models/deepseek-v4p1-flash");
     const payload = await capturePayload(

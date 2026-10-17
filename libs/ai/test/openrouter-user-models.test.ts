@@ -70,13 +70,11 @@ describe("personalizeOpenRouterCatalog", () => {
         top_provider: { context_length: 262_144, max_completion_tokens: 32_768 },
         pricing: { prompt: "0.000003", completion: "0.000015" },
       },
-      // A missing limit keeps the catalog value, so generator fixes for missing OpenRouter data survive.
       {
         id: "no-limits",
         context_length: 0,
         top_provider: { context_length: null, max_completion_tokens: null },
       },
-      // Router models report -1, meaning the price depends on the model they pick.
       { id: "router", pricing: { prompt: "-1", completion: "-1" } },
     ];
     stubUserModels(Response.json({ data }));
@@ -109,7 +107,6 @@ describe("personalizeOpenRouterCatalog", () => {
       cost: chatModel("x").cost,
     });
     expect(result[2]).toMatchObject({ cost: zeroCost });
-    // /models/user lists text models only, so image and classifier models are not filtered.
     expect(result[3]).toBe(imageModel);
     expect(result[4]).toBe(classifierModel);
   });
@@ -117,8 +114,6 @@ describe("personalizeOpenRouterCatalog", () => {
   it.each([401, 403, 404])(
     "returns the catalog unchanged when the endpoint rejects the key or is missing (%i)",
     async (status) => {
-      // For example a proxy configured in models.json that rejects the key or has no /models/user:
-      // the user keeps the full list instead of a failing refresh.
       stubUserModels(new Response("", { status }));
       const catalog = [chatModel("a")];
 

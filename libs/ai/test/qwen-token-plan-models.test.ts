@@ -134,7 +134,6 @@ const QWEN38_MODEL_CASES: QwenTokenPlanModelCase[] = (
 ).flatMap((provider) => QWEN38_MODELS.map((modelId) => ({ provider, modelId })));
 
 describe("Qwen Token Plan models", () => {
-  // #9021
   it("exposes exactly the documented Individual text models", () => {
     const modelIds = getModels("qwen-token-plan-individual")
       .map((model) => model.id)
@@ -169,7 +168,6 @@ describe("Qwen Token Plan models", () => {
     },
   );
 
-  // docs: https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=api&commonbuy=1#/api/?type=model&url=3016807
   it.each(QWEN_THINKING_MODEL_CASES)(
     "sends Qwen thinking fields for $provider/$modelId",
     async ({ provider, modelId }) => {

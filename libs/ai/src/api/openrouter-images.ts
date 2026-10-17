@@ -39,14 +39,6 @@ type OpenRouterImageGenerationResponse = ChatCompletion & {
   choices: OpenRouterImageGenerationChoice[];
 };
 
-/**
- * Image generation over OpenRouter's chat completions endpoint.
- *
- * @param {ImageModel<ImageApi>} model - image model the request targets
- * @param {ImagesContext} context - image request context
- * @param {ImagesOptions} [options] - request options
- * @returns {Promise<AssistantImages>} the generated images
- */
 export const generateImages: ImagesFunction<ImagesOptions> = async (
   model: ImageModel<ImageApi>,
   context: ImagesContext,

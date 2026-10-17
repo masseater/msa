@@ -1,14 +1,3 @@
-/**
- * Radius gateway OAuth flow.
- *
- * Radius is a msa-messages gateway. OAuth client APIs live on the configured
- * gateway; only the interactive browser authorization endpoint is discovered.
- * Model catalog loading is owned by the Radius provider.
- *
- * NOTE: This module uses node:http (via callback-server.ts) for the OAuth callback server.
- * It is only intended for CLI use, not browser environments.
- */
-
 import { normalizeRadiusGatewayUrl } from "../../providers/radius-config.ts";
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import { startOAuthCallbackServer } from "./callback-server.ts";

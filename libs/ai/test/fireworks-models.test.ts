@@ -118,7 +118,6 @@ describe("Fireworks models", () => {
     expect(payload?.["reasoning_effort"]).toBe("max");
   });
 
-  // Regression for #9323: native effort must reach Messages without budget-based fallback.
   it.each([
     ["accounts/fireworks/models/deepseek-v4p1-flash", ["off", "low", "high", "max"]],
     ["accounts/fireworks/models/qwen3p8-max", ["off", "low", "medium", "xhigh"]],
@@ -151,7 +150,6 @@ describe("Fireworks models", () => {
     }
   });
 
-  // Regression for #9323: accepted aliases are not distinct native effort levels.
   it.each([
     ["accounts/fireworks/models/glm-5p3", ["low", "high", "max"]],
     ["accounts/fireworks/routers/glm-5p3-fast", ["low", "high", "max"]],
@@ -204,8 +202,6 @@ describe("Fireworks models", () => {
   });
 });
 
-// --- Integration tests for Fireworks Anthropic session affinity and tool compat ---
-
 interface CapturedRequest {
   headers: IncomingMessage["headers"];
   body: Record<string, unknown>;
@@ -233,7 +229,6 @@ function createFireworksModel(
     name: "Kimi K2.6",
     api: "anthropic-messages",
     provider: "fireworks",
-    // overridden by captureAnthropicRequest
     baseUrl: "http://127.0.0.1:0",
     reasoning: true,
     input: ["text", "image"],
@@ -250,7 +245,6 @@ function createAnthropicModel(): Model<"anthropic-messages"> {
     name: "Claude Opus 4.8",
     api: "anthropic-messages",
     provider: "anthropic",
-    // overridden by captureAnthropicRequest
     baseUrl: "http://127.0.0.1:0",
     reasoning: true,
     input: ["text"],
@@ -310,7 +304,6 @@ async function captureAnthropicRequest(
   const address = server.address() as AddressInfo;
 
   try {
-    // Override the model's baseUrl to point to the local test server
     const localModel = { ...model, baseUrl: `http://127.0.0.1:${address.port}` };
 
     const stream = streamAnthropic(localModel, normalizeContext(context), {
@@ -345,7 +338,6 @@ function getTools(body: Record<string, unknown>): Record<string, unknown>[] {
 describe("Anthropic-compatible session affinity and tool compat", () => {
   it("sends x-session-affinity header for Fireworks models", async () => {
     const model = createFireworksModel();
-    // Need a real port, capture will assign one
     const request = await captureAnthropicRequest(model, createContext(), {
       sessionId: "fireworks-session-1",
     });
@@ -372,7 +364,6 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
     expect(request.headers["x-session-affinity"]).toBeUndefined();
   });
 
-  // Regression test for https://github.com/earendil-works/pi/issues/9102
   it("sends only x-session-id for OpenRouter models", async () => {
     const request = await captureAnthropicRequest(createOpenRouterModel(), createContext(), {
       sessionId: "openrouter-session-1",

@@ -17,12 +17,6 @@ function withSessionHeader<TOptions extends StreamOptions>(
   };
 }
 
-/**
- * Adds OpenCode's required per-conversation routing header before API dispatch.
- *
- * @param {ProviderStreams} streams - API implementation to wrap
- * @returns {ProviderStreams} the wrapped implementation
- */
 export function withOpenCodeSessionHeader(streams: ProviderStreams): ProviderStreams {
   return {
     ...streams,

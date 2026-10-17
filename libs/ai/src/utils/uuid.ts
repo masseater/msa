@@ -4,12 +4,6 @@ const MAX_SEQUENCE = (1n << 41n) - 1n;
 let lastOrdinaryTimestamp = -1;
 let sequence: bigint | undefined;
 
-/**
- * Generate a time-ordered UUIDv7. A supplied timestamp is preserved for follower ids.
- *
- * @param {number} [timestampMs] - timestamp to embed
- * @returns {string} the UUID
- */
 export function uuidv7(timestampMs?: number): string {
   const requestedTimestamp = timestampMs ?? Date.now();
   if (

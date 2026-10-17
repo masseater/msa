@@ -20,7 +20,6 @@ import {
 } from "./cloudflare-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
-// Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
 const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
 
@@ -28,7 +27,6 @@ async function testEmptyMessage<TApi extends Api>(
   llm: Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
-  // Test with completely empty content array
   const emptyMessage: UserMessage = {
     role: "user",
     content: [],
@@ -41,10 +39,8 @@ async function testEmptyMessage<TApi extends Api>(
 
   const response = await complete(llm, context, options);
 
-  // Should either handle gracefully or return an error
   expect(response).toBeDefined();
   expect(response.role).toBe("assistant");
-  // Should handle empty string gracefully
   if (response.stopReason === "error") {
     expect(response.errorMessage).toBeDefined();
   } else {
@@ -56,7 +52,6 @@ async function testEmptyStringMessage<TApi extends Api>(
   llm: Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
-  // Test with empty string content
   const context: Context = {
     messages: [
       {
@@ -72,7 +67,6 @@ async function testEmptyStringMessage<TApi extends Api>(
   expect(response).toBeDefined();
   expect(response.role).toBe("assistant");
 
-  // Should handle empty string gracefully
   if (response.stopReason === "error") {
     expect(response.errorMessage).toBeDefined();
   } else {
@@ -84,7 +78,6 @@ async function testWhitespaceOnlyMessage<TApi extends Api>(
   llm: Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
-  // Test with whitespace-only content
   const context: Context = {
     messages: [
       {
@@ -100,7 +93,6 @@ async function testWhitespaceOnlyMessage<TApi extends Api>(
   expect(response).toBeDefined();
   expect(response.role).toBe("assistant");
 
-  // Should handle whitespace-only gracefully
   if (response.stopReason === "error") {
     expect(response.errorMessage).toBeDefined();
   } else {
@@ -112,8 +104,6 @@ async function testEmptyAssistantMessage<TApi extends Api>(
   llm: Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
-  // Test with empty assistant message in conversation flow
-  // User -> Empty Assistant -> User
   const emptyAssistant: AssistantMessage = {
     role: "assistant",
     content: [],
@@ -153,7 +143,6 @@ async function testEmptyAssistantMessage<TApi extends Api>(
   expect(response).toBeDefined();
   expect(response.role).toBe("assistant");
 
-  // Should handle empty assistant message in context gracefully
   if (response.stopReason === "error") {
     expect(response.errorMessage).toBeDefined();
   } else {
@@ -828,10 +817,6 @@ describe("AI Providers Empty Message Tests", () => {
       },
     );
   });
-
-  // =========================================================================
-  // OAuth-based providers (credentials from ~/.msa/agent/oauth.json)
-  // =========================================================================
 
   describe("Anthropic OAuth Provider Empty Messages", () => {
     const llm = getModel("anthropic", "claude-haiku-4-5");

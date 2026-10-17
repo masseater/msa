@@ -74,13 +74,6 @@ function getModelFixture(): Model<"bedrock-converse-stream"> {
   return getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
 }
 
-/**
- * Drive a stream to completion so the middleware (registered before `client.send`)
- * is captured even though the mocked `send()` rejects. Errors are swallowed because
- * the rejecting mock is expected — we only care about the recorded registrations.
- *
- * @param {BedrockOptions} options - stream options
- */
 async function driveBedrock(options: BedrockOptions): Promise<void> {
   await streamBedrock(getModelFixture(), context, options)
     .result()
@@ -151,9 +144,6 @@ describe("bedrock custom headers middleware", () => {
     expect(fakeArgs.request.headers["x-amz-date"]).toBe("real-date");
     expect(fakeArgs.request.headers["host"]).toBe("real-host");
     expect(fakeArgs.request.headers["x-allowed"]).toBe("ok");
-    // Mixed-case reserved keys must be skipped too: a case-sensitive guard would
-    // add them back as distinct capitalised keys. Assert no such leak occurred and
-    // that the only new key beyond the three pre-existing ones is `x-allowed`.
     expect(fakeArgs.request.headers["Authorization"]).toBeUndefined();
     expect(fakeArgs.request.headers["X-Amz-Date"]).toBeUndefined();
     expect(fakeArgs.request.headers["HOST"]).toBeUndefined();

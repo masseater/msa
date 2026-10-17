@@ -53,13 +53,11 @@ export interface GoogleOptions extends StreamOptions {
   toolChoice?: "auto" | "none" | "any" | undefined;
   thinking?: {
     enabled: boolean;
-    // -1 for dynamic, 0 to disable
     budgetTokens?: number;
     level?: GoogleApiThinkingLevel;
   };
 }
 
-// Counter for generating unique tool call IDs
 let toolCallCounter = 0;
 
 export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
@@ -114,8 +112,6 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
       const blockIndex = () => blocks.length - 1;
       for await (const chunk of googleStream) {
         await options?.onProviderStreamEvent?.(chunk, model);
-        // @google/genai documents GenerateContentResponse.responseId as an output-only field
-        // used to identify each response. Keep the first non-empty one from the stream.
         output.responseId ||= chunk.responseId;
         const candidate = chunk.candidates?.[0];
         if (candidate?.content?.parts) {
@@ -205,7 +201,6 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
                 currentBlock = null;
               }
 
-              // Generate unique ID if not provided or if it's a duplicate
               const providedId = part.functionCall.id;
               const needsNewId =
                 !providedId ||
@@ -307,7 +302,6 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
       events.push({ type: "done", reason: output.stopReason, message: output });
       events.end();
     } catch (error) {
-      // Remove internal index property used during streaming
       for (const block of output.content) {
         if ("index" in block) {
           delete (block as { index?: number }).index;
@@ -381,7 +375,6 @@ function createClient(
     {};
   if (model.baseUrl) {
     httpOptions.baseUrl = model.baseUrl;
-    // baseUrl already includes version path, don't append
     httpOptions.apiVersion = "";
   }
   const headers = providerHeadersToRecord({

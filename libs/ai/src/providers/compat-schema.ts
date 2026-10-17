@@ -607,15 +607,6 @@ type MergedCompatProperties<
   Overrides extends TProperties,
 > = Omit<UnionToIntersection<PropertyGroups[number]>, keyof Overrides> & Overrides;
 
-/**
- * Provider-level models.json compatibility is API-agnostic, so it needs one superset. Every
- * duplicate property requires explicit generic metadata, while API-specific schemas retain their
- * own defaults and descriptions.
- *
- * @param {PropertyGroups} propertyGroups - per-API compat property schemas
- * @param {Overrides} overrides - generic metadata for properties shared by several APIs
- * @returns {MergedCompatProperties<PropertyGroups, Overrides>} the merged property superset
- */
 function mergeCompatProperties<
   const PropertyGroups extends readonly TProperties[],
   const Overrides extends TProperties,
@@ -668,27 +659,18 @@ export const ProviderCompatSchema = Type.Object(ProviderCompatProperties, {
 });
 
 export type ChatTemplateKwargValue = Static<typeof ChatTemplateKwargValueSchema>;
-/** Top-level request field used to cap reasoning tokens on OpenAI-compatible servers. */
 export type ThinkingTokenBudgetField = Static<typeof ThinkingTokenBudgetFieldSchema>;
 export type SessionAffinityFormat = Static<typeof SessionAffinityFormatSchema>;
-/** OpenRouter provider routing preferences. */
 export interface OpenRouterRouting extends Static<typeof OpenRouterRoutingSchema> {}
-/** Vercel AI Gateway routing preferences. */
 export interface VercelGatewayRouting extends Static<typeof VercelGatewayRoutingSchema> {}
-/** An Anthropic server-side refusal fallback model with local pricing metadata. */
 export interface AnthropicAllowedFallbackModel extends Static<
   typeof AnthropicAllowedFallbackModelSchema
 > {}
 
-/** Compatibility settings for OpenAI-compatible completions APIs. */
 export interface OpenAICompletionsCompat extends Static<typeof OpenAICompletionsCompatSchema> {}
-/** Compatibility settings for OpenAI Responses APIs. */
 export interface OpenAIResponsesCompat extends Static<typeof OpenAIResponsesCompatSchema> {}
-/** Compatibility settings for Anthropic Messages-compatible APIs. */
 export interface AnthropicMessagesCompat extends Static<typeof AnthropicMessagesCompatSchema> {}
-/** Compatibility settings for Amazon Bedrock models. */
 export interface BedrockCompat extends Static<typeof BedrockCompatSchema> {}
-/** Compatibility settings for the Mistral chat API. */
 export interface MistralConversationsCompat extends Static<
   typeof MistralConversationsCompatSchema
 > {}

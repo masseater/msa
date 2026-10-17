@@ -552,7 +552,6 @@ describe("OpenAI Codex OAuth", () => {
   });
 
   it("falls back to the pasted redirect URL when the fixed callback port is taken", async () => {
-    // Port 1455 is registered with OpenAI; the Codex CLI may hold it. Occupy it unless it already is.
     const blocker = createServer();
     await new Promise<void>((resolve) => {
       blocker.once("error", () => resolve());

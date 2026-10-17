@@ -20,13 +20,6 @@ export function resolveCloudflareModel<TModel extends { baseUrl: string }>(
   return baseUrl === model.baseUrl ? model : { ...model, baseUrl };
 }
 
-/**
- * Wrap an API implementation so Cloudflare account/gateway endpoint
- * placeholders materialize from the resolved provider env before dispatch.
- *
- * @param {ProviderStreams} streams - API implementation to wrap
- * @returns {ProviderStreams} the wrapped implementation
- */
 export function cloudflareStreams(streams: ProviderStreams): ProviderStreams {
   return {
     stream: (model, context, options) =>
@@ -36,12 +29,6 @@ export function cloudflareStreams(streams: ProviderStreams): ProviderStreams {
   };
 }
 
-/**
- * Classifier counterpart of {@link cloudflareStreams}.
- *
- * @param {ProviderClassifier} classifier - classifier implementation to wrap
- * @returns {ProviderClassifier} the wrapped classifier
- */
 export function cloudflareClassifier(classifier: ProviderClassifier): ProviderClassifier {
   return {
     classify: (model, context, options) =>

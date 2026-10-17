@@ -1,6 +1,5 @@
 import type { ModelCost, ModelCostTier } from "../types.ts";
 
-/** OpenRouter's per-token prices, as decimal strings. */
 export interface OpenRouterPricing {
   prompt?: string;
   completion?: string;
@@ -9,10 +8,6 @@ export interface OpenRouterPricing {
   overrides?: OpenRouterPricingOverride[];
 }
 
-/**
- * A conditional price. `min_prompt_tokens` selects prompt-length pricing; `utc_*` fields select
- * time-of-day or weekday pricing. Missing rates keep the base price.
- */
 export interface OpenRouterPricingOverride {
   min_prompt_tokens?: number;
   utc_start?: number;
@@ -24,7 +19,6 @@ export interface OpenRouterPricingOverride {
   input_cache_write?: string;
 }
 
-/** The fields msa reads from a model in OpenRouter's `GET /models` and `GET /models/user`. */
 export interface OpenRouterModel {
   id: string;
   context_length?: number | null;
@@ -32,28 +26,11 @@ export interface OpenRouterModel {
   pricing?: OpenRouterPricing;
 }
 
-/**
- * Convert one $/token price to $/1M tokens. 0 means free. Missing, invalid and negative prices use
- * the fallback: OpenRouter reports -1 for router models such as `openrouter/auto`, whose price
- * depends on the model they pick.
- *
- * @param {string | undefined} value - price in $/token
- * @param {number} fallback - price to use when the value is missing, invalid or negative
- * @returns {number} the price in $/1M tokens
- */
 function perMillion(value: string | undefined, fallback: number): number {
   const perToken = Number.parseFloat(value ?? "");
   return perToken >= 0 ? Number((perToken * 1_000_000).toFixed(6)) : fallback;
 }
 
-/**
- * Convert OpenRouter's $/token prices to msa's $/1M tokens. Missing, invalid and negative base
- * prices are 0. Prompt-length overrides become request-wide tiers; a rate a tier does not list
- * keeps the base price. Time-of-day overrides are skipped because ModelCost cannot express them.
- *
- * @param {OpenRouterPricing | undefined} pricing - OpenRouter pricing of a model
- * @returns {ModelCost} the cost in $/1M tokens
- */
 export function openRouterCost(pricing: OpenRouterPricing | undefined): ModelCost {
   const base = {
     input: perMillion(pricing?.prompt, 0),

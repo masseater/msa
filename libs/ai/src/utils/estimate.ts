@@ -9,13 +9,9 @@ import type {
 import { getSystemMessageText } from "./text.ts";
 
 export interface ContextUsageEstimate {
-  /** Estimated total context tokens. */
   tokens: number;
-  /** Tokens reported by the most recent applicable assistant usage block. */
   usageTokens: number;
-  /** Estimated tokens after the most recent applicable assistant usage block. */
   trailingTokens: number;
-  /** Index of the applicable message that provided usage, or null when none exists. */
   lastUsageIndex: number | null;
 }
 
@@ -89,8 +85,6 @@ function getLastAssistantUsageInfo(
   for (const [i, message] of messages.entries()) {
     if (message.role === "assistant") {
       const assistant = message as AssistantMessage;
-      // A newer prefix message was inserted after this response (for example, a
-      // compaction summary), so its usage cannot describe the current prefix.
       const usageAppliesToPrefix = assistant.timestamp >= latestPrefixTimestamp;
       if (
         usageAppliesToPrefix &&

@@ -148,7 +148,6 @@ describe("builtin providers", () => {
   });
 
   it("uses models.dev effort levels for Google thinking models", () => {
-    // Regression test for https://github.com/earendil-works/pi/issues/9455
     for (const provider of ["google", "google-vertex"] as const) {
       expect(getSupportedThinkingLevels(getBuiltinModel(provider, "gemini-3.6-flash"))).toContain(
         "minimal",
@@ -229,21 +228,18 @@ describe("builtin providers", () => {
 
   it("routes proxied tool changes through verified transports only", () => {
     const models = builtinModels();
-    // Proxies pass `additional_tools` through to OpenAI but are not verified for tool search.
     expect(models.getModel("opencode", "gpt-5.6-terra")?.compat).toMatchObject({
       supportsAdditionalTools: true,
     });
     expect(models.getModel("opencode", "gpt-5.6-terra")?.compat).not.toHaveProperty(
       "supportsToolSearch",
     );
-    // Proxied Anthropic endpoints reject `tool_addition`/`tool_removal` blocks.
     expect(models.getModel("opencode", "claude-opus-5")?.compat).not.toHaveProperty(
       "supportsMidConvoToolChanges",
     );
     expect(models.getModel("anthropic", "claude-opus-5")?.compat).toMatchObject({
       supportsMidConvoToolChanges: true,
     });
-    // Kimi-style tool-bearing system messages survive Moonshot and OpenCode but not OpenRouter.
     for (const provider of ["moonshotai", "moonshotai-cn", "opencode", "opencode-go"] as const) {
       expect(models.getModel(provider, "kimi-k3")?.compat, provider).toMatchObject({
         supportsMidConvoToolAdditions: true,
@@ -484,14 +480,12 @@ describe("builtin providers", () => {
     expect(result?.auth).toEqual({});
     expect(result?.source).toContain("application default");
 
-    // ADC without project/location is not configured
     const partial = createModels({
       authContext: fakeAuthContext({ GOOGLE_CLOUD_PROJECT: "proj" }, [adc]),
     });
     partial.setProvider(googleVertexProvider());
     expect(await partial.getAuth(model.provider)).toBeUndefined();
 
-    // explicit key wins over ADC
     const keyed = createModels({
       authContext: fakeAuthContext({ GOOGLE_CLOUD_API_KEY: "vertex-key" }),
     });

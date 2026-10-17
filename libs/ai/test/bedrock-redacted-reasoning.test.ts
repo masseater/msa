@@ -1,12 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-/**
- * OpenAI models served through Bedrock Converse (e.g. `global.openai.gpt-5.6-terra`)
- * return encrypted reasoning as the opaque `redactedContent` member of
- * `reasoningContent`, not as `reasoningText`. The AWS SDK decodes the wire blob to
- * `Uint8Array`.
- * @see https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ReasoningContentBlockDelta.html
- */
 const bedrockMock = vi.hoisted(() => {
   const redactedBase64 = "cnNuXzVaVnJpZjRKMGJYSXFtV2RsZWRqN1FJRmVOaWtSUWJF";
   return {
@@ -87,11 +80,6 @@ const emptyUsage = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
-/**
- * Mirrors the ConverseStream frames GPT-5.6 emits: encrypted reasoning, then text.
- *
- * @returns {unknown[]} the stream frames
- */
 function redactedReasoningEvents(): unknown[] {
   return [
     { messageStart: { role: "assistant" } },
@@ -146,7 +134,6 @@ describe("Bedrock redacted reasoning", () => {
     const response = await streamBedrock(gptModel, helloContext).result();
 
     expect(response.stopReason, response.errorMessage).not.toBe("error");
-    // Reasoning precedes the answer, matching the order Bedrock streamed it.
     expect(response.content.map((c) => c.type)).toEqual(["thinking", "text"]);
     expect(response.content[1]).toEqual({ type: "text", text: "done" });
   });
@@ -158,12 +145,8 @@ describe("Bedrock redacted reasoning", () => {
 
     const thinking = response.content.find((c): c is ThinkingContent => c.type === "thinking");
     expect(thinking).toBeDefined();
-    // Same representation Anthropic redacted thinking already uses: the opaque
-    // payload rides in `thinkingSignature` with `redacted: true`.
     expect(thinking?.redacted).toBe(true);
     expect(thinking?.thinkingSignature).toBe(bedrockMock.redactedBase64);
-    // The byte buffer is streaming scratch state: persisting it would bloat the
-    // session, since a Uint8Array serializes to an index-keyed object.
     expect("redactedChunks" in thinking!).toBe(false);
   });
 
@@ -183,7 +166,6 @@ describe("Bedrock redacted reasoning", () => {
 
     const thinking = response.content.find((c): c is ThinkingContent => c.type === "thinking");
     expect(thinking?.thinkingSignature).toBe(bedrockMock.redactedBase64);
-    // Streaming scratch state must not survive into the persisted message.
     expect("redactedChunks" in thinking!).toBe(false);
     expect("index" in thinking!).toBe(false);
   });
@@ -215,7 +197,6 @@ describe("Bedrock redacted reasoning", () => {
 
     const thinking = response.content.find((c): c is ThinkingContent => c.type === "thinking");
     expect(thinking?.thinkingSignature).toBe(bedrockMock.redactedBase64);
-    // The placeholder marks the block once, not once per delta.
     expect(thinking?.thinking).toBe("[Reasoning redacted]");
   });
 
@@ -254,8 +235,6 @@ describe("Bedrock redacted reasoning", () => {
   });
 
   it("replays redacted reasoning before the toolUse block it belongs to", async () => {
-    // Bedrock rejects a tool continuation whose reasoning block is missing or
-    // reordered, so the opaque payload must land ahead of the matching toolUse.
     const messages: Message[] = [
       { role: "user", content: "read the file", timestamp: Date.now() },
       {

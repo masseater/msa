@@ -132,7 +132,6 @@ export type ProviderId = KnownProvider | string;
 export type ToolChoice = "auto" | "none";
 export type SamplingParams = Record<string, unknown>;
 export type SamplingParamsByThinkingLevel = Partial<Record<ModelThinkingLevel, SamplingParams>>;
-/** Token budgets for each thinking level (token-based providers only) */
 export interface ThinkingBudgets {
   minimal?: number;
   low?: number;
@@ -140,10 +139,8 @@ export interface ThinkingBudgets {
   high?: number;
 }
 
-// Base options all providers share
 export type Transport = "sse" | "websocket" | "websocket-cached" | "auto";
 
-/** Provider-scoped environment overrides. Values take precedence over process.env. */
 export type ProviderEnv = Record<string, string>;
 export type ProviderHeaders = Record<string, string | null>;
 export type FetchFunction = typeof globalThis.fetch;
@@ -153,136 +150,45 @@ export interface ProviderResponse {
   headers: Record<string, string>;
 }
 
-/** Authentication, HTTP transport, and lifecycle callbacks shared by provider requests. */
 export interface ProviderRequestOptions<TModel = Model<Api>> {
   signal?: AbortSignal | undefined;
-  /** Explicit parent context for telemetry produced by this logical request. */
   telemetryContext?: TelemetryContext | undefined;
   apiKey?: string | undefined;
-  /**
-   * Optional fetch implementation for provider HTTP requests.
-   * Defaults to `globalThis.fetch`. Provider adapters that cannot inject a custom implementation may reject it.
-   * This does not affect WebSocket transports.
-   */
   fetch?: FetchFunction | undefined;
-  /**
-   * Provider-scoped environment values. These take precedence over process.env for
-   * provider configuration such as regional settings, endpoint placeholders, and
-   * proxy variables.
-   */
   env?: ProviderEnv | undefined;
-  /**
-   * Optional callback for inspecting or replacing provider payloads before sending.
-   * Return undefined to keep the payload unchanged.
-   */
   onPayload?:
     | ((payload: unknown, model: TModel) => unknown | undefined | Promise<unknown | undefined>)
     | undefined;
-  /**
-   * Optional callback invoked after an HTTP response is received.
-   */
   onResponse?: ((response: ProviderResponse, model: TModel) => void | Promise<void>) | undefined;
-  /**
-   * Optional custom HTTP headers to include in API requests.
-   * Merged with provider defaults; caller values override default headers.
-   * On AWS Bedrock these are injected via a Smithy `build`-step middleware so
-   * they are covered by SigV4 signing; reserved headers (`x-amz-*`,
-   * `authorization`, `host`) are silently ignored to preserve SigV4 / bearer auth.
-   * A null value suppresses a provider/API default header with the same name.
-   */
   headers?: ProviderHeaders | undefined;
-  /**
-   * HTTP request timeout in milliseconds for providers/SDKs that support it.
-   * For example, OpenAI and Anthropic SDK clients default to 10 minutes.
-   */
   timeoutMs?: number | undefined;
-  /**
-   * Maximum retry attempts for providers/SDKs that support client-side retries.
-   * For example, OpenAI and Anthropic SDK clients default to 2.
-   */
   maxRetries?: number | undefined;
-  /**
-   * Maximum delay in milliseconds to wait for a retry when the server requests a long wait.
-   * If the server's requested delay exceeds this value, the request fails immediately
-   * with an error containing the requested delay, allowing higher-level retry logic
-   * to handle it with user visibility.
-   * Default: 60000 (60 seconds). Set to 0 to disable the cap.
-   */
   maxRetryDelayMs?: number | undefined;
 }
 
 export interface StreamOptions extends ProviderRequestOptions<Model<Api>> {
-  /**
-   * Optional callback invoked after an HTTP response is received and before
-   * its body stream is consumed.
-   */
   onResponse?:
     | ((response: ProviderResponse, model: Model<Api>) => void | Promise<void>)
     | undefined;
-  /**
-   * Optional observer for each parsed provider stream event before msa normalization.
-   * Event data is adapter-owned and must be treated as read-only.
-   * Adapter support is explicit; unsupported adapters do not invoke it.
-   */
   onProviderStreamEvent?: ((data: unknown, model: Model<Api>) => void | Promise<void>) | undefined;
   temperature?: number | undefined;
-  /**
-   * Arbitrary sampling parameters merged into the request body as-is, after the named request
-   * fields, so keys here override them. Lets custom OpenAI-compatible servers (llama.cpp, vLLM,
-   * SGLang, ...) receive parameters msa does not model, e.g. `top_p`, `top_k`, `min_p`,
-   * `repetition_penalty`. Merged over `Model.samplingParams` per key. Only applied by
-   * OpenAI-compatible adapters (completions, responses, Azure responses); other APIs ignore it.
-   */
   samplingParams?: SamplingParams | undefined;
   maxTokens?: number | undefined;
-  /**
-   * Preferred transport for providers that support multiple transports.
-   * Providers that do not support this option ignore it.
-   */
   transport?: Transport | undefined;
-  /**
-   * Prompt cache retention preference. Providers map this to their supported values.
-   * Default: "short".
-   */
   cacheRetention?: CacheRetention | undefined;
-  /**
-   * Optional session identifier for providers that support session-based caching.
-   * Providers can use this to enable prompt caching, request routing, or other
-   * session-aware features. Ignored by providers that don't support it.
-   */
   sessionId?: string | undefined;
-  /**
-   * WebSocket connect timeout in milliseconds for providers that support
-   * WebSocket transports. This covers the connection/open handshake only;
-   * stream idleness after connection uses timeoutMs.
-   */
   websocketConnectTimeoutMs?: number | undefined;
-  /**
-   * Optional metadata to include in API requests.
-   * Providers extract the fields they understand and ignore the rest.
-   * For example, Anthropic uses `user_id` for abuse tracking and rate limiting.
-   */
   metadata?: Record<string, unknown> | undefined;
 }
 
 export type ProviderStreamOptions = StreamOptions & Record<string, unknown>;
 
 export interface DeferredFetchOptions extends ProviderRequestOptions<Model<Api>> {
-  /**
-   * Maximum provider long-poll duration in milliseconds.
-   * Defaults to 0, which performs one status check.
-   */
   wait?: number;
 }
 
-/** Request options for best-effort deferred-response cancellation. */
 export type DeferredCancelOptions = ProviderRequestOptions<Model<Api>>;
 
-/**
- * Maps known APIs to their full provider-specific stream option types.
- * Type-only imports from API implementation modules are erased at emit, so
- * this is tree-shake safe.
- */
 export interface ApiOptionsMap {
   "anthropic-messages": AnthropicOptions;
   "openai-completions": OpenAICompletionsOptions;
@@ -296,22 +202,10 @@ export interface ApiOptionsMap {
   "msa-messages": MsaMessagesOptions;
 }
 
-/**
- * Full stream options for an API. Known APIs resolve to their concrete option
- * type; custom API strings fall back to the generic shape.
- */
 export type ApiStreamOptions<TApi extends Api> = TApi extends keyof ApiOptionsMap
   ? ApiOptionsMap[TApi]
   : StreamOptions & Record<string, unknown>;
 
-/**
- * The uniform stream contract of an API implementation module: every module
- * under `src/api/` exports `stream` and `streamSimple`; capable modules may also
- * export deferred-response methods. Lazy wrappers (`lazyApi()`) and provider
- * factories pass these around as values. This is the untyped dispatch shape;
- * per-API option typing lives on the implementation modules themselves and on
- * `Provider.stream()` via `ApiStreamOptions`.
- */
 export interface ProviderStreams {
   stream(
     model: Model<Api>,
@@ -335,12 +229,6 @@ export interface ProviderStreams {
   ): Promise<void>;
 }
 
-/**
- * The uniform contract of an image-generation API implementation module:
- * every image API module under `src/api/` exports exactly `generateImages`,
- * so the module itself satisfies this interface. Lazy wrappers and
- * `createProvider({ images })` pass these around as values.
- */
 export interface ProviderImages {
   generateImages(
     model: ImageModel<ImageApi>,
@@ -349,7 +237,6 @@ export interface ProviderImages {
   ): Promise<AssistantImages>;
 }
 
-/** The uniform contract implemented by classifier API modules. */
 export interface ProviderClassifier {
   classify(
     model: ClassifierModel<ClassifierApi>,
@@ -359,46 +246,22 @@ export interface ProviderClassifier {
 }
 
 export interface ClassifierOptions extends ProviderRequestOptions<ClassifierModel<ClassifierApi>> {
-  /**
-   * Divides the answer logits by this value before they are normalized into probabilities.
-   * Values above 1 soften the distribution; values below 1 sharpen it. Must be positive.
-   * APIs that cannot apply it ignore it.
-   */
   temperature?: number;
 }
 
 export interface ImagesOptions extends ProviderRequestOptions<ImageModel<ImageApi>> {
-  /**
-   * Optional metadata to include in API requests.
-   * Providers extract the fields they understand and ignore the rest.
-   */
   metadata?: Record<string, unknown>;
 }
 
 export type ProviderImagesOptions = ImagesOptions & Record<string, unknown>;
 
-// Unified options with reasoning passed to streamSimple() and completeSimple()
 export interface SimpleStreamOptions extends StreamOptions {
-  /** Provider-neutral tool selection for simple requests. When omitted, adapters use provider-specific behavior. */
   toolChoice?: ToolChoice | undefined;
   reasoning?: ThinkingLevel | undefined;
-  /** Ask a capable provider to return a durable handle and continue the request asynchronously. */
   deferred?: boolean | { window?: "15m" | "1h" | "24h" } | undefined;
-  /** Custom token budgets for thinking levels (token-based providers only) */
   thinkingBudgets?: ThinkingBudgets | undefined;
 }
 
-// Generic StreamFunction with typed options.
-//
-// Contract:
-// - Receives a normalized transcript: the system prompt and tools live in the
-//   leading system message, never on the context itself.
-// - Must return an AssistantMessageEventStream.
-// - Direct streamSimple() calls may throw synchronously when request auth is
-//   missing. Once a stream is returned, request/model/runtime failures should
-//   be encoded in that stream.
-// - Error termination must produce an AssistantMessage with stopReason
-//   "error" or "aborted" and errorMessage, emitted via the stream protocol.
 export type StreamFunction<
   TApi extends Api = Api,
   TOptions extends StreamOptions = StreamOptions,
@@ -429,26 +292,19 @@ export interface TextSignatureV1 {
 export interface TextContent {
   type: "text";
   text: string;
-  // e.g., for OpenAI responses, message metadata (legacy id string or TextSignatureV1 JSON)
   textSignature?: string | undefined;
 }
 
 export interface ThinkingContent {
   type: "thinking";
   thinking: string;
-  // Provider-specific opaque or serialized reasoning replay data
   thinkingSignature?: string | undefined;
-  /** When true, the thinking content was redacted by safety filters. The opaque
-   *  encrypted payload is stored in `thinkingSignature` so it can be passed back
-   *  to the API for multi-turn continuity. */
   redacted?: boolean;
 }
 
 export interface ImageContent {
   type: "image";
-  // base64 encoded image data
   data: string;
-  // e.g., "image/jpeg", "image/png"
   mimeType: string;
 }
 
@@ -457,14 +313,8 @@ export interface ToolCall {
   id: string;
   name: string;
   arguments: JsonObject;
-  // Google-specific: opaque signature for reusing thought context
   thoughtSignature?: string | undefined;
-  /** OpenAI Responses namespace for calls to dynamically loaded or namespaced tools. */
   namespace?: string;
-  /**
-   * Set when the model's complete arguments text was not a valid JSON object. `arguments` is then `{}`.
-   * Describes the problem and includes the text the model sent; tool argument validation fails with it.
-   */
   argumentsError?: string;
 }
 
@@ -473,13 +323,7 @@ export interface Usage {
   output: number;
   cacheRead: number;
   cacheWrite: number;
-  /** Subset of `cacheWrite` written with 1h retention. Only Anthropic reports this split. */
   cacheWrite1h?: number | undefined;
-  /**
-   * Reasoning/thinking tokens, when the provider reports them. This is a subset of
-   * `output`: `output` already includes these tokens. Set to a number (possibly 0) by
-   * providers that expose a reasoning breakdown; left undefined by providers that don't.
-   */
   reasoning?: number;
   totalTokens: number;
   cost: {
@@ -545,7 +389,6 @@ type IsJsonCompatible<T> =
                     : false
                   : false;
 
-/** The JSON representation of a typed in-memory value. Optional object properties remain optional. */
 export type JsonRepresentation<T> =
   IsAny<T> extends true
     ? JsonValue
@@ -563,47 +406,24 @@ export interface DeferredHandle {
   provider: string;
   modelId: string;
   api: string;
-  /** Provider token, such as a response id or batch id plus row id. */
   id: string;
   expiresAt?: number;
   pollAfterMs?: number;
-  /** Provider conversion data required to reconstruct the final assistant message. */
   data?: JsonValue;
 }
 
-/**
- * System instructions and tool declarations at one point in the transcript.
- *
- * The leading system message is the system prompt. Later system messages change it:
- * `content` adds instructions from that point on, `sections` replace or remove named
- * prompt sections, and `toolsAdded`/`toolsRemoved` change the tool set. Replaying
- * every system message in order yields the current prompt and tools. Providers that
- * accept system messages mid-conversation send each one in place; other providers
- * rebuild the leading system message from the replayed state.
- */
 export interface SystemMessage {
   role: "system";
-  /** Instruction text. On the leading message this is the base prompt; later, additional instructions. */
   content: string | TextContent[];
-  /**
-   * Named, ordered prompt sections rendered verbatim after `content`. The leading message
-   * declares them; later messages replace sections by name, and `null` removes one. Keep
-   * each section self-delimiting (a tag, a heading) so the model can relate an update to
-   * the original. Avoid integer-like names; JSON objects reorder those.
-   */
   sections?: Record<string, string | null>;
-  /** Complete definitions of tools that become available at this point. */
   toolsAdded?: Tool[];
-  /** Tools that stop being available at this point. */
   toolsRemoved?: ToolReference[];
-  // Unix timestamp in milliseconds
   timestamp: number;
 }
 
 export interface UserMessage {
   role: "user";
   content: string | (TextContent | ImageContent)[];
-  // Unix timestamp in milliseconds
   timestamp: number;
 }
 
@@ -613,55 +433,33 @@ export interface AssistantMessage {
   api: Api;
   provider: ProviderId;
   model: string;
-  // Concrete model reported by the provider when different from the requested `model`
   responseModel?: string;
-  // Provider-specific response/message identifier when the upstream API exposes one
   responseId?: string | undefined;
-  /** Exact provider-native effort level used for this response. Absent for legacy or unmanaged responses. */
   providerThinkingLevel?: string;
-  /** msa thinking level the agent loop requested for this response. Absent outside the agent loop and for legacy responses. */
   thinkingLevel?: ModelThinkingLevel;
-  // Redacted provider/runtime diagnostics for failures and recoveries.
   diagnostics?: AssistantMessageDiagnostic[];
   usage: Usage;
   stopReason: StopReason;
   deferred?: DeferredHandle;
   errorMessage?: string;
   rawStopReason?: string | undefined;
-  /**
-   * Provider indication of whether the model explicitly ended its turn.
-   * Preserved for debugging and does not currently affect agent control flow.
-   */
   endTurn?: boolean;
-  /** Unix timestamp in milliseconds when the request started. */
   timestamp: number;
-  /**
-   * Milliseconds from `timestamp` until the response ended, measured with a monotonic clock. Set by
-   * `AssistantMessageEventStream` on the final message of a response it saw start; absent for legacy messages and
-   * for deferred results fetched later.
-   */
   durationMs?: number;
 }
 
-/** A tool call that another tool made while it ran, for example from a codemode script. */
 export interface NestedToolCallRecord {
   id: string;
   name: string;
-  /** Omitted when over the size limits; `argumentsBytes` then gives their size. */
   arguments?: JsonObject;
-  /** UTF-8 size of the arguments as JSON, set when `arguments` is omitted. */
   argumentsBytes?: number;
-  /** `unfinished`: the call was still running when the calling tool finished. */
   status: "ok" | "error" | "unfinished";
   durationMs?: number;
-  /** Error text, truncated. */
   error?: string;
 }
 
-/** Bounded record of the nested calls a tool made. Results are not recorded. */
 export interface NestedToolCalls {
   calls: NestedToolCallRecord[];
-  /** False when calls were dropped, arguments omitted, or calls had not finished. */
   complete: boolean;
 }
 
@@ -671,17 +469,12 @@ export type ToolResultMessage<TDetails = JsonValue> =
         role: "toolResult";
         toolCallId: string;
         toolName: string;
-        // Supports text and images
         content: (TextContent | ImageContent)[];
         details?: JsonRepresentation<TDetails>;
-        /** Usage from the tool execution itself, if available. Not part of main LLM context accounting. */
         usage?: Usage;
-        /** Calls this tool made to other tools. Kept for the session record; not sent to the model. */
         nestedCalls?: NestedToolCalls;
         isError: boolean;
-        /** Unix timestamp in milliseconds when the result was created. */
         timestamp: number;
-        /** Milliseconds the tool's execution took, measured with a monotonic clock. Absent for legacy results. */
         durationMs?: number;
       }
     : never;
@@ -706,7 +499,6 @@ export interface AssistantImages {
   usage?: Usage;
   stopReason: ImagesStopReason;
   errorMessage?: string;
-  // Unix timestamp in milliseconds
   timestamp: number;
 }
 
@@ -735,10 +527,6 @@ export type ClassifierQuestion =
 
 export interface ClassifierContext {
   state: JsonObject;
-  /**
-   * Images judged together with `state`. Only models whose `input` includes `"image"` accept them;
-   * other models return an error result.
-   */
   images?: ImageContent[];
   questions: Record<string, ClassifierQuestion>;
 }
@@ -772,28 +560,18 @@ export interface ClassifierResult {
   provider: ProviderId;
   model: string;
   answers: Record<string, ClassifierAnswer>;
-  /** Token usage and its cost at the model's catalog price, when the service reports token counts. */
   usage?: Usage;
   stopReason: ClassifierStopReason;
   errorMessage?: string;
-  // Unix timestamp in milliseconds
   timestamp: number;
 }
 
 import type { TSchema } from "typebox";
 
-/** OpenAI grammar variants for constrained sampling. */
 export type GrammarFormat = "openai_lark" | "openai_regex";
 
 export type GrammarVariants = Partial<Record<GrammarFormat, string>>;
 
-/**
- * Optional provider-side constrained sampling configs for a tool.
- *
- * The `json_schema` value roughly maps to the concept of `strict` in APIs which is
- * implemented as json-schema constrained sampling by APIs. Grammar variants let
- * callers provide provider-specific encodings of the same intended language.
- */
 export type ConstrainedSamplingConfig =
   | {
       type: "json_schema";
@@ -815,12 +593,6 @@ export interface ToolReference {
   name: string;
 }
 
-/**
- * Request input accepted by the public stream entry points (`Models.stream()`,
- * `streamSimple()`, ...). `systemPrompt` and `tools` are shorthand for a leading
- * system message; `normalizeContext()` folds them into one before the request
- * reaches a provider.
- */
 export interface Context {
   systemPrompt?: string;
   messages: Message[];
@@ -829,33 +601,11 @@ export interface Context {
 
 declare const transcriptContextBrand: unique symbol;
 
-/**
- * Normalized request context passed to providers and API implementations. The
- * prompt and tool declarations are carried by the transcript's system messages.
- * Only `normalizeContext()` produces this type, so a raw `Context` cannot reach
- * provider code by accident.
- */
 export type TranscriptContext = {
   messages: Message[];
   readonly [transcriptContextBrand]: true;
 };
 
-/**
- * Event protocol for AssistantMessageEventStream.
- *
- * Successful streams emit `start` before partial updates and terminate with
- * `done`. A stream may terminate directly with `error` when request setup fails
- * before generation starts; after `start`, failures also terminate with `error`.
- * Direct `streamSimple()` calls throw synchronously when request auth is missing.
- * Updates and `done` must never appear before `start`.
- *
- * `partial` is the shared live response-so-far helper, not an event-time
- * snapshot. Text and thinking blocks are empty when their `*_start` event is
- * emitted and grow only through their corresponding `*_delta` events until the
- * authoritative `*_end`. Redacted thinking may be complete at start and emit no
- * deltas. Tool-call arguments at `toolcall_start` are provider-specific;
- * `toolcall_delta` carries subsequent JSON updates.
- */
 export type AssistantMessageEvent =
   | { type: "start"; partial: AssistantMessage }
   | { type: "text_start"; contentIndex: number; partial: AssistantMessage }
@@ -874,7 +624,6 @@ export type AssistantMessageEvent =
     }
   | { type: "error"; reason: Extract<StopReason, "aborted" | "error">; error: AssistantMessage };
 
-/** Fields shared by every catalog entry, regardless of what you can do with it. */
 export interface BaseModel<TApi extends string> {
   id: string;
   name: string;
@@ -882,35 +631,20 @@ export interface BaseModel<TApi extends string> {
   provider: ProviderId;
   baseUrl: string;
   input: ModelInputModality[];
-  /** Provider input limits and cache-safe preprocessing metadata. */
   inputLimits?: ModelInputLimits;
   cost: ModelCost;
   headers?: Record<string, string>;
 }
 
-/** Chat model: usable with `stream()` and friends. */
 export interface Model<TApi extends Api> extends BaseModel<TApi> {
-  /**
-   * Optional: chat is the default model type, so models without `type` are chat
-   * models. Narrow mixed model lists with `isModelType()` instead of comparing
-   * `type` directly.
-   */
   type?: "chat";
   reasoning: boolean;
-  /**
-   * Maps msa thinking levels to provider/model-specific values.
-   * Missing keys use provider defaults. null marks a level as unsupported.
-   */
   thinkingLevelMap?: ThinkingLevelMap;
-  /** Prompt cache lifetimes per retention tier. Unset when the provider's cache behavior is unknown. */
   promptCache?: ModelPromptCache;
   contextWindow: number;
   maxTokens: number;
-  /** Default sampling parameters for this model. See {@link StreamOptions.samplingParams}; per-request keys override these. */
   samplingParams?: SamplingParams;
-  /** Sampling parameter overrides selected by the effective msa thinking level. */
   samplingParamsByThinkingLevel?: SamplingParamsByThinkingLevel;
-  /** Compatibility overrides for OpenAI-compatible APIs. If not set, auto-detected from baseUrl. */
   compat?:
     | (TApi extends "openai-completions"
         ? OpenAICompletionsCompat
@@ -926,28 +660,22 @@ export interface Model<TApi extends Api> extends BaseModel<TApi> {
     | undefined;
 }
 
-/** Image-generation model: usable with `generateImages()` only. */
 export interface ImageModel<TApi extends ImageApi> extends BaseModel<TApi> {
   type: "image";
-  /** Output modalities. Always includes `"image"`; `"text"` means the model can also return text blocks. */
   output: ("text" | "image")[];
 }
 
-/** Structured classifier model: usable with `classify()` only. */
 export interface ClassifierModel<TApi extends ClassifierApi> extends BaseModel<TApi> {
   type: "classifier";
   contextWindow: number;
 }
 
-/** Model shape for each model type. */
 export interface ModelTypeMap {
   chat: Model<Api>;
   image: ImageModel<ImageApi>;
   classifier: ClassifierModel<ClassifierApi>;
 }
 
-/** What a catalog entry is for. Decides which `Models` operation accepts it. */
 export type ModelType = keyof ModelTypeMap;
 
-/** Anything a provider can list. Narrow with `isModelType()`. */
 export type AnyModel = ModelTypeMap[ModelType];

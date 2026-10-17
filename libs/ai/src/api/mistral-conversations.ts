@@ -32,9 +32,6 @@ import { transformMessages } from "./transform-messages.ts";
 const MISTRAL_TOOL_CALL_ID_LENGTH = 9;
 const MAX_MISTRAL_ERROR_BODY_CHARS = 4000;
 
-/**
- * Provider-specific options for the Mistral API.
- */
 type MistralReasoningEffort = "none" | "low" | "medium" | "high" | "max";
 
 export interface MistralOptions extends StreamOptions {
@@ -177,7 +174,6 @@ export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
       events.end();
     } catch (error) {
       for (const block of output.content) {
-        // partialArgs is only a streaming scratch buffer; never persist it.
         delete (block as { partialArgs?: string }).partialArgs;
       }
       output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -208,7 +204,6 @@ export const streamSimple: StreamFunction<"mistral-conversations", SimpleStreamO
     ? clampThinkingLevel(model, options.reasoning)
     : undefined;
   const reasoning = clampedReasoning === "off" ? undefined : clampedReasoning;
-  // Models with a thinking level map use `reasoning_effort`; other reasoning models use `prompt_mode`.
   const effortMap = model.reasoning ? model.thinkingLevelMap : undefined;
   const reasoningEffort = effortMap
     ? reasoning
@@ -313,8 +308,6 @@ async function requestMistralStream(
   baseUrl.pathname = `${baseUrl.pathname.replace(/\/+$/u, "")}/`;
   const url = new URL("v1/chat/completions", baseUrl);
   const headers = buildMistralHeaders(model, apiKey, options);
-  // The timeout covers only the wait for response headers. Long streams (e.g. extended thinking)
-  // must not be cut off by a fixed deadline; body stalls are left to the HTTP client idle timeout.
   const timeoutMs = options?.timeoutMs ?? 60_000;
   const headerTimeoutSignal = AbortSignal.timeout(timeoutMs);
   const combinedSignal = combineAbortSignals([options?.signal, headerTimeoutSignal]);
@@ -640,8 +633,6 @@ async function consumeChatStream(
   for await (const event of mistralStream) {
     const chunk = event.data;
     await onProviderStreamEvent?.(chunk, model);
-    // Mistral's streamed CompletionChunk carries an id field. Keep the first non-empty one,
-    // mirroring how OpenAI-style streaming exposes a stable response identifier per stream.
     output.responseId ||= chunk.id;
 
     if (chunk.usage) {
@@ -676,8 +667,6 @@ async function consumeChatStream(
       for (const item of contentItems) {
         if (typeof item === "string") {
           const textDelta = sanitizeSurrogates(item);
-          // GLM models on Mistral send empty content deltas around thinking and tool calls.
-          // Opening a block for them splits thinking into multiple blocks, which Mistral rejects on replay.
           if (!textDelta) continue;
           if (!currentBlock || currentBlock.type !== "text") {
             finishCurrentBlock(currentBlock);
@@ -797,8 +786,6 @@ async function consumeChatStream(
     if (block?.type !== "toolCall") continue;
     const toolBlock = block as ToolCall & { partialArgs?: string };
     Object.assign(toolBlock, parseToolCallArguments(toolBlock.partialArgs));
-    // Finalize in-place and strip the scratch buffer so replay only
-    // carries parsed arguments.
     delete toolBlock.partialArgs;
     events.push({
       type: "toolcall_end",
@@ -990,7 +977,6 @@ function mapChatStopReason(reason: string | null): {
     case "tool_calls":
       return { stopReason: "toolUse" };
     case "error":
-      // Mistral reports transient server failures this way; "server error" makes the message retryable.
       return { stopReason: "error", errorMessage: "Provider stopped with: error (server error)" };
     default:
       return { stopReason: "error", errorMessage: `Provider stopped with: ${reason}` };

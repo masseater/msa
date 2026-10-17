@@ -76,7 +76,6 @@ describe("Radius provider catalogs", () => {
       contextWindow: 424242,
     });
     expect(models.getModel("radius", "organization-only")).toBeDefined();
-    // Models disabled by the organization must not reappear from the shipped catalog.
     expect(models.getModels("radius").map((model) => model.id)).toEqual([
       "balanced",
       "organization-only",

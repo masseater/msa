@@ -42,7 +42,6 @@ const context: ClassifierContext = {
   },
 };
 
-/** Response shape from the API reference and live `gpt-6-luna` requests. */
 const wireAnswers = [
   {
     type: "choice",
@@ -81,7 +80,6 @@ const image: ImageContent = { type: "image", data: "aW1hZ2U=", mimeType: "image/
 describe("OpenAI Decisions", () => {
   it("maps questions to Decisions types and answers back by name", async () => {
     const fetch = vi.fn((_input: string | URL | Request, _init?: RequestInit) =>
-      // Answers out of question order: they are matched by name.
       Promise.resolve(
         Response.json({
           model: "gpt-6-luna",
@@ -105,7 +103,6 @@ describe("OpenAI Decisions", () => {
           type: "choice",
           name: "category",
           instructions: "Classify the message",
-          // Empty descriptions are omitted.
           choices: [{ value: "success", description: "Successful" }, { value: "failure" }],
         },
         {
@@ -263,7 +260,6 @@ describe("OpenAI Decisions", () => {
         }),
       ),
     );
-    // Default retries: the same input would time out again.
     const result = await classify(model, context, { apiKey: "secret", fetch });
 
     expect(fetch).toHaveBeenCalledOnce();

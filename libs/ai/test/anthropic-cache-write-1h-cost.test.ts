@@ -67,7 +67,6 @@ function eventsWithCacheCreation(
   ];
 }
 
-// claude-opus-4-8: input 5, cacheWrite (5m) 6.25 per Mtok. 1h write = 2x input = 10.
 const context = normalizeContext({
   messages: [{ role: "user", content: "hi", timestamp: Date.now() }],
 });
@@ -87,11 +86,9 @@ describe("Anthropic 1h cache write cost", () => {
 
     expect(result.usage.cacheWrite).toBe(1_000_000);
     expect(result.usage.cacheWrite1h).toBe(400_000);
-    // 600k * 6.25/Mtok + 400k * 10/Mtok = 3.75 + 4.0 = 7.75
     expect(result.usage.cost.cacheWrite).toBeCloseTo(7.75, 10);
   });
 
-  // Regression for #9210: Vercel AI Gateway sends cache usage in message_delta, not message_start.
   it("prices 1h cache writes reported only in message_delta", async () => {
     const model = getModel("vercel-ai-gateway", "anthropic/claude-haiku-4.5");
     const response = createSseResponse([
@@ -135,7 +132,6 @@ describe("Anthropic 1h cache write cost", () => {
 
     expect(result.usage.cacheWrite).toBe(1_000_000);
     expect(result.usage.cacheWrite1h ?? 0).toBe(0);
-    // 1M * 6.25/Mtok = 6.25
     expect(result.usage.cost.cacheWrite).toBeCloseTo(6.25, 10);
   });
 });

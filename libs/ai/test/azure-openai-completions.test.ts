@@ -109,7 +109,6 @@ function deepSeekModel() {
   return getModel("azure", "deepseek-v4-pro");
 }
 
-// Regression for #9645: Azure Foundry rejects DeepSeek's thinking field and every prompt cache parameter here.
 describe("azure deepseek-v4-pro over Chat Completions", () => {
   it("turns thinking on with reasoning_effort instead of DeepSeek's thinking field", async () => {
     await azure
@@ -146,8 +145,6 @@ describe("azure deepseek-v4-pro over Chat Completions", () => {
     expect(mockState.lastParams?.prompt_cache_retention).toBeUndefined();
   });
 
-  // The deployment discards a `developer` system message once reasoning_effort is set, without
-  // billing it, so the system prompt has to go out under the system role.
   it("sends the system prompt under the system role", async () => {
     await azure
       .stream(deepSeekModel(), context, { apiKey: "test-key", reasoningEffort: "low" })
@@ -156,7 +153,6 @@ describe("azure deepseek-v4-pro over Chat Completions", () => {
     expect(mockState.lastParams?.messages?.[0]).toMatchObject({ role: "system", content: "sys" });
   });
 
-  // The deployment honours system messages sent mid-conversation, so msa must not collapse them.
   it("keeps mid-conversation system messages in place", async () => {
     const resumed = normalizeContext({
       systemPrompt: "first",
@@ -251,7 +247,6 @@ describe("azure Chat Completions endpoint resolution", () => {
     expect(result.errorMessage).toContain("Azure OpenAI base URL is required");
   });
 
-  // The id is persisted on the assistant message and read back by name, so it has to stay a catalog id.
   it("sends the model id as the request model", async () => {
     const result = await azure.stream(deepSeekModel(), context, { apiKey: "test-key" }).result();
 

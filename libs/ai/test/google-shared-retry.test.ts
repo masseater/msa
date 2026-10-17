@@ -2,12 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { retryGoogleRequest } from "../src/api/google-shared.ts";
 
-/**
- * Shaped like @google/genai's ApiError: has `status`, but no `headers`.
- *
- * @param {number} status - HTTP status
- * @returns {Error} the error
- */
 function googleApiError(status: number): Error {
   return Object.assign(new Error(`got status: ${status}`), { status });
 }

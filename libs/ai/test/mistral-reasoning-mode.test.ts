@@ -88,7 +88,6 @@ describe("Mistral reasoning mode selection", () => {
     expect(payload.reasoningEffort).toBeUndefined();
   });
 
-  // Regression for #8700 and #9375: Medium and GLM-5.2 ignore Magistral's prompt_mode.
   describe.each(["mistral-small-2603", "mistral-medium-latest", "zai-glm-5-2"] as const)(
     "%s",
     (modelId) => {
@@ -116,7 +115,6 @@ describe("Mistral reasoning mode selection", () => {
     },
   );
 
-  // Regression for #9678: requested levels must reach Mistral-hosted GLM models.
   it("sends max for GLM-5.2", async () => {
     const payload = await capturePayload(makeModel("zai-glm-5-2", true, GLM_5_2_LEVELS), {
       reasoning: "max",
@@ -144,7 +142,6 @@ describe("Mistral reasoning mode selection", () => {
     });
   });
 
-  // Regression for #8700: reasoning controls must respect the model's reasoning capability.
   it("omits reasoning controls for non-reasoning models", async () => {
     const payload = await capturePayload(makeModel("mistral-medium-2505", false), {
       reasoning: "medium",

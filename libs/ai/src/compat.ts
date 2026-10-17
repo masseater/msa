@@ -1,15 +1,3 @@
-/**
- * Temporary compatibility entrypoint preserving the old global msa-ai API
- * surface: api-dispatch `stream()`/`complete()` with env API key injection,
- * the api-registry, generated catalog reads (`getModel`/`getModels`/
- * `getProviders`), per-API lazy stream wrappers, and image generation.
- *
- * Existing apps switch imports from "@msa/ai" to
- * "@msa/ai/compat" unchanged; new code uses `createModels()`
- * and the provider factories. This module is deleted with the coding-agent
- * ModelManager migration.
- */
-
 export * from "./api/anthropic-messages.lazy.ts";
 export * from "./api/azure-openai-responses.lazy.ts";
 export * from "./api/bedrock-converse-stream.lazy.ts";
@@ -70,13 +58,10 @@ import type {
 } from "./types.ts";
 import { normalizeContext } from "./utils/transcript.ts";
 
-/** @deprecated Static catalog read. Use `getBuiltinModel` from "@msa/ai/providers/all" or `Models.getModel()`. */
 export const getModel = getBuiltinModel;
 
-/** @deprecated Static catalog read. Use `getBuiltinModels` from "@msa/ai/providers/all" or `Models.getModels()`. */
 export const getModels = getBuiltinModels;
 
-/** @deprecated Static catalog read. Use `getBuiltinProviders` from "@msa/ai/providers/all" or `Models.getProviders()`. */
 export const getProviders = getBuiltinProviders;
 
 export type ApiStreamFunction = (
@@ -209,11 +194,6 @@ const BUILTIN_APIS: [Api, ProviderStreams][] = [
 
 const builtinApiProviderInstances = new Map<Api, ReturnType<typeof getApiProvider>>();
 
-/**
- * Registers the builtin API implementations into the api-registry without
- * clobbering existing entries: compat may load after a test or extension has
- * already registered an override for a builtin api id.
- */
 export function registerBuiltInApiProviders(): void {
   for (const [api, streams] of BUILTIN_APIS) {
     if (!getApiProvider(api)) {

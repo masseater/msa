@@ -59,9 +59,6 @@ import { zaiProvider } from "./zai.ts";
 
 export { radiusProvider };
 
-/** Providers present in the generated catalog. `KnownProvider` additionally
- * includes purely dynamic providers (e.g. "radius") that have no static
- * catalog entry. */
 export type BuiltinProvider = keyof typeof MODELS;
 
 type BuiltinChatModelId<TProvider extends BuiltinProvider> = keyof (typeof MODELS)[TProvider];
@@ -69,7 +66,6 @@ type BuiltinImageModelId<TProvider extends BuiltinProvider> =
   keyof (typeof IMAGE_MODELS)[TProvider];
 type BuiltinClassifierModelId<TProvider extends BuiltinProvider> =
   keyof (typeof CLASSIFIER_MODELS)[TProvider];
-/** API ids of catalog entries. Built-in getters return `Model<Api>` shapes, not literal entry types. */
 type CatalogApi<TEntry> = TEntry extends { api: infer TApi extends string } ? TApi : never;
 
 export function getBuiltinModel<
@@ -111,11 +107,6 @@ export function getBuiltinProviders(): BuiltinProvider[] {
   return Object.keys(MODELS) as BuiltinProvider[];
 }
 
-/**
- * Generation timestamp shared by all built-in provider catalogs.
- *
- * @returns {number | undefined} the generation timestamp, or undefined when no catalog is loaded
- */
 export function getBuiltinModelDataGeneratedAt(): number | undefined {
   const generatedAt = Date.parse(modelDataManifest.generatedAt);
   return Number.isNaN(generatedAt) ? undefined : generatedAt;
@@ -164,11 +155,6 @@ export function getAllBuiltinModels<TProvider extends BuiltinProvider>(
   ];
 }
 
-/**
- * All built-in providers, freshly constructed.
- *
- * @returns {Provider[]} the built-in providers
- */
 export function builtinProviders(): Provider[] {
   return [
     amazonBedrockProvider(),
@@ -215,12 +201,6 @@ export function builtinProviders(): Provider[] {
   ];
 }
 
-/**
- * A `Models` collection with every built-in provider registered.
- *
- * @param {CreateModelsOptions} [options] - options for the collection
- * @returns {MutableModels} the collection
- */
 export function builtinModels(options?: CreateModelsOptions): MutableModels {
   const models = createModels(options);
   for (const provider of builtinProviders()) {

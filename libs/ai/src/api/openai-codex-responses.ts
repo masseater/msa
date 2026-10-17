@@ -50,18 +50,12 @@ import {
 } from "./openai-responses-shared.ts";
 import { buildBaseOptions } from "./simple-options.ts";
 
-// ============================================================================
-// Configuration
-// ============================================================================
-
 const DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api";
 const JWT_CLAIM_PATH = "https://api.openai.com/auth" as const;
 const DEFAULT_MAX_RETRIES = 0;
 const BASE_DELAY_MS = 1000;
 const DEFAULT_MAX_RETRY_DELAY_MS = 60_000;
 const DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS = 15_000;
-// The Codex backend accepts zstd-compressed request bodies on the SSE responses
-// endpoint (the same endpoint the official Codex client compresses against).
 const REQUEST_COMPRESSION_ZSTD_LEVEL = 3;
 const CODEX_TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode"]);
 const WEBSOCKET_MESSAGE_TOO_BIG_CLOSE_CODE = 1009;
@@ -76,10 +70,6 @@ const CODEX_RESPONSE_STATUSES = new Set<CodexResponseStatus>([
   "queued",
   "in_progress",
 ]);
-
-// ============================================================================
-// Types
-// ============================================================================
 
 export interface OpenAICodexResponsesOptions extends StreamOptions {
   reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | undefined;
@@ -128,10 +118,6 @@ function assertSuccessfulOutput(
     throw new Error(output.errorMessage || "An unknown error occurred");
   }
 }
-
-// ============================================================================
-// Retry Helpers
-// ============================================================================
 
 function isTerminalRateLimitError(errorText: string): boolean {
   return /GoUsageLimitError|FreeUsageLimitError|Monthly usage limit reached|available balance|insufficient_quota|out of budget|quota exceeded|billing/iu.test(
@@ -212,10 +198,6 @@ function normalizeTimeoutMs(value: number | undefined): number | undefined {
   return Math.floor(value);
 }
 
-// ============================================================================
-// Request Compression
-// ============================================================================
-
 type ProcessWithBuiltinModule = typeof process & {
   getBuiltinModule?: (id: "node:zlib") => typeof NodeZlib;
 };
@@ -227,9 +209,6 @@ function loadNodeZlib(): typeof NodeZlib | null {
   return (process as ProcessWithBuiltinModule).getBuiltinModule?.("node:zlib") ?? null;
 }
 
-// Returns the zstd-compressed body bytes, or null when compression is
-// unavailable (browser/Vite builds). Callers fall back to sending the
-// uncompressed JSON when this returns null.
 function compressRequestBodyZstd(bodyJson: string): Uint8Array<ArrayBuffer> | null {
   const zlib = loadNodeZlib();
   if (!zlib || typeof zlib.zstdCompressSync !== "function") {
@@ -239,16 +218,11 @@ function compressRequestBodyZstd(bodyJson: string): Uint8Array<ArrayBuffer> | nu
     const compressed = zlib.zstdCompressSync(bodyJson, {
       params: { [zlib.constants.ZSTD_c_compressionLevel]: REQUEST_COMPRESSION_ZSTD_LEVEL },
     });
-    // A copy owns a plain ArrayBuffer, which fetch accepts as a body under every lib.
     return new Uint8Array(compressed);
   } catch {
     return null;
   }
 }
-
-// ============================================================================
-// Main Stream Function
-// ============================================================================
 
 export const stream: StreamFunction<"openai-codex-responses", OpenAICodexResponsesOptions> = (
   model: Model<"openai-codex-responses">,
@@ -408,16 +382,12 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
         }
       }
 
-      // Compress the request body once for the SSE path. The Codex backend
-      // decodes Content-Encoding: zstd; the WebSocket transport above sends the
-      // uncompressed JSON frame, matching the official Codex client.
       const compressedBody = compressRequestBodyZstd(bodyJson);
       if (compressedBody) {
         sseHeaders.set("content-encoding", "zstd");
       }
       const sseBody: Uint8Array<ArrayBuffer> | string = compressedBody ?? bodyJson;
 
-      // Fetch with retry logic for rate limits and transient errors
       let response: Response | undefined;
       let lastError: Error | undefined;
       const maxRetries = options?.maxRetries ?? DEFAULT_MAX_RETRIES;
@@ -471,7 +441,6 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
             continue;
           }
 
-          // Parse error for friendly message on final attempt or non-retryable error
           const fakeResponse = new Response(errorText, {
             status: response.status,
             statusText: response.statusText,
@@ -485,7 +454,6 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
             }
           }
           lastError = error instanceof Error ? error : new Error(String(error));
-          // Network errors are retryable
           if (
             attempt < maxRetries &&
             !(lastError instanceof RetryDelayExceededError) &&
@@ -522,7 +490,6 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
       events.end();
     } catch (error) {
       for (const block of output.content) {
-        // Streaming scratch buffers are only used during parsing; never persist them.
         delete (block as { partialJson?: string }).partialJson;
         delete (block as { customInput?: unknown }).customInput;
       }
@@ -560,10 +527,6 @@ export const streamSimple: StreamFunction<"openai-codex-responses", SimpleStream
     reasoningEffort,
   } satisfies OpenAICodexResponsesOptions);
 };
-
-// ============================================================================
-// Request Building
-// ============================================================================
 
 function buildRequestBody(
   model: Model<"openai-codex-responses">,
@@ -701,10 +664,6 @@ function resolveCodexWebSocketUrl(baseUrl?: string): string {
   return url.toString();
 }
 
-// ============================================================================
-// Response Processing
-// ============================================================================
-
 async function processStream(
   response: Response,
   output: AssistantMessage,
@@ -818,7 +777,6 @@ async function* mapCodexEvents(
     try {
       await onProviderStreamEvent?.(event, model);
     } catch (error) {
-      // Keep callback failures out of Codex's WebSocket retry and SSE fallback path.
       throw new ProviderStreamEventCallbackError(error);
     }
     const type = typeof event["type"] === "string" ? event["type"] : undefined;
@@ -871,10 +829,6 @@ function normalizeCodexStatus(status: unknown): CodexResponseStatus | undefined 
     : undefined;
 }
 
-// ============================================================================
-// SSE Parsing
-// ============================================================================
-
 async function* parseSSE(
   response: Response,
   signal?: AbortSignal,
@@ -899,7 +853,6 @@ async function* parseSSE(
         throw new Error("Request was aborted");
       }
       buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
-      // Treat EOF as terminating the residual SSE frame.
       if (done && buffer.trim()) buffer += "\n\n";
 
       let idx = buffer.indexOf("\n\n");
@@ -939,10 +892,6 @@ async function* parseSSE(
     } catch {}
   }
 }
-
-// ============================================================================
-// WebSocket Parsing
-// ============================================================================
 
 const OPENAI_BETA_RESPONSES_WEBSOCKETS = "responses_websockets=2026-02-06";
 const SESSION_WEBSOCKET_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -1078,8 +1027,6 @@ let _cachedWebsocket: WebSocketConstructor | null = null;
 function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketConstructor | null> {
   if (!env && _cachedWebsocket) return Promise.resolve(_cachedWebsocket);
 
-  // bun doesn't respect http proxy envs, ref: https://github.com/oven-sh/bun/issues/15489
-  // Drop this branch once bun supports proxy envs in websocket.
   if (typeof process !== "undefined" && process.versions?.["bun"]) {
     const WebSocketWithProxy = class extends WebSocket {
       constructor(url: string | URL, options?: string | string[] | Record<string, unknown>) {
@@ -1136,7 +1083,6 @@ function getWebSocketReadyState(socket: WebSocketLike): number | undefined {
 
 function isWebSocketReusable(socket: WebSocketLike): boolean {
   const readyState = getWebSocketReadyState(socket);
-  // If readyState is unavailable, assume the runtime keeps it open/reusable.
   return readyState === undefined || readyState === 1;
 }
 
@@ -1625,8 +1571,6 @@ async function processWebSocketStream(
   let keepConnection = true;
   const useCachedContext =
     options?.transport === "websocket-cached" || options?.transport === "auto";
-  // ChatGPT Codex Responses rejects `store: true` ("Store must be set to false").
-  // WebSocket continuation still works via connection-scoped previous_response_id state.
   const fullBody = body;
   const requestBody =
     useCachedContext && entry ? buildCachedWebSocketRequestBody(entry, fullBody) : fullBody;
@@ -1702,10 +1646,6 @@ async function processWebSocketStream(
   }
 }
 
-// ============================================================================
-// Error Handling
-// ============================================================================
-
 async function parseErrorResponse(
   response: Response,
 ): Promise<{ message: string; friendlyMessage?: string | undefined }> {
@@ -1744,10 +1684,6 @@ async function parseErrorResponse(
   return { message, friendlyMessage };
 }
 
-// ============================================================================
-// Auth & Headers
-// ============================================================================
-
 function extractAccountId(token: string): string {
   try {
     const parts = token.split(".");
@@ -1768,7 +1704,6 @@ function buildBaseCodexHeaders(
   accountId: string,
   token: string,
 ): Headers {
-  // Defaults first so model and caller headers can override them, matching the other providers.
   const headers = new Headers({ originator: "pi", "User-Agent": getMsaUserAgent() });
   for (const [key, value] of Object.entries(initHeaders || {})) {
     headers.set(key, value);

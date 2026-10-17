@@ -57,7 +57,6 @@ export interface GoogleVertexOptions extends StreamOptions {
   toolChoice?: "auto" | "none" | "any" | undefined;
   thinking?: {
     enabled: boolean;
-    // -1 for dynamic, 0 to disable
     budgetTokens?: number;
     level?: GoogleApiThinkingLevel;
   };
@@ -68,7 +67,6 @@ export interface GoogleVertexOptions extends StreamOptions {
 const API_VERSION = "v1";
 const GCP_VERTEX_CREDENTIALS_MARKER = "gcp-vertex-credentials";
 
-// Counter for generating unique tool call IDs
 let toolCallCounter = 0;
 
 export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
@@ -103,7 +101,6 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
         throw new Error("Custom fetch is not supported by the Google Vertex adapter");
       }
       const apiKey = resolveApiKey(options);
-      // Create the client using either a Vertex API key, if provided, or ADC with project and location
       const client = apiKey
         ? createClientWithApiKey(model, apiKey, options?.headers)
         : createClient(
@@ -129,8 +126,6 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
       const blockIndex = () => blocks.length - 1;
       for await (const chunk of googleStream) {
         await options?.onProviderStreamEvent?.(chunk, model);
-        // Vertex uses the same @google/genai GenerateContentResponse type as Gemini.
-        // responseId is documented there as an output-only identifier for each response.
         output.responseId ||= chunk.responseId;
         const candidate = chunk.candidates?.[0];
         if (candidate?.content?.parts) {
@@ -321,7 +316,6 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
       events.push({ type: "done", reason: output.stopReason, message: output });
       events.end();
     } catch (error) {
-      // Remove internal index property used during streaming
       for (const block of output.content) {
         if ("index" in block) {
           delete (block as { index?: number }).index;

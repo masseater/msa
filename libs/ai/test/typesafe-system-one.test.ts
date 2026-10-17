@@ -58,7 +58,6 @@ describe("TypeSafe System One", () => {
       expect(payload.questions["category"]?.type).toBe("choice");
       expect(payload.questions["satisfaction"]?.type).toBe("score");
       expect(payload.questions["approved"]?.type).toBe("noul");
-      // System One has no temperature field; the option is ignored.
       expect(payload).not.toHaveProperty("temperature");
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer secret");
       return Promise.resolve(Response.json({ answers: wireAnswers }));
@@ -97,7 +96,6 @@ describe("TypeSafe System One", () => {
         model: "typesafe/jev-1.13",
         state: context.state,
       });
-      // Response shape observed from the live OpenRouter endpoint.
       return Promise.resolve(
         Response.json({
           id: "gen-dec-1",
@@ -120,7 +118,6 @@ describe("TypeSafe System One", () => {
     expect(String(fetch.mock.calls[0]?.[0])).toBe("https://openrouter.ai/api/v1/systemone");
     expect(result.stopReason).toBe("stop");
     expect(result.answers["approved"]).toEqual({ type: "bool", probability: 0.95 });
-    // Priced from the catalog like chat usage; matches OpenRouter's reported cost.
     expect(result.usage?.cost.total).toBeCloseTo(0.000012936, 12);
   });
 
@@ -262,7 +259,6 @@ describe("TypeSafe System One", () => {
     expect(result.stopReason).toBe("error");
     expect(result.answers).toEqual({});
     expect(result.errorMessage).toContain("did not return an answer for category");
-    // The request was billed, so its usage is kept.
     expect(result.usage).toMatchObject({ input: 10, output: 2 });
   });
 

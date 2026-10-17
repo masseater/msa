@@ -178,8 +178,6 @@ describe("Anthropic mid-conversation effort", () => {
       high: "high",
       max: "max",
     };
-    // Anthropic rejects block_binding with disabled thinking, and rejects effort markers
-    // that change level (here low, then medium) while thinking is disabled.
     const { payload, message } = await capture(
       model,
       {
@@ -275,7 +273,6 @@ describe("Anthropic mid-conversation effort", () => {
     expect(openRouter.baseUrl).toBe("https://openrouter.ai/api");
     expect(openRouter.compat?.supportsMidConvoEffort).toBe(true);
     expect(unsupported.compat?.supportsMidConvoEffort).toBeUndefined();
-    // OpenRouter rejects configuration_update on Opus 5 but accepts it on Fable 5.1.
     expect(
       getModel("openrouter", "anthropic/claude-opus-5").compat?.supportsMidConvoEffort,
     ).toBeUndefined();

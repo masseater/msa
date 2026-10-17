@@ -12,11 +12,6 @@ import type { ClassifierContext, ClassifierModel, ClassifierOptions } from "../s
 
 let serverCount = 0;
 
-/**
- * A fresh server URL per test: label tokens are cached per server and model.
- *
- * @returns {ClassifierModel<"llama-cpp-classify">} the model
- */
 function model(): ClassifierModel<"llama-cpp-classify"> {
   serverCount++;
   return {
@@ -39,18 +34,11 @@ interface RecordedRequest {
 }
 
 interface FakeServerOptions {
-  /** Log-probabilities of the next token by token text, in rank order. */
   next?: (prompt: string, depth: number) => Record<string, number>;
   template?: (messages: Array<{ role: string; content: string }>) => string;
   tokenize?: (content: string) => number[];
 }
 
-/**
- * Token IDs: one per character, the character code.
- *
- * @param {string} content - text to tokenize
- * @returns {number[]} the token ids
- */
 function charTokens(content: string): number[] {
   return [...content].map((char) => char.codePointAt(0)!);
 }
@@ -96,12 +84,6 @@ function fakeServer(options: FakeServerOptions = {}) {
   return { fetch, requests };
 }
 
-/**
- * Completion log-probabilities for bool (Yes/No) and letter labels; the fake tokenizer maps a label to its first character.
- *
- * @param {string} prompt - rendered prompt
- * @returns {Record<string, number>} the log-probabilities by label
- */
 function answerByPrompt(prompt: string): Record<string, number> {
   if (prompt.includes("Answer Yes or No.")) return { Y: -0.05, N: -3 };
   if (prompt.includes("Answer with one level number.")) return { "2": -0.2, "1": -1.8, "0": -4 };
@@ -129,12 +111,6 @@ const context: ClassifierContext = {
   },
 };
 
-/**
- * Maps multi-character labels to single tokens, as a real vocabulary would.
- *
- * @param {string} content - text to tokenize
- * @returns {number[]} the token ids
- */
 function wordTokens(content: string): number[] {
   const words: Record<string, number> = { Yes: 89, No: 78 };
   const tokens: number[] = [];
@@ -321,7 +297,6 @@ describe("llama.cpp classifier", () => {
   });
 
   it("reads labels in reply position and rejects labels that are not one token", async () => {
-    // A tokenizer that merges a newline with a following letter falls back to the label alone.
     const merging = fakeServer({
       tokenize: (content) =>
         content.startsWith("\n") && content.length > 1 ? [1000] : charTokens(content),
@@ -336,7 +311,6 @@ describe("llama.cpp classifier", () => {
     );
     expect(merged.stopReason).toBe("stop");
 
-    // The default fake tokenizer splits "Yes" into three tokens.
     const split = fakeServer();
     const result = await classify(
       model(),

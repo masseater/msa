@@ -78,11 +78,9 @@ function harness(respond: (payload: MessageCreateParamsStreaming, attempt: numbe
   };
 }
 
-// Regression tests for https://github.com/earendil-works/pi/issues/10409.
 describe("Anthropic preferred strict tool fallback", () => {
   it.each([
     grammarError,
-    // Observed from the live API: 32 strict tools, then 20 tools with 24 optional fields each.
     "Too many strict tools (32). The maximum number of strict tools supported is 20. Try reducing the number of tools marked as strict.",
     "Schemas contains too many parameters with union types (480 parameters with type arrays or anyOf). This causes exponential compilation cost. Reduce the number of nullable or union-typed parameters (limit: 16 parameters with unions).",
   ])(
@@ -93,7 +91,6 @@ describe("Anthropic preferred strict tool fallback", () => {
       const ordinary = tool("ordinary");
       const transcript = context([preferred, required, ordinary]);
       const original = JSON.stringify(transcript);
-      // Use the real SDK's HTTP error parsing, not a synthetic thrown Error.
       const { payloads, options } = harness((_payload, attempt) =>
         attempt === 1 ? errorResponse(message) : successResponse(),
       );

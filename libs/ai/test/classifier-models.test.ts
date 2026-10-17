@@ -224,7 +224,6 @@ describe("Models with classifier models", () => {
       input: ["text", "image"],
       contextWindow: 922000,
     });
-    // The chat entry with the same id stays separate.
     expect(models.getModel("openai", "gpt-6-luna")?.api).toBe("openai-responses");
 
     const urls: string[] = [];
@@ -269,7 +268,6 @@ describe("Models with classifier models", () => {
       (await withApiKey.getAvailableOfType("classifier", "openai")).map((model) => model.id),
     ).toEqual(["gpt-6-luna"]);
     expect(await withOAuth.getAvailableOfType("classifier", "openai")).toEqual([]);
-    // Chat models stay available with ChatGPT OAuth.
     expect(
       (await withOAuth.getAvailable("openai")).some((model) => model.id === "gpt-6-luna"),
     ).toBe(true);

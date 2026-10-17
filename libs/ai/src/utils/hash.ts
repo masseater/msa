@@ -1,9 +1,3 @@
-/**
- * Fast deterministic hash to shorten long strings
- *
- * @param {string} str - string to hash
- * @returns {string} a short hash of the string
- */
 export function shortHash(str: string): string {
   let h1 = 0xdeadbeef;
   let h2 = 0x41c6ce57;

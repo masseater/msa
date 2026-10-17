@@ -22,7 +22,6 @@ class FifoQueue<T> {
   }
 }
 
-// Generic event stream class for async iteration
 export class EventStream<T, R = T> implements AsyncIterable<T> {
   private queue = new FifoQueue<T>();
   private waiting = new FifoQueue<(value: IteratorResult<T>) => void>();
@@ -48,7 +47,6 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
       this.resolveFinalResult(this.extractResult(event));
     }
 
-    // Deliver to waiting consumer or queue it
     const waiter = this.waiting.dequeue();
     if (waiter) {
       waiter({ value: event, done: false });
@@ -62,7 +60,6 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
     if (result !== undefined) {
       this.resolveFinalResult(result);
     }
-    // Notify all waiting consumers that we're done
     while (this.waiting.length > 0) {
       const waiter = this.waiting.dequeue()!;
       waiter({ value: undefined as any, done: true });
@@ -90,12 +87,6 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
   }
 }
 
-/**
- * Event stream of one assistant response. It also times the response: the final message (`done` or `error` event, or
- * the result passed to `end()`) gets `durationMs`, measured with a monotonic clock from the stream's creation, unless
- * the message already has one or its `timestamp` predates the stream. A stream that forwards a response which started
- * elsewhere, such as a deferred result fetched later, therefore leaves it untimed.
- */
 export class AssistantMessageEventStream extends EventStream<
   AssistantMessageEvent,
   AssistantMessage
@@ -135,11 +126,6 @@ export class AssistantMessageEventStream extends EventStream<
   }
 }
 
-/**
- * Factory function for AssistantMessageEventStream (for use in extensions)
- *
- * @returns {AssistantMessageEventStream} a new empty stream
- */
 export function createAssistantMessageEventStream(): AssistantMessageEventStream {
   return new AssistantMessageEventStream();
 }

@@ -221,7 +221,6 @@ describe("Anthropic OAuth", () => {
     expect(credential.access).toBe("access");
     expect(events.some((e) => e.type === "auth_url")).toBe(true);
     expect(prompts.some((p) => p.type === "manual_code")).toBe(true);
-    // the prompt's signal is aborted once login settles, so UIs can dismiss it
     expect(manualSignal?.aborted).toBe(true);
   });
 
@@ -235,7 +234,6 @@ describe("Anthropic OAuth", () => {
     expect(login.pageText).toContain("Signed in to Anthropic.");
   });
 
-  // #10571
   it("falls back to a free callback port when the preferred port cannot be bound", async () => {
     const blocker = createServer();
     await listen(blocker, 53692);

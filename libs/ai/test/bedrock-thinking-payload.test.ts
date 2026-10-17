@@ -162,7 +162,6 @@ describe("Bedrock thinking payload", () => {
     expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "xhigh" });
   });
 
-  // https://github.com/earendil-works/pi/issues/10324
   it("sends block_binding and the binding beta for Claude Opus 5.5", async () => {
     const model = getModel("amazon-bedrock", "global.anthropic.claude-opus-5-5");
 
@@ -174,7 +173,6 @@ describe("Bedrock thinking payload", () => {
     ]);
   });
 
-  // Bedrock rejects block_binding on 4.6 models: "Extra inputs are not permitted" (#10324)
   it.each(["global.anthropic.claude-opus-4-6-v1", "global.anthropic.claude-sonnet-4-6"] as const)(
     "omits block_binding for %s",
     async (modelId) => {
@@ -226,7 +224,6 @@ describe("Bedrock thinking payload", () => {
 });
 
 describe("Bedrock OpenAI reasoning payload", () => {
-  // Regression for #9331: the configured thinking level never reached OpenAI models on Bedrock.
   it.each([
     ["minimal", "low"],
     ["low", "low"],
@@ -381,11 +378,9 @@ describe("Application inference profile support", () => {
       if (event.type === "error") break;
     }
 
-    // System prompt should have a cache point
     expect(capturedPayload.system).toHaveLength(2);
     expect(capturedPayload.system[1]).toHaveProperty("cachePoint");
 
-    // Last user message should have a cache point
     const lastMsg = capturedPayload.messages[capturedPayload.messages.length - 1];
     const lastContent = lastMsg.content[lastMsg.content.length - 1];
     expect(lastContent).toHaveProperty("cachePoint");

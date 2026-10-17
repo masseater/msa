@@ -21,7 +21,6 @@ const context: ClassifierContext = {
   },
 };
 
-// Model output from https://developers.cloudflare.com/ai/models/typesafe/jev/
 const jevOutput = {
   model: "jev-1.13.0",
   answers: {
@@ -36,7 +35,6 @@ const jevOutput = {
   usage: { input_tokens: 426, output_tokens: 73 },
 };
 
-// REST envelope observed from the live /ai/run endpoint.
 function restResponse(state: string, result: unknown = jevOutput) {
   return {
     result: { state, result, gatewayMetadata: { keySource: "Unified" } },
@@ -46,8 +44,6 @@ function restResponse(state: string, result: unknown = jevOutput) {
   };
 }
 
-// Cloudflare-hosted output observed from a live /ai/run call, question ids renamed to match `context`.
-// The envelope carries the output directly, without a run record.
 const clefOutput = {
   model: "clef",
   answers: {

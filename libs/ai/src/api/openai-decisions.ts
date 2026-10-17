@@ -15,21 +15,8 @@ import {
   requiredNumber,
 } from "./classifier-shared.ts";
 
-/**
- * OpenAI's Decisions API: `POST /v1/decisions` with `{ model, input, questions }`.
- * https://developers.openai.com/api/docs/guides/decisions
- *
- * The state is sent as JSON text. With images, the input becomes one user message with the state
- * as `input_text` followed by `input_image` data URLs. Questions map to Decisions types:
- * `choice` to `choice`, `score` to `score`, and `bool` to `predicate`. Predicates have no
- * criteria field, so the meanings of true and false are appended to the instructions.
- *
- * Only OpenAI API keys work: Sign in with ChatGPT tokens are rejected on this route.
- */
-
 const LABEL = "OpenAI Decisions";
 
-/** The endpoint accepts at most this many image parts per request. */
 const MAX_IMAGES = 128;
 
 interface DecisionQuestion {
@@ -160,11 +147,6 @@ function parseAnswers(
   );
 }
 
-/**
- * Cloudflare in front of api.openai.com answers 504 with an HTML page when a request runs longer
- * than about five seconds. Large inputs, currently above roughly 600K tokens, hit this limit, and
- * retrying the same input runs into it again, so 504 is not retried.
- */
 const NO_RETRY_STATUSES = [504];
 
 function errorMessage(error: unknown): string {
@@ -174,14 +156,6 @@ function errorMessage(error: unknown): string {
   return formatProviderError(normalizeProviderError(error), `${LABEL} error`);
 }
 
-/**
- * Classification through OpenAI's Decisions API.
- *
- * @param {ClassifierModel<ClassifierApi>} model - classifier model
- * @param {ClassifierContext} context - classifier request
- * @param {ClassifierOptions} [options] - request options
- * @returns {Promise<ClassifierResult>} the classification result
- */
 export const classify: ClassifierFunction<ClassifierOptions> = async (model, context, options) => {
   const output: ClassifierResult = {
     api: model.api,
@@ -210,7 +184,6 @@ export const classify: ClassifierFunction<ClassifierOptions> = async (model, con
       NO_RETRY_STATUSES,
     );
     if (!isRecord(body)) throw new Error(`${LABEL} returned an unexpected response`);
-    // Set before parsing answers: a request with malformed or refused answers was still billed.
     const usage = parseClassifierUsage(body["usage"], model);
     if (usage) output.usage = usage;
     output.answers = parseAnswers(body["answers"], context);

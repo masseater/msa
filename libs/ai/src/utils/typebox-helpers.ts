@@ -1,20 +1,5 @@
 import { type TUnsafe, Type } from "typebox";
 
-/**
- * Creates a string enum schema compatible with Google's API and other providers
- * that don't support anyOf/const patterns.
- *
- * @example
- * const OperationSchema = StringEnum(["add", "subtract", "multiply", "divide"], {
- *   description: "The operation to perform"
- * });
- *
- * type Operation = Static<typeof OperationSchema>; // "add" | "subtract" | "multiply" | "divide"
- *
- * @param {T} values - allowed strings
- * @param {{ description?: string; default?: T[number] }} [options] - schema options
- * @returns {TUnsafe<T[number]>} the string enum schema
- */
 export function StringEnum<T extends readonly string[]>(
   values: T,
   options?: { description?: string; default?: T[number] },

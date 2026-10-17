@@ -70,14 +70,6 @@ import {
 } from "./simple-options.ts";
 import { transformMessages } from "./transform-messages.ts";
 
-/**
- * Resolve cache retention preference.
- * Defaults to "short" and uses MSA_CACHE_RETENTION for backward compatibility.
- *
- * @param {CacheRetention} [cacheRetention] - caller preference
- * @param {ProviderEnv} [env] - scoped provider env overrides
- * @returns {CacheRetention} the cache retention to use
- */
 function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEnv): CacheRetention {
   if (cacheRetention) {
     return cacheRetention;
@@ -105,12 +97,8 @@ function getCacheControl(
   };
 }
 
-// Stealth mode: Mimic Claude Code's tool naming exactly
 const claudeCodeVersion = "2.1.280";
 
-// Claude Code 2.x tool names (canonical casing)
-// Source: https://cchistory.mariozechner.at/data/prompts-2.1.11.md
-// To update: https://github.com/badlogic/cchistory
 const claudeCodeTools = [
   "Read",
   "Write",
@@ -133,7 +121,6 @@ const claudeCodeTools = [
 
 const ccToolLookup = new Map(claudeCodeTools.map((t) => [t.toLowerCase(), t]));
 
-// Convert tool name to CC canonical casing if it matches (case-insensitive)
 const toClaudeCodeName = (name: string) => ccToolLookup.get(name.toLowerCase()) ?? name;
 const fromClaudeCodeName = (name: string, tools?: Tool[]) => {
   if (tools && tools.length > 0) {
@@ -157,13 +144,11 @@ function convertContentBlocks(content: (TextContent | ImageContent)[]):
           };
         }
     > {
-  // If only text blocks, return as concatenated string for simplicity
   const hasImages = content.some((c) => c.type === "image");
   if (!hasImages) {
     return sanitizeSurrogates(content.map((c) => (c as TextContent).text).join("\n"));
   }
 
-  // If we have images, convert to content block array
   const blocks = content.map((block) => {
     if (block.type === "text") {
       return {
@@ -181,7 +166,6 @@ function convertContentBlocks(content: (TextContent | ImageContent)[]):
     };
   });
 
-  // If only images (no text), add placeholder text block
   const hasText = blocks.some((b) => b.type === "text");
   if (!hasText) {
     blocks.unshift({
@@ -204,13 +188,6 @@ const MID_CONVERSATION_OUTPUT_CONFIG_BETA = "mid-conversation-output-config-2026
 const THINKING_BINDING_CONTROLS_BETA = "thinking-binding-controls-2026-08-01";
 const INLINE_TOOLS_BETA = "inline-tools-2026-09-15";
 
-/**
- * Stable deferred tool declared whenever native tool changes are in use. Anthropic adds
- * hidden prompt scaffolding for mid-conversation tool changes; declaring this placeholder
- * from the first request keeps that scaffolding in the cached prefix, so the first tool
- * change does not invalidate the cache (measured: full miss without it). It is never
- * activated and the model cannot see it.
- */
 const DEFERRED_TOOL_PLACEHOLDER: BetaTool = {
   name: "__pi_deferred_placeholder__",
   description: "Reserved placeholder. Never available. Never call this.",
@@ -240,64 +217,12 @@ function getAnthropicCompat(model: Model<"anthropic-messages">) {
 }
 
 export interface AnthropicOptions extends StreamOptions {
-  /**
-   * Enable extended thinking.
-   * For adaptive thinking models: the model decides when/how much to think.
-   * For older models: uses budget-based thinking with thinkingBudgetTokens.
-   * Default: undefined (thinking is omitted unless `streamSimple()` maps
-   * a simple reasoning level to this option, or callers set it explicitly).
-   */
   thinkingEnabled?: boolean | undefined;
-  /**
-   * Token budget for extended thinking (older models only).
-   * Ignored for adaptive thinking models.
-   * Default: 1024 when `thinkingEnabled` is true and no budget is provided.
-   */
   thinkingBudgetTokens?: number | undefined;
-  /**
-   * Effort level for adaptive thinking models.
-   * Controls how much thinking Claude allocates:
-   * - "max": Always thinks with no constraints (Opus 4.6 only)
-   * - "xhigh": Highest reasoning level (Opus 4.7+, Fable 5)
-   * - "high": Always thinks, deep reasoning
-   * - "medium": Moderate thinking, may skip for simple queries
-   * - "low": Minimal thinking, skips for simple tasks
-   * Ignored for older models.
-   * Default: omitted unless `streamSimple()` maps a simple reasoning
-   * level to this option.
-   */
   effort?: AnthropicEffort | undefined;
-  /**
-   * Controls how thinking content is returned in API responses.
-   * - "summarized": Thinking blocks contain summarized thinking text.
-   * - "omitted": Thinking blocks return an empty thinking field; the encrypted
-   *   signature still travels back for multi-turn continuity. Use for faster
-   *   time-to-first-text-token when your UI does not surface thinking.
-   *
-   * Note: Anthropic's API default for Claude Opus 4.7 and Claude Mythos Preview
-   * is "omitted". We default to "summarized" here to keep behavior consistent
-   * with older Claude 4 models. Set this explicitly to "omitted" to opt in.
-   * Default: "summarized" when thinking is enabled.
-   */
   thinkingDisplay?: AnthropicThinkingDisplay | undefined;
-  /**
-   * Whether to request the interleaved thinking beta header for non-adaptive
-   * thinking models. Adaptive thinking models have interleaved thinking built in,
-   * so the header is skipped for them regardless of this setting.
-   * Default: true.
-   */
   interleavedThinking?: boolean | undefined;
-  /**
-   * Anthropic tool choice behavior. String values map to Anthropic's built-in
-   * choices; `{ type: "tool", name }` forces a specific tool.
-   * Default: omitted (Anthropic default behavior, currently equivalent to auto).
-   */
   toolChoice?: "auto" | "any" | "none" | { type: "tool"; name: string } | undefined;
-  /**
-   * Pre-built Anthropic client instance. When provided, skips internal client
-   * construction entirely. Use this to inject alternative SDK clients such as
-   * `AnthropicVertex` that shares the same messaging API.
-   */
   client?: Anthropic | undefined;
 }
 
@@ -341,12 +266,6 @@ function assertRequestAuth(
   if (!hasRequestAuth(apiKey, headers)) throw new Error(`No API key for provider: ${provider}`);
 }
 
-/**
- * Anthropic SDK client that never runs the SDK's own credential chain
- * (ANTHROPIC_PROFILE config files, federation env vars). Without this, every
- * client built with `apiKey: null, authToken: null` for header-owned auth would
- * also resolve and exchange SDK credentials behind msa's auth resolver.
- */
 class MsaAnthropic extends Anthropic {
   protected override _shouldResolveDefaultCredentials(): boolean {
     return false;
@@ -355,18 +274,6 @@ class MsaAnthropic extends Anthropic {
 
 type AnthropicFederationConfig = NonNullable<ClientOptions["config"]>;
 
-/**
- * Workload identity federation config from the ANTHROPIC_* variables the
- * Anthropic SDK documents; the SDK performs the token exchange and refresh.
- * Only for the anthropic provider, since the exchange is an Anthropic API
- * endpoint, and only when no key or auth header was resolved.
- *
- * @param {Model<"anthropic-messages">} model - model the request targets
- * @param {string | undefined} apiKey - resolved API key, if any
- * @param {ProviderHeaders | undefined} headers - resolved request headers
- * @param {ProviderEnv | undefined} env - scoped provider env overrides
- * @returns {AnthropicFederationConfig | undefined} the federation config, or undefined when federation does not apply
- */
 function getAnthropicFederation(
   model: Model<"anthropic-messages">,
   apiKey: string | undefined,
@@ -390,11 +297,6 @@ function getAnthropicFederation(
   };
 }
 
-/**
- * The SDK caches the federated access token per client, but msa creates a client
- * per request. Keep one client for the current federation config and fetch, and
- * clone it per request with `withOptions()`, which shares the token cache.
- */
 let federationClient:
   | { key: string; fetch: typeof globalThis.fetch | undefined; client: Anthropic }
   | undefined;
@@ -684,7 +586,6 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
           );
           break;
         } catch (error) {
-          // Only downgrade a rejected request, never an already-started stream.
           if (
             options?.signal?.aborted ||
             disablePreferredStrictTools ||
@@ -736,15 +637,12 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
                     fallback.provider === model.provider && fallback.model === responseModel,
                 )?.cost;
           usageModel = fallbackCost ? { ...model, id: responseModel, cost: fallbackCost } : model;
-          // Capture initial token usage from message_start event
-          // This ensures we have input token counts even if the stream is aborted early
           output.usage.input = event.message.usage.input_tokens || 0;
           output.usage.output = event.message.usage.output_tokens || 0;
           output.usage.cacheRead = event.message.usage.cache_read_input_tokens || 0;
           output.usage.cacheWrite = event.message.usage.cache_creation_input_tokens || 0;
           output.usage.cacheWrite1h =
             event.message.usage.cache_creation?.ephemeral_1h_input_tokens || 0;
-          // Anthropic doesn't provide total_tokens, compute from components
           output.usage.totalTokens =
             output.usage.input +
             output.usage.output +
@@ -882,8 +780,6 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
               });
             } else if (block.type === "toolCall") {
               Object.assign(block, parseToolCallArguments(block.partialJson));
-              // Finalize in-place and strip the scratch buffer so replay only
-              // carries parsed arguments.
               delete (block as { partialJson?: string }).partialJson;
               events.push({
                 type: "toolcall_end",
@@ -907,8 +803,6 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
               output.errorMessage = stopReasonResult.errorMessage;
             }
           }
-          // Only update usage fields if present (not null).
-          // Preserves input_tokens from message_start when proxies omit it in message_delta.
           if (event.usage) {
             if (event.usage.input_tokens !== undefined && event.usage.input_tokens !== null) {
               output.usage.input = event.usage.input_tokens;
@@ -928,7 +822,6 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
             ) {
               output.usage.cacheWrite = event.usage.cache_creation_input_tokens;
             }
-            // Vercel AI Gateway includes the TTL breakdown in deltas, though the SDK only types it on message_start.
             const cacheCreation = (
               event.usage as typeof event.usage & {
                 cache_creation?: { ephemeral_1h_input_tokens?: number };
@@ -940,13 +833,11 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
             ) {
               output.usage.cacheWrite1h = cacheCreation.ephemeral_1h_input_tokens;
             }
-            // Anthropic reports reasoning tokens as a subset of output tokens.
             const thinkingTokens = event.usage.output_tokens_details?.thinking_tokens;
             if (thinkingTokens !== undefined && thinkingTokens !== null) {
               output.usage.reasoning = thinkingTokens;
             }
           }
-          // Anthropic doesn't provide total_tokens, compute from components
           output.usage.totalTokens =
             output.usage.input +
             output.usage.output +
@@ -985,7 +876,6 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
     } catch (error) {
       for (const block of output.content) {
         delete (block as { index?: number }).index;
-        // partialJson is only a streaming scratch buffer; never persist it.
         delete (block as { partialJson?: string }).partialJson;
       }
       output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -998,15 +888,6 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
   return events;
 };
 
-/**
- * Map ThinkingLevel to Anthropic effort levels for adaptive thinking.
- * Note: effort "max" is available on all adaptive-thinking Claude models, while native
- * "xhigh" is only available on Opus 4.7/4.8, Sonnet 5, and Fable 5.
- *
- * @param {Model<"anthropic-messages">} model - Anthropic model the request targets
- * @param {SimpleStreamOptions["reasoning"]} level - requested thinking level
- * @returns {AnthropicEffort} the Anthropic effort level
- */
 function mapThinkingLevelToEffort(
   model: Model<"anthropic-messages">,
   level: SimpleStreamOptions["reasoning"],
@@ -1047,8 +928,6 @@ export const streamSimple: StreamFunction<"anthropic-messages", SimpleStreamOpti
     } satisfies AnthropicOptions);
   }
 
-  // For models with adaptive thinking: use an effort level.
-  // For older models: use budget-based thinking.
   if (model.compat?.forceAdaptiveThinking === true) {
     const effort = mapThinkingLevelToEffort(model, options.reasoning);
     return stream(model, context, {
@@ -1058,8 +937,6 @@ export const streamSimple: StreamFunction<"anthropic-messages", SimpleStreamOpti
     } satisfies AnthropicOptions);
   }
 
-  // Undefined means the caller did not request an output cap; let the helper use the model cap.
-  // Do not coerce to 0 here, or the thinking budget would become the entire max_tokens value.
   const adjusted = adjustMaxTokensForThinking(
     base.maxTokens,
     model.maxTokens,
@@ -1089,7 +966,6 @@ function createClient(
   sessionId?: string,
   federation?: AnthropicFederationConfig,
 ): { client: Anthropic; isOAuthToken: boolean } {
-  // OAuth: Bearer auth, Claude Code identity headers
   if (apiKey && isOAuthToken(apiKey)) {
     const client = new MsaAnthropic({
       apiKey: null,
@@ -1112,7 +988,6 @@ function createClient(
     return { client, isOAuthToken: true };
   }
 
-  // API key, header-owned auth, or workload identity federation.
   const compat = getAnthropicCompat(model);
   const sessionAffinityHeaders: ProviderHeaders = {};
   if (sessionId && compat.sendSessionAffinityHeaders) {
@@ -1211,7 +1086,6 @@ function buildParams(
 ): {
   params: MessageCreateParamsStreaming;
   hasPreferredStrictTools: boolean;
-  /** Effort of the final effort marker, recorded on the reply so later requests can replay it. */
   providerThinkingLevel: AnthropicEffort | undefined;
 } {
   const { cacheControl } = getCacheControl(model, options?.cacheRetention, options?.env);
@@ -1222,10 +1096,6 @@ function buildParams(
   const conversationMessages = initialSystemMessage
     ? transformedMessages.slice(1)
     : transformedMessages;
-  // Native tool changes keep the request-level tool list fixed and define every later tool
-  // by value in a `tool_addition` block, which also expresses same-name redefinitions.
-  // Anthropic rejects a tool list where every tool is deferred, so there must be an initial
-  // active tool to anchor the placeholder. Otherwise the current tool list is sent.
   let hasPreferredStrictTools = false;
   const convertToolDefinitions = (
     tools: Tool[],
@@ -1261,7 +1131,6 @@ function buildParams(
     initialTools.length > 0;
   const thinkingDisabled =
     model.reasoning && options?.thinkingEnabled === false && model.thinkingLevelMap?.off !== null;
-  // Effort cannot change between messages while thinking is disabled, so "off" sends no effort markers.
   const effortMessages = model.compat?.supportsMidConvoEffort === true && !thinkingDisabled;
   const converted = convertMessages(
     conversationMessages,
@@ -1283,7 +1152,6 @@ function buildParams(
     ...(betaFeatures.length > 0 ? { betas: betaFeatures } : {}),
   };
 
-  // For OAuth tokens, we MUST include Claude Code identity
   if (usesOAuth) {
     params.system = [
       {
@@ -1300,7 +1168,6 @@ function buildParams(
       });
     }
   } else if (initialSystemText) {
-    // Add cache control to system prompt for non-OAuth tokens
     params.system = [
       {
         type: "text",
@@ -1310,7 +1177,6 @@ function buildParams(
     ];
   }
 
-  // Temperature is incompatible with extended thinking and unsupported on Claude Opus 4.7+.
   if (
     options?.temperature !== undefined &&
     !options?.thinkingEnabled &&
@@ -1322,10 +1188,6 @@ function buildParams(
 
   const toolCacheControl = compat.supportsCacheControlOnTools ? cacheControl : undefined;
   if (nativeToolChanges) {
-    // Initial tools stay active with the cache breakpoint on the last one, followed by the
-    // placeholder. The list never changes afterwards: later tools are defined by value in
-    // `tool_addition` blocks and withdrawn by `tool_removal`, so the cached prefix survives
-    // every tool change.
     params.tools = [
       ...convertToolDefinitions(initialTools, toolCacheControl),
       DEFERRED_TOOL_PLACEHOLDER,
@@ -1338,12 +1200,8 @@ function buildParams(
   }
 
   if (thinkingDisabled) {
-    // No effort is sent, so the model default applies. Anthropic rejects `block_binding`
-    // with disabled thinking.
     params.thinking = { type: "disabled" };
   } else if (effortMessages) {
-    // Managed effort models use adaptive thinking so prefix mismatches can
-    // be dropped instead of surfacing as persistent 400 responses.
     params.thinking = {
       type: "adaptive",
       display: options?.thinkingDisplay ?? "summarized",
@@ -1351,17 +1209,13 @@ function buildParams(
     };
     params.output_config = { effort: "high" };
   } else if (model.reasoning && options?.thinkingEnabled) {
-    // Default to "summarized" so Opus 4.7 and Mythos Preview behave like
-    // older Claude 4 models (whose API default is also "summarized").
     const display: AnthropicThinkingDisplay = options.thinkingDisplay ?? "summarized";
     if (model.compat?.forceAdaptiveThinking === true) {
-      // Adaptive thinking: Claude decides when and how much to think.
       params.thinking = { type: "adaptive", display };
       if (options.effort) {
         params.output_config = { effort: options.effort };
       }
     } else {
-      // Budget-based thinking for older models
       params.thinking = {
         type: "enabled",
         budget_tokens: options.thinkingBudgetTokens || 1024,
@@ -1397,14 +1251,11 @@ function buildParams(
   };
 }
 
-// Normalize tool call IDs to match Anthropic's required pattern and length
 function normalizeToolCallId(id: string): string {
   return id.replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length)).slice(0, 64);
 }
 
 function convertToolResult(msg: ToolResultMessage): ContentBlockParam {
-  // Anthropic rejects error tool results that contain anything but text, so images are replaced
-  // with a note (#10794).
   const content = msg.isError
     ? msg.content.map((block) =>
         block.type === "image"
@@ -1434,16 +1285,10 @@ function convertMessages(
   cacheControl?: CacheControlEphemeral,
   allowEmptySignature = false,
   managedProvider?: string,
-  /** Converts tool definitions for native `tool_addition` blocks; undefined when tool changes are not native. */
   convertToolDefinitions?: (tools: Tool[]) => BetaTool[],
 ): ConvertedAnthropicMessages {
   const params: MessageParam[] = [];
   const assistantLevels = new Map<number, AnthropicEffort>();
-  // Later system messages are held back and emitted directly before the next assistant
-  // message (or at the end of the transcript). Anthropic requires `tool_result` blocks to
-  // immediately follow their `tool_use`, so a system message between them is rejected; this
-  // also mirrors where the managed-effort system messages are inserted. As a result an
-  // update placed before a user message in the transcript lands after it on the wire.
   const pendingSystemMessages: MessageParam[] = [];
   const flushPendingSystemMessages = (): void => {
     params.push(...pendingSystemMessages);
@@ -1455,8 +1300,6 @@ function convertMessages(
     if (msg === undefined) continue;
 
     if (msg.role === "system") {
-      // Later system messages only reach this point when the model accepts them natively;
-      // otherwise the transcript was collapsed into the leading message before conversion.
       const text = renderSystemMessageUpdate(msg);
       const blocks: ContentBlockParam[] = [];
       if (text.length > 0) blocks.push({ type: "text", text: sanitizeSurrogates(text) });
@@ -1464,7 +1307,6 @@ function convertMessages(
         const added = msg.toolsAdded ?? [];
         const redefined = new Set(added.map((tool) => tool.name));
         for (const tool of msg.toolsRemoved ?? []) {
-          // A new definition under the same name replaces the old one, so no removal is needed.
           if (redefined.has(tool.name)) continue;
           blocks.push({
             type: "tool_removal",
@@ -1528,7 +1370,6 @@ function convertMessages(
             text: sanitizeSurrogates(block.text),
           });
         } else if (block.type === "thinking") {
-          // Redacted thinking: pass the opaque payload back as redacted_thinking
           if (block.redacted) {
             blocks.push({
               type: "redacted_thinking",
@@ -1539,9 +1380,6 @@ function convertMessages(
           const thinkingSignature = block.thinkingSignature;
           const hasThinkingSignature = !!thinkingSignature && thinkingSignature.trim().length > 0;
           if (block.thinking.trim().length === 0 && !hasThinkingSignature) continue;
-          // If thinking signature is missing/empty (e.g., from aborted stream),
-          // convert to plain text for Anthropic. Some compatible providers emit
-          // and accept empty signatures, so let marked models preserve the block.
           if (hasThinkingSignature) {
             blocks.push({
               type: "thinking",
@@ -1586,7 +1424,6 @@ function convertMessages(
         assistantLevels.set(messageIndex, msg.providerThinkingLevel);
       }
     } else if (msg.role === "toolResult") {
-      // Collect all consecutive toolResult messages, needed for z.ai Anthropic endpoint.
       const toolResults: ContentBlockParam[] = [];
       let j = i;
       let next = transformedMessages[j];
@@ -1595,7 +1432,6 @@ function convertMessages(
         next = transformedMessages[++j];
       }
 
-      // Skip the messages we've already processed.
       i = j - 1;
 
       params.push({
@@ -1607,7 +1443,6 @@ function convertMessages(
 
   flushPendingSystemMessages();
 
-  // Add cache_control to the last user or system message to cache conversation history
   if (cacheControl && params.length > 0) {
     const lastMessage = params.at(-1);
     if (lastMessage?.role === "user" || lastMessage?.role === "system") {
@@ -1674,8 +1509,6 @@ function shouldUseFineGrainedToolStreamingBeta(
   );
 }
 
-// Keywords Anthropic strict tool use rejects with a 400 for the whole request.
-// https://platform.claude.com/docs/en/build-with-claude/structured-outputs#json-schema-limitations
 const ANTHROPIC_STRICT_UNSUPPORTED_KEYWORDS = new Set([
   "minimum",
   "maximum",
@@ -1775,17 +1608,13 @@ function mapStopReason(
         stopReason: "error",
         errorMessage: stopDetails?.explanation || `The model refused to complete the request`,
       };
-    // Stop is good enough -> resubmit
     case "pause_turn":
       return { stopReason: "stop" };
     case "stop_sequence":
-      // We don't supply stop sequences, so this should never happen
       return { stopReason: "stop" };
-    // Content flagged by safety filters (not yet in SDK types)
     case "sensitive":
       return { stopReason: "error", errorMessage: "Provider stopped with: sensitive" };
     default:
-      // Handle unknown stop reasons gracefully (API may add new values)
       throw new Error(`Unhandled stop reason: ${reason}`);
   }
 }

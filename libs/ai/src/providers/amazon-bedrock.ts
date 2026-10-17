@@ -3,11 +3,6 @@ import type { ApiKeyAuth } from "../auth/types.ts";
 import { createProvider, type Provider } from "../models.ts";
 import { AMAZON_BEDROCK_MODELS } from "./amazon-bedrock.models.ts";
 
-/**
- * Bedrock accepts a bearer token or the AWS SDK's default credential chain.
- * The login flow can store a token/profile choice; resolve also detects ambient
- * AWS credentials without copying them into msa's credential store.
- */
 const bedrockAuth: ApiKeyAuth = {
   name: "AWS credentials or bearer token",
   login: async (interaction) => {

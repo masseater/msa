@@ -234,7 +234,6 @@ describe("openai-completions tool_choice", () => {
   });
 
   it("defaults unknown OpenAI-compatible endpoints to non-strict tools", async () => {
-    // Regression test for #9816.
     const model = {
       ...localOpenAICompletionsModel,
       id: "local-model",
@@ -1253,8 +1252,6 @@ describe("openai-completions tool_choice", () => {
   });
 
   it("stores OpenRouter Kimi K2.6 reasoning replay compat in built-in metadata", () => {
-    // `:free` variant delisted from the OpenRouter API; the generator override
-    // matches any `moonshotai/kimi-k2.6*` variant that is listed.
     const model = getModel("openrouter", "moonshotai/kimi-k2.6")!;
     expect(model.compat?.supportsDeveloperRole).toBe(false);
     expect(model.compat?.requiresReasoningContentOnAssistantMessages).toBe(true);
@@ -1776,7 +1773,6 @@ describe("openai-completions tool_choice", () => {
       { apiKey: "test" },
     ).result();
 
-    // cached_tokens is documented as cache reads; cache_write_tokens is separate.
     expect(response.usage.input).toBe(20);
     expect(response.usage.cacheRead).toBe(50);
     expect(response.usage.cacheWrite).toBe(30);
@@ -1822,7 +1818,6 @@ describe("openai-completions tool_choice", () => {
       { apiKey: "test" },
     ).result();
 
-    // cached_tokens is documented as cache reads; cache_write_tokens is separate.
     expect(response.usage.input).toBe(20);
     expect(response.usage.cacheRead).toBe(50);
     expect(response.usage.cacheWrite).toBe(30);

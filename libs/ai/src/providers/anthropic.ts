@@ -50,10 +50,6 @@ function anthropicApiKeyAuth(): ApiKeyAuth {
         if (apiKey) return { auth: { apiKey }, source: envVar };
       }
 
-      // Workload identity federation: the Anthropic SDK exchanges the identity
-      // token for a short-lived access token and refreshes it itself. Last in
-      // line so keys and ANTHROPIC_AUTH_TOKEN keep winning, as in the SDK. The
-      // ids are provider config rather than auth, so they travel in `env`.
       const federation: ProviderEnv = {};
       for (const envVar of [
         ANTHROPIC_FEDERATION_RULE_ID_ENV,

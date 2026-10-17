@@ -65,7 +65,6 @@ interface ProviderCall {
   options: StreamOptions | undefined;
 }
 
-/** Ambient auth for keyless test providers; reports "configured" with no auth values. */
 const ambientAuth: ApiKeyAuth = {
   name: "Ambient",
   resolve: () => Promise.resolve({ auth: {} }),
@@ -214,7 +213,6 @@ describe("Models runtime", () => {
     expect(models.getModel("p2", "m3")?.id).toBe("m3");
     expect(models.getModel("p2", "missing")).toBeUndefined();
 
-    // hasApi() narrows dynamically looked-up models with a runtime check
     const found = models.getModel("p2", "m3");
     expect(found && hasApi(found, "openai-completions")).toBe(false);
     expect(found && hasApi(found, "test-api")).toBe(true);
@@ -254,7 +252,6 @@ describe("Models runtime", () => {
 
     expect(models.getModels().map((m) => m.id)).toEqual(["m1"]);
     expect(models.getModels("broken")).toEqual([]);
-    // precise failures come from the provider directly
     expect(() => models.getProvider("broken")?.getModels()).toThrow("boom");
   });
 
@@ -484,8 +481,6 @@ describe("Models runtime", () => {
   });
 
   it("passes the registered provider's base URL, including wrapper overrides, to refreshModels", async () => {
-    // A models.json baseUrl (e.g. a regional OpenRouter host) is applied by a wrapper around the
-    // built-in provider. The built-in refresh must still request that URL.
     const baseUrls: (string | undefined)[] = [];
     const inner: Provider = {
       ...testProvider({
@@ -879,7 +874,6 @@ describe("Models runtime", () => {
     expect(await credentials.read("p1")).toEqual({ type: "api_key", key: "first" });
   });
 
-  // Radius bug report 01a10855-43d8-7447-a710-2acf5ee0b2ee: refresh_token_invalidated after a cancelled refresh.
   it("persists an OAuth refresh that started before the request was cancelled", async () => {
     const credentials = new InMemoryCredentialStore();
     await credentials.modify("p1", () =>
@@ -898,7 +892,6 @@ describe("Models runtime", () => {
         auth: {
           oauth: testOAuth({
             refresh: (credential) => {
-              // The provider has rotated old-refresh by the time the request is cancelled.
               controller.abort();
               return Promise.resolve({
                 ...credential,
@@ -928,14 +921,12 @@ describe("Models runtime", () => {
     );
     const model = testModel("p1", "model-a");
 
-    // model and provider-id overloads resolve the same provider-scoped auth
     expect((await models.getAuth(model))?.auth.apiKey).toBe("env-key");
     expect((await models.getAuth(model.provider))?.auth.apiKey).toBe("env-key");
     expect((await models.getAuth(model, { apiKey: "explicit-key" }))?.auth.apiKey).toBe(
       "explicit-key",
     );
 
-    // stored oauth credential (persisted via the single write path): beats ambient env
     await credentials.modify("p1", () =>
       Promise.resolve({
         type: "oauth",
@@ -948,7 +939,6 @@ describe("Models runtime", () => {
     expect(resolution?.auth.apiKey).toBe("oauth-token");
     expect(resolution?.source).toBe("OAuth");
 
-    // stored api-key credential resolves through apiKey auth, beats env
     await credentials.modify("p1", () => Promise.resolve({ type: "api_key", key: "stored-key" }));
     const apiKeyResolution = await models.getAuth(model.provider);
     expect(apiKeyResolution?.auth.apiKey).toBe("stored-key");
@@ -1017,7 +1007,6 @@ describe("Models runtime", () => {
   it("a stored credential without a matching handler blocks ambient fallback", async () => {
     const credentials = new InMemoryCredentialStore();
     const models = createModels({ credentials });
-    // provider has only apiKey auth, but an oauth credential is stored (stale config)
     models.setProvider(testProvider({ id: "p1", auth: { apiKey: envKeyAuth("env-key") } }));
     await credentials.modify("p1", () =>
       Promise.resolve({
@@ -1126,7 +1115,6 @@ describe("Models runtime", () => {
     );
 
     await expect(models.getAuth("p1")).rejects.toMatchObject({ code: "oauth" });
-    // credential preserved for retry / re-login
     expect(((await credentials.read("p1")) as { access: string }).access).toBe("old");
   });
 
@@ -1197,7 +1185,6 @@ describe("Models runtime", () => {
   });
 
   it("wraps credential store failures in ModelsError", async () => {
-    // read failure
     const readFailing: CredentialStore = {
       read: () => {
         return Promise.reject(new Error("disk on fire"));
@@ -1210,7 +1197,6 @@ describe("Models runtime", () => {
     models.setProvider(testProvider({ id: "p1", auth: { apiKey: envKeyAuth("env-key") } }));
     await expect(models.getAuth("p1")).rejects.toMatchObject({ code: "auth" });
 
-    // modify failure during refresh
     const modifyFailing: CredentialStore = {
       read: () => Promise.resolve({ type: "oauth", access: "old", refresh: "r", expires: 0 }),
       list: () => Promise.resolve([{ providerId: "p1", type: "oauth" }]),
@@ -1323,7 +1309,6 @@ describe("Models runtime", () => {
     });
     expect(calls[0]?.model.baseUrl).toBe("https://auth.test/v1");
 
-    // without explicit options, resolved auth applies
     const result2 = await models.completeSimple(model, context);
     expect(result2.stopReason).toBe("stop");
     expect(calls[1]?.options?.apiKey).toBe("resolved-key");

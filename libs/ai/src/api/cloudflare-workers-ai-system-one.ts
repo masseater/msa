@@ -16,16 +16,6 @@ function cloudflareErrorMessage(errors: unknown): string {
   return `${LABEL} request failed`;
 }
 
-/**
- * System One models on the Workers AI REST endpoint:
- * `POST /accounts/{account}/ai/run` with `{ model, input }`. The REST API wraps the model
- * output in Cloudflare's API envelope. Third-party models such as `typesafe/jev` add a run record:
- * `{ success, result: { state: "Completed", result: { answers, usage } } }`.
- * https://developers.cloudflare.com/ai/models/typesafe/jev/
- * Cloudflare-hosted models such as `@cf/cloudflare/clef` return the output directly:
- * `{ success, result: { model, answers, usage } }`.
- * https://developers.cloudflare.com/workers-ai/models/clef/
- */
 const transport: SystemOneTransport = {
   api: "cloudflare-workers-ai-system-one",
   label: LABEL,
@@ -45,13 +35,5 @@ const transport: SystemOneTransport = {
   },
 };
 
-/**
- * Cloudflare Workers AI System One classification with public `bool` values mapped to wire-level `noul`.
- *
- * @param {ClassifierModel<ClassifierApi>} model - classifier model
- * @param {ClassifierContext} context - classifier request
- * @param {ClassifierOptions} [options] - request options
- * @returns {Promise<ClassifierResult>} the classification result
- */
 export const classify: ClassifierFunction<ClassifierOptions> = (model, context, options) =>
   classifySystemOne(transport, model, context, options);

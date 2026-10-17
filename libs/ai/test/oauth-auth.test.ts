@@ -128,7 +128,6 @@ describe("OAuth through Models.getAuth (lazy load chain)", () => {
         type: "oauth",
         access: "oauth-access-token",
         refresh: "r",
-        // Keep this beyond getAuth()'s refresh window.
         expires: Date.now() + 10 * 60_000,
       }),
     );

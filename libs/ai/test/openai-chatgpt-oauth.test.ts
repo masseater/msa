@@ -192,7 +192,6 @@ describe("OpenAI ChatGPT OAuth", () => {
     const before = Date.now();
     const credential = await openaiChatGPTOAuth.refresh(connectedCredential(), neverAbortedSignal);
 
-    // expires_in is 3600 seconds; the credential expires 3 minutes early so it is refreshed in time.
     expect(credential.expires).toBeGreaterThanOrEqual(before + (3600 - 180) * 1000);
     expect(credential.expires).toBeLessThanOrEqual(Date.now() + (3600 - 180) * 1000);
 

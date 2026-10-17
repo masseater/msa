@@ -1,13 +1,11 @@
 import type { ModelCost, ModelCostRates, ModelCostTier } from "../src/types.ts";
 
-/** A prompt-length bracket. `min` is inclusive and `max` exclusive, both in prompt tokens. */
 export interface AiGatewayPriceTier {
   cost?: string | number;
   min?: number;
   max?: number;
 }
 
-/** Vercel AI Gateway pricing in $/token. */
 export interface AiGatewayPricing {
   input?: string | number;
   output?: string | number;
@@ -31,13 +29,6 @@ function perMillion(value: string | number | undefined): number {
   return Number.isFinite(parsed) ? Number((parsed * 1_000_000).toFixed(6)) : 0;
 }
 
-/**
- * Convert AI Gateway pricing to $/million tokens. Each rate lists its own prompt-length brackets;
- * every bracket start above zero becomes a request-wide tier with the rates in effect there.
- *
- * @param {AiGatewayPricing | undefined} pricing - AI Gateway pricing
- * @returns {ModelCost} the cost in $/1M tokens
- */
 export function getAiGatewayCost(pricing: AiGatewayPricing | undefined): ModelCost {
   const base: ModelCostRates = {
     input: perMillion(pricing?.input),

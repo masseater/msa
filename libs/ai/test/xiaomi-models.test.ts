@@ -30,7 +30,6 @@ describe("Xiaomi MiMo models", () => {
     for (const modelId of REPLACEMENT_MODEL_IDS) expect(modelIds).toContain(modelId);
   });
 
-  // #10818: MiMo Chat Completions only supports a thinking on/off toggle.
   it.each(XIAOMI_PROVIDERS)("models %s reasoning as an off/on toggle", async (provider) => {
     const models = getModels(provider).filter((model) => model.reasoning);
     expect(models.length).toBeGreaterThan(0);

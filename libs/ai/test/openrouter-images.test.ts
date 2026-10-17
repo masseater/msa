@@ -151,7 +151,6 @@ describe("openrouter images", () => {
 
     const output = await generateImages(model, context, { apiKey: "test" });
     expect(output.output.some((item) => item.type === "image")).toBe(true);
-    // Image-only models must not request text output.
     expect((mockState.lastParams as { modalities?: string[] }).modalities).toEqual(["image"]);
   });
 });

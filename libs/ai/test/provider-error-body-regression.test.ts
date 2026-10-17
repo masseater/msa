@@ -1,14 +1,3 @@
-// Per-tier provider regression for issues/provider-error-body-passthrough.
-//
-// Routes a 403-with-body error through the real provider catch path for one
-// representative per tier (Success Criterion 7): a body-blind text provider
-// (openai-completions), a status-only provider (openai-responses), and a
-// body-blind Bedrock provider. Each asserts the resulting errorMessage carries
-// both the HTTP status and the body reason. The image-provider tier is covered
-// by provider-error-body-passthrough.test.ts; the already-correct happy path
-// (no double body / no duplicated status) is asserted via the shared helper in
-// error-body.test.ts.
-
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { streamSimple as streamSimpleBedrock } from "../src/api/bedrock-converse-stream.ts";
@@ -16,8 +5,6 @@ import { stream as streamOpenAICompletions } from "../src/api/openai-completions
 import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
 import type { Model } from "../src/types.ts";
 
-// openai SDK APIError shape: "<status> status code (no body)" message, the
-// parsed body kept on `.error`.
 class FakeAPIError extends Error {
   status: number;
   error: unknown;
@@ -34,7 +21,6 @@ const bedrockMock = vi.hoisted(() => ({
 }));
 
 const openaiMock = vi.hoisted(() => ({
-  // Default parsed body; individual tests may override before invoking.
   parsedBody: { error: "blocked by gateway WAF" } as unknown,
 }));
 
@@ -150,9 +136,6 @@ describe("provider error body passthrough (per-tier regression)", () => {
   });
 
   it("openai-completions does not double-print the OpenRouter metadata.raw extra", async () => {
-    // OpenRouter returns the extra reason under error.error.metadata.raw, which
-    // is part of the parsed body normalizeProviderError already surfaces. The
-    // manual append must not duplicate it.
     openaiMock.parsedBody = {
       message: "Provider returned error",
       code: 403,

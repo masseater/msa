@@ -13,9 +13,6 @@ async function resolveValue(
   credential: ApiKeyCredential | undefined,
   signal: AbortSignal,
 ): Promise<string | undefined> {
-  // Per-field merge: prefer the credential value, fall back to ambient env.
-  // A credential carrying only the API key must still pick up the account /
-  // gateway id from the environment.
   const fromCredential = credential
     ? name === CLOUDFLARE_API_KEY
       ? credential.key

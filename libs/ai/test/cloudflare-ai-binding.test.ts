@@ -35,7 +35,6 @@ describe("createAiBindingFetch", () => {
       headers: { "content-type": "text/event-stream", "cf-aig-log-id": "log-1" },
     });
     const { binding, requests } = fakeBinding(bindingResponse);
-    // No cast at the call site: an `Ai` binding is accepted as-is, the way `env.AI` is typed.
     const fetchFn = createAiBindingFetch(binding);
     const body = JSON.stringify({ model: "claude", messages: [{ role: "user", content: "hi" }] });
 
@@ -55,7 +54,6 @@ describe("createAiBindingFetch", () => {
     expect(request.method).toBe("POST");
     expect(Object.fromEntries(request.headers)).toEqual({
       "content-type": "application/json",
-      // The gateway recognizes and strips the sentinel itself; nothing here touches headers.
       "cf-aig-authorization": `Bearer ${CLOUDFLARE_GATEWAY_BINDING_AUTH_SENTINEL}`,
       "anthropic-version": "2023-06-01",
     });
@@ -65,15 +63,10 @@ describe("createAiBindingFetch", () => {
   });
 
   it("rejects a binding with no fetch() at construction, not on first request", () => {
-    // A well-typed binding on a runtime that predates `Ai#fetch`: `fetch` is optional on the
-    // type, so the check has to happen at runtime — early, with a message that names the cause.
     expect(() => createAiBindingFetch({ aiGatewayLogId: null })).toThrow("does not expose fetch()");
   });
 
   it("keeps SDK placeholder auth off the wire when paired with null auth headers", async () => {
-    // The full header contract from the module docs, end to end through a real API impl: the
-    // sentinel satisfies msa's request-auth check, and the explicit nulls make the OpenAI SDK
-    // delete its own `Authorization: Bearer unused` placeholder before dispatch.
     const { binding, requests } = fakeBinding(
       Response.json({ error: { type: "bad_request", message: "stubbed" } }, { status: 400 }),
     );

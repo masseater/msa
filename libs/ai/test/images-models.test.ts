@@ -141,7 +141,6 @@ describe("model discriminants", () => {
     expect(isModelType(chat, "image")).toBe(false);
     expect(isModelType(image, "image")).toBe(true);
 
-    // hasApi never matches an image model, even on an equal api string
     expect(hasApi({ ...image, api: "test-chat" }, "test-chat")).toBe(false);
     expect(hasApi(chat, "test-chat")).toBe(true);
   });
@@ -283,7 +282,6 @@ describe("Models with image models", () => {
     expect(ghost.stopReason).toBe("error");
     expect(ghost.errorMessage).toContain("Unknown provider: ghost");
 
-    // Unconfigured auth is an error, matching stream().
     const calls: GenerateCall[] = [];
     models.setProvider(testProvider({ id: "p1", envVar: "MISSING", calls }));
     const model = models.getModelOfType("image", "p1", "model-a")!;
@@ -299,7 +297,6 @@ describe("Models with image models", () => {
     expect(cancelled.stopReason).toBe("aborted");
     expect(calls).toEqual([]);
 
-    // A provider without any images implementation rejects image models it lists.
     models.setProvider(
       createProvider({
         id: "chat-only",
@@ -318,7 +315,6 @@ describe("Models with image models", () => {
     expect(unsupported.stopReason).toBe("error");
     expect(unsupported.errorMessage).toContain("does not support image generation");
 
-    // An images map without the model's api yields a provider error result.
     models.setProvider(
       testProvider({
         id: "wrong-api",
@@ -432,13 +428,11 @@ describe("Models with image models", () => {
     expect(images.every((m) => m.type === "image" && m.api === "openrouter-images")).toBe(true);
     expect(models.getModelsOfType("image").every((m) => m.provider === "openrouter")).toBe(true);
 
-    // One upstream id can expose separate chat and image operations.
     const chat = models.getModel("openrouter", "google/gemini-3-pro-image");
     const image = models.getModelOfType("image", "openrouter", "google/gemini-3-pro-image");
     expect(chat?.api).toBe("openai-completions");
     expect(image?.api).toBe("openrouter-images");
 
-    // One credential covers both.
     const [firstImage] = images;
     if (!firstImage) throw new Error("Expected an OpenRouter image model");
     expect((await models.getAuth(firstImage))?.auth.apiKey).toBe("or-key");

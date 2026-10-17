@@ -1,11 +1,3 @@
-/**
- * Kimi Code (subscription) OAuth flow
- *
- * RFC 8628 device authorization grant against https://auth.kimi.com with JSON
- * responses. The access token authenticates requests to
- * https://api.kimi.com/coding as an `Authorization: Bearer` header.
- */
-
 import { toErrorMessage } from "../../utils/errors.ts";
 import { getProviderEnvValue } from "../../utils/provider-env.ts";
 import { sleep } from "../../utils/sleep.ts";
@@ -57,12 +49,6 @@ async function readJson(response: Response): Promise<Record<string, unknown> | n
   }
 }
 
-/**
- * The verification URI is opened in the user's browser; only http(s) URLs are trusted.
- *
- * @param {unknown} value - verification URI
- * @returns {string | null} the URL, or null when it is not http(s)
- */
 function trustedHttpUrl(value: unknown): string | null {
   if (typeof value !== "string" || !value) return null;
   try {
@@ -274,7 +260,6 @@ async function refreshToken(
       return parseTokenResponse(json, "refresh");
     }
 
-    // Unauthorized: the stored credential is dead; Models clears it and prompts re-login.
     if (response.status === 401 || response.status === 403 || json?.["error"] === "invalid_grant") {
       const description =
         typeof json?.["error_description"] === "string" ? `: ${json["error_description"]}` : "";

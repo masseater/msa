@@ -1,16 +1,3 @@
-/**
- * OpenRouter OAuth PKCE flow.
- *
- * OpenRouter exchanges an authorization code for a permanent, user-controlled
- * API key rather than an expiring access/refresh token pair. The callback is
- * handled by a one-shot loopback server on an ephemeral port, raced against a
- * manual prompt so remote/headless sessions can paste the redirect URL when
- * the browser cannot reach the loopback server.
- *
- * NOTE: This module uses node:http (via callback-server.ts) for the OAuth callback server.
- * It is only intended for CLI use, not browser environments.
- */
-
 import { getProviderEnvValue } from "../../utils/provider-env.ts";
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import { startOAuthCallbackServer, waitForCallbackOrManualInput } from "./callback-server.ts";
@@ -33,9 +20,7 @@ function parseAuthorizationInput(input: string): string | undefined {
 
   try {
     return new URL(value).searchParams.get("code") ?? undefined;
-  } catch {
-    // not a URL
-  }
+  } catch {}
 
   if (value.includes("code=")) {
     return new URLSearchParams(value).get("code") ?? undefined;
@@ -116,7 +101,6 @@ async function exchangeAuthorizationCode(
 
 async function loginOpenRouter(interaction: ProviderAuthInteraction): Promise<OAuthCredential> {
   const { verifier, challenge } = await generatePKCE();
-  // OpenRouter sends no `state`; the random path keeps stray requests from completing the sign-in.
   const callback = await startOAuthCallbackServer({
     providerName: "OpenRouter",
     host: getCallbackHost(),

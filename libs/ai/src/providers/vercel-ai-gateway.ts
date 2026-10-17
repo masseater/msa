@@ -18,7 +18,6 @@ export function vercelAIGatewayProvider(): Provider<"anthropic-messages"> {
       ...Object.values(VERCEL_AI_GATEWAY_CLASSIFIER_MODELS),
     ],
     api: anthropicMessagesApi(),
-    // AI Gateway serves TypeSafe's System One protocol at /typesafe/v1/systemone.
     classifiers: { "typesafe-system-one": typesafeSystemOneApi() },
   });
 }

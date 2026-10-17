@@ -1,11 +1,3 @@
-/**
- * OpenAI Codex (ChatGPT OAuth) flow
- *
- * NOTE: This module uses Node.js crypto and http (via callback-server.ts) for the OAuth callback.
- * It is only intended for CLI use, not browser environments.
- */
-
-// NEVER convert to top-level imports - breaks browser/Vite builds
 let _randomBytes: typeof import("node:crypto").randomBytes | null = null;
 if (typeof process !== "undefined" && (process.versions?.node || process.versions?.["bun"])) {
   import("node:crypto").then((m) => {
@@ -85,9 +77,7 @@ function parseAuthorizationInput(input: string): {
       code: url.searchParams.get("code") ?? undefined,
       state: url.searchParams.get("state") ?? undefined,
     };
-  } catch {
-    // not a URL
-  }
+  } catch {}
 
   if (value.includes("#")) {
     const [code, state] = value.split("#", 2);
@@ -383,7 +373,6 @@ async function loginOpenAICodex(
   options?: LoginOptions,
 ): Promise<OAuthCredential> {
   const { verifier, state, url } = await createAuthorizationFlow(options?.agentName);
-  // Port 1455 is shared with the Codex CLI; when it is taken, fall back to the pasted redirect URL.
   const callback = await startOAuthCallbackServer({
     providerName: "OpenAI",
     host: getCallbackHost(),

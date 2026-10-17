@@ -8,12 +8,6 @@ export interface OpenRouterReasoningMetadata {
   default_effort?: ThinkingLevel | "none";
 }
 
-/**
- * Convert OpenRouter's reasoning metadata into msa model capabilities.
- *
- * @param {OpenRouterReasoningMetadata | undefined} reasoning - OpenRouter reasoning metadata
- * @returns {ThinkingLevelMap | undefined} the thinking level map, or undefined
- */
 export function getOpenRouterThinkingLevelMap(
   reasoning: OpenRouterReasoningMetadata | undefined,
 ): ThinkingLevelMap | undefined {
@@ -21,8 +15,6 @@ export function getOpenRouterThinkingLevelMap(
   if (!reasoning.supported_efforts?.length)
     return reasoning.mandatory === true ? { off: null } : undefined;
 
-  // OpenRouter's supported_efforts uses the same effort values as models.dev reasoning_options,
-  // so both sources can share the same msa thinking-level conversion.
   const map = getEffortThinkingLevelMap([{ type: "effort", values: reasoning.supported_efforts }]);
   if (!map) return reasoning.mandatory === true ? { off: null } : undefined;
   return { ...map, off: reasoning.mandatory === true ? null : "none" };

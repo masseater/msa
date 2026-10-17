@@ -1,10 +1,3 @@
-/**
- * Test helper for resolving API keys from ~/.msa/agent/auth.json
- *
- * Supports both API key and OAuth credentials.
- * OAuth tokens are automatically refreshed if expired and saved back to auth.json.
- */
-
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
@@ -48,15 +41,6 @@ function saveAuthStorage(storage: AuthStorage): void {
   chmodSync(AUTH_PATH, 0o600);
 }
 
-/**
- * Resolve API key for a provider from ~/.msa/agent/auth.json
- *
- * For API key credentials, returns the key directly.
- * For OAuth credentials, returns the access token (refreshing if expired and saving back).
- *
- * @param {string} provider - provider id
- * @returns {Promise<string | undefined>} the API key or access token, or undefined when none is stored
- */
 export async function resolveApiKey(provider: string): Promise<string | undefined> {
   const storage = loadAuthStorage();
   const entry = storage[provider];

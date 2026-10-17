@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-/**
- * Live probe for OpenAI Codex Responses websocket-cached mode.
- *
- * Runs a simple tool loop directly against the msa-ai provider source so it does not
- * depend on built dist packages or coding-agent SDK wiring.
- */
 
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";

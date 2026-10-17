@@ -185,7 +185,6 @@ describe("validateToolArguments", () => {
       { type: ["array", "null"], items: { type: "string" } } as Tool["parameters"],
       null,
     );
-    // The CSP test above selects TypeBox's process-wide interpreted fallback, so exercise the generated validator explicitly.
     const generatedCheck = new Function(Compile(tool.parameters).Code())() as (
       value: unknown,
     ) => boolean;
@@ -210,7 +209,6 @@ describe("validateToolArguments", () => {
       expect(() => validateToolArguments(tool, toolCall)).toThrow("Validation failed");
     }
   });
-  // #10897
   it("reports malformed arguments JSON instead of validating empty arguments", () => {
     const tool: Tool = {
       name: "echo",

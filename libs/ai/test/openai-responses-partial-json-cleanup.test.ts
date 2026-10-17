@@ -107,7 +107,6 @@ describe("openai responses partialJson cleanup", () => {
     expect("partialJson" in toolCallEnd.toolCall).toBe(false);
   });
 
-  // #10897
   it("marks malformed final arguments instead of keeping the parsed prefix", async () => {
     const model: Model<"openai-responses"> = {
       id: "gpt-5-mini",

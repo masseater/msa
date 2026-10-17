@@ -1,15 +1,9 @@
 import { IMAGE_MODELS } from "./models.generated.ts";
 import type { ImageApi, ImageModel } from "./types.ts";
 
-/**
- * Compat reads of the generated catalog restricted to image models. New code
- * uses `Models.getModelOfType("image", ...)` or `getBuiltinImageModel()` from `providers/all`.
- */
-
 type Catalog = typeof IMAGE_MODELS;
 type ImageModelIds<TProvider extends keyof Catalog> = keyof Catalog[TProvider];
 
-/** Built-in providers with at least one image model in the generated catalog. */
 export type BuiltinImageProvider = {
   [TProvider in keyof Catalog]: [ImageModelIds<TProvider>] extends [never] ? never : TProvider;
 }[keyof Catalog];
@@ -31,13 +25,6 @@ for (const [provider, models] of Object.entries(IMAGE_MODELS)) {
   if (imageModels.size > 0) imageModelsByProvider.set(provider, imageModels);
 }
 
-/**
- * @deprecated Static catalog read. Use `getBuiltinImageModel` from "@msa/ai/providers/all" or `Models.getModelOfType("image", ...)`.
- *
- * @param {TProvider} provider - built-in provider id
- * @param {TModelId} modelId - image model id
- * @returns {BuiltinImageModel<TProvider, TModelId>} the image model
- */
 export function getImageModel<
   TProvider extends BuiltinImageProvider,
   TModelId extends ImageModelIds<TProvider>,
@@ -48,21 +35,10 @@ export function getImageModel<
   >;
 }
 
-/**
- * @deprecated Static catalog read. Use `Models.getProviders()`.
- *
- * @returns {BuiltinImageProvider[]} the built-in providers with image models
- */
 export function getImageProviders(): BuiltinImageProvider[] {
   return Array.from(imageModelsByProvider.keys()) as BuiltinImageProvider[];
 }
 
-/**
- * @deprecated Static catalog read. Use `getBuiltinImageModels` from "@msa/ai/providers/all" or `Models.getModelsOfType("image")`.
- *
- * @param {TProvider} provider - built-in provider id
- * @returns {BuiltinImageModel<TProvider, ImageModelIds<TProvider>>[]} the provider's image models
- */
 export function getImageModels<TProvider extends BuiltinImageProvider>(
   provider: TProvider,
 ): BuiltinImageModel<TProvider, ImageModelIds<TProvider>>[] {

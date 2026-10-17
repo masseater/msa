@@ -36,14 +36,12 @@ import {
 import { buildBaseOptions, resolveSamplingParams } from "./simple-options.ts";
 
 const AZURE_TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode", "azure"]);
-// OpenAI Responses rejects max_output_tokens below 16: https://github.com/earendil-works/pi/issues/6265
 const OPENAI_RESPONSES_MIN_OUTPUT_TOKENS = 16;
 
 function formatAzureOpenAIError(error: unknown): string {
   return formatProviderError(normalizeProviderError(error), "Azure OpenAI API error");
 }
 
-// Azure OpenAI Responses-specific options
 export interface AzureOpenAIResponsesOptions extends AzureEndpointOptions {
   reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | undefined;
   toolChoice?: ResponseCreateParamsStreaming["tool_choice"] | undefined;
@@ -61,7 +59,6 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
     model.compat?.supportsMidConvoSystemMessages,
   );
 
-  // Start async processing
   (async () => {
     const deploymentName = resolveDeploymentName(model, options);
 
@@ -84,7 +81,6 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
     };
 
     try {
-      // Create Azure OpenAI client
       const apiKey = options?.apiKey;
       if (!apiKey) {
         throw new Error(`No API key for provider: ${model.provider}`);
@@ -145,7 +141,6 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
     } catch (error) {
       for (const block of output.content) {
         delete (block as { index?: number }).index;
-        // Streaming scratch buffers are only used during parsing; never persist them.
         delete (block as { partialJson?: string }).partialJson;
         delete (block as { customInput?: unknown }).customInput;
       }
@@ -280,7 +275,6 @@ function buildParams(
     }
   }
 
-  // Last so model and request sampling parameters override named request fields.
   const samplingParams = resolveSamplingParams(
     model,
     reasoningEffort ?? "off",

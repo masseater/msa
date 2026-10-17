@@ -1,11 +1,6 @@
 export type { Static, TSchema } from "typebox";
 export { Type } from "typebox";
 
-// Core only, side-effect free: no generated catalogs, no provider factories,
-// no api-registry, no OAuth implementations, no compat. Provider factories
-// live under "@msa/ai/providers/*", API implementations under
-// "@msa/ai/api/*", the old global API under
-// "@msa/ai/compat".
 export type {
   AnthropicEffort,
   AnthropicOptions,

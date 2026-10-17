@@ -48,10 +48,6 @@ import {
 } from "./constrained-sampling.ts";
 import { transformMessages } from "./transform-messages.ts";
 
-// =============================================================================
-// Utilities
-// =============================================================================
-
 function encodeTextSignatureV1(id: string, phase?: TextSignatureV1["phase"]): string {
   const payload: TextSignatureV1 = { v: 1, id };
   if (phase) payload.phase = phase;
@@ -71,9 +67,7 @@ function parseTextSignature(
         }
         return { id: parsed.id };
       }
-    } catch {
-      // Fall through to legacy plain-string handling.
-    }
+    } catch {}
   }
   return { id: signature };
 }
@@ -128,20 +122,10 @@ export interface OpenAIResponsesStreamOptions {
 export interface ConvertResponsesMessagesOptions {
   includeSystemPrompt?: boolean | undefined;
   grammarToolInputProperties?: ReadonlyMap<string, string> | undefined;
-  /** Whether later system messages are sent in place; otherwise they are folded into the leading prompt. */
   supportsMidConvoSystemMessages?: boolean | undefined;
   supportsAdditionalTools?: boolean | undefined;
   supportsToolSearch?: boolean | undefined;
   toolOptions?: ConvertResponsesToolsOptions | undefined;
-  /**
-   * Effort for the reply being generated. When set, the thinking level is sent as
-   * configuration_update items instead of a changing reasoning.effort, which would invalidate the
-   * prompt cache. Each item sets the effort from that point on: one goes before every earlier
-   * reply with the level recorded on it (`providerThinkingLevel`), and one with this effort goes
-   * at the end. Earlier input therefore never changes. OpenAI documents the item before user
-   * messages only. After tool results it was verified on gpt-6-luna (October 2026) to be accepted
-   * and to apply to the next reply.
-   */
   configurationUpdateEffort?: string | undefined;
 }
 
@@ -151,10 +135,6 @@ export interface ConvertResponsesToolsOptions {
   supportsOpenAIGrammarTools?: boolean | undefined;
   toolSearchResult?: boolean | undefined;
 }
-
-// =============================================================================
-// Message conversion
-// =============================================================================
 
 export function convertResponsesMessages<TApi extends Api>(
   model: Model<TApi>,
@@ -189,7 +169,6 @@ export function convertResponsesMessages<TApi extends Api>(
     let normalizedItemId = isForeignToolCall
       ? buildForeignResponsesItemId(itemId)
       : normalizeIdPart(itemId);
-    // OpenAI Responses API requires item id to start with "fc"
     if (!normalizedItemId.startsWith("fc_")) {
       normalizedItemId = normalizeIdPart(`fc_${normalizedItemId}`);
     }
@@ -308,7 +287,6 @@ export function convertResponsesMessages<TApi extends Api>(
           const fallbackMessageId =
             textBlockIndex === 0 ? `msg_pi_${msgIndex}` : `msg_pi_${msgIndex}_${textBlockIndex}`;
           textBlockIndex++;
-          // OpenAI requires id to be max 64 characters
           let msgId = parsedSignature?.id;
           if (!msgId) {
             msgId = fallbackMessageId;
@@ -331,12 +309,6 @@ export function convertResponsesMessages<TApi extends Api>(
           const customInputProperty = options?.grammarToolInputProperties?.get(toolCall.name);
           let itemId: string | undefined = itemIdRaw;
 
-          // For different-model messages, set id to undefined to avoid pairing validation.
-          // OpenAI tracks which item IDs were paired with rs_xxx reasoning items.
-          // By omitting the id, we avoid triggering that validation (like cross-provider does).
-          // Also drop ids that do not match the replayed item type: function_call ids must be fc_*
-          // and custom_tool_call ids must be ctc_*. Foreign tool call ids are normalized to fc_*, and
-          // a call can switch between the two types when grammar tool support differs.
           const itemIdPrefix = customInputProperty === undefined ? "fc_" : "ctc_";
           if (isDifferentModel || !itemId?.startsWith(itemIdPrefix)) {
             itemId = undefined;
@@ -404,10 +376,6 @@ export function convertResponsesMessages<TApi extends Api>(
   return messages;
 }
 
-// =============================================================================
-// Tool conversion
-// =============================================================================
-
 export function convertResponsesTools(
   tools: readonly Tool[],
   options?: ConvertResponsesToolsOptions,
@@ -449,10 +417,6 @@ export function convertResponsesTools(
     return functionTool as OpenAITool;
   });
 }
-
-// =============================================================================
-// Stream processing
-// =============================================================================
 
 type StreamingToolCall = ToolCall & {
   partialJson?: string;
@@ -606,10 +570,6 @@ export async function processResponsesStream<TApi extends Api>(
   ): ResponsesOutputSlot | undefined => {
     return outputSlots.get(outputIndex) ?? createSlot(outputIndex, item);
   };
-  // Azure OpenAI can omit reasoning.encrypted_content from response.output_item.done
-  // and provide it only in response.completed.response.output. Backfill the
-  // persisted reasoning signature from the terminal response to keep store:false
-  // multi-turn replay stateless. See https://github.com/earendil-works/pi/issues/6409.
   const backfillReasoningSignatures = (responseOutput: ResponseOutputItem[]): void => {
     for (const item of responseOutput) {
       if (item.type !== "reasoning" || !item.encrypted_content) continue;
@@ -642,7 +602,6 @@ export async function processResponsesStream<TApi extends Api>(
       const cachedTokens = inputDetails?.cached_tokens || 0;
       const cacheWriteTokens = inputDetails?.cache_write_tokens || 0;
       output.usage = {
-        // OpenAI includes cached and cache-write tokens in input_tokens, so subtract both.
         input: Math.max(0, (response.usage.input_tokens || 0) - cachedTokens - cacheWriteTokens),
         output: response.usage.output_tokens || 0,
         cacheRead: cachedTokens,
@@ -659,8 +618,6 @@ export async function processResponsesStream<TApi extends Api>(
         : (response?.service_tier ?? options.serviceTier);
       options.applyServiceTierPricing(output.usage, serviceTier);
     }
-    // Map status to stop reason. For incomplete responses, retain the provider's
-    // specific reason so max-output truncation and content filtering stay distinct.
     const status = response?.status;
     const incompleteDetails = response?.incomplete_details as
       | { reason?: unknown }
@@ -802,8 +759,6 @@ export async function processResponsesStream<TApi extends Api>(
       ) {
         Object.assign(slot.block, parseToolCallArguments(item.arguments || slot.block.partialJson));
         if (item.namespace !== undefined) slot.block.namespace = item.namespace;
-        // Finalize in-place and strip the scratch buffer so replay only
-        // carries parsed arguments.
         delete slot.block.partialJson;
         stream.push({
           type: "toolcall_end",
@@ -854,9 +809,6 @@ export async function processResponsesStream<TApi extends Api>(
   if (!sawTerminalResponseEvent) {
     throw new Error("OpenAI Responses stream ended before a terminal response event");
   }
-  // The agent runs every tool call in the final message. Refuse to hand over calls whose
-  // output_item.done never arrived: their arguments may be cut off or mixed up, e.g. when a
-  // non-compliant server omits output_index. Finished calls have their scratch buffers removed.
   if (output.stopReason === "toolUse") {
     for (const block of output.content) {
       if (block.type !== "toolCall") continue;
@@ -891,7 +843,6 @@ function mapStopReason(
     case "failed":
     case "cancelled":
       return { stopReason: "error" };
-    // These two are wonky ...
     case "in_progress":
     case "queued":
       return { stopReason: "stop" };

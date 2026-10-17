@@ -141,7 +141,6 @@ describe("Google thinking level maps", () => {
     );
   });
 
-  // Regression test for https://github.com/earendil-works/pi/issues/9455
   it.each(googleAdapters)(
     "uses the lowest supported $name level when reasoning is omitted",
     async ({ capture }) => {
@@ -192,7 +191,6 @@ describe("Google thinking level maps", () => {
     },
   );
 
-  // Regression test for https://github.com/earendil-works/pi/issues/10890
   it.each(googleAdapters)(
     "uses thinking levels for Gemini 4 models on $name",
     async ({ capture }) => {

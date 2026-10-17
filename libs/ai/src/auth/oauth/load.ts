@@ -1,14 +1,5 @@
 import type { OAuthAuth } from "../types.ts";
 
-/**
- * Loads an OAuth flow module through a variable specifier so bundlers cannot
- * follow the import into Node-only flow code (`node:http` callback servers,
- * `node:crypto` PKCE). The `.ts`/`.js` rewrite keeps the trick working from
- * both source and built output.
- *
- * @param {string} specifier - module specifier
- * @returns {Promise<unknown>} the loaded module
- */
 const importOAuthModule = (specifier: string): Promise<unknown> => {
   const runtimeSpecifier = import.meta.url.endsWith(".js")
     ? specifier.replace(/\.ts$/u, ".js")
@@ -29,11 +20,6 @@ type OAuthFlowLoaders = {
 
 let bundledLoaders: OAuthFlowLoaders | undefined;
 
-/**
- * Registers statically bundled OAuth flows for standalone Bun binaries.
- *
- * @param {OAuthFlowLoaders} loaders - bundled flow loaders by provider id
- */
 export function registerBundledOAuthFlowLoaders(loaders: OAuthFlowLoaders): void {
   bundledLoaders = loaders;
 }

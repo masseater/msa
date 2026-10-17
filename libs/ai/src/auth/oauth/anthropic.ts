@@ -1,10 +1,3 @@
-/**
- * Anthropic OAuth flow (Claude Pro/Max)
- *
- * NOTE: This module uses Node.js http.createServer for the OAuth callback server.
- * It is only intended for CLI use, not browser environments.
- */
-
 import { getProviderEnvValue } from "../../utils/provider-env.ts";
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import { startOAuthCallbackServer, waitForCallbackOrManualInput } from "./callback-server.ts";
@@ -15,8 +8,6 @@ const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
 const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
 const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
 const CALLBACK_HOST = getProviderEnvValue("MSA_OAUTH_CALLBACK_HOST") || "127.0.0.1";
-// Preferred so the port can be forwarded into containers or over SSH. Anthropic accepts any loopback port,
-// so login falls back to a free port when this one cannot be bound (#10571).
 const CALLBACK_PORT = 53692;
 const CALLBACK_PATH = "/callback";
 const REDIRECT_URI = `http://localhost:${CALLBACK_PORT}${CALLBACK_PATH}`;
@@ -39,9 +30,7 @@ function parseAuthorizationInput(input: string): {
       code: url.searchParams.get("code") ?? undefined,
       state: url.searchParams.get("state") ?? undefined,
     };
-  } catch {
-    // not a URL
-  }
+  } catch {}
 
   if (value.includes("#")) {
     const [code, state] = value.split("#", 2);
@@ -170,7 +159,6 @@ async function loginAnthropic(interaction: ProviderAuthInteraction): Promise<OAu
       complete: (code) => Promise.resolve(code),
       signal: interaction.signal,
     });
-  // Without a callback server, login continues with the pasted redirect URL.
   const callback = await startCallbackServer(CALLBACK_PORT)
     .catch(() => startCallbackServer(0))
     .catch(() => undefined);

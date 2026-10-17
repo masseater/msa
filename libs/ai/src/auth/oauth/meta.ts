@@ -1,22 +1,6 @@
-/**
- * Meta Model API OAuth flow
- *
- * RFC 8628 device authorization grant against https://auth.meta.com (JSON
- * responses). Meta splits identity from API access: the resulting identity
- * token is not accepted for inference, so it is exchanged for a Model API
- * key via the Muse Code key-mint endpoint (minted keys live about a day).
- * The identity token is stored as `refresh` and the minted key as `access`,
- * so the standard OAuth scheduler re-mints the key when it expires with no
- * bespoke renewal machinery. The identity token itself is not renewable
- * (auth.meta.com answers grant_type=refresh_token with 404 and issues no
- * refresh_token), so a 401/403 from mint means the session is dead and the
- * user must sign in again.
- */
-
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import { pollOAuthDeviceCodeFlow } from "./device-code.ts";
 
-// Muse Code CLI client id.
 const CLIENT_ID = "1031625952748946";
 const AUTH_HOST = "https://auth.meta.com";
 const DEVICE_AUTHORIZATION_URL = `${AUTH_HOST}/oidc/device/authorization/`;
@@ -54,12 +38,6 @@ function errorDetail(json: Record<string, unknown> | null): string {
   return "";
 }
 
-/**
- * The verification URI is opened in the user's browser; only http(s) URLs are trusted.
- *
- * @param {unknown} value - verification URI
- * @returns {string | null} the URL, or null when it is not http(s)
- */
 function trustedHttpUrl(value: unknown): string | null {
   if (typeof value !== "string" || !value) return null;
   try {
@@ -160,13 +138,6 @@ function pollForIdentityToken(device: DeviceAuthorization, signal: AbortSignal):
   });
 }
 
-/**
- * Exchange an identity token for a Model API key. Keys are valid for about a day.
- *
- * @param {string} identityToken - identity token
- * @param {AbortSignal} signal - cancels the request
- * @returns {Promise<OAuthCredential>} the API key credential
- */
 async function mintApiKey(identityToken: string, signal: AbortSignal): Promise<OAuthCredential> {
   const response = await fetch(API_KEY_MINT_URL, {
     method: "POST",
@@ -181,7 +152,6 @@ async function mintApiKey(identityToken: string, signal: AbortSignal): Promise<O
   });
   const json = await readJson(response);
   if (response.status === 401 || response.status === 403) {
-    // Identity token is not renewable (see file header); only a fresh device flow helps.
     throw new Error(
       `Meta session expired (status ${response.status}). Run \`/login meta\` to sign in again.${errorDetail(json)}`,
     );
@@ -218,7 +188,6 @@ async function loginMeta(interaction: ProviderAuthInteraction): Promise<OAuthCre
     interaction.notify({ type: "progress", message: "Enabling Meta Model API access..." });
     return await mintApiKey(identityToken, interaction.signal);
   } catch (e) {
-    // An in-flight fetch rejects with a DOMException on abort; the login UI matches on this message.
     if (interaction.signal.aborted) throw new Error("Login cancelled", { cause: e });
     throw e;
   }

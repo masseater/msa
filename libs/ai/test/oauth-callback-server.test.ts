@@ -33,12 +33,6 @@ function interaction(
   return { signal: signal ?? new AbortController().signal, notify: () => {}, prompt };
 }
 
-/**
- * A manual prompt that stays open until its signal aborts.
- *
- * @param {(prompt: AuthPrompt) => void} [onPrompt] - called with each prompt
- * @returns {(prompt: AuthPrompt) => Promise<string>} the prompt function
- */
 function pendingPrompt(
   onPrompt?: (prompt: AuthPrompt) => void,
 ): (prompt: AuthPrompt) => Promise<string> {
@@ -163,7 +157,6 @@ describe("OAuth callback server", () => {
     await vi.waitFor(() => expect(finishExchange).toBeDefined());
     const second = await nativeFetch(url);
     expect(second.status).toBe(409);
-    // A claimed callback keeps completing even when the caller switches to manual input.
     server.cancel();
     finishExchange?.("done");
     expect((await first).status).toBe(200);

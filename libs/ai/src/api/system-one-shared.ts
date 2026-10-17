@@ -14,23 +14,16 @@ import {
   requiredNumber,
 } from "./classifier-shared.ts";
 
-/** TypeSafe System One request body without the transport-specific envelope. */
 export interface SystemOneWireRequest {
   state: ClassifierContext["state"];
   questions: Record<string, unknown>;
 }
 
-/** Differences between services that serve System One models. */
 export interface SystemOneTransport {
-  /** Classifier API implemented by this transport. */
   api: ClassifierApi;
-  /** Service name used in error messages. */
   label: string;
-  /** Absolute request URL. */
   url(model: ClassifierModel<ClassifierApi>): URL;
-  /** Wraps the System One request in the service's request envelope. */
   payload(model: ClassifierModel<ClassifierApi>, request: SystemOneWireRequest): unknown;
-  /** Extracts the System One output (`{ answers, usage }`) from the service's response envelope. */
   output(body: unknown): Record<string, unknown>;
 }
 
@@ -93,12 +86,6 @@ function parseAnswers(
   return Object.fromEntries(answers);
 }
 
-/**
- * Maps public `bool` questions to TypeSafe's wire-level `noul` type.
- *
- * @param {ClassifierContext} context - classifier request
- * @returns {SystemOneWireRequest} the wire request
- */
 function wireRequest(context: ClassifierContext): SystemOneWireRequest {
   return {
     state: context.state,
@@ -111,15 +98,6 @@ function wireRequest(context: ClassifierContext): SystemOneWireRequest {
   };
 }
 
-/**
- * Runs one System One classification over the given transport.
- *
- * @param {SystemOneTransport} transport - sends the wire request
- * @param {ClassifierModel<ClassifierApi>} model - classifier model
- * @param {ClassifierContext} context - classifier request
- * @param {ClassifierOptions | undefined} options - request options
- * @returns {Promise<ClassifierResult>} the classification result
- */
 export async function classifySystemOne(
   transport: SystemOneTransport,
   model: ClassifierModel<ClassifierApi>,
@@ -146,7 +124,6 @@ export async function classifySystemOne(
       options,
     );
     const result = transport.output(body);
-    // Set before parsing answers: a request with malformed answers was still billed.
     const usage = parseClassifierUsage(result["usage"], model);
     if (usage) output.usage = usage;
     output.answers = parseAnswers(transport.label, result["answers"], context);

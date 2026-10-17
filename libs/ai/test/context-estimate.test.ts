@@ -43,7 +43,6 @@ const model: Model<"openai-responses"> = {
 };
 
 describe("context token estimation", () => {
-  // Regression for #10497: large new inputs need more room than chars/4 allows.
   it("reserves 3.5 characters per token for new text when limiting output", () => {
     const context = normalizeContext({
       messages: [

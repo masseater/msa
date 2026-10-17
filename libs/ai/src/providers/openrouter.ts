@@ -17,18 +17,6 @@ import {
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const OPENROUTER_USER_MODELS_TIMEOUT_MS = 15_000;
 
-/**
- * Restrict an OpenRouter catalog to the chat models the key may use, with the key's limits and
- * prices from `GET /models/user`. Image and classifier models are returned unchanged. A missing
- * limit keeps the catalog value. The request uses the provider's configured base URL, so regional
- * endpoints such as `https://us.openrouter.ai/api/v1` apply their region's filtering. When the
- * endpoint rejects the key (401/403) or does not exist (404), for example with a proxy configured
- * in models.json, the catalog is returned unchanged.
- *
- * @param {readonly AnyModel[]} catalog - OpenRouter catalog
- * @param {RefreshModelsContext} context - refresh context with auth and network access
- * @returns {Promise<readonly AnyModel[]>} the catalog restricted to the key
- */
 export async function personalizeOpenRouterCatalog(
   catalog: readonly AnyModel[],
   context: RefreshModelsContext,
@@ -70,7 +58,6 @@ export async function personalizeOpenRouterCatalog(
     return [
       {
         ...model,
-        // `||`: OpenRouter reports a missing limit as absent, null or 0, like the generator's fallback.
         contextWindow:
           entry.top_provider?.context_length || entry.context_length || model.contextWindow,
         maxTokens: entry.top_provider?.max_completion_tokens || model.maxTokens,
@@ -103,7 +90,6 @@ export function openrouterProvider(): Provider<"anthropic-messages" | "openai-co
       "openai-completions": openAICompletionsApi(),
     },
     images: { "openrouter-images": openrouterImagesApi() },
-    // OpenRouter serves TypeSafe's System One protocol at /api/v1/systemone.
     classifiers: { "typesafe-system-one": typesafeSystemOneApi() },
   });
 }

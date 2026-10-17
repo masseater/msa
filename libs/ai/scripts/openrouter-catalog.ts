@@ -28,18 +28,6 @@ function modalities(values: string[] | undefined): ("text" | "image")[] {
   );
 }
 
-/**
- * Build the OpenRouter catalog from the default listing and the
- * `output_modalities=image` and `output_modalities=decisions` listings. The
- * default listing omits image-only and decision models, so those come from
- * the other listings. An upstream model may appear in several results; it then
- * gets separate entries per operation.
- *
- * @param {readonly OpenRouterModelListItem[]} listed - default listing
- * @param {readonly OpenRouterModelListItem[]} imageListed - image listing
- * @param {readonly OpenRouterModelListItem[]} decisionListed - decisions listing
- * @returns {OpenRouterCatalog} the catalog
- */
 export function buildOpenRouterCatalog(
   listed: readonly OpenRouterModelListItem[],
   imageListed: readonly OpenRouterModelListItem[],
@@ -48,9 +36,7 @@ export function buildOpenRouterCatalog(
   const chat: OpenRouterCatalog["chat"] = [];
 
   for (const model of listed) {
-    // Only include models that support tools
     if (!model.supported_parameters?.includes("tools")) continue;
-    // Parse input modalities
     const input: ("text" | "image")[] = ["text"];
     if (model.architecture?.modality?.includes("image")) {
       input.push("image");
@@ -93,8 +79,6 @@ export function buildOpenRouterCatalog(
     });
   }
 
-  // Decision models such as TypeSafe's Jev are served through OpenRouter's
-  // TypeSafe-compatible System One endpoint.
   const classifiers: OpenRouterCatalog["classifiers"] = [];
   for (const model of decisionListed) {
     if (classifiers.some((entry) => entry.id === model.id)) continue;

@@ -1,10 +1,3 @@
-/**
- * OpenAI Responses API token sharing through Sign in with ChatGPT.
- *
- * This public-client flow uses no client secret and sends the resulting user
- * access token directly to api.openai.com.
- */
-
 import { randomBytes } from "node:crypto";
 import { createServer, type Server, type ServerResponse } from "node:http";
 
@@ -18,7 +11,6 @@ import type {
 } from "../types.ts";
 import { generatePKCE } from "./pkce.ts";
 
-// every login registers a new client with this ID; OpenAI returns the issued client ID in the callback
 const DYNAMIC_CLIENT_ID = "dynamic_agent_client";
 const AGENT_NAME_HINT = "msa";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
@@ -31,7 +23,6 @@ const CALLBACK_PATH = "/auth/callback";
 const REDIRECT_URI = `http://127.0.0.1:${CALLBACK_PORT}${CALLBACK_PATH}`;
 const DIRECT_TOKEN_SCOPE = "chatgpt.tokens.use.direct";
 const SCOPE = `openid profile email offline_access resource.invoke ${DIRECT_TOKEN_SCOPE}`;
-// Refresh this long before the real expiry so a request never starts with a token about to expire.
 const EXPIRY_MARGIN_MS = 3 * 60 * 1000;
 
 type AuthorizationResult = {
@@ -220,8 +211,6 @@ async function exchangeAuthorizationCode(
     }),
     signal,
   );
-  // msa does not use the ID token to identify the user or read profile data.
-  // Keep the presence check as part of the token-response contract.
   if (typeof token.id_token !== "string" || token.id_token.trim().length === 0) {
     throw new Error("OpenAI OAuth token response did not contain an ID token");
   }
@@ -250,12 +239,6 @@ async function refreshAccessToken(
   return credentialFromTokenResponse(token, clientId);
 }
 
-/**
- * OpenAI identifies each installation ("agent host") by a stable URI such as `urn:uuid:<uuid>`.
- *
- * @param {string | undefined} deviceId - installation id
- * @returns {string} the agent host URI
- */
 function agentHostId(deviceId: string | undefined): string {
   if (!deviceId || !UUID_PATTERN.test(deviceId)) {
     throw new Error("Sign in with ChatGPT requires a device ID (UUID) for this installation");
@@ -271,8 +254,6 @@ async function loginOpenAIChatGPT(
   const { verifier, challenge } = await generatePKCE();
   const state = randomValue();
   const nonce = randomValue();
-  // Without this server, the browser's callback would reach whatever else holds the port (another
-  // pending login or the Codex CLI), which rejects it as a state mismatch. Fail with a clear error instead.
   const callback = await startCallbackServer(state).catch((error: unknown) => {
     if (!(error instanceof Error && "code" in error && error.code === "EADDRINUSE")) throw error;
     throw new Error(
@@ -329,11 +310,6 @@ async function loginOpenAIChatGPT(
   } finally {
     manualAbort.abort();
     callback.server.close();
-    // close() only stops accepting new connections. Browsers open spare connections ahead of
-    // time, and one that has not sent a request yet stays open and attached to this server.
-    // A later login in the same process starts a new server with a new state, but the browser
-    // may send that login's callback over the spare connection. This server would then handle
-    // it and reject it with "OAuth state mismatch", and the new login would never see it.
     callback.server.closeAllConnections();
   }
 }

@@ -25,8 +25,6 @@ function makeCustomModel(
   compat?: Model<"anthropic-messages">["compat"],
 ): Model<"anthropic-messages"> {
   return {
-    // Id intentionally does not match any built-in adaptive substring. This
-    // mirrors corporate proxy schemes such as `anthropic--claude-opus-latest`.
     id: "vendor--claude-opus-latest",
     name: "Vendor Proxy Opus Latest",
     api: "anthropic-messages",

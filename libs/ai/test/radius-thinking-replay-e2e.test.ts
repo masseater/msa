@@ -1,33 +1,3 @@
-/**
- * Radius drops replayed Anthropic thinking (e2e, needs real credentials).
- *
- * Problem: when a client sends a Claude reply back to the model in a later request, the reply's signed thinking blocks
- * should become part of the model's context. Through Radius they are silently dropped: the model never sees its
- * earlier reasoning, and the provider reports no input tokens for it.
- *
- * How it was found: a msa Mobile session on radius/claude-opus-5-5 reached ~996K context tokens, but its compaction
- * request was 1.38M tokens ("prompt is too long"). Compaction serializes all assistant thinking as text, while the
- * live context had been carrying none of it.
- *
- * Mechanism: Claude models with managed effort (`compat.supportsMidConvoEffort`) bind each signed thinking block to
- * the effort level of the request that produced it. `anthropic-messages` records that level on the assistant message as
- * `providerThinkingLevel` and replays it as an effort marker next to the block. The request also sets
- * `thinking.block_binding.prefix_mismatch_behavior = "drop_block"`, so a block whose marker is missing is dropped
- * without an error. Direct Anthropic replies carry `providerThinkingLevel: "high"`. Radius replies do not: its
- * msa-messages `done` event omits `providerThinkingLevel`, although the client parses it (see `msa-messages.ts`). Radius
- * does honor the field when a client sends it, so the fix is for Radius to return it.
- *
- * Measurement: get one real reply with thinking and a tool call, then send the follow-up request twice, once with the
- * reply unchanged and once with its thinking blocks removed. Kept thinking makes the first request larger by roughly the
- * reply's thinking tokens; dropped thinking makes both requests the same size. Observed on claude-opus-5-5:
- *
- *   anthropic                       with 970, without 605 (+365 of 413 output tokens)
- *   radius                          with 582, without 582 (+0 of 463 output tokens)
- *   radius, level "high" injected   with 997, without 582
- *
- * Credentials: RADIUS_API_KEY or a `radius` entry in ~/.msa/agent/auth.json; ANTHROPIC_API_KEY, ANTHROPIC_OAUTH_TOKEN or
- * an `anthropic` entry for the control. Each test makes three paid requests.
- */
 import { describe, expect, it } from "vite-plus/test";
 
 import { completeSimple, getModel } from "../src/compat.ts";
@@ -64,12 +34,6 @@ const user: Message = {
   timestamp: 1,
 };
 
-/**
- * Input tokens the provider reports for the request, cached or not.
- *
- * @param {AssistantMessage} message - assistant message
- * @returns {number} the input token count
- */
 function inputTokens(message: AssistantMessage): number {
   return message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
 }
@@ -92,13 +56,6 @@ function request<TApi extends Api>(
   });
 }
 
-/**
- * A real reply with signed thinking and a tool call, plus the tool result that answers it.
- *
- * @param {Model<TApi>} model - model to call
- * @param {string} apiKey - API key
- * @returns {Promise<{ reply: AssistantMessage; result: ToolResultMessage }>} the reply and the tool result
- */
 async function thinkingTurn<TApi extends Api>(
   model: Model<TApi>,
   apiKey: string,
@@ -123,15 +80,6 @@ async function thinkingTurn<TApi extends Api>(
   return { reply, result };
 }
 
-/**
- * Input tokens `reply`'s thinking adds to the follow-up request.
- *
- * @param {Model<TApi>} model - model to call
- * @param {string} apiKey - API key
- * @param {AssistantMessage} reply - reply with signed thinking
- * @param {ToolResultMessage} result - tool result answering the reply
- * @returns {Promise<number>} the added input tokens
- */
 async function replayedThinkingTokens<TApi extends Api>(
   model: Model<TApi>,
   apiKey: string,
@@ -163,11 +111,9 @@ describe("replayed Claude thinking stays in context", () => {
   it.skipIf(!radiusKey)("radius keeps it", { timeout: 180000 }, async () => {
     const model = getModel("radius", "claude-opus-5-5");
     const { reply, result } = await thinkingTurn(model, radiusKey!);
-    // Cause: without this level, the replayed block has no effort marker and Anthropic drops it.
     expect
       .soft(reply.providerThinkingLevel, "radius done event omits providerThinkingLevel")
       .toBe("high");
-    // Effect: the follow-up request reports no input tokens for the thinking.
     const added = await replayedThinkingTokens(model, radiusKey!, reply, result);
     expect(added, "radius dropped the replayed thinking").toBeGreaterThan(0.5 * reply.usage.output);
   });

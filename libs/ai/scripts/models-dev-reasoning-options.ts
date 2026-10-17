@@ -19,14 +19,6 @@ const THINKING_LEVELS: readonly ThinkingLevel[] = [
   "max",
 ];
 
-/**
- * Converts models.dev verified effort values into msa's selectable thinking levels.
- * Values without a msa equivalent (`default` and JSON `null`) are intentionally
- * omitted.
- *
- * @param {readonly ModelsDevReasoningOption[]} options - models.dev effort values
- * @returns {ThinkingLevelMap | undefined} the thinking level map, or undefined when no value maps
- */
 export function getEffortThinkingLevelMap(
   options: readonly ModelsDevReasoningOption[],
 ): ThinkingLevelMap | undefined {

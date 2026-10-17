@@ -3,7 +3,6 @@ import { getProviderEnvValue } from "../utils/provider-env.ts";
 
 const DEFAULT_AZURE_API_VERSION = "v1";
 
-/** Azure models ship without a baseUrl: one resource per user, resolved per request. */
 export interface AzureEndpointOptions extends StreamOptions {
   azureApiVersion?: string | undefined;
   azureResourceName?: string | undefined;
@@ -52,8 +51,6 @@ function normalizeAzureBaseUrl(baseUrl: string): string {
     url.hostname.endsWith(".ai.azure.com");
   const normalizedPath = url.pathname.replace(/\/+$/u, "");
 
-  // Ensure Azure hosts have /openai/v1 as base path so the AzureOpenAI SDK
-  // can append /deployments/<model>/... and ?api-version=v1 correctly.
   if (
     isAzureHost &&
     (normalizedPath === "" ||

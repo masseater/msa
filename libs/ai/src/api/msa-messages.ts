@@ -1,14 +1,3 @@
-/**
- * msa-messages API implementation.
- *
- * Streams msa's own message protocol directly to a backend: the request is a
- * single POST of `{ model, context, options }` to `<baseUrl>/messages`, the
- * response is an SSE stream of serialized assistant-message events plus a
- * terminal `done`/`error` event. This is the wire protocol spoken by the
- * Radius gateway, but any backend implementing it can be used, e.g. via a
- * models.json custom provider with `"api": "msa-messages"`.
- */
-
 import type {
   AssistantMessage,
   AssistantMessageEvent,
@@ -42,14 +31,12 @@ export interface MsaMessagesOptions extends StreamOptions {
     | "required"
     | { type: "function"; function: { name: string } }
     | undefined;
-  /** Ask the backend for debug metadata (e.g. routing response headers). */
   debug?: boolean | undefined;
 }
 
 type MsaMessagesUsage = AssistantMessage["usage"];
 type MsaMessagesStopReason = AssistantMessage["stopReason"];
 
-/** Impact summary of a server-side message rewrite (e.g. a gateway policy). */
 export type MsaMessagesRewriteImpact = {
   policyId: string;
   policyVersion: number;
@@ -59,7 +46,6 @@ export type MsaMessagesRewriteImpact = {
   systemPromptChanged: boolean;
 };
 
-/** Serialized assistant-message event as sent by a msa-messages backend. */
 export type MsaMessagesEvent =
   | { type: "start" }
   | { type: "text_start"; contentIndex: number }
@@ -380,7 +366,6 @@ function resolveCacheRetention(
   if (cacheRetention) {
     return cacheRetention;
   }
-  // Backend defaults apply when unset; only the legacy env opt-in is mapped.
   return getProviderEnvValue("MSA_CACHE_RETENTION", env) === "long" ? "long" : undefined;
 }
 
