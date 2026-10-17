@@ -30,13 +30,17 @@ release. Add a tool name to select part of the graph. For example, run
 
 - pnpm は直接呼ばない。install・add・remove は `vp install`・`vp add`・`vp remove`、script は `vp run <script>`、binary は `vp exec <bin>`。`vp` が持たないサブコマンドだけ `vp pm <subcommand>` を使う。
 - `vp run verify` が唯一のゲート。PR と main への push で CI の verify が走る。pre-push フックは gitleaks だけを走らせる。
-- テストは `bash test.sh`（verify の `test-all` が回す）。API キーを抜いた隔離環境で全 package をテストする。1 つだけ走らせるときは package のルートで `node "$(git rev-parse --show-toplevel)/node_modules/vitest/dist/cli.js" --run test/<file>.test.ts`（`libs/tui` は `node --test`）。
+- テストは `bash test.sh`（verify の `test-all` が回す）。API キーを抜いた隔離環境で全 package をテストする。1 つだけ走らせるときは package のルートで `vp test --run test/<file>.test.ts`（`libs/tui` は `node --test`）。
 - パッケージは `apps/`（配布する CLI と eval）・`libs/`（共有するライブラリ）・`tools/`（リポジトリの道具）に置く。`packages/` は作らない（verify の `workspace-layout` が落とす）。
 - `libs/ai/src/models.generated.ts` は直接編集せず、`vp run generate:models` で作り直す。clone 直後に typecheck が通らないときは `vp run hydrate:model-data` を回す。
 
 ## pi との関係
 
 - このリポジトリは pi（https://github.com/earendil-works/pi）の fork から始まったが、pi とは完全に分離した別プロジェクトで、pi は upstream ではない。pi の取り込みは、原則として機能単位で、必要と判断したときだけ行う。取り込むときは msa のコードとして実装し直し、pi のコードをそのまま取り込まない（merge・cherry-pick・コピーをしない）。
+
+## 機能の置き場所
+
+- msa の機能は本体（`apps/coding-agent/src/core` など）に実装する。拡張機能（extensions）は msa の外の機能を簡易に取り込むための仕組みで、msa 自身の機能をそこに置かない。
 
 ## 環境変数
 

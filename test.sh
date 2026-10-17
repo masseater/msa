@@ -80,6 +80,12 @@ for name in CI GITHUB_ACTIONS; do
 	[[ -z "$value" ]] || test_env+=("$name=$value")
 done
 
+# The orchestrator graph tests also run against Neo4j when it is configured.
+for name in NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD; do
+	value="${!name-}"
+	[[ -z "$value" ]] || test_env+=("$name=$value")
+done
+
 # Root ignores file modes, so tests of permission errors cannot fail as they should.
 # Dropping the override capabilities makes root obey the modes of the files it owns.
 runner=()

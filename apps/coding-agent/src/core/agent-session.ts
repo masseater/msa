@@ -135,6 +135,15 @@ import { ModelRegistry } from "./model-registry.ts";
 import { resolveModelReference } from "./model-resolver.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import { NestedToolCallRunner } from "./nested-tool-calls.ts";
+import { Neo4jSessionGraph } from "./orchestrator/neo4j-graph.ts";
+import {
+  type CreateWorkerOptions,
+  ORCHESTRATOR_REPORT_MESSAGE_TYPE,
+  Orchestrator,
+  type OrchestratorDefaults,
+  type WorkerSession,
+} from "./orchestrator/orchestrator.ts";
+import { createOrchestratorToolDefinitions } from "./orchestrator/tools.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
@@ -338,6 +347,11 @@ export interface AgentSessionConfig {
   extensionRunnerRef?: { current?: ExtensionRunner };
   /** Session start event metadata emitted when extensions bind to this runtime. */
   sessionStartEvent?: SessionStartEvent;
+  /**
+   * Creates the sessions the orchestrator tools start. Without it the session has no orchestrator
+   * tools.
+   */
+  createWorkerSession?: (options: CreateWorkerOptions) => Promise<WorkerSession>;
 }
 
 export interface ExtensionBindings {
@@ -471,6 +485,7 @@ export class AgentSession {
   private _lastAssistantToolResults: AgentMessage[] = [];
   private _lastActivityOutcome: AgentActivityOutcome = "completed";
   private readonly _goal: GoalLoop;
+  private readonly _orchestrator: Orchestrator | undefined;
   private _totalTokensCache: { entryCount: number; total: number } | undefined;
   private _isBeforeSettle = false;
   private _abortDuringBeforeSettle = false;
@@ -585,6 +600,28 @@ export class AgentSession {
       },
       findActiveGoalCondition(this.sessionManager.getBranch()),
     );
+
+    const createWorkerSession = config.createWorkerSession;
+    this._orchestrator = createWorkerSession
+      ? new Orchestrator({
+          project: this.sessionManager.getSessionId(),
+          cwd: this._cwd,
+          connectGraph: () => Neo4jSessionGraph.connect(),
+          createWorker: createWorkerSession,
+          resolveModel: (reference) => this._resolveOrchestratorModel(reference),
+          defaults: () => this._orchestratorDefaults(),
+          report: (text, details) =>
+            void this.sendCustomMessage(
+              {
+                customType: ORCHESTRATOR_REPORT_MESSAGE_TYPE,
+                content: text,
+                display: true,
+                details,
+              },
+              { triggerTurn: true, deliverAs: "followUp" },
+            ),
+        })
+      : undefined;
 
     // Always subscribe to agent events for internal handling
     // (session persistence, extensions, auto-compaction, retry logic)
@@ -1532,6 +1569,7 @@ export class AgentSession {
     } catch {
       // Dispose must succeed even if an abort hook throws.
     }
+    void this._orchestrator?.dispose().catch(() => undefined);
 
     this._extensionRunner.invalidate(
       "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
@@ -2701,6 +2739,31 @@ export class AgentSession {
       this._totalTokensCache = { entryCount, total: this.getSessionStats().tokens.total };
     }
     return this._totalTokensCache.total;
+  }
+
+  private _resolveOrchestratorModel(reference: string): Model<any> {
+    const result = resolveModelReference(
+      { text: reference, thinkingSuffix: "none", fuzzy: false },
+      this._modelRuntime.getAvailableSnapshot(),
+      () => true,
+    );
+    if (result.status !== "resolved") throw new Error(`"${reference}" is not an available model`);
+    return result.model;
+  }
+
+  private _orchestratorDefaults(): OrchestratorDefaults {
+    const current = this.model;
+    if (!current) throw new Error(formatNoModelSelectedMessage());
+    const currentReference = `${current.provider}/${current.id}`;
+    return {
+      workerModel: this.settingsManager.getOrchestratorWorkerModel() ?? currentReference,
+      workerThinkingLevel:
+        this.settingsManager.getOrchestratorWorkerThinkingLevel() ?? this.thinkingLevel,
+      reviewModel: this.settingsManager.getOrchestratorReviewModel() ?? currentReference,
+      reviewThinkingLevel:
+        this.settingsManager.getOrchestratorReviewThinkingLevel() ?? this.thinkingLevel,
+      maxConcurrentSessions: this.settingsManager.getOrchestratorMaxConcurrentSessions(),
+    };
   }
 
   private _goalEvaluatorModel(): Model<any> {
@@ -4004,6 +4067,13 @@ export class AgentSession {
     this._baseToolDefinitions = new Map(
       Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
     );
+    if (this._orchestrator && !this._baseToolsOverride) {
+      for (const [name, tool] of Object.entries(
+        createOrchestratorToolDefinitions(this._orchestrator),
+      )) {
+        this._baseToolDefinitions.set(name, tool);
+      }
+    }
 
     const extensionsResult = this._resourceLoader.getExtensions();
     if (options.flagValues) {
