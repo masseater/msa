@@ -1,7 +1,7 @@
 import { Clock, Effect } from "effect";
 
+import { AltScreenSearchComponent } from "./alt-screen-search-component.ts";
 import {
-  AltScreenSearchComponent,
   AltScreenSearchIndex,
   type AltScreenSearchMatch,
   getAltScreenSearchMatchKey,

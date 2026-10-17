@@ -2,10 +2,9 @@ import { dual } from "effect/Function";
 
 import { stripOsc133ZonePrefix } from "./ansi-sequences.ts";
 import type { ScrollView } from "./components/scroll-view.ts";
-import { allocateStackSizes, visibleStackEntries } from "./components/stack.ts";
-import { getLayoutNode } from "./layout-node.ts";
+import { type LayoutContext, layoutComponent } from "./layout-tree.ts";
 import { cropKittyImageLine, getKittyImageMetadata, isImageLine } from "./terminal-image.ts";
-import { type Component, CURSOR_MARKER, compositeTuiLine } from "./tui.ts";
+import { type Component, compositeTuiLine } from "./tui.ts";
 import {
   extractAnsiCode,
   getActiveBackgroundAnsi,
@@ -49,227 +48,6 @@ export interface ScrollbarGeometry {
   thumbTop: number;
   thumbHeight: number;
   maxScrollTop: number;
-}
-
-interface LayoutContext {
-  viewport: { width: number; height: number };
-  renderCache: Map<Component, Map<number, string[]>>;
-  requestRender: () => void;
-  primaryScrollView: ScrollView | undefined;
-}
-
-function intersect(a: LayoutRect, b: LayoutRect): LayoutRect {
-  const x = Math.max(a.x, b.x);
-  const y = Math.max(a.y, b.y);
-  const right = Math.min(a.x + a.width, b.x + b.width);
-  const bottom = Math.min(a.y + a.height, b.y + b.height);
-  return { x, y, width: Math.max(0, right - x), height: Math.max(0, bottom - y) };
-}
-
-function renderCached(context: LayoutContext, component: Component, width: number): string[] {
-  const safeWidth = Math.max(1, Math.floor(width));
-  let widths = context.renderCache.get(component);
-  if (widths === undefined) {
-    widths = new Map<number, string[]>();
-    context.renderCache.set(component, widths);
-  }
-  let lines = widths.get(safeWidth);
-  if (lines === undefined) {
-    lines = component.render(safeWidth);
-    widths.set(safeWidth, lines);
-  }
-  return lines;
-}
-
-function measureHeight(context: LayoutContext, component: Component, width: number): number {
-  return renderCached(context, component, width).length;
-}
-
-function measureWidth(context: LayoutContext, component: Component, width: number): number {
-  return renderCached(context, component, width).reduce(
-    (max, line) => Math.max(max, visibleWidth(line)),
-    0,
-  );
-}
-
-function withParent(box: LayoutBox, parent: LayoutBox): LayoutBox {
-  box.parent = parent;
-  return box;
-}
-
-function translateBox(box: LayoutBox, deltaY: number): void {
-  box.rect.y += deltaY;
-  for (const child of box.children) translateBox(child, deltaY);
-}
-
-function updateClips(box: LayoutBox, parentClip: LayoutRect): void {
-  box.clip = intersect(parentClip, box.rect);
-  for (const child of box.children) updateClips(child, box.clip);
-}
-
-function layoutComponent(
-  context: LayoutContext,
-  component: Component,
-  x: number,
-  y: number,
-  width: number,
-  height: number | undefined,
-  clip: LayoutRect,
-): LayoutBox {
-  const safeWidth = Math.max(1, Math.floor(width));
-  const node = getLayoutNode(component);
-  if (node === undefined) {
-    const lines = renderCached(context, component, safeWidth);
-    const allocatedHeight = height === undefined ? lines.length : Math.max(0, Math.floor(height));
-    let lineOffset = 0;
-    if (lines.length > allocatedHeight && allocatedHeight > 0) {
-      const cursorLine = lines.findIndex((line) => line.includes(CURSOR_MARKER));
-      if (cursorLine >= allocatedHeight) lineOffset = cursorLine - allocatedHeight + 1;
-    }
-    return {
-      component,
-      rect: { x, y, width: safeWidth, height: allocatedHeight },
-      clip: intersect(clip, { x, y, width: safeWidth, height: allocatedHeight }),
-      children: [],
-      lines,
-      lineOffset,
-      layer: 0,
-    };
-  }
-
-  if (node.type === "scroll") {
-    const previousScrollTop = node.state.scrollTop;
-    const contentWidth = node.state.getContentWidth(safeWidth);
-    const childBox = layoutComponent(
-      context,
-      node.component,
-      x,
-      y - previousScrollTop,
-      contentWidth,
-      undefined,
-      clip,
-    );
-    const contentHeight = childBox.rect.height;
-    const viewportHeight = height === undefined ? contentHeight : Math.max(0, Math.floor(height));
-    node.state.updateLayout(contentHeight, viewportHeight, context.requestRender);
-    translateBox(childBox, previousScrollTop - node.state.scrollTop);
-    const scrollView = node.state as ScrollView;
-    if (node.state.primary || context.primaryScrollView === undefined)
-      context.primaryScrollView = scrollView;
-    const rect = { x, y, width: safeWidth, height: viewportHeight };
-    const childClip = intersect(clip, rect);
-    const box: LayoutBox = {
-      component,
-      rect,
-      clip: childClip,
-      children: [childBox],
-      scrollView,
-      scrollContentLines: renderCached(context, node.component, contentWidth),
-      layer: 0,
-    };
-    childBox.parent = box;
-    updateClips(childBox, childClip);
-    return box;
-  }
-
-  const entries = visibleStackEntries(node.entries, context.viewport);
-  const gapTotal = Math.max(0, entries.length - 1) * node.gap;
-  if (node.type === "vstack") {
-    const intrinsicHeights = entries.map((entry) =>
-      typeof entry.basis === "number"
-        ? entry.basis
-        : measureHeight(context, entry.component, safeWidth),
-    );
-    const sizes = allocateStackSizes(entries, intrinsicHeights, height, node.gap);
-    const naturalHeight = sizes.reduce((sum, size) => sum + size, 0) + gapTotal;
-    const allocatedHeight = height === undefined ? naturalHeight : Math.max(0, Math.floor(height));
-    const rect = { x, y, width: safeWidth, height: allocatedHeight };
-    const box: LayoutBox = {
-      component,
-      rect,
-      clip: intersect(clip, rect),
-      children: [],
-      layer: 0,
-    };
-    let childY = y;
-    for (let index = 0; index < entries.length; index++) {
-      box.children.push(
-        withParent(
-          layoutComponent(
-            context,
-            entries[index]!.component,
-            x,
-            childY,
-            safeWidth,
-            sizes[index]!,
-            box.clip,
-          ),
-          box,
-        ),
-      );
-      childY += sizes[index]! + node.gap;
-    }
-    return box;
-  }
-
-  const intrinsicWidths = entries.map((entry) =>
-    typeof entry.basis === "number"
-      ? entry.basis
-      : measureWidth(context, entry.component, safeWidth),
-  );
-  const widths = allocateStackSizes(entries, intrinsicWidths, safeWidth, node.gap);
-  const intrinsicHeights = entries.map((entry, index) =>
-    measureHeight(context, entry.component, Math.max(1, widths[index]!)),
-  );
-  const allocatedHeight =
-    height === undefined
-      ? intrinsicHeights.reduce((max, childHeight) => Math.max(max, childHeight), 0)
-      : Math.max(0, height);
-  const rect = { x, y, width: safeWidth, height: allocatedHeight };
-  const box: LayoutBox = {
-    component,
-    rect,
-    clip: intersect(clip, rect),
-    children: [],
-    layer: 0,
-  };
-  let childX = x;
-  for (let index = 0; index < entries.length; index++) {
-    const naturalChildHeight = intrinsicHeights[index]!;
-    const childHeight =
-      node.align === "stretch" ? allocatedHeight : Math.min(allocatedHeight, naturalChildHeight);
-    let childY = y;
-    if (node.align === "center") childY += Math.floor((allocatedHeight - childHeight) / 2);
-    else if (node.align === "end") childY += allocatedHeight - childHeight;
-    const childWidth = widths[index]!;
-    if (childWidth === 0) {
-      box.children.push({
-        component: entries[index]!.component,
-        rect: { x: childX, y: childY, width: 0, height: childHeight },
-        clip: { x: childX, y: childY, width: 0, height: 0 },
-        children: [],
-        parent: box,
-        layer: 0,
-      });
-    } else {
-      box.children.push(
-        withParent(
-          layoutComponent(
-            context,
-            entries[index]!.component,
-            childX,
-            childY,
-            childWidth,
-            childHeight,
-            box.clip,
-          ),
-          box,
-        ),
-      );
-    }
-    childX += childWidth + node.gap;
-  }
-  return box;
 }
 
 function replaceScrollbarCell(
@@ -363,66 +141,74 @@ function paintScrollbar(box: LayoutBox, screen: string[], totalWidth: number): v
   }
 }
 
-function paintBox(box: LayoutBox, screen: string[], totalWidth: number): void {
-  if (box.lines !== undefined) {
-    const offset = box.lineOffset ?? 0;
-    const firstRow = Math.max(box.rect.y, box.clip.y, 0);
-    const lastRow = Math.min(
-      box.rect.y + box.rect.height,
-      box.clip.y + box.clip.height,
-      screen.length,
-    );
-    for (let row = firstRow; row < lastRow; row++) {
-      const sourceLine = box.lines[offset + row - box.rect.y];
-      if (sourceLine === undefined) continue;
-      let line = stripOsc133ZonePrefix(sourceLine);
-      const imageMetadata = getKittyImageMetadata(line);
-      if (imageMetadata !== undefined) {
-        const clipBottom = Math.min(screen.length, box.clip.y + box.clip.height);
-        const visibleRows = Math.min(imageMetadata.rows, clipBottom - row);
-        if (visibleRows < imageMetadata.rows) line = cropKittyImageLine(line, 0, visibleRows);
-      }
-      if (
-        box.rect.x === 0 &&
-        box.rect.width >= totalWidth &&
-        (isImageLine(line) || screen[row] === undefined || screen[row] === "")
-      ) {
-        screen[row] = line;
-      } else {
-        screen[row] = compositeTuiLine(
-          screen[row] ?? "",
-          line,
-          box.rect.x,
-          box.rect.width,
-          totalWidth,
-        );
-      }
-    }
-  }
-  for (const child of box.children) paintBox(child, screen, totalWidth);
+function isFullWidthBox(box: LayoutBox, totalWidth: number): boolean {
+  return box.rect.x === 0 && box.rect.width >= totalWidth;
+}
 
+function clipImageLine(box: LayoutBox, line: string, row: number, screenHeight: number): string {
+  const imageMetadata = getKittyImageMetadata(line);
+  if (imageMetadata === undefined) return line;
+  const clipBottom = Math.min(screenHeight, box.clip.y + box.clip.height);
+  const visibleRows = Math.min(imageMetadata.rows, clipBottom - row);
+  return visibleRows < imageMetadata.rows ? cropKittyImageLine(line, 0, visibleRows) : line;
+}
+
+function paintLine(box: LayoutBox, screen: string[], totalWidth: number, row: number): void {
+  const sourceLine = box.lines?.[(box.lineOffset ?? 0) + row - box.rect.y];
+  if (sourceLine === undefined) return;
+  const line = clipImageLine(box, stripOsc133ZonePrefix(sourceLine), row, screen.length);
   if (
-    box.scrollView !== undefined &&
-    box.scrollContentLines !== undefined &&
-    box.scrollView.scrollTop > 0 &&
-    box.rect.height > 0
+    isFullWidthBox(box, totalWidth) &&
+    (isImageLine(line) || screen[row] === undefined || screen[row] === "")
   ) {
-    for (let imageRow = box.scrollView.scrollTop - 1; imageRow >= 0; imageRow--) {
-      const imageLine = box.scrollContentLines[imageRow] ?? "";
-      const metadata = getKittyImageMetadata(imageLine);
-      if (metadata !== undefined) {
-        const hiddenRows = box.scrollView.scrollTop - imageRow;
-        if (hiddenRows < metadata.rows) {
-          const visibleRows = Math.min(box.rect.height, metadata.rows - hiddenRows);
-          const cropped = cropKittyImageLine(imageLine, hiddenRows, visibleRows);
-          if (box.rect.x === 0 && box.rect.width >= totalWidth) screen[box.rect.y] = cropped;
-        }
-        break;
-      }
-      if (imageLine !== "") break;
-    }
+    screen[row] = line;
+  } else {
+    screen[row] = compositeTuiLine(screen[row] ?? "", line, box.rect.x, box.rect.width, totalWidth);
   }
+}
 
+function paintLines(box: LayoutBox, screen: string[], totalWidth: number): void {
+  if (box.lines === undefined) return;
+  const firstRow = Math.max(box.rect.y, box.clip.y, 0);
+  const lastRow = Math.min(
+    box.rect.y + box.rect.height,
+    box.clip.y + box.clip.height,
+    screen.length,
+  );
+  for (let row = firstRow; row < lastRow; row++) paintLine(box, screen, totalWidth, row);
+}
+
+interface HiddenImage {
+  line: string;
+  row: number;
+  rows: number;
+}
+
+function findImageAboveViewport(lines: readonly string[], top: number): HiddenImage | undefined {
+  for (let row = top - 1; row >= 0; row--) {
+    const line = lines[row] ?? "";
+    const metadata = getKittyImageMetadata(line);
+    if (metadata !== undefined) return { line, row, rows: metadata.rows };
+    if (line !== "") return undefined;
+  }
+  return undefined;
+}
+
+function paintScrolledImage(box: LayoutBox, screen: string[], totalWidth: number): void {
+  const { scrollView, scrollContentLines } = box;
+  if (scrollView === undefined || scrollContentLines === undefined || box.rect.height <= 0) return;
+  const image = findImageAboveViewport(scrollContentLines, scrollView.scrollTop);
+  const hiddenRows = image === undefined ? 0 : scrollView.scrollTop - image.row;
+  if (image === undefined || hiddenRows >= image.rows) return;
+  const visibleRows = Math.min(box.rect.height, image.rows - hiddenRows);
+  const cropped = cropKittyImageLine(image.line, hiddenRows, visibleRows);
+  if (isFullWidthBox(box, totalWidth)) screen[box.rect.y] = cropped;
+}
+
+function paintBox(box: LayoutBox, screen: string[], totalWidth: number): void {
+  paintLines(box, screen, totalWidth);
+  for (const child of box.children) paintBox(child, screen, totalWidth);
+  paintScrolledImage(box, screen, totalWidth);
   paintScrollbar(box, screen, totalWidth);
 }
 
@@ -440,11 +226,12 @@ export const renderLayoutFrame: {
       requestRender,
       primaryScrollView: undefined,
     };
-    const rootBox = layoutComponent(context, root, 0, 0, safeWidth, safeHeight, {
+    const rootBox = layoutComponent(context, root, {
       x: 0,
       y: 0,
       width: safeWidth,
       height: safeHeight,
+      clip: { x: 0, y: 0, width: safeWidth, height: safeHeight },
     });
     const lines = Array.from({ length: safeHeight }, () => "");
     paintBox(rootBox, lines, safeWidth);
