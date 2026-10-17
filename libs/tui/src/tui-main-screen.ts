@@ -19,16 +19,11 @@ import {
   deleteChangedKittyImages,
   deleteKittyImages,
 } from "./tui-main-screen-kitty.ts";
-import {
-  fullRenderReason,
-  overwideCrashLines,
-  overwideErrorMessage,
-  renderDebugLines,
-} from "./tui-main-screen-reports.ts";
+import { fullRenderReason, overwideCrash, renderDebugLines } from "./tui-main-screen-reports.ts";
 import {
   appendRedrawLog,
   BoundedTerminalWriter,
-  writeCrashLog,
+  raiseRenderCrash,
   writeRenderDebugLog,
 } from "./tui-main-screen-support.ts";
 import { TuiBase } from "./tui.ts";
@@ -234,14 +229,16 @@ export class TuiMainScreen extends TuiBase implements TUI {
     this.previousViewportTop = frame.prevViewportTop;
   }
 
-  private failOnOverwideLine(frame: RenderFrame, index: number): never {
-    const crashLogPath = writeCrashLog(this.logDirectory, overwideCrashLines(frame, index));
+  private failOnOverwideLine(frame: RenderFrame, index: number): void {
     this.stop();
-    throw new Error(overwideErrorMessage(frame, index, crashLogPath));
+    void raiseRenderCrash(overwideCrash(frame, index, this.logDirectory));
   }
 
   private handleFallback(frame: RenderFrame, outcome: FrameOutcome): boolean {
-    if (outcome.kind === "overwide") this.failOnOverwideLine(frame, outcome.index);
+    if (outcome.kind === "overwide") {
+      this.failOnOverwideLine(frame, outcome.index);
+      return true;
+    }
     if (outcome.kind !== "fallback") return false;
     this.logRedraw(frame, outcome.reason);
     this.fullRender(frame, true);
