@@ -8,7 +8,7 @@ import { getApiProvider, getSupportedThinkingLevels } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
-import type { ModelsJsonProvider } from "../src/core/model-config.ts";
+import { ModelConfig, type ModelsJsonProvider } from "../src/core/model-config.ts";
 import {
   clearApiKeyCache,
   type ModelRegistry,
@@ -2111,36 +2111,41 @@ describe("ModelRegistry", () => {
         expect(count).toBe(0);
       });
 
-      test("getAvailable applies the provider's credential-specific filterModels", async () => {
-        const chatModel = (id: string): Model<"openai-completions"> => ({
-          id,
-          name: id,
-          api: "openai-completions",
-          provider: "filtered-provider",
-          baseUrl: "https://provider.test/v1",
-          reasoning: false,
-          input: ["text"],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 1000,
-          maxTokens: 100,
-        });
+      const filteredChatModel = (id: string): Model<"openai-completions"> => ({
+        id,
+        name: id,
+        api: "openai-completions",
+        provider: "filtered-provider",
+        baseUrl: "https://provider.test/v1",
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 1000,
+        maxTokens: 100,
+      });
+
+      const createLimitedKeyRegistry = async (): Promise<ModelRegistry> => {
         await authStorage.modify("filtered-provider", async () => ({
           type: "api_key",
           key: "limited-key",
         }));
+        return createModelRegistry(authStorage, modelsJsonPath);
+      };
 
-        const registry = await createModelRegistry(authStorage, modelsJsonPath);
+      const registerFilteredProvider = (registry: ModelRegistry, onResolve: () => void): void => {
         registry.registerProvider(
           createProvider({
             id: "filtered-provider",
             auth: {
               apiKey: {
                 name: "Filtered",
-                resolve: async ({ credential }) =>
-                  credential?.key ? { auth: { apiKey: credential.key } } : undefined,
+                resolve: async ({ credential }) => {
+                  onResolve();
+                  return credential?.key ? { auth: { apiKey: credential.key } } : undefined;
+                },
               },
             },
-            models: [chatModel("allowed"), chatModel("denied")],
+            models: [filteredChatModel("allowed"), filteredChatModel("denied")],
             filterModels: (models, credential) =>
               credential?.type === "api_key" && credential.key === "limited-key"
                 ? models.filter((m) => m.id === "allowed")
@@ -2155,14 +2160,41 @@ describe("ModelRegistry", () => {
             },
           }),
         );
+      };
+
+      const filteredAvailableIds = (registry: ModelRegistry): string[] =>
+        registry
+          .getAvailable()
+          .filter((m) => m.provider === "filtered-provider")
+          .map((m) => m.id);
+
+      test("getAvailable applies the provider's credential-specific filterModels", async () => {
+        const registry = await createLimitedKeyRegistry();
+        registerFilteredProvider(registry, () => {});
         await registry.refresh();
 
-        expect(
-          registry
-            .getAvailable()
-            .filter((m) => m.provider === "filtered-provider")
-            .map((m) => m.id),
-        ).toEqual(["allowed"]);
+        expect(filteredAvailableIds(registry)).toEqual(["allowed"]);
+      });
+
+      test("a background refresh that lands during an awaited refresh keeps filterModels", async () => {
+        // registerProvider starts a refresh in the background. Hold it until the awaited refresh
+        // checks auth, so it lands while the awaited one runs.
+        const config = await ModelConfig.load(modelsJsonPath);
+        let releaseBackground: () => void = () => {};
+        const background = new Promise<void>((resolve) => {
+          releaseBackground = resolve;
+        });
+        const registry = await createLimitedKeyRegistry();
+        vi.spyOn(ModelConfig, "load")
+          .mockImplementationOnce(async () => {
+            await background;
+            return config;
+          })
+          .mockImplementationOnce(async () => config);
+        registerFilteredProvider(registry, () => releaseBackground());
+        await registry.refresh();
+
+        expect(filteredAvailableIds(registry)).toEqual(["allowed"]);
       });
 
       test("getApiKeyAndHeaders resolves authHeader on every request", async () => {
