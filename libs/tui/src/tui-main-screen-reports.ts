@@ -2,6 +2,7 @@ import { dual } from "effect/Function";
 
 import type { RenderFrame } from "./tui-main-screen-frame.ts";
 import type { ChangedRange } from "./tui-main-screen-kitty.ts";
+import type { RenderCrash } from "./tui-main-screen-support.ts";
 import { visibleWidth } from "./utils.ts";
 
 export interface PreviousFrameState {
@@ -130,3 +131,12 @@ export const renderDebugLines: {
   "=== buffer ===",
   `[${values.written} chars written in bounded chunks]`,
 ]);
+
+export const overwideCrash: {
+  (frame: RenderFrame, index: number, directory: string | undefined): RenderCrash;
+  (index: number, directory: string | undefined): (frame: RenderFrame) => RenderCrash;
+} = dual(3, (frame: RenderFrame, index: number, directory: string | undefined): RenderCrash => ({
+  directory,
+  lines: overwideCrashLines(frame, index),
+  message: (crashLogPath) => overwideErrorMessage(frame, index, crashLogPath),
+}));

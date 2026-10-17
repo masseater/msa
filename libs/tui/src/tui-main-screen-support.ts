@@ -1,11 +1,10 @@
-import * as fs from "node:fs";
 import * as os from "node:os";
 
 import { Clock, DateTime, Effect, Random } from "effect";
 import { dual } from "effect/Function";
 
 import { writeFileInBackground } from "./file-log.ts";
-import { pathOperations } from "./platform.ts";
+import { Platform, type PlatformFailure, pathOperations, platformRuntime } from "./platform.ts";
 
 const KITTY_SEQUENCE_PREFIX = "\x1b_G";
 const MAX_RENDER_WRITE_CHARS = 1024 * 1024;
@@ -114,15 +113,50 @@ export const appendRedrawLog: {
 });
 
 export const writeCrashLog: {
-  (directory: string | undefined, lines: readonly string[]): string;
-  (lines: readonly string[]): (directory: string | undefined) => string;
-} = dual(2, (directory: string | undefined, lines: readonly string[]): string => {
-  const crashLogPath = pathOperations.join(directory ?? os.tmpdir(), "msa-tui-crash.log");
-  const crashData = [`Crash at ${nowIso()}`, ...lines].join("\n");
-  fs.mkdirSync(pathOperations.dirname(crashLogPath), { recursive: true });
-  fs.writeFileSync(crashLogPath, crashData);
-  return crashLogPath;
-});
+  (
+    directory: string | undefined,
+    lines: readonly string[],
+  ): Effect.Effect<string, PlatformFailure, Platform>;
+  (
+    lines: readonly string[],
+  ): (directory: string | undefined) => Effect.Effect<string, PlatformFailure, Platform>;
+} = dual(
+  2,
+  (
+    directory: string | undefined,
+    lines: readonly string[],
+  ): Effect.Effect<string, PlatformFailure, Platform> =>
+    Effect.gen(function* () {
+      const platform = yield* Platform;
+      const crashLogPath = pathOperations.join(directory ?? os.tmpdir(), "msa-tui-crash.log");
+      const data = [`Crash at ${nowIso()}`, ...lines].join("\n");
+      yield* platform.writeFile({ path: crashLogPath, data, append: false });
+      return crashLogPath;
+    }),
+);
+
+export interface RenderCrash {
+  readonly directory: string | undefined;
+  readonly lines: readonly string[];
+  readonly message: (crashLogPath: string) => string;
+}
+
+export const crashAfterLogging = (crash: RenderCrash): Effect.Effect<never, never, Platform> =>
+  writeCrashLog(crash.directory, crash.lines).pipe(
+    Effect.matchEffect({
+      onSuccess: (crashLogPath) => Effect.die(new Error(crash.message(crashLogPath))),
+      onFailure: (failure) =>
+        Effect.die(
+          new Error(crash.message(`(not written: ${failure.operation} failed)`), {
+            cause: failure,
+          }),
+        ),
+    }),
+  );
+
+export function raiseRenderCrash(crash: RenderCrash): Promise<never> {
+  return platformRuntime.runPromise(crashAfterLogging(crash));
+}
 
 export function writeRenderDebugLog(lines: readonly string[]): void {
   const debugPath = pathOperations.join(
