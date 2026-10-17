@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 /**
  * Tests for AgentSession concurrent prompt guard.
  */
@@ -55,6 +55,8 @@ describe("AgentSession concurrent prompt guard", () => {
   beforeEach(async () => {
     tempDir = join(tmpdir(), `msa-concurrent-test-${Date.now()}`);
     mkdirSync(tempDir, { recursive: true });
+    // Memory stays out of these tests: recall would add a real embedding request and timing noise.
+    writeFileSync(join(tempDir, "settings.json"), JSON.stringify({ memory: { enabled: false } }));
   });
 
   afterEach(async () => {

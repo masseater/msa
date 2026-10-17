@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Long-term memory: the `memory` tool, prompt recall, and the `/memory` view keep durable facts across sessions in a local SQLite store, with embeddings from an OpenAI-compatible endpoint (local Ollama with EmbeddingGemma 2 by default, task prefixes included) and keyword search as the fallback ([docs](docs/memory.md))
+
 ## [0.0.2] - 2026-10-17
 
 ### Fixed
