@@ -184,6 +184,19 @@ export interface AuthStatus {
   detail?: string;
 }
 
+/** "logged in as <email>" for a signed-in account, "" otherwise. */
+export function describeLogin(status: AuthStatus): string {
+  return status.loggedIn ? `logged in${status.email ? ` as ${status.email}` : ""}` : "";
+}
+
+/** Each account with its {@link authStatus}, checked in parallel. */
+export async function withAuthStatus(
+  accounts: Account[],
+): Promise<Array<{ account: Account; status: AuthStatus }>> {
+  const statuses = await Promise.all(accounts.map((account) => authStatus(account)));
+  return accounts.map((account, index) => ({ account, status: statuses[index]! }));
+}
+
 /** `claude auth status` (JSON, exit 1 when logged out) under this account. */
 export async function authStatus(account: Account): Promise<AuthStatus> {
   try {

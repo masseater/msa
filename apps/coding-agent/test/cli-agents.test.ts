@@ -46,7 +46,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  process.env = { ...savedEnv };
+  // Restore in place: from Node 26 a child process ignores a replaced process.env object, so later
+  // tests that change PATH would still spawn with the original one.
+  for (const key of Object.keys(process.env)) if (!(key in savedEnv)) delete process.env[key];
+  Object.assign(process.env, savedEnv);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -228,7 +231,8 @@ describe("managing Claude Code accounts", () => {
   }
 
   it("tells /login how to install Claude Code when it is missing", async () => {
-    process.env["CLAUDE_BIN"] = join(dir, "missing", "claude");
+    process.env["CLAUDE_BIN"] = "";
+    process.env["PATH"] = join(dir, "empty");
     expect(await claudeCodeService.status()).toEqual({
       installed: false,
       install: "curl -fsSL https://claude.ai/install.sh | bash",

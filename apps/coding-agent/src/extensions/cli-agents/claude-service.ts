@@ -2,18 +2,17 @@
  * Claude Code as an external service, so `/login` signs its accounts in to Claude. `/accounts claude`
  * manages the same accounts with more actions.
  */
-import { existsSync } from "node:fs";
-import { isAbsolute } from "node:path";
-
-import type { ExternalService } from "../../core/external-services.ts";
+import type { ExternalService, ServiceLoginInteraction } from "../../core/external-services.ts";
 import {
   type Account,
   addAccount,
   authStatus,
   claudeExecutable,
+  describeLogin,
   loadAccounts,
   loginAccount,
   logoutAccount,
+  withAuthStatus,
 } from "./claude-accounts.ts";
 
 const INSTALL_COMMAND = "curl -fsSL https://claude.ai/install.sh | bash";
@@ -24,11 +23,9 @@ function loginAccounts(): Account[] {
   return loadAccounts().filter((account) => account.configDir || !account.tokenCommand);
 }
 
-async function withStatus(accounts: Account[]) {
-  const statuses = await Promise.all(accounts.map((account) => authStatus(account)));
-  return accounts.map((account, index) => {
-    const status = statuses[index]!;
-    const state = status.loggedIn ? `logged in${status.email ? ` as ${status.email}` : ""}` : "";
+async function withLabels(accounts: Account[]) {
+  return (await withAuthStatus(accounts)).map(({ account, status }) => {
+    const state = describeLogin(status);
     return {
       account,
       loggedIn: status.loggedIn,
@@ -37,32 +34,31 @@ async function withStatus(accounts: Account[]) {
   });
 }
 
+/** The account to sign in: the only one, or the one the user picks or adds. */
+async function chooseAccount(
+  interaction: ServiceLoginInteraction,
+  accounts: Awaited<ReturnType<typeof withLabels>>,
+): Promise<Account | undefined> {
+  if (accounts.length === 1) return accounts[0]!.account;
+  const choice = await interaction.select("Sign in which Claude account?", [
+    ...accounts.map((entry) => entry.label),
+    NEW_ACCOUNT,
+  ]);
+  if (choice !== NEW_ACCOUNT) return accounts.find((entry) => entry.label === choice)?.account;
+  return addAccount((await interaction.prompt("Name for the new account", "work")).trim());
+}
+
 export const claudeCodeService: ExternalService = {
   id: "claude-code",
   name: "Claude Code",
   purpose: "Claude models through the claude-code provider",
   async status() {
-    const executable = claudeExecutable();
-    // CLAUDE_BIN names the binary without checking it exists.
-    if (!executable || (isAbsolute(executable) && !existsSync(executable))) {
-      return { installed: false, install: INSTALL_COMMAND };
-    }
-    const accounts = await withStatus(loginAccounts());
+    if (!claudeExecutable()) return { installed: false, install: INSTALL_COMMAND };
+    const accounts = await withLabels(loginAccounts());
     return { installed: true, signedIn: accounts.some((entry) => entry.loggedIn) };
   },
   async login(interaction) {
-    const accounts = await withStatus(loginAccounts());
-    let account: Account | undefined = accounts[0]?.account;
-    if (accounts.length !== 1) {
-      const choice = await interaction.select("Sign in which Claude account?", [
-        ...accounts.map((entry) => entry.label),
-        NEW_ACCOUNT,
-      ]);
-      account =
-        choice === NEW_ACCOUNT
-          ? addAccount((await interaction.prompt("Name for the new account", "work")).trim())
-          : accounts.find((entry) => entry.label === choice)?.account;
-    }
+    const account = await chooseAccount(interaction, await withLabels(loginAccounts()));
     if (!account) throw new Error("No Claude account to sign in");
     await loginAccount(account, {
       askCode: (url) => {
@@ -75,7 +71,7 @@ export const claudeCodeService: ExternalService = {
     }
   },
   async logout(interaction) {
-    const accounts = (await withStatus(loginAccounts())).filter((entry) => entry.loggedIn);
+    const accounts = (await withLabels(loginAccounts())).filter((entry) => entry.loggedIn);
     const choice =
       accounts.length === 1
         ? accounts[0]!.label
