@@ -1094,6 +1094,11 @@ export class SettingsManager {
     this.setGlobalSetting("showCacheMissNotices", show);
   }
 
+  getClipboardImageCommand(): string | undefined {
+    const command = this.globalSettings.clipboardImageCommand;
+    return typeof command === "string" && command.trim() !== "" ? command : undefined;
+  }
+
   getShellPath(): string | undefined {
     const shellPath = this.settings.shellPath;
     return shellPath ? normalizePath(shellPath) : shellPath;
