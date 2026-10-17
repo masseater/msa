@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import OpenAI from "openai";
 import type {
   ChatCompletion,
@@ -21,7 +22,8 @@ import type {
 import { currentTimeMillis } from "../utils/clock.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
-import { retryProviderRequest } from "../utils/provider-retry.ts";
+import { callHook } from "../utils/hooks.ts";
+import { providerRequestWithRetry } from "../utils/provider-retry.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 
 interface OpenRouterGeneratedImage {
@@ -40,86 +42,91 @@ type OpenRouterImageGenerationResponse = ChatCompletion & {
   choices: OpenRouterImageGenerationChoice[];
 };
 
-export const generateImages: ImagesFunction<ImagesOptions> = async (
+export const generateImages: ImagesFunction<ImagesOptions> = (
   model: ImageModel<ImageApi>,
   context: ImagesContext,
   options?: ImagesOptions,
-) => {
-  const output: AssistantImages = {
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    output: [],
-    stopReason: "stop",
-    timestamp: currentTimeMillis(),
-  };
+) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const output: AssistantImages = {
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        output: [],
+        stopReason: "stop",
+        timestamp: currentTimeMillis(),
+      };
+      return yield* Effect.gen(function* () {
+        const apiKey = options?.apiKey;
+        if (apiKey === undefined || apiKey === "") {
+          throw new Error(`No API key for provider: ${model.provider}`);
+        }
+        const client = createClient(model, apiKey, options?.headers, options?.fetch);
+        let params = buildParams(model, context);
+        const nextParams = yield* callHook(() => options?.onPayload?.(params, model));
+        if (nextParams !== undefined) {
+          params = nextParams as typeof params;
+        }
+        const requestOptions = {
+          ...(options?.signal === undefined ? {} : { signal: options.signal }),
+          ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
+          maxRetries: 0,
+        };
+        const { data: response, response: rawResponse } = yield* providerRequestWithRetry(
+          () =>
+            client.chat.completions
+              .create(params as unknown as ChatCompletionCreateParamsNonStreaming, requestOptions)
+              .withResponse(),
+          {
+            maxRetries: options?.maxRetries,
+            maxRetryDelayMs: options?.maxRetryDelayMs,
+            signal: options?.signal,
+          },
+        );
+        yield* callHook(() =>
+          options?.onResponse?.(
+            { status: rawResponse.status, headers: headersToRecord(rawResponse.headers) },
+            model,
+          ),
+        );
+        const imageResponse = response as OpenRouterImageGenerationResponse;
+        output.responseId = imageResponse.id;
+        if (imageResponse.usage !== undefined) {
+          output.usage = parseUsage(imageResponse.usage, model);
+        }
+        const choice = imageResponse.choices[0];
+        if (choice !== undefined) {
+          const content = choice.message.content;
+          if (typeof content === "string" && content.length > 0) {
+            output.output.push({ type: "text", text: content } satisfies TextContent);
+          }
 
-  try {
-    const apiKey = options?.apiKey;
-    if (apiKey === undefined || apiKey === "") {
-      throw new Error(`No API key for provider: ${model.provider}`);
-    }
-    const client = createClient(model, apiKey, options?.headers, options?.fetch);
-    let params = buildParams(model, context);
-    const nextParams = await options?.onPayload?.(params, model);
-    if (nextParams !== undefined) {
-      params = nextParams as typeof params;
-    }
-    const requestOptions = {
-      ...(options?.signal === undefined ? {} : { signal: options.signal }),
-      ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
-      maxRetries: 0,
-    };
-    const { data: response, response: rawResponse } = await retryProviderRequest(
-      () =>
-        client.chat.completions
-          .create(params as unknown as ChatCompletionCreateParamsNonStreaming, requestOptions)
-          .withResponse(),
-      {
-        maxRetries: options?.maxRetries,
-        maxRetryDelayMs: options?.maxRetryDelayMs,
-        signal: options?.signal,
-      },
-    );
-    await options?.onResponse?.(
-      { status: rawResponse.status, headers: headersToRecord(rawResponse.headers) },
-      model,
-    );
-
-    const imageResponse = response as OpenRouterImageGenerationResponse;
-    output.responseId = imageResponse.id;
-    if (imageResponse.usage !== undefined) {
-      output.usage = parseUsage(imageResponse.usage, model);
-    }
-
-    const choice = imageResponse.choices[0];
-    if (choice !== undefined) {
-      const content = choice.message.content;
-      if (typeof content === "string" && content.length > 0) {
-        output.output.push({ type: "text", text: content } satisfies TextContent);
-      }
-
-      for (const image of choice.message.images ?? []) {
-        const imageUrl =
-          typeof image.image_url === "string" ? image.image_url : image.image_url?.url;
-        if (imageUrl?.startsWith("data:") !== true) continue;
-        const [, mimeType, data] = imageUrl.match(/^data:([^;]+);base64,(.+)$/u) ?? [];
-        if (mimeType === undefined || data === undefined) continue;
-        output.output.push({
-          type: "image",
-          mimeType,
-          data,
-        } satisfies ImageContent);
-      }
-    }
-
-    return output;
-  } catch (error) {
-    output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-    output.errorMessage = formatProviderError(normalizeProviderError(error));
-    return output;
-  }
-};
+          for (const image of choice.message.images ?? []) {
+            const imageUrl =
+              typeof image.image_url === "string" ? image.image_url : image.image_url?.url;
+            if (imageUrl?.startsWith("data:") !== true) continue;
+            const [, mimeType, data] = imageUrl.match(/^data:([^;]+);base64,(.+)$/u) ?? [];
+            if (mimeType === undefined || data === undefined) continue;
+            output.output.push({
+              type: "image",
+              mimeType,
+              data,
+            } satisfies ImageContent);
+          }
+        }
+        return output;
+      }).pipe(
+        Effect.catchDefect((error) =>
+          Effect.sync(() => {
+            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+            output.errorMessage = formatProviderError(normalizeProviderError(error));
+            return output;
+          }),
+        ),
+      );
+    }),
+  );
 
 function createClient(
   model: ImageModel<ImageApi>,

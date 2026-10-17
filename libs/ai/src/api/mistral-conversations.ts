@@ -1,3 +1,5 @@
+import { Effect, Stream } from "effect";
+
 import { calculateCost, clampThinkingLevel } from "../models.ts";
 import type {
   AssistantMessage,
@@ -14,10 +16,13 @@ import type {
   TranscriptContext,
 } from "../types.ts";
 import { combineAbortSignals } from "../utils/abort-signals.ts";
+import { waitForAbort } from "../utils/abort.ts";
 import { currentTimeMillis } from "../utils/clock.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { shortHash } from "../utils/hash.ts";
 import { headersToRecord } from "../utils/headers.ts";
+import { callHook } from "../utils/hooks.ts";
+import { encodeJson, encodeJsonSync } from "../utils/json-codec.ts";
 import { parseStreamingJson, parseToolCallArguments } from "../utils/json-parse.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { getSystemMessageText, renderSystemMessageUpdate } from "../utils/text.ts";
@@ -137,52 +142,58 @@ export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
     model.compat?.supportsMidConvoSystemMessages,
   );
 
-  (async () => {
-    const output = createOutput(model);
-
-    try {
-      const apiKey = options?.apiKey;
-      if (apiKey === undefined || apiKey === "") {
-        throw new Error(`No API key for provider: ${model.provider}`);
-      }
-
-      const normalizeMistralToolCallId = createMistralToolCallIdNormalizer();
-      const transformedMessages = transformMessages(normalizedContext.messages, model, (id) =>
-        normalizeMistralToolCallId(id),
+  Effect.runFork(
+    Effect.gen(function* () {
+      const output = createOutput(model);
+      yield* Effect.gen(function* () {
+        const apiKey = options?.apiKey;
+        if (apiKey === undefined || apiKey === "") {
+          throw new Error(`No API key for provider: ${model.provider}`);
+        }
+        const normalizeMistralToolCallId = createMistralToolCallIdNormalizer();
+        const transformedMessages = transformMessages(normalizedContext.messages, model, (id) =>
+          normalizeMistralToolCallId(id),
+        );
+        let payload = buildChatPayload(model, normalizedContext, transformedMessages, options);
+        const nextPayload = yield* callHook(() => options?.onPayload?.(payload, model));
+        if (nextPayload !== undefined) {
+          payload = nextPayload as MistralChatPayload;
+        }
+        const mistralStream = yield* requestMistralStream(model, payload, apiKey, options);
+        events.push({ type: "start", partial: output });
+        yield* consumeChatStream(
+          model,
+          output,
+          events,
+          mistralStream,
+          options?.onProviderStreamEvent,
+        );
+        if (options?.signal?.aborted === true) {
+          throw new Error("Request was aborted");
+        }
+        if (output.stopReason === "pending") {
+          throw new Error("Mistral stream ended without a finish reason");
+        }
+        if (output.stopReason === "aborted" || output.stopReason === "error") {
+          throw new Error(output.errorMessage || "An unknown error occurred");
+        }
+        events.push({ type: "done", reason: output.stopReason, message: output });
+        events.end();
+      }).pipe(
+        Effect.catchDefect((error) =>
+          Effect.sync(() => {
+            for (const block of output.content) {
+              delete (block as { partialArgs?: string }).partialArgs;
+            }
+            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+            output.errorMessage = formatMistralError(error);
+            events.push({ type: "error", reason: output.stopReason, error: output });
+            events.end();
+          }),
+        ),
       );
-
-      let payload = buildChatPayload(model, normalizedContext, transformedMessages, options);
-      const nextPayload = await options?.onPayload?.(payload, model);
-      if (nextPayload !== undefined) {
-        payload = nextPayload as MistralChatPayload;
-      }
-      const mistralStream = await requestMistralStream(model, payload, apiKey, options);
-      events.push({ type: "start", partial: output });
-      await consumeChatStream(model, output, events, mistralStream, options?.onProviderStreamEvent);
-
-      if (options?.signal?.aborted === true) {
-        throw new Error("Request was aborted");
-      }
-
-      if (output.stopReason === "pending") {
-        throw new Error("Mistral stream ended without a finish reason");
-      }
-      if (output.stopReason === "aborted" || output.stopReason === "error") {
-        throw new Error(output.errorMessage || "An unknown error occurred");
-      }
-
-      events.push({ type: "done", reason: output.stopReason, message: output });
-      events.end();
-    } catch (error) {
-      for (const block of output.content) {
-        delete (block as { partialArgs?: string }).partialArgs;
-      }
-      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-      output.errorMessage = formatMistralError(error);
-      events.push({ type: "error", reason: output.stopReason, error: output });
-      events.end();
-    }
-  })();
+    }),
+  );
 
   return events;
 };
@@ -302,12 +313,12 @@ function safeJsonStringify(value: unknown): string {
   }
 }
 
-async function requestMistralStream(
+const requestMistralStream = Effect.fn("requestMistralStream")(function* (
   model: Model<"mistral-conversations">,
   payload: MistralChatPayload,
   apiKey: string,
   options?: MistralOptions,
-): Promise<AsyncIterable<MistralCompletionEvent>> {
+) {
   const baseUrl = new URL(model.baseUrl);
   baseUrl.pathname = `${baseUrl.pathname.replace(/\/+$/u, "")}/`;
   const url = new URL("v1/chat/completions", baseUrl);
@@ -315,38 +326,42 @@ async function requestMistralStream(
   const timeoutMs = options?.timeoutMs ?? 60_000;
   const headerTimeoutSignal = AbortSignal.timeout(timeoutMs);
   const combinedSignal = combineAbortSignals([options?.signal, headerTimeoutSignal]);
-  let response: Response;
-  try {
-    response = await (options?.fetch ?? globalThis.fetch)(url, {
+  const body = yield* encodeJson(toMistralWirePayload(payload));
+  const response = yield* Effect.promise(() =>
+    (options?.fetch ?? globalThis.fetch)(url, {
       method: "POST",
       headers,
-      body: JSON.stringify(toMistralWirePayload(payload)),
+      body,
       signal: combinedSignal.signal ?? null,
-    });
-  } catch (error) {
-    if (headerTimeoutSignal.aborted && options?.signal?.aborted !== true) {
-      throw new Error(`Mistral response headers timed out after ${timeoutMs}ms`, { cause: error });
-    }
-    throw error;
-  } finally {
-    combinedSignal.cleanup();
-  }
+    }),
+  ).pipe(
+    Effect.catchDefect((error) =>
+      Effect.die(
+        headerTimeoutSignal.aborted && options?.signal?.aborted !== true
+          ? new Error(`Mistral response headers timed out after ${timeoutMs}ms`, { cause: error })
+          : error,
+      ),
+    ),
+    Effect.ensuring(Effect.sync(() => combinedSignal.cleanup())),
+  );
 
-  await options?.onResponse?.(
-    { status: response.status, headers: headersToRecord(response.headers) },
-    model,
+  yield* callHook(() =>
+    options?.onResponse?.(
+      { status: response.status, headers: headersToRecord(response.headers) },
+      model,
+    ),
   );
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new MistralHttpError(response.status, body, response.statusText);
+    const text = yield* Effect.promise(() => response.text());
+    return yield* Effect.die(new MistralHttpError(response.status, text, response.statusText));
   }
   if (response.body === null) {
-    throw new Error("Mistral response has no body");
+    return yield* Effect.die(new Error("Mistral response has no body"));
   }
 
   return readMistralEvents(response.body, options?.signal);
-}
+});
 
 class MistralHttpError extends Error {
   statusCode: number;
@@ -481,50 +496,53 @@ function isMistralRecord(value: unknown): value is Record<string, unknown> {
 
 const MISTRAL_STREAM_DONE = Symbol("mistral-stream-done");
 
-async function* readMistralEvents(
+const splitMistralEvents = (
+  buffer: string,
+): readonly [rest: string, events: ReadonlyArray<MistralStreamItem>] => {
+  const events: MistralStreamItem[] = [];
+  let rest = buffer;
+  let boundary = findMistralEventBoundary(rest);
+  while (boundary !== undefined) {
+    events.push(parseMistralEvent(rest.slice(0, boundary.index)));
+    rest = rest.slice(boundary.index + boundary.length);
+    boundary = findMistralEventBoundary(rest);
+  }
+  return [rest, events];
+};
+
+type MistralStreamItem = MistralCompletionEvent | typeof MISTRAL_STREAM_DONE | undefined;
+
+const isMistralEvent = (item: MistralStreamItem): item is MistralCompletionEvent =>
+  item !== undefined && item !== MISTRAL_STREAM_DONE;
+
+function readMistralEvents(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal | undefined,
-): AsyncGenerator<MistralCompletionEvent> {
-  const reader = body.getReader();
+): Stream.Stream<MistralCompletionEvent> {
   const decoder = new TextDecoder();
-  let buffer = "";
-  const onAbort = () => {
-    void reader.cancel().catch(() => {});
-  };
-  signal?.addEventListener("abort", onAbort, { once: true });
-
-  try {
-    while (true) {
-      signal?.throwIfAborted();
-      const { done, value } = await reader.read();
-      signal?.throwIfAborted();
-      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
-
-      let boundary = findMistralEventBoundary(buffer);
-      while (boundary !== undefined) {
-        const event = parseMistralEvent(buffer.slice(0, boundary.index));
-        buffer = buffer.slice(boundary.index + boundary.length);
-        if (event === MISTRAL_STREAM_DONE) return;
-        if (event !== undefined) yield event;
-        boundary = findMistralEventBoundary(buffer);
-      }
-
-      if (done) break;
-    }
-
-    if (buffer.trim() !== "") {
-      const event = parseMistralEvent(buffer);
-      if (event !== MISTRAL_STREAM_DONE && event !== undefined) yield event;
-    }
-  } finally {
-    signal?.removeEventListener("abort", onAbort);
-    try {
-      await reader.cancel();
-    } catch {}
-    try {
-      reader.releaseLock();
-    } catch {}
-  }
+  const throwIfAborted = Effect.sync(() => signal?.throwIfAborted());
+  const chunks = Stream.fromReadableStream({
+    evaluate: () => body,
+    onError: (error) => error,
+  }).pipe(
+    Stream.orDie,
+    signal === undefined ? (self) => self : Stream.interruptWhen(waitForAbort(signal)),
+    Stream.mapEffect((value) => Effect.as(throwIfAborted, decoder.decode(value, { stream: true }))),
+    Stream.concat(Stream.fromEffect(Effect.as(throwIfAborted, decoder.decode()))),
+  );
+  return Stream.fromEffect(throwIfAborted).pipe(
+    Stream.drain,
+    Stream.concat(chunks),
+    Stream.mapAccum<string, string, MistralStreamItem>(
+      () => "",
+      (buffer, text: string) => splitMistralEvents(buffer + text),
+      {
+        onHalt: (buffer) => (buffer.trim() === "" ? [] : [parseMistralEvent(buffer)]),
+      },
+    ),
+    Stream.takeWhile((item) => item !== MISTRAL_STREAM_DONE),
+    Stream.filter(isMistralEvent),
+  );
 }
 
 function findMistralEventBoundary(buffer: string): { index: number; length: number } | undefined {
@@ -607,18 +625,17 @@ function getMistralCachedPromptTokens(usage: unknown, promptTokens: number): num
   return Math.min(promptTokens, Math.max(0, cachedTokens));
 }
 
-async function consumeChatStream(
+const consumeChatStream = Effect.fn("consumeChatStream")(function* (
   model: Model<"mistral-conversations">,
   output: AssistantMessage,
   events: AssistantMessageEventStream,
-  mistralStream: AsyncIterable<MistralCompletionEvent>,
+  mistralStream: Stream.Stream<MistralCompletionEvent>,
   onProviderStreamEvent: StreamOptions["onProviderStreamEvent"],
-): Promise<void> {
+) {
   let currentBlock: TextContent | ThinkingContent | null = null;
   const blocks = output.content;
   const blockIndex = () => blocks.length - 1;
   const toolBlocksByKey = new Map<string | number, number>();
-
   const finishCurrentBlock = (block?: typeof currentBlock) => {
     if (block === undefined || block === null) return;
     if (block.type === "text") {
@@ -639,161 +656,165 @@ async function consumeChatStream(
       });
     }
   };
+  yield* mistralStream.pipe(
+    Stream.runForEach((event) =>
+      Effect.gen(function* () {
+        const chunk = event.data;
+        yield* callHook(() => onProviderStreamEvent?.(chunk, model));
+        output.responseId ||= chunk.id;
+        if (chunk.usage !== undefined) {
+          const promptTokens = chunk.usage.prompt_tokens || 0;
+          const cachedPromptTokens = getMistralCachedPromptTokens(chunk.usage, promptTokens);
 
-  for await (const event of mistralStream) {
-    const chunk = event.data;
-    await onProviderStreamEvent?.(chunk, model);
-    output.responseId ||= chunk.id;
-
-    if (chunk.usage !== undefined) {
-      const promptTokens = chunk.usage.prompt_tokens || 0;
-      const cachedPromptTokens = getMistralCachedPromptTokens(chunk.usage, promptTokens);
-
-      output.usage.input = Math.max(0, promptTokens - cachedPromptTokens);
-      output.usage.output = chunk.usage.completion_tokens || 0;
-      output.usage.cacheRead = cachedPromptTokens;
-      output.usage.cacheWrite = 0;
-      output.usage.totalTokens =
-        chunk.usage.total_tokens ||
-        output.usage.input + output.usage.output + output.usage.cacheRead + output.usage.cacheWrite;
-      calculateCost(model, output.usage);
-    }
-
-    const choice = chunk.choices[0];
-    if (choice === undefined) continue;
-
-    if (
-      choice.finish_reason !== undefined &&
-      choice.finish_reason !== null &&
-      choice.finish_reason !== ""
-    ) {
-      output.rawStopReason = choice.finish_reason;
-      const stopReasonResult = mapChatStopReason(choice.finish_reason);
-      output.stopReason = stopReasonResult.stopReason;
-      if (stopReasonResult.errorMessage !== undefined && stopReasonResult.errorMessage !== "") {
-        output.errorMessage = stopReasonResult.errorMessage;
-      }
-    }
-
-    const delta = choice.delta;
-    if (delta.content !== null && delta.content !== undefined) {
-      const contentItems = typeof delta.content === "string" ? [delta.content] : delta.content;
-      for (const item of contentItems) {
-        if (typeof item === "string") {
-          const textDelta = sanitizeSurrogates(item);
-          if (textDelta === "") continue;
-          if (currentBlock === null || currentBlock.type !== "text") {
-            finishCurrentBlock(currentBlock);
-            currentBlock = { type: "text", text: "" };
-            output.content.push(currentBlock);
-            events.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+          output.usage.input = Math.max(0, promptTokens - cachedPromptTokens);
+          output.usage.output = chunk.usage.completion_tokens || 0;
+          output.usage.cacheRead = cachedPromptTokens;
+          output.usage.cacheWrite = 0;
+          output.usage.totalTokens =
+            chunk.usage.total_tokens ||
+            output.usage.input +
+              output.usage.output +
+              output.usage.cacheRead +
+              output.usage.cacheWrite;
+          calculateCost(model, output.usage);
+        }
+        const choice = chunk.choices[0];
+        if (choice === undefined) return;
+        if (
+          choice.finish_reason !== undefined &&
+          choice.finish_reason !== null &&
+          choice.finish_reason !== ""
+        ) {
+          output.rawStopReason = choice.finish_reason;
+          const stopReasonResult = mapChatStopReason(choice.finish_reason);
+          output.stopReason = stopReasonResult.stopReason;
+          if (stopReasonResult.errorMessage !== undefined && stopReasonResult.errorMessage !== "") {
+            output.errorMessage = stopReasonResult.errorMessage;
           }
-          currentBlock.text += textDelta;
+        }
+        const delta = choice.delta;
+        if (delta.content !== null && delta.content !== undefined) {
+          const contentItems = typeof delta.content === "string" ? [delta.content] : delta.content;
+          for (const item of contentItems) {
+            if (typeof item === "string") {
+              const textDelta = sanitizeSurrogates(item);
+              if (textDelta === "") continue;
+              if (currentBlock === null || currentBlock.type !== "text") {
+                finishCurrentBlock(currentBlock);
+                currentBlock = { type: "text", text: "" };
+                output.content.push(currentBlock);
+                events.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+              }
+              currentBlock.text += textDelta;
+              events.push({
+                type: "text_delta",
+                contentIndex: blockIndex(),
+                delta: textDelta,
+                partial: output,
+              });
+              continue;
+            }
+
+            if (item.type === "thinking") {
+              const deltaText = (item.thinking ?? [])
+                .map((part) => part.text ?? "")
+                .filter((text) => text.length > 0)
+                .join("");
+              const thinkingDelta = sanitizeSurrogates(deltaText);
+              if (thinkingDelta === "") continue;
+              if (currentBlock === null || currentBlock.type !== "thinking") {
+                finishCurrentBlock(currentBlock);
+                currentBlock = { type: "thinking", thinking: "" };
+                output.content.push(currentBlock);
+                events.push({
+                  type: "thinking_start",
+                  contentIndex: blockIndex(),
+                  partial: output,
+                });
+              }
+              currentBlock.thinking += thinkingDelta;
+              events.push({
+                type: "thinking_delta",
+                contentIndex: blockIndex(),
+                delta: thinkingDelta,
+                partial: output,
+              });
+              continue;
+            }
+
+            if (item.type === "text") {
+              const textDelta = sanitizeSurrogates(item.text ?? "");
+              if (textDelta === "") continue;
+              if (currentBlock === null || currentBlock.type !== "text") {
+                finishCurrentBlock(currentBlock);
+                currentBlock = { type: "text", text: "" };
+                output.content.push(currentBlock);
+                events.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+              }
+              currentBlock.text += textDelta;
+              events.push({
+                type: "text_delta",
+                contentIndex: blockIndex(),
+                delta: textDelta,
+                partial: output,
+              });
+            }
+          }
+        }
+        const toolCalls = delta.tool_calls || [];
+        for (const toolCall of toolCalls) {
+          if (currentBlock !== null) {
+            finishCurrentBlock(currentBlock);
+            currentBlock = null;
+          }
+          const callId =
+            toolCall.id !== undefined && toolCall.id !== "" && toolCall.id !== "null"
+              ? toolCall.id
+              : deriveMistralToolCallId(`toolcall:${toolCall.index ?? 0}`, 0);
+          const key = toolCall.index ?? callId;
+          const existingIndex = toolBlocksByKey.get(key);
+          let block: (ToolCall & { partialArgs?: string }) | undefined;
+
+          if (existingIndex !== undefined) {
+            const existing = output.content[existingIndex];
+            if (existing?.type === "toolCall") {
+              block = existing as ToolCall & { partialArgs?: string };
+            }
+          }
+
+          if (block === undefined) {
+            block = {
+              type: "toolCall",
+              id: callId,
+              name: toolCall.function.name,
+              arguments: {},
+              partialArgs: "",
+            };
+            output.content.push(block);
+            toolBlocksByKey.set(key, output.content.length - 1);
+            events.push({
+              type: "toolcall_start",
+              contentIndex: output.content.length - 1,
+              partial: output,
+            });
+          }
+
+          const argsDelta =
+            typeof toolCall.function.arguments === "string"
+              ? toolCall.function.arguments
+              : encodeJsonSync(toolCall.function.arguments || {});
+          block.partialArgs = (block.partialArgs || "") + argsDelta;
+          block.arguments = parseStreamingJson<ToolCall["arguments"]>(block.partialArgs);
           events.push({
-            type: "text_delta",
-            contentIndex: blockIndex(),
-            delta: textDelta,
+            type: "toolcall_delta",
+            contentIndex: toolBlocksByKey.get(key)!,
+            delta: argsDelta,
             partial: output,
           });
-          continue;
         }
-
-        if (item.type === "thinking") {
-          const deltaText = (item.thinking ?? [])
-            .map((part) => part.text ?? "")
-            .filter((text) => text.length > 0)
-            .join("");
-          const thinkingDelta = sanitizeSurrogates(deltaText);
-          if (thinkingDelta === "") continue;
-          if (currentBlock === null || currentBlock.type !== "thinking") {
-            finishCurrentBlock(currentBlock);
-            currentBlock = { type: "thinking", thinking: "" };
-            output.content.push(currentBlock);
-            events.push({ type: "thinking_start", contentIndex: blockIndex(), partial: output });
-          }
-          currentBlock.thinking += thinkingDelta;
-          events.push({
-            type: "thinking_delta",
-            contentIndex: blockIndex(),
-            delta: thinkingDelta,
-            partial: output,
-          });
-          continue;
-        }
-
-        if (item.type === "text") {
-          const textDelta = sanitizeSurrogates(item.text ?? "");
-          if (textDelta === "") continue;
-          if (currentBlock === null || currentBlock.type !== "text") {
-            finishCurrentBlock(currentBlock);
-            currentBlock = { type: "text", text: "" };
-            output.content.push(currentBlock);
-            events.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
-          }
-          currentBlock.text += textDelta;
-          events.push({
-            type: "text_delta",
-            contentIndex: blockIndex(),
-            delta: textDelta,
-            partial: output,
-          });
-        }
-      }
-    }
-
-    const toolCalls = delta.tool_calls || [];
-    for (const toolCall of toolCalls) {
-      if (currentBlock !== null) {
-        finishCurrentBlock(currentBlock);
-        currentBlock = null;
-      }
-      const callId =
-        toolCall.id !== undefined && toolCall.id !== "" && toolCall.id !== "null"
-          ? toolCall.id
-          : deriveMistralToolCallId(`toolcall:${toolCall.index ?? 0}`, 0);
-      const key = toolCall.index ?? callId;
-      const existingIndex = toolBlocksByKey.get(key);
-      let block: (ToolCall & { partialArgs?: string }) | undefined;
-
-      if (existingIndex !== undefined) {
-        const existing = output.content[existingIndex];
-        if (existing?.type === "toolCall") {
-          block = existing as ToolCall & { partialArgs?: string };
-        }
-      }
-
-      if (block === undefined) {
-        block = {
-          type: "toolCall",
-          id: callId,
-          name: toolCall.function.name,
-          arguments: {},
-          partialArgs: "",
-        };
-        output.content.push(block);
-        toolBlocksByKey.set(key, output.content.length - 1);
-        events.push({
-          type: "toolcall_start",
-          contentIndex: output.content.length - 1,
-          partial: output,
-        });
-      }
-
-      const argsDelta =
-        typeof toolCall.function.arguments === "string"
-          ? toolCall.function.arguments
-          : JSON.stringify(toolCall.function.arguments || {});
-      block.partialArgs = (block.partialArgs || "") + argsDelta;
-      block.arguments = parseStreamingJson<ToolCall["arguments"]>(block.partialArgs);
-      events.push({
-        type: "toolcall_delta",
-        contentIndex: toolBlocksByKey.get(key)!,
-        delta: argsDelta,
-        partial: output,
-      });
-    }
-  }
-
+      }),
+    ),
+  );
   finishCurrentBlock(currentBlock);
   for (const index of toolBlocksByKey.values()) {
     const block = output.content[index];
@@ -808,7 +829,7 @@ async function consumeChatStream(
       partial: output,
     });
   }
-}
+});
 
 function toFunctionTools(tools: Tool[]): MistralFunctionTool[] {
   return tools.map((tool) => {
