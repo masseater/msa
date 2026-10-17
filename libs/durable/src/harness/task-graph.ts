@@ -19,7 +19,7 @@ import type {
   TaskOutcome,
   TaskRecord,
   WatchHandle,
-} from "../types.ts";
+} from "./types.ts";
 import { closedError, scanAll } from "./util.ts";
 
 export type TaskGraphState =
@@ -81,41 +81,55 @@ export class TaskGraphView {
     });
   }
 
-  async state(context: Context): Promise<AttachedReplicatedState<TaskGraph>> {
-    const { observer, detach } = await this.#attach(
-      (value, release) => new CommittedStateSource<TaskGraph>(value, release),
-      context,
+  state(context: Context): Promise<AttachedReplicatedState<TaskGraph>> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const { observer, detach } = yield* this.#attach(
+          (value, release) => new CommittedStateSource<TaskGraph>(value, release),
+          context,
+        );
+        return yield* Effect.sync(() =>
+          replicatedState(observer, { onError: (error) => this.#session.report(error) }),
+        ).pipe(Effect.onError(() => Effect.sync(detach)));
+      }),
     );
-    try {
-      return replicatedState(observer, { onError: (error) => this.#session.report(error) });
-    } catch (error) {
-      detach();
-      throw error;
-    }
   }
 
-  async watch(context: Context): Promise<TaskGraphWatch> {
-    const { observer } = await this.#attach(
-      (value, release) =>
-        new CommittedWatch<TaskGraph>(value, release, (error) => this.#session.report(error)),
-      context,
+  watch(context: Context): Promise<TaskGraphWatch> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const { observer } = yield* this.#attach(
+          (value, release) =>
+            new CommittedWatch<TaskGraph>(value, release, (error) => this.#session.report(error)),
+          context,
+        );
+        const signal = context.abortSignal;
+        if (signal?.aborted === true) {
+          observer.cancel();
+          return yield* Effect.die(signal.reason);
+        }
+        if (signal !== undefined) observer.observeCancellation(signal);
+        return observer;
+      }),
     );
-    const signal = context.abortSignal;
-    if (signal?.aborted) {
-      observer.cancel();
-      throw signal.reason;
-    }
-    if (signal !== undefined) observer.observeCancellation(signal);
-    return observer;
   }
 
   #attach<O extends Observer>(
     create: (value: TaskGraph, release: () => void) => O,
     context: Context,
-  ): Promise<{ observer: O; detach: () => void }> {
-    return this.#session.readOnLine(async () => {
+  ): Effect.Effect<{ observer: O; detach: () => void }> {
+    return Effect.promise(() =>
+      this.#session.readOnLine(() => Effect.runPromise(this.#mountObserver(create, context))),
+    );
+  }
+
+  #mountObserver<O extends Observer>(
+    create: (value: TaskGraph, release: () => void) => O,
+    context: Context,
+  ): Effect.Effect<{ observer: O; detach: () => void }> {
+    return Effect.gen({ self: this }, function* () {
       const mount = this.#mount ?? {
-        value: await this.#build(context),
+        value: yield* this.#build(context),
         observers: new Set<Observer>(),
       };
       const detach = (): void => {
@@ -131,32 +145,38 @@ export class TaskGraphView {
     });
   }
 
-  async #build(context: Context): Promise<TaskGraph> {
-    const tasks: Record<string, TaskGraphNode> = {};
-    const records: AnyTaskRecord[] = [];
-    for await (const status of LIVE_STATUSES) {
-      records.push(
-        ...(await Effect.runPromise(
-          scanAll((cursor) => this.#storage.scanTasks({ status }, SCAN_PAGE_SIZE, cursor, context)),
-        )),
+  #build(context: Context): Effect.Effect<TaskGraph> {
+    const storage = this.#storage;
+    return Effect.gen(function* () {
+      const tasks: Record<string, TaskGraphNode> = {};
+      const scans = yield* Effect.forEach(LIVE_STATUSES, (status) =>
+        scanAll((cursor) => storage.scanTasks({ status }, SCAN_PAGE_SIZE, cursor, context)),
       );
-    }
-    records.sort((a, b) => a.id - b.id);
-    for await (const record of records) {
-      const owned = await Effect.runPromise(
-        scanAll((cursor) =>
-          this.#storage.scanConversations(
-            { ownerTaskId: record.id },
-            SCAN_PAGE_SIZE,
-            cursor,
-            context,
+      const records: AnyTaskRecord[] = scans.flat();
+      records.sort((a, b) => a.id - b.id);
+      yield* Effect.forEach(
+        records,
+        (record) =>
+          Effect.map(
+            scanAll((cursor) =>
+              storage.scanConversations(
+                { ownerTaskId: record.id },
+                SCAN_PAGE_SIZE,
+                cursor,
+                context,
+              ),
+            ),
+            (owned) => {
+              const conversations = owned
+                .map((conversation) => conversation.id)
+                .sort((a, b) => a - b);
+              tasks[String(record.id)] = nodeOf(record, conversations);
+            },
           ),
-        ),
+        { discard: true },
       );
-      const conversations = owned.map((conversation) => conversation.id).sort((a, b) => a - b);
-      tasks[String(record.id)] = nodeOf(record, conversations);
-    }
-    return { tasks };
+      return { tasks };
+    });
   }
 }
 

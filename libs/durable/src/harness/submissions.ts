@@ -1,40 +1,29 @@
-import { type Context, copyJson, type JsonRepresentation } from "@msa/chord";
+import type { Context } from "@msa/chord";
+import { Effect } from "effect";
 
-import { ConversationBusy } from "../errors.ts";
 import type { SessionImpl } from "../session/session.ts";
+import type { Transaction } from "../session/transaction.ts";
+import { toPromise } from "./bridge.ts";
+import type { QueueModes } from "./inbox.ts";
+import { removeInboxItem } from "./inbox.ts";
+import { SubmissionHandle } from "./submission-handle.ts";
+import { admitSubmission } from "./submissions-admit.ts";
 import type {
   CommitPublication,
   ConversationId,
-  JsonObject,
-  Storage,
-  SubmissionId,
-  SubmissionRecord,
-  Tx,
-} from "../types.ts";
-import { startRun } from "./generation.ts";
-import {
-  appendInput,
-  applyBoundary,
-  hasQueuedReset,
-  InboxDoc,
-  isDisplayOnly,
-  isStale,
-  pickInputEntry,
-  prepareBoundary,
-  type QueueModes,
-  removeInboxItem,
-} from "./inbox.ts";
-import { LiveDoc } from "./live.ts";
-import type {
-  InputEntry,
   SettledSubmissionRecord,
+  Storage,
   Submission,
   SubmissionDraft,
-  UserInput,
+  SubmissionId,
+  SubmissionRecord,
 } from "./types.ts";
 import { closedError, Waiters } from "./util.ts";
 
-type AbortResult = "aborted" | "already_placed" | "settled";
+export type AbortResult = "aborted" | "already_placed" | "settled";
+
+const isSettled = (record: SubmissionRecord): record is SettledSubmissionRecord =>
+  record.status === "done" || record.status === "unanswered";
 
 export class Submissions {
   readonly #session: SessionImpl;
@@ -57,47 +46,65 @@ export class Submissions {
     this.#now = now;
     this.#queueModes = queueModes;
     this.#resume = resume;
-    session.observeCommits((publication) => this.#observe(publication));
+    session.observeCommits((publication) => {
+      this.#observe(publication);
+    });
     session.subscribeClose(() => {
       this.#closed = true;
       this.#waiters.rejectAll(closedError(this.#session));
     });
   }
 
-  async submit(
+  submit(
     conversationId: ConversationId,
     draft: SubmissionDraft,
     context: Context,
   ): Promise<Submission> {
     this.#resume();
-    const id = await this.#session.commitWith(
-      (tx) => admitSubmission(tx, conversationId, draft, this.#now(), this.#queueModes()),
-      context,
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const admit = yield* toPromise((tx: Transaction) =>
+          admitSubmission(tx, conversationId, draft, this.#now(), this.#queueModes()),
+        );
+        const id = yield* Effect.promise(() => this.#session.commitWith(admit, context));
+        return new SubmissionHandle(id, this);
+      }),
     );
-    return new SubmissionHandle(id, this);
   }
 
-  async get(id: SubmissionId, context: Context): Promise<Submission | undefined> {
-    const record = await this.#session.readOnLine(() => this.#storage.submission(id, context));
-    return record === undefined ? undefined : new SubmissionHandle(record.id, this);
+  get(id: SubmissionId, context: Context): Promise<Submission | undefined> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const record = yield* Effect.promise(() =>
+          this.#session.readOnLine(() => this.#storage.submission(id, context)),
+        );
+        return record === undefined ? undefined : new SubmissionHandle(record.id, this);
+      }),
+    );
   }
 
-  async status(id: SubmissionId, context: Context): Promise<SubmissionRecord> {
-    const record = await this.#session.readOnLine(() => this.#storage.submission(id, context));
-    if (record === undefined) throw new Error(`Submission ${id} does not exist`);
-    return record;
+  status(id: SubmissionId, context: Context): Promise<SubmissionRecord> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const record = yield* Effect.promise(() =>
+          this.#session.readOnLine(() => this.#storage.submission(id, context)),
+        );
+        if (record === undefined)
+          return yield* Effect.die(new Error(`Submission ${id} does not exist`));
+        return record;
+      }),
+    );
   }
 
-  async wait(id: SubmissionId, context: Context): Promise<SettledSubmissionRecord> {
+  wait(id: SubmissionId, context: Context): Promise<SettledSubmissionRecord> {
     this.#resume();
-    const found = await this.#session.readOnLine(async () => {
-      const record = await this.#storage.submission(id, context);
-      if (record === undefined) throw new Error(`Submission ${id} does not exist`);
-      if (isSettled(record)) return { promise: Promise.resolve(record) };
-      if (this.#closed) throw closedError(this.#session);
-      return { promise: this.#waiters.add(id, context) };
-    });
-    return found.promise;
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const pending = yield* toPromise(() => this.#pending(id, context));
+        const found = yield* Effect.promise(() => this.#session.readOnLine(pending));
+        return yield* Effect.promise(() => found.promise);
+      }),
+    );
   }
 
   abort(
@@ -105,22 +112,57 @@ export class Submissions {
     context: Context,
     conversationId?: ConversationId,
   ): Promise<AbortResult | "not_found"> {
-    return this.#session.commitWith(async (tx) => {
-      const record = await tx.submission(id);
-      if (
-        record === undefined ||
-        (conversationId !== undefined && record.conversationId !== conversationId)
-      ) {
-        return "not_found";
-      }
-      if (record.status === "queued") {
-        tx.settleSubmission(id, { status: "unanswered", reason: "aborted" });
-        await removeInboxItem(tx, record.conversationId, id);
-        return "aborted";
-      }
-      return record.status === "placed" ? "already_placed" : "settled";
-    }, context);
+    return this.#session.commitWith(
+      (tx) => Effect.runPromise(this.#abort(tx, id, conversationId)),
+      context,
+    );
   }
+
+  abortHandle(id: SubmissionId, context: Context): Promise<AbortResult> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const result = yield* Effect.promise(() => this.abort(id, context));
+        if (result === "not_found")
+          return yield* Effect.die(new Error(`Submission ${id} does not exist`));
+        return result;
+      }),
+    );
+  }
+
+  #abort = Effect.fn("abortSubmission")(function* (
+    this: Submissions,
+    tx: Transaction,
+    id: SubmissionId,
+    conversationId: ConversationId | undefined,
+  ) {
+    const record = yield* Effect.promise(() => tx.submission(id));
+    if (
+      record === undefined ||
+      (conversationId !== undefined && record.conversationId !== conversationId)
+    )
+      return yield* Effect.succeed<AbortResult | "not_found">("not_found");
+    if (record.status === "queued") {
+      tx.settleSubmission(id, { status: "unanswered", reason: "aborted" });
+      yield* removeInboxItem(tx, record.conversationId, id);
+      return yield* Effect.succeed<AbortResult | "not_found">("aborted");
+    }
+    return yield* Effect.succeed<AbortResult | "not_found">(
+      record.status === "placed" ? "already_placed" : "settled",
+    );
+  });
+
+  #pending = Effect.fn("pendingSubmission")(function* (
+    this: Submissions,
+    id: SubmissionId,
+    context: Context,
+  ) {
+    const record = yield* Effect.promise(() => this.#storage.submission(id, context));
+    if (record === undefined)
+      return yield* Effect.die(new Error(`Submission ${id} does not exist`));
+    if (isSettled(record)) return { promise: Promise.resolve(record) };
+    if (this.#closed) return yield* Effect.die(closedError(this.#session));
+    return { promise: this.#waiters.add(id, context) };
+  });
 
   #observe(publication: CommitPublication): void {
     for (const change of publication.changes) {
@@ -128,133 +170,4 @@ export class Submissions {
       this.#waiters.resolve(change.value.id, change.value);
     }
   }
-}
-
-class SubmissionHandle implements Submission {
-  readonly id: SubmissionId;
-  readonly #submissions: Submissions;
-
-  constructor(id: SubmissionId, submissions: Submissions) {
-    this.id = id;
-    this.#submissions = submissions;
-  }
-
-  status(context: Context): Promise<SubmissionRecord> {
-    return this.#submissions.status(this.id, context);
-  }
-
-  wait(context: Context): Promise<SettledSubmissionRecord> {
-    return this.#submissions.wait(this.id, context);
-  }
-
-  async abort(context: Context): Promise<AbortResult> {
-    const result = await this.#submissions.abort(this.id, context);
-    if (result === "not_found") throw new Error(`Submission ${this.id} does not exist`);
-    return result;
-  }
-}
-
-function isSettled(record: SubmissionRecord): record is SettledSubmissionRecord {
-  return record.status === "done" || record.status === "unanswered";
-}
-
-function checkInputEntry(entry: InputEntry): void {
-  const { kind } = entry;
-  if (typeof kind !== "string" || kind.length === 0 || kind.startsWith("msa.")) {
-    throw new TypeError(
-      `An input entry's kind must be a non-empty string not starting with "msa.", got ${String(kind)}`,
-    );
-  }
-}
-
-export async function admitSubmission(
-  tx: Tx,
-  conversationId: ConversationId,
-  draft: SubmissionDraft,
-  now: number,
-  queueModes: QueueModes,
-): Promise<SubmissionId> {
-  if (draft.type === "input" && draft.entry !== undefined) checkInputEntry(draft.entry);
-  if (draft.requestId !== undefined) {
-    const existing = await tx.submissionByRequest(conversationId, draft.requestId);
-    if (existing !== undefined) {
-      if (existing.type !== draft.type) {
-        throw new Error(
-          `Request ${draft.requestId} already identifies a submission of type ${existing.type}`,
-        );
-      }
-      return existing.id;
-    }
-  }
-  const requestId = draft.requestId === undefined ? {} : { requestId: draft.requestId };
-  if (
-    draft.type === "write" &&
-    isDisplayOnly(draft.entry) &&
-    !hasQueuedReset((await tx.doc(InboxDoc, conversationId)).items)
-  ) {
-    const entry = await tx.appendEntry(conversationId, draft.entry);
-    const write = {
-      conversationId,
-      ...requestId,
-      type: "write",
-      status: "done",
-      entry: entry.id,
-    } as const;
-    return (await tx.createSubmission(write)).id;
-  }
-  const live = await tx.doc(LiveDoc, conversationId);
-  const busy = live.run !== undefined;
-  if (busy && draft.type === "input" && draft.whenBusy === "reject")
-    throw new ConversationBusy(conversationId);
-  const boundary = busy ? undefined : await prepareBoundary(tx, conversationId, queueModes);
-  if (boundary === undefined || boundary.inbox.items.length > 0) {
-    const { id } = await tx.createSubmission({
-      conversationId,
-      ...requestId,
-      type: draft.type,
-      status: "queued",
-    });
-    const value = copyJson(draft.type === "write" ? draft.entry : draft.content, {
-      omitUndefinedProperties: true,
-    });
-    const items = (boundary?.inbox ?? (await tx.doc(InboxDoc, conversationId))).items;
-    if (draft.type === "write") items.push({ id, mode: "write", entry: value as JsonObject });
-    else {
-      const mode = draft.whenBusy === "steer" ? "steer" : "followUp";
-      const content = value as JsonRepresentation<UserInput>;
-      const entry = draft.entry === undefined ? {} : { entry: pickInputEntry(draft.entry) };
-      items.push({ id, mode, content, ...entry });
-    }
-    if (boundary === undefined) return id;
-    const { users } = await applyBoundary(tx, boundary, "final", now);
-    if (users.length > 0) await startRun(tx, conversationId, live, users);
-    return id;
-  }
-  if (draft.type === "write") {
-    if (isStale(boundary, draft.entry)) {
-      const stale = { status: "unanswered", reason: "stale" } as const;
-      return (await tx.createSubmission({ conversationId, ...requestId, type: "write", ...stale }))
-        .id;
-    }
-    const entry = await tx.appendEntry(conversationId, draft.entry);
-    const write = {
-      conversationId,
-      ...requestId,
-      type: "write",
-      status: "done",
-      entry: entry.id,
-    } as const;
-    return (await tx.createSubmission(write)).id;
-  }
-  const entry = await appendInput(tx, conversationId, draft.content, draft.entry, now);
-  const input = {
-    conversationId,
-    ...requestId,
-    type: "input",
-    status: "placed",
-    entry: entry.id,
-  } as const;
-  const { id } = await tx.createSubmission(input);
-  await startRun(tx, conversationId, live, [id]);
-  return id;
 }

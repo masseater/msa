@@ -13,6 +13,7 @@ import {
   ToolTask,
   UsageDoc,
 } from "@msa/durable";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { recordUsage } from "../src/harness/usage.ts";
@@ -194,8 +195,14 @@ describe("usage", () => {
     };
     const names = ["constructor", "__proto__", "toString"];
     for await (const name of names) {
-      await root.commit((tx) => recordUsage(tx, root.id, "tools", name, usage), context);
-      await root.commit((tx) => recordUsage(tx, root.id, "tools", name, usage), context);
+      await root.commit(
+        (tx) => Effect.runPromise(recordUsage(tx, root.id, "tools", name, usage)),
+        context,
+      );
+      await root.commit(
+        (tx) => Effect.runPromise(recordUsage(tx, root.id, "tools", name, usage)),
+        context,
+      );
     }
     const total = await harness.usage(context);
     expect(Object.keys(total.tools)).toEqual(names);

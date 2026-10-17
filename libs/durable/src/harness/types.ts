@@ -1,27 +1,12 @@
-import type {
-  AssistantMessage,
-  CacheRetention,
-  Message,
-  Models,
-  ModelThinkingLevel,
-  Static,
-  Tool as AiTool,
-  ToolCall,
-  ToolResultMessage,
-  Transport,
-  TSchema,
-  Usage,
-  UserMessage,
-} from "@msa/ai";
+import type { CacheRetention, Message, Models, Transport, UserMessage } from "@msa/ai";
 import type { AttachedReplicatedState, Context, JsonValue } from "@msa/chord";
 
-import type { ExecutionEnv, ShellOutputSkip, ShellOutputWindow } from "../env/index.ts";
+import type { ExecutionEnv } from "../env/index.ts";
 import type {
   ConversationId,
   ConversationOwnership,
   ConversationRecord,
   Cursor,
-  DocumentObserver,
   DocumentReader,
   EntryDraft,
   EntryId,
@@ -34,15 +19,21 @@ import type {
   SubmissionRecord,
   Task,
   TaskId,
-  TaskOptions,
   TaskRecord,
   TaskState,
   Tx,
   WatchHandle,
 } from "../types.ts";
 import type { TaskGraph, TaskGraphWatch } from "./task-graph.ts";
+import type { Agent, AgentChange, Extension, RegistryReader } from "./types-registry.ts";
+import type { QueueMode, ToolExecutionMode, ToolRegistration } from "./types-tools.ts";
 import type { UsageState } from "./usage.ts";
 import type { ConversationView } from "./view.ts";
+
+export type * from "./types-tools.ts";
+export type * from "./types-registry.ts";
+export type * from "./types-hooks.ts";
+export type * from "../types.ts";
 
 export type ModelRef = {
   readonly provider: string;
@@ -111,198 +102,6 @@ export interface ConversationHandle {
   abort(context: Context, options?: ConversationAbortOptions): Promise<void>;
   waitForIdle(context: Context): Promise<void>;
 }
-
-export type ToolControl = {
-  readonly addTools?: readonly string[] | undefined;
-  readonly terminate?: true | undefined;
-  readonly handoff?: string | undefined;
-};
-
-export type ToolDiagnostic = {
-  readonly severity: "info" | "warn" | "error";
-  readonly message: string;
-  readonly code?: string;
-};
-
-export type ToolExecutionResult<TDetails extends JsonValue = JsonValue> = {
-  readonly output?: ToolResultMessage["content"];
-  readonly structuredOutput?: JsonValue;
-  readonly isError?: boolean;
-  readonly details?: TDetails;
-  readonly diagnostics?: readonly ToolDiagnostic[];
-  readonly usage?: Usage;
-  readonly control?: ToolControl;
-};
-
-export type NestedToolExecutionResult = {
-  readonly taskId: TaskId;
-  readonly structuredOutput?: JsonValue;
-  readonly isError: boolean;
-  readonly details?: JsonValue;
-  readonly diagnostics: readonly ToolDiagnostic[];
-  readonly usage?: Usage;
-  readonly durationMs?: number;
-};
-
-export type ToolExecutionMode = "parallel" | "sequential";
-
-export type QueueMode = "all" | "one-at-a-time";
-
-export interface ToolExecutionApi<TDetails extends JsonValue = JsonValue>
-  extends DocumentObserver, DocumentReader {
-  readonly taskId: TaskId;
-  readonly conversationId: ConversationId;
-  readonly callId: string;
-  readonly registry: RegistrySnapshot;
-  agent(context: Context): Promise<Agent>;
-  readonly models: Models;
-  readonly env: ExecutionEnv | undefined;
-  output(chunk: string | Uint8Array, skipped?: ShellOutputSkip): void;
-  readonly outputWindow: ShellOutputWindow | undefined;
-  retainedOutput(): { readonly text: string; readonly truncated: boolean };
-  diagnostic(diagnostic: ToolDiagnostic): void;
-  details(value: TDetails, context: Context): Promise<void>;
-  commit<T>(change: (tx: Tx) => T | Promise<T>, context: Context): Promise<T>;
-  memo<T extends JsonValue>(name: string, context: Context): Promise<T | undefined>;
-  memo<T extends JsonValue>(name: string, candidate: T, context: Context): Promise<T>;
-  createTask<I, S extends { phase: string }, R, H extends object>(
-    task: Task<I, S, R, H>,
-    input: I,
-    options: Omit<TaskOptions, "conversationId">,
-    context: Context,
-  ): Promise<TaskId<R>>;
-  getTask<R>(
-    id: TaskId<R>,
-    context: Context,
-  ): Promise<TaskRecord<JsonValue, JsonValue, R> | undefined>;
-  waitForTask<R>(id: TaskId<R>, context: Context): Promise<SettledTask<R>>;
-  conversation(id: ConversationId, context: Context): Promise<ConversationHandle | undefined>;
-  executeTool(
-    name: string,
-    args: JsonObject,
-    context: Context,
-    options?: { readonly key?: string; readonly progress?: boolean },
-  ): Promise<NestedToolExecutionResult>;
-}
-
-export type ToolRegistration<
-  TParameters extends TSchema = TSchema,
-  TDetails extends JsonValue = JsonValue,
-> = AiTool<TParameters> & {
-  readonly replay?: "safe" | "unsafe";
-  readonly executionMode?: ToolExecutionMode;
-  prepareArguments?(args: unknown): Static<TParameters>;
-  readonly structuredOutputSchema?: TSchema;
-  readonly callers?: readonly ("model" | "tools")[];
-  readonly deferred?: true;
-  readonly outputLimits?: {
-    readonly maxBytes?: number;
-    readonly maxLines?: number;
-    readonly retain?: "head" | "tail";
-  };
-  execute(
-    args: Static<TParameters>,
-    api: ToolExecutionApi<TDetails>,
-    context: Context,
-  ): Promise<ToolExecutionResult<TDetails>>;
-};
-
-export type PromptInput<Tool extends ToolRegistration = ToolRegistration> = {
-  readonly conversationId: ConversationId;
-  readonly agent: Agent<Tool>;
-  readonly env: ExecutionEnv | undefined;
-  readonly shown: Readonly<Record<string, string>>;
-  readonly read: DocumentReader;
-};
-
-export type PromptSection<Tool extends ToolRegistration = ToolRegistration> = {
-  readonly key: string;
-  render(
-    input: PromptInput<Tool>,
-    context: Context,
-  ): string | undefined | Promise<string | undefined>;
-  readonly tag?: boolean;
-};
-
-export type HookRegistration = { readonly task: string; readonly handlers: object };
-
-export type Wrap<Tool extends ToolRegistration = ToolRegistration> =
-  | { readonly tool: string; wrap(tool: Tool): Tool }
-  | { readonly section: string; wrap(section: PromptSection<Tool>): PromptSection<Tool> };
-
-export interface Extension<Tool extends ToolRegistration = ToolRegistration> {
-  readonly name: string;
-  readonly tools?: readonly Tool[];
-  readonly sections?: readonly PromptSection<Tool>[];
-  readonly hooks?: readonly HookRegistration[];
-  readonly wraps?: readonly Wrap<Tool>[];
-  readonly tasks?: readonly AnyTask[];
-}
-
-export interface RegistrySnapshot<Tool extends ToolRegistration = ToolRegistration> {
-  installed(): readonly Extension<Tool>[];
-  extension(name: string): Extension<Tool> | undefined;
-  tools(): readonly { readonly extension: Extension<Tool>; readonly tool: Tool }[];
-  sections(): readonly {
-    readonly extension: Extension<Tool>;
-    readonly section: PromptSection<Tool>;
-  }[];
-  tasks(): readonly AnyTask[];
-  task(name: string): AnyTask | undefined;
-}
-
-export interface RegistryReader<Tool extends ToolRegistration = ToolRegistration> {
-  snapshot(): RegistrySnapshot<Tool>;
-  subscribe(listener: () => void): () => void;
-}
-
-export interface Registry<
-  Tool extends ToolRegistration = ToolRegistration,
-> extends RegistryReader<Tool> {
-  install(extension: Extension<Tool>): void;
-  uninstall(extension: Extension): void;
-}
-
-export type AgentState = {
-  model?: ModelRef;
-  thinkingLevel?: ModelThinkingLevel;
-  extensions?: string[] | { add?: string[]; remove?: string[] };
-  tools?: string[] | { remove: string[] };
-  modelTools?: string[] | { remove?: string[]; add?: string[] };
-  instructions?: string;
-  cwd?: string;
-};
-
-export type AgentChange = {
-  readonly model?: ModelRef | null | undefined;
-  readonly thinkingLevel?: ModelThinkingLevel | null;
-  readonly extensions?:
-    | readonly Extension[]
-    | { readonly add?: readonly Extension[]; readonly remove?: readonly Extension[] }
-    | null;
-  readonly tools?:
-    | readonly ToolRegistration[]
-    | { readonly remove: readonly ToolRegistration[] }
-    | null;
-  readonly modelTools?:
-    | readonly ToolRegistration[]
-    | { readonly remove?: readonly ToolRegistration[]; readonly add?: readonly ToolRegistration[] }
-    | null;
-  readonly instructions?: string | null;
-  readonly cwd?: string | null;
-};
-
-export type Agent<Tool extends ToolRegistration = ToolRegistration> = {
-  readonly model?: ModelRef;
-  readonly thinkingLevel: ModelThinkingLevel;
-  readonly extensions: readonly Extension<Tool>[];
-  readonly tools: readonly Tool[];
-  readonly callable: readonly Tool[];
-  readonly deferred: readonly Tool[];
-  readonly sections: readonly PromptSection<Tool>[];
-  readonly instructions?: string;
-  readonly cwd?: string;
-};
 
 export type ConversationInit = (tx: Tx, conversationId: ConversationId) => void | Promise<void>;
 
@@ -474,66 +273,4 @@ export interface Harness extends Session {
   usage(context: Context): Promise<UsageState>;
   taskGraph(context: Context): Promise<AttachedReplicatedState<TaskGraph>>;
   watchTaskGraph(context: Context): Promise<TaskGraphWatch>;
-}
-
-export interface HookApi extends DocumentReader {
-  readonly taskId: TaskId;
-  readonly conversationId: ConversationId;
-  readonly models: Models;
-  memo<T extends JsonValue>(name: string, context: Context): Promise<T | undefined>;
-  memo<T extends JsonValue>(name: string, candidate: T, context: Context): Promise<T>;
-}
-
-export type HookResult<T> = T | undefined | Promise<T | undefined>;
-
-export interface GenerationHooks {
-  beforeRequest(
-    request: { readonly messages: readonly Message[] },
-    api: HookApi,
-    context: Context,
-  ): HookResult<{ readonly messages: readonly Message[] }>;
-  afterResponse(message: AssistantMessage, api: HookApi, context: Context): void | Promise<void>;
-  onYield(
-    answer: AssistantMessage,
-    api: HookApi,
-    context: Context,
-  ): HookResult<{ readonly continue: UserInput }>;
-  afterTools(
-    assistant: EntryId,
-    results: readonly EntryId[],
-    api: HookApi,
-    context: Context,
-  ): void | Promise<void>;
-}
-
-export type ToolHookCall = ToolCall & {
-  readonly parent?: { readonly taskId: TaskId; readonly callId: string };
-};
-
-export interface ToolHooks {
-  beforeTool(
-    call: ToolHookCall,
-    api: HookApi,
-    context: Context,
-  ): HookResult<{ readonly arguments?: JsonObject; readonly block?: string }>;
-  afterTool(
-    call: ToolHookCall,
-    result: ToolExecutionResult,
-    api: HookApi,
-    context: Context,
-  ): HookResult<ToolExecutionResult>;
-}
-
-export interface CompactionHooks {
-  beforeCompact(
-    compaction: {
-      readonly reason: CompactionReason;
-      readonly entries: readonly EntryRecord[];
-      readonly messages: readonly Message[];
-      readonly firstKept: EntryId;
-      readonly instructions?: string;
-    },
-    api: HookApi,
-    context: Context,
-  ): HookResult<{ readonly decline: true } | { readonly summary: string }>;
 }

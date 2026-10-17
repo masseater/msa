@@ -10,6 +10,7 @@ import {
   type ToolRegistration,
   wrapSection,
 } from "@msa/durable";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { resolveAgent, resolveSettings } from "../src/harness/agent.ts";
@@ -120,12 +121,8 @@ describe("system prompt preparation", () => {
         throw error;
       },
     );
-    const desired = await renderSections(
-      agent.sections,
-      input,
-      shown,
-      (error) => reports.push(error),
-      context,
+    const desired = await Effect.runPromise(
+      renderSections(agent.sections, input, shown, (error) => reports.push(error), context),
     );
     expect([...desired]).toEqual([
       ["preamble", "You are helpful."],
@@ -145,9 +142,9 @@ describe("system prompt preparation", () => {
     const failing = section("a", () => {
       throw new Error("cancelled");
     });
-    await expect(renderSections([failing], input, new Map(), () => {}, cancelled)).rejects.toThrow(
-      "cancelled",
-    );
+    await expect(
+      Effect.runPromise(renderSections([failing], input, new Map(), () => {}, cancelled)),
+    ).rejects.toThrow("cancelled");
   });
 });
 

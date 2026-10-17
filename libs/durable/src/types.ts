@@ -12,6 +12,8 @@ import type {
   SettledTask,
 } from "./harness/types.ts";
 
+export type * from "./dual.ts";
+
 export type JsonObject = { [key: string]: JsonValue };
 
 declare const idBrand: unique symbol;

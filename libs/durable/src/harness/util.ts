@@ -2,7 +2,7 @@ import type { Context } from "@msa/chord";
 import { Effect } from "effect";
 
 import { SessionFailed } from "../errors.ts";
-import type { Cursor, Page } from "../types.ts";
+import type { Cursor, Page } from "./types.ts";
 
 export class Waiters<K, T> {
   readonly #sets = new Map<K, Set<PromiseWithResolvers<T>>>();

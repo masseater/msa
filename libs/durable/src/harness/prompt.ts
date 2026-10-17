@@ -1,10 +1,18 @@
 import type { Message, SystemMessage, Tool as AiTool, ToolReference } from "@msa/ai";
 import { declarationsEqual, getCurrentTools, toToolDeclaration } from "@msa/ai/utils/transcript";
 import type { Context } from "@msa/chord";
+import { Cause, Effect, Exit, Function } from "effect";
 
 import { SystemEntry } from "../entries.ts";
-import type { ContextEdit, TypedEntryDraft } from "../types.ts";
-import type { ContextView, PromptInput, PromptSection, ToolRegistration } from "./types.ts";
+import type {
+  ContextEdit,
+  ContextView,
+  Dual4,
+  PromptInput,
+  PromptSection,
+  ToolRegistration,
+  TypedEntryDraft,
+} from "./types.ts";
 
 export function replaySections(messages: readonly Message[]): Map<string, string> {
   const shown = new Map<string, string>();
@@ -18,39 +26,83 @@ export function replaySections(messages: readonly Message[]): Map<string, string
   return shown;
 }
 
-export async function renderSections<Tool extends ToolRegistration>(
-  sections: readonly PromptSection<Tool>[],
-  input: PromptInput<Tool>,
-  shown: ReadonlyMap<string, string>,
-  report: (error: unknown) => void,
-  context: Context,
-): Promise<Map<string, string>> {
-  const desired = new Map<string, string>();
-  for await (const section of sections) {
-    let text: string | undefined;
-    try {
-      text = await section.render(input, context);
-    } catch (error) {
-      if (context.abortSignal?.aborted) throw error;
-      report(error);
-      const kept = shown.get(section.key);
+type RenderRequest<Tool extends ToolRegistration> = {
+  readonly input: PromptInput<Tool>;
+  readonly shown: ReadonlyMap<string, string>;
+  readonly report: (error: unknown) => void;
+  readonly context: Context;
+};
+
+const renderSection = <Tool extends ToolRegistration>(
+  section: PromptSection<Tool>,
+  request: RenderRequest<Tool>,
+  desired: Map<string, string>,
+) =>
+  Effect.gen(function* () {
+    const rendered = yield* Effect.exit(
+      Effect.promise(() => Promise.resolve(section.render(request.input, request.context))),
+    );
+    if (Exit.isFailure(rendered)) {
+      const error = Cause.squash(rendered.cause);
+      if (request.context.abortSignal?.aborted === true) return yield* Effect.die(error);
+      request.report(error);
+      const kept = request.shown.get(section.key);
       if (kept !== undefined) desired.set(section.key, kept);
-      continue;
+      return;
     }
-    if (text === undefined) continue;
+    const text = rendered.value;
+    if (text === undefined) return;
     desired.set(
       section.key,
       section.tag === false ? text : `<${section.key}>\n${text}\n</${section.key}>`,
     );
-  }
-  return desired;
-}
+  });
 
-type SystemDraft = TypedEntryDraft<never>;
+export const renderSections: {
+  <Tool extends ToolRegistration>(
+    input: PromptInput<Tool>,
+    shown: ReadonlyMap<string, string>,
+    report: (error: unknown) => void,
+    context: Context,
+  ): (sections: readonly PromptSection<Tool>[]) => Effect.Effect<Map<string, string>>;
+  <Tool extends ToolRegistration>(
+    sections: readonly PromptSection<Tool>[],
+    input: PromptInput<Tool>,
+    shown: ReadonlyMap<string, string>,
+    report: (error: unknown) => void,
+    context: Context,
+  ): Effect.Effect<Map<string, string>>;
+} = Function.dual(
+  5,
+  Effect.fn("renderSections")(function* <Tool extends ToolRegistration>(
+    sections: readonly PromptSection<Tool>[],
+    input: PromptInput<Tool>,
+    shown: ReadonlyMap<string, string>,
+    report: (error: unknown) => void,
+    context: Context,
+  ) {
+    const desired = new Map<string, string>();
+    const request = { input, shown, report, context };
+    yield* Effect.forEach(sections, (section) => renderSection(section, request, desired), {
+      discard: true,
+    });
+    return desired;
+  }),
+);
+
+export type SystemDraft = TypedEntryDraft<never>;
 
 type ToolChanges = { readonly toolsRemoved: ToolReference[]; readonly toolsAdded: AiTool[] };
 
-export function planSystemEntries(
+export const planSystemEntries: Dual4<
+  ContextView,
+  ReadonlyMap<string, string>,
+  readonly AiTool[],
+  number,
+  SystemDraft[]
+> = Function.dual(4, planEntries);
+
+function planEntries(
   view: ContextView,
   desired: ReadonlyMap<string, string>,
   tools: readonly AiTool[],
