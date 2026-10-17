@@ -13,6 +13,10 @@ export const ORCHESTRATOR_TOOL_NAMES = [
   "stop_session",
 ] as const;
 
+export function isOrchestratorTool(name: string): boolean {
+  return (ORCHESTRATOR_TOOL_NAMES as readonly string[]).includes(name);
+}
+
 const modelSchema = Type.String({ description: 'Model as "provider/id".' });
 
 const startSchema = Type.Object({

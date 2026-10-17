@@ -20,6 +20,7 @@ import { createToolNameMatcher } from "./mcp-servers.ts";
 import { convertToLlm } from "./messages.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { ModelRuntime } from "./model-runtime.ts";
+import { isOrchestratorTool, ORCHESTRATOR_TOOL_NAMES } from "./orchestrator/tools.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
 import type { ResourceLoader } from "./resource-loader.ts";
 import { DefaultResourceLoader } from "./resource-loader.ts";
@@ -508,22 +509,35 @@ export async function createAgentSession(
     excludedToolNames,
     extensionRunnerRef,
     sessionStartEvent: options.sessionStartEvent,
-    createWorkerSession: options.orchestrator
-      ? async (worker) => {
-          const { session: workerSession } = await createAgentSession({
-            cwd: worker.cwd,
-            agentDir,
-            modelRuntime,
-            model: worker.model,
-            thinkingLevel: worker.thinkingLevel,
-            sessionManager: worker.sessionFile
-              ? SessionManager.open(worker.sessionFile)
-              : SessionManager.create(worker.cwd, getDefaultSessionDir(worker.cwd, agentDir)),
-          });
-          await workerSession.bindExtensions({ mode: "print" });
-          return workerSession;
-        }
-      : undefined,
+    // Workers get the orchestrator's settings, project trust, resources, and tool selection, minus
+    // the orchestrator tools; the worker cwd only moves their tools and transcripts.
+    createWorkerSession:
+      options.orchestrator && resourceLoader instanceof DefaultResourceLoader
+        ? async (worker) => {
+            const workerResourceLoader = resourceLoader.fork();
+            await workerResourceLoader.reload();
+            const workerTools = options.tools?.filter(
+              (entry) => !isOrchestratorTool(entry.replace(/^[+-]/, "")),
+            );
+            const { session: workerSession } = await createAgentSession({
+              cwd: worker.cwd,
+              agentDir,
+              modelRuntime,
+              settingsManager,
+              resourceLoader: workerResourceLoader,
+              model: worker.model,
+              thinkingLevel: worker.thinkingLevel,
+              tools: workerTools?.length ? workerTools : undefined,
+              excludeTools: [...(options.excludeTools ?? []), ...ORCHESTRATOR_TOOL_NAMES],
+              noTools: options.noTools,
+              sessionManager: worker.sessionFile
+                ? SessionManager.open(worker.sessionFile)
+                : SessionManager.create(worker.cwd, getDefaultSessionDir(worker.cwd, agentDir)),
+            });
+            await workerSession.bindExtensions({ mode: "print" });
+            return workerSession;
+          }
+        : undefined,
   });
 
   const extensionsResult = resourceLoader.getExtensions();
