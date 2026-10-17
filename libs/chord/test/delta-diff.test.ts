@@ -81,7 +81,7 @@ describe("immutable revision diff", () => {
     ]);
     for (const operation of wire) assertValidWireOp(operation);
     expect(decoder().decode(wire)).toEqual(operations);
-    expect(() => assertValidOp(["m", ["values"], [0, 0]])).toThrow(/bijection/);
+    expect(() => assertValidOp(["m", ["values"], [0, 0]])).toThrow(/bijection/u);
   });
 
   it("emits nothing for deeply equal reconstructed values", () => {

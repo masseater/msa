@@ -182,7 +182,7 @@ describe("host manager (real child processes)", () => {
 
   it("reports a fatal child as a failed start", async () => {
     const manager = createHostManager({ driver: driver({ FIXTURE_MODE: "fatal" }) });
-    await assert.rejects(manager.start(), /fixture refuses to start/);
+    await assert.rejects(manager.start(), /fixture refuses to start/u);
     assert.equal(manager.status, "stopped");
   }, 20_000);
 

@@ -320,7 +320,7 @@ describe("application requests", () => {
     });
     await assert.rejects(
       host.hold(Other, {}).ready,
-      /expose takes a resource declared by this object/,
+      /expose takes a resource declared by this object/u,
     );
   });
 

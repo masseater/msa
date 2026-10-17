@@ -62,7 +62,11 @@ function copy(
       const result = new Array<JsonValue>(value.length);
       for (let index = 0; index < value.length; index++) {
         const descriptor = Object.getOwnPropertyDescriptor(value, index);
-        if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+        if (
+          descriptor === undefined ||
+          descriptor.enumerable !== true ||
+          !("value" in descriptor)
+        ) {
           throw new TypeError("Value must contain strict JSON enumerable indexed data properties");
         }
         defineData(result, String(index), copy(descriptor.value, active, omitUndefinedProperties));
@@ -78,7 +82,7 @@ function copy(
       if (typeof key === "symbol")
         throw new TypeError("Value contains a symbol key and is not strict JSON");
       const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
-      if (!descriptor.enumerable || !("value" in descriptor)) {
+      if (descriptor.enumerable !== true || !("value" in descriptor)) {
         throw new TypeError("Value must contain strict JSON enumerable data properties");
       }
       if (descriptor.value === undefined && omitUndefinedProperties) continue;
@@ -115,7 +119,7 @@ function check(value: unknown, ancestors: Set<object>): boolean {
         const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
         if (
           descriptor === undefined ||
-          !descriptor.enumerable ||
+          descriptor.enumerable !== true ||
           !("value" in descriptor) ||
           !check(descriptor.value, ancestors)
         ) {
@@ -136,7 +140,7 @@ function check(value: unknown, ancestors: Set<object>): boolean {
   try {
     for (const descriptor of Object.values(Object.getOwnPropertyDescriptors(value))) {
       if (
-        !descriptor.enumerable ||
+        descriptor.enumerable !== true ||
         !("value" in descriptor) ||
         !check(descriptor.value, ancestors)
       ) {

@@ -147,7 +147,7 @@ describe("state cells", () => {
       self.state("x", Type.Object({ n: Type.Number() }), { n: "no" } as never);
       return {};
     });
-    await assert.rejects(host.hold(Bad, {}).ready, /initial value of state x/);
+    await assert.rejects(host.hold(Bad, {}).ready, /initial value of state x/u);
 
     const lax = createHost({ self: { kind: "host" }, onError: () => {} });
     serveList(lax);
@@ -180,7 +180,7 @@ describe("state cells", () => {
       x.replace(captured!, {});
       return {};
     });
-    await assert.rejects(host.hold(Writer, {}).ready, /read_only/);
+    await assert.rejects(host.hold(Writer, {}).ready, /read_only/u);
   });
 
   it("listeners run each event in a fresh root; tasks get an abortable ctx", async () => {

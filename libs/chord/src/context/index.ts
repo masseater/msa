@@ -104,6 +104,7 @@ export function awaitWithContext<T>(promise: Promise<T>, context: Context): Prom
       (value) => {
         signal.removeEventListener("abort", onAbort);
         resolve(value);
+        return undefined;
       },
       (error: unknown) => {
         signal.removeEventListener("abort", onAbort);

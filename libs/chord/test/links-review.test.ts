@@ -47,7 +47,7 @@ class WatchedLink implements Link {
   }
   send(frame: Frame): number | undefined {
     this.sent.push(frame);
-    if (this.closeOn?.(frame)) {
+    if (this.closeOn?.(frame) === true) {
       this.inner.close("dropped");
       return undefined;
     }
@@ -94,7 +94,7 @@ function cluster() {
     slowGate: latch(),
     browser(principal: unknown, restamp?: (p: unknown) => unknown | undefined) {
       const [down, up] = memoryLinkPair();
-      server.accept(down, { principal, ...(restamp !== undefined ? { restamp } : {}) });
+      server.accept(down, { principal, ...(restamp === undefined ? {} : { restamp }) });
       return {
         host: createHost({
           self: { kind: "host" },
@@ -189,7 +189,7 @@ describe("links review: identity and stamping", () => {
     await until(() => raw.closed);
     assert.throws(
       () => c.server.accept(memoryLinkPair()[0], { principal: {}, kind: "host" }),
-      /needs its name/,
+      /needs its name/u,
     );
   });
 

@@ -135,7 +135,7 @@ describe("reload", () => {
         probe.replace(captured!, {});
       },
     });
-    await assert.rejects(host.reload([writing]), /read_only/);
+    await assert.rejects(host.reload([writing]), /read_only/u);
 
     const log: string[] = [];
     const failing = greeterFacet({
@@ -153,7 +153,7 @@ describe("reload", () => {
     await assert.rejects(
       host.reload([failing]),
       (error) =>
-        isChordError(error, "unavailable") && /reload aborted.*b fails/.test(error.message),
+        isChordError(error, "unavailable") && /reload aborted.*b fails/u.test(error.message),
     );
     assert.equal(host.codeVersion, codeVersion);
     assert.deepEqual(log, ["open a", "close a"]);
@@ -174,7 +174,7 @@ describe("reload", () => {
       (error) =>
         isChordError(error, "invalid") &&
         error.reason === "state" &&
-        /without a version bump/.test(error.message),
+        /without a version bump/u.test(error.message),
     );
   });
 
@@ -257,7 +257,7 @@ describe("reload", () => {
     assert.equal(report.gated.length, 1);
     assert.deepEqual(migrated, ["b 1->2"]);
     assert.deepEqual([pair.a.value, pair.b.value], [2, 10], "a kept as it was, b migrated");
-    await assert.rejects(host.reload([facet(1)]), /version of state b lowered from 2 to 1/);
+    await assert.rejects(host.reload([facet(1)]), /version of state b lowered from 2 to 1/u);
   });
 
   it("gate: late old roots get upgrade_conflict, grandfathered roots re-enter, then commit", async () => {
@@ -317,7 +317,7 @@ describe("reload", () => {
     await tick();
     await assert.rejects(host.reload([facet("hi", 2)], { gateDeadline: 30 }), (error) => {
       assert.ok(isChordError(error, "aborted") && error.reason === "gate_deadline");
-      assert.match(error.message, /blocking roots: host#\w+:\d+/);
+      assert.match(error.message, /blocking roots: host#\w+:\d+/u);
       return true;
     });
     assert.equal(await ref.greet("x"), "hello x");
@@ -503,7 +503,7 @@ describe("reload", () => {
     assert.ok(
       errors.some(
         (error) =>
-          isChordError(error, "aborted") && /still running after 30 ms/.test(error.message),
+          isChordError(error, "aborted") && /still running after 30 ms/u.test(error.message),
       ),
     );
     stuck.open();
@@ -576,7 +576,7 @@ describe("reload", () => {
       name: "doc",
       setup: (api) => api.serve(DocBroken, () => ({ variant: "main", read: () => ({ text: 1 }) })),
     };
-    await assert.rejects(host.reload([broken]), /without a version bump/);
+    await assert.rejects(host.reload([broken]), /without a version bump/u);
 
     const fetch = () => ({ body: "v2" });
     const v2: Facet = {
@@ -724,7 +724,7 @@ describe("reload", () => {
         }),
     });
     const codeVersion = host.codeVersion;
-    await assert.rejects(host.reload([clockFacet, consumer(true)]), /consumer fails/);
+    await assert.rejects(host.reload([clockFacet, consumer(true)]), /consumer fails/u);
     assert.equal(host.codeVersion, codeVersion);
     assert.equal(await ref.greet("x"), "hello x");
     await host.reload([clockFacet, consumer(false)]);

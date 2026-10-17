@@ -104,16 +104,16 @@ describe("transactional overlay drafts", () => {
     const change = tracker.beginChange();
     expect(() => {
       change.state.values[0] = undefined as unknown as JsonValue;
-    }).toThrow(/strict JSON/);
+    }).toThrow(/strict JSON/u);
     expect(() => change.state.values.push({ nested: undefined } as unknown as JsonValue)).toThrow(
-      /strict JSON/,
+      /strict JSON/u,
     );
     expect(() => {
       change.state.number = Number.NaN;
-    }).toThrow(/strict JSON/);
+    }).toThrow(/strict JSON/u);
     expect(() => {
       change.state.payload = new Date() as unknown as JsonValue;
-    }).toThrow(/plain objects/);
+    }).toThrow(/plain objects/u);
     expect(change.state).toEqual(tracker.value);
     change.abort();
     expect(tracker.value).toEqual({ number: 0, payload: null, values: [1, 2] });
@@ -122,7 +122,7 @@ describe("transactional overlay drafts", () => {
   it("rejects array holes without mutating the committed base", () => {
     const tracker = track({ values: [1, 2] });
     const change = tracker.beginChange();
-    expect(() => delete change.state.values[0]).toThrow(/dense|holes/);
+    expect(() => delete change.state.values[0]).toThrow(/dense|holes/u);
     change.abort();
     expect(tracker.value.values).toEqual([1, 2]);
   });

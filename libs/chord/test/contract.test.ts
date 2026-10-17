@@ -103,7 +103,7 @@ describe("contracts", () => {
         },
       },
     });
-    assert.match(coverage(required.description, chatV1.description) ?? "", /arguments/);
+    assert.match(coverage(required.description, chatV1.description) ?? "", /arguments/u);
     assert.throws(
       () => bind(required, undefined, chatV1),
       (error) => isChordError(error, "contract_mismatch"),
@@ -116,7 +116,7 @@ describe("contracts", () => {
         viewer: { state: { view: Type.Object({ text: Type.Number() }) } },
       },
     });
-    assert.match(coverage(retyped.description, chatV1.description) ?? "", /state/);
+    assert.match(coverage(retyped.description, chatV1.description) ?? "", /state/u);
   });
 
   it("methods without arguments or result: described without them; their presence must match, a void consumer accepts a result", () => {
@@ -129,18 +129,18 @@ describe("contracts", () => {
     assert.equal(coverage(none, none), undefined);
     assert.match(
       coverage(withArgs, none) ?? "",
-      /arguments/,
+      /arguments/u,
       "the consumer sends none, the provider expects some",
     );
     assert.match(
       coverage(none, withArgs) ?? "",
-      /arguments/,
+      /arguments/u,
       "the consumer sends some, the provider takes none",
     );
     assert.equal(coverage(withResult, none), undefined, "a void consumer ignores a result");
     assert.match(
       coverage(none, withResult) ?? "",
-      /result/,
+      /result/u,
       "a consumer expecting a result needs one",
     );
   });
@@ -172,7 +172,7 @@ describe("contracts", () => {
       },
     });
     const b = local("t.idx", { ...a.def, members: { ...a.def.members, harness: opaque("h@2") } });
-    assert.match(coverage(b.description, a.description) ?? "", /opaque/);
+    assert.match(coverage(b.description, a.description) ?? "", /opaque/u);
     assert.ok(
       fits(
         Type.Function([Type.Unknown()], Type.Void()),

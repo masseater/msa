@@ -56,6 +56,7 @@ describe("host: eager readiness", () => {
         const loading = operation === "install" ? host.install(facet) : host.load([facet]);
         void loading.then(() => {
           settled = true;
+          return undefined;
         });
         await tick();
         assert.equal(settled, false);
@@ -184,7 +185,7 @@ describe("host: eager readiness", () => {
       );
       await first;
       assert.equal(created, 1);
-      await assert.rejects(host.ready(), /later/);
+      await assert.rejects(host.ready(), /later/u);
     } finally {
       await host.close();
     }
@@ -253,6 +254,7 @@ describe("host: eager readiness", () => {
           let settled = false;
           const ready = worker.ready().then(() => {
             settled = true;
+            return undefined;
           });
           await tick();
           assert.equal(settled, false);

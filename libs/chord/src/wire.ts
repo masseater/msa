@@ -140,6 +140,6 @@ export function toWireError(error: unknown): WireError {
 }
 
 export const fromWireError = (error: WireError): ChordError =>
-  new ChordError(error.code, error.message.replace(/^[a-z_]+(\/[a-z_]+)?: /, ""), {
+  new ChordError(error.code, error.message.replace(/^[a-z_]+(\/[a-z_]+)?: /u, ""), {
     reason: error.reason,
   });

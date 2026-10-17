@@ -24,7 +24,7 @@ export interface OutputSkip {
 }
 
 const NEWLINE = 0x0a;
-const INVALID_OUTPUT = /[\x00-\x08\x0b-\x1f\ufff9-\ufffb]/g;
+const INVALID_OUTPUT = /(?![\t\n\u007f-\u009f])\p{Cc}|[\ufff9-\ufffb]/gu;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { ignoreBOM: true });
 
@@ -238,10 +238,10 @@ interface RuntimeBuffer {
 }
 
 const runtimeBuffer = (globalThis as { Buffer?: RuntimeBuffer }).Buffer;
-const nonAsciiPattern = /[^\x00-\x7f]/;
+const nonAsciiPattern = /\P{ASCII}/u;
 
 export function utf8ByteLength(content: string): number {
-  if (runtimeBuffer) return runtimeBuffer.byteLength(content, "utf8");
+  if (runtimeBuffer !== undefined) return runtimeBuffer.byteLength(content, "utf8");
   const firstNonAscii = content.search(nonAsciiPattern);
   if (firstNonAscii === -1) return content.length;
   let bytes = firstNonAscii;
@@ -331,6 +331,7 @@ export class Progress {
           this.#nextAt =
             started + Math.max(this.#minIntervalMs, (bytes * 1000) / PROGRESS_BYTES_PER_SECOND);
           for (const waiter of waiters) waiter.resolve();
+          return undefined;
         },
         (error: unknown) => {
           this.#nextAt = started + this.#minIntervalMs;

@@ -137,16 +137,16 @@ describe("principals", () => {
 
   it("refuses a host, a parent link or a route without its principal", () => {
     expectTypeOf<{ name: "x" }>().not.toExtend<HostOptions>();
-    assert.throws(() => Reflect.apply(createHost, undefined, [{ name: "x" }]), /needs `self`/);
+    assert.throws(() => Reflect.apply(createHost, undefined, [{ name: "x" }]), /needs `self`/u);
     const host = createHost({ self: "host" });
     const [, up] = memoryLinkPair();
     expectTypeOf<Record<never, never>>().not.toExtend<ConnectOptions>();
-    assert.throws(() => Reflect.apply(host.connect, host, [up, {}]), /connect needs `principal`/);
+    assert.throws(() => Reflect.apply(host.connect, host, [up, {}]), /connect needs `principal`/u);
     expectTypeOf<Omit<Route, "principal">>().not.toExtend<Route>();
     assert.throws(
       () =>
         Reflect.apply(host.route, host, ["w:", { authorize: () => true, resolve: async () => up }]),
-      /needs `principal`/,
+      /needs `principal`/u,
     );
   });
 });

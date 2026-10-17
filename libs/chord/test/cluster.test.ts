@@ -69,7 +69,7 @@ function greeterFacet(
     name: "greeter",
     setup: (api) => {
       const greeter = (self: Self) => {
-        if (options.fail) throw new Error("worker factory fails");
+        if (options.fail === true) throw new Error("worker factory fails");
         const count = self.state(
           "count",
           Type.Object({ n: Type.Number() }),
@@ -167,7 +167,7 @@ describe("cross-host reload", () => {
     modules.set("greeter", greeterFacet("v2", { fail: true }));
     await assert.rejects(server.reload([], { remote: { "session:": ["greeter"] } }), (error) => {
       assert.ok(isChordError(error, "unavailable"));
-      assert.match(error.message, /session:S1: .*worker factory fails/);
+      assert.match(error.message, /session:S1: .*worker factory fails/u);
       return true;
     });
     assert.deepEqual([server.codeVersion, worker.codeVersion], before);
@@ -191,7 +191,7 @@ describe("cross-host reload", () => {
       server.reload([], { remote: { "session:": ["greeter"] }, gateDeadline: 30 }),
       (error) => {
         assert.ok(isChordError(error, "aborted") && error.reason === "gate_deadline");
-        assert.match(error.message, /session:S1: .*blocking roots: server#\w+:\d+/);
+        assert.match(error.message, /session:S1: .*blocking roots: server#\w+:\d+/u);
         return true;
       },
     );
@@ -209,13 +209,13 @@ describe("cross-host reload", () => {
     });
     await server.install(greeterFacet("v1"));
     await tick();
-    const local = server.hold(ServerGreeter, {});
+    const onServer = server.hold(ServerGreeter, {});
     const child = server.hold(Greeter, { session: "S1" });
-    assert.equal(await local.greet("a"), "v1 a");
+    assert.equal(await onServer.greet("a"), "v1 a");
     assert.equal(await child.greet("a"), "v1 a");
     await server.reload([], { remove: ["greeter"], remoteRemove: { "session:": ["greeter"] } });
     for (let i = 0; i < 20 && child.status !== "gone"; i++) await tick();
-    assert.equal(local.status, "gone");
+    assert.equal(onServer.status, "gone");
     assert.equal(child.status, "gone");
 
     const cold = createHost({
@@ -616,7 +616,7 @@ describe("cross-host reload", () => {
     onTestFinished(() => browser.close());
     const call = browser.hold(Slow, {}).wait();
     call.catch(() => {});
-    for (let i = 0; i < 50 && log.length === 0 && !worker.codeVersion; i++) await tick();
+    for (let i = 0; i < 50 && log.length === 0 && worker.codeVersion === 0; i++) await tick();
     await new Promise((resolve) => setTimeout(resolve, 10));
     await server.reload([storeFacet(2)]);
     await server.reload([storeFacet(3)], { retireDeadline: 20 });

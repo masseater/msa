@@ -591,11 +591,12 @@ class MemberReadable implements Readable<unknown> {
   events(listener: (event: StateEvent<unknown>) => void): () => void {
     this.#events.add(listener);
     const source = this.#readable();
-    if (source !== undefined) {
+    if (source === undefined) this.#unseen.add(listener);
+    else {
       const value = source.value;
       this.#seen = { value };
       this.#safe(() => listener({ type: "snap", value }));
-    } else this.#unseen.add(listener);
+    }
     this.bind();
     return () => {
       this.#unseen.delete(listener);
@@ -702,6 +703,7 @@ export class RefImpl {
       if (this.status === "gone") throw this.error;
       if (this.status === "released")
         throw new ChordError("released", `reference ${this.address} released`);
+      return undefined;
     });
     this.ready.catch(noop);
     this.proxy = new Proxy(this, {
@@ -882,13 +884,13 @@ export class RefImpl {
             return Promise.reject(error);
           }
           return this.object.host.root(
-            (root) => this.object.call(this, name, args, root as CtxImpl),
+            (root) => this.object.callMember(this, name, args, root as CtxImpl),
             {
               signal: ctx?.signal,
             },
           );
         }
-        return this.object.call(this, name, args, ctx);
+        return this.object.callMember(this, name, args, ctx);
       };
       this.callers.set(name, caller);
     }
@@ -981,6 +983,7 @@ export class ObjectImpl {
       () => {
         for (const ref of this.refs) ref.live();
         this.#maybeIdle();
+        return undefined;
       },
       (cause: unknown) => {
         if (this.status === "activating") this.status = "failed";
@@ -1097,11 +1100,11 @@ export class ObjectImpl {
         promise = (async () => {
           await Promise.all(
             resource.deps.map((dep) =>
-              !(dep instanceof ResourceImpl)
-                ? dep.ready
-                : resources.includes(dep)
+              dep instanceof ResourceImpl
+                ? resources.includes(dep)
                   ? openOne(dep)
-                  : undefined,
+                  : undefined
+                : dep.ready,
             ),
           );
           await resource.open(signal, this.openOrder);
@@ -1259,8 +1262,8 @@ export class ObjectImpl {
           continue;
         }
         entry.unsubscribe = source.subscribe((event) => {
-          if (entry.buffer !== undefined) entry.buffer.push(event);
-          else this.#deliver(key, event);
+          if (entry.buffer === undefined) this.#deliver(key, event);
+          else entry.buffer.push(event);
         });
       }
     } catch (error) {
@@ -1428,7 +1431,7 @@ export class ObjectImpl {
     this.admit(ctx);
   };
 
-  async call(ref: RefImpl, name: string, args: unknown, ctx: CtxImpl): Promise<unknown> {
+  async callMember(ref: RefImpl, name: string, args: unknown, ctx: CtxImpl): Promise<unknown> {
     ctx.check(this.host);
     if (ref.status === "released" || ref.status === "gone") throw ref.terminalError();
     if (ref.status === "loading") await raceSignal(ref.ready, ctx.signal);
@@ -1470,9 +1473,10 @@ export class ObjectImpl {
       const own =
         ref.contract.scope === "remote" && wanted?.kind === "method" ? wanted.args : undefined;
       const sent = own === undefined ? args : Value.Clean(own, Value.Clone(args));
-      input = validated?.args ? Value.Clean(validated.args, Value.Clone(sent)) : sent;
-      if (validated?.args)
-        assertValid("args", `${this.address}.${name} args`, validated.args, input);
+      const argsSchema = validated?.args;
+      input = argsSchema === undefined ? sent : Value.Clean(argsSchema, Value.Clone(sent));
+      if (argsSchema !== undefined)
+        assertValid("args", `${this.address}.${name} args`, argsSchema, input);
     }
     this.lease(ctx);
     const child = ctx.child(this);
@@ -1487,8 +1491,9 @@ export class ObjectImpl {
       child.close();
     }
     if (!returns) return undefined;
-    if (validated?.result)
-      assertValid("result", `${this.address}.${name} result`, validated.result, result);
+    const resultSchema = validated?.result;
+    if (resultSchema !== undefined)
+      assertValid("result", `${this.address}.${name} result`, resultSchema, result);
     return result;
   }
 
@@ -1506,7 +1511,8 @@ export class ObjectImpl {
   rootEnded(rootId: string): void {
     this.leases.delete(rootId);
     const gate = this.gate;
-    if (gate?.grandfathered.delete(rootId) && gate.grandfathered.size === 0) gate.drained();
+    if (gate?.grandfathered.delete(rootId) === true && gate.grandfathered.size === 0)
+      gate.drained();
   }
 
   addRef(ref: RefImpl): void {

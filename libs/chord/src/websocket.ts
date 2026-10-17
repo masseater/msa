@@ -24,6 +24,7 @@ export function acceptWebSockets<Request, P = unknown>(
       (principal) => {
         if (principal === undefined) link.close("unauthorized");
         else host.accept(link, { ...options, principal, kind: "client" });
+        return undefined;
       },
       () => link.close("authentication failed"),
     );

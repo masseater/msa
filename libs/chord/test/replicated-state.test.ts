@@ -52,7 +52,7 @@ describe("transactional replicated state", () => {
         draft.value = 1;
         return Promise.resolve();
       }) as (draft: Draft<{ value: number }>) => void),
-    ).toThrow(/synchronous/);
+    ).toThrow(/synchronous/u);
     expect(state.value).toBe(previous);
   });
 
@@ -65,13 +65,13 @@ describe("transactional replicated state", () => {
           nested.right = 2;
         });
       }),
-    ).toThrow(/reentrantly/);
+    ).toThrow(/reentrantly/u);
     expect(state.value).toEqual({ left: 0, right: 0 });
     expect(() =>
       state.change(BACKGROUND_CONTEXT, () => {
         state.replace(BACKGROUND_CONTEXT, { left: 1, right: 2 });
       }),
-    ).toThrow(/change callback/);
+    ).toThrow(/change callback/u);
     expect(state.value).toEqual({ left: 0, right: 0 });
   });
 
@@ -86,7 +86,9 @@ describe("transactional replicated state", () => {
       state.change(BACKGROUND_CONTEXT, (draft) => {
         draft.value = 2;
       });
-      state.subscribe((_value, _context, delivery) => lateDeliveries.push(delivery));
+      state.subscribe((_lateValue, _lateContext, lateDelivery) =>
+        lateDeliveries.push(lateDelivery),
+      );
     });
     state.subscribe((value, _context, delivery) => {
       if (delivery.kind === "update")
@@ -299,8 +301,8 @@ describe("authoritative replicated state sources", () => {
       if (delivery.kind !== "update" || delivery.sequence !== 1 || nested) return;
       nested = true;
       source.commit(Object.freeze({ value: 2 }), Object.freeze([["s", ["value"], 2] as const]));
-      state.subscribe((value, _context, delivery) =>
-        late.push({ ...delivery, value: value.value }),
+      state.subscribe((lateValue, _lateContext, lateDelivery) =>
+        late.push({ ...lateDelivery, value: lateValue.value }),
       );
     });
     state.subscribe((value, _context, delivery) => {

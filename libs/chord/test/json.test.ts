@@ -28,12 +28,12 @@ describe("copyJson", () => {
 
   test("optionally omits undefined object properties without normalizing arrays", () => {
     const input = { kept: 1, omitted: undefined, nested: { omitted: undefined, kept: true } };
-    expect(() => copyJson(input)).toThrow(/strict JSON/);
+    expect(() => copyJson(input)).toThrow(/strict JSON/u);
     expect(copyJson(input, { omitUndefinedProperties: true })).toEqual({
       kept: 1,
       nested: { kept: true },
     });
-    expect(() => copyJson([undefined], { omitUndefinedProperties: true })).toThrow(/strict JSON/);
+    expect(() => copyJson([undefined], { omitUndefinedProperties: true })).toThrow(/strict JSON/u);
   });
 
   test("preserves null prototypes and own __proto__ data properties", () => {
@@ -63,7 +63,7 @@ describe("copyJson", () => {
     const symbol = { [Symbol("value")]: 1 };
     for (const invalid of [cyclic, sparse, extra, subclass, accessor, hidden, symbol]) {
       expect(isJsonValue(invalid)).toBe(false);
-      expect(() => copyJson(invalid)).toThrow(/strict JSON/);
+      expect(() => copyJson(invalid)).toThrow(/strict JSON/u);
     }
   });
 });

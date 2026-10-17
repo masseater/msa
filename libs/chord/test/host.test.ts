@@ -178,7 +178,7 @@ describe("host: activation and lifetime", () => {
     const parent = host.hold(Parent, {});
     await assert.rejects(
       parent.ready,
-      (error) => isChordError(error, "unavailable") && /boom/.test(error.message),
+      (error) => isChordError(error, "unavailable") && /boom/u.test(error.message),
     );
     assert.equal(parent.status, "gone");
     fail = false;
@@ -209,8 +209,8 @@ describe("host: activation and lifetime", () => {
       if (async) return Promise.resolve({}) as never;
       throw new Error("factory failed");
     });
-    await assert.rejects(host.hold(Bad, { async: false }).ready, /factory failed/);
-    await assert.rejects(host.hold(Bad, { async: true }).ready, /synchronous/);
+    await assert.rejects(host.hold(Bad, { async: false }).ready, /factory failed/u);
+    await assert.rejects(host.hold(Bad, { async: true }).ready, /synchronous/u);
     await tick();
     await tick();
     assert.equal(leafLive, 0);
@@ -224,7 +224,7 @@ describe("host: activation and lifetime", () => {
       self.state("a", Type.Object({}), {});
       return {};
     });
-    await assert.rejects(host.hold(Dup, {}).ready, /duplicate state name a/);
+    await assert.rejects(host.hold(Dup, {}).ready, /duplicate state name a/u);
   });
 
   it("detects hold cycles", async () => {
@@ -239,7 +239,7 @@ describe("host: activation and lifetime", () => {
       self.get(A, {});
       return {};
     });
-    await assert.rejects(host.hold(A, {}).ready, /cycle/);
+    await assert.rejects(host.hold(A, {}).ready, /cycle/u);
   });
 
   it("closes resources in reverse order, runs all steps and aggregates errors", async () => {
@@ -415,10 +415,10 @@ describe("host: lifetime", () => {
     expectTypeOf<{ lifetime: "host"; linger: 10 }>().not.toExtend<ServeOptionsFor<typeof Store>>();
     expectTypeOf<{ lifetime: "forever" }>().not.toExtend<ServeOptionsFor<typeof Store>>();
     const refused: [readonly unknown[], RegExp][] = [
-      [[Remote, () => ({ variant: "main" }), { lifetime: "host" }], /needs a local type/],
-      [[Keyed, () => ({}), { lifetime: "host" }], /input that accepts \{\}/],
-      [[Store, () => ({ seen: null }), { lifetime: "host", linger: 10 }], /does not linger/],
-      [[Store, () => ({ seen: null }), { lifetime: "forever" }], /unknown lifetime/],
+      [[Remote, () => ({ variant: "main" }), { lifetime: "host" }], /needs a local type/u],
+      [[Keyed, () => ({}), { lifetime: "host" }], /input that accepts \{\}/u],
+      [[Store, () => ({ seen: null }), { lifetime: "host", linger: 10 }], /does not linger/u],
+      [[Store, () => ({ seen: null }), { lifetime: "forever" }], /unknown lifetime/u],
     ];
     for (const [args, error] of refused)
       assert.throws(() => Reflect.apply(host.serve, host, args), error);
@@ -633,7 +633,10 @@ describe("host: registries", () => {
       self.register(Routes, { x: "x" });
       return {};
     });
-    await assert.rejects(host.hold(Lazy, {}).ready, /only objects of lifetime "host" may register/);
+    await assert.rejects(
+      host.hold(Lazy, {}).ready,
+      /only objects of lifetime "host" may register/u,
+    );
   });
 
   it("rejects conflicting registrations", async () => {
@@ -651,7 +654,7 @@ describe("host: registries", () => {
     }
     await tick();
     await tick();
-    assert.ok(errors.some((error) => /registry_conflict/.test(String(error))));
+    assert.ok(errors.some((error) => /registry_conflict/u.test(String(error))));
   });
 });
 

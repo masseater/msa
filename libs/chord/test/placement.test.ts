@@ -84,12 +84,12 @@ describe("placement", () => {
     const host = createHost({ name: "session:S1", self: "host", onError: () => {} });
     assert.throws(
       () => host.serve(Catalog, () => ({ variant: "main", where: () => "" })),
-      /t\.catalog is declared for server, but session:S1 serves it/,
+      /t\.catalog is declared for server, but session:S1 serves it/u,
     );
     const server = createHost({ name: "server", self: "host", onError: () => {} });
     assert.throws(
       () => server.serve(Note, () => ({ variant: "main", where: () => "" })),
-      /t\.note is declared for session:<session>, but server serves it/,
+      /t\.note is declared for session:<session>, but server serves it/u,
     );
     const misplaced: Facet = {
       name: "misplaced",
@@ -97,7 +97,7 @@ describe("placement", () => {
     };
     await assert.rejects(
       server.reload([misplaced]),
-      /declared for session:<session>, but server serves it/,
+      /declared for session:<session>, but server serves it/u,
     );
     await host.close();
     await server.close();
@@ -131,7 +131,7 @@ describe("placement", () => {
     assert.equal(relayed?.t, "gone");
     assert.match(
       relayed?.t === "gone" ? relayed.error.message : "",
-      /placement|does not live on session:S2/,
+      /placement|does not live on session:S2/u,
     );
     assert.equal((await holds("session:S1", { session: "S1", id: "x" }))?.t, "shape");
     const direct = await holds("server", { session: "S1", id: "x" });
@@ -152,7 +152,7 @@ describe("placement", () => {
     assert.equal(await server.hold(Doc, {} as never).where(), "session:S1");
     assert.throws(
       () => server.hold(Note, { session: "", id: "x" }),
-      /input field session names no host/,
+      /input field session names no host/u,
     );
     await close();
   });
@@ -185,7 +185,7 @@ describe("placement", () => {
     await host.get(at("server"), {});
     await assert.rejects(
       host.reload([facet(1, "session:S1")]),
-      /declared for session:S1|without a version bump/,
+      /declared for session:S1|without a version bump/u,
     );
     const moved = remote("t.moved", {
       version: 2,
@@ -196,7 +196,7 @@ describe("placement", () => {
     assert.throws(
       () => bind(moved, { 1: (current) => current }, at("server")),
       (error) =>
-        isChordError(error, "contract_mismatch") && /lives on session:S1/.test(error.message),
+        isChordError(error, "contract_mismatch") && /lives on session:S1/u.test(error.message),
     );
     await host.close();
   });
@@ -230,8 +230,8 @@ describe("placement", () => {
       ]);
     assert.throws(
       () => Reflect.apply(remote, undefined, ["t.nowhere", { version: 1, input, variants }]),
-      /needs `host`/,
+      /needs `host`/u,
     );
-    assert.throws(() => hostFamily("", "session"), /prefix/);
+    assert.throws(() => hostFamily("", "session"), /prefix/u);
   });
 });

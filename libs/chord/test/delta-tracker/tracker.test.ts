@@ -97,7 +97,7 @@ describe("delta tracker transactional overlay lifecycle", () => {
     expect(prepared.value).toEqual({ left: 1, nested: { right: 2 } });
     expect(() => {
       change.state.left = 3;
-    }).toThrow(/settled/);
+    }).toThrow(/settled/u);
     tracker.adopt(prepared);
   });
 
@@ -116,7 +116,7 @@ describe("delta tracker transactional overlay lifecycle", () => {
     const resolved = await Promise.resolve(draft);
     expect(resolved).toBe(draft);
     expect(resolved.then).toBeUndefined();
-    expect(() => resolved.value).toThrow(/settled/);
+    expect(() => resolved.value).toThrow(/settled/u);
 
     tracker.adopt(prepared);
     expect(tracker.value.then).toBe("document-value");
@@ -129,7 +129,7 @@ describe("delta tracker transactional overlay lifecycle", () => {
     largeDraft.rows[0]!.value = -1;
     const largePrepared = largeChange.prepare();
     expect(await Promise.resolve(largeDraft)).toBe(largeDraft);
-    expect(() => largeDraft.rows).toThrow(/settled/);
+    expect(() => largeDraft.rows).toThrow(/settled/u);
     largeTracker.adopt(largePrepared);
   });
 
@@ -142,7 +142,7 @@ describe("delta tracker transactional overlay lifecycle", () => {
     change.abort();
     expect(tracker.value.child.value).toBe(1);
     expect(() => child.value).toThrow(TypeError);
-    expect(() => change.prepare()).toThrow(/settled/);
+    expect(() => change.prepare()).toThrow(/settled/u);
   });
 
   it("allows competing contexts and invalidates loser views", () => {
@@ -157,8 +157,8 @@ describe("delta tracker transactional overlay lifecycle", () => {
     tracker.adopt(firstPrepared);
     expect(tracker.value.value).toBe(1);
     expect(held.value).toBe(2);
-    expect(() => tracker.adopt(secondPrepared)).toThrow(/stale/);
-    expect(() => tracker.adopt(firstPrepared)).toThrow(/already been used/);
+    expect(() => tracker.adopt(secondPrepared)).toThrow(/stale/u);
+    expect(() => tracker.adopt(firstPrepared)).toThrow(/already been used/u);
   });
 
   it("invalidates competing open overlays without changing their base revision", () => {
@@ -175,8 +175,8 @@ describe("delta tracker transactional overlay lifecycle", () => {
 
     expect(initial).toEqual({ rows: [{ value: 0 }, { value: 1 }] });
     expect(tracker.value).toEqual({ rows: [{ value: 3 }, { value: 1 }] });
-    expect(() => held.value).toThrow(/settled/);
-    expect(() => staleChange.prepare()).toThrow(/settled/);
+    expect(() => held.value).toThrow(/settled/u);
+    expect(() => staleChange.prepare()).toThrow(/settled/u);
     staleChange.abort();
   });
 
@@ -267,17 +267,17 @@ describe("delta tracker transactional overlay lifecycle", () => {
     change.abort();
     expect(prepared.ops).toBe(operations);
     expect(prepared.value).toEqual({ value: 1, nested: { value: 1 } });
-    expect(() => tracker.adopt(prepared)).toThrow(/aborted/);
+    expect(() => tracker.adopt(prepared)).toThrow(/aborted/u);
   });
 
   it("rejects foreign and aborted prepared values", () => {
     const first = track({ value: 0 });
     const second = track({ value: 0 });
     const prepared = first.prepareReplace({ value: 1 });
-    expect(() => second.adopt(prepared)).toThrow(/different tracker/);
+    expect(() => second.adopt(prepared)).toThrow(/different tracker/u);
     prepared.abort();
     prepared.abort();
-    expect(() => first.adopt(prepared)).toThrow(/aborted/);
+    expect(() => first.adopt(prepared)).toThrow(/aborted/u);
   });
 
   it("reads deleted own properties as absent", () => {
@@ -664,7 +664,7 @@ describe("delta tracker policy view", () => {
     const change = tracker.beginChange();
     expect(() => {
       change.state.values[3] = 4;
-    }).toThrow(/holes/);
+    }).toThrow(/holes/u);
     expect(change.state.values).toEqual([1, 2]);
     expect(tracker.value.values).toEqual([1, 2]);
 
@@ -688,7 +688,7 @@ describe("delta tracker policy view", () => {
       expect(draft.values).toEqual([3, 1, 2, null, null]);
       draft.values.length = 4;
       draft.values.sort();
-      expect(() => delete draft.values[0]).toThrow(/holes/);
+      expect(() => delete draft.values[0]).toThrow(/holes/u);
     });
     expect(tracker.value).toEqual({ values: [1, 2, 3, null] });
   });
@@ -765,42 +765,44 @@ describe("delta tracker by-value placements", () => {
 
     expect(() => {
       change.state.values[0] = undefinedValue;
-    }).toThrow(/strict JSON/);
-    expect(() => change.state.values.push({ staged: true }, undefinedValue)).toThrow(/strict JSON/);
-    expect(() => change.state.values.unshift(undefinedValue)).toThrow(/strict JSON/);
-    expect(() => change.state.values.splice(1, 0, undefinedValue)).toThrow(/strict JSON/);
-    expect(() => change.state.values.fill(undefinedValue)).toThrow(/strict JSON/);
+    }).toThrow(/strict JSON/u);
+    expect(() => change.state.values.push({ staged: true }, undefinedValue)).toThrow(
+      /strict JSON/u,
+    );
+    expect(() => change.state.values.unshift(undefinedValue)).toThrow(/strict JSON/u);
+    expect(() => change.state.values.splice(1, 0, undefinedValue)).toThrow(/strict JSON/u);
+    expect(() => change.state.values.fill(undefinedValue)).toThrow(/strict JSON/u);
     expect(() => {
       change.state.payload = { nested: undefined } as unknown as JsonValue;
-    }).toThrow(/strict JSON/);
+    }).toThrow(/strict JSON/u);
     expect(() => {
       change.state.payload = { nested: () => 1 } as unknown as JsonValue;
-    }).toThrow(/strict JSON/);
+    }).toThrow(/strict JSON/u);
     expect(() => {
       change.state.payload = { nested: Symbol("invalid") } as unknown as JsonValue;
-    }).toThrow(/strict JSON/);
+    }).toThrow(/strict JSON/u);
     expect(() => {
       change.state.payload = { nested: 1n } as unknown as JsonValue;
-    }).toThrow(/strict JSON/);
+    }).toThrow(/strict JSON/u);
     expect(() => {
       change.state.number = Number.NaN;
-    }).toThrow(/strict JSON/);
+    }).toThrow(/strict JSON/u);
     expect(() => {
       change.state.number = Number.POSITIVE_INFINITY;
-    }).toThrow(/strict JSON/);
+    }).toThrow(/strict JSON/u);
     expect(() => {
       change.state.payload = new Date() as unknown as JsonValue;
-    }).toThrow(/plain objects/);
+    }).toThrow(/plain objects/u);
 
     const sparse: JsonValue[] = new Array<JsonValue>(1);
     expect(() => {
       change.state.payload = sparse;
-    }).toThrow(/dense plain arrays/);
+    }).toThrow(/dense plain arrays/u);
     const cyclic: { self?: unknown } = {};
     cyclic.self = cyclic;
     expect(() => {
       change.state.payload = cyclic as JsonValue;
-    }).toThrow(/cycles/);
+    }).toThrow(/cycles/u);
     let accessorReads = 0;
     const accessor = Object.defineProperty({}, "value", {
       enumerable: true,
@@ -811,7 +813,7 @@ describe("delta tracker by-value placements", () => {
     });
     expect(() => {
       change.state.payload = accessor as JsonValue;
-    }).toThrow(/data properties/);
+    }).toThrow(/data properties/u);
     expect(accessorReads).toBe(0);
 
     expect(change.state).toEqual(initial);
@@ -1267,7 +1269,7 @@ describe("delta tracker piece arrays", () => {
     const tracker = track({
       rows: Array.from({ length: 400 }, (_, index) => ({
         flag: 0,
-        values: index === 100 ? Array.from({ length: 400 }, (_, value) => ({ value })) : [],
+        values: index === 100 ? Array.from({ length: 400 }, (_cell, value) => ({ value })) : [],
       })),
     });
     const base = clone(tracker.value);
@@ -1525,6 +1527,9 @@ describe("delta tracker security and storage-style cloning", () => {
     const tracker = track({} as Record<string, JsonValue>);
     // oxlint-disable-next-line eslint/no-extend-native -- 継承 setter の耐性テストで、prototype を汚すのが目的
     Object.defineProperty(Object.prototype, "trap", {
+      get() {
+        return undefined;
+      },
       set() {
         throw new Error("inherited setter ran");
       },

@@ -278,7 +278,7 @@ test("a forgotten contract bump remains refused even when the only consumer is t
       },
     ]),
     (error) =>
-      isChordError(error, "contract_mismatch") && /without a version bump/.test(error.message),
+      isChordError(error, "contract_mismatch") && /without a version bump/u.test(error.message),
   );
   assert.equal(host.hostObjects.get(ReadV1.name)?.contract, ReadV1);
 });

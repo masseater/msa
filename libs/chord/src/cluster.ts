@@ -16,7 +16,10 @@ let reloadSeq = 0;
 const modulesFor = (remote: ReloadOptions["remote"], hostName: string | undefined): string[] => {
   let best: [string, readonly string[]] | undefined;
   for (const entry of Object.entries(remote ?? {})) {
-    if (hostName?.startsWith(entry[0]) && (best === undefined || entry[0].length > best[0].length))
+    if (
+      hostName?.startsWith(entry[0]) === true &&
+      (best === undefined || entry[0].length > best[0].length)
+    )
       best = entry;
   }
   return [...(best?.[1] ?? [])];
@@ -69,10 +72,10 @@ export async function runClusterReload(
         plugins: modulesFor(options.remote, name),
         options: {
           remove: modulesFor(options.remoteRemove, name),
-          ...(options.gateDeadline !== undefined ? { gateDeadline: options.gateDeadline } : {}),
-          ...(options.retireDeadline !== undefined
-            ? { retireDeadline: options.retireDeadline }
-            : {}),
+          ...(options.gateDeadline === undefined ? {} : { gateDeadline: options.gateDeadline }),
+          ...(options.retireDeadline === undefined
+            ? {}
+            : { retireDeadline: options.retireDeadline }),
         },
       });
       return vote.then(
@@ -90,6 +93,7 @@ export async function runClusterReload(
     const results = await Promise.allSettled([
       reload.prepare().then(() => {
         local = true;
+        return undefined;
       }),
       ...votes,
     ]);

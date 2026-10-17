@@ -643,7 +643,7 @@ export class Connection implements RemoteChannel {
         return;
       case "ping":
         this.send({ t: "pong", n: frame.n });
-        return;
+        break;
       case "pong":
       case "bye":
       case "ack":
@@ -706,7 +706,7 @@ export class Connection implements RemoteChannel {
         this.votes.delete(frame.reload);
         if (frame.error === undefined) vote?.resolve(frame.report);
         else vote?.reject(fromWireError(frame.error));
-        return;
+        break;
       }
     }
   }
@@ -882,8 +882,8 @@ export class Connection implements RemoteChannel {
     let first: StateEvent<unknown> | undefined;
     feed.unsubscribe = readable.events((event) => {
       if (first === undefined) first = event;
-      else if (feed.buffer !== undefined) feed.buffer.push(event);
-      else this.#feedEvent(served, name, feed, event);
+      else if (feed.buffer === undefined) this.#feedEvent(served, name, feed, event);
+      else feed.buffer.push(event);
     });
     served.feeds.set(name, feed);
     return { frame: this.#snapshot(served, name, as, first?.value), feed };
@@ -1006,7 +1006,12 @@ export class Connection implements RemoteChannel {
     const run =
       served.kind === "local"
         ? (ctx: Ctx) =>
-            served.ref.object.call(served.ref, frame.member, unpack(frame.args), ctx as CtxImpl)
+            served.ref.object.callMember(
+              served.ref,
+              frame.member,
+              unpack(frame.args),
+              ctx as CtxImpl,
+            )
         : (ctx: Ctx) =>
             relayCall(
               served.relay,
@@ -1112,7 +1117,7 @@ export class Connection implements RemoteChannel {
   }
 
   #closed(reason: string): void {
-    const told = /^protocol-version (\d+)$/.exec(reason);
+    const told = /^protocol-version (\d+)$/u.exec(reason);
     if (told !== null && Number(told[1]) !== PROTOCOL_VERSION)
       this.#protocolMismatch(Number(told[1]), false);
     if (this.#pinger !== undefined) clearInterval(this.#pinger);

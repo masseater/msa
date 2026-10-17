@@ -61,7 +61,7 @@ const todoStore =
       finish: ({ index }, ctx) => {
         rows.change(ctx, (draft) => {
           const todo = draft[index];
-          if (!todo) throw invalid("args", "No such todo");
+          if (todo === undefined) throw invalid("args", "No such todo");
           todo.done = true;
         });
       },
@@ -367,10 +367,9 @@ it("09: compatible reload, migration and an old-contract adapter", { timeout: 50
             version: 2,
             migrate: (old, from) => {
               assert.equal(from, 1);
-              return (old as Static<typeof Rows>).map((todo) => ({
-                ...todo,
-                text: todo.text.toUpperCase(),
-              }));
+              return (old as Static<typeof Rows>).map((todo) =>
+                Object.assign(todo, { text: todo.text.toUpperCase() }),
+              );
             },
           }),
         ),

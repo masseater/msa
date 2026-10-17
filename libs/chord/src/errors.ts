@@ -28,7 +28,8 @@ export class ChordError extends Error {
     message: string,
     options?: { cause?: unknown; details?: unknown; reason?: ChordErrorReason | undefined },
   ) {
-    super(`${code}${options?.reason ? `/${options.reason}` : ""}: ${message}`, {
+    const reason = options?.reason;
+    super(`${code}${reason === undefined || reason === "" ? "" : `/${reason}`}: ${message}`, {
       cause: options?.cause,
     });
     this.name = "ChordError";

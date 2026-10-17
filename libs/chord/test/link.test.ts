@@ -165,7 +165,7 @@ function cluster(options: { pingInterval?: number; pingTimeout?: number } = {}):
       const [down, up] = memoryLinkPair();
       server.accept(down, {
         principal,
-        ...(browserOptions.restamp !== undefined ? { restamp: browserOptions.restamp } : {}),
+        ...(browserOptions.restamp === undefined ? {} : { restamp: browserOptions.restamp }),
         ...options,
       });
       const host = createHost({
@@ -304,7 +304,7 @@ describe("links: relay, stamping, lifetime", () => {
       },
     });
     const first = server.hold(SessionCounter, { session: "S1", name: "a" });
-    await assert.rejects(first.add(1), (error: Error) => /closed/.test(error.message));
+    await assert.rejects(first.add(1), (error: Error) => /closed/u.test(error.message));
     const second = server.hold(SessionCounter, { session: "S1", name: "a" });
     assert.equal(await second.add(2), 2);
     assert.equal(attempt, 2);

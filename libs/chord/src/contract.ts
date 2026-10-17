@@ -33,7 +33,7 @@ export function method(args?: TSchema, result?: TSchema): MethodSpec {
 }
 
 export const opaque = <T = unknown>(id: string): OpaqueSpec<T> => {
-  if (!/^[^@\s]+@\d+$/.test(id)) throw new TypeError(`opaque id must be name@version: ${id}`);
+  if (!/^[^@\s]+@\d+$/u.test(id)) throw new TypeError(`opaque id must be name@version: ${id}`);
   return { [MEMBER]: "opaque", id };
 };
 
@@ -197,7 +197,7 @@ function finish<C extends AnyContract>(contract: Omit<C, "fingerprint">): C {
 }
 
 function checkHeader(name: string, version: number): void {
-  if (!name) throw new TypeError("contract name is empty");
+  if (typeof name !== "string" || name === "") throw new TypeError("contract name is empty");
   if (!Number.isInteger(version) || version < 1)
     throw new TypeError(`contract version must be a positive integer`);
 }

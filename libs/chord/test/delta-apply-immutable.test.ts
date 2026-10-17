@@ -226,7 +226,7 @@ describe("checked immutable operation application", () => {
       },
     });
     const malformed: Op[] = [["s", "bad-path", 1] as never];
-    expect(() => applyImmutableBatches(target, [malformed])).toThrow(/path/);
+    expect(() => applyImmutableBatches(target, [malformed])).toThrow(/path/u);
     expect(reads).toBe(0);
 
     expect(() =>

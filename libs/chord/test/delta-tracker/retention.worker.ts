@@ -158,7 +158,7 @@ if (scenario === "settled-lifecycle") {
   };
   replace();
   await collect(obsolete);
-  assert.throws(() => (retainedSettledChanges[0] as { value: number }).value, /settled/);
+  assert.throws(() => (retainedSettledChanges[0] as { value: number }).value, /settled/u);
 } else if (scenario === "retained-large-settled-proxy") {
   const tracker = track({ rows: Array.from({ length: 100_000 }, (_, value) => ({ value })) });
   const obsolete = new WeakRef(tracker.value.rows);
@@ -179,7 +179,7 @@ if (scenario === "settled-lifecycle") {
   };
   replace();
   await collect(obsolete);
-  assert.throws(() => (retainedSettledChanges[0] as { value: number }).value, /settled/);
+  assert.throws(() => (retainedSettledChanges[0] as { value: number }).value, /settled/u);
 } else if (scenario === "retained-large-placement-proxies") {
   type Root = {
     child: { value: number };
@@ -228,7 +228,7 @@ if (scenario === "settled-lifecycle") {
   const references = [run("write"), run("writes"), run("insert"), run("override")];
   for (const reference of references) await collect(reference);
   for (const held of retainedSettledChanges)
-    assert.throws(() => Reflect.get(held, "length"), /settled/);
+    assert.throws(() => Reflect.get(held, "length"), /settled/u);
 } else if (scenario === "stale-unprepared-change") {
   const tracker = track({
     payload: { rows: Array.from({ length: 50_000 }, (_, value) => ({ value })) },
@@ -241,7 +241,7 @@ if (scenario === "settled-lifecycle") {
     tracker.adopt(winner);
   };
   replace();
-  assert.throws(() => stale.prepare(), /settled/);
+  assert.throws(() => stale.prepare(), /settled/u);
   retainedSettledChanges.push(stale);
   await collect(obsolete);
   assert.equal(retainedSettledChanges.length, 1);

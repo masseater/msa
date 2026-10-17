@@ -101,8 +101,8 @@ describe.each<Kind>(["mutable", "attached"])("%s public delivery", (kind) => {
     const gate = deferred();
     const context = withCancel(BACKGROUND_CONTEXT).context;
     const received: { value: Value; context: Context; delivery: ReplicatedStateDelivery }[] = [];
-    state.subscribe((value, context, delivery) => {
-      received.push({ value, context, delivery });
+    state.subscribe((value, deliveredContext, delivery) => {
+      received.push({ value, context: deliveredContext, delivery });
       if (value.value === 1) return gate.promise;
       return undefined;
     });

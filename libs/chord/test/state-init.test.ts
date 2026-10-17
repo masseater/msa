@@ -112,7 +112,7 @@ describe("state init", () => {
       const count = self.derive([notes], (list) => list.length);
       return { notes, count, has: () => false, add: () => {} };
     });
-    await assert.rejects(host.hold(Notes, {}).ready, /db down/);
+    await assert.rejects(host.hold(Notes, {}).ready, /db down/u);
     assert.deepEqual(closed, ["db"]);
     result = () => [1];
     await assert.rejects(
@@ -223,7 +223,7 @@ describe("state init", () => {
             },
           }),
         ]),
-        /cannot load more/,
+        /cannot load more/u,
       );
       assert.equal(ref.count.value, 1);
       assert.equal(await host.root((ctx) => ref.has("loaded", ctx)), true);

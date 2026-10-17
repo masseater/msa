@@ -82,7 +82,7 @@ function candidateValue(source: Readable<unknown>): unknown {
 
 export function reloadError(error: unknown): ChordError {
   const cause = asChordError(error, "reload");
-  if (/^reload aborted/.test(cause.message.replace(/^[^:]*: /, ""))) return cause;
+  if (/^reload aborted/u.test(cause.message.replace(/^[^:]*: /u, ""))) return cause;
   return new ChordError(cause.code, `reload aborted: ${cause.message}`, {
     cause,
     reason: cause.reason,
@@ -376,7 +376,7 @@ export class Reload {
     for (const resource of deferred) {
       candidate.atGate.push(resource);
       const old = object.decls.resources.get(resource.key);
-      if (resource.exclusive && old?.exclusive && old.state === "open")
+      if (resource.exclusive === true && old?.exclusive === true && old.state === "open")
         candidate.replaced.push(old);
     }
     if (deferred.size > 0) candidate.reasons.push("exclusive resource replaced");
@@ -473,8 +473,8 @@ export class Reload {
       let value: unknown;
       if ((run.decls.cellVersions.get(name) ?? 1) > from && fn !== undefined)
         value = fn(structuredClone(cell.value), from);
-      else if (!deepEqual(cell.schema, schema)) value = cell.value;
-      else continue;
+      else if (deepEqual(cell.schema, schema)) continue;
+      else value = cell.value;
       assertValid("state", `${object.address}: migrated state ${name}`, schema, value);
       candidate.migrated.set(cell, value);
     }

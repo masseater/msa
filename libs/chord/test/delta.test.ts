@@ -55,7 +55,7 @@ describe("immutable tracker lifecycle", () => {
     expect(tracker.value.child.value).toBe(1);
     expect(() => child.value).toThrow(TypeError);
     expect(() => change.abort()).not.toThrow();
-    expect(() => change.prepare()).toThrow(/settled/);
+    expect(() => change.prepare()).toThrow(/settled/u);
     const next = tracker.beginChange();
     next.abort();
   });
@@ -115,16 +115,16 @@ describe("immutable tracker lifecycle", () => {
     competing.state.value = 2;
     const prepared = change.prepare();
     const competingPrepared = competing.prepare();
-    expect(() => second.adopt(prepared)).toThrow(/different tracker/);
+    expect(() => second.adopt(prepared)).toThrow(/different tracker/u);
     first.adopt(prepared);
-    expect(() => first.adopt(prepared)).toThrow(/already been used/);
-    expect(() => first.adopt(competingPrepared)).toThrow(/stale/);
+    expect(() => first.adopt(prepared)).toThrow(/already been used/u);
+    expect(() => first.adopt(competingPrepared)).toThrow(/stale/u);
 
     const stale = first.prepareReplace({ value: 2 });
     const winner = first.prepareReplace({ value: 3 });
     first.adopt(winner);
-    expect(() => first.adopt(stale)).toThrow(/stale/);
-    expect(() => first.adopt(stale)).toThrow(/stale/);
+    expect(() => first.adopt(stale)).toThrow(/stale/u);
+    expect(() => first.adopt(stale)).toThrow(/stale/u);
   });
 
   it("invalidates a prepared result when its change is aborted", () => {
@@ -133,7 +133,7 @@ describe("immutable tracker lifecycle", () => {
     change.state.value = 1;
     const prepared = change.prepare();
     change.abort();
-    expect(() => tracker.adopt(prepared)).toThrow(/aborted/);
+    expect(() => tracker.adopt(prepared)).toThrow(/aborted/u);
     expect(() => change.abort()).not.toThrow();
   });
 
@@ -144,8 +144,8 @@ describe("immutable tracker lifecycle", () => {
     expect(first.value).toBe(first.base);
     expect(competing.value).toBe(competing.base);
     tracker.adopt(first);
-    expect(() => tracker.adopt(first)).toThrow(/already been used/);
-    expect(() => tracker.adopt(competing)).toThrow(/stale/);
+    expect(() => tracker.adopt(first)).toThrow(/already been used/u);
+    expect(() => tracker.adopt(competing)).toThrow(/stale/u);
   });
 
   it("emits an owned root replacement without traversing large replacement input", () => {
@@ -220,7 +220,7 @@ describe("operation application and validation", () => {
     expect(() => apply({ values: [1] }, [["s", ["values", 3], 2]])).toThrow(UnsafePathError);
     expect(() => apply({ value: 1 }, [["a", ["value"], "x"]])).toThrow();
     expect(() => assertValidOp(["s", "value", 1] as never)).toThrow();
-    expect(() => assertValidOp(["m", [], [0, 0]] as never)).toThrow(/bijection/);
+    expect(() => assertValidOp(["m", [], [0, 0]] as never)).toThrow(/bijection/u);
   });
 
   it("validates immutable operations before traversing the target", () => {
@@ -232,7 +232,7 @@ describe("operation application and validation", () => {
         return {};
       },
     });
-    expect(() => applyImmutable(target, [["s", "bad-path", 1] as never])).toThrow(/path/);
+    expect(() => applyImmutable(target, [["s", "bad-path", 1] as never])).toThrow(/path/u);
     expect(reads).toBe(0);
   });
 
@@ -384,6 +384,9 @@ describe("path and prototype safety", () => {
   it("does not run inherited setters", () => {
     // oxlint-disable-next-line eslint/no-extend-native -- 継承 setter の耐性テストで、prototype を汚すのが目的
     Object.defineProperty(Object.prototype, "trap", {
+      get() {
+        return undefined;
+      },
       set() {
         throw new Error("inherited setter ran");
       },
@@ -414,6 +417,9 @@ describe("path and prototype safety", () => {
     });
     // oxlint-disable-next-line eslint/no-extend-native -- 継承 setter の耐性テストで、prototype を汚すのが目的
     Object.defineProperty(Object.prototype, "trap", {
+      get() {
+        return undefined;
+      },
       set() {
         throw new Error("inherited setter ran");
       },
@@ -428,6 +434,9 @@ describe("path and prototype safety", () => {
     let value: { values: number[] } | undefined;
     // oxlint-disable-next-line eslint/no-extend-native -- 継承 array setter の耐性テストで、prototype を汚すのが目的
     Object.defineProperty(Array.prototype, "0", {
+      get() {
+        return undefined;
+      },
       set() {
         throw new Error("inherited array setter ran");
       },

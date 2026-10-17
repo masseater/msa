@@ -145,6 +145,7 @@ describe("re-hold after a link loss", () => {
     let joined = false;
     void joining.ready.then(() => {
       joined = true;
+      return undefined;
     });
     await sleep(5);
     assert.equal(joined, false, "a reference joining during the re-hold waits for the fresh unit");

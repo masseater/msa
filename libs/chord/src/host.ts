@@ -306,7 +306,7 @@ export class HostImpl implements Host, HostCore {
   }
 
   #hostObjectsReady(refs: Iterable<RefCore>): Promise<void> {
-    const ready = Promise.all([...refs].map((ref) => ref.ready)).then(() => {});
+    const ready = Promise.all([...refs].map((ref) => ref.ready)).then(() => undefined);
     ready.catch(() => {});
     return ready;
   }
@@ -456,7 +456,7 @@ export class HostImpl implements Host, HostCore {
       throw invalid("cycle", `${from.address} -> ${address} would create a ref cycle`);
     }
     if (object === undefined) {
-      if (this.gating?.has(type.name)) {
+      if (this.gating?.has(type.name) === true) {
         throw new ChordError("upgrade_conflict", `${type.name} is being upgraded; retry`, {
           reason: "gate",
         });
@@ -633,7 +633,7 @@ export class HostImpl implements Host, HostCore {
     if (installed === undefined || installed.decls === object.decls) return;
     const kept = object.allDecls();
     const keep = <T>(pick: (decls: Decls) => Iterable<T>): Set<T> =>
-      new Set([...kept].flatMap((decls) => [...pick(decls)]));
+      new Set([...kept].flatMap((decls) => Array.from(pick(decls))));
     const refs = keep((decls) => decls.refs.values());
     const resources = keep((decls) => decls.resources.values());
     const derives = keep((decls) => decls.derives.values());
@@ -816,7 +816,7 @@ export class HostImpl implements Host, HostCore {
   connect(link: Link, options: ConnectOptions): void {
     if (!("principal" in options))
       throw new TypeError("connect needs `principal`: what the parent's own requests act as");
-    if (this.upstream?.open) this.upstream.link.close("replaced");
+    if (this.upstream?.open === true) this.upstream.link.close("replaced");
     const connection = this.#addConnection(link, {
       ...options,
       role: "upstream",
@@ -961,19 +961,24 @@ export class HostImpl implements Host, HostCore {
       connection.then(
         (target) => {
           if (!binding.ended && binding.hold === undefined) target.hold(binding, false);
+          return undefined;
         },
         (error: unknown) => binding.gone(error),
       );
     };
     const direct = this.#childNamed(binding.at);
-    if (this.upstream !== undefined) this.upstream.hold(binding, false);
-    else if (direct !== undefined) bindWhenSynced(direct.whenSynced().then(() => direct));
-    else {
-      const route = this.#routeFor(binding.at);
-      if (route === undefined)
-        binding.gone(new ChordError("unavailable", `no route to ${binding.at}`));
-      else bindWhenSynced(this.#resolve(route, binding.at, binding.principal ?? this.principal));
+    if (this.upstream !== undefined) {
+      this.upstream.hold(binding, false);
+      return;
     }
+    if (direct !== undefined) {
+      bindWhenSynced(direct.whenSynced().then(() => direct));
+      return;
+    }
+    const route = this.#routeFor(binding.at);
+    if (route === undefined)
+      binding.gone(new ChordError("unavailable", `no route to ${binding.at}`));
+    else bindWhenSynced(this.#resolve(route, binding.at, binding.principal ?? this.principal));
   }
 
   #routeFor(hostName: string): Route | undefined {

@@ -48,8 +48,8 @@ abstract class BaseLink implements Link {
   }
 
   protected deliver(frame: Frame): void {
-    if (this.#decoding !== undefined) this.deliverLater(Promise.resolve(frame));
-    else this.#deliverNow(frame);
+    if (this.#decoding === undefined) this.#deliverNow(frame);
+    else this.deliverLater(Promise.resolve(frame));
   }
 
   protected deliverLater(frame: Promise<Frame>): void {
@@ -218,7 +218,7 @@ export class MemoryLink extends BaseLink {
 
   sever(): void {
     this.#severed = true;
-    if (this.peer) this.peer.#severed = true;
+    if (this.peer !== undefined) this.peer.#severed = true;
   }
 
   protected transmit(frame: Frame): number | undefined {
@@ -227,6 +227,7 @@ export class MemoryLink extends BaseLink {
     const peer = this.peer;
     this.#pending = this.#pending.then(() => {
       if (!this.#severed && peer !== undefined) peer.deliver(parseFrame(data));
+      return undefined;
     });
     return data.length;
   }
@@ -337,12 +338,11 @@ export class WebSocketLink extends BaseLink {
               : undefined;
         if (bytes === undefined) throw new TypeError("unknown message type");
         const { envelope, field, bytes: payload } = splitMessage(bytes);
-        if (zlib !== undefined)
-          this.deliver({ ...envelope, [field]: new Packed(payload) } as Frame);
-        else
+        if (zlib === undefined)
           this.deliverLater(
             inflate(payload).then((value) => ({ ...envelope, [field]: value }) as Frame),
           );
+        else this.deliver({ ...envelope, [field]: new Packed(payload) } as Frame);
       } catch {
         this.close("protocol error");
       }

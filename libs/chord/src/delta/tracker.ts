@@ -670,7 +670,7 @@ function ownKeys(node: OverlayNode): ArrayLike<string | symbol> {
   }
   if (existingKeysOnly) return Object.keys(nodeBase(node));
   const keys = Object.keys(nodeBase(node)).filter(
-    (key) => !isObjectDeleted(node, key) && !node.readded?.has(key),
+    (key) => !isObjectDeleted(node, key) && node.readded?.has(key) !== true,
   );
   const seen = new Set(keys);
   if (node.writeKey !== undefined && !seen.has(node.writeKey)) {
@@ -705,9 +705,7 @@ function getDescriptor(node: OverlayNode, property: PropertyKey): PropertyDescri
     }
     const index = arrayIndex(property);
     if (index === undefined || index >= arrayLength(arrayOverlay(node))) return undefined;
-  } else {
-    if (typeof property === "symbol" || !objectHas(node, String(property))) return undefined;
-  }
+  } else if (typeof property === "symbol" || !objectHas(node, String(property))) return undefined;
   return {
     configurable: true,
     enumerable: true,
@@ -795,7 +793,7 @@ function objectValue(node: OverlayNode, key: string): Stored {
 }
 
 function markDirty(node: OverlayNode): void {
-  if (node.dirty) return;
+  if (node.dirty === true) return;
   node.dirty = true;
   node.context.dirty.push(node);
   for (let parent = nodeParent(node); parent !== undefined; parent = nodeParent(parent))
@@ -1049,9 +1047,10 @@ function entryValueAt(node: OverlayNode, piece: Piece, sourceIndex: number): Sto
       : storedValue(node.context, valueIndex);
   }
   const overrides = overlay.insertOverrides?.get(piece.source);
-  const reference = overrides?.has(sourceIndex)
-    ? overrides.get(sourceIndex)!
-    : piece.source.refs[sourceIndex]!;
+  const reference =
+    overrides?.has(sourceIndex) === true
+      ? overrides.get(sourceIndex)!
+      : piece.source.refs[sourceIndex]!;
   return storedValue(node.context, reference);
 }
 
@@ -1062,8 +1061,8 @@ function hasEntryOverrideAt(overlay: ArrayOverlay, piece: Piece, sourceIndex: nu
 }
 
 function extendRightmostPiece(node: PieceNode, amount: number): void {
-  if (node.right !== undefined) extendRightmostPiece(node.right, amount);
-  else node.piece.length += amount;
+  if (node.right === undefined) node.piece.length += amount;
+  else extendRightmostPiece(node.right, amount);
   updatePieceNode(node);
 }
 
@@ -1471,11 +1470,11 @@ function publicSortValue(
       ? overlay.baseOverrides?.get(sourceIndex)
       : overlay.insertOverrides?.get(source)?.get(sourceIndex);
   const value =
-    overrideIndex !== undefined
-      ? storedValue(node.context, overrideIndex)
-      : source === undefined
+    overrideIndex === undefined
+      ? source === undefined
         ? (nodeBase(node) as JsonValue[])[sourceIndex]!
-        : storedValue(node.context, source.refs[sourceIndex]!);
+        : storedValue(node.context, source.refs[sourceIndex]!)
+      : storedValue(node.context, overrideIndex);
   if (!isContainer(value)) return value;
   return createNode(
     node.context,
@@ -1502,36 +1501,34 @@ function restoreSortOverride(
   if (source === undefined) {
     const existingIndex = overlay.baseOverrides?.get(sourceIndex);
     const snapshotValue = baseSnapshot.get(sourceIndex);
-    if (snapshotValue !== undefined) {
-      if (existingIndex === undefined)
-        baseOverridesForWrite(overlay).set(sourceIndex, storeValue(node.context, snapshotValue));
-      else
-        overlay.baseOverrides!.set(
-          sourceIndex,
-          replaceStoredValue(node.context, existingIndex, snapshotValue),
-        );
-    } else {
+    if (snapshotValue === undefined) {
       if (existingIndex !== undefined) releaseStoredValue(node.context, existingIndex);
       overlay.baseOverrides?.delete(sourceIndex);
-    }
+    } else if (existingIndex === undefined)
+      baseOverridesForWrite(overlay).set(sourceIndex, storeValue(node.context, snapshotValue));
+    else
+      overlay.baseOverrides!.set(
+        sourceIndex,
+        replaceStoredValue(node.context, existingIndex, snapshotValue),
+      );
     return;
   }
   let overrides = overlay.insertOverrides?.get(source);
   const existingIndex = overrides?.get(sourceIndex);
   const snapshotValue = insertSnapshots.get(source)?.get(sourceIndex);
-  if (snapshotValue !== undefined) {
-    if (overrides === undefined) {
-      overrides = new Map();
-      insertOverridesForWrite(overlay).set(source, overrides);
-    }
-    if (existingIndex === undefined)
-      overrides.set(sourceIndex, storeValue(node.context, snapshotValue));
-    else overrides.set(sourceIndex, replaceStoredValue(node.context, existingIndex, snapshotValue));
-  } else {
+  if (snapshotValue === undefined) {
     if (existingIndex !== undefined) releaseStoredValue(node.context, existingIndex);
     overrides?.delete(sourceIndex);
     if (overrides?.size === 0) overlay.insertOverrides?.delete(source);
+    return;
   }
+  if (overrides === undefined) {
+    overrides = new Map();
+    insertOverridesForWrite(overlay).set(source, overrides);
+  }
+  if (existingIndex === undefined)
+    overrides.set(sourceIndex, storeValue(node.context, snapshotValue));
+  else overrides.set(sourceIndex, replaceStoredValue(node.context, existingIndex, snapshotValue));
 }
 
 function sameSortTokenAt(
@@ -1687,7 +1684,9 @@ function cloneNode(node: OverlayNode): Container {
 function cloneStored(value: Stored, context: OverlayContext): Stored {
   if (!isContainer(value)) return value;
   const node = context.rawNodes!.get(value);
-  return node === undefined || (!node.dirty && !node.subtreeDirty) ? value : cloneNode(node);
+  return node === undefined || (node.dirty !== true && node.subtreeDirty !== true)
+    ? value
+    : cloneNode(node);
 }
 
 function clonePlacementNode(node: OverlayNode): Container {
@@ -1989,7 +1988,7 @@ function emitObjectWrite(
 ): boolean {
   const nextPath = [...path, key] as unknown as NonEmptyPath;
   const before =
-    node.readded?.has(key) || !Object.hasOwn(nodeBase(node), key)
+    node.readded?.has(key) === true || !Object.hasOwn(nodeBase(node), key)
       ? undefined
       : (nodeBase(node) as Record<string, JsonValue>)[key];
   const after = cloneStored(value, node.context);

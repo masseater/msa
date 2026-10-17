@@ -245,20 +245,20 @@ function applyOps<T>(target: T | undefined, ops: readonly Op[]): T {
     assertSafePath(path);
 
     if (op[0] === "p") {
-      const target_ = path.length === 0 ? root : resolve(root, path);
-      if (!Array.isArray(target_)) throw new PathError(path);
-      target_.splice(op[2], op[3]);
+      const spliced = path.length === 0 ? root : resolve(root, path);
+      if (!Array.isArray(spliced)) throw new PathError(path);
+      spliced.splice(op[2], op[3]);
       const chunkSize = 10_000;
       for (let offset = 0; offset < op[4].length; offset += chunkSize) {
-        target_.splice(op[2] + offset, 0, ...op[4].slice(offset, offset + chunkSize));
+        spliced.splice(op[2] + offset, 0, ...op[4].slice(offset, offset + chunkSize));
       }
       continue;
     }
     if (op[0] === "m") {
-      const target_ = path.length === 0 ? root : resolve(root, path);
-      if (!Array.isArray(target_) || target_.length !== op[2].length) throw new PathError(path);
-      const previous = target_.slice();
-      for (let index = 0; index < op[2].length; index++) target_[index] = previous[op[2][index]!]!;
+      const moved = path.length === 0 ? root : resolve(root, path);
+      if (!Array.isArray(moved) || moved.length !== op[2].length) throw new PathError(path);
+      const previous = moved.slice();
+      for (let index = 0; index < op[2].length; index++) moved[index] = previous[op[2][index]!]!;
       continue;
     }
 

@@ -92,9 +92,9 @@ describe("local hydration", () => {
       await forward.ready;
       assert.equal(forward.v.value, "from the worker");
       assert.equal(forward.size.value, "from the worker".length);
-      const local = c.server.hold(Forward, { how });
-      await local.ready;
-      assert.equal(local.v.value, "from the worker");
+      const onServer = c.server.hold(Forward, { how });
+      await onServer.ready;
+      assert.equal(onServer.v.value, "from the worker");
     }
     await c.server.close();
     await c.worker.close();
@@ -197,7 +197,7 @@ describe("local hydration", () => {
       (error) =>
         isChordError(error, "unavailable") &&
         error.reason === "ready_timeout" &&
-        /cycle/.test(error.message),
+        /cycle/u.test(error.message),
     );
     await sleep(10);
     await c.server.close();

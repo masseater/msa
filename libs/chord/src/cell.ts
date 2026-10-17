@@ -21,6 +21,10 @@ export interface SourceOptions {
 export type WriteGuard = (ctx: Ctx) => void;
 
 let sequence = 0;
+function nextSequence(): number {
+  sequence += 1;
+  return sequence;
+}
 
 class Fanout<T> {
   readonly #values = new Set<(value: T) => void>();
@@ -81,7 +85,7 @@ export const unhydrated = (sources: Iterable<unknown>): Hydration[] =>
 
 export abstract class Source<T> implements Readable<T> {
   readonly key: string;
-  readonly seq = ++sequence;
+  readonly seq = nextSequence();
   readonly dependents = new Set<Derived<unknown>>();
   schemas: readonly TSchema[] = [];
   protected readonly options: SourceOptions;
@@ -328,14 +332,15 @@ export class Derived<T> extends Source<T> {
     return {
       hydrated: false,
       whenHydrated: () =>
-        Promise.all(pending.map((hydration) => hydration.whenHydrated())).then(() => {}),
+        Promise.all(pending.map((hydration) => hydration.whenHydrated())).then(() => undefined),
     };
   }
 
   attach(precomputed?: ReadonlyMap<unknown, unknown>): void {
-    this.#value = precomputed?.has(this)
-      ? (precomputed.get(this) as T)
-      : this.compute((source) => source.value);
+    this.#value =
+      precomputed?.has(this) === true
+        ? (precomputed.get(this) as T)
+        : this.compute((source) => source.value);
     for (const source of this.sources) {
       if (source instanceof Source) source.dependents.add(this as Derived<unknown>);
       else this.#external.push(source.subscribe(() => this.refresh()));

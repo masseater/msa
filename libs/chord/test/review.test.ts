@@ -40,7 +40,7 @@ function emitter<E>(options: { failSubscribe?: boolean } = {}) {
       for (const fn of [...listeners]) fn(event);
     },
     subscribe: (fn: (event: E) => void) => {
-      if (options.failSubscribe) throw new Error("subscribe fails");
+      if (options.failSubscribe === true) throw new Error("subscribe fails");
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
@@ -76,7 +76,7 @@ describe("review: reload commit", () => {
     const refs = ["a", "b", "c"].map((id) => host.hold(Item, { id }));
     await Promise.all(refs.map((ref) => ref.ready));
     const codeVersion = host.codeVersion;
-    await assert.rejects(host.reload([facet("v2", true)]), /subscribe fails/);
+    await assert.rejects(host.reload([facet("v2", true)]), /subscribe fails/u);
     assert.equal(host.codeVersion, codeVersion);
     assert.deepEqual(await Promise.all(refs.map((ref) => ref.version())), ["v1", "v1", "v1"]);
     assert.equal(sources.a.size, 0);
@@ -157,7 +157,7 @@ describe("review: reload commit", () => {
       host.reload([
         { name: "item", setup: (api) => api.serve(Item, () => ({ version: () => "v2" })) },
       ]),
-      /install step fails/,
+      /install step fails/u,
     );
     await assert.rejects(
       ref.version(),
@@ -415,7 +415,7 @@ describe("review: prepare isolation and contracts", () => {
           }),
       },
     ];
-    await assert.rejects(host.reload(plugins(true)), /b fails/);
+    await assert.rejects(host.reload(plugins(true)), /b fails/u);
     await ticks();
     assert.deepEqual(log, []);
     await host.reload(plugins(false));
@@ -498,7 +498,7 @@ describe("review: prepare isolation and contracts", () => {
       host.install(facet(1));
       const ref = host.hold(Db, {});
       await ref.ready;
-      await assert.rejects(host.reload([facet(2)]), /close fails/);
+      await assert.rejects(host.reload([facet(2)]), /close fails/u);
       if (reopen === "works") {
         assert.deepEqual(log, ["open 1", "close 1", "open 1"]);
         assert.deepEqual(await ref.read(), { rev: 1 });
