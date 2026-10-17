@@ -6,10 +6,6 @@ An extension runs inside the msa process with the same operating-system permissi
 
 Typical extensions add an agent tool, protect paths, confirm dangerous commands, react to session events, modify context, expose a command, or display persistent status.
 
-<a id="quick-start"></a>
-<a id="writing-an-extension"></a>
-<a id="create-an-extension"></a>
-
 ## Create and load an extension
 
 An extension exports a default factory that receives `ExtensionAPI`. The factory registers capabilities for the current extension runtime.
@@ -37,10 +33,6 @@ msa --extension ./hello.ts
 
 msa uses `jiti`, so local TypeScript extensions do not need a separate compilation step. Use [msa packages](packages.md) for distributed extensions and dependencies.
 
-<a id="extension-locations"></a>
-<a id="available-imports"></a>
-<a id="choose-where-it-loads"></a>
-
 ## Add it to msa
 
 Place the extension in your user or project extensions directory. msa loads direct TypeScript or JavaScript files and subdirectories containing an `index.ts` or `index.js` entry point.
@@ -48,8 +40,6 @@ Place the extension in your user or project extensions directory. msa loads dire
 Use a single file for a small extension and a directory for a multi-file implementation. Put npm dependencies in a nearby `package.json`. See [Configuration](configuration.md) for conventional locations and [Settings](settings.md#resources) for additional paths.
 
 Reload replaces the extension runtime, so code after `await ctx.reload()` must not reuse state from the old runtime. Only personal and explicit command-line extensions can participate in the `project_trust` event that runs before project extensions load.
-
-<a id="understand-the-lifecycle"></a>
 
 ## Respect the runtime lifecycle
 
@@ -62,12 +52,9 @@ Close session-scoped resources from an idempotent `session_shutdown` handler.
 A run proceeds from input and `before_agent_start`, through model, message, and tool events, to `agent_end`.
 msa counts as busy while a run starts, including the compaction check and `before_agent_start`, so messages sent meanwhile go into the starting run.
 Automatic retries, recovery, compaction, or queued work can continue afterward.
-<a id="agent_start--agent_end--agent_before_settle--agent_settled"></a>
 
 `agent_before_settle` is the final actionable boundary: it can append entries and request one continuation.
 `agent_settled` is final and notification-only; use it when an integration needs to know msa will not continue automatically.
-
-<a id="extensionapi-methods"></a>
 
 ## Choose an integration point
 
@@ -90,9 +77,6 @@ Use the exported declarations in [`extensions/types.ts`](https://github.com/mass
 
 ## Follow the extension contracts
 
-<a id="events"></a>
-<a id="work-with-events"></a>
-
 ### Events and concurrency
 
 Handlers run in extension load and registration order. `msa.on()` returns a function that unsubscribes that registration; changes do not affect a dispatch already in progress.
@@ -105,19 +89,13 @@ Events cover resource discovery, sessions, agent and message lifecycle, provider
 
 `message_end` can replace a finalized message while preserving its role. `tool_call` can mutate input or block execution. `tool_result` handlers compose, with each handler seeing prior changes.
 
-<a id="provider_stream_event"></a>
-
 `provider_stream_event` fires for each parsed provider stream event before msa normalizes it. The event identifies the provider, API, and model; `event.data` is the earliest structured value available to msa, not necessarily the original HTTP bytes or SSE frame. Treat it as read-only because mutation can affect normalization. The event is notification-only and is not persisted.
 
 Handlers are awaited in stream order, so slow handlers delay stream consumption. Handler errors are reported without changing the provider response. See [`debug-provider.ts`](../examples/extensions/debug-provider.ts) for an opt-in viewer that groups raw events by assistant message.
 
-<a id="context_with_system"></a>
-
 `context` transforms conversation messages without prompt and tool system messages; msa restores that state afterward. Use `context_with_system` only when a request-local transformation must own the complete transcript, and keep a system message at index zero.
 
 `turn_end` and `agent_before_settle` are actionable boundaries. Their handlers can chain proposed `custom`, `custom_message`, `context_edit`, or `compaction` entries and return `continue: true` for one next model request. Guard continuation conditions because an unconditional continuation can loop. Use the exported event declarations for the complete validation and ordering contract.
-
-<a id="cache_warming_decision"></a>
 
 `cache_warming_decision` can override an idle prompt-cache refresh with `{ action: "warm" }` or `{ action: "stop" }`. The last handler that returns an action wins.
 
@@ -126,9 +104,6 @@ Do not assume a sibling call or result exists when another tool event runs.
 Use `ctx.signal` for nested work owned by an active turn; commands and idle session events often have no operation signal.
 
 A `user_bash` handler that returns `undefined` passes the command to the next handler and then to local execution if no handler handles it. Returning `operations` or `result` stops propagation. A handler failure blocks the command rather than falling through to local execution.
-
-<a id="custom-tools"></a>
-<a id="register-tools"></a>
 
 ### Tools
 
@@ -203,11 +178,7 @@ msa.unregisterMcpServer("jira");
 
 Servers registered while the extension loads connect when the session starts, together with the `mcp.json` servers; servers registered later connect right away, and `msa.unregisterMcpServer()` closes the connection and makes the server's tools unreachable. Registrations are not saved: register again on every load, for example based on the extension's own settings. A server in `mcp.json` with the same name takes precedence, and `/mcp` shows the override. Registering the same name again replaces the extension's earlier registration; names registered by another extension, invalid names, and invalid configs throw.
 
-The built-in MCP support connects registered servers. When nothing does, because another extension replaced it (see [MCP](mcp.md#other-mcp-extensions)), each registration is reported as an extension error. Other MCP extensions can connect registered servers too: read them with `msa.getMcpServers()` on `session_start` and handle the `mcp_servers_change` event for later changes.
-
-<a id="extensioncontext"></a>
-<a id="extensioncommandcontext"></a>
-<a id="use-extension-context"></a>
+The built-in MCP support connects registered servers. When nothing does, because another extension replaced it (see [MCP](mcp.md#replace-the-built-in-mcp-support)), each registration is reported as an extension error. Other MCP extensions can connect registered servers too: read them with `msa.getMcpServers()` on `session_start` and handle the `mcp_servers_change` event for later changes.
 
 ### Context and session changes
 
@@ -218,9 +189,6 @@ Command handlers receive `ExtensionCommandContext`, which adds operations for wa
 These operations are command-only because calling them from lifecycle handlers can deadlock the runtime.
 
 Session replacement invalidates the old context. Capture only plain data before switching, then use the fresh context supplied to `withSession` for session-bound work.
-
-<a id="state-management"></a>
-<a id="persist-state"></a>
 
 ### State
 
@@ -237,11 +205,6 @@ Reconstruct branch-sensitive state from `ctx.sessionManager.getBranch()` during 
 Do not rebuild it from every file entry because abandoned branches represent alternative histories.
 Register an entry or message renderer when custom stored content should appear in the transcript.
 
-<a id="custom-ui"></a>
-<a id="mode-behavior"></a>
-<a id="interact-with-the-user"></a>
-<a id="account-for-each-mode"></a>
-
 ### UI and modes
 
 `ctx.ui` provides dialogs, notifications, status text, widgets, titles, editor access, and custom components.
@@ -255,9 +218,6 @@ Guard terminal-only behavior with `ctx.mode === "tui"` and use `ctx.hasUI` for i
 
 Keep tool and event behavior independent from rendering so non-interactive modes remain functional.
 
-<a id="error-handling"></a>
-<a id="handle-errors-and-shutdown"></a>
-
 ### Errors and cleanup
 
 msa reports handler errors and continues where possible. A `tool_call` handler failure blocks the tool as a fail-safe; a tool execution failure becomes an error result for the model.
@@ -265,9 +225,6 @@ msa reports handler errors and continues where possible. A `tool_call` handler f
 Release resources in `session_shutdown` even when normal operation attempted cleanup.
 Keep cleanup idempotent because cancellation, reload, session replacement, and process exit can converge on the same path.
 Use `ctx.shutdown()` to request an orderly process shutdown.
-
-<a id="examples-reference"></a>
-<a id="use-examples-as-the-implementation-reference"></a>
 
 ## Examples and reference
 

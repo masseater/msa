@@ -21,8 +21,6 @@ The theme adapts to what the terminal reports:
 
 msa asks the terminal for its colors when it starts. Terminals usually answer within a few milliseconds, and msa waits at most 100 ms before showing the startup header. If the terminal does not answer in time, msa uses the ANSI color fallback, and it still applies the colors if they arrive later, for example over a slow SSH connection. `system` is a reserved name: a custom theme with that name is ignored.
 
-<a id="selecting-a-theme"></a>
-
 ## Choose a theme
 
 Open `/config` and select **Theme**. You can use one theme for every terminal appearance or choose separate themes for light and dark terminals.

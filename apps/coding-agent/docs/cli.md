@@ -1,5 +1,3 @@
-<a id="cli-and-modes-reference"></a>
-
 # Command Line
 
 This page documents msa's built-in command-line commands and options. Run `msa --help` or append `--help` to a command for the exact interface in your installed version. The top-level help also includes options registered by loaded extensions.
@@ -15,8 +13,6 @@ msa config [options]
 msa auth <check|print-api-key|print-bearer-token> [options]
 msa mcp <list|login|logout> [options]
 ```
-
-<a id="modes"></a>
 
 ## Invocation and output
 
@@ -50,8 +46,6 @@ msa resolves `@path` from the current working directory. The working directory a
 
 RPC mode rejects `@file` arguments. JSON and RPC modes reserve stdout for protocol records. See [JSON Event Stream](json.md) and [RPC Protocol](rpc.md).
 
-<a id="model-options"></a>
-
 ## Models
 
 ```sh
@@ -72,8 +66,6 @@ See [Choose a Model](models.md) for model selection and [Providers](providers.md
   Sets a comma-separated scope for startup and cycling. It accepts exact IDs, fuzzy matches, case-insensitive globs, and optional `:<thinking>` suffixes. A model offered by several providers is added for each, with a warning.
 - `--list-models [search]`<br>
   Lists available models, optionally filtered by a fuzzy search, then exits.
-
-<a id="session-options"></a>
 
 ## Sessions
 
@@ -106,8 +98,6 @@ Constraints:
 - `--fork` cannot be combined with `--session`, `--continue`, `--resume`, or `--no-session`.
 - `--session-id` cannot be combined with `--session`, `--continue`, or `--resume`. Combine it with `--fork` to choose the new ID.
 
-<a id="tool-options"></a>
-
 ## Tools
 
 ```sh
@@ -117,7 +107,7 @@ msa --tools read,grep,find,ls --print "Review this project"
 See [Settings](settings.md#tools) for configuring the default tool selection.
 
 - `-t`, `--tools <list>`<br>
-  Replaces the default selection with a comma-separated allowlist of built-in, extension, or custom tools. Entries are tool names or patterns where `*` matches any characters. MCP tools are kept unless an entry starts with `mcp__` (see [MCP tools](#mcp-tools)). A list of only `+name` and `-name` entries is not an allowlist; it changes the default selection instead.
+  Replaces the default selection with a comma-separated allowlist of built-in, extension, or custom tools. Entries are tool names or patterns where `*` matches any characters. MCP tools are kept unless an entry starts with `mcp__` (see [MCP tools](#tools)). A list of only `+name` and `-name` entries is not an allowlist; it changes the default selection instead.
 - `-xt`, `--exclude-tools <list>`<br>
   Disables comma-separated tool names or patterns after all other selection options, MCP tools included.
 - `-nbt`, `--no-builtin-tools`<br>
@@ -129,15 +119,13 @@ See [Settings](settings.md#tools) for configuring the default tool selection.
 
 Default enabled tools are `read`, `bash`, `edit`, and `write`, unless `defaultTools` changes them. `--tools` with plain names replaces the whole selection, so name every tool you want. Like `defaultTools`, it also accepts a list of only `+name` and `-name` entries, which adds tools to or removes them from the default selection: `msa --tools +codemode,-write` keeps the other default tools, enables `codemode`, and disables `write`. These entries take exact tool names, not `*` patterns; use `--exclude-tools` to disable tools by pattern. Plain names and `+name`/`-name` entries cannot be mixed. `/reload` enables tools newly added to `defaultTools`, but a tool removed with `-name` stays removed.
 
-<a id="mcp-tools"></a>
-
 `--tools` selects the tools declared to the model. It does not remove MCP tools, whose reach is set by their [exposure](mcp.md#control-tool-exposure): `msa --tools read,codemode` keeps every MCP tool callable from codemode scripts. An MCP tool that no entry names or matches is never declared directly, whatever its exposure; only `tool_search`, if listed, can load it. Once an entry starts with `mcp__`, `--tools` filters MCP tools too, so this keeps only the tools of the `radius` server:
 
 ```sh
 msa --tools read,bash,codemode,'mcp__radius__*'
 ```
 
-The MCP resource tools (`list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource`) count as MCP tools. To remove MCP tools, use `--exclude-tools 'mcp__*'` or [`--no-mcp`](#resource-options).
+The MCP resource tools (`list_mcp_resources`, `list_mcp_resource_templates`, `read_mcp_resource`) count as MCP tools. To remove MCP tools, use `--exclude-tools 'mcp__*'` or [`--no-mcp`](#resources).
 
 | Built-in     | Purpose                                           |
 | ------------ | ------------------------------------------------- |
@@ -150,7 +138,7 @@ The MCP resource tools (`list_mcp_resources`, `list_mcp_resource_templates`, `re
 | `find`       | Find paths using glob patterns                    |
 | `ls`         | List directory contents                           |
 
-Built-in extensions add two more tools. They are off by default; the MCP extension turns them on when an MCP server needs them (see [MCP](mcp.md#exposure)). To enable them yourself, name them in `--tools` or `defaultTools`.
+Built-in extensions add two more tools. They are off by default; the MCP extension turns them on when an MCP server needs them (see [MCP](mcp.md#control-tool-exposure)). To enable them yourself, name them in `--tools` or `defaultTools`.
 
 | Built-in extension | Purpose                                                                                                                                           |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -182,8 +170,6 @@ Scripts run in a QuickJS sandbox and reach the other tools through `tools.<name>
 ### Tool search
 
 `tool_search` is off by default; enable it with `"defaultTools": ["+tool_search"]` or `--tools`. It uses the same ranking as `searchTools()` over tools that are not declared yet and declares the matches for the next model call. Loaded tools are recorded in the session like other tool changes, so they stay declared on that branch.
-
-<a id="resource-options"></a>
 
 ## Resources
 
@@ -217,8 +203,6 @@ See [Configuration](configuration.md) for conventional directories and project t
   Disables `AGENTS.md` and `CLAUDE.md` discovery.
 
 Resource paths apply only to the current process. Relative paths resolve from the current working directory.
-
-<a id="prompt-and-display-options"></a>
 
 ## Prompts and process
 
@@ -330,6 +314,6 @@ These commands work outside a session, so agents can run them through `bash`. Se
 | `msa mcp login <server> [--timeout <seconds>]`          | Sign in to an OAuth server: open the authorization page and wait for the browser; a terminal also accepts the pasted redirect URL. `--timeout` limits the whole sign-in, including requests to the authorization server (default 300 seconds)                                  |
 | `msa mcp logout <server>`                               | Delete the stored OAuth credentials of a server                                                                                                                                                                                                                                |
 
-`add` and `remove` change `~/.msa/agent/mcp.json`, or `.msa/mcp.json` in the current directory with `--local` (`-l`). `add` also takes `--exposure <mode>` (see [Exposure](mcp.md#exposure)) and `--description <text>` and does not connect; run `msa mcp list` to check the server.
+`add` and `remove` change `~/.msa/agent/mcp.json`, or `.msa/mcp.json` in the current directory with `--local` (`-l`). `add` also takes `--exposure <mode>` (see [Exposure](mcp.md#control-tool-exposure)) and `--description <text>` and does not connect; run `msa mcp list` to check the server.
 
 Project `.msa/mcp.json` files are only read for projects that are already trusted.

@@ -6,8 +6,6 @@ Add `"$schema": "https://raw.githubusercontent.com/masseater/msa/main/apps/codin
 
 ## Model and thinking
 
-<a id="model-cycling"></a>
-
 | Setting                | Type                                                                    | Default                             | Description                                                                                                                                                                                                          |
 | ---------------------- | ----------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `defaultProvider`      | string                                                                  | Automatic                           | Startup AI provider.                                                                                                                                                                                                 |
@@ -21,7 +19,7 @@ Add `"$schema": "https://raw.githubusercontent.com/masseater/msa/main/apps/codin
 | `showCacheMissNotices` | boolean                                                                 | `false`                             | Show notices for significant cache misses, successful cache warming, compaction usage, and provider recovery.                                                                                                        |
 | `cacheWarming`         | `"off" \| "streaming" \| "idle"`                                        | `"streaming"`                       | Keep eligible provider prompt caches warm during active runs or, with `"idle"`, between runs. Global setting only.                                                                                                   |
 
-Cache warming runs only when the model declares a cache lifetime and msa estimates at least $0.05 in avoided cache-miss cost. Refresh usage counts toward session totals but does not enter model context. `/status` shows the next decision; extensions can override it with `cache_warming_decision`. See [Prompt Cache Lifetimes](models.md#prompt-cache-lifetimes).
+Cache warming runs only when the model declares a cache lifetime and msa estimates at least $0.05 in avoided cache-miss cost. Refresh usage counts toward session totals but does not enter model context. `/status` shows the next decision; extensions can override it with `cache_warming_decision`. See [Describe model input and caching](models.md#describe-model-input-and-caching).
 
 See [Choose a Model](models.md) for model selection and thinking controls.
 
@@ -76,8 +74,6 @@ CLI tool options override this setting for one invocation. `--tools` with only `
 | `compaction.reserveTokens`    | number  | `16384` | Tokens reserved for the model response.                     |
 | `compaction.keepRecentTokens` | number  | `20000` | Recent tokens retained without summarization.               |
 | `compaction.modelOverrides`   | object  | None    | Per-model token settings keyed by exact `provider/modelId`. |
-
-<a id="per-model-compaction-overrides"></a>
 
 Compaction token values must be non-negative safe integers. Each value resolves independently from the matching model override, then the ordinary compaction setting, then the built-in default. Project and user objects merge before model lookup.
 
