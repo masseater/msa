@@ -113,12 +113,14 @@ const skipsCancelledRetries = Effect.gen(function* () {
   yield* connectWith(client, url, provider);
   const controller = abortController();
   const aborted = client.callTool("aborted", {}, { signal: controller.signal });
-  const timedOut = client.callTool("timed-out", {}, { timeoutMs: 200 });
+  const timedOut = expect(
+    client.callTool("timed-out", {}, { timeoutMs: 200 }),
+  ).rejects.toMatchObject({ name: "McpTimeoutError" });
   const kept = client.callTool("kept");
   yield* Deferred.await(allWaiting);
   controller.abort();
   yield* Effect.promise(() => expect(aborted).rejects.toMatchObject({ name: "AbortError" }));
-  yield* Effect.promise(() => expect(timedOut).rejects.toMatchObject({ name: "McpTimeoutError" }));
+  yield* Effect.promise(() => timedOut);
   Deferred.doneUnsafe(refreshGate, Effect.void);
   expect(yield* Effect.promise(() => kept)).toEqual({ content: [{ type: "text", text: "hello" }] });
   expect(executed).toEqual(["kept"]);
