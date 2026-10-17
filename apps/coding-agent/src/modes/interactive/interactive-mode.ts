@@ -185,6 +185,7 @@ import {
 import { ThemedText } from "./components/themed-text.ts";
 import { ThinkingSelectorComponent } from "./components/thinking-selector.ts";
 import { ToolExecutionComponent } from "./components/tool-execution.ts";
+import { ToolGroupComponent } from "./components/tool-group.ts";
 import { TreeSelectorComponent } from "./components/tree-selector.ts";
 import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.ts";
@@ -435,6 +436,7 @@ export class InteractiveMode {
 
   // Tool execution tracking: toolCallId -> component
   private pendingTools = new Map<string, ToolExecutionComponent>();
+  private toolGroup?: ToolGroupComponent;
 
   // Tool output expansion state
   private toolOutputExpanded = false;
@@ -1805,7 +1807,7 @@ export class InteractiveMode {
 
   private setHiddenThinkingLabel(label?: string): void {
     this.hiddenThinkingLabel = label ?? this.defaultHiddenThinkingLabel;
-    for (const child of this.chatContainer.children) {
+    for (const child of this.chatComponents()) {
       if (child instanceof AssistantMessageComponent) {
         child.setHiddenThinkingLabel(this.hiddenThinkingLabel);
       }
@@ -2709,7 +2711,7 @@ export class InteractiveMode {
                   this.sessionManager.getCwd(),
                 );
                 component.setExpanded(this.toolOutputExpanded);
-                this.chatContainer.addChild(component);
+                this.addToolExecution(component);
                 this.pendingTools.set(content.id, component);
               } else {
                 const component = this.pendingTools.get(content.id);
@@ -2791,7 +2793,7 @@ export class InteractiveMode {
             this.sessionManager.getCwd(),
           );
           component.setExpanded(this.toolOutputExpanded);
-          this.chatContainer.addChild(component);
+          this.addToolExecution(component);
           this.pendingTools.set(event.toolCallId, component);
         }
         component.markExecutionStarted();
@@ -2830,6 +2832,7 @@ export class InteractiveMode {
         this.clearStatusIndicator("working");
         if (this.streamingComponent) {
           this.chatContainer.removeChild(this.streamingComponent);
+          this.toolGroup?.items.removeChild(this.streamingComponent);
           this.streamingComponent = undefined;
           this.streamingMessage = undefined;
         }
@@ -3104,6 +3107,40 @@ export class InteractiveMode {
     this.chatContainer.addChild(component);
   }
 
+  /** Chat components, including the ones folded into tool groups. */
+  private *chatComponents(): Generator<Component> {
+    for (const child of this.chatContainer.children) {
+      yield child;
+      if (child instanceof ToolGroupComponent) yield* child.items.children;
+    }
+  }
+
+  /**
+   * Add a tool call to the group of tool calls just before it, or start a group. Assistant
+   * messages that only think, between or right before the calls, go into the group with them.
+   */
+  private addToolExecution(component: ToolExecutionComponent): void {
+    const children = this.chatContainer.children;
+    const isFoldable = (child: Component | undefined) =>
+      child instanceof AssistantMessageComponent && !child.hasVisibleText();
+    const groupIndex = this.toolGroup ? children.indexOf(this.toolGroup) : -1;
+    let group = this.toolGroup;
+    let folded: Component[];
+    if (group && groupIndex >= 0 && children.slice(groupIndex + 1).every(isFoldable)) {
+      folded = children.slice(groupIndex + 1);
+    } else {
+      group = new ToolGroupComponent(this.outputPad);
+      group.setExpanded(this.toolOutputExpanded);
+      const last = children.at(-1);
+      folded = isFoldable(last) && last ? [last] : [];
+      this.toolGroup = group;
+    }
+    for (const child of folded) this.chatContainer.removeChild(child);
+    if (!children.includes(group)) this.chatContainer.addChild(group);
+    for (const child of folded) group.items.addChild(child);
+    group.items.addChild(component);
+  }
+
   private addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void {
     switch (message.role) {
       case "bashExecution": {
@@ -3279,7 +3316,7 @@ export class InteractiveMode {
               this.sessionManager.getCwd(),
             );
             component.setExpanded(this.toolOutputExpanded);
-            this.chatContainer.addChild(component);
+            this.addToolExecution(component);
 
             if (message.stopReason === "aborted" || message.stopReason === "error") {
               let errorMessage: string;
@@ -3844,7 +3881,7 @@ export class InteractiveMode {
 
   /** Update rendered assistant messages without rebuilding live tool components. */
   private updateThinkingBlockVisibility(): void {
-    for (const child of this.chatContainer.children) {
+    for (const child of this.chatComponents()) {
       if (child instanceof AssistantMessageComponent) {
         child.setHideThinkingBlock(this.hideThinkingBlock);
       }
@@ -4202,7 +4239,7 @@ export class InteractiveMode {
           },
           onShowImagesChange: (enabled) => {
             this.settingsManager.setShowImages(enabled);
-            for (const child of this.chatContainer.children) {
+            for (const child of this.chatComponents()) {
               if (child instanceof ToolExecutionComponent) {
                 child.setShowImages(enabled);
               }
@@ -4210,7 +4247,7 @@ export class InteractiveMode {
           },
           onImageWidthCellsChange: (width) => {
             this.settingsManager.setImageWidthCells(width);
-            for (const child of this.chatContainer.children) {
+            for (const child of this.chatComponents()) {
               if (child instanceof ToolExecutionComponent) {
                 child.setImageWidthCells(width);
               }
@@ -4321,8 +4358,11 @@ export class InteractiveMode {
           onOutputPadChange: (padding) => {
             this.settingsManager.setOutputPad(padding);
             this.outputPad = padding;
-            for (const container of [this.chatContainer, this.pendingMessagesContainer]) {
-              for (const child of container.children) {
+            for (const children of [
+              this.chatComponents(),
+              this.pendingMessagesContainer.children,
+            ]) {
+              for (const child of children) {
                 if ("setOutputPad" in child && typeof child.setOutputPad === "function") {
                   child.setOutputPad(padding);
                 }
