@@ -86,8 +86,7 @@ function getLastAssistantUsageInfo(
   let latestPrefixTimestamp = Number.NEGATIVE_INFINITY;
   let usageInfo: { usage: Usage; index: number } | undefined;
 
-  for (let i = 0; i < messages.length; i++) {
-    const message = messages[i];
+  for (const [i, message] of messages.entries()) {
     if (message.role === "assistant") {
       const assistant = message as AssistantMessage;
       // A newer prefix message was inserted after this response (for example, a
@@ -116,8 +115,8 @@ export function estimateContextTokens(
   if (usageInfo) {
     const usageTokens = calculateContextTokens(usageInfo.usage);
     let trailingTokens = 0;
-    for (let i = usageInfo.index + 1; i < messages.length; i++) {
-      trailingTokens += estimateMessageTokens(messages[i]);
+    for (const message of messages.slice(usageInfo.index + 1)) {
+      trailingTokens += estimateMessageTokens(message);
     }
     return {
       tokens: usageTokens + trailingTokens,

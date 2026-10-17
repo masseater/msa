@@ -1215,9 +1215,9 @@ describe("Models runtime", () => {
       env: { ACCOUNT_ID: "acct" },
     });
 
-    expect(calls[0].model.baseUrl).toBe("https://example.test/acct");
-    expect(calls[0].options?.apiKey).toBe("explicit-key");
-    expect(calls[0].options?.env).toEqual({ ACCOUNT_ID: "acct" });
+    expect(calls[0]?.model.baseUrl).toBe("https://example.test/acct");
+    expect(calls[0]?.options?.apiKey).toBe("explicit-key");
+    expect(calls[0]?.options?.env).toEqual({ ACCOUNT_ID: "acct" });
   });
 
   it("merges resolved auth into stream options; explicit options win per field", async () => {
@@ -1242,18 +1242,18 @@ describe("Models runtime", () => {
     });
     expect(result.stopReason).toBe("stop");
     expect(calls).toHaveLength(1);
-    expect(calls[0].options?.apiKey).toBe("explicit-key");
-    expect(calls[0].options?.headers).toEqual({
+    expect(calls[0]?.options?.apiKey).toBe("explicit-key");
+    expect(calls[0]?.options?.headers).toEqual({
       authorization: "Explicit token",
       "x-a": "auth",
       "x-b": "explicit",
     });
-    expect(calls[0].model.baseUrl).toBe("https://auth.test/v1");
+    expect(calls[0]?.model.baseUrl).toBe("https://auth.test/v1");
 
     // without explicit options, resolved auth applies
     const result2 = await models.completeSimple(model, context);
     expect(result2.stopReason).toBe("stop");
-    expect(calls[1].options?.apiKey).toBe("resolved-key");
+    expect(calls[1]?.options?.apiKey).toBe("resolved-key");
   });
 
   it("adds model headers only for model auth and transforms assembled headers once", async () => {
@@ -1284,13 +1284,13 @@ describe("Models runtime", () => {
     });
 
     expect(transforms).toBe(1);
-    expect(calls[0].options?.headers).toEqual({
+    expect(calls[0]?.options?.headers).toEqual({
       "x-model": "model",
       "x-explicit": "explicit",
       "X-Shared": "explicit",
       "x-transformed": "yes",
     });
-    expect(calls[0].options).not.toHaveProperty("transformHeaders");
+    expect(calls[0]?.options).not.toHaveProperty("transformHeaders");
   });
 
   it("produces an error stream for unknown providers instead of throwing", async () => {

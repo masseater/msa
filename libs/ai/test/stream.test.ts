@@ -123,8 +123,8 @@ async function handleToolCall<TApi extends Api>(
       hasToolStart = true;
       const toolCall = event.partial.content[event.contentIndex];
       index = event.contentIndex;
-      expect(toolCall.type).toBe("toolCall");
-      if (toolCall.type === "toolCall") {
+      expect(toolCall?.type).toBe("toolCall");
+      if (toolCall?.type === "toolCall") {
         expect(toolCall.name).toBe("math_operation");
         expect(toolCall.id).toBeTruthy();
       }
@@ -133,8 +133,8 @@ async function handleToolCall<TApi extends Api>(
       hasToolDelta = true;
       const toolCall = event.partial.content[event.contentIndex];
       expect(event.contentIndex).toBe(index);
-      expect(toolCall.type).toBe("toolCall");
-      if (toolCall.type === "toolCall") {
+      expect(toolCall?.type).toBe("toolCall");
+      if (toolCall?.type === "toolCall") {
         expect(toolCall.name).toBe("math_operation");
         accumulatedToolArgs += event.delta;
         // Check that we have a parsed arguments object during streaming
@@ -149,8 +149,8 @@ async function handleToolCall<TApi extends Api>(
       hasToolEnd = true;
       const toolCall = event.partial.content[event.contentIndex];
       expect(event.contentIndex).toBe(index);
-      expect(toolCall.type).toBe("toolCall");
-      if (toolCall.type === "toolCall") {
+      expect(toolCall?.type).toBe("toolCall");
+      if (toolCall?.type === "toolCall") {
         expect(toolCall.name).toBe("math_operation");
         JSON.parse(accumulatedToolArgs);
         expect(toolCall.arguments).not.toBeUndefined();

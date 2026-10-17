@@ -34,7 +34,6 @@ import type {
   ThinkingTokenBudgetField,
   Tool,
   ToolCall,
-  ToolResultMessage,
 } from "../types.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
@@ -1183,8 +1182,7 @@ function addCacheControlToLastConversationMessage(
   messages: ChatCompletionMessageParam[],
   cacheControl: OpenAICompatCacheControl,
 ): void {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
+  for (const message of messages.toReversed()) {
     if (message.role === "user" || message.role === "assistant" || message.role === "tool") {
       if (addCacheControlToMessage(message, cacheControl)) {
         return;
@@ -1309,6 +1307,7 @@ export function convertMessages(
 
   for (let i = 0; i < transformedMessages.length; i++) {
     const msg = transformedMessages[i];
+    if (msg === undefined) continue;
     // Some providers don't allow user messages directly after tool results
     // Insert a synthetic assistant message to bridge the gap
     if (
@@ -1399,7 +1398,8 @@ export function convertMessages(
       const nonEmptyThinkingBlocks = thinkingBlocks.filter(
         (block) => block.thinking.trim().length > 0,
       );
-      if (nonEmptyThinkingBlocks.length > 0) {
+      const [firstThinkingBlock] = nonEmptyThinkingBlocks;
+      if (firstThinkingBlock !== undefined) {
         if (compat.requiresThinkingAsText) {
           // Convert thinking blocks to plain text (no tags to avoid model mimicking them)
           const thinkingText = nonEmptyThinkingBlocks
@@ -1419,7 +1419,7 @@ export function convertMessages(
           // reasoning_details is the structured alternative to a raw reasoning field.
           if (!preservedReasoningDetails) {
             // Use the signature from the first thinking block if available (for llama.cpp server + gpt-oss)
-            let signature = nonEmptyThinkingBlocks[0].thinkingSignature;
+            let signature = firstThinkingBlock.thinkingSignature;
             if (model.provider === "opencode-go" && signature === "reasoning") {
               signature = "reasoning_content";
             }
@@ -1491,9 +1491,11 @@ export function convertMessages(
       const imageBlocks: Array<{ type: "image_url"; image_url: { url: string } }> = [];
       let j = i;
 
-      for (; j < transformedMessages.length && transformedMessages[j].role === "toolResult"; j++) {
-        const toolMsg = transformedMessages[j] as ToolResultMessage;
-
+      for (
+        let toolMsg = transformedMessages[j];
+        toolMsg?.role === "toolResult";
+        toolMsg = transformedMessages[++j]
+      ) {
         // Extract text and image content
         const textResult = toolMsg.content
           .filter(isTextContentBlock)

@@ -356,6 +356,7 @@ describe("builtin providers", () => {
     const models = createModels({ authContext: fakeAuthContext({ AWS_PROFILE: "dev" }) });
     models.setProvider(amazonBedrockProvider());
     const model = models.getModels("amazon-bedrock")[0];
+    if (!model) throw new Error("Expected a model");
 
     const result = await models.getAuth(model.provider);
     expect(result?.auth).toEqual({});
@@ -372,6 +373,7 @@ describe("builtin providers", () => {
     });
     missingAccount.setProvider(cloudflareWorkersAIProvider());
     const model = missingAccount.getModels("cloudflare-workers-ai")[0];
+    if (!model) throw new Error("Expected a model");
     expect(await missingAccount.getAuth(model.provider)).toBeUndefined();
 
     const configured = createModels({
@@ -395,6 +397,7 @@ describe("builtin providers", () => {
     });
     missingGateway.setProvider(cloudflareAIGatewayProvider());
     const model = missingGateway.getModels("cloudflare-ai-gateway")[0];
+    if (!model) throw new Error("Expected a model");
     expect(await missingGateway.getAuth(model.provider)).toBeUndefined();
 
     const configured = createModels({
@@ -473,6 +476,7 @@ describe("builtin providers", () => {
     });
     configured.setProvider(googleVertexProvider());
     const model = configured.getModels("google-vertex")[0];
+    if (!model) throw new Error("Expected a model");
 
     const result = await configured.getAuth(model.provider);
     expect(result?.auth).toEqual({});
@@ -789,6 +793,8 @@ describe("fauxProvider", () => {
     faux.setResponses([fauxAssistantMessage("hello from faux")]);
 
     const model = models.getModels(faux.provider.id)[0];
+
+    if (!model) throw new Error("Expected a model");
     const result = await models.completeSimple(model, context);
     expect(result.stopReason).toBe("stop");
     expect(result.content).toEqual([{ type: "text", text: "hello from faux" }]);

@@ -329,7 +329,10 @@ describe("Anthropic raw SSE parsing", () => {
 
   it("uses the serving model input transformations from the final stream event", async () => {
     const events = minimalAnthropicEvents.map((event) => ({ ...event }));
-    events[0].data = JSON.stringify({
+    const messageStart = events[0];
+    const messageDelta = events[4];
+    if (!messageStart || !messageDelta) throw new Error("Expected minimal Anthropic events");
+    messageStart.data = JSON.stringify({
       type: "message_start",
       message: {
         id: "msg_transformations",
@@ -344,11 +347,11 @@ describe("Anthropic raw SSE parsing", () => {
         ],
       },
     });
-    const delta = JSON.parse(events[4].data) as Record<string, unknown>;
+    const delta = JSON.parse(messageDelta.data) as Record<string, unknown>;
     delta["input_transformations"] = [
       { type: "thinking_dropped", path: "messages.3.content.0", reason: "model_binding_mismatch" },
     ];
-    events[4].data = JSON.stringify(delta);
+    messageDelta.data = JSON.stringify(delta);
 
     const result = await streamAnthropic(
       getModel("anthropic", "claude-fable-5-1"),

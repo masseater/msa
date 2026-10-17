@@ -193,7 +193,7 @@ describe("openai-completions empty tools handling", () => {
       reasoning_effort?: string;
       store?: boolean;
     };
-    expect(params.messages[0].role).toBe("system");
+    expect(params.messages[0]?.role).toBe("system");
     expect(params.max_tokens).toBe(1234);
     expect(params.max_completion_tokens).toBeUndefined();
     expect(params.reasoning_effort).toBeUndefined();

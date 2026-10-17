@@ -60,7 +60,9 @@ async function captureClientConfig(
   bedrockMock.constructorCalls.length = 0;
   await streamBedrock(model, context, { cacheRetention: "none", ...options }).result();
   expect(bedrockMock.constructorCalls).toHaveLength(1);
-  return bedrockMock.constructorCalls[0];
+  const [config] = bedrockMock.constructorCalls;
+  if (!config) throw new Error("Expected a BedrockRuntimeClient constructor call");
+  return config;
 }
 
 describe("bedrock credential priority", () => {

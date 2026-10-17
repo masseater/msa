@@ -226,10 +226,10 @@ describe("Models with image models", () => {
 
     const result = await models.generateImages(model, context);
     expect(result.stopReason).toBe("stop");
-    expect(calls[0].options?.apiKey).toBe("env-key");
+    expect(calls[0]?.options?.apiKey).toBe("env-key");
 
     await models.generateImages(model, context, { apiKey: "explicit" });
-    expect(calls[1].options?.apiKey).toBe("explicit");
+    expect(calls[1]?.options?.apiKey).toBe("explicit");
   });
 
   it("merges provider-resolved env and applies header transforms", async () => {
@@ -266,13 +266,13 @@ describe("Models with image models", () => {
       transformHeaders: (headers) => ({ ...headers, "x-extra": "2" }),
     });
 
-    expect(calls[0].options?.apiKey).toBe("request-key");
-    expect(calls[0].options?.env).toEqual({
+    expect(calls[0]?.options?.apiKey).toBe("request-key");
+    expect(calls[0]?.options?.env).toEqual({
       PROVIDER_ONLY: "provider",
       REQUEST_ONLY: "request",
       SHARED: "request",
     });
-    expect(calls[0].options?.headers).toEqual({ "x-base": "1", "x-extra": "2" });
+    expect(calls[0]?.options?.headers).toEqual({ "x-base": "1", "x-extra": "2" });
   });
 
   it("returns error results instead of rejecting", async () => {
@@ -438,7 +438,9 @@ describe("Models with image models", () => {
     expect(image?.api).toBe("openrouter-images");
 
     // One credential covers both.
-    expect((await models.getAuth(images[0]))?.auth.apiKey).toBe("or-key");
+    const [firstImage] = images;
+    if (!firstImage) throw new Error("Expected an OpenRouter image model");
+    expect((await models.getAuth(firstImage))?.auth.apiKey).toBe("or-key");
     expect((await models.getAuth(chat!))?.auth.apiKey).toBe("or-key");
     expect(provider.generateImages).toBeDefined();
   });

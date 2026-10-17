@@ -118,7 +118,7 @@ async function captureGoogleHeaders(
   }).result();
 
   expect(googleGenAiMock.constructorCalls).toHaveLength(1);
-  const httpOptions = googleGenAiMock.constructorCalls[0]["httpOptions"] as {
+  const httpOptions = googleGenAiMock.constructorCalls[0]?.["httpOptions"] as {
     headers?: Record<string, string>;
   };
   return httpOptions.headers ?? {};

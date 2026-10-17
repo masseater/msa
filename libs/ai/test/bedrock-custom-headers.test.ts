@@ -104,13 +104,13 @@ describe("bedrock custom headers middleware", () => {
     expect(registrations).toHaveLength(1);
 
     const [reg] = registrations;
-    expect(reg.opts.step).toBe("build");
-    expect(reg.opts.priority).toBe("low");
-    expect(reg.opts.name).toBe(MIDDLEWARE_NAME);
+    expect(reg?.opts.step).toBe("build");
+    expect(reg?.opts.priority).toBe("low");
+    expect(reg?.opts.name).toBe(MIDDLEWARE_NAME);
 
     const nextSpy = vi.fn(async (a: unknown) => a);
     const fakeArgs = { request: { headers: {} as Record<string, string> } };
-    await reg.handler(nextSpy)(fakeArgs);
+    await reg?.handler(nextSpy)(fakeArgs);
 
     expect(fakeArgs.request.headers["x-custom"]).toBe("v");
     expect(nextSpy).toHaveBeenCalledTimes(1);
@@ -143,7 +143,7 @@ describe("bedrock custom headers middleware", () => {
         } as Record<string, string>,
       },
     };
-    await reg.handler(nextSpy)(fakeArgs);
+    await reg?.handler(nextSpy)(fakeArgs);
 
     expect(fakeArgs.request.headers["authorization"]).toBe("real-auth");
     expect(fakeArgs.request.headers["x-amz-date"]).toBe("real-date");
@@ -182,11 +182,11 @@ describe("bedrock custom headers middleware", () => {
     const nextSpy = vi.fn(async (a: unknown) => a);
 
     const argsNoHeaders = { request: {} };
-    await expect(reg.handler(nextSpy)(argsNoHeaders)).resolves.toBeDefined();
+    await expect(reg?.handler(nextSpy)(argsNoHeaders)).resolves.toBeDefined();
     expect(nextSpy).toHaveBeenCalledWith(argsNoHeaders);
 
     const argsUndefinedRequest = { request: undefined };
-    await expect(reg.handler(nextSpy)(argsUndefinedRequest)).resolves.toBeDefined();
+    await expect(reg?.handler(nextSpy)(argsUndefinedRequest)).resolves.toBeDefined();
     expect(nextSpy).toHaveBeenCalledWith(argsUndefinedRequest);
 
     expect(nextSpy).toHaveBeenCalledTimes(2);
@@ -201,11 +201,11 @@ describe("bedrock custom headers middleware", () => {
     expect(registrations).toHaveLength(1);
 
     const [reg] = registrations;
-    expect(reg.opts.step).toBe("build");
+    expect(reg?.opts.step).toBe("build");
 
     const nextSpy = vi.fn(async (a: unknown) => a);
     const fakeArgs = { request: { headers: {} as Record<string, string> } };
-    await reg.handler(nextSpy)(fakeArgs);
+    await reg?.handler(nextSpy)(fakeArgs);
 
     expect(fakeArgs.request.headers["x-custom"]).toBe("v");
   });

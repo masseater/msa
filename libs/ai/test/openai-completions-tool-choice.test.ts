@@ -932,8 +932,8 @@ describe("openai-completions tool_choice", () => {
     expect(toolCallContentIndexes).toEqual([0, 0, 0, 0, 0]);
     expect(response.content).toHaveLength(1);
     const toolCall = response.content[0];
-    expect(toolCall.type).toBe("toolCall");
-    if (toolCall.type !== "toolCall") {
+    expect(toolCall?.type).toBe("toolCall");
+    if (toolCall?.type !== "toolCall") {
       throw new Error("Expected toolCall content");
     }
     expect(toolCall.id).toBe("functions.read:0");
@@ -1145,15 +1145,15 @@ describe("openai-completions tool_choice", () => {
     const grepCall = response.content[3];
     const listCall = response.content[4];
     const writeCall = response.content[5];
-    expect(readCall.type).toBe("toolCall");
-    expect(grepCall.type).toBe("toolCall");
-    expect(listCall.type).toBe("toolCall");
-    expect(writeCall.type).toBe("toolCall");
+    expect(readCall?.type).toBe("toolCall");
+    expect(grepCall?.type).toBe("toolCall");
+    expect(listCall?.type).toBe("toolCall");
+    expect(writeCall?.type).toBe("toolCall");
     if (
-      readCall.type !== "toolCall" ||
-      grepCall.type !== "toolCall" ||
-      listCall.type !== "toolCall" ||
-      writeCall.type !== "toolCall"
+      readCall?.type !== "toolCall" ||
+      grepCall?.type !== "toolCall" ||
+      listCall?.type !== "toolCall" ||
+      writeCall?.type !== "toolCall"
     ) {
       throw new Error("Expected toolCall content");
     }

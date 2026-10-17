@@ -55,7 +55,6 @@ import type {
   ThinkingLevel,
   Tool,
   ToolCall,
-  ToolResultMessage,
 } from "../types.ts";
 import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.ts";
 import { normalizeProviderError } from "../utils/error-body.ts";
@@ -659,7 +658,7 @@ function handleContentBlockDelta(
       const newBlock: Block = { type: "text", text: "", index: contentBlockIndex };
       output.content.push(newBlock);
       index = blocks.length - 1;
-      block = blocks[index];
+      block = newBlock;
       events.push({ type: "text_start", contentIndex: index, partial: output });
     }
     if (block.type === "text") {
@@ -1055,6 +1054,7 @@ function convertMessages(
 
   for (let i = 0; i < transformedMessages.length; i++) {
     const m = transformedMessages[i];
+    if (m === undefined) continue;
 
     switch (m.role) {
       case "user": {
@@ -1177,8 +1177,8 @@ function convertMessages(
 
         // Look ahead for consecutive toolResult messages
         let j = i + 1;
-        while (j < transformedMessages.length && transformedMessages[j].role === "toolResult") {
-          const nextMsg = transformedMessages[j] as ToolResultMessage;
+        let nextMsg = transformedMessages[j];
+        while (nextMsg?.role === "toolResult") {
           toolResults.push({
             toolResult: {
               toolUseId: nextMsg.toolCallId,
@@ -1186,7 +1186,7 @@ function convertMessages(
               status: nextMsg.isError ? ToolResultStatus.ERROR : ToolResultStatus.SUCCESS,
             },
           });
-          j++;
+          nextMsg = transformedMessages[++j];
         }
 
         // Skip the messages we've already processed
@@ -1202,8 +1202,8 @@ function convertMessages(
 
   // Add cache point to the last user message for supported Claude models when caching is enabled
   if (cacheRetention !== "none" && supportsPromptCaching(model, env) && result.length > 0) {
-    const lastMessage = result[result.length - 1];
-    if (lastMessage.role === ConversationRole.USER && lastMessage.content) {
+    const lastMessage = result.at(-1);
+    if (lastMessage?.role === ConversationRole.USER && lastMessage.content) {
       (lastMessage.content as ContentBlock[]).push({
         cachePoint: {
           type: CachePointType.DEFAULT,

@@ -36,7 +36,7 @@ export function repairJson(json: string): string {
   let inString = false;
 
   for (let index = 0; index < json.length; index++) {
-    const char = json[index];
+    const char = json.charAt(index);
 
     if (!inString) {
       repaired += char;

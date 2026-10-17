@@ -167,8 +167,10 @@ describe("TypeSafe System One", () => {
     });
 
     expect(requests[0]).toMatchObject({ authorization: "Bearer request", "x-source": "request" });
+    const [firstRequest] = requests;
+    if (!firstRequest) throw new Error("Expected a classify request");
     expect(
-      Object.keys(requests[0]).filter((name) => name.toLowerCase() === "authorization"),
+      Object.keys(firstRequest).filter((name) => name.toLowerCase() === "authorization"),
     ).toHaveLength(1);
     expect(requests[1]).not.toHaveProperty("authorization");
   });

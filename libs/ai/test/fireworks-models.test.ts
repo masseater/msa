@@ -402,7 +402,8 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
     const request = await captureAnthropicRequest(model, createContext());
 
     const tools = getTools(request.body);
-    const lastTool = tools[tools.length - 1];
+    const lastTool = tools.at(-1);
+    if (!lastTool) throw new Error("Expected a tool definition");
     expect(lastTool["cache_control"]).toBeUndefined();
   });
 
@@ -421,7 +422,8 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
     const request = await captureAnthropicRequest(model, createContext());
 
     const tools = getTools(request.body);
-    const lastTool = tools[tools.length - 1];
+    const lastTool = tools.at(-1);
+    if (!lastTool) throw new Error("Expected a tool definition");
     expect(lastTool["cache_control"]).toBeDefined();
     expect((lastTool["cache_control"] as { type: string }).type).toBe("ephemeral");
   });
@@ -431,6 +433,6 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
     const request = await captureAnthropicRequest(model, createContext());
 
     const tools = getTools(request.body);
-    expect(tools[0]["eager_input_streaming"]).toBe(true);
+    expect(tools[0]?.["eager_input_streaming"]).toBe(true);
   });
 });

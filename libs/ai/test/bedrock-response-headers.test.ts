@@ -57,9 +57,9 @@ describe("bedrock response headers", () => {
     // documents that the header callback still fires before stream consumption.
     expect(result.stopReason).toBe("error");
     expect(responses).toHaveLength(1);
-    expect(responses[0].status).toBe(200);
-    expect(responses[0].headers["x-amzn-requestid"]).toBe("req-123");
-    expect(responses[0].headers["x-bifrost-provider"]).toBe("bedrock");
-    expect(responses[0].headers["x-bifrost-resolved-model"]).toBe(MODEL_ID);
+    expect(responses[0]?.status).toBe(200);
+    expect(responses[0]?.headers["x-amzn-requestid"]).toBe("req-123");
+    expect(responses[0]?.headers["x-bifrost-provider"]).toBe("bedrock");
+    expect(responses[0]?.headers["x-bifrost-resolved-model"]).toBe(MODEL_ID);
   });
 });

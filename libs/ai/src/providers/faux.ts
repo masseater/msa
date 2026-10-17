@@ -393,15 +393,13 @@ async function streamWithDeltas(
 
   stream.push({ type: "start", partial: { ...partial } });
 
-  for (let index = 0; index < message.content.length; index++) {
+  for (const [index, block] of message.content.entries()) {
     if (signal?.aborted) {
       const aborted = createAbortedMessage(partial);
       stream.push({ type: "error", reason: "aborted", error: aborted });
       stream.end(aborted);
       return;
     }
-
-    const block = message.content[index];
 
     if (block.type === "thinking") {
       partial.content = [...partial.content, { type: "thinking", thinking: "" }];
