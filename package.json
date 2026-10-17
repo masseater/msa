@@ -19,8 +19,8 @@
     "check:model-data": "vp run --filter @msa/ai check:model-data",
     "generate:model-catalog": "vp run --filter @msa/ai generate-model-catalog",
     "eval": "vp run --filter @msa/evals eval",
-    "profile:tui": "node scripts/profile-coding-agent-node.mjs --mode tui",
-    "profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",
+    "profile:tui": "node scripts/profile-coding-agent-node.ts --mode tui",
+    "profile:rpc": "node scripts/profile-coding-agent-node.ts --mode rpc",
     "test:scripts": "node --test scripts/*.test.mjs scripts/*.test.ts",
     "test:mcp-conformance": "node apps/coding-agent/test/mcp-conformance/run.ts",
     "prepare": "vp config --no-agent && effect-tsgo patch --oxlint && skills experimental_install --force"
