@@ -2,15 +2,16 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vite-plus";
 
+import { onGitHubActions } from "../../vite.config.ts";
+
 const telemetrySrcIndex = fileURLToPath(new URL("../telemetry/src/index.ts", import.meta.url));
 
 export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    // 30 seconds for API calls
     testTimeout: 30000,
-    reporters: process.env.GITHUB_ACTIONS ? ["dot", "github-actions"] : ["dot"],
+    reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
     silent: "passed-only",
   },
   resolve: {

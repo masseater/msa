@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 
 import { presets as effectPresets } from "@effect/tsgo/oxlint-presets";
+import { Config, Effect } from "effect";
 import { defineConfig } from "vite-plus";
 
 import { generated, lintPlugins, restrictedImports, strictCategoryRules } from "./lint.config.ts";
@@ -64,6 +65,10 @@ export const workspaceSourcePaths = {
   codingAgentIndex: fileURLToPath(new URL("./apps/coding-agent/src/index.ts", import.meta.url)),
   tuiIndex: fileURLToPath(new URL("./libs/tui/src/index.ts", import.meta.url)),
 } as const;
+
+export const onGitHubActions = Effect.runSync(
+  Config.withDefault(Config.Boolean("GITHUB_ACTIONS"), false),
+);
 
 export const testBaseConfig = {
   resolve: {
