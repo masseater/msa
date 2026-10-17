@@ -27,7 +27,8 @@ function exampleTool(name: string, description: string): AppTool {
     name,
     description,
     parameters: Type.Object({ path: Type.String() }),
-    execute: async (args) => ({ output: [{ type: "text", text: `${name} ${args.path}` }] }),
+    execute: (args) =>
+      Promise.resolve({ output: [{ type: "text", text: `${name} ${args.path}` }] }),
   });
   return { ...tool, snippet: `Use ${name} for files.` };
 }

@@ -6,18 +6,22 @@ import { describe, expect, it } from "vite-plus/test";
 
 const sourceRoot = fileURLToPath(new URL("../src", import.meta.url));
 
-async function sourceGraph(entry: string): Promise<Set<string>> {
-  const visited = new Set<string>();
-  const pending = [resolve(sourceRoot, entry)];
-  while (pending.length > 0) {
-    const path = pending.pop()!;
-    if (visited.has(path)) continue;
+async function sourceGraph(
+  entry: string,
+  visited = new Set<string>(),
+  pending = [resolve(sourceRoot, entry)],
+): Promise<Set<string>> {
+  const path = pending.pop();
+  if (path === undefined) return visited;
+  if (!visited.has(path)) {
     visited.add(path);
     const source = await readFile(path, "utf8");
-    expect(source, `${path} imports a Node built-in`).not.toMatch(/(?:from\s+|import\s*)["']node:/);
+    expect(source, `${path} imports a Node built-in`).not.toMatch(
+      /(?:from\s+|import\s*)["']node:/u,
+    );
     // Type-only imports are erased and load nothing.
     for (const match of source.matchAll(
-      /\b(import|export)(\s+type\b)?[^;"']*?(?:from\s*)?["'](\.[^"']+)["']/g,
+      /\b(import|export)(\s+type\b)?[^;"']*?(?:from\s*)?["'](\.[^"']+)["']/gu,
     )) {
       const [, , typeOnly, specifier] = match;
       if (typeOnly === undefined && specifier !== undefined) {
@@ -25,7 +29,7 @@ async function sourceGraph(entry: string): Promise<Set<string>> {
       }
     }
   }
-  return visited;
+  return sourceGraph(entry, visited, pending);
 }
 
 describe("durable storage runtime boundaries", () => {

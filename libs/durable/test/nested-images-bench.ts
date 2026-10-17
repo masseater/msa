@@ -10,39 +10,30 @@
  *
  *   node --conditions=source --experimental-strip-types --expose-gc test/nested-images-bench.ts [count]
  */
-import { randomBytes } from "node:crypto";
-import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-import type { ImageContent } from "@msa/ai";
 import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
 import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
-import { Type } from "typebox";
 
 import {
-  createRegistry,
-  defineExtension,
-  defineTool,
   Harness,
-  type JsonObject,
-  NestedCallDoc,
   type Storage,
   type StorageWrite,
-  type TaskId,
   ToolResultEntry,
   type ToolTaskInput,
 } from "../src/index.ts";
-import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import {
+  directorySize,
+  heapAfterGc,
+  meterCommits,
+  noWrites,
+  openBenchStorage,
+  requireGc,
+  type Written,
+} from "./bench-support.ts";
+import { registryFor, type Scenario } from "./nested-images-bench-tools.ts";
+import { makeTempDir, removeDir } from "./temp-support.ts";
 
-type Backend = "sqlite" | "jsonl";
-type Variant = "inline" | "reference";
-type Scenario = { backend: Backend; variant: Variant; count: number; bytes: number };
-/** Hooks the tools call: a heap sample, and the stored size measured before `script` returns. */
-type Probe = { sample: () => void; beforeReturn: () => Promise<void> };
-type Written = Record<StorageWrite["type"], number>;
 type Result = {
   commits: number;
   ms: number;
@@ -61,221 +52,150 @@ type Result = {
   largestTask: number;
 };
 
-const gc = (globalThis as { gc?: () => void }).gc;
-if (gc === undefined) throw new Error("Run with --expose-gc");
+requireGc();
 
-function heapAfterGc(): number {
-  gc!();
-  return process.memoryUsage().heapUsed;
+// What a scenario samples while it runs: the heap peak, the stored size before `script` returns, and every commit.
+type Meter = {
+  peakHeap: number;
+  storedLive: number;
+  commits: number;
+  readonly written: Written;
+  readonly sample: () => void;
+};
+
+function newMeter(): Meter {
+  const meter: Meter = {
+    peakHeap: 0,
+    storedLive: 0,
+    commits: 0,
+    written: noWrites(),
+    sample: () => {
+      meter.peakHeap = Math.max(meter.peakHeap, process.memoryUsage().heapUsed);
+    },
+  };
+  return meter;
 }
 
-async function directorySize(path: string): Promise<number> {
-  let total = 0;
-  for (const entry of await readdir(path, { withFileTypes: true })) {
-    const full = join(path, entry.name);
-    total += entry.isDirectory() ? await directorySize(full) : (await stat(full)).size;
+function scenarioModels(scenario: Scenario, directory: string, meter: Meter) {
+  const faux = fauxProvider();
+  const models = createModels();
+  models.setProvider(faux.provider);
+  const registry = registryFor(scenario, {
+    sample: meter.sample,
+    beforeReturn: async () => {
+      meter.storedLive = await directorySize(directory);
+    },
+  });
+  return { faux, models, registry };
+}
+
+async function openMetered(
+  scenario: Scenario,
+  directory: string,
+  meter: Meter,
+  { faux, models, registry }: ReturnType<typeof scenarioModels>,
+) {
+  const storage = await openBenchStorage(scenario.backend, directory);
+  // SQLite commits synchronously, which can starve the timer; sample at each commit too.
+  meterCommits(storage, meter, meter.sample);
+  const harness = await Harness.open(storage, { models, registry }, context);
+  const root = await harness.root(context, {
+    agent: { model: { provider: "faux", modelId: "faux-1" } },
+  });
+  faux.setResponses([
+    fauxAssistantMessage([fauxToolCall("script", { count: scenario.count }, { id: "s" })], {
+      stopReason: "toolUse",
+    }),
+    fauxAssistantMessage([fauxText("done")]),
+  ]);
+  return { harness, root };
+}
+
+async function runScript(root: Awaited<ReturnType<typeof openMetered>>["root"]): Promise<void> {
+  const settled = await (
+    await root.submit({ type: "input", content: "run" }, context)
+  ).wait(context);
+  if (settled.status !== "done") throw new Error(`run: ${settled.status}`);
+  // `done` only says the model answered; the script's result says whether it ran through.
+  const latest = (await root.entries({}, 10, undefined, context)).items;
+  const result = latest.find((entry) => ToolResultEntry.is(entry))?.model?.[0];
+  if (result?.role !== "toolResult" || result.isError) throw new Error("run: the script failed");
+}
+
+function writtenSince(written: Written, before: Written): Written {
+  const delta = noWrites();
+  for (const type of Object.keys(delta) as StorageWrite["type"][]) {
+    delta[type] = written[type] - before[type];
   }
-  return total;
+  return delta;
 }
 
-async function open(backend: Backend, directory: string): Promise<Storage> {
-  return backend === "sqlite"
-    ? openNodeSqliteStorage(join(directory, "session.sqlite"))
-    : openNodeJsonlStorage(directory, context);
+async function reopenAndScan(
+  scenario: Scenario,
+  directory: string,
+  { models, registry }: ReturnType<typeof scenarioModels>,
+  baseHeap: number,
+) {
+  const reopenedStorage = await openBenchStorage(scenario.backend, directory);
+  const reopened = await Harness.open(reopenedStorage, { models, registry }, context);
+  const reopenedHeap = heapAfterGc() - baseHeap;
+  const storedReopened = await directorySize(directory);
+  const tasks = { nestedTasks: 0, largestTask: 0 };
+  const scan = async (cursor?: Parameters<Storage["scanTasks"]>[2]): Promise<void> => {
+    const page = await reopenedStorage.scanTasks({ kind: "msa.tool" }, 50, cursor, context);
+    for (const record of page.items) {
+      if ((record.input as ToolTaskInput).kind === "nested") tasks.nestedTasks++;
+      tasks.largestTask = Math.max(tasks.largestTask, JSON.stringify(record).length);
+    }
+    if (page.next !== undefined) await scan(page.next);
+  };
+  await scan();
+  await reopened.close(context);
+  return { reopenedHeap, storedReopened, ...tasks };
 }
 
-function noWrites(): Written {
+async function measureScenario(scenario: Scenario, directory: string): Promise<Result> {
+  const meter = newMeter();
+  const setup = scenarioModels(scenario, directory, meter);
+  const baseHeap = heapAfterGc();
+
+  const { harness, root } = await openMetered(scenario, directory, meter, setup);
+  const before = { commits: meter.commits, written: { ...meter.written } };
+  meter.peakHeap = 0;
+  const sampler = setInterval(meter.sample, 5);
+  const started = performance.now();
+  await runScript(root);
+  const ms = Math.round(performance.now() - started);
+  clearInterval(sampler);
+  const settledHeap = heapAfterGc() - baseHeap;
+  await harness.waitForIdle(context);
+  const idleHeap = heapAfterGc() - baseHeap;
+  const delta = writtenSince(meter.written, before.written);
+  const storedRun = await directorySize(directory);
+  await harness.close(context);
+  const storedClosed = await directorySize(directory);
+
+  const reopened = await reopenAndScan(scenario, directory, setup, baseHeap);
   return {
-    conversation: 0,
-    entry: 0,
-    task: 0,
-    submission: 0,
-    "document.create": 0,
-    "document.copy": 0,
-    "document.change": 0,
-    "document.retire": 0,
+    commits: meter.commits - before.commits,
+    ms,
+    written: delta,
+    storedLive: meter.storedLive,
+    storedRun,
+    storedClosed,
+    peakHeap: meter.peakHeap - baseHeap,
+    settledHeap,
+    idleHeap,
+    ...reopened,
   };
 }
 
-const ImageArgument = Type.Object({
-  type: Type.Literal("image"),
-  mimeType: Type.String(),
-  data: Type.Optional(Type.String()),
-  source: Type.Optional(Type.Object({ taskId: Type.Number() })),
-});
-
-function registryFor(scenario: Scenario, probe: Probe) {
-  const registry = createRegistry();
-  const readImage = defineTool({
-    name: "read_image",
-    description: "Read an image",
-    parameters: Type.Object({ n: Type.Number() }),
-    // One image, so programs get it as an `ImageContent`. Unique per call: base64 of random bytes.
-    execute: async () => ({
-      output: [
-        {
-          type: "image",
-          data: randomBytes((scenario.bytes / 4) * 3).toString("base64"),
-          mimeType: "image/png",
-        },
-      ],
-    }),
-  });
-  const classify = defineTool({
-    name: "classify",
-    description: "Classify images",
-    parameters: Type.Object({ images: Type.Array(ImageArgument) }),
-    execute: async (args, api, callContext) => {
-      for (const image of args.images) {
-        let data = image.data;
-        if (image.source !== undefined) {
-          // The caller is the nested call's `parent`; its `NestedCallDoc` holds the referenced result.
-          const input = (await api.getTask(api.taskId, callContext))?.input as
-            | ToolTaskInput
-            | undefined;
-          if (input?.kind !== "nested")
-            throw new Error("classify resolves references only as a nested call");
-          // Results are keyed by call key, which the referenced call's input carries.
-          const source = (await api.getTask(image.source.taskId as TaskId, callContext))
-            ?.input as ToolTaskInput;
-          if (source.kind !== "nested") throw new Error("A reference names a nested call");
-          const stored = await api.snapshot(NestedCallDoc, input.parent, source.key, callContext);
-          const block = stored?.result?.structuredOutput as ImageContent | undefined;
-          data = block?.type === "image" ? block.data : undefined;
-        }
-        if (data?.length !== scenario.bytes)
-          throw new Error(`Image has ${data?.length} characters`);
-      }
-      return { output: [{ type: "text", text: "ok" }] };
-    },
-  });
-  const script = defineTool({
-    name: "script",
-    description: "Read and classify images",
-    parameters: Type.Object({ count: Type.Number() }),
-    callers: ["model"],
-    execute: async (args, api, callContext) => {
-      for (let n = 0; n < args.count; n++) {
-        const key = `read${n}`;
-        const read = await api.executeTool("read_image", { n }, callContext, { key });
-        const image = read.structuredOutput as unknown as ImageContent;
-        const argument: JsonObject =
-          scenario.variant === "inline"
-            ? { type: "image", data: image.data, mimeType: image.mimeType }
-            : { type: "image", source: { taskId: read.taskId }, mimeType: image.mimeType };
-        const classified = await api.executeTool("classify", { images: [argument] }, callContext, {
-          key: `classify${n}`,
-        });
-        if (classified.isError)
-          throw new Error(`classify ${n} failed: ${JSON.stringify(classified.diagnostics)}`);
-        probe.sample();
-      }
-      await probe.beforeReturn();
-      return { output: [{ type: "text", text: `classified ${args.count}` }] };
-    },
-  });
-  registry.install(defineExtension({ name: "bench", tools: [readImage, classify, script] }));
-  return registry;
-}
-
 async function runScenario(scenario: Scenario): Promise<Result> {
-  const directory = await mkdtemp(join(tmpdir(), "msa-durable-images-bench-"));
+  const directory = await makeTempDir("msa-durable-images-bench-");
   try {
-    const faux = fauxProvider();
-    const models = createModels();
-    models.setProvider(faux.provider);
-    let peakHeap = 0;
-    let storedLive = 0;
-    const sample = () => {
-      peakHeap = Math.max(peakHeap, process.memoryUsage().heapUsed);
-    };
-    const registry = registryFor(scenario, {
-      sample,
-      beforeReturn: async () => {
-        storedLive = await directorySize(directory);
-      },
-    });
-    const baseHeap = heapAfterGc();
-
-    const storage = await open(scenario.backend, directory);
-    let commits = 0;
-    const written = noWrites();
-    const commit = storage.commit.bind(storage);
-    storage.commit = (writes, commitContext) => {
-      commits++;
-      // SQLite commits synchronously, which can starve the timer; sample here too.
-      sample();
-      for (const write of writes) written[write.type] += JSON.stringify(write).length;
-      return commit(writes, commitContext);
-    };
-    const harness = await Harness.open(storage, { models, registry }, context);
-    const root = await harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" } },
-    });
-    faux.setResponses([
-      fauxAssistantMessage([fauxToolCall("script", { count: scenario.count }, { id: "s" })], {
-        stopReason: "toolUse",
-      }),
-      fauxAssistantMessage([fauxText("done")]),
-    ]);
-    const before = { commits, written: { ...written } };
-    peakHeap = 0;
-    const sampler = setInterval(sample, 5);
-    const started = performance.now();
-    const settled = await (
-      await root.submit({ type: "input", content: "run" }, context)
-    ).wait(context);
-    if (settled.status !== "done") throw new Error(`run: ${settled.status}`);
-    // `done` only says the model answered; the script's result says whether it ran through.
-    const latest = (await root.entries({}, 10, undefined, context)).items;
-    const result = latest.find((entry) => ToolResultEntry.is(entry))?.model?.[0];
-    if (result?.role !== "toolResult" || result.isError) throw new Error("run: the script failed");
-    const ms = Math.round(performance.now() - started);
-    clearInterval(sampler);
-    const settledHeap = heapAfterGc() - baseHeap;
-    await harness.waitForIdle(context);
-    const idleHeap = heapAfterGc() - baseHeap;
-    const delta = noWrites();
-    for (const type of Object.keys(delta) as StorageWrite["type"][]) {
-      delta[type] = written[type] - before.written[type];
-    }
-    const storedRun = await directorySize(directory);
-    await harness.close(context);
-    const storedClosed = await directorySize(directory);
-
-    const reopenedStorage = await open(scenario.backend, directory);
-    const reopened = await Harness.open(reopenedStorage, { models, registry }, context);
-    const reopenedHeap = heapAfterGc() - baseHeap;
-    const storedReopened = await directorySize(directory);
-    let nestedTasks = 0;
-    let largestTask = 0;
-    let cursor: Parameters<Storage["scanTasks"]>[2];
-    do {
-      const page = await reopenedStorage.scanTasks({ kind: "msa.tool" }, 50, cursor, context);
-      for (const record of page.items) {
-        if ((record.input as ToolTaskInput).kind === "nested") nestedTasks++;
-        largestTask = Math.max(largestTask, JSON.stringify(record).length);
-      }
-      cursor = page.next;
-    } while (cursor !== undefined);
-    await reopened.close(context);
-    return {
-      commits: commits - before.commits,
-      ms,
-      written: delta,
-      storedLive,
-      storedRun,
-      storedClosed,
-      storedReopened,
-      peakHeap: peakHeap - baseHeap,
-      settledHeap,
-      idleHeap,
-      reopenedHeap,
-      nestedTasks,
-      largestTask,
-    };
+    return await measureScenario(scenario, directory);
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await removeDir(directory);
   }
 }
 
@@ -296,9 +216,9 @@ async function main(): Promise<void> {
   console.log(
     "backend | variant   | count | commits, ms | written: all (task / doc create / doc change / entry) | stored: live / run / closed / reopened | heap: peak; settled / idle / reopened | nested tasks, largest task",
   );
-  for (const count of counts) {
-    for (const backend of ["sqlite", "jsonl"] as const) {
-      for (const variant of ["inline", "reference"] as const) {
+  for await (const count of counts) {
+    for await (const backend of ["sqlite", "jsonl"] as const) {
+      for await (const variant of ["inline", "reference"] as const) {
         const result = await runScenario({ backend, variant, count, bytes });
         const all = Object.values(result.written).reduce((sum, value) => sum + value, 0);
         const written = result.written;

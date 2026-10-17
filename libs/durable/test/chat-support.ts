@@ -48,7 +48,7 @@ export function chatSetup(options: RegisterFauxProviderOptions = {}): ChatSetup 
   };
 }
 
-/** Open a Harness over `storage` and return its root, configured with the faux model on first creation. */
+// Open a Harness over `storage` and return its root, configured with the faux model on first creation.
 export async function openChat(
   storage: Storage,
   setup: ChatSetup,
@@ -78,7 +78,7 @@ export async function openChat(
   return { harness, root };
 }
 
-/** Raw entries of a conversation, oldest first. */
+// Raw entries of a conversation, oldest first.
 export async function allEntries(
   conversation: Conversation,
   callContext: Context = context,
@@ -87,7 +87,7 @@ export async function allEntries(
   return [...page.items].reverse();
 }
 
-/** Text of the first text content of a message. */
+// Text of the first text content of a message.
 export function textOf(message: Message | undefined): string | undefined {
   if (message === undefined) return undefined;
   if (message.role === "system") return undefined;
@@ -96,22 +96,25 @@ export function textOf(message: Message | undefined): string | undefined {
   return text?.type === "text" ? text.text : undefined;
 }
 
-/** Poll `check` in real time until it holds; for waits that span throttle windows and timers. */
+// Poll `check` in real time until it holds; for waits that span throttle windows and timers.
 export async function waitFor(
   check: () => boolean | Promise<boolean>,
   timeoutMs = 5000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
-  while (!(await check())) {
+  const poll = async (): Promise<void> => {
+    if (await check()) return;
     if (Date.now() > deadline) throw new Error("Condition was not reached");
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
+    await new Promise((resolve) => {
+      setTimeout(resolve, 5);
+    });
+    await poll();
+  };
+  await poll();
 }
 
-/**
- * Faux response that never answers; the run stays busy until its generation is cancelled. `reached` resolves once the
- * request was sent, after the generation's preparation and request commits.
- */
+// Faux response that never answers; the run stays busy until its generation is cancelled. `reached` resolves once the
+// request was sent, after the generation's preparation and request commits.
 export function unanswered(): { readonly step: FauxResponseStep; readonly reached: Promise<void> } {
   let reach!: () => void;
   const reached = new Promise<void>((resolve) => {
@@ -126,7 +129,7 @@ export function unanswered(): { readonly step: FauxResponseStep; readonly reache
   return { step, reached };
 }
 
-/** The installed tools with these names, as `configure()` takes them. */
+// The installed tools with these names, as `configure()` takes them.
 export function toolsNamed(setup: ChatSetup, ...names: string[]): ToolRegistration[] {
   const installed = setup.registry.snapshot().tools();
   return names.map((name) => {

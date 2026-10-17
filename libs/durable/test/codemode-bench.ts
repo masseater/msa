@@ -5,8 +5,6 @@
  *
  *   node --conditions=source --experimental-strip-types test/codemode-bench.ts [N,...]
  */
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createModels } from "@msa/ai/models";
@@ -18,6 +16,7 @@ import { Type } from "typebox";
 import { createCodemodeTool } from "../src/codemode/codemode.ts";
 import { createRegistry, defineExtension, defineTool, Harness } from "../src/index.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import { makeTempDir, removeDir } from "./temp-support.ts";
 
 type Shape = "sequential" | "parallel";
 
@@ -25,7 +24,7 @@ const echo = defineTool({
   name: "echo",
   description: "echo",
   parameters: Type.Object({ i: Type.Number() }),
-  execute: async (args) => ({ output: [{ type: "text", text: String(args.i) }] }),
+  execute: (args) => Promise.resolve({ output: [{ type: "text", text: String(args.i) }] }),
 });
 
 const plain = defineTool({
@@ -35,7 +34,8 @@ const plain = defineTool({
   replay: "safe",
   execute: async (args, api, callContext) => {
     if (args.shape === "sequential") {
-      for (let i = 0; i < args.n; i++) await api.executeTool("echo", { i }, callContext);
+      for await (const i of Array.from({ length: args.n }, (_, i) => i))
+        await api.executeTool("echo", { i }, callContext);
     } else {
       await Promise.all(
         Array.from({ length: args.n }, (_, i) => api.executeTool("echo", { i }, callContext)),
@@ -50,7 +50,7 @@ async function run(
   shape: Shape,
   n: number,
 ): Promise<{ ms: number; commits: number }> {
-  const directory = await mkdtemp(join(tmpdir(), "msa-codemode-bench-"));
+  const directory = await makeTempDir("msa-codemode-bench-");
   try {
     const faux = fauxProvider();
     const models = createModels();
@@ -88,13 +88,13 @@ async function run(
     await sandbox.close();
     return { ms, commits };
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await removeDir(directory);
   }
 }
 
 const sizes = (process.argv[2] ?? "100,1000").split(",").map(Number);
-for (const shape of ["sequential", "parallel"] as const) {
-  for (const n of sizes) {
+for await (const shape of ["sequential", "parallel"] as const) {
+  for await (const n of sizes) {
     const plainRun = await run("plain", shape, n);
     const codemodeRun = await run("codemode", shape, n);
     const per = (value: number) => (value / n).toFixed(2);

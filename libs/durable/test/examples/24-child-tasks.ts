@@ -74,7 +74,7 @@ const Checkout = defineTask<{ cards: string[] }, CheckoutState, string>({
     pay: async (task, runtime, taskContext) => {
       await runtime.commit(async (tx) => {
         const payments: TaskId<PaymentResult>[] = [];
-        for (const card of task.input.cards) {
+        for await (const card of task.input.cards) {
           payments.push(
             await tx.createTask(
               Payment,
@@ -127,7 +127,7 @@ const open = async () =>
     { models: createModels(), registry },
     context,
   );
-/** Print the live tasks as a tree along their owner edges. */
+// Print the live tasks as a tree along their owner edges.
 function printGraph(graph: TaskGraph): void {
   const nodes = Object.values(graph.tasks);
   const print = (node: TaskGraphNode, depth: number): void => {
@@ -155,7 +155,9 @@ console.log(`  checkout: ${(await harness.waitForTask(id, context)).state.outcom
 console.log("The customer cancels:");
 id = await checkout(root, ["visa-5", "visa-6", "visa-7", "visa-8"]);
 harness.resume();
-await new Promise((resolve) => setTimeout(resolve, 20));
+await new Promise((resolve) => {
+  setTimeout(resolve, 20);
+});
 const graph = await harness.taskGraph(context);
 printGraph(graph.value);
 graph.dispose();
@@ -164,10 +166,12 @@ console.log(`  checkout: ${(await harness.waitForTask(id, context)).state.outcom
 
 console.log("The process stops while the payments run, and a new one continues:");
 id = await checkout(root, ["visa-9", "visa-10", "visa-11", "visa-12"]);
-await new Promise((resolve) => setTimeout(resolve, 20));
+await new Promise((resolve) => {
+  setTimeout(resolve, 20);
+});
 await harness.close(context);
 harness = await open();
-root = await harness.root(context);
+await harness.root(context);
 console.log(`  checkout: ${(await harness.waitForTask(id, context)).state.outcome.status}`);
 
 await harness.close(context);

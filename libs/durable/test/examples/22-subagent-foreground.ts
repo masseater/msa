@@ -93,9 +93,7 @@ const Subagent: Extension = defineExtension({
 
 const models = createModels();
 let model = { provider: "openai", modelId: "gpt-6-sol" };
-if (process.env["OPENAI_API_KEY"] !== undefined) {
-  models.setProvider(openaiProvider());
-} else {
+if (process.env["OPENAI_API_KEY"] === undefined) {
   // The parent delegates, the child answers, and the parent reports.
   const faux = fauxProvider();
   models.setProvider(faux.provider);
@@ -110,6 +108,8 @@ if (process.env["OPENAI_API_KEY"] !== undefined) {
     fauxAssistantMessage([fauxText("2, 3, and 5.")]),
     fauxAssistantMessage([fauxText("The subagent says: 2, 3, and 5.")]),
   ] satisfies FauxResponseStep[]);
+} else {
+  models.setProvider(openaiProvider());
 }
 const registry = createRegistry();
 registry.install(Subagent);
@@ -132,7 +132,7 @@ const attach = async (id: ConversationId, indent: string): Promise<void> => {
   attached.add(id);
   const stream = await watchEvents(harness, id, context);
   stream.start(async (events) => {
-    for (const event of events) {
+    for await (const event of events) {
       print(indent, event);
       if (event.type !== "tool_execution_update") continue;
       const child = (event.details as { conversationId?: ConversationId } | undefined)
@@ -153,5 +153,7 @@ const submission = await root.submit(
 await submission.wait(context);
 await harness.waitForIdle(context);
 // Event callbacks run after their commit; let the last ones print.
-await new Promise((resolve) => setTimeout(resolve, 0));
+await new Promise((resolve) => {
+  setTimeout(resolve, 0);
+});
 await harness.close(context);

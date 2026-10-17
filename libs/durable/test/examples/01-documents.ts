@@ -17,7 +17,8 @@ const Notes = defineDoc<{ text: string }>({
   version: 1,
   scope: "conversation",
   history: "rewindable",
-  fork: "asOf", // a fork starts with the value these notes had at the fork entry
+  // a fork starts with the value these notes had at the fork entry
+  fork: "asOf",
   initial: () => ({ text: "" }),
 });
 

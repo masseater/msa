@@ -46,9 +46,11 @@ if (process.env["OPENAI_API_KEY"] === undefined) {
     process.stdout.write(text.slice(printed.length));
     printed = text;
   };
-  liveWatch.start(async (value) => {
+  liveWatch.start((value) => {
     const block = value?.generation?.message?.content.find((content) => content.type === "text");
     if (block?.type === "text") printText(block.text);
+
+    return Promise.resolve();
   });
   harness.resume();
   process.stdout.write("answer: ");

@@ -25,7 +25,8 @@ const read = defineTool({
   name: "read",
   description: "Read a file",
   parameters: Type.Object({ path: Type.String() }),
-  execute: async (args) => ({ output: [{ type: "text", text: `contents of ${args.path}` }] }),
+  execute: (args) =>
+    Promise.resolve({ output: [{ type: "text", text: `contents of ${args.path}` }] }),
 });
 const Files = defineExtension({ name: "files", tools: [read] });
 const registry = createRegistry();

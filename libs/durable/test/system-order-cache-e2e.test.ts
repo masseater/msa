@@ -47,16 +47,16 @@ const first = defineTool({
   name: "probe_first",
   description: "Unused probe tool.",
   parameters: Parameters,
-  execute: async () => ({ output: [] }),
+  execute: () => Promise.resolve({ output: [] }),
 });
 const second = defineTool({
   name: "probe_second",
   description: "Unused probe tool added on the second turn.",
   parameters: Parameters,
-  execute: async () => ({ output: [] }),
+  execute: () => Promise.resolve({ output: [] }),
 });
 
-/** Puts the leading system message back after the user messages before it: the request order before the fix. */
+// Puts the leading system message back after the user messages before it: the request order before the fix.
 function committedOrder(messages: readonly Message[]): Message[] {
   if (messages[0]?.role !== "system") return [...messages];
   const [system, ...rest] = messages;
@@ -65,10 +65,10 @@ function committedOrder(messages: readonly Message[]): Message[] {
   return [...rest.slice(0, at), system!, ...rest.slice(at)];
 }
 
-/** Share of the prompt the second turn read from cache after adding a tool. */
-async function cacheReadAfterToolChange(token: string, legacyOrder: boolean): Promise<number> {
+// Built-in models that stream Anthropic requests with `token`.
+function anthropicModels(token: string): Models {
   const base = builtinModels();
-  const models = new Proxy(base, {
+  return new Proxy(base, {
     get(target, property) {
       if (property === "streamSimple") {
         return (
@@ -85,6 +85,10 @@ async function cacheReadAfterToolChange(token: string, legacyOrder: boolean): Pr
       return typeof value === "function" ? value.bind(target) : value;
     },
   }) as Models;
+}
+
+// The probe tools, and a hook restoring the committed request order.
+function probeRegistry() {
   const registry = createRegistry();
   const probe = defineExtension({ name: "probe", tools: [first, second] });
   const legacy = defineExtension({
@@ -97,6 +101,13 @@ async function cacheReadAfterToolChange(token: string, legacyOrder: boolean): Pr
   });
   registry.install(probe);
   registry.install(legacy);
+  return { registry, probe, legacy };
+}
+
+// Share of the prompt the second turn read from cache after adding a tool.
+async function cacheReadAfterToolChange(token: string, legacyOrder: boolean): Promise<number> {
+  const models = anthropicModels(token);
+  const { registry, probe, legacy } = probeRegistry();
   const harness = await Harness.open(
     new MemoryStorage(),
     { models, registry, settings: { compaction: { enabled: false } } },

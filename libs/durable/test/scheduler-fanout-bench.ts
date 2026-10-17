@@ -19,7 +19,7 @@ import {
 } from "../src/index.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";
 
-async function run(calls: number): Promise<{ ms: number; commits: number }> {
+function fanModels() {
   const faux = fauxProvider();
   const models = createModels();
   models.setProvider(faux.provider);
@@ -28,7 +28,7 @@ async function run(calls: number): Promise<{ ms: number; commits: number }> {
     name: "leaf",
     description: "Return at once",
     parameters: Type.Object({ n: Type.Number() }),
-    execute: async () => ({ output: [{ type: "text", text: "ok" }] }),
+    execute: () => Promise.resolve({ output: [{ type: "text", text: "ok" }] }),
   });
   const fan = defineTool({
     name: "fan",
@@ -45,6 +45,11 @@ async function run(calls: number): Promise<{ ms: number; commits: number }> {
     },
   });
   registry.install(defineExtension({ name: "bench", tools: [leaf, fan] }));
+  return { faux, models, registry };
+}
+
+async function run(calls: number): Promise<{ ms: number; commits: number }> {
+  const { faux, models, registry } = fanModels();
   const storage = new MemoryStorage();
   let commits = 0;
   const commit = storage.commit.bind(storage);
@@ -79,7 +84,7 @@ async function run(calls: number): Promise<{ ms: number; commits: number }> {
 
 const sizes = process.argv.slice(2).map(Number);
 console.log("calls | ms     | commits | ms per call");
-for (const calls of sizes.length > 0 ? sizes : [250, 500, 1000, 2000, 4000]) {
+for await (const calls of sizes.length > 0 ? sizes : [250, 500, 1000, 2000, 4000]) {
   const { ms, commits } = await run(calls);
   console.log(
     `${String(calls).padEnd(5)} | ${String(ms).padEnd(6)} | ${String(commits).padEnd(7)} | ${(ms / calls).toFixed(2)}`,

@@ -67,7 +67,7 @@ export class ControlledStorage extends MemoryStorage {
     this.#commitFailure = error;
   }
 
-  /** Reopen after `close()`, as a fresh process would reopen the same database, keeping every committed record. */
+  // Reopen after `close()`, as a fresh process would reopen the same database, keeping every committed record.
   reopen(): this {
     (this as unknown as { closed: boolean }).closed = false;
     return this;
@@ -119,7 +119,7 @@ export class ControlledStorage extends MemoryStorage {
   }
 }
 
-/** Session kernel plus its controlled storage and every committed publication. */
+// Session kernel plus its controlled storage and every committed publication.
 export function openTestSession(): {
   readonly storage: ControlledStorage;
   readonly session: SessionImpl;
@@ -153,15 +153,19 @@ export function documentCopyChanges(
   );
 }
 
-/** Create one conversation and return its ID. */
-export async function createConversation(session: SessionImpl): Promise<ConversationId> {
-  return session.commit(
-    async (tx) => (await tx.createConversation({ ownership: { kind: "ownerless" } })).id,
-    context,
+// Create one conversation and return its ID.
+export function createConversation(session: SessionImpl): Promise<ConversationId> {
+  return Promise.resolve(
+    session.commit(
+      async (tx) => (await tx.createConversation({ ownership: { kind: "ownerless" } })).id,
+      context,
+    ),
   );
 }
 
-/** Resolve after pending microtasks and one macrotask turn. */
+// Resolve after pending microtasks and one macrotask turn.
 export function flush(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
 }

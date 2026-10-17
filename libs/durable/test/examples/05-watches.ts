@@ -28,9 +28,11 @@ const notesWatch = await session.watchDoc(Notes, chat.id, context);
 if (notesWatch === undefined) throw new Error("notes are absent");
 console.log("watch baseline:", notesWatch.value);
 const delivered = new Promise<void>((resolve) => {
-  notesWatch.start(async (value, _ops, _deliveryContext) => {
+  notesWatch.start((value, _ops, _deliveryContext) => {
     console.log("watch update:", value);
     resolve();
+
+    return Promise.resolve();
   });
 });
 await session.commit(async (tx) => {

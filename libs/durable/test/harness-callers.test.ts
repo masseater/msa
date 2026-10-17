@@ -18,7 +18,7 @@ function tool(name: string, extra: Partial<ToolRegistration> = {}): ToolRegistra
     name,
     description: name,
     parameters: Type.Object({}),
-    execute: async () => ({ output: [{ type: "text", text: `${name} ran` }] }),
+    execute: () => Promise.resolve({ output: [{ type: "text", text: `${name} ran` }] }),
     ...extra,
   });
 }
@@ -29,7 +29,7 @@ function call(name: string, id = "c1"): AssistantMessage {
   return fauxAssistantMessage([fauxToolCall(name, {}, { id })], { stopReason: "toolUse" });
 }
 
-/** A tool that calls each of `names` as a nested call and records what it got back. */
+// A tool that calls each of `names` as a nested call and records what it got back.
 function prober(names: readonly string[]) {
   const received = new Map<string, NestedToolExecutionResult>();
   const registration = defineTool({
@@ -37,7 +37,8 @@ function prober(names: readonly string[]) {
     description: "probe",
     parameters: Type.Object({}),
     execute: async (_args, api, callContext) => {
-      for (const name of names) received.set(name, await api.executeTool(name, {}, callContext));
+      for await (const name of names)
+        received.set(name, await api.executeTool(name, {}, callContext));
       return {};
     },
   });
@@ -52,10 +53,10 @@ async function callable(root: Conversation): Promise<string[]> {
   return (await root.agent(context)).callable.map((each) => each.name);
 }
 
-async function setupWith(tools: readonly ToolRegistration[]): Promise<ChatSetup> {
+function setupWith(tools: readonly ToolRegistration[]): Promise<ChatSetup> {
   const setup = chatSetup();
   for (const each of tools) addTool(setup.registry, each);
-  return setup;
+  return Promise.resolve(setup);
 }
 
 describe("who may call a tool", () => {
@@ -105,7 +106,9 @@ describe("who may call a tool", () => {
     expect(await offered(root)).toEqual(["read", "bash", "probe"]);
     await harness.close(context);
   });
+});
 
+describe("who may call a tool", () => {
   it("never offers a tool that is not enabled, nor lets tools call it", async () => {
     const read = tool("read");
     const bash = tool("bash");
@@ -138,11 +141,13 @@ describe("who may call a tool", () => {
     expect(JSON.stringify(result?.model)).toContain("Tool bash is not available");
     await harness.close(context);
   });
+});
 
+describe("who may call a tool", () => {
   it("applies addTools to modelTools too, so the model is offered the added tools", async () => {
     const extra = tool("extra");
     const grow = tool("grow", {
-      execute: async () => ({ output: [], control: { addTools: ["extra"] } }),
+      execute: () => Promise.resolve({ output: [], control: { addTools: ["extra"] } }),
     });
     const setup = await setupWith([extra, grow]);
     setup.faux.setResponses([call("grow"), DONE]);

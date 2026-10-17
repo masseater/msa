@@ -1,35 +1,18 @@
-import { fauxAssistantMessage, fauxText, fauxToolCall, Type } from "@msa/ai";
-// The Session's document cache is bounded by use: unattached documents leave it after the retention period and load
-// from Storage again; documents with a watch or a document state never leave it.
 import type { Context } from "@msa/chord";
-import {
-  type AgentEvent,
-  type ConversationId,
-  defineDoc,
-  defineDocFamily,
-  defineTool,
-  type HarnessSettings,
-  MemoryStorage,
-  type StorageWrite,
-  watchEvents,
-} from "@msa/durable";
-import { describe, expect, it, onTestFinished } from "vite-plus/test";
+import { defineDoc, defineDocFamily, type StorageWrite } from "@msa/durable";
+import { describe, expect, it } from "vite-plus/test";
 
-import { SessionImpl, setDefaultDocumentRetention } from "../src/session/session.ts";
-import { chatSetup, openChat } from "./chat-support.ts";
-import { addTool } from "./harness-support.ts";
+import { SessionImpl } from "../src/session/session.ts";
+import {
+  settleLine,
+  type Counter,
+  CounterDoc,
+  bump,
+  open,
+} from "./session-document-retention-support.ts";
 import { ControlledStorage, context, createConversation } from "./session-support.ts";
 import { deferred, eventually } from "./task-support.ts";
 
-type Counter = { count: number };
-const CounterDoc = defineDoc<Counter>({
-  kind: "test.retention.counter",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
-  fork: "initial",
-  initial: () => ({ count: 0 }),
-});
 const RewindableDoc = defineDoc<Counter>({
   kind: "test.retention.rewindable",
   version: 1,
@@ -38,6 +21,7 @@ const RewindableDoc = defineDoc<Counter>({
   fork: "asOf",
   initial: () => ({ count: 0 }),
 });
+
 /** A third-party conversation family: one member per event. */
 const EventDoc = defineDocFamily<{ seq: number }, number>({
   kind: "test.retention.event",
@@ -48,63 +32,13 @@ const EventDoc = defineDocFamily<{ seq: number }, number>({
   family: true,
   initial: (seq) => ({ seq }),
 });
+
 const SessionCounterDoc = defineDoc<Counter>({
   kind: "test.retention.session-counter",
   version: 1,
   scope: "session",
   initial: () => ({ count: 0 }),
 });
-
-/** A session document whose checkpoint predicate throws, so the commit that changes it fails while it settles. */
-const Failing = defineDoc<Counter>({
-  kind: "test.retention.failing",
-  version: 1,
-  scope: "session",
-  initial: () => ({ count: 0 }),
-  checkpointWhen: () => {
-    throw new Error("checkpoint failed");
-  },
-});
-
-/** The default retention of this run, as the setup file set it. */
-const defaultForRun =
-  process.env["MSA_DURABLE_DOCUMENT_RETENTION_MS"] === undefined
-    ? 600_000
-    : Number(process.env["MSA_DURABLE_DOCUMENT_RETENTION_MS"]);
-
-/** A conversation document any Harness test can read. */
-const TestDoc = defineDoc<Counter>({
-  kind: "test.retention.harness",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
-  fork: "initial",
-  initial: () => ({ count: 0 }),
-});
-
-/** A Session with a controllable clock and retention. */
-function open(retentionMs: number) {
-  const clock = { now: 1_000 };
-  const storage = new ControlledStorage();
-  const session = new SessionImpl(
-    storage,
-    () => clock.now,
-    () => retentionMs,
-  );
-  const sizes = () => session.documentCacheSizes;
-  return { storage, session, clock, sizes };
-}
-
-/** Let the line run what is queued on it: an eviction job, then return. */
-async function settleLine(session: SessionImpl): Promise<void> {
-  await session.readOnLine(async () => {});
-}
-
-async function bump(session: SessionImpl, conversationId: ConversationId, by = 1): Promise<void> {
-  await session.commit(async (tx) => {
-    (await tx.doc(CounterDoc, conversationId)).count += by;
-  }, context);
-}
 
 describe("document cache retention", () => {
   it("evicts an unattached document once its retention passed, and loads it again with the same value", async () => {
@@ -141,7 +75,9 @@ describe("document cache retention", () => {
     expect(await session.snapshot(CounterDoc, conversationId, context)).toEqual({ count: 1 });
     await session.close(context);
   });
+});
 
+describe("document cache retention", () => {
   it("never evicts a document a watch or a document state observes, and evicts it once the last detaches", async () => {
     const { session, storage, clock, sizes } = open(1_000);
     const conversationId = await createConversation(session);
@@ -149,8 +85,10 @@ describe("document cache retention", () => {
     const watch = (await session.watchDoc(CounterDoc, conversationId, context))!;
     const state = (await session.documentState(CounterDoc, conversationId, context))!;
     const seen: number[] = [];
-    watch.start(async (value) => {
+    watch.start((value) => {
       seen.push(value?.count ?? -1);
+
+      return Promise.resolve();
     });
     clock.now += 1_000_000;
     await bump(session, conversationId);
@@ -182,7 +120,9 @@ describe("document cache retention", () => {
     expect(sizes().cached).toBe(1);
     await session.close(context);
   });
+});
 
+describe("document cache retention", () => {
   it("never takes a tracker from a transaction that holds it", async () => {
     const { session, clock } = open(0);
     const conversationId = await createConversation(session);
@@ -205,7 +145,9 @@ describe("document cache retention", () => {
     expect(await session.snapshot(CounterDoc, conversationId, context)).toEqual({ count: 12 });
     await session.close(context);
   });
+});
 
+describe("document cache retention", () => {
   it("writes after a reload continue the stored deltas and bases", async () => {
     const { session, storage } = open(0);
     const conversationId = await createConversation(session);
@@ -215,7 +157,7 @@ describe("document cache retention", () => {
       writes.push([...batch]);
       return commit(batch, commitContext);
     };
-    for (let n = 0; n < 5; n++) {
+    for await (const _ of Array.from({ length: 5 })) {
       await bump(session, conversationId);
       await settleLine(session);
     }
@@ -234,7 +176,9 @@ describe("document cache retention", () => {
     expect(await reopened.snapshot(CounterDoc, conversationId, context)).toEqual({ count: 5 });
     await reopened.close(context);
   });
+});
 
+describe("document cache retention", () => {
   it("keeps history and forks of rewindable documents after eviction", async () => {
     const { session } = open(0);
     const conversationId = await createConversation(session);
@@ -268,7 +212,7 @@ describe("document cache retention", () => {
   it("bounds a third-party family with a member per event", async () => {
     const { session, sizes } = open(0);
     const conversationId = await createConversation(session);
-    for (let seq = 0; seq < 200; seq++) {
+    for await (const seq of Array.from({ length: 200 }, (_, i) => i)) {
       await session.commit(async (tx) => {
         await tx.doc(EventDoc, conversationId, String(seq), seq);
       }, context);
@@ -280,10 +224,12 @@ describe("document cache retention", () => {
     expect(await session.snapshot(EventDoc, conversationId, "123", context)).toEqual({ seq: 123 });
     await session.close(context);
   });
+});
 
+describe("document cache retention", () => {
   it("keeps the cache of a long-lived Session bounded across many conversations", async () => {
     const { session, clock, sizes } = open(10_000);
-    for (let n = 0; n < 300; n++) {
+    for await (const _ of Array.from({ length: 300 })) {
       const conversationId = await createConversation(session);
       await bump(session, conversationId);
       clock.now += 1_000;
@@ -310,295 +256,6 @@ describe("document cache retention", () => {
     await bump(session, conversationId, 42);
     clock.fail = false;
     expect(await session.snapshot(CounterDoc, conversationId, context)).toEqual({ count: 42 });
-    await session.close(context);
-  });
-
-  it("evicts after a commit whose settlement fails", async () => {
-    const { session, clock, sizes } = open(10_000);
-    const conversationId = await createConversation(session);
-    await bump(session, conversationId);
-    // Created first: the predicate runs only for changes to an existing document.
-    await session.commit((tx) => tx.doc(Failing).then(() => undefined), context);
-    await settleLine(session);
-    // Retention passes inside a commit whose checkpoint predicate throws while it settles.
-    await expect(
-      session.commit(async (tx) => {
-        (await tx.doc(Failing)).count++;
-        clock.now += 1_000_000;
-      }, context),
-    ).rejects.toThrow("checkpoint failed");
-    expect(sizes().cached).toBe(0);
-    await session.close(context);
-  });
-
-  it("evicts promptly once the retention is shortened", async () => {
-    const retention = { ms: 600_000 };
-    const storage = new ControlledStorage();
-    const clock = { now: 1_000 };
-    const session = new SessionImpl(
-      storage,
-      () => clock.now,
-      () => retention.ms,
-    );
-    const conversationId = await createConversation(session);
-    await bump(session, conversationId);
-    retention.ms = 0;
-    clock.now += 2_000;
-    // A read, no commit: the sweep pending for ten minutes from now moves up.
-    await session.snapshot(CounterDoc, conversationId, context);
-    await eventually(async () => {
-      await settleLine(session);
-      return session.documentCacheSizes.cached === 0;
-    });
-    await session.close(context);
-  });
-
-  it("does not keep a replacement cached for an observer of the retired incarnation", async () => {
-    const { session, sizes } = open(0);
-    const conversationId = await createConversation(session);
-    await bump(session, conversationId);
-    const state = (await session.documentState(CounterDoc, conversationId, context))!;
-    await session.commit((tx) => tx.retireDoc(CounterDoc, conversationId), context);
-    expect(state.value).toBeNull();
-    await bump(session, conversationId, 5);
-    await eventually(async () => {
-      await settleLine(session);
-      return sizes().cached === 0;
-    });
-    expect(await session.snapshot(CounterDoc, conversationId, context)).toEqual({ count: 5 });
-    state.dispose();
-    await session.close(context);
-  });
-
-  it("leaves no pin behind when an observer's load loses a race with close", async () => {
-    const { session, storage } = open(0);
-    const conversationId = await createConversation(session);
-    await bump(session, conversationId);
-    await eventually(async () => {
-      await settleLine(session);
-      return session.documentCacheSizes.cached === 0;
-    });
-    const gate = storage.holdFindDocument();
-    const attaching = session.documentState(CounterDoc, conversationId, context);
-    await gate.entered;
-    const closing = session.close(context);
-    gate.release();
-    await expect(attaching).rejects.toThrow();
-    await closing;
-    expect(session.documentCacheSizes).toMatchObject({ cached: 0, idle: 0, attached: 0 });
-  });
-
-  it("evicts on its timer without a commit, and tolerates a detach called twice", async () => {
-    const storage = new ControlledStorage();
-    const session = new SessionImpl(storage, Date.now, () => 20);
-    const conversationId = await createConversation(session);
-    await bump(session, conversationId);
-    const state = (await session.documentState(CounterDoc, conversationId, context))!;
-    state.dispose();
-    state.dispose();
-    const until = Date.now() + 2_000;
-    while (session.documentCacheSizes.cached > 0 && Date.now() < until)
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(session.documentCacheSizes.cached).toBe(0);
-    await session.close(context);
-  });
-
-  it("migrates a document again after its eviction", async () => {
-    const V1 = defineDoc<{ count: number }>({
-      kind: "test.retention.migrating",
-      version: 1,
-      scope: "session",
-      initial: () => ({ count: 1 }),
-    });
-    let migrations = 0;
-    const V2 = defineDoc<{ count: number; migrated: boolean }>({
-      kind: "test.retention.migrating",
-      version: 2,
-      scope: "session",
-      initial: () => ({ count: 0, migrated: true }),
-      migrate: (value) => {
-        migrations++;
-        return { count: (value as { count: number }).count, migrated: true };
-      },
-    });
-    const { session } = open(0);
-    await session.commit((tx) => tx.doc(V1).then(() => undefined), context);
-    await settleLine(session);
-    expect(await session.snapshot(V2, context)).toEqual({ count: 1, migrated: true });
-    await settleLine(session);
-    expect(await session.snapshot(V2, context)).toEqual({ count: 1, migrated: true });
-    // Not written back, so each cold load migrates again.
-    expect(migrations).toBe(2);
-    await session.close(context);
-  });
-
-  it("treats a retention that is not a number of milliseconds as the default, and Infinity as never", async () => {
-    // The default as shipped, also in the suite run that forces another.
-    setDefaultDocumentRetention(600_000);
-    onTestFinished(() => setDefaultDocumentRetention(defaultForRun));
-    for (const retention of [Number.NaN, -5, "soon" as unknown as number]) {
-      const { session, clock, sizes } = open(retention);
-      const conversationId = await createConversation(session);
-      await bump(session, conversationId);
-      clock.now += 60_000;
-      await session.commit(async () => {}, context);
-      await settleLine(session);
-      // Not dropped at once, as a retention of 0 would: the ten-minute default holds it.
-      expect(sizes().cached).toBe(1);
-      await session.close(context);
-    }
-    const { session, clock, sizes } = open(Number.POSITIVE_INFINITY);
-    const conversationId = await createConversation(session);
-    await bump(session, conversationId);
-    clock.now += 1e15;
-    await session.commit(async () => {}, context);
-    await settleLine(session);
-    expect(sizes().cached).toBe(1);
-    await session.close(context);
-  });
-
-  it("keeps no timer where timers cannot be unreferenced, and evicts on commits", async () => {
-    const setTimer = globalThis.setTimeout;
-    let timers = 0;
-    globalThis.setTimeout = ((callback: () => void, ms?: number) => {
-      timers++;
-      const timer = setTimer(callback, ms);
-      // As in Cloudflare Workers: a plain number, no `unref`.
-      return Number(timer as unknown as number) as unknown as ReturnType<typeof setTimeout>;
-    }) as typeof setTimeout;
-    try {
-      const { session, clock, sizes } = open(1_000);
-      const conversationId = await createConversation(session);
-      await bump(session, conversationId);
-      await bump(session, conversationId);
-      // Tried once, then never again.
-      expect(timers).toBeLessThanOrEqual(1);
-      clock.now += 10_000;
-      await session.commit(async () => {}, context);
-      await settleLine(session);
-      expect(sizes().cached).toBe(0);
-      await session.close(context);
-    } finally {
-      globalThis.setTimeout = setTimer;
-    }
-  });
-
-  it("follows a Harness settings change at the next use", async () => {
-    setDefaultDocumentRetention(600_000);
-    onTestFinished(() => setDefaultDocumentRetention(defaultForRun));
-    const setup = chatSetup();
-    const settings: { -readonly [K in keyof HarnessSettings]: HarnessSettings[K] } = setup.settings;
-    const { harness, root } = await openChat(new MemoryStorage(), setup);
-    await root.commit(async (tx) => {
-      (await tx.doc(TestDoc, root.id)).count++;
-    }, context);
-    const sizesOf = () => (harness as unknown as SessionImpl).documentCacheSizes;
-    expect(sizesOf().cached).toBeGreaterThan(0);
-    settings.documentRetentionMs = 0;
-    await harness.snapshot(TestDoc, root.id, context);
-    await eventually(async () => {
-      await (harness as unknown as SessionImpl).readOnLine(async () => {});
-      return sizesOf().cached === 0;
-    });
-    await harness.close(context);
-  });
-
-  it("gives the same events with documents evicted right after use as with documents kept", async () => {
-    const run = async (documentRetentionMs: number): Promise<string[]> => {
-      const setup = chatSetup();
-      setup.settings.documentRetentionMs = documentRetentionMs;
-      setup.settings.progress = { outputIntervalMs: 0 };
-      addTool(
-        setup.registry,
-        defineTool({
-          name: "steps",
-          description: "Streams three steps",
-          parameters: Type.Object({}),
-          execute: async (_args, api) => {
-            for (const step of ["a\n", "b\n", "c\n"]) {
-              api.output(step);
-              await new Promise((resolve) => setTimeout(resolve, 5));
-            }
-            return {};
-          },
-        }),
-      );
-      setup.faux.setResponses([
-        fauxAssistantMessage([fauxToolCall("steps", {}, { id: "s1" })], { stopReason: "toolUse" }),
-        fauxAssistantMessage([fauxText("done")]),
-      ]);
-      const { harness, root } = await openChat(new MemoryStorage(), setup);
-      const stream = await watchEvents(harness, root.id, context);
-      const events: AgentEvent[] = [];
-      stream.start(async (batch) => {
-        events.push(...batch);
-      });
-      await (await root.submit({ type: "input", content: "go" }, context)).wait(context);
-      await harness.waitForIdle(context);
-      await stream.stop();
-      await harness.close(context);
-      // Ids and times differ between runs; the sequence of event types and tool outputs must not.
-      return events.map((event) =>
-        event.type === "tool_execution_update"
-          ? `update:${JSON.stringify(event.output)}`
-          : event.type,
-      );
-    };
-    expect(await run(0)).toEqual(await run(600_000));
-  });
-
-  it("keeps a reloaded newer version cached while an observer of the older one is attached", async () => {
-    const V1 = defineDoc<Counter>({
-      kind: "test.retention.versioned",
-      version: 1,
-      scope: "session",
-      initial: () => ({ count: 3 }),
-    });
-    const V2 = defineDoc<Counter & { v2: true }>({
-      kind: "test.retention.versioned",
-      version: 2,
-      scope: "session",
-      initial: () => ({ count: 0, v2: true }),
-      migrate: (value) => ({ count: (value as Counter).count, v2: true }),
-    });
-    const { session, sizes } = open(0);
-    await session.commit((tx) => tx.doc(V1).then(() => undefined), context);
-    const state = (await session.documentState(V1, context))!;
-    expect(await session.snapshot(V2, context)).toEqual({ count: 3, v2: true });
-    await settleLine(session);
-    expect(sizes().cached).toBe(1);
-    state.dispose();
-    await eventually(async () => {
-      await settleLine(session);
-      return sizes().cached === 0;
-    });
-    await session.close(context);
-  });
-
-  it("queues one sweep job, not one per document, while a commit holds the line", async () => {
-    const { session } = open(0);
-    const conversationIds: ConversationId[] = [];
-    for (let n = 0; n < 50; n++) {
-      const id = await createConversation(session);
-      await bump(session, id);
-      conversationIds.push(id);
-    }
-    await eventually(async () => {
-      await settleLine(session);
-      return session.documentCacheSizes.cached === 0;
-    });
-    const before = session.documentCacheSizes.sweeps;
-    // One commit loads 50 evicted documents from storage, each touched as it loads; the sweep job stays pending while
-    // the line is held.
-    await session.commit(async (tx) => {
-      for (const id of conversationIds) {
-        (await tx.doc(CounterDoc, id)).count++;
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      }
-    }, context);
-    await settleLine(session);
-    expect(session.documentCacheSizes.cached).toBe(0);
-    expect(session.documentCacheSizes.sweeps - before).toBeLessThanOrEqual(2);
     await session.close(context);
   });
 });

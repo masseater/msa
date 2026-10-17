@@ -11,10 +11,8 @@ import {
 
 type SqlValue = ArrayBuffer | string | number | null;
 
-/**
- * A stand-in for a SQLite-backed Durable Object's `ctx.storage` over `node:sqlite`, with its value types: `BLOB`
- * bindings and results are `ArrayBuffer`s, and `exec()` without bindings may run several statements.
- */
+// A stand-in for a SQLite-backed Durable Object's `ctx.storage` over `node:sqlite`, with its value types: `BLOB`
+// bindings and results are `ArrayBuffer`s, and `exec()` without bindings may run several statements.
 function durableObjectStorage(database = new DatabaseSync(":memory:")): DurableObjectSqliteStorage {
   const toNode = (value: SqlValue) =>
     value instanceof ArrayBuffer ? new Uint8Array(value) : value;
@@ -23,7 +21,7 @@ function durableObjectStorage(database = new DatabaseSync(":memory:")): DurableO
   return {
     sql: {
       exec(query, ...bindings) {
-        if (bindings.length === 0 && query.trim().replace(/;\s*$/, "").includes(";")) {
+        if (bindings.length === 0 && query.trim().replace(/;\s*$/u, "").includes(";")) {
           database.exec(query);
           return { toArray: () => [] };
         }
@@ -101,7 +99,9 @@ describe("Durable Object SQLite adapter", () => {
     await Promise.all([transaction, closed]);
     expect(order).toEqual(["transaction", "close"]);
   });
+});
 
+describe("Durable Object SQLite adapter", () => {
   it("rolls back a rejected transaction and rejects its handle afterwards", async () => {
     const database = new DurableObjectSqliteDatabase(durableObjectStorage());
     await database.exec("CREATE TABLE items (id INTEGER PRIMARY KEY)");

@@ -55,7 +55,9 @@ describe("truncate utilities", () => {
     expect(result.lengths).toEqual(inputs.map(byteLength));
     expect(result.head).toMatchObject({ content: "aé🙂", outputBytes: 7, truncatedBy: "bytes" });
   });
+});
 
+describe("truncate utilities", () => {
   it("does not count a trailing newline as an extra line", () => {
     const content = `${Array.from({ length: 3 }, () => "line").join("\n")}\n`;
     const head = truncateHead(content, { maxBytes: 100, maxLines: 3 });
@@ -103,7 +105,9 @@ describe("truncate utilities", () => {
     expect(result.truncatedBy).toBe("bytes");
     expect(result.firstLineExceedsLimit).toBe(true);
   });
+});
 
+describe("truncate utilities", () => {
   it("formats sizes", () => {
     expect(formatSize(1023)).toBe("1023B");
     expect(formatSize(1536)).toBe("1.5KB");

@@ -48,37 +48,111 @@ class HoldMarks extends MemoryStorage {
   }
 }
 
-describe("work below a cancelled owner", () => {
-  it("does not start its next phase while the cascade that marks it has not committed", async () => {
-    const storage = new HoldMarks();
-    const entered = deferred();
-    const advance = deferred();
-    let ranNext = false;
-    const Child = defineTask<null, { phase: "first" } | { phase: "next" }, null>({
-      name: "test.child",
-      version: 1,
-      initial: () => ({ phase: "first" }),
-      phases: {
-        first: async (_task, runtime, phaseContext) => {
-          entered.resolve();
-          await advance.promise;
-          await runtime.commit(
-            () => ({ status: "running", checkpoint: { phase: "next" } }),
-            phaseContext,
-          );
-        },
-        next: async (_task, runtime) => {
-          ranNext = true;
-          await aborted(runtime.signal);
-        },
-      },
-      abort: async (_task, runtime, abortContext) => {
+function holdingChildSetup() {
+  const storage = new HoldMarks();
+  const entered = deferred();
+  const advance = deferred();
+  const progress: { ranNext: boolean } = { ranNext: false };
+  const Child = defineTask<null, { phase: "first" } | { phase: "next" }, null>({
+    name: "test.child",
+    version: 1,
+    initial: () => ({ phase: "first" }),
+    phases: {
+      first: async (_task, runtime, phaseContext) => {
+        entered.resolve();
+        await advance.promise;
         await runtime.commit(
-          () => ({ status: "terminal", outcome: { status: "aborted" } }),
-          abortContext,
+          () => ({ status: "running", checkpoint: { phase: "next" } }),
+          phaseContext,
         );
       },
-    });
+      next: async (_task, runtime) => {
+        progress.ranNext = true;
+        await aborted(runtime.signal);
+      },
+    },
+    abort: async (_task, runtime, abortContext) => {
+      await runtime.commit(
+        () => ({ status: "terminal", outcome: { status: "aborted" } }),
+        abortContext,
+      );
+    },
+  });
+  return { storage, entered, advance, progress, Child };
+}
+
+async function failFastOverRestartStore() {
+  const storage = new MemoryStorage();
+  const session = createSession(storage);
+  const conversation = await session.commit(
+    (tx) => tx.createConversation({ ownership: { kind: "ownerless" } }),
+    context,
+  );
+  const parent = await session.commit(
+    (tx) =>
+      tx.createTask(Dormant, null, {
+        conversationId: conversation.id,
+        ownership: { kind: "conversation" },
+      }),
+    context,
+  );
+  const failed = await session.commit(
+    (tx) => tx.createTask(Dormant, null, { ownership: { kind: "task", taskId: parent } }),
+    context,
+  );
+  const child = await session.commit(
+    (tx) => tx.createTask(Dormant, null, { ownership: { kind: "task", taskId: parent } }),
+    context,
+  );
+  // A restart-abandoned owner that waits failFast on a failed child and a live one.
+  const owner = (await storage.task(parent, context))!;
+  const failedRecord = (await storage.task(failed, context))!;
+  const waiting = {
+    status: "waiting",
+    checkpoint: { phase: "work" },
+    on: [failed, child],
+    policy: "failFast",
+  } as const;
+  return { storage, child, owner, failedRecord, waiting };
+}
+
+async function restartMarkedTree() {
+  const storage = new MemoryStorage();
+  const session = createSession(storage);
+  const conversation = await session.commit(
+    (tx) => tx.createConversation({ ownership: { kind: "ownerless" } }),
+    context,
+  );
+  const top = await session.commit(
+    (tx) =>
+      tx.createTask(Dormant, null, {
+        conversationId: conversation.id,
+        ownership: { kind: "conversation" },
+      }),
+    context,
+  );
+  const middle = await session.commit(
+    (tx) =>
+      tx.createTask(Dormant, null, {
+        ownership: { kind: "task", taskId: top },
+        abandonOnRestart: true,
+      }),
+    context,
+  );
+  const Missing = defineTask<null, { phase: "work" }, null>({
+    ...Dormant.definition,
+    name: "test.missing",
+  });
+  const leaf = await session.commit(
+    (tx) => tx.createTask(Missing, null, { ownership: { kind: "task", taskId: middle } }),
+    context,
+  );
+  return { storage, top, middle, leaf };
+}
+
+describe("work below a cancelled owner", () => {
+  it("does not start its next phase while the cascade that marks it has not committed", async () => {
+    const { storage, entered, advance, progress, Child } = holdingChildSetup();
     const { harness } = await openTasks(storage, [Dormant, Child]);
     const root = await harness.root(context);
     const parent = await root.commit(
@@ -97,51 +171,23 @@ describe("work below a cancelled owner", () => {
       await storage.held.promise;
       // The parent's request is durable, the cascade's mark of the child is not: its phase must not advance.
       advance.resolve();
-      for (let i = 0; i < 5; i++) await flush();
-      expect(ranNext).toBe(false);
+      for await (const _ of Array.from({ length: 5 })) await flush();
+      expect(progress.ranNext).toBe(false);
       storage.release.resolve();
       expect((await harness.waitForTask(child, context)).state.outcome.status).toBe("aborted");
       await aborting;
-      expect(ranNext).toBe(false);
+      expect(progress.ranNext).toBe(false);
     } finally {
       advance.resolve();
       storage.release.resolve();
       await harness.close(context);
     }
   });
+});
 
+describe("work below a cancelled owner", () => {
   it("lets a failFast request in the same pass override a restart mark", async () => {
-    const storage = new MemoryStorage();
-    const session = createSession(storage);
-    const conversation = await session.commit(
-      (tx) => tx.createConversation({ ownership: { kind: "ownerless" } }),
-      context,
-    );
-    const parent = await session.commit(
-      (tx) =>
-        tx.createTask(Dormant, null, {
-          conversationId: conversation.id,
-          ownership: { kind: "conversation" },
-        }),
-      context,
-    );
-    const failed = await session.commit(
-      (tx) => tx.createTask(Dormant, null, { ownership: { kind: "task", taskId: parent } }),
-      context,
-    );
-    const child = await session.commit(
-      (tx) => tx.createTask(Dormant, null, { ownership: { kind: "task", taskId: parent } }),
-      context,
-    );
-    // A restart-abandoned owner that waits failFast on a failed child and a live one.
-    const owner = (await storage.task(parent, context))!;
-    const failedRecord = (await storage.task(failed, context))!;
-    const waiting = {
-      status: "waiting",
-      checkpoint: { phase: "work" },
-      on: [failed, child],
-      policy: "failFast",
-    } as const;
+    const { storage, child, owner, failedRecord, waiting } = await failFastOverRestartStore();
     const failure = { status: "failed", error: { message: "failed" } } as const;
     await storage.commit(
       [
@@ -173,38 +219,11 @@ describe("work below a cancelled owner", () => {
       await harness.close(context);
     }
   });
+});
 
+describe("work below a cancelled owner", () => {
   it("upgrades restart marks down the tree when an abort is requested above them", async () => {
-    const storage = new MemoryStorage();
-    const session = createSession(storage);
-    const conversation = await session.commit(
-      (tx) => tx.createConversation({ ownership: { kind: "ownerless" } }),
-      context,
-    );
-    const top = await session.commit(
-      (tx) =>
-        tx.createTask(Dormant, null, {
-          conversationId: conversation.id,
-          ownership: { kind: "conversation" },
-        }),
-      context,
-    );
-    const middle = await session.commit(
-      (tx) =>
-        tx.createTask(Dormant, null, {
-          ownership: { kind: "task", taskId: top },
-          abandonOnRestart: true,
-        }),
-      context,
-    );
-    const Missing = defineTask<null, { phase: "work" }, null>({
-      ...Dormant.definition,
-      name: "test.missing",
-    });
-    const leaf = await session.commit(
-      (tx) => tx.createTask(Missing, null, { ownership: { kind: "task", taskId: middle } }),
-      context,
-    );
+    const { storage, top, middle, leaf } = await restartMarkedTree();
     // Only Dormant is registered: the leaf waits for its definition under the restart cascade.
     const { harness } = await openTasks(storage, [Dormant]);
     try {
@@ -221,7 +240,7 @@ describe("work below a cancelled owner", () => {
       expect((await harness.getTask(leaf, context))?.state.status).not.toBe("terminal");
       // A request on the top task reaches the leaf two levels down, which is then orphaned.
       await harness.abortTask(top, context);
-      for (const [id, status] of [
+      for await (const [id, status] of [
         [leaf, "orphaned"],
         [middle, "aborted"],
         [top, "aborted"],
@@ -232,7 +251,9 @@ describe("work below a cancelled owner", () => {
       await harness.close(context);
     }
   });
+});
 
+describe("work below a cancelled owner", () => {
   it("marks a flagged task that holds its outcome, aborting its owned work, and keeps the outcome", async () => {
     const storage = new MemoryStorage();
     const session = createSession(storage);

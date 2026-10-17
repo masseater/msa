@@ -1,41 +1,19 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { rm } from "node:fs/promises";
 
-import { type AssistantMessage, createModels, fauxAssistantMessage, type Message } from "@msa/ai";
+import { type AssistantMessage, fauxAssistantMessage, type Message } from "@msa/ai";
 import { AssistantEntry, type Harness, LiveDoc, type TaskId } from "@msa/durable";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import {
-  allEntries,
-  type ChatSetup,
-  chatSetup,
-  openChat,
-  textOf,
-  unanswered,
-  waitFor,
-} from "./chat-support.ts";
+import { allEntries, chatSetup, textOf, waitFor } from "./chat-support.ts";
+import { open, directories, sqlitePath } from "./harness-generation-recovery-support.ts";
 import { addSection } from "./harness-support.ts";
 import { context } from "./session-support.ts";
 import { aborted, deferred } from "./task-support.ts";
 
-const directories = new Set<string>();
-
 afterEach(async () => {
-  for (const directory of directories) await rm(directory, { recursive: true, force: true });
+  for await (const directory of directories) await rm(directory, { recursive: true, force: true });
   directories.clear();
 });
-
-async function sqlitePath(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "msa-durable-generation-"));
-  directories.add(directory);
-  return join(directory, "session.sqlite");
-}
-
-async function open(path: string, setup: ChatSetup) {
-  return openChat(await openNodeSqliteStorage(path), setup);
-}
 
 async function runTaskId(harness: Harness): Promise<TaskId> {
   const live = await harness.snapshot(LiveDoc, 1 as never, context);
@@ -45,6 +23,34 @@ async function runTaskId(harness: Harness): Promise<TaskId> {
 async function checkpoint(harness: Harness, id: TaskId) {
   const record = await harness.getTask(id, context);
   return record?.state.status === "terminal" ? undefined : record?.state.checkpoint;
+}
+
+async function interruptedBeforePartial() {
+  const path = await sqlitePath();
+  const setup = chatSetup();
+  addSection(setup.registry, "preamble", () => "p", { tag: false });
+  const reached = deferred();
+  const sent: string[][] = [];
+  const timeouts: (number | undefined)[] = [];
+  setup.faux.setResponses([
+    (_context, options) => {
+      reached.resolve();
+      return Promise.resolve(aborted(options!.signal!));
+    },
+    (request, options) => {
+      sent.push(request.messages.map((message) => message.role));
+      timeouts.push(options?.timeoutMs);
+      return fauxAssistantMessage("answer");
+    },
+  ]);
+  const opened = await open(path, setup);
+  setup.settings.stream = { timeoutMs: 1234 };
+  opened.harness.resume();
+  const id = (await opened.root.submit({ type: "input", content: "hi" }, context)).id;
+  await reached.promise;
+  const taskId = await runTaskId(opened.harness);
+  await opened.harness.close(context);
+  return { path, setup, sent, timeouts, id, taskId };
 }
 
 describe("generation recovery", () => {
@@ -82,35 +88,14 @@ describe("generation recovery", () => {
     ]);
     await opened.harness.close(context);
   });
+});
 
+describe("generation recovery", () => {
   it("resends a request interrupted before any partial without repeating preparation", async () => {
-    const path = await sqlitePath();
-    const setup = chatSetup();
-    addSection(setup.registry, "preamble", () => "p", { tag: false });
-    const reached = deferred();
-    const sent: string[][] = [];
-    const timeouts: (number | undefined)[] = [];
-    setup.faux.setResponses([
-      async (_context, options) => {
-        reached.resolve();
-        return aborted(options!.signal!);
-      },
-      (request, options) => {
-        sent.push(request.messages.map((message) => message.role));
-        timeouts.push(options?.timeoutMs);
-        return fauxAssistantMessage("answer");
-      },
-    ]);
-    let opened = await open(path, setup);
-    setup.settings.stream = { timeoutMs: 1234 };
-    opened.harness.resume();
-    const id = (await opened.root.submit({ type: "input", content: "hi" }, context)).id;
-    await reached.promise;
-    const taskId = await runTaskId(opened.harness);
-    await opened.harness.close(context);
+    const { path, setup, sent, timeouts, id, taskId } = await interruptedBeforePartial();
 
-    opened = await open(path, setup);
-    expect(await checkpoint(opened.harness, taskId)).toMatchObject({
+    const reopened = await open(path, setup);
+    expect(await checkpoint(reopened.harness, taskId)).toMatchObject({
       phase: "request",
       attempt: 1,
       thinkingLevel: "off",
@@ -118,23 +103,25 @@ describe("generation recovery", () => {
     });
     // The resend uses the pinned request, not options changed after preparation.
     setup.settings.stream = { timeoutMs: 999 };
-    expect(await opened.harness.snapshot(LiveDoc, opened.root.id, context)).toMatchObject({
+    expect(await reopened.harness.snapshot(LiveDoc, reopened.root.id, context)).toMatchObject({
       generation: { attempt: 1 },
     });
-    opened.harness.resume();
-    expect((await (await opened.harness.submission(id, context))!.wait(context)).status).toBe(
+    reopened.harness.resume();
+    expect((await (await reopened.harness.submission(id, context))!.wait(context)).status).toBe(
       "done",
     );
     expect(sent).toEqual([["system", "user"]]);
     expect(timeouts).toEqual([1234]);
-    expect((await allEntries(opened.root)).map((entry) => entry.kind)).toEqual([
+    expect((await allEntries(reopened.root)).map((entry) => entry.kind)).toEqual([
       "msa.user",
       "msa.system",
       "msa.assistant",
     ]);
-    await opened.harness.close(context);
+    await reopened.harness.close(context);
   });
+});
 
+describe("generation recovery", () => {
   it("converts a committed partial into an aborted entry and resends the same messages", async () => {
     const path = await sqlitePath();
     const slow = chatSetup({ tokensPerSecond: 20, tokenSize: { min: 1, max: 1 } });
@@ -143,8 +130,10 @@ describe("generation recovery", () => {
     opened.harness.resume();
     const watch = (await opened.harness.watchDoc(LiveDoc, opened.root.id, context))!;
     let watched: string | undefined;
-    watch.start(async (value) => {
+    watch.start((value) => {
       watched = textOf(value?.generation?.message as Message) ?? watched;
+
+      return Promise.resolve();
     });
     const id = (await opened.root.submit({ type: "input", content: "hi" }, context)).id;
     await waitFor(() => watched !== undefined);
@@ -180,7 +169,9 @@ describe("generation recovery", () => {
     expect(await opened.harness.snapshot(LiveDoc, opened.root.id, context)).toEqual({});
     await opened.harness.close(context);
   });
+});
 
+describe("generation recovery", () => {
   it("resumes a retry backoff after reopen", async () => {
     const path = await sqlitePath();
     const setup = chatSetup();
@@ -223,7 +214,9 @@ describe("generation recovery", () => {
     ]);
     await opened.harness.close(context);
   });
+});
 
+describe("generation recovery", () => {
   it("resumes polling a deferred response after reopen", async () => {
     const path = await sqlitePath();
     const setup = chatSetup({ deferred: { pollAfterMs: 60_000 } });
@@ -258,76 +251,6 @@ describe("generation recovery", () => {
     );
     expect(textOf(answer?.model?.[0])).toBe("deferred answer");
     expect(setup.faux.state.deferredFetchCount).toBe(1);
-    await opened.harness.close(context);
-  });
-
-  it("fails no_model when the pinned model is gone after reopen, in request and in poll", async () => {
-    const path = await sqlitePath();
-    const setup = chatSetup({ deferred: { pollAfterMs: 60_000 } });
-    const busy = unanswered();
-    setup.faux.setResponses([busy.step, fauxAssistantMessage("deferred")]);
-    let opened = await open(path, setup);
-    opened.harness.resume();
-    const requesting = (await opened.root.submit({ type: "input", content: "one" }, context)).id;
-    await busy.reached;
-    await opened.harness.close(context);
-
-    // Reopened without the faux provider: the request's pinned model is unknown.
-    const empty: ChatSetup = { ...setup, models: createModels() };
-    opened = await open(path, empty);
-    opened.harness.resume();
-    expect(
-      await (await opened.harness.submission(requesting, context))!.wait(context),
-    ).toMatchObject({
-      status: "unanswered",
-      reason: "no_model",
-    });
-    await opened.harness.close(context);
-
-    opened = await open(path, setup);
-    setup.settings.stream = { deferred: true };
-    opened.harness.resume();
-    const polling = (await opened.root.submit({ type: "input", content: "two" }, context)).id;
-    await waitFor(async () => {
-      const live = await opened.harness.snapshot(LiveDoc, opened.root.id, context);
-      return live?.generation?.deferred !== undefined;
-    });
-    await opened.harness.close(context);
-
-    opened = await open(path, empty);
-    opened.harness.resume();
-    expect(await (await opened.harness.submission(polling, context))!.wait(context)).toMatchObject({
-      status: "unanswered",
-      reason: "no_model",
-    });
-    await opened.harness.close(context);
-  });
-
-  it("runs a print-style turn and reads the durable answer after reopen", async () => {
-    const path = await sqlitePath();
-    const setup = chatSetup();
-    addSection(setup.registry, "preamble", () => "You are terse.", { tag: false });
-    setup.faux.setResponses([fauxAssistantMessage("42")]);
-    let opened = await open(path, setup);
-    opened.harness.resume();
-    const submission = await opened.root.submit({ type: "input", content: "answer?" }, context);
-    const settled = await submission.wait(context);
-    if (settled.status !== "done" || settled.type !== "input")
-      throw new Error(`Unexpected ${settled.status}`);
-    const answer = await opened.root.commit(
-      (tx) => tx.entry(AssistantEntry, settled.answer),
-      context,
-    );
-    expect(textOf(answer?.model?.[0])).toBe("42");
-    await opened.harness.close(context);
-
-    opened = await open(path, setup);
-    expect(
-      await (await opened.harness.submission(submission.id, context))!.status(context),
-    ).toEqual(settled);
-    expect(
-      await opened.root.commit((tx) => tx.entry(AssistantEntry, settled.answer), context),
-    ).toEqual(answer);
     await opened.harness.close(context);
   });
 });

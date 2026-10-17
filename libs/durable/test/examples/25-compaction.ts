@@ -72,7 +72,7 @@ async function ask(question: string): Promise<void> {
   const record = await submission.wait(context);
   // Let a background compaction started by this turn finish, so its summary shows below.
   const running = (await harness.snapshot(LiveDoc, root.id, context))?.compactions ?? [];
-  for (const { taskId } of running) await harness.waitForTask(taskId, context);
+  for await (const { taskId } of running) await harness.waitForTask(taskId, context);
   await show(
     root,
     `after "${question}" (${record.status === "done" ? "answered" : record.reason})`,
@@ -81,7 +81,7 @@ async function ask(question: string): Promise<void> {
 
 // 1. A long chat: once the context crosses the background threshold, a compaction runs while the chat goes on, and
 // its summary lands at once when the conversation is idle, otherwise at the next turn boundary.
-for (const question of [
+for await (const question of [
   "Where should we stay?",
   "What should we eat?",
   "Which day trips?",
@@ -118,7 +118,7 @@ await ask("Summarize the plan for my partner");
 
 await harness.close(context);
 
-/** Print the model context: one line per message, and the number of stored entries behind it. */
+// Print the model context: one line per message, and the number of stored entries behind it.
 async function show(conversation: Conversation, label: string): Promise<void> {
   const view = await conversation.context(context);
   const stored = (await conversation.entries({}, 1000, undefined, context)).items.length;

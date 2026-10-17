@@ -3,11 +3,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { chatSetup, openChat, unanswered, waitFor } from "./chat-support.ts";
 import { context } from "./session-support.ts";
-import { completed, deferred, eventually, openTasks } from "./task-support.ts";
+import { completed, type Deferred, deferred, eventually, openTasks } from "./task-support.ts";
 
 type Step = { phase: "run" };
 
-/** A one-phase task that completes once `gate` resolves; `migrate` runs when an older stored version migrates. */
+// A one-phase task that completes once `gate` resolves; `migrate` runs when an older stored version migrates.
 function task(
   name: string,
   version: number,
@@ -43,90 +43,120 @@ function stateOf(
   return tasks.find((entry) => entry.record.id === id)?.state;
 }
 
+type Gated = { gateId?: TaskId };
+
+// Waits on the task in `gated.gateId`, then completes.
+function dependentOn(gated: Gated) {
+  return defineTask<null, { phase: "wait" } | { phase: "done" }, null>({
+    name: "test.dependent",
+    version: 1,
+    initial: () => ({ phase: "wait" }),
+    phases: {
+      wait: async (_task, runtime, ctx) => {
+        const checkpoint = { phase: "done" } as const;
+        await runtime.commit(
+          () => ({ status: "waiting", checkpoint, on: [gated.gateId!], policy: "allSettled" }),
+          ctx,
+        );
+      },
+      done: (_task, runtime, ctx) => Promise.resolve(runtime.commit(() => completed(null), ctx)),
+    },
+    abort: async () => {},
+  });
+}
+
+function registeredTasks(
+  Gate: ReturnType<typeof task>,
+  Dependent: ReturnType<typeof dependentOn>,
+  counts: { migrations: number },
+) {
+  return [
+    Gate,
+    Dependent,
+    task("test.migrating", 2, {
+      migrate: () => {
+        counts.migrations++;
+      },
+    }),
+    task("test.no-migration", 2),
+    task("test.failing", 2, {
+      migrate: () => {
+        throw new Error("cannot migrate");
+      },
+    }),
+    task("test.too-old", 1),
+  ];
+}
+
+// A gate, a task waiting on it, and tasks stored by definitions other than the registered ones.
+async function openInspected(gate: Deferred<void>) {
+  const Gate = task("test.gate", 1, { gate: gate.promise });
+  const gated: Gated = {};
+  const Dependent = dependentOn(gated);
+  const counts = { migrations: 0 };
+  const { harness } = await openTasks(
+    new MemoryStorage(),
+    registeredTasks(Gate, Dependent, counts),
+  );
+  const root = await harness.root(context);
+  const ids = await root.commit(async (tx) => {
+    const gateId = await tx.createTask(Gate, null, { ownership: { kind: "conversation" } });
+    gated.gateId = gateId;
+    return {
+      gate: gateId,
+      dependent: await tx.createTask(Dependent, null, { ownership: { kind: "conversation" } }),
+      // Stored by definitions other than the registered ones.
+      migrating: await tx.createTask(task("test.migrating", 1), null, {
+        ownership: { kind: "conversation" },
+      }),
+      noMigration: await tx.createTask(task("test.no-migration", 1), null, {
+        ownership: { kind: "conversation" },
+      }),
+      failing: await tx.createTask(task("test.failing", 1), null, {
+        ownership: { kind: "conversation" },
+      }),
+      tooOld: await tx.createTask(task("test.too-old", 2), null, {
+        ownership: { kind: "conversation" },
+      }),
+      missing: await tx.createTask(task("test.missing", 1), null, {
+        ownership: { kind: "conversation" },
+      }),
+    };
+  }, context);
+  return { harness, ids, counts };
+}
+
+function expectPausedStates(
+  paused: Awaited<ReturnType<Awaited<ReturnType<typeof openInspected>>["harness"]["inspect"]>>,
+  ids: Awaited<ReturnType<typeof openInspected>>["ids"],
+) {
+  expect(paused.scheduling).toBe("paused");
+  expect(paused.tasks.map((entry) => entry.record.id)).toEqual(Object.values(ids));
+  expect(stateOf(paused.tasks, ids.gate)).toEqual({ kind: "ready", migrates: false });
+  expect(stateOf(paused.tasks, ids.dependent)).toEqual({ kind: "ready", migrates: false });
+  expect(stateOf(paused.tasks, ids.migrating)).toEqual({ kind: "ready", migrates: true });
+  // A migration that was never tried is not run to find out.
+  expect(stateOf(paused.tasks, ids.failing)).toEqual({ kind: "ready", migrates: true });
+  expect(stateOf(paused.tasks, ids.noMigration)).toMatchObject({
+    kind: "blocked",
+    reason: "migration_failed",
+    error: new Error("Task test.no-migration version 2 has no migration from 1"),
+  });
+  expect(stateOf(paused.tasks, ids.tooOld)).toEqual({ kind: "blocked", reason: "task_too_old" });
+  expect(stateOf(paused.tasks, ids.missing)).toEqual({ kind: "blocked", reason: "missing_task" });
+}
+
 describe("Harness.inspect()", () => {
   it("derives every live task's state without running task code", async () => {
     const gate = deferred();
-    const Gate = task("test.gate", 1, { gate: gate.promise });
-    let gateId: TaskId | undefined;
-    const Dependent = defineTask<null, { phase: "wait" } | { phase: "done" }, null>({
-      name: "test.dependent",
-      version: 1,
-      initial: () => ({ phase: "wait" }),
-      phases: {
-        wait: async (_task, runtime, ctx) => {
-          const checkpoint = { phase: "done" } as const;
-          await runtime.commit(
-            () => ({ status: "waiting", checkpoint, on: [gateId!], policy: "allSettled" }),
-            ctx,
-          );
-        },
-        done: async (_task, runtime, ctx) => runtime.commit(() => completed(null), ctx),
-      },
-      abort: async () => {},
-    });
-    let migrations = 0;
-    const registered = [
-      Gate,
-      Dependent,
-      task("test.migrating", 2, {
-        migrate: () => {
-          migrations++;
-        },
-      }),
-      task("test.no-migration", 2),
-      task("test.failing", 2, {
-        migrate: () => {
-          throw new Error("cannot migrate");
-        },
-      }),
-      task("test.too-old", 1),
-    ];
-    const { harness } = await openTasks(new MemoryStorage(), registered);
-    const root = await harness.root(context);
-    const ids = await root.commit(async (tx) => {
-      gateId = await tx.createTask(Gate, null, { ownership: { kind: "conversation" } });
-      return {
-        gate: gateId,
-        dependent: await tx.createTask(Dependent, null, { ownership: { kind: "conversation" } }),
-        // Stored by definitions other than the registered ones.
-        migrating: await tx.createTask(task("test.migrating", 1), null, {
-          ownership: { kind: "conversation" },
-        }),
-        noMigration: await tx.createTask(task("test.no-migration", 1), null, {
-          ownership: { kind: "conversation" },
-        }),
-        failing: await tx.createTask(task("test.failing", 1), null, {
-          ownership: { kind: "conversation" },
-        }),
-        tooOld: await tx.createTask(task("test.too-old", 2), null, {
-          ownership: { kind: "conversation" },
-        }),
-        missing: await tx.createTask(task("test.missing", 1), null, {
-          ownership: { kind: "conversation" },
-        }),
-      };
-    }, context);
+    const { harness, ids, counts } = await openInspected(gate);
 
-    const paused = await harness.inspect(context);
-    expect(paused.scheduling).toBe("paused");
-    expect(paused.tasks.map((entry) => entry.record.id)).toEqual(Object.values(ids));
-    expect(stateOf(paused.tasks, ids.gate)).toEqual({ kind: "ready", migrates: false });
-    expect(stateOf(paused.tasks, ids.dependent)).toEqual({ kind: "ready", migrates: false });
-    expect(stateOf(paused.tasks, ids.migrating)).toEqual({ kind: "ready", migrates: true });
-    // A migration that was never tried is not run to find out.
-    expect(stateOf(paused.tasks, ids.failing)).toEqual({ kind: "ready", migrates: true });
-    expect(stateOf(paused.tasks, ids.noMigration)).toMatchObject({
-      kind: "blocked",
-      reason: "migration_failed",
-      error: new Error("Task test.no-migration version 2 has no migration from 1"),
-    });
-    expect(stateOf(paused.tasks, ids.tooOld)).toEqual({ kind: "blocked", reason: "task_too_old" });
-    expect(stateOf(paused.tasks, ids.missing)).toEqual({ kind: "blocked", reason: "missing_task" });
-    expect(migrations).toBe(0);
+    expectPausedStates(await harness.inspect(context), ids);
+    expect(counts.migrations).toBe(0);
     expect((await harness.inspect(context)).scheduling).toBe("paused");
 
     harness.resume();
-    await eventually(() => migrations === 1);
+    await eventually(() => counts.migrations === 1);
     await harness.waitForTask(ids.migrating, context);
     let running = await harness.inspect(context);
     await waitFor(async () => {
@@ -157,7 +187,9 @@ describe("Harness.inspect()", () => {
     ]);
     await harness.close(context);
   });
+});
 
+describe("Harness.inspect()", () => {
   it("lists unsettled submissions", async () => {
     const setup = chatSetup();
     const busy = unanswered();
