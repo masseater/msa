@@ -46,9 +46,9 @@ Windows Terminal reserves some Alt shortcuts. See [Terminal Setup](terminal-setu
 Type `/` to search the available commands. The commands you will use most often are:
 
 - `/model` selects a model. Press `Ctrl+L` to open the same selector.
-- `/thinking` selects how much reasoning the current model uses. Press `Shift+Tab` to cycle through supported levels.
+- `/effort` selects how much reasoning the current model uses. Press `Shift+Tab` to cycle through supported levels.
 - `/login` and `/logout` manage provider access.
-- `/settings` changes common preferences.
+- `/config` changes common preferences.
 
 Prompt templates, skills, and extensions can add more commands to the same menu. See [Choose a Model](models.md), [Configuration](configuration.md), or the complete [Slash Commands reference](slash-commands.md).
 
@@ -56,12 +56,12 @@ Prompt templates, skills, and extensions can add more commands to the same menu.
 
 msa saves sessions automatically unless session persistence is disabled.
 
-- `/new` starts a new session.
+- `/clear` starts a new session.
 - `/resume` opens another saved session.
-- `/name` gives the current session a recognizable name.
-- `/session` shows its file, ID, message count, token usage, and cost.
+- `/rename` gives the current session a recognizable name.
+- `/status` shows its file, ID, message count, token usage, and cost.
 
-Use `/tree`, `/fork`, or `/clone` when you want to explore another approach without losing existing work. Use `/compact` to reduce the conversation history sent to the model. See [Sessions and Context](sessions.md) for these workflows.
+Use `/rewind`, `/fork`, or `/branch` when you want to explore another approach without losing existing work. Use `/compact` to reduce the conversation history sent to the model. See [Sessions and Context](sessions.md) for these workflows.
 
 After leaving msa, run `msa --continue` from the same folder to resume its most recent session.
 
@@ -83,9 +83,9 @@ Use `/share` to upload the session and get a viewer link. By default, Radius aut
 
 ## Adjust the terminal
 
-Fullscreen mode, the default, keeps the editor and status area fixed while the transcript scrolls within the terminal window. Regular mode uses the terminal's normal scrollback. Choose a mode through `/settings` or `--tui-mode`.
+Fullscreen mode, the default, keeps the editor and status area fixed while the transcript scrolls within the terminal window. Regular mode uses the terminal's normal scrollback. Choose a mode through `/config` or `--tui-mode`.
 
-Terminal support for mouse input, keyboard shortcuts, and inline images varies. See [Terminal Setup](terminal-setup.md) for platform-specific configuration and [Keybindings](keybindings.md) for every configurable shortcut. Run `/hotkeys` to inspect the shortcuts active in your current session.
+Terminal support for mouse input, keyboard shortcuts, and inline images varies. See [Terminal Setup](terminal-setup.md) for platform-specific configuration and [Keybindings](keybindings.md) for every configurable shortcut. Run `/keybindings` to inspect the shortcuts active in your current session.
 
 ## Collect diagnostic information
 

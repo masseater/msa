@@ -2,7 +2,7 @@
 
 msa supports user-level and project configuration. User-level configuration lives in the agent directory, which defaults to `~/.msa/agent`. Project configuration lives in `.msa` under the working directory and loads after [project trust](security.md#understand-project-trust) is granted. The only exception is `sessionDir`, which msa reads before resolving trust so it can locate sessions.
 
-In interactive mode, use `/settings` to change common preferences. For other options, ask msa to update the configuration or edit the relevant files directly. Run `/reload` after manually changing settings, keybindings, instructions, or resources.
+In interactive mode, use `/config` to change common preferences. For other options, ask msa to update the configuration or edit the relevant files directly. Run `/reload` after manually changing settings, keybindings, instructions, or resources.
 
 ## Agent directory
 

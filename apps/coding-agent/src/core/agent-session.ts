@@ -172,7 +172,7 @@ import {
   DEFAULT_TOOL_NAMES,
   type SettingsManager,
 } from "./settings-manager.ts";
-import type { SlashCommandInfo } from "./slash-commands.ts";
+import { type SlashCommandInfo, slashCommandName, withSkillCommands } from "./slash-commands.ts";
 import {
   BUILTIN_PATH_PREFIX,
   createSyntheticSourceInfo,
@@ -409,7 +409,7 @@ export interface ModelCycleResult {
   isScoped: boolean;
 }
 
-/** Session statistics for /session command */
+/** Session statistics for the /status command */
 export interface SessionStats {
   sessionFile: string | undefined;
   sessionId: string;
@@ -2338,7 +2338,7 @@ export class AgentSession {
     }
     const { text: currentText, images: currentImages } = processedInput;
 
-    // Expand skill commands (/skill:name args) and prompt templates (/template args)
+    // Expand skill commands (/name args) and prompt templates (/template args)
     let expandedText = currentText;
     if (expandPromptTemplates) {
       expandedText = this._expandSkillCommand(expandedText);
@@ -2396,7 +2396,7 @@ export class AgentSession {
     const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
 
     const command = this._extensionRunner.getCommand(commandName);
-    if (!command) return false;
+    if (!command || this._isSkillCommand(text)) return false;
 
     // Get command context from extension runner (includes session control methods)
     const ctx = this._extensionRunner.createCommandContext();
@@ -2415,16 +2415,23 @@ export class AgentSession {
     }
   }
 
+  /** Whether `text` starts with `/name` for a loaded skill. */
+  private _isSkillCommand(text: string): boolean {
+    const name = slashCommandName(text);
+    return this.resourceLoader.getSkills().skills.some((skill) => skill.name === name);
+  }
+
   /**
-   * Expand skill commands (/skill:name args) to their full content.
+   * Expand skill commands (`/name args`) to their full content. A skill takes its name from a
+   * prompt template or extension command of the same name.
    * Returns the expanded text, or the original text if not a skill command or skill not found.
    * Emits errors via extension runner if file read fails.
    */
   private _expandSkillCommand(text: string): string {
-    if (!text.startsWith("/skill:")) return text;
+    if (!text.startsWith("/")) return text;
 
     const spaceIndex = text.indexOf(" ");
-    const skillName = spaceIndex === -1 ? text.slice(7) : text.slice(7, spaceIndex);
+    const skillName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
     const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1).trim();
 
     const skill = this.resourceLoader.getSkills().skills.find((s) => s.name === skillName);
@@ -2546,7 +2553,7 @@ export class AgentSession {
     const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
     const command = this._extensionRunner.getCommand(commandName);
 
-    if (command) {
+    if (command && !this._isSkillCommand(text)) {
       throw new Error(
         `Extension command "/${commandName}" cannot be queued. Use prompt() or execute the command when not streaming.`,
       );
@@ -3887,13 +3894,13 @@ export class AgentSession {
       }));
 
       const skills: SlashCommandInfo[] = this._resourceLoader.getSkills().skills.map((skill) => ({
-        name: `skill:${skill.name}`,
+        name: skill.name,
         description: skill.description,
         source: "skill",
         sourceInfo: skill.sourceInfo,
       }));
 
-      return [...extensionCommands, ...templates, ...skills];
+      return withSkillCommands([...extensionCommands, ...templates], skills);
     };
 
     runner.bindCore(

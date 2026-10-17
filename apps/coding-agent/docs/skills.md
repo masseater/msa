@@ -42,15 +42,15 @@ Use relative paths from the skill directory when referring to bundled files. msa
 
 At startup, msa scans configured skill locations and adds each skill’s name, description, and path to the system prompt. It does not add the full instructions.
 
-When a task matches, the model reads `SKILL.md` and follows its instructions. This keeps detailed guidance out of context until it is needed. A model might fail to load a relevant skill, so use `/skill:name` when you need to force it.
+When a task matches, the model reads `SKILL.md` and follows its instructions. This keeps detailed guidance out of context until it is needed. A model might fail to load a relevant skill, so use `/name` when you need to force it.
 
-Arguments after `/skill:name` are appended to the loaded instructions as a user request:
+Arguments after the command are appended to the loaded instructions as a user request:
 
 ```text
-/skill:pdf-tools extract report.pdf
+/pdf-tools extract report.pdf
 ```
 
-Set `disable-model-invocation: true` in frontmatter when a skill should be available only through its explicit command. The `enableSkillCommands` [setting](settings.md) controls whether skill commands appear in interactive command discovery; manually entered `/skill:name` commands still work.
+Set `disable-model-invocation: true` in frontmatter when a skill should be available only through its explicit command. The `enableSkillCommands` [setting](settings.md) controls whether skill commands appear in interactive command discovery; manually entered `/name` commands still work. A skill takes its name from a built-in command, an extension command, or a prompt template of the same name, as in Claude Code; the built-in command keeps its aliases.
 
 <a id="choose-where-it-loads"></a>
 
@@ -86,7 +86,7 @@ Malformed `SKILL.md` files and declared skills without descriptions are not load
 
 ## Validate and share a skill
 
-Run msa from a location where the skill is discoverable, then inspect the startup diagnostics and `/skill:name` command. Run `/reload` after editing a skill during an active session.
+Run msa from a location where the skill is discoverable, then inspect the startup diagnostics and its `/name` command. Run `/reload` after editing a skill during an active session.
 
 Use a [msa package](packages.md) to distribute one or more skills through npm or git. Keep environment setup inside the skill and declare any required runtime dependencies in the package.
 

@@ -2,7 +2,7 @@
 
 msa exposes named actions, such as `app.session.new`, that can be assigned keybindings. You can change default assignments or bind unassigned actions in msa's [user configuration](configuration.md#agent-directory).
 
-Run `/hotkeys` to see the active shortcuts for the main editor and application.
+Run `/keybindings` to see the active shortcuts for the main editor and application.
 
 ## Assign keybindings
 
@@ -134,8 +134,8 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 
 | Keybinding id                   | Default          | Description                                        |
 | ------------------------------- | ---------------- | -------------------------------------------------- |
-| `app.session.new`               | None             | Start a new session (`/new`)                       |
-| `app.session.tree`              | None             | Open session tree navigator (`/tree`)              |
+| `app.session.new`               | None             | Start a new session (`/clear`)                     |
+| `app.session.tree`              | None             | Open session tree navigator (`/rewind`)            |
 | `app.session.fork`              | None             | Fork current session (`/fork`)                     |
 | `app.session.resume`            | None             | Open session resume picker (`/resume`)             |
 | `app.session.togglePath`        | `ctrl+p`         | Toggle path display                                |
@@ -161,12 +161,12 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 
 ### Display and Message Queue
 
-| Keybinding id          | Default                                   | Description                                                                                                                                                                                                             |
-| ---------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `app.tools.expand`     | `ctrl+o`                                  | Collapse or expand tool output                                                                                                                                                                                          |
-| `app.message.copy`     | `ctrl+x`                                  | Copy the selected message in `/tree`; in fullscreen mode, copy the active selection when `fullscreenCopyOnSelect` is `false`; otherwise copy the last assistant message. On OAuth sign-in screens, copy the sign-in URL |
-| `app.message.followUp` | `alt+enter` (`ctrl+q` on Windows and WSL) | Queue follow-up message                                                                                                                                                                                                 |
-| `app.message.dequeue`  | `alt+up` (`alt+q` on Windows and WSL)     | Restore queued messages to editor                                                                                                                                                                                       |
+| Keybinding id          | Default                                   | Description                                                                                                                                                                                                               |
+| ---------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app.tools.expand`     | `ctrl+o`                                  | Collapse or expand tool output                                                                                                                                                                                            |
+| `app.message.copy`     | `ctrl+x`                                  | Copy the selected message in `/rewind`; in fullscreen mode, copy the active selection when `fullscreenCopyOnSelect` is `false`; otherwise copy the last assistant message. On OAuth sign-in screens, copy the sign-in URL |
+| `app.message.followUp` | `alt+enter` (`ctrl+q` on Windows and WSL) | Queue follow-up message                                                                                                                                                                                                   |
+| `app.message.dequeue`  | `alt+up` (`alt+q` on Windows and WSL)     | Restore queued messages to editor                                                                                                                                                                                         |
 
 ### Tree Navigation
 

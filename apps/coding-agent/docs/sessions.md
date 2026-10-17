@@ -11,9 +11,9 @@ msa --continue
 msa --resume
 ```
 
-`--continue` opens the most recent session for the current working directory. `--resume` opens the session picker. In interactive mode, `/resume` opens the same picker and `/new` starts a new session.
+`--continue` opens the most recent session for the current working directory. `--resume` opens the session picker. In interactive mode, `/resume` opens the same picker and `/clear` starts a new session.
 
-Use `/name` or `--name` to assign a recognizable session name. Run `/session` to verify the current session file, ID, message count, token usage, and cost.
+Use `/rename` or `--name` to assign a recognizable session name. Run `/status` to verify the current session file, ID, message count, token usage, and cost.
 
 The session picker lets you search, rename, and delete sessions. It can also show paths, change sorting, and limit results to named sessions. See [Keybindings](keybindings.md#sessions) for its shortcuts.
 
@@ -21,13 +21,13 @@ The session picker lets you search, rename, and delete sessions. It can also sho
 
 msa stores entries as a tree, so returning to an earlier point does not erase the branch you leave.
 
-| Action   | Result                                             | Use it when                                   |
-| -------- | -------------------------------------------------- | --------------------------------------------- |
-| `/tree`  | Moves within the current session file              | Related alternatives should stay together     |
-| `/fork`  | Creates a new session from an earlier user message | The alternative should become separate work   |
-| `/clone` | Copies the active branch into a new session        | You want a separate copy of the current state |
+| Action    | Result                                             | Use it when                                   |
+| --------- | -------------------------------------------------- | --------------------------------------------- |
+| `/rewind` | Moves within the current session file              | Related alternatives should stay together     |
+| `/fork`   | Creates a new session from an earlier user message | The alternative should become separate work   |
+| `/branch` | Copies the active branch into a new session        | You want a separate copy of the current state |
 
-In `/tree`, select a user message to put its text back in the editor. Edit and submit it to create another branch. Selecting an assistant response or another entry continues after that entry with an empty editor.
+In `/rewind`, select a user message to put its text back in the editor. Edit and submit it to create another branch. Selecting an assistant response or another entry continues after that entry with an empty editor.
 
 When you leave a branch, msa can summarize it and attach that summary to the branch you enter. This preserves relevant work from the abandoned path without including every message from it.
 

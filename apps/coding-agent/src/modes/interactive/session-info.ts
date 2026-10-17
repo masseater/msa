@@ -6,7 +6,7 @@ import type { UsageCostBreakdownEntry } from "../../core/usage-totals.ts";
 import { formatTokens } from "./components/footer.ts";
 import { theme } from "./theme/theme.ts";
 
-/** Everything `/session` reports, captured when the command runs. */
+/** Everything `/status` reports, captured when the command runs. */
 export type SessionInfo = {
   stats: SessionStats;
   sessionName: string | undefined;
@@ -20,7 +20,7 @@ export type SessionInfo = {
 
 const label = (text: string): string => theme.fg("dim", text);
 
-/** The `/session` report. Built from the current theme, so call it again after theme changes. */
+/** The `/status` report. Built from the current theme, so call it again after theme changes. */
 export function formatSessionInfo(info: SessionInfo): string {
   const { stats, cacheWaste, usageBreakdown, cacheWarmingStatus } = info;
   const lines: string[] = [theme.bold("Session Info"), ""];

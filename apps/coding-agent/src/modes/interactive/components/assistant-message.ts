@@ -23,6 +23,8 @@ export class AssistantMessageComponent extends Container {
   private hasToolCalls = false;
   private isStreaming = false;
   private thinkingVisibilityOverrides = new Map<number, boolean>();
+  /** Shows this message's thinking in place of the message, once a tool group folds it in. */
+  private splitThinking?: AssistantMessageComponent;
 
   constructor(
     message?: AssistantMessage,
@@ -88,6 +90,39 @@ export class AssistantMessageComponent extends Container {
     );
   }
 
+  /**
+   * Move the thinking of a message that also shows text into a component of its own, so a tool
+   * group can fold the thinking in while the text stays in the chat. The returned component keeps
+   * following this message's updates.
+   */
+  takeThinking(): AssistantMessageComponent | undefined {
+    const message = this.lastMessage;
+    if (this.splitThinking || !message || !this.hasVisibleText()) return undefined;
+    if (!message.content.some((c) => c.type === "thinking" && c.thinking.trim())) return undefined;
+    this.splitThinking = new AssistantMessageComponent(
+      undefined,
+      this.hideThinkingBlock,
+      this.markdownTheme,
+      this.hiddenThinkingLabel,
+      this.outputPad,
+      this.markdownTransformers,
+    );
+    this.updateContent(message);
+    return this.splitThinking;
+  }
+
+  /** The component holding this message's thinking after {@link takeThinking}. */
+  get takenThinking(): AssistantMessageComponent | undefined {
+    return this.splitThinking;
+  }
+
+  /** Whether the message has thinking to show. */
+  hasThinking(): boolean {
+    return (
+      this.lastMessage?.content.some((c) => c.type === "thinking" && c.thinking.trim()) ?? false
+    );
+  }
+
   override render(width: number): string[] {
     const lines = super.render(width);
     if (this.hasToolCalls || lines.length === 0) {
@@ -103,10 +138,24 @@ export class AssistantMessageComponent extends Container {
     this.lastMessage = message;
     this.isStreaming = isStreaming;
 
+    // The thinking component stands in for the message's thinking, but not for its stop reason,
+    // which the message shows. Keeping the tool calls stops it from marking a prompt zone.
+    this.splitThinking?.updateContent(
+      {
+        ...message,
+        content: message.content.filter((c) => c.type === "thinking" || c.type === "toolCall"),
+        stopReason: "toolUse",
+      },
+      isStreaming,
+    );
+    const contentBlocks = this.splitThinking
+      ? message.content.filter((c) => c.type !== "thinking")
+      : message.content;
+
     // Clear content container
     this.contentContainer.clear();
 
-    const hasVisibleContent = message.content.some(
+    const hasVisibleContent = contentBlocks.some(
       (c) => (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()),
     );
 
@@ -116,8 +165,8 @@ export class AssistantMessageComponent extends Container {
 
     // Render content in order
     let thinkingRunIndex = 0;
-    for (let i = 0; i < message.content.length; i++) {
-      const content = message.content[i];
+    for (let i = 0; i < contentBlocks.length; i++) {
+      const content = contentBlocks[i];
       if (content.type === "text" && content.text.trim()) {
         // Assistant text messages with no background - trim the text
         // Set paddingY=0 to avoid extra spacing before tool executions
@@ -132,8 +181,8 @@ export class AssistantMessageComponent extends Container {
         );
       } else if (content.type === "thinking") {
         const thinkingBlocks: string[] = [];
-        for (; i < message.content.length; i++) {
-          const thinkingContent = message.content[i];
+        for (; i < contentBlocks.length; i++) {
+          const thinkingContent = contentBlocks[i];
           if (thinkingContent.type !== "thinking") {
             break;
           }
@@ -150,7 +199,7 @@ export class AssistantMessageComponent extends Container {
 
         // Add spacing only when another visible assistant content block follows.
         // This avoids a superfluous blank line before separately-rendered tool execution blocks.
-        const hasVisibleContentAfter = message.content
+        const hasVisibleContentAfter = contentBlocks
           .slice(i + 1)
           .some(
             (c) =>

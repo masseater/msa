@@ -5,7 +5,7 @@
  * `tool_search` searches tools that are not declared to
  * the model (`codemode` and `deferred` exposure) and loads the matches, so they are declared for the
  * next model call. Loading goes through the active tool set, so it is recorded in the transcript
- * like any other tool change and survives `/tree`, resume, and fork on that branch.
+ * like any other tool change and survives `/rewind`, resume, and fork on that branch.
  */
 
 import { type Static, Type } from "typebox";
