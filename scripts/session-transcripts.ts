@@ -1,422 +1,248 @@
-#!/usr/bin/env node
-/**
- * Extracts session transcripts for a given cwd, splits into context-sized files,
- * optionally spawns subagents to analyze patterns.
- *
- * Usage: node scripts/session-transcripts.ts [--analyze] [--output <dir>] [cwd]
- *   --analyze      Spawn msa subagents to analyze each transcript file
- *   --output <dir> Output directory for transcript files (defaults to ./session-transcripts)
- *   cwd            Working directory to extract sessions for (defaults to current)
- */
-
-import { spawn } from "child_process";
-import { readFileSync, readdirSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { createInterface } from "node:readline";
+import { homedir } from "node:os";
 import { styleText } from "node:util";
-import { homedir } from "os";
-import { join, resolve } from "path";
+
+import { Console, Effect, Predicate } from "effect";
 
 import {
   parseSessionEntries,
   type SessionMessageEntry,
 } from "../apps/coding-agent/src/core/session-manager.ts";
+import { Host, runScript } from "./host.ts";
+import type { HostShape } from "./host.ts";
+import { runSubagent } from "./session-transcripts-agent.ts";
+import { aggregationPrompt, analysisPrompt } from "./session-transcripts-prompts.ts";
 
-const MAX_CHARS_PER_FILE = 100_000; // ~20k tokens, leaving room for prompt + analysis + output
+const MAX_CHARS_PER_FILE = 100_000;
 
-function cwdToSessionDir(cwd: string): string {
-  const normalized = resolve(cwd).replace(/\//g, "-");
-  return `--${normalized.slice(1)}--`; // Remove leading slash, wrap with --
+interface Args {
+  readonly analyze: boolean;
+  readonly cwd: string;
+  readonly outputDir: string;
 }
 
-function extractTextContent(content: string | Array<{ type: string; text?: string }>): string {
-  if (typeof content === "string") return content;
+const cwdToSessionDir = (host: HostShape, cwd: string): string =>
+  `--${host.resolve(cwd).replaceAll("/", "-").slice(1)}--`;
+
+const extractTextContent = (content: unknown): string => {
+  if (Predicate.isString(content)) return content;
   if (!Array.isArray(content)) return "";
-
   return content
-    .filter((c) => c.type === "text" && c.text)
-    .map((c) => c.text!)
+    .filter(
+      (block: unknown): block is { readonly text: string } =>
+        Predicate.isObject(block) &&
+        "type" in block &&
+        block.type === "text" &&
+        "text" in block &&
+        Predicate.isString(block.text) &&
+        block.text !== "",
+    )
+    .map((block) => block.text)
     .join("\n");
-}
+};
 
-function parseSession(filePath: string): string[] {
-  const content = readFileSync(filePath, "utf8");
-  const entries = parseSessionEntries(content);
-  const messages: string[] = [];
-
-  for (const entry of entries) {
-    if (entry.type !== "message") continue;
-    const msgEntry = entry as SessionMessageEntry;
-    const { role, content: messageContent } = msgEntry.message as {
-      role?: string;
-      content?: unknown;
-    };
-
-    if (role !== "user" && role !== "assistant") continue;
-
-    const text = extractTextContent(
-      messageContent as string | Array<{ type: string; text?: string }>,
-    );
-    if (!text.trim()) continue;
-
-    messages.push(`[${role.toUpperCase()}]\n${text}`);
-  }
-
-  return messages;
-}
-
-const MAX_DISPLAY_WIDTH = 100;
-
-function truncateLine(text: string, maxWidth: number): string {
-  const singleLine = text.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
-  if (singleLine.length <= maxWidth) return singleLine;
-  return singleLine.slice(0, maxWidth - 3) + "...";
-}
-
-interface JsonEvent {
-  type: string;
-  assistantMessageEvent?: { type: string; delta?: string };
-  toolName?: string;
-  args?: {
-    path?: string;
-    offset?: number;
-    limit?: number;
-    content?: string;
-  };
-}
-
-function runSubagent(prompt: string, cwd: string): Promise<{ success: boolean }> {
-  return new Promise((finish) => {
-    const child = spawn("msa", ["--mode", "json", "--tools", "read,write", "-p", prompt], {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    let textBuffer = "";
-
-    const rl = createInterface({ input: child.stdout });
-
-    rl.on("line", (line) => {
-      try {
-        const event: JsonEvent = JSON.parse(line);
-
-        if (event.type === "message_update" && event.assistantMessageEvent) {
-          const msgEvent = event.assistantMessageEvent;
-          if (msgEvent.type === "text_delta" && msgEvent.delta) {
-            textBuffer += msgEvent.delta;
-          }
-        } else if (event.type === "tool_execution_start" && event.toolName) {
-          // Print accumulated text before tool starts
-          if (textBuffer.trim()) {
-            console.log(styleText("dim", "  " + truncateLine(textBuffer, MAX_DISPLAY_WIDTH)));
-            textBuffer = "";
-          }
-          // Format tool call with args
-          let argsStr = "";
-          if (event.args) {
-            if (event.toolName === "read") {
-              argsStr = event.args.path || "";
-              if (event.args.offset) argsStr += ` offset=${event.args.offset}`;
-              if (event.args.limit) argsStr += ` limit=${event.args.limit}`;
-            } else if (event.toolName === "write") {
-              argsStr = event.args.path || "";
-            }
-          }
-          console.log(styleText("cyan", `  [${event.toolName}] ${argsStr}`));
-        } else if (event.type === "turn_end") {
-          // Print any remaining text at turn end
-          if (textBuffer.trim()) {
-            console.log(styleText("dim", "  " + truncateLine(textBuffer, MAX_DISPLAY_WIDTH)));
-          }
-          textBuffer = "";
-        }
-      } catch {
-        // Ignore malformed JSON
-      }
-    });
-
-    child.stderr.on("data", (data) => {
-      process.stderr.write(styleText("red", data.toString()));
-    });
-
-    child.on("close", (code) => {
-      finish({ success: code === 0 });
-    });
-
-    child.on("error", (err) => {
-      console.error(styleText("red", `  Failed to spawn msa: ${err.message}`));
-      finish({ success: false });
-    });
+const parseSession = (host: HostShape, filePath: string) =>
+  Effect.gen(function* () {
+    const entries = parseSessionEntries(yield* host.readText(filePath));
+    const messages: Array<string> = [];
+    for (const entry of entries) {
+      if (entry.type !== "message") continue;
+      const { role, content } = (entry as SessionMessageEntry).message as {
+        role?: string;
+        content?: unknown;
+      };
+      if (role !== "user" && role !== "assistant") continue;
+      const text = extractTextContent(content);
+      if (text.trim() === "") continue;
+      messages.push(`[${role.toUpperCase()}]\n${text}`);
+    }
+    return messages;
   });
-}
 
-async function main() {
+const parseArgs = (host: HostShape): Args => {
   const args = process.argv.slice(2);
-  const analyzeFlag = args.includes("--analyze");
-
-  // Parse --output <dir>
-  const outputIdx = args.indexOf("--output");
-  let outputDir = resolve("./session-transcripts");
-  if (outputIdx !== -1 && args[outputIdx + 1]) {
-    outputDir = resolve(args[outputIdx + 1]);
+  const outputIndex = args.indexOf("--output");
+  const outputValue = outputIndex === -1 ? undefined : args[outputIndex + 1];
+  const flagIndices = new Set<number>([args.indexOf("--analyze")]);
+  if (outputIndex !== -1) {
+    flagIndices.add(outputIndex);
+    flagIndices.add(outputIndex + 1);
   }
+  const cwdArg = args.find(
+    (arg, index) => !flagIndices.has(index) && !arg.startsWith("--") && arg !== "",
+  );
+  return {
+    analyze: args.includes("--analyze"),
+    cwd: host.resolve(cwdArg ?? process.cwd()),
+    outputDir:
+      outputValue === undefined || outputValue === ""
+        ? host.resolve("./session-transcripts")
+        : host.resolve(outputValue),
+  };
+};
 
-  // Find cwd (positional arg that's not a flag or flag value)
-  const flagIndices = new Set<number>();
-  flagIndices.add(args.indexOf("--analyze"));
-  if (outputIdx !== -1) {
-    flagIndices.add(outputIdx);
-    flagIndices.add(outputIdx + 1);
-  }
-  const cwdArg = args.find((a, i) => !flagIndices.has(i) && !a.startsWith("--"));
-  const cwd = resolve(cwdArg || process.cwd());
+const transcriptFileName = (index: number): string =>
+  `session-transcripts-${String(index).padStart(3, "0")}.txt`;
 
-  mkdirSync(outputDir, { recursive: true });
-  const sessionsBase = join(homedir(), ".msa/agent/sessions");
-  const sessionDirName = cwdToSessionDir(cwd);
-  const sessionDir = join(sessionsBase, sessionDirName);
+const collectTranscripts = (host: HostShape, sessionDir: string) =>
+  Effect.gen(function* () {
+    const names = yield* host.readDirectory(sessionDir);
+    const sessionFiles = [...names.filter((name) => name.endsWith(".jsonl"))].sort();
+    yield* Console.log(`Found ${sessionFiles.length} session files in ${sessionDir}`);
+    const transcripts = yield* Effect.forEach(sessionFiles, (file) =>
+      Effect.gen(function* () {
+        const messages = yield* parseSession(host, host.join(sessionDir, file));
+        return messages.length > 0
+          ? [`=== SESSION: ${file} ===\n${messages.join("\n---\n")}\n=== END SESSION ===`]
+          : [];
+      }),
+    );
+    return transcripts.flat();
+  });
 
-  if (!existsSync(sessionDir)) {
-    console.error(`No sessions found for ${cwd}`);
-    console.error(`Expected: ${sessionDir}`);
-    process.exit(1);
-  }
-
-  const sessionFiles = readdirSync(sessionDir)
-    .filter((f) => f.endsWith(".jsonl"))
-    .sort();
-
-  console.log(`Found ${sessionFiles.length} session files in ${sessionDir}`);
-
-  // Collect all transcripts
-  const allTranscripts: string[] = [];
-  for (const file of sessionFiles) {
-    const filePath = join(sessionDir, file);
-    const messages = parseSession(filePath);
-    if (messages.length > 0) {
-      allTranscripts.push(
-        `=== SESSION: ${file} ===\n${messages.join("\n---\n")}\n=== END SESSION ===`,
-      );
-    }
-  }
-
-  if (allTranscripts.length === 0) {
-    console.error("No transcripts found");
-    process.exit(1);
-  }
-
-  // Split into files respecting MAX_CHARS_PER_FILE
-  const outputFiles: string[] = [];
-  let currentContent = "";
-  let fileIndex = 0;
-
-  for (const transcript of allTranscripts) {
-    // If adding this transcript would exceed limit, write current and start new
-    if (
-      currentContent.length > 0 &&
-      currentContent.length + transcript.length + 2 > MAX_CHARS_PER_FILE
-    ) {
-      const filename = `session-transcripts-${String(fileIndex).padStart(3, "0")}.txt`;
-      writeFileSync(join(outputDir, filename), currentContent);
-      outputFiles.push(filename);
-      console.log(`Wrote ${filename} (${currentContent.length} chars)`);
-      currentContent = "";
-      fileIndex++;
-    }
-
-    // If this single transcript exceeds limit, write it to its own file
-    if (transcript.length > MAX_CHARS_PER_FILE) {
-      // Write any pending content first
-      if (currentContent.length > 0) {
-        const filename = `session-transcripts-${String(fileIndex).padStart(3, "0")}.txt`;
-        writeFileSync(join(outputDir, filename), currentContent);
+const writeTranscriptFiles = (
+  host: HostShape,
+  outputDir: string,
+  transcripts: ReadonlyArray<string>,
+) =>
+  Effect.gen(function* () {
+    const outputFiles: Array<string> = [];
+    let currentContent = "";
+    let fileIndex = 0;
+    const flush = (oversized: string | undefined) =>
+      Effect.gen(function* () {
+        const content = oversized ?? currentContent;
+        const filename = transcriptFileName(fileIndex);
+        yield* host.writeText(host.join(outputDir, filename), content);
         outputFiles.push(filename);
-        console.log(`Wrote ${filename} (${currentContent.length} chars)`);
-        currentContent = "";
-        fileIndex++;
+        yield* oversized === undefined
+          ? Console.log(`Wrote ${filename} (${content.length} chars)`)
+          : Console.log(
+              styleText("yellow", `Wrote ${filename} (${content.length} chars) - oversized`),
+            );
+        if (oversized === undefined) currentContent = "";
+        fileIndex += 1;
+      });
+    for (const transcript of transcripts) {
+      if (
+        currentContent.length > 0 &&
+        currentContent.length + transcript.length + 2 > MAX_CHARS_PER_FILE
+      ) {
+        yield* flush(undefined);
       }
-      // Write the large transcript to its own file
-      const filename = `session-transcripts-${String(fileIndex).padStart(3, "0")}.txt`;
-      writeFileSync(join(outputDir, filename), transcript);
-      outputFiles.push(filename);
-      console.log(
-        styleText("yellow", `Wrote ${filename} (${transcript.length} chars) - oversized`),
-      );
-      fileIndex++;
-      continue;
+      if (transcript.length > MAX_CHARS_PER_FILE) {
+        if (currentContent.length > 0) yield* flush(undefined);
+        yield* flush(transcript);
+        continue;
+      }
+      currentContent += (currentContent === "" ? "" : "\n\n") + transcript;
     }
+    if (currentContent.length > 0) yield* flush(undefined);
+    yield* Console.log(`\nCreated ${outputFiles.length} transcript file(s) in ${outputDir}`);
+    return outputFiles;
+  });
 
-    currentContent += (currentContent ? "\n\n" : "") + transcript;
-  }
+const agentsMdSectionFor = (host: HostShape, cwd: string) =>
+  Effect.gen(function* () {
+    const candidates = [host.join(homedir(), ".msa/agent/AGENTS.md"), host.join(cwd, "AGENTS.md")];
+    const agentsMdFiles = yield* Effect.filter(candidates, (file) => host.exists(file));
+    const section =
+      agentsMdFiles.length > 0
+        ? `STEP 1: Read the existing AGENTS.md file(s) to see what's already encoded:\n${agentsMdFiles.join("\n")}\n\nSTEP 2: `
+        : "";
+    return { agentsMdFiles, section };
+  });
 
-  // Write remaining content
-  if (currentContent.length > 0) {
-    const filename = `session-transcripts-${String(fileIndex).padStart(3, "0")}.txt`;
-    writeFileSync(join(outputDir, filename), currentContent);
-    outputFiles.push(filename);
-    console.log(`Wrote ${filename} (${currentContent.length} chars)`);
-  }
-
-  console.log(`\nCreated ${outputFiles.length} transcript file(s) in ${outputDir}`);
-
-  if (!analyzeFlag) {
-    console.log("\nRun with --analyze to spawn msa subagents for pattern analysis.");
-    return;
-  }
-
-  // Find AGENTS.md files to compare against
-  const globalAgentsMd = join(homedir(), ".msa/agent/AGENTS.md");
-  const localAgentsMd = join(cwd, "AGENTS.md");
-  const agentsMdFiles = [globalAgentsMd, localAgentsMd].filter(existsSync);
-  const agentsMdSection =
-    agentsMdFiles.length > 0
-      ? `STEP 1: Read the existing AGENTS.md file(s) to see what's already encoded:\n${agentsMdFiles.join("\n")}\n\nSTEP 2: `
-      : "";
-
-  // Spawn subagents to analyze each file
-  const analysisPrompt = `You are analyzing session transcripts to identify recurring user instructions that could be automated.
-
-${agentsMdSection}READING THE TRANSCRIPT:
-The transcript file is large. Read it in chunks of 1000 lines using offset/limit parameters:
-1. First: read with limit=1000 (lines 1-1000)
-2. Then: read with offset=1001, limit=1000 (lines 1001-2000)
-3. Continue incrementing offset by 1000 until you reach the end
-4. Only after reading the ENTIRE file, perform the analysis and write the summary
-
-ANALYSIS TASK:
-Look for patterns where the user repeatedly gives similar instructions. These could become:
-- AGENTS.md entries: coding style rules, behavior guidelines, project conventions
-- Skills: multi-step workflows with external tools (search, browser, APIs)
-- Prompt templates: reusable prompts for common tasks
-
-Compare each pattern against the existing AGENTS.md content to determine if it's NEW or EXISTING.
-
-OUTPUT FORMAT (strict):
-Write a file with exactly this structure. Use --- as separator between patterns.
-
-PATTERN: <short descriptive name>
-STATUS: NEW | EXISTING
-TYPE: agents-md | skill | prompt-template
-FREQUENCY: <number of times observed>
-EVIDENCE:
-- "<exact quote 1>"
-- "<exact quote 2>"
-- "<exact quote 3>"
-DRAFT:
-<proposed content for AGENTS.md entry, SKILL.md, or prompt template>
----
-
-Rules:
-- Only include patterns that appear 2+ times
-- STATUS is NEW if not in AGENTS.md, EXISTING if already covered
-- EVIDENCE must contain exact quotes from the transcripts
-- DRAFT must be ready-to-use content
-- If no patterns found, write "NO PATTERNS FOUND"
-- Do not include any other text outside this format`;
-
-  console.log("\nSpawning subagents for analysis...");
-  for (const file of outputFiles) {
+const analyzeFile = (options: {
+  readonly file: string;
+  readonly host: HostShape;
+  readonly outputDir: string;
+  readonly prompt: string;
+}) =>
+  Effect.gen(function* () {
+    const { file, host, outputDir, prompt } = options;
     const summaryFile = file.replace(".txt", ".summary.txt");
-    const filePath = join(outputDir, file);
-    const summaryPath = join(outputDir, summaryFile);
-
-    const fileContent = readFileSync(filePath, "utf8");
-    const fileSize = fileContent.length;
-
-    console.log(`Analyzing ${file} (${fileSize} chars)...`);
-
+    const filePath = host.join(outputDir, file);
+    const summaryPath = host.join(outputDir, summaryFile);
+    const fileContent = yield* host.readText(filePath);
+    yield* Console.log(`Analyzing ${file} (${fileContent.length} chars)...`);
     const lineCount = fileContent.split("\n").length;
-    const fullPrompt = `${analysisPrompt}\n\nThe file ${filePath} has ${lineCount} lines. Read it in full using chunked reads, then write your analysis to ${summaryPath}`;
-
-    const result = await runSubagent(fullPrompt, outputDir);
-
-    if (result.success && existsSync(summaryPath)) {
-      console.log(styleText("green", `  -> ${summaryFile}`));
-    } else if (result.success) {
-      console.error(styleText("yellow", `  Agent finished but did not write ${summaryFile}`));
-    } else {
-      console.error(styleText("red", `  Failed to analyze ${file}`));
+    const success = yield* runSubagent({
+      cwd: outputDir,
+      host,
+      prompt: `${prompt}\n\nThe file ${filePath} has ${lineCount} lines. Read it in full using chunked reads, then write your analysis to ${summaryPath}`,
+    });
+    if (success && (yield* host.exists(summaryPath))) {
+      yield* Console.log(styleText("green", `  -> ${summaryFile}`));
+      return;
     }
+    yield* success
+      ? Console.error(styleText("yellow", `  Agent finished but did not write ${summaryFile}`))
+      : Console.error(styleText("red", `  Failed to analyze ${file}`));
+  });
+
+const aggregate = (options: {
+  readonly agentsMdFiles: ReadonlyArray<string>;
+  readonly host: HostShape;
+  readonly outputDir: string;
+}) =>
+  Effect.gen(function* () {
+    const { agentsMdFiles, host, outputDir } = options;
+    const names = yield* host.readDirectory(outputDir);
+    const summaryFiles = [...names.filter((name) => name.endsWith(".summary.txt"))].sort();
+    yield* Console.log("\n=== Individual Analysis Complete ===");
+    yield* Console.log(`Created ${summaryFiles.length} summary files`);
+    if (summaryFiles.length === 0) {
+      yield* Console.log(styleText("yellow", "No summary files created. Nothing to aggregate."));
+      return;
+    }
+    yield* Console.log("\nAggregating findings into final summary...");
+    const finalSummaryPath = host.join(outputDir, "FINAL-SUMMARY.txt");
+    const success = yield* runSubagent({
+      cwd: outputDir,
+      host,
+      prompt: aggregationPrompt({
+        agentsMdFiles,
+        finalSummaryPath,
+        summaryPaths: summaryFiles.map((file) => host.join(outputDir, file)).join("\n"),
+      }),
+    });
+    if (success && (yield* host.exists(finalSummaryPath))) {
+      yield* Console.log(styleText("green", "\n=== Final Summary Created ==="));
+      yield* Console.log(styleText("green", `  ${finalSummaryPath}`));
+      return;
+    }
+    yield* success
+      ? Console.error(styleText("yellow", "Agent finished but did not write final summary"))
+      : Console.error(styleText("red", "Failed to create final summary"));
+  });
+
+const program = Effect.gen(function* () {
+  const host = yield* Host;
+  const args = parseArgs(host);
+  yield* host.makeDirectory(args.outputDir);
+  const sessionDir = host.join(homedir(), ".msa/agent/sessions", cwdToSessionDir(host, args.cwd));
+  if (!(yield* host.exists(sessionDir))) {
+    yield* Console.error(`No sessions found for ${args.cwd}`);
+    yield* Console.error(`Expected: ${sessionDir}`);
+    return yield* Effect.sync(() => process.exit(1));
   }
-
-  // Collect all created summary files
-  const summaryFiles = readdirSync(outputDir)
-    .filter((f) => f.endsWith(".summary.txt"))
-    .sort();
-
-  console.log(`\n=== Individual Analysis Complete ===`);
-  console.log(`Created ${summaryFiles.length} summary files`);
-
-  if (summaryFiles.length === 0) {
-    console.log(styleText("yellow", "No summary files created. Nothing to aggregate."));
+  const transcripts = yield* collectTranscripts(host, sessionDir);
+  if (transcripts.length === 0) {
+    yield* Console.error("No transcripts found");
+    return yield* Effect.sync(() => process.exit(1));
+  }
+  const outputFiles = yield* writeTranscriptFiles(host, args.outputDir, transcripts);
+  if (!args.analyze) {
+    yield* Console.log("\nRun with --analyze to spawn msa subagents for pattern analysis.");
     return;
   }
+  const { agentsMdFiles, section } = yield* agentsMdSectionFor(host, args.cwd);
+  const prompt = analysisPrompt(section);
+  yield* Console.log("\nSpawning subagents for analysis...");
+  yield* Effect.forEach(outputFiles, (file) =>
+    analyzeFile({ file, host, outputDir: args.outputDir, prompt }),
+  );
+  yield* aggregate({ agentsMdFiles, host, outputDir: args.outputDir });
+});
 
-  // Final aggregation step
-  console.log("\nAggregating findings into final summary...");
-
-  const summaryPaths = summaryFiles.map((f) => join(outputDir, f)).join("\n");
-  const finalSummaryPath = join(outputDir, "FINAL-SUMMARY.txt");
-
-  const aggregationPrompt = `You are aggregating pattern analysis results from multiple summary files.
-
-STEP 1: Read the existing AGENTS.md file(s) to understand what patterns are already encoded:
-${agentsMdFiles.length > 0 ? agentsMdFiles.join("\n") : "(no AGENTS.md files found)"}
-
-STEP 2: Read ALL of the following summary files:
-${summaryPaths}
-
-STEP 3: Create a consolidated final summary that:
-1. Merges duplicate patterns (same pattern found in multiple files)
-2. Ranks patterns by total frequency across all files
-3. Groups by status (NEW first, then EXISTING) and type
-4. Provides the best/most complete DRAFT for each unique pattern
-5. Verify STATUS against AGENTS.md content (pattern may be marked NEW in summaries but actually exists)
-
-OUTPUT FORMAT (strict):
-Write the final summary with this structure:
-
-# NEW PATTERNS (not yet in AGENTS.md)
-
-## AGENTS.MD: <pattern name>
-Total Frequency: <sum across all files>
-Evidence:
-- "<best quotes>"
-Draft:
-<consolidated draft>
-
-## SKILL: <pattern name>
-...
-
-## PROMPT-TEMPLATE: <pattern name>
-...
-
----
-
-# EXISTING PATTERNS (already in AGENTS.md, for reference)
-
-## <pattern name>
-Total Frequency: <N>
-Already covered by: <quote relevant section from AGENTS.md>
-
----
-
-# SUMMARY
-- New patterns to add: <N>
-- Already covered: <N>
-- Top 3 new patterns by frequency: <list>
-
-Write the final summary to ${finalSummaryPath}`;
-
-  const aggregateResult = await runSubagent(aggregationPrompt, outputDir);
-
-  if (aggregateResult.success && existsSync(finalSummaryPath)) {
-    console.log(styleText("green", `\n=== Final Summary Created ===`));
-    console.log(styleText("green", `  ${finalSummaryPath}`));
-  } else if (aggregateResult.success) {
-    console.error(styleText("yellow", `Agent finished but did not write final summary`));
-  } else {
-    console.error(styleText("red", `Failed to create final summary`));
-  }
-}
-
-main().catch(console.error);
+runScript(program);

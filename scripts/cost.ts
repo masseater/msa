@@ -1,53 +1,9 @@
-#!/usr/bin/env node
+import { Console, DateTime, Effect, Option, Stream } from "effect";
 
-import * as fs from "fs";
-import * as path from "path";
-
-// Parse args
-const args = process.argv.slice(2);
-let directory: string | undefined;
-let days: number | undefined;
-
-for (let i = 0; i < args.length; i++) {
-  if (args[i] === "--dir" || args[i] === "-d") {
-    directory = args[++i];
-  } else if (args[i] === "--days" || args[i] === "-n") {
-    days = parseInt(args[++i], 10);
-  } else if (args[i] === "--help" || args[i] === "-h") {
-    console.log(`Usage: cost.ts -d <path> -n <days>
-  -d, --dir <path>   Directory path (required)
-  -n, --days <num>   Number of days to track (required)
-  -h, --help         Show this help`);
-    process.exit(0);
-  }
-}
-
-if (!directory || !days) {
-  console.error("Error: both --dir and --days are required");
-  console.error("Run with --help for usage");
-  process.exit(1);
-}
-
-// Encode directory path to session folder name
-function encodeSessionDir(dir: string): string {
-  // Remove leading slash, replace remaining slashes with dashes
-  const normalized = dir.startsWith("/") ? dir.slice(1) : dir;
-  return "--" + normalized.replace(/\//g, "-") + "--";
-}
-
-const sessionsBase = path.join(process.env.HOME!, ".msa/agent/sessions");
-const encodedDir = encodeSessionDir(directory);
-const sessionsDir = path.join(sessionsBase, encodedDir);
-
-if (!fs.existsSync(sessionsDir)) {
-  console.error(`Sessions directory not found: ${sessionsDir}`);
-  process.exit(1);
-}
-
-// Get cutoff date
-const cutoff = new Date();
-cutoff.setDate(cutoff.getDate() - days);
-cutoff.setHours(0, 0, 0, 0);
+import { Host, runScript } from "./host.ts";
+import type { HostShape } from "./host.ts";
+import { defaultSessionsBase, encodeSessionDir, jsonlFiles, sessionEntries } from "./sessions.ts";
+import type { Cost } from "./sessions.ts";
 
 interface DayCost {
   total: number;
@@ -58,133 +14,180 @@ interface DayCost {
   requests: number;
 }
 
-interface Stats {
-  [day: string]: {
-    [provider: string]: DayCost;
-  };
+interface Args {
+  readonly days: number;
+  readonly directory: string;
 }
 
-const stats: Stats = {};
+const HELP = `Usage: cost.ts -d <path> -n <days>
+  -d, --dir <path>   Directory path (required)
+  -n, --days <num>   Number of days to track (required)
+  -h, --help         Show this help`;
 
-// Process session files
-const files = fs.readdirSync(sessionsDir).filter((f) => f.endsWith(".jsonl"));
+const FILE_TIMESTAMP = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/u;
 
-for (const file of files) {
-  // Extract timestamp from filename: <timestamp>_<uuid>.jsonl
-  // Format: 2025-12-17T08-25-07-381Z (dashes instead of colons)
-  const timestamp = file.split("_")[0];
-  // Convert back to valid ISO: replace T08-25-07-381Z with T08:25:07.381Z
-  const isoTimestamp = timestamp.replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/, "T$1:$2:$3.$4Z");
-  const fileDate = new Date(isoTimestamp);
+const createDayCost = (): DayCost => ({
+  total: 0,
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  requests: 0,
+});
 
-  if (fileDate < cutoff) continue;
+const addCost = (target: DayCost, cost: Cost): void => {
+  target.total += cost.total ?? 0;
+  target.input += cost.input ?? 0;
+  target.output += cost.output ?? 0;
+  target.cacheRead += cost.cacheRead ?? 0;
+  target.cacheWrite += cost.cacheWrite ?? 0;
+  target.requests += 1;
+};
 
-  const filepath = path.join(sessionsDir, file);
-  const content = fs.readFileSync(filepath, "utf8");
-  const lines = content.trim().split("\n");
+const mergeCost = (target: DayCost, source: DayCost): void => {
+  target.total += source.total;
+  target.input += source.input;
+  target.output += source.output;
+  target.cacheRead += source.cacheRead;
+  target.cacheWrite += source.cacheWrite;
+  target.requests += source.requests;
+};
 
-  for (const line of lines) {
-    if (!line) continue;
-
-    try {
-      const entry = JSON.parse(line);
-
-      if (entry.type !== "message") continue;
-      if (entry.message?.role !== "assistant") continue;
-      if (!entry.message?.usage?.cost) continue;
-
-      const { provider, usage } = entry.message;
-      const { cost } = usage;
-      const entryDate = new Date(entry.timestamp);
-      const day = entryDate.toISOString().split("T")[0];
-
-      if (!stats[day]) stats[day] = {};
-      if (!stats[day][provider]) {
-        stats[day][provider] = {
-          total: 0,
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          requests: 0,
-        };
-      }
-
-      stats[day][provider].total += cost.total || 0;
-      stats[day][provider].input += cost.input || 0;
-      stats[day][provider].output += cost.output || 0;
-      stats[day][provider].cacheRead += cost.cacheRead || 0;
-      stats[day][provider].cacheWrite += cost.cacheWrite || 0;
-      stats[day][provider].requests += 1;
-    } catch {
-      // Skip malformed lines
+const parseArgs = Effect.gen(function* () {
+  const args = process.argv.slice(2);
+  let directory: string | undefined;
+  let days: number | undefined;
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg === "--dir" || arg === "-d") {
+      directory = args[++index];
+    } else if (arg === "--days" || arg === "-n") {
+      days = Number.parseInt(args[++index] ?? "", 10);
+    } else if (arg === "--help" || arg === "-h") {
+      yield* Console.log(HELP);
+      return yield* Effect.sync(() => process.exit(0));
     }
   }
-}
+  if (directory === undefined || days === undefined || Number.isNaN(days) || days === 0) {
+    yield* Console.error("Error: both --dir and --days are required");
+    yield* Console.error("Run with --help for usage");
+    return yield* Effect.sync(() => process.exit(1));
+  }
+  return { days, directory } satisfies Args;
+});
 
-// Sort days and output
-const sortedDays = Object.keys(stats).sort();
+const fileInstant = (file: string): Option.Option<DateTime.Utc> => {
+  const [stamp] = file.split("_");
+  const match = FILE_TIMESTAMP.exec(stamp ?? "");
+  if (match === null) return Option.none();
+  const [, date, hour, minute, second, millis] = match;
+  return DateTime.make(`${date}T${hour}:${minute}:${second}.${millis}Z`);
+};
 
-if (sortedDays.length === 0) {
-  console.log(`No sessions found in the last ${days} days for: ${directory}`);
-  process.exit(0);
-}
+const describeCost = (label: string, cost: DayCost): string =>
+  `  ${label.padEnd(15)} $${cost.total.toFixed(4).padStart(8)}  (${cost.requests} reqs, in: $${cost.input.toFixed(4)}, out: $${cost.output.toFixed(4)}, cache: $${(cost.cacheRead + cost.cacheWrite).toFixed(4)})`;
 
-console.log(`\nCost breakdown for: ${directory}`);
-console.log(`Period: last ${days} days (since ${cutoff.toISOString().split("T")[0]})`);
-console.log("=".repeat(80));
-
-let grandTotal = 0;
-const providerTotals: { [p: string]: DayCost } = {};
-
-for (const day of sortedDays) {
-  console.log(`\n${day}`);
-  console.log("-".repeat(40));
-
-  let dayTotal = 0;
-  const providers = Object.keys(stats[day]).sort();
-
-  for (const provider of providers) {
-    const s = stats[day][provider];
-    dayTotal += s.total;
-
-    if (!providerTotals[provider]) {
-      providerTotals[provider] = {
-        total: 0,
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        requests: 0,
-      };
-    }
-    providerTotals[provider].total += s.total;
-    providerTotals[provider].input += s.input;
-    providerTotals[provider].output += s.output;
-    providerTotals[provider].cacheRead += s.cacheRead;
-    providerTotals[provider].cacheWrite += s.cacheWrite;
-    providerTotals[provider].requests += s.requests;
-
-    console.log(
-      `  ${provider.padEnd(15)} $${s.total.toFixed(4).padStart(8)}  (${s.requests} reqs, in: $${s.input.toFixed(4)}, out: $${s.output.toFixed(4)}, cache: $${(s.cacheRead + s.cacheWrite).toFixed(4)})`,
+const collect = (host: HostShape, sessionsDir: string, cutoff: DateTime.Zoned) =>
+  Effect.gen(function* () {
+    const stats = new Map<string, Map<string, DayCost>>();
+    const files = yield* jsonlFiles({ directory: sessionsDir, host });
+    const cutoffMillis = DateTime.toEpochMillis(cutoff);
+    const fresh = files.filter((file) =>
+      Option.match(fileInstant(file), {
+        onNone: () => false,
+        onSome: (instant) => DateTime.toEpochMillis(instant) >= cutoffMillis,
+      }),
     );
+    yield* Effect.forEach(fresh, (file) =>
+      sessionEntries({ file: host.join(sessionsDir, file), host }).pipe(
+        Stream.runForEach((entry) => {
+          const cost = entry.message?.usage?.cost;
+          if (
+            entry.type !== "message" ||
+            entry.message?.role !== "assistant" ||
+            cost === undefined
+          ) {
+            return Effect.void;
+          }
+          const instant = DateTime.make(entry.timestamp ?? 0);
+          if (Option.isNone(instant)) return Effect.void;
+          const day = DateTime.formatIsoDateUtc(instant.value);
+          const providers = stats.get(day) ?? new Map<string, DayCost>();
+          stats.set(day, providers);
+          const provider = entry.message.provider ?? "undefined";
+          const dayCost = providers.get(provider) ?? createDayCost();
+          providers.set(provider, dayCost);
+          addCost(dayCost, cost);
+          return Effect.void;
+        }),
+      ),
+    );
+    return stats;
+  });
+
+const reportDays = (
+  stats: Map<string, Map<string, DayCost>>,
+  providerTotals: Map<string, DayCost>,
+) =>
+  Effect.gen(function* () {
+    let grandTotal = 0;
+    const days = [...stats.keys()].sort();
+    for (const day of days) {
+      yield* Console.log(`\n${day}`);
+      yield* Console.log("-".repeat(40));
+      const providers = stats.get(day) ?? new Map<string, DayCost>();
+      let dayTotal = 0;
+      for (const provider of [...providers.keys()].sort()) {
+        const cost = providers.get(provider) ?? createDayCost();
+        dayTotal += cost.total;
+        const totals = providerTotals.get(provider) ?? createDayCost();
+        providerTotals.set(provider, totals);
+        mergeCost(totals, cost);
+        yield* Console.log(describeCost(provider, cost));
+      }
+      yield* Console.log(`  ${"Day total:".padEnd(15)} $${dayTotal.toFixed(4).padStart(8)}`);
+      grandTotal += dayTotal;
+    }
+    return grandTotal;
+  });
+
+const report = (args: Args, cutoff: DateTime.Zoned, stats: Map<string, Map<string, DayCost>>) =>
+  Effect.gen(function* () {
+    if (stats.size === 0) {
+      yield* Console.log(`No sessions found in the last ${args.days} days for: ${args.directory}`);
+      return yield* Effect.sync(() => process.exit(0));
+    }
+    yield* Console.log(`\nCost breakdown for: ${args.directory}`);
+    yield* Console.log(
+      `Period: last ${args.days} days (since ${DateTime.formatIsoDateUtc(cutoff)})`,
+    );
+    yield* Console.log("=".repeat(80));
+    const providerTotals = new Map<string, DayCost>();
+    const grandTotal = yield* reportDays(stats, providerTotals);
+    yield* Console.log(`\n${"=".repeat(80)}`);
+    yield* Console.log("TOTALS BY PROVIDER");
+    yield* Console.log("-".repeat(40));
+    yield* Effect.forEach([...providerTotals.keys()].sort(), (provider) =>
+      Console.log(describeCost(provider, providerTotals.get(provider) ?? createDayCost())),
+    );
+    yield* Console.log("-".repeat(40));
+    yield* Console.log(`  ${"GRAND TOTAL:".padEnd(15)} $${grandTotal.toFixed(4).padStart(8)}`);
+    yield* Console.log("");
+  });
+
+const program = Effect.gen(function* () {
+  const host = yield* Host;
+  const args = yield* parseArgs;
+  const sessionsDir = host.join(defaultSessionsBase(host), encodeSessionDir(args.directory));
+  if (!(yield* host.exists(sessionsDir))) {
+    yield* Console.error(`Sessions directory not found: ${sessionsDir}`);
+    return yield* Effect.sync(() => process.exit(1));
   }
-
-  console.log(`  ${"Day total:".padEnd(15)} $${dayTotal.toFixed(4).padStart(8)}`);
-  grandTotal += dayTotal;
-}
-
-console.log("\n" + "=".repeat(80));
-console.log("TOTALS BY PROVIDER");
-console.log("-".repeat(40));
-
-for (const provider of Object.keys(providerTotals).sort()) {
-  const t = providerTotals[provider];
-  console.log(
-    `  ${provider.padEnd(15)} $${t.total.toFixed(4).padStart(8)}  (${t.requests} reqs, in: $${t.input.toFixed(4)}, out: $${t.output.toFixed(4)}, cache: $${(t.cacheRead + t.cacheWrite).toFixed(4)})`,
+  const cutoff = DateTime.startOf(
+    DateTime.subtract(yield* DateTime.nowInCurrentZone, { days: args.days }),
+    "day",
   );
-}
+  yield* report(args, cutoff, yield* collect(host, sessionsDir, cutoff));
+});
 
-console.log("-".repeat(40));
-console.log(`  ${"GRAND TOTAL:".padEnd(15)} $${grandTotal.toFixed(4).padStart(8)}`);
-console.log();
+runScript(program);

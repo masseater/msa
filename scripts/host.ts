@@ -1,5 +1,16 @@
 import { NodeServices } from "@effect/platform-node";
-import { Cause, Context, Effect, FileSystem, Layer, Option, Path, Queue, Stream } from "effect";
+import {
+  Cause,
+  Context,
+  DateTime,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Path,
+  Queue,
+  Stream,
+} from "effect";
 import type { Scope } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -37,6 +48,7 @@ interface RunningCommand {
   readonly endInput: Effect.Effect<void>;
   readonly exitCode: Effect.Effect<number>;
   readonly kill: Effect.Effect<void>;
+  readonly stderrChunks: Stream.Stream<string>;
   readonly stderrText: Effect.Effect<string>;
   readonly stdoutLines: Stream.Stream<string>;
   readonly stdoutText: Effect.Effect<string>;
@@ -96,6 +108,7 @@ const makeSpawn = Effect.gen(function* () {
         endInput: Queue.end(input).pipe(Effect.asVoid),
         exitCode: handle.exitCode.pipe(Effect.map(Number), Effect.orDie),
         kill: handle.kill().pipe(Effect.orDie),
+        stderrChunks: handle.stderr.pipe(Stream.decodeText(), Stream.orDie),
         stderrText: handle.stderr.pipe(Stream.decodeText(), Stream.mkString, Effect.orDie),
         stdoutLines: handle.stdout.pipe(Stream.decodeText(), Stream.splitLines, Stream.orDie),
         stdoutText: handle.stdout.pipe(Stream.decodeText(), Stream.mkString, Effect.orDie),
@@ -170,7 +183,7 @@ const hostLayer: Layer.Layer<Host> = Layer.effect(
   // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
   .pipe(Layer.provide(NodeServices.layer));
 
-const runScript = runMainWith(hostLayer);
+const runScript = runMainWith(Layer.mergeAll(hostLayer, DateTime.layerCurrentZoneLocal));
 
 export type { CommandOptions, CommandResult, FileInfo, HostShape, RunningCommand };
 export { Host, runScript };
