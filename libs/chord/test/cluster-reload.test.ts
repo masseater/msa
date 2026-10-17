@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 
-import { Clock, Effect } from "effect";
+import { Clock, type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it, onTestFinished } from "vite-plus/test";
 
-import { createHost, type Facet, isChordError, memoryLinkPair } from "../src/index.ts";
+import { createHost, type Facet, type Host, isChordError, memoryLinkPair } from "../src/index.ts";
 import { Greeter, greeterFacet, setup } from "./fixtures/cluster.ts";
 import { latch, tick } from "./fixtures/timing.ts";
 
@@ -158,6 +158,44 @@ const aChildReconciledAfterItsParent = Effect.gen(function* () {
   assert.ok((yield* Clock.currentTimeMillis) - started < 2000);
 });
 
+interface BlockedWorker {
+  readonly worker: Host;
+  readonly releaseLoading: () => void;
+}
+
+const blockedWorker = (
+  server: Host,
+  modules: Map<string, Facet>,
+  services: Context.Context<never>,
+): BlockedWorker => {
+  const workerLoading = latch();
+  let blockWorker = true;
+  const [down, up] = memoryLinkPair();
+  server.accept(down, { principal: { worker: "w" }, kind: "host", name: "session:S1" });
+  const worker = createHost({
+    self: { kind: "host" },
+    name: "session:S1",
+    upstream: { link: up, principal: { kind: "server" } },
+    loader: (names) =>
+      Effect.runPromiseWith(services)(
+        Effect.gen(function* () {
+          if (blockWorker) yield* workerLoading.wait;
+          return names.map((name) => modules.get(String(name))!);
+        }),
+      ),
+    onError: () => {},
+  });
+  onTestFinished(() => worker.close());
+  worker.install(modules.get("greeter")!);
+  return {
+    worker,
+    releaseLoading: () => {
+      blockWorker = false;
+      workerLoading.open();
+    },
+  };
+};
+
 const aReconciliationRunningWhenAReload = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const modules = new Map<string, Facet>([["greeter", greeterFacet("v1")]]);
@@ -180,31 +218,12 @@ const aReconciliationRunningWhenAReload = Effect.gen(function* () {
   yield* Effect.promise(() =>
     server.reload(["server-plugin"], { remote: { "session:": ["greeter"] } }),
   );
-  const workerLoading = latch();
-  let blockWorker = true;
-  const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { worker: "w" }, kind: "host", name: "session:S1" });
-  const worker = createHost({
-    self: { kind: "host" },
-    name: "session:S1",
-    upstream: { link: up, principal: { kind: "server" } },
-    loader: (names) =>
-      Effect.runPromiseWith(services)(
-        Effect.gen(function* () {
-          if (blockWorker) yield* workerLoading.wait;
-          return names.map((name) => modules.get(String(name))!);
-        }),
-      ),
-    onError: () => {},
-  });
-  onTestFinished(() => worker.close());
-  worker.install(modules.get("greeter")!);
+  const { worker, releaseLoading } = blockedWorker(server, modules, services);
   yield* tick;
   blockServer = true;
   modules.set("greeter", greeterFacet("v2"));
   const reloading = server.reload(["server-plugin"], { remote: { "session:": ["greeter"] } });
-  blockWorker = false;
-  workerLoading.open();
+  releaseLoading();
   for (let i = 0; i < 50 && worker.codeVersion !== 2; i++) yield* tick;
   assert.equal(worker.codeVersion, 2);
   serverLoading.open();

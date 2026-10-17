@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 
-import { Clock, Effect } from "effect";
+import { Clock, type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
@@ -115,10 +115,10 @@ const aLifetimeHostObjectWithState = Effect.gen(function* () {
   yield* Effect.promise(() => host.close());
 });
 
-const abortListenersThatCallsAndTasks = Effect.gen(function* () {
-  const services = yield* Effect.context<never>();
-  const generations = tracker();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+const abortingStoreFacet = (
+  generations: ReturnType<typeof tracker>,
+  services: Context.Context<never>,
+): ((generation: number) => Facet) => {
   const facet = (generation: number): Facet => {
     const sentinel = generations.track(generation, { generation });
     return {
@@ -148,6 +148,14 @@ const abortListenersThatCallsAndTasks = Effect.gen(function* () {
         ),
     };
   };
+  return facet;
+};
+
+const abortListenersThatCallsAndTasks = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const generations = tracker();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const facet = abortingStoreFacet(generations, services);
   yield* Effect.promise(() => host.install(facet(0)));
   for (let generation = 1; generation <= RELOADS; generation++) {
     yield* Effect.promise(() => host.reload([facet(generation)]));

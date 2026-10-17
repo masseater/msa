@@ -16,21 +16,22 @@ import {
 import { Counter, serveCounter } from "./fixtures/link.ts";
 import { tick } from "./fixtures/timing.ts";
 
-const travelWithoutArgsAndWithoutA = Effect.gen(function* () {
-  const Tool = remote("t.tool", {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed("server"),
-    variants: {
-      main: {
-        methods: {
-          ping: method(),
-          count: method(undefined, Type.Number()),
-          note: method(Type.String()),
-        },
+const Tool = remote("t.tool", {
+  version: 1,
+  input: Type.Object({}),
+  host: hostNamed("server"),
+  variants: {
+    main: {
+      methods: {
+        ping: method(),
+        count: method(undefined, Type.Number()),
+        note: method(Type.String()),
       },
     },
-  });
+  },
+});
+
+const travelWithoutArgsAndWithoutA = Effect.gen(function* () {
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
   const notes: string[] = [];
   server.serve(Tool, () => ({

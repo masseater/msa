@@ -37,91 +37,100 @@ export const SwitchV3 = local("t.eager-switch", {
 
 export const Read = defineRegistry<() => unknown>("t.eager-switch-read");
 
-export function switchFacets(log: string[]) {
-  const declareResource = (self: Self) =>
-    self.resource("watch", {
-      version: 1,
-      open: () => {
-        log.push("open");
-        return null;
-      },
-      close: () => {
-        log.push("close");
-      },
-    });
-  const v1: Facet = {
-    name: "switch",
-    setup: (api) =>
-      api.serve(
-        SwitchV1,
-        (_input, _principal, self) => {
-          declareResource(self);
-          const enabledState = self.state("enabled", Type.Boolean(), false);
-          self.register(Read, { current: () => enabledState.value });
-          return {
-            enabled: enabledState,
-            set: (enabled, ctx) => {
-              enabledState.replace(ctx, enabled);
-            },
-          };
-        },
-        { lifetime: "host" },
-      ),
-  };
-  const v2 = (valid: boolean): Facet => ({
-    name: "switch",
-    setup: (api) =>
-      api.serve(
-        SwitchV2,
-        (_input, _principal, self) => {
-          declareResource(self);
-          const enabledState = self.state(
-            "enabled",
-            flags,
-            {},
-            {
-              version: 2,
-              migrate: (old, from) => {
-                assert.equal(from, 1);
-                return valid ? { 1: old as boolean } : ("invalid migration" as never);
-              },
-            },
-          );
-          self.register(Read, { current: () => enabledState.value });
-          return {
-            enabled: enabledState,
-            set: ({ conversation, enabled }, ctx) => {
-              enabledState.change(ctx, (draft) => {
-                draft[conversation] = enabled;
-              });
-            },
-          };
-        },
-        { lifetime: "host" },
-      ),
+const watchResource = (log: string[]) => (self: Self) =>
+  self.resource("watch", {
+    version: 1,
+    open: () => {
+      log.push("open");
+      return null;
+    },
+    close: () => {
+      log.push("close");
+    },
   });
-  const v3: Facet = {
-    name: "switch",
-    setup: (api) =>
-      api.serve(
-        SwitchV3,
-        (_input, _principal, self) => {
-          declareResource(self);
-          const enabledState = self.state("enabled", flags, {}, { version: 2 });
-          self.register(Read, { current: () => enabledState.value });
-          return {
-            enabled: enabledState,
-            update: ({ conversation, enabled }, ctx) => {
-              enabledState.change(ctx, (draft) => {
-                draft[conversation] = enabled;
-              });
+
+const switchV1 = (declareResource: (self: Self) => void): Facet => ({
+  name: "switch",
+  setup: (api) =>
+    api.serve(
+      SwitchV1,
+      (_input, _principal, self) => {
+        declareResource(self);
+        const enabledState = self.state("enabled", Type.Boolean(), false);
+        self.register(Read, { current: () => enabledState.value });
+        return {
+          enabled: enabledState,
+          set: (enabled, ctx) => {
+            enabledState.replace(ctx, enabled);
+          },
+        };
+      },
+      { lifetime: "host" },
+    ),
+});
+
+const switchV2 = (declareResource: (self: Self) => void, valid: boolean): Facet => ({
+  name: "switch",
+  setup: (api) =>
+    api.serve(
+      SwitchV2,
+      (_input, _principal, self) => {
+        declareResource(self);
+        const enabledState = self.state(
+          "enabled",
+          flags,
+          {},
+          {
+            version: 2,
+            migrate: (old, from) => {
+              assert.equal(from, 1);
+              return valid ? { 1: old as boolean } : ("invalid migration" as never);
             },
-          };
-        },
-        { lifetime: "host" },
-      ),
+          },
+        );
+        self.register(Read, { current: () => enabledState.value });
+        return {
+          enabled: enabledState,
+          set: ({ conversation, enabled }, ctx) => {
+            enabledState.change(ctx, (draft) => {
+              draft[conversation] = enabled;
+            });
+          },
+        };
+      },
+      { lifetime: "host" },
+    ),
+});
+
+const switchV3 = (declareResource: (self: Self) => void): Facet => ({
+  name: "switch",
+  setup: (api) =>
+    api.serve(
+      SwitchV3,
+      (_input, _principal, self) => {
+        declareResource(self);
+        const enabledState = self.state("enabled", flags, {}, { version: 2 });
+        self.register(Read, { current: () => enabledState.value });
+        return {
+          enabled: enabledState,
+          update: ({ conversation, enabled }, ctx) => {
+            enabledState.change(ctx, (draft) => {
+              draft[conversation] = enabled;
+            });
+          },
+        };
+      },
+      { lifetime: "host" },
+    ),
+});
+
+export function switchFacets(log: string[]) {
+  const declareResource = watchResource(log);
+  return {
+    v1: switchV1(declareResource),
+    v2: (valid: boolean) => switchV2(declareResource, valid),
+    v3: switchV3(declareResource),
   };
-  return { v1, v2, v3 };
 }
 
 export const ReadV1 = local("t.eager-read", {

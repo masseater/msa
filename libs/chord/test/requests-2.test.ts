@@ -66,14 +66,15 @@ const case4ReplaceDiffsANewRevision = Effect.gen(function* () {
   assert.deepEqual(replica, ref.doc.value);
 });
 
+const Echo = remote("t.echo", {
+  version: 1,
+  input: Type.Object({}),
+  host: hostNamed("server"),
+  variants: { main: { methods: { codeVersion: method(undefined, Type.Number()) } } },
+});
+
 const case5RootsOfAChildThat = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const Echo = remote("t.echo", {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed("server"),
-    variants: { main: { methods: { codeVersion: method(undefined, Type.Number()) } } },
-  });
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
   const echoFacet: Facet = {
     name: "echo",

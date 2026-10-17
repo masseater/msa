@@ -20,19 +20,21 @@ import {
 import { View, until } from "./fixtures/requests.ts";
 import { tick } from "./fixtures/timing.ts";
 
+const Conv = remote("t.conv", {
+  version: 1,
+  input: Type.Object({}),
+  host: hostNamed("server"),
+  variants: { main: { state: { view: View }, methods: { set: method(Type.String()) } } },
+});
+
+const Chat = remote("t.chat", {
+  version: 1,
+  input: Type.Object({}),
+  host: hostNamed("server"),
+  variants: { viewer: { state: { view: View } } },
+});
+
 const case1AHeldObjectSState = Effect.gen(function* () {
-  const Conv = remote("t.conv", {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed("server"),
-    variants: { main: { state: { view: View }, methods: { set: method(Type.String()) } } },
-  });
-  const Chat = remote("t.chat", {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed("server"),
-    variants: { viewer: { state: { view: View } } },
-  });
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
   server.serve(Conv, (_input, _principal, self) => {
     const view = self.state("view", View, { text: "" });
@@ -72,15 +74,18 @@ const case1AHeldObjectSState = Effect.gen(function* () {
   yield* until(() => (remoteChat.view.value as { text: string } | undefined)?.text === "there");
 });
 
+const Config = defineRegistry<string>("t.config");
+
+const Settings = local("t.settings", { version: 1, input: Type.Object({}) });
+
+const Reader = local("t.reader", {
+  version: 1,
+  input: Type.Object({}),
+  members: { read: method(undefined, Type.String()) },
+});
+
 const case2FacetsReachTheirOwnHost = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const Config = defineRegistry<string>("t.config");
-  const Settings = local("t.settings", { version: 1, input: Type.Object({}) });
-  const Reader = local("t.reader", {
-    version: 1,
-    input: Type.Object({}),
-    members: { read: method(undefined, Type.String()) },
-  });
   const captured: FacetApi[] = [];
   const facet = (value: string): Facet => ({
     name: "config",

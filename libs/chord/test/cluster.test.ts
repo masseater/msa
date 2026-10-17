@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 
-import { Effect } from "effect";
+import { type Context, Effect } from "effect";
 import { describe, it, onTestFinished } from "vite-plus/test";
 
-import { createHost, isChordError, memoryLinkPair } from "../src/index.ts";
+import { createHost, type Facet, type Host, isChordError, memoryLinkPair } from "../src/index.ts";
 import { Greeter, GreeterV2, ServerGreeter, greeterFacet, setup } from "./fixtures/cluster.ts";
 import { latch, tick } from "./fixtures/timing.ts";
 
@@ -93,6 +93,62 @@ const aWorkerGateBlockedPastIts = Effect.gen(function* () {
   assert.equal(yield* Effect.promise(() => greeter.greet("x")), "v1 x");
 });
 
+const coldWorkerIsReconciled = (server: Host, services: Context.Context<never>) =>
+  Effect.gen(function* () {
+    const cold = createHost({
+      self: { kind: "host" },
+      name: "session:cold",
+      loader: () =>
+        Effect.runPromiseWith(services)(
+          Effect.sync(() => {
+            assert.fail("Removed modules must not be imported");
+          }),
+        ),
+      onError: () => {},
+    });
+    onTestFinished(() => cold.close());
+    yield* Effect.promise(() => cold.install(greeterFacet("v1")));
+    const old = cold.hold(Greeter, { session: "cold" });
+    yield* Effect.promise(() => old.ready);
+    const [down, up] = memoryLinkPair();
+    server.accept(down, { principal: { worker: "cold" }, kind: "host", name: "session:cold" });
+    cold.connect(up, { principal: { kind: "server" } });
+    for (let i = 0; i < 20 && old.status !== "gone"; i++) yield* tick;
+    assert.equal(old.status, "gone");
+    assert.equal(cold.codeVersion, server.codeVersion);
+    yield* Effect.promise(() => cold.close());
+  });
+
+const freshWorkerLoadsCurrentCode = (
+  server: Host,
+  modules: Map<string, Facet>,
+  services: Context.Context<never>,
+) =>
+  Effect.gen(function* () {
+    const fresh = createHost({
+      self: { kind: "host" },
+      name: "session:fresh",
+      loader: (names) =>
+        Effect.runPromiseWith(services)(
+          Effect.sync(() => names.map((name) => modules.get(String(name))!)),
+        ),
+      onError: () => {},
+    });
+    onTestFinished(() => fresh.close());
+    yield* Effect.promise(() => fresh.install(greeterFacet("v1")));
+    const [freshDown, freshUp] = memoryLinkPair();
+    server.accept(freshDown, {
+      principal: { worker: "fresh" },
+      kind: "host",
+      name: "session:fresh",
+    });
+    fresh.connect(freshUp, { principal: { kind: "server" } });
+    assert.equal(
+      yield* Effect.promise(() => server.hold(Greeter, { session: "fresh" }).greet("c")),
+      "v2 c",
+    );
+  });
+
 const removesFacetsFromServerAndWorkers = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const { server, worker, modules } = setup();
@@ -117,28 +173,7 @@ const removesFacetsFromServerAndWorkers = Effect.gen(function* () {
   assert.equal(onServer.status, "gone");
   assert.equal(child.status, "gone");
 
-  const cold = createHost({
-    self: { kind: "host" },
-    name: "session:cold",
-    loader: () =>
-      Effect.runPromiseWith(services)(
-        Effect.sync(() => {
-          assert.fail("Removed modules must not be imported");
-        }),
-      ),
-    onError: () => {},
-  });
-  onTestFinished(() => cold.close());
-  yield* Effect.promise(() => cold.install(greeterFacet("v1")));
-  const old = cold.hold(Greeter, { session: "cold" });
-  yield* Effect.promise(() => old.ready);
-  const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { worker: "cold" }, kind: "host", name: "session:cold" });
-  cold.connect(up, { principal: { kind: "server" } });
-  for (let i = 0; i < 20 && old.status !== "gone"; i++) yield* tick;
-  assert.equal(old.status, "gone");
-  assert.equal(cold.codeVersion, server.codeVersion);
-  yield* Effect.promise(() => cold.close());
+  yield* coldWorkerIsReconciled(server, services);
   modules.set("greeter", greeterFacet("v2"));
   yield* Effect.promise(() =>
     server.reload([greeterFacet("v2")], { remote: { "session:": ["greeter"] } }),
@@ -147,28 +182,7 @@ const removesFacetsFromServerAndWorkers = Effect.gen(function* () {
     yield* Effect.promise(() => server.hold(Greeter, { session: "S1" }).greet("b")),
     "v2 b",
   );
-  const fresh = createHost({
-    self: { kind: "host" },
-    name: "session:fresh",
-    loader: (names) =>
-      Effect.runPromiseWith(services)(
-        Effect.sync(() => names.map((name) => modules.get(String(name))!)),
-      ),
-    onError: () => {},
-  });
-  onTestFinished(() => fresh.close());
-  yield* Effect.promise(() => fresh.install(greeterFacet("v1")));
-  const [freshDown, freshUp] = memoryLinkPair();
-  server.accept(freshDown, {
-    principal: { worker: "fresh" },
-    kind: "host",
-    name: "session:fresh",
-  });
-  fresh.connect(freshUp, { principal: { kind: "server" } });
-  assert.equal(
-    yield* Effect.promise(() => server.hold(Greeter, { session: "fresh" }).greet("c")),
-    "v2 c",
-  );
+  yield* freshWorkerLoadsCurrentCode(server, modules, services);
 });
 
 const onlyTheServerCoordinatesReloads = Effect.gen(function* () {

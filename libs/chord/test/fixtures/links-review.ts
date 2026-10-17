@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { type Context, Effect } from "effect";
 import { Type } from "typebox";
 
 import {
@@ -13,7 +13,7 @@ import {
   PROTOCOL_VERSION,
   remote,
 } from "../../src/index.ts";
-import { latch, pollUntil } from "./timing.ts";
+import { type Latch, latch, pollUntil } from "./timing.ts";
 
 export const until = pollUntil(100, Effect.sleep(2));
 
@@ -62,6 +62,75 @@ export const Counter = remote("t.counter", {
   },
 });
 
+const browserOn =
+  (server: Host) => (principal: unknown, restamp?: (p: unknown) => unknown | undefined) => {
+    const [down, up] = memoryLinkPair();
+    server.accept(down, { principal, ...(restamp === undefined ? {} : { restamp }) });
+    return {
+      host: createHost({
+        self: { kind: "host" },
+        name: "browser",
+        kind: "client",
+        upstream: { link: up, principal: { kind: "server" } },
+        onError: () => {},
+      }),
+      up,
+    };
+  };
+
+const rawOn = (server: Host) => (principal: unknown) => {
+  const [down, raw] = memoryLinkPair();
+  server.accept(down, { principal });
+  const frames: Frame[] = [];
+  raw.receive((frame) => frames.push(frame));
+  raw.send({
+    t: "hello",
+    protocol: PROTOCOL_VERSION,
+    name: "raw",
+    kind: "client",
+    codeVersion: 0,
+  });
+  return { raw, frames };
+};
+
+interface CounterEnv {
+  readonly principals: unknown[];
+  readonly log: string[];
+  readonly slowGate: () => Latch;
+  readonly services: Context.Context<never>;
+}
+
+const serveReviewCounter = (worker: Host, env: CounterEnv): void => {
+  const { principals, log, services } = env;
+  worker.serve(Counter, (input, principal, self) => {
+    principals.push(principal);
+    self.resource("probe", {
+      version: 1,
+      open: () => void log.push(`open ${input.name}`),
+      close: () => void log.push(`close ${input.name}`),
+    });
+    const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
+    return {
+      variant: "main",
+      count,
+      add: (delta: number, ctx: Ctx) => {
+        count.change(ctx, (draft) => {
+          draft.n += delta;
+        });
+        return count.value.n;
+      },
+      who: () => principal,
+      slow: (ctx: Ctx) =>
+        Effect.runPromiseWith(services)(
+          Effect.gen(function* () {
+            ctx.signal.addEventListener("abort", () => log.push("slow aborted"));
+            yield* Effect.promise(() => env.slowGate().promise);
+          }),
+        ),
+    };
+  });
+};
+
 export function cluster() {
   const log: string[] = [];
   const principals: unknown[] = [];
@@ -74,34 +143,8 @@ export function cluster() {
     workers,
     resolveGate: undefined as Promise<void> | undefined,
     slowGate: latch(),
-    browser(principal: unknown, restamp?: (p: unknown) => unknown | undefined) {
-      const [down, up] = memoryLinkPair();
-      server.accept(down, { principal, ...(restamp === undefined ? {} : { restamp }) });
-      return {
-        host: createHost({
-          self: { kind: "host" },
-          name: "browser",
-          kind: "client",
-          upstream: { link: up, principal: { kind: "server" } },
-          onError: () => {},
-        }),
-        up,
-      };
-    },
-    raw(principal: unknown) {
-      const [down, raw] = memoryLinkPair();
-      server.accept(down, { principal });
-      const frames: Frame[] = [];
-      raw.receive((frame) => frames.push(frame));
-      raw.send({
-        t: "hello",
-        protocol: PROTOCOL_VERSION,
-        name: "raw",
-        kind: "client",
-        codeVersion: 0,
-      });
-      return { raw, frames };
-    },
+    browser: browserOn(server),
+    raw: rawOn(server),
   };
   server.route("session:", {
     principal: (name) => ({ host: name }),
@@ -121,33 +164,7 @@ export function cluster() {
             upstream: { link: up, principal: { kind: "server" } },
             onError: () => {},
           });
-          worker.serve(Counter, (input, principal, self) => {
-            principals.push(principal);
-            self.resource("probe", {
-              version: 1,
-              open: () => void log.push(`open ${input.name}`),
-              close: () => void log.push(`close ${input.name}`),
-            });
-            const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
-            return {
-              variant: "main",
-              count,
-              add: (delta: number, ctx: Ctx) => {
-                count.change(ctx, (draft) => {
-                  draft.n += delta;
-                });
-                return count.value.n;
-              },
-              who: () => principal,
-              slow: (ctx: Ctx) =>
-                Effect.runPromiseWith(services)(
-                  Effect.gen(function* () {
-                    ctx.signal.addEventListener("abort", () => log.push("slow aborted"));
-                    yield* Effect.promise(() => state.slowGate.promise);
-                  }),
-                ),
-            };
-          });
+          serveReviewCounter(worker, { principals, log, slowGate: () => state.slowGate, services });
           workers.set(name, { host: worker, link });
           return link;
         }),

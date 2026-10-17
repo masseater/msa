@@ -9,14 +9,15 @@ import { NoteSchema, Notes, setup, until } from "./fixtures/bindings.ts";
 import { CountingLink, stateFrames } from "./fixtures/counting.ts";
 import { tick } from "./fixtures/timing.ts";
 
+const Panel = local("t.e8-panel", {
+  version: 1,
+  input: Type.Object({}),
+  members: { count: Type.Number() },
+});
+
 const nReferencesToOneObjectOne = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const { server, browser, link } = setup();
-  const Panel = local("t.e8-panel", {
-    version: 1,
-    input: Type.Object({}),
-    members: { count: Type.Number() },
-  });
   browser.serve(Panel, (_input, _principal, self) => {
     const notes = self.get(Notes, {});
     return { count: self.derive([notes.notes], (list) => list.length) };
@@ -130,26 +131,27 @@ describe("shared bindings: linger", () => {
     Effect.runPromise(atMostCapBindingsLingerThe));
 });
 
+const NotesV2 = remote("t.e8-notes", {
+  version: 2,
+  input: Type.Object({ list: Type.Optional(Type.String({ default: "main" })) }),
+  host: hostNamed("server"),
+  variants: {
+    main: {
+      state: { notes: NoteSchema, title: Type.String() },
+      methods: {
+        add: method(Type.String()),
+        rename: method(Type.String()),
+        clear: method(),
+      },
+    },
+  },
+});
+
 const normalizedEqualInputsAndEqualPrincipal = Effect.gen(function* () {
   const server = createHost({
     self: { kind: "host" },
     name: "server",
     onError: () => {},
-  });
-  const NotesV2 = remote("t.e8-notes", {
-    version: 2,
-    input: Type.Object({ list: Type.Optional(Type.String({ default: "main" })) }),
-    host: hostNamed("server"),
-    variants: {
-      main: {
-        state: { notes: NoteSchema, title: Type.String() },
-        methods: {
-          add: method(Type.String()),
-          rename: method(Type.String()),
-          clear: method(),
-        },
-      },
-    },
   });
   server.serve(
     NotesV2,

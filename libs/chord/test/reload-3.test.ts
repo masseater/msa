@@ -98,31 +98,34 @@ const aFacetSSignalAbortsWhen = Effect.gen(function* () {
   assert.equal(signals.get("c")?.aborted, true, "host closed");
 });
 
+const DocV1 = remote("t.rdoc", {
+  version: 1,
+  input: Type.Object({}),
+  host: hostNamed("host"),
+  variants: {
+    main: { methods: { read: method(undefined, Type.Object({ text: Type.String() })) } },
+  },
+});
+
+const DocBroken = remote("t.rdoc", {
+  version: 1,
+  input: Type.Object({}),
+  host: hostNamed("host"),
+  variants: {
+    main: { methods: { read: method(undefined, Type.Object({ text: Type.Number() })) } },
+  },
+});
+
+const DocV2 = remote("t.rdoc", {
+  version: 2,
+  input: Type.Object({}),
+  host: hostNamed("host"),
+  variants: {
+    main: { methods: { fetch: method(undefined, Type.Object({ body: Type.String() })) } },
+  },
+});
+
 const checksContractsAtReloadForgottenBumps = Effect.gen(function* () {
-  const DocV1 = remote("t.rdoc", {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed("host"),
-    variants: {
-      main: { methods: { read: method(undefined, Type.Object({ text: Type.String() })) } },
-    },
-  });
-  const DocBroken = remote("t.rdoc", {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed("host"),
-    variants: {
-      main: { methods: { read: method(undefined, Type.Object({ text: Type.Number() })) } },
-    },
-  });
-  const DocV2 = remote("t.rdoc", {
-    version: 2,
-    input: Type.Object({}),
-    host: hostNamed("host"),
-    variants: {
-      main: { methods: { fetch: method(undefined, Type.Object({ body: Type.String() })) } },
-    },
-  });
   const host = quiet();
   host.install({
     name: "doc",
@@ -166,6 +169,12 @@ const checksContractsAtReloadForgottenBumps = Effect.gen(function* () {
   assert.deepEqual(yield* Effect.promise(() => modern.fetch()), { body: "v2" });
 });
 
+const Sum = local("t.sum", {
+  version: 1,
+  input: Type.Object({}),
+  members: { sum: Type.Object({ v: Type.Number() }) },
+});
+
 const rebindsListenersToTheNewCode = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const host = quiet();
@@ -180,11 +189,6 @@ const rebindsListenersToTheNewCode = Effect.gen(function* () {
     for (const fn of listeners) fn(value);
   };
   const log: string[] = [];
-  const Sum = local("t.sum", {
-    version: 1,
-    input: Type.Object({}),
-    members: { sum: Type.Object({ v: Type.Number() }) },
-  });
   const facet = (factor: number): Facet => ({
     name: "sum",
     setup: (api) =>

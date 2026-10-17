@@ -3,87 +3,32 @@ import { describe, expect, it } from "vite-plus/test";
 import { track } from "../../src/delta/index.ts";
 import { replay, settle } from "../fixtures/tracker.ts";
 
+const coercingToOne = (values: number[]) =>
+  ({
+    valueOf() {
+      values.push(4);
+      return 1;
+    },
+  }) as unknown as number;
+
+const compareWithNative = (mutate: (values: number[]) => void): void => {
+  const native = [1, 2, 3];
+  mutate(native);
+  const tracker = track({ values: [1, 2, 3] });
+  settle(tracker, (draft) => mutate(draft.values));
+  expect(tracker.value.values).toEqual(native);
+};
+
 const matchesNativeStructuralCoercionOrderingFor = (): void => {
-  const compare = (
-    mutateNative: (values: number[]) => void,
-    mutateDraft: (values: number[]) => void,
-  ): void => {
-    const native = [1, 2, 3];
-    mutateNative(native);
-    const tracker = track({ values: [1, 2, 3] });
-    settle(tracker, (draft) => mutateDraft(draft.values));
-    expect(tracker.value.values).toEqual(native);
-  };
-  compare(
-    (values) => {
-      values.splice(
-        {
-          valueOf() {
-            values.push(4);
-            return 1;
-          },
-        } as unknown as number,
-        1,
-        9,
-      );
-    },
-    (values) => {
-      values.splice(
-        {
-          valueOf() {
-            values.push(4);
-            return 1;
-          },
-        } as unknown as number,
-        1,
-        9,
-      );
-    },
-  );
-  compare(
-    (values) => {
-      values.fill(7, {
-        valueOf() {
-          values.push(4);
-          return 1;
-        },
-      } as unknown as number);
-    },
-    (values) => {
-      values.fill(7, {
-        valueOf() {
-          values.push(4);
-          return 1;
-        },
-      } as unknown as number);
-    },
-  );
-  compare(
-    (values) => {
-      values.copyWithin(
-        {
-          valueOf() {
-            values.push(4);
-            return 1;
-          },
-        } as unknown as number,
-        0,
-        2,
-      );
-    },
-    (values) => {
-      values.copyWithin(
-        {
-          valueOf() {
-            values.push(4);
-            return 1;
-          },
-        } as unknown as number,
-        0,
-        2,
-      );
-    },
-  );
+  compareWithNative((values) => {
+    values.splice(coercingToOne(values), 1, 9);
+  });
+  compareWithNative((values) => {
+    values.fill(7, coercingToOne(values));
+  });
+  compareWithNative((values) => {
+    values.copyWithin(coercingToOne(values), 0, 2);
+  });
 };
 
 const doesNotReportInheritedMethodsAs = (): void => {

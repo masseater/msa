@@ -31,15 +31,16 @@ const case1TheAcceptorDecidesWhatA = Effect.gen(function* () {
   );
 });
 
+const Echo = remote("t.echo", {
+  version: 1,
+  input: Type.Object({}),
+  host: hostNamed("server"),
+  variants: { main: { methods: { root: method(undefined, Type.String()) } } },
+});
+
 const case1RootEndIsHonoredOnly = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
-  const Echo = remote("t.echo", {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed("server"),
-    variants: { main: { methods: { root: method(undefined, Type.String()) } } },
-  });
   const facet = (version: number): Facet => ({
     name: "echo",
     setup: (api) =>

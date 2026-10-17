@@ -101,19 +101,21 @@ const twoBrowsersShareOneWorkerConnection = Effect.gen(function* () {
   assert.equal(yield* Effect.promise(() => b.add(1)), 6);
 });
 
+const DocV1 = remote("t.doc", {
+  version: 1,
+  input: Type.Object({}),
+  host: hostNamed("server"),
+  variants: { main: { state: { view: Type.Object({ text: Type.String() }) } } },
+});
+
+const DocV2 = remote("t.doc", {
+  version: 2,
+  input: Type.Object({}),
+  host: hostNamed("server"),
+  variants: { main: { state: { view: Type.Object({ body: Type.String() }) } } },
+});
+
 const case11SnapshotsThroughAnAcceptsAdapter = Effect.gen(function* () {
-  const DocV1 = remote("t.doc", {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed("server"),
-    variants: { main: { state: { view: Type.Object({ text: Type.String() }) } } },
-  });
-  const DocV2 = remote("t.doc", {
-    version: 2,
-    input: Type.Object({}),
-    host: hostNamed("server"),
-    variants: { main: { state: { view: Type.Object({ body: Type.String() }) } } },
-  });
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
   server.serve(
     DocV2,

@@ -1,7 +1,7 @@
 import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type JsonValue, track } from "../../src/delta/index.ts";
+import { type Change, type JsonValue, track } from "../../src/delta/index.ts";
 import { clone, expectAliasFree, replay } from "../fixtures/tracker.ts";
 
 const clonesPropertyIndexPushUnshiftSplice = (): void => {
@@ -32,15 +32,38 @@ const clonesPropertyIndexPushUnshiftSplice = (): void => {
   tracker.adopt(prepared);
 };
 
-const rejectsNonStrictJsonPlacementsBefore = (): void => {
-  const initial = {
-    optional: "remove" as string | undefined,
-    payload: null as JsonValue,
-    number: 0,
-    values: [1, 2] as JsonValue[],
-  };
-  const tracker = track(initial);
-  const change = tracker.beginChange();
+const rejectsNonPlainContainers = (change: Change<Placements>): void => {
+  const sparse: JsonValue[] = new Array<JsonValue>(1);
+  expect(() => {
+    change.state.payload = sparse;
+  }).toThrow(/dense plain arrays/u);
+  const cyclic: { self?: unknown } = {};
+  cyclic.self = cyclic;
+  expect(() => {
+    change.state.payload = cyclic as JsonValue;
+  }).toThrow(/cycles/u);
+  let accessorReads = 0;
+  const accessor = Object.defineProperty({}, "value", {
+    enumerable: true,
+    get() {
+      accessorReads += 1;
+      return 1;
+    },
+  });
+  expect(() => {
+    change.state.payload = accessor as JsonValue;
+  }).toThrow(/data properties/u);
+  expect(accessorReads).toBe(0);
+};
+
+interface Placements {
+  optional: string | undefined;
+  payload: JsonValue;
+  number: number;
+  values: JsonValue[];
+}
+
+const rejectsNonJsonScalars = (change: Change<Placements>): void => {
   const undefinedValue = undefined as unknown as JsonValue;
 
   expect(() => {
@@ -71,28 +94,15 @@ const rejectsNonStrictJsonPlacementsBefore = (): void => {
   expect(() => {
     change.state.payload = DateTime.toDateUtc(DateTime.nowUnsafe()) as unknown as JsonValue;
   }).toThrow(/plain objects/u);
+};
 
-  const sparse: JsonValue[] = new Array<JsonValue>(1);
-  expect(() => {
-    change.state.payload = sparse;
-  }).toThrow(/dense plain arrays/u);
-  const cyclic: { self?: unknown } = {};
-  cyclic.self = cyclic;
-  expect(() => {
-    change.state.payload = cyclic as JsonValue;
-  }).toThrow(/cycles/u);
-  let accessorReads = 0;
-  const accessor = Object.defineProperty({}, "value", {
-    enumerable: true,
-    get() {
-      accessorReads += 1;
-      return 1;
-    },
-  });
-  expect(() => {
-    change.state.payload = accessor as JsonValue;
-  }).toThrow(/data properties/u);
-  expect(accessorReads).toBe(0);
+const rejectsNonStrictJsonPlacementsBefore = (): void => {
+  const initial: Placements = { optional: "remove", payload: null, number: 0, values: [1, 2] };
+  const tracker = track(initial);
+  const change = tracker.beginChange();
+  rejectsNonJsonScalars(change);
+
+  rejectsNonPlainContainers(change);
 
   expect(change.state).toEqual(initial);
   change.state.optional = undefined;

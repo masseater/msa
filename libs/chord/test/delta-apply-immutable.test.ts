@@ -11,7 +11,7 @@ import {
 } from "../src/delta/index.ts";
 import { clone, freezeDeep } from "./fixtures/delta-apply-immutable.ts";
 
-const copiesEachTouchedContainerOnceWhile = (): void => {
+const touchedContainers = () => {
   const shared = freezeDeep({ nested: { value: 1 } });
   const untouched = freezeDeep({ value: 9 });
   const rowPayload = freezeDeep({ id: 4, label: "placed" });
@@ -31,6 +31,11 @@ const copiesEachTouchedContainerOnceWhile = (): void => {
       { id: 3, label: "three" },
     ],
   });
+  return { shared, untouched, rowPayload, base };
+};
+
+const copiesEachTouchedContainerOnceWhile = (): void => {
+  const { shared, untouched, rowPayload, base } = touchedContainers();
   const operations = freezeDeep([
     ["t", ["text"], 2],
     ["a", ["text"], "!"],
@@ -173,6 +178,27 @@ const handlesTrackerProducedBatchesAcrossArbitrary = (): void => {
   expect(applyImmutableBatches(initial, batches)).toEqual(tracker.value);
 };
 
+const rejectsMalformedPathsWithoutReading = (): void => {
+  let reads = 0;
+  const target = Object.defineProperty({}, "trap", {
+    enumerable: true,
+    get() {
+      reads++;
+      return {};
+    },
+  });
+  const malformed: Op[] = [["s", "bad-path", 1] as never];
+  expect(() => applyImmutableBatches(target, [malformed])).toThrow(/path/u);
+  expect(reads).toBe(0);
+
+  expect(() => applyImmutable({ values: [] }, [["s", ["values", "missing", "value"], 1]])).toThrow(
+    PathError,
+  );
+  expect(() => applyImmutable({ values: [{}] }, [["s", ["values", "0", "value"], 1]])).toThrow(
+    UnsafePathError,
+  );
+};
+
 const doesNotExposePartialApplicationWhen = (): void => {
   const base = freezeDeep({ nested: { value: 1 } });
   const invalidBatches: readonly (readonly Op[])[] = [
@@ -206,24 +232,7 @@ const doesNotExposePartialApplicationWhen = (): void => {
   expect(iteratorClosed).toBe(true);
   expect(base.nested.value).toBe(1);
 
-  let reads = 0;
-  const target = Object.defineProperty({}, "trap", {
-    enumerable: true,
-    get() {
-      reads++;
-      return {};
-    },
-  });
-  const malformed: Op[] = [["s", "bad-path", 1] as never];
-  expect(() => applyImmutableBatches(target, [malformed])).toThrow(/path/u);
-  expect(reads).toBe(0);
-
-  expect(() => applyImmutable({ values: [] }, [["s", ["values", "missing", "value"], 1]])).toThrow(
-    PathError,
-  );
-  expect(() => applyImmutable({ values: [{}] }, [["s", ["values", "0", "value"], 1]])).toThrow(
-    UnsafePathError,
-  );
+  rejectsMalformedPathsWithoutReading();
 };
 
 describe("checked immutable operation application", () => {

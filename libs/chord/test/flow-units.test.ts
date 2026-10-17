@@ -132,6 +132,19 @@ const Counter = remote("t.e8-relayed", {
   variants: { main: { state: { n: Type.Number() }, methods: { add: method(Type.Number()) } } },
 });
 
+const serveRelayedCounter = (created: HostImpl): void => {
+  created.serve(Counter, (_input, _principal, self) => {
+    const n = self.state("n", Type.Number(), 0);
+    return {
+      variant: "main",
+      n,
+      add: (delta: number, ctx: Ctx) => {
+        n.replace(ctx, n.value + delta);
+      },
+    };
+  });
+};
+
 function cluster() {
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
   let worker: HostImpl | undefined;
@@ -150,16 +163,7 @@ function cluster() {
             upstream: { link: up, principal: { kind: "server" } },
             onError: () => {},
           });
-          created.serve(Counter, (_input, _principal, self) => {
-            const n = self.state("n", Type.Number(), 0);
-            return {
-              variant: "main",
-              n,
-              add: (delta: number, ctx: Ctx) => {
-                n.replace(ctx, n.value + delta);
-              },
-            };
-          });
+          serveRelayedCounter(created);
           worker = created;
           toWorker = new CountingLink(down);
           return toWorker;

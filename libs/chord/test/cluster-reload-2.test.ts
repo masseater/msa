@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { Clock, Effect } from "effect";
+import { Clock, type Context, Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it, onTestFinished } from "vite-plus/test";
 
@@ -9,6 +9,7 @@ import {
   createHost,
   type Facet,
   type FacetLoader,
+  type Host,
   hostNamed,
   local,
   memoryLinkPair,
@@ -16,7 +17,7 @@ import {
   remote,
 } from "../src/index.ts";
 import { Ping, dropping, greeterFacet } from "./fixtures/cluster.ts";
-import { latch, tick } from "./fixtures/timing.ts";
+import { type Latch, latch, tick } from "./fixtures/timing.ts";
 
 const aChildBehindWhoseHelloWaits = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
@@ -110,46 +111,30 @@ const aReconnectingChildBehindItsParent = Effect.gen(function* () {
   assert.ok(elapsed < 2000, `reconciled after ${elapsed} ms`);
 });
 
-const forcedRetirementCancelsABrowserCall = Effect.gen(function* () {
-  const services = yield* Effect.context<never>();
-  const log: string[] = [];
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
-  onTestFinished(() => server.close());
-  const [down, up] = memoryLinkPair();
-  const worker = createHost({
+const Slow = remote("t.cluster-slow", {
+  version: 1,
+  input: Type.Object({}),
+  host: hostNamed("session:S1"),
+  variants: { main: { methods: { wait: method() } } },
+});
+
+const Store = local("t.cluster-store", { version: 1, input: Type.Object({}) });
+
+const connectGuestBrowser = (server: Host): Host => {
+  const [browserDown, browserUp] = memoryLinkPair();
+  server.accept(browserDown, { principal: { guest: "g" } });
+  const browser = createHost({
     self: { kind: "host" },
-    name: "session:S1",
-    upstream: { link: up, principal: { kind: "server" } },
+    name: "browser",
+    kind: "client",
+    upstream: { link: browserUp, principal: { kind: "server" } },
     onError: () => {},
   });
-  onTestFinished(() => worker.close());
-  const never = latch();
-  const Slow = remote("t.cluster-slow", {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed("session:S1"),
-    variants: { main: { methods: { wait: method() } } },
-  });
-  worker.serve(Slow, () => ({
-    variant: "main",
-    wait: (ctx: Ctx) =>
-      Effect.runPromiseWith(services)(
-        Effect.gen(function* () {
-          ctx.signal.addEventListener("abort", () => log.push("worker aborted"));
-          yield* never.wait;
-        }),
-      ),
-  }));
-  const watched = dropping(down, (frame) => {
-    if (frame.t === "cancel") log.push("cancel sent");
-    return false;
-  });
-  server.route("session:", {
-    authorize: () => true,
-    resolve: () => Effect.runPromiseWith(services)(Effect.succeed(watched)),
-    principal: (name) => ({ host: name }),
-  });
-  const Store = local("t.cluster-store", { version: 1, input: Type.Object({}) });
+  onTestFinished(() => browser.close());
+  return browser;
+};
+
+const loggingStoreFacet = (log: string[]): ((version: number) => Facet) => {
   const storeFacet = (version: number): Facet => ({
     name: "store",
     setup: (api) =>
@@ -166,17 +151,54 @@ const forcedRetirementCancelsABrowserCall = Effect.gen(function* () {
         { lifetime: "host" },
       ),
   });
-  yield* Effect.promise(() => server.install(storeFacet(1)));
-  const [browserDown, browserUp] = memoryLinkPair();
-  server.accept(browserDown, { principal: { guest: "g" } });
-  const browser = createHost({
+  return storeFacet;
+};
+
+const serveSlowUntil = (
+  worker: Host,
+  log: string[],
+  never: Latch,
+  services: Context.Context<never>,
+): void => {
+  worker.serve(Slow, () => ({
+    variant: "main",
+    wait: (ctx: Ctx) =>
+      Effect.runPromiseWith(services)(
+        Effect.gen(function* () {
+          ctx.signal.addEventListener("abort", () => log.push("worker aborted"));
+          yield* never.wait;
+        }),
+      ),
+  }));
+};
+
+const forcedRetirementCancelsABrowserCall = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const log: string[] = [];
+  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
+  onTestFinished(() => server.close());
+  const [down, up] = memoryLinkPair();
+  const worker = createHost({
     self: { kind: "host" },
-    name: "browser",
-    kind: "client",
-    upstream: { link: browserUp, principal: { kind: "server" } },
+    name: "session:S1",
+    upstream: { link: up, principal: { kind: "server" } },
     onError: () => {},
   });
-  onTestFinished(() => browser.close());
+  onTestFinished(() => worker.close());
+  const never = latch();
+  serveSlowUntil(worker, log, never, services);
+  const watched = dropping(down, (frame) => {
+    if (frame.t === "cancel") log.push("cancel sent");
+    return false;
+  });
+  server.route("session:", {
+    authorize: () => true,
+    resolve: () => Effect.runPromiseWith(services)(Effect.succeed(watched)),
+    principal: (name) => ({ host: name }),
+  });
+  const storeFacet = loggingStoreFacet(log);
+  yield* Effect.promise(() => server.install(storeFacet(1)));
+  const browser = connectGuestBrowser(server);
   const call = browser.hold(Slow, {}).wait();
   call.catch(() => {});
   for (let i = 0; i < 50 && log.length === 0 && worker.codeVersion === 0; i++) yield* tick;

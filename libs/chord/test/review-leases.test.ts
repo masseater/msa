@@ -8,13 +8,14 @@ import { createHost, defineRegistry, isChordError, local, method, type Ref } fro
 import { emitter } from "./fixtures/review.ts";
 import { latch, tick, ticks } from "./fixtures/timing.ts";
 
+const Worker = local("t.busy", {
+  version: 1,
+  input: Type.Object({ id: Type.String() }),
+  members: { work: method(undefined, Type.Boolean()) },
+});
+
 const case5DisposalWaitsForRunningMethods = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
-  const Worker = local("t.busy", {
-    version: 1,
-    input: Type.Object({ id: Type.String() }),
-    members: { work: method(undefined, Type.Boolean()) },
-  });
   const log: string[] = [];
   let go = latch();
   const host = createHost({ self: { kind: "host" }, onError: () => {} });

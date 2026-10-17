@@ -92,6 +92,54 @@ export interface Cluster {
   allow: (principal: unknown, host: string) => boolean;
 }
 
+const browserOf =
+  (server: Host, options: { pingInterval?: number; pingTimeout?: number }): Cluster["browser"] =>
+  (principal, browserOptions = {}) => {
+    const [down, up] = memoryLinkPair();
+    server.accept(down, {
+      principal,
+      ...(browserOptions.restamp === undefined ? {} : { restamp: browserOptions.restamp }),
+      ...options,
+    });
+    const host = createHost({
+      self: { kind: "host" },
+      name: "browser",
+      kind: "client",
+      upstream: { link: up, principal: { kind: "server" }, ...options },
+      onError: () => {},
+    });
+    const ref = { host, up, reconnect: () => {} };
+    ref.reconnect = () => {
+      const [nextDown, nextUp] = memoryLinkPair();
+      server.accept(nextDown, { principal });
+      ref.up = nextUp;
+      host.connect(nextUp, { principal: { kind: "server" } });
+    };
+    return ref;
+  };
+
+const serveSessionCounter = (worker: Host, log: string[]): void => {
+  worker.serve(SessionCounter, (input, principal, self) => {
+    self.resource("probe", {
+      version: 1,
+      open: () => void log.push(`open ${input.name}`),
+      close: () => void log.push(`close ${input.name}`),
+    });
+    const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
+    return {
+      variant: "main",
+      count,
+      add: (delta: number, ctx: Ctx) => {
+        count.change(ctx, (draft) => {
+          draft.n += delta;
+        });
+        return count.value.n;
+      },
+      who: () => principal,
+    };
+  });
+};
+
 export function cluster(options: { pingInterval?: number; pingTimeout?: number } = {}): Cluster {
   const log: string[] = [];
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
@@ -101,29 +149,7 @@ export function cluster(options: { pingInterval?: number; pingTimeout?: number }
     workers,
     log,
     allow: () => true,
-    browser(principal, browserOptions = {}) {
-      const [down, up] = memoryLinkPair();
-      server.accept(down, {
-        principal,
-        ...(browserOptions.restamp === undefined ? {} : { restamp: browserOptions.restamp }),
-        ...options,
-      });
-      const host = createHost({
-        self: { kind: "host" },
-        name: "browser",
-        kind: "client",
-        upstream: { link: up, principal: { kind: "server" }, ...options },
-        onError: () => {},
-      });
-      const ref = { host, up, reconnect: () => {} };
-      ref.reconnect = () => {
-        const [nextDown, nextUp] = memoryLinkPair();
-        server.accept(nextDown, { principal });
-        ref.up = nextUp;
-        host.connect(nextUp, { principal: { kind: "server" } });
-      };
-      return ref;
-    },
+    browser: browserOf(server, options),
   };
   server.route("session:", {
     principal: (name) => ({ host: name }),
@@ -138,25 +164,7 @@ export function cluster(options: { pingInterval?: number; pingTimeout?: number }
             upstream: { link: up, principal: { kind: "server" }, ...options },
             onError: () => {},
           });
-          worker.serve(SessionCounter, (input, principal, self) => {
-            self.resource("probe", {
-              version: 1,
-              open: () => void log.push(`open ${input.name}`),
-              close: () => void log.push(`close ${input.name}`),
-            });
-            const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
-            return {
-              variant: "main",
-              count,
-              add: (delta: number, ctx: Ctx) => {
-                count.change(ctx, (draft) => {
-                  draft.n += delta;
-                });
-                return count.value.n;
-              },
-              who: () => principal,
-            };
-          });
+          serveSessionCounter(worker, log);
           workers.set(name, worker);
           return down;
         }),

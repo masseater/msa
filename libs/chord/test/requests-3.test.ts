@@ -152,15 +152,24 @@ const case9ReferencesReportStatusChangesLive = Effect.gen(function* () {
   assert.deepEqual(remoteStatus, ["live", "loading", "live", "released"]);
 });
 
+const Remote = remote("t.remote10", {
+  version: 1,
+  input: Type.Object({}),
+  host: hostNamed("server"),
+  variants: { main: { methods: { note: method(Type.String()) } } },
+});
+
+const Proc = local("t.proc", {
+  version: 1,
+  input: Type.Object({}),
+  members: { tracker: opaque<Set<string>>("t.tracker@1") },
+});
+
+const Chat = local("t.chat10", { version: 1, input: Type.Object({}) });
+
 const case10HostCloseDisposesHoldersBefore = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const log: string[] = [];
-  const Remote = remote("t.remote10", {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed("server"),
-    variants: { main: { methods: { note: method(Type.String()) } } },
-  });
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
   server.serve(Remote, () => ({
     variant: "main",
@@ -168,12 +177,6 @@ const case10HostCloseDisposesHoldersBefore = Effect.gen(function* () {
       log.push(`server: ${text}`);
     },
   }));
-  const Proc = local("t.proc", {
-    version: 1,
-    input: Type.Object({}),
-    members: { tracker: opaque<Set<string>>("t.tracker@1") },
-  });
-  const Chat = local("t.chat10", { version: 1, input: Type.Object({}) });
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { worker: "w" }, kind: "host", name: "w" });
   const worker = createHost({
