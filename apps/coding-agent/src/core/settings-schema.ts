@@ -322,7 +322,7 @@ export const SettingsSchema = Type.Object(
     collapseChangelog: Type.Optional(
       Type.Boolean({
         description:
-          "Show the condensed changelog after update; use /changelog for the full changelog.",
+          "Show the condensed changelog after update; use /release-notes for the full changelog.",
         default: SETTINGS_DEFAULTS.collapseChangelog,
       }),
     ),
@@ -368,7 +368,7 @@ export const SettingsSchema = Type.Object(
     ),
     enableSkillCommands: Type.Optional(
       Type.Boolean({
-        description: "Register skills as /name commands, or /skill:name when the name is taken.",
+        description: "Register skills as /name commands.",
         default: SETTINGS_DEFAULTS.enableSkillCommands,
       }),
     ),

@@ -629,7 +629,7 @@ export class SettingsSelectorComponent extends Container {
       {
         id: "tree-filter-mode",
         label: "Tree filter mode",
-        description: "Default filter when opening /tree",
+        description: "Default filter when opening /rewind",
         currentValue: config.treeFilterMode,
         values: ["default", "no-tools", "user-only", "labeled-only", "all"],
       },

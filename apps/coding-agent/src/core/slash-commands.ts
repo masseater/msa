@@ -18,7 +18,7 @@ export interface BuiltinSlashCommand {
   aliases?: readonly string[];
 }
 
-/** Named and grouped after Claude Code's commands; earlier msa names remain as aliases. */
+/** Named, grouped, and aliased as in Claude Code. */
 export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
   { name: "help", description: "Show the available commands" },
   { name: "config", description: "Open settings", aliases: ["settings", "theme"] },
@@ -31,34 +31,31 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
     name: "effort",
     description: "Set thinking level",
     argumentHint: "<level>",
-    aliases: ["thinking"],
   },
   { name: "scoped-models", description: "Enable/disable models for Ctrl+P cycling" },
   { name: "login", description: "Configure provider authentication", argumentHint: "<provider>" },
   { name: "logout", description: "Remove provider authentication" },
   { name: "clear", description: "Start a new session", aliases: ["new", "reset"] },
-  { name: "resume", description: "Resume a different session" },
+  { name: "resume", description: "Resume a different session", aliases: ["continue"] },
   {
     name: "rename",
     description: "Set session display name",
     argumentHint: "<name>",
-    aliases: ["name"],
   },
   {
     name: "status",
     description: "Show session info, usage, and cost",
-    aliases: ["session", "usage", "cost", "stats", "context"],
+    aliases: ["usage", "cost", "stats", "context"],
   },
   {
     name: "rewind",
     description: "Go back to an earlier point in the session tree",
-    aliases: ["tree", "checkpoint", "undo"],
+    aliases: ["checkpoint", "undo"],
   },
   { name: "fork", description: "Create a new session from an earlier user message" },
   {
     name: "branch",
     description: "Duplicate the current session at the current position",
-    aliases: ["clone"],
   },
   {
     name: "compact",
@@ -87,8 +84,8 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
     description: "Reload keybindings, extensions, skills, prompts, themes, and context files",
     aliases: ["reload-skills", "reload-plugins"],
   },
-  { name: "keybindings", description: "Show all keyboard shortcuts", aliases: ["hotkeys"] },
-  { name: "release-notes", description: "Show changelog entries", aliases: ["changelog"] },
+  { name: "keybindings", description: "Show all keyboard shortcuts" },
+  { name: "release-notes", description: "Show changelog entries" },
   { name: "exit", description: `Exit ${APP_NAME}`, aliases: ["quit"] },
 ];
 
@@ -106,14 +103,14 @@ export function isBuiltinSlashCommandName(name: string): boolean {
 
 /**
  * Rewrites a built-in command typed by one of its aliases to the command's own name, keeping its
- * arguments: `/quit` becomes `/exit`, `/thinking high` becomes `/effort high`. Other text is
+ * arguments: `/quit` becomes `/exit`, `/cost` becomes `/status`. Other text is
  * returned unchanged.
  */
 export function canonicalizeBuiltinSlashCommand(text: string): string {
-  if (!text.startsWith("/")) return text;
-  const end = text.search(/\s/u);
-  const name = BUILTIN_NAMES.get(end === -1 ? text.slice(1) : text.slice(1, end));
-  return name === undefined ? text : `/${name}${end === -1 ? "" : text.slice(end)}`;
+  const typed = slashCommandName(text);
+  if (typed === undefined) return text;
+  const name = BUILTIN_NAMES.get(typed);
+  return name === undefined ? text : `/${name}${text.slice(typed.length + 1)}`;
 }
 
 /** What `/init` sends: the model writes the repository's AGENTS.md. */
@@ -123,14 +120,19 @@ export const INIT_PROMPT =
   "Read package.json (or the equivalent), the build and test configuration, and AGENTS.md and " +
   "CLAUDE.md if they already exist. Keep it short and specific to this repository.";
 
-/** The `/help` text: built-in commands with their aliases, then the commands resources added. */
+/**
+ * The `/help` text: built-in commands with their aliases, then the commands resources added. A
+ * built-in command whose name an added command (a skill) took is left out.
+ */
 export function formatHelpMarkdown(
   added: ReadonlyArray<{ name: string; description?: string | undefined }>,
 ): string {
   const row = (name: string, description = "") =>
     `| \`/${name}\` | ${description.replaceAll("|", "\\|")} |`;
   const lines = ["| Command | Description |", "| --- | --- |"];
+  const taken = new Set(added.map((command) => command.name));
   for (const command of BUILTIN_SLASH_COMMANDS) {
+    if (taken.has(command.name)) continue;
     const aliases = command.aliases?.map((alias) => `\`/${alias}\``).join(", ");
     lines.push(
       row(command.name, aliases ? `${command.description} (${aliases})` : command.description),
@@ -143,11 +145,21 @@ export function formatHelpMarkdown(
   return lines.join("\n");
 }
 
+/** The command name at the start of `text` (`/name args` gives `name`), or undefined for other text. */
+export function slashCommandName(text: string): string | undefined {
+  if (!text.startsWith("/")) return undefined;
+  const end = text.search(/\s/u);
+  return end === -1 ? text.slice(1) : text.slice(1, end);
+}
+
 /**
- * The command a skill is listed under: `/name`, as in Claude Code, or `/skill:name` when a built-in
- * command, an extension command, or a prompt template already uses that name. `/skill:name` always
- * works.
+ * The commands `/name` runs: a skill takes its name from any extension command or prompt template
+ * of the same name, as a Claude Code skill does from a command file.
  */
-export function skillCommandName(name: string, taken: ReadonlySet<string>): string {
-  return isBuiltinSlashCommandName(name) || taken.has(name) ? `skill:${name}` : name;
+export function withSkillCommands<T extends { name: string }>(
+  commands: readonly T[],
+  skills: readonly T[],
+): T[] {
+  const skillNames = new Set(skills.map((skill) => skill.name));
+  return [...commands.filter((command) => !skillNames.has(command.name)), ...skills];
 }

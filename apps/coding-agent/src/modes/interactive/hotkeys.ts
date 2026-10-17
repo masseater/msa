@@ -79,7 +79,7 @@ function table(
   return `**${title}**\n| Key | Action |\n|-----|--------|\n${body}`;
 }
 
-/** The `/hotkeys` table, using the current keybindings, followed by the shortcuts extensions registered. */
+/** The `/keybindings` table, using the current keybindings, followed by the shortcuts extensions registered. */
 export function formatHotkeysMarkdown(
   extensionShortcuts: ReadonlyMap<string, ExtensionShortcut>,
 ): string {

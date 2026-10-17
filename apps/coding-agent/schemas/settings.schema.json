@@ -269,7 +269,7 @@
     },
     "collapseChangelog": {
       "type": "boolean",
-      "description": "Show the condensed changelog after update; use /changelog for the full changelog.",
+      "description": "Show the condensed changelog after update; use /release-notes for the full changelog.",
       "default": false
     },
     "enableInstallTelemetry": {
@@ -389,7 +389,7 @@
     },
     "enableSkillCommands": {
       "type": "boolean",
-      "description": "Register skills as /name commands, or /skill:name when the name is taken.",
+      "description": "Register skills as /name commands.",
       "default": true
     },
     "terminal": {

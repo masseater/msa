@@ -35,7 +35,7 @@ If the agent is streaming and no `streamingBehavior` is specified, the command r
 
 **Extension commands**: If the message is an extension command (e.g., `/mycommand`), it executes immediately even during streaming. Extension commands manage their own LLM interaction via `msa.sendMessage()`.
 
-**Input expansion**: Skill commands (`/name` or `/skill:name`) and prompt templates (`/template`) are expanded before sending/queueing.
+**Input expansion**: Skill commands (`/name`) and prompt templates (`/template`) are expanded before sending/queueing.
 
 Response:
 
@@ -899,7 +899,7 @@ Each command has:
 - `source`: What kind of command:
   - `"extension"`: Registered via `msa.registerCommand()` in an extension
   - `"prompt"`: Loaded from a prompt template `.md` file
-  - `"skill"`: Loaded from a skill directory (name is prefixed with `skill:`)
+  - `"skill"`: Loaded from a skill directory; it takes the name from an extension command or prompt template of the same name
 - `sourceInfo`: Metadata for the resource that registered the command:
   - `path`: Absolute path to the resource
   - `source`: How msa discovered it, such as `"local"`, `"auto"`, or `"cli"`

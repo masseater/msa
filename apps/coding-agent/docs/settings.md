@@ -150,14 +150,14 @@ See [Shell aliases](shell-aliases.md) for shell setup and [msa Packages](package
 
 Resource paths in user settings resolve from the agent directory. Paths in project settings resolve from the project `.msa` directory. Absolute paths and `~` are supported.
 
-| Setting               | Type       | Default | Description                                                                   |
-| --------------------- | ---------- | ------- | ----------------------------------------------------------------------------- |
-| `packages`            | array      | `[]`    | npm, git, or local msa package sources. See [msa Packages](packages.md).      |
-| `extensions`          | `string[]` | `[]`    | Extension files or directories.                                               |
-| `skills`              | `string[]` | `[]`    | Skill files or directories.                                                   |
-| `prompts`             | `string[]` | `[]`    | Prompt-template files or directories.                                         |
-| `themes`              | `string[]` | `[]`    | Theme files or directories.                                                   |
-| `enableSkillCommands` | boolean    | `true`  | Register skills as `/name` commands, or `/skill:name` when the name is taken. |
+| Setting               | Type       | Default | Description                                                              |
+| --------------------- | ---------- | ------- | ------------------------------------------------------------------------ |
+| `packages`            | array      | `[]`    | npm, git, or local msa package sources. See [msa Packages](packages.md). |
+| `extensions`          | `string[]` | `[]`    | Extension files or directories.                                          |
+| `skills`              | `string[]` | `[]`    | Skill files or directories.                                              |
+| `prompts`             | `string[]` | `[]`    | Prompt-template files or directories.                                    |
+| `themes`              | `string[]` | `[]`    | Theme files or directories.                                              |
+| `enableSkillCommands` | boolean    | `true`  | Register skills as `/name` commands.                                     |
 
 Resource arrays support glob exclusions with `!pattern`, exact inclusion with `+path`, and exact exclusion with `-path`. msa loads resources listed in both user-level and project settings.
 

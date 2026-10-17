@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalizeBuiltinSlashCommand,
   formatHelpMarkdown,
-  skillCommandName,
+  withSkillCommands,
 } from "../src/core/slash-commands.ts";
 
 describe("built-in slash commands", () => {
@@ -11,14 +11,21 @@ describe("built-in slash commands", () => {
     ["/quit", "/exit"],
     ["/new", "/clear"],
     ["/settings", "/config"],
-    ["/session", "/status"],
-    ["/thinking high", "/effort high"],
-    ["/name my session", "/rename my session"],
+    ["/cost", "/status"],
+    ["/continue", "/resume"],
+    ["/undo", "/rewind"],
     ["/feedback it\ncrashed", "/bug it\ncrashed"],
     ["/exit", "/exit"],
-  ])("runs %j as %j", (typed, run) => {
+  ])("runs Claude Code's %j as %j", (typed, run) => {
     expect(canonicalizeBuiltinSlashCommand(typed)).toBe(run);
   });
+
+  it.each(["/thinking high", "/name x", "/session", "/tree", "/clone", "/hotkeys", "/changelog"])(
+    "has no alias for the earlier msa name %j",
+    (text) => {
+      expect(canonicalizeBuiltinSlashCommand(text)).toBe(text);
+    },
+  );
 
   it.each(["/quitter", "/skill:quit", "quit", "/usr/bin/env", ""])(
     "leaves %j to extensions, templates, skills, and the model",
@@ -27,11 +34,26 @@ describe("built-in slash commands", () => {
     },
   );
 
-  it("lists skills by name unless a command already uses it", () => {
-    const taken = new Set(["review"]);
-    expect(skillCommandName("deploy", taken)).toBe("deploy");
-    expect(skillCommandName("review", taken)).toBe("skill:review");
-    expect(skillCommandName("quit", taken)).toBe("skill:quit");
+  it("lists every skill under its name, taking the name from a command", () => {
+    const commands = [
+      { name: "review", source: "prompt" },
+      { name: "lint", source: "extension" },
+    ];
+    const skills = [
+      { name: "review", source: "skill" },
+      { name: "deploy", source: "skill" },
+    ];
+    expect(withSkillCommands(commands, skills)).toEqual([
+      { name: "lint", source: "extension" },
+      { name: "review", source: "skill" },
+      { name: "deploy", source: "skill" },
+    ]);
+  });
+
+  it("lists a skill instead of the built-in command whose name it took in /help", () => {
+    const help = formatHelpMarkdown([{ name: "status", description: "Project status." }]);
+    expect(help).not.toContain("Show session info");
+    expect(help).toContain("| `/status` | Project status. |");
   });
 
   it("shows aliases next to each command in /help, then the first sentence of added commands", () => {

@@ -610,7 +610,7 @@ export interface ToolLoadoutChanges {
   descriptions?: Readonly<Record<string, string>>;
   /**
    * Declared tools whose declarations requests leave out. They stay active and callable, and the
-   * transcript still declares them, so the active set survives `/tree` and resume.
+   * transcript still declares them, so the active set survives `/rewind` and resume.
    */
   hiddenDeclarations?: readonly string[];
 }
