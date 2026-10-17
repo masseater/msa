@@ -192,7 +192,7 @@ const MemoryRecallSettingsSchema = Type.Object({
   minScore: Type.Optional(
     Type.Number({
       description:
-        "Minimum relevance (0-1) for a memory to be recalled: the better of the embedding similarity and the share of query terms found. Embedding models differ in their score range, so tune this with the model.",
+        "Minimum relevance (0-1) for a memory to be recalled: its embedding similarity, or the share of query words it holds. Embedding models differ in their score range, so tune this with the model.",
       default: SETTINGS_DEFAULTS.memory.recall.minScore,
     }),
   ),
