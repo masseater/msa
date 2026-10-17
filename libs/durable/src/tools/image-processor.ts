@@ -55,6 +55,8 @@ export const INLINE_IMAGE_TYPES: ReadonlySet<string> = new Set([
 /**
  * Standard base64 of `bytes`. `btoa` takes a binary string, built 8 KiB at a time: a single `String.fromCharCode`
  * call with megabytes of arguments overflows the stack.
+ * @param {Uint8Array} bytes - The bytes to encode.
+ * @returns {string} The base64 text.
  */
 export function toBase64(bytes: Uint8Array): string {
   const parts: string[] = [];
@@ -65,7 +67,6 @@ export function toBase64(bytes: Uint8Array): string {
   return btoa(parts.join(""));
 }
 
-/** The length of the base64 of `byteLength` bytes. */
 export function base64Length(byteLength: number): number {
   return Math.ceil(byteLength / 3) * 4;
 }

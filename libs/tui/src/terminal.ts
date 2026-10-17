@@ -28,18 +28,18 @@ export type KeyboardProtocolNegotiationSequence =
 export function parseKeyboardProtocolNegotiationSequence(
   sequence: string,
 ): KeyboardProtocolNegotiationSequence | undefined {
-  const kittyFlags = sequence.match(/^\x1b\[\?(\d+)u$/);
+  const kittyFlags = sequence.match(/^\x1b\[\?(\d+)u$/u);
   if (kittyFlags) {
     return { type: "kitty-flags", flags: Number.parseInt(kittyFlags[1]!, 10) };
   }
-  if (/^\x1b\[\?[\d;]*c$/.test(sequence)) {
+  if (/^\x1b\[\?[\d;]*c$/u.test(sequence)) {
     return { type: "device-attributes" };
   }
   return undefined;
 }
 
 function isKeyboardProtocolNegotiationSequencePrefix(sequence: string): boolean {
-  return sequence === "\x1b[" || /^\x1b\[\?[\d;]*$/.test(sequence);
+  return sequence === "\x1b[" || /^\x1b\[\?[\d;]*$/u.test(sequence);
 }
 
 export function isAppleTerminalSession(): boolean {
@@ -107,19 +107,26 @@ export interface Terminal {
   get kittyProtocolActive(): boolean;
 
   // Cursor positioning (relative to current position)
-  moveBy(lines: number): void; // Move cursor up (negative) or down (positive) by N lines
+  // Move cursor up (negative) or down (positive) by N lines
+  moveBy(lines: number): void;
 
   // Cursor visibility
-  hideCursor(): void; // Hide the cursor
-  showCursor(): void; // Show the cursor
+  // Hide the cursor
+  hideCursor(): void;
+  // Show the cursor
+  showCursor(): void;
 
   // Clear operations
-  clearLine(): void; // Clear current line
-  clearFromCursor(): void; // Clear from cursor to end of screen
-  clearScreen(): void; // Clear entire screen and move cursor to (0,0)
+  // Clear current line
+  clearLine(): void;
+  // Clear from cursor to end of screen
+  clearFromCursor(): void;
+  // Clear entire screen and move cursor to (0,0)
+  clearScreen(): void;
 
   // Title operations
-  setTitle(title: string): void; // Set terminal window title
+  // Set terminal window title
+  setTitle(title: string): void;
 
   // Progress indicator (OSC 9;4)
   setProgress(active: boolean): void;
@@ -138,6 +145,9 @@ const DEFAULT_SSH_ESCAPE_TIMEOUT_MS = 100;
  * Resolve how long to wait for the rest of an escape sequence before
  * dispatching a lone ESC as the Escape key. Legacy Alt+key input is ESC plus
  * another byte, so high-latency transports need a longer reassembly window.
+ *
+ * @param {NodeJS.ProcessEnv} env - Environment to read the transport hints from.
+ * @returns {number} The timeout in milliseconds.
  */
 export function resolveEscapeTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const configured = Number(env["MSA_TUI_ESC_TIMEOUT"]);
@@ -253,7 +263,8 @@ export class ProcessTerminal implements Terminal {
       const negotiation = this.readKeyboardProtocolNegotiationSequence(sequence);
       if (negotiation === "pending") {
         this.scheduleKeyboardProtocolNegotiationBufferFlush();
-        return; // Wait briefly for the rest of a split Kitty response.
+        // Wait briefly for the rest of a split Kitty response.
+        return;
       }
       if (negotiation && this.handleKeyboardProtocolNegotiationSequence(negotiation.parsed)) {
         return;
@@ -320,14 +331,14 @@ export class ProcessTerminal implements Terminal {
         this.programStatusQueryPending = false;
     }
     if (negotiationSequence.type === "kitty-flags") {
-      if (negotiationSequence.flags !== 0) {
+      if (negotiationSequence.flags === 0) {
+        this.enableModifyOtherKeys();
+      } else {
         this.disableModifyOtherKeys();
         if (!this._kittyProtocolActive) {
           this._kittyProtocolActive = true;
           setKittyProtocolActive(true);
         }
-      } else {
-        this.enableModifyOtherKeys();
       }
       return true;
     }
@@ -338,7 +349,12 @@ export class ProcessTerminal implements Terminal {
     return true;
   }
 
-  /** Returns the parsed negotiation reply with its full (possibly reassembled) sequence. */
+  /**
+   * Returns the parsed negotiation reply with its full (possibly reassembled) sequence.
+   *
+   * @param {string} sequence - A sequence from the stdin buffer.
+   * @returns {{ parsed: KeyboardProtocolNegotiationSequence; sequence: string } | "pending" | undefined} The reply, "pending" while the reply is incomplete, or undefined when it is not a reply.
+   */
   private readKeyboardProtocolNegotiationSequence(
     sequence: string,
   ): { parsed: KeyboardProtocolNegotiationSequence; sequence: string } | "pending" | undefined {
@@ -459,14 +475,19 @@ export class ProcessTerminal implements Terminal {
     process.stdin.on("data", onData);
     const endTime = Date.now() + maxMs;
 
+    const waitUntilIdle = async (): Promise<void> => {
+      const now = Date.now();
+      const timeLeft = endTime - now;
+      if (timeLeft <= 0) return;
+      if (now - lastDataTime >= idleMs) return;
+      await new Promise((resolve) => {
+        setTimeout(resolve, Math.min(idleMs, timeLeft));
+      });
+      await waitUntilIdle();
+    };
+
     try {
-      while (true) {
-        const now = Date.now();
-        const timeLeft = endTime - now;
-        if (timeLeft <= 0) break;
-        if (now - lastDataTime >= idleMs) break;
-        await new Promise((resolve) => setTimeout(resolve, Math.min(idleMs, timeLeft)));
-      }
+      await waitUntilIdle();
     } finally {
       process.stdin.removeListener("data", onData);
       this.inputHandler = previousHandler;
@@ -574,7 +595,8 @@ export class ProcessTerminal implements Terminal {
   }
 
   clearScreen(): void {
-    process.stdout.write("\x1b[2J\x1b[H"); // Clear screen and move to home (1,1)
+    // Clear screen and move to home (1,1)
+    process.stdout.write("\x1b[2J\x1b[H");
   }
 
   setTitle(title: string): void {

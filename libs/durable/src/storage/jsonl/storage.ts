@@ -3,6 +3,7 @@ import type { Context, JsonValue } from "@msa/chord";
 import type { FileError, FileSystem } from "../../env/index.ts";
 import { StorageRequestError } from "../../errors.ts";
 import { idFromNumber, seqFromNumber } from "../../ids.ts";
+import { promiseTry } from "../../promise-try.ts";
 import type {
   ConversationId,
   ConversationQuery,
@@ -106,10 +107,10 @@ const sidecarFileName = (kind: "doc" | "task", id: DocumentId | TaskId): string 
   `${kind}-${id}.jsonl`;
 
 const isSidecarFileName = (name: string): boolean =>
-  /^(?:doc|task)-(?:0|[1-9]\d*)\.jsonl$/.test(name);
+  /^(?:doc|task)-(?:0|[1-9]\d*)\.jsonl$/u.test(name);
 
 const isReclaimFileName = (name: string): boolean =>
-  /^(?:doc|task)-(?:0|[1-9]\d*)\.jsonl\.reclaim$/.test(name);
+  /^(?:doc|task)-(?:0|[1-9]\d*)\.jsonl\.reclaim$/u.test(name);
 
 const isCurrentOnly = (record: DocumentCreate): boolean =>
   record.scope.kind !== "conversation" || record.history === "latest";
@@ -274,7 +275,14 @@ export class JsonlStorage implements Storage {
     this.fsync = options.fsync ?? false;
   }
 
-  /** Open or create a JSONL storage directory using the supplied filesystem. */
+  /**
+   * Open or create a JSONL storage directory using the supplied filesystem.
+   * @param {string} directory - The storage directory.
+   * @param {FileSystem} fs - The file system.
+   * @param {Context} context - The caller's context.
+   * @param {JsonlStorageOptions} options - The storage options.
+   * @returns {Promise<JsonlStorage>} The storage.
+   */
   static async open(
     directory: string,
     fs: FileSystem,
@@ -305,12 +313,12 @@ export class JsonlStorage implements Storage {
       })),
     );
 
-    for (const sidecar of sidecars) {
+    for await (const sidecar of sidecars) {
       const result = await this.fs.appendFile(sidecar.path, sidecar.content, context);
       if (!result.ok) throw this.poison(errorFromFile(`append to ${sidecar.file}`, result.error));
     }
     if (this.fsync) {
-      for (const sidecar of sidecars) {
+      for await (const sidecar of sidecars) {
         const result = await this.fs.flushFile(sidecar.path, context);
         if (!result.ok) throw this.poison(errorFromFile(`flush of ${sidecar.file}`, result.error));
       }
@@ -323,21 +331,21 @@ export class JsonlStorage implements Storage {
     return seq;
   }
 
-  async mintId<I extends Id<string>>(): Promise<I> {
-    return this.store.mintId<I>();
+  mintId<I extends Id<string>>(): Promise<I> {
+    return promiseTry(() => this.store.mintId<I>());
   }
 
-  async conversation(id: ConversationId, context: Context) {
-    return this.store.conversation(id, context);
+  conversation(id: ConversationId, context: Context) {
+    return promiseTry(() => this.store.conversation(id, context));
   }
 
-  async scanConversations(
+  scanConversations(
     query: ConversationQuery,
     limit: number,
     cursor: Cursor | undefined,
     context: Context,
   ) {
-    return this.store.scanConversations(query, limit, cursor, context);
+    return promiseTry(() => this.store.scanConversations(query, limit, cursor, context));
   }
 
   entry(id: EntryId, context: Context): ReturnType<Storage["entry"]>;
@@ -346,79 +354,73 @@ export class JsonlStorage implements Storage {
     id: EntryId,
     context: Context,
   ): ReturnType<Storage["entry"]>;
-  async entry(
+  entry(
     idOrConversationId: EntryId | ConversationId,
     idOrContext: EntryId | Context,
     context?: Context,
   ) {
-    if (context === undefined)
-      return this.store.entry(idFromNumber<EntryId>(idOrConversationId), idOrContext as Context);
-    if (typeof idOrContext !== "number")
-      throw new StorageRequestError("Storage.entry() requires an entry ID");
-    return this.store.entry(
-      idFromNumber<ConversationId>(idOrConversationId),
-      idFromNumber<EntryId>(idOrContext),
-      context,
-    );
+    return promiseTry(() => {
+      if (context === undefined)
+        return this.store.entry(idFromNumber<EntryId>(idOrConversationId), idOrContext as Context);
+      if (typeof idOrContext !== "number")
+        throw new StorageRequestError("Storage.entry() requires an entry ID");
+      return this.store.entry(
+        idFromNumber<ConversationId>(idOrConversationId),
+        idFromNumber<EntryId>(idOrContext),
+        context,
+      );
+    });
   }
 
-  async findLatestHeadMarker(
+  findLatestHeadMarker(
     conversationId: ConversationId,
     atOrBeforeEntryId: EntryId | undefined,
     context: Context,
   ) {
-    return this.store.findLatestHeadMarker(conversationId, atOrBeforeEntryId, context);
+    return promiseTry(() =>
+      this.store.findLatestHeadMarker(conversationId, atOrBeforeEntryId, context),
+    );
   }
 
-  async scanEntries(
-    query: EntryQuery,
-    limit: number,
-    cursor: Cursor | undefined,
-    context: Context,
-  ) {
-    return this.store.scanEntries(query, limit, cursor, context);
+  scanEntries(query: EntryQuery, limit: number, cursor: Cursor | undefined, context: Context) {
+    return promiseTry(() => this.store.scanEntries(query, limit, cursor, context));
   }
 
-  async task(id: TaskId, context: Context) {
-    return this.store.task(id, context);
+  task(id: TaskId, context: Context) {
+    return promiseTry(() => this.store.task(id, context));
   }
 
-  async scanTasks(query: TaskQuery, limit: number, cursor: Cursor | undefined, context: Context) {
-    return this.store.scanTasks(query, limit, cursor, context);
+  scanTasks(query: TaskQuery, limit: number, cursor: Cursor | undefined, context: Context) {
+    return promiseTry(() => this.store.scanTasks(query, limit, cursor, context));
   }
 
-  async submission(id: SubmissionId, context: Context) {
-    return this.store.submission(id, context);
+  submission(id: SubmissionId, context: Context) {
+    return promiseTry(() => this.store.submission(id, context));
   }
 
-  async scanSubmissions(
+  scanSubmissions(
     query: SubmissionQuery,
     limit: number,
     cursor: Cursor | undefined,
     context: Context,
   ) {
-    return this.store.scanSubmissions(query, limit, cursor, context);
+    return promiseTry(() => this.store.scanSubmissions(query, limit, cursor, context));
   }
 
-  async submissionByRequest(conversationId: ConversationId, requestId: string, context: Context) {
-    return this.store.submissionByRequest(conversationId, requestId, context);
+  submissionByRequest(conversationId: ConversationId, requestId: string, context: Context) {
+    return promiseTry(() => this.store.submissionByRequest(conversationId, requestId, context));
   }
 
-  async findDocument(address: DocumentAddress, at: DocumentPoint, context: Context) {
-    return this.store.findDocument(address, at, context);
+  findDocument(address: DocumentAddress, at: DocumentPoint, context: Context) {
+    return promiseTry(() => this.store.findDocument(address, at, context));
   }
 
-  async document(id: DocumentId, at: DocumentPoint, context: Context) {
-    return this.store.document(id, at, context);
+  document(id: DocumentId, at: DocumentPoint, context: Context) {
+    return promiseTry(() => this.store.document(id, at, context));
   }
 
-  async scanDocuments(
-    query: DocumentQuery,
-    limit: number,
-    cursor: Cursor | undefined,
-    context: Context,
-  ) {
-    return this.store.scanDocuments(query, limit, cursor, context);
+  scanDocuments(query: DocumentQuery, limit: number, cursor: Cursor | undefined, context: Context) {
+    return promiseTry(() => this.store.scanDocuments(query, limit, cursor, context));
   }
 
   async close(context: Context): Promise<void> {
@@ -553,7 +555,11 @@ export class JsonlStorage implements Storage {
     }
   }
 
-  /** The marker already published this state, so reclamation is retryable best-effort maintenance. */
+  /**
+   * The marker already published this state, so reclamation is retryable best-effort maintenance.
+   * @param {ReadonlyMap<string, string>} replacements - New content by sidecar file.
+   * @param {Context} context - The caller's context.
+   */
   private async reclaimSidecars(
     replacements: ReadonlyMap<string, string>,
     context: Context,
@@ -563,7 +569,8 @@ export class JsonlStorage implements Storage {
       const flushed = await this.fs.flushFile(this.mainPath, context);
       if (!flushed.ok) return;
     }
-    for (const [file, content] of replacements) await this.replaceSidecar(file, content, context);
+    for await (const [file, content] of replacements)
+      await this.replaceSidecar(file, content, context);
   }
 
   private async replaceSidecar(file: string, content: string, context: Context): Promise<void> {
@@ -606,7 +613,7 @@ export class JsonlStorage implements Storage {
 
     const listed = await fs.listDir(directory, context);
     if (!listed.ok) throw errorFromFile("directory listing", listed.error);
-    for (const info of listed.value) {
+    for await (const info of listed.value) {
       if (info.kind === "file" && isReclaimFileName(info.name)) {
         await fs.remove(info.path, { force: true }, context);
       }
@@ -617,7 +624,7 @@ export class JsonlStorage implements Storage {
       .sort();
     const parsedFiles = new Map<string, ParsedFile<SidecarRecord>>();
     const recordByKey = new Map<string, ParsedLine<SidecarRecord>>();
-    for (const file of sidecarFiles) {
+    for await (const file of sidecarFiles) {
       const pathResult = await fs.joinPath([directory, file], context);
       if (!pathResult.ok) throw errorFromFile("path join", pathResult.error);
       const parsed = await JsonlStorage.readLines(
@@ -784,7 +791,7 @@ export class JsonlStorage implements Storage {
     }
 
     const reclamations = new Map<string, string>();
-    for (const [file, parsed] of parsedFiles) {
+    for await (const [file, parsed] of parsedFiles) {
       let unconfirmedAt: number | undefined;
       for (const line of parsed.lines) {
         const key = sidecarKey(file, line.value.seq, line.value.ordinal);

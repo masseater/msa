@@ -4,12 +4,11 @@ const { readFile } = require("node:fs/promises");
 const { setTimeout: delay } = require("node:timers/promises");
 const { isMainThread, parentPort, Worker, workerData } = require("node:worker_threads");
 
-async function waitFor(predicate) {
-  const deadline = performance.now() + 5000;
-  while (!predicate()) {
-    assert.ok(performance.now() < deadline, "Timed out waiting for the private reader");
-    await delay(10);
-  }
+async function waitFor(predicate, deadline = performance.now() + 5000) {
+  if (predicate()) return;
+  assert.ok(performance.now() < deadline, "Timed out waiting for the private reader");
+  await delay(10);
+  await waitFor(predicate, deadline);
 }
 
 (async () => {
@@ -41,7 +40,8 @@ async function waitFor(predicate) {
   if (mode === "process-exit") {
     assert.equal(await pending, undefined);
     console.log("passed");
-    return; // The private callback never finishes; Node must still exit naturally.
+    // The private callback never finishes; Node must still exit naturally.
+    return;
   }
   const concurrentStarted = performance.now();
   const concurrent = Array.from({ length: 20 }, (_, index) =>

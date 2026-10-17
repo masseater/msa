@@ -53,7 +53,13 @@ const GOOGLE_SDK_THINKING_LEVEL_MAP: Record<GoogleApiThinkingLevel, GoogleSdkThi
   HIGH: GoogleSdkThinkingLevel.HIGH,
 };
 
-/** Resolve a supported msa level or model-specific Google mapping to a standard Google level. */
+/**
+ * Resolve a supported msa level or model-specific Google mapping to a standard Google level.
+ *
+ * @param {Model<T>} model - Google model the request targets
+ * @param {ThinkingLevel} level - requested thinking level
+ * @returns {ResolvedGoogleThinkingLevel} the standard Google thinking level
+ */
 export function resolveGoogleThinkingLevel<T extends GoogleApiType>(
   model: Model<T>,
   level: ThinkingLevel,
@@ -77,19 +83,22 @@ export function resolveGoogleThinkingLevel<T extends GoogleApiType>(
  * Whether this model uses Gemini's discrete `thinkingLevel` control instead of
  * the token-based `thinkingBudget` control. Supported levels come from the
  * model's `thinkingLevelMap`; this only selects the Google wire format.
+ *
+ * @param {Model<T>} model - Google model to check
+ * @returns {boolean} whether the model uses thinkingLevel
  */
 export function usesGoogleThinkingLevel<T extends GoogleApiType>(model: Model<T>): boolean {
   const id = model.id.toLowerCase();
   return (
     // Match Gemini 3 Pro/Flash IDs with or without a minor version, such as
     // gemini-3-flash-preview, gemini-3.1-pro-preview, and gemini-3.8-flash.
-    /gemini-3(?:\.\d+)?-(?:pro|flash)/.test(id) ||
+    /gemini-3(?:\.\d+)?-(?:pro|flash)/u.test(id) ||
     // Match Gemini 4 and later, such as gemini-4-argon (#10890).
-    /gemini-(?:[4-9]|[1-9]\d)/.test(id) ||
+    /gemini-(?:[4-9]|[1-9]\d)/u.test(id) ||
     id === "gemini-flash-latest" ||
     id === "gemini-flash-lite-latest" ||
     // Match both hosted Gemma 4 naming forms: gemma-4-* and gemma4-*.
-    /gemma-?4/.test(id)
+    /gemma-?4/u.test(id)
   );
 }
 
@@ -137,6 +146,9 @@ export function getDisabledGoogleThinkingConfig<T extends GoogleApiType>(
  *   do not merge/move signatures across parts.
  *
  * See: https://ai.google.dev/gemini-api/docs/thought-signatures
+ *
+ * @param {Pick<Part, "thought" | "thoughtSignature">} part - streamed Gemini part
+ * @returns {boolean} whether the part is thinking content
  */
 export function isThinkingPart(part: Pick<Part, "thought" | "thoughtSignature">): boolean {
   return part.thought === true;
@@ -150,6 +162,10 @@ export function isThinkingPart(part: Pick<Part, "thought" | "thoughtSignature">)
  *
  * Note: this does NOT merge or move signatures across distinct response parts. It only prevents
  * a signature from being overwritten with `undefined` within the same streamed block.
+ *
+ * @param {string | undefined} existing - signature kept so far for the block
+ * @param {string | undefined} incoming - signature of the current delta
+ * @returns {string | undefined} the signature to keep
  */
 export function retainThoughtSignature(
   existing: string | undefined,
@@ -160,7 +176,7 @@ export function retainThoughtSignature(
 }
 
 // Thought signatures must be base64 for Google APIs (TYPE_BYTES).
-const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/;
+const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/u;
 
 function isValidThoughtSignature(signature: string | undefined): boolean {
   if (!signature) return false;
@@ -170,6 +186,10 @@ function isValidThoughtSignature(signature: string | undefined): boolean {
 
 /**
  * Only keep signatures from the same provider/model and with valid base64.
+ *
+ * @param {boolean} isSameProviderAndModel - whether the signature comes from the target model
+ * @param {string | undefined} signature - stored thought signature
+ * @returns {string | undefined} the signature to replay, or undefined
  */
 function resolveThoughtSignature(
   isSameProviderAndModel: boolean,
@@ -180,6 +200,9 @@ function resolveThoughtSignature(
 
 /**
  * Models via Google APIs that require explicit tool call IDs in function calls/responses.
+ *
+ * @param {string} modelId - model id to check
+ * @returns {boolean} whether function calls and responses need explicit ids
  */
 export function requiresToolCallId(modelId: string): boolean {
   const geminiMajorVersion = getGeminiMajorVersion(modelId);
@@ -191,7 +214,7 @@ export function requiresToolCallId(modelId: string): boolean {
 }
 
 function getGeminiMajorVersion(modelId: string): number | undefined {
-  const major = modelId.toLowerCase().match(/^gemini(?:-live)?-(\d+)/)?.[1];
+  const major = modelId.toLowerCase().match(/^gemini(?:-live)?-(\d+)/u)?.[1];
   if (major === undefined) return undefined;
   return Number.parseInt(major, 10);
 }
@@ -204,9 +227,6 @@ function supportsMultimodalFunctionResponse(modelId: string): boolean {
   return true;
 }
 
-/**
- * Convert internal messages to Gemini Content[] format.
- */
 export function convertMessages<T extends GoogleApiType>(
   model: Model<T>,
   context: TranscriptContext,
@@ -216,7 +236,7 @@ export function convertMessages<T extends GoogleApiType>(
   const contents: Content[] = [];
   const normalizeToolCallId = (id: string): string => {
     if (!requiresToolCallId(model.id)) return id;
-    return id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+    return id.replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length)).slice(0, 64);
   };
 
   const transformedMessages = transformMessages(conversation, model, normalizeToolCallId);
@@ -232,14 +252,13 @@ export function convertMessages<T extends GoogleApiType>(
         const parts: Part[] = msg.content.map((item) => {
           if (item.type === "text") {
             return { text: sanitizeSurrogates(item.text) };
-          } else {
-            return {
-              inlineData: {
-                mimeType: item.mimeType,
-                data: item.data,
-              },
-            };
           }
+          return {
+            inlineData: {
+              mimeType: item.mimeType,
+              data: item.data,
+            },
+          };
         });
         if (parts.length === 0) continue;
         contents.push({
@@ -385,11 +404,15 @@ const JSON_SCHEMA_META_DECLARATIONS = new Set([
   "$vocabulary",
   "$comment",
   "$defs",
-  "definitions", // pre-draft-2019-09 equivalent of $defs
+  // pre-draft-2019-09 equivalent of $defs
+  "definitions",
 ]);
 
 /**
  * Strip meta-declarations from a schema obj
+ *
+ * @param {unknown} schema - JSON schema value
+ * @returns {unknown} the schema without meta-declarations
  */
 function sanitizeForOpenApi(schema: unknown): unknown {
   if (typeof schema !== "object" || schema === null || Array.isArray(schema)) {
@@ -411,6 +434,11 @@ function sanitizeForOpenApi(schema: unknown): unknown {
  * anyOf, oneOf, const, etc.). Set `useParameters` to true to use the legacy `parameters`
  * field instead (OpenAPI 3.03 Schema). This is needed for Cloud Code Assist with Claude
  * models, where the API translates `parameters` into Anthropic's `input_schema`.
+ *
+ * @param {Tool[]} tools - tools to convert
+ * @param {boolean} [useParameters] - send the legacy `parameters` field
+ * @param {boolean} [supportsStrictMode] - whether the target honours strict tool schemas
+ * @returns {{ functionDeclarations: Record<string, unknown>[] }[] | undefined} the function declarations, or undefined when there are no tools
  */
 export function convertTools(
   tools: Tool[],
@@ -435,13 +463,17 @@ export function convertTools(
   ];
 }
 
-/** Gemini 3+ enforces required function parameters in validated tool-calling modes. */
+/**
+ * Gemini 3+ enforces required function parameters in validated tool-calling modes.
+ *
+ * @param {string} modelId - model id to check
+ * @returns {boolean} whether validated tool-calling modes are available
+ */
 export function supportsGoogleStrictToolSampling(modelId: string): boolean {
   const majorVersion = getGeminiMajorVersion(modelId);
   return majorVersion !== undefined && majorVersion >= 3;
 }
 
-/** Map tool choice string to Gemini FunctionCallingConfigMode. */
 export function mapToolChoice(choice: string): FunctionCallingConfigMode {
   switch (choice) {
     case "auto":
@@ -472,9 +504,6 @@ export function resolveGoogleFunctionCallingMode(
   return toolChoice ? mapToolChoice(toolChoice) : undefined;
 }
 
-/**
- * Map Gemini FinishReason to our StopReason.
- */
 export function mapStopReason(reason: FinishReason): StopReason {
   switch (reason) {
     case FinishReason.STOP:
@@ -507,6 +536,9 @@ export function mapStopReason(reason: FinishReason): StopReason {
 
 /**
  * Map string finish reason to our StopReason (for raw API responses).
+ *
+ * @param {string} reason - raw finish reason
+ * @returns {StopReason} the matching stop reason
  */
 export function mapStopReasonString(reason: string): StopReason {
   switch (reason) {
@@ -527,6 +559,10 @@ export function mapStopReasonString(reason: string): StopReason {
  * `headers` property, and retryProviderRequest only retries errors that carry
  * both, so normalize the error by adding the missing `headers` before
  * rethrowing.
+ *
+ * @param {() => Promise<T>} request - SDK request to run
+ * @param {Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">} [options] - retry options
+ * @returns {Promise<T>} the request result
  */
 export function retryGoogleRequest<T>(
   request: () => Promise<T>,

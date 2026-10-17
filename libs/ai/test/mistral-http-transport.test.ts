@@ -67,10 +67,12 @@ describe("Mistral HTTP transport", () => {
     let requestInit: RequestInit | undefined;
     let callbackPayload: Record<string, unknown> | undefined;
     let callbackResponse: ProviderResponse | undefined;
-    const fetch: FetchFunction = async (input, init) => {
+    const fetch: FetchFunction = (input, init) => {
       requestUrl = String(input);
       requestInit = init;
-      return createSseResponse([createTerminalEvent()], { "x-request-id": "request-1" });
+      return Promise.resolve(
+        createSseResponse([createTerminalEvent()], { "x-request-id": "request-1" }),
+      );
     };
 
     const message = await streamMistral(model, context, {
@@ -201,9 +203,9 @@ describe("Mistral HTTP transport", () => {
       ],
     });
     let requestInit: RequestInit | undefined;
-    const fetch: FetchFunction = async (_input, init) => {
+    const fetch: FetchFunction = (_input, init) => {
       requestInit = init;
-      return createSseResponse([createTerminalEvent()]);
+      return Promise.resolve(createSseResponse([createTerminalEvent()]));
     };
 
     const message = await streamMistral(model, context, { apiKey: "test", fetch }).result();
@@ -313,7 +315,7 @@ describe("Mistral HTTP transport", () => {
         },
       },
     ];
-    const fetch: FetchFunction = async () => createSseResponse(events);
+    const fetch: FetchFunction = () => Promise.resolve(createSseResponse(events));
 
     const message = await streamMistral(model, context, { apiKey: "test", fetch }).result();
 
@@ -366,7 +368,7 @@ describe("Mistral HTTP transport", () => {
 
     const message = await streamMistral(model, context, {
       apiKey: "test",
-      fetch: async () => createSseResponse(events),
+      fetch: () => Promise.resolve(createSseResponse(events)),
     }).result();
 
     expect(message.content).toEqual([
@@ -397,7 +399,7 @@ describe("Mistral HTTP transport", () => {
     const eventModels: Model<Api>[] = [];
     const result = await streamMistral(model, context, {
       apiKey: "test",
-      fetch: async () => createSseResponse(events),
+      fetch: () => Promise.resolve(createSseResponse(events)),
       onProviderStreamEvent: async (event, eventModel) => {
         await Promise.resolve();
         received.push(event);
@@ -416,13 +418,15 @@ describe("Mistral HTTP transport", () => {
     const context = normalizeContext({
       messages: [{ role: "user", content: "hello", timestamp: 1 }],
     });
-    const fetch: FetchFunction = async () =>
-      createBytewiseSseResponse({
-        id: "response-bytewise",
-        model: model.id,
-        choices: [{ index: 0, finish_reason: "stop", delta: { content: "héllo 🌍" } }],
-        usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
-      });
+    const fetch: FetchFunction = () =>
+      Promise.resolve(
+        createBytewiseSseResponse({
+          id: "response-bytewise",
+          model: model.id,
+          choices: [{ index: 0, finish_reason: "stop", delta: { content: "héllo 🌍" } }],
+          usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
+        }),
+      );
 
     const message = await streamMistral(model, context, { apiKey: "test", fetch }).result();
 
@@ -439,9 +443,9 @@ describe("Mistral HTTP transport", () => {
       messages: [{ role: "user", content: "hello", timestamp: 1 }],
     });
     let requestHeaders: Headers | undefined;
-    const fetch: FetchFunction = async (_input, init) => {
+    const fetch: FetchFunction = (_input, init) => {
       requestHeaders = new Headers(init?.headers);
-      return createSseResponse([createTerminalEvent()]);
+      return Promise.resolve(createSseResponse([createTerminalEvent()]));
     };
 
     await streamMistral(model, context, {
@@ -462,12 +466,14 @@ describe("Mistral HTTP transport", () => {
       messages: [{ role: "user", content: "hello", timestamp: 1 }],
     });
     const controller = new AbortController();
-    const fetch: FetchFunction = async () =>
-      new Response(
-        new ReadableStream({
-          start() {},
-        }),
-        { headers: { "content-type": "text/event-stream" } },
+    const fetch: FetchFunction = () =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream({
+            start() {},
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
       );
 
     const result = streamMistral(model, context, {
@@ -516,21 +522,27 @@ describe("Mistral HTTP transport", () => {
         },
       ],
     };
-    const fetch: FetchFunction = async () =>
-      new Response(
-        new ReadableStream({
-          async start(controller) {
-            for (let i = 0; i < 5; i++) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(thinkingEvent)}\n\n`));
-              await new Promise((resolve) => setTimeout(resolve, 10));
-            }
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify(createTerminalEvent())}\n\ndata: [DONE]\n\n`),
-            );
-            controller.close();
-          },
-        }),
-        { headers: { "content-type": "text/event-stream" } },
+    const fetch: FetchFunction = () =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream({
+            async start(controller) {
+              for (let i = 0; i < 5; i++) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(thinkingEvent)}\n\n`));
+                await new Promise((resolve) => {
+                  setTimeout(resolve, 10);
+                });
+              }
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify(createTerminalEvent())}\n\ndata: [DONE]\n\n`,
+                ),
+              );
+              controller.close();
+            },
+          }),
+          { headers: { "content-type": "text/event-stream" } },
+        ),
       );
 
     const message = await streamMistral(model, context, {
@@ -548,8 +560,10 @@ describe("Mistral HTTP transport", () => {
     const context = normalizeContext({
       messages: [{ role: "user", content: "hello", timestamp: 1 }],
     });
-    const fetch: FetchFunction = async () =>
-      new Response('{"message":"blocked by gateway"}', { status: 403, statusText: "Forbidden" });
+    const fetch: FetchFunction = () =>
+      Promise.resolve(
+        new Response('{"message":"blocked by gateway"}', { status: 403, statusText: "Forbidden" }),
+      );
 
     const message = await streamMistral(model, context, { apiKey: "test", fetch }).result();
 

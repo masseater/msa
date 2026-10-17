@@ -27,7 +27,8 @@ class BoundedTerminalWriter {
 
   /**
    * Append terminal data, flushing full chunks as needed. Callers must call `flush()` after the final append.
-   * @param value Terminal data to write in order; oversized values are split without splitting surrogate pairs.
+   *
+   * @param {string} value - Terminal data to write in order; oversized values are split without splitting surrogate pairs.
    */
   append(value: string): void {
     let offset = 0;
@@ -286,10 +287,12 @@ export class TuiMainScreen extends TuiBase implements TUI {
     const fullRender = (clear: boolean): void => {
       this.fullRedrawCount += 1;
       const output = new BoundedTerminalWriter((data) => this.terminal.write(data));
-      output.append("\x1b[?2026h"); // Begin synchronized output
+      // Begin synchronized output
+      output.append("\x1b[?2026h");
       if (clear) {
         output.append(this.deleteKittyImages(this.previousKittyImageIds));
-        output.append("\x1b[2J\x1b[H\x1b[3J"); // Clear screen, home, then clear scrollback
+        // Clear screen, home, then clear scrollback
+        output.append("\x1b[2J\x1b[H\x1b[3J");
       }
       for (let i = 0; i < newLines.length; i++) {
         if (i > 0) output.append("\r\n");
@@ -309,7 +312,8 @@ export class TuiMainScreen extends TuiBase implements TUI {
         }
         output.append(line);
       }
-      output.append("\x1b[?2026l"); // End synchronized output
+      // End synchronized output
+      output.append("\x1b[?2026l");
       output.flush();
       this.cursorRow = Math.max(0, newLines.length - 1);
       this.hardwareCursorRow = this.cursorRow;
@@ -477,7 +481,8 @@ export class TuiMainScreen extends TuiBase implements TUI {
     // Render from first changed line to end
     // Keep updates wrapped in synchronized output while writing bounded chunks.
     const output = new BoundedTerminalWriter((data) => this.terminal.write(data));
-    output.append("\x1b[?2026h"); // Begin synchronized output
+    // Begin synchronized output
+    output.append("\x1b[?2026h");
     output.append(this.deleteChangedKittyImages(firstChanged, lastChanged));
     const prevViewportBottom = prevViewportTop + height - 1;
     const moveTargetRow = appendStart ? firstChanged - 1 : firstChanged;
@@ -500,12 +505,15 @@ export class TuiMainScreen extends TuiBase implements TUI {
     // Move cursor to first changed line (use hardwareCursorRow for actual position)
     const lineDiff = computeLineDiff(moveTargetRow);
     if (lineDiff > 0) {
-      output.append(`\x1b[${lineDiff}B`); // Move down
+      // Move down
+      output.append(`\x1b[${lineDiff}B`);
     } else if (lineDiff < 0) {
-      output.append(`\x1b[${-lineDiff}A`); // Move up
+      // Move up
+      output.append(`\x1b[${-lineDiff}A`);
     }
 
-    output.append(appendStart ? "\r\n" : "\r"); // Move to column 0
+    // Move to column 0
+    output.append(appendStart ? "\r\n" : "\r");
 
     // Only render changed lines (firstChanged to lastChanged), not all lines to end
     // This reduces flicker when only a single line changes (e.g., spinner animation)
@@ -539,7 +547,8 @@ export class TuiMainScreen extends TuiBase implements TUI {
         continue;
       }
 
-      output.append("\x1b[2K"); // Clear current line
+      // Clear current line
+      output.append("\x1b[2K");
       if (!isImage && visibleWidth(line) > width) {
         // Log all lines to crash file for debugging
         const crashLogPath = path.join(this.logDirectory ?? os.tmpdir(), "msa-tui-crash.log");
@@ -590,7 +599,8 @@ export class TuiMainScreen extends TuiBase implements TUI {
       output.append(`\x1b[${extraLines}A`);
     }
 
-    output.append("\x1b[?2026l"); // End synchronized output
+    // End synchronized output
+    output.append("\x1b[?2026l");
 
     if (process.env["MSA_TUI_DEBUG"] === "1") {
       const debugDir = "/tmp/tui";
@@ -646,8 +656,9 @@ export class TuiMainScreen extends TuiBase implements TUI {
 
   /**
    * Position the hardware cursor for IME candidate window.
-   * @param cursorPos The cursor position extracted from rendered output, or null
-   * @param totalLines Total number of rendered lines
+   *
+   * @param {{ row: number; col: number } | null} cursorPos - The cursor position extracted from rendered output, or null
+   * @param {number} totalLines - Total number of rendered lines
    */
   private positionHardwareCursor(
     cursorPos: { row: number; col: number } | null,
@@ -666,9 +677,11 @@ export class TuiMainScreen extends TuiBase implements TUI {
     const rowDelta = targetRow - this.hardwareCursorRow;
     let buffer = "";
     if (rowDelta > 0) {
-      buffer += `\x1b[${rowDelta}B`; // Move down
+      // Move down
+      buffer += `\x1b[${rowDelta}B`;
     } else if (rowDelta < 0) {
-      buffer += `\x1b[${-rowDelta}A`; // Move up
+      // Move up
+      buffer += `\x1b[${-rowDelta}A`;
     }
     // Move to absolute column (1-indexed)
     buffer += `\x1b[${targetCol + 1}G`;

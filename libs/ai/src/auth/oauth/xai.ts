@@ -175,7 +175,7 @@ async function requestDeviceCode(signal: AbortSignal): Promise<XaiDeviceCode> {
   return parseDeviceCode(response.body);
 }
 
-async function pollForTokens(device: XaiDeviceCode, signal: AbortSignal): Promise<OAuthCredential> {
+function pollForTokens(device: XaiDeviceCode, signal: AbortSignal): Promise<OAuthCredential> {
   return pollOAuthDeviceCodeFlow<OAuthCredential>({
     intervalSeconds: device.intervalSeconds,
     expiresInSeconds: device.expiresInSeconds,
@@ -259,7 +259,7 @@ export const xaiOAuth: OAuthAuth = {
   login: loginXai,
   refresh: (credential, signal) => refreshXaiToken(credential.refresh, signal),
 
-  async toAuth(credential) {
-    return { apiKey: credential.access };
+  toAuth(credential) {
+    return Promise.resolve({ apiKey: credential.access });
   },
 };

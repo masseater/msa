@@ -36,7 +36,9 @@ describe("TruncatedText component", () => {
       assert.strictEqual(visibleWidth(line), 40);
     }
   });
+});
 
+describe("TruncatedText component", () => {
   it("truncates long text and pads to width", () => {
     const longText =
       "This is a very long piece of text that will definitely exceed the available width";
@@ -51,7 +53,7 @@ describe("TruncatedText component", () => {
     assert.strictEqual(visibleWidth(line), 30);
 
     // Should contain ellipsis
-    const stripped = line.replace(/\x1b\[[0-9;]*m/g, "");
+    const stripped = line.replace(/\x1b\[[0-9;]*m/gu, "");
     assert.ok(stripped.includes("..."));
   });
 
@@ -70,7 +72,9 @@ describe("TruncatedText component", () => {
     // Should preserve the color codes
     assert.ok(line.includes("\x1b["));
   });
+});
 
+describe("TruncatedText component", () => {
   it("truncates styled text and adds reset code before ellipsis", () => {
     const longStyledText = chalk.red("This is a very long red text that will be truncated");
     const text = new TruncatedText(longStyledText, 1, 0);
@@ -99,7 +103,7 @@ describe("TruncatedText component", () => {
     assert.strictEqual(visibleWidth(line), 30);
 
     // Should NOT contain ellipsis
-    const stripped = line.replace(/\x1b\[[0-9;]*m/g, "");
+    const stripped = line.replace(/\x1b\[[0-9;]*m/gu, "");
     assert.ok(!stripped.includes("..."));
   });
 
@@ -112,7 +116,9 @@ describe("TruncatedText component", () => {
     assert.ok(line !== undefined);
     assert.strictEqual(visibleWidth(line), 30);
   });
+});
 
+describe("TruncatedText component", () => {
   it("stops at newline and only shows first line", () => {
     const multilineText = "First line\nSecond line\nThird line";
     const text = new TruncatedText(multilineText, 1, 0);
@@ -124,7 +130,7 @@ describe("TruncatedText component", () => {
     assert.strictEqual(visibleWidth(line), 40);
 
     // Should only contain "First line"
-    const stripped = line.replace(/\x1b\[[0-9;]*m/g, "").trim();
+    const stripped = line.replace(/\x1b\[[0-9;]*m/gu, "").trim();
     assert.ok(stripped.includes("First line"));
     assert.ok(!stripped.includes("Second line"));
     assert.ok(!stripped.includes("Third line"));
@@ -141,7 +147,7 @@ describe("TruncatedText component", () => {
     assert.strictEqual(visibleWidth(line), 25);
 
     // Should contain ellipsis and not second line
-    const stripped = line.replace(/\x1b\[[0-9;]*m/g, "");
+    const stripped = line.replace(/\x1b\[[0-9;]*m/gu, "");
     assert.ok(stripped.includes("..."));
     assert.ok(!stripped.includes("Second line"));
   });

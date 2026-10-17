@@ -37,7 +37,7 @@ type TokenResponse = {
 function getOauthHost(): string {
   const override =
     getProviderEnvValue("KIMI_CODE_OAUTH_HOST") || getProviderEnvValue("KIMI_OAUTH_HOST");
-  return (override || DEFAULT_OAUTH_HOST).replace(/\/+$/, "");
+  return (override || DEFAULT_OAUTH_HOST).replace(/\/+$/u, "");
 }
 
 function requestSignal(signal: AbortSignal): AbortSignal {
@@ -57,7 +57,12 @@ async function readJson(response: Response): Promise<Record<string, unknown> | n
   }
 }
 
-/** The verification URI is opened in the user's browser; only http(s) URLs are trusted. */
+/**
+ * The verification URI is opened in the user's browser; only http(s) URLs are trusted.
+ *
+ * @param {unknown} value - verification URI
+ * @returns {string | null} the URL, or null when it is not http(s)
+ */
 function trustedHttpUrl(value: unknown): string | null {
   if (typeof value !== "string" || !value) return null;
   try {
@@ -151,7 +156,7 @@ function parseTokenResponse(
   };
 }
 
-async function pollForToken(
+function pollForToken(
   oauthHost: string,
   device: DeviceAuthorization,
   signal: AbortSignal,
@@ -318,7 +323,7 @@ export const kimiCodingOAuth: OAuthAuth = {
     return { type: "oauth", access: token.access, refresh: token.refresh, expires: token.expires };
   },
 
-  async toAuth(credential) {
-    return { headers: { Authorization: `Bearer ${credential.access}` } };
+  toAuth(credential) {
+    return Promise.resolve({ headers: { Authorization: `Bearer ${credential.access}` } });
   },
 };

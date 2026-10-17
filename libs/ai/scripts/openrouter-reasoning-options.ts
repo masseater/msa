@@ -8,7 +8,12 @@ export interface OpenRouterReasoningMetadata {
   default_effort?: ThinkingLevel | "none";
 }
 
-/** Convert OpenRouter's reasoning metadata into msa model capabilities. */
+/**
+ * Convert OpenRouter's reasoning metadata into msa model capabilities.
+ *
+ * @param {OpenRouterReasoningMetadata | undefined} reasoning - OpenRouter reasoning metadata
+ * @returns {ThinkingLevelMap | undefined} the thinking level map, or undefined
+ */
 export function getOpenRouterThinkingLevelMap(
   reasoning: OpenRouterReasoningMetadata | undefined,
 ): ThinkingLevelMap | undefined {

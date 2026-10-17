@@ -30,7 +30,9 @@ describe("KeybindingsManager", () => {
     assert.deepStrictEqual(keybindings.getKeys("tui.editor.historyPrevious"), []);
     assert.deepStrictEqual(keybindings.getKeys("tui.editor.historyNext"), []);
   });
+});
 
+describe("KeybindingsManager", () => {
   it("binds unmodified terminal viewport shortcuts to alternate-screen navigation", () => {
     const keybindings = new KeybindingsManager(TUI_KEYBINDINGS);
 
@@ -67,7 +69,9 @@ describe("KeybindingsManager", () => {
     assert.deepStrictEqual(keybindings.getKeys("tui.input.submit"), ["enter", "ctrl+enter"]);
     assert.deepStrictEqual(keybindings.getKeys("tui.select.confirm"), ["enter"]);
   });
+});
 
+describe("KeybindingsManager", () => {
   it("does not evict cursor bindings when another action reuses the same key", () => {
     const keybindings = new KeybindingsManager(TUI_KEYBINDINGS, {
       "tui.select.up": ["up", "ctrl+p"],

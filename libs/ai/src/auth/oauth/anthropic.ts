@@ -167,7 +167,7 @@ async function loginAnthropic(interaction: ProviderAuthInteraction): Promise<OAu
       path: CALLBACK_PATH,
       redirectHost: "localhost",
       state: verifier,
-      complete: async (code) => code,
+      complete: (code) => Promise.resolve(code),
       signal: interaction.signal,
     });
   // Without a callback server, login continues with the pasted redirect URL.
@@ -261,9 +261,6 @@ async function loginAnthropicCopyCode(
   );
 }
 
-/**
- * Refresh Anthropic OAuth token
- */
 async function refreshAnthropicToken(
   refreshToken: string,
   signal: AbortSignal,
@@ -335,7 +332,7 @@ export const anthropicOAuth: OAuthAuth = {
 
   refresh: (credential, signal) => refreshAnthropicToken(credential.refresh, signal),
 
-  async toAuth(credential) {
-    return { apiKey: credential.access };
+  toAuth(credential) {
+    return Promise.resolve({ apiKey: credential.access });
   },
 };

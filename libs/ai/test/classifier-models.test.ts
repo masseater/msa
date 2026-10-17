@@ -64,7 +64,7 @@ describe("Models with classifier models", () => {
     const classifier = classifierModel("test", "shared");
     const provider = createProvider({
       id: "test",
-      auth: { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } },
+      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
       models: [chat, classifier],
       api: {
         "test-chat": {
@@ -74,14 +74,15 @@ describe("Models with classifier models", () => {
       },
       classifiers: {
         "test-classifier": {
-          classify: async (model): Promise<ClassifierResult> => ({
-            api: model.api,
-            provider: model.provider,
-            model: model.id,
-            answers: { approved: { type: "bool", probability: 0.9 } },
-            stopReason: "stop",
-            timestamp: Date.now(),
-          }),
+          classify: (model): Promise<ClassifierResult> =>
+            Promise.resolve({
+              api: model.api,
+              provider: model.provider,
+              model: model.id,
+              answers: { approved: { type: "bool", probability: 0.9 } },
+              stopReason: "stop",
+              timestamp: Date.now(),
+            }),
         },
       },
     });
@@ -106,7 +107,7 @@ describe("Models with classifier models", () => {
     models.setProvider(
       createProvider({
         id: "test",
-        auth: { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } },
+        auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
         models: [chat],
         api: {
           stream: () => new AssistantMessageEventStream(),
@@ -157,13 +158,15 @@ describe("Models with classifier models", () => {
     }> = [];
     const result = await models.classify(jev, context, {
       apiKey: "secret",
-      fetch: async (input, init) => {
+      fetch: (input, init) => {
         requests.push({
           url: String(input),
           body: JSON.parse(String(init?.body)) as Record<string, unknown>,
           authorization: new Headers(init?.headers).get("authorization"),
         });
-        return Response.json({ model: id, answers: { approved: { type: "noul", noul: 0.8 } } });
+        return Promise.resolve(
+          Response.json({ model: id, answers: { approved: { type: "noul", noul: 0.8 } } }),
+        );
       },
     });
 
@@ -180,19 +183,21 @@ describe("Models with classifier models", () => {
 
   it("rejects images for classifier models without image input before calling the provider", async () => {
     const classifier = classifierModel("test", "text-only");
-    const classify = vi.fn(async (): Promise<ClassifierResult> => ({
-      api: classifier.api,
-      provider: classifier.provider,
-      model: classifier.id,
-      answers: {},
-      stopReason: "stop",
-      timestamp: Date.now(),
-    }));
+    const classify = vi.fn((): Promise<ClassifierResult> =>
+      Promise.resolve({
+        api: classifier.api,
+        provider: classifier.provider,
+        model: classifier.id,
+        answers: {},
+        stopReason: "stop",
+        timestamp: Date.now(),
+      }),
+    );
     const models = createModels();
     models.setProvider(
       createProvider({
         id: "test",
-        auth: { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } },
+        auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
         models: [classifier],
         classifiers: { "test-classifier": { classify } },
       }),
@@ -228,11 +233,13 @@ describe("Models with classifier models", () => {
       { ...context, images: [{ type: "image", data: "aW1hZ2U=", mimeType: "image/png" }] },
       {
         apiKey: "secret",
-        fetch: async (input) => {
+        fetch: (input) => {
           urls.push(String(input));
-          return Response.json({
-            answers: [{ type: "predicate", name: "approved", probability: 0.8 }],
-          });
+          return Promise.resolve(
+            Response.json({
+              answers: [{ type: "predicate", name: "approved", probability: 0.8 }],
+            }),
+          );
         },
       },
     );
@@ -244,14 +251,16 @@ describe("Models with classifier models", () => {
 
   it("lists OpenAI Decisions models only for API key credentials", async () => {
     const apiKeyStore = new InMemoryCredentialStore();
-    await apiKeyStore.modify("openai", async () => ({ type: "api_key", key: "secret" }));
+    await apiKeyStore.modify("openai", () => Promise.resolve({ type: "api_key", key: "secret" }));
     const oauthStore = new InMemoryCredentialStore();
-    await oauthStore.modify("openai", async () => ({
-      type: "oauth",
-      access: "access",
-      refresh: "refresh",
-      expires: Date.now() + 3_600_000,
-    }));
+    await oauthStore.modify("openai", () =>
+      Promise.resolve({
+        type: "oauth",
+        access: "access",
+        refresh: "refresh",
+        expires: Date.now() + 3_600_000,
+      }),
+    );
 
     const withApiKey = builtinModels({ credentials: apiKeyStore });
     const withOAuth = builtinModels({ credentials: oauthStore });

@@ -54,7 +54,12 @@ function errorDetail(json: Record<string, unknown> | null): string {
   return "";
 }
 
-/** The verification URI is opened in the user's browser; only http(s) URLs are trusted. */
+/**
+ * The verification URI is opened in the user's browser; only http(s) URLs are trusted.
+ *
+ * @param {unknown} value - verification URI
+ * @returns {string | null} the URL, or null when it is not http(s)
+ */
 function trustedHttpUrl(value: unknown): string | null {
   if (typeof value !== "string" || !value) return null;
   try {
@@ -109,10 +114,7 @@ async function startDeviceAuthorization(signal: AbortSignal): Promise<DeviceAuth
   };
 }
 
-async function pollForIdentityToken(
-  device: DeviceAuthorization,
-  signal: AbortSignal,
-): Promise<string> {
+function pollForIdentityToken(device: DeviceAuthorization, signal: AbortSignal): Promise<string> {
   return pollOAuthDeviceCodeFlow<string>({
     intervalSeconds: device.intervalSeconds,
     expiresInSeconds: device.expiresInSeconds,
@@ -158,7 +160,13 @@ async function pollForIdentityToken(
   });
 }
 
-/** Exchange an identity token for a Model API key. Keys are valid for about a day. */
+/**
+ * Exchange an identity token for a Model API key. Keys are valid for about a day.
+ *
+ * @param {string} identityToken - identity token
+ * @param {AbortSignal} signal - cancels the request
+ * @returns {Promise<OAuthCredential>} the API key credential
+ */
 async function mintApiKey(identityToken: string, signal: AbortSignal): Promise<OAuthCredential> {
   const response = await fetch(API_KEY_MINT_URL, {
     method: "POST",
@@ -225,7 +233,7 @@ export const metaOAuth: OAuthAuth = {
 
   refresh: (credential, signal) => mintApiKey(credential.refresh, signal),
 
-  async toAuth(credential) {
-    return { apiKey: credential.access };
+  toAuth(credential) {
+    return Promise.resolve({ apiKey: credential.access });
   },
 };

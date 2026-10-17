@@ -12,11 +12,11 @@ const tokenStartRegex = new RegExp(`${autocompleteBoundaryRegex.source}$`, "u");
 const PATH_WRAPPERS: Record<string, string> = { "(": ")", "[": "]", "{": "}", "<": ">", "`": "`" };
 
 function toDisplayPath(value: string): string {
-  return value.replace(/\\/g, "/");
+  return value.replace(/\\/gu, "/");
 }
 
 function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function buildFdPathQuery(query: string): string {
@@ -26,7 +26,7 @@ function buildFdPathQuery(query: string): string {
   }
 
   const hasTrailingSeparator = normalized.endsWith("/");
-  const trimmed = normalized.replace(/^\/+|\/+$/g, "");
+  const trimmed = normalized.replace(/^\/+|\/+$/gu, "");
   if (!trimmed) {
     return normalized;
   }
@@ -274,7 +274,8 @@ export interface SlashCommand {
 
 export interface AutocompleteSuggestions {
   items: AutocompleteItem[];
-  prefix: string; // What we're matching against (e.g., "/" or "src/")
+  // What we're matching against (e.g., "/" or "src/")
+  prefix: string;
 }
 
 export interface AutocompleteProvider {
@@ -377,11 +378,11 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
           prefix,
           (item) => item.name,
         );
-        const filtered = [...bareNameMatches, ...fullNameOnlyMatches].map((item) => ({
-          value: item.name,
-          label: item.label,
-          ...(item.description && { description: item.description }),
-        }));
+        const filtered = [...bareNameMatches, ...fullNameOnlyMatches].map((item) => {
+          const suggestion: AutocompleteItem = { value: item.name, label: item.label };
+          if (item.description) suggestion.description = item.description;
+          return suggestion;
+        });
 
         if (filtered.length === 0) return null;
 
@@ -458,7 +459,8 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
       return {
         lines: newLines,
         cursorLine,
-        cursorCol: beforePrefix.length + item.value.length + 2, // +2 for "/" and space
+        // +2 for "/" and space
+        cursorCol: beforePrefix.length + item.value.length + 2,
       };
     }
 
@@ -702,7 +704,8 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
         } else if (displayPrefix.includes("/") || displayPrefix.includes("\\")) {
           // Preserve ~/ format for home directory paths
           if (displayPrefix.startsWith("~/")) {
-            const homeRelativeDir = displayPrefix.slice(2); // Remove ~/
+            // Remove ~/
+            const homeRelativeDir = displayPrefix.slice(2);
             const dir = dirname(homeRelativeDir);
             relativePath = `~/${dir === "." ? name : join(dir, name)}`;
           } else if (displayPrefix.startsWith("/")) {
@@ -831,7 +834,8 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 
       const scoredEntries = entries
         .map((entry) => ({
-          ...entry,
+          path: entry.path,
+          isDirectory: entry.isDirectory,
           score: fdQuery ? this.scoreEntry(entry.path, fdQuery, entry.isDirectory) : 1,
         }))
         .filter((entry) => entry.score > 0);

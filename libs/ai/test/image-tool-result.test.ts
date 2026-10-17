@@ -24,6 +24,9 @@ const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
  * 1. Tool results can contain image content blocks
  * 2. Providers correctly pass images from tool results to the LLM
  * 3. The LLM can see and describe images returned by tools
+ *
+ * @param {Model<TApi>} model - model under test
+ * @param {StreamOptionsWithExtras} [options] - stream options
  */
 async function handleToolWithImageResult<TApi extends Api>(
   model: Model<TApi>,
@@ -116,6 +119,9 @@ async function handleToolWithImageResult<TApi extends Api>(
  * 1. Tool results can contain mixed content blocks (text + images)
  * 2. Providers correctly pass both text and images from tool results to the LLM
  * 3. The LLM can see both the text and images in tool results
+ *
+ * @param {Model<TApi>} model - model under test
+ * @param {StreamOptionsWithExtras} [options] - stream options
  */
 async function handleToolWithTextAndImageResult<TApi extends Api>(
   model: Model<TApi>,
@@ -201,7 +207,7 @@ async function handleToolWithTextAndImageResult<TApi extends Api>(
   if (textContent && textContent.type === "text") {
     const lowerContent = textContent.text.toLowerCase();
     // Should mention details from the text (diameter/pixels)
-    expect(lowerContent.match(/diameter|100|pixel/)).toBeTruthy();
+    expect(lowerContent.match(/diameter|100|pixel/u)).toBeTruthy();
     // Should also mention the visual properties (red and circle)
     expect(lowerContent).toContain("red");
     expect(lowerContent).toContain("circle");
@@ -356,7 +362,7 @@ describe("Tool Results with Images", () => {
         await handleToolWithImageResult(llm);
       });
 
-      // FIXME(xiaomi): when a tool_result contains both a descriptive text block
+      // Known xiaomi limitation: when a tool_result contains both a descriptive text block
       // and an image block, MiMo locks onto the text and ignores the image (it
       // reports the text-derived diameter but never mentions the image's color).
       // The image-only case above proves the image reaches the model, and the
@@ -382,7 +388,7 @@ describe("Tool Results with Images", () => {
         await handleToolWithImageResult(llm);
       });
 
-      // FIXME(xiaomi): see the API-billing block above — same multimodal-fusion
+      // Known xiaomi limitation, see the API-billing block above — same multimodal-fusion
       // limitation applies to Token Plan endpoints (same model behind both).
       it.skip(
         "should handle tool result with text and image",
@@ -403,7 +409,7 @@ describe("Tool Results with Images", () => {
         await handleToolWithImageResult(llm);
       });
 
-      // FIXME(xiaomi): see the API-billing block above — same multimodal-fusion
+      // Known xiaomi limitation, see the API-billing block above — same multimodal-fusion
       // limitation applies to Token Plan endpoints (same model behind both).
       it.skip(
         "should handle tool result with text and image",
@@ -424,7 +430,7 @@ describe("Tool Results with Images", () => {
         await handleToolWithImageResult(llm);
       });
 
-      // FIXME(xiaomi): see the API-billing block above — same multimodal-fusion
+      // Known xiaomi limitation, see the API-billing block above — same multimodal-fusion
       // limitation applies to Token Plan endpoints (same model behind both).
       it.skip(
         "should handle tool result with text and image",

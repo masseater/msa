@@ -25,7 +25,7 @@ function hexToRgb(hex: string): RgbColor {
 }
 
 function parseOscHexChannel(channel: string): number | undefined {
-  if (!/^[0-9a-f]+$/i.test(channel)) {
+  if (!/^[0-9a-f]+$/iu.test(channel)) {
     return undefined;
   }
   const max = 16 ** channel.length - 1;
@@ -38,12 +38,16 @@ function parseOscHexChannel(channel: string): number | undefined {
 /** What an OSC color reply reports: the default foreground (OSC 10), background (OSC 11), or a palette index (OSC 4). */
 export type OscColorTarget = "foreground" | "background" | number;
 
-const OSC_COLOR_RESPONSE_PATTERN = /^\x1b\](?:(1[01])|4;(\d{1,3}));([^\x07\x1b]*)(?:\x07|\x1b\\)$/i;
-const COLOR_SCHEME_REPORT_PATTERN = /^(?:\x1b\[\?997;(1|2)n)+$/;
+const OSC_COLOR_RESPONSE_PATTERN =
+  /^\x1b\](?:(1[01])|4;(\d{1,3}));([^\x07\x1b]*)(?:\x07|\x1b\\)$/iu;
+const COLOR_SCHEME_REPORT_PATTERN = /^(?:\x1b\[\?997;(1|2)n)+$/u;
 
 /**
  * Parse an OSC 10, 11, or 4 color reply. Returns undefined when `data` is not such a reply;
  * `rgb` is undefined when it is a reply with an unparseable color.
+ *
+ * @param {string} data - A sequence read from the terminal.
+ * @returns {{ target: OscColorTarget; rgb: RgbColor | undefined } | undefined} The color target and color, or undefined.
  */
 export function parseOscColorResponse(
   data: string,
@@ -57,10 +61,10 @@ export function parseOscColorResponse(
     target = "foreground";
   } else if (dynamicColor === "11") {
     target = "background";
-  } else if (paletteIndex !== undefined) {
-    target = Number.parseInt(paletteIndex, 10);
-  } else {
+  } else if (paletteIndex === undefined) {
     throw new Error(`OSC color response has no target: ${JSON.stringify(data)}`);
+  } else {
+    target = Number.parseInt(paletteIndex, 10);
   }
   return { target, rgb: parseOscColorValue(value) };
 }
@@ -69,10 +73,10 @@ function parseOscColorValue(rawValue: string): RgbColor | undefined {
   const value = rawValue.trim();
   if (value.startsWith("#")) {
     const hex = value.slice(1);
-    if (/^[0-9a-f]{6}$/i.test(hex)) {
+    if (/^[0-9a-f]{6}$/iu.test(hex)) {
       return hexToRgb(value);
     }
-    if (/^[0-9a-f]{12}$/i.test(hex)) {
+    if (/^[0-9a-f]{12}$/iu.test(hex)) {
       const r = parseOscHexChannel(hex.slice(0, 4));
       const g = parseOscHexChannel(hex.slice(4, 8));
       const b = parseOscHexChannel(hex.slice(8, 12));
@@ -81,7 +85,7 @@ function parseOscColorValue(rawValue: string): RgbColor | undefined {
     return undefined;
   }
 
-  const rgbValue = value.replace(/^rgba?:/i, "");
+  const rgbValue = value.replace(/^rgba?:/iu, "");
   const [red, green, blue] = rgbValue.split("/");
   if (red === undefined || green === undefined || blue === undefined) {
     return undefined;

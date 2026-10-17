@@ -73,6 +73,10 @@ import { transformMessages } from "./transform-messages.ts";
 /**
  * Resolve cache retention preference.
  * Defaults to "short" and uses MSA_CACHE_RETENTION for backward compatibility.
+ *
+ * @param {CacheRetention} [cacheRetention] - caller preference
+ * @param {ProviderEnv} [env] - scoped provider env overrides
+ * @returns {CacheRetention} the cache retention to use
  */
 function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEnv): CacheRetention {
   if (cacheRetention) {
@@ -140,9 +144,6 @@ const fromClaudeCodeName = (name: string, tools?: Tool[]) => {
   return name;
 };
 
-/**
- * Convert content blocks to Anthropic API format
- */
 function convertContentBlocks(content: (TextContent | ImageContent)[]):
   | string
   | Array<
@@ -359,6 +360,12 @@ type AnthropicFederationConfig = NonNullable<ClientOptions["config"]>;
  * Anthropic SDK documents; the SDK performs the token exchange and refresh.
  * Only for the anthropic provider, since the exchange is an Anthropic API
  * endpoint, and only when no key or auth header was resolved.
+ *
+ * @param {Model<"anthropic-messages">} model - model the request targets
+ * @param {string | undefined} apiKey - resolved API key, if any
+ * @param {ProviderHeaders | undefined} headers - resolved request headers
+ * @param {ProviderEnv | undefined} env - scoped provider env overrides
+ * @returns {AnthropicFederationConfig | undefined} the federation config, or undefined when federation does not apply
  */
 function getAnthropicFederation(
   model: Model<"anthropic-messages">,
@@ -646,7 +653,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
       }
       const requestOptions = {
         ...(options?.signal ? { signal: options.signal } : {}),
-        ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+        ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
         maxRetries: 0,
       };
       let disablePreferredStrictTools = false;
@@ -903,16 +910,22 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
           // Only update usage fields if present (not null).
           // Preserves input_tokens from message_start when proxies omit it in message_delta.
           if (event.usage) {
-            if (event.usage.input_tokens != null) {
+            if (event.usage.input_tokens !== undefined && event.usage.input_tokens !== null) {
               output.usage.input = event.usage.input_tokens;
             }
-            if (event.usage.output_tokens != null) {
+            if (event.usage.output_tokens !== undefined && event.usage.output_tokens !== null) {
               output.usage.output = event.usage.output_tokens;
             }
-            if (event.usage.cache_read_input_tokens != null) {
+            if (
+              event.usage.cache_read_input_tokens !== undefined &&
+              event.usage.cache_read_input_tokens !== null
+            ) {
               output.usage.cacheRead = event.usage.cache_read_input_tokens;
             }
-            if (event.usage.cache_creation_input_tokens != null) {
+            if (
+              event.usage.cache_creation_input_tokens !== undefined &&
+              event.usage.cache_creation_input_tokens !== null
+            ) {
               output.usage.cacheWrite = event.usage.cache_creation_input_tokens;
             }
             // Vercel AI Gateway includes the TTL breakdown in deltas, though the SDK only types it on message_start.
@@ -921,12 +934,15 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
                 cache_creation?: { ephemeral_1h_input_tokens?: number };
               }
             ).cache_creation;
-            if (cacheCreation?.ephemeral_1h_input_tokens != null) {
+            if (
+              cacheCreation?.ephemeral_1h_input_tokens !== undefined &&
+              cacheCreation?.ephemeral_1h_input_tokens !== null
+            ) {
               output.usage.cacheWrite1h = cacheCreation.ephemeral_1h_input_tokens;
             }
             // Anthropic reports reasoning tokens as a subset of output tokens.
             const thinkingTokens = event.usage.output_tokens_details?.thinking_tokens;
-            if (thinkingTokens != null) {
+            if (thinkingTokens !== undefined && thinkingTokens !== null) {
               output.usage.reasoning = thinkingTokens;
             }
           }
@@ -986,6 +1002,10 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
  * Map ThinkingLevel to Anthropic effort levels for adaptive thinking.
  * Note: effort "max" is available on all adaptive-thinking Claude models, while native
  * "xhigh" is only available on Opus 4.7/4.8, Sonnet 5, and Fable 5.
+ *
+ * @param {Model<"anthropic-messages">} model - Anthropic model the request targets
+ * @param {SimpleStreamOptions["reasoning"]} level - requested thinking level
+ * @returns {AnthropicEffort} the Anthropic effort level
  */
 function mapThinkingLevelToEffort(
   model: Model<"anthropic-messages">,
@@ -1379,7 +1399,7 @@ function buildParams(
 
 // Normalize tool call IDs to match Anthropic's required pattern and length
 function normalizeToolCallId(id: string): string {
-  return id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+  return id.replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length)).slice(0, 64);
 }
 
 function convertToolResult(msg: ToolResultMessage): ContentBlockParam {
@@ -1474,20 +1494,15 @@ function convertMessages(
               type: "text",
               text: sanitizeSurrogates(item.text),
             };
-          } else {
-            return {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: item.mimeType as
-                  | "image/jpeg"
-                  | "image/png"
-                  | "image/gif"
-                  | "image/webp",
-                data: item.data,
-              },
-            };
           }
+          return {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: item.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+              data: item.data,
+            },
+          };
         });
         const filteredBlocks = blocks.filter((b) => {
           if (b.type === "text") {
@@ -1527,7 +1542,13 @@ function convertMessages(
           // If thinking signature is missing/empty (e.g., from aborted stream),
           // convert to plain text for Anthropic. Some compatible providers emit
           // and accept empty signatures, so let marked models preserve the block.
-          if (!hasThinkingSignature) {
+          if (hasThinkingSignature) {
+            blocks.push({
+              type: "thinking",
+              thinking: sanitizeSurrogates(block.thinking),
+              signature: thinkingSignature,
+            });
+          } else {
             blocks.push(
               allowEmptySignature
                 ? {
@@ -1540,12 +1561,6 @@ function convertMessages(
                     text: sanitizeSurrogates(block.thinking),
                   },
             );
-          } else {
-            blocks.push({
-              type: "thinking",
-              thinking: sanitizeSurrogates(block.thinking),
-              signature: thinkingSignature,
-            });
           }
         } else if (block.type === "toolCall") {
           blocks.push({
@@ -1760,11 +1775,14 @@ function mapStopReason(
         stopReason: "error",
         errorMessage: stopDetails?.explanation || `The model refused to complete the request`,
       };
-    case "pause_turn": // Stop is good enough -> resubmit
+    // Stop is good enough -> resubmit
+    case "pause_turn":
       return { stopReason: "stop" };
     case "stop_sequence":
-      return { stopReason: "stop" }; // We don't supply stop sequences, so this should never happen
-    case "sensitive": // Content flagged by safety filters (not yet in SDK types)
+      // We don't supply stop sequences, so this should never happen
+      return { stopReason: "stop" };
+    // Content flagged by safety filters (not yet in SDK types)
+    case "sensitive":
       return { stopReason: "error", errorMessage: "Provider stopped with: sensitive" };
     default:
       // Handle unknown stop reasons gracefully (API may add new values)

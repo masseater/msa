@@ -23,10 +23,11 @@ vi.mock("openai", () => {
               response: { status: number; headers: Headers };
             }>;
           };
-          promise.withResponse = async () => ({
-            data: stream,
-            response: { status: 200, headers: new Headers({ "x-request-id": "req-1" }) },
-          });
+          promise.withResponse = () =>
+            Promise.resolve({
+              data: stream,
+              response: { status: 200, headers: new Headers({ "x-request-id": "req-1" }) },
+            });
           return promise;
         },
       },

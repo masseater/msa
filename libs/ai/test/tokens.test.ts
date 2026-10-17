@@ -333,7 +333,7 @@ describe("Token Statistics on Abort", () => {
   describe.skipIf(!process.env["XIAOMI_API_KEY"])("Xiaomi MiMo (API billing) Provider", () => {
     const llm = getModel("xiaomi", "mimo-v2.6-pro");
 
-    // FIXME(xiaomi): Xiaomi's Anthropic-compatible stream does not populate
+    // Known xiaomi limitation: Xiaomi's Anthropic-compatible stream does not populate
     // usage in the message_start event the way Anthropic does — usage only
     // arrives at message_stop. Aborting mid-stream therefore loses input/output
     // token counts. Non-streaming usage works (see total-tokens.test.ts).
@@ -352,7 +352,7 @@ describe("Token Statistics on Abort", () => {
     () => {
       const llm = getModel("xiaomi-token-plan-cn", "mimo-v2.6-pro");
 
-      // FIXME(xiaomi): see the API-billing block above — same upstream streaming
+      // Known xiaomi limitation, see the API-billing block above — same upstream streaming
       // usage limitation applies to Token Plan endpoints.
       it.skip(
         "should include token stats when aborted mid-stream",
@@ -369,7 +369,7 @@ describe("Token Statistics on Abort", () => {
     () => {
       const llm = getModel("xiaomi-token-plan-ams", "mimo-v2.6-pro");
 
-      // FIXME(xiaomi): see the API-billing block above — same upstream streaming
+      // Known xiaomi limitation, see the API-billing block above — same upstream streaming
       // usage limitation applies to Token Plan endpoints.
       it.skip(
         "should include token stats when aborted mid-stream",
@@ -386,7 +386,7 @@ describe("Token Statistics on Abort", () => {
     () => {
       const llm = getModel("xiaomi-token-plan-sgp", "mimo-v2.6-pro");
 
-      // FIXME(xiaomi): see the API-billing block above — same upstream streaming
+      // Known xiaomi limitation, see the API-billing block above — same upstream streaming
       // usage limitation applies to Token Plan endpoints.
       it.skip(
         "should include token stats when aborted mid-stream",

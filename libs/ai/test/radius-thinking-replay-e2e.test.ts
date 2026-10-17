@@ -64,7 +64,12 @@ const user: Message = {
   timestamp: 1,
 };
 
-/** Input tokens the provider reports for the request, cached or not. */
+/**
+ * Input tokens the provider reports for the request, cached or not.
+ *
+ * @param {AssistantMessage} message - assistant message
+ * @returns {number} the input token count
+ */
 function inputTokens(message: AssistantMessage): number {
   return message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
 }
@@ -87,7 +92,13 @@ function request<TApi extends Api>(
   });
 }
 
-/** A real reply with signed thinking and a tool call, plus the tool result that answers it. */
+/**
+ * A real reply with signed thinking and a tool call, plus the tool result that answers it.
+ *
+ * @param {Model<TApi>} model - model to call
+ * @param {string} apiKey - API key
+ * @returns {Promise<{ reply: AssistantMessage; result: ToolResultMessage }>} the reply and the tool result
+ */
 async function thinkingTurn<TApi extends Api>(
   model: Model<TApi>,
   apiKey: string,
@@ -112,7 +123,15 @@ async function thinkingTurn<TApi extends Api>(
   return { reply, result };
 }
 
-/** Input tokens `reply`'s thinking adds to the follow-up request. */
+/**
+ * Input tokens `reply`'s thinking adds to the follow-up request.
+ *
+ * @param {Model<TApi>} model - model to call
+ * @param {string} apiKey - API key
+ * @param {AssistantMessage} reply - reply with signed thinking
+ * @param {ToolResultMessage} result - tool result answering the reply
+ * @returns {Promise<number>} the added input tokens
+ */
 async function replayedThinkingTokens<TApi extends Api>(
   model: Model<TApi>,
   apiKey: string,

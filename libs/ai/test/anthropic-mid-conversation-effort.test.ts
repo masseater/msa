@@ -247,10 +247,12 @@ describe("Anthropic mid-conversation effort", () => {
     const body = events
       .map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
       .join("");
-    const fetchImpl: typeof fetch = async (input, init) => {
+    const fetchImpl: typeof fetch = (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init);
       betaHeader = request.headers.get("anthropic-beta");
-      return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+      return Promise.resolve(
+        new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }),
+      );
     };
     const result = await stream(managedModel(), normalizeContext({ messages: [user("one", 1)] }), {
       apiKey: "test-key",

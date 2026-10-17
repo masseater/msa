@@ -93,7 +93,8 @@ export class VirtualTerminal implements Terminal {
   }
 
   clearScreen(): void {
-    this.xterm.write("\x1b[2J\x1b[H"); // Clear screen and move to home (1,1)
+    // Clear screen and move to home (1,1)
+    this.xterm.write("\x1b[2J\x1b[H");
   }
 
   setTitle(title: string): void {
@@ -106,18 +107,12 @@ export class VirtualTerminal implements Terminal {
 
   // Test-specific methods not in Terminal interface
 
-  /**
-   * Simulate keyboard input
-   */
   sendInput(data: string): void {
     if (this.inputHandler) {
       this.inputHandler(data);
     }
   }
 
-  /**
-   * Resize the terminal
-   */
   resize(columns: number, rows: number): void {
     this._columns = columns;
     this._rows = rows;
@@ -130,7 +125,7 @@ export class VirtualTerminal implements Terminal {
   /**
    * Wait for all pending writes to complete. Viewport and scroll buffer will be updated.
    */
-  async flush(): Promise<void> {
+  flush(): Promise<void> {
     // Write an empty string to ensure all previous writes are flushed
     return new Promise<void>((resolve) => {
       this.xterm.write("", () => resolve());
@@ -139,6 +134,8 @@ export class VirtualTerminal implements Terminal {
 
   /**
    * Flush and get viewport - convenience method for tests
+   *
+   * @returns {Promise<string[]>} The viewport lines after pending writes are applied.
    */
   async flushAndGetViewport(): Promise<string[]> {
     await this.flush();
@@ -148,6 +145,8 @@ export class VirtualTerminal implements Terminal {
   /**
    * Get the visible viewport (what's currently on screen)
    * Note: You should use getViewportAfterWrite() for testing after writing data
+   *
+   * @returns {string[]} One string per visible terminal row.
    */
   getViewport(): string[] {
     const lines: string[] = [];
@@ -166,9 +165,6 @@ export class VirtualTerminal implements Terminal {
     return lines;
   }
 
-  /**
-   * Get the entire scroll buffer
-   */
   getScrollBuffer(): string[] {
     const lines: string[] = [];
     const buffer = this.xterm.buffer.active;
@@ -200,9 +196,6 @@ export class VirtualTerminal implements Terminal {
     this.xterm.reset();
   }
 
-  /**
-   * Get cursor position
-   */
   getCursorPosition(): { x: number; y: number } {
     const buffer = this.xterm.buffer.active;
     return {
@@ -213,8 +206,12 @@ export class VirtualTerminal implements Terminal {
 
   /** Wait for TUI's throttled render pipeline to settle. */
   async waitForRender(): Promise<void> {
-    await new Promise<void>((resolve) => process.nextTick(resolve));
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    await new Promise<void>((resolve) => {
+      process.nextTick(resolve);
+    });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 20);
+    });
     await this.flush();
   }
 }

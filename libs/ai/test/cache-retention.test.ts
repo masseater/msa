@@ -40,10 +40,10 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
   });
 
   afterEach(() => {
-    if (originalEnv !== undefined) {
-      process.env["MSA_CACHE_RETENTION"] = originalEnv;
-    } else {
+    if (originalEnv === undefined) {
       delete process.env["MSA_CACHE_RETENTION"];
+    } else {
+      process.env["MSA_CACHE_RETENTION"] = originalEnv;
     }
   });
 

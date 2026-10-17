@@ -15,7 +15,7 @@ export interface ModelDataManifest {
 }
 
 const MODEL_DATA_IMPORT_PATTERN =
-  /^import \{ [A-Z][A-Z0-9_]*_CLASSIFIER_MODELS, [A-Z][A-Z0-9_]*_IMAGE_MODELS, [A-Z][A-Z0-9_]*_MODELS \} from "\.\/providers\/([^"/]+)\.models\.ts";$/gm;
+  /^import \{ [A-Z][A-Z0-9_]*_CLASSIFIER_MODELS, [A-Z][A-Z0-9_]*_IMAGE_MODELS, [A-Z][A-Z0-9_]*_MODELS \} from "\.\/providers\/([^"/]+)\.models\.ts";$/gmu;
 
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -235,15 +235,15 @@ function validateModelValue(
       `${label} has type ${JSON.stringify(value["type"])}, expected "chat", "image", or "classifier"`,
     );
   }
-  if (!isRecord(value["cost"])) {
-    errors.push(`${label} has invalid cost metadata`);
-  } else {
+  if (isRecord(value["cost"])) {
     for (const field of ["input", "output", "cacheRead", "cacheWrite"] as const) {
       const cost = value["cost"][field];
       if (typeof cost !== "number" || !Number.isFinite(cost)) {
         errors.push(`${label} has invalid cost.${field}`);
       }
     }
+  } else {
+    errors.push(`${label} has invalid cost metadata`);
   }
 }
 
@@ -292,14 +292,15 @@ export function validateModelDataDirectory(structure: ModelDataStructure, dataDi
     errors.push("model data generation stamp does not match the generated catalog");
   }
   const manifestFiles = isRecord(manifest?.["files"]) ? manifest["files"] : undefined;
-  if (!manifestFiles) errors.push("model data manifest has no file hashes");
-  else {
+  if (manifestFiles) {
     const manifestFileNames = Object.keys(manifestFiles).sort();
     if (!sameStrings(expectedFiles, manifestFileNames)) {
       errors.push(
         `manifest file hashes do not match provider data files (${describeSetDifference(expectedFiles, manifestFileNames)})`,
       );
     }
+  } else {
+    errors.push("model data manifest has no file hashes");
   }
 
   for (const [providerId, expectedModels] of Object.entries(structure)) {
@@ -368,6 +369,10 @@ export interface ModelCatalogEntry {
 /**
  * Group one provider's typed catalog entries by API and key them by `type:id`,
  * the layout of `src/providers/data/<provider>.json`.
+ *
+ * @param {string} providerId - provider id
+ * @param {readonly T[]} models - typed catalog entries
+ * @returns {{ groups: Record<string, Record<string, T>>; structure: Record<string, string> }} the groups and their structure
  */
 export function groupProviderModelData<T extends ModelCatalogEntry>(
   providerId: string,

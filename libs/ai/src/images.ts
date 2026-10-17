@@ -21,12 +21,20 @@ function resolveImagesApiProvider(api: ImageApi) {
  * Global image generation dispatched on `model.api` through the images api
  * registry. Auth must be passed explicitly via `options.apiKey`; prefer
  * `Models.generateImages()`, which resolves provider auth.
+ *
+ * @param {ImageModel<ImageApi>} model - image model the request targets
+ * @param {ImagesContext} context - image request context
+ * @param {ProviderImagesOptions} [options] - request options with auth
+ * @returns {Promise<AssistantImages>} the generated images
  */
-export async function generateImages(
+export function generateImages(
   model: ImageModel<ImageApi>,
   context: ImagesContext,
   options?: ProviderImagesOptions,
 ): Promise<AssistantImages> {
-  const provider = resolveImagesApiProvider(model.api);
-  return provider.generateImages(model, context, options);
+  try {
+    return resolveImagesApiProvider(model.api).generateImages(model, context, options);
+  } catch (error) {
+    return Promise.reject(error);
+  }
 }

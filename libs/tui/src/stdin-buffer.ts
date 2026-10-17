@@ -27,7 +27,7 @@ const BRACKETED_PASTE_END = "\x1b[201~";
 // Color and program-status OSC replies, XTVersion, and Kitty graphics replies.
 // Until their header is complete, the input may be batched legacy Alt keystrokes.
 const TERMINAL_REPLY_HEADER_PATTERN =
-  /^\x1b(?:\](?:1[01];|4;\d{1,3};|7501;\?)|P>\||_G(?:[a-z]=\d+,)*[a-z]=\d+;)/;
+  /^\x1b(?:\](?:1[01];|4;\d{1,3};|7501;\?)|P>\||_G(?:[a-z]=\d+,)*[a-z]=\d+;)/u;
 
 function isControlString(data: string): boolean {
   return data.startsWith(`${ESC}]`) || data.startsWith(`${ESC}P`) || data.startsWith(`${ESC}_`);
@@ -35,6 +35,9 @@ function isControlString(data: string): boolean {
 
 /**
  * Check if a string is a complete escape sequence or needs more data
+ *
+ * @param {string} data - Buffered input.
+ * @returns {"complete" | "incomplete" | "not-escape"} Whether `data` is a complete escape sequence, an incomplete one, or not an escape sequence.
  */
 function isCompleteSequence(data: string): "complete" | "incomplete" | "not-escape" {
   if (!data.startsWith(ESC)) {
@@ -90,6 +93,9 @@ function isCompleteSequence(data: string): "complete" | "incomplete" | "not-esca
 /**
  * Check if CSI sequence is complete
  * CSI sequences: ESC [ ... followed by a final byte (0x40-0x7E)
+ *
+ * @param {string} data - Buffered input starting with ESC [.
+ * @returns {"complete" | "incomplete"} Whether the sequence is complete.
  */
 function isCompleteCsiSequence(data: string): "complete" | "incomplete" {
   if (!data.startsWith(`${ESC}[`)) {
@@ -113,7 +119,7 @@ function isCompleteCsiSequence(data: string): "complete" | "incomplete" {
     // Format: ESC[<B;X;Ym or ESC[<B;X;YM
     if (payload.startsWith("<")) {
       // Must have format: <digits;digits;digits[Mm]
-      const mouseMatch = /^<\d+;\d+;\d+[Mm]$/.test(payload);
+      const mouseMatch = /^<\d+;\d+;\d+[Mm]$/u.test(payload);
       if (mouseMatch) {
         return "complete";
       }
@@ -121,7 +127,7 @@ function isCompleteCsiSequence(data: string): "complete" | "incomplete" {
       if (lastChar === "M" || lastChar === "m") {
         // Check if we have the right structure
         const parts = payload.slice(1, -1).split(";");
-        if (parts.length === 3 && parts.every((p) => /^\d+$/.test(p))) {
+        if (parts.length === 3 && parts.every((p) => /^\d+$/u.test(p))) {
           return "complete";
         }
       }
@@ -138,6 +144,9 @@ function isCompleteCsiSequence(data: string): "complete" | "incomplete" {
 /**
  * Check if OSC sequence is complete
  * OSC sequences: ESC ] ... ST (where ST is ESC \ or BEL)
+ *
+ * @param {string} data - Buffered input starting with ESC ].
+ * @returns {"complete" | "incomplete"} Whether the sequence is complete.
  */
 function isCompleteOscSequence(data: string): "complete" | "incomplete" {
   if (!data.startsWith(`${ESC}]`)) {
@@ -156,6 +165,9 @@ function isCompleteOscSequence(data: string): "complete" | "incomplete" {
  * Check if DCS (Device Control String) sequence is complete
  * DCS sequences: ESC P ... ST (where ST is ESC \)
  * Used for XTVersion responses like ESC P >| ... ESC \
+ *
+ * @param {string} data - Buffered input starting with ESC P.
+ * @returns {"complete" | "incomplete"} Whether the sequence is complete.
  */
 function isCompleteDcsSequence(data: string): "complete" | "incomplete" {
   if (!data.startsWith(`${ESC}P`)) {
@@ -174,6 +186,9 @@ function isCompleteDcsSequence(data: string): "complete" | "incomplete" {
  * Check if APC (Application Program Command) sequence is complete
  * APC sequences: ESC _ ... ST (where ST is ESC \)
  * Used for Kitty graphics responses like ESC _ G ... ESC \
+ *
+ * @param {string} data - Buffered input starting with ESC _.
+ * @returns {"complete" | "incomplete"} Whether the sequence is complete.
  */
 function isCompleteApcSequence(data: string): "complete" | "incomplete" {
   if (!data.startsWith(`${ESC}_`)) {
@@ -188,17 +203,20 @@ function isCompleteApcSequence(data: string): "complete" | "incomplete" {
   return "incomplete";
 }
 
-/**
- * Split accumulated buffer into complete sequences
- */
 function parseUnmodifiedKittyPrintableCodepoint(sequence: string): number | undefined {
-  const match = sequence.match(/^\x1b\[(\d+)(?::\d*)?(?::\d+)?u$/);
+  const match = sequence.match(/^\x1b\[(\d+)(?::\d*)?(?::\d+)?u$/u);
   if (!match) return undefined;
 
   const codepoint = parseInt(match[1]!, 10);
   return codepoint >= 32 ? codepoint : undefined;
 }
 
+/**
+ * Split accumulated buffer into complete sequences.
+ *
+ * @param {string} buffer - Buffered input.
+ * @returns {{ sequences: string[]; remainder: string }} The complete sequences and the incomplete rest.
+ */
 function extractCompleteSequences(buffer: string): { sequences: string[]; remainder: string } {
   const sequences: string[] = [];
   let pos = 0;
@@ -243,11 +261,16 @@ function extractCompleteSequences(buffer: string): { sequences: string[]; remain
           if (candidate === "\x1b\x1b") {
             const nextChar = remaining[seqEnd];
             if (
-              nextChar === "[" || // CSI
-              nextChar === "]" || // OSC
-              nextChar === "O" || // SS3
-              nextChar === "P" || // DCS
-              nextChar === "_" // APC
+              // CSI
+              nextChar === "[" ||
+              // OSC
+              nextChar === "]" ||
+              // SS3
+              nextChar === "O" ||
+              // DCS
+              nextChar === "P" ||
+              // APC
+              nextChar === "_"
             ) {
               sequences.push(ESC);
               pos += 1;

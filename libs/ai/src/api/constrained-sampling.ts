@@ -136,7 +136,13 @@ function makeJsonSchemaNodeStrict(
   schema["additionalProperties"] = false;
 }
 
-/** Convert a tool schema to the strict subset expected by provider constrained sampling. */
+/**
+ * Convert a tool schema to the strict subset expected by provider constrained sampling.
+ *
+ * @param {Tool["parameters"]} schema - tool parameter schema
+ * @param {UnsupportedStrictSchemaKeywordCheck} [isUnsupportedKeyword] - provider check for keywords its strict mode rejects
+ * @returns {Record<string, unknown>} the strict schema
+ */
 export function makeStrictJsonSchema(
   schema: Tool["parameters"],
   isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
@@ -249,6 +255,11 @@ function inferGrammarInputProperty(tool: Tool): string {
 /**
  * Decide whether a JSON-schema tool is sent in strict mode. `isUnsupportedKeyword` lets a provider
  * reject extra keywords its strict mode does not accept, so "prefer" tools fall back to non-strict.
+ *
+ * @param {Tool} tool - tool to send
+ * @param {boolean} supportsStrictMode - whether the target supports strict mode
+ * @param {UnsupportedStrictSchemaKeywordCheck} [isUnsupportedKeyword] - provider check for keywords its strict mode rejects
+ * @returns {boolean | undefined} true for strict, false for non-strict, or undefined to leave it unset
  */
 export function resolveJsonSchemaStrictSampling(
   tool: Tool,

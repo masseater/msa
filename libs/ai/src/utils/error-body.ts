@@ -57,6 +57,9 @@ export function normalizeProviderError(error: unknown): NormalizedProviderError 
  * Probe the HTTP status, first numeric hit wins, in SDK-field order:
  * `statusCode` (Mistral) → `status` (`openai`, `@google/genai`) →
  * `$metadata.httpStatusCode` (Bedrock) → `$response.statusCode` (Bedrock).
+ *
+ * @param {SdkErrorShape} error - thrown value
+ * @returns {number | undefined} the HTTP status, or undefined
  */
 function extractStatus(error: SdkErrorShape): number | undefined {
   if (typeof error.statusCode === "number") return error.statusCode;
@@ -72,6 +75,9 @@ function extractStatus(error: SdkErrorShape): number | undefined {
  * `this.error`) → `$response.body` (Bedrock). Empty objects and unread response
  * streams are treated as no body so they do not surface as `"{}"` or serialized
  * stream internals. The chosen body is truncated to the cap.
+ *
+ * @param {SdkErrorShape} error - thrown value
+ * @returns {string | undefined} the truncated body, or undefined
  */
 function extractBody(error: SdkErrorShape): string | undefined {
   const bodyText = pickBodyText(error);
@@ -113,6 +119,9 @@ function isReadableStreamLike(value: unknown): boolean {
  * ReadableStreams (pipeTo/pipeThrough, no `pipe`) and non-stream SDK wrapper
  * classes fail the prototype check, while parsed JSON bodies (plain objects
  * by construction) still pass.
+ *
+ * @param {unknown} value - candidate body
+ * @returns {boolean} whether the value is a plain object with keys
  */
 function isPlainNonEmptyObject(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
@@ -129,6 +138,10 @@ function isPlainNonEmptyObject(value: unknown): boolean {
  *
  * - no prefix: `"<status>: <body>"`
  * - prefix:    `"<prefix> (<status>): <body>"`
+ *
+ * @param {NormalizedProviderError} norm - normalized error
+ * @param {string} [prefix] - provider label
+ * @returns {string} the display string
  */
 export function formatProviderError(norm: NormalizedProviderError, prefix?: string): string {
   if (norm.messageCarriesBody || norm.status === undefined || norm.body === undefined) {
@@ -136,9 +149,9 @@ export function formatProviderError(norm: NormalizedProviderError, prefix?: stri
       ? `${prefix} (${norm.status}): ${norm.message}`
       : norm.message;
   }
-  return prefix !== undefined
-    ? `${prefix} (${norm.status}): ${norm.body}`
-    : `${norm.status}: ${norm.body}`;
+  return prefix === undefined
+    ? `${norm.status}: ${norm.body}`
+    : `${prefix} (${norm.status}): ${norm.body}`;
 }
 
 export function truncateErrorText(text: string, maxChars: number): string {

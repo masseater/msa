@@ -93,7 +93,11 @@ export const CURRENT_SQLITE_SCHEMA_VERSION = SQLITE_MIGRATIONS.at(-1)?.version ?
 
 type SchemaRow = { readonly version: number };
 
-/** Apply all pending schema migrations atomically. */
+/**
+ * Apply all pending schema migrations atomically.
+ * @param {SqliteDatabase} database - The database.
+ * @param {readonly SqliteMigration[]} migrations - Every migration, in order.
+ */
 export async function applySqliteMigrations(
   database: SqliteDatabase,
   migrations: readonly SqliteMigration[] = SQLITE_MIGRATIONS,
@@ -122,9 +126,9 @@ export async function applySqliteMigrations(
         `Durable SQLite schema version ${row.version} is newer than supported version ${currentVersion}`,
       );
     }
-    for (const migration of migrations) {
+    for await (const migration of migrations) {
       if (migration.version <= row.version) continue;
-      for (const statement of migration.statements) await transaction.exec(statement);
+      for await (const statement of migration.statements) await transaction.exec(statement);
       await transaction.run(
         "UPDATE durable_schema SET version = ? WHERE singleton = 1",
         migration.version,

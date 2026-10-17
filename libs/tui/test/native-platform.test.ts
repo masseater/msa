@@ -34,7 +34,7 @@ test(
   async () => {
     const clipboard = getNativeClipboard();
     assert.ok(clipboard?.setText);
-    for (const text of ["clipboard café 日本語", "", "second write"]) {
+    for await (const text of ["clipboard café 日本語", "", "second write"]) {
       await clipboard.setText(text);
       assert.equal(await clipboard.getText(), text);
       assert.equal(await clipboard.getImage(), null);
@@ -86,11 +86,12 @@ test(
     Object.defineProperty(process, "platform", { value: "linux" });
     delete process.env["DISPLAY"];
     process.env["WAYLAND_DISPLAY"] = "wayland-0";
-    assert.equal(getNativeClipboard(), undefined); // Wayland paste uses wl-paste.
+    // Wayland paste uses wl-paste.
+    assert.equal(getNativeClipboard(), undefined);
     let available = false;
     const helper = {
-      getText: t.mock.fn(async () => (available ? "X11" : undefined)),
-      getImage: t.mock.fn(async () => null),
+      getText: t.mock.fn(() => Promise.resolve(available ? "X11" : undefined)),
+      getImage: t.mock.fn(() => Promise.resolve(null)),
     };
     const module = new Module(modulePath);
     module.exports = helper;

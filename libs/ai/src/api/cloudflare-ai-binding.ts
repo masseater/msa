@@ -76,6 +76,9 @@ export const CLOUDFLARE_GATEWAY_BINDING_AUTH_SENTINEL = "cloudflare-gateway-bind
  *   fetch: createAiBindingFetch(env.AI),
  * });
  * ```
+ *
+ * @param {AiBinding} binding - Workers AI binding
+ * @returns {FetchFunction} the fetch function
  */
 export function createAiBindingFetch(binding: AiBinding): FetchFunction {
   // `fetch` is optional on the type, so its presence is checked here — early, rather than as a

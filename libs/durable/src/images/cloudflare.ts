@@ -5,7 +5,10 @@ import photonWasm from "@silvia-odwyer/photon/photon_rs_bg.wasm";
 import type { ImageProcessor } from "../tools/image-processor.ts";
 import { createPhotonImages } from "./index.ts";
 
-/** `createPhotonImages()` for Cloudflare Workers and Durable Objects, built with Wrangler. */
+/**
+ * `createPhotonImages()` for Cloudflare Workers and Durable Objects, built with Wrangler.
+ * @returns {ImageProcessor} The processor.
+ */
 export function createCloudflarePhotonImages(): ImageProcessor {
   return createPhotonImages(photonWasm);
 }

@@ -34,6 +34,10 @@ function isCatalogEntry(value: unknown): value is CatalogEntry {
  * Hydrate the checkout's provider data files from a published typed catalog
  * (`models.all.json`) without network access. With `validateOnly`, stage and
  * validate the data without replacing the checkout's current data.
+ *
+ * @param {string} packageRoot - package root
+ * @param {string} catalogPath - path of models.all.json
+ * @param {{ validateOnly?: boolean }} [options] - hydration options
  */
 export function hydrateModelCatalog(
   packageRoot: string,

@@ -78,20 +78,45 @@ const K1 = 0.206;
 const K2 = 0.03;
 const K3 = (1 + K1) / (1 + K2);
 
-/** Oklab lightness to OKHSL lightness. */
+/**
+ * Oklab lightness to OKHSL lightness.
+ *
+ * @param {number} x - Oklab lightness.
+ * @returns {number} OKHSL lightness.
+ */
 export const oklabToOkhslLightness = (x: number): number =>
   0.5 * (K3 * x - K1 + Math.sqrt((K3 * x - K1) ** 2 + 4 * K2 * K3 * x));
-/** OKHSL lightness to Oklab lightness. */
+/**
+ * OKHSL lightness to Oklab lightness.
+ *
+ * @param {number} x - OKHSL lightness.
+ * @returns {number} Oklab lightness.
+ */
 const okhslToOklabLightness = (x: number): number => (x * x + K1 * x) / (K3 * (x + K2));
 
-/** sRGB transfer function: linear to encoded channel, both 0-1. */
+/**
+ * sRGB transfer function: linear to encoded channel, both 0-1.
+ *
+ * @param {number} value - Linear channel.
+ * @returns {number} Encoded channel.
+ */
 const linearToSrgb = (value: number): number =>
   value > 0.0031308 ? 1.055 * value ** (1 / 2.4) - 0.055 : 12.92 * value;
-/** Inverse sRGB transfer function: encoded to linear channel, both 0-1. */
+/**
+ * Inverse sRGB transfer function: encoded to linear channel, both 0-1.
+ *
+ * @param {number} value - Encoded channel.
+ * @returns {number} Linear channel.
+ */
 const srgbToLinear = (value: number): number =>
   value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
 
-/** Oklab [L, a, b] to linear sRGB [r, g, b] (0-1, may leave the gamut). */
+/**
+ * Oklab [L, a, b] to linear sRGB [r, g, b] (0-1, may leave the gamut).
+ *
+ * @param {Vector} lab - Oklab [L, a, b].
+ * @returns {Vector} Linear sRGB [r, g, b].
+ */
 export function oklabToLinearSrgb(lab: Vector): Vector {
   return multiply(
     LMS_TO_LINEAR_SRGB,
@@ -99,17 +124,32 @@ export function oklabToLinearSrgb(lab: Vector): Vector {
   );
 }
 
-/** Linear sRGB [r, g, b] (0-1) to Oklab [L, a, b]. */
+/**
+ * Linear sRGB [r, g, b] (0-1) to Oklab [L, a, b].
+ *
+ * @param {Vector} rgb - Linear sRGB [r, g, b].
+ * @returns {Vector} Oklab [L, a, b].
+ */
 function linearSrgbToOklab(rgb: Vector): Vector {
   return multiply(LMS_TO_LAB, multiply(LINEAR_SRGB_TO_LMS, rgb).map(Math.cbrt) as Vector);
 }
 
-/** sRGB channels (0-255) to Oklab [L, a, b]. */
-export function rgbToOklab({ r, g, b }: RgbColor): Vector {
-  return linearSrgbToOklab([r / 255, g / 255, b / 255].map(srgbToLinear) as Vector);
+/**
+ * sRGB channels (0-255) to Oklab [L, a, b].
+ *
+ * @param {RgbColor} rgb - sRGB channels.
+ * @returns {Vector} Oklab [L, a, b].
+ */
+export function rgbToOklab(rgb: RgbColor): Vector {
+  return linearSrgbToOklab([rgb.r / 255, rgb.g / 255, rgb.b / 255].map(srgbToLinear) as Vector);
 }
 
-/** Linear sRGB [r, g, b] to sRGB channels (0-255, rounded), clipping out-of-gamut channels. */
+/**
+ * Linear sRGB [r, g, b] to sRGB channels (0-255, rounded), clipping out-of-gamut channels.
+ *
+ * @param {Vector} linear - Linear sRGB [r, g, b].
+ * @returns {RgbColor} sRGB channels.
+ */
 export function linearSrgbToRgb(linear: Vector): RgbColor {
   const [r, g, b] = mapVector(linear, (value) =>
     Math.round(Math.min(1, Math.max(0, linearToSrgb(value))) * 255),
@@ -117,14 +157,26 @@ export function linearSrgbToRgb(linear: Vector): RgbColor {
   return { r, g, b };
 }
 
-/** Rate of change of each cube-root LMS component along a chroma direction (a, b). */
+/**
+ * Rate of change of each cube-root LMS component along a chroma direction (a, b).
+ *
+ * @param {number} a - Oklab a of the direction.
+ * @param {number} b - Oklab b of the direction.
+ * @returns {Vector} The slopes of L, M, S.
+ */
 function lmsSlopes(a: number, b: number): Vector {
   return [LAB_TO_LMS[0], LAB_TO_LMS[1], LAB_TO_LMS[2]].map(
     (row) => row[1] * a + row[2] * b,
   ) as Vector;
 }
 
-/** Largest saturation (C/L) inside sRGB for hue (a, b): polynomial fit plus one Halley step. */
+/**
+ * Largest saturation (C/L) inside sRGB for hue (a, b): polynomial fit plus one Halley step.
+ *
+ * @param {number} a - Normalized Oklab a of the hue.
+ * @param {number} b - Normalized Oklab b of the hue.
+ * @returns {number} The saturation.
+ */
 function maxSaturation(a: number, b: number): number {
   const channel = SATURATION_FIT.findIndex(([[x, y]], index) => index === 2 || x * a + y * b > 1);
   const fit = SATURATION_FIT[channel];
@@ -144,7 +196,13 @@ function maxSaturation(a: number, b: number): number {
   return saturation - (f * f1) / (f1 * f1 - 0.5 * f * f2);
 }
 
-/** Oklab lightness and chroma of the most saturated sRGB color of hue (a, b). */
+/**
+ * Oklab lightness and chroma of the most saturated sRGB color of hue (a, b).
+ *
+ * @param {number} a - Normalized Oklab a of the hue.
+ * @param {number} b - Normalized Oklab b of the hue.
+ * @returns {[number, number]} [L, C] of the cusp.
+ */
 function cusp(a: number, b: number): [number, number] {
   const saturation = maxSaturation(a, b);
   const lightness = Math.cbrt(
@@ -153,13 +211,17 @@ function cusp(a: number, b: number): [number, number] {
   return [lightness, lightness * saturation];
 }
 
-/** Chroma where the constant-lightness line at `lightness` leaves the sRGB gamut. */
-function maxChroma(
-  a: number,
-  b: number,
-  lightness: number,
-  [cuspL, cuspC]: [number, number],
-): number {
+/**
+ * Chroma where the constant-lightness line at `lightness` leaves the sRGB gamut.
+ *
+ * @param {number} a - Normalized Oklab a of the hue.
+ * @param {number} b - Normalized Oklab b of the hue.
+ * @param {number} lightness - Oklab lightness.
+ * @param {[number, number]} hueCusp - [L, C] of the hue's cusp.
+ * @returns {number} The chroma.
+ */
+function maxChroma(a: number, b: number, lightness: number, hueCusp: [number, number]): number {
+  const [cuspL, cuspC] = hueCusp;
   if (lightness <= cuspL) return (cuspC * lightness) / cuspL;
   // Upper half: triangle edge, then one Halley step against each channel reaching 1.
   const t = (cuspC * (lightness - 1)) / (cuspL - 1);
@@ -178,7 +240,14 @@ function maxChroma(
   return t + Math.min(...steps);
 }
 
-/** OKHSL's chroma reference points at lightness L and hue (a, b): [c0, cMid, cMax]. */
+/**
+ * OKHSL's chroma reference points at lightness L and hue (a, b): [c0, cMid, cMax].
+ *
+ * @param {number} L - Oklab lightness.
+ * @param {number} a - Normalized Oklab a of the hue.
+ * @param {number} b - Normalized Oklab b of the hue.
+ * @returns {[number, number, number]} [c0, cMid, cMax].
+ */
 function chromaStops(L: number, a: number, b: number): [number, number, number] {
   const peak = cusp(a, b);
   const cMax = maxChroma(a, b, L, peak);
@@ -213,9 +282,11 @@ function chromaStops(L: number, a: number, b: number): [number, number, number] 
 
 /**
  * Convert OKHSL to sRGB channels (0-255, rounded), clipping out-of-gamut channels.
- * @param hue Hue in degrees.
- * @param saturation Saturation, 0-1.
- * @param lightness Lightness, 0-1.
+ *
+ * @param {number} hue - Hue in degrees.
+ * @param {number} saturation - Saturation, 0-1.
+ * @param {number} lightness - Lightness, 0-1.
+ * @returns {RgbColor} sRGB channels.
  */
 export function okhslToRgb(hue: number, saturation: number, lightness: number): RgbColor {
   const L = okhslToOklabLightness(lightness);
@@ -243,7 +314,9 @@ export function okhslToRgb(hue: number, saturation: number, lightness: number): 
 
 /**
  * Convert sRGB channels (0-255) to OKHSL.
- * @returns Hue `h` in degrees (0 for grays), saturation `s` and lightness `l` 0-1.
+ *
+ * @param {RgbColor} rgb - sRGB channels (0-255).
+ * @returns {{ h: number; s: number; l: number }} Hue `h` in degrees (0 for grays), saturation `s` and lightness `l` 0-1.
  */
 export function rgbToOkhsl(rgb: RgbColor): { h: number; s: number; l: number } {
   const [L, labA, labB] = rgbToOklab(rgb);

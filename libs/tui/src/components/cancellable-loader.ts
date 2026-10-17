@@ -16,12 +16,15 @@ export class CancellableLoader extends Loader {
   /** Called when user presses Escape */
   onAbort?: () => void;
 
-  /** AbortSignal that is aborted when user presses Escape */
+  /**
+   * AbortSignal that is aborted when user presses Escape
+   *
+   * @returns {AbortSignal} The signal aborted on Escape.
+   */
   get signal(): AbortSignal {
     return this.abortController.signal;
   }
 
-  /** Whether the loader was aborted */
   get aborted(): boolean {
     return this.abortController.signal.aborted;
   }

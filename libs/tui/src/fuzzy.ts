@@ -31,7 +31,7 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatch {
       const i = textLower.indexOf(normalizedQuery[queryIndex]!, lastMatchIndex + 1);
       if (i === -1) break;
 
-      const isWordBoundary = i === 0 || /[\s\-_./:]/.test(textLower[i - 1]!);
+      const isWordBoundary = i === 0 || /[\s\-_./:]/u.test(textLower[i - 1]!);
 
       // Reward consecutive matches
       if (lastMatchIndex === i - 1) {
@@ -73,8 +73,8 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatch {
     return primaryMatch;
   }
 
-  const alphaNumericMatch = queryLower.match(/^(?<letters>[a-z]+)(?<digits>[0-9]+)$/);
-  const numericAlphaMatch = queryLower.match(/^(?<digits>[0-9]+)(?<letters>[a-z]+)$/);
+  const alphaNumericMatch = queryLower.match(/^(?<letters>[a-z]+)(?<digits>[0-9]+)$/u);
+  const numericAlphaMatch = queryLower.match(/^(?<digits>[0-9]+)(?<letters>[a-z]+)$/u);
   const swappedQuery = alphaNumericMatch
     ? `${alphaNumericMatch.groups?.["digits"] ?? ""}${alphaNumericMatch.groups?.["letters"] ?? ""}`
     : numericAlphaMatch
@@ -96,6 +96,11 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatch {
 /**
  * Filter and sort items by fuzzy match quality (best matches first).
  * Supports whitespace- and slash-separated tokens: all tokens must match.
+ *
+ * @param {T[]} items - Items to filter.
+ * @param {string} query - The query.
+ * @param {(item: T) => string} getText - Returns the text to match for an item.
+ * @returns {T[]} The matching items, best first.
  */
 export function fuzzyFilter<T>(items: T[], query: string, getText: (item: T) => string): T[] {
   if (!query.trim()) {
@@ -104,7 +109,7 @@ export function fuzzyFilter<T>(items: T[], query: string, getText: (item: T) => 
 
   const tokens = query
     .trim()
-    .split(/[\s/]+/)
+    .split(/[\s/]+/u)
     .filter((t) => t.length > 0);
 
   if (tokens.length === 0) {

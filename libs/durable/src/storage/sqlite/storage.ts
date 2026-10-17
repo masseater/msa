@@ -3,6 +3,7 @@ import { apply, type Op } from "@msa/chord/delta";
 
 import { StorageRequestError } from "../../errors.ts";
 import { idFromNumber, seqFromNumber } from "../../ids.ts";
+import { promiseTry } from "../../promise-try.ts";
 import type {
   ConversationId,
   ConversationQuery,
@@ -48,6 +49,10 @@ type RevisionRow = {
   readonly version: number;
   readonly content: string;
 };
+type ForkSegment = {
+  readonly conversationId: ConversationId;
+  readonly upper: number | undefined;
+};
 type IdRow = { readonly id: number };
 type MetadataRow = { readonly next_id: string; readonly next_seq: number };
 type DocumentAction = {
@@ -84,7 +89,11 @@ const page = <T extends { readonly id: Id<string> }>(
   return { items, next: nextCursor(items.at(-1)!.id, order) };
 };
 
-/** The ID condition, its parameter, and the `ORDER BY` direction of a table scan. */
+/**
+ * The ID condition, its parameter, and the `ORDER BY` direction of a table scan.
+ * @param {ScanStart} start - The scan's order and position.
+ * @returns {{ readonly clause: string; readonly param: number; readonly direction: string }} The SQL parts.
+ */
 const scanSql = (
   start: ScanStart,
 ): { readonly clause: string; readonly param: number; readonly direction: string } =>
@@ -156,7 +165,11 @@ export class SqliteStorage implements Storage {
     this.nextId = nextId;
   }
 
-  /** Initialize storage over an owned SQLite database facade. */
+  /**
+   * Initialize storage over an owned SQLite database facade.
+   * @param {SqliteDatabase} db - The database the storage owns.
+   * @returns {Promise<SqliteStorage>} The storage.
+   */
   static async open(db: SqliteDatabase): Promise<SqliteStorage> {
     try {
       await applySqliteMigrations(db);
@@ -187,7 +200,8 @@ export class SqliteStorage implements Storage {
       const committedSeq = seqFromNumber(metadata.next_seq);
       await this.checkGlobalIds(transaction, writes);
       await this.checkDocumentActions(transaction, documentActions);
-      for (const write of writes) await this.applyTableWrite(transaction, write, committedSeq);
+      for await (const write of writes)
+        await this.applyTableWrite(transaction, write, committedSeq);
       await this.applyDocumentActions(transaction, documentActions, committedSeq);
       await transaction.run(
         "UPDATE durable_metadata SET next_id = ?, next_seq = ? WHERE singleton = 1",
@@ -200,10 +214,12 @@ export class SqliteStorage implements Storage {
     return seq;
   }
 
-  async mintId<I extends Id<string>>(): Promise<I> {
-    this.assertOpen();
-    if (!Number.isSafeInteger(this.nextId)) throw new Error("ID space is exhausted");
-    return idFromNumber<I>(this.nextId++);
+  mintId<I extends Id<string>>(): Promise<I> {
+    return promiseTry(() => {
+      this.assertOpen();
+      if (!Number.isSafeInteger(this.nextId)) throw new Error("ID space is exhausted");
+      return idFromNumber<I>(this.nextId++);
+    });
   }
 
   async conversation(
@@ -305,44 +321,57 @@ export class SqliteStorage implements Storage {
     );
     if (row === undefined) return undefined;
     const entry = parseJson<EntryRecord>(row.record);
-    if (conversation !== undefined) {
-      let upperEntryId = Number.POSITIVE_INFINITY;
-      while (conversation.id !== entry.conversationId) {
-        if (conversation.parent === undefined) return undefined;
-        upperEntryId = Math.min(upperEntryId, conversation.parent.at);
-        conversation = (await this.readConversation(conversation.parent.conversationId))!;
-      }
-      if (entry.id > upperEntryId) return undefined;
-    }
+    if (
+      conversation !== undefined &&
+      !(await this.visibleFrom(conversation, entry, Number.POSITIVE_INFINITY))
+    )
+      return undefined;
     return { entry, commitSeq: seqFromNumber(row.commit_seq) };
+  }
+
+  private async visibleFrom(
+    conversation: ConversationRecord,
+    entry: EntryRecord,
+    upperEntryId: number,
+  ): Promise<boolean> {
+    if (conversation.id === entry.conversationId) return entry.id <= upperEntryId;
+    if (conversation.parent === undefined) return false;
+    const nextUpper = Math.min(upperEntryId, conversation.parent.at);
+    const parent = (await this.readConversation(conversation.parent.conversationId))!;
+    return this.visibleFrom(parent, entry, nextUpper);
   }
 
   private async readLatestHeadMarker(
     conversationId: ConversationId,
     atOrBeforeEntryId: EntryId | undefined,
   ): Promise<(EntryRecord & { readonly head: EntryId }) | undefined> {
-    let conversation = await this.readConversation(conversationId);
+    const conversation = await this.readConversation(conversationId);
     if (conversation === undefined)
       throw new StorageRequestError(`Unknown conversation: ${conversationId}`);
-    let upper: number | undefined = atOrBeforeEntryId;
-    while (true) {
-      const row =
-        upper === undefined
-          ? await this.db.get<JsonRow>(
-              "SELECT record FROM entries WHERE conversation_id = ? AND head IS NOT NULL ORDER BY id DESC LIMIT 1",
-              conversation.id,
-            )
-          : await this.db.get<JsonRow>(
-              "SELECT record FROM entries WHERE conversation_id = ? AND head IS NOT NULL AND id <= ? ORDER BY id DESC LIMIT 1",
-              conversation.id,
-              upper,
-            );
-      if (row !== undefined) return parseJson<EntryRecord & { readonly head: EntryId }>(row.record);
-      if (conversation.parent === undefined) return undefined;
-      upper =
-        upper === undefined ? conversation.parent.at : Math.min(upper, conversation.parent.at);
-      conversation = (await this.readConversation(conversation.parent.conversationId))!;
-    }
+    return this.headMarkerFrom(conversation, atOrBeforeEntryId);
+  }
+
+  private async headMarkerFrom(
+    conversation: ConversationRecord,
+    upper: number | undefined,
+  ): Promise<(EntryRecord & { readonly head: EntryId }) | undefined> {
+    const row =
+      upper === undefined
+        ? await this.db.get<JsonRow>(
+            "SELECT record FROM entries WHERE conversation_id = ? AND head IS NOT NULL ORDER BY id DESC LIMIT 1",
+            conversation.id,
+          )
+        : await this.db.get<JsonRow>(
+            "SELECT record FROM entries WHERE conversation_id = ? AND head IS NOT NULL AND id <= ? ORDER BY id DESC LIMIT 1",
+            conversation.id,
+            upper,
+          );
+    if (row !== undefined) return parseJson<EntryRecord & { readonly head: EntryId }>(row.record);
+    if (conversation.parent === undefined) return undefined;
+    const nextUpper =
+      upper === undefined ? conversation.parent.at : Math.min(upper, conversation.parent.at);
+    const parent = (await this.readConversation(conversation.parent.conversationId))!;
+    return this.headMarkerFrom(parent, nextUpper);
   }
 
   private async readEntries(
@@ -352,64 +381,68 @@ export class SqliteStorage implements Storage {
   ): Promise<Page<EntryRecord, Cursor>> {
     const { order, after } = scanStart(query.order, cursor, "descending");
     if (order === "ascending") return this.readEntriesAscending(query, limit, after);
-    let conversation = await this.readConversation(query.conversationId);
+    const conversation = await this.readConversation(query.conversationId);
     if (conversation === undefined)
       throw new StorageRequestError(`Unknown conversation: ${query.conversationId}`);
     let upper: number | undefined = query.maxEntryId;
     if (after !== undefined) upper = Math.min(upper ?? Number.MAX_SAFE_INTEGER, after - 1);
     const values: EntryRecord[] = [];
-    while (true) {
-      const clauses = ["conversation_id = ?"];
-      const params: SqliteValue[] = [conversation.id];
-      if (query.minEntryId !== undefined) {
-        clauses.push("id >= ?");
-        params.push(query.minEntryId);
-      }
-      if (upper !== undefined) {
-        clauses.push("id <= ?");
-        params.push(upper);
-      }
-      params.push(limit + 1 - values.length);
-      const rows = await this.db.all<JsonRow>(
-        `SELECT record FROM entries WHERE ${clauses.join(" AND ")} ORDER BY id DESC LIMIT ?`,
-        ...params,
-      );
-      values.push(...rows.map((row) => parseJson<EntryRecord>(row.record)));
-      if (values.length > limit || conversation.parent === undefined) break;
-      upper =
-        upper === undefined ? conversation.parent.at : Math.min(upper, conversation.parent.at);
-      if (query.minEntryId !== undefined && upper < query.minEntryId) break;
-      conversation = (await this.readConversation(conversation.parent.conversationId))!;
-    }
+    await this.collectDescending(query, limit, conversation, upper, values);
     return page(values, limit, "descending");
   }
 
-  /** Oldest first: the fork chain's segments from the root conversation forward, each up to its fork point. */
+  private async collectDescending(
+    query: EntryQuery,
+    limit: number,
+    conversation: ConversationRecord,
+    upper: number | undefined,
+    values: EntryRecord[],
+  ): Promise<void> {
+    const clauses = ["conversation_id = ?"];
+    const params: SqliteValue[] = [conversation.id];
+    if (query.minEntryId !== undefined) {
+      clauses.push("id >= ?");
+      params.push(query.minEntryId);
+    }
+    if (upper !== undefined) {
+      clauses.push("id <= ?");
+      params.push(upper);
+    }
+    params.push(limit + 1 - values.length);
+    const rows = await this.db.all<JsonRow>(
+      `SELECT record FROM entries WHERE ${clauses.join(" AND ")} ORDER BY id DESC LIMIT ?`,
+      ...params,
+    );
+    values.push(...rows.map((row) => parseJson<EntryRecord>(row.record)));
+    if (values.length > limit || conversation.parent === undefined) return;
+    const nextUpper =
+      upper === undefined ? conversation.parent.at : Math.min(upper, conversation.parent.at);
+    if (query.minEntryId !== undefined && nextUpper < query.minEntryId) return;
+    const parent = (await this.readConversation(conversation.parent.conversationId))!;
+    await this.collectDescending(query, limit, parent, nextUpper, values);
+  }
+
+  /**
+   * Oldest first: the fork chain's segments from the root conversation forward, each up to its fork point.
+   * @param {EntryQuery} query - The entry query.
+   * @param {number} limit - The page size.
+   * @param {number | undefined} after - The cursor's entry ID.
+   * @returns {Promise<Page<EntryRecord, Cursor>>} One page of entries.
+   */
   private async readEntriesAscending(
     query: EntryQuery,
     limit: number,
     after: number | undefined,
   ): Promise<Page<EntryRecord, Cursor>> {
-    const segments: {
-      readonly conversationId: ConversationId;
-      readonly upper: number | undefined;
-    }[] = [];
-    let conversation = await this.readConversation(query.conversationId);
+    const segments: ForkSegment[] = [];
+    const conversation = await this.readConversation(query.conversationId);
     if (conversation === undefined)
       throw new StorageRequestError(`Unknown conversation: ${query.conversationId}`);
-    let upper: number | undefined = query.maxEntryId;
-    while (true) {
-      segments.push({ conversationId: conversation.id, upper });
-      if (conversation.parent === undefined) break;
-      upper =
-        upper === undefined ? conversation.parent.at : Math.min(upper, conversation.parent.at);
-      if (query.minEntryId !== undefined && upper < query.minEntryId) break;
-      conversation = (await this.readConversation(conversation.parent.conversationId))!;
-    }
+    await this.collectSegments(query, conversation, query.maxEntryId, segments);
     let lower: number | undefined = query.minEntryId;
     if (after !== undefined) lower = Math.max(lower ?? after + 1, after + 1);
     const values: EntryRecord[] = [];
-    for (const segment of segments.reverse()) {
+    for await (const segment of segments.reverse()) {
       const clauses = ["conversation_id = ?"];
       const params: SqliteValue[] = [segment.conversationId];
       if (lower !== undefined) {
@@ -429,6 +462,21 @@ export class SqliteStorage implements Storage {
       if (values.length > limit) break;
     }
     return page(values, limit, "ascending");
+  }
+
+  private async collectSegments(
+    query: EntryQuery,
+    conversation: ConversationRecord,
+    upper: number | undefined,
+    segments: ForkSegment[],
+  ): Promise<void> {
+    segments.push({ conversationId: conversation.id, upper });
+    if (conversation.parent === undefined) return;
+    const nextUpper =
+      upper === undefined ? conversation.parent.at : Math.min(upper, conversation.parent.at);
+    if (query.minEntryId !== undefined && nextUpper < query.minEntryId) return;
+    const parent = (await this.readConversation(conversation.parent.conversationId))!;
+    await this.collectSegments(query, parent, nextUpper, segments);
   }
 
   async task(id: TaskId, _context: Context): Promise<StoredTask | undefined> {
@@ -559,14 +607,16 @@ export class SqliteStorage implements Storage {
     return row === undefined ? undefined : parseJson<DocumentRecord>(row.record);
   }
 
-  async document(
+  document(
     id: DocumentId,
     at: DocumentPoint,
     _context: Context,
   ): Promise<StoredDocument | undefined> {
-    this.assertOpen();
-    // The record and revision queries must observe one committed state; a commit between them can replace the base.
-    return this.db.transaction((transaction) => this.materializeDocument(transaction, id, at));
+    return promiseTry(() => {
+      this.assertOpen();
+      // The record and revision queries must observe one committed state; a commit between them can replace the base.
+      return this.db.transaction((transaction) => this.materializeDocument(transaction, id, at));
+    });
   }
 
   async scanDocuments(
@@ -620,6 +670,8 @@ export class SqliteStorage implements Storage {
   /**
    * Run a read that issues several queries. Close waits for admitted reads, so their later queries never reach a
    * closed database. Single-query reads and transactions are already ordered before close by the database.
+   * @param {() => Promise<T>} read - The read.
+   * @returns {Promise<T>} What `read` resolves with.
    */
   private async admitRead<T>(read: () => Promise<T>): Promise<T> {
     this.assertOpen();
@@ -687,7 +739,7 @@ export class SqliteStorage implements Storage {
     writes: readonly StorageWrite[],
   ): Promise<void> {
     const claimed = new Map<Id<string>, TableName>();
-    for (const write of writes) {
+    for await (const write of writes) {
       if (write.type === "document.change" || write.type === "document.retire") continue;
       const document = write.type === "document.create" || write.type === "document.copy";
       const table: TableName = document ? "document" : write.type;
@@ -772,7 +824,7 @@ export class SqliteStorage implements Storage {
     actions: ReadonlyMap<DocumentId, DocumentAction>,
   ): Promise<void> {
     const liveCounts = new Map<string, number>();
-    for (const [id, action] of actions) {
+    for await (const [id, action] of actions) {
       if (action.copy !== undefined && actions.has(action.copy.id)) {
         throw new Error(`Document copy ${id} source is changed in the copy batch`);
       }
@@ -905,7 +957,7 @@ export class SqliteStorage implements Storage {
     actions: ReadonlyMap<DocumentId, DocumentAction>,
     seq: Seq,
   ): Promise<void> {
-    for (const [id, action] of actions) {
+    for await (const [id, action] of actions) {
       let content = action.content;
       if (action.copy !== undefined) {
         try {
@@ -931,7 +983,10 @@ export class SqliteStorage implements Storage {
         }
       }
       let record: DocumentRecord;
-      if (action.create !== undefined) {
+      if (action.create === undefined) {
+        const row = (await executor.get<JsonRow>("SELECT record FROM documents WHERE id = ?", id))!;
+        record = parseJson<DocumentRecord>(row.record);
+      } else {
         record = {
           ...action.create,
           createdAt: seq,
@@ -953,9 +1008,6 @@ export class SqliteStorage implements Storage {
           action.retire ? seq : null,
           encodeJson(record),
         );
-      } else {
-        const row = (await executor.get<JsonRow>("SELECT record FROM documents WHERE id = ?", id))!;
-        record = parseJson<DocumentRecord>(row.record);
       }
 
       if (content !== undefined) {

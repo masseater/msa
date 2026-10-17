@@ -6,6 +6,9 @@ type JsonContainer = Record<string, JsonValue> | JsonValue[];
  * Assign `value` at `target[key]` leaf by leaf. Chord records a container assignment as one full set and only emits an
  * append when a string leaf is reassigned with a longer string, so writing the partial whole would store and publish the
  * complete message on every flush.
+ * @param {JsonContainer} target - The container.
+ * @param {string | number} key - The key.
+ * @param {JsonValue} value - The value.
  */
 export function assignJson(target: JsonContainer, key: string | number, value: JsonValue): void {
   const slots = target as Record<string | number, JsonValue>;

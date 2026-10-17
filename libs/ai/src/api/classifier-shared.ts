@@ -62,6 +62,14 @@ function requestHeaders(
  * Posts one JSON classifier request with bearer auth, `onPayload`/`onResponse` hooks, a fresh
  * timeout per attempt, and provider retries. Returns the parsed response body; throws on failure.
  * `noRetryStatuses` lists HTTP statuses that fail at once although they are normally retried.
+ *
+ * @param {string} label - provider label for errors
+ * @param {URL} url - endpoint
+ * @param {ClassifierModel<ClassifierApi>} model - classifier model
+ * @param {unknown} body - JSON request body
+ * @param {ClassifierOptions | undefined} options - request options
+ * @param {readonly number[]} [noRetryStatuses] - statuses that fail at once
+ * @returns {Promise<unknown>} the parsed response body
  */
 export async function postClassifierRequest(
   label: string,
@@ -80,7 +88,7 @@ export async function postClassifierRequest(
   const { response, json } = await retryProviderRequest(
     async () => {
       const timeoutSignal =
-        options.timeoutMs !== undefined ? AbortSignal.timeout(options.timeoutMs) : undefined;
+        options.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs);
       const signal =
         options.signal && timeoutSignal
           ? AbortSignal.any([options.signal, timeoutSignal])
@@ -121,6 +129,10 @@ function tokenCount(value: unknown): number {
 /**
  * Usage from a `{ input_tokens, output_tokens }` object, priced from the model catalog like chat
  * usage. A missing or malformed usage object leaves the result without usage instead of failing it.
+ *
+ * @param {unknown} value - usage object from the response
+ * @param {ClassifierModel<ClassifierApi>} model - classifier model with pricing
+ * @returns {Usage | undefined} the priced usage, or undefined
  */
 export function parseClassifierUsage(
   value: unknown,

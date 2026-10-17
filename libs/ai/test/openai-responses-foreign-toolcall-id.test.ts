@@ -70,6 +70,6 @@ describe("OpenAI Responses foreign tool call ID normalization", () => {
     const expectedItemId = `fc_${shortHash(FOREIGN_RAW_TOOL_CALL_ID.split("|")[1]!)}`;
     expect(functionCall.id).toBe(expectedItemId);
     expect(functionCall.id?.length ?? 0).toBeLessThanOrEqual(64);
-    expect(functionCall.id).toMatch(/^fc_[A-Za-z0-9]+$/);
+    expect(functionCall.id).toMatch(/^fc_[A-Za-z0-9]+$/u);
   });
 });

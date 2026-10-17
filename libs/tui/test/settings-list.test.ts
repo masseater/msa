@@ -1,7 +1,11 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { SettingsList, type SettingsListTheme } from "../src/components/settings-list.ts";
+import {
+  type SettingItem,
+  SettingsList,
+  type SettingsListTheme,
+} from "../src/components/settings-list.ts";
 
 const testTheme: SettingsListTheme = {
   label: (text) => text,
@@ -11,20 +15,22 @@ const testTheme: SettingsListTheme = {
   hint: (text) => text,
 };
 
-const items = [
-  {
-    id: "tui-mode",
-    label: "TUI mode",
-    currentValue: "regular",
-    values: ["regular", "fullscreen"],
-  },
-];
+function createItems(): SettingItem[] {
+  return [
+    {
+      id: "tui-mode",
+      label: "TUI mode",
+      currentValue: "regular",
+      values: ["regular", "fullscreen"],
+    },
+  ];
+}
 
 describe("SettingsList", () => {
   it("includes spaces in an active search instead of changing the selected setting", () => {
     const changes: Array<{ id: string; value: string }> = [];
     const list = new SettingsList(
-      items.map((item) => ({ ...item })),
+      createItems(),
       10,
       testTheme,
       (id, value) => changes.push({ id, value }),
@@ -35,7 +41,7 @@ describe("SettingsList", () => {
     for (const character of "TUI mode") list.handleInput(character);
 
     assert.deepStrictEqual(changes, []);
-    assert.match(list.render(80)[0] ?? "", /TUI mode/);
+    assert.match(list.render(80)[0] ?? "", /TUI mode/u);
 
     list.handleInput("\r");
     assert.deepStrictEqual(changes, [{ id: "tui-mode", value: "fullscreen" }]);
@@ -44,7 +50,7 @@ describe("SettingsList", () => {
   it("keeps Space as a change shortcut before a search query is entered", () => {
     const changes: Array<{ id: string; value: string }> = [];
     const list = new SettingsList(
-      items.map((item) => ({ ...item })),
+      createItems(),
       10,
       testTheme,
       (id, value) => changes.push({ id, value }),

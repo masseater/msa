@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { Worker } from "node:worker_threads";
 
+import { promiseTry } from "../promise-try.ts";
 import type { ImageLimits, ImageProcessor, PreparedImage } from "../tools/image-processor.ts";
 import { createPhotonImages } from "./index.ts";
 import type { PrepareReply, PrepareRequest } from "./node-worker.ts";
@@ -24,11 +25,16 @@ export type NodePhotonImagesOptions = {
  * by default in a worker thread that keeps the process alive only while it prepares an image. A worker that cannot
  * start falls back to the calling thread. A single-file binary cannot resolve the package: read its own copy of
  * `photon_rs_bg.wasm` and call `createPhotonImages()`.
+ * @param {NodePhotonImagesOptions} options - Whether and how to use a worker.
+ * @returns {Promise<ImageProcessor>} The processor.
  */
-export async function createNodePhotonImages(
+export function createNodePhotonImages(
   options: NodePhotonImagesOptions = {},
 ): Promise<ImageProcessor> {
-  if (options.worker === false) return inProcess();
+  return promiseTry(() => (options.worker === false ? inProcess() : threaded(options)));
+}
+
+function threaded(options: NodePhotonImagesOptions): ImageProcessor {
   const idleMs = options.idleMs ?? 30_000;
   let thread: PhotonThread | undefined;
   let fallback: Promise<ImageProcessor> | undefined;

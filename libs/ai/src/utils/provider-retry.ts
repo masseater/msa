@@ -21,7 +21,12 @@ function isProviderError(error: unknown): error is ProviderError {
   );
 }
 
-/** Mirrors the pinned OpenAI/Anthropic SDK retry policy; review when either SDK is upgraded. */
+/**
+ * Mirrors the pinned OpenAI/Anthropic SDK retry policy; review when either SDK is upgraded.
+ *
+ * @param {ProviderError} error - thrown value
+ * @returns {boolean} whether the SDKs would retry the error
+ */
 function isRetryableProviderError(error: ProviderError): boolean {
   const shouldRetry = error.headers?.get("x-should-retry");
   if (shouldRetry === "true") return true;
@@ -109,6 +114,10 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
  * wrap the request with this helper. Provider-requested delays above
  * `maxRetryDelayMs` fail immediately (60 seconds by default); set it to zero to
  * disable the limit.
+ *
+ * @param {() => Promise<T>} request - request to run
+ * @param {ProviderRetryOptions} [options] - retry options
+ * @returns {Promise<T>} the request result
  */
 export async function retryProviderRequest<T>(
   request: () => Promise<T>,

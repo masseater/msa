@@ -13,7 +13,11 @@ type ExpectResult = {
   };
 };
 
-/** Adapts a Vitest/Jest-compatible `expect` function without importing either runner. */
+/**
+ * Adapts a Vitest/Jest-compatible `expect` function without importing either runner.
+ * @param {ExpectLike} expect - The runner's `expect`.
+ * @returns {StorageConformanceAssertions} The assertions.
+ */
 export function createExpectAssertions(expect: ExpectLike): StorageConformanceAssertions {
   const result = (actual: unknown, message?: string): ExpectResult =>
     expect(actual, message) as ExpectResult;

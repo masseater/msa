@@ -47,7 +47,7 @@ vi.mock("@anthropic-ai/sdk", () => {
         create: (params: Record<string, unknown>) => {
           mockState.createParams = params;
           return {
-            asResponse: async () => createSseResponse(),
+            asResponse: () => Promise.resolve(createSseResponse()),
           };
         },
       },
@@ -96,13 +96,15 @@ describe("Anthropic auth token env", () => {
     const provider = anthropicProvider();
     const auth = await provider.auth.apiKey?.resolve({
       ctx: {
-        env: async (name) =>
-          ({
-            ANTHROPIC_AUTH_TOKEN: "auth-token",
-            ANTHROPIC_OAUTH_TOKEN: "oauth-token",
-            ANTHROPIC_API_KEY: "api-key",
-          })[name],
-        fileExists: async () => false,
+        env: (name) =>
+          Promise.resolve(
+            {
+              ANTHROPIC_AUTH_TOKEN: "auth-token",
+              ANTHROPIC_OAUTH_TOKEN: "oauth-token",
+              ANTHROPIC_API_KEY: "api-key",
+            }[name],
+          ),
+        fileExists: () => Promise.resolve(false),
       },
       signal: neverAbortedSignal,
     });
@@ -117,12 +119,14 @@ describe("Anthropic auth token env", () => {
     const provider = anthropicProvider();
     const auth = await provider.auth.apiKey?.resolve({
       ctx: {
-        env: async (name) =>
-          ({
-            ANTHROPIC_OAUTH_TOKEN: "oauth-token",
-            ANTHROPIC_API_KEY: "api-key",
-          })[name],
-        fileExists: async () => false,
+        env: (name) =>
+          Promise.resolve(
+            {
+              ANTHROPIC_OAUTH_TOKEN: "oauth-token",
+              ANTHROPIC_API_KEY: "api-key",
+            }[name],
+          ),
+        fileExists: () => Promise.resolve(false),
       },
       signal: neverAbortedSignal,
     });
@@ -152,8 +156,8 @@ describe("Anthropic auth token env", () => {
   it("threads authContext ANTHROPIC_AUTH_TOKEN through request headers", async () => {
     const models = createModels({
       authContext: {
-        env: async (name) => (name === "ANTHROPIC_AUTH_TOKEN" ? "ctx-token" : undefined),
-        fileExists: async () => false,
+        env: (name) => Promise.resolve(name === "ANTHROPIC_AUTH_TOKEN" ? "ctx-token" : undefined),
+        fileExists: () => Promise.resolve(false),
       },
     });
     models.setProvider(anthropicProvider());
@@ -173,8 +177,9 @@ describe("Anthropic auth token env", () => {
   it("preserves OAuth request shaping for ANTHROPIC_OAUTH_TOKEN", async () => {
     const models = createModels({
       authContext: {
-        env: async (name) => (name === "ANTHROPIC_OAUTH_TOKEN" ? "sk-ant-oat-test" : undefined),
-        fileExists: async () => false,
+        env: (name) =>
+          Promise.resolve(name === "ANTHROPIC_OAUTH_TOKEN" ? "sk-ant-oat-test" : undefined),
+        fileExists: () => Promise.resolve(false),
       },
     });
     models.setProvider(anthropicProvider());
@@ -189,8 +194,8 @@ describe("Anthropic auth token env", () => {
   it("lets explicit request headers override ANTHROPIC_AUTH_TOKEN", async () => {
     const models = createModels({
       authContext: {
-        env: async (name) => (name === "ANTHROPIC_AUTH_TOKEN" ? "ctx-token" : undefined),
-        fileExists: async () => false,
+        env: (name) => Promise.resolve(name === "ANTHROPIC_AUTH_TOKEN" ? "ctx-token" : undefined),
+        fileExists: () => Promise.resolve(false),
       },
     });
     models.setProvider(anthropicProvider());

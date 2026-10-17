@@ -34,7 +34,7 @@ function makeContext(): Context {
 }
 
 function countPongs(text: string): number {
-  return text.match(/\bpong\b/gi)?.length ?? 0;
+  return text.match(/\bpong\b/giu)?.length ?? 0;
 }
 
 async function runWithoutReasoning<TApi extends Api>(

@@ -67,7 +67,13 @@ export class Submissions {
     });
   }
 
-  /** Admit a submission in one commit; see `admitSubmission()`. */
+  /**
+   * Admit a submission in one commit; see `admitSubmission()`.
+   * @param {ConversationId} conversationId - The conversation.
+   * @param {SubmissionDraft} draft - The submission to admit.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<Submission>} The admitted submission's handle.
+   */
   async submit(
     conversationId: ConversationId,
     draft: SubmissionDraft,
@@ -81,7 +87,12 @@ export class Submissions {
     return new SubmissionHandle(id, this);
   }
 
-  /** Handle for an existing submission, or `undefined`. */
+  /**
+   * Handle for an existing submission, or `undefined`.
+   * @param {SubmissionId} id - The submission.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<Submission | undefined>} Its handle.
+   */
   async get(id: SubmissionId, context: Context): Promise<Submission | undefined> {
     const record = await this.#session.readOnLine(() => this.#storage.submission(id, context));
     return record === undefined ? undefined : new SubmissionHandle(record.id, this);
@@ -107,7 +118,13 @@ export class Submissions {
     return found.promise;
   }
 
-  /** Withdraw a queued submission and remove its inbox item; placed inputs and settled submissions are reported. */
+  /**
+   * Withdraw a queued submission and remove its inbox item; placed inputs and settled submissions are reported.
+   * @param {SubmissionId} id - The submission.
+   * @param {Context} context - The caller's context.
+   * @param {ConversationId} conversationId - Its conversation, when known.
+   * @returns {Promise<AbortResult | "not_found">} How the submission ended, or `not_found`.
+   */
   abort(
     id: SubmissionId,
     context: Context,
@@ -166,7 +183,10 @@ function isSettled(record: SubmissionRecord): record is SettledSubmissionRecord 
   return record.status === "done" || record.status === "unanswered";
 }
 
-/** Reject an input entry an untyped caller got wrong: its kind must be a non-empty string outside the `msa.` prefix. */
+/**
+ * Reject an input entry an untyped caller got wrong: its kind must be a non-empty string outside the `msa.` prefix.
+ * @param {InputEntry} entry - The input entry.
+ */
 function checkInputEntry(entry: InputEntry): void {
   const { kind } = entry;
   if (typeof kind !== "string" || kind.length === 0 || kind.startsWith("msa.")) {
@@ -185,6 +205,12 @@ function checkInputEntry(entry: InputEntry): void {
  * queues it behind them and runs a final boundary. Otherwise idle input places its entry (`msa.user`, or the input's
  * own) and starts a run, and an idle write appends its entry and settles `done`, or `stale` when its head reaches
  * before the active range.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {SubmissionDraft} draft - The submission to admit.
+ * @param {number} now - The commit's time.
+ * @param {QueueModes} queueModes - How queued items are placed.
+ * @returns {Promise<SubmissionId>} The admitted or existing submission.
  */
 export async function admitSubmission(
   tx: Tx,

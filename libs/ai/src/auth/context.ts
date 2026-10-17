@@ -19,12 +19,16 @@ function getProcessEnv(): Record<string, string | undefined> | undefined {
 /**
  * Default auth context: env vars from `process.env` (undefined in browsers),
  * file existence via node:fs (always false in browsers).
+ *
+ * @returns {AuthContext} the auth context
  */
 export function defaultProviderAuthContext(): AuthContext {
   return {
-    async env(name: string): Promise<string | undefined> {
+    env(name: string): Promise<string | undefined> {
       const value = getProcessEnv()?.[name];
-      return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+      return Promise.resolve(
+        typeof value === "string" && value.trim().length > 0 ? value : undefined,
+      );
     },
 
     async fileExists(path: string): Promise<boolean> {

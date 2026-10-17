@@ -30,7 +30,9 @@ describe("getNativeModuleCandidates", () => {
     assert.equal(candidates[0], join(packageRoot, nativePath));
     assert.ok(candidates.includes(join(dirname(bundledModule), "..", nativePath)));
   });
+});
 
+describe("getNativeModuleCandidates", () => {
   it("keeps standalone binary fallbacks when the TUI package is unavailable", () => {
     const bundledModule = resolve("virtual", "msa", "bundle", "chunks", "chunk.js");
     const execPath = resolve("virtual", "msa", "msa.exe");

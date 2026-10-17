@@ -18,6 +18,11 @@ export interface WordNavigationOptions {
  * Skips trailing whitespace, then stops at the next word/punctuation boundary.
  *
  * Pure function - does not mutate any state.
+ *
+ * @param {string} text - The text to move in.
+ * @param {number} cursor - The cursor index.
+ * @param {WordNavigationOptions} options - Word boundary options.
+ * @returns {number} The new cursor index.
  */
 export function findWordBackward(
   text: string,
@@ -53,7 +58,7 @@ export function findWordBackward(
   } else if (last.isWordLike) {
     // Skip inside one word-like segment, preserving ASCII punctuation boundaries.
     const segment = last.segment;
-    const matches = [...segment.matchAll(new RegExp(PUNCTUATION_REGEX, "g"))];
+    const matches = [...segment.matchAll(new RegExp(PUNCTUATION_REGEX, "gu"))];
     if (matches.length <= 0) {
       newCursor -= segment.length;
     } else {
@@ -80,6 +85,11 @@ export function findWordBackward(
  * Skips leading whitespace, then stops at the next word/punctuation boundary.
  *
  * Pure function - does not mutate any state.
+ *
+ * @param {string} text - The text to move in.
+ * @param {number} cursor - The cursor index.
+ * @param {WordNavigationOptions} options - Word boundary options.
+ * @returns {number} The new cursor index.
  */
 export function findWordForward(
   text: string,

@@ -89,6 +89,7 @@
     "@msa/telemetry": "workspace:*",
     "@smithy/node-http-handler": "catalog:",
     "@smithy/types": "4.19.0",
+    "effect": "catalog:stack",
     "http-proxy-agent": "catalog:",
     "https-proxy-agent": "catalog:",
     "openai": "catalog:",
@@ -96,6 +97,7 @@
     "typebox": "catalog:"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:stack",
     "@types/node": "catalog:",
     "canvas": "catalog:",
     "vitest": "catalog:"

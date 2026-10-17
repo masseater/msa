@@ -144,9 +144,11 @@
     "@msa/codemode": "workspace:*",
     "@silvia-odwyer/photon": "catalog:",
     "diff": "catalog:",
+    "effect": "catalog:stack",
     "typebox": "catalog:"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:stack",
     "shx": "catalog:",
     "vitest": "catalog:"
   },

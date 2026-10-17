@@ -178,8 +178,8 @@ describe("faux provider", () => {
     const registration = registerFauxProvider();
     registrations.push(registration);
     registration.setResponses([
-      async (context, _options, state) =>
-        fauxAssistantMessage(`${context.messages.length}:${state.callCount}`),
+      (context, _options, state) =>
+        Promise.resolve(fauxAssistantMessage(`${context.messages.length}:${state.callCount}`)),
     ]);
 
     const response = await complete(registration.getModel(), {

@@ -49,7 +49,7 @@ const classifierModel: ClassifierModel<"typesafe-system-one"> = {
 function refreshContext(): RefreshModelsContext {
   return {
     credential: { type: "api_key", key: "sk-or-test" },
-    publish: async () => true,
+    publish: () => Promise.resolve(true),
     allowNetwork: true,
     signal: new AbortController().signal,
   };

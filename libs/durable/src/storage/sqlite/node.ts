@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import type { StatementSync } from "node:sqlite";
 import { DatabaseSync } from "node:sqlite";
 
+import { promiseTry } from "../../promise-try.ts";
 import type { SqliteDatabase, SqliteExecutor, SqliteValue } from "./database.ts";
 import { SqliteStorage } from "./storage.ts";
 
@@ -127,9 +128,11 @@ class NodeSqliteTransaction extends NodeSqliteExecutor {
     this.scope = scope;
   }
 
-  protected async runOperation<T>(operation: () => T): Promise<T> {
-    if (!this.scope.active) throw new Error("SQLite transaction handle is no longer active");
-    return operation();
+  protected runOperation<T>(operation: () => T): Promise<T> {
+    return promiseTry(() => {
+      if (!this.scope.active) throw new Error("SQLite transaction handle is no longer active");
+      return operation();
+    });
   }
 }
 
@@ -187,7 +190,12 @@ export class NodeSqliteDatabase extends NodeSqliteExecutor implements SqliteData
   }
 }
 
-/** Open and configure a Node-backed SQLite database facade. */
+/**
+ * Open and configure a Node-backed SQLite database facade.
+ * @param {string} path - The database file.
+ * @param {NodeSqliteStorageOptions} options - The storage options.
+ * @returns {Promise<NodeSqliteDatabase>} The database.
+ */
 export async function openNodeSqliteDatabase(
   path: string,
   options: NodeSqliteStorageOptions = {},
@@ -212,7 +220,12 @@ export async function openNodeSqliteDatabase(
   }
 }
 
-/** Open or create file-backed durable storage using Node's built-in SQLite. */
+/**
+ * Open or create file-backed durable storage using Node's built-in SQLite.
+ * @param {string} path - The database file.
+ * @param {NodeSqliteStorageOptions} options - The storage options.
+ * @returns {Promise<SqliteStorage>} The storage.
+ */
 export async function openNodeSqliteStorage(
   path: string,
   options: NodeSqliteStorageOptions = {},

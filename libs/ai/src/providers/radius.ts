@@ -18,14 +18,19 @@ export interface RadiusProviderOptions {
   gateway?: string;
 }
 
-/** Radius gateway provider with a persisted, dynamically refreshed catalog. */
+/**
+ * Radius gateway provider with a persisted, dynamically refreshed catalog.
+ *
+ * @param {RadiusProviderOptions} [options] - gateway options
+ * @returns {Provider<"msa-messages">} the provider
+ */
 export function radiusProvider(options: RadiusProviderOptions = {}): Provider<"msa-messages"> {
   const id = options.id ?? "radius";
   const name = options.name ?? "Radius";
   const gateway = normalizeRadiusGatewayUrl(options.gateway ?? DEFAULT_RADIUS_GATEWAY);
   const baselineModels: Model<"msa-messages">[] =
     gateway === normalizeRadiusGatewayUrl(DEFAULT_RADIUS_GATEWAY)
-      ? Object.values(RADIUS_MODELS).map((model) => ({ ...model, provider: id }))
+      ? Object.values(RADIUS_MODELS).map((model) => Object.assign({}, model, { provider: id }))
       : [];
   // Gateway catalog for this account. Radius org owners can disable models, so once known it replaces
   // the shipped baseline instead of overlaying it. The baseline only covers the time before any catalog exists.

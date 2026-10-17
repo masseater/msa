@@ -36,7 +36,11 @@
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest --run"
   },
+  "dependencies": {
+    "effect": "catalog:stack"
+  },
   "devDependencies": {
+    "@effect/vitest": "catalog:stack",
     "@types/node": "catalog:",
     "vitest": "catalog:"
   },

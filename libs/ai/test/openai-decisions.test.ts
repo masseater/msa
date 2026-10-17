@@ -80,9 +80,15 @@ const image: ImageContent = { type: "image", data: "aW1hZ2U=", mimeType: "image/
 
 describe("OpenAI Decisions", () => {
   it("maps questions to Decisions types and answers back by name", async () => {
-    const fetch = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+    const fetch = vi.fn((_input: string | URL | Request, _init?: RequestInit) =>
       // Answers out of question order: they are matched by name.
-      Response.json({ model: "gpt-6-luna", answers: [...wireAnswers].reverse(), usage: wireUsage }),
+      Promise.resolve(
+        Response.json({
+          model: "gpt-6-luna",
+          answers: [...wireAnswers].reverse(),
+          usage: wireUsage,
+        }),
+      ),
     );
 
     const result = await classify(model, context, { apiKey: "secret", fetch, temperature: 1.5 });
@@ -133,16 +139,21 @@ describe("OpenAI Decisions", () => {
   it("prices long-context requests at the long-context input rate", async () => {
     const result = await classify(model, context, {
       apiKey: "secret",
-      fetch: async () =>
-        Response.json({ answers: wireAnswers, usage: { input_tokens: 300000, output_tokens: 0 } }),
+      fetch: () =>
+        Promise.resolve(
+          Response.json({
+            answers: wireAnswers,
+            usage: { input_tokens: 300000, output_tokens: 0 },
+          }),
+        ),
     });
 
     expect(result.usage?.cost.total).toBeCloseTo(0.06, 12);
   });
 
   it("sends images after the state in one user message", async () => {
-    const fetch = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
-      Response.json({ answers: wireAnswers }),
+    const fetch = vi.fn((_input: string | URL | Request, _init?: RequestInit) =>
+      Promise.resolve(Response.json({ answers: wireAnswers })),
     );
 
     const result = await classify(
@@ -168,7 +179,7 @@ describe("OpenAI Decisions", () => {
   });
 
   it("rejects more than 128 images before sending", async () => {
-    const fetch = vi.fn(async () => Response.json({ answers: wireAnswers }));
+    const fetch = vi.fn(() => Promise.resolve(Response.json({ answers: wireAnswers })));
 
     const result = await classify(
       model,
@@ -187,11 +198,13 @@ describe("OpenAI Decisions", () => {
   it("fails the result when a question is refused and keeps the billed usage", async () => {
     const result = await classify(model, context, {
       apiKey: "secret",
-      fetch: async () =>
-        Response.json({
-          answers: [wireAnswers[0], wireAnswers[1], { type: "refusal", name: "approved" }],
-          usage: wireUsage,
-        }),
+      fetch: () =>
+        Promise.resolve(
+          Response.json({
+            answers: [wireAnswers[0], wireAnswers[1], { type: "refusal", name: "approved" }],
+            usage: wireUsage,
+          }),
+        ),
     });
 
     expect(result.stopReason).toBe("error");
@@ -203,14 +216,16 @@ describe("OpenAI Decisions", () => {
   it("returns missing and mistyped answers as classifier errors", async () => {
     const missing = await classify(model, context, {
       apiKey: "secret",
-      fetch: async () => Response.json({ answers: wireAnswers.slice(0, 2) }),
+      fetch: () => Promise.resolve(Response.json({ answers: wireAnswers.slice(0, 2) })),
     });
     const mistyped = await classify(model, context, {
       apiKey: "secret",
-      fetch: async () =>
-        Response.json({
-          answers: [wireAnswers[0], wireAnswers[1], { type: "score", name: "approved" }],
-        }),
+      fetch: () =>
+        Promise.resolve(
+          Response.json({
+            answers: [wireAnswers[0], wireAnswers[1], { type: "score", name: "approved" }],
+          }),
+        ),
     });
 
     expect(missing.stopReason).toBe("error");
@@ -228,8 +243,10 @@ describe("OpenAI Decisions", () => {
     };
     const result = await classify(model, prototypeContext, {
       apiKey: "secret",
-      fetch: async () =>
-        Response.json({ answers: [{ type: "predicate", name: "__proto__", probability: 0.75 }] }),
+      fetch: () =>
+        Promise.resolve(
+          Response.json({ answers: [{ type: "predicate", name: "__proto__", probability: 0.75 }] }),
+        ),
     });
 
     expect(result.stopReason).toBe("stop");
@@ -238,12 +255,13 @@ describe("OpenAI Decisions", () => {
   });
 
   it("does not retry gateway timeouts and explains them instead of returning the HTML page", async () => {
-    const fetch = vi.fn(
-      async () =>
+    const fetch = vi.fn(() =>
+      Promise.resolve(
         new Response("<!DOCTYPE html><html>Gateway time-out</html>", {
           status: 504,
           headers: { "retry-after-ms": "0" },
         }),
+      ),
     );
     // Default retries: the same input would time out again.
     const result = await classify(model, context, { apiKey: "secret", fetch });
@@ -260,10 +278,12 @@ describe("OpenAI Decisions", () => {
     let attempt = 0;
     const result = await classify(model, context, {
       apiKey: "secret",
-      fetch: async () =>
-        ++attempt === 1
-          ? new Response("busy", { status: 503, headers: { "retry-after-ms": "0" } })
-          : Response.json({ answers: wireAnswers }),
+      fetch: () =>
+        Promise.resolve(
+          ++attempt === 1
+            ? new Response("busy", { status: 503, headers: { "retry-after-ms": "0" } })
+            : Response.json({ answers: wireAnswers }),
+        ),
     });
 
     expect(attempt).toBe(2);
@@ -274,15 +294,17 @@ describe("OpenAI Decisions", () => {
     const result = await classify(model, context, {
       apiKey: "secret",
       maxRetries: 0,
-      fetch: async () =>
-        Response.json(
-          {
-            error: {
-              message: "Decision input exceeds the token limit.",
-              type: "invalid_request_error",
+      fetch: () =>
+        Promise.resolve(
+          Response.json(
+            {
+              error: {
+                message: "Decision input exceeds the token limit.",
+                type: "invalid_request_error",
+              },
             },
-          },
-          { status: 400 },
+            { status: 400 },
+          ),
         ),
     });
 
@@ -292,7 +314,7 @@ describe("OpenAI Decisions", () => {
   });
 
   it("rejects models for other classifier APIs and missing API keys", async () => {
-    const fetch = vi.fn(async () => Response.json({ answers: wireAnswers }));
+    const fetch = vi.fn(() => Promise.resolve(Response.json({ answers: wireAnswers })));
     const otherApi = await classify({ ...model, api: "typesafe-system-one" }, context, {
       apiKey: "secret",
       fetch,

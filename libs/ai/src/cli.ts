@@ -15,7 +15,9 @@ const PROVIDERS = builtinProviders().filter(
 );
 
 function prompt(rl: ReturnType<typeof createInterface>, question: string): Promise<string> {
-  return new Promise((resolve) => rl.question(question, resolve));
+  return new Promise((resolve) => {
+    rl.question(question, resolve);
+  });
 }
 
 function loadAuth(): Record<string, OAuthCredential> {

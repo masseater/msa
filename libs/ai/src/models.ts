@@ -129,12 +129,22 @@ export type ModelsClassifierOptions = ClassifierOptions & ModelsRequestTransform
 
 const KNOWN_MODEL_TYPES: Record<ModelType, true> = { chat: true, image: true, classifier: true };
 
-/** Models from stores and remote sources may have types that only newer versions know. */
+/**
+ * Models from stores and remote sources may have types that only newer versions know.
+ *
+ * @param {AnyModel} model - stored model
+ * @returns {boolean} whether this version knows the model type
+ */
 function hasKnownModelType(model: AnyModel): boolean {
   return Object.hasOwn(KNOWN_MODEL_TYPES, getModelType(model));
 }
 
-/** Drops stored models whose type this version does not know. */
+/**
+ * Drops stored models whose type this version does not know.
+ *
+ * @param {ModelsStoreEntry} entry - stored entry
+ * @returns {ModelsStoreEntry} the entry with known model types only
+ */
 function withKnownModelTypes(entry: ModelsStoreEntry): ModelsStoreEntry {
   return { ...entry, models: entry.models.filter(hasKnownModelType) };
 }
@@ -889,10 +899,10 @@ class ModelsImpl implements MutableModels {
     });
     const mutation = this.credentials.modify(
       providerId,
-      async () => {
+      () => {
         mutationStarted = true;
         markMutationStarted?.();
-        return credential;
+        return Promise.resolve(credential);
       },
       { signal },
     );
@@ -1007,12 +1017,16 @@ class ModelsImpl implements MutableModels {
     });
   }
 
-  async complete<TApi extends Api>(
+  complete<TApi extends Api>(
     model: Model<TApi>,
     context: Context,
     options?: ModelsApiStreamOptions<TApi>,
   ): Promise<AssistantMessage> {
-    return this.stream(model, context, options).result();
+    try {
+      return this.stream(model, context, options).result();
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   streamSimple(
@@ -1028,12 +1042,16 @@ class ModelsImpl implements MutableModels {
     });
   }
 
-  async completeSimple(
+  completeSimple(
     model: Model<Api>,
     context: Context,
     options?: ModelsSimpleStreamOptions,
   ): Promise<AssistantMessage> {
-    return this.streamSimple(model, context, options).result();
+    try {
+      return this.streamSimple(model, context, options).result();
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   streamDeferred(
@@ -1054,7 +1072,7 @@ class ModelsImpl implements MutableModels {
     });
   }
 
-  async fetchDeferred(
+  fetchDeferred(
     model: Model<Api>,
     handle: DeferredHandle,
     options?: ModelsDeferredFetchOptions,
@@ -1175,6 +1193,9 @@ export interface CreateProviderOptions<TApi extends Api = Api> {
  * no entry produces a stream error. One-shot operation maps dispatch on
  * `model.api` the same way. At least one concrete implementation across
  * `api`/`images`/`classifiers` is required; empty maps are rejected.
+ *
+ * @param {CreateProviderOptions<TApi>} input - provider parts
+ * @returns {Provider<TApi>} the provider
  */
 export function createProvider<TApi extends Api = Api>(
   input: CreateProviderOptions<TApi>,
@@ -1226,7 +1247,7 @@ export function createProvider<TApi extends Api = Api>(
   ): AssistantMessageEventStream => {
     const providerStreams = apiFor(model);
     if (!providerStreams) {
-      return lazyStream(model, async () => {
+      return lazyStream(model, () => {
         throw new ModelsError(
           "stream",
           `Provider ${input.id} has no API implementation for "${model.api}"`,
@@ -1245,8 +1266,8 @@ export function createProvider<TApi extends Api = Api>(
     getModels: () =>
       currentModels().filter((model): model is Model<TApi> => isModelType(model, "chat")),
     getAllModels: currentModels,
-    ...(input.filterModels !== undefined ? { filterModels: input.filterModels } : {}),
-    ...(input.filterAllModels !== undefined ? { filterAllModels: input.filterAllModels } : {}),
+    ...(input.filterModels === undefined ? {} : { filterModels: input.filterModels }),
+    ...(input.filterAllModels === undefined ? {} : { filterAllModels: input.filterAllModels }),
     stream: (model, context, options) =>
       dispatch(model, (providerStreams) => providerStreams.stream(model, context, options)),
     streamSimple: (model, context, options) =>
@@ -1283,7 +1304,7 @@ export function createProvider<TApi extends Api = Api>(
   }
   if (streams.some((entry) => entry.fetchDeferred !== undefined)) {
     provider.fetchDeferred = (model, handle, options) =>
-      lazyStream(model, async () => {
+      lazyStream(model, () => {
         const implementation = apiFor(model);
         if (!implementation?.fetchDeferred) {
           throw new ModelsError(
@@ -1307,33 +1328,45 @@ export function createProvider<TApi extends Api = Api>(
     };
   }
   if (images && imageImplementations.length > 0) {
-    provider.generateImages = async (model, context, options) => {
+    provider.generateImages = (model, context, options) => {
       const implementation = images[model.api];
       if (!implementation) {
-        return imageErrorResult(
-          model,
-          new ModelsError(
-            "provider",
-            `Provider ${input.id} has no image generation implementation for "${model.api}"`,
+        return Promise.resolve(
+          imageErrorResult(
+            model,
+            new ModelsError(
+              "provider",
+              `Provider ${input.id} has no image generation implementation for "${model.api}"`,
+            ),
           ),
         );
       }
-      return implementation.generateImages(model, context, options);
+      try {
+        return implementation.generateImages(model, context, options);
+      } catch (error) {
+        return Promise.reject(error);
+      }
     };
   }
   if (classifiers && classifierImplementations.length > 0) {
-    provider.classify = async (model, context, options) => {
+    provider.classify = (model, context, options) => {
       const implementation = classifiers[model.api];
       if (!implementation) {
-        return classifierErrorResult(
-          model,
-          new ModelsError(
-            "provider",
-            `Provider ${input.id} has no classifier implementation for "${model.api}"`,
+        return Promise.resolve(
+          classifierErrorResult(
+            model,
+            new ModelsError(
+              "provider",
+              `Provider ${input.id} has no classifier implementation for "${model.api}"`,
+            ),
           ),
         );
       }
-      return implementation.classify(model, context, options);
+      try {
+        return implementation.classify(model, context, options);
+      } catch (error) {
+        return Promise.reject(error);
+      }
     };
   }
 
@@ -1351,6 +1384,10 @@ export function createProvider<TApi extends Api = Api>(
  * ```
  *
  * Non-chat models never match, even when their api id equals `api`.
+ *
+ * @param {AnyModel} model - model to check
+ * @param {TApi} api - expected api id
+ * @returns {boolean} whether the model is a chat model of the api
  */
 export function hasApi<TApi extends Api>(model: AnyModel, api: TApi): model is Model<TApi> {
   return isModelType(model, "chat") && model.api === api;
@@ -1424,6 +1461,10 @@ export function clampThinkingLevel<TApi extends Api>(
 /**
  * Check if two models are equal by comparing their type, id, and provider.
  * Returns false if either model is null or undefined.
+ *
+ * @param {AnyModel | null | undefined} a - first model
+ * @param {AnyModel | null | undefined} b - second model
+ * @returns {boolean} whether both models are the same
  */
 export function modelsAreEqual(
   a: AnyModel | null | undefined,

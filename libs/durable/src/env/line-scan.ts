@@ -4,7 +4,11 @@ import type { LineScan } from "./index.ts";
 const NEWLINE = 0x0a;
 const encoder = new TextEncoder();
 
-/** UTF-8 byte length of decoded text. */
+/**
+ * UTF-8 byte length of decoded text.
+ * @param {string} text - The text.
+ * @returns {number} The byte length.
+ */
 function decodedBytes(text: string): number {
   return text === "" ? 0 : encoder.encode(text).length;
 }
@@ -135,7 +139,13 @@ export class LineScanner {
     this.#selection = undefined;
   }
 
-  /** Feed `chunk[from, to)`, which starts at file offset `base`, to the decoders of the ranges still open. */
+  /**
+   * Feed `chunk[from, to)`, which starts at file offset `base`, to the decoders of the ranges still open.
+   * @param {Uint8Array} chunk - The bytes read.
+   * @param {number} base - The chunk's file offset.
+   * @param {number} from - The first byte to feed.
+   * @param {number} to - The byte after the last.
+   */
   #feed(chunk: Uint8Array, base: number, from: number, to: number): void {
     // Decoding the whole file drops a leading byte-order mark.
     if (this.#bom && base + from < 3) from = Math.min(to, 3 - base);

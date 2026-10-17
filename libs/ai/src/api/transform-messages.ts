@@ -66,6 +66,11 @@ function downgradeUnsupportedImages<TApi extends Api>(
  * Normalize tool call ID for cross-provider compatibility.
  * OpenAI Responses API generates IDs that are 450+ chars with special characters like `|`.
  * Anthropic APIs require IDs matching ^[a-zA-Z0-9_-]+$ (max 64 chars).
+ *
+ * @param {Message[]} messages - transcript messages
+ * @param {Model<TApi>} model - model the request targets
+ * @param {(id: string, model: Model<TApi>, source: AssistantMessage) => string} [normalizeToolCallId] - provider-specific id normalization
+ * @returns {Message[]} the transformed messages
  */
 export function transformMessages<TApi extends Api>(
   messages: Message[],
@@ -77,7 +82,7 @@ export function transformMessages<TApi extends Api>(
   // Normalize null/undefined content from untyped callers (custom tools, hand-built
   // histories, old session files) so downstream code can rely on the type contract.
   const normalizedMessages = messages.map((msg) =>
-    msg.content == null ? { ...msg, content: [] } : msg,
+    msg.content === undefined || msg.content === null ? { ...msg, content: [] } : msg,
   );
   const imageAwareMessages = downgradeUnsupportedImages(normalizedMessages, model);
 
@@ -92,7 +97,7 @@ export function transformMessages<TApi extends Api>(
     if (msg.role === "toolResult") {
       const normalizedId = toolCallIdMap.get(msg.toolCallId);
       if (normalizedId && normalizedId !== msg.toolCallId) {
-        return { ...msg, toolCallId: normalizedId };
+        return Object.assign({}, msg, { toolCallId: normalizedId });
       }
       return msg;
     }
@@ -155,10 +160,7 @@ export function transformMessages<TApi extends Api>(
         return block;
       });
 
-      return {
-        ...assistantMsg,
-        content: transformedContent,
-      };
+      return Object.assign({}, assistantMsg, { content: transformedContent });
     }
     return msg;
   });

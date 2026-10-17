@@ -34,33 +34,57 @@ import type { AssistantMessage } from "../types.ts";
  * - Ollama: Some deployments truncate silently, others return errors like "prompt too long; exceeded max context length by X tokens"
  */
 const OVERFLOW_PATTERNS = [
-  /prompt (?:is )?too long/i, // Anthropic and z.ai token overflow
-  /prompt exceeds max length/i, // z.ai CN endpoint token overflow
-  /request_too_large/i, // Anthropic request byte-size overflow (HTTP 413)
-  /input is too long for requested model/i, // Amazon Bedrock
-  /exceeds the context window/i, // OpenAI (Completions & Responses API)
-  /exceeds (?:the )?(?:model'?s )?maximum context length(?: of [\d,]+ tokens?|\s*\([\d,]+\))/i, // OpenAI-compatible proxies (LiteLLM)
-  /input token count.*exceeds the maximum/i, // Google (Gemini)
-  /maximum prompt length is \d+/i, // xAI (Grok)
-  /reduce the length of the messages/i, // Groq
-  /maximum context length is \d+ tokens/i, // OpenRouter (most backends)
-  /exceeds (?:the )?maximum allowed input length of [\d,]+ tokens?/i, // OpenRouter/Poolside
-  /input \(\d+ tokens\) is longer than the model'?s context length \(\d+ tokens\)/i, // Together AI
-  /exceeds the available context size/i, // llama.cpp server
-  /greater than the context length/i, // LM Studio
-  /context window exceeds limit/i, // MiniMax
-  /exceeded model token limit/i, // Kimi For Coding
-  /too large for model with \d+ maximum context length/i, // Mistral
-  /prompt has [\d,]+ tokens?, but the configured context size is [\d,]+ tokens?/i, // DS4 server
-  /model_context_window_exceeded/i, // z.ai non-standard finish_reason surfaced as error text
-  /prompt too long; exceeded (?:max )?context length/i, // Ollama explicit overflow error
-  /range of input length should be/i, // DashScope / Qwen Token Plan
-  /context[_ ]length[_ ]exceeded/i, // Generic fallback
-  /too many tokens/i, // Generic fallback
-  /token limit exceeded/i, // Generic fallback
+  // Anthropic and z.ai token overflow
+  /prompt (?:is )?too long/iu,
+  // z.ai CN endpoint token overflow
+  /prompt exceeds max length/iu,
+  // Anthropic request byte-size overflow (HTTP 413)
+  /request_too_large/iu,
+  // Amazon Bedrock
+  /input is too long for requested model/iu,
+  // OpenAI (Completions & Responses API)
+  /exceeds the context window/iu,
+  // OpenAI-compatible proxies (LiteLLM)
+  /exceeds (?:the )?(?:model'?s )?maximum context length(?: of [\d,]+ tokens?|\s*\([\d,]+\))/iu,
+  // Google (Gemini)
+  /input token count.*exceeds the maximum/iu,
+  // xAI (Grok)
+  /maximum prompt length is \d+/iu,
+  // Groq
+  /reduce the length of the messages/iu,
+  // OpenRouter (most backends)
+  /maximum context length is \d+ tokens/iu,
+  // OpenRouter/Poolside
+  /exceeds (?:the )?maximum allowed input length of [\d,]+ tokens?/iu,
+  // Together AI
+  /input \(\d+ tokens\) is longer than the model'?s context length \(\d+ tokens\)/iu,
+  // llama.cpp server
+  /exceeds the available context size/iu,
+  // LM Studio
+  /greater than the context length/iu,
+  // MiniMax
+  /context window exceeds limit/iu,
+  // Kimi For Coding
+  /exceeded model token limit/iu,
+  // Mistral
+  /too large for model with \d+ maximum context length/iu,
+  // DS4 server
+  /prompt has [\d,]+ tokens?, but the configured context size is [\d,]+ tokens?/iu,
+  // z.ai non-standard finish_reason surfaced as error text
+  /model_context_window_exceeded/iu,
+  // Ollama explicit overflow error
+  /prompt too long; exceeded (?:max )?context length/iu,
+  // DashScope / Qwen Token Plan
+  /range of input length should be/iu,
+  // Generic fallback
+  /context[_ ]length[_ ]exceeded/iu,
+  // Generic fallback
+  /too many tokens/iu,
+  // Generic fallback
+  /token limit exceeded/iu,
 ];
 
-const CEREBRAS_BODYLESS_OVERFLOW_PATTERN = /^4(?:00|13)\s*(?:status code)?\s*\(no body\)/i;
+const CEREBRAS_BODYLESS_OVERFLOW_PATTERN = /^4(?:00|13)\s*(?:status code)?\s*\(no body\)/iu;
 
 /**
  * Patterns that indicate non-overflow errors (e.g. rate limiting, server errors).
@@ -72,9 +96,12 @@ const CEREBRAS_BODYLESS_OVERFLOW_PATTERN = /^4(?:00|13)\s*(?:status code)?\s*\(n
  * pattern without this exclusion.
  */
 const NON_OVERFLOW_PATTERNS = [
-  /^(Throttling error|Service unavailable):/i, // AWS Bedrock non-overflow errors (human-readable prefixes from formatBedrockError)
-  /rate limit/i, // Generic rate limiting
-  /too many requests/i, // Generic HTTP 429 style
+  // AWS Bedrock non-overflow errors (human-readable prefixes from formatBedrockError)
+  /^(Throttling error|Service unavailable):/iu,
+  // Generic rate limiting
+  /rate limit/iu,
+  // Generic HTTP 429 style
+  /too many requests/iu,
 ];
 
 /**
@@ -128,9 +155,9 @@ const NON_OVERFLOW_PATTERNS = [
  * 4. The pattern should be added to OVERFLOW_PATTERNS in this file, or
  *    check the errorMessage yourself before calling this function
  *
- * @param message - The assistant message to check
- * @param contextWindow - Optional context window size for detecting silent overflow (z.ai)
- * @returns true if the message indicates a context overflow
+ * @param {AssistantMessage} message - The assistant message to check
+ * @param {number} [contextWindow] - Optional context window size for detecting silent overflow (z.ai)
+ * @returns {boolean} true if the message indicates a context overflow
  */
 export function isContextOverflow(message: AssistantMessage, contextWindow?: number): boolean {
   // Case 1: Check error message patterns
@@ -176,6 +203,10 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
  * Such responses may be caused by context pressure or provider-side truncation, so callers
  * can make one bounded compact-and-retry attempt. `desiredMaxOutput` must be the original
  * limit before any context-based clamping.
+ *
+ * @param {AssistantMessage} message - assistant message that stopped for length
+ * @param {number} desiredMaxOutput - original output limit
+ * @returns {boolean} whether a compact-and-retry attempt may help
  */
 export function isRecoverableLength(message: AssistantMessage, desiredMaxOutput: number): boolean {
   return (
@@ -187,6 +218,8 @@ export function isRecoverableLength(message: AssistantMessage, desiredMaxOutput:
 
 /**
  * Get the overflow patterns for testing purposes.
+ *
+ * @returns {RegExp[]} the overflow patterns
  */
 export function getOverflowPatterns(): RegExp[] {
   return [...OVERFLOW_PATTERNS];

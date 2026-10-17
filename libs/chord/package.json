@@ -61,9 +61,11 @@
     "test": "vitest --run"
   },
   "dependencies": {
+    "effect": "catalog:stack",
     "typebox": "catalog:"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:stack",
     "@types/ws": "catalog:",
     "shx": "catalog:",
     "vitest": "catalog:",

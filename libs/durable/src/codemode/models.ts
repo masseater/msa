@@ -57,7 +57,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** A script value in an error message: `undefined`, `a string`, `an array`, or its keys (`{ prompt }`). */
+/**
+ * A script value in an error message: `undefined`, `a string`, `an array`, or its keys (`{ prompt }`).
+ * @param {unknown} value - The value.
+ * @returns {string} The description.
+ */
 function describeValue(value: unknown): string {
   if (value === undefined || value === null) return String(value);
   if (Array.isArray(value)) return value.length === 0 ? "an empty array" : "an array";
@@ -69,9 +73,13 @@ function describeValue(value: unknown): string {
   return typeof value === "string" ? "a string" : `a ${typeof value}`;
 }
 
-/** `an image`, `a classifier`. */
+/**
+ * `an image`, `a classifier`.
+ * @param {string} word - The word.
+ * @returns {string} The word with its article.
+ */
 function withArticle(word: string): string {
-  return `${/^[aeiou]/.test(word) ? "an" : "a"} ${word}`;
+  return `${/^[aeiou]/u.test(word) ? "an" : "a"} ${word}`;
 }
 
 function toModelType(value: unknown): ModelType {
@@ -87,14 +95,25 @@ function toProvider(value: unknown): string | undefined {
   return value;
 }
 
-/** Catalog entry for scripts. `headers` is dropped because configured headers can carry credentials. */
+/**
+ * Catalog entry for scripts. `headers` is dropped because configured headers can carry credentials.
+ * @param {AnyModel} model - The model.
+ * @returns {JsonValue} The entry.
+ */
 function toModelInfo(model: AnyModel): JsonValue {
   const info: Record<string, unknown> = { ...model };
   delete info["headers"];
   return JSON.parse(JSON.stringify(info)) as JsonValue;
 }
 
-/** The catalog functions: what a script's call of `name` with `args` (the argument list) resolves to. */
+/**
+ * The catalog functions: what a script's call of `name` with `args` (the argument list) resolves to.
+ * @param {string} name - The function.
+ * @param {unknown} args - The argument list.
+ * @param {Models} models - The model registry.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<JsonValue | undefined>} The result.
+ */
 export async function catalogCall(
   name: string,
   args: unknown,
@@ -123,7 +142,11 @@ export async function catalogCall(
 const CLASSIFIER_CONTEXT_SHAPE =
   '{ state: { ... }, images?: [{ type: "image", data: <base64>, mimeType }], questions: { <id>: { type: "choice", instructions, criteria: { <label>: <meaning> } } | { type: "score", instructions, criteria: [<lowest level>, ..., <highest level>] } | { type: "bool", instructions, criteria: { true: <meaning>, false: <meaning> } } } }';
 
-/** Check a script's classifier context, so mistakes fail with the expected shape instead of a provider error. */
+/**
+ * Check a script's classifier context, so mistakes fail with the expected shape instead of a provider error.
+ * @param {unknown} context - The script's value.
+ * @returns {ClassifierContext} The context.
+ */
 function checkClassifierContext(context: unknown): ClassifierContext {
   const fail = (problem: string) =>
     new Error(`models.classify() ${problem}. Expected context: ${CLASSIFIER_CONTEXT_SHAPE}.`);
@@ -190,7 +213,11 @@ function checkClassifierContext(context: unknown): ClassifierContext {
   return context as unknown as ClassifierContext;
 }
 
-/** Check a script's image context, so mistakes such as `{ prompt }` fail with the expected shape. */
+/**
+ * Check a script's image context, so mistakes such as `{ prompt }` fail with the expected shape.
+ * @param {unknown} context - The script's value.
+ * @returns {ImagesContext} The context.
+ */
 function checkImagesContext(context: unknown): ImagesContext {
   const fail = (problem: string) =>
     new Error(
@@ -221,6 +248,11 @@ function checkImagesContext(context: unknown): ImagesContext {
 /**
  * Resolve the script's model by provider and id only, so a script-supplied baseUrl or headers never receive the
  * credentials, with errors that say what to do.
+ * @param {string} name - The function, for errors.
+ * @param {TType} type - The model type.
+ * @param {unknown} model - The script's model.
+ * @param {Models} models - The model registry.
+ * @returns {ModelTypeMap[TType]} The model.
  */
 function resolveModel<TType extends "classifier" | "image">(
   name: string,
@@ -258,7 +290,13 @@ function resolveModel<TType extends "classifier" | "image">(
 
 const ModelCallParameters = Type.Object({ model: Type.Unknown(), context: Type.Unknown() });
 
-/** The result of a model call as the tool returns it: the whole result for the script, usage counted by the Harness. */
+/**
+ * The result of a model call as the tool returns it: the whole result for the script, usage counted by the Harness.
+ * @param {string} label - The call, for errors.
+ * @param {{ stopReason: string; errorMessage?: string; usage?: Usage }} result - The model's result.
+ * @param {unknown} value - The value for the script.
+ * @returns {ToolExecutionResult} The tool's result.
+ */
 function modelResult(
   label: string,
   result: { stopReason: string; errorMessage?: string; usage?: Usage },
@@ -278,7 +316,10 @@ function modelResult(
   };
 }
 
-/** The internal tools behind `models.classify()` and `models.generateImages()`. */
+/**
+ * The internal tools behind `models.classify()` and `models.generateImages()`.
+ * @returns {ToolRegistration[]} The tools.
+ */
 export function createModelTools(): ToolRegistration[] {
   const classify = defineTool({
     name: CLASSIFY_TOOL,

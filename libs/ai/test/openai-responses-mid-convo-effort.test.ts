@@ -85,12 +85,14 @@ async function runOpenAI(
   options: { apiKey?: string; model?: Model<"openai-responses">; withToolCall?: boolean } = {},
 ): Promise<{ payload: Payload; message: AssistantMessage }> {
   let payload: Payload | undefined;
-  const fetchMock = async (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  const fetchMock = (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
     payload = JSON.parse(String(init?.body)) as Payload;
     const body = responseEvents("resp_1", options.withToolCall ?? false)
       .map((event) => `data: ${JSON.stringify(event)}\n\n`)
       .join("");
-    return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+    return Promise.resolve(
+      new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
   };
   const message = await streamOpenAIResponses(
     options.model ?? openAIModel(),

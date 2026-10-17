@@ -87,7 +87,7 @@ function findVisualStudioDevCmd() {
         ],
         { encoding: "utf8" },
       );
-      for (const line of result.stdout.split(/\r?\n/)) {
+      for (const line of result.stdout.split(/\r?\n/u)) {
         const installationPath = line.trim();
         if (installationPath)
           candidates.push(path.join(installationPath, "Common7", "Tools", "VsDevCmd.bat"));

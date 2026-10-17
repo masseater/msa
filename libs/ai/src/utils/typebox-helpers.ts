@@ -10,6 +10,10 @@ import { type TUnsafe, Type } from "typebox";
  * });
  *
  * type Operation = Static<typeof OperationSchema>; // "add" | "subtract" | "multiply" | "divide"
+ *
+ * @param {T} values - allowed strings
+ * @param {{ description?: string; default?: T[number] }} [options] - schema options
+ * @returns {TUnsafe<T[number]>} the string enum schema
  */
 export function StringEnum<T extends readonly string[]>(
   values: T,

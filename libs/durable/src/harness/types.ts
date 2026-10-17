@@ -617,24 +617,28 @@ export type HarnessOptions<Tool extends ToolRegistration = ToolRegistration> = {
 /** Live task and what the scheduler would do with it under the current registry. */
 export type TaskInspection = {
   readonly record: TaskRecord<JsonValue, JsonValue, JsonValue>;
-  readonly state: /** An invocation is active. */
-    | { readonly kind: "running" }
-    /** The next scheduling pass reserves it; `migrates` when its definition is newer and has `migrate`. */
-    | { readonly kind: "ready"; readonly migrates: boolean }
-    /**
-     * Waits for these live tasks: the live part of its `on`, or, when abort-marked, its live ordinary owned work, which
-     * must end before its abort handler starts.
-     */
-    | { readonly kind: "waiting"; readonly on: readonly TaskId[] }
-    /** Outcome held until its ordinary owned work drains. */
-    | { readonly kind: "completing" }
-    /** No registered definition can take it; aborting it settles it as `orphaned`. */
-    | {
-        readonly kind: "blocked";
-        readonly reason: "missing_task" | "task_too_old" | "migration_failed";
-        readonly error?: unknown;
-      };
+  readonly state: TaskInspectionState;
 };
+
+/** What the scheduler would do with a live task under the current registry. */
+type TaskInspectionState =
+  /** An invocation is active. */
+  | { readonly kind: "running" }
+  /** The next scheduling pass reserves it; `migrates` when its definition is newer and has `migrate`. */
+  | { readonly kind: "ready"; readonly migrates: boolean }
+  /**
+   * Waits for these live tasks: the live part of its `on`, or, when abort-marked, its live ordinary owned work, which
+   * must end before its abort handler starts.
+   */
+  | { readonly kind: "waiting"; readonly on: readonly TaskId[] }
+  /** Outcome held until its ordinary owned work drains. */
+  | { readonly kind: "completing" }
+  /** No registered definition can take it; aborting it settles it as `orphaned`. */
+  | {
+      readonly kind: "blocked";
+      readonly reason: "missing_task" | "task_too_old" | "migration_failed";
+      readonly error?: unknown;
+    };
 
 /** Point-in-time view of live work: unfinished tasks and submissions, read on the Session line. */
 export type HarnessInspection = {

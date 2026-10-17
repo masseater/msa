@@ -1,6 +1,10 @@
 // EXIF orientation of JPEG and WebP files, read from the bytes without decoding the image.
 
-/** The EXIF orientation of a JPEG or WebP, 1 to 8; 1 when absent or unreadable. */
+/**
+ * The EXIF orientation of a JPEG or WebP, 1 to 8; 1 when absent or unreadable.
+ * @param {Uint8Array} bytes - The image bytes.
+ * @returns {number} The orientation.
+ */
 export function exifOrientation(bytes: Uint8Array): number {
   const tiff = tiffStart(bytes);
   if (tiff < 0 || tiff + 8 > bytes.length) return 1;
@@ -27,7 +31,11 @@ export function exifOrientation(bytes: Uint8Array): number {
   return 1;
 }
 
-/** Where the TIFF header of a JPEG's APP1 or a WebP's EXIF chunk starts; -1 when there is none. */
+/**
+ * Where the TIFF header of a JPEG's APP1 or a WebP's EXIF chunk starts; -1 when there is none.
+ * @param {Uint8Array} bytes - The image bytes.
+ * @returns {number} The offset.
+ */
 function tiffStart(bytes: Uint8Array): number {
   if (bytes[0] === 0xff && bytes[1] === 0xd8) {
     for (let offset = 2; offset + 4 <= bytes.length;) {

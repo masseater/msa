@@ -12,7 +12,11 @@ import type { ClassifierContext, ClassifierModel, ClassifierOptions } from "../s
 
 let serverCount = 0;
 
-/** A fresh server URL per test: label tokens are cached per server and model. */
+/**
+ * A fresh server URL per test: label tokens are cached per server and model.
+ *
+ * @returns {ClassifierModel<"llama-cpp-classify">} the model
+ */
 function model(): ClassifierModel<"llama-cpp-classify"> {
   serverCount++;
   return {
@@ -41,28 +45,33 @@ interface FakeServerOptions {
   tokenize?: (content: string) => number[];
 }
 
-/** Token IDs: one per character, the character code. */
+/**
+ * Token IDs: one per character, the character code.
+ *
+ * @param {string} content - text to tokenize
+ * @returns {number[]} the token ids
+ */
 function charTokens(content: string): number[] {
   return [...content].map((char) => char.codePointAt(0)!);
 }
 
 function fakeServer(options: FakeServerOptions = {}) {
   const requests: RecordedRequest[] = [];
-  const fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  const fetch = (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = String(input);
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     requests.push({ url, body, headers: new Headers(init?.headers) });
     const path = new URL(url).pathname;
     if (path === "/tokenize") {
       const content = String(body["content"]);
-      return Response.json({ tokens: (options.tokenize ?? charTokens)(content) });
+      return Promise.resolve(Response.json({ tokens: (options.tokenize ?? charTokens)(content) }));
     }
     if (path === "/apply-template") {
       const messages = body["messages"] as Array<{ role: string; content: string }>;
       const prompt =
         options.template?.(messages) ??
         `${messages.map((message) => `<|${message.role}|>\n${message.content}\n`).join("")}<|assistant|>\n`;
-      return Response.json({ prompt });
+      return Promise.resolve(Response.json({ prompt }));
     }
     if (path === "/completion") {
       const next = options.next?.(String(body["prompt"]), Number(body["n_probs"])) ?? {
@@ -75,17 +84,24 @@ function fakeServer(options: FakeServerOptions = {}) {
         bytes: [],
         logprob,
       }));
-      return Response.json({
-        content: "A",
-        completion_probabilities: [{ id: 65, token: "A", top_logprobs }],
-      });
+      return Promise.resolve(
+        Response.json({
+          content: "A",
+          completion_probabilities: [{ id: 65, token: "A", top_logprobs }],
+        }),
+      );
     }
-    return new Response("not found", { status: 404 });
+    return Promise.resolve(new Response("not found", { status: 404 }));
   };
   return { fetch, requests };
 }
 
-/** Completion log-probabilities for bool (Yes/No) and letter labels; the fake tokenizer maps a label to its first character. */
+/**
+ * Completion log-probabilities for bool (Yes/No) and letter labels; the fake tokenizer maps a label to its first character.
+ *
+ * @param {string} prompt - rendered prompt
+ * @returns {Record<string, number>} the log-probabilities by label
+ */
 function answerByPrompt(prompt: string): Record<string, number> {
   if (prompt.includes("Answer Yes or No.")) return { Y: -0.05, N: -3 };
   if (prompt.includes("Answer with one level number.")) return { "2": -0.2, "1": -1.8, "0": -4 };
@@ -113,13 +129,18 @@ const context: ClassifierContext = {
   },
 };
 
-/** Maps multi-character labels to single tokens, as a real vocabulary would. */
+/**
+ * Maps multi-character labels to single tokens, as a real vocabulary would.
+ *
+ * @param {string} content - text to tokenize
+ * @returns {number[]} the token ids
+ */
 function wordTokens(content: string): number[] {
   const words: Record<string, number> = { Yes: 89, No: 78 };
   const tokens: number[] = [];
   for (const part of content.split(/(\n)/u)) {
     if (part === "") continue;
-    tokens.push(...(words[part] !== undefined ? [words[part]] : charTokens(part)));
+    tokens.push(...(words[part] === undefined ? charTokens(part) : [words[part]]));
   }
   return tokens;
 }
@@ -406,7 +427,8 @@ describe("llama.cpp classifier", () => {
   it("reports server errors and cancellation", async () => {
     const failing = await classify(model(), context, {
       maxRetries: 0,
-      fetch: async () => new Response('{"error":{"message":"context overflow"}}', { status: 400 }),
+      fetch: () =>
+        Promise.resolve(new Response('{"error":{"message":"context overflow"}}', { status: 400 })),
     });
     expect(failing.stopReason).toBe("error");
     expect(failing.errorMessage).toContain("llama.cpp error (400)");
@@ -416,9 +438,9 @@ describe("llama.cpp classifier", () => {
     controller.abort();
     const aborted = await classify(model(), context, {
       signal: controller.signal,
-      fetch: async (_input, init) => {
+      fetch: (_input, init) => {
         init?.signal?.throwIfAborted();
-        return Response.json({});
+        return Promise.resolve(Response.json({}));
       },
     });
     expect(aborted.stopReason).toBe("aborted");

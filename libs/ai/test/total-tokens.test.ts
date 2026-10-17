@@ -68,7 +68,8 @@ async function testTotalTokensWithCache<TApi extends Api>(
     systemPrompt: LONG_SYSTEM_PROMPT,
     messages: [
       ...context1.messages,
-      response1, // Include previous assistant response
+      // Include previous assistant response
+      response1,
       {
         role: "user",
         content: "What is 3 + 3? Reply with just the number.",

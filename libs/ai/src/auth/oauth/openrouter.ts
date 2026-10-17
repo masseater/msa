@@ -168,10 +168,10 @@ export const openRouterOAuth: OAuthAuth = {
   name: "OpenRouter OAuth",
   loginLabel: "Sign in with OpenRouter",
   login: loginOpenRouter,
-  async refresh(credential, _signal) {
-    return credential;
+  refresh(credential, _signal) {
+    return Promise.resolve(credential);
   },
-  async toAuth(credential) {
-    return { apiKey: credential.access };
+  toAuth(credential) {
+    return Promise.resolve({ apiKey: credential.access });
   },
 };

@@ -69,11 +69,6 @@ import {
 } from "./simple-options.ts";
 import { transformMessages } from "./transform-messages.ts";
 
-/**
- * Check if conversation messages contain tool calls or tool results.
- * This is needed because Anthropic (via proxy) requires the tools param
- * to be present when messages include tool_calls or tool role messages.
- */
 function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean {
   if (!headers) return false;
   const expected = name.toLowerCase();
@@ -94,6 +89,14 @@ function getClientApiKey(
   throw new Error(`No API key for provider: ${provider}`);
 }
 
+/**
+ * Check if conversation messages contain tool calls or tool results.
+ * This is needed because Anthropic (via proxy) requires the tools param
+ * to be present when messages include tool_calls or tool role messages.
+ *
+ * @param {Message[]} messages - conversation messages
+ * @returns {boolean} whether any message holds a tool call or tool result
+ */
 function hasToolHistory(messages: Message[]): boolean {
   for (const msg of messages) {
     if (msg.role === "toolResult") {
@@ -410,7 +413,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
       }
       const requestOptions = {
         ...(options?.signal ? { signal: options.signal } : {}),
-        ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+        ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
         maxRetries: 0,
       };
       const { data: openaiStream, response } = await retryProviderRequest(
@@ -553,7 +556,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
       const ensureToolCallBlock = (toolCall: StreamingToolCallDelta) => {
         const streamIndex = typeof toolCall.index === "number" ? toolCall.index : undefined;
         const name = toolCall.function?.name ?? toolCall.custom?.name ?? "";
-        let block = streamIndex !== undefined ? toolCallBlocksByIndex.get(streamIndex) : undefined;
+        let block = streamIndex === undefined ? undefined : toolCallBlocksByIndex.get(streamIndex);
         if (!block && toolCall.id) {
           block = toolCallBlocksById.get(toolCall.id);
         }
@@ -885,7 +888,7 @@ function buildParams(
     model: model.id,
     messages,
     stream: true,
-    ...(promptCacheKey !== undefined ? { prompt_cache_key: promptCacheKey } : {}),
+    ...(promptCacheKey === undefined ? {} : { prompt_cache_key: promptCacheKey }),
     ...(cacheRetention === "long" && compat.supportsLongCacheRetention
       ? { prompt_cache_retention: "24h" as const }
       : {}),
@@ -1299,8 +1302,12 @@ export function convertMessages(
     if (id.includes("|")) {
       // Sanitize to allowed chars and truncate to 40 chars (OpenAI limit)
       const separatorIndex = id.indexOf("|");
-      const callId = id.slice(0, separatorIndex).replace(/[^a-zA-Z0-9_-]/g, "_");
-      const itemId = id.slice(separatorIndex + 1).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const callId = id
+        .slice(0, separatorIndex)
+        .replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
+      const itemId = id
+        .slice(separatorIndex + 1)
+        .replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
       const combinedId = itemId.length > 0 ? `${callId}_${itemId}` : callId;
       if (combinedId.length <= 40) {
         return combinedId;
@@ -1369,14 +1376,13 @@ export function convertMessages(
                 type: "text",
                 text: sanitizeSurrogates(item.text),
               } satisfies ChatCompletionContentPartText;
-            } else {
-              return {
-                type: "image_url",
-                image_url: {
-                  url: `data:${item.mimeType};base64,${item.data}`,
-                },
-              } satisfies ChatCompletionContentPartImage;
             }
+            return {
+              type: "image_url",
+              image_url: {
+                url: `data:${item.mimeType};base64,${item.data}`,
+              },
+            } satisfies ChatCompletionContentPartImage;
           });
         if (content.length === 0) continue;
         params.push({
@@ -1702,6 +1708,9 @@ function mapStopReason(reason: ChatCompletionChunk.Choice["finish_reason"] | str
  * Auto-detect compatibility settings from provider name and baseUrl.
  * Used as the base when model.compat is not set; explicit model.compat
  * entries override these detected values.
+ *
+ * @param {Model<"openai-completions">} model - model to inspect
+ * @returns {ResolvedOpenAICompletionsCompat} the detected compat settings
  */
 function detectCompat(model: Model<"openai-completions">): ResolvedOpenAICompletionsCompat {
   const provider = model.provider;
@@ -1817,6 +1826,9 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 /**
  * Get resolved compatibility settings for a model.
  * Auto-detects from provider/URL then overrides with explicit model.compat.
+ *
+ * @param {Model<"openai-completions">} model - model to inspect
+ * @returns {ResolvedOpenAICompletionsCompat} the resolved compat settings
  */
 function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletionsCompat {
   const detected = detectCompat(model);

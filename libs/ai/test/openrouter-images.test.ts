@@ -19,8 +19,8 @@ vi.mock("openai", () => {
           if (signal?.aborted) {
             const error = new Error("Request aborted");
             return {
-              withResponse: async () => {
-                throw error;
+              withResponse: () => {
+                return Promise.reject(error);
               },
             };
           }
@@ -46,10 +46,11 @@ vi.mock("openai", () => {
               response: { status: number; headers: Headers };
             }>;
           };
-          promise.withResponse = async () => ({
-            data: response,
-            response: { status: 200, headers: new Headers() },
-          });
+          promise.withResponse = () =>
+            Promise.resolve({
+              data: response,
+              response: { status: 200, headers: new Headers() },
+            });
           return promise;
         },
       },

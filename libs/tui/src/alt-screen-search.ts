@@ -34,7 +34,7 @@ export interface AltScreenSearchMatch {
   segments: AltScreenSearchSegment[];
 }
 
-const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
+const PRINTABLE_ASCII = /^[\x20-\x7e]*$/u;
 
 function buildSearchCorpus(lines: readonly string[]): SearchCorpus {
   const chunks: string[] = [];
@@ -115,7 +115,7 @@ function normalizeQuery(query: string): string {
 }
 
 function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function findSearchCorpusMatches(
@@ -289,11 +289,11 @@ export class AltScreenSearchComponent implements Component, Focusable {
     const previousKey = formatKey(keybindings.getKeys("tui.altScreen.searchPrevious")[0]);
     const nextKey = formatKey(keybindings.getKeys("tui.altScreen.searchNext")[0]);
     const query = this.input.getValue();
-    const result = !query
-      ? ""
-      : this.resultCount === 0
+    const result = query
+      ? this.resultCount === 0
         ? "No matches"
-        : `${this.resultIndex + 1}/${this.resultCount}`;
+        : `${this.resultIndex + 1}/${this.resultCount}`
+      : "";
     const resultSpace = Math.max(0, innerWidth - 3);
     const visibleResult = truncateToWidth(result, resultSpace, "");
     const resultText = visibleResult ? `\x1b[2m ${visibleResult} \x1b[22m` : "";

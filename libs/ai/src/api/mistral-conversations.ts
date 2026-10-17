@@ -128,9 +128,6 @@ type MistralCompletionEvent = {
   };
 };
 
-/**
- * Stream responses from the native Mistral Chat Completions endpoint.
- */
 export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
   model: Model<"mistral-conversations">,
   context: TranscriptContext,
@@ -193,9 +190,6 @@ export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
   return events;
 };
 
-/**
- * Maps provider-agnostic `SimpleStreamOptions` to Mistral options.
- */
 export const streamSimple: StreamFunction<"mistral-conversations", SimpleStreamOptions> = (
   model: Model<"mistral-conversations">,
   context: TranscriptContext,
@@ -272,12 +266,12 @@ function createMistralToolCallIdNormalizer(): (id: string) => string {
 }
 
 function deriveMistralToolCallId(id: string, attempt: number): string {
-  const normalized = id.replace(/[^a-zA-Z0-9]/g, "");
+  const normalized = id.replace(/[^a-zA-Z0-9]/gu, "");
   if (attempt === 0 && normalized.length === MISTRAL_TOOL_CALL_ID_LENGTH) return normalized;
   const seedBase = normalized || id;
   const seed = attempt === 0 ? seedBase : `${seedBase}:${attempt}`;
   return shortHash(seed)
-    .replace(/[^a-zA-Z0-9]/g, "")
+    .replace(/[^a-zA-Z0-9]/gu, "")
     .slice(0, MISTRAL_TOOL_CALL_ID_LENGTH);
 }
 

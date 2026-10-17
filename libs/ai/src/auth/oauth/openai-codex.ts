@@ -245,7 +245,7 @@ async function startOpenAICodexDeviceAuth(signal: AbortSignal): Promise<DeviceAu
   };
 }
 
-async function pollOpenAICodexDeviceAuth(
+function pollOpenAICodexDeviceAuth(
   device: DeviceAuthInfo,
   signal: AbortSignal,
 ): Promise<DeviceTokenSuccess> {
@@ -390,7 +390,7 @@ async function loginOpenAICodex(
     port: 1455,
     path: "/auth/callback",
     state,
-    complete: async (code) => code,
+    complete: (code) => Promise.resolve(code),
     signal: interaction.signal,
   }).catch(() => undefined);
 
@@ -427,9 +427,6 @@ async function loginOpenAICodex(
   }
 }
 
-/**
- * Refresh OpenAI Codex OAuth token
- */
 async function refreshOpenAICodexToken(
   refreshToken: string,
   signal: AbortSignal,
@@ -463,7 +460,7 @@ export const openaiCodexOAuth: OAuthAuth = {
 
   refresh: (credential, signal) => refreshOpenAICodexToken(credential.refresh, signal),
 
-  async toAuth(credential) {
-    return { apiKey: credential.access };
+  toAuth(credential) {
+    return Promise.resolve({ apiKey: credential.access });
   },
 };

@@ -41,7 +41,7 @@ vi.mock("@anthropic-ai/sdk", () => {
       messages: {
         create: (params: Record<string, unknown>) => {
           mockState.createParams = params;
-          return { asResponse: async () => createSseResponse() };
+          return { asResponse: () => Promise.resolve(createSseResponse()) };
         },
       },
     };
@@ -90,7 +90,7 @@ const anthropicModel: Model<"anthropic-messages"> = {
 
 function resolveWithEnv(env: Record<string, string>) {
   return anthropicProvider().auth.apiKey?.resolve({
-    ctx: { env: async (name) => env[name], fileExists: async () => false },
+    ctx: { env: (name) => Promise.resolve(env[name]), fileExists: () => Promise.resolve(false) },
     signal: neverAbortedSignal,
   });
 }
@@ -163,8 +163,8 @@ describe("Anthropic workload identity federation", () => {
   it("threads authContext federation variables through Models", async () => {
     const models = createModels({
       authContext: {
-        env: async (name) => federationEnv[name as keyof typeof federationEnv],
-        fileExists: async () => false,
+        env: (name) => Promise.resolve(federationEnv[name as keyof typeof federationEnv]),
+        fileExists: () => Promise.resolve(false),
       },
     });
     models.setProvider(anthropicProvider());

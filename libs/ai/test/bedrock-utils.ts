@@ -8,6 +8,8 @@
  * - AWS_PROFILE (named profile from ~/.aws/credentials)
  * - AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY (IAM keys)
  * - AWS_BEARER_TOKEN_BEDROCK (Bedrock API key)
+ *
+ * @returns {boolean} whether Bedrock credentials are configured
  */
 export function hasBedrockCredentials(): boolean {
   return !!(

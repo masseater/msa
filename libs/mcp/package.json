@@ -47,9 +47,11 @@
     "test": "vitest --run"
   },
   "dependencies": {
-    "cross-spawn": "catalog:"
+    "cross-spawn": "catalog:",
+    "effect": "catalog:stack"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:stack",
     "@types/cross-spawn": "catalog:",
     "shx": "catalog:",
     "vitest": "catalog:"

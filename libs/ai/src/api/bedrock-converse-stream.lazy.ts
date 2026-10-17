@@ -6,10 +6,13 @@ import { lazyApi } from "./lazy.ts";
  * (browser smoke, Bun compile) cannot follow the import into the Node-only
  * AWS SDK. The `.ts`/`.js` rewrite keeps the trick working from both source
  * and built output.
+ *
+ * @param {string} specifier - module specifier
+ * @returns {Promise<unknown>} the loaded module
  */
 const importNodeOnlyApi = (specifier: string): Promise<unknown> => {
   const runtimeSpecifier = import.meta.url.endsWith(".js")
-    ? specifier.replace(/\.ts$/, ".js")
+    ? specifier.replace(/\.ts$/u, ".js")
     : specifier;
   return import(runtimeSpecifier);
 };
@@ -20,6 +23,8 @@ let bedrockModuleOverride: ProviderStreams | undefined;
  * Overrides the dynamically imported bedrock implementation. Used by the Bun
  * binary build, where the variable-specifier import cannot be bundled; the
  * build registers a statically imported module instead.
+ *
+ * @param {ProviderStreams} module - statically imported bedrock implementation
  */
 export function setBedrockProviderModule(module: ProviderStreams): void {
   bedrockModuleOverride = module;

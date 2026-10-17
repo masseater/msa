@@ -12,6 +12,8 @@ export type ByteSource = {
 /**
  * `detectSupportedImageMimeType` of a whole file, reading only its header and, for PNG, the chunk headers up to the
  * first `acTL` or `IDAT`.
+ * @param {ByteSource} source - The file.
+ * @returns {Promise<string | undefined>} The image MIME type, if supported.
  */
 export async function detectSupportedImageMimeTypeOf(
   source: ByteSource,
@@ -21,8 +23,12 @@ export async function detectSupportedImageMimeTypeOf(
   return isPng(header) && !(await isAnimatedPngOf(source)) ? "image/png" : undefined;
 }
 
-/** `isAnimatedPng` over a file read in blocks. */
-async function isAnimatedPngOf(source: ByteSource): Promise<boolean> {
+/**
+ * `isAnimatedPng` over a file read in blocks.
+ * @param {ByteSource} source - The file.
+ * @returns {Promise<boolean>} Whether it is an animated PNG.
+ */
+function isAnimatedPngOf(source: ByteSource): Promise<boolean> {
   let block: Uint8Array = new Uint8Array(0);
   let blockStart = 0;
   const bytesAt = async (offset: number, length: number): Promise<Uint8Array> => {
@@ -32,17 +38,17 @@ async function isAnimatedPngOf(source: ByteSource): Promise<boolean> {
     }
     return block.subarray(offset - blockStart, offset - blockStart + length);
   };
-  let offset = PNG_SIGNATURE.length;
-  while (offset + 8 <= source.size) {
+  const chunkFrom = async (offset: number): Promise<boolean> => {
+    if (offset + 8 > source.size) return false;
     const chunkHeader = await bytesAt(offset, 8);
     const chunkLength = readUint32BE(chunkHeader, 0);
     if (startsWithAscii(chunkHeader, 4, "acTL")) return true;
     if (startsWithAscii(chunkHeader, 4, "IDAT")) return false;
     const nextOffset = offset + 8 + chunkLength + 4;
     if (nextOffset <= offset || nextOffset > source.size) return false;
-    offset = nextOffset;
-  }
-  return false;
+    return chunkFrom(nextOffset);
+  };
+  return chunkFrom(PNG_SIGNATURE.length);
 }
 
 export function detectSupportedImageMimeType(buffer: Uint8Array): string | undefined {
@@ -81,6 +87,9 @@ function isAnimatedPng(buffer: Uint8Array): boolean {
 /**
  * The width and height an image of `mimeType` declares in its header, without decoding it: PNG's IHDR, GIF's screen,
  * WebP's VP8, VP8L, or VP8X chunk, JPEG's first SOF segment. `undefined` when the header cannot be read.
+ * @param {Uint8Array} bytes - The image bytes.
+ * @param {string} mimeType - The image's MIME type.
+ * @returns {{ readonly width: number; readonly height: number } | undefined} The size.
  */
 export function imageDimensions(
   bytes: Uint8Array,

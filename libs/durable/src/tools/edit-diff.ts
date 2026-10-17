@@ -13,11 +13,11 @@ export function detectLineEnding(content: string): "\r\n" | "\n" {
 }
 
 export function normalizeToLF(text: string): string {
-  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  return text.replace(/\r\n/gu, "\n").replace(/\r/gu, "\n");
 }
 
 export function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
-  return ending === "\r\n" ? text.replace(/\n/g, "\r\n") : text;
+  return ending === "\r\n" ? text.replace(/\n/gu, "\r\n") : text;
 }
 
 /**
@@ -26,6 +26,8 @@ export function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string 
  * - Normalize smart quotes to ASCII equivalents
  * - Normalize Unicode dashes/hyphens to ASCII hyphen
  * - Normalize special Unicode spaces to regular space
+ * @param {string} text - The text.
+ * @returns {string} The normalized text.
  */
 export function normalizeForFuzzyMatch(text: string): string {
   return (
@@ -36,22 +38,22 @@ export function normalizeForFuzzyMatch(text: string): string {
       .map((line) => line.trimEnd())
       .join("\n")
       // Smart single quotes → '
-      .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+      .replace(/[\u2018\u2019\u201A\u201B]/gu, "'")
       // Smart double quotes → "
-      .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+      .replace(/[\u201C\u201D\u201E\u201F]/gu, '"')
       // Various dashes/hyphens → -
       // U+2010 hyphen, U+2011 non-breaking hyphen, U+2012 figure dash,
       // U+2013 en-dash, U+2014 em-dash, U+2015 horizontal bar, U+2212 minus
-      .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, "-")
+      .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/gu, "-")
       // Special spaces → regular space
       // U+00A0 NBSP, U+2002-U+200A various spaces, U+202F narrow NBSP,
       // U+205F medium math space, U+3000 ideographic space
-      .replace(/[\u00A0\u2002-\u200A\u202F\u205F\u3000]/g, " ")
+      .replace(/[\u00A0\u2002-\u200A\u202F\u205F\u3000]/gu, " ")
   );
 }
 
 function splitLinesWithEndings(content: string): string[] {
-  return content.match(/[^\n]*\n|[^\n]+/g) ?? [];
+  return content.match(/[^\n]*\n|[^\n]+/gu) ?? [];
 }
 
 interface LineSpan {
@@ -122,6 +124,10 @@ function applyReplacements(content: string, replacements: TextReplacement[], off
  * are rewritten from the normalized base, and all other lines are copied back
  * from `originalContent`. The actual replacement ranges drive preservation so
  * duplicate normalized lines cannot be aligned to the wrong occurrence.
+ * @param {string} originalContent - The original text.
+ * @param {string} baseContent - The text the replacements matched.
+ * @param {TextReplacement[]} replacements - The replacements.
+ * @returns {string} The new text.
  */
 export function applyReplacementsPreservingUnchangedLines(
   originalContent: string,
@@ -204,6 +210,9 @@ export interface AppliedEditsResult {
  * When fuzzy matching is used, the returned contentForReplacement is the
  * fuzzy-normalized version of the content (trailing whitespace stripped,
  * Unicode quotes/dashes normalized to ASCII).
+ * @param {string} content - The text.
+ * @param {string} oldText - The text to find.
+ * @returns {FuzzyMatchResult} The match.
  */
 export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResult {
   // Try exact match first
@@ -245,7 +254,11 @@ export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResul
   };
 }
 
-/** Strip UTF-8 BOM if present, return both the BOM (if any) and the text without it */
+/**
+ * Strip UTF-8 BOM if present, return both the BOM (if any) and the text without it
+ * @param {string} content - The text.
+ * @returns {{ bom: string; text: string }} The BOM and the rest.
+ */
 export function stripBom(content: string): { bom: string; text: string } {
   return content.startsWith("\uFEFF")
     ? { bom: "\uFEFF", text: content.slice(1) }
@@ -309,6 +322,10 @@ function getNoChangeError(path: string, totalEdits: number): Error {
  * fuzzy matching, the operation runs in fuzzy-normalized content space and then
  * overlays those line-level changes onto the original content so unchanged line
  * blocks keep their original bytes.
+ * @param {string} normalizedContent - The LF-normalized text.
+ * @param {Edit[]} edits - The edits.
+ * @param {string} path - The file, for errors.
+ * @returns {AppliedEditsResult} The result.
  */
 export function applyEditsToNormalizedContent(
   normalizedContent: string,
@@ -381,7 +398,14 @@ export function applyEditsToNormalizedContent(
   return { baseContent, newContent };
 }
 
-/** Generate a standard unified patch. */
+/**
+ * Generate a standard unified patch.
+ * @param {string} path - The file.
+ * @param {string} oldContent - The old text.
+ * @param {string} newContent - The new text.
+ * @param {number} contextLines - How many context lines.
+ * @returns {string} The patch.
+ */
 export function generateUnifiedPatch(
   path: string,
   oldContent: string,
@@ -397,6 +421,10 @@ export function generateUnifiedPatch(
 /**
  * Generate a display-oriented diff string with line numbers and context.
  * Returns both the diff string and the first changed line number (in the new file).
+ * @param {string} oldContent - The old text.
+ * @param {string} newContent - The new text.
+ * @param {number} contextLines - How many context lines.
+ * @returns {{ diff: string; firstChangedLine: number | undefined }} The diff and the first changed line.
  */
 export function generateDiffString(
   oldContent: string,

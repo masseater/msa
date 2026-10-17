@@ -41,8 +41,8 @@ const openaiMock = vi.hoisted(() => ({
 vi.mock("openai", () => {
   function throwingCreate() {
     const promise = Promise.resolve(undefined) as unknown as { withResponse: () => Promise<never> };
-    promise.withResponse = async () => {
-      throw new FakeAPIError(403, openaiMock.parsedBody);
+    promise.withResponse = () => {
+      return Promise.reject(new FakeAPIError(403, openaiMock.parsedBody));
     };
     return promise;
   }
@@ -164,7 +164,7 @@ describe("provider error body passthrough (per-tier regression)", () => {
     );
 
     expect(output.errorMessage).toContain("upstream WAF blocked policy XYZ");
-    const occurrences = output.errorMessage?.match(/upstream WAF blocked policy XYZ/g) ?? [];
+    const occurrences = output.errorMessage?.match(/upstream WAF blocked policy XYZ/gu) ?? [];
     expect(occurrences).toHaveLength(1);
   });
 

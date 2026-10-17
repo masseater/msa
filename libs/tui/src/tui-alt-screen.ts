@@ -71,8 +71,8 @@ const FOCUS_IN = "\x1b[I";
 const FOCUS_OUT = "\x1b[O";
 const BEGIN_SYNCHRONIZED_OUTPUT = "\x1b[?2026h";
 const END_SYNCHRONIZED_OUTPUT = "\x1b[?2026l";
-const OSC133_ZONE_PREFIX = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/;
-const OSC133_PROMPT_START = /^\x1b\]133;A(?:\x07|\x1b\\)/;
+const OSC133_ZONE_PREFIX = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/u;
+const OSC133_PROMPT_START = /^\x1b\]133;A(?:\x07|\x1b\\)/u;
 const PAGE_SCROLL_OVERLAP = 4;
 const ALT_WHEEL_SCROLL_MULTIPLIER = 5;
 const MAX_CACHED_OFFSCREEN_KITTY_IMAGES = 16;
@@ -307,15 +307,23 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     this.copyOnSelect = enabled;
   }
 
-  /** Whether the fullscreen viewport has a non-empty active text selection. */
+  /**
+   * Whether the fullscreen viewport has a non-empty active text selection.
+   *
+   * @returns {boolean} Whether a non-empty selection is active.
+   */
   hasActiveSelection(): boolean {
     return this.getActiveSelectionText() !== undefined;
   }
 
-  /** Copy the active fullscreen text selection, if any, using the configured selection clipboard path. */
-  async copyActiveSelectionToClipboard(): Promise<boolean> {
+  /**
+   * Copy the active fullscreen text selection, if any, using the configured selection clipboard path.
+   *
+   * @returns {Promise<boolean>} Whether text was copied.
+   */
+  copyActiveSelectionToClipboard(): Promise<boolean> {
     const text = this.getActiveSelectionText();
-    if (!text) return false;
+    if (!text) return Promise.resolve(false);
     return this.copyTextToClipboard(text);
   }
 
@@ -325,7 +333,11 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     this.lastClick = undefined;
   }
 
-  /** The lines of the last rendered frame, one per terminal row, as written to the terminal. */
+  /**
+   * The lines of the last rendered frame, one per terminal row, as written to the terminal.
+   *
+   * @returns {string[]} The frame lines.
+   */
   getScreenLines(): string[] {
     return [...this.previousScreen];
   }
@@ -693,7 +705,12 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     return scrollView.scrollTop !== before;
   }
 
-  /** Show a transient message in the alternate-screen flash stack. */
+  /**
+   * Show a transient message in the alternate-screen flash stack.
+   *
+   * @param {string} message - The message to show.
+   * @param {number} durationMs - How long to show it, in milliseconds.
+   */
   flash(message: string, durationMs?: number): void {
     this.flashes.flash(message, durationMs);
   }
@@ -742,7 +759,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
       // SGR mouse button codes use bit 3 (value 8) for the Alt modifier.
       const wheelDelta =
         wheelEvent.direction *
-        ((wheelEvent.button & 8) !== 0 ? lines * ALT_WHEEL_SCROLL_MULTIPLIER : lines);
+        ((wheelEvent.button & 8) === 0 ? lines : lines * ALT_WHEEL_SCROLL_MULTIPLIER);
       const event = this.createMouseEvent("wheel", wheelEvent.button, wheelEvent.x, wheelEvent.y, {
         wheelDelta,
       });
@@ -991,13 +1008,13 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     if (this.handleSearchMouseEvent(raw)) return;
 
     const overlay = this.dispatchMouseToOverlay(event);
-    if (!overlay.hit) {
+    if (overlay.hit) {
+      this.stopScrollbarHover();
+    } else {
       if (this.handleScrollToEndIndicatorMouseEvent(raw)) return;
       const scrollbarHandled = this.handleScrollbarMouseEvent(raw);
       if (!this.scrollbarDrag) this.updateScrollbarHover(raw.x, raw.y);
       if (scrollbarHandled) return;
-    } else {
-      this.stopScrollbarHover();
     }
 
     const result = overlay.result ?? (overlay.hit ? undefined : this.dispatchMouseToLayout(event));
@@ -1018,7 +1035,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
   }
 
   private parseWheelEvent(data: string): WheelEvent | undefined {
-    const [, sgrButton, sgrX, sgrY] = /^\x1b\[<(\d+);(\d+);(\d+)[Mm]$/.exec(data) ?? [];
+    const [, sgrButton, sgrX, sgrY] = /^\x1b\[<(\d+);(\d+);(\d+)[Mm]$/u.exec(data) ?? [];
     if (sgrButton !== undefined && sgrX !== undefined && sgrY !== undefined) {
       const button = Number.parseInt(sgrButton, 10);
       if ((button & 64) === 0) return undefined;
@@ -1063,7 +1080,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
   }
 
   private parseSgrMouseEvent(data: string): SgrMouseEvent | undefined {
-    const [, button, x, y, final] = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/.exec(data) ?? [];
+    const [, button, x, y, final] = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/u.exec(data) ?? [];
     if (button === undefined || x === undefined || y === undefined) return undefined;
     return {
       button: Number.parseInt(button, 10),
@@ -1445,7 +1462,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
           return;
         }
       }
-      if (this.copyOnSelect) void this.copySelectionToClipboard();
+      if (this.copyOnSelect) void this.copyActiveSelectionToClipboard();
       this.requestRender();
       return;
     }
@@ -1548,12 +1565,6 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     }
     const text = lines.join("\n");
     return text.length === 0 ? undefined : text;
-  }
-
-  private async copySelectionToClipboard(): Promise<boolean> {
-    const text = this.getActiveSelectionText();
-    if (!text) return false;
-    return this.copyTextToClipboard(text);
   }
 
   private async copyTextToClipboard(text: string): Promise<boolean> {
@@ -1738,7 +1749,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
 
   private isMouseSequence(data: string): boolean {
     return (
-      /^\x1b\[<\d+;\d+;\d+[Mm]$/.test(data) || (data.length === 6 && data.startsWith("\x1b[M"))
+      /^\x1b\[<\d+;\d+;\d+[Mm]$/u.test(data) || (data.length === 6 && data.startsWith("\x1b[M"))
     );
   }
 

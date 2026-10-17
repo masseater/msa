@@ -9,6 +9,7 @@ import {
   type SyncInitInput,
 } from "@silvia-odwyer/photon/photon_rs.js";
 
+import { promiseTry } from "../promise-try.ts";
 import type { ImageLimits, ImageProcessor, PreparedImage } from "../tools/image-processor.ts";
 import { base64Length, INLINE_IMAGE_TYPES, toBase64 } from "../tools/image-processor.ts";
 import { exifOrientation } from "./exif.ts";
@@ -29,10 +30,14 @@ const JPEG_QUALITIES = [80, 70, 55, 40];
  *
  * The work runs on the calling thread: about a second and a half for a 12-megapixel photo. Decoding takes the image's
  * RGBA size in WebAssembly memory, which does not shrink again; leave the processor out on memory-constrained hosts.
+ * @param {SyncInitInput} wasm - Photon's WebAssembly.
+ * @returns {ImageProcessor} The processor.
  */
 export function createPhotonImages(wasm: SyncInitInput): ImageProcessor {
   initSync({ module: wasm });
-  return { prepare: async (bytes, mimeType, limits) => prepare(bytes, mimeType, limits) };
+  return {
+    prepare: (bytes, mimeType, limits) => promiseTry(() => prepare(bytes, mimeType, limits)),
+  };
 }
 
 function prepare(
@@ -99,6 +104,11 @@ function prepare(
 /**
  * `image` at `size` in the first encoding whose base64 fits `maxBytes`: PNG, then JPEG at falling qualities, or the
  * JPEG qualities first when `jpegFirst`; `undefined` if none fits.
+ * @param {PhotonImage} image - The decoded image.
+ * @param {{ readonly width: number; readonly height: number }} size - The size to encode at.
+ * @param {number} maxBytes - The base64 limit.
+ * @param {boolean} jpegFirst - Whether to try JPEG first.
+ * @returns {{ readonly data: string; readonly mimeType: string } | undefined} The encoding.
  */
 function encodeWithin(
   image: PhotonImage,
@@ -128,6 +138,9 @@ function encodeWithin(
 /**
  * The RGBA pixels of `image` turned upright for EXIF `orientation` 5 to 8, the orientations that swap width and
  * height. Photon's own `rotate` drops pixels at right angles, so the pixels are moved here.
+ * @param {PhotonImage} image - The decoded image.
+ * @param {number} orientation - The EXIF orientation.
+ * @returns {{ readonly pixels: Uint8Array; readonly width: number; readonly height: number }} The pixels and size.
  */
 function transposed(
   image: PhotonImage,

@@ -90,7 +90,11 @@ export class TaskGraphView {
     });
   }
 
-  /** A disposable read-only Chord state of the graph. */
+  /**
+   * A disposable read-only Chord state of the graph.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<AttachedReplicatedState<TaskGraph>>} The state.
+   */
   async state(context: Context): Promise<AttachedReplicatedState<TaskGraph>> {
     const { observer, detach } = await this.#attach(
       (value, release) => new CommittedStateSource<TaskGraph>(value, release),
@@ -104,7 +108,11 @@ export class TaskGraphView {
     }
   }
 
-  /** A serialized exact-frame watch of the graph; cancelling `context` stops it. */
+  /**
+   * A serialized exact-frame watch of the graph; cancelling `context` stops it.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<TaskGraphWatch>} The watch.
+   */
   async watch(context: Context): Promise<TaskGraphWatch> {
     const { observer } = await this.#attach(
       (value, release) =>
@@ -120,7 +128,12 @@ export class TaskGraphView {
     return observer;
   }
 
-  /** Register an observer created from the current revision, atomically on the Session line. */
+  /**
+   * Register an observer created from the current revision, atomically on the Session line.
+   * @param {(value: TaskGraph, release: () => void) => O} create - Creates the observer.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<{ observer: O; detach: () => void }>} The observer and its detach.
+   */
   #attach<O extends Observer>(
     create: (value: TaskGraph, release: () => void) => O,
     context: Context,
@@ -147,7 +160,7 @@ export class TaskGraphView {
   async #build(context: Context): Promise<TaskGraph> {
     const tasks: Record<string, TaskGraphNode> = {};
     const records: AnyTaskRecord[] = [];
-    for (const status of LIVE_STATUSES) {
+    for await (const status of LIVE_STATUSES) {
       records.push(
         ...(await scanAll((cursor) =>
           this.#storage.scanTasks({ status }, SCAN_PAGE_SIZE, cursor, context),
@@ -155,7 +168,7 @@ export class TaskGraphView {
       );
     }
     records.sort((a, b) => a.id - b.id);
-    for (const record of records) {
+    for await (const record of records) {
       const owned = await scanAll((cursor) =>
         this.#storage.scanConversations(
           { ownerTaskId: record.id },
@@ -174,6 +187,10 @@ export class TaskGraphView {
 /**
  * Derive the mount's operations from one publication, apply them, and hand the revision to every observer; one that
  * throws is reported through `report`, and the others still get it.
+ * @param {Mount} mount - The mount.
+ * @param {CommitPublication} publication - The publication.
+ * @param {Context} context - The caller's context.
+ * @param {(error: unknown) => void} report - Receives errors that must not fail the caller.
  */
 function advance(
   mount: Mount,

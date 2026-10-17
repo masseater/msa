@@ -11,7 +11,7 @@ import type {
   ToolRegistration,
 } from "./types.ts";
 
-const SECTION_KEY = /^[a-z][a-z0-9_-]*$/;
+const SECTION_KEY = /^[a-z][a-z0-9_-]*$/u;
 
 /** Built-in task definitions every registry holds; they are not an extension and cannot be removed or replaced. */
 export const BUILTIN_TASKS: readonly AnyTask[] = [GenerationTask, ToolTask, CompactionTask];
@@ -100,14 +100,20 @@ class RegistryImpl<Tool extends ToolRegistration> implements Registry<Tool> {
     this.#publish(current.filter((installed) => installed.name !== extension.name));
   }
 
-  /** Build and validate the next state, which throws on a task name collision, then publish it synchronously. */
+  /**
+   * Build and validate the next state, which throws on a task name collision, then publish it synchronously.
+   * @param {readonly Extension<Tool>[]} extensions - The installed extensions.
+   */
   #publish(extensions: readonly Extension<Tool>[]): void {
     this.#current = new RegistryState(extensions);
     for (const listener of [...this.#listeners]) listener();
   }
 }
 
-/** Unique tool names and section keys within one extension; valid, unreserved section keys. */
+/**
+ * Unique tool names and section keys within one extension; valid, unreserved section keys.
+ * @param {Extension} extension - The extension.
+ */
 function validateExtension(extension: Extension): void {
   const tools = new Set<string>();
   for (const tool of extension.tools ?? []) {
@@ -127,7 +133,10 @@ function validateExtension(extension: Extension): void {
   }
 }
 
-/** Create an application-owned registry holding only the built-in tasks. */
+/**
+ * Create an application-owned registry holding only the built-in tasks.
+ * @returns {Registry<Tool>} The registry.
+ */
 export function createRegistry<Tool extends ToolRegistration = ToolRegistration>(): Registry<Tool> {
   return new RegistryImpl<Tool>();
 }

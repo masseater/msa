@@ -3,7 +3,11 @@ import type { JsonValue } from "@msa/chord";
 import type { CompactionReason, ToolDiagnostic } from "./harness/types.ts";
 import type { Entry, EntryRecord, TypedEntry } from "./types.ts";
 
-/** Define a typed entry kind whose `is()` guard narrows by `EntryRecord.kind`. */
+/**
+ * Define a typed entry kind whose `is()` guard narrows by `EntryRecord.kind`.
+ * @param {string} kind - The entry kind.
+ * @returns {Entry<D>} The entry kind's helpers.
+ */
 export function defineEntry<D extends JsonValue = never>(kind: string): Entry<D> {
   if (typeof kind !== "string" || kind.length === 0)
     throw new TypeError("Entry kind must be a non-empty string");

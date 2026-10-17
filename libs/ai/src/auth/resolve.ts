@@ -29,6 +29,12 @@ export interface AuthResolutionOverrides {
  * A stored credential owns the provider: ambient/env is consulted only when
  * nothing is stored. No silent env fallback after a failed refresh or for a
  * credential type without a matching handler.
+ *
+ * @param {{ id: string; auth: ProviderAuth }} provider - provider to authenticate
+ * @param {CredentialStore} credentials - credential store
+ * @param {AuthContext} authContext - env and file access
+ * @param {AuthResolutionOverrides} [overrides] - caller auth overrides
+ * @returns {Promise<AuthResult | undefined>} the auth result, or undefined when unauthenticated
  */
 export function resolveProviderAuth(
   provider: { id: string; auth: ProviderAuth },
@@ -125,6 +131,13 @@ const DEFAULT_OAUTH_REFRESH_TIMEOUT_MS = 15_000;
  *
  * Resolves with the stored OAuth credential after the operation, or undefined
  * when the provider no longer has an OAuth credential.
+ *
+ * @param {CredentialStore} credentials - credential store
+ * @param {string} providerId - provider id
+ * @param {OAuthAuth} oauth - provider OAuth implementation
+ * @param {(credential: OAuthCredential) => boolean} needsRefresh - decides whether the stored credential needs a refresh
+ * @param {AbortSignal} signal - cancels the wait for the lock
+ * @returns {Promise<OAuthCredential | undefined>} the refreshed credential, or undefined when nothing was refreshed
  */
 export async function refreshStoredOAuthCredential(
   credentials: CredentialStore,
@@ -144,8 +157,10 @@ export async function refreshStoredOAuthCredential(
       async (current) => {
         signal.removeEventListener("abort", cancelLockWait);
         signal.throwIfAborted();
-        if (current?.type !== "oauth") return undefined; // logged out meanwhile
-        if (!needsRefresh(current)) return undefined; // another process/request refreshed
+        // logged out meanwhile
+        if (current?.type !== "oauth") return undefined;
+        // another process/request refreshed
+        if (!needsRefresh(current)) return undefined;
         try {
           return await oauth.refresh(
             current,
@@ -174,6 +189,14 @@ export async function refreshStoredOAuthCredential(
 /**
  * OAuth resolution with double-checked locking: tokens with less than five
  * minutes remaining are refreshed through `refreshStoredOAuthCredential`.
+ *
+ * @param {CredentialStore} credentials - credential store
+ * @param {string} providerId - provider id
+ * @param {OAuthAuth} oauth - provider OAuth implementation
+ * @param {OAuthCredential} stored - stored credential
+ * @param {AbortSignal} signal - cancels the wait for the lock
+ * @param {number} [minOAuthValidityMs] - minimum remaining validity before a refresh
+ * @returns {Promise<AuthResult | undefined>} the auth result, or undefined
  */
 async function resolveStoredOAuth(
   credentials: CredentialStore,
@@ -197,7 +220,8 @@ async function resolveStoredOAuth(
       expiresSoon,
       signal,
     );
-    if (!post) return undefined; // logged out meanwhile
+    // logged out meanwhile
+    if (!post) return undefined;
     credential = post;
     // The normal five-minute window triggers a refresh but does not impose a
     // provider contract. Explicit callers (such as bearer-token export) do

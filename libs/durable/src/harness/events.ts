@@ -186,6 +186,10 @@ function queued(inbox: InboxState | undefined): QueuedItem[] {
 /**
  * Experimental: attach to one conversation's agent events (spec §9.4). The snapshot and the registration for later
  * commits are captured atomically on the Session line; overflow replaces undelivered batches with one snapshot.
+ * @param {Harness} harness - The Harness.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<AgentEventStream>} The event stream.
  */
 export async function watchEvents(
   harness: Harness,
@@ -240,7 +244,12 @@ export async function watchEvents(
 
 type TaskChange = Extract<CommitChange, { type: "task" }>;
 
-/** The tool result for `callId` among `entries`. */
+/**
+ * The tool result for `callId` among `entries`.
+ * @param {readonly EntryRecord[]} entries - The entries to search.
+ * @param {string} callId - The tool call.
+ * @returns {EntryRecord | undefined} The result entry.
+ */
 function resultOf(entries: readonly EntryRecord[], callId: string): EntryRecord | undefined {
   return entries.find((entry) => {
     const message = entry.model?.[0];
@@ -248,7 +257,16 @@ function resultOf(entries: readonly EntryRecord[], callId: string): EntryRecord 
   });
 }
 
-/** Every event one publication causes, in the order of spec §9.4. */
+/**
+ * Every event one publication causes, in the order of spec §9.4.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {ConversationView} before - The view before the publication.
+ * @param {ConversationView} after - The view after it.
+ * @param {readonly Op[]} viewOps - The operations from `before` to `after`.
+ * @param {CommitPublication} publication - The publication.
+ * @param {Set<TaskId>} held - Tasks whose events are held back.
+ * @returns {AgentEvent[]} The events.
+ */
 function translate(
   conversationId: ConversationId,
   before: ConversationView,
@@ -475,7 +493,12 @@ function translate(
 
 const PARTIAL_PATH = ["docs", "msa.live", "generation", "message"];
 
-/** Translate the view operations on the in-flight message into message changes (spec §9.4). */
+/**
+ * Translate the view operations on the in-flight message into message changes (spec §9.4).
+ * @param {readonly Op[]} viewOps - The view operations.
+ * @param {AssistantMessage} message - The in-flight message after them.
+ * @returns {MessageChange[]} The message changes.
+ */
 function messageChanges(viewOps: readonly Op[], message: AssistantMessage): MessageChange[] {
   const changes: MessageChange[] = [];
   // A block sent whole already holds every later change to it in this batch.
@@ -523,7 +546,11 @@ function messageChanges(viewOps: readonly Op[], message: AssistantMessage): Mess
   return changes;
 }
 
-/** The identifying fields of a slot's tool events. */
+/**
+ * The identifying fields of a slot's tool events.
+ * @param {ToolSlot | NestedToolSlot} slot - The slot.
+ * @returns {ToolEventCall} The fields.
+ */
 function callOf(slot: ToolSlot | NestedToolSlot): ToolEventCall {
   return {
     toolCallId: slot.callId,
@@ -535,7 +562,14 @@ function callOf(slot: ToolSlot | NestedToolSlot): ToolEventCall {
   };
 }
 
-/** Output, details, and diagnostics changes of a running slot at `at` in `msa.live`, from the view operations on it. */
+/**
+ * Output, details, and diagnostics changes of a running slot at `at` in `msa.live`, from the view operations on it.
+ * @param {readonly Op[]} viewOps - The view operations.
+ * @param {readonly ["tools" | "nestedTools", number]} at - Where the slot is in `msa.live`.
+ * @param {ToolSlot | NestedToolSlot} slot - The slot after the operations.
+ * @param {ToolSlot | NestedToolSlot} previous - The slot before them.
+ * @returns {ToolExecutionUpdate | undefined} The update, or `undefined` when nothing changed.
+ */
 function toolUpdate(
   viewOps: readonly Op[],
   at: readonly ["tools" | "nestedTools", number],

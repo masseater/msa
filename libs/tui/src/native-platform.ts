@@ -58,7 +58,11 @@ export function getNativePlatformHelper(): NativePlatformHelper | undefined {
   return loadNativePlatformHelper(process.platform);
 }
 
-/** Load a clipboard helper without opening the display until a read is requested. */
+/**
+ * Load a clipboard helper without opening the display until a read is requested.
+ *
+ * @returns {NativeClipboard | undefined} The helper, or undefined when the platform has none.
+ */
 export function getNativeClipboard(): NativeClipboard | undefined {
   if (process.platform !== "linux") return getNativePlatformHelper();
   if (!process.env["DISPLAY"]) return undefined;

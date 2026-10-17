@@ -4,16 +4,10 @@ import { eastAsianWidth } from "get-east-asian-width";
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
 
-/**
- * Get the shared grapheme segmenter instance.
- */
 export function getGraphemeSegmenter(): Intl.Segmenter {
   return graphemeSegmenter;
 }
 
-/**
- * Get the shared word segmenter instance.
- */
 export function getWordSegmenter(): Intl.Segmenter {
   return wordSegmenter;
 }
@@ -23,16 +17,25 @@ export function getWordSegmenter(): Intl.Segmenter {
  * This is a fast heuristic to avoid the expensive rgiEmojiRegex test.
  * The tested Unicode blocks are deliberately broad to account for future
  * Unicode additions.
+ *
+ * @param {string} segment - A grapheme cluster.
+ * @returns {boolean} False only when the cluster cannot be an RGI emoji.
  */
 function couldBeEmoji(segment: string): boolean {
   const cp = segment.codePointAt(0)!;
   return (
-    (cp >= 0x1f000 && cp <= 0x1fbff) || // Emoji and Pictograph
-    (cp >= 0x2300 && cp <= 0x23ff) || // Misc technical
-    (cp >= 0x2600 && cp <= 0x27bf) || // Misc symbols, dingbats
-    (cp >= 0x2b50 && cp <= 0x2b55) || // Specific stars/circles
-    segment.includes("\uFE0F") || // Contains VS16 (emoji presentation selector)
-    segment.length > 2 // Multi-codepoint sequences (ZWJ, skin tones, etc.)
+    // Emoji and Pictograph
+    (cp >= 0x1f000 && cp <= 0x1fbff) ||
+    // Misc technical
+    (cp >= 0x2300 && cp <= 0x23ff) ||
+    // Misc symbols, dingbats
+    (cp >= 0x2600 && cp <= 0x27bf) ||
+    // Specific stars/circles
+    (cp >= 0x2b50 && cp <= 0x2b55) ||
+    // Contains VS16 (emoji presentation selector)
+    segment.includes("\uFE0F") ||
+    // Multi-codepoint sequences (ZWJ, skin tones, etc.)
+    segment.length > 2
   );
 }
 
@@ -184,6 +187,9 @@ function finalizeTruncatedResult(
  * Calculate the terminal width of a single grapheme cluster.
  * Based on code from the string-width library, but includes a possible-emoji
  * check to avoid running the RGI_Emoji regex unnecessarily.
+ *
+ * @param {string} segment - A grapheme cluster.
+ * @returns {number} The number of terminal cells the cluster occupies.
  */
 function graphemeWidth(segment: string): number {
   if (segment.length === 1) {
@@ -252,6 +258,9 @@ function graphemeWidth(segment: string): number {
 
 /**
  * Calculate the visible width of a string in terminal columns.
+ *
+ * @param {string} str - Text that may contain ANSI, OSC, and APC sequences.
+ * @returns {number} The number of terminal columns the text occupies.
  */
 export function visibleWidth(str: string): number {
   if (str.length === 0) {
@@ -274,7 +283,7 @@ export function visibleWidth(str: string): number {
   // Normalize: tabs to 3 spaces, strip ANSI escape codes
   let clean = str;
   if (str.includes("\t")) {
-    clean = clean.replace(/\t/g, "   ");
+    clean = clean.replace(/\t/gu, "   ");
   }
   let escapeIndex = clean.indexOf("\x1b");
   if (escapeIndex !== -1) {
@@ -315,7 +324,12 @@ export function visibleWidth(str: string): number {
   return width;
 }
 
-/** Remove ANSI, OSC, and APC control sequences while preserving visible text. */
+/**
+ * Remove ANSI, OSC, and APC control sequences while preserving visible text.
+ *
+ * @param {string} str - Text that may contain terminal control sequences.
+ * @returns {string} The visible text only.
+ */
 export function stripTerminalSequences(str: string): string {
   if (!str.includes("\x1b")) return str;
   let result = "";
@@ -337,7 +351,13 @@ interface GraphemeCellRange {
   end: number;
 }
 
-/** Return the terminal-cell range occupied by the grapheme at a visible column. */
+/**
+ * Return the terminal-cell range occupied by the grapheme at a visible column.
+ *
+ * @param {string} line - A rendered terminal line.
+ * @param {number} column - A visible column, 0-based.
+ * @returns {GraphemeCellRange | undefined} The cell range, or undefined when no grapheme covers the column.
+ */
 export function getGraphemeCellRange(line: string, column: number): GraphemeCellRange | undefined {
   let currentCol = 0;
   let i = 0;
@@ -361,7 +381,13 @@ export function getGraphemeCellRange(line: string, column: number): GraphemeCell
   return undefined;
 }
 
-/** Return the OSC 8 hyperlink covering a visible terminal column. */
+/**
+ * Return the OSC 8 hyperlink covering a visible terminal column.
+ *
+ * @param {string} line - A rendered terminal line.
+ * @param {number} column - A visible column, 0-based.
+ * @returns {string | undefined} The hyperlink URL, or undefined when the column is not inside a link.
+ */
 export function getOsc8LinkAtColumn(line: string, column: number): string | undefined {
   let activeUrl: string | undefined;
   let currentCol = 0;
@@ -369,7 +395,7 @@ export function getOsc8LinkAtColumn(line: string, column: number): string | unde
   while (i < line.length) {
     const ansi = extractAnsiCode(line, i);
     if (ansi) {
-      const hyperlink = /^\x1b\]8;[^;]*;([^\x07\x1b]*)(?:\x07|\x1b\\)$/.exec(ansi.code);
+      const hyperlink = /^\x1b\]8;[^;]*;([^\x07\x1b]*)(?:\x07|\x1b\\)$/u.exec(ansi.code);
       if (hyperlink) activeUrl = hyperlink[1] || undefined;
       i += ansi.length;
       continue;
@@ -394,8 +420,8 @@ export function getOsc8LinkAtColumn(line: string, column: number): string | unde
  * expanded to the fixed width used by layout so terminal tab stops cannot wrap
  * a logical line, while tabs inside terminal string sequences stay untouched.
  */
-const THAI_LAO_AM_REGEX = /[\u0e33\u0eb3]/;
-const THAI_LAO_AM_GLOBAL_REGEX = /[\u0e33\u0eb3]/g;
+const THAI_LAO_AM_REGEX = /[\u0e33\u0eb3]/u;
+const THAI_LAO_AM_GLOBAL_REGEX = /[\u0e33\u0eb3]/gu;
 
 export function normalizeTerminalOutput(str: string): string {
   let normalized = str;
@@ -423,6 +449,10 @@ export function normalizeTerminalOutput(str: string): string {
 
 /**
  * Extract ANSI escape sequences from a string at the given position.
+ *
+ * @param {string} str - Text to read.
+ * @param {number} pos - Index where the sequence may start.
+ * @returns {{ code: string; length: number } | null} The sequence and its length, or null when no sequence starts at `pos`.
  */
 export function extractAnsiCode(str: string, pos: number): { code: string; length: number } | null {
   const length = ansiCodeLength(str, pos);
@@ -432,6 +462,9 @@ export function extractAnsiCode(str: string, pos: number): { code: string; lengt
 /**
  * Width of a string made of printable ASCII, tabs, and ANSI escape sequences, or -1 if it contains
  * anything else. Matches `visibleWidth` for those strings without allocating.
+ *
+ * @param {string} str - Text to measure.
+ * @returns {number} The width in terminal columns, or -1.
  */
 function asciiVisibleWidth(str: string): number {
   let width = 0;
@@ -455,7 +488,13 @@ function asciiVisibleWidth(str: string): number {
   return width;
 }
 
-/** Length of the ANSI/OSC/APC escape sequence starting at `pos`, or 0 if there is none. */
+/**
+ * Length of the ANSI/OSC/APC escape sequence starting at `pos`, or 0 if there is none.
+ *
+ * @param {string} str - Text to read.
+ * @param {number} pos - Index where the sequence may start.
+ * @returns {number} The sequence length in UTF-16 code units, or 0.
+ */
 function ansiCodeLength(str: string, pos: number): number {
   if (pos >= str.length || str.charCodeAt(pos) !== 0x1b) return 0;
 
@@ -558,8 +597,10 @@ class AnsiCodeTracker {
   private inverse = false;
   private hidden = false;
   private strikethrough = false;
-  private fgColor: string | null = null; // Stores the full code like "31" or "38;5;240"
-  private bgColor: string | null = null; // Stores the full code like "41" or "48;5;240"
+  // Stores the full code like "31" or "38;5;240"
+  private fgColor: string | null = null;
+  // Stores the full code like "41" or "48;5;240"
+  private bgColor: string | null = null;
   private activeHyperlink: ActiveHyperlink | null = null;
 
   process(ansiCode: string): void {
@@ -578,7 +619,7 @@ class AnsiCodeTracker {
     }
 
     // Extract the parameters between \x1b[ and m
-    const params = ansiCode.match(/\x1b\[([\d;]*)m/)?.[1];
+    const params = ansiCode.match(/\x1b\[([\d;]*)m/u)?.[1];
     if (params === undefined) return;
 
     if (params === "" || params === "0") {
@@ -653,7 +694,8 @@ class AnsiCodeTracker {
           break;
         case 21:
           this.bold = false;
-          break; // Some terminals
+          // Some terminals
+          break;
         case 22:
           this.bold = false;
           this.dim = false;
@@ -678,10 +720,12 @@ class AnsiCodeTracker {
           break;
         case 39:
           this.fgColor = null;
-          break; // Default fg
+          // Default fg
+          break;
         case 49:
           this.bgColor = null;
-          break; // Default bg
+          // Default bg
+          break;
         default:
           // Standard foreground colors 30-37, 90-97
           if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) {
@@ -762,14 +806,18 @@ class AnsiCodeTracker {
    * Underline must be closed to prevent bleeding into padding.
    * Active OSC 8 hyperlinks must be closed and re-opened on the next line.
    * Returns empty string if no attributes need closing.
+   *
+   * @returns {string} The reset sequence, or an empty string.
    */
   getLineEndReset(): string {
     let result = "";
     if (this.underline) {
-      result += "\x1b[24m"; // Underline off only
+      // Underline off only
+      result += "\x1b[24m";
     }
     if (this.activeHyperlink) {
-      result += formatOsc8Close(this.activeHyperlink.terminator); // Re-opened at line start via getActiveCodes()
+      // Re-opened at line start via getActiveCodes()
+      result += formatOsc8Close(this.activeHyperlink.terminator);
     }
     return result;
   }
@@ -789,7 +837,12 @@ function updateTrackerFromText(text: string, tracker: AnsiCodeTracker): void {
   }
 }
 
-/** Return only the background color active at the end of an ANSI-styled string. */
+/**
+ * Return only the background color active at the end of an ANSI-styled string.
+ *
+ * @param {string} text - An ANSI-styled string.
+ * @returns {string} The SGR sequence of the active background, or an empty string.
+ */
 export function getActiveBackgroundAnsi(text: string): string {
   const tracker = new AnsiCodeTracker();
   updateTrackerFromText(text, tracker);
@@ -802,11 +855,15 @@ function* graphemeSegments(text: string): Generator<string> {
 
 /**
  * Split text into words while keeping ANSI codes attached.
+ *
+ * @param {string} text - Text that may contain ANSI codes.
+ * @returns {string[]} Words and whitespace runs, each with the ANSI codes that precede it.
  */
 function splitIntoTokensWithAnsi(text: string): string[] {
   const tokens: string[] = [];
   let current = "";
-  let pendingAnsi = ""; // ANSI codes waiting to be attached to next visible content
+  // ANSI codes waiting to be attached to next visible content
+  let pendingAnsi = "";
   let currentKind: "space" | "word" | null = null;
   let i = 0;
 
@@ -885,25 +942,27 @@ function splitIntoTokensWithAnsi(text: string): string[] {
 }
 
 /**
+ * Flatten cached lines. V8 keeps a string built by concatenation as a tree of its parts until something reads it
+ * whole, and a cached line kept as such a tree retains several times its own size. Converting a string to a number
+ * reads it whole, so V8 flattens it in place; the strings' values do not change.
+ *
+ * @param {readonly string[]} lines - Lines to flatten in place.
+ */
+export function flattenLines(lines: readonly string[]): void {
+  for (const line of lines) Number(line);
+}
+
+/**
  * Wrap text with ANSI codes preserved.
  *
  * ONLY does word wrapping - NO padding, NO background colors.
  * Returns lines where each line is <= width visible chars.
  * Active ANSI codes are preserved across line breaks.
  *
- * @param text - Text to wrap (may contain ANSI codes and newlines)
- * @param width - Maximum visible width per line
- * @returns Array of wrapped lines (NOT padded to width)
+ * @param {string} text - Text to wrap (may contain ANSI codes and newlines)
+ * @param {number} width - Maximum visible width per line
+ * @returns {string[]} Array of wrapped lines (NOT padded to width)
  */
-/**
- * Flatten cached lines. V8 keeps a string built by concatenation as a tree of its parts until something reads it
- * whole, and a cached line kept as such a tree retains several times its own size. Converting a string to a number
- * reads it whole, so V8 flattens it in place; the strings' values do not change.
- */
-export function flattenLines(lines: readonly string[]): void {
-  for (const line of lines) Number(line);
-}
-
 export function wrapTextWithAnsi(text: string, width: number): string[] {
   if (!text) {
     return [""];
@@ -911,7 +970,7 @@ export function wrapTextWithAnsi(text: string, width: number): string[] {
 
   // Handle newlines by processing each line separately
   // Track ANSI state across lines so styles carry over after literal newlines
-  const inputLines = text.split(/\r\n|\r|\n/);
+  const inputLines = text.split(/\r\n|\r|\n/u);
   const result: string[] = [];
   const tracker = new AnsiCodeTracker();
 
@@ -959,8 +1018,6 @@ function wrapSingleLine(line: string, width: number): string[] {
           currentLine += lineEndReset;
         }
         wrapped.push(currentLine);
-        currentLine = "";
-        currentVisibleLength = 0;
       }
 
       // Break long token - breakLongWord handles its own resets
@@ -1010,18 +1067,12 @@ function wrapSingleLine(line: string, width: number): string[] {
   return wrapped.length > 0 ? wrapped.map((wrappedLine) => wrappedLine.trimEnd()) : [""];
 }
 
-export const PUNCTUATION_REGEX = /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/;
+export const PUNCTUATION_REGEX = /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/u;
 
-/**
- * Check if a character is whitespace.
- */
 export function isWhitespaceChar(char: string): boolean {
-  return /\s/.test(char);
+  return /\s/u.test(char);
 }
 
-/**
- * Check if a character is punctuation.
- */
 export function isPunctuationChar(char: string): boolean {
   return PUNCTUATION_REGEX.test(char);
 }
@@ -1098,10 +1149,10 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
 /**
  * Apply background color to a line, padding to full width.
  *
- * @param line - Line of text (may contain ANSI codes)
- * @param width - Total width to pad to
- * @param bgFn - Background color function
- * @returns Line with background applied and padded to width
+ * @param {string} line - Line of text (may contain ANSI codes)
+ * @param {number} width - Total width to pad to
+ * @param {(text: string) => string} bgFn - Background color function
+ * @returns {string} Line with background applied and padded to width
  */
 export function applyBackgroundToLine(
   line: string,
@@ -1123,11 +1174,11 @@ export function applyBackgroundToLine(
  * Optionally pad with spaces to reach exactly maxWidth.
  * Properly handles ANSI escape codes (they don't count toward width).
  *
- * @param text - Text to truncate (may contain ANSI codes)
- * @param maxWidth - Maximum visible width
- * @param ellipsis - Ellipsis string to append when truncating (default: "...")
- * @param pad - If true, pad result with spaces to exactly maxWidth (default: false)
- * @returns Truncated text, optionally padded to exactly maxWidth
+ * @param {string} text - Text to truncate (may contain ANSI codes)
+ * @param {number} maxWidth - Maximum visible width
+ * @param {string} ellipsis - Ellipsis string to append when truncating (default: "...")
+ * @param {boolean} pad - If true, pad result with spaces to exactly maxWidth (default: false)
+ * @returns {string} Truncated text, optionally padded to exactly maxWidth
  */
 export function truncateToWidth(
   text: string,
@@ -1186,7 +1237,7 @@ export function truncateToWidth(
   let keptWidth = 0;
   let keepContiguousPrefix = true;
   let overflowed = false;
-  let exhaustedInput = false;
+  let exhaustedInput: boolean;
   const hasAnsi = text.includes("\x1b");
   const hasTabs = text.includes("\t");
 
@@ -1283,7 +1334,12 @@ export function truncateToWidth(
 
 /**
  * Extract a range of visible columns from a line. Handles ANSI codes and wide chars.
- * @param strict - If true, exclude wide chars at boundary that would extend past the range
+ *
+ * @param {string} line - A line that may contain ANSI codes.
+ * @param {number} startCol - First visible column, 0-based.
+ * @param {number} length - Number of visible columns.
+ * @param {boolean} strict - If true, exclude wide chars at boundary that would extend past the range
+ * @returns {string} The slice with the ANSI codes active in it.
  */
 export function sliceByColumn(
   line: string,
@@ -1294,7 +1350,15 @@ export function sliceByColumn(
   return sliceWithWidth(line, startCol, length, strict).text;
 }
 
-/** Like sliceByColumn but also returns the actual visible width of the result. */
+/**
+ * Like sliceByColumn but also returns the actual visible width of the result.
+ *
+ * @param {string} line - A line that may contain ANSI codes.
+ * @param {number} startCol - First visible column, 0-based.
+ * @param {number} length - Number of visible columns.
+ * @param {boolean} strict - If true, exclude wide chars at boundary that would extend past the range
+ * @returns {{ text: string; width: number }} The slice and its visible width.
+ */
 export function sliceWithWidth(
   line: string,
   startCol: number,
@@ -1352,6 +1416,13 @@ const pooledStyleTracker = new AnsiCodeTracker();
  * Extract "before" and "after" segments from a line in a single pass.
  * Used for overlay compositing where we need content before and after the overlay region.
  * Preserves styling from before the overlay that should affect content after it.
+ *
+ * @param {string} line - A line that may contain ANSI codes.
+ * @param {number} beforeEnd - Visible column where the overlay region starts.
+ * @param {number} afterStart - Visible column where the overlay region ends.
+ * @param {number} afterLen - Number of visible columns to keep after the overlay region.
+ * @param {boolean} strictAfter - If true, exclude wide chars at the end of the after segment that would extend past it.
+ * @returns {{ before: string; beforeWidth: number; after: string; afterWidth: number }} The before and after segments with their visible widths.
  */
 export function extractSegments(
   line: string,

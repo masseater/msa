@@ -11,7 +11,7 @@ import {
   visibleWidth,
 } from "./utils.ts";
 
-const OSC133_ZONE_PREFIX = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/;
+const OSC133_ZONE_PREFIX = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/u;
 
 export interface LayoutRect {
   x: number;
@@ -458,7 +458,14 @@ function containsPoint(rect: LayoutRect, x: number, y: number): boolean {
   return x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
 }
 
-/** Return the visual hit path from the deepest component to the layout root. */
+/**
+ * Return the visual hit path from the deepest component to the layout root.
+ *
+ * @param {LayoutFrame} frame - The laid-out frame.
+ * @param {number} x - Column, 0-based.
+ * @param {number} y - Row, 0-based.
+ * @returns {LayoutBox[]} The boxes under the point, deepest first.
+ */
 export function getLayoutBoxesAt(frame: LayoutFrame, x: number, y: number): LayoutBox[] {
   const result: Array<{ box: LayoutBox; depth: number }> = [];
   const visit = (box: LayoutBox, depth: number): void => {

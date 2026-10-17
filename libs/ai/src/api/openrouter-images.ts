@@ -39,7 +39,14 @@ type OpenRouterImageGenerationResponse = ChatCompletion & {
   choices: OpenRouterImageGenerationChoice[];
 };
 
-/** Image generation over OpenRouter's chat completions endpoint. */
+/**
+ * Image generation over OpenRouter's chat completions endpoint.
+ *
+ * @param {ImageModel<ImageApi>} model - image model the request targets
+ * @param {ImagesContext} context - image request context
+ * @param {ImagesOptions} [options] - request options
+ * @returns {Promise<AssistantImages>} the generated images
+ */
 export const generateImages: ImagesFunction<ImagesOptions> = async (
   model: ImageModel<ImageApi>,
   context: ImagesContext,
@@ -67,7 +74,7 @@ export const generateImages: ImagesFunction<ImagesOptions> = async (
     }
     const requestOptions = {
       ...(options?.signal ? { signal: options.signal } : {}),
-      ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+      ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
       maxRetries: 0,
     };
     const { data: response, response: rawResponse } = await retryProviderRequest(
@@ -103,7 +110,7 @@ export const generateImages: ImagesFunction<ImagesOptions> = async (
         const imageUrl =
           typeof image.image_url === "string" ? image.image_url : image.image_url?.url;
         if (!imageUrl?.startsWith("data:")) continue;
-        const [, mimeType, data] = imageUrl.match(/^data:([^;]+);base64,(.+)$/) ?? [];
+        const [, mimeType, data] = imageUrl.match(/^data:([^;]+);base64,(.+)$/u) ?? [];
         if (mimeType === undefined || data === undefined) continue;
         output.output.push({
           type: "image",

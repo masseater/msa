@@ -34,6 +34,11 @@ function modalities(values: string[] | undefined): ("text" | "image")[] {
  * default listing omits image-only and decision models, so those come from
  * the other listings. An upstream model may appear in several results; it then
  * gets separate entries per operation.
+ *
+ * @param {readonly OpenRouterModelListItem[]} listed - default listing
+ * @param {readonly OpenRouterModelListItem[]} imageListed - image listing
+ * @param {readonly OpenRouterModelListItem[]} decisionListed - decisions listing
+ * @returns {OpenRouterCatalog} the catalog
  */
 export function buildOpenRouterCatalog(
   listed: readonly OpenRouterModelListItem[],
@@ -52,7 +57,7 @@ export function buildOpenRouterCatalog(
     }
 
     const thinkingLevelMap = getOpenRouterThinkingLevelMap(model.reasoning);
-    const useAnthropicMessages = /^anthropic\//.test(model.id) && !model.id.endsWith(":batch");
+    const useAnthropicMessages = /^anthropic\//u.test(model.id) && !model.id.endsWith(":batch");
     chat.push({
       type: "chat",
       id: model.id,

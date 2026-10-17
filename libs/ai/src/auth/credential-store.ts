@@ -10,7 +10,14 @@ export class InMemoryCredentialStore implements CredentialStore {
   private credentials = new Map<string, Credential>();
   private chains = new Map<string, Promise<unknown>>();
 
-  /** Serialize tasks per provider id without releasing the chain before active work settles. */
+  /**
+   * Serialize tasks per provider id without releasing the chain before active work settles.
+   *
+   * @param {string} providerId - provider id to serialize on
+   * @param {() => Promise<T>} task - work to run
+   * @param {AuthOperationOptions} [options] - operation options
+   * @returns {Promise<T>} the task result
+   */
   private enqueue<T>(
     providerId: string,
     task: () => Promise<T>,
@@ -31,17 +38,27 @@ export class InMemoryCredentialStore implements CredentialStore {
     return raceWithAbortSignal(queued, signal);
   }
 
-  async read(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
-    options?.signal?.throwIfAborted();
-    return this.credentials.get(providerId);
+  read(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
+    try {
+      options?.signal?.throwIfAborted();
+      return Promise.resolve(this.credentials.get(providerId));
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
-  async list(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
-    options?.signal?.throwIfAborted();
-    return [...this.credentials].map(([providerId, credential]) => ({
-      providerId,
-      type: credential.type,
-    }));
+  list(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
+    try {
+      options?.signal?.throwIfAborted();
+      return Promise.resolve(
+        [...this.credentials].map(([providerId, credential]) => ({
+          providerId,
+          type: credential.type,
+        })),
+      );
+    } catch (error) {
+      return Promise.reject(error);
+    }
   }
 
   modify(
@@ -65,8 +82,9 @@ export class InMemoryCredentialStore implements CredentialStore {
   delete(providerId: string, options?: AuthOperationOptions): Promise<void> {
     return this.enqueue(
       providerId,
-      async () => {
+      () => {
         this.credentials.delete(providerId);
+        return Promise.resolve();
       },
       options,
     );

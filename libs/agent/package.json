@@ -37,9 +37,11 @@
   },
   "dependencies": {
     "@msa/ai": "workspace:*",
+    "effect": "catalog:stack",
     "typebox": "catalog:"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:stack",
     "@types/node": "catalog:",
     "vitest": "catalog:"
   },

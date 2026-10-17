@@ -2,7 +2,7 @@ import type { Context } from "@msa/chord";
 
 import { type ExecutionEnv, getOrThrow } from "../env/index.ts";
 
-const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
+const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/gu;
 const NARROW_NO_BREAK_SPACE = "\u202F";
 
 function normalizeToolPath(path: string): string {
@@ -26,13 +26,13 @@ export async function resolveReadToolPath(
   const resolved = await resolveToolPath(env, path, context);
   const variants = [
     resolved,
-    resolved.replace(/ (AM|PM)\./gi, `${NARROW_NO_BREAK_SPACE}$1.`),
+    resolved.replace(/ (AM|PM)\./giu, `${NARROW_NO_BREAK_SPACE}$1.`),
     resolved.normalize("NFD"),
-    resolved.replace(/'/g, "\u2019"),
-    resolved.normalize("NFD").replace(/'/g, "\u2019"),
+    resolved.replace(/'/gu, "\u2019"),
+    resolved.normalize("NFD").replace(/'/gu, "\u2019"),
   ];
 
-  for (const variant of new Set(variants)) {
+  for await (const variant of new Set(variants)) {
     if (getOrThrow(await env.exists(variant, context))) return variant;
   }
   return resolved;

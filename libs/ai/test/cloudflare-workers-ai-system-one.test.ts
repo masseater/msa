@@ -82,7 +82,7 @@ describe("Cloudflare Workers AI System One", () => {
 
   it("runs Jev through the account-scoped /ai/run endpoint", async () => {
     const { models, jev } = setup();
-    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+    const fetch = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
         input: { state: unknown; questions: Record<string, { type: string }> };
@@ -92,7 +92,7 @@ describe("Cloudflare Workers AI System One", () => {
       expect(payload.input.questions["is_urgent"]?.type).toBe("noul");
       expect(payload.input.questions["department"]?.type).toBe("choice");
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer cf-key");
-      return Response.json(restResponse("Completed"));
+      return Promise.resolve(Response.json(restResponse("Completed")));
     });
 
     const result = await models.classify(jev, context, { ...auth, fetch });
@@ -117,7 +117,7 @@ describe("Cloudflare Workers AI System One", () => {
     const { models } = setup();
     const clef = models.getModelOfType("classifier", "cloudflare-workers-ai", id);
     if (!clef) throw new Error(`missing Cloudflare ${id} model`);
-    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+    const fetch = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;
         input: { state: unknown; questions: Record<string, { type: string }> };
@@ -125,7 +125,9 @@ describe("Cloudflare Workers AI System One", () => {
       expect(payload.model).toBe(id);
       expect(payload.input.state).toEqual(context.state);
       expect(payload.input.questions["is_urgent"]?.type).toBe("noul");
-      return Response.json({ result: clefOutput, success: true, errors: [], messages: [] });
+      return Promise.resolve(
+        Response.json({ result: clefOutput, success: true, errors: [], messages: [] }),
+      );
     });
 
     const result = await models.classify(clef, context, { ...auth, fetch });
@@ -148,7 +150,7 @@ describe("Cloudflare Workers AI System One", () => {
     const { models, jev } = setup();
     const result = await models.classify(jev, context, {
       ...auth,
-      fetch: async () => Response.json(restResponse("Queued", null)),
+      fetch: () => Promise.resolve(Response.json(restResponse("Queued", null))),
     });
 
     expect(result.stopReason).toBe("error");
@@ -159,12 +161,14 @@ describe("Cloudflare Workers AI System One", () => {
     const { models, jev } = setup();
     const result = await models.classify(jev, context, {
       ...auth,
-      fetch: async () =>
-        Response.json({
-          success: false,
-          errors: [{ code: 5007, message: "No such model" }],
-          result: null,
-        }),
+      fetch: () =>
+        Promise.resolve(
+          Response.json({
+            success: false,
+            errors: [{ code: 5007, message: "No such model" }],
+            result: null,
+          }),
+        ),
     });
 
     expect(result.stopReason).toBe("error");

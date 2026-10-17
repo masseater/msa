@@ -189,6 +189,9 @@ interface CachedContext {
 
 /**
  * Get API key for provider - checks OAuth storage first, then env vars
+ *
+ * @param {string} provider - provider id
+ * @returns {Promise<string | undefined>} the API key, or undefined
  */
 async function getApiKey(provider: string): Promise<string | undefined> {
   const oauthKey = await resolveApiKey(provider);
@@ -198,6 +201,9 @@ async function getApiKey(provider: string): Promise<string | undefined> {
 
 /**
  * Synchronous check for API key availability (env vars only, for skipIf)
+ *
+ * @param {ProviderModelPair} pair - provider/model pair
+ * @returns {boolean} whether an API key is set
  */
 function hasApiKey(pair: ProviderModelPair): boolean {
   if (pair.provider === "azure") {
@@ -221,6 +227,8 @@ function getHeaders(pair: ProviderModelPair): Record<string, string> | undefined
 
 /**
  * Check if any provider has API keys available (for skipIf at describe level)
+ *
+ * @returns {boolean} whether any provider has an API key
  */
 function hasAnyApiKey(): boolean {
   return PROVIDER_MODEL_PAIRS.some((pair) => hasApiKey(pair));
@@ -246,6 +254,10 @@ function dumpFailurePayload(params: {
 /**
  * Generate a context from a provider/model pair.
  * Makes a real API call to get authentic tool call IDs and thinking blocks.
+ *
+ * @param {ProviderModelPair} pair - provider/model pair
+ * @param {string} apiKey - API key
+ * @returns {Promise<{ messages: Message[]; api: Api } | null>} the context, or null when the call failed
  */
 async function generateContext(
   pair: ProviderModelPair,
@@ -525,7 +537,7 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
               .filter((c) => c.type === "text")
               .map((c) => c.text)
               .join(" ");
-            const preview = text.slice(0, 100).replace(/\n/g, " ");
+            const preview = text.slice(0, 100).replace(/\n/gu, " ");
             console.log(`[Target: ${targetPair.label}] SUCCESS: ${preview}...`);
             results.push({ target: targetPair.label, success: true });
           }

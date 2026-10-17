@@ -36,12 +36,13 @@ vi.mock("openai", () => {
         const events = azureMock.streamEvents;
         if (!events) throw new Error("mock create");
         return {
-          withResponse: async () => ({
-            data: (async function* () {
-              for (const event of events) yield event;
-            })(),
-            response: { status: 200, headers: new Headers() },
-          }),
+          withResponse: () =>
+            Promise.resolve({
+              data: (async function* () {
+                for (const event of events) yield event;
+              })(),
+              response: { status: 200, headers: new Headers() },
+            }),
         };
       },
     };

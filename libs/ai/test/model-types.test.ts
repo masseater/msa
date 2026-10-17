@@ -45,7 +45,7 @@ function imageModel(provider: string, id: string): ImageModel<ImageApi> {
   };
 }
 
-const noAuth = { apiKey: { name: "Test", resolve: async () => ({ auth: {} }) } };
+const noAuth = { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } };
 const chatStreams = {
   stream: () => new AssistantMessageEventStream(),
   streamSimple: () => new AssistantMessageEventStream(),
@@ -104,8 +104,10 @@ describe("built-in catalog getters", () => {
   it("return model shapes that can be reassigned within one api", () => {
     // Compile-time regression check: the return type must not carry literal model ids.
     let model = getBuiltinModel("openai", "gpt-4o-mini");
+    expect(model.id).toBe("gpt-4o-mini");
     model = getBuiltinModel("openai", "gpt-4o");
     let compat = getCompatModel("openai", "gpt-4o-mini");
+    expect(compat.id).toBe("gpt-4o-mini");
     compat = getCompatModel("openai", "gpt-4o");
 
     expect(model.id).toBe("gpt-4o");
@@ -133,7 +135,7 @@ describe("stored and fetched models of unknown types", () => {
         id: "dyn",
         auth: noAuth,
         models: [],
-        fetchModels: async () => fetched as Model<Api>[],
+        fetchModels: () => Promise.resolve(fetched as Model<Api>[]),
         api: chatStreams,
       }),
     );

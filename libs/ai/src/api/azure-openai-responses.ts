@@ -50,9 +50,6 @@ export interface AzureOpenAIResponsesOptions extends AzureEndpointOptions {
   reasoningSummary?: "auto" | "detailed" | "concise" | null | undefined;
 }
 
-/**
- * Generate function for Azure OpenAI Responses API
- */
 export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIResponsesOptions> = (
   model: Model<"azure-openai-responses">,
   context: TranscriptContext,
@@ -110,7 +107,7 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
       }
       const requestOptions = {
         ...(options?.signal ? { signal: options.signal } : {}),
-        ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+        ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
         maxRetries: 0,
       };
       const { data: openaiStream, response } = await retryProviderRequest(
@@ -242,7 +239,7 @@ function buildParams(
     model: deploymentName,
     input: messages,
     stream: true,
-    ...(promptCacheKey !== undefined ? { prompt_cache_key: promptCacheKey } : {}),
+    ...(promptCacheKey === undefined ? {} : { prompt_cache_key: promptCacheKey }),
     store: false,
   };
 

@@ -611,6 +611,10 @@ type MergedCompatProperties<
  * Provider-level models.json compatibility is API-agnostic, so it needs one superset. Every
  * duplicate property requires explicit generic metadata, while API-specific schemas retain their
  * own defaults and descriptions.
+ *
+ * @param {PropertyGroups} propertyGroups - per-API compat property schemas
+ * @param {Overrides} overrides - generic metadata for properties shared by several APIs
+ * @returns {MergedCompatProperties<PropertyGroups, Overrides>} the merged property superset
  */
 function mergeCompatProperties<
   const PropertyGroups extends readonly TProperties[],

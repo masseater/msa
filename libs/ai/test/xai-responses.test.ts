@@ -58,7 +58,7 @@ async function captureCompletionsUserAgent(
   headers?: Record<string, string>,
 ): Promise<string | null> {
   let userAgent: string | null = null;
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
     userAgent = new Request(input, init).headers.get("user-agent");
     const chunks = [
       { id: "chatcmpl-ua", choices: [{ delta: { content: "ok" }, finish_reason: null, index: 0 }] },
@@ -74,10 +74,12 @@ async function captureCompletionsUserAgent(
       },
     ];
     const body = `${chunks.map((chunk) => `data: ${JSON.stringify(chunk)}`).join("\n\n")}\n\ndata: [DONE]\n\n`;
-    return new Response(body, {
-      status: 200,
-      headers: { "content-type": "text/event-stream" },
-    });
+    return Promise.resolve(
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      }),
+    );
   });
 
   const result = await streamOpenAICompletions(
@@ -279,9 +281,9 @@ describe("xAI Responses provider", () => {
 
   it("uses msa's User-Agent by default for Responses requests", async () => {
     let userAgent: string | null = null;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
       userAgent = new Request(input, init).headers.get("user-agent");
-      return completedResponse();
+      return Promise.resolve(completedResponse());
     });
 
     const openaiModel: Model<"openai-responses"> = {

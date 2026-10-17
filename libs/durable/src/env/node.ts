@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 
 import type { Context } from "@msa/chord";
 
+import { promiseTry } from "../promise-try.ts";
 import { StreamDecoder } from "./decode.ts";
 import {
   type BinaryReader,
@@ -213,7 +214,7 @@ async function findBashOnPath(): Promise<string | null> {
       ? await runCommand("where", ["bash.exe"], 5000)
       : await runCommand("which", ["bash"], 5000);
   if (result.status !== 0 || !result.stdout) return null;
-  const firstMatch = result.stdout.trim().split(/\r?\n/)[0];
+  const firstMatch = result.stdout.trim().split(/\r?\n/u)[0];
   return firstMatch && (await pathExists(firstMatch)) ? firstMatch : null;
 }
 
@@ -224,8 +225,8 @@ interface ShellConfig {
 }
 
 function isLegacyWslBashPath(path: string): boolean {
-  const normalized = path.replace(/\//g, "\\").toLowerCase();
-  return /^[a-z]:\\windows\\(?:system32|sysnative)\\bash\.exe$/.test(normalized);
+  const normalized = path.replace(/\//gu, "\\").toLowerCase();
+  return /^[a-z]:\\windows\\(?:system32|sysnative)\\bash\.exe$/u.test(normalized);
 }
 
 function getBashShellConfig(shell: string): ShellConfig {
@@ -251,7 +252,7 @@ async function getShellConfig(
     if (programFiles) candidates.push(`${programFiles}\\Git\\bin\\bash.exe`);
     const programFilesX86 = process.env["ProgramFiles(x86)"];
     if (programFilesX86) candidates.push(`${programFilesX86}\\Git\\bin\\bash.exe`);
-    for (const candidate of candidates) {
+    for await (const candidate of candidates) {
       if (await pathExists(candidate)) {
         return ok(getBashShellConfig(candidate));
       }
@@ -429,40 +430,38 @@ class NodeTextLineReader implements TextLineReader {
     if (this.closed) return err(new FileError("invalid", "Text line reader is closed", this.path));
 
     try {
-      while (true) {
-        const newline = this.buffered.indexOf("\n");
-        if (newline !== -1) {
-          const text = this.buffered.slice(0, newline);
-          this.buffered = this.buffered.slice(newline + 1);
-          return ok({ text, terminated: true });
-        }
-        if (this.ended) {
-          if (this.buffered.length === 0) return ok(undefined);
-          const text = this.buffered;
-          this.buffered = "";
-          return ok({ text, terminated: false });
-        }
-
-        // Explicit positions allow an aborted read to be retried without skipping bytes.
-        const { bytesRead } = await this.file.read(
-          this.chunk,
-          0,
-          this.chunk.length,
-          this.byteOffset,
-        );
-        const afterReadAbort = abortResult<TextLine | undefined>(context.abortSignal, this.path);
-        if (afterReadAbort) return afterReadAbort;
-        this.byteOffset += bytesRead;
-        if (bytesRead === 0) {
-          this.buffered += this.decoder.decode();
-          this.ended = true;
-        } else {
-          this.buffered += this.decoder.decode(this.chunk.subarray(0, bytesRead));
-        }
-      }
+      return await this.nextLine(context);
     } catch (error) {
       return err(toFileError(error, this.path));
     }
+  }
+
+  private async nextLine(context: Context): Promise<Result<TextLine | undefined, FileError>> {
+    const newline = this.buffered.indexOf("\n");
+    if (newline !== -1) {
+      const text = this.buffered.slice(0, newline);
+      this.buffered = this.buffered.slice(newline + 1);
+      return ok({ text, terminated: true });
+    }
+    if (this.ended) {
+      if (this.buffered.length === 0) return ok(undefined);
+      const text = this.buffered;
+      this.buffered = "";
+      return ok({ text, terminated: false });
+    }
+
+    // Explicit positions allow an aborted read to be retried without skipping bytes.
+    const { bytesRead } = await this.file.read(this.chunk, 0, this.chunk.length, this.byteOffset);
+    const afterReadAbort = abortResult<TextLine | undefined>(context.abortSignal, this.path);
+    if (afterReadAbort) return afterReadAbort;
+    this.byteOffset += bytesRead;
+    if (bytesRead === 0) {
+      this.buffered += this.decoder.decode();
+      this.ended = true;
+    } else {
+      this.buffered += this.decoder.decode(this.chunk.subarray(0, bytesRead));
+    }
+    return this.nextLine(context);
   }
 
   async close(_context: Context): Promise<void> {
@@ -521,17 +520,11 @@ class NodeBinaryReader implements BinaryReader {
       );
     }
     const chunks: Uint8Array[] = [];
-    let total = 0;
+    let total: number;
     try {
-      while (total < length) {
-        const chunk = new Uint8Array(Math.min(length - total, BINARY_READ_CHUNK));
-        const { bytesRead } = await this.file.read(chunk, 0, chunk.length, offset + total);
-        const afterReadAbort = abortResult<Uint8Array>(context.abortSignal, this.path);
-        if (afterReadAbort) return afterReadAbort;
-        if (bytesRead === 0) break;
-        chunks.push(bytesRead === chunk.length ? chunk : chunk.subarray(0, bytesRead));
-        total += bytesRead;
-      }
+      const read = await this.readChunks(offset, length, 0, chunks, context);
+      if (!read.ok) return read;
+      total = read.value;
     } catch (error) {
       return err(toFileError(error, this.path));
     }
@@ -543,6 +536,23 @@ class NodeBinaryReader implements BinaryReader {
       position += chunk.length;
     }
     return ok(bytes);
+  }
+
+  private async readChunks(
+    offset: number,
+    length: number,
+    total: number,
+    chunks: Uint8Array[],
+    context: Context,
+  ): Promise<Result<number, FileError>> {
+    if (total >= length) return ok(total);
+    const chunk = new Uint8Array(Math.min(length - total, BINARY_READ_CHUNK));
+    const { bytesRead } = await this.file.read(chunk, 0, chunk.length, offset + total);
+    const afterReadAbort = abortResult<number>(context.abortSignal, this.path);
+    if (afterReadAbort) return afterReadAbort;
+    if (bytesRead === 0) return ok(total);
+    chunks.push(bytesRead === chunk.length ? chunk : chunk.subarray(0, bytesRead));
+    return this.readChunks(offset, length, total + bytesRead, chunks, context);
   }
 
   async scanLines(
@@ -560,17 +570,24 @@ class NodeBinaryReader implements BinaryReader {
     }
     const chunk = new Uint8Array(64 * 1024);
     try {
-      for (let position = 0; ;) {
-        const { bytesRead } = await this.file.read(chunk, 0, chunk.length, position);
-        const afterReadAbort = abortResult<LineScan>(context.abortSignal, this.path);
-        if (afterReadAbort) return afterReadAbort;
-        if (bytesRead === 0) return ok(scanner.finish());
-        scanner.push(chunk.subarray(0, bytesRead));
-        position += bytesRead;
-      }
+      return await this.scanFrom(0, chunk, scanner, context);
     } catch (error) {
       return err(toFileError(error, this.path));
     }
+  }
+
+  private async scanFrom(
+    position: number,
+    chunk: Uint8Array,
+    scanner: LineScanner,
+    context: Context,
+  ): Promise<Result<LineScan, FileError>> {
+    const { bytesRead } = await this.file.read(chunk, 0, chunk.length, position);
+    const afterReadAbort = abortResult<LineScan>(context.abortSignal, this.path);
+    if (afterReadAbort) return afterReadAbort;
+    if (bytesRead === 0) return ok(scanner.finish());
+    scanner.push(chunk.subarray(0, bytesRead));
+    return this.scanFrom(position + bytesRead, chunk, scanner, context);
   }
 
   async close(_context: Context): Promise<void> {
@@ -606,33 +623,43 @@ class NodeDirReader implements DirReader {
     }
     const entries: FileInfo[] = [];
     try {
-      while (!this.done && entries.length < maxEntries) {
-        const entry = await this.dir.read();
-        if (entry === null) {
-          this.done = true;
-          break;
-        }
-        const loopAbort = abortResult<{ entries: FileInfo[]; done: boolean }>(
-          context.abortSignal,
-          this.path,
-        );
-        if (loopAbort) return loopAbort;
-        const entryPath = resolve(this.path, entry.name);
-        let stats: Stats;
-        try {
-          stats = await lstat(entryPath);
-        } catch (error) {
-          // Removed between enumeration and lstat: not part of the listing any more.
-          if (isNodeError(error) && error.code === "ENOENT") continue;
-          return err(toFileError(error, entryPath));
-        }
-        const info = fileInfoFromStats(entryPath, stats);
-        if (info.ok) entries.push(info.value);
-      }
+      const filled = await this.fill(entries, maxEntries, context);
+      if (filled !== undefined) return filled;
       return ok({ entries, done: this.done });
     } catch (error) {
       return err(toFileError(error, this.path));
     }
+  }
+
+  private async fill(
+    entries: FileInfo[],
+    maxEntries: number,
+    context: Context,
+  ): Promise<Result<{ entries: FileInfo[]; done: boolean }, FileError> | undefined> {
+    if (this.done || entries.length >= maxEntries) return undefined;
+    const entry = await this.dir.read();
+    if (entry === null) {
+      this.done = true;
+      return undefined;
+    }
+    const loopAbort = abortResult<{ entries: FileInfo[]; done: boolean }>(
+      context.abortSignal,
+      this.path,
+    );
+    if (loopAbort) return loopAbort;
+    const entryPath = resolve(this.path, entry.name);
+    let stats: Stats | undefined;
+    try {
+      stats = await lstat(entryPath);
+    } catch (error) {
+      // Removed between enumeration and lstat: not part of the listing any more.
+      if (!isNodeError(error) || error.code !== "ENOENT") return err(toFileError(error, entryPath));
+    }
+    if (stats !== undefined) {
+      const info = fileInfoFromStats(entryPath, stats);
+      if (info.ok) entries.push(info.value);
+    }
+    return this.fill(entries, maxEntries, context);
   }
 
   async close(_context: Context): Promise<void> {
@@ -692,12 +719,12 @@ export class NodeExecutionEnv implements ExecutionEnv {
     }
   }
 
-  async absolutePath(path: string, _context: Context): Promise<Result<string, FileError>> {
-    return ok(resolvePath(this.cwd, path));
+  absolutePath(path: string, _context: Context): Promise<Result<string, FileError>> {
+    return promiseTry(() => ok(resolvePath(this.cwd, path)));
   }
 
-  async joinPath(parts: string[], _context: Context): Promise<Result<string, FileError>> {
-    return ok(join(...parts));
+  joinPath(parts: string[], _context: Context): Promise<Result<string, FileError>> {
+    return promiseTry(() => ok(join(...parts)));
   }
 
   async exec(
@@ -1005,14 +1032,17 @@ export class NodeExecutionEnv implements ExecutionEnv {
     const opened = await this.openTextLineReader(path, context);
     if (!opened.ok) return opened;
     const lines: string[] = [];
+    const maxLines = options?.maxLines;
+    const readFrom = async (): Promise<Result<string[], FileError>> => {
+      if (maxLines !== undefined && lines.length >= maxLines) return ok(lines);
+      const line = await opened.value.readLine(context);
+      if (!line.ok) return line;
+      if (line.value === undefined) return ok(lines);
+      lines.push(line.value.text);
+      return readFrom();
+    };
     try {
-      while (options?.maxLines === undefined || lines.length < options.maxLines) {
-        const line = await opened.value.readLine(context);
-        if (!line.ok) return line;
-        if (line.value === undefined) break;
-        lines.push(line.value.text);
-      }
-      return ok(lines);
+      return await readFrom();
     } finally {
       await opened.value.close(context);
     }
@@ -1206,7 +1236,7 @@ export class NodeExecutionEnv implements ExecutionEnv {
     try {
       const entries = await readdir(resolved, { withFileTypes: true });
       const infos: FileInfo[] = [];
-      for (const entry of entries) {
+      for await (const entry of entries) {
         const loopAbort = abortResult<FileInfo[]>(signal, resolved);
         if (loopAbort) return loopAbort;
         const entryPath = resolve(resolved, entry.name);
@@ -1325,9 +1355,11 @@ export class NodeExecutionEnv implements ExecutionEnv {
     }
   }
 
-  async cleanup(_context: Context): Promise<void> {
-    for (const pid of this.activeChildPids) killProcessTree(pid);
-    this.activeChildPids.clear();
+  cleanup(_context: Context): Promise<void> {
+    return promiseTry(() => {
+      for (const pid of this.activeChildPids) killProcessTree(pid);
+      this.activeChildPids.clear();
+    });
   }
 }
 export type { NodeWatchOptions } from "./node-watch.ts";

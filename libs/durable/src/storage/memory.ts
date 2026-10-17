@@ -3,6 +3,7 @@ import { applyImmutableBatches, type Op } from "@msa/chord/delta";
 
 import { StorageRequestError } from "../errors.ts";
 import { idFromNumber, seqFromNumber } from "../ids.ts";
+import { promiseTry } from "../promise-try.ts";
 import type {
   ConversationId,
   ConversationQuery,
@@ -224,8 +225,9 @@ const page = <T extends { readonly id: Id<string> }>(
 
 /**
  * Indexes of sorted `ids` in scan order, after the cursor's ID when there is one.
- *
- * @yields Indexes of `ids` in scan order.
+ * @param {readonly Id<string>[]} ids - The sorted IDs.
+ * @param {ScanStart} start - The scan's order and position.
+ * @yields {number} Indexes of `ids` in scan order.
  */
 function* scanIndexes(ids: readonly Id<string>[], start: ScanStart): Generator<number> {
   if (start.order === "ascending") {
@@ -277,11 +279,16 @@ export class MemoryStorage implements Storage {
   private nextSeq = 1;
   private closed = false;
 
-  async commit(writes: readonly StorageWrite[], _context: Context): Promise<Seq> {
-    return this.prepareCommit(writes).apply();
+  commit(writes: readonly StorageWrite[], _context: Context): Promise<Seq> {
+    return promiseTry(() => this.prepareCommit(writes).apply());
   }
 
-  /** Validate and detach one commit without changing observable state. */
+  /**
+   * Validate and detach one commit without changing observable state.
+   * @param {readonly StorageWrite[]} writes - The batch.
+   * @param {Seq} seq - Its sequence number.
+   * @returns {PreparedMemoryCommit} The commit.
+   */
   prepareCommit(
     writes: readonly StorageWrite[],
     seq: Seq = seqFromNumber(this.nextSeq),
@@ -452,48 +459,51 @@ export class MemoryStorage implements Storage {
     return seq;
   }
 
-  async mintId<I extends Id<string>>(): Promise<I> {
-    this.assertOpen();
-    if (!Number.isSafeInteger(this.nextId)) throw new Error("ID space is exhausted");
-    return idFromNumber<I>(this.nextId++);
+  mintId<I extends Id<string>>(): Promise<I> {
+    return promiseTry(() => {
+      this.assertOpen();
+      if (!Number.isSafeInteger(this.nextId)) throw new Error("ID space is exhausted");
+      return idFromNumber<I>(this.nextId++);
+    });
   }
 
-  async conversation(
-    id: ConversationId,
-    _context: Context,
-  ): Promise<ConversationRecord | undefined> {
-    this.assertOpen();
-    const value = this.state.conversations.get(id);
-    return value === undefined ? undefined : clone(value);
+  conversation(id: ConversationId, _context: Context): Promise<ConversationRecord | undefined> {
+    return promiseTry(() => {
+      this.assertOpen();
+      const value = this.state.conversations.get(id);
+      return value === undefined ? undefined : clone(value);
+    });
   }
 
-  async scanConversations(
+  scanConversations(
     query: ConversationQuery,
     limit: number,
     cursor: Cursor | undefined,
     _context: Context,
   ): Promise<Page<ConversationRecord, Cursor>> {
-    this.assertOpen();
-    const ids =
-      query.ownerTaskId !== undefined
-        ? (this.state.conversationIdsByOwnerTask.get(query.ownerTaskId) ?? [])
-        : query.ownerConversationId !== undefined
-          ? (this.state.conversationIdsByOwnerConversation.get(query.ownerConversationId) ?? [])
-          : this.state.conversationIds;
-    const start = scanStart(query.order, cursor, "ascending");
-    const values: ConversationRecord[] = [];
-    for (const index of scanIndexes(ids, start)) {
-      if (values.length > limit) break;
-      const value = this.state.conversations.get(ids[index]!)!;
-      if (
-        query.ownerConversationId !== undefined &&
-        value.owner?.conversationId !== query.ownerConversationId
-      ) {
-        continue;
+    return promiseTry(() => {
+      this.assertOpen();
+      const ids =
+        query.ownerTaskId === undefined
+          ? query.ownerConversationId === undefined
+            ? this.state.conversationIds
+            : (this.state.conversationIdsByOwnerConversation.get(query.ownerConversationId) ?? [])
+          : (this.state.conversationIdsByOwnerTask.get(query.ownerTaskId) ?? []);
+      const start = scanStart(query.order, cursor, "ascending");
+      const values: ConversationRecord[] = [];
+      for (const index of scanIndexes(ids, start)) {
+        if (values.length > limit) break;
+        const value = this.state.conversations.get(ids[index]!)!;
+        if (
+          query.ownerConversationId !== undefined &&
+          value.owner?.conversationId !== query.ownerConversationId
+        ) {
+          continue;
+        }
+        values.push(value);
       }
-      values.push(value);
-    }
-    return page(values, limit, start.order);
+      return page(values, limit, start.order);
+    });
   }
 
   entry(
@@ -505,207 +515,231 @@ export class MemoryStorage implements Storage {
     id: EntryId,
     context: Context,
   ): Promise<{ readonly entry: EntryRecord; readonly commitSeq: Seq } | undefined>;
-  async entry(
+  entry(
     idOrConversationId: EntryId | ConversationId,
     idOrContext: EntryId | Context,
     context?: Context,
   ): Promise<{ readonly entry: EntryRecord; readonly commitSeq: Seq } | undefined> {
-    this.assertOpen();
-    if (context === undefined) {
-      const id = idFromNumber<EntryId>(idOrConversationId);
-      const entry = this.state.entries.get(id);
+    return promiseTry(() => {
+      this.assertOpen();
+      if (context === undefined) {
+        const id = idFromNumber<EntryId>(idOrConversationId);
+        const entry = this.state.entries.get(id);
+        if (entry === undefined) return undefined;
+        return { entry: clone(entry), commitSeq: this.state.entryCommitSeqs.get(id)! };
+      }
+      if (typeof idOrContext !== "number")
+        throw new StorageRequestError("Storage.entry() requires an entry ID");
+      const conversationId = idFromNumber<ConversationId>(idOrConversationId);
+      const id = idFromNumber<EntryId>(idOrContext);
+      const entry = this.visibleEntries(conversationId, id, id).next().value;
       if (entry === undefined) return undefined;
       return { entry: clone(entry), commitSeq: this.state.entryCommitSeqs.get(id)! };
-    }
-    if (typeof idOrContext !== "number")
-      throw new StorageRequestError("Storage.entry() requires an entry ID");
-    const conversationId = idFromNumber<ConversationId>(idOrConversationId);
-    const id = idFromNumber<EntryId>(idOrContext);
-    const entry = this.visibleEntries(conversationId, id, id).next().value;
-    if (entry === undefined) return undefined;
-    return { entry: clone(entry), commitSeq: this.state.entryCommitSeqs.get(id)! };
+    });
   }
 
-  async findLatestHeadMarker(
+  findLatestHeadMarker(
     conversationId: ConversationId,
     atOrBeforeEntryId: EntryId | undefined,
     _context: Context,
   ): Promise<(EntryRecord & { readonly head: EntryId }) | undefined> {
-    this.assertOpen();
-    if (!this.state.conversations.has(conversationId)) {
-      throw new StorageRequestError(`Unknown conversation: ${conversationId}`);
-    }
-    let currentId = conversationId;
-    let upperEntryId = atOrBeforeEntryId ?? Number.POSITIVE_INFINITY;
-    while (true) {
-      const ids = this.state.headEntryIds.get(currentId) ?? [];
-      const id = ids[upperBound(ids, upperEntryId) - 1];
-      if (id !== undefined) {
-        const entry = this.state.entries.get(id)!;
-        return clone({ ...entry, head: entry.head! });
+    return promiseTry(() => {
+      this.assertOpen();
+      if (!this.state.conversations.has(conversationId)) {
+        throw new StorageRequestError(`Unknown conversation: ${conversationId}`);
       }
-      const conversation = this.state.conversations.get(currentId)!;
-      if (conversation.parent === undefined) return undefined;
-      upperEntryId = Math.min(upperEntryId, conversation.parent.at);
-      currentId = conversation.parent.conversationId;
-    }
+      let currentId = conversationId;
+      let upperEntryId = atOrBeforeEntryId ?? Number.POSITIVE_INFINITY;
+      while (true) {
+        const ids = this.state.headEntryIds.get(currentId) ?? [];
+        const id = ids[upperBound(ids, upperEntryId) - 1];
+        if (id !== undefined) {
+          const entry = this.state.entries.get(id)!;
+          return clone({ ...entry, head: entry.head! });
+        }
+        const conversation = this.state.conversations.get(currentId)!;
+        if (conversation.parent === undefined) return undefined;
+        upperEntryId = Math.min(upperEntryId, conversation.parent.at);
+        currentId = conversation.parent.conversationId;
+      }
+    });
   }
 
-  async scanEntries(
+  scanEntries(
     query: EntryQuery,
     limit: number,
     cursor: Cursor | undefined,
     _context: Context,
   ): Promise<Page<EntryRecord, Cursor>> {
-    this.assertOpen();
-    const { order, after } = scanStart(query.order, cursor, "descending");
-    // The cursor narrows the bound on the side the scan moves away from.
-    let minEntryId: number | undefined = query.minEntryId;
-    let maxEntryId: number | undefined = query.maxEntryId;
-    if (after !== undefined && order === "descending")
-      maxEntryId = Math.min(maxEntryId ?? after, after - 1);
-    if (after !== undefined && order === "ascending")
-      minEntryId = Math.max(minEntryId ?? after, after + 1);
-    const visible: EntryRecord[] = [];
-    const entries =
-      order === "descending"
-        ? this.visibleEntries(query.conversationId, minEntryId, maxEntryId)
-        : this.visibleEntriesAscending(query.conversationId, minEntryId, maxEntryId);
-    for (const entry of entries) {
-      visible.push(entry);
-      if (visible.length > limit) break;
-    }
-    return page(visible, limit, order);
+    return promiseTry(() => {
+      this.assertOpen();
+      const { order, after } = scanStart(query.order, cursor, "descending");
+      // The cursor narrows the bound on the side the scan moves away from.
+      let minEntryId: number | undefined = query.minEntryId;
+      let maxEntryId: number | undefined = query.maxEntryId;
+      if (after !== undefined && order === "descending")
+        maxEntryId = Math.min(maxEntryId ?? after, after - 1);
+      if (after !== undefined && order === "ascending")
+        minEntryId = Math.max(minEntryId ?? after, after + 1);
+      const visible: EntryRecord[] = [];
+      const entries =
+        order === "descending"
+          ? this.visibleEntries(query.conversationId, minEntryId, maxEntryId)
+          : this.visibleEntriesAscending(query.conversationId, minEntryId, maxEntryId);
+      for (const entry of entries) {
+        visible.push(entry);
+        if (visible.length > limit) break;
+      }
+      return page(visible, limit, order);
+    });
   }
 
-  async task(id: TaskId, _context: Context): Promise<StoredTask | undefined> {
-    this.assertOpen();
-    const value = this.state.tasks.get(id);
-    return value === undefined ? undefined : clone(value);
+  task(id: TaskId, _context: Context): Promise<StoredTask | undefined> {
+    return promiseTry(() => {
+      this.assertOpen();
+      const value = this.state.tasks.get(id);
+      return value === undefined ? undefined : clone(value);
+    });
   }
 
-  async scanTasks(
+  scanTasks(
     query: TaskQuery,
     limit: number,
     cursor: Cursor | undefined,
     _context: Context,
   ): Promise<Page<StoredTask, Cursor>> {
-    this.assertOpen();
-    const start = scanStart(query.order, cursor, "ascending");
-    const ids =
-      query.status === undefined ? this.state.taskIds : this.state.taskIdsByStatus[query.status];
-    const values: StoredTask[] = [];
-    for (const index of scanIndexes(ids, start)) {
-      if (values.length > limit) break;
-      const value = this.state.tasks.get(ids[index]!)!;
-      if (query.conversationId !== undefined && value.conversationId !== query.conversationId)
-        continue;
-      if (query.kind !== undefined && value.kind !== query.kind) continue;
-      if (query.abortRequested !== undefined && value.abortRequested !== query.abortRequested)
-        continue;
-      if (query.background !== undefined && value.background !== query.background) continue;
-      values.push(value);
-    }
-    return page(values, limit, start.order);
+    return promiseTry(() => {
+      this.assertOpen();
+      const start = scanStart(query.order, cursor, "ascending");
+      const ids =
+        query.status === undefined ? this.state.taskIds : this.state.taskIdsByStatus[query.status];
+      const values: StoredTask[] = [];
+      for (const index of scanIndexes(ids, start)) {
+        if (values.length > limit) break;
+        const value = this.state.tasks.get(ids[index]!)!;
+        if (query.conversationId !== undefined && value.conversationId !== query.conversationId)
+          continue;
+        if (query.kind !== undefined && value.kind !== query.kind) continue;
+        if (query.abortRequested !== undefined && value.abortRequested !== query.abortRequested)
+          continue;
+        if (query.background !== undefined && value.background !== query.background) continue;
+        values.push(value);
+      }
+      return page(values, limit, start.order);
+    });
   }
 
-  async submission(id: SubmissionId, _context: Context): Promise<SubmissionRecord | undefined> {
-    this.assertOpen();
-    const value = this.state.submissions.get(id);
-    return value === undefined ? undefined : clone(value);
+  submission(id: SubmissionId, _context: Context): Promise<SubmissionRecord | undefined> {
+    return promiseTry(() => {
+      this.assertOpen();
+      const value = this.state.submissions.get(id);
+      return value === undefined ? undefined : clone(value);
+    });
   }
 
-  async scanSubmissions(
+  scanSubmissions(
     query: SubmissionQuery,
     limit: number,
     cursor: Cursor | undefined,
     _context: Context,
   ): Promise<Page<SubmissionRecord, Cursor>> {
-    this.assertOpen();
-    const start = scanStart(query.order, cursor, "ascending");
-    const ids =
-      query.status === undefined
-        ? this.state.submissionIds
-        : this.state.submissionIdsByStatus[query.status];
-    const values: SubmissionRecord[] = [];
-    for (const index of scanIndexes(ids, start)) {
-      if (values.length > limit) break;
-      const value = this.state.submissions.get(ids[index]!)!;
-      if (query.conversationId !== undefined && value.conversationId !== query.conversationId)
-        continue;
-      values.push(value);
-    }
-    return page(values, limit, start.order);
+    return promiseTry(() => {
+      this.assertOpen();
+      const start = scanStart(query.order, cursor, "ascending");
+      const ids =
+        query.status === undefined
+          ? this.state.submissionIds
+          : this.state.submissionIdsByStatus[query.status];
+      const values: SubmissionRecord[] = [];
+      for (const index of scanIndexes(ids, start)) {
+        if (values.length > limit) break;
+        const value = this.state.submissions.get(ids[index]!)!;
+        if (query.conversationId !== undefined && value.conversationId !== query.conversationId)
+          continue;
+        values.push(value);
+      }
+      return page(values, limit, start.order);
+    });
   }
 
-  async submissionByRequest(
+  submissionByRequest(
     conversationId: ConversationId,
     requestId: string,
     _context: Context,
   ): Promise<SubmissionRecord | undefined> {
-    this.assertOpen();
-    const id = this.state.submissionIdsByRequest.get(conversationId)?.get(requestId);
-    if (id === undefined) return undefined;
-    return clone(this.state.submissions.get(id)!);
+    return promiseTry(() => {
+      this.assertOpen();
+      const id = this.state.submissionIdsByRequest.get(conversationId)?.get(requestId);
+      if (id === undefined) return undefined;
+      return clone(this.state.submissions.get(id)!);
+    });
   }
 
-  async findDocument(
+  findDocument(
     address: DocumentAddress,
     at: DocumentPoint,
     _context: Context,
   ): Promise<DocumentRecord | undefined> {
-    this.assertOpen();
-    const index = this.state.documentAddresses.get(addressKey(address));
-    if (at === "current") {
-      return index?.currentId === undefined
-        ? undefined
-        : clone(this.state.documents.get(index.currentId)!.record);
-    }
-    for (const id of index?.ids ?? []) {
-      const record = this.state.documents.get(id)!.record;
-      if (isAliveAt(record, at)) return clone(record);
-    }
-    return undefined;
+    return promiseTry(() => {
+      this.assertOpen();
+      const index = this.state.documentAddresses.get(addressKey(address));
+      if (at === "current") {
+        return index?.currentId === undefined
+          ? undefined
+          : clone(this.state.documents.get(index.currentId)!.record);
+      }
+      for (const id of index?.ids ?? []) {
+        const record = this.state.documents.get(id)!.record;
+        if (isAliveAt(record, at)) return clone(record);
+      }
+      return undefined;
+    });
   }
 
-  async document(
+  document(
     id: DocumentId,
     at: DocumentPoint,
     _context: Context,
   ): Promise<StoredDocument | undefined> {
-    this.assertOpen();
-    const stored = this.materializeDocument(id, at);
-    return stored === undefined
-      ? undefined
-      : {
-          record: clone(stored.record),
-          version: stored.version,
-          value: clone(stored.value),
-          deltasSinceBase: stored.deltasSinceBase,
-        };
+    return promiseTry(() => {
+      this.assertOpen();
+      const stored = this.materializeDocument(id, at);
+      return stored === undefined
+        ? undefined
+        : {
+            record: clone(stored.record),
+            version: stored.version,
+            value: clone(stored.value),
+            deltasSinceBase: stored.deltasSinceBase,
+          };
+    });
   }
 
-  async scanDocuments(
+  scanDocuments(
     query: DocumentQuery,
     limit: number,
     cursor: Cursor | undefined,
     _context: Context,
   ): Promise<Page<DocumentRecord, Cursor>> {
-    this.assertOpen();
-    const ids = this.state.documentIdsByScope.get(scopeKey(query.scope)) ?? [];
-    const after = cursorId(cursor);
-    const start = after === undefined ? 0 : upperBound(ids, after);
-    const values: DocumentRecord[] = [];
-    for (let index = start; index < ids.length && values.length <= limit; index++) {
-      const record = this.state.documents.get(ids[index]!)!.record;
-      if (query.kind !== undefined && record.kind !== query.kind) continue;
-      if (isAliveAt(record, query.at)) values.push(record);
-    }
-    return page(values, limit);
+    return promiseTry(() => {
+      this.assertOpen();
+      const ids = this.state.documentIdsByScope.get(scopeKey(query.scope)) ?? [];
+      const after = cursorId(cursor);
+      const start = after === undefined ? 0 : upperBound(ids, after);
+      const values: DocumentRecord[] = [];
+      for (let index = start; index < ids.length && values.length <= limit; index++) {
+        const record = this.state.documents.get(ids[index]!)!.record;
+        if (query.kind !== undefined && record.kind !== query.kind) continue;
+        if (isAliveAt(record, query.at)) values.push(record);
+      }
+      return page(values, limit);
+    });
   }
 
-  async close(_context: Context): Promise<void> {
-    this.closed = true;
+  close(_context: Context): Promise<void> {
+    return promiseTry(() => {
+      this.closed = true;
+    });
   }
 
   private materializeDocument(id: DocumentId, at: DocumentPoint): StoredDocument | undefined {
@@ -762,8 +796,10 @@ export class MemoryStorage implements Storage {
 
   /**
    * Visible entries oldest first: the fork chain's segments from the root conversation forward.
-   *
-   * @yields Visible entries of the fork chain's segments, oldest first.
+   * @param {ConversationId} conversationId - The conversation.
+   * @param {number} minEntryId - The lowest entry ID.
+   * @param {number} maxEntryId - The highest entry ID.
+   * @yields {EntryRecord} Visible entries of the fork chain's segments, oldest first.
    */
   private *visibleEntriesAscending(
     conversationId: ConversationId,

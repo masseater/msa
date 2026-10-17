@@ -55,9 +55,10 @@ function loginOpenAICodexDeviceCodeForTest(options: {
 }) {
   return openaiCodexOAuth.login({
     signal: options.signal ?? neverAbortedSignal,
-    prompt: async (prompt) => {
-      if (prompt.type !== "select") throw new Error(`Unexpected prompt: ${prompt.type}`);
-      return "device_code";
+    prompt: (prompt) => {
+      if (prompt.type !== "select")
+        return Promise.reject(new Error(`Unexpected prompt: ${prompt.type}`));
+      return Promise.resolve("device_code");
     },
     notify: (event) => {
       if (event.type === "device_code") {
@@ -92,7 +93,7 @@ describe("OpenAI Codex OAuth", () => {
       }),
     ];
 
-    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+    const fetchMock = vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
       const url = getUrl(input);
 
       if (url === "https://auth.openai.com/api/accounts/deviceauth/usercode") {
@@ -101,11 +102,13 @@ describe("OpenAI Codex OAuth", () => {
         expect(JSON.parse(String(init?.body))).toEqual({
           client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
         });
-        return jsonResponse({
-          device_auth_id: "device-auth-id",
-          user_code: "ABCD-1234",
-          interval: "5",
-        });
+        return Promise.resolve(
+          jsonResponse({
+            device_auth_id: "device-auth-id",
+            user_code: "ABCD-1234",
+            interval: "5",
+          }),
+        );
       }
 
       if (url === "https://auth.openai.com/api/accounts/deviceauth/token") {
@@ -118,9 +121,9 @@ describe("OpenAI Codex OAuth", () => {
         });
         const response = pollResponses.shift();
         if (!response) {
-          throw new Error("Unexpected extra device auth poll");
+          return Promise.reject(new Error("Unexpected extra device auth poll"));
         }
-        return response;
+        return Promise.resolve(response);
       }
 
       if (url === "https://auth.openai.com/oauth/token") {
@@ -134,14 +137,16 @@ describe("OpenAI Codex OAuth", () => {
         expect(params.get("code")).toBe("oauth-code");
         expect(params.get("redirect_uri")).toBe("https://auth.openai.com/deviceauth/callback");
         expect(params.get("code_verifier")).toBe("device-code-verifier");
-        return jsonResponse({
-          access_token: accessToken,
-          refresh_token: "refresh-token",
-          expires_in: 3600,
-        });
+        return Promise.resolve(
+          jsonResponse({
+            access_token: accessToken,
+            refresh_token: "refresh-token",
+            expires_in: 3600,
+          }),
+        );
       }
 
-      throw new Error(`Unexpected fetch URL: ${url}`);
+      return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
     });
 
     vi.stubGlobal("fetch", fetchMock);
@@ -186,43 +191,50 @@ describe("OpenAI Codex OAuth", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+      vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
         const url = getUrl(input);
         if (url === "https://auth.openai.com/api/accounts/deviceauth/usercode") {
           expect(JSON.parse(String(init?.body))).toEqual({
             client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
           });
-          return jsonResponse({
-            device_auth_id: "device-auth-id",
-            user_code: "WXYZ-7890",
-            interval: "5",
-          });
+          return Promise.resolve(
+            jsonResponse({
+              device_auth_id: "device-auth-id",
+              user_code: "WXYZ-7890",
+              interval: "5",
+            }),
+          );
         }
         if (url === "https://auth.openai.com/api/accounts/deviceauth/token") {
-          return jsonResponse({
-            authorization_code: "oauth-code",
-            code_challenge: "device-code-challenge",
-            code_verifier: "device-code-verifier",
-          });
+          return Promise.resolve(
+            jsonResponse({
+              authorization_code: "oauth-code",
+              code_challenge: "device-code-challenge",
+              code_verifier: "device-code-verifier",
+            }),
+          );
         }
         if (url === "https://auth.openai.com/oauth/token") {
-          return jsonResponse({
-            access_token: accessToken,
-            refresh_token: "refresh-token",
-            expires_in: 3600,
-          });
+          return Promise.resolve(
+            jsonResponse({
+              access_token: accessToken,
+              refresh_token: "refresh-token",
+              expires_in: 3600,
+            }),
+          );
         }
-        throw new Error(`Unexpected fetch URL: ${url}`);
+        return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
       }),
     );
 
     await expect(
       openaiCodexOAuth.login({
         signal: neverAbortedSignal,
-        prompt: async (prompt) => {
-          if (prompt.type !== "select") throw new Error("Text prompt should not be used");
+        prompt: (prompt) => {
+          if (prompt.type !== "select")
+            return Promise.reject(new Error("Text prompt should not be used"));
           selectPrompts.push(prompt);
-          return "device_code";
+          return Promise.resolve("device_code");
         },
         notify: (event) => {
           if (event.type === "auth_url") throw new Error("Browser login should not start");
@@ -263,8 +275,8 @@ describe("OpenAI Codex OAuth", () => {
     await expect(
       openaiCodexOAuth.login({
         signal: neverAbortedSignal,
-        prompt: async () => {
-          throw new Error("Login cancelled");
+        prompt: () => {
+          return Promise.reject(new Error("Login cancelled"));
         },
         notify: () => {},
       }),
@@ -278,23 +290,25 @@ describe("OpenAI Codex OAuth", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+      vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
         const url = getUrl(input);
         if (url === "https://auth.openai.com/api/accounts/deviceauth/usercode") {
           expect(JSON.parse(String(init?.body))).toEqual({
             client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
           });
-          return jsonResponse({
-            device_auth_id: "device-auth-id",
-            user_code: "ABCD-1234",
-            interval: "5",
-          });
+          return Promise.resolve(
+            jsonResponse({
+              device_auth_id: "device-auth-id",
+              user_code: "ABCD-1234",
+              interval: "5",
+            }),
+          );
         }
         if (url === "https://auth.openai.com/api/accounts/deviceauth/token") {
           pollTimes.push(Date.now());
-          return deviceAuthPendingResponse();
+          return Promise.resolve(deviceAuthPendingResponse());
         }
-        throw new Error(`Unexpected fetch URL: ${url}`);
+        return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
       }),
     );
 
@@ -324,23 +338,25 @@ describe("OpenAI Codex OAuth", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+      vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
         const url = getUrl(input);
         if (url === "https://auth.openai.com/api/accounts/deviceauth/usercode") {
           expect(JSON.parse(String(init?.body))).toEqual({
             client_id: "app_EMoamEEZ73f0CkXaXp7hrann",
           });
-          return jsonResponse({
-            device_auth_id: "device-auth-id",
-            user_code: "ABCD-1234",
-            interval: "60",
-          });
+          return Promise.resolve(
+            jsonResponse({
+              device_auth_id: "device-auth-id",
+              user_code: "ABCD-1234",
+              interval: "60",
+            }),
+          );
         }
         if (url === "https://auth.openai.com/api/accounts/deviceauth/token") {
           pollTimes.push(Date.now());
-          return deviceAuthPendingResponse();
+          return Promise.resolve(deviceAuthPendingResponse());
         }
-        throw new Error(`Unexpected fetch URL: ${url}`);
+        return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
       }),
     );
 
@@ -379,31 +395,35 @@ describe("OpenAI Codex OAuth", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown): Promise<Response> => {
+      vi.fn((input: unknown): Promise<Response> => {
         const url = getUrl(input);
         if (url === "https://auth.openai.com/api/accounts/deviceauth/usercode") {
-          return jsonResponse({
-            device_auth_id: "device-auth-id",
-            user_code: "ABCD-1234",
-            interval: "1",
-          });
+          return Promise.resolve(
+            jsonResponse({
+              device_auth_id: "device-auth-id",
+              user_code: "ABCD-1234",
+              interval: "1",
+            }),
+          );
         }
         if (url === "https://auth.openai.com/api/accounts/deviceauth/token") {
           pollTimes.push(Date.now());
           const response = pollResponses.shift();
           if (!response) {
-            throw new Error("Unexpected extra device auth poll");
+            return Promise.reject(new Error("Unexpected extra device auth poll"));
           }
-          return response;
+          return Promise.resolve(response);
         }
         if (url === "https://auth.openai.com/oauth/token") {
-          return jsonResponse({
-            access_token: accessToken,
-            refresh_token: "refresh-token",
-            expires_in: 3600,
-          });
+          return Promise.resolve(
+            jsonResponse({
+              access_token: accessToken,
+              refresh_token: "refresh-token",
+              expires_in: 3600,
+            }),
+          );
         }
-        throw new Error(`Unexpected fetch URL: ${url}`);
+        return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
       }),
     );
 
@@ -428,19 +448,23 @@ describe("OpenAI Codex OAuth", () => {
   it("includes the response body in OpenAI Codex device auth poll failures", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown): Promise<Response> => {
+      vi.fn((input: unknown): Promise<Response> => {
         const url = getUrl(input);
         if (url === "https://auth.openai.com/api/accounts/deviceauth/usercode") {
-          return jsonResponse({
-            device_auth_id: "device-auth-id",
-            user_code: "ABCD-1234",
-            interval: "5",
-          });
+          return Promise.resolve(
+            jsonResponse({
+              device_auth_id: "device-auth-id",
+              user_code: "ABCD-1234",
+              interval: "5",
+            }),
+          );
         }
         if (url === "https://auth.openai.com/api/accounts/deviceauth/token") {
-          return jsonResponse({ error: "server_error", error_description: "try again later" }, 500);
+          return Promise.resolve(
+            jsonResponse({ error: "server_error", error_description: "try again later" }, 500),
+          );
         }
-        throw new Error(`Unexpected fetch URL: ${url}`);
+        return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
       }),
     );
 
@@ -457,19 +481,21 @@ describe("OpenAI Codex OAuth", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (): Promise<Response> => {
-        return new Response(
-          JSON.stringify({
-            error: {
-              message: "Could not validate your token. Please try signing in again.",
-              type: "invalid_request_error",
+      vi.fn((): Promise<Response> => {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: {
+                message: "Could not validate your token. Please try signing in again.",
+                type: "invalid_request_error",
+              },
+            }),
+            {
+              status: 401,
+              statusText: "Unauthorized",
+              headers: { "Content-Type": "application/json" },
             },
-          }),
-          {
-            status: 401,
-            statusText: "Unauthorized",
-            headers: { "Content-Type": "application/json" },
-          },
+          ),
         );
       }),
     );
@@ -484,19 +510,21 @@ describe("OpenAI Codex OAuth", () => {
         },
         neverAbortedSignal,
       ),
-    ).rejects.toThrow(/OpenAI Codex token refresh failed \(401\).*Could not validate your token/);
+    ).rejects.toThrow(/OpenAI Codex token refresh failed \(401\).*Could not validate your token/u);
     expect(consoleError).not.toHaveBeenCalled();
   });
 
   it("uses the app's agent name as the browser login originator", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        jsonResponse({
-          access_token: createAccessToken("acct"),
-          refresh_token: "refresh",
-          expires_in: 3600,
-        }),
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse({
+            access_token: createAccessToken("acct"),
+            refresh_token: "refresh",
+            expires_in: 3600,
+          }),
+        ),
       ),
     );
 
@@ -507,11 +535,14 @@ describe("OpenAI Codex OAuth", () => {
         notify: (event) => {
           if (event.type === "auth_url") authUrl = event.url;
         },
-        prompt: async (prompt) => {
-          if (prompt.type === "select") return "browser";
-          if (prompt.type !== "manual_code") throw new Error(`Unexpected prompt: ${prompt.type}`);
+        prompt: (prompt) => {
+          if (prompt.type === "select") return Promise.resolve("browser");
+          if (prompt.type !== "manual_code")
+            return Promise.reject(new Error(`Unexpected prompt: ${prompt.type}`));
           const state = new URL(authUrl).searchParams.get("state");
-          return `http://localhost:1455/auth/callback?code=pasted-code&state=${state}`;
+          return Promise.resolve(
+            `http://localhost:1455/auth/callback?code=pasted-code&state=${state}`,
+          );
         },
       },
       { agentName: "my-app" },
@@ -531,14 +562,16 @@ describe("OpenAI Codex OAuth", () => {
       let exchangeBody: URLSearchParams | undefined;
       vi.stubGlobal(
         "fetch",
-        vi.fn(async (input: unknown, init?: RequestInit) => {
+        vi.fn((input: unknown, init?: RequestInit) => {
           expect(getUrl(input)).toBe("https://auth.openai.com/oauth/token");
           exchangeBody = new URLSearchParams(String(init?.body));
-          return jsonResponse({
-            access_token: createAccessToken("acct"),
-            refresh_token: "refresh",
-            expires_in: 3600,
-          });
+          return Promise.resolve(
+            jsonResponse({
+              access_token: createAccessToken("acct"),
+              refresh_token: "refresh",
+              expires_in: 3600,
+            }),
+          );
         }),
       );
 
@@ -548,11 +581,14 @@ describe("OpenAI Codex OAuth", () => {
         notify: (event) => {
           if (event.type === "auth_url") authUrl = event.url;
         },
-        prompt: async (prompt) => {
-          if (prompt.type === "select") return "browser";
-          if (prompt.type !== "manual_code") throw new Error(`Unexpected prompt: ${prompt.type}`);
+        prompt: (prompt) => {
+          if (prompt.type === "select") return Promise.resolve("browser");
+          if (prompt.type !== "manual_code")
+            return Promise.reject(new Error(`Unexpected prompt: ${prompt.type}`));
           const state = new URL(authUrl).searchParams.get("state");
-          return `http://localhost:1455/auth/callback?code=pasted-code&state=${state}`;
+          return Promise.resolve(
+            `http://localhost:1455/auth/callback?code=pasted-code&state=${state}`,
+          );
         },
       });
 

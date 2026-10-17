@@ -14,11 +14,13 @@ describe("OAuth device-code polling", () => {
     vi.setSystemTime(new Date("2026-03-09T00:00:00Z"));
 
     const pollTimes: number[] = [];
-    const poll = vi.fn(async () => {
+    const poll = vi.fn(() => {
       pollTimes.push(Date.now());
-      return pollTimes.length === 1
-        ? { status: "pending" as const }
-        : { status: "complete" as const, value: "token" };
+      return Promise.resolve(
+        pollTimes.length === 1
+          ? { status: "pending" as const }
+          : { status: "complete" as const, value: "token" },
+      );
     });
 
     const resultPromise = pollOAuthDeviceCodeFlow({
@@ -51,9 +53,9 @@ describe("OAuth device-code polling", () => {
       intervalSeconds: 2,
       expiresInSeconds: 30,
       waitBeforeFirstPoll: true,
-      poll: async () => {
+      poll: () => {
         pollTimes.push(Date.now());
-        return { status: "complete" as const, value: "token" };
+        return Promise.resolve({ status: "complete" as const, value: "token" });
       },
       signal: neverAbortedSignal,
     });
@@ -79,11 +81,11 @@ describe("OAuth device-code polling", () => {
     const resultPromise = pollOAuthDeviceCodeFlow({
       intervalSeconds: 2,
       expiresInSeconds: 900,
-      poll: async () => {
+      poll: () => {
         pollTimes.push(Date.now());
         const result = results.shift();
-        if (!result) throw new Error("Unexpected extra poll");
-        return result;
+        if (!result) return Promise.reject(new Error("Unexpected extra poll"));
+        return Promise.resolve(result);
       },
       signal: neverAbortedSignal,
     });
@@ -112,11 +114,11 @@ describe("OAuth device-code polling", () => {
     const resultPromise = pollOAuthDeviceCodeFlow({
       intervalSeconds: 2,
       expiresInSeconds: 900,
-      poll: async () => {
+      poll: () => {
         pollTimes.push(Date.now());
         const result = results.shift();
-        if (!result) throw new Error("Unexpected extra poll");
-        return result;
+        if (!result) return Promise.reject(new Error("Unexpected extra poll"));
+        return Promise.resolve(result);
       },
       signal: neverAbortedSignal,
     });
@@ -139,7 +141,7 @@ describe("OAuth device-code polling", () => {
     const resultPromise = pollOAuthDeviceCodeFlow({
       intervalSeconds: 5,
       expiresInSeconds: 30,
-      poll: async () => ({ status: "pending" }),
+      poll: () => Promise.resolve({ status: "pending" }),
       signal: controller.signal,
     });
 

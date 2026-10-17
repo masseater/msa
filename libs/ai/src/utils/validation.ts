@@ -287,20 +287,20 @@ function formatValidationPath(error: TLocalizedValidationError): string {
       .requiredProperties;
     const requiredProperty = requiredProperties?.[0];
     if (requiredProperty) {
-      const basePath = error.instancePath.replace(/^\//, "").replace(/\//g, ".");
+      const basePath = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
       return basePath ? `${basePath}.${requiredProperty}` : requiredProperty;
     }
   }
-  const path = error.instancePath.replace(/^\//, "").replace(/\//g, ".");
+  const path = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
   return path || "root";
 }
 
 /**
  * Finds a tool by name and validates the tool call arguments against its TypeBox schema
- * @param tools Array of tool definitions
- * @param toolCall The tool call from the LLM
- * @returns The validated arguments
- * @throws Error if tool is not found or validation fails
+ * @param {Tool[]} tools - Array of tool definitions
+ * @param {ToolCall} toolCall - The tool call from the LLM
+ * @returns {any} The validated arguments
+ * @throws {Error} if tool is not found or validation fails
  */
 export function validateToolCall(tools: Tool[], toolCall: ToolCall): any {
   const tool = tools.find((t) => t.name === toolCall.name);
@@ -312,10 +312,10 @@ export function validateToolCall(tools: Tool[], toolCall: ToolCall): any {
 
 /**
  * Validates tool call arguments against the tool's TypeBox schema
- * @param tool The tool definition with TypeBox schema
- * @param toolCall The tool call from the LLM
- * @returns The validated (and potentially coerced) arguments
- * @throws Error with formatted message if validation fails
+ * @param {Tool} tool - The tool definition with TypeBox schema
+ * @param {ToolCall} toolCall - The tool call from the LLM
+ * @returns {any} The validated (and potentially coerced) arguments
+ * @throws {Error} with formatted message if validation fails
  */
 export function validateToolArguments(tool: Tool, toolCall: ToolCall): any {
   if (toolCall.argumentsError) {

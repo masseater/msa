@@ -47,6 +47,10 @@ const CONFIGURATION_UPDATE_REQUEST_EFFORT = "medium";
 /**
  * OpenAI API keys start with `sk-`; a different credential sent directly to OpenAI
  * is a Sign in with ChatGPT access token.
+ *
+ * @param {Model<"openai-responses">} model - model the request targets
+ * @param {string | undefined} apiKey - credential sent with the request
+ * @returns {boolean} whether the credential is a Sign in with ChatGPT access token
  */
 function isChatGPTSignIn(model: Model<"openai-responses">, apiKey: string | undefined): boolean {
   return (
@@ -88,6 +92,10 @@ function detectSessionAffinityFormat(
 /**
  * Resolve cache retention preference.
  * Defaults to "short" and uses MSA_CACHE_RETENTION for backward compatibility.
+ *
+ * @param {CacheRetention} [cacheRetention] - caller preference
+ * @param {ProviderEnv} [env] - scoped provider env overrides
+ * @returns {CacheRetention} the cache retention to use
  */
 function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEnv): CacheRetention {
   if (cacheRetention) {
@@ -116,7 +124,14 @@ function getCompat(model: Model<"openai-responses">): Required<OpenAIResponsesCo
   };
 }
 
-/** Effort to send in configuration_update items, or undefined to send it as reasoning.effort. */
+/**
+ * Effort to send in configuration_update items, or undefined to send it as reasoning.effort.
+ *
+ * @param {Model<"openai-responses">} model - model the request targets
+ * @param {OpenAIResponsesOptions | undefined} options - caller stream options
+ * @param {Required<OpenAIResponsesCompat>} compat - resolved compat settings of the model
+ * @returns {string | undefined} the effort for configuration_update items, or undefined to send reasoning.effort
+ */
 function getConfigurationUpdateEffort(
   model: Model<"openai-responses">,
   options: OpenAIResponsesOptions | undefined,
@@ -162,9 +177,6 @@ export interface OpenAIResponsesOptions extends StreamOptions {
   toolChoice?: ResponseCreateParamsStreaming["tool_choice"] | undefined;
 }
 
-/**
- * Generate function for OpenAI Responses API
- */
 export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> = (
   model: Model<"openai-responses">,
   context: TranscriptContext,
@@ -225,7 +237,7 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
       }
       const requestOptions = {
         ...(options?.signal ? { signal: options.signal } : {}),
-        ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+        ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
         maxRetries: 0,
       };
       const { data: openaiStream, response } = await retryProviderRequest(
@@ -383,9 +395,9 @@ function buildParams(
     model: model.id,
     input: messages,
     stream: true,
-    ...(promptCacheKey !== undefined ? { prompt_cache_key: promptCacheKey } : {}),
-    ...(promptCacheRetention !== undefined ? { prompt_cache_retention: promptCacheRetention } : {}),
-    ...(promptCacheOptions !== undefined ? { prompt_cache_options: promptCacheOptions } : {}),
+    ...(promptCacheKey === undefined ? {} : { prompt_cache_key: promptCacheKey }),
+    ...(promptCacheRetention === undefined ? {} : { prompt_cache_retention: promptCacheRetention }),
+    ...(promptCacheOptions === undefined ? {} : { prompt_cache_options: promptCacheOptions }),
     store: false,
   };
 

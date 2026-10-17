@@ -174,7 +174,14 @@ function errorMessage(error: unknown): string {
   return formatProviderError(normalizeProviderError(error), `${LABEL} error`);
 }
 
-/** Classification through OpenAI's Decisions API. */
+/**
+ * Classification through OpenAI's Decisions API.
+ *
+ * @param {ClassifierModel<ClassifierApi>} model - classifier model
+ * @param {ClassifierContext} context - classifier request
+ * @param {ClassifierOptions} [options] - request options
+ * @returns {Promise<ClassifierResult>} the classification result
+ */
 export const classify: ClassifierFunction<ClassifierOptions> = async (model, context, options) => {
   const output: ClassifierResult = {
     api: model.api,

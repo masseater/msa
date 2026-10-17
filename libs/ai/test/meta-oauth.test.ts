@@ -26,8 +26,8 @@ function getUrl(input: unknown): string {
 function createInteraction(events: Array<Record<string, unknown>>): ProviderAuthInteraction {
   return {
     signal: new AbortController().signal,
-    prompt: async () => {
-      throw new Error("Meta login should not prompt");
+    prompt: () => {
+      return Promise.reject(new Error("Meta login should not prompt"));
     },
     notify: (event) => events.push(event),
   };
@@ -53,19 +53,21 @@ describe("Meta OAuth", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+      vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
         const url = getUrl(input);
         if (url === DEVICE_AUTHORIZATION_URL) {
           expect(init?.method).toBe("POST");
           expect(new URLSearchParams(String(init?.body)).get("client_id")).toBe(CLIENT_ID);
-          return jsonResponse({
-            device_code: "device-code-123",
-            user_code: "ABCD-1234",
-            verification_uri: "https://auth.meta.com/oauth/device/",
-            verification_uri_complete: "https://auth.meta.com/oauth/device/?code=ABCD-1234",
-            interval: 5,
-            expires_in: 600,
-          });
+          return Promise.resolve(
+            jsonResponse({
+              device_code: "device-code-123",
+              user_code: "ABCD-1234",
+              verification_uri: "https://auth.meta.com/oauth/device/",
+              verification_uri_complete: "https://auth.meta.com/oauth/device/?code=ABCD-1234",
+              interval: 5,
+              expires_in: 600,
+            }),
+          );
         }
         if (url === DEVICE_TOKEN_URL) {
           const params = new URLSearchParams(String(init?.body));
@@ -73,15 +75,15 @@ describe("Meta OAuth", () => {
           expect(params.get("client_id")).toBe(CLIENT_ID);
           expect(params.get("device_code")).toBe("device-code-123");
           const response = pollResponses.shift();
-          if (!response) throw new Error("Unexpected extra token poll");
-          return response;
+          if (!response) return Promise.reject(new Error("Unexpected extra token poll"));
+          return Promise.resolve(response);
         }
         if (url === MINT_URL) {
           expect(init?.method).toBe("POST");
           expect(init?.headers).toMatchObject({ Authorization: "Bearer identity-token" });
-          return jsonResponse({ api_key: "LLM|minted-key" });
+          return Promise.resolve(jsonResponse({ api_key: "LLM|minted-key" }));
         }
-        throw new Error(`Unexpected fetch URL: ${url}`);
+        return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
       }),
     );
 
@@ -112,10 +114,10 @@ describe("Meta OAuth", () => {
     vi.setSystemTime(now);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
+      vi.fn((input: unknown, init?: RequestInit): Promise<Response> => {
         expect(getUrl(input)).toBe(MINT_URL);
         expect(init?.headers).toMatchObject({ Authorization: "Bearer identity-token" });
-        return jsonResponse({ api_key: "LLM|fresh-key" });
+        return Promise.resolve(jsonResponse({ api_key: "LLM|fresh-key" }));
       }),
     );
 
@@ -135,8 +137,10 @@ describe("Meta OAuth", () => {
   it("reports the setup URL when Meta issues no key", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        jsonResponse({ require_payment: true, action_url: "https://dev.meta.ai/billing" }),
+      vi.fn(() =>
+        Promise.resolve(
+          jsonResponse({ require_payment: true, action_url: "https://dev.meta.ai/billing" }),
+        ),
       ),
     );
     await expect(

@@ -56,7 +56,9 @@ describe("SelectList", () => {
       visibleIndexOf(second, "long description"),
     );
   });
+});
 
+describe("SelectList", () => {
   it("uses the configured minimum primary column width", () => {
     const items = [
       { value: "a", label: "a", description: "first" },
@@ -93,7 +95,9 @@ describe("SelectList", () => {
     assert.equal(visibleIndexOf(first, "first"), 22);
     assert.equal(visibleIndexOf(second, "second"), 22);
   });
+});
 
+describe("SelectList", () => {
   it("allows overriding primary truncation while preserving description alignment", () => {
     const items = [
       {

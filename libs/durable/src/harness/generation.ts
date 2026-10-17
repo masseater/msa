@@ -136,6 +136,10 @@ export const GenerationTask = defineTask<
      * `request`. The agent and settings resolved here are fixed for this request. Only the Harness writes model
      * context to a busy conversation, so the context read here is still current at the commit; display-only entries
      * may land meanwhile.
+     * @param {RunningTask<GenerationInput, GenerationCheckpoint>} task - The running generation.
+     * @param {TaskRuntime<GenerationInput, GenerationCheckpoint, GenerationResult>} runtime - The task's runtime.
+     * @param {Context} context - The caller's context.
+     * @returns {Promise<NextTaskState<GenerationCheckpoint, GenerationResult>>} The next state.
      */
     prepare: async (task, runtime, context) => {
       const { conversationId } = runtime;
@@ -205,7 +209,7 @@ export const GenerationTask = defineTask<
       }
       await runtime.commit(async (tx) => {
         let cutoff = (await tx.scanEntries({ conversationId }, 1)).items[0]?.id;
-        for (const entry of entries)
+        for await (const entry of entries)
           cutoff = (await tx.appendEntry(SystemEntry, conversationId, entry)).id;
         if (cutoff === undefined)
           throw new Error(`Conversation ${conversationId} has no entries to send`);
@@ -326,7 +330,7 @@ export const GenerationTask = defineTask<
     await runtime.commit(async (tx) => {
       const live = await tx.doc(LiveDoc, conversationId);
       await convertPartial(tx, live, conversationId);
-      for (const call of unstarted) {
+      for await (const call of unstarted) {
         const result = harnessError("aborted", `Tool ${call.name} was aborted`);
         await appendToolResult(tx, conversationId, call, result, { timestamp: runtime.now() });
       }
@@ -336,7 +340,14 @@ export const GenerationTask = defineTask<
   },
 });
 
-/** The calls `callIds` of the assistant entry, in the given order. */
+/**
+ * The calls `callIds` of the assistant entry, in the given order.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {EntryId} assistant - The assistant entry.
+ * @param {readonly string[]} callIds - The calls.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<ToolCall[]>} The calls.
+ */
 async function readCalls(
   runtime: Runtime,
   assistant: EntryId,
@@ -351,7 +362,14 @@ async function readCalls(
   return callIds.flatMap((id) => calls.filter((call) => call.id === id).slice(0, 1));
 }
 
-/** A tool task for call `callId`, owned by the generation. */
+/**
+ * A tool task for call `callId`, owned by the generation.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {EntryId} assistant - The assistant entry.
+ * @param {string} callId - The call.
+ * @returns {Promise<TaskId<ToolTaskResult>>} The tool task.
+ */
 function createToolTask(
   tx: Tx,
   runtime: Runtime,
@@ -369,6 +387,11 @@ function createToolTask(
  * Which threshold compaction preparation starts before its request (spec §8.3): `blocking` above
  * `contextWindow - reserveTokens`, `background` above the background threshold, and only when range selection finds a
  * cut. The caller starts a background one only while no compaction is listed.
+ * @param {ContextView} view - The conversation's context view.
+ * @param {readonly { readonly model?: readonly Message[] }[]} planned - The entries the request adds.
+ * @param {number} contextWindow - The model's context window.
+ * @param {CompactionPolicy} policy - The compaction policy.
+ * @returns {"blocking" | "background" | undefined} The compaction to start, if any.
  */
 function thresholdCompaction(
   view: ContextView,
@@ -394,7 +417,11 @@ function thresholdCompaction(
   return over;
 }
 
-/** Error text for a generation whose blocking compaction ended without completing. */
+/**
+ * Error text for a generation whose blocking compaction ended without completing.
+ * @param {Exclude<TaskOutcome<CompactionResult>, { status: "completed" }>} outcome - The compaction's outcome.
+ * @returns {string} The error text.
+ */
 function compactionFailure(
   outcome: Exclude<TaskOutcome<CompactionResult>, { status: "completed" }>,
 ): string {
@@ -409,7 +436,12 @@ function compactionFailure(
   }
 }
 
-/** Settle the run's inputs `unanswered` with `model_error` and fail with `text`. */
+/**
+ * Settle the run's inputs `unanswered` with `model_error` and fail with `text`.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {string} text - The error text.
+ * @param {Context} context - The caller's context.
+ */
 async function failModelError(runtime: Runtime, text: string, context: Context): Promise<void> {
   await runtime.commit(async (tx) => {
     const live = await tx.doc(LiveDoc, runtime.conversationId);
@@ -421,7 +453,12 @@ async function failModelError(runtime: Runtime, text: string, context: Context):
   }, context);
 }
 
-/** Settle the run's inputs `unanswered` with `no_model` and fail. */
+/**
+ * Settle the run's inputs `unanswered` with `no_model` and fail.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {ModelRef | undefined} ref - The model that could not be resolved.
+ * @param {Context} context - The caller's context.
+ */
 async function failNoModel(
   runtime: Runtime,
   ref: ModelRef | undefined,
@@ -444,6 +481,9 @@ async function failNoModel(
 /**
  * Append a committed partial left by an interrupted, aborted, faulted, or orphaned attempt as an aborted assistant
  * entry; the caller replaces or removes `generation`.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {Draft<LiveState>} live - The `msa.live` draft.
+ * @param {ConversationId} conversationId - The conversation.
  */
 export async function convertPartial(
   tx: Tx,
@@ -460,6 +500,13 @@ export async function convertPartial(
  * Stream one request and return the terminal message. Partials commit as trailing writes at most every
  * `progress.partialIntervalMs` (default 100 ms) with one commit in flight; `finally` stops the throttle and awaits that
  * commit, so no stale partial lands after the outcome.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {Model<Api>} model - The model.
+ * @param {readonly Message[]} messages - The request's messages.
+ * @param {SimpleStreamOptions} options - The stream options.
+ * @param {number} attempt - The attempt number.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<AssistantMessage>} The terminal message.
  */
 async function streamResponse(
   runtime: Runtime,
@@ -516,7 +563,14 @@ async function streamResponse(
   }
 }
 
-/** Classify a terminal provider message in one commit that also clears the partial. */
+/**
+ * Classify a terminal provider message in one commit that also clears the partial.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {Request} request - The request.
+ * @param {AssistantMessage} message - The terminal message.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<void>} The next state.
+ */
 async function classify(
   runtime: Runtime,
   request: Request,
@@ -622,6 +676,9 @@ async function classify(
  * A final answer; the final boundary places queued items (spec §6). The first `onYield` continuation appends a user
  * message and hands the run to a successor generation, but only when the boundary selected no user item and no reset.
  * Otherwise the run's inputs settle `done`, and selected user items start the next run.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {AssistantMessage} message - The final answer.
+ * @param {Context} context - The caller's context.
  */
 async function answer(
   runtime: Runtime,
@@ -661,6 +718,11 @@ async function answer(
  * Append the tool-calling answer and start its tool round in one commit (spec §8.3). A call to a tool the request did
  * not offer gets its `tool_unavailable` result here; every other call gets a tool task owned by the generation, only the
  * first one now when the round is sequential. The generation then waits for them in its `tools` phase, keeping the run.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {Request} request - The request.
+ * @param {AssistantMessage} message - The tool-calling answer.
+ * @param {readonly ToolCall[]} calls - Its calls.
+ * @param {Context} context - The caller's context.
  */
 async function startToolRound(
   runtime: Runtime,
@@ -689,7 +751,7 @@ async function startToolRound(
     const slots: ToolSlot[] = [];
     const started: TaskId<ToolTaskResult>[] = [];
     const pending: string[] = [];
-    for (const call of calls) {
+    for await (const call of calls) {
       if (!offered.has(call.name)) {
         const unavailable = harnessError("tool_unavailable", `Tool ${call.name} is not available`);
         const result = await appendToolResult(tx, conversationId, call, unavailable, {
@@ -717,6 +779,10 @@ async function startToolRound(
 /**
  * The round's tools are terminal: apply their controls and either end the run at the final boundary (`terminate`,
  * `handoff`, or a queued reset) or hand it to the next generation at the `postTools` boundary (spec §8.5).
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {EntryId} assistant - The tool-calling answer.
+ * @param {readonly TaskId<ToolTaskResult>[]} tools - The round's tool tasks.
+ * @param {Context} context - The caller's context.
  */
 async function finishToolRound(
   runtime: Runtime,
@@ -788,6 +854,10 @@ async function finishToolRound(
 /**
  * Append a provider result and add its usage to `msa.usage` in the same commit.
  * REMINDER: every built-in writer of assistant entries goes through here, so the usage ledger stays complete.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {AssistantMessage} message - The provider result.
+ * @returns {Promise<TypedEntry<never>>} The appended entry.
  */
 async function appendAssistant(
   tx: Tx,
@@ -804,7 +874,13 @@ async function appendAssistant(
   return tx.appendEntry(AssistantEntry, conversationId, { model: [message] });
 }
 
-/** Start a run for `inputs`, placed input submissions: a new generation takes `msa.live.run`. */
+/**
+ * Start a run for `inputs`, placed input submissions: a new generation takes `msa.live.run`.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {Draft<LiveState>} live - The `msa.live` draft.
+ * @param {SubmissionId[]} inputs - The run's inputs.
+ */
 export async function startRun(
   tx: Tx,
   conversationId: ConversationId,
@@ -814,7 +890,12 @@ export async function startRun(
   live.run = { taskId: await createGeneration(tx, conversationId), inputs };
 }
 
-/** A generation owned by its conversation. */
+/**
+ * A generation owned by its conversation.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
+ * @returns {Promise<TaskId<GenerationResult>>} The generation.
+ */
 function createGeneration(
   tx: Tx,
   conversationId: ConversationId,
@@ -822,7 +903,12 @@ function createGeneration(
   return tx.createTask(GenerationTask, {}, { ownership: { kind: "conversation" }, conversationId });
 }
 
-/** Hand run control from `from` to `to`; the run's inputs move with it. */
+/**
+ * Hand run control from `from` to `to`; the run's inputs move with it.
+ * @param {Draft<LiveState>} live - The `msa.live` draft.
+ * @param {TaskId} from - The task giving up the run.
+ * @param {TaskId} to - The task taking it.
+ */
 export function handOver(live: Draft<LiveState>, from: TaskId, to: TaskId): void {
   if (live.run?.taskId === from) live.run.taskId = to;
 }

@@ -5,6 +5,10 @@ import type { ApiKeyAuth, OAuthAuth } from "./types.ts";
  * set env var resolves. Includes a `login` that prompts for the key.
  * Providers with non-standard resolution (provider env, ambient files, IAM)
  * write their own `ApiKeyAuth`.
+ *
+ * @param {string} name - credential name shown to users
+ * @param {readonly string[]} envVars - environment variables to check in order
+ * @returns {ApiKeyAuth} the api-key auth
  */
 export function envApiKeyAuth(name: string, envVars: readonly string[]): ApiKeyAuth {
   return {
@@ -40,6 +44,9 @@ export function envApiKeyAuth(name: string, envVars: readonly string[]): ApiKeyA
  * first `login`/`refresh`/`toAuth` call; callers keep Node-only flow code out
  * of bundles by loading through a bundler-opaque dynamic import (variable
  * specifier, see the bedrock lazy wrapper).
+ *
+ * @param {{ name: string; isSubscription?: boolean; loginLabel?: string; load: () => Promise<OAuthAuth>; }} input - OAuth metadata and loader
+ * @returns {OAuthAuth} the lazy OAuth auth
  */
 export function lazyOAuth(input: {
   name: string;

@@ -334,8 +334,8 @@ export function createRadiusOAuth(options: RadiusOAuthOptions): OAuthAuth {
       return refreshed;
     },
 
-    async toAuth(credential) {
-      return { apiKey: credential.access };
+    toAuth(credential) {
+      return Promise.resolve({ apiKey: credential.access });
     },
   };
 }

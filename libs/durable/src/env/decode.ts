@@ -4,12 +4,19 @@
  * mark, so these decoders turn BOM handling off and drop a leading mark themselves.
  */
 
-/** A streaming decoder for a byte range; callers that start at the beginning of a file skip a leading mark themselves. */
+/**
+ * A streaming decoder for a byte range; callers that start at the beginning of a file skip a leading mark themselves.
+ * @returns {InstanceType<typeof TextDecoder>} The decoder.
+ */
 export function rangeDecoder(): InstanceType<typeof TextDecoder> {
   return new TextDecoder("utf-8", { ignoreBOM: true });
 }
 
-/** Whether decoding the whole input drops its first three bytes as a byte-order mark. */
+/**
+ * Whether decoding the whole input drops its first three bytes as a byte-order mark.
+ * @param {Uint8Array} firstBytes - The input's first bytes.
+ * @returns {boolean} Whether it does.
+ */
 export function startsWithBom(firstBytes: Uint8Array): boolean {
   return firstBytes[0] === 0xef && firstBytes[1] === 0xbb && firstBytes[2] === 0xbf;
 }
@@ -19,7 +26,11 @@ export class StreamDecoder {
   readonly #decoder = rangeDecoder();
   #started = false;
 
-  /** Text for `bytes`, holding back an incomplete character; without `bytes`, the end of the stream. */
+  /**
+   * Text for `bytes`, holding back an incomplete character; without `bytes`, the end of the stream.
+   * @param {Uint8Array} bytes - The next bytes.
+   * @returns {string} The text.
+   */
   decode(bytes?: Uint8Array): string {
     const text =
       bytes === undefined ? this.#decoder.decode() : this.#decoder.decode(bytes, { stream: true });

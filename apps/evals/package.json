@@ -10,7 +10,11 @@
     "eval:docs": "node --experimental-strip-types src/cli.ts",
     "test": "vitest run --config vitest.test.config.ts"
   },
+  "dependencies": {
+    "effect": "catalog:stack"
+  },
   "devDependencies": {
+    "@effect/vitest": "catalog:stack",
     "@msa/ai": "workspace:*",
     "@msa/coding-agent": "workspace:*",
     "@msa/tui": "workspace:*",

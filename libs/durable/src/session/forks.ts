@@ -23,7 +23,15 @@ export type ForkDocumentCopy = {
   readonly source: DocumentCopySource;
 };
 
-/** Select every persisted conversation document copied by one fork. */
+/**
+ * Select every persisted conversation document copied by one fork.
+ * @param {Storage} storage - The storage backend.
+ * @param {ConversationId} parentConversationId - The forked conversation.
+ * @param {EntryId} at - The fork point.
+ * @param {ConversationId} childConversationId - The fork.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<readonly ForkDocumentCopy[]>} The copies.
+ */
 export async function prepareForkDocumentCopies(
   storage: Storage,
   parentConversationId: ConversationId,
@@ -70,10 +78,9 @@ async function collectCopies(
   copiedAddresses: Set<string>,
   context: Context,
 ): Promise<void> {
-  let cursor: Cursor | undefined;
-  do {
+  const copyPage = async (cursor: Cursor | undefined): Promise<void> => {
     const page = await storage.scanDocuments({ scope, at }, SCAN_PAGE_SIZE, cursor, context);
-    for (const source of page.items) {
+    for await (const source of page.items) {
       if (source.scope.kind !== "conversation" || source.fork !== policy) continue;
       const id = await storage.mintId<DocumentId>();
       const identity = {
@@ -94,6 +101,7 @@ async function collectCopies(
       copiedAddresses.add(copyAddress);
       copies.push({ record, source: { id: source.id, at } });
     }
-    cursor = page.next;
-  } while (cursor !== undefined);
+    if (page.next !== undefined) await copyPage(page.next);
+  };
+  await copyPage(undefined);
 }

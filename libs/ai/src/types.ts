@@ -429,13 +429,15 @@ export interface TextSignatureV1 {
 export interface TextContent {
   type: "text";
   text: string;
-  textSignature?: string | undefined; // e.g., for OpenAI responses, message metadata (legacy id string or TextSignatureV1 JSON)
+  // e.g., for OpenAI responses, message metadata (legacy id string or TextSignatureV1 JSON)
+  textSignature?: string | undefined;
 }
 
 export interface ThinkingContent {
   type: "thinking";
   thinking: string;
-  thinkingSignature?: string | undefined; // Provider-specific opaque or serialized reasoning replay data
+  // Provider-specific opaque or serialized reasoning replay data
+  thinkingSignature?: string | undefined;
   /** When true, the thinking content was redacted by safety filters. The opaque
    *  encrypted payload is stored in `thinkingSignature` so it can be passed back
    *  to the API for multi-turn continuity. */
@@ -444,8 +446,10 @@ export interface ThinkingContent {
 
 export interface ImageContent {
   type: "image";
-  data: string; // base64 encoded image data
-  mimeType: string; // e.g., "image/jpeg", "image/png"
+  // base64 encoded image data
+  data: string;
+  // e.g., "image/jpeg", "image/png"
+  mimeType: string;
 }
 
 export interface ToolCall {
@@ -453,7 +457,8 @@ export interface ToolCall {
   id: string;
   name: string;
   arguments: JsonObject;
-  thoughtSignature?: string | undefined; // Google-specific: opaque signature for reusing thought context
+  // Google-specific: opaque signature for reusing thought context
+  thoughtSignature?: string | undefined;
   /** OpenAI Responses namespace for calls to dynamically loaded or namespaced tools. */
   namespace?: string;
   /**
@@ -591,13 +596,15 @@ export interface SystemMessage {
   toolsAdded?: Tool[];
   /** Tools that stop being available at this point. */
   toolsRemoved?: ToolReference[];
-  timestamp: number; // Unix timestamp in milliseconds
+  // Unix timestamp in milliseconds
+  timestamp: number;
 }
 
 export interface UserMessage {
   role: "user";
   content: string | (TextContent | ImageContent)[];
-  timestamp: number; // Unix timestamp in milliseconds
+  // Unix timestamp in milliseconds
+  timestamp: number;
 }
 
 export interface AssistantMessage {
@@ -606,13 +613,16 @@ export interface AssistantMessage {
   api: Api;
   provider: ProviderId;
   model: string;
-  responseModel?: string; // Concrete model reported by the provider when different from the requested `model`
-  responseId?: string | undefined; // Provider-specific response/message identifier when the upstream API exposes one
+  // Concrete model reported by the provider when different from the requested `model`
+  responseModel?: string;
+  // Provider-specific response/message identifier when the upstream API exposes one
+  responseId?: string | undefined;
   /** Exact provider-native effort level used for this response. Absent for legacy or unmanaged responses. */
   providerThinkingLevel?: string;
   /** msa thinking level the agent loop requested for this response. Absent outside the agent loop and for legacy responses. */
   thinkingLevel?: ModelThinkingLevel;
-  diagnostics?: AssistantMessageDiagnostic[]; // Redacted provider/runtime diagnostics for failures and recoveries.
+  // Redacted provider/runtime diagnostics for failures and recoveries.
+  diagnostics?: AssistantMessageDiagnostic[];
   usage: Usage;
   stopReason: StopReason;
   deferred?: DeferredHandle;
@@ -661,7 +671,8 @@ export type ToolResultMessage<TDetails = JsonValue> =
         role: "toolResult";
         toolCallId: string;
         toolName: string;
-        content: (TextContent | ImageContent)[]; // Supports text and images
+        // Supports text and images
+        content: (TextContent | ImageContent)[];
         details?: JsonRepresentation<TDetails>;
         /** Usage from the tool execution itself, if available. Not part of main LLM context accounting. */
         usage?: Usage;
@@ -695,7 +706,8 @@ export interface AssistantImages {
   usage?: Usage;
   stopReason: ImagesStopReason;
   errorMessage?: string;
-  timestamp: number; // Unix timestamp in milliseconds
+  // Unix timestamp in milliseconds
+  timestamp: number;
 }
 
 export interface ClassifierChoiceQuestion {
@@ -764,7 +776,8 @@ export interface ClassifierResult {
   usage?: Usage;
   stopReason: ClassifierStopReason;
   errorMessage?: string;
-  timestamp: number; // Unix timestamp in milliseconds
+  // Unix timestamp in milliseconds
+  timestamp: number;
 }
 
 import type { TSchema } from "typebox";

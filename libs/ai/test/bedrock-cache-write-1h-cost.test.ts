@@ -6,8 +6,8 @@ vi.mock("@aws-sdk/client-bedrock-runtime", () => {
   class BedrockRuntimeClient {
     middlewareStack = { add: () => undefined };
 
-    async send(): Promise<unknown> {
-      return {
+    send(): Promise<unknown> {
+      return Promise.resolve({
         $metadata: { httpStatusCode: 200 },
         stream: (async function* () {
           yield { messageStart: { role: "assistant" } };
@@ -28,7 +28,7 @@ vi.mock("@aws-sdk/client-bedrock-runtime", () => {
           };
           yield { messageStop: { stopReason: "end_turn" } };
         })(),
-      };
+      });
     }
   }
 

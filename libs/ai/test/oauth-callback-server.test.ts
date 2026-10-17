@@ -33,7 +33,12 @@ function interaction(
   return { signal: signal ?? new AbortController().signal, notify: () => {}, prompt };
 }
 
-/** A manual prompt that stays open until its signal aborts. */
+/**
+ * A manual prompt that stays open until its signal aborts.
+ *
+ * @param {(prompt: AuthPrompt) => void} [onPrompt] - called with each prompt
+ * @returns {(prompt: AuthPrompt) => Promise<string>} the prompt function
+ */
 function pendingPrompt(
   onPrompt?: (prompt: AuthPrompt) => void,
 ): (prompt: AuthPrompt) => Promise<string> {
@@ -58,7 +63,7 @@ describe("OAuth callback server", () => {
       port: 0,
       path: "/callback",
       state: "expected-state",
-      complete: async (code) => `completed:${code}` as T,
+      complete: (code) => Promise.resolve(`completed:${code}` as T),
       ...options,
     });
     servers.push(server);
@@ -71,7 +76,7 @@ describe("OAuth callback server", () => {
 
   it("ignores stray requests and resolves with the completed code", async () => {
     const server = await start<string>();
-    expect(server.redirectUri).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/callback$/);
+    expect(server.redirectUri).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/callback$/u);
 
     const wrongPath = await page(await nativeFetch(new URL("/other", server.redirectUri)));
     expect(wrongPath.status).toBe(404);
@@ -108,7 +113,7 @@ describe("OAuth callback server", () => {
 
   it("uses the redirect host and skips the state check when none is expected", async () => {
     const server = await start<string>({ redirectHost: "localhost", state: undefined });
-    expect(server.redirectUri).toMatch(/^http:\/\/localhost:\d+\/callback$/);
+    expect(server.redirectUri).toMatch(/^http:\/\/localhost:\d+\/callback$/u);
     const response = await nativeFetch(callbackUrl(server.redirectUri, { code: "no-state" }));
     expect(response.status).toBe(200);
     await expect(server.wait()).resolves.toBe("completed:no-state");
@@ -116,8 +121,8 @@ describe("OAuth callback server", () => {
 
   it("shows completion failures on the page and rejects the wait", async () => {
     const server = await start<string>({
-      complete: async () => {
-        throw new Error("token exchange failed");
+      complete: () => {
+        return Promise.reject(new Error("token exchange failed"));
       },
     });
     const failure = await page(
@@ -193,7 +198,9 @@ describe("OAuth callback server", () => {
 
   it("fails instead of picking another port when the requested port is taken", async () => {
     const blocker: Server = createServer();
-    await new Promise<void>((resolve) => blocker.listen(0, "127.0.0.1", resolve));
+    await new Promise<void>((resolve) => {
+      blocker.listen(0, "127.0.0.1", resolve);
+    });
     try {
       const address = blocker.address();
       if (!address || typeof address === "string") throw new Error("blocker did not bind to TCP");
@@ -214,7 +221,7 @@ describe("waitForCallbackOrManualInput", () => {
       host: "127.0.0.1",
       port: 0,
       path: "/callback",
-      complete: async (code) => code,
+      complete: (code) => Promise.resolve(code),
     });
     try {
       const result = waitForCallbackOrManualInput(
@@ -240,11 +247,11 @@ describe("waitForCallbackOrManualInput", () => {
       host: "127.0.0.1",
       port: 0,
       path: "/callback",
-      complete: async (code) => code,
+      complete: (code) => Promise.resolve(code),
     });
     try {
       const result = await waitForCallbackOrManualInput(
-        interaction(async () => "pasted"),
+        interaction(() => Promise.resolve("pasted")),
         server,
         {
           message: "paste",
@@ -259,7 +266,7 @@ describe("waitForCallbackOrManualInput", () => {
 
   it("uses only the manual prompt without a callback server", async () => {
     const result = await waitForCallbackOrManualInput(
-      interaction(async () => "pasted"),
+      interaction(() => Promise.resolve("pasted")),
       undefined,
       {
         message: "paste",
@@ -275,12 +282,12 @@ describe("waitForCallbackOrManualInput", () => {
       host: "127.0.0.1",
       port: 0,
       path: "/callback",
-      complete: async (code) => code,
+      complete: (code) => Promise.resolve(code),
     });
     try {
       const result = waitForCallbackOrManualInput(
-        interaction(async () => {
-          throw new Error("prompt cancelled");
+        interaction(() => {
+          return Promise.reject(new Error("prompt cancelled"));
         }),
         server,
         { message: "paste", placeholder: server.redirectUri },

@@ -36,7 +36,7 @@ async function capturePayload(
     onPayload: (params) => {
       payload = params as Record<string, unknown>;
     },
-    fetch: async () => new Response(null, { status: 500 }),
+    fetch: () => Promise.resolve(new Response(null, { status: 500 })),
   }).result();
   if (!payload) throw new Error("Request payload was not captured");
   return payload;

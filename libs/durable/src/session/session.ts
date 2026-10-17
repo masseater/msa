@@ -12,6 +12,7 @@ import {
 } from "../documents.ts";
 import { SessionFailed, StorageRequestError } from "../errors.ts";
 import { idFromNumber } from "../ids.ts";
+import { promiseTry } from "../promise-try.ts";
 import type {
   CommitChange,
   CommitPublication,
@@ -71,6 +72,9 @@ import {
 /**
  * Open a Session kernel over one storage backend. `now` is the wall clock for task times; default `Date.now`. The first
  * error a Storage method throws fails the Session (`SessionFailed`); see `SessionImpl`.
+ * @param {Storage} storage - The storage backend.
+ * @param {{ readonly now?: () => number; readonly documentRetentionMs?: number }} options - The clock and the document retention.
+ * @returns {Session} The Session.
  */
 export function createSession(
   storage: Storage,
@@ -87,7 +91,10 @@ export function createSession(
 /** Default document retention: ten minutes, as for kept contexts. */
 let defaultRetention = 600_000;
 
-/** Internal, for tests: the retention of every Session that keeps the default, as a suite run with eviction at once. */
+/**
+ * Internal, for tests: the retention of every Session that keeps the default, as a suite run with eviction at once.
+ * @param {number} ms - The retention.
+ */
 export function setDefaultDocumentRetention(ms: number): void {
   defaultRetention = ms;
 }
@@ -95,6 +102,8 @@ export function setDefaultDocumentRetention(ms: number): void {
 /**
  * A retention as given, when it is a number of milliseconds, `0` or more (`Infinity` keeps documents); otherwise the
  * default.
+ * @param {number | undefined} ms - The given retention.
+ * @returns {number} The retention.
  */
 export function documentRetention(ms: number | undefined): number {
   return typeof ms === "number" && ms >= 0 ? ms : defaultRetention;
@@ -153,12 +162,18 @@ export class SessionImpl implements Session {
     return this.#closed.promise;
   }
 
-  /** Internal: the error that failed the Session, if one did. */
+  /**
+   * Internal: the error that failed the Session, if one did.
+   * @returns {{ readonly error: unknown } | undefined} The failure.
+   */
   get failure(): { readonly error: unknown } | undefined {
     return this.#failure;
   }
 
-  /** Internal: rejects with `SessionFailed` the moment the Session fails, before work underway has ended; never resolves. */
+  /**
+   * Internal: rejects with `SessionFailed` the moment the Session fails, before work underway has ended; never resolves.
+   * @returns {Promise<never>} The rejecting promise.
+   */
   get failed(): Promise<never> {
     return this.#failed.promise;
   }
@@ -208,7 +223,10 @@ export class SessionImpl implements Session {
     };
   }
 
-  /** The Storage behind the failure guard; every component reads and writes through it. */
+  /**
+   * The Storage behind the failure guard; every component reads and writes through it.
+   * @returns {Storage} The guarded Storage.
+   */
   protected get storage(): Storage {
     return this.#storage;
   }
@@ -221,6 +239,7 @@ export class SessionImpl implements Session {
    * Internal: fail the Session with `error`, the first wins, and report it once. Admission ends, and close listeners run
    * now; they read the error from `failure`. The Storage guard calls this; the Harness also calls it for a throw in its
    * scheduler's own commits.
+   * @param {unknown} error - The failure.
    */
   fail(error: unknown): void {
     if (this.#failure !== undefined) return;
@@ -237,6 +256,10 @@ export class SessionImpl implements Session {
    * Internal commit exposing the concrete transaction and its internal operations, such as the reserved-ID root
    * bootstrap and task replacement. `scope` sets the default `tx.createTask()` conversation and the task attributed to
    * appended entries.
+   * @param {(tx: Transaction) => T | Promise<T>} change - Stages the commit's writes.
+   * @param {Context} context - The caller's context.
+   * @param {TransactionScope} scope - The commit's default conversation and task.
+   * @returns {Promise<T>} What `change` returns.
    */
   commitWith<T>(
     change: (tx: Transaction) => T | Promise<T>,
@@ -251,22 +274,32 @@ export class SessionImpl implements Session {
     return this.#enqueue(() => this.#runCommit(change, context, scope));
   }
 
-  /** Internal: run a read-only job on the mutation line so multi-read derivations observe one committed state. */
+  /**
+   * Internal: run a read-only job on the mutation line so multi-read derivations observe one committed state.
+   * @param {() => Promise<T>} job - The read.
+   * @returns {Promise<T>} What `job` resolves with.
+   */
   readOnLine<T>(job: () => Promise<T>): Promise<T> {
     try {
       this.assertUsable();
     } catch (error) {
       return Promise.reject(error);
     }
-    return this.#enqueue(async () => {
-      this.#assertHealthy();
-      return job();
-    });
+    return this.#enqueue(() =>
+      promiseTry(() => {
+        this.#assertHealthy();
+        return job();
+      }),
+    );
   }
 
   /**
    * Internal: a conversation document's current incarnation and value, for a job already running on the line (see
    * `readOnLine()`). Absent documents are `undefined`.
+   * @param {ConversationDocToken<JsonObject>} token - The document.
+   * @param {ConversationId} conversationId - The conversation.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<{ record: DocumentRecord; version: number; value: JsonObject } | undefined>} The incarnation and value.
    */
   async conversationDocumentOnLine(
     token: ConversationDocToken<JsonObject>,
@@ -326,10 +359,12 @@ export class SessionImpl implements Session {
     const loaded =
       cached?.valueVersion === definition.version
         ? cached
-        : await this.#enqueue(async () => {
-            this.#assertHealthy();
-            return this.#loadDocument(definition, resolved.id, resolved.address, context);
-          });
+        : await this.#enqueue(() =>
+            promiseTry(() => {
+              this.#assertHealthy();
+              return this.#loadDocument(definition, resolved.id, resolved.address, context);
+            }),
+          );
     if (loaded === undefined) return undefined;
     checkRecordScope(definition, loaded.record);
     checkRecordVersion(definition, loaded.record, loaded.storedVersion);
@@ -485,40 +520,39 @@ export class SessionImpl implements Session {
     at: EntryId,
     context: Context,
   ): Promise<Readonly<T> | undefined>;
-  async snapshotAsOf(
-    token: AnyDocToken,
-    ...args: readonly unknown[]
-  ): Promise<JsonObject | undefined> {
-    this.assertUsable();
-    const definition = token.definition;
-    const resolved = resolveAddress(definition, args);
-    if (resolved.address.scope.kind !== "conversation") {
-      throw new TypeError("Session.snapshotAsOf() requires a conversation document");
-    }
-    const conversationId = resolved.address.scope.conversationId;
-    const atValue = args[resolved.nextArgument];
-    if (typeof atValue !== "number" || !Number.isSafeInteger(atValue)) {
-      throw new TypeError("Session.snapshotAsOf() requires an entry ID");
-    }
-    const at = idFromNumber<EntryId>(atValue);
-    const context = args[resolved.nextArgument + 1] as Context;
-    return this.#enqueue(async () => {
-      this.#assertHealthy();
-      const storedEntry = await this.#storage.entry(conversationId, at, context);
-      if (storedEntry === undefined) {
-        throw new Error(`Entry ${at} is not visible from conversation ${conversationId}`);
+  snapshotAsOf(token: AnyDocToken, ...args: readonly unknown[]): Promise<JsonObject | undefined> {
+    return promiseTry(() => {
+      this.assertUsable();
+      const definition = token.definition;
+      const resolved = resolveAddress(definition, args);
+      if (resolved.address.scope.kind !== "conversation") {
+        throw new TypeError("Session.snapshotAsOf() requires a conversation document");
       }
-      const address: DocumentAddress = {
-        ...resolved.address,
-        scope: { kind: "conversation", conversationId: storedEntry.entry.conversationId },
-      };
-      const record = await this.#storage.findDocument(address, storedEntry.commitSeq, context);
-      if (record === undefined) return undefined;
-      const stored = await this.#storage.document(record.id, storedEntry.commitSeq, context);
-      if (stored === undefined) {
-        throw new Error(`Historical document ${record.id} (${record.kind}) cannot be read`);
+      const conversationId = resolved.address.scope.conversationId;
+      const atValue = args[resolved.nextArgument];
+      if (typeof atValue !== "number" || !Number.isSafeInteger(atValue)) {
+        throw new TypeError("Session.snapshotAsOf() requires an entry ID");
       }
-      return materializeDocument(definition, stored);
+      const at = idFromNumber<EntryId>(atValue);
+      const context = args[resolved.nextArgument + 1] as Context;
+      return this.#enqueue(async () => {
+        this.#assertHealthy();
+        const storedEntry = await this.#storage.entry(conversationId, at, context);
+        if (storedEntry === undefined) {
+          throw new Error(`Entry ${at} is not visible from conversation ${conversationId}`);
+        }
+        const address: DocumentAddress = {
+          ...resolved.address,
+          scope: { kind: "conversation", conversationId: storedEntry.entry.conversationId },
+        };
+        const record = await this.#storage.findDocument(address, storedEntry.commitSeq, context);
+        if (record === undefined) return undefined;
+        const stored = await this.#storage.document(record.id, storedEntry.commitSeq, context);
+        if (stored === undefined) {
+          throw new Error(`Historical document ${record.id} (${record.kind}) cannot be read`);
+        }
+        return materializeDocument(definition, stored);
+      });
     });
   }
 
@@ -569,23 +603,36 @@ export class SessionImpl implements Session {
     for (const listener of listeners) contained(listener, (error) => this.report(error));
   }
 
-  /** Internal: the Session's failure, and errors of listeners, which never fail what ran them. A plain Session drops them. */
+  /**
+   * Internal: the Session's failure, and errors of listeners, which never fail what ran them. A plain Session drops them.
+   * @param {unknown} _error - The error.
+   */
   report(_error: unknown): void {}
 
   /**
    * Runs inside every transaction that creates or forks a conversation, after the conversation record is staged. A
    * plain Session stages nothing; a Harness stages its built-in documents.
+   * @param {Transaction} _tx - The creating transaction.
+   * @param {ConversationRecord} _record - The staged conversation.
+   * @returns {Promise<void>} Settles once the documents are staged.
    */
   protected conversationCreated(_tx: Transaction, _record: ConversationRecord): Promise<void> {
     return Promise.resolve();
   }
 
-  /** Runs after close seals admission and before the line closes Storage; must not reject. */
+  /**
+   * Runs after close seals admission and before the line closes Storage; must not reject.
+   * @returns {Promise<void>} Settles when done.
+   */
   protected beforeClose(): Promise<void> {
     return Promise.resolve();
   }
 
-  /** Register a synchronous post-adoption listener. It must not block or call Session operations; a throw is reported. */
+  /**
+   * Register a synchronous post-adoption listener. It must not block or call Session operations; a throw is reported.
+   * @param {(publication: CommitPublication, context: Context) => void} listener - The listener.
+   * @returns {() => void} Unsubscribes.
+   */
   subscribeCommits(
     listener: (publication: CommitPublication, context: Context) => void,
   ): () => void {
@@ -597,6 +644,8 @@ export class SessionImpl implements Session {
   /**
    * Internal: `subscribeCommits()` for the Session's own components, whose state follows each commit. A throw leaves
    * that state behind storage, so it fails the Session instead of being reported. They run before host listeners.
+   * @param {(publication: CommitPublication, context: Context) => void} listener - The listener.
+   * @returns {() => void} Unsubscribes.
    */
   observeCommits(listener: (publication: CommitPublication, context: Context) => void): () => void {
     this.assertUsable();
@@ -607,6 +656,8 @@ export class SessionImpl implements Session {
   /**
    * Register a listener called synchronously when close begins, also when a failure closes the Session (`failure` is
    * then set). It must not block or call Session operations; a throw is reported.
+   * @param {() => void} listener - The listener.
+   * @returns {() => void} Unsubscribes.
    */
   subscribeClose(listener: () => void): () => void {
     this.assertUsable();
@@ -614,17 +665,23 @@ export class SessionImpl implements Session {
     return () => this.#closeListeners.delete(listener);
   }
 
-  /** Drop every loaded tracker on the mutation line; later access cold-loads from Storage. */
+  /**
+   * Drop every loaded tracker on the mutation line; later access cold-loads from Storage.
+   * @returns {Promise<void>} Settles once the trackers are dropped.
+   */
   unloadDocuments(): Promise<void> {
-    return this.#enqueue(async () => {
-      this.#documents.clear();
-      this.#idleDocuments.clear();
-    });
+    return this.#enqueue(() =>
+      promiseTry(() => {
+        this.#documents.clear();
+        this.#idleDocuments.clear();
+      }),
+    );
   }
 
   /**
    * Internal, for tests: how many documents the cache holds, how many are idle, how many incarnations are pinned, and how
    * many sweep jobs were queued on the line so far.
+   * @returns {{ cached: number; idle: number; attached: number; sweeps: number }} The counts.
    */
   get documentCacheSizes(): {
     readonly cached: number;
@@ -640,7 +697,10 @@ export class SessionImpl implements Session {
     };
   }
 
-  /** Note a use of a cached document: an unattached one becomes the newest idle one, and an eviction is scheduled. */
+  /**
+   * Note a use of a cached document: an unattached one becomes the newest idle one, and an eviction is scheduled.
+   * @param {string} addressId - The document's address.
+   */
   #touchDocument(addressId: string): void {
     const cached = this.#documents.get(addressId);
     if (cached === undefined || this.#attachedDocuments.has(cached.record.id)) return;
@@ -682,10 +742,12 @@ export class SessionImpl implements Session {
     const sweep = { at, timer: undefined as ReturnType<typeof setTimeout> | undefined };
     const run = (): void => {
       this.#sweepJobs++;
-      this.#enqueue(async () => {
-        if (this.#documentSweep === sweep) this.#documentSweep = undefined;
-        if (this.#closing === undefined) this.#sweepDocuments();
-      }).catch(() => {});
+      this.#enqueue(() =>
+        promiseTry(() => {
+          if (this.#documentSweep === sweep) this.#documentSweep = undefined;
+          if (this.#closing === undefined) this.#sweepDocuments();
+        }),
+      ).catch(() => {});
     };
     const delay = at - this.#clock();
     this.#documentSweep = sweep;
@@ -719,7 +781,12 @@ export class SessionImpl implements Session {
     this.#scheduleDocumentSweep();
   }
 
-  /** Pin a cached incarnation for one observer; the returned release unpins it once, idle again after the last. */
+  /**
+   * Pin a cached incarnation for one observer; the returned release unpins it once, idle again after the last.
+   * @param {string} addressId - The document's address.
+   * @param {DocumentId} recordId - The incarnation.
+   * @returns {() => void} Unpins it.
+   */
   #pinDocument(addressId: string, recordId: DocumentId): () => void {
     this.#attachedDocuments.set(recordId, (this.#attachedDocuments.get(recordId) ?? 0) + 1);
     this.#idleDocuments.delete(addressId);
@@ -828,6 +895,10 @@ export class SessionImpl implements Session {
   /**
    * Attach an observer to one committed incarnation: check the definition, then forward this incarnation's committed
    * changes and close. `detach` removes both subscriptions.
+   * @param {AnyDocToken["definition"]} definition - The caller's definition.
+   * @param {LoadedDocument} loaded - The incarnation.
+   * @param {(value: JsonObject, detach: () => void) => O} create - Creates the observer.
+   * @returns {{ observer: O; detach: () => void }} The observer and its detach.
    */
   #attachDocument<O extends CommittedStateSource | CommittedWatch>(
     definition: AnyDocToken["definition"],
@@ -926,6 +997,8 @@ export class SessionImpl implements Session {
 /**
  * Run a host callback that must not fail its caller: a throw, or a promise it returns that rejects, goes to `onError`,
  * which is not awaited.
+ * @param {() => unknown} callback - The callback.
+ * @param {(error: unknown) => void} onError - Receives its failure.
  */
 export function contained(callback: () => unknown, onError: (error: unknown) => void): void {
   try {
@@ -941,6 +1014,9 @@ export function contained(callback: () => unknown, onError: (error: unknown) => 
 /**
  * Operations an observer applies for one committed change. An observer hydrated under another definition version holds
  * a differently shaped value, so it receives the new value as a root replacement instead of operations for that shape.
+ * @param {{ version: number }} observed - The observer's definition version.
+ * @param {Extract<DocumentCommitChange, { readonly type: "document" }>} change - The committed change.
+ * @returns {readonly Op[]} The operations.
  */
 function observedOperations(
   observed: { version: number },
@@ -983,7 +1059,12 @@ class GuardedStorage implements Storage {
     this.#latch = latch;
   }
 
-  /** Never exempt, whatever it throws: once admitted, whether a failed batch committed is unknown. */
+  /**
+   * Never exempt, whatever it throws: once admitted, whether a failed batch committed is unknown.
+   * @param {readonly StorageWrite[]} writes - The batch.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<Seq>} The commit's sequence number.
+   */
   commit(writes: readonly StorageWrite[], context: Context): Promise<Seq> {
     return this.#call(undefined, () => this.#storage.commit(writes, context));
   }
@@ -1116,6 +1197,8 @@ class GuardedStorage implements Storage {
   /**
    * Close the backend once every call underway has settled, so none outlives it or fails after `closed` settles. New
    * calls are refused from here on: a paged read must not start its next page while the backend closes.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<void>} Settles once the backend is closed.
    */
   async close(context: Context): Promise<void> {
     this.#closing = true;
@@ -1127,13 +1210,16 @@ class GuardedStorage implements Storage {
    * Run one backend call under the guard. `read` is a read's context; `commit()` and `mintId()` pass none, so nothing
    * exempts their errors: once a batch is admitted, whether it committed is unknown. A call still underway when another
    * fails the Session ends with `SessionFailed` too, whatever it returns: nothing it read or wrote is used.
+   * @param {Context | undefined} read - A read's context; none for writes.
+   * @param {() => Promise<T>} run - The backend call.
+   * @returns {Promise<T>} What `run` resolves with.
    */
   async #call<T>(read: Context | undefined, run: () => Promise<T>): Promise<T> {
     this.#assertHealthy();
     if (this.#closing) throw new Error("Session is closed");
     let result: T;
     // An async wrapper, so a backend that throws synchronously is guarded too.
-    const call = (async () => run())();
+    const call = (() => promiseTry(() => run()))();
     this.#underway.add(call);
     try {
       result = await call;

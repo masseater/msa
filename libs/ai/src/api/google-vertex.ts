@@ -57,7 +57,8 @@ export interface GoogleVertexOptions extends StreamOptions {
   toolChoice?: "auto" | "none" | "any" | undefined;
   thinking?: {
     enabled: boolean;
-    budgetTokens?: number; // -1 for dynamic, 0 to disable
+    // -1 for dynamic, 0 to disable
+    budgetTokens?: number;
     level?: GoogleApiThinkingLevel;
   };
   project?: string | undefined;
@@ -395,7 +396,7 @@ function createClient(
     location,
     apiVersion: API_VERSION,
     ...(googleAuthOptions ? { googleAuthOptions } : {}),
-    ...(httpOptions !== undefined ? { httpOptions } : {}),
+    ...(httpOptions === undefined ? {} : { httpOptions }),
   });
 }
 
@@ -409,7 +410,7 @@ function createClientWithApiKey(
     vertexai: true,
     apiKey,
     apiVersion: API_VERSION,
-    ...(httpOptions !== undefined ? { httpOptions } : {}),
+    ...(httpOptions === undefined ? {} : { httpOptions }),
   });
 }
 
@@ -450,9 +451,9 @@ function resolveCustomBaseUrl(baseUrl: string): string | undefined {
 function baseUrlIncludesApiVersion(baseUrl: string): boolean {
   try {
     const url = new URL(baseUrl);
-    return url.pathname.split("/").some((part) => /^v\d+(?:beta\d*)?$/.test(part));
+    return url.pathname.split("/").some((part) => /^v\d+(?:beta\d*)?$/u.test(part));
   } catch {
-    return /(?:^|\/)v\d+(?:beta\d*)?(?:\/|$)/.test(baseUrl);
+    return /(?:^|\/)v\d+(?:beta\d*)?(?:\/|$)/u.test(baseUrl);
   }
 }
 
@@ -470,7 +471,7 @@ function resolveApiKey(options?: GoogleVertexOptions): string | undefined {
 }
 
 function isPlaceholderApiKey(apiKey: string): boolean {
-  return /^<[^>]+>$/.test(apiKey);
+  return /^<[^>]+>$/u.test(apiKey);
 }
 
 function resolveProject(options?: GoogleVertexOptions): string {

@@ -3,25 +3,25 @@ import { describe, it } from "node:test";
 
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 
+const commands = [
+  { name: "skill:deep-research", description: "Multi-agent deep research" },
+  { name: "skill:research-idea", description: "Refine a raw idea into a falsifiable seed" },
+  { name: "skill:to-sidecar", description: "Route work to a sidecar" },
+  { name: "skill:brainstorm", description: "Generate ideas" },
+  { name: "model", description: "Select the active model" },
+];
+
+async function suggestionsFor(prefix: string): Promise<string[]> {
+  const provider = new CombinedAutocompleteProvider(commands, process.cwd());
+  const line = `/${prefix}`;
+  const result = await provider.getSuggestions([line], 0, line.length, {
+    signal: new AbortController().signal,
+  });
+  assert.ok(result, `expected suggestions for "/${prefix}"`);
+  return result.items.map((item) => item.value);
+}
+
 describe("CombinedAutocompleteProvider slash-command filter", () => {
-  const commands = [
-    { name: "skill:deep-research", description: "Multi-agent deep research" },
-    { name: "skill:research-idea", description: "Refine a raw idea into a falsifiable seed" },
-    { name: "skill:to-sidecar", description: "Route work to a sidecar" },
-    { name: "skill:brainstorm", description: "Generate ideas" },
-    { name: "model", description: "Select the active model" },
-  ];
-
-  async function suggestionsFor(prefix: string): Promise<string[]> {
-    const provider = new CombinedAutocompleteProvider(commands, process.cwd());
-    const line = `/${prefix}`;
-    const result = await provider.getSuggestions([line], 0, line.length, {
-      signal: new AbortController().signal,
-    });
-    assert.ok(result, `expected suggestions for "/${prefix}"`);
-    return result.items.map((item) => item.value);
-  }
-
   it("ranks skill:research-idea first for query 'idea'", async () => {
     const items = await suggestionsFor("idea");
     assert.equal(items[0], "skill:research-idea");
@@ -35,7 +35,7 @@ describe("CombinedAutocompleteProvider slash-command filter", () => {
 
   it("completes commands after leading whitespace and preserves it", async () => {
     const provider = new CombinedAutocompleteProvider([{ name: "model" }], process.cwd());
-    for (const [line, expected] of [
+    for await (const [line, expected] of [
       [" /", " /model "],
       ["  /mod", "  /model "],
       ["\t/mod", "\t/model "],
@@ -60,7 +60,9 @@ describe("CombinedAutocompleteProvider slash-command filter", () => {
       assert.equal(applied.cursorCol, expected.length);
     }
   });
+});
 
+describe("CombinedAutocompleteProvider slash-command filter", () => {
   it("completes command arguments after leading whitespace", async () => {
     const provider = new CombinedAutocompleteProvider(
       [
@@ -94,7 +96,9 @@ describe("CombinedAutocompleteProvider slash-command filter", () => {
     const items = await suggestionsFor("skill:side");
     assert.ok(items.includes("skill:to-sidecar"));
   });
+});
 
+describe("CombinedAutocompleteProvider slash-command filter", () => {
   // Regression test for #9944.
   it("lists skills while typing the skill prefix", async () => {
     const items = await suggestionsFor("skill");

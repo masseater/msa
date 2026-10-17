@@ -34,7 +34,11 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
   "image/webp": ".webp",
 };
 
-/** Like the script's `text()`: strings as is, other values as compact JSON. */
+/**
+ * Like the script's `text()`: strings as is, other values as compact JSON.
+ * @param {unknown} value - The value.
+ * @returns {string} The text.
+ */
 function valueText(value: unknown): string {
   if (typeof value === "string") return value;
   return JSON.stringify(value) ?? String(value);
@@ -43,6 +47,8 @@ function valueText(value: unknown): string {
 /**
  * Lay out the script's output so the model can tell items apart: with more than one text item, each starts with a
  * `==> text N/M <==` line; `console` lines follow all other output in one `<console_output>` block.
+ * @param {readonly CodemodeOutputItem[]} output - The script's output.
+ * @returns {Item[]} The items.
  */
 function formatItems(output: readonly CodemodeOutputItem[]): Item[] {
   const total = output.filter((item) => item.type === "text" && !item.console).length;
@@ -73,6 +79,8 @@ function formatItems(output: readonly CodemodeOutputItem[]): Item[] {
  * Join adjacent text items into one, each part starting on its own line. The separator check looks at the last
  * non-empty part, not the joined text: reading the end of a growing concatenation makes V8 copy it on every item, which
  * is quadratic.
+ * @param {readonly Item[]} items - The output items.
+ * @returns {Item[]} The joined items.
  */
 function joinAdjacentText(items: readonly Item[]): Item[] {
   const joined: Item[] = [];
@@ -103,6 +111,11 @@ function joinAdjacentText(items: readonly Item[]): Item[] {
 /**
  * Apply the token budget: when the combined text exceeds it, the text items become one item that keeps the start and
  * end of the text, and images follow it. The complete text is written to a temp file.
+ * @param {readonly Item[]} items - The output items.
+ * @param {number} maxTokens - The token budget.
+ * @param {Limits} limits - The byte and line limits.
+ * @param {OutputFile} write - Writes a file into the run's output directory.
+ * @returns {Promise<{ items: Item[]; fullOutputPath?: string }>} The items and the full text's path.
  */
 async function truncate(
   items: readonly Item[],
@@ -138,7 +151,12 @@ async function truncate(
   };
 }
 
-/** Save each image to a file and put a text item with its path before it; an image shown twice is saved once. */
+/**
+ * Save each image to a file and put a text item with its path before it; an image shown twice is saved once.
+ * @param {readonly Item[]} items - The output items.
+ * @param {OutputFile} write - Writes a file into the run's output directory.
+ * @returns {Promise<Item[]>} The items.
+ */
 async function saveImages(items: readonly Item[], write: OutputFile): Promise<Item[]> {
   const labels = new Map<string, Promise<string>>();
   const label = async ({ data, mimeType }: ImageContent, index: number): Promise<string> => {
@@ -184,7 +202,12 @@ function formatError(
   return `${head}\n\n${summary}`;
 }
 
-/** The tool result's content for a script's result, and the path of the complete text when it was cut. */
+/**
+ * The tool result's content for a script's result, and the path of the complete text when it was cut.
+ * @param {CodemodeResult} result - The script's result.
+ * @param {FormatOptions} options - The run's images, time, budget, calls, limits, and writer.
+ * @returns {Promise<{ content: Item[]; fullOutputPath?: string }>} The content and the full text's path.
+ */
 export async function formatResult(
   result: CodemodeResult,
   options: {
