@@ -12,6 +12,7 @@ import type {
 } from "../../types.ts";
 import { currentTimeMillis } from "../../utils/clock.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
+import { modelCall } from "../../utils/model-call.ts";
 
 interface OpenRouterImagesProviderModule {
   generateImages: typeof generateImagesOpenRouterFunction;
@@ -38,11 +39,12 @@ function loadOpenRouterImagesProviderModule(): Promise<OpenRouterImagesProviderM
   return openRouterImagesProviderModulePromise;
 }
 
-export const generateImagesOpenRouter: ImagesFunction<ImagesOptions> = (
-  model: ImageModel<ImageApi>,
-  context: ImagesContext,
-  options?: ImagesOptions,
-) =>
+export const generateImagesOpenRouter = modelCall<
+  Parameters<ImagesFunction<ImagesOptions>>[0],
+  Parameters<ImagesFunction<ImagesOptions>>[1],
+  NonNullable<Parameters<ImagesFunction<ImagesOptions>>[2]>,
+  ReturnType<ImagesFunction<ImagesOptions>>
+>((model: ImageModel<ImageApi>, context: ImagesContext, options?: ImagesOptions) =>
   Effect.runPromise(
     Effect.promise(() => loadOpenRouterImagesProviderModule()).pipe(
       Effect.flatMap((module) =>
@@ -50,7 +52,8 @@ export const generateImagesOpenRouter: ImagesFunction<ImagesOptions> = (
       ),
       Effect.catchDefect((error) => Effect.succeed(createLazyLoadErrorImages(model, error))),
     ),
-  );
+  ),
+);
 
 export function registerBuiltInImagesApiProviders(): void {
   registerImagesApiProvider({

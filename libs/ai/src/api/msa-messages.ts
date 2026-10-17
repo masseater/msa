@@ -26,6 +26,7 @@ import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
 import { callHook } from "../utils/hooks.ts";
 import { encodeJson } from "../utils/json-codec.ts";
 import { parseStreamingJson } from "../utils/json-parse.ts";
+import { modelCall } from "../utils/model-call.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 
 export interface MsaMessagesOptions extends StreamOptions {
@@ -439,57 +440,71 @@ const requestMsaMessages = Effect.fn("requestMsaMessages")(function* (
   return readMsaMessagesEvents(response.body);
 });
 
-export const stream: StreamFunction<"msa-messages", MsaMessagesOptions> = (
-  model: Model<"msa-messages">,
-  context: TranscriptContext,
-  options?: MsaMessagesOptions,
-): AssistantMessageEventStream => {
-  const eventStream = new AssistantMessageEventStream();
-  const convertEvent = createEventConverter(model);
+export const stream = modelCall<
+  Parameters<StreamFunction<"msa-messages", MsaMessagesOptions>>[0],
+  Parameters<StreamFunction<"msa-messages", MsaMessagesOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"msa-messages", MsaMessagesOptions>>[2]>,
+  ReturnType<StreamFunction<"msa-messages", MsaMessagesOptions>>
+>(
+  (
+    model: Model<"msa-messages">,
+    context: TranscriptContext,
+    options?: MsaMessagesOptions,
+  ): AssistantMessageEventStream => {
+    const eventStream = new AssistantMessageEventStream();
+    const convertEvent = createEventConverter(model);
 
-  Effect.runFork(
-    requestMsaMessages(model, context, options).pipe(
-      Effect.flatMap((events) =>
-        events.pipe(
-          Stream.mapEffect((msaEvent) =>
-            callHook(() => options?.onProviderStreamEvent?.(msaEvent, model)).pipe(
-              Effect.map(() => {
-                const event = convertEvent(msaEvent);
-                eventStream.push(event);
-                return event.type === "done" || event.type === "error";
-              }),
+    Effect.runFork(
+      requestMsaMessages(model, context, options).pipe(
+        Effect.flatMap((events) =>
+          events.pipe(
+            Stream.mapEffect((msaEvent) =>
+              callHook(() => options?.onProviderStreamEvent?.(msaEvent, model)).pipe(
+                Effect.map(() => {
+                  const event = convertEvent(msaEvent);
+                  eventStream.push(event);
+                  return event.type === "done" || event.type === "error";
+                }),
+              ),
             ),
+            Stream.takeUntil((terminal) => terminal),
+            Stream.runLast,
           ),
-          Stream.takeUntil((terminal) => terminal),
-          Stream.runLast,
+        ),
+        Effect.flatMap((last) =>
+          Option.getOrElse(last, () => false)
+            ? Effect.void
+            : Effect.die(new Error(`${model.provider} stream ended without a terminal event`)),
+        ),
+        Effect.catchDefect((error) =>
+          Effect.sync(() =>
+            eventStream.push(createErrorEvent(model, error, options?.signal?.aborted ?? false)),
+          ),
         ),
       ),
-      Effect.flatMap((last) =>
-        Option.getOrElse(last, () => false)
-          ? Effect.void
-          : Effect.die(new Error(`${model.provider} stream ended without a terminal event`)),
-      ),
-      Effect.catchDefect((error) =>
-        Effect.sync(() =>
-          eventStream.push(createErrorEvent(model, error, options?.signal?.aborted ?? false)),
-        ),
-      ),
-    ),
-  );
+    );
 
-  return eventStream;
-};
+    return eventStream;
+  },
+);
 
-export const streamSimple: StreamFunction<"msa-messages", SimpleStreamOptions> = (
-  model: Model<"msa-messages">,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-): AssistantMessageEventStream => {
-  const extra = options as MsaMessagesOptions | undefined;
-  return stream(model, context, {
-    ...options,
-    reasoning: options?.reasoning,
-    toolChoice: options?.toolChoice,
-    debug: extra?.debug,
-  });
-};
+export const streamSimple = modelCall<
+  Parameters<StreamFunction<"msa-messages", SimpleStreamOptions>>[0],
+  Parameters<StreamFunction<"msa-messages", SimpleStreamOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"msa-messages", SimpleStreamOptions>>[2]>,
+  ReturnType<StreamFunction<"msa-messages", SimpleStreamOptions>>
+>(
+  (
+    model: Model<"msa-messages">,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): AssistantMessageEventStream => {
+    const extra = options as MsaMessagesOptions | undefined;
+    return stream(model, context, {
+      ...options,
+      reasoning: options?.reasoning,
+      toolChoice: options?.toolChoice,
+      debug: extra?.debug,
+    });
+  },
+);

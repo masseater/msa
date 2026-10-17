@@ -50,6 +50,7 @@ import {
   parseStreamingJson,
   parseToolCallArguments,
 } from "../utils/json-parse.ts";
+import { modelCall } from "../utils/model-call.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 import { providerRequestWithRetry } from "../utils/provider-retry.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
@@ -523,409 +524,428 @@ const STRICT_TOOL_LIMIT_MESSAGES = [
   "Schemas contains too many parameters with union types (",
 ];
 
-export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
-  model: Model<"anthropic-messages">,
-  context: TranscriptContext,
-  options?: AnthropicOptions,
-): AssistantMessageEventStream => {
-  const events = new AssistantMessageEventStream();
-  const normalizedContext = resolveTranscript(
-    context,
-    getAnthropicCompat(model).supportsMidConvoSystemMessages,
-  );
-  const currentTools = getCurrentTools(normalizedContext.messages);
+export const stream = modelCall<
+  Parameters<StreamFunction<"anthropic-messages", AnthropicOptions>>[0],
+  Parameters<StreamFunction<"anthropic-messages", AnthropicOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"anthropic-messages", AnthropicOptions>>[2]>,
+  ReturnType<StreamFunction<"anthropic-messages", AnthropicOptions>>
+>(
+  (
+    model: Model<"anthropic-messages">,
+    context: TranscriptContext,
+    options?: AnthropicOptions,
+  ): AssistantMessageEventStream => {
+    const events = new AssistantMessageEventStream();
+    const normalizedContext = resolveTranscript(
+      context,
+      getAnthropicCompat(model).supportsMidConvoSystemMessages,
+    );
+    const currentTools = getCurrentTools(normalizedContext.messages);
 
-  Effect.runFork(
-    Effect.gen(function* () {
-      const output: AssistantMessage = {
-        role: "assistant",
-        content: [],
-        api: model.api as Api,
-        provider: model.provider,
-        model: model.id,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-        stopReason: "pending",
-        timestamp: currentTimeMillis(),
-      };
-      yield* Effect.gen(function* () {
-        let client: Anthropic;
-        let isOAuth: boolean;
-        let usageModel = model;
-        let inputTransformations: BetaInputTransformation[] | undefined;
-        if (options?.client === undefined) {
-          const apiKey = options?.apiKey;
-          const federation = getAnthropicFederation(model, apiKey, options?.headers, options?.env);
-          if (federation === undefined) assertRequestAuth(model.provider, apiKey, options?.headers);
-
-          const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
-          const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
-
-          const created = createClient(
-            model,
-            apiKey,
-            options?.headers,
-            options?.fetch,
-            cacheSessionId,
-            federation,
-          );
-          client = created.client;
-          isOAuth = created.isOAuthToken;
-        } else {
-          client = options.client;
-          isOAuth = false;
-        }
-        const requestOptions = {
-          ...(options?.signal === undefined ? {} : { signal: options.signal }),
-          ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
-          maxRetries: 0,
+    Effect.runFork(
+      Effect.gen(function* () {
+        const output: AssistantMessage = {
+          role: "assistant",
+          content: [],
+          api: model.api as Api,
+          provider: model.provider,
+          model: model.id,
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "pending",
+          timestamp: currentTimeMillis(),
         };
-        const send = (disablePreferredStrictTools: boolean): Effect.Effect<Response> =>
-          Effect.gen(function* () {
-            options?.signal?.throwIfAborted();
-            const built = buildParams(
+        yield* Effect.gen(function* () {
+          let client: Anthropic;
+          let isOAuth: boolean;
+          let usageModel = model;
+          let inputTransformations: BetaInputTransformation[] | undefined;
+          if (options?.client === undefined) {
+            const apiKey = options?.apiKey;
+            const federation = getAnthropicFederation(
               model,
-              normalizedContext,
-              isOAuth,
-              options,
-              disablePreferredStrictTools,
+              apiKey,
+              options?.headers,
+              options?.env,
             );
-            if (built.providerThinkingLevel !== undefined)
-              output.providerThinkingLevel = built.providerThinkingLevel;
-            let params = built.params;
-            const nextParams = yield* callHook(() => options?.onPayload?.(params, model));
-            if (nextParams !== undefined) {
-              params = { ...(nextParams as MessageCreateParamsStreaming), stream: true };
-            }
-            return yield* providerRequestWithRetry(
-              () => client.beta.messages.create(params, requestOptions).asResponse(),
-              {
-                maxRetries: options?.maxRetries,
-                maxRetryDelayMs: options?.maxRetryDelayMs,
-                signal: options?.signal,
-              },
-            ).pipe(
-              Effect.catchDefect((error) => {
-                if (
-                  options?.signal?.aborted === true ||
-                  disablePreferredStrictTools ||
-                  !built.hasPreferredStrictTools ||
-                  !(error instanceof APIError) ||
-                  error.status !== 400 ||
-                  error.type !== "invalid_request_error" ||
-                  !STRICT_TOOL_LIMIT_MESSAGES.some((message) => error.message.includes(message))
-                ) {
-                  return Effect.die(error);
-                }
-                appendAssistantMessageDiagnostic(output, {
-                  type: "anthropic_strict_tools_fallback",
-                  timestamp: currentTimeMillis(),
-                  error: { message: error.message },
-                  details: { reason: "strict_tool_limits_exceeded" },
-                });
-                return send(true);
-              }),
+            if (federation === undefined)
+              assertRequestAuth(model.provider, apiKey, options?.headers);
+
+            const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
+            const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
+
+            const created = createClient(
+              model,
+              apiKey,
+              options?.headers,
+              options?.fetch,
+              cacheSessionId,
+              federation,
             );
-          });
-        const response = yield* send(false);
-        yield* callHook(() =>
-          options?.onResponse?.(
-            { status: response.status, headers: headersToRecord(response.headers) },
-            model,
-          ),
-        );
-        events.push({ type: "start", partial: output });
-        type Block = (ThinkingContent | TextContent | (ToolCall & { partialJson: string })) & {
-          index: number;
-        };
-        const blocks = output.content as Block[];
-        yield* iterateAnthropicEvents(response, options?.signal).pipe(
-          Stream.runForEach((event) =>
+            client = created.client;
+            isOAuth = created.isOAuthToken;
+          } else {
+            client = options.client;
+            isOAuth = false;
+          }
+          const requestOptions = {
+            ...(options?.signal === undefined ? {} : { signal: options.signal }),
+            ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
+            maxRetries: 0,
+          };
+          const send = (disablePreferredStrictTools: boolean): Effect.Effect<Response> =>
             Effect.gen(function* () {
-              yield* callHook(() => options?.onProviderStreamEvent?.(event, model));
-              if (event.type === "message_start") {
-                output.responseId = event.message.id;
-                const transformations = event.message.input_transformations;
-                if (Array.isArray(transformations)) inputTransformations = transformations;
-                const responseModel = event.message.model;
-                if (responseModel !== model.id) output.responseModel = responseModel;
-                const fallbackCost =
-                  responseModel === model.id
-                    ? undefined
-                    : model.compat?.allowedFallbackModels?.find(
-                        (fallback) =>
-                          fallback.provider === model.provider && fallback.model === responseModel,
-                      )?.cost;
-                usageModel =
-                  fallbackCost === undefined
-                    ? model
-                    : { ...model, id: responseModel, cost: fallbackCost };
-                output.usage.input = event.message.usage.input_tokens || 0;
-                output.usage.output = event.message.usage.output_tokens || 0;
-                output.usage.cacheRead = event.message.usage.cache_read_input_tokens || 0;
-                output.usage.cacheWrite = event.message.usage.cache_creation_input_tokens || 0;
-                output.usage.cacheWrite1h =
-                  event.message.usage.cache_creation?.ephemeral_1h_input_tokens || 0;
-                output.usage.totalTokens =
-                  output.usage.input +
-                  output.usage.output +
-                  output.usage.cacheRead +
-                  output.usage.cacheWrite;
-                calculateCost(usageModel, output.usage);
-              } else if (event.type === "content_block_start") {
-                if (event.content_block.type === "fallback") {
-                  if (output.content.length > 0) {
-                    throw new Error("Anthropic performed an unsupported mid-output model fallback");
-                  }
-                  return;
-                }
-                if (event.content_block.type === "text") {
-                  const block: Block = {
-                    type: "text",
-                    text: event.content_block.text ?? "",
-                    index: event.index,
-                  };
-                  output.content.push(block);
-                  events.push({
-                    type: "text_start",
-                    contentIndex: output.content.length - 1,
-                    partial: output,
-                  });
-                } else if (event.content_block.type === "thinking") {
-                  const block: Block = {
-                    type: "thinking",
-                    thinking: event.content_block.thinking ?? "",
-                    thinkingSignature: event.content_block.signature ?? "",
-                    index: event.index,
-                  };
-                  output.content.push(block);
-                  events.push({
-                    type: "thinking_start",
-                    contentIndex: output.content.length - 1,
-                    partial: output,
-                  });
-                } else if (event.content_block.type === "redacted_thinking") {
-                  const block: Block = {
-                    type: "thinking",
-                    thinking: "[Reasoning redacted]",
-                    thinkingSignature: event.content_block.data,
-                    redacted: true,
-                    index: event.index,
-                  };
-                  output.content.push(block);
-                  events.push({
-                    type: "thinking_start",
-                    contentIndex: output.content.length - 1,
-                    partial: output,
-                  });
-                } else if (event.content_block.type === "tool_use") {
-                  const block: Block = {
-                    type: "toolCall",
-                    id: event.content_block.id,
-                    name: isOAuth
-                      ? fromClaudeCodeName(event.content_block.name, currentTools)
-                      : event.content_block.name,
-                    arguments: (event.content_block.input as Record<string, any>) ?? {},
-                    partialJson: "",
-                    index: event.index,
-                  };
-                  output.content.push(block);
-                  events.push({
-                    type: "toolcall_start",
-                    contentIndex: output.content.length - 1,
-                    partial: output,
-                  });
-                }
-              } else if (event.type === "content_block_delta") {
-                if (event.delta.type === "text_delta") {
-                  const index = blocks.findIndex((b) => b.index === event.index);
-                  const block = blocks[index];
-                  if (block !== undefined && block.type === "text") {
-                    block.text += event.delta.text;
-                    events.push({
-                      type: "text_delta",
-                      contentIndex: index,
-                      delta: event.delta.text,
-                      partial: output,
-                    });
-                  }
-                } else if (event.delta.type === "thinking_delta") {
-                  const index = blocks.findIndex((b) => b.index === event.index);
-                  const block = blocks[index];
-                  if (block !== undefined && block.type === "thinking") {
-                    block.thinking += event.delta.thinking;
-                    events.push({
-                      type: "thinking_delta",
-                      contentIndex: index,
-                      delta: event.delta.thinking,
-                      partial: output,
-                    });
-                  }
-                } else if (event.delta.type === "input_json_delta") {
-                  const index = blocks.findIndex((b) => b.index === event.index);
-                  const block = blocks[index];
-                  if (block !== undefined && block.type === "toolCall") {
-                    block.partialJson += event.delta.partial_json;
-                    block.arguments = parseStreamingJson(block.partialJson);
-                    events.push({
-                      type: "toolcall_delta",
-                      contentIndex: index,
-                      delta: event.delta.partial_json,
-                      partial: output,
-                    });
-                  }
-                } else if (event.delta.type === "signature_delta") {
-                  const index = blocks.findIndex((b) => b.index === event.index);
-                  const block = blocks[index];
-                  if (block !== undefined && block.type === "thinking") {
-                    block.thinkingSignature = block.thinkingSignature || "";
-                    block.thinkingSignature += event.delta.signature;
-                  }
-                }
-              } else if (event.type === "content_block_stop") {
-                const index = blocks.findIndex((b) => b.index === event.index);
-                const block = blocks[index];
-                if (block !== undefined) {
-                  delete (block as any).index;
-                  if (block.type === "text") {
-                    events.push({
-                      type: "text_end",
-                      contentIndex: index,
-                      content: block.text,
-                      partial: output,
-                    });
-                  } else if (block.type === "thinking") {
-                    events.push({
-                      type: "thinking_end",
-                      contentIndex: index,
-                      content: block.thinking,
-                      partial: output,
-                    });
-                  } else if (block.type === "toolCall") {
-                    Object.assign(block, parseToolCallArguments(block.partialJson));
-                    delete (block as { partialJson?: string }).partialJson;
-                    events.push({
-                      type: "toolcall_end",
-                      contentIndex: index,
-                      toolCall: block,
-                      partial: output,
-                    });
-                  }
-                }
-              } else if (event.type === "message_delta") {
-                const transformations = event.input_transformations;
-                if (Array.isArray(transformations)) inputTransformations = transformations;
-                if (event.delta.stop_reason !== null) {
-                  output.rawStopReason = event.delta.stop_reason;
-                  const stopReasonResult = mapStopReason(
-                    event.delta.stop_reason,
-                    event.delta.stop_details,
-                  );
-                  output.stopReason = stopReasonResult.stopReason;
-                  if (
-                    stopReasonResult.errorMessage !== undefined &&
-                    stopReasonResult.errorMessage !== ""
-                  ) {
-                    output.errorMessage = stopReasonResult.errorMessage;
-                  }
-                }
-                if (event.usage !== undefined && event.usage !== null) {
-                  if (event.usage.input_tokens !== undefined && event.usage.input_tokens !== null) {
-                    output.usage.input = event.usage.input_tokens;
-                  }
-                  if (
-                    event.usage.output_tokens !== undefined &&
-                    event.usage.output_tokens !== null
-                  ) {
-                    output.usage.output = event.usage.output_tokens;
-                  }
-                  if (
-                    event.usage.cache_read_input_tokens !== undefined &&
-                    event.usage.cache_read_input_tokens !== null
-                  ) {
-                    output.usage.cacheRead = event.usage.cache_read_input_tokens;
-                  }
-                  if (
-                    event.usage.cache_creation_input_tokens !== undefined &&
-                    event.usage.cache_creation_input_tokens !== null
-                  ) {
-                    output.usage.cacheWrite = event.usage.cache_creation_input_tokens;
-                  }
-                  const cacheCreation = (
-                    event.usage as typeof event.usage & {
-                      cache_creation?: { ephemeral_1h_input_tokens?: number };
-                    }
-                  ).cache_creation;
-                  if (
-                    cacheCreation?.ephemeral_1h_input_tokens !== undefined &&
-                    cacheCreation?.ephemeral_1h_input_tokens !== null
-                  ) {
-                    output.usage.cacheWrite1h = cacheCreation.ephemeral_1h_input_tokens;
-                  }
-                  const thinkingTokens = event.usage.output_tokens_details?.thinking_tokens;
-                  if (thinkingTokens !== undefined && thinkingTokens !== null) {
-                    output.usage.reasoning = thinkingTokens;
-                  }
-                }
-                output.usage.totalTokens =
-                  output.usage.input +
-                  output.usage.output +
-                  output.usage.cacheRead +
-                  output.usage.cacheWrite;
-                calculateCost(usageModel, output.usage);
+              options?.signal?.throwIfAborted();
+              const built = buildParams(
+                model,
+                normalizedContext,
+                isOAuth,
+                options,
+                disablePreferredStrictTools,
+              );
+              if (built.providerThinkingLevel !== undefined)
+                output.providerThinkingLevel = built.providerThinkingLevel;
+              let params = built.params;
+              const nextParams = yield* callHook(() => options?.onPayload?.(params, model));
+              if (nextParams !== undefined) {
+                params = { ...(nextParams as MessageCreateParamsStreaming), stream: true };
               }
+              return yield* providerRequestWithRetry(
+                () => client.beta.messages.create(params, requestOptions).asResponse(),
+                {
+                  maxRetries: options?.maxRetries,
+                  maxRetryDelayMs: options?.maxRetryDelayMs,
+                  signal: options?.signal,
+                },
+              ).pipe(
+                Effect.catchDefect((error) => {
+                  if (
+                    options?.signal?.aborted === true ||
+                    disablePreferredStrictTools ||
+                    !built.hasPreferredStrictTools ||
+                    !(error instanceof APIError) ||
+                    error.status !== 400 ||
+                    error.type !== "invalid_request_error" ||
+                    !STRICT_TOOL_LIMIT_MESSAGES.some((message) => error.message.includes(message))
+                  ) {
+                    return Effect.die(error);
+                  }
+                  appendAssistantMessageDiagnostic(output, {
+                    type: "anthropic_strict_tools_fallback",
+                    timestamp: currentTimeMillis(),
+                    error: { message: error.message },
+                    details: { reason: "strict_tool_limits_exceeded" },
+                  });
+                  return send(true);
+                }),
+              );
+            });
+          const response = yield* send(false);
+          yield* callHook(() =>
+            options?.onResponse?.(
+              { status: response.status, headers: headersToRecord(response.headers) },
+              model,
+            ),
+          );
+          events.push({ type: "start", partial: output });
+          type Block = (ThinkingContent | TextContent | (ToolCall & { partialJson: string })) & {
+            index: number;
+          };
+          const blocks = output.content as Block[];
+          yield* iterateAnthropicEvents(response, options?.signal).pipe(
+            Stream.runForEach((event) =>
+              Effect.gen(function* () {
+                yield* callHook(() => options?.onProviderStreamEvent?.(event, model));
+                if (event.type === "message_start") {
+                  output.responseId = event.message.id;
+                  const transformations = event.message.input_transformations;
+                  if (Array.isArray(transformations)) inputTransformations = transformations;
+                  const responseModel = event.message.model;
+                  if (responseModel !== model.id) output.responseModel = responseModel;
+                  const fallbackCost =
+                    responseModel === model.id
+                      ? undefined
+                      : model.compat?.allowedFallbackModels?.find(
+                          (fallback) =>
+                            fallback.provider === model.provider &&
+                            fallback.model === responseModel,
+                        )?.cost;
+                  usageModel =
+                    fallbackCost === undefined
+                      ? model
+                      : { ...model, id: responseModel, cost: fallbackCost };
+                  output.usage.input = event.message.usage.input_tokens || 0;
+                  output.usage.output = event.message.usage.output_tokens || 0;
+                  output.usage.cacheRead = event.message.usage.cache_read_input_tokens || 0;
+                  output.usage.cacheWrite = event.message.usage.cache_creation_input_tokens || 0;
+                  output.usage.cacheWrite1h =
+                    event.message.usage.cache_creation?.ephemeral_1h_input_tokens || 0;
+                  output.usage.totalTokens =
+                    output.usage.input +
+                    output.usage.output +
+                    output.usage.cacheRead +
+                    output.usage.cacheWrite;
+                  calculateCost(usageModel, output.usage);
+                } else if (event.type === "content_block_start") {
+                  if (event.content_block.type === "fallback") {
+                    if (output.content.length > 0) {
+                      throw new Error(
+                        "Anthropic performed an unsupported mid-output model fallback",
+                      );
+                    }
+                    return;
+                  }
+                  if (event.content_block.type === "text") {
+                    const block: Block = {
+                      type: "text",
+                      text: event.content_block.text ?? "",
+                      index: event.index,
+                    };
+                    output.content.push(block);
+                    events.push({
+                      type: "text_start",
+                      contentIndex: output.content.length - 1,
+                      partial: output,
+                    });
+                  } else if (event.content_block.type === "thinking") {
+                    const block: Block = {
+                      type: "thinking",
+                      thinking: event.content_block.thinking ?? "",
+                      thinkingSignature: event.content_block.signature ?? "",
+                      index: event.index,
+                    };
+                    output.content.push(block);
+                    events.push({
+                      type: "thinking_start",
+                      contentIndex: output.content.length - 1,
+                      partial: output,
+                    });
+                  } else if (event.content_block.type === "redacted_thinking") {
+                    const block: Block = {
+                      type: "thinking",
+                      thinking: "[Reasoning redacted]",
+                      thinkingSignature: event.content_block.data,
+                      redacted: true,
+                      index: event.index,
+                    };
+                    output.content.push(block);
+                    events.push({
+                      type: "thinking_start",
+                      contentIndex: output.content.length - 1,
+                      partial: output,
+                    });
+                  } else if (event.content_block.type === "tool_use") {
+                    const block: Block = {
+                      type: "toolCall",
+                      id: event.content_block.id,
+                      name: isOAuth
+                        ? fromClaudeCodeName(event.content_block.name, currentTools)
+                        : event.content_block.name,
+                      arguments: (event.content_block.input as Record<string, any>) ?? {},
+                      partialJson: "",
+                      index: event.index,
+                    };
+                    output.content.push(block);
+                    events.push({
+                      type: "toolcall_start",
+                      contentIndex: output.content.length - 1,
+                      partial: output,
+                    });
+                  }
+                } else if (event.type === "content_block_delta") {
+                  if (event.delta.type === "text_delta") {
+                    const index = blocks.findIndex((b) => b.index === event.index);
+                    const block = blocks[index];
+                    if (block !== undefined && block.type === "text") {
+                      block.text += event.delta.text;
+                      events.push({
+                        type: "text_delta",
+                        contentIndex: index,
+                        delta: event.delta.text,
+                        partial: output,
+                      });
+                    }
+                  } else if (event.delta.type === "thinking_delta") {
+                    const index = blocks.findIndex((b) => b.index === event.index);
+                    const block = blocks[index];
+                    if (block !== undefined && block.type === "thinking") {
+                      block.thinking += event.delta.thinking;
+                      events.push({
+                        type: "thinking_delta",
+                        contentIndex: index,
+                        delta: event.delta.thinking,
+                        partial: output,
+                      });
+                    }
+                  } else if (event.delta.type === "input_json_delta") {
+                    const index = blocks.findIndex((b) => b.index === event.index);
+                    const block = blocks[index];
+                    if (block !== undefined && block.type === "toolCall") {
+                      block.partialJson += event.delta.partial_json;
+                      block.arguments = parseStreamingJson(block.partialJson);
+                      events.push({
+                        type: "toolcall_delta",
+                        contentIndex: index,
+                        delta: event.delta.partial_json,
+                        partial: output,
+                      });
+                    }
+                  } else if (event.delta.type === "signature_delta") {
+                    const index = blocks.findIndex((b) => b.index === event.index);
+                    const block = blocks[index];
+                    if (block !== undefined && block.type === "thinking") {
+                      block.thinkingSignature = block.thinkingSignature || "";
+                      block.thinkingSignature += event.delta.signature;
+                    }
+                  }
+                } else if (event.type === "content_block_stop") {
+                  const index = blocks.findIndex((b) => b.index === event.index);
+                  const block = blocks[index];
+                  if (block !== undefined) {
+                    delete (block as any).index;
+                    if (block.type === "text") {
+                      events.push({
+                        type: "text_end",
+                        contentIndex: index,
+                        content: block.text,
+                        partial: output,
+                      });
+                    } else if (block.type === "thinking") {
+                      events.push({
+                        type: "thinking_end",
+                        contentIndex: index,
+                        content: block.thinking,
+                        partial: output,
+                      });
+                    } else if (block.type === "toolCall") {
+                      Object.assign(block, parseToolCallArguments(block.partialJson));
+                      delete (block as { partialJson?: string }).partialJson;
+                      events.push({
+                        type: "toolcall_end",
+                        contentIndex: index,
+                        toolCall: block,
+                        partial: output,
+                      });
+                    }
+                  }
+                } else if (event.type === "message_delta") {
+                  const transformations = event.input_transformations;
+                  if (Array.isArray(transformations)) inputTransformations = transformations;
+                  if (event.delta.stop_reason !== null) {
+                    output.rawStopReason = event.delta.stop_reason;
+                    const stopReasonResult = mapStopReason(
+                      event.delta.stop_reason,
+                      event.delta.stop_details,
+                    );
+                    output.stopReason = stopReasonResult.stopReason;
+                    if (
+                      stopReasonResult.errorMessage !== undefined &&
+                      stopReasonResult.errorMessage !== ""
+                    ) {
+                      output.errorMessage = stopReasonResult.errorMessage;
+                    }
+                  }
+                  if (event.usage !== undefined && event.usage !== null) {
+                    if (
+                      event.usage.input_tokens !== undefined &&
+                      event.usage.input_tokens !== null
+                    ) {
+                      output.usage.input = event.usage.input_tokens;
+                    }
+                    if (
+                      event.usage.output_tokens !== undefined &&
+                      event.usage.output_tokens !== null
+                    ) {
+                      output.usage.output = event.usage.output_tokens;
+                    }
+                    if (
+                      event.usage.cache_read_input_tokens !== undefined &&
+                      event.usage.cache_read_input_tokens !== null
+                    ) {
+                      output.usage.cacheRead = event.usage.cache_read_input_tokens;
+                    }
+                    if (
+                      event.usage.cache_creation_input_tokens !== undefined &&
+                      event.usage.cache_creation_input_tokens !== null
+                    ) {
+                      output.usage.cacheWrite = event.usage.cache_creation_input_tokens;
+                    }
+                    const cacheCreation = (
+                      event.usage as typeof event.usage & {
+                        cache_creation?: { ephemeral_1h_input_tokens?: number };
+                      }
+                    ).cache_creation;
+                    if (
+                      cacheCreation?.ephemeral_1h_input_tokens !== undefined &&
+                      cacheCreation?.ephemeral_1h_input_tokens !== null
+                    ) {
+                      output.usage.cacheWrite1h = cacheCreation.ephemeral_1h_input_tokens;
+                    }
+                    const thinkingTokens = event.usage.output_tokens_details?.thinking_tokens;
+                    if (thinkingTokens !== undefined && thinkingTokens !== null) {
+                      output.usage.reasoning = thinkingTokens;
+                    }
+                  }
+                  output.usage.totalTokens =
+                    output.usage.input +
+                    output.usage.output +
+                    output.usage.cacheRead +
+                    output.usage.cacheWrite;
+                  calculateCost(usageModel, output.usage);
+                }
+              }),
+            ),
+          );
+          if (options?.signal?.aborted === true) {
+            throw new Error("Request was aborted");
+          }
+          if (output.stopReason === "pending") {
+            throw new Error("Anthropic stream ended without a stop reason");
+          }
+          if (output.stopReason === "aborted" || output.stopReason === "error") {
+            throw new Error(output.errorMessage || "An unknown error occurred");
+          }
+          if (inputTransformations !== undefined && inputTransformations.length > 0) {
+            appendAssistantMessageDiagnostic(output, {
+              type: "anthropic_input_transformations",
+              timestamp: currentTimeMillis(),
+              details: {
+                transformations: inputTransformations.map((transformation) => ({
+                  type: transformation.type ?? undefined,
+                  path: transformation.path ?? undefined,
+                  reason: transformation.reason ?? undefined,
+                })),
+              },
+            });
+          }
+          events.push({ type: "done", reason: output.stopReason, message: output });
+          events.end();
+        }).pipe(
+          Effect.catchDefect((error) =>
+            Effect.sync(() => {
+              for (const block of output.content) {
+                delete (block as { index?: number }).index;
+                delete (block as { partialJson?: string }).partialJson;
+              }
+              output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+              output.errorMessage = describeThrown(error);
+              events.push({ type: "error", reason: output.stopReason, error: output });
+              events.end();
             }),
           ),
         );
-        if (options?.signal?.aborted === true) {
-          throw new Error("Request was aborted");
-        }
-        if (output.stopReason === "pending") {
-          throw new Error("Anthropic stream ended without a stop reason");
-        }
-        if (output.stopReason === "aborted" || output.stopReason === "error") {
-          throw new Error(output.errorMessage || "An unknown error occurred");
-        }
-        if (inputTransformations !== undefined && inputTransformations.length > 0) {
-          appendAssistantMessageDiagnostic(output, {
-            type: "anthropic_input_transformations",
-            timestamp: currentTimeMillis(),
-            details: {
-              transformations: inputTransformations.map((transformation) => ({
-                type: transformation.type ?? undefined,
-                path: transformation.path ?? undefined,
-                reason: transformation.reason ?? undefined,
-              })),
-            },
-          });
-        }
-        events.push({ type: "done", reason: output.stopReason, message: output });
-        events.end();
-      }).pipe(
-        Effect.catchDefect((error) =>
-          Effect.sync(() => {
-            for (const block of output.content) {
-              delete (block as { index?: number }).index;
-              delete (block as { partialJson?: string }).partialJson;
-            }
-            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-            output.errorMessage = describeThrown(error);
-            events.push({ type: "error", reason: output.stopReason, error: output });
-            events.end();
-          }),
-        ),
-      );
-    }),
-  );
+      }),
+    );
 
-  return events;
-};
+    return events;
+  },
+);
 
 function mapThinkingLevelToEffort(
   model: Model<"anthropic-messages">,
@@ -947,53 +967,60 @@ function mapThinkingLevelToEffort(
   }
 }
 
-export const streamSimple: StreamFunction<"anthropic-messages", SimpleStreamOptions> = (
-  model: Model<"anthropic-messages">,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-): AssistantMessageEventStream => {
-  if (
-    getAnthropicFederation(model, options?.apiKey, options?.headers, options?.env) === undefined
-  ) {
-    assertRequestAuth(model.provider, options?.apiKey, options?.headers);
-  }
+export const streamSimple = modelCall<
+  Parameters<StreamFunction<"anthropic-messages", SimpleStreamOptions>>[0],
+  Parameters<StreamFunction<"anthropic-messages", SimpleStreamOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"anthropic-messages", SimpleStreamOptions>>[2]>,
+  ReturnType<StreamFunction<"anthropic-messages", SimpleStreamOptions>>
+>(
+  (
+    model: Model<"anthropic-messages">,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): AssistantMessageEventStream => {
+    if (
+      getAnthropicFederation(model, options?.apiKey, options?.headers, options?.env) === undefined
+    ) {
+      assertRequestAuth(model.provider, options?.apiKey, options?.headers);
+    }
 
-  const base = {
-    ...buildBaseOptions(model, context, options, options?.apiKey),
-    toolChoice: options?.toolChoice,
-  } satisfies AnthropicOptions;
-  if (options?.reasoning === undefined) {
+    const base = {
+      ...buildBaseOptions(model, context, options, options?.apiKey),
+      toolChoice: options?.toolChoice,
+    } satisfies AnthropicOptions;
+    if (options?.reasoning === undefined) {
+      return stream(model, context, {
+        ...base,
+        thinkingEnabled: false,
+      } satisfies AnthropicOptions);
+    }
+
+    if (model.compat?.forceAdaptiveThinking === true) {
+      const effort = mapThinkingLevelToEffort(model, options.reasoning);
+      return stream(model, context, {
+        ...base,
+        thinkingEnabled: true,
+        effort,
+      } satisfies AnthropicOptions);
+    }
+
+    const adjusted = adjustMaxTokensForThinking(
+      base.maxTokens,
+      model.maxTokens,
+      options.reasoning,
+      options.thinkingBudgets,
+    );
+
+    const maxTokens = clampMaxTokensToContext(model, context, adjusted.maxTokens);
+
     return stream(model, context, {
       ...base,
-      thinkingEnabled: false,
-    } satisfies AnthropicOptions);
-  }
-
-  if (model.compat?.forceAdaptiveThinking === true) {
-    const effort = mapThinkingLevelToEffort(model, options.reasoning);
-    return stream(model, context, {
-      ...base,
+      maxTokens,
       thinkingEnabled: true,
-      effort,
+      thinkingBudgetTokens: Math.min(adjusted.thinkingBudget, Math.max(0, maxTokens - 1024)),
     } satisfies AnthropicOptions);
-  }
-
-  const adjusted = adjustMaxTokensForThinking(
-    base.maxTokens,
-    model.maxTokens,
-    options.reasoning,
-    options.thinkingBudgets,
-  );
-
-  const maxTokens = clampMaxTokensToContext(model, context, adjusted.maxTokens);
-
-  return stream(model, context, {
-    ...base,
-    maxTokens,
-    thinkingEnabled: true,
-    thinkingBudgetTokens: Math.min(adjusted.thinkingBudget, Math.max(0, maxTokens - 1024)),
-  } satisfies AnthropicOptions);
-};
+  },
+);
 
 function isOAuthToken(apiKey: string): boolean {
   return apiKey.includes("sk-ant-oat");

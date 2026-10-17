@@ -24,6 +24,7 @@ import { headersToRecord } from "../utils/headers.ts";
 import { callHook } from "../utils/hooks.ts";
 import { encodeJson, encodeJsonSync } from "../utils/json-codec.ts";
 import { parseStreamingJson, parseToolCallArguments } from "../utils/json-parse.ts";
+import { modelCall } from "../utils/model-call.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { getSystemMessageText, renderSystemMessageUpdate } from "../utils/text.ts";
 import { getCurrentTools, resolveTranscript } from "../utils/transcript.ts";
@@ -131,107 +132,121 @@ type MistralCompletionEvent = {
   };
 };
 
-export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
-  model: Model<"mistral-conversations">,
-  context: TranscriptContext,
-  options?: MistralOptions,
-): AssistantMessageEventStream => {
-  const events = new AssistantMessageEventStream();
-  const normalizedContext = resolveTranscript(
-    context,
-    model.compat?.supportsMidConvoSystemMessages,
-  );
+export const stream = modelCall<
+  Parameters<StreamFunction<"mistral-conversations", MistralOptions>>[0],
+  Parameters<StreamFunction<"mistral-conversations", MistralOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"mistral-conversations", MistralOptions>>[2]>,
+  ReturnType<StreamFunction<"mistral-conversations", MistralOptions>>
+>(
+  (
+    model: Model<"mistral-conversations">,
+    context: TranscriptContext,
+    options?: MistralOptions,
+  ): AssistantMessageEventStream => {
+    const events = new AssistantMessageEventStream();
+    const normalizedContext = resolveTranscript(
+      context,
+      model.compat?.supportsMidConvoSystemMessages,
+    );
 
-  Effect.runFork(
-    Effect.gen(function* () {
-      const output = createOutput(model);
-      yield* Effect.gen(function* () {
-        const apiKey = options?.apiKey;
-        if (apiKey === undefined || apiKey === "") {
-          throw new Error(`No API key for provider: ${model.provider}`);
-        }
-        const normalizeMistralToolCallId = createMistralToolCallIdNormalizer();
-        const transformedMessages = transformMessages(normalizedContext.messages, model, (id) =>
-          normalizeMistralToolCallId(id),
+    Effect.runFork(
+      Effect.gen(function* () {
+        const output = createOutput(model);
+        yield* Effect.gen(function* () {
+          const apiKey = options?.apiKey;
+          if (apiKey === undefined || apiKey === "") {
+            throw new Error(`No API key for provider: ${model.provider}`);
+          }
+          const normalizeMistralToolCallId = createMistralToolCallIdNormalizer();
+          const transformedMessages = transformMessages(normalizedContext.messages, model, (id) =>
+            normalizeMistralToolCallId(id),
+          );
+          let payload = buildChatPayload(model, normalizedContext, transformedMessages, options);
+          const nextPayload = yield* callHook(() => options?.onPayload?.(payload, model));
+          if (nextPayload !== undefined) {
+            payload = nextPayload as MistralChatPayload;
+          }
+          const mistralStream = yield* requestMistralStream(model, payload, apiKey, options);
+          events.push({ type: "start", partial: output });
+          yield* consumeChatStream(
+            model,
+            output,
+            events,
+            mistralStream,
+            options?.onProviderStreamEvent,
+          );
+          if (options?.signal?.aborted === true) {
+            throw new Error("Request was aborted");
+          }
+          if (output.stopReason === "pending") {
+            throw new Error("Mistral stream ended without a finish reason");
+          }
+          if (output.stopReason === "aborted" || output.stopReason === "error") {
+            throw new Error(output.errorMessage || "An unknown error occurred");
+          }
+          events.push({ type: "done", reason: output.stopReason, message: output });
+          events.end();
+        }).pipe(
+          Effect.catchDefect((error) =>
+            Effect.sync(() => {
+              for (const block of output.content) {
+                delete (block as { partialArgs?: string }).partialArgs;
+              }
+              output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+              output.errorMessage = formatMistralError(error);
+              events.push({ type: "error", reason: output.stopReason, error: output });
+              events.end();
+            }),
+          ),
         );
-        let payload = buildChatPayload(model, normalizedContext, transformedMessages, options);
-        const nextPayload = yield* callHook(() => options?.onPayload?.(payload, model));
-        if (nextPayload !== undefined) {
-          payload = nextPayload as MistralChatPayload;
-        }
-        const mistralStream = yield* requestMistralStream(model, payload, apiKey, options);
-        events.push({ type: "start", partial: output });
-        yield* consumeChatStream(
-          model,
-          output,
-          events,
-          mistralStream,
-          options?.onProviderStreamEvent,
-        );
-        if (options?.signal?.aborted === true) {
-          throw new Error("Request was aborted");
-        }
-        if (output.stopReason === "pending") {
-          throw new Error("Mistral stream ended without a finish reason");
-        }
-        if (output.stopReason === "aborted" || output.stopReason === "error") {
-          throw new Error(output.errorMessage || "An unknown error occurred");
-        }
-        events.push({ type: "done", reason: output.stopReason, message: output });
-        events.end();
-      }).pipe(
-        Effect.catchDefect((error) =>
-          Effect.sync(() => {
-            for (const block of output.content) {
-              delete (block as { partialArgs?: string }).partialArgs;
-            }
-            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-            output.errorMessage = formatMistralError(error);
-            events.push({ type: "error", reason: output.stopReason, error: output });
-            events.end();
-          }),
-        ),
-      );
-    }),
-  );
+      }),
+    );
 
-  return events;
-};
+    return events;
+  },
+);
 
-export const streamSimple: StreamFunction<"mistral-conversations", SimpleStreamOptions> = (
-  model: Model<"mistral-conversations">,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-): AssistantMessageEventStream => {
-  const apiKey = options?.apiKey;
-  if (apiKey === undefined || apiKey === "") {
-    throw new Error(`No API key for provider: ${model.provider}`);
-  }
+export const streamSimple = modelCall<
+  Parameters<StreamFunction<"mistral-conversations", SimpleStreamOptions>>[0],
+  Parameters<StreamFunction<"mistral-conversations", SimpleStreamOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"mistral-conversations", SimpleStreamOptions>>[2]>,
+  ReturnType<StreamFunction<"mistral-conversations", SimpleStreamOptions>>
+>(
+  (
+    model: Model<"mistral-conversations">,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): AssistantMessageEventStream => {
+    const apiKey = options?.apiKey;
+    if (apiKey === undefined || apiKey === "") {
+      throw new Error(`No API key for provider: ${model.provider}`);
+    }
 
-  const base = {
-    ...buildBaseOptions(model, context, options, apiKey),
-    toolChoice: options?.toolChoice,
-  } satisfies MistralOptions;
-  const clampedReasoning =
-    options?.reasoning === undefined ? undefined : clampThinkingLevel(model, options.reasoning);
-  const reasoning = clampedReasoning === "off" ? undefined : clampedReasoning;
-  const effortMap = model.reasoning ? model.thinkingLevelMap : undefined;
-  const reasoningEffort =
-    effortMap === undefined
-      ? undefined
-      : reasoning === undefined
-        ? (effortMap.off ?? undefined)
-        : (effortMap[reasoning] ?? "high");
+    const base = {
+      ...buildBaseOptions(model, context, options, apiKey),
+      toolChoice: options?.toolChoice,
+    } satisfies MistralOptions;
+    const clampedReasoning =
+      options?.reasoning === undefined ? undefined : clampThinkingLevel(model, options.reasoning);
+    const reasoning = clampedReasoning === "off" ? undefined : clampedReasoning;
+    const effortMap = model.reasoning ? model.thinkingLevelMap : undefined;
+    const reasoningEffort =
+      effortMap === undefined
+        ? undefined
+        : reasoning === undefined
+          ? (effortMap.off ?? undefined)
+          : (effortMap[reasoning] ?? "high");
 
-  return stream(model, context, {
-    ...base,
-    promptMode:
-      model.reasoning && effortMap === undefined && reasoning !== undefined
-        ? "reasoning"
-        : undefined,
-    reasoningEffort: reasoningEffort as MistralReasoningEffort | undefined,
-  } satisfies MistralOptions);
-};
+    return stream(model, context, {
+      ...base,
+      promptMode:
+        model.reasoning && effortMap === undefined && reasoning !== undefined
+          ? "reasoning"
+          : undefined,
+      reasoningEffort: reasoningEffort as MistralReasoningEffort | undefined,
+    } satisfies MistralOptions);
+  },
+);
 
 function createOutput(model: Model<"mistral-conversations">): AssistantMessage {
   return {

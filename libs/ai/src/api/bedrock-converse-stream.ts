@@ -64,6 +64,7 @@ import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { providerHeadersToRecord } from "../utils/headers.ts";
 import { callHook } from "../utils/hooks.ts";
 import { parseStreamingJson, parseToolCallArguments } from "../utils/json-parse.ts";
+import { modelCall } from "../utils/model-call.ts";
 import { resolveHttpProxyUrlForTarget } from "../utils/node-http-proxy.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 import { isNodeRuntime } from "../utils/runtime.ts";
@@ -114,237 +115,249 @@ const THINKING_BINDING_CONTROLS_BETA = "thinking-binding-controls-2026-08-01";
 
 const REDACTED_THINKING_PLACEHOLDER = "[Reasoning redacted]";
 
-export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> = (
-  model: Model<"bedrock-converse-stream">,
-  context: TranscriptContext,
-  options: BedrockOptions = {},
-): AssistantMessageEventStream => {
-  const events = new AssistantMessageEventStream();
-  const normalizedContext = collapseSystemMessages(context);
+export const stream = modelCall<
+  Parameters<StreamFunction<"bedrock-converse-stream", BedrockOptions>>[0],
+  Parameters<StreamFunction<"bedrock-converse-stream", BedrockOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"bedrock-converse-stream", BedrockOptions>>[2]>,
+  ReturnType<StreamFunction<"bedrock-converse-stream", BedrockOptions>>
+>(
+  (
+    model: Model<"bedrock-converse-stream">,
+    context: TranscriptContext,
+    options: BedrockOptions = {},
+  ): AssistantMessageEventStream => {
+    const events = new AssistantMessageEventStream();
+    const normalizedContext = collapseSystemMessages(context);
 
-  Effect.runFork(
-    Effect.gen(function* () {
-      const output: AssistantMessage = {
-        role: "assistant",
-        content: [],
-        api: "bedrock-converse-stream" as Api,
-        provider: model.provider,
-        model: model.id,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-        stopReason: "pending",
-        timestamp: currentTimeMillis(),
-      };
-      const blocks = output.content as Block[];
-      const optionsProfile = options.profile || options.env?.["AWS_PROFILE"];
-      const profile = optionsProfile || getProviderEnvValue("AWS_PROFILE", options.env);
-      const config: BedrockRuntimeClientConfig = {
-        ...(profile === undefined ? {} : { profile }),
-      };
-      const configuredRegion = getConfiguredBedrockRegion(options);
-      const hasAmbientConfiguredProfile = Boolean(getProviderEnvValue("AWS_PROFILE"));
-      const endpointRegion = getStandardBedrockEndpointRegion(model.baseUrl);
-      const useExplicitEndpoint = shouldUseExplicitBedrockEndpoint(
-        model.baseUrl,
-        configuredRegion,
-        hasAmbientConfiguredProfile,
-      );
-      if (useExplicitEndpoint) {
-        config.endpoint = model.baseUrl;
-      }
-      const skipAuth = getProviderEnvValue("AWS_BEDROCK_SKIP_AUTH", options.env) === "1";
-      const bearerToken =
-        options.bearerToken ||
-        options.apiKey ||
-        getProviderEnvValue("AWS_BEARER_TOKEN_BEDROCK", options.env) ||
-        undefined;
-      const useBearerToken = bearerToken !== undefined && !skipAuth;
-      if (isNodeRuntime()) {
-        const arnRegion = model.id.match(/^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9-]+):/u)?.[1];
-        if (arnRegion !== undefined && arnRegion !== "") {
-          config.region = arnRegion;
-        } else if (configuredRegion !== undefined && configuredRegion !== "") {
-          config.region = configuredRegion;
-        } else if (endpointRegion !== undefined && endpointRegion !== "" && useExplicitEndpoint) {
-          config.region = endpointRegion;
-        } else if (!hasAmbientConfiguredProfile) {
-          config.region = "us-east-1";
-        }
-
-        if (skipAuth) {
-          config.credentials = {
-            accessKeyId: "dummy-access-key",
-            secretAccessKey: "dummy-secret-key",
-          };
-        }
-
-        const credentials = getConfiguredBedrockCredentials(options.env);
-        if (
-          !skipAuth &&
-          credentials !== undefined &&
-          (optionsProfile === undefined || optionsProfile === "")
-        ) {
-          config.credentials = credentials;
-        }
-
-        const proxyUrl = resolveHttpProxyUrlForTarget(model.baseUrl, options.env);
-        if (proxyUrl !== undefined) {
-          config.requestHandler = new NodeHttpHandler({
-            httpAgent: new HttpProxyAgent(proxyUrl),
-            httpsAgent: new HttpsProxyAgent(proxyUrl) as unknown as HttpsAgent,
-          });
-        } else if (getProviderEnvValue("AWS_BEDROCK_FORCE_HTTP1", options.env) === "1") {
-          config.requestHandler = new NodeHttpHandler();
-        }
-      } else {
-        config.region =
-          configuredRegion ||
-          (endpointRegion !== undefined && endpointRegion !== "" && useExplicitEndpoint
-            ? endpointRegion
-            : undefined) ||
-          "us-east-1";
-      }
-      if (useBearerToken) {
-        config.token = { token: bearerToken };
-        config.authSchemePreference = ["httpBearerAuth"];
-      }
-      let responseRequestId: string | undefined;
-      yield* Effect.gen(function* () {
-        const supportsStrictMode = model.compat?.supportsStrictMode ?? false;
-        const client = new BedrockRuntimeClient(config);
-        let observedRawResponse = false;
-        if (options.onResponse !== undefined) {
-          addResponseHeadersMiddleware(client, options.onResponse, model, () => {
-            observedRawResponse = true;
-          });
-        }
-        const customHeaders = providerHeadersToRecord(options.headers);
-        if (customHeaders !== undefined) {
-          addCustomHeadersMiddleware(client, customHeaders);
-        }
-        const cacheRetention = resolveCacheRetention(options.cacheRetention, options.env);
-        const inferenceMaxTokens =
-          options.maxTokens ?? (isAnthropicClaudeModel(model) ? model.maxTokens : undefined);
-        const initialSystemMessage = getInitialSystemMessage(normalizedContext.messages);
-        const initialSystemPrompt =
-          initialSystemMessage === undefined
-            ? undefined
-            : getSystemMessageText(initialSystemMessage);
-        let commandInput = {
-          modelId: model.id,
-          messages: convertMessages(normalizedContext, model, cacheRetention, options.env),
-          system: buildSystemPrompt(initialSystemPrompt, model, cacheRetention, options.env),
-          inferenceConfig: {
-            ...(inferenceMaxTokens !== undefined && { maxTokens: inferenceMaxTokens }),
-            ...(options.temperature !== undefined && { temperature: options.temperature }),
+    Effect.runFork(
+      Effect.gen(function* () {
+        const output: AssistantMessage = {
+          role: "assistant",
+          content: [],
+          api: "bedrock-converse-stream" as Api,
+          provider: model.provider,
+          model: model.id,
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
           },
-          toolConfig: convertToolConfig(
-            getCurrentTools(normalizedContext.messages),
-            options.toolChoice,
-            supportsStrictMode,
-          ),
-          additionalModelRequestFields: buildAdditionalModelRequestFields(model, options),
-          ...(options.requestMetadata !== undefined && {
-            requestMetadata: options.requestMetadata,
-          }),
+          stopReason: "pending",
+          timestamp: currentTimeMillis(),
         };
-        const nextCommandInput = yield* callHook(() => options?.onPayload?.(commandInput, model));
-        if (nextCommandInput !== undefined) {
-          commandInput = nextCommandInput as typeof commandInput;
-        }
-        const command = new ConverseStreamCommand(commandInput);
-        const response = yield* Effect.promise(() =>
-          client.send(command, options.signal === undefined ? {} : { abortSignal: options.signal }),
+        const blocks = output.content as Block[];
+        const optionsProfile = options.profile || options.env?.["AWS_PROFILE"];
+        const profile = optionsProfile || getProviderEnvValue("AWS_PROFILE", options.env);
+        const config: BedrockRuntimeClientConfig = {
+          ...(profile === undefined ? {} : { profile }),
+        };
+        const configuredRegion = getConfiguredBedrockRegion(options);
+        const hasAmbientConfiguredProfile = Boolean(getProviderEnvValue("AWS_PROFILE"));
+        const endpointRegion = getStandardBedrockEndpointRegion(model.baseUrl);
+        const useExplicitEndpoint = shouldUseExplicitBedrockEndpoint(
+          model.baseUrl,
+          configuredRegion,
+          hasAmbientConfiguredProfile,
         );
-        responseRequestId = normalizeDiagnosticValue(response.$metadata.requestId);
-        const status = response.$metadata.httpStatusCode;
-        if (!observedRawResponse && status !== undefined) {
-          const responseHeaders: Record<string, string> = {};
-          if (response.$metadata.requestId !== undefined && response.$metadata.requestId !== "") {
-            responseHeaders["x-amzn-requestid"] = response.$metadata.requestId;
-          }
-          yield* callHook(() => options?.onResponse?.({ status, headers: responseHeaders }, model));
+        if (useExplicitEndpoint) {
+          config.endpoint = model.baseUrl;
         }
-        yield* Stream.fromAsyncIterable(response.stream!, (error) => error).pipe(
-          Stream.orDie,
-          Stream.runForEach((item) =>
-            Effect.gen(function* () {
-              yield* callHook(() => options.onProviderStreamEvent?.(item, model));
-              if (item.messageStart !== undefined) {
-                if (item.messageStart.role !== ConversationRole.ASSISTANT) {
-                  throw new Error(
-                    "Unexpected assistant message start but got user message start instead",
-                  );
+        const skipAuth = getProviderEnvValue("AWS_BEDROCK_SKIP_AUTH", options.env) === "1";
+        const bearerToken =
+          options.bearerToken ||
+          options.apiKey ||
+          getProviderEnvValue("AWS_BEARER_TOKEN_BEDROCK", options.env) ||
+          undefined;
+        const useBearerToken = bearerToken !== undefined && !skipAuth;
+        if (isNodeRuntime()) {
+          const arnRegion = model.id.match(/^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9-]+):/u)?.[1];
+          if (arnRegion !== undefined && arnRegion !== "") {
+            config.region = arnRegion;
+          } else if (configuredRegion !== undefined && configuredRegion !== "") {
+            config.region = configuredRegion;
+          } else if (endpointRegion !== undefined && endpointRegion !== "" && useExplicitEndpoint) {
+            config.region = endpointRegion;
+          } else if (!hasAmbientConfiguredProfile) {
+            config.region = "us-east-1";
+          }
+
+          if (skipAuth) {
+            config.credentials = {
+              accessKeyId: "dummy-access-key",
+              secretAccessKey: "dummy-secret-key",
+            };
+          }
+
+          const credentials = getConfiguredBedrockCredentials(options.env);
+          if (
+            !skipAuth &&
+            credentials !== undefined &&
+            (optionsProfile === undefined || optionsProfile === "")
+          ) {
+            config.credentials = credentials;
+          }
+
+          const proxyUrl = resolveHttpProxyUrlForTarget(model.baseUrl, options.env);
+          if (proxyUrl !== undefined) {
+            config.requestHandler = new NodeHttpHandler({
+              httpAgent: new HttpProxyAgent(proxyUrl),
+              httpsAgent: new HttpsProxyAgent(proxyUrl) as unknown as HttpsAgent,
+            });
+          } else if (getProviderEnvValue("AWS_BEDROCK_FORCE_HTTP1", options.env) === "1") {
+            config.requestHandler = new NodeHttpHandler();
+          }
+        } else {
+          config.region =
+            configuredRegion ||
+            (endpointRegion !== undefined && endpointRegion !== "" && useExplicitEndpoint
+              ? endpointRegion
+              : undefined) ||
+            "us-east-1";
+        }
+        if (useBearerToken) {
+          config.token = { token: bearerToken };
+          config.authSchemePreference = ["httpBearerAuth"];
+        }
+        let responseRequestId: string | undefined;
+        yield* Effect.gen(function* () {
+          const supportsStrictMode = model.compat?.supportsStrictMode ?? false;
+          const client = new BedrockRuntimeClient(config);
+          let observedRawResponse = false;
+          if (options.onResponse !== undefined) {
+            addResponseHeadersMiddleware(client, options.onResponse, model, () => {
+              observedRawResponse = true;
+            });
+          }
+          const customHeaders = providerHeadersToRecord(options.headers);
+          if (customHeaders !== undefined) {
+            addCustomHeadersMiddleware(client, customHeaders);
+          }
+          const cacheRetention = resolveCacheRetention(options.cacheRetention, options.env);
+          const inferenceMaxTokens =
+            options.maxTokens ?? (isAnthropicClaudeModel(model) ? model.maxTokens : undefined);
+          const initialSystemMessage = getInitialSystemMessage(normalizedContext.messages);
+          const initialSystemPrompt =
+            initialSystemMessage === undefined
+              ? undefined
+              : getSystemMessageText(initialSystemMessage);
+          let commandInput = {
+            modelId: model.id,
+            messages: convertMessages(normalizedContext, model, cacheRetention, options.env),
+            system: buildSystemPrompt(initialSystemPrompt, model, cacheRetention, options.env),
+            inferenceConfig: {
+              ...(inferenceMaxTokens !== undefined && { maxTokens: inferenceMaxTokens }),
+              ...(options.temperature !== undefined && { temperature: options.temperature }),
+            },
+            toolConfig: convertToolConfig(
+              getCurrentTools(normalizedContext.messages),
+              options.toolChoice,
+              supportsStrictMode,
+            ),
+            additionalModelRequestFields: buildAdditionalModelRequestFields(model, options),
+            ...(options.requestMetadata !== undefined && {
+              requestMetadata: options.requestMetadata,
+            }),
+          };
+          const nextCommandInput = yield* callHook(() => options?.onPayload?.(commandInput, model));
+          if (nextCommandInput !== undefined) {
+            commandInput = nextCommandInput as typeof commandInput;
+          }
+          const command = new ConverseStreamCommand(commandInput);
+          const response = yield* Effect.promise(() =>
+            client.send(
+              command,
+              options.signal === undefined ? {} : { abortSignal: options.signal },
+            ),
+          );
+          responseRequestId = normalizeDiagnosticValue(response.$metadata.requestId);
+          const status = response.$metadata.httpStatusCode;
+          if (!observedRawResponse && status !== undefined) {
+            const responseHeaders: Record<string, string> = {};
+            if (response.$metadata.requestId !== undefined && response.$metadata.requestId !== "") {
+              responseHeaders["x-amzn-requestid"] = response.$metadata.requestId;
+            }
+            yield* callHook(() =>
+              options?.onResponse?.({ status, headers: responseHeaders }, model),
+            );
+          }
+          yield* Stream.fromAsyncIterable(response.stream!, (error) => error).pipe(
+            Stream.orDie,
+            Stream.runForEach((item) =>
+              Effect.gen(function* () {
+                yield* callHook(() => options.onProviderStreamEvent?.(item, model));
+                if (item.messageStart !== undefined) {
+                  if (item.messageStart.role !== ConversationRole.ASSISTANT) {
+                    throw new Error(
+                      "Unexpected assistant message start but got user message start instead",
+                    );
+                  }
+                  events.push({ type: "start", partial: output });
+                } else if (item.contentBlockStart !== undefined) {
+                  handleContentBlockStart(item.contentBlockStart, blocks, output, events);
+                } else if (item.contentBlockDelta !== undefined) {
+                  handleContentBlockDelta(item.contentBlockDelta, blocks, output, events);
+                } else if (item.contentBlockStop !== undefined) {
+                  handleContentBlockStop(item.contentBlockStop, blocks, output, events);
+                } else if (item.messageStop !== undefined) {
+                  output.rawStopReason = item.messageStop.stopReason;
+                  const { stopReason, errorMessage } = mapStopReason(item.messageStop.stopReason);
+                  output.stopReason = stopReason;
+                  if (errorMessage !== undefined && errorMessage !== "") {
+                    output.errorMessage = errorMessage;
+                  }
+                } else if (item.metadata !== undefined) {
+                  handleMetadata(item.metadata, model, output);
+                } else if (item.internalServerException !== undefined) {
+                  throw item.internalServerException;
+                } else if (item.modelStreamErrorException !== undefined) {
+                  throw item.modelStreamErrorException;
+                } else if (item.validationException !== undefined) {
+                  throw item.validationException;
+                } else if (item.throttlingException !== undefined) {
+                  throw item.throttlingException;
+                } else if (item.serviceUnavailableException !== undefined) {
+                  throw item.serviceUnavailableException;
                 }
-                events.push({ type: "start", partial: output });
-              } else if (item.contentBlockStart !== undefined) {
-                handleContentBlockStart(item.contentBlockStart, blocks, output, events);
-              } else if (item.contentBlockDelta !== undefined) {
-                handleContentBlockDelta(item.contentBlockDelta, blocks, output, events);
-              } else if (item.contentBlockStop !== undefined) {
-                handleContentBlockStop(item.contentBlockStop, blocks, output, events);
-              } else if (item.messageStop !== undefined) {
-                output.rawStopReason = item.messageStop.stopReason;
-                const { stopReason, errorMessage } = mapStopReason(item.messageStop.stopReason);
-                output.stopReason = stopReason;
-                if (errorMessage !== undefined && errorMessage !== "") {
-                  output.errorMessage = errorMessage;
-                }
-              } else if (item.metadata !== undefined) {
-                handleMetadata(item.metadata, model, output);
-              } else if (item.internalServerException !== undefined) {
-                throw item.internalServerException;
-              } else if (item.modelStreamErrorException !== undefined) {
-                throw item.modelStreamErrorException;
-              } else if (item.validationException !== undefined) {
-                throw item.validationException;
-              } else if (item.throttlingException !== undefined) {
-                throw item.throttlingException;
-              } else if (item.serviceUnavailableException !== undefined) {
-                throw item.serviceUnavailableException;
+              }),
+            ),
+          );
+          if (options.signal?.aborted === true) {
+            throw new Error("Request was aborted");
+          }
+          if (output.stopReason === "pending") {
+            throw new Error("Bedrock stream ended without a stop reason");
+          }
+          if (output.stopReason === "error" || output.stopReason === "aborted") {
+            throw new Error(output.errorMessage || "An unknown error occurred");
+          }
+          for (const block of output.content) finalizeStreamingBlock(block as Block);
+          events.push({ type: "done", reason: output.stopReason, message: output });
+          events.end();
+        }).pipe(
+          Effect.catchDefect((error) =>
+            Effect.sync(() => {
+              for (const block of output.content) {
+                finalizeStreamingBlock(block as Block);
               }
+              output.stopReason = options.signal?.aborted === true ? "aborted" : "error";
+              output.errorMessage = formatBedrockError(error);
+              if (output.stopReason === "error") {
+                appendBedrockFailureDiagnostic(output, error, responseRequestId);
+              }
+              events.push({ type: "error", reason: output.stopReason, error: output });
+              events.end();
             }),
           ),
         );
-        if (options.signal?.aborted === true) {
-          throw new Error("Request was aborted");
-        }
-        if (output.stopReason === "pending") {
-          throw new Error("Bedrock stream ended without a stop reason");
-        }
-        if (output.stopReason === "error" || output.stopReason === "aborted") {
-          throw new Error(output.errorMessage || "An unknown error occurred");
-        }
-        for (const block of output.content) finalizeStreamingBlock(block as Block);
-        events.push({ type: "done", reason: output.stopReason, message: output });
-        events.end();
-      }).pipe(
-        Effect.catchDefect((error) =>
-          Effect.sync(() => {
-            for (const block of output.content) {
-              finalizeStreamingBlock(block as Block);
-            }
-            output.stopReason = options.signal?.aborted === true ? "aborted" : "error";
-            output.errorMessage = formatBedrockError(error);
-            if (output.stopReason === "error") {
-              appendBedrockFailureDiagnostic(output, error, responseRequestId);
-            }
-            events.push({ type: "error", reason: output.stopReason, error: output });
-            events.end();
-          }),
-        ),
-      );
-    }),
-  );
+      }),
+    );
 
-  return events;
-};
+    return events;
+  },
+);
 
 const BEDROCK_ERROR_PREFIXES: Record<string, string> = {
   InternalServerException: "Internal server error",
@@ -480,57 +493,64 @@ function addResponseHeadersMiddleware(
   client.middlewareStack.add(middleware, { step: "deserialize", name: "msa-ai-response-headers" });
 }
 
-export const streamSimple: StreamFunction<"bedrock-converse-stream", SimpleStreamOptions> = (
-  model: Model<"bedrock-converse-stream">,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-): AssistantMessageEventStream => {
-  const base = {
-    ...buildBaseOptions(model, context, options, undefined),
-    toolChoice: options?.toolChoice,
-  } satisfies BedrockOptions;
-  if (options?.reasoning === undefined) {
-    return stream(model, context, { ...base, reasoning: undefined } satisfies BedrockOptions);
-  }
+export const streamSimple = modelCall<
+  Parameters<StreamFunction<"bedrock-converse-stream", SimpleStreamOptions>>[0],
+  Parameters<StreamFunction<"bedrock-converse-stream", SimpleStreamOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"bedrock-converse-stream", SimpleStreamOptions>>[2]>,
+  ReturnType<StreamFunction<"bedrock-converse-stream", SimpleStreamOptions>>
+>(
+  (
+    model: Model<"bedrock-converse-stream">,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): AssistantMessageEventStream => {
+    const base = {
+      ...buildBaseOptions(model, context, options, undefined),
+      toolChoice: options?.toolChoice,
+    } satisfies BedrockOptions;
+    if (options?.reasoning === undefined) {
+      return stream(model, context, { ...base, reasoning: undefined } satisfies BedrockOptions);
+    }
 
-  if (isAnthropicClaudeModel(model)) {
-    if (supportsAdaptiveThinking(model.id, model.name)) {
+    if (isAnthropicClaudeModel(model)) {
+      if (supportsAdaptiveThinking(model.id, model.name)) {
+        return stream(model, context, {
+          ...base,
+          reasoning: options.reasoning,
+          thinkingBudgets: options.thinkingBudgets,
+        } satisfies BedrockOptions);
+      }
+
+      const adjusted = adjustMaxTokensForThinking(
+        base.maxTokens,
+        model.maxTokens,
+        options.reasoning,
+        options.thinkingBudgets,
+      );
+
+      const maxTokens = clampMaxTokensToContext(model, context, adjusted.maxTokens);
+
       return stream(model, context, {
         ...base,
+        maxTokens,
         reasoning: options.reasoning,
-        thinkingBudgets: options.thinkingBudgets,
+        thinkingBudgets: {
+          ...(options.thinkingBudgets || {}),
+          [clampReasoning(options.reasoning)!]: Math.min(
+            adjusted.thinkingBudget,
+            Math.max(0, maxTokens - 1024),
+          ),
+        },
       } satisfies BedrockOptions);
     }
 
-    const adjusted = adjustMaxTokensForThinking(
-      base.maxTokens,
-      model.maxTokens,
-      options.reasoning,
-      options.thinkingBudgets,
-    );
-
-    const maxTokens = clampMaxTokensToContext(model, context, adjusted.maxTokens);
-
     return stream(model, context, {
       ...base,
-      maxTokens,
       reasoning: options.reasoning,
-      thinkingBudgets: {
-        ...(options.thinkingBudgets || {}),
-        [clampReasoning(options.reasoning)!]: Math.min(
-          adjusted.thinkingBudget,
-          Math.max(0, maxTokens - 1024),
-        ),
-      },
+      thinkingBudgets: options.thinkingBudgets,
     } satisfies BedrockOptions);
-  }
-
-  return stream(model, context, {
-    ...base,
-    reasoning: options.reasoning,
-    thinkingBudgets: options.thinkingBudgets,
-  } satisfies BedrockOptions);
-};
+  },
+);
 
 function handleContentBlockStart(
   event: ContentBlockStartEvent,

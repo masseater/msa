@@ -11,6 +11,7 @@ import type {
   ClassifierResult,
 } from "../types.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
+import { modelCall } from "../utils/model-call.ts";
 import {
   type ClassifierHttpError,
   isRecord,
@@ -190,7 +191,12 @@ const requestDecisions = Effect.fn("requestDecisions")(function* (
   return output;
 });
 
-export const classify: ClassifierFunction<ClassifierOptions> = (model, context, options) =>
+export const classify = modelCall<
+  Parameters<ClassifierFunction<ClassifierOptions>>[0],
+  Parameters<ClassifierFunction<ClassifierOptions>>[1],
+  NonNullable<Parameters<ClassifierFunction<ClassifierOptions>>[2]>,
+  ReturnType<ClassifierFunction<ClassifierOptions>>
+>((model, context, options) =>
   Effect.runPromise(
     Effect.gen(function* () {
       const output: ClassifierResult = {
@@ -212,4 +218,5 @@ export const classify: ClassifierFunction<ClassifierOptions> = (model, context, 
         ),
       );
     }),
-  );
+  ),
+);

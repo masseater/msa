@@ -23,6 +23,7 @@ import { currentTimeMillis } from "../utils/clock.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
 import { callHook } from "../utils/hooks.ts";
+import { modelCall } from "../utils/model-call.ts";
 import { providerRequestWithRetry } from "../utils/provider-retry.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 
@@ -42,11 +43,12 @@ type OpenRouterImageGenerationResponse = ChatCompletion & {
   choices: OpenRouterImageGenerationChoice[];
 };
 
-export const generateImages: ImagesFunction<ImagesOptions> = (
-  model: ImageModel<ImageApi>,
-  context: ImagesContext,
-  options?: ImagesOptions,
-) =>
+export const generateImages = modelCall<
+  Parameters<ImagesFunction<ImagesOptions>>[0],
+  Parameters<ImagesFunction<ImagesOptions>>[1],
+  NonNullable<Parameters<ImagesFunction<ImagesOptions>>[2]>,
+  ReturnType<ImagesFunction<ImagesOptions>>
+>((model: ImageModel<ImageApi>, context: ImagesContext, options?: ImagesOptions) =>
   Effect.runPromise(
     Effect.gen(function* () {
       const output: AssistantImages = {
@@ -126,7 +128,8 @@ export const generateImages: ImagesFunction<ImagesOptions> = (
         ),
       );
     }),
-  );
+  ),
+);
 
 function createClient(
   model: ImageModel<ImageApi>,

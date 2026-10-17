@@ -14,6 +14,7 @@ import type {
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
 import { encodeJson } from "../utils/json-codec.ts";
+import { modelCall } from "../utils/model-call.ts";
 import { retryProviderEffect } from "../utils/provider-retry.ts";
 
 const LABEL = "llama.cpp";
@@ -500,7 +501,12 @@ const classifyAll = Effect.fn("classifyAll")(function* (
   return Object.fromEntries(answers);
 });
 
-export const classify: ClassifierFunction<ClassifierOptions> = (model, context, options) =>
+export const classify = modelCall<
+  Parameters<ClassifierFunction<ClassifierOptions>>[0],
+  Parameters<ClassifierFunction<ClassifierOptions>>[1],
+  NonNullable<Parameters<ClassifierFunction<ClassifierOptions>>[2]>,
+  ReturnType<ClassifierFunction<ClassifierOptions>>
+>((model, context, options) =>
   Effect.runPromise(
     Effect.gen(function* () {
       const output: ClassifierResult = {
@@ -529,4 +535,5 @@ export const classify: ClassifierFunction<ClassifierOptions> = (model, context, 
         ),
       );
     }),
-  );
+  ),
+);

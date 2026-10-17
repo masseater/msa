@@ -23,6 +23,7 @@ import { formatProviderError, normalizeProviderError } from "../utils/error-body
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import { callHook } from "../utils/hooks.ts";
+import { modelCall } from "../utils/model-call.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 import { providerRequestWithRetry } from "../utils/provider-retry.ts";
 import {
@@ -152,153 +153,169 @@ export interface OpenAIResponsesOptions extends StreamOptions {
   toolChoice?: ResponseCreateParamsStreaming["tool_choice"] | undefined;
 }
 
-export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> = (
-  model: Model<"openai-responses">,
-  context: TranscriptContext,
-  options?: OpenAIResponsesOptions,
-): AssistantMessageEventStream => {
-  const events = new AssistantMessageEventStream();
-  const normalizedContext = resolveTranscript(
-    context,
-    getCompat(model).supportsMidConvoSystemMessages,
-  );
+export const stream = modelCall<
+  Parameters<StreamFunction<"openai-responses", OpenAIResponsesOptions>>[0],
+  Parameters<StreamFunction<"openai-responses", OpenAIResponsesOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"openai-responses", OpenAIResponsesOptions>>[2]>,
+  ReturnType<StreamFunction<"openai-responses", OpenAIResponsesOptions>>
+>(
+  (
+    model: Model<"openai-responses">,
+    context: TranscriptContext,
+    options?: OpenAIResponsesOptions,
+  ): AssistantMessageEventStream => {
+    const events = new AssistantMessageEventStream();
+    const normalizedContext = resolveTranscript(
+      context,
+      getCompat(model).supportsMidConvoSystemMessages,
+    );
 
-  Effect.runFork(
-    Effect.gen(function* () {
-      const compat = getCompat(model);
-      const configurationUpdateEffort = getConfigurationUpdateEffort(model, options, compat);
-      const output: AssistantMessage = {
-        role: "assistant",
-        content: [],
-        api: model.api as Api,
-        provider: model.provider,
-        model: model.id,
-        ...(configurationUpdateEffort === undefined
-          ? {}
-          : { providerThinkingLevel: configurationUpdateEffort }),
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-        stopReason: "pending",
-        timestamp: currentTimeMillis(),
-      };
-      yield* Effect.gen(function* () {
-        const apiKey = getClientApiKey(model.provider, options?.apiKey, options?.headers);
-        const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
-        const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
-        const grammarToolInputProperties = createGrammarToolInputProperties(
-          getDeclaredTools(normalizedContext.messages),
-          compat.supportsOpenAIGrammarTools,
-        );
-        const client = createClient(
-          model,
-          apiKey,
-          options?.headers,
-          options?.fetch,
-          cacheSessionId,
-        );
-        let params = buildParams(
-          model,
-          normalizedContext,
-          options,
-          compat,
-          grammarToolInputProperties,
-          configurationUpdateEffort,
-        );
-        const nextParams = yield* callHook(() => options?.onPayload?.(params, model));
-        if (nextParams !== undefined) {
-          params = nextParams as ResponseCreateParamsStreaming;
-        }
-        const requestOptions = {
-          ...(options?.signal === undefined ? {} : { signal: options.signal }),
-          ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
-          maxRetries: 0,
-        };
-        const { data: openaiStream, response } = yield* providerRequestWithRetry(
-          () => client.responses.create(params, requestOptions).withResponse(),
-          {
-            maxRetries: options?.maxRetries,
-            maxRetryDelayMs: options?.maxRetryDelayMs,
-            signal: options?.signal,
+    Effect.runFork(
+      Effect.gen(function* () {
+        const compat = getCompat(model);
+        const configurationUpdateEffort = getConfigurationUpdateEffort(model, options, compat);
+        const output: AssistantMessage = {
+          role: "assistant",
+          content: [],
+          api: model.api as Api,
+          provider: model.provider,
+          model: model.id,
+          ...(configurationUpdateEffort === undefined
+            ? {}
+            : { providerThinkingLevel: configurationUpdateEffort }),
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
           },
-        );
-        yield* callHook(() =>
-          options?.onResponse?.(
-            { status: response.status, headers: headersToRecord(response.headers) },
+          stopReason: "pending",
+          timestamp: currentTimeMillis(),
+        };
+        yield* Effect.gen(function* () {
+          const apiKey = getClientApiKey(model.provider, options?.apiKey, options?.headers);
+          const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
+          const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
+          const grammarToolInputProperties = createGrammarToolInputProperties(
+            getDeclaredTools(normalizedContext.messages),
+            compat.supportsOpenAIGrammarTools,
+          );
+          const client = createClient(
             model,
+            apiKey,
+            options?.headers,
+            options?.fetch,
+            cacheSessionId,
+          );
+          let params = buildParams(
+            model,
+            normalizedContext,
+            options,
+            compat,
+            grammarToolInputProperties,
+            configurationUpdateEffort,
+          );
+          const nextParams = yield* callHook(() => options?.onPayload?.(params, model));
+          if (nextParams !== undefined) {
+            params = nextParams as ResponseCreateParamsStreaming;
+          }
+          const requestOptions = {
+            ...(options?.signal === undefined ? {} : { signal: options.signal }),
+            ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
+            maxRetries: 0,
+          };
+          const { data: openaiStream, response } = yield* providerRequestWithRetry(
+            () => client.responses.create(params, requestOptions).withResponse(),
+            {
+              maxRetries: options?.maxRetries,
+              maxRetryDelayMs: options?.maxRetryDelayMs,
+              signal: options?.signal,
+            },
+          );
+          yield* callHook(() =>
+            options?.onResponse?.(
+              { status: response.status, headers: headersToRecord(response.headers) },
+              model,
+            ),
+          );
+          events.push({ type: "start", partial: output });
+          yield* processResponsesStream(openaiStream, output, events, model, {
+            onProviderStreamEvent: options?.onProviderStreamEvent,
+            serviceTier: options?.serviceTier,
+            grammarToolInputProperties,
+            applyServiceTierPricing: (usage, serviceTier) =>
+              applyServiceTierPricing(usage, serviceTier, model),
+          });
+          if (options?.signal?.aborted === true) {
+            throw new Error("Request was aborted");
+          }
+          if (output.stopReason === "pending") {
+            throw new Error("OpenAI Responses stream ended without a stop reason");
+          }
+          if (output.stopReason === "aborted" || output.stopReason === "error") {
+            throw new Error(output.errorMessage || "An unknown error occurred");
+          }
+          events.push({ type: "done", reason: output.stopReason, message: output });
+          events.end();
+        }).pipe(
+          Effect.catchDefect((error) =>
+            Effect.sync(() => {
+              for (const block of output.content) {
+                delete (block as { index?: number }).index;
+                delete (block as { partialJson?: string }).partialJson;
+                delete (block as { customInput?: unknown }).customInput;
+              }
+              output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+              const errorMessage = formatProviderError(
+                normalizeProviderError(error),
+                `${model.provider === "openai" ? "OpenAI" : model.provider} API error`,
+              );
+              output.errorMessage = errorMessage.includes(
+                "subscription_sharing_usage_limit_exceeded",
+              )
+                ? `${errorMessage}\nCheck your ChatGPT usage: ${CHATGPT_USAGE_URL}`
+                : errorMessage;
+              events.push({ type: "error", reason: output.stopReason, error: output });
+              events.end();
+            }),
           ),
         );
-        events.push({ type: "start", partial: output });
-        yield* processResponsesStream(openaiStream, output, events, model, {
-          onProviderStreamEvent: options?.onProviderStreamEvent,
-          serviceTier: options?.serviceTier,
-          grammarToolInputProperties,
-          applyServiceTierPricing: (usage, serviceTier) =>
-            applyServiceTierPricing(usage, serviceTier, model),
-        });
-        if (options?.signal?.aborted === true) {
-          throw new Error("Request was aborted");
-        }
-        if (output.stopReason === "pending") {
-          throw new Error("OpenAI Responses stream ended without a stop reason");
-        }
-        if (output.stopReason === "aborted" || output.stopReason === "error") {
-          throw new Error(output.errorMessage || "An unknown error occurred");
-        }
-        events.push({ type: "done", reason: output.stopReason, message: output });
-        events.end();
-      }).pipe(
-        Effect.catchDefect((error) =>
-          Effect.sync(() => {
-            for (const block of output.content) {
-              delete (block as { index?: number }).index;
-              delete (block as { partialJson?: string }).partialJson;
-              delete (block as { customInput?: unknown }).customInput;
-            }
-            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-            const errorMessage = formatProviderError(
-              normalizeProviderError(error),
-              `${model.provider === "openai" ? "OpenAI" : model.provider} API error`,
-            );
-            output.errorMessage = errorMessage.includes("subscription_sharing_usage_limit_exceeded")
-              ? `${errorMessage}\nCheck your ChatGPT usage: ${CHATGPT_USAGE_URL}`
-              : errorMessage;
-            events.push({ type: "error", reason: output.stopReason, error: output });
-            events.end();
-          }),
-        ),
-      );
-    }),
-  );
+      }),
+    );
 
-  return events;
-};
+    return events;
+  },
+);
 
-export const streamSimple: StreamFunction<"openai-responses", SimpleStreamOptions> = (
-  model: Model<"openai-responses">,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-): AssistantMessageEventStream => {
-  getClientApiKey(model.provider, options?.apiKey, options?.headers);
+export const streamSimple = modelCall<
+  Parameters<StreamFunction<"openai-responses", SimpleStreamOptions>>[0],
+  Parameters<StreamFunction<"openai-responses", SimpleStreamOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"openai-responses", SimpleStreamOptions>>[2]>,
+  ReturnType<StreamFunction<"openai-responses", SimpleStreamOptions>>
+>(
+  (
+    model: Model<"openai-responses">,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): AssistantMessageEventStream => {
+    getClientApiKey(model.provider, options?.apiKey, options?.headers);
 
-  const base = {
-    ...buildBaseOptions(model, context, options, options?.apiKey),
-    toolChoice: options?.toolChoice,
-  } satisfies OpenAIResponsesOptions;
-  const clampedReasoning =
-    options?.reasoning === undefined ? undefined : clampThinkingLevel(model, options.reasoning);
-  const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
+    const base = {
+      ...buildBaseOptions(model, context, options, options?.apiKey),
+      toolChoice: options?.toolChoice,
+    } satisfies OpenAIResponsesOptions;
+    const clampedReasoning =
+      options?.reasoning === undefined ? undefined : clampThinkingLevel(model, options.reasoning);
+    const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
 
-  return stream(model, context, {
-    ...base,
-    reasoningEffort,
-  } satisfies OpenAIResponsesOptions);
-};
+    return stream(model, context, {
+      ...base,
+      reasoningEffort,
+    } satisfies OpenAIResponsesOptions);
+  },
+);
 
 function createClient(
   model: Model<"openai-responses">,

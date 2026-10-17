@@ -1,4 +1,5 @@
 import type { ClassifierFunction, ClassifierOptions } from "../types.ts";
+import { modelCall } from "../utils/model-call.ts";
 import { isRecord } from "./classifier-shared.ts";
 import { classifySystemOne, type SystemOneTransport } from "./system-one-shared.ts";
 
@@ -35,5 +36,9 @@ const transport: SystemOneTransport = {
   },
 };
 
-export const classify: ClassifierFunction<ClassifierOptions> = (model, context, options) =>
-  classifySystemOne(transport, model, context, options);
+export const classify = modelCall<
+  Parameters<ClassifierFunction<ClassifierOptions>>[0],
+  Parameters<ClassifierFunction<ClassifierOptions>>[1],
+  NonNullable<Parameters<ClassifierFunction<ClassifierOptions>>[2]>,
+  ReturnType<ClassifierFunction<ClassifierOptions>>
+>((model, context, options) => classifySystemOne(transport, model, context, options));

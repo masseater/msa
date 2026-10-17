@@ -35,6 +35,7 @@ import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import { callHook } from "../utils/hooks.ts";
 import { encodeJsonSync } from "../utils/json-codec.ts";
+import { modelCall } from "../utils/model-call.ts";
 import { resolveHttpProxyUrlForTarget } from "../utils/node-http-proxy.ts";
 import { isNodeRuntime } from "../utils/runtime.ts";
 import { getSystemMessageText } from "../utils/text.ts";
@@ -557,68 +558,82 @@ const runCodexStream = Effect.fn("runCodexStream")(function* (
   yield* streamCodexOverSse(run, sseHeaders);
 });
 
-export const stream: StreamFunction<"openai-codex-responses", OpenAICodexResponsesOptions> = (
-  model: Model<"openai-codex-responses">,
-  context: TranscriptContext,
-  options?: OpenAICodexResponsesOptions,
-): AssistantMessageEventStream => {
-  const events = new AssistantMessageEventStream();
-  const normalizedContext = resolveTranscript(
-    context,
-    model.compat?.supportsMidConvoSystemMessages,
-  );
-  const output: AssistantMessage = {
-    role: "assistant",
-    content: [],
-    api: "openai-codex-responses" as Api,
-    provider: model.provider,
-    model: model.id,
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-    stopReason: "pending",
-    timestamp: currentTimeMillis(),
-  };
+export const stream = modelCall<
+  Parameters<StreamFunction<"openai-codex-responses", OpenAICodexResponsesOptions>>[0],
+  Parameters<StreamFunction<"openai-codex-responses", OpenAICodexResponsesOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"openai-codex-responses", OpenAICodexResponsesOptions>>[2]>,
+  ReturnType<StreamFunction<"openai-codex-responses", OpenAICodexResponsesOptions>>
+>(
+  (
+    model: Model<"openai-codex-responses">,
+    context: TranscriptContext,
+    options?: OpenAICodexResponsesOptions,
+  ): AssistantMessageEventStream => {
+    const events = new AssistantMessageEventStream();
+    const normalizedContext = resolveTranscript(
+      context,
+      model.compat?.supportsMidConvoSystemMessages,
+    );
+    const output: AssistantMessage = {
+      role: "assistant",
+      content: [],
+      api: "openai-codex-responses" as Api,
+      provider: model.provider,
+      model: model.id,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "pending",
+      timestamp: currentTimeMillis(),
+    };
 
-  Effect.runFork(
-    runCodexStream(model, normalizedContext, output, events, options).pipe(
-      Effect.catchDefect((error) =>
-        Effect.sync(() => failCodexOutput(output, events, options, error)),
+    Effect.runFork(
+      runCodexStream(model, normalizedContext, output, events, options).pipe(
+        Effect.catchDefect((error) =>
+          Effect.sync(() => failCodexOutput(output, events, options, error)),
+        ),
       ),
-    ),
-  );
+    );
 
-  return events;
-};
+    return events;
+  },
+);
 
-export const streamSimple: StreamFunction<"openai-codex-responses", SimpleStreamOptions> = (
-  model: Model<"openai-codex-responses">,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-): AssistantMessageEventStream => {
-  const apiKey = options?.apiKey;
-  if (apiKey === undefined || apiKey === "") {
-    throw new Error(`No API key for provider: ${model.provider}`);
-  }
+export const streamSimple = modelCall<
+  Parameters<StreamFunction<"openai-codex-responses", SimpleStreamOptions>>[0],
+  Parameters<StreamFunction<"openai-codex-responses", SimpleStreamOptions>>[1],
+  NonNullable<Parameters<StreamFunction<"openai-codex-responses", SimpleStreamOptions>>[2]>,
+  ReturnType<StreamFunction<"openai-codex-responses", SimpleStreamOptions>>
+>(
+  (
+    model: Model<"openai-codex-responses">,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+  ): AssistantMessageEventStream => {
+    const apiKey = options?.apiKey;
+    if (apiKey === undefined || apiKey === "") {
+      throw new Error(`No API key for provider: ${model.provider}`);
+    }
 
-  const base = {
-    ...buildBaseOptions(model, context, options, apiKey),
-    toolChoice: options?.toolChoice,
-  } satisfies OpenAICodexResponsesOptions;
-  const clampedReasoning =
-    options?.reasoning === undefined ? undefined : clampThinkingLevel(model, options.reasoning);
-  const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
+    const base = {
+      ...buildBaseOptions(model, context, options, apiKey),
+      toolChoice: options?.toolChoice,
+    } satisfies OpenAICodexResponsesOptions;
+    const clampedReasoning =
+      options?.reasoning === undefined ? undefined : clampThinkingLevel(model, options.reasoning);
+    const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
 
-  return stream(model, context, {
-    ...base,
-    reasoningEffort,
-  } satisfies OpenAICodexResponsesOptions);
-};
+    return stream(model, context, {
+      ...base,
+      reasoningEffort,
+    } satisfies OpenAICodexResponsesOptions);
+  },
+);
 
 function buildRequestBody(
   model: Model<"openai-codex-responses">,
