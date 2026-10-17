@@ -1,206 +1,27 @@
-// Ported from libs/agent/test/harness/tools.test.ts and adapted to ToolRegistration: tools take the environment
-// from `api.env`, stream through `api.output()`, and report notices as diagnostics instead of content text.
-import { appendFileSync, mkdirSync, rmSync } from "node:fs";
-import { symlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import type { Context, JsonValue } from "@msa/chord";
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
-import type {
-  ToolDiagnostic,
-  ToolExecutionApi,
-  ToolExecutionResult,
-  ToolRegistration,
-} from "@msa/durable";
+import type { ToolExecutionResult } from "@msa/durable";
 import { applyPatch } from "diff";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import {
-  type ExecutionEnv,
-  ExecutionError,
-  err,
-  type FileError,
-  getOrThrow,
-  type Result,
-  type ShellExecOptions,
-  type ShellExecResult,
-  type ShellOutputSkip,
-  type ShellOutputWindow,
-} from "../src/env/index.ts";
+import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
-import { withFileMutationQueue } from "../src/tools/file-mutation-queue.ts";
 import { detectSupportedImageMimeType } from "../src/tools/image.ts";
+import { createEditTool, createReadTool, createWriteTool } from "../src/tools/index.ts";
+import { appendTempFile } from "./temp-support.ts";
 import {
-  createBashTool,
-  createEditTool,
-  createPowerShellTool,
-  createReadTool,
-  createWriteTool,
-} from "../src/tools/index.ts";
-import { DEFAULT_MAX_LINES } from "../src/truncate.ts";
+  textOutput,
+  createEnv,
+  createTempDir,
+  run,
+  delay,
+  BlockingWriteExecutionEnv,
+  removeTempDirs,
+} from "./tools-support.ts";
 
-const tempDirs: string[] = [];
-
-afterAll(() => {
-  for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
-});
-
-function createTempDir(): string {
-  const dir = join(
-    tmpdir(),
-    `msa-durable-tools-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  );
-  mkdirSync(dir, { recursive: true });
-  tempDirs.push(dir);
-  return dir;
-}
-
-function createEnv(): NodeExecutionEnv {
-  return new NodeExecutionEnv({ cwd: createTempDir() });
-}
-
-/** A minimal execution API: the environment, collected output and diagnostics, and nothing durable. */
-function fakeApi(env: ExecutionEnv | undefined): {
-  api: ToolExecutionApi;
-  output: string[];
-  diagnostics: ToolDiagnostic[];
-} {
-  const output: string[] = [];
-  const diagnostics: ToolDiagnostic[] = [];
-  const api = {
-    taskId: 1,
-    conversationId: 1,
-    callId: "call",
-    env,
-    output: (chunk: string | Uint8Array) =>
-      output.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk)),
-    retainedOutput: () => ({ text: output.join(""), truncated: false }),
-    diagnostic: (diagnostic: ToolDiagnostic) => diagnostics.push(diagnostic),
-    details: async () => {},
-    // No model: `read` treats it as one that sees images.
-    agent: async () => ({}),
-  } as unknown as ToolExecutionApi;
-  return { api, output, diagnostics };
-}
-
-async function run(
-  tool: ToolRegistration,
-  args: JsonValue,
-  env: ExecutionEnv | undefined,
-  context: Context = BACKGROUND_CONTEXT,
-): Promise<ToolExecutionResult & { streamed: string[]; reported: ToolDiagnostic[] }> {
-  const { api, output, diagnostics } = fakeApi(env);
-  return { ...(await tool.execute(args, api, context)), streamed: output, reported: diagnostics };
-}
-
-/** Run a tool expected to throw; returns the error with what it streamed and reported first. */
-async function runFailing(
-  tool: ToolRegistration,
-  args: JsonValue,
-  env: ExecutionEnv,
-): Promise<{ error: Error; streamed: string[]; reported: ToolDiagnostic[] }> {
-  const { api, output, diagnostics } = fakeApi(env);
-  try {
-    await tool.execute(args, api, BACKGROUND_CONTEXT);
-  } catch (error) {
-    return { error: error as Error, streamed: output, reported: diagnostics };
-  }
-  throw new Error("Expected the tool to throw");
-}
-
-function textOutput(result: ToolExecutionResult): string {
-  return (result.output ?? [])
-    .flatMap((part) => (part.type === "text" ? [part.text] : []))
-    .join("\n");
-}
+afterAll(removeTempDirs);
 
 function diagnosticText(result: ToolExecutionResult): string {
   return (result.diagnostics ?? []).map((diagnostic) => diagnostic.message).join("\n");
-}
-
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve = () => {};
-  const promise = new Promise<void>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-  return { promise, resolve };
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-class SlowReadExecutionEnv extends NodeExecutionEnv {
-  override async readTextFile(path: string, context: Context): Promise<Result<string, FileError>> {
-    await delay(20);
-    return super.readTextFile(path, context);
-  }
-}
-
-class BlockingWriteExecutionEnv extends NodeExecutionEnv {
-  readonly firstWriteStarted = deferred();
-  readonly finishFirstWrite = deferred();
-  secondWriteStarted = false;
-
-  override async writeFile(
-    path: string,
-    content: string | Uint8Array,
-    context: Context,
-  ): Promise<Result<void, FileError>> {
-    if (content === "first\n") {
-      this.firstWriteStarted.resolve();
-      await this.finishFirstWrite.promise;
-    } else if (content === "second\n") {
-      this.secondWriteStarted = true;
-    }
-    return super.writeFile(path, content, context);
-  }
-}
-
-class BlockingEditExecutionEnv extends NodeExecutionEnv {
-  readonly firstEditWriteStarted = deferred();
-  readonly finishFirstEditWrite = deferred();
-  firstEditWriteSettled = false;
-  secondEditWriteStarted = false;
-
-  override async writeFile(
-    path: string,
-    content: string | Uint8Array,
-    context: Context,
-  ): Promise<Result<void, FileError>> {
-    if (content === "ALPHA\nbeta\n") {
-      this.firstEditWriteStarted.resolve();
-      await this.finishFirstEditWrite.promise;
-      const result = await super.writeFile(path, content, BACKGROUND_CONTEXT);
-      this.firstEditWriteSettled = true;
-      return result;
-    }
-    if (content === "ALPHA\nBETA\n" || content === "alpha\nBETA\n") {
-      this.secondEditWriteStarted = true;
-    }
-    return super.writeFile(path, content, context);
-  }
-}
-
-const TRUNCATED_OUTPUT_LINES = DEFAULT_MAX_LINES + 1;
-
-class TimeoutOutputExecutionEnv extends NodeExecutionEnv {
-  override async exec(
-    _command: string | readonly string[],
-    options: ShellExecOptions | undefined,
-    context: Context,
-  ): Promise<Result<ShellExecResult, ExecutionError>> {
-    const output = `${Array.from({ length: TRUNCATED_OUTPUT_LINES }, (_, index) => `line-${index + 1}`).join("\n")}\n`;
-    const spillPath = getOrThrow(
-      await this.createTempFile({ prefix: "timeout-", suffix: ".log" }, context),
-    );
-    getOrThrow(await this.writeFile(spillPath, output, context));
-    options?.onOutput?.(output, context, { stream: "stdout" });
-    const error = new ExecutionError("timeout", `timeout:${options?.timeout}`);
-    error.spillPath = spillPath;
-    return err(error);
-  }
 }
 
 describe("durable tools", () => {
@@ -209,7 +30,9 @@ describe("durable tools", () => {
       "No execution environment",
     );
   });
+});
 
+describe("durable tools", () => {
   describe("read", () => {
     it.each(["GIF87a", "GIF89a"])("detects the complete %s signature", (signature) => {
       expect(detectSupportedImageMimeType(Buffer.from(signature, "ascii"))).toBe("image/gif");
@@ -255,7 +78,11 @@ describe("durable tools", () => {
         outputLines: 2000,
       });
     });
+  });
+});
 
+describe("durable tools", () => {
+  describe("read", () => {
     it("does not count a trailing newline as an extra line at the truncation limit", async () => {
       const env = createEnv();
       getOrThrow(
@@ -298,11 +125,14 @@ describe("durable tools", () => {
         "Offset 100 is beyond end of file (3 lines total)",
       );
     });
+  });
+});
 
+describe("durable tools", () => {
+  describe("read", () => {
     it("reads a log that grows while it is read", async () => {
       const env = createEnv();
       getOrThrow(await env.writeFile("app.log", "one\ntwo\n", BACKGROUND_CONTEXT));
-      const logPath = join(env.cwd, "app.log");
       // Every read appends, as a busy writer would; the scanned lines stay as they were.
       const growing = Object.create(env) as NodeExecutionEnv;
       growing.openBinaryReader = async (path, options, context) => {
@@ -310,9 +140,9 @@ describe("durable tools", () => {
         if (!opened.ok) return opened;
         const reader = opened.value;
         const read = reader.read.bind(reader);
-        reader.read = async (position, length, readContext) => {
-          appendFileSync(logPath, "more\n");
-          return read(position, length, readContext);
+        reader.read = (position, length, readContext) => {
+          appendTempFile(env.cwd, "app.log", "more\n");
+          return Promise.resolve(read(position, length, readContext));
         };
         return opened;
       };
@@ -337,7 +167,9 @@ describe("durable tools", () => {
       expect(diagnosticText(result)).toBe("Read image file [image/png].");
     });
   });
+});
 
+describe("durable tools", () => {
   describe("write", () => {
     it("writes files and creates parent directories", async () => {
       const env = createEnv();
@@ -373,7 +205,9 @@ describe("durable tools", () => {
       expect(getOrThrow(await env.readTextFile("file.txt", BACKGROUND_CONTEXT))).toBe("second\n");
     });
   });
+});
 
+describe("durable tools", () => {
   describe("edit", () => {
     it("applies disjoint edits and returns both diff formats", async () => {
       const env = createEnv();
@@ -416,416 +250,6 @@ describe("durable tools", () => {
         edits: [edit, { oldText: "c", newText: "d" }],
       });
       expect(prepare({ path: "f", edits: "not json" })).toEqual({ path: "f", edits: "not json" });
-    });
-
-    it("matches all edits against the original and rejects overlaps", async () => {
-      const env = createEnv();
-      getOrThrow(await env.writeFile("edit.txt", "one\ntwo\nthree\n", BACKGROUND_CONTEXT));
-      await expect(
-        run(
-          createEditTool(),
-          {
-            path: "edit.txt",
-            edits: [
-              { oldText: "one\ntwo\n", newText: "ONE\nTWO\n" },
-              { oldText: "two\nthree\n", newText: "TWO\nTHREE\n" },
-            ],
-          },
-          env,
-        ),
-      ).rejects.toThrow(/overlap/);
-      expect(getOrThrow(await env.readTextFile("edit.txt", BACKGROUND_CONTEXT))).toBe(
-        "one\ntwo\nthree\n",
-      );
-    });
-
-    it("rejects missing and duplicate target text", async () => {
-      const env = createEnv();
-      getOrThrow(await env.writeFile("edit.txt", "foo foo foo", BACKGROUND_CONTEXT));
-      const tool = createEditTool();
-      await expect(
-        run(tool, { path: "edit.txt", edits: [{ oldText: "bar", newText: "baz" }] }, env),
-      ).rejects.toThrow(/Could not find the exact text/);
-      await expect(
-        run(tool, { path: "edit.txt", edits: [{ oldText: "foo", newText: "bar" }] }, env),
-      ).rejects.toThrow(/Found 3 occurrences/);
-    });
-
-    it("keeps the mutation queue locked until an aborted edit write settles", async () => {
-      const env = new BlockingEditExecutionEnv({ cwd: createTempDir() });
-      getOrThrow(await env.writeFile("file.txt", "alpha\nbeta\n", BACKGROUND_CONTEXT));
-      const tool = createEditTool();
-      const controller = new AbortController();
-      const firstEdit = run(
-        tool,
-        { path: "file.txt", edits: [{ oldText: "alpha", newText: "ALPHA" }] },
-        env,
-        withAbortSignal(controller.signal, BACKGROUND_CONTEXT),
-      );
-      await env.firstEditWriteStarted.promise;
-      controller.abort();
-      const secondEdit = run(
-        tool,
-        { path: "file.txt", edits: [{ oldText: "beta", newText: "BETA" }] },
-        env,
-      );
-      await delay(20);
-      expect(env.secondEditWriteStarted).toBe(false);
-      env.finishFirstEditWrite.resolve();
-      await expect(firstEdit).rejects.toThrow("Operation aborted");
-      await secondEdit;
-      expect(env.firstEditWriteSettled).toBe(true);
-      expect(getOrThrow(await env.readTextFile("file.txt", BACKGROUND_CONTEXT))).toBe(
-        "ALPHA\nBETA\n",
-      );
-    });
-
-    it("serializes concurrent edits through canonical and symlink paths", async () => {
-      const env = new SlowReadExecutionEnv({ cwd: createTempDir() });
-      getOrThrow(await env.writeFile("target.txt", "alpha\nbeta\ngamma\n", BACKGROUND_CONTEXT));
-      await symlink("target.txt", `${env.cwd}/link.txt`);
-      const tool = createEditTool();
-      await Promise.all([
-        run(tool, { path: "target.txt", edits: [{ oldText: "alpha", newText: "ALPHA" }] }, env),
-        run(tool, { path: "link.txt", edits: [{ oldText: "beta", newText: "BETA" }] }, env),
-      ]);
-      expect(getOrThrow(await env.readTextFile("target.txt", BACKGROUND_CONTEXT))).toBe(
-        "ALPHA\nBETA\ngamma\n",
-      );
-    });
-
-    it("serializes edits of one file across environment objects of one file system", async () => {
-      const dir = createTempDir();
-      const first = new SlowReadExecutionEnv({ cwd: dir });
-      const second = new SlowReadExecutionEnv({ cwd: dir });
-      getOrThrow(await first.writeFile("file.txt", "alpha\nbeta\n", BACKGROUND_CONTEXT));
-      const tool = createEditTool();
-      await Promise.all([
-        run(tool, { path: "file.txt", edits: [{ oldText: "alpha", newText: "ALPHA" }] }, first),
-        run(tool, { path: "file.txt", edits: [{ oldText: "beta", newText: "BETA" }] }, second),
-      ]);
-      expect(getOrThrow(await first.readTextFile("file.txt", BACKGROUND_CONTEXT))).toBe(
-        "ALPHA\nBETA\n",
-      );
-    });
-
-    it("serializes a new file created through a symlinked directory with its canonical path", async () => {
-      const env = new BlockingWriteExecutionEnv({ cwd: createTempDir() });
-      mkdirSync(`${env.cwd}/real`);
-      await symlink(`${env.cwd}/real`, `${env.cwd}/link`);
-      const tool = createWriteTool();
-      const first = run(tool, { path: "link/new.txt", content: "first\n" }, env);
-      await env.firstWriteStarted.promise;
-      const second = run(tool, { path: "real/new.txt", content: "second\n" }, env);
-      await delay(20);
-      expect(env.secondWriteStarted).toBe(false);
-      env.finishFirstWrite.resolve();
-      await Promise.all([first, second]);
-      expect(getOrThrow(await env.readTextFile("real/new.txt", BACKGROUND_CONTEXT))).toBe(
-        "second\n",
-      );
-    });
-
-    it.skipIf(process.platform === "win32")(
-      "keys a missing file whose name contains a backslash like the created file",
-      async () => {
-        const env = createEnv();
-        const created = deferred();
-        const release = deferred();
-        const first = withFileMutationQueue(
-          env,
-          "a\\b.txt",
-          async () => {
-            getOrThrow(await env.writeFile("a\\b.txt", "first\n", BACKGROUND_CONTEXT));
-            created.resolve();
-            await release.promise;
-          },
-          BACKGROUND_CONTEXT,
-        );
-        await created.promise;
-        let entered = false;
-        const second = withFileMutationQueue(
-          env,
-          "a\\b.txt",
-          async () => {
-            entered = true;
-          },
-          BACKGROUND_CONTEXT,
-        );
-        await delay(20);
-        expect(entered).toBe(false);
-        release.resolve();
-        await Promise.all([first, second]);
-        expect(entered).toBe(true);
-      },
-    );
-
-    it("does not serialize the same path on different file systems", async () => {
-      class OtherFileSystem extends BlockingWriteExecutionEnv {
-        override readonly id = "other";
-      }
-      const dir = createTempDir();
-      const local = new BlockingWriteExecutionEnv({ cwd: dir });
-      const other = new OtherFileSystem({ cwd: dir });
-      const tool = createWriteTool();
-      const blocked = run(tool, { path: "file.txt", content: "first\n" }, local);
-      await local.firstWriteStarted.promise;
-      await run(tool, { path: "file.txt", content: "second\n" }, other);
-      expect(other.secondWriteStarted).toBe(true);
-      local.finishFirstWrite.resolve();
-      await blocked;
-    });
-
-    it("edits regular files through symlinks", async () => {
-      const env = createEnv();
-      getOrThrow(await env.writeFile("target.txt", "before\n", BACKGROUND_CONTEXT));
-      await symlink("target.txt", `${env.cwd}/link.txt`);
-      await run(
-        createEditTool(),
-        { path: "link.txt", edits: [{ oldText: "before", newText: "after" }] },
-        env,
-      );
-      expect(getOrThrow(await env.readTextFile("target.txt", BACKGROUND_CONTEXT))).toBe("after\n");
-    });
-
-    it("preserves BOM and CRLF line endings", async () => {
-      const env = createEnv();
-      getOrThrow(await env.writeFile("edit.txt", "\uFEFFone\r\ntwo\r\n", BACKGROUND_CONTEXT));
-      await run(
-        createEditTool(),
-        { path: "edit.txt", edits: [{ oldText: "two", newText: "TWO" }] },
-        env,
-      );
-      expect(getOrThrow(await env.readTextFile("edit.txt", BACKGROUND_CONTEXT))).toBe(
-        "\uFEFFone\r\nTWO\r\n",
-      );
-    });
-  });
-
-  describe("powershell", () => {
-    /** An environment where only the listed programs exist; it records each command and prints `output`. */
-    function programsEnv(installed: readonly string[], output: string, exitCode = 0) {
-      const commands: (string | readonly string[])[] = [];
-      class ProgramsEnv extends NodeExecutionEnv {
-        override async exec(
-          command: string | readonly string[],
-          options: ShellExecOptions | undefined,
-          context: Context,
-        ): Promise<Result<ShellExecResult, ExecutionError>> {
-          commands.push(command);
-          if (typeof command === "string" || !installed.includes(command[0]!)) {
-            return err(new ExecutionError("spawn_error", `spawn ${command[0]} ENOENT`));
-          }
-          options?.onOutput?.(output, context, { stream: "stdout" });
-          return { ok: true, value: { exitCode } };
-        }
-      }
-      return { env: new ProgramsEnv({ cwd: createTempDir() }), commands };
-    }
-
-    it("runs the command with pwsh as one argument, forcing UTF-8 output", async () => {
-      const { env, commands } = programsEnv(["pwsh"], "héllo\n");
-      const result = await run(createPowerShellTool(), { command: "Write-Output 'héllo'" }, env);
-      expect(result.streamed.join("")).toBe("héllo\n");
-      expect(commands).toEqual([
-        [
-          "pwsh",
-          "-NoProfile",
-          "-NonInteractive",
-          "-ExecutionPolicy",
-          "Bypass",
-          "-Command",
-          "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\nWrite-Output 'héllo'",
-        ],
-      ]);
-    });
-
-    it("falls back to Windows PowerShell and reports the last start failure", async () => {
-      const windowsOnly = programsEnv(["powershell"], "ok");
-      const result = await run(
-        createPowerShellTool({ commandPrefix: "$x = 1" }),
-        { command: "$x" },
-        windowsOnly.env,
-      );
-      expect(result.streamed.join("")).toBe("ok");
-      expect(windowsOnly.commands.map((command) => command[0])).toEqual(["pwsh", "powershell"]);
-      expect(String(windowsOnly.commands[1]?.at(-1))).toMatch(/\n\$x = 1\n\$x$/);
-
-      const none = programsEnv([], "");
-      const failed = await runFailing(createPowerShellTool(), { command: "1" }, none.env);
-      expect(failed.error.message).toBe("spawn powershell ENOENT");
-    });
-
-    it("answers a nonzero exit with an error result carrying the exit code", async () => {
-      const { env } = programsEnv(["pwsh"], "partial", 3);
-      const result = await run(createPowerShellTool(), { command: "exit 3" }, env);
-      expect(result).toMatchObject({
-        isError: true,
-        structuredOutput: { output: "partial", truncated: false, exitCode: 3 },
-        diagnostics: [
-          { severity: "error", code: "exit_code", message: "Command exited with code 3" },
-        ],
-      });
-      expect(result.streamed.join("")).toBe("partial");
-    });
-
-    it.runIf(process.platform === "win32")("runs real PowerShell with UTF-8 output", async () => {
-      const result = await run(
-        createPowerShellTool(),
-        { command: "Write-Output ('h' + [char]0xe9 + 'llo'); exit 0" },
-        createEnv(),
-      );
-      expect(result.streamed.join("").trim()).toBe("héllo");
-    });
-  });
-
-  describe("bash", () => {
-    it("passes the retained window to the environment and forwards what it skipped", async () => {
-      const window: ShellOutputWindow = {
-        maxBytes: 4,
-        maxLines: 1,
-        minIntervalMs: 100,
-        bytesPerSecond: 1024,
-      };
-      const skipped: ShellOutputSkip = { bytes: 6, newlines: 2, endsWithNewline: true };
-      let received: ShellOutputWindow | undefined;
-      class SkippingEnv extends NodeExecutionEnv {
-        override async exec(
-          _command: string | readonly string[],
-          options: ShellExecOptions | undefined,
-          context: Context,
-        ): Promise<Result<ShellExecResult, ExecutionError>> {
-          received = options?.window;
-          options?.onOutput?.("tail\n", context, { stream: "stdout", skipped });
-          return { ok: true, value: { exitCode: 0 } };
-        }
-      }
-      const calls: [string, ShellOutputSkip | undefined][] = [];
-      const api = {
-        ...fakeApi(new SkippingEnv({ cwd: createTempDir() })).api,
-        outputWindow: window,
-        output: (chunk: string | Uint8Array, skip?: ShellOutputSkip) =>
-          calls.push([String(chunk), skip]),
-      } as ToolExecutionApi;
-      await createBashTool().execute({ command: "anything" }, api, BACKGROUND_CONTEXT);
-      expect(received).toEqual(window);
-      expect(calls).toEqual([["tail\n", skipped]]);
-    });
-
-    it("streams combined stdout and stderr, returns no output of its own, and repeats it with the exit code", async () => {
-      const result = await run(
-        createBashTool(),
-        { command: "printf out; printf err >&2" },
-        createEnv(),
-      );
-      expect(result.streamed.join("")).toContain("out");
-      expect(result.streamed.join("")).toContain("err");
-      expect(result.output).toBeUndefined();
-      expect(result.structuredOutput).toEqual({
-        output: result.streamed.join(""),
-        truncated: false,
-        exitCode: 0,
-      });
-    });
-
-    it("answers a nonzero exit with an error result, and throws on a timeout, after streaming the output", async () => {
-      const env = createEnv();
-      const tool = createBashTool();
-      const failed = await run(tool, { command: "printf failed; exit 7" }, env);
-      expect(failed).toMatchObject({
-        isError: true,
-        structuredOutput: { output: "failed", truncated: false, exitCode: 7 },
-        diagnostics: [{ code: "exit_code", message: "Command exited with code 7" }],
-      });
-      expect(failed.streamed.join("")).toBe("failed");
-      const slow = await runFailing(tool, { command: "sleep 2", timeout: 0.01 }, env);
-      expect(slow.error.message).toBe("Command timed out after 0.01 seconds");
-    });
-
-    it("reports the spill of a command that times out", async () => {
-      const env = new TimeoutOutputExecutionEnv({ cwd: createTempDir() });
-      const failed = await runFailing(
-        createBashTool(),
-        { command: "emit-output-then-time-out", timeout: 0.05 },
-        env,
-      );
-      expect(failed.error.message).toBe("Command timed out after 0.05 seconds");
-      const fullOutputPath = failed.reported[0]?.message.match(/^Full output: (.+)$/)?.[1];
-      expect(fullOutputPath).toBeDefined();
-      const fullOutput = getOrThrow(await env.readTextFile(fullOutputPath!, BACKGROUND_CONTEXT));
-      expect(fullOutput).toContain("line-1\nline-2");
-      expect(fullOutput).toContain(`line-${DEFAULT_MAX_LINES}\nline-${TRUNCATED_OUTPUT_LINES}`);
-    });
-
-    it("prepares command, cwd, and an explicit environment with the call's api", async () => {
-      const env = new NodeExecutionEnv({
-        cwd: createTempDir(),
-        shellEnv: { MSA_BASH_PREPARE_INHERITED: "inherited" },
-      });
-      getOrThrow(await env.createDir("workspace", undefined, BACKGROUND_CONTEXT));
-      const workspace = `${env.cwd}/workspace`;
-      const controller = new AbortController();
-      let receivedEnv: ExecutionEnv | undefined;
-      let receivedSignal: AbortSignal | undefined;
-      const tool = createBashTool({
-        commandPrefix: "prefix=ready",
-        prepare: async (execution, api, callContext) => {
-          receivedEnv = api.env;
-          receivedSignal = callContext.abortSignal;
-          execution.cwd = workspace;
-          execution.env = { MSA_BASH_PREPARE_EXPLICIT: "explicit" };
-          execution.inheritEnv = false;
-          execution.command += `\n: > prepared-cwd\nprintf '%s:%s:%s' "$prefix" "\${MSA_BASH_PREPARE_INHERITED-}" "$MSA_BASH_PREPARE_EXPLICIT"`;
-          // Git Bash on Windows reports $PWD as an MSYS path, so only POSIX compares it.
-          if (process.platform !== "win32") execution.command += `\nprintf ':%s' "$PWD"`;
-        },
-      });
-      const result = await run(
-        tool,
-        { command: ":" },
-        env,
-        withAbortSignal(controller.signal, BACKGROUND_CONTEXT),
-      );
-      expect(receivedEnv).toBe(env);
-      expect(receivedSignal).toBe(controller.signal);
-      const pwd =
-        process.platform === "win32"
-          ? ""
-          : `:${getOrThrow(await env.canonicalPath(workspace, BACKGROUND_CONTEXT))}`;
-      expect(result.streamed.join("")).toBe(`ready::explicit${pwd}`);
-      expect(getOrThrow(await env.exists(`${workspace}/prepared-cwd`, BACKGROUND_CONTEXT))).toBe(
-        true,
-      );
-    });
-
-    it("supports command prefixes", async () => {
-      const result = await run(
-        createBashTool({ commandPrefix: "value=hello" }),
-        { command: "printf $value" },
-        createEnv(),
-      );
-      expect(result.streamed.join("")).toBe("hello");
-    });
-
-    it("streams every byte and spills complete output beyond the default limits", async () => {
-      const env = createEnv();
-      const result = await run(
-        createBashTool(),
-        { command: "i=1; while [ $i -le 3000 ]; do echo line-$i; i=$((i + 1)); done" },
-        env,
-      );
-      const expected = Array.from({ length: 3000 }, (_, index) => `line-${index + 1}\n`).join("");
-      expect(result.streamed.join("")).toBe(expected);
-      const fullOutputPath = result.reported[0]?.message.match(/^Full output: (.+)$/)?.[1];
-      expect(fullOutputPath).toBeDefined();
-      expect(getOrThrow(await env.readTextFile(fullOutputPath!, BACKGROUND_CONTEXT))).toBe(
-        expected,
-      );
-    });
-
-    it("does not spill output within the limits", async () => {
-      const result = await run(createBashTool(), { command: "printf small" }, createEnv());
-      expect(result.reported).toEqual([]);
     });
   });
 });

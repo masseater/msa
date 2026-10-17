@@ -24,9 +24,7 @@ const prompt = process.argv[2] ?? "What is in this directory?";
 
 const models = createModels();
 let model = { provider: "openai", modelId: "gpt-6-sol" };
-if (process.env["OPENAI_API_KEY"] !== undefined) {
-  models.setProvider(openaiProvider());
-} else {
+if (process.env["OPENAI_API_KEY"] === undefined) {
   const faux = fauxProvider();
   models.setProvider(faux.provider);
   model = { provider: "faux", modelId: "faux-1" };
@@ -38,6 +36,8 @@ if (process.env["OPENAI_API_KEY"] !== undefined) {
       fauxText("This directory holds the durable package sources, tests, and docs."),
     ]),
   ]);
+} else {
+  models.setProvider(openaiProvider());
 }
 
 const registry = createRegistry();

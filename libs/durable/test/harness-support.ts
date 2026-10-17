@@ -31,11 +31,11 @@ export function tool(name: string, description = `${name} tool`): ToolRegistrati
     name,
     description,
     parameters: Type.Object({}),
-    execute: async () => ({ output: [] }),
+    execute: () => Promise.resolve({ output: [] }),
   });
 }
 
-/** Open a Harness with a fresh registry holding the named tools. */
+// Open a Harness with a fresh registry holding the named tools.
 export async function openHarness(
   storage: Storage,
   toolNames: readonly string[] = [],
@@ -106,7 +106,7 @@ export function system(sections: Record<string, string | null>): SystemMessage {
   return { role: "system", content: "", sections, timestamp: 4 };
 }
 
-/** Compact message rendering for assertions. */
+// Compact message rendering for assertions.
 export function describeMessage(message: Message): string {
   switch (message.role) {
     case "user":
@@ -135,7 +135,7 @@ function installOne<Tool extends ToolRegistration>(
   return { dispose: () => registry.uninstall(extension) };
 }
 
-/** Install a one-tool extension named after the tool. */
+// Install a one-tool extension named after the tool.
 export function addTool<Tool extends ToolRegistration>(
   registry: Registry<Tool>,
   tool: Tool,
@@ -144,7 +144,7 @@ export function addTool<Tool extends ToolRegistration>(
   return installOne(registry, defineExtension<Tool>({ name, tools: [tool] }));
 }
 
-/** Install a one-task extension named after the task. */
+// Install a one-task extension named after the task.
 export function addTask(
   registry: Registry,
   task: AnyTask,
@@ -155,7 +155,7 @@ export function addTask(
 
 let hookExtensions = 0;
 
-/** Install an extension with one hook registration for `task`. */
+// Install an extension with one hook registration for `task`.
 export function addHooks<K extends AnyTask>(
   registry: Registry,
   task: K,
@@ -165,7 +165,7 @@ export function addHooks<K extends AnyTask>(
   return installOne(registry, defineExtension({ name, hooks: [hook(task, handlers)] }));
 }
 
-/** Install a one-section extension named after the section. */
+// Install a one-section extension named after the section.
 export function addSection<Tool extends ToolRegistration = ToolRegistration>(
   registry: Registry<Tool>,
   key: string,

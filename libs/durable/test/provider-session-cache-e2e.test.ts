@@ -2,6 +2,7 @@ import { type AssistantMessage, type Model, type Models, normalizeContext, uuidv
 import { builtinModels } from "@msa/ai/providers/all";
 import {
   AssistantEntry,
+  type Conversation,
   type ConversationId,
   createRegistry,
   type EntryId,
@@ -40,9 +41,60 @@ function assistant(harness: Harness, conversationId: ConversationId, answer: Ent
     });
 }
 
+// Send the cache probe, then follow-ups until three in a row after the first prompt-cache hit, at most eight turns.
+async function promptUntilCached(harness: Harness, root: Conversation) {
+  const usages: AssistantMessage["usage"][] = [];
+  const hits: { firstHit?: number } = {};
+  for await (const turn of Array.from({ length: 8 }, (_, i) => i)) {
+    const content =
+      turn === 0 ? cacheProbe(uuidv7()) : `Reply exactly: CACHE PROBE FOLLOW-UP ${turn}`;
+    const settled = await (await root.submit({ type: "input", content }, context)).wait(context);
+    if (settled.status !== "done" || settled.type !== "input") {
+      throw new Error(`Unexpected submission status: ${settled.status}`);
+    }
+    const message = await assistant(harness, root.id, settled.answer);
+    expect(message?.stopReason, message?.errorMessage).not.toBe("error");
+    usages.push(message!.usage);
+    if (hits.firstHit === undefined && message!.usage.cacheRead > 0)
+      hits.firstHit = usages.length - 1;
+    if (hits.firstHit !== undefined && usages.length - hits.firstHit >= 3) break;
+  }
+  return { usages, firstHit: hits.firstHit };
+}
+
 function cacheHitRate(usage: AssistantMessage["usage"]): number {
   const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
   return promptTokens === 0 ? 0 : usage.cacheRead / promptTokens;
+}
+
+function forwardingCodexModels() {
+  const base = builtinModels();
+  const forwarded: string[] = [];
+  const models = new Proxy(base, {
+    get(target, property) {
+      if (property === "streamSimple") {
+        return (
+          model: Parameters<Models["streamSimple"]>[0],
+          request: Parameters<Models["streamSimple"]>[1],
+          options?: Parameters<Models["streamSimple"]>[2],
+        ) => {
+          forwarded.push(options?.sessionId ?? "");
+          return streamSimpleOpenAICodexResponses(
+            model as Model<"openai-codex-responses">,
+            normalizeContext(request),
+            {
+              ...options,
+              ...(codexToken === undefined ? {} : { apiKey: codexToken }),
+              transport: "sse",
+            },
+          );
+        };
+      }
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as Models;
+  return { forwarded, models };
 }
 
 describe("Durable provider session cache e2e", () => {
@@ -51,32 +103,7 @@ describe("Durable provider session cache e2e", () => {
     "reuses the Codex prompt cache across Durable turns",
     { retry: 2, timeout: 120_000 },
     async () => {
-      const base = builtinModels();
-      const forwarded: string[] = [];
-      const models = new Proxy(base, {
-        get(target, property) {
-          if (property === "streamSimple") {
-            return (
-              model: Parameters<Models["streamSimple"]>[0],
-              request: Parameters<Models["streamSimple"]>[1],
-              options?: Parameters<Models["streamSimple"]>[2],
-            ) => {
-              forwarded.push(options?.sessionId ?? "");
-              return streamSimpleOpenAICodexResponses(
-                model as Model<"openai-codex-responses">,
-                normalizeContext(request),
-                {
-                  ...options,
-                  ...(codexToken === undefined ? {} : { apiKey: codexToken }),
-                  transport: "sse",
-                },
-              );
-            };
-          }
-          const value = Reflect.get(target, property, target);
-          return typeof value === "function" ? value.bind(target) : value;
-        },
-      }) as Models;
+      const { forwarded, models } = forwardingCodexModels();
       const harness = await Harness.open(
         new MemoryStorage(),
         {
@@ -94,23 +121,7 @@ describe("Durable provider session cache e2e", () => {
           agent: { model: { provider: "openai-codex", modelId: "gpt-5.5" } },
         });
         harness.resume();
-        const usages: AssistantMessage["usage"][] = [];
-        let firstHit: number | undefined;
-        for (let turn = 0; turn < 8; turn++) {
-          const content =
-            turn === 0 ? cacheProbe(uuidv7()) : `Reply exactly: CACHE PROBE FOLLOW-UP ${turn}`;
-          const settled = await (
-            await root.submit({ type: "input", content }, context)
-          ).wait(context);
-          if (settled.status !== "done" || settled.type !== "input") {
-            throw new Error(`Unexpected submission status: ${settled.status}`);
-          }
-          const message = await assistant(harness, root.id, settled.answer);
-          expect(message?.stopReason, message?.errorMessage).not.toBe("error");
-          usages.push(message!.usage);
-          if (firstHit === undefined && message!.usage.cacheRead > 0) firstHit = usages.length - 1;
-          if (firstHit !== undefined && usages.length - firstHit >= 3) break;
-        }
+        const { usages, firstHit } = await promptUntilCached(harness, root);
         const sessionId = (await harness.snapshot(ProviderDoc, root.id, context))!.sessionId;
         expect(forwarded).toEqual(Array.from({ length: usages.length }, () => sessionId));
         const firstPrompt = usages[0]!.input + usages[0]!.cacheRead + usages[0]!.cacheWrite;

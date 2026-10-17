@@ -66,7 +66,9 @@ describe("Session document states", () => {
     expect(state.value).toBe(await session.snapshot(StateDoc, context));
     state.dispose();
   });
+});
 
+describe("Session document states", () => {
   it("creates independent disposable states for one incarnation", async () => {
     const { session } = await createState();
     const first = (await session.documentState(StateDoc, context))!;
@@ -115,7 +117,9 @@ describe("Session document states", () => {
     expect(deliveries).toEqual([0]);
     state.dispose();
   });
+});
 
+describe("Session document states", () => {
   it("publishes null retirement and never follows a replacement incarnation", async () => {
     const { session } = await createState();
     const oldState = (await session.documentState(StateDoc, context))!;
@@ -137,7 +141,9 @@ describe("Session document states", () => {
     oldState.dispose();
     replacement.dispose();
   });
+});
 
+describe("Session document states", () => {
   it("cold-loads a definition-free fork copy", async () => {
     const Copied = defineDoc<{ value: number }>({
       kind: "state.copied",
@@ -165,7 +171,9 @@ describe("Session document states", () => {
     expect(storage.documentReadCount).toBeGreaterThan(reads);
     state.dispose();
   });
+});
 
+describe("Session document states", () => {
   it("hydrates a migrated tracker without writing and skips an equal version-base update", async () => {
     const Old = defineDoc<{ value: number }>({
       kind: "state.migration",
@@ -200,7 +208,9 @@ describe("Session document states", () => {
     expect(state.value).toEqual({ value: 4, migrated: true });
     state.dispose();
   });
+});
 
+describe("Session document states", () => {
   it("continues from exact committed values after the tracker cache unloads", async () => {
     const { session, storage } = await createState();
     const state = (await session.documentState(StateDoc, context))!;

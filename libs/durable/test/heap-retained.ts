@@ -2,7 +2,7 @@
 // collector has not compacted yet, which hides a small leak or invents a large one.
 import { Session } from "node:inspector/promises";
 
-/** Sum of the self sizes of every object in a fresh heap snapshot, which collects garbage first. */
+// Sum of the self sizes of every object in a fresh heap snapshot, which collects garbage first.
 export async function retainedBytes(): Promise<number> {
   const inspector = new Session();
   inspector.connect();

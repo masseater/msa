@@ -22,7 +22,7 @@ function tool(
     name,
     description,
     parameters: Type.Object({ path: Type.String({ description: "File path" }) }),
-    execute: async () => ({ output: [] }),
+    execute: () => Promise.resolve({ output: [] }),
     ...extra,
   });
 }
@@ -73,7 +73,9 @@ describe("code mode description and section", () => {
     expect(codemodeSection([...github], [GITHUB], 10)!).toContain("## github (tools not listed)");
     expect(codemodeSection([], [GITHUB], 3000)).toBeUndefined();
   });
+});
 
+describe("code mode description and section", () => {
   it("uses the longest matching namespace prefix", () => {
     const section = codemodeSection(
       [tool("mcp__github__x", "x")],

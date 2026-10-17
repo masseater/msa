@@ -1,0 +1,280 @@
+import { spawnSync } from "node:child_process";
+
+import { createNodePhotonImages } from "@msa/durable/images/node";
+import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
+
+import { exifOrientation } from "../src/images/exif.ts";
+import {
+  DEFAULT_IMAGE_LIMITS,
+  type ImageProcessor,
+  toBase64,
+} from "../src/tools/image-processor.ts";
+import { imageDimensions } from "../src/tools/image.ts";
+import {
+  decodedImage,
+  noisyPng,
+  encodeRgba,
+  gif,
+  encode,
+  withOrientation,
+  EXIF_HEADER,
+  setUpImages,
+  tiff,
+} from "./tools-images-fixtures-support.ts";
+import { removeImageDirectory } from "./tools-images-support.ts";
+
+let processor: ImageProcessor;
+
+beforeAll(async () => {
+  processor = await setUpImages();
+});
+
+afterAll(removeImageDirectory);
+
+type Rgb = readonly [number, number, number];
+
+// A `width` by `height` image of `block`-pixel squares coloured row by row from `colors`.
+function blocks(
+  colors: readonly (readonly Rgb[])[],
+  block: number,
+): { rgba: Uint8Array; width: number; height: number } {
+  const width = colors[0]!.length * block;
+  const height = colors.length * block;
+  const rgba = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      rgba.set(
+        [...colors[Math.floor(y / block)]![Math.floor(x / block)]!, 255],
+        (y * width + x) * 4,
+      );
+    }
+  }
+  return { rgba, width, height };
+}
+
+// A RIFF WEBP file with one chunk of `type` holding `data`.
+function webp(type: string, data: number[]): Uint8Array {
+  return new Uint8Array([
+    ...Buffer.from("RIFF"),
+    0,
+    0,
+    0,
+    0,
+    ...Buffer.from("WEBP"),
+    ...Buffer.from(type),
+    0,
+    0,
+    0,
+    0,
+    ...data,
+    ...new Array(16).fill(0),
+  ]);
+}
+
+// A RIFF WebP with a dummy `VP8 ` chunk and an `EXIF` chunk saying `orientation`, its TIFF data bare or prefixed.
+function webpWithOrientation(orientation: number, prefixed: boolean): Uint8Array {
+  const chunk = (type: string, data: number[]): number[] => {
+    const size = data.length;
+    const padding = size % 2 === 1 ? [0] : [];
+    return [...Buffer.from(type), size & 0xff, (size >> 8) & 0xff, 0, 0, ...data, ...padding];
+  };
+  const exif = [...(prefixed ? EXIF_HEADER : []), ...tiff(orientation, true)];
+  const body = [...Buffer.from("WEBP"), ...chunk("VP8 ", [1, 2, 3]), ...chunk("EXIF", exif)];
+  return new Uint8Array([
+    ...Buffer.from("RIFF"),
+    body.length & 0xff,
+    (body.length >> 8) & 0xff,
+    0,
+    0,
+    ...body,
+  ]);
+}
+
+const R: Rgb = [255, 0, 0];
+
+const G: Rgb = [0, 255, 0];
+
+const B: Rgb = [0, 0, 255];
+
+const W: Rgb = [255, 255, 255];
+
+const K: Rgb = [0, 0, 0];
+
+const Y: Rgb = [255, 255, 0];
+
+const stored = [
+  [R, G, B],
+  [W, K, Y],
+];
+
+const mirror = <T>(grid: readonly (readonly T[])[]): T[][] => grid.map((row) => [...row].reverse());
+
+// A quarter turn clockwise: the left column, read bottom to top, becomes the top row.
+const turn = <T>(grid: readonly (readonly T[])[]): T[][] =>
+  grid[0]!.map((_, x) => grid.map((row) => row[x]!).reverse());
+
+// What each orientation shows, from its EXIF definition: mirror, then turn clockwise.
+const upright: Record<number, Rgb[][]> = {
+  1: stored.map((row) => [...row]),
+  2: mirror(stored),
+  3: turn(turn(stored)),
+  4: turn(turn(mirror(stored))),
+  5: turn(turn(turn(mirror(stored)))),
+  6: turn(stored),
+  7: turn(mirror(stored)),
+  8: turn(turn(turn(stored))),
+};
+
+describe("EXIF orientation", () => {
+  it.each(Array.from({ length: 8 }, (_, i) => i + 1))(
+    "turns orientation %i upright",
+    async (orientation) => {
+      const { rgba, width, height } = blocks(stored, 16);
+      const jpeg = withOrientation(encodeRgba(rgba, width, height, "jpeg"), orientation);
+      const prepared = await processor.prepare(jpeg, "image/jpeg", DEFAULT_IMAGE_LIMITS);
+      const image = decodedImage(prepared!.data);
+      const expected = upright[orientation]!;
+      expect({ width: image.width, height: image.height }).toEqual({
+        width: expected[0]!.length * 16,
+        height: expected.length * 16,
+      });
+      // The colour at the centre of each block, rounded to full channels against JPEG noise.
+      const seen = expected.map((row, by) =>
+        row.map((_, bx) => {
+          const at = ((by * 16 + 8) * image.width + bx * 16 + 8) * 4;
+          return [...image.rgba.subarray(at, at + 3)].map((channel) => (channel > 127 ? 255 : 0));
+        }),
+      );
+      expect(seen).toEqual(expected);
+    },
+  );
+
+  it("reads big- and little-endian JPEG EXIF, after an APP0 segment, and 1 when absent or out of range", () => {
+    const jpeg = encode(2, 2, "jpeg");
+    expect(exifOrientation(withOrientation(jpeg, 6))).toBe(6);
+    expect(exifOrientation(withOrientation(jpeg, 8, { little: true }))).toBe(8);
+    expect(exifOrientation(withOrientation(jpeg, 5, { app0: true }))).toBe(5);
+    expect(exifOrientation(withOrientation(jpeg, 9))).toBe(1);
+    expect(exifOrientation(jpeg)).toBe(1);
+    expect(exifOrientation(encode(2, 2, "png"))).toBe(1);
+  });
+
+  it("reads WebP EXIF chunks with and without the Exif prefix", () => {
+    expect(exifOrientation(webpWithOrientation(6, false))).toBe(6);
+    expect(exifOrientation(webpWithOrientation(3, true))).toBe(3);
+  });
+});
+
+describe("imageDimensions", () => {
+  it("reads the size each format declares in its header", () => {
+    expect(imageDimensions(encode(7, 5, "png"), "image/png")).toEqual({ width: 7, height: 5 });
+    expect(imageDimensions(encode(7, 5, "jpeg"), "image/jpeg")).toEqual({ width: 7, height: 5 });
+    expect(
+      imageDimensions(withOrientation(encode(7, 5, "jpeg"), 6, { app0: true }), "image/jpeg"),
+    ).toEqual({
+      width: 7,
+      height: 5,
+    });
+    expect(imageDimensions(gif(300, 200), "image/gif")).toEqual({ width: 300, height: 200 });
+    // VP8: frame tag, start code, then 14-bit width and height.
+    expect(
+      imageDimensions(
+        webp("VP8 ", [0, 0, 0, 0x9d, 0x01, 0x2a, 0x2c, 0x01, 0xc8, 0x00]),
+        "image/webp",
+      ),
+    ).toEqual({
+      width: 300,
+      height: 200,
+    });
+    // VP8L: signature, then width - 1 and height - 1 in 14 bits each.
+    const bits = 299 | (199 << 14);
+    expect(
+      imageDimensions(
+        webp("VP8L", [0x2f, bits & 0xff, (bits >> 8) & 0xff, (bits >> 16) & 0xff, bits >>> 24]),
+        "image/webp",
+      ),
+    ).toEqual({ width: 300, height: 200 });
+    // VP8X: flags, then width - 1 and height - 1 in 24 bits each.
+    expect(
+      imageDimensions(webp("VP8X", [0, 0, 0, 0, 0x2b, 0x01, 0, 0xc7, 0, 0]), "image/webp"),
+    ).toEqual({
+      width: 300,
+      height: 200,
+    });
+    expect(imageDimensions(new Uint8Array([0xff, 0xd8, 0xff]), "image/jpeg")).toBeUndefined();
+  });
+});
+
+describe("toBase64", () => {
+  it("matches Buffer for every remainder length", () => {
+    for (const length of [0, 1, 2, 3, 4, 5, 8191, 8192, 8193, 10_000, 16_385]) {
+      const bytes = Uint8Array.from({ length }, (_, index) => (index * 37) % 256);
+      expect(toBase64(bytes)).toBe(Buffer.from(bytes).toString("base64"));
+    }
+  });
+
+  // #10923: building the output a character at a time took 138 MB of heap for a 3 MiB image.
+  it("encodes a 3 MiB image within a 128 MB heap", () => {
+    const source = new URL("../src/tools/image-processor.ts", import.meta.url).href;
+    const script = `
+			const { toBase64 } = await import(${JSON.stringify(source)});
+			const bytes = Uint8Array.from({ length: 3147295 }, (_, index) => (index * 37) % 256);
+			if (toBase64(bytes) !== Buffer.from(bytes).toString("base64")) throw new Error("mismatch");
+		`;
+    const args = [
+      "--experimental-strip-types",
+      "--max-heap-size=128",
+      "--input-type=module",
+      "-e",
+      script,
+    ];
+    const result = spawnSync(process.execPath, args, { encoding: "utf8" });
+    expect(result.stderr).not.toMatch(/heap out of memory|mismatch/u);
+    expect(result.status).toBe(0);
+  }, 20_000);
+});
+
+describe("createNodePhotonImages", () => {
+  it("prepares in a worker thread, leaving the event loop free", async () => {
+    const photo = noisyPng(3000, 2000);
+    const prepareOn = async (images: ImageProcessor): Promise<number> => {
+      // The longest gap between timer ticks while the image is prepared: the time the event loop was blocked.
+      let longest = 0;
+      let last = performance.now();
+      const ticks = setInterval(() => {
+        const now = performance.now();
+        longest = Math.max(longest, now - last);
+        last = now;
+      }, 5);
+      try {
+        const prepared = images.prepare(photo, "image/png", DEFAULT_IMAGE_LIMITS);
+        expect(await prepared).toBeDefined();
+        // Counted until the result arrived, including the gap the last tick did not see.
+        longest = Math.max(longest, performance.now() - last);
+      } finally {
+        clearInterval(ticks);
+      }
+      return longest;
+    };
+    const inline = await prepareOn(await createNodePhotonImages({ worker: false }));
+    const threaded = await prepareOn(processor);
+    // Compared with each other, not with fixed times: a busy machine stretches every gap.
+    expect(inline).toBeGreaterThan(200);
+    expect(threaded).toBeLessThan(inline / 4);
+  }, 60_000);
+
+  it("gives the same result as the calling thread, and keeps the caller's bytes", async () => {
+    // A small byte limit sends a small image through re-encoding and shrinking, as a large one would.
+    const limits = { ...DEFAULT_IMAGE_LIMITS, maxBytes: 20_000 };
+    const png = noisyPng(200, 200);
+    const copy = png.slice();
+    const threaded = await processor.prepare(png, "image/png", limits);
+    const inline = await (
+      await createNodePhotonImages({ worker: false })
+    ).prepare(png, "image/png", limits);
+    expect(threaded?.mimeType).toBe("image/jpeg");
+    expect(threaded?.resized?.from).toEqual({ width: 200, height: 200 });
+    expect(threaded).toEqual(inline);
+    expect(png).toEqual(copy);
+  });
+});

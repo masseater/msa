@@ -19,7 +19,10 @@ import {
 } from "../../src/index.ts";
 
 const context = BACKGROUND_CONTEXT;
-const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const pause = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 // A tool that prints a line every 100 ms, then a slowly streamed answer.
 const registry = createRegistry();
@@ -32,7 +35,7 @@ registry.install(
         description: "Counts to ten",
         parameters: Type.Object({}),
         execute: async (_args, api) => {
-          for (let n = 1; n <= 10; n++) {
+          for await (const n of Array.from({ length: 10 }, (_, i) => 1 + i)) {
             api.output(`${n}\n`);
             await pause(100);
           }
@@ -81,7 +84,7 @@ console.log(
   stream.snapshot.tools.map((slot) => `${slot.name} ${slot.status}`),
 );
 let output = stream.snapshot.tools[0]?.output ?? "";
-stream.start(async (events: readonly AgentEvent[]) => {
+stream.start((events: readonly AgentEvent[]) => {
   for (const event of events) {
     if (event.type === "tool_execution_update" && event.output !== undefined) {
       output =
@@ -98,6 +101,8 @@ stream.start(async (events: readonly AgentEvent[]) => {
       console.log("event:", event.type);
     }
   }
+
+  return Promise.resolve();
 });
 
 await submission.wait(context);

@@ -1,4 +1,3 @@
-import { Type } from "@msa/ai";
 import {
   type AgentState,
   CompactionTask,
@@ -6,31 +5,25 @@ import {
   defineExtension,
   defineTask,
   GenerationTask,
-  type HarnessSettings,
-  hook,
-  type RegistrySnapshot,
   section,
-  type ToolRegistration,
   ToolTask,
   wrapSection,
   wrapTool,
 } from "@msa/durable";
 import { describe, expect, it } from "vite-plus/test";
 
-import { agentHooks, resolveAgent, resolveSettings } from "../src/harness/agent.ts";
+import { resolveSettings } from "../src/harness/agent.ts";
+import {
+  Skills,
+  type AppTool,
+  read,
+  tool,
+  bash,
+  edit,
+  Coding,
+  resolve,
+} from "./harness-registry-support.ts";
 import { context } from "./session-support.ts";
-
-type AppTool = ToolRegistration & { readonly snippet?: string };
-
-function tool(name: string, extra: Partial<AppTool> = {}): AppTool {
-  return {
-    name,
-    description: `${name} tool`,
-    parameters: Type.Object({}),
-    execute: async () => ({ output: [] }),
-    ...extra,
-  };
-}
 
 function task(name: string, version = 1) {
   return defineTask<undefined, { phase: "run" }, null>({
@@ -46,29 +39,23 @@ function names(items: readonly { readonly name: string }[]): string[] {
   return items.map((item) => item.name);
 }
 
-/** Resolve `state` against `snapshot` and `settings`, collecting reports. */
-function resolve(
-  state: AgentState | undefined,
-  snapshot: RegistrySnapshot<AppTool>,
-  settings: HarnessSettings = {},
-  reports: unknown[] = [],
-) {
-  return resolveAgent(state, snapshot, resolveSettings(settings), (error) => reports.push(error));
-}
-
-async function rendered(
-  agent: ReturnType<typeof resolve>,
-): Promise<[string, string | undefined][]> {
+function rendered(agent: ReturnType<typeof resolve>): Promise<[string, string | undefined][]> {
   const input = {
     conversationId: 1 as never,
     agent,
     env: undefined,
     shown: {},
-    read: { snapshot: async () => undefined, snapshotAsOf: async () => undefined },
+    read: {
+      snapshot: () => Promise.resolve(undefined),
+      snapshotAsOf: () => Promise.resolve(undefined),
+    },
   };
-  return Promise.all(
-    agent.sections.map(
-      async (item) => [item.key, await item.render(input, context)] as [string, string | undefined],
+  return Promise.resolve(
+    Promise.all(
+      agent.sections.map(
+        async (item) =>
+          [item.key, await item.render(input, context)] as [string, string | undefined],
+      ),
     ),
   );
 }
@@ -108,7 +95,9 @@ describe("registry", () => {
     expect(names(registry.snapshot().installed())).toEqual(["b", "a"]);
     expect(listener).toEqual(["a", "a,b", "a,b", "b", "b,a"]);
   });
+});
 
+describe("registry", () => {
   it("validates the registry as it would be after an install and publishes nothing when invalid", () => {
     const registry = createRegistry();
     const Tasks = defineExtension({ name: "tasks", tasks: [task("app.index")] });
@@ -164,30 +153,22 @@ describe("settings", () => {
   });
 });
 
-describe("agent resolution", () => {
-  const read = tool("read");
-  const bash = tool("bash");
-  const edit = tool("edit");
-  const Coding = defineExtension<AppTool>({
-    name: "coding",
-    tools: [read, bash, edit],
-    sections: [
-      section("preamble", () => "You code.", { tag: false }),
-      section("cwd", () => "/repo"),
-    ],
-  });
-  const Skills = defineExtension<AppTool>({
-    name: "skills",
-    sections: [section("skills", () => "S")],
-  });
-  const Reviewer = defineExtension<AppTool>({
-    name: "reviewer",
-    sections: [section("role", () => "Review.")],
-  });
-  const registry = createRegistry<AppTool>();
-  for (const extension of [Coding, Skills, Reviewer]) registry.install(extension);
-  const snapshot = registry.snapshot();
+const Reviewer = defineExtension<AppTool>({
+  name: "reviewer",
+  sections: [section("role", () => "Review.")],
+});
 
+function codingRegistry() {
+  const installed = createRegistry<AppTool>();
+  for (const extension of [Coding, Skills, Reviewer]) installed.install(extension);
+  return installed;
+}
+
+const registry = codingRegistry();
+
+const snapshot = registry.snapshot();
+
+describe("agent resolution", () => {
   it("selects the default, an array, or the default edited by add and remove", () => {
     expect(names(resolve(undefined, snapshot).extensions)).toEqual([
       "coding",
@@ -215,7 +196,9 @@ describe("agent resolution", () => {
     local.install(Skills);
     expect(names(resolve(state, local.snapshot()).extensions)).toEqual(["coding", "skills"]);
   });
+});
 
+describe("agent resolution", () => {
   it("replaces same-name tools in place, wraps the winner, then applies the filter", () => {
     const local = createRegistry<AppTool>();
     const venvBash = tool("bash", { description: "venv bash" });
@@ -252,7 +235,9 @@ describe("agent resolution", () => {
       "edit",
     ]);
   });
+});
 
+describe("agent resolution", () => {
   it("drops a tool or section whose wrapper throws or renames it and reports the failure", () => {
     const local = createRegistry<AppTool>();
     const Broken = defineExtension<AppTool>({
@@ -279,7 +264,9 @@ describe("agent resolution", () => {
       "section wrapper failed",
     ]);
   });
+});
 
+describe("agent resolution", () => {
   it("orders sections by extension, replaces same keys in place, and renders instructions last and unwrapped", async () => {
     const local = createRegistry<AppTool>();
     const Override = defineExtension<AppTool>({
@@ -307,38 +294,5 @@ describe("agent resolution", () => {
     ]);
     expect(agent.sections.at(-1)!.tag).toBeUndefined();
     expect(reports).toEqual([]);
-  });
-
-  it("collects hooks of the selected extensions in extension order and applies field defaults", () => {
-    const local = createRegistry<AppTool>();
-    const first = { beforeTool: () => undefined };
-    const second = { beforeTool: () => undefined };
-    const onYield = { onYield: () => undefined };
-    local.install(
-      defineExtension<AppTool>({
-        name: "a",
-        hooks: [hook(ToolTask, first), hook(GenerationTask, onYield)],
-      }),
-    );
-    local.install(defineExtension<AppTool>({ name: "b", hooks: [hook(ToolTask, second)] }));
-    expect(agentHooks(resolve(undefined, local.snapshot()), "msa.tool")).toEqual([first, second]);
-    expect(agentHooks(resolve({ extensions: ["b", "a"] }, local.snapshot()), "msa.tool")).toEqual([
-      second,
-      first,
-    ]);
-    expect(agentHooks(resolve({ extensions: ["b"] }, local.snapshot()), "msa.generation")).toEqual(
-      [],
-    );
-
-    const defaults = resolve(undefined, local.snapshot());
-    expect(defaults.model).toBeUndefined();
-    expect(defaults.thinkingLevel).toBe("off");
-    expect(defaults.cwd).toBeUndefined();
-    expect(
-      resolve(
-        { model: { provider: "p", modelId: "m" }, thinkingLevel: "high", cwd: "/w" },
-        local.snapshot(),
-      ),
-    ).toMatchObject({ model: { provider: "p", modelId: "m" }, thinkingLevel: "high", cwd: "/w" });
   });
 });

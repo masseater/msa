@@ -14,22 +14,20 @@ const windows = process.platform === "win32";
 const gitBash = join(process.env["ProgramFiles"] ?? "C:\\Program Files", "Git", "bin", "bash.exe");
 const context = BACKGROUND_CONTEXT;
 
-/**
- * Remove a test directory. On Windows, `taskkill /T` runs asynchronously and can miss descendants such as Git Bash's
- * `sleep`, so a killed command's processes can hold the directory for a while after `exec` settles; retry until they
- * exit.
- */
-async function removeTempDir(dir: string): Promise<void> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      rmSync(dir, { recursive: true, force: true });
-      return;
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (attempt >= 80 || (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY"))
-        throw error;
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
+// Remove a test directory. On Windows, `taskkill /T` runs asynchronously and can miss descendants such as Git Bash's
+// `sleep`, so a killed command's processes can hold the directory for a while after `exec` settles; retry until they
+// exit.
+async function removeTempDir(dir: string, attempt = 0): Promise<void> {
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (attempt >= 80 || (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY"))
+      throw error;
+    await new Promise((resolve) => {
+      setTimeout(resolve, 100);
+    });
+    await removeTempDir(dir, attempt + 1);
   }
 }
 
@@ -87,9 +85,14 @@ describe("NodeExecutionEnv watch limits", () => {
       );
       getOrThrow(await env.createDir("tree/d", undefined, context));
       const deadline = Date.now() + 3000;
-      while (!changes.some((change) => "error" in change) && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 20));
-      }
+      const failed = async (): Promise<void> => {
+        if (changes.some((change) => "error" in change) || Date.now() >= deadline) return;
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+        await failed();
+      };
+      await failed();
       expect(changes.at(-1)).toMatchObject({ error: { code: "invalid" } });
       await watcher.close(context);
     } finally {
@@ -106,7 +109,7 @@ describe("NodeExecutionEnv readers", () => {
     return dir;
   };
   afterEach(async () => {
-    for (const dir of dirs.splice(0)) await removeTempDir(dir);
+    for await (const dir of dirs.splice(0)) await removeTempDir(dir);
   }, 15_000);
 
   it("reads ranges spanning several internal chunks exactly", async () => {

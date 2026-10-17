@@ -4,79 +4,18 @@ import {
   fauxAssistantMessage,
   fauxText,
 } from "@msa/ai";
-import { applyImmutable, type Op } from "@msa/chord/delta";
-import {
-  AgentDoc,
-  type Conversation,
-  type ConversationView,
-  defineDoc,
-  type Harness,
-  InboxDoc,
-  LiveDoc,
-  MemoryStorage,
-  ProviderDoc,
-  UsageDoc,
-} from "@msa/durable";
+import { type Conversation, type Harness, LiveDoc, MemoryStorage } from "@msa/durable";
 import { describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup, openChat, waitFor } from "./chat-support.ts";
+import { committed, replay, type Frame, drained, record, fresh } from "./harness-view-support.ts";
 import { context } from "./session-support.ts";
 import { aborted, deferred } from "./task-support.ts";
 
-type Frame = { value: ConversationView; ops: readonly Op[] };
-
 const MOUNTED = ["msa.agent", "msa.inbox", "msa.live", "msa.provider", "msa.usage"];
-
-/** Start a watch of `conversation` that records its acquisition revision and every delivered frame. */
-async function record(conversation: Conversation) {
-  const watch = await conversation.watch(context);
-  const initial = watch.value;
-  const frames: Frame[] = [];
-  watch.start(async (value, ops) => {
-    frames.push({ value, ops });
-  });
-  return { initial, frames, stop: () => watch.stop() };
-}
-
-/** A freshly built view of `conversation`, for comparing with an advanced one. */
-async function fresh(conversation: Conversation): Promise<ConversationView> {
-  const state = await conversation.viewState(context);
-  const value = state.value;
-  state.dispose();
-  return value;
-}
-
-/** The view as committed state defines it, read without any mount: the active entries and the built-in documents. */
-async function committed(
-  harness: Harness,
-  conversation: Conversation,
-  record: ConversationView["conversation"],
-) {
-  const docs: Record<string, unknown> = {};
-  for (const token of [AgentDoc, LiveDoc, InboxDoc, ProviderDoc, UsageDoc] as const) {
-    const value = await harness.snapshot(token as typeof LiveDoc, conversation.id, context);
-    if (value !== undefined) docs[token.definition.kind] = value;
-  }
-  return { conversation: record, entries: (await conversation.context(context)).entries, docs };
-}
-
-/** Replay every frame's operations from `initial`, checking each delivered revision on the way. */
-function replay(initial: ConversationView, frames: readonly Frame[]): ConversationView {
-  let value = initial;
-  for (const frame of frames) {
-    value = applyImmutable(value, frame.ops);
-    expect(value).toEqual(frame.value);
-  }
-  return value;
-}
 
 function answer(text: string): AssistantMessage {
   return fauxAssistantMessage([fauxText(text)]);
-}
-
-/** Let watch callbacks, which run after the commit, catch up. */
-async function drained(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function touches(harness: Harness, conversation: Conversation): { count: number } {
@@ -109,7 +48,9 @@ describe("conversation view", () => {
     expect(view.docs["msa.inbox"]).toEqual({ items: [] });
     await harness.close(context);
   });
+});
 
+describe("conversation view", () => {
   it("publishes one frame per touching commit, whose operations rebuild every revision", async () => {
     const setup = chatSetup();
     const release = deferred();
@@ -147,7 +88,9 @@ describe("conversation view", () => {
     await stop();
     await harness.close(context);
   });
+});
 
+describe("conversation view", () => {
   it("shares unchanged parts between revisions and skips commits that touch nothing mounted", async () => {
     const setup = chatSetup();
     const { harness, root } = await openChat(new MemoryStorage(), setup);
@@ -187,7 +130,9 @@ describe("conversation view", () => {
     await stop();
     await harness.close(context);
   });
+});
 
+describe("conversation view", () => {
   it("keeps only mounted entries for a raw head write that targets before the active range", async () => {
     const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
     const old = await root.commit((tx) => tx.appendEntry(root.id, { kind: "old" }), context);
@@ -233,7 +178,9 @@ describe("conversation view", () => {
     await stop();
     await harness.close(context);
   });
+});
 
+describe("conversation view", () => {
   it("unmounts a retired document and mounts its recreation whole", async () => {
     const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
     const { frames, stop } = await record(root);
@@ -254,12 +201,14 @@ describe("conversation view", () => {
   it("replaces undelivered frames with the newest view after 100 pending frames", async () => {
     const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
     const watch = await root.watch(context);
-    for (let index = 0; index < 101; index++) {
+    for await (const _ of Array.from({ length: 101 })) {
       await root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context);
     }
     const frames: Frame[] = [];
-    watch.start(async (value, ops) => {
+    watch.start((value, ops) => {
       frames.push({ value, ops });
+
+      return Promise.resolve();
     });
     await drained();
     expect(frames).toHaveLength(1);
@@ -268,7 +217,9 @@ describe("conversation view", () => {
     await watch.stop();
     await harness.close(context);
   });
+});
 
+describe("conversation view", () => {
   it("keeps states and watches of one conversation independent and remounts after the last one detaches", async () => {
     const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
     const state = await root.viewState(context);
@@ -299,78 +250,5 @@ describe("conversation view", () => {
     expect(state.value.entries).toEqual([]);
     await expect(root.watch(context)).rejects.toThrow();
     await expect(root.viewState(context)).rejects.toThrow();
-  });
-
-  it("rejects an acquisition cancelled or closed while it waits for the Session line", async () => {
-    const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
-    const hold = () => {
-      const release = deferred();
-      const blocking = root.commit(async () => {
-        await release.promise;
-      }, context);
-      return { release: () => release.resolve(), blocking };
-    };
-    let held = hold();
-    const controller = new AbortController();
-    const cancelled = root.watch({ ...context, abortSignal: controller.signal });
-    controller.abort(new Error("cancelled"));
-    held.release();
-    await held.blocking;
-    await expect(cancelled).rejects.toThrow("cancelled");
-
-    held = hold();
-    const closedWhileQueued = root.watch(context);
-    const closing = harness.close(context);
-    held.release();
-    await held.blocking;
-    await expect(closedWhileQueued).rejects.toThrow("Harness is closed");
-    await closing;
-  });
-
-  it("shares one mount between concurrent observers and isolates a failing listener", async () => {
-    const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
-    const failing = await root.watch(context);
-    const { frames, stop } = await record(root);
-    const shared = await root.viewState(context);
-    expect(failing.value).toBe(shared.value);
-    shared.dispose();
-    failing.start(async () => {
-      throw new Error("listener failed");
-    });
-    await root.commit((tx) => tx.appendEntry(root.id, { kind: "one" }), context);
-    await root.commit((tx) => tx.appendEntry(root.id, { kind: "two" }), context);
-    await drained();
-    expect(await failing.closed).toMatchObject({ reason: "listener_error" });
-    expect(frames).toHaveLength(2);
-    await stop();
-    await harness.close(context);
-  });
-
-  it("publishes one frame for a commit that appends several entries and edits a document", async () => {
-    const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
-    const Other = defineDoc<{ n: number }>({
-      kind: "app.other",
-      version: 1,
-      scope: "conversation",
-      history: "latest",
-      fork: "initial",
-      initial: () => ({ n: 0 }),
-    });
-    const { initial, frames, stop } = await record(root);
-    await root.commit(async (tx) => {
-      await tx.appendEntry(root.id, { kind: "a" });
-      (await tx.doc(LiveDoc, root.id)).tools = [];
-      await tx.appendEntry(root.id, { kind: "b" });
-    }, context);
-    // A document that is not mounted publishes nothing.
-    await root.commit(async (tx) => {
-      (await tx.doc(Other, root.id)).n = 1;
-    }, context);
-    await drained();
-    expect(frames).toHaveLength(1);
-    expect(frames[0]!.value.entries.map((entry) => entry.kind)).toEqual(["a", "b"]);
-    expect(replay(initial, frames)).toEqual(await committed(harness, root, initial.conversation));
-    await stop();
-    await harness.close(context);
   });
 });

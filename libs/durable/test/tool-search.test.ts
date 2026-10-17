@@ -27,7 +27,7 @@ function tool(
     parameters: Type.Object({
       number: Type.Optional(Type.Number({ description: "Issue number" })),
     }),
-    execute: async () => ({ output: [{ type: "text", text: `${name} ran` }] }),
+    execute: () => Promise.resolve({ output: [{ type: "text", text: `${name} ran` }] }),
     ...extra,
   });
 }
@@ -38,7 +38,7 @@ function call(name: string, args: JsonObject = {}, id = "c1"): AssistantMessage 
   return fauxAssistantMessage([fauxToolCall(name, args, { id })], { stopReason: "toolUse" });
 }
 
-/** `alpha`, the deferred `github_get_issue` and `github_list_repos`, then `omega`, and `tool_search` last. */
+// `alpha`, the deferred `github_get_issue` and `github_list_repos`, then `omega`, and `tool_search` last.
 function setup(): ChatSetup {
   const chat = chatSetup();
   addTool(chat.registry, tool("alpha", "Alpha tool"));
@@ -59,7 +59,7 @@ async function offered(root: Conversation): Promise<string[]> {
   return (await root.agent(context)).tools.map((each) => each.name);
 }
 
-/** The model messages of the `msa.system` entries, oldest first. */
+// The model messages of the `msa.system` entries, oldest first.
 function systemMessages(entries: readonly EntryRecord[]) {
   return entries
     .filter((entry) => entry.kind === "msa.system")
@@ -127,7 +127,9 @@ describe("deferred tools and tool_search", () => {
     expect(load!.toolsRemoved).toBeUndefined();
     await harness.close(context);
   });
+});
 
+describe("deferred tools and tool_search", () => {
   it("appends each loaded tool in load order, not registry order", async () => {
     const chat = setup();
     chat.faux.setResponses([
@@ -152,17 +154,20 @@ describe("deferred tools and tool_search", () => {
     expect(loads.every((message) => message.toolsRemoved === undefined)).toBe(true);
     await harness.close(context);
   });
+});
 
+describe("deferred tools and tool_search", () => {
   it("records loads by name: unknown and non-deferred names change nothing, remove wins, and a load lifts it", async () => {
     const chat = setup();
     const grow = defineTool({
       name: "grow",
       description: "grow",
       parameters: Type.Object({}),
-      execute: async () => ({
-        output: [],
-        control: { addTools: ["github_get_issue", "alpha", "ghost"] },
-      }),
+      execute: () =>
+        Promise.resolve({
+          output: [],
+          control: { addTools: ["github_get_issue", "alpha", "ghost"] },
+        }),
     });
     addTool(chat.registry, grow);
     chat.faux.setResponses([call("grow"), DONE, call("grow"), DONE]);
@@ -192,7 +197,9 @@ describe("deferred tools and tool_search", () => {
     expect(await offered(root)).toContain("github_get_issue");
     await harness.close(context);
   });
+});
 
+describe("deferred tools and tool_search", () => {
   it("keeps a loaded tool when its extension is gone for a while, and appends to an explicit array", async () => {
     const chat = setup();
     const issue = tool("github_get_issue", "Get a GitHub issue by number", { deferred: true });
@@ -217,7 +224,9 @@ describe("deferred tools and tool_search", () => {
     ]);
     await harness.close(context);
   });
+});
 
+describe("deferred tools and tool_search", () => {
   it("keeps loaded tools per branch and in the baseline after a reset", async () => {
     const chat = setup();
     chat.faux.setResponses([call("tool_search", { query: "github issue", limit: 1 }), DONE]);

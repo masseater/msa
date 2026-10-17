@@ -31,7 +31,7 @@ const Member = defineDocFamily<{ issued: number; at: number }, null>({
 async function run(kind: "array" | "family", n: number): Promise<number> {
   const session = createSession(new MemoryStorage());
   const started = performance.now();
-  for (let i = 0; i < n; i++) {
+  for await (const i of Array.from({ length: n }, (_, i) => i)) {
     await session.commit(async (tx) => {
       if (kind === "array")
         (await tx.doc(Journal)).entries.push({ key: `c${i}`, issued: i, at: i });
@@ -44,7 +44,7 @@ async function run(kind: "array" | "family", n: number): Promise<number> {
 }
 
 const sizes = (process.argv[2] ?? "1000,8000,16000,32000").split(",").map(Number);
-for (const n of sizes) {
+for await (const n of sizes) {
   const array = await run("array", n);
   const family = await run("family", n);
   const per = (ms: number) => `${((ms / n) * 1000).toFixed(0)} µs`;

@@ -1,0 +1,102 @@
+import {
+  type AssistantMessage,
+  fauxAssistantMessage,
+  fauxText,
+  fauxToolCall,
+  type ToolResultMessage,
+  Type,
+} from "@msa/ai";
+import {
+  defineTool,
+  type EntryRecord,
+  type Harness,
+  LiveDoc,
+  type TaskId,
+  type ToolRegistration,
+  ToolResultEntry,
+} from "@msa/durable";
+
+import type { ExecutionEnv } from "../src/env/index.ts";
+import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+import { type ChatSetup, openChat, waitFor } from "./chat-support.ts";
+import { context } from "./session-support.ts";
+import { aborted, deferred } from "./task-support.ts";
+import { makeTempFile, removeDir } from "./temp-support.ts";
+
+export const directories = new Set<string>();
+
+export async function removeDirectories(): Promise<void> {
+  for await (const directory of directories) await removeDir(directory);
+  directories.clear();
+}
+
+export async function sqlitePath(): Promise<string> {
+  const { directory, path } = await makeTempFile("msa-durable-tools-", "session.sqlite");
+  directories.add(directory);
+  return path;
+}
+
+export async function open(path: string, setup: ChatSetup, env?: ExecutionEnv) {
+  const opened = await openChat(
+    await openNodeSqliteStorage(path),
+    setup,
+    env === undefined ? {} : { env },
+  );
+  opened.harness.resume();
+  return opened;
+}
+
+export function tool(
+  name: string,
+  execute: ToolRegistration["execute"],
+  extra: Partial<ToolRegistration> = {},
+): ToolRegistration {
+  return defineTool({ name, description: name, parameters: Type.Object({}), execute, ...extra });
+}
+
+export function call(name: string, id = "c1"): AssistantMessage {
+  return fauxAssistantMessage([fauxToolCall(name, {}, { id })], { stopReason: "toolUse" });
+}
+
+export const DONE = fauxAssistantMessage([fauxText("done")]);
+
+export function results(entries: readonly EntryRecord[]): ToolResultMessage[] {
+  return entries
+    .filter((entry) => ToolResultEntry.is(entry))
+    .map((entry) => entry.model![0] as ToolResultMessage);
+}
+
+export function text(message: ToolResultMessage | undefined): string {
+  return (message?.content ?? []).map((item) => (item.type === "text" ? item.text : "")).join("|");
+}
+
+export async function toolTaskId(harness: Harness): Promise<TaskId> {
+  let id: TaskId | undefined;
+  await waitFor(async () => {
+    id = (await harness.snapshot(LiveDoc, 1 as never, context))?.tools?.[0]?.taskId;
+    return id !== undefined;
+  });
+  return id!;
+}
+
+// A tool that writes output, then blocks until its invocation is cancelled the first `blocking` times it runs.
+// `started` resolves once the output is durable.
+export function blockingTool(name: string, extra: Partial<ToolRegistration> = {}) {
+  const started = deferred();
+  const state = { runs: 0, blocking: 1 };
+  const registration = tool(
+    name,
+    async (_args, api, callContext) => {
+      state.runs++;
+      api.output(`run ${state.runs}\n`);
+      await api.details({ run: state.runs }, callContext);
+      if (state.runs <= state.blocking) {
+        started.resolve();
+        await aborted(callContext.abortSignal!);
+      }
+      return {};
+    },
+    extra,
+  );
+  return { registration, started, state };
+}

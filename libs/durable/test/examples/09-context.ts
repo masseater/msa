@@ -82,9 +82,11 @@ const say = (kind: string, ...model: Message[]) =>
   transcript.commit((tx) => tx.appendEntry(transcript.id, { kind, model }), context);
 
 const question = await say("message", { role: "user", content: "read a and b", timestamp: 1 });
-await say("message", assistantMessage("I crashed", [], "aborted")); // stored, never sent
+// stored, never sent
+await say("message", assistantMessage("I crashed", [], "aborted"));
 const calls = await say("message", assistantMessage("reading", ["a", "b"]));
-await say("message", toolResultMessage("b")); // results finish out of order
+// results finish out of order
+await say("message", toolResultMessage("b"));
 await say("msa.system", {
   role: "system",
   content: "",

@@ -3,9 +3,6 @@
 // directory is left behind for inspection.
 // Run from libs/durable:
 //   node --conditions=source --experimental-strip-types test/examples/17-coding-tools.ts
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import type { ToolResultMessage } from "@msa/ai";
 import { createModels } from "@msa/ai/models";
@@ -24,10 +21,11 @@ import {
 } from "../../src/index.ts";
 import { openNodeJsonlStorage } from "../../src/storage/jsonl/node.ts";
 import { type BashToolInput, CodingTools } from "../../src/tools/index.ts";
+import { makeTempDir, writeTempFile, readTempFile } from "../temp-support.ts";
 
 const context = BACKGROUND_CONTEXT;
-const directory = await mkdtemp(join(tmpdir(), "msa-durable-example-"));
-await writeFile(join(directory, "notes.txt"), "hello world\n");
+const directory = await makeTempDir("msa-durable-example-");
+writeTempFile(directory, "notes.txt", "hello world\n");
 
 // The faux provider plays the model: four tool-calling answers, then a final answer.
 const faux = fauxProvider();
@@ -102,6 +100,6 @@ if (settled.status === "done" && settled.type === "input") {
   const message = answer?.model?.[0];
   console.log("answer:", message?.role === "assistant" ? message.content : message);
 }
-console.log("file:", JSON.stringify(await readFile(join(directory, "notes.txt"), "utf8")));
+console.log("file:", JSON.stringify(readTempFile(directory, "notes.txt")));
 await harness.close(context);
 console.log("storage:", directory);

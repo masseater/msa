@@ -6,9 +6,6 @@
 // Uses OpenAI when OPENAI_API_KEY is set, and a scripted faux model otherwise.
 // Run from libs/durable:
 //   node --conditions=source --experimental-strip-types test/examples/19-json.ts --events "What is in this directory?"
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 import { createModels } from "@msa/ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
@@ -28,6 +25,7 @@ import {
 import { openNodeJsonlStorage } from "../../src/storage/jsonl/node.ts";
 import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
 import { createBashTool, createReadTool } from "../../src/tools/index.ts";
+import { makeTempDir, tempPath } from "../temp-support.ts";
 
 const context = BACKGROUND_CONTEXT;
 const args = process.argv.slice(2);
@@ -42,10 +40,10 @@ const prompt =
 let storage: Storage;
 let location: string | undefined;
 if (storageKind === "sqlite") {
-  location = join(tmpdir(), `msa-durable-json-${Date.now()}.sqlite`);
+  location = tempPath(`msa-durable-json-${Date.now()}.sqlite`);
   storage = await openNodeSqliteStorage(location);
 } else if (storageKind === "jsonl") {
-  location = await mkdtemp(join(tmpdir(), "msa-durable-json-"));
+  location = await makeTempDir("msa-durable-json-");
   storage = await openNodeJsonlStorage(location, context);
 } else if (storageKind === "memory") {
   storage = new MemoryStorage();
@@ -56,9 +54,7 @@ const print = (value: unknown): void => void process.stdout.write(`${JSON.string
 
 const models = createModels();
 let model = { provider: "openai", modelId: "gpt-6-sol" };
-if (process.env["OPENAI_API_KEY"] !== undefined) {
-  models.setProvider(openaiProvider());
-} else {
+if (process.env["OPENAI_API_KEY"] === undefined) {
   const faux = fauxProvider({ tokensPerSecond: 200 });
   models.setProvider(faux.provider);
   model = { provider: "faux", modelId: "faux-1" };
@@ -70,6 +66,8 @@ if (process.env["OPENAI_API_KEY"] !== undefined) {
       fauxText("This directory holds the durable package sources, tests, and docs."),
     ]),
   ]);
+} else {
+  models.setProvider(openaiProvider());
 }
 
 const registry = createRegistry();
@@ -89,14 +87,16 @@ let stop: () => Promise<unknown>;
 if (mode === "events") {
   const stream = await watchEvents(harness, root.id, context);
   print(stream.snapshot);
-  stream.start(async (events) => {
+  stream.start((events) => {
     for (const event of events) print(event);
+
+    return Promise.resolve();
   });
   stop = () => stream.stop();
 } else {
   const watch = await root.watch(context);
   print({ view: watch.value });
-  watch.start(async (_value, ops) => print({ ops }));
+  watch.start((_value, ops) => Promise.resolve(print({ ops })));
   stop = () => watch.stop();
 }
 
@@ -104,7 +104,9 @@ const submission = await root.submit({ type: "input", content: prompt }, context
 await submission.wait(context);
 await harness.waitForIdle(context);
 // Let the last batch reach the listener before stopping.
-await new Promise((resolve) => setTimeout(resolve, 0));
+await new Promise((resolve) => {
+  setTimeout(resolve, 0);
+});
 await stop();
 await harness.close(context);
 if (location !== undefined) console.error(`${storageKind} storage: ${location}`);

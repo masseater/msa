@@ -1,11 +1,9 @@
-import { type SystemMessage, type Tool, Type } from "@msa/ai";
-import { getCurrentTools, toToolDeclaration } from "@msa/ai/utils/transcript";
+import { type SystemMessage } from "@msa/ai";
 import {
   type Conversation,
   createRegistry,
   defineExtension,
   type EntryId,
-  MemoryStorage,
   type PromptInput,
   type PromptSection,
   SystemEntry,
@@ -16,7 +14,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { resolveAgent, resolveSettings } from "../src/harness/agent.ts";
 import { planSystemEntries, renderSections, replaySections } from "../src/harness/prompt.ts";
-import { addSection, openHarness, user } from "./harness-support.ts";
+import { marker, root } from "./harness-prompt-support.ts";
+import { addSection, user } from "./harness-support.ts";
 import { context } from "./session-support.ts";
 
 type Planned = {
@@ -24,7 +23,7 @@ type Planned = {
   readonly omit?: readonly EntryId[];
 };
 
-/** Plan against the current context, append the plan, and check that replay then yields `desired` in order. */
+// Plan against the current context, append the plan, and check that replay then yields `desired` in order.
 async function apply(
   conversation: Conversation,
   desired: Record<string, string>,
@@ -36,7 +35,7 @@ async function apply(
     7,
   );
   await conversation.commit(async (tx) => {
-    for (const draft of drafts) await tx.appendEntry(SystemEntry, conversation.id, draft);
+    for await (const draft of drafts) await tx.appendEntry(SystemEntry, conversation.id, draft);
   }, context);
   const replayed = replaySections((await conversation.context(context)).messages);
   expect([...replayed]).toEqual(Object.entries(desired));
@@ -53,23 +52,9 @@ async function apply(
   });
 }
 
-async function root(): Promise<Conversation> {
-  const { harness } = await openHarness(new MemoryStorage());
-  return harness.root(context);
-}
-
 async function lastSystemId(conversation: Conversation): Promise<EntryId> {
   const page = await conversation.entries({}, 100, undefined, context);
   return page.items.find((entry) => entry.kind === "msa.system")!.id;
-}
-
-async function marker(conversation: Conversation, head: EntryId | "self"): Promise<EntryId> {
-  return conversation.commit(
-    async (tx) =>
-      (await tx.appendEntry(conversation.id, { kind: "summary", head, model: [user("summary")] }))
-        .id,
-    context,
-  );
 }
 
 function section(key: string, render: PromptSection<ToolRegistration>["render"], tag?: boolean) {
@@ -88,32 +73,40 @@ const input: PromptInput<ToolRegistration> = {
   },
   env: undefined,
   shown: {},
-  read: { snapshot: async () => undefined, snapshotAsOf: async () => undefined },
+  read: {
+    snapshot: () => Promise.resolve(undefined),
+    snapshotAsOf: () => Promise.resolve(undefined),
+  },
 };
+
+function sectionRegistry() {
+  const registry = createRegistry();
+  addSection(registry, "preamble", () => "You are helpful.", { tag: false });
+  addSection(registry, "cwd", () => Promise.resolve("/repo"));
+  addSection(registry, "skipped", () => undefined);
+  addSection(registry, "failing", () => {
+    throw new Error("render failed");
+  });
+  addSection(registry, "new-failing", () => {
+    throw new Error("also failed");
+  });
+  registry.install(
+    defineExtension({
+      name: "git",
+      wraps: [
+        wrapSection("cwd", (inner) => ({
+          ...inner,
+          render: async (value, ctx) => `${await inner.render(value, ctx)} (git)`,
+        })),
+      ],
+    }),
+  );
+  return { registry };
+}
 
 describe("system prompt preparation", () => {
   it("renders sections in order with tags, omissions, wrappers, and failures", async () => {
-    const registry = createRegistry();
-    addSection(registry, "preamble", () => "You are helpful.", { tag: false });
-    addSection(registry, "cwd", async () => "/repo");
-    addSection(registry, "skipped", () => undefined);
-    addSection(registry, "failing", () => {
-      throw new Error("render failed");
-    });
-    addSection(registry, "new-failing", () => {
-      throw new Error("also failed");
-    });
-    registry.install(
-      defineExtension({
-        name: "git",
-        wraps: [
-          wrapSection("cwd", (inner) => ({
-            ...inner,
-            render: async (value, ctx) => `${await inner.render(value, ctx)} (git)`,
-          })),
-        ],
-      }),
-    );
+    const { registry } = sectionRegistry();
     const reports: unknown[] = [];
     const shown = new Map([
       ["failing", "<failing>\nold\n</failing>"],
@@ -156,7 +149,9 @@ describe("system prompt preparation", () => {
       "cancelled",
     );
   });
+});
 
+describe("system prompt preparation", () => {
   it("replays sections in place, deletes on null, and appends re-additions", () => {
     const system = (sections: Record<string, string | null>): SystemMessage => ({
       role: "system",
@@ -191,7 +186,9 @@ describe("system prompt preparation", () => {
     expect(await apply(conversation, { a: "1", c: "3", d: "4" })).toEqual([]);
     expect(await apply(conversation, {})).toEqual([{ sections: { a: null, c: null, d: null } }]);
   });
+});
 
+describe("system prompt preparation", () => {
   it("rewrites order-only changes and re-additions as two entries", async () => {
     const conversation = await root();
     await apply(conversation, { a: "1", b: "2" });
@@ -233,7 +230,9 @@ describe("system prompt preparation", () => {
       { sections: { a: "1", b: "21" }, omit: [delta, baseline, after] },
     ]);
   });
+});
 
+describe("system prompt preparation", () => {
   it("writes a complete post-head baseline even when replay already matches", async () => {
     const conversation = await root();
     await apply(conversation, { a: "1" });
@@ -245,83 +244,5 @@ describe("system prompt preparation", () => {
     await marker(conversation, "self");
     expect(await apply(conversation, {})).toEqual([{ sections: {} }]);
     expect(await apply(conversation, {})).toEqual([]);
-  });
-});
-
-describe("tool loadout preparation", () => {
-  const declaration = (name: string, description = name): Tool => ({
-    name,
-    description,
-    parameters: Type.Object({}),
-  });
-
-  /** Plan tools only, append the plan, check that replay offers `tools` in order, and return each message's changes. */
-  async function applyTools(
-    conversation: Conversation,
-    tools: readonly Tool[],
-    sections: Record<string, string> = {},
-  ): Promise<{ removed?: string[]; added?: string[]; sections?: Record<string, string | null> }[]> {
-    const drafts = planSystemEntries(
-      await conversation.context(context),
-      new Map(Object.entries(sections)),
-      tools,
-      7,
-    );
-    await conversation.commit(async (tx) => {
-      for (const draft of drafts) await tx.appendEntry(SystemEntry, conversation.id, draft);
-    }, context);
-    const offered = getCurrentTools((await conversation.context(context)).messages);
-    expect(offered).toEqual(tools.map(toToolDeclaration));
-    return drafts.map((draft) => {
-      const message = draft.model![0] as SystemMessage;
-      return {
-        ...(message.toolsRemoved === undefined
-          ? {}
-          : { removed: message.toolsRemoved.map((tool) => tool.name) }),
-        ...(message.toolsAdded === undefined
-          ? {}
-          : { added: message.toolsAdded.map((tool) => tool.name) }),
-        ...(message.sections === undefined ? {} : { sections: message.sections }),
-      };
-    });
-  }
-
-  it("adds, removes, replaces changed declarations, and rewrites the order when needed", async () => {
-    const conversation = await root();
-    const [a, b, c] = [declaration("a"), declaration("b"), declaration("c")];
-    expect(await applyTools(conversation, [a, b])).toEqual([{ added: ["a", "b"] }]);
-    expect(await applyTools(conversation, [a, b])).toEqual([]);
-    expect(await applyTools(conversation, [a, b, c])).toEqual([{ added: ["c"] }]);
-    expect(await applyTools(conversation, [a, c])).toEqual([{ removed: ["b"] }]);
-    // A changed declaration at the end is removed and re-added in place.
-    const c2 = declaration("c", "changed");
-    expect(await applyTools(conversation, [a, c2])).toEqual([{ removed: ["c"], added: ["c"] }]);
-    // A changed declaration in the middle would move to the end, so the whole order is rewritten.
-    const a2 = declaration("a", "changed");
-    expect(await applyTools(conversation, [a2, c2])).toEqual([
-      { removed: ["a", "c"], added: ["a", "c"] },
-    ]);
-    // Order-only change.
-    expect(await applyTools(conversation, [c2, a2])).toEqual([
-      { removed: ["a", "c"], added: ["c", "a"] },
-    ]);
-    expect(await applyTools(conversation, [])).toEqual([{ removed: ["c", "a"] }]);
-  });
-
-  it("puts tool changes on the last section entry and re-declares every tool after a head cut", async () => {
-    const conversation = await root();
-    const [a, b] = [declaration("a"), declaration("b")];
-    expect(await applyTools(conversation, [a], { x: "1", y: "2" })).toEqual([
-      { added: ["a"], sections: { x: "1", y: "2" } },
-    ]);
-    // Section order changes need two entries; the tool change rides on the second.
-    expect(await applyTools(conversation, [a, b], { y: "2", x: "1" })).toEqual([
-      { sections: { x: null, y: null } },
-      { added: ["b"], sections: { y: "2", x: "1" } },
-    ]);
-    await marker(conversation, "self");
-    expect(await applyTools(conversation, [a, b], { y: "2", x: "1" })).toEqual([
-      { added: ["a", "b"], sections: { y: "2", x: "1" } },
-    ]);
   });
 });

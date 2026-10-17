@@ -24,9 +24,31 @@ async function databasePath(): Promise<string> {
 }
 
 afterEach(async () => {
-  for (const directory of directories) await rm(directory, { recursive: true, force: true });
+  for await (const directory of directories) await rm(directory, { recursive: true, force: true });
   directories.clear();
 });
+
+async function storedBeforeMigration() {
+  const path = await databasePath();
+  const storage = await openNodeSqliteStorage(path);
+  await storage.commit(
+    [
+      { type: "conversation", value: { id: ROOT_CONVERSATION_ID } },
+      {
+        type: "entry",
+        value: {
+          id: idFromNumber<EntryId>(2),
+          conversationId: ROOT_CONVERSATION_ID,
+          kind: "retained",
+          data: { retained: true },
+        },
+      },
+    ],
+    BACKGROUND_CONTEXT,
+  );
+  await storage.close(BACKGROUND_CONTEXT);
+  return { path };
+}
 
 describe("durable SQLite migrations", () => {
   it("creates the current schema and can be applied repeatedly", async () => {
@@ -60,7 +82,9 @@ describe("durable SQLite migrations", () => {
 
     await expect(openNodeSqliteStorage(path)).rejects.toThrow("is newer than supported version");
   });
+});
 
+describe("durable SQLite migrations", () => {
   it("rolls initial bootstrap and every pending migration back together", async () => {
     const database = await openNodeSqliteDatabase(await databasePath());
     try {
@@ -99,26 +123,11 @@ describe("durable SQLite migrations", () => {
       await database.close();
     }
   });
+});
 
+describe("durable SQLite migrations", () => {
   it("rolls a failed migration back and preserves stored data for a successful retry", async () => {
-    const path = await databasePath();
-    const storage = await openNodeSqliteStorage(path);
-    await storage.commit(
-      [
-        { type: "conversation", value: { id: ROOT_CONVERSATION_ID } },
-        {
-          type: "entry",
-          value: {
-            id: idFromNumber<EntryId>(2),
-            conversationId: ROOT_CONVERSATION_ID,
-            kind: "retained",
-            data: { retained: true },
-          },
-        },
-      ],
-      BACKGROUND_CONTEXT,
-    );
-    await storage.close(BACKGROUND_CONTEXT);
+    const { path } = await storedBeforeMigration();
 
     const database = await openNodeSqliteDatabase(path);
     const nextVersion = CURRENT_SQLITE_SCHEMA_VERSION + 1;
