@@ -80,6 +80,12 @@ for name in CI GITHUB_ACTIONS; do
 	[[ -z "$value" ]] || test_env+=("$name=$value")
 done
 
+# The orchestrator graph tests also run against Neo4j when it is configured.
+for name in NEO4J_URI NEO4J_USERNAME NEO4J_PASSWORD; do
+	value="${!name-}"
+	[[ -z "$value" ]] || test_env+=("$name=$value")
+done
+
 # Wrap the run so it holds in cloud containers, where CI's conditions differ:
 # - Root bypasses file permissions through CAP_DAC_OVERRIDE and CAP_DAC_READ_SEARCH (capabilities(7)),
 #   so tests that expect EACCES hold only once setpriv(1) drops both from the bounding and inheritable sets.

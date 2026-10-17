@@ -966,6 +966,29 @@ export class SettingsManager {
     return this.settings.goal?.evaluatorModel;
   }
 
+  getOrchestratorWorkerModel(): string | undefined {
+    return this.settings.orchestrator?.workerModel;
+  }
+
+  getOrchestratorWorkerThinkingLevel(): ThinkingLevel | undefined {
+    return this.settings.orchestrator?.workerThinkingLevel;
+  }
+
+  getOrchestratorReviewModel(): string | undefined {
+    return this.settings.orchestrator?.reviewModel;
+  }
+
+  getOrchestratorReviewThinkingLevel(): ThinkingLevel | undefined {
+    return this.settings.orchestrator?.reviewThinkingLevel;
+  }
+
+  getOrchestratorMaxConcurrentSessions(): number {
+    return (
+      this.settings.orchestrator?.maxConcurrentSessions ??
+      SETTINGS_DEFAULTS.orchestrator.maxConcurrentSessions
+    );
+  }
+
   getRetryEnabled(): boolean {
     return this.settings.retry?.enabled ?? SETTINGS_DEFAULTS.retry.enabled;
   }

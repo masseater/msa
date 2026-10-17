@@ -275,6 +275,30 @@ export const SettingsSchema = Type.Object(
         ),
       }),
     ),
+    orchestrator: Type.Optional(
+      Type.Object({
+        workerModel: Type.Optional(
+          Type.String({
+            description:
+              'Model of the sessions the orchestrator starts, as "provider/id", unless start_session names one. Default: the orchestrator\'s model.',
+          }),
+        ),
+        workerThinkingLevel: Type.Optional(ModelThinkingLevelSchema),
+        reviewModel: Type.Optional(
+          Type.String({
+            description:
+              'Model of the review session that closes each round, as "provider/id". Default: the orchestrator\'s model.',
+          }),
+        ),
+        reviewThinkingLevel: Type.Optional(ModelThinkingLevelSchema),
+        maxConcurrentSessions: Type.Optional(
+          Type.Integer({
+            minimum: 1,
+            default: SETTINGS_DEFAULTS.orchestrator.maxConcurrentSessions,
+          }),
+        ),
+      }),
+    ),
     hideThinkingBlock: Type.Optional(
       Type.Boolean({ default: SETTINGS_DEFAULTS.hideThinkingBlock }),
     ),

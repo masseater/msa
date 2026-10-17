@@ -51,6 +51,9 @@
     "generate:schemas": "node --import ./src/experimental/source-resolver.ts scripts/generate-schemas.ts"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "catalog:",
+    "@anthropic-ai/sdk": "catalog:",
+    "@modelcontextprotocol/sdk": "catalog:",
     "@msa/agent-core": "workspace:*",
     "@msa/ai": "workspace:*",
     "@msa/codemode": "workspace:*",
@@ -67,6 +70,7 @@
     "ignore": "catalog:",
     "jiti": "catalog:",
     "minimatch": "catalog:",
+    "neo4j-driver": "catalog:",
     "proper-lockfile": "catalog:",
     "quickjs-wasi": "catalog:",
     "semver": "catalog:",
