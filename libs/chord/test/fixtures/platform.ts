@@ -66,11 +66,20 @@ export interface NodeRun {
   readonly stderr: string;
 }
 
-const collect = (args: readonly string[]) =>
+export interface NodeRunOptions {
+  readonly timeout: Duration.Input;
+  readonly cwd?: string;
+}
+
+const collect = (args: readonly string[], cwd: string | undefined) =>
   Effect.scoped(
     Effect.gen(function* () {
       // oxlint-disable-next-line effecttsgo/unstable-api-usage -- node:child_process has no stable Effect replacement
-      const child = yield* ChildProcess.make(process.execPath, args);
+      const child = yield* ChildProcess.make(
+        process.execPath,
+        args,
+        cwd === undefined ? {} : { cwd },
+      );
       const [stdout, stderr, status] = yield* Effect.all(
         [
           Stream.mkString(Stream.decodeText(child.stdout)),
@@ -84,8 +93,8 @@ const collect = (args: readonly string[]) =>
   );
 
 export const runNode: {
-  (timeout: Duration.Input): (args: readonly string[]) => Effect.Effect<NodeRun>;
-  (args: readonly string[], timeout: Duration.Input): Effect.Effect<NodeRun>;
-} = dual(2, (args: readonly string[], timeout: Duration.Input): Effect.Effect<NodeRun> =>
-  onPlatform(collect(args)).pipe(Effect.timeout(timeout), Effect.orDie),
+  (options: NodeRunOptions): (args: readonly string[]) => Effect.Effect<NodeRun>;
+  (args: readonly string[], options: NodeRunOptions): Effect.Effect<NodeRun>;
+} = dual(2, (args: readonly string[], options: NodeRunOptions): Effect.Effect<NodeRun> =>
+  onPlatform(collect(args, options.cwd)).pipe(Effect.timeout(options.timeout), Effect.orDie),
 );

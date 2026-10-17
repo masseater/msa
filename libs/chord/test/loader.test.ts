@@ -8,10 +8,9 @@ import { createHost } from "../src/index.ts";
 import { runNode } from "./fixtures/platform.ts";
 
 const loadsFacetModulesAndReloadsThem = Effect.gen(function* () {
-  const child = yield* runNode(
-    [fileURLToPath(new URL("./fixtures/loader.ts", import.meta.url))],
-    "30 seconds",
-  );
+  const child = yield* runNode([fileURLToPath(new URL("./fixtures/loader.ts", import.meta.url))], {
+    timeout: "30 seconds",
+  });
   assert.equal(child.status, 0, `${child.stdout}\n${child.stderr}`);
 });
 
