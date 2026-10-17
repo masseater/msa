@@ -1,12 +1,8 @@
-import * as fs from "node:fs";
-
-import { DateTime, Effect } from "effect";
 import { dual } from "effect/Function";
 
 import { CSI, matchCsiSequence } from "./ansi-sequences.ts";
 import { type CancelDelay, runAfter } from "./delay.ts";
 import { readEnv } from "./env.ts";
-import { pathOperations } from "./platform.ts";
 import type { ProgramStatus } from "./program-status.ts";
 
 const KITTY_FLAGS_BODY = /^\?(\d+)$/u;
@@ -114,34 +110,6 @@ export function resolveEscapeTimeoutMs(env: NodeJS.ProcessEnv = process.env): nu
   }
   return DEFAULT_ESCAPE_TIMEOUT_MS;
 }
-
-export function resolveWriteLogPath(): string {
-  const env = readEnv("MSA_TUI_WRITE_LOG") ?? "";
-  if (env === "") return "";
-  try {
-    if (fs.statSync(env).isDirectory()) {
-      const now = DateTime.toParts(
-        DateTime.makeZonedUnsafe(Effect.runSync(DateTime.now), {
-          timeZone: DateTime.zoneMakeLocal(),
-        }),
-      );
-      const pad = (value: number): string => String(value).padStart(2, "0");
-      const ts = `${now.year}-${pad(now.month)}-${pad(now.day)}_${pad(now.hour)}-${pad(now.minute)}-${pad(now.second)}`;
-      return pathOperations.join(env, `tui-${ts}-${process.pid}.log`);
-    }
-  } catch {}
-  return env;
-}
-
-export const appendWriteLog: {
-  (path: string, data: string): void;
-  (data: string): (path: string) => void;
-} = dual(2, (path: string, data: string): void => {
-  if (path === "") return;
-  try {
-    fs.appendFileSync(path, data, { encoding: "utf8" });
-  } catch {}
-});
 
 type NegotiationRead =
   | { parsed: KeyboardProtocolNegotiationSequence; sequence: string }

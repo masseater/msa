@@ -1,6 +1,4 @@
-import { matchCsiSequence } from "./ansi-sequences.ts";
 import { isKeyRelease, matchesKey } from "./keys.ts";
-import { getCapabilities, setCellDimensions } from "./terminal-capabilities.ts";
 import type { TerminalColors, TerminalColorScheme } from "./terminal-colors.ts";
 import type { Terminal } from "./terminal-protocol.ts";
 import { TerminalColorQueries, type TerminalColorQueryOptions } from "./tui-color-queries.ts";
@@ -13,8 +11,11 @@ import {
 import type { TUI, TuiInputListener, TuiMode, TuiStopOptions } from "./tui-interface.ts";
 import { TuiOverlayHost } from "./tui-overlay-host.ts";
 import { RenderScheduler } from "./tui-render-scheduler.ts";
-
-const CELL_SIZE_BODY = /^6;(\d+);(\d+)$/u;
+import {
+  cellSizeQuery,
+  consumeCellSizeResponse,
+  probeCapabilitiesInBackground,
+} from "./tui-terminal-queries.ts";
 
 export abstract class TuiBase extends TuiOverlayHost implements TUI {
   abstract readonly mode: TuiMode;
@@ -90,6 +91,11 @@ export abstract class TuiBase extends TuiOverlayHost implements TUI {
       this.terminal.write("\x1b[?2031h");
     }
     this.queryCellSize();
+    probeCapabilitiesInBackground(() => {
+      if (this.stopped) return;
+      this.invalidate();
+      this.requestRender();
+    });
     this.requestRender();
   }
 
@@ -119,10 +125,8 @@ export abstract class TuiBase extends TuiOverlayHost implements TUI {
   }
 
   private queryCellSize(): void {
-    if (getCapabilities().images === null) {
-      return;
-    }
-    this.terminal.write("\x1b[16t");
+    const query = cellSizeQuery();
+    if (query !== "") this.terminal.write(query);
   }
 
   stop(options: TuiStopOptions = {}): void {
@@ -189,22 +193,12 @@ export abstract class TuiBase extends TuiOverlayHost implements TUI {
   }
 
   private consumeCellSizeResponse(data: string): boolean {
-    const [, height, width] =
-      matchCsiSequence({ data, finals: "t", body: CELL_SIZE_BODY })?.groups ?? [];
-    if (height === undefined || width === undefined) {
-      return false;
+    const response = consumeCellSizeResponse(data);
+    if (response === "updated") {
+      this.invalidate();
+      this.requestRender();
     }
-
-    const heightPx = parseInt(height, 10);
-    const widthPx = parseInt(width, 10);
-    if (heightPx <= 0 || widthPx <= 0) {
-      return true;
-    }
-
-    setCellDimensions({ widthPx, heightPx });
-    this.invalidate();
-    this.requestRender();
-    return true;
+    return response !== "none";
   }
 
   protected compositeOverlays(lines: string[], termWidth: number, termHeight: number): string[] {

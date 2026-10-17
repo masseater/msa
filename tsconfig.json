@@ -55,6 +55,7 @@
     "libs/*/src/**/*",
     "libs/*/test/**/*",
     "libs/ai/scripts/**/*.ts",
+    "libs/tui/native/**/*.ts",
     "apps/coding-agent/examples/**/*",
     "libs/agent/examples/**/*"
   ],

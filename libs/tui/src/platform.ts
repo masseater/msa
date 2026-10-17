@@ -18,6 +18,12 @@ export interface CommandResult {
   readonly stdout: string;
 }
 
+export interface FileWrite {
+  readonly path: string;
+  readonly data: string;
+  readonly append: boolean;
+}
+
 export interface PathOperations {
   readonly join: (...segments: ReadonlyArray<string>) => string;
   readonly dirname: (path: string) => string;
@@ -32,6 +38,7 @@ export class Platform extends Context.Service<
     readonly isDirectory: (path: string) => Effect.Effect<boolean>;
     readonly readDirectory: (path: string) => Effect.Effect<ReadonlyArray<string>, PlatformFailure>;
     readonly runCommand: (request: CommandRequest) => Effect.Effect<CommandResult, PlatformFailure>;
+    readonly writeFile: (file: FileWrite) => Effect.Effect<void, PlatformFailure>;
   }
 >()("@msa/tui/platform") {}
 
@@ -44,6 +51,7 @@ const platformServices = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 const makePlatform = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
+  const nodeDirname = (yield* Path.Path).dirname;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   return Platform.of({
     isDirectory: (path) =>
@@ -53,6 +61,13 @@ const makePlatform = Effect.gen(function* () {
       ),
     readDirectory: (path) =>
       fs.readDirectory(path).pipe(Effect.mapError(failWith("readDirectory"))),
+    writeFile: ({ path, data, append }) =>
+      fs
+        .makeDirectory(nodeDirname(path), { recursive: true })
+        .pipe(
+          Effect.andThen(fs.writeFileString(path, data, append ? { flag: "a" } : {})),
+          Effect.mapError(failWith("writeFile")),
+        ),
     runCommand: ({ file, args }) =>
       Effect.scoped(
         Effect.gen(function* () {
