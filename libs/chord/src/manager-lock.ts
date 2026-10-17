@@ -1,4 +1,3 @@
-import { unlinkSync } from "node:fs";
 import { connect, createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 
@@ -93,30 +92,14 @@ const closeServer = (server: Server): Effect.Effect<void> =>
     server.close((error) => resume(error === undefined ? Effect.void : Effect.die(error)));
   });
 
-const exitCleanup = (address: string): (() => void) | undefined => {
-  if (!usesSocketFile()) return undefined;
-  const removeFile = (): void => {
-    try {
-      unlinkSync(address);
-    } catch {}
-  };
-  process.once("exit", removeFile);
-  return removeFile;
-};
-
-const releaser = (server: Server, cleanup: (() => void) | undefined) => (): Promise<void> => {
-  if (cleanup !== undefined) process.removeListener("exit", cleanup);
-  return Effect.runPromise(closeServer(server));
-};
+const releaser = (server: Server) => (): Promise<void> => Effect.runPromise(closeServer(server));
 
 export const acquireProcessLock = Effect.fn(function* (name: string) {
   const address = yield* lockAddress(name);
   const server = createServer((socket) => socket.end());
   yield* bind(server, address, name);
-  return { server, cleanup: exitCleanup(address) };
+  return server;
 });
 
 export const processLock = (name: string): Promise<() => Promise<void>> =>
-  Effect.runPromise(acquireProcessLock(name)).then(({ server, cleanup }) =>
-    releaser(server, cleanup),
-  );
+  Effect.runPromise(acquireProcessLock(name)).then(releaser);
