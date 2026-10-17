@@ -1,26 +1,30 @@
 import type { Context } from "@msa/chord";
 import { FileError, type FileWatcher, type WatchChange, type WatchTarget } from "@msa/durable/env";
+import { Cause, Deferred, Effect, Exit } from "effect";
 
-import { type Connection, isConnectionLost } from "./connection.ts";
+import { type Connection, isConnectionLost, type Json } from "./connection.ts";
 import { toFileError } from "./errors.ts";
 
-/** How the daemon watches, like `NodeExecutionEnv`'s `NodeWatchOptions`. */
 export interface RemoteWatchOptions {
-  /** Force a mode; by default Windows and file systems that do not report remote changes poll. */
   mode?: "native" | "polling";
-  /** Interval between snapshots in `polling` mode; default 2000 ms. */
   pollIntervalMs?: number;
-  /** Most directories one watcher covers; default 10,000. */
   maxDirectories?: number;
 }
 
 const RECONNECT_FIRST_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 
-/**
- * A watcher running in the daemon (Durable's `NodeFileWatcher` next to the files). When the connection is lost, it is
- * opened again once the connection can be started again, and reports `overflow`: changes in between were not seen.
- */
+const asError = (error: unknown): Error =>
+  error instanceof Error ? error : new Error(String(error));
+
+function unrefTimer(delay: number, fire: () => void): () => void {
+  const timer = setTimeout(fire, delay);
+  timer.unref();
+  return () => {
+    clearTimeout(timer);
+  };
+}
+
 export class RemoteWatcher implements FileWatcher {
   readonly #connection: Connection;
   readonly #targets: readonly WatchTarget[];
@@ -44,123 +48,136 @@ export class RemoteWatcher implements FileWatcher {
     this.#options = options;
   }
 
-  /** Watch `targets` (resolved paths); fails like `NodeFileWatcher.open` if coverage cannot be established. */
-  static async open(
+  static open(
     connection: Connection,
     targets: readonly WatchTarget[],
     onChange: (change: WatchChange) => void,
     options: RemoteWatchOptions = {},
   ): Promise<RemoteWatcher> {
     const watcher = new RemoteWatcher(connection, targets, onChange, options);
-    await watcher.#start();
-    return watcher;
+    return Effect.runPromise(Effect.as(watcher.#start(), watcher));
   }
 
   get mode(): "native" | "polling" {
     return this.#mode;
   }
 
-  async close(_context: Context): Promise<void> {
-    if (this.#closed) return;
+  close(_context: Context): Promise<void> {
+    if (this.#closed) return Promise.resolve();
     this.#closed = true;
     this.#wake?.();
     this.#controller?.abort();
-    await this.#request;
+    return this.#request ?? Promise.resolve();
   }
 
-  #deliver(change: WatchChange): void {
-    if (this.#closed) return;
+  #deliver(change: WatchChange): boolean {
+    if (this.#closed) return false;
     try {
       this.#onChange(change);
+      return true;
     } catch {
-      // A throwing callback must not stop watching.
+      return false;
     }
   }
 
-  /** Open the daemon's watcher; resolves once it reports coverage. */
-  #start(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      let ready = false;
-      const controller = new AbortController();
-      this.#controller = controller;
-      const request = this.#connection.request(
-        "watch",
-        {
-          targets: this.#targets.map((target) => ({
-            path: target.path,
-            recursive: target.recursive === true,
-            exclude: {
-              hidden: target.exclude?.hidden === true,
-              names: [...(target.exclude?.names ?? [])],
-            },
-          })),
-          ...this.#options,
-        },
-        {
-          signal: controller.signal,
-          onEvent: (event) => {
-            if (event["kind"] === "ready") {
-              ready = true;
-              this.#mode = event["mode"] === "polling" ? "polling" : "native";
-              resolve();
-            } else if (event["kind"] === "change") {
-              if (event["mode"] === "polling") this.#mode = "polling";
-              if (event["overflow"] === true) this.#deliver({ overflow: true });
-              else this.#deliver({ paths: event["paths"] as string[] });
-            } else if (event["kind"] === "error") {
-              const code = event["code"] === "permission_denied" ? "permission_denied" : "invalid";
-              this.#deliver({ error: new FileError(code, String(event["message"])) });
-              this.#closed = true;
-            }
+  #onEvent(event: Json, onReady: () => void): void {
+    if (event["kind"] === "ready") {
+      this.#mode = event["mode"] === "polling" ? "polling" : "native";
+      onReady();
+    } else if (event["kind"] === "change") {
+      if (event["mode"] === "polling") this.#mode = "polling";
+      if (event["overflow"] === true) this.#deliver({ overflow: true });
+      else this.#deliver({ paths: event["paths"] as string[] });
+    } else if (event["kind"] === "error") {
+      const code = event["code"] === "permission_denied" ? "permission_denied" : "invalid";
+      this.#deliver({ error: new FileError(code, String(event["message"])) });
+      this.#closed = true;
+    }
+  }
+
+  #onFailure(error: unknown, ready: boolean, started: Deferred.Deferred<void, Error>): void {
+    if (!ready) {
+      Deferred.doneUnsafe(started, Exit.fail(asError(error)));
+      return;
+    }
+    if (this.#closed) return;
+    if (isConnectionLost(error)) {
+      Effect.runFork(this.#reconnect());
+      return;
+    }
+    this.#deliver({ error: toFileError(error, undefined) });
+    this.#closed = true;
+  }
+
+  #start(): Effect.Effect<void, Error> {
+    let ready = false;
+    const started = Deferred.makeUnsafe<void, Error>();
+    const controller = new AbortController();
+    this.#controller = controller;
+    const request = this.#connection.request(
+      "watch",
+      {
+        targets: this.#targets.map((target) => ({
+          path: target.path,
+          recursive: target.recursive === true,
+          exclude: {
+            hidden: target.exclude?.hidden === true,
+            names: [...(target.exclude?.names ?? [])],
           },
+        })),
+        ...this.#options,
+      },
+      {
+        signal: controller.signal,
+        onEvent: (event) => {
+          this.#onEvent(event, () => {
+            ready = true;
+            Deferred.doneUnsafe(started, Exit.void);
+          });
         },
-      );
-      this.#request = request.then(
-        () => {},
-        (error: unknown) => {
-          if (!ready) {
-            reject(error);
-            return;
-          }
-          if (this.#closed) return;
-          if (isConnectionLost(error)) {
-            void this.#reconnect();
-            return;
-          }
-          this.#deliver({ error: toFileError(error) });
-          this.#closed = true;
-        },
-      );
+      },
+    );
+    this.#request = request.then(
+      () => undefined,
+      (error: unknown) => {
+        this.#onFailure(error, ready, started);
+      },
+    );
+    return Deferred.await(started);
+  }
+
+  #sleep(delay: number): Effect.Effect<void> {
+    return Effect.callback<void>((resume) => {
+      const cancel = unrefTimer(delay, () => {
+        resume(Effect.void);
+      });
+      this.#wake = () => {
+        cancel();
+        resume(Effect.void);
+      };
     });
   }
 
-  async #reconnect(): Promise<void> {
-    for (
+  #reconnect(): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
       let delay = RECONNECT_FIRST_MS;
-      !this.#closed;
-      delay = Math.min(delay * 2, RECONNECT_MAX_MS)
-    ) {
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, delay);
-        timer.unref();
-        this.#wake = () => {
-          clearTimeout(timer);
-          resolve();
-        };
-      });
-      this.#wake = undefined;
-      if (this.#closed) return;
-      try {
-        await this.#start();
-        // Changes while disconnected were not seen.
-        this.#deliver({ overflow: true });
-        return;
-      } catch (error) {
-        if (isConnectionLost(error)) continue;
-        this.#deliver({ error: toFileError(error) });
-        this.#closed = true;
-        return;
+      while (!this.#closed) {
+        yield* this.#sleep(delay);
+        this.#wake = undefined;
+        if (this.#closed) return;
+        const exit = yield* Effect.exit(this.#start());
+        if (Exit.isSuccess(exit)) {
+          this.#deliver({ overflow: true });
+          return;
+        }
+        const error = Cause.squash(exit.cause);
+        if (!isConnectionLost(error)) {
+          this.#deliver({ error: toFileError(error, undefined) });
+          this.#closed = true;
+          return;
+        }
+        delay = Math.min(delay * 2, RECONNECT_MAX_MS);
       }
-    }
+    });
   }
 }

@@ -11,79 +11,117 @@ import {
   type Result,
 } from "@msa/durable/env";
 import { NodeExecutionEnv } from "@msa/durable/env/node";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
 import type { Connection } from "./connection.ts";
-import { abortResult, toFileError } from "./errors.ts";
+import { abortResult, recoverFileError } from "./errors.ts";
 
-/** Kind bytes of `listFiles` records: `f`, `d`, `l`. */
 const KINDS: Record<number, FileKind> = { 102: "file", 100: "directory", 108: "symlink" };
 
-/**
- * `listFiles` of an absolute path through the daemon: fails with `not_supported` if the daemon does not list files
- * (a release before `listFiles`), so callers fall back to their own walk.
- */
-export async function listFilesOver(
-  connection: Connection,
-  path: string,
+function invalidLimit(
   options: ListFilesOptions | undefined,
-  context: Context,
-): Promise<Result<FileListing, FileError>> {
+  path: string,
+): Result<FileListing, FileError> | undefined {
   for (const key of ["maxEntries", "maxBytes", "timeoutMs"] as const) {
     const value = options?.[key];
     if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
       return err(new FileError("invalid", `${key} must be a non-negative safe integer`, path));
     }
   }
-  const aborted = abortResult<FileListing>(context.abortSignal, path);
-  if (aborted) return aborted;
-  try {
-    if (!(await connection.info()).features?.includes("listFiles")) {
-      return err(
+  return undefined;
+}
+
+function parseListing(payload: Uint8Array): FileListEntry[] {
+  const entries: FileListEntry[] = [];
+  const bytes = Buffer.from(payload.buffer, payload.byteOffset, payload.length);
+  for (let start = 0; start < bytes.length;) {
+    const end = bytes.indexOf(0, start);
+    if (end === -1) break;
+    const kind = KINDS[bytes[start]!];
+    if (kind !== undefined) entries.push({ path: bytes.toString("utf8", start + 1, end), kind });
+    start = end + 1;
+  }
+  return entries;
+}
+
+function requestListing(
+  connection: Connection,
+  path: string,
+  options: ListFilesOptions | undefined,
+  context: Context,
+): Effect.Effect<Result<FileListing, FileError>> {
+  return Effect.gen(function* () {
+    const info = yield* Effect.promise(() => connection.info());
+    if (info.features?.includes("listFiles") !== true) {
+      return err<FileListing, FileError>(
         new FileError("not_supported", "The msa-env daemon does not list files; update it", path),
       );
     }
-    const { json, payload } = await connection.request(
-      "listFiles",
-      // Fields left undefined are not sent; the daemon applies the defaults.
-      {
-        path,
-        hidden: options?.hidden,
-        gitignore: options?.gitignore,
-        exclude: options?.exclude,
-        maxEntries: options?.maxEntries,
-        maxBytes: options?.maxBytes,
-        timeoutMs: options?.timeoutMs,
-      },
-      context.abortSignal ? { signal: context.abortSignal } : {},
+    const { json, payload } = yield* Effect.promise(() =>
+      connection.request(
+        "listFiles",
+        {
+          path,
+          hidden: options?.hidden,
+          gitignore: options?.gitignore,
+          exclude: options?.exclude,
+          maxEntries: options?.maxEntries,
+          maxBytes: options?.maxBytes,
+          timeoutMs: options?.timeoutMs,
+        },
+        context.abortSignal === undefined ? {} : { signal: context.abortSignal },
+      ),
     );
     const afterAbort = abortResult<FileListing>(context.abortSignal, path);
-    if (afterAbort) return afterAbort;
-    // Records of a kind byte, the UTF-8 path, and a NUL.
-    const entries: FileListEntry[] = [];
-    const bytes = Buffer.from(payload.buffer, payload.byteOffset, payload.length);
-    for (let start = 0; start < bytes.length;) {
-      const end = bytes.indexOf(0, start);
-      if (end === -1) break;
-      const kind = KINDS[bytes[start]!];
-      if (kind !== undefined) entries.push({ path: bytes.toString("utf8", start + 1, end), kind });
-      start = end + 1;
-    }
-    return ok({ entries, truncated: json["truncated"] === true });
-  } catch (error) {
-    return err(toFileError(error, path));
-  }
+    if (afterAbort !== undefined) return afterAbort;
+    return ok<FileListing, FileError>({
+      entries: parseListing(payload),
+      truncated: json["truncated"] === true,
+    });
+  });
 }
 
+const listFilesEffect = (
+  connection: Connection,
+  path: string,
+  options: ListFilesOptions | undefined,
+  context: Context,
+): Effect.Effect<Result<FileListing, FileError>> => {
+  const invalid = invalidLimit(options, path);
+  if (invalid !== undefined) return Effect.succeed(invalid);
+  const aborted = abortResult<FileListing>(context.abortSignal, path);
+  if (aborted !== undefined) return Effect.succeed(aborted);
+  return recoverFileError(requestListing(connection, path, options, context), path);
+};
+
+export const listFilesOver: {
+  (
+    path: string,
+    options: ListFilesOptions | undefined,
+    context: Context,
+  ): (connection: Connection) => Promise<Result<FileListing, FileError>>;
+  (
+    connection: Connection,
+    path: string,
+    options: ListFilesOptions | undefined,
+    context: Context,
+  ): Promise<Result<FileListing, FileError>>;
+} = dual(
+  4,
+  (
+    connection: Connection,
+    path: string,
+    options: ListFilesOptions | undefined,
+    context: Context,
+  ): Promise<Result<FileListing, FileError>> =>
+    Effect.runPromise(listFilesEffect(connection, path, options, context)),
+);
+
 export type LocalExecutionEnvOptions = ConstructorParameters<typeof NodeExecutionEnv>[0] & {
-  /** A connection to this machine's daemon, `new Connection({ command: [localDaemon()] })`, for `listFiles`. */
   connection: Connection;
 };
 
-/**
- * `NodeExecutionEnv` with `listFiles` through a msa-env daemon on the same machine, so local and remote environments
- * list files with the same code. Everything else is `NodeExecutionEnv`'s. The connection belongs to the caller, who
- * closes it; several environments may share it.
- */
 export class LocalExecutionEnv extends NodeExecutionEnv implements ExecutionEnv {
   readonly #connection: Connection;
 
@@ -93,13 +131,17 @@ export class LocalExecutionEnv extends NodeExecutionEnv implements ExecutionEnv 
     this.#connection = connection;
   }
 
-  async listFiles(
+  listFiles(
     path: string,
     options: ListFilesOptions | undefined,
     context: Context,
   ): Promise<Result<FileListing, FileError>> {
-    const resolved = await this.absolutePath(path, context);
-    if (!resolved.ok) return resolved;
-    return listFilesOver(this.#connection, resolved.value, options, context);
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const resolved = yield* Effect.promise(() => this.absolutePath(path, context));
+        if (!resolved.ok) return resolved;
+        return yield* listFilesEffect(this.#connection, resolved.value, options, context);
+      }),
+    );
   }
 }

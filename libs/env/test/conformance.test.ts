@@ -1,7 +1,3 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { registerEnvConformance } from "@msa/durable/testing";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
@@ -9,46 +5,44 @@ import { Connection } from "../src/connection.ts";
 import { LocalExecutionEnv } from "../src/list-files.ts";
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
 import { daemon } from "./daemon.ts";
+import { optionalEnv, windows } from "./environment.ts";
+import { gitBash, withTempDir } from "./temp-dir.ts";
 
 const connection = new Connection({ command: [daemon] });
-afterAll(() => connection.close());
+afterAll(() => {
+  connection.close();
+});
 
-const windows = process.platform === "win32";
-const gitBash = join(process.env["ProgramFiles"] ?? "C:\\Program Files", "Git", "bin", "bash.exe");
+const options = windows
+  ? { shell: [gitBash(optionalEnv("ProgramFiles")), "-c"], symlinks: false, listFiles: true }
+  : { listFiles: true };
 
 registerEnvConformance(
   { describe, expect, it },
   "RemoteExecutionEnv over a pipe",
-  async (use) => {
-    const cwd = mkdtempSync(join(tmpdir(), "msa-env-conformance-"));
-    try {
-      await use(
-        new RemoteExecutionEnv({
-          connection,
-          id: "msa-env:test",
-          cwd,
-          watch: { pollIntervalMs: 100 },
-        }),
-      );
-    } finally {
-      // On Windows a killed command's processes can hold the directory for a moment.
-      rmSync(cwd, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
-    }
-  },
-  // Git Bash's `ln -s` copies instead of linking unless native symlinks are enabled.
-  windows ? { shell: [gitBash, "-c"], symlinks: false, listFiles: true } : { listFiles: true },
+  (use) =>
+    withTempDir({
+      prefix: "msa-env-conformance-",
+      use: (cwd) =>
+        use(
+          new RemoteExecutionEnv({
+            connection,
+            id: "msa-env:test",
+            cwd,
+            watch: { pollIntervalMs: 100 },
+          }),
+        ),
+    }),
+  options,
 );
 
 registerEnvConformance(
   { describe, expect, it },
   "LocalExecutionEnv",
-  async (use) => {
-    const cwd = mkdtempSync(join(tmpdir(), "msa-env-local-conformance-"));
-    try {
-      await use(new LocalExecutionEnv({ connection, cwd, watch: { pollIntervalMs: 100 } }));
-    } finally {
-      rmSync(cwd, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
-    }
-  },
-  windows ? { shell: [gitBash, "-c"], symlinks: false, listFiles: true } : { listFiles: true },
+  (use) =>
+    withTempDir({
+      prefix: "msa-env-local-conformance-",
+      use: (cwd) => use(new LocalExecutionEnv({ connection, cwd, watch: { pollIntervalMs: 100 } })),
+    }),
+  options,
 );

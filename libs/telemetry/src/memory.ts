@@ -5,7 +5,7 @@ import type {
   SpanStatus,
   TelemetryContext,
   TelemetrySpan,
-} from "./index.ts";
+} from "./context.ts";
 import { NOOP_TELEMETRY_CONTEXT } from "./noop.ts";
 
 export interface RecordedTelemetryEvent {
@@ -53,7 +53,7 @@ function copyAttributeValue(value: AttributeValue): AttributeValue {
 
 function copyAttributes(attributes?: SpanAttributes): SpanAttributes {
   const copy: SpanAttributes = {};
-  if (!attributes) return copy;
+  if (attributes === undefined) return copy;
   for (const [name, value] of Object.entries(attributes)) {
     if (value !== undefined) copy[name] = copyAttributeValue(value);
   }
@@ -70,9 +70,9 @@ function mergeAttributes(current: SpanAttributes, attributes: SpanAttributes): S
 
 function copyStatus(status: SpanStatus): SpanStatus {
   if (status.status === "ok") return { status: "ok" };
-  return status.error
-    ? { status: "error", error: { name: status.error.name, message: status.error.message } }
-    : { status: "error" };
+  return status.error === undefined
+    ? { status: "error" }
+    : { status: "error", error: { name: status.error.name, message: status.error.message } };
 }
 
 function automaticErrorStatus(error: unknown): SpanStatus {
@@ -81,7 +81,7 @@ function automaticErrorStatus(error: unknown): SpanStatus {
       return { status: "error", error: { name: error.name, message: error.message } };
     }
   } catch {
-    // Error inspection is passive. Fall through to an error status without details.
+    return { status: "error" };
   }
   return { status: "error" };
 }
@@ -117,57 +117,52 @@ function createSpan(
   };
 }
 
-function startInMemorySpan<T>(
-  state: InMemoryTelemetryState,
-  parent: MutableRecordedTelemetrySpan | undefined,
-  options: SpanOptions,
-  callback: (span: TelemetrySpan) => T | Promise<T>,
-): Promise<T> {
-  if (parent?.settled) return NOOP_TELEMETRY_CONTEXT.startSpan(options, callback);
-
-  let recordedSpan: MutableRecordedTelemetrySpan;
+function recordPassively(recordedSpan: MutableRecordedTelemetrySpan, record: () => void): boolean {
+  if (recordedSpan.settled) return false;
   try {
-    recordedSpan = createSpan(state, parent, options);
-    state.spans.push(recordedSpan);
+    record();
+    return true;
   } catch {
-    return NOOP_TELEMETRY_CONTEXT.startSpan(options, callback);
+    return false;
   }
+}
 
-  const span: TelemetrySpan = {
+function createRecordingSpan(
+  state: InMemoryTelemetryState,
+  recordedSpan: MutableRecordedTelemetrySpan,
+): TelemetrySpan {
+  return {
     startSpan: <Result>(
       childOptions: SpanOptions,
       childCallback: (child: TelemetrySpan) => Result | Promise<Result>,
     ) => startInMemorySpan(state, recordedSpan, childOptions, childCallback),
     addEvent(name, attributes) {
-      if (recordedSpan.settled) return;
-      try {
+      recordPassively(recordedSpan, () => {
         recordedSpan.events.push({ name, attributes: copyAttributes(attributes) });
-      } catch {
-        // Recording is passive. Ignore malformed or unreadable telemetry payloads.
-      }
+      });
     },
     setAttributes(attributes) {
-      if (recordedSpan.settled) return;
-      try {
+      recordPassively(recordedSpan, () => {
         recordedSpan.attributes = mergeAttributes(recordedSpan.attributes, attributes);
-      } catch {
-        // Recording is passive. Ignore malformed or unreadable telemetry payloads.
-      }
+      });
     },
     setStatus(status) {
-      if (recordedSpan.settled) return;
-      try {
+      recordPassively(recordedSpan, () => {
         recordedSpan.status = copyStatus(status);
         recordedSpan.explicitStatus = true;
-      } catch {
-        // Recording is passive. Ignore malformed or unreadable telemetry payloads.
-      }
+      });
     },
   };
+}
 
+function runRecordedCallback<T>(
+  state: InMemoryTelemetryState,
+  recordedSpan: MutableRecordedTelemetrySpan,
+  callback: (span: TelemetrySpan) => T | Promise<T>,
+): Promise<T> {
   let result: T | Promise<T>;
   try {
-    result = callback(span);
+    result = callback(createRecordingSpan(state, recordedSpan));
   } catch (error) {
     settleSpan(state, recordedSpan, true, error);
     return Promise.reject(error);
@@ -185,10 +180,25 @@ function startInMemorySpan<T>(
   );
 }
 
-/**
- * Backend-neutral reference implementation that records spans in process memory.
- * Create a fresh instance to isolate tests or independent recording scopes.
- */
+function startInMemorySpan<T>(
+  state: InMemoryTelemetryState,
+  parent: MutableRecordedTelemetrySpan | undefined,
+  options: SpanOptions,
+  callback: (span: TelemetrySpan) => T | Promise<T>,
+): Promise<T> {
+  if (parent?.settled === true) return NOOP_TELEMETRY_CONTEXT.startSpan(options, callback);
+
+  let recordedSpan: MutableRecordedTelemetrySpan;
+  try {
+    recordedSpan = createSpan(state, parent, options);
+    state.spans.push(recordedSpan);
+  } catch {
+    return NOOP_TELEMETRY_CONTEXT.startSpan(options, callback);
+  }
+
+  return runRecordedCallback(state, recordedSpan, callback);
+}
+
 export class InMemoryTelemetryContext implements TelemetryContext {
   private readonly state: InMemoryTelemetryState = {
     spans: [],
@@ -203,7 +213,6 @@ export class InMemoryTelemetryContext implements TelemetryContext {
     return startInMemorySpan(this.state, undefined, options, callback);
   }
 
-  /** Returns detached snapshots in span-start order. */
   getSpans(): readonly RecordedTelemetrySpan[] {
     return this.state.spans.map((span) => ({
       id: span.id,

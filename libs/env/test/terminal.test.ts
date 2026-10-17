@@ -2,11 +2,13 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { Connection, RemoteError } from "../src/connection.ts";
-import { openTerminal } from "../src/terminal.ts";
+import { openTerminal, type TerminalForeground } from "../src/terminal.ts";
 import { daemon } from "./daemon.ts";
+import { windows } from "./environment.ts";
 
 const connections: Connection[] = [];
 const dirs: string[] = [];
@@ -23,15 +25,14 @@ function connect(): { connection: Connection; cwd: string } {
   return { connection, cwd };
 }
 
-/** Collects output and waits for text to appear in it. */
 function collector(): {
   onData: (bytes: Uint8Array) => void;
   bytes: () => Buffer;
-  waitFor: (text: string) => Promise<void>;
+  waitFor: (text: string) => Effect.Effect<void>;
 } {
   const chunks: Buffer[] = [];
   const waiting: { text: string; resolve: () => void }[] = [];
-  const bytes = () => Buffer.concat(chunks);
+  const bytes = (): Buffer => Buffer.concat(chunks);
   return {
     bytes,
     onData: (data) => {
@@ -44,127 +45,164 @@ function collector(): {
     },
     waitFor: (text) =>
       bytes().toString("latin1").includes(text)
-        ? Promise.resolve()
-        : new Promise((resolve) => waiting.push({ text, resolve })),
+        ? Effect.void
+        : Effect.callback<void>((resume) => {
+            waiting.push({
+              text,
+              resolve: () => {
+                resume(Effect.void);
+              },
+            });
+          }),
   };
 }
 
-describe.skipIf(process.platform === "win32")("openTerminal", () => {
-  it("runs a program in a terminal with input, resizing and its exit code", async () => {
-    const { connection, cwd } = connect();
-    const output = collector();
-    const terminal = await openTerminal(connection, {
+const run = (effect: Effect.Effect<void>): Promise<void> => Effect.runPromise(effect);
+
+const ignoreData = (): void => undefined;
+
+const ttyProgram = Effect.gen(function* () {
+  const { connection, cwd } = connect();
+  const output = collector();
+  const terminal = yield* Effect.promise(() =>
+    openTerminal(connection, {
       cwd,
       argv: ["/bin/sh"],
       env: { PS1: "$ ", TERM: "xterm-256color" },
       cols: 80,
       rows: 24,
       onData: output.onData,
-    });
-    expect(terminal.pid).toBeGreaterThan(0);
-    terminal.write("test -t 0 && echo IS-A-TTY; stty size; echo $TERM\n");
-    await output.waitFor("IS-A-TTY");
-    await output.waitFor("24 80");
-    await output.waitFor("xterm-256color");
-    terminal.resize(100, 30);
-    terminal.write("stty size\n");
-    await output.waitFor("30 100");
-    terminal.write("exit 3\n");
-    expect(await terminal.exited).toBe(3);
-  }, 20_000);
+    }),
+  );
+  expect(terminal.pid).toBeGreaterThan(0);
+  terminal.write("test -t 0 && echo IS-A-TTY; stty size; echo $TERM\n");
+  yield* output.waitFor("IS-A-TTY");
+  yield* output.waitFor("24 80");
+  yield* output.waitFor("xterm-256color");
+  terminal.resize(100, 30);
+  terminal.write("stty size\n");
+  yield* output.waitFor("30 100");
+  terminal.write("exit 3\n");
+  expect(yield* Effect.promise(() => terminal.exited)).toBe(3);
+});
 
-  it("reports the job in the foreground, not the shell at its prompt", async () => {
-    const { connection, cwd } = connect();
-    const output = collector();
-    const terminal = await openTerminal(connection, {
+const named = process.platform === "darwin" || process.platform === "linux";
+
+const isCommand = (foreground: TerminalForeground | undefined): boolean =>
+  foreground !== undefined && (!named || foreground.name === "sleep");
+
+const foregroundJob = Effect.gen(function* () {
+  const { connection, cwd } = connect();
+  const output = collector();
+  const terminal = yield* Effect.promise(() =>
+    openTerminal(connection, {
       cwd,
-      // Interactive, for job control: the shell puts each job in front of the terminal.
       argv: ["/bin/sh", "-i"],
       env: { PS1: "$ ", TERM: "xterm-256color" },
       cols: 80,
       rows: 24,
       onData: output.onData,
-    });
-    terminal.write("echo READY\n");
-    await output.waitFor("READY");
-    expect(await terminal.foreground()).toBeUndefined();
-    terminal.write("sleep 100\n");
-    // The shell forks before it execs: wait until the foreground job is the command itself, not the forked shell.
-    const named = process.platform === "darwin" || process.platform === "linux";
-    let foreground = await terminal.foreground();
-    for (
-      let tries = 0;
-      (!foreground || (named && foreground.name !== "sleep")) && tries < 100;
-      tries++
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      foreground = await terminal.foreground();
-    }
-    expect(foreground?.pid).toBeGreaterThan(0);
-    expect(foreground?.pid).not.toBe(terminal.pid);
-    if (named) expect(foreground?.name).toBe("sleep");
-    terminal.close();
-    await expect(terminal.exited).rejects.toMatchObject({ code: "aborted" });
-    await expect(terminal.foreground()).rejects.toMatchObject({ code: "EBADF" });
-  }, 20_000);
+    }),
+  );
+  terminal.write("echo READY\n");
+  yield* output.waitFor("READY");
+  expect(yield* Effect.promise(() => terminal.foreground())).toBeUndefined();
+  terminal.write("sleep 100\n");
+  let foreground = yield* Effect.promise(() => terminal.foreground());
+  for (let tries = 0; !isCommand(foreground) && tries < 100; tries++) {
+    yield* Effect.sleep(20);
+    foreground = yield* Effect.promise(() => terminal.foreground());
+  }
+  expect(foreground?.pid).toBeGreaterThan(0);
+  expect(foreground?.pid).not.toBe(terminal.pid);
+  if (named) expect(foreground?.name).toBe("sleep");
+  terminal.close();
+  yield* Effect.promise(() => expect(terminal.exited).rejects.toMatchObject({ code: "aborted" }));
+  yield* Effect.promise(() =>
+    expect(terminal.foreground()).rejects.toMatchObject({ code: "EBADF" }),
+  );
+});
 
-  it("delivers raw bytes, not decoded text", async () => {
-    const { connection, cwd } = connect();
-    const output = collector();
-    const terminal = await openTerminal(connection, {
+const rawBytes = Effect.gen(function* () {
+  const { connection, cwd } = connect();
+  const output = collector();
+  const terminal = yield* Effect.promise(() =>
+    openTerminal(connection, {
       cwd,
       argv: ["sh", "-c", "printf 'a\\377b'"],
       cols: 80,
       rows: 24,
       onData: output.onData,
-    });
-    expect(await terminal.exited).toBe(0);
-    expect([...output.bytes()]).toEqual([0x61, 0xff, 0x62]);
-  });
+    }),
+  );
+  expect(yield* Effect.promise(() => terminal.exited)).toBe(0);
+  expect([...output.bytes()]).toEqual([0x61, 0xff, 0x62]);
+});
 
-  it("keeps input in order", async () => {
-    const { connection, cwd } = connect();
-    const terminal = await openTerminal(connection, {
+const inputOrder = Effect.gen(function* () {
+  const { connection, cwd } = connect();
+  const terminal = yield* Effect.promise(() =>
+    openTerminal(connection, {
       cwd,
       argv: ["sh", "-c", "head -c 40000 > input.txt"],
       cols: 80,
       rows: 24,
-      onData: () => {},
-    });
-    let text = "";
-    for (let index = 0; index < 4000; index++) {
-      const piece = `${String(index).padStart(9, "0")}\n`;
-      text += piece;
-      terminal.write(piece);
-    }
-    expect(await terminal.exited).toBe(0);
-    expect(readFileSync(join(cwd, "input.txt"), "utf8")).toBe(text);
-  }, 20_000);
+      onData: ignoreData,
+    }),
+  );
+  let text = "";
+  for (let index = 0; index < 4000; index++) {
+    const piece = `${String(index).padStart(9, "0")}\n`;
+    text += piece;
+    terminal.write(piece);
+  }
+  expect(yield* Effect.promise(() => terminal.exited)).toBe(0);
+  expect(readFileSync(join(cwd, "input.txt"), "utf8")).toBe(text);
+});
 
-  it("kills the program on close", async () => {
-    const { connection, cwd } = connect();
-    const terminal = await openTerminal(connection, {
+const killOnClose = Effect.gen(function* () {
+  const { connection, cwd } = connect();
+  const terminal = yield* Effect.promise(() =>
+    openTerminal(connection, {
       cwd,
       argv: ["sleep", "100"],
       cols: 80,
       rows: 24,
-      onData: () => {},
-    });
-    terminal.close();
-    await expect(terminal.exited).rejects.toMatchObject({ code: "aborted" });
-  });
+      onData: ignoreData,
+    }),
+  );
+  terminal.close();
+  yield* Effect.promise(() => expect(terminal.exited).rejects.toMatchObject({ code: "aborted" }));
+});
 
-  it("fails to open in a missing directory", async () => {
-    const { connection, cwd } = connect();
-    await expect(
-      openTerminal(connection, { cwd: join(cwd, "missing"), cols: 80, rows: 24, onData: () => {} }),
-    ).rejects.toBeInstanceOf(RemoteError);
-  });
+const missingDirectory = Effect.promise(() => {
+  const { connection, cwd } = connect();
+  return expect(
+    openTerminal(connection, { cwd: join(cwd, "missing"), cols: 80, rows: 24, onData: ignoreData }),
+  ).rejects.toBeInstanceOf(RemoteError);
+});
 
-  it("rejects writes to a terminal that does not exist", async () => {
-    const { connection } = connect();
-    await expect(connection.request("ptyWrite", { target: 999 })).rejects.toMatchObject({
-      code: "EBADF",
-    });
+const missingTerminal = Effect.promise(() => {
+  const { connection } = connect();
+  return expect(connection.request("ptyWrite", { target: 999 })).rejects.toMatchObject({
+    code: "EBADF",
   });
+});
+
+describe.skipIf(windows)("openTerminal", () => {
+  it(
+    "runs a program in a terminal with input, resizing and its exit code",
+    () => run(ttyProgram),
+    20_000,
+  );
+  it(
+    "reports the job in the foreground, not the shell at its prompt",
+    () => run(foregroundJob),
+    20_000,
+  );
+  it("delivers raw bytes, not decoded text", () => run(rawBytes));
+  it("keeps input in order", () => run(inputOrder), 20_000);
+  it("kills the program on close", () => run(killOnClose));
+  it("fails to open in a missing directory", () => run(missingDirectory));
+  it("rejects writes to a terminal that does not exist", () => run(missingTerminal));
 });

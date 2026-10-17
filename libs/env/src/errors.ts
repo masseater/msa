@@ -1,21 +1,24 @@
-import { err, FileError, type Result } from "@msa/durable/env";
+import { err, FileError, ok, type Result } from "@msa/durable/env";
+import { Cause, Effect } from "effect";
+import { dual } from "effect/Function";
 
-import { RemoteError } from "./connection.ts";
+import { RemoteError } from "./remote-error.ts";
 
-export function abortResult<T>(
-  signal: AbortSignal | undefined,
-  path?: string,
-): Result<T, FileError> | undefined {
-  return signal?.aborted ? err(new FileError("aborted", "aborted", path)) : undefined;
-}
+export const abortResult: {
+  (
+    path: string | undefined,
+  ): <T>(signal: AbortSignal | undefined) => Result<T, FileError> | undefined;
+  <T>(signal: AbortSignal | undefined, path: string | undefined): Result<T, FileError> | undefined;
+} = dual(
+  2,
+  <T>(
+    signal: AbortSignal | undefined,
+    path: string | undefined,
+  ): Result<T, FileError> | undefined =>
+    signal?.aborted === true ? err(new FileError("aborted", "aborted", path)) : undefined,
+);
 
-/** `NodeExecutionEnv`'s mapping of Node error codes to `FileError` codes. */
-export function toFileError(error: unknown, fallbackPath?: string): FileError {
-  if (error instanceof FileError) return error;
-  if (!(error instanceof RemoteError)) {
-    const cause = error instanceof Error ? error : new Error(String(error));
-    return new FileError("unknown", cause.message, fallbackPath, cause);
-  }
+function remoteFileError(error: RemoteError, fallbackPath: string | undefined): FileError {
   const path = error.path ?? fallbackPath;
   switch (error.code) {
     case "aborted":
@@ -33,6 +36,58 @@ export function toFileError(error: unknown, fallbackPath?: string): FileError {
     case "SYMLINK":
     case "NOT_REGULAR":
       return new FileError("invalid", error.message, path, error);
+    default:
+      return new FileError("unknown", error.message, path, error);
   }
-  return new FileError("unknown", error.message, path, error);
 }
+
+export const toFileError: {
+  (fallbackPath: string | undefined): (error: unknown) => FileError;
+  (error: unknown, fallbackPath: string | undefined): FileError;
+} = dual(2, (error: unknown, fallbackPath: string | undefined): FileError => {
+  if (error instanceof FileError) return error;
+  if (error instanceof RemoteError) return remoteFileError(error, fallbackPath);
+  const cause = error instanceof Error ? error : new Error(String(error));
+  return new FileError("unknown", cause.message, fallbackPath, cause);
+});
+
+export const recoverFileError: {
+  (
+    fallbackPath: string | undefined,
+  ): <T>(
+    effect: Effect.Effect<Result<T, FileError>, FileError>,
+  ) => Effect.Effect<Result<T, FileError>>;
+  <T>(
+    effect: Effect.Effect<Result<T, FileError>, FileError>,
+    fallbackPath: string | undefined,
+  ): Effect.Effect<Result<T, FileError>>;
+} = dual(
+  2,
+  <T>(
+    effect: Effect.Effect<Result<T, FileError>, FileError>,
+    fallbackPath: string | undefined,
+  ): Effect.Effect<Result<T, FileError>> =>
+    Effect.catchCause(effect, (cause) =>
+      Effect.succeed(err<T, FileError>(toFileError(Cause.squash(cause), fallbackPath))),
+    ),
+);
+
+export const fileResult: {
+  (
+    fallbackPath: string | undefined,
+  ): <T>(effect: Effect.Effect<T, FileError>) => Effect.Effect<Result<T, FileError>>;
+  <T>(
+    effect: Effect.Effect<T, FileError>,
+    fallbackPath: string | undefined,
+  ): Effect.Effect<Result<T, FileError>>;
+} = dual(
+  2,
+  <T>(
+    effect: Effect.Effect<T, FileError>,
+    fallbackPath: string | undefined,
+  ): Effect.Effect<Result<T, FileError>> =>
+    recoverFileError(
+      Effect.map(effect, (value) => ok<T, FileError>(value)),
+      fallbackPath,
+    ),
+);

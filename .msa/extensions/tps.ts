@@ -1,8 +1,9 @@
 import type { AssistantMessage } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
+import { Clock, Effect } from "effect";
 
 function isAssistantMessage(message: unknown): message is AssistantMessage {
-  if (!message || typeof message !== "object") return false;
+  if (typeof message !== "object" || message === null) return false;
   const role = (message as { role?: unknown }).role;
   return role === "assistant";
 }
@@ -11,14 +12,14 @@ export default function (msa: ExtensionAPI) {
   let agentStartMs: number | null = null;
 
   msa.on("agent_start", () => {
-    agentStartMs = Date.now();
+    agentStartMs = Effect.runSync(Clock.currentTimeMillis);
   });
 
   msa.on("agent_end", (event, ctx) => {
     if (!ctx.hasUI) return;
     if (agentStartMs === null) return;
 
-    const elapsedMs = Date.now() - agentStartMs;
+    const elapsedMs = Effect.runSync(Clock.currentTimeMillis) - agentStartMs;
     agentStartMs = null;
     if (elapsedMs <= 0) return;
 
