@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
 import { Cause, Console, Effect, Fiber, Schedule, Schema } from "effect";
+
+import { readFileString, sha256Hex } from "../test-platform.ts";
 
 type ClipboardValue = string | Buffer | null | undefined;
 
@@ -19,6 +19,7 @@ const read = Effect.gen(function* () {
   const value: ClipboardValue = yield* Effect.promise((): Promise<ClipboardValue> => pending);
   const bytes =
     typeof value === "string" || Buffer.isBuffer(value) ? Buffer.from(value) : undefined;
+  const hash = bytes === undefined ? undefined : yield* sha256Hex(bytes);
   yield* Console.log(
     yield* toJson({
       ok: true,
@@ -26,7 +27,7 @@ const read = Effect.gen(function* () {
         value === null || (typeof value === "string" && value.length <= 100) ? value : undefined,
       unavailable: value === undefined || undefined,
       length: bytes?.length,
-      hash: bytes && createHash("sha256").update(bytes).digest("hex"),
+      hash,
     }),
   );
 }).pipe(
@@ -47,7 +48,8 @@ const program = Effect.gen(function* () {
         yield* Fiber.interrupt(ticker);
         if (performance.now() - started > 200)
           assert.ok(ticks > 5, "Clipboard I/O must not block the JS event loop");
-        assert.equal(readFileSync(`/proc/self/task/${process.pid}/children`, "utf8").trim(), "");
+        const children = yield* readFileString(`/proc/self/task/${process.pid}/children`);
+        assert.equal(children.trim(), "");
       }),
     ),
   );

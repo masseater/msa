@@ -1,88 +1,54 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { after, before, describe, it } from "node:test";
+import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
+import { pathOperations } from "../src/platform.ts";
 import {
-  dependenciesAvailable,
+  type CompiledFixtures,
   exec,
-  fixtures,
+  dependenciesAvailable,
   readClipboard,
   startServer,
   startX11,
+  useCompiledFixtures,
 } from "./native-clipboard-linux-helpers.ts";
 
+const { join } = pathOperations;
+
 describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 60000 }, () => {
-  nativeLinuxClipboardCases8();
+  const compiled = useCompiledFixtures();
+  ["text", "image"].forEach((content) => {
+    invalidMetadataCase(compiled, content);
+    partialTransferCase(compiled, content);
+  });
 });
 
-function nativeLinuxClipboardCases8(): void {
-  let directory: string;
-  before(() => {
-    directory = mkdtempSync(join(tmpdir(), "msa-clipboard-test-"));
-    const flags = [
-      "-std=c11",
-      "-D_POSIX_C_SOURCE=200809L",
-      "-Wall",
-      "-Wextra",
-      "-Werror",
-      "-pthread",
-    ];
-    execFileSync("cc", [
-      ...flags,
-      join(fixtures, "clipboard-x11-test.c"),
-      "-lxcb",
-      "-ldl",
-      "-o",
-      join(directory, "x11-test"),
-    ]);
-    execFileSync("cc", [
-      ...flags,
-      "-shared",
-      "-fPIC",
-      "-nostdlib",
-      ...(process.arch === "arm64" ? ["-mno-outline-atomics"] : []),
-      "-Wl,-z,nodelete",
-      join(fixtures, "clipboard-worker-test.c"),
-      "-ldl",
-      "-o",
-      join(directory, "worker-test.node"),
-    ]);
-  });
-  after(() => {
-    if (directory !== "") rmSync(directory, { recursive: true, force: true });
-  });
-  ["text", "image"].forEach((content) => {
-    it(`frees partially received X11 ${content} after invalid metadata`, (t) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const { env } = yield* startX11(t);
-          yield* startServer({ t, command: join(directory, "x11-test"), args: ["invalid"], env });
-          const { stdout } = yield* exec({
-            file: join(directory, "x11-test"),
-            args: [content],
-            env,
-            timeout: 6000,
-          });
-          assert.equal(stdout.trim(), "clean");
-        }),
-      ));
+function invalidMetadataCase(compiled: CompiledFixtures, content: string): void {
+  it(`frees partially received X11 ${content} after invalid metadata`, (t) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { env } = yield* startX11(t);
+        const command = join(compiled.directory(), "x11-test");
+        yield* startServer({ t, command, args: ["invalid"], env });
+        const { stdout } = yield* exec({ file: command, args: [content], env, timeout: 6000 });
+        assert.equal(stdout.trim(), "clean");
+      }),
+    ));
+}
 
-    it(`times out stalled X11 ${content} after a partial transfer without blocking JS`, (t) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          const { env } = yield* startX11(t);
-          yield* startServer({ t, command: join(directory, "x11-test"), args: ["partial"], env });
-          const started = performance.now();
-          const result = yield* readClipboard(content === "text" ? "getText" : "getImage", env);
-          assert.equal(result.ok, false);
-          assert.match(result.error ?? "", /X11 clipboard/u);
-          assert.ok(performance.now() - started < 3500);
-        }),
-      ));
-  });
+function partialTransferCase(compiled: CompiledFixtures, content: string): void {
+  it(`times out stalled X11 ${content} after a partial transfer without blocking JS`, (t) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { env } = yield* startX11(t);
+        const command = join(compiled.directory(), "x11-test");
+        yield* startServer({ t, command, args: ["partial"], env });
+        const started = performance.now();
+        const result = yield* readClipboard(content === "text" ? "getText" : "getImage", env);
+        assert.equal(result.ok, false);
+        assert.match(result.error ?? "", /X11 clipboard/u);
+        assert.ok(performance.now() - started < 3500);
+      }),
+    ));
 }

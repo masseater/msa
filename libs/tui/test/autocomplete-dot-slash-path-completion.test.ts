@@ -1,13 +1,10 @@
 import assert from "node:assert";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, test } from "node:test";
+import { describe, test } from "node:test";
 
 import { Effect } from "effect";
 
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import { getSuggestions, setupFolder } from "./autocomplete-helpers.ts";
+import { getSuggestions, setupFolder, useTempDirectory } from "./autocomplete-helpers.ts";
 
 describe("CombinedAutocompleteProvider", () => {
   describe("dot-slash path completion", () => {
@@ -16,18 +13,14 @@ describe("CombinedAutocompleteProvider", () => {
 });
 
 function dotSlashPathCompletionCases3(): void {
-  let baseDir = "";
-  beforeEach(() => {
-    baseDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-"));
-  });
-  afterEach(() => {
-    rmSync(baseDir, { recursive: true, force: true });
-  });
+  const ws = useTempDirectory("msa-autocomplete-");
   test("completes Chinese path prefixes after whitespace or CJK punctuation on Tab", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        setupFolder(baseDir, { files: { "说明.md": "file", "文档/说明.md": "nested file" } });
-        const provider = new CombinedAutocompleteProvider([], baseDir);
+        yield* setupFolder(ws.baseDir, {
+          files: { "说明.md": "file", "文档/说明.md": "nested file" },
+        });
+        const provider = new CombinedAutocompleteProvider([], ws.baseDir);
         const completions = [
           { prefix: "说", value: "说明.md" },
           { prefix: "文", value: "文档/" },
@@ -35,7 +28,10 @@ function dotSlashPathCompletionCases3(): void {
           { prefix: "./文档/说", value: "./文档/说明.md" },
         ];
         if (process.platform !== "win32") {
-          completions.push({ prefix: `${baseDir}/文档/说`, value: `${baseDir}/文档/说明.md` });
+          completions.push({
+            prefix: `${ws.baseDir}/文档/说`,
+            value: `${ws.baseDir}/文档/说明.md`,
+          });
         }
         for (const separator of " \t\u3000\u00a0，：；。！？（「《") {
           for (const { prefix, value } of completions) {
@@ -73,21 +69,15 @@ describe("CombinedAutocompleteProvider", () => {
 });
 
 function dotSlashPathCompletionCases4(): void {
-  let baseDir = "";
-  beforeEach(() => {
-    baseDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-"));
-  });
-  afterEach(() => {
-    rmSync(baseDir, { recursive: true, force: true });
-  });
+  const ws = useTempDirectory("msa-autocomplete-");
   test("treats unquoted separators as boundaries even when a matching literal path exists", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        setupFolder(baseDir, { files: { "归档/说明.md": "other" } });
-        const provider = new CombinedAutocompleteProvider([], baseDir);
+        yield* setupFolder(ws.baseDir, { files: { "归档/说明.md": "other" } });
+        const provider = new CombinedAutocompleteProvider([], ws.baseDir);
         for (const separator of [" ", "\u3000", "，", "。"]) {
           const directory = `资料${separator}归档`;
-          setupFolder(baseDir, { files: { [`${directory}/说明.md`]: "archive" } });
+          yield* setupFolder(ws.baseDir, { files: { [`${directory}/说明.md`]: "archive" } });
           for (const marker of ["", "@"]) {
             const line = `${marker}${directory}/说`;
             const result = yield* Effect.promise(() =>
@@ -133,18 +123,12 @@ function dotSlashPathCompletionCases4(): void {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("dot-slash path completion", () => {
-    let baseDir = "";
-    beforeEach(() => {
-      baseDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-"));
-    });
-    afterEach(() => {
-      rmSync(baseDir, { recursive: true, force: true });
-    });
+    const ws = useTempDirectory("msa-autocomplete-");
     test("handles an empty prefix after whitespace or CJK punctuation consistently", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, { files: { "说明.md": "text" } });
-          const provider = new CombinedAutocompleteProvider([], baseDir);
+          yield* setupFolder(ws.baseDir, { files: { "说明.md": "text" } });
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir);
           for (const separator of [" ", "\t", "\u3000", "，", "。"]) {
             for (const force of [false, true]) {
               const line = `查看${separator}`;
@@ -170,18 +154,12 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("dot-slash path completion", () => {
-    let baseDir = "";
-    beforeEach(() => {
-      baseDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-"));
-    });
-    afterEach(() => {
-      rmSync(baseDir, { recursive: true, force: true });
-    });
+    const ws = useTempDirectory("msa-autocomplete-");
     test("completes paths after opening wrappers like ( [ { < and backticks", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, { files: { "src/main.ts": "x" } });
-          const provider = new CombinedAutocompleteProvider([], baseDir);
+          yield* setupFolder(ws.baseDir, { files: { "src/main.ts": "x" } });
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir);
           for (const wrapper of ["(", "[", "{", "<", "`", "((", "(`"]) {
             for (const prefix of ["src/ma", "./src/ma"]) {
               const before = `see ${wrapper}`;
@@ -213,18 +191,12 @@ describe("CombinedAutocompleteProvider", () => {
 
 describe("CombinedAutocompleteProvider", () => {
   describe("dot-slash path completion", () => {
-    let baseDir = "";
-    beforeEach(() => {
-      baseDir = mkdtempSync(join(tmpdir(), "msa-autocomplete-"));
-    });
-    afterEach(() => {
-      rmSync(baseDir, { recursive: true, force: true });
-    });
+    const ws = useTempDirectory("msa-autocomplete-");
     test("completes quoted paths after opening wrappers", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, { files: { "my dir/main.ts": "x" } });
-          const provider = new CombinedAutocompleteProvider([], baseDir);
+          yield* setupFolder(ws.baseDir, { files: { "my dir/main.ts": "x" } });
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir);
           const line = 'see ("my dir/ma';
           const result = yield* Effect.promise(() =>
             getSuggestions(provider, [line], 0, line.length, true),
@@ -241,8 +213,10 @@ describe("CombinedAutocompleteProvider", () => {
     test("keeps wrappers that are closed inside the path", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          setupFolder(baseDir, { files: { "[slug]/page.tsx": "x", "(group)/layout.tsx": "x" } });
-          const provider = new CombinedAutocompleteProvider([], baseDir);
+          yield* setupFolder(ws.baseDir, {
+            files: { "[slug]/page.tsx": "x", "(group)/layout.tsx": "x" },
+          });
+          const provider = new CombinedAutocompleteProvider([], ws.baseDir);
           for (const [prefix, value] of [
             ["[slug]/pa", "[slug]/page.tsx"],
             ["(group)/la", "(group)/layout.tsx"],

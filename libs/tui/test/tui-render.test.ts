@@ -1,14 +1,13 @@
 import assert from "node:assert";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
+import { pathOperations } from "../src/platform.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import { type TUI } from "../src/tui.ts";
 import { nextTick } from "./effect-helpers.ts";
+import { makeTempDirectory, readFileString, removeRecursive } from "./test-platform.ts";
 import { BoundedWriteTerminal } from "./tui-render-bounded-write-terminal.ts";
 import { MAX_RENDER_WRITE_CHARS, withEnv } from "./tui-render-helpers.ts";
 import { InputComponent } from "./tui-render-input-component.ts";
@@ -47,7 +46,7 @@ describe("TUI debug logging", () => {
   it("writes redraw logs to the provided directory", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const logDir = mkdtempSync(join(tmpdir(), "msa-tui-log-"));
+        const logDir = yield* makeTempDirectory("msa-tui-log-");
         yield* withEnv(
           { MSA_TUI_DEBUG_REDRAW: "1" },
           Effect.gen(function* () {
@@ -60,18 +59,12 @@ describe("TUI debug logging", () => {
             yield* Effect.promise(() => terminal.waitForRender());
 
             assert.match(
-              readFileSync(join(logDir, "msa-tui-debug.log"), "utf-8"),
+              yield* readFileString(pathOperations.join(logDir, "msa-tui-debug.log")),
               /fullRender: first render/u,
             );
             tui.stop();
           }),
-        ).pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              rmSync(logDir, { recursive: true, force: true });
-            }),
-          ),
-        );
+        ).pipe(Effect.ensuring(removeRecursive(logDir)));
       }),
     ));
 });
