@@ -130,7 +130,7 @@ describe("formatResumeCommand", () => {
 
   it("returns undefined when the session file is not set", () => {
     setStdoutIsTTY(true);
-    const sessionManager = createSessionManager({ sessionFile: undefined });
+    const sessionManager = createSessionManager({});
 
     expect(formatResumeCommand(sessionManager)).toBeUndefined();
   });

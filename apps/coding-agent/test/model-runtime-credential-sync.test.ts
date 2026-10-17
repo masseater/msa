@@ -41,7 +41,7 @@ function provider(
       },
     },
     getModels: () => [providerModel],
-    refreshModels: options.refreshModels,
+    ...(options.refreshModels !== undefined ? { refreshModels: options.refreshModels } : {}),
     stream: () => {
       throw new Error("unused");
     },

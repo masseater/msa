@@ -21,14 +21,14 @@ export type EvalRunIdentity = {
 export type ExpectedEvalRun = EvalRunIdentity;
 
 type EvalMetrics = {
-  inputTokens?: number;
-  outputTokens?: number;
-  cacheReadTokens?: number;
-  cacheWriteTokens?: number;
-  totalTokens?: number;
-  toolCalls?: number;
-  totalMs?: number;
-  estimatedCostUsd?: number;
+  inputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+  cacheReadTokens?: number | undefined;
+  cacheWriteTokens?: number | undefined;
+  totalTokens?: number | undefined;
+  toolCalls?: number | undefined;
+  totalMs?: number | undefined;
+  estimatedCostUsd?: number | undefined;
 };
 
 export type EvalObservation = EvalRunIdentity &

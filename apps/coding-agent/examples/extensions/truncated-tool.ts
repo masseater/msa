@@ -41,8 +41,8 @@ const RgParams = Type.Object({
 
 interface RgDetails {
   pattern: string;
-  path?: string;
-  glob?: string;
+  path?: string | undefined;
+  glob?: string | undefined;
   matchCount: number;
   truncation?: TruncationResult;
   fullOutputPath?: string;

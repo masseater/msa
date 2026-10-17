@@ -41,8 +41,8 @@ class TodoListComponent {
   private todos: Todo[];
   private theme: Theme;
   private onClose: () => void;
-  private cachedWidth?: number;
-  private cachedLines?: string[];
+  private cachedWidth?: number | undefined;
+  private cachedLines?: string[] | undefined;
 
   constructor(todos: Todo[], theme: Theme, onClose: () => void) {
     this.todos = todos;

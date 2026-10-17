@@ -140,7 +140,9 @@ async function createRuntimeHost(options: {
     settingsManager,
     cwd: tempDir,
     modelRuntime: getModelRuntime(modelRegistry),
-    resourceLoader: createTestResourceLoader({ extensionsResult: options.extensionsResult }),
+    resourceLoader: createTestResourceLoader(
+      options.extensionsResult !== undefined ? { extensionsResult: options.extensionsResult } : {},
+    ),
   });
 
   const runtimeHost = {

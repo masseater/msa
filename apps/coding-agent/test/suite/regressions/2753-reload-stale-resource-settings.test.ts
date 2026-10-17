@@ -81,7 +81,7 @@ describe("issue #2753 reload stale resource settings", () => {
         ...(await createAgentSessionFromServices({
           services,
           sessionManager,
-          sessionStartEvent,
+          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
           model: faux.getModel(),
         })),
         services,

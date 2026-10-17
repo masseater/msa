@@ -195,7 +195,7 @@ describe("buildSystemPrompt", () => {
       { name: "custom prompt", customPrompt: "Custom system prompt" },
     ])("includes skills with only bash in the $name", ({ customPrompt }) => {
       const prompt = buildSystemPrompt({
-        customPrompt,
+        ...(customPrompt !== undefined ? { customPrompt } : {}),
         selectedTools: ["bash"],
         contextFiles: [],
         skills: [testSkill],

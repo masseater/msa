@@ -43,7 +43,7 @@ const openaiModel: Model<Api> = {
   ...getBuiltinModel("openai", "gpt-5"),
   promptCache: { short: 300, long: 86_400 },
 };
-const unknownModel: Model<Api> = { ...adaptiveModel, promptCache: undefined };
+const { promptCache: _adaptivePromptCache, ...unknownModel }: Model<Api> = adaptiveModel;
 
 const warmUsage: Usage = {
   input: 0,

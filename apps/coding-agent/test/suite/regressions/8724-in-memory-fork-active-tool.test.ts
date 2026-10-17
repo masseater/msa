@@ -56,7 +56,7 @@ describe("regression #8724: in-memory fork during an active tool turn", () => {
       ...(await createAgentSessionFromServices({
         services,
         sessionManager,
-        sessionStartEvent,
+        ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
         model: harness.getModel(),
         noTools: "all",
       })),

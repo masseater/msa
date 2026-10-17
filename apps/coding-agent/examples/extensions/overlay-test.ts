@@ -68,7 +68,7 @@ class OverlayTestComponent implements Focusable {
     const current = this.items[this.selected]!;
 
     if (matchesKey(data, "return")) {
-      this.done({ action: current.label, query: current.hasInput ? current.text : undefined });
+      this.done({ action: current.label, ...(current.hasInput ? { query: current.text } : {}) });
       return;
     }
 

@@ -58,7 +58,7 @@ function createController(
     getSettingsManager,
     showError: vi.fn(),
     onChanged: vi.fn(),
-    initialThemeSetting,
+    ...(initialThemeSetting !== undefined ? { initialThemeSetting } : {}),
   });
 }
 
