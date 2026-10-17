@@ -1,7 +1,8 @@
-import { Effect } from "effect";
+import { Effect, Fiber } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { retryGoogleRequest } from "../src/api/google-shared.ts";
+import { defectOf } from "./effect-assert.ts";
 
 function googleApiError(status: number): Error {
   return Object.assign(new Error(`got status: ${status}`), { status });
@@ -21,10 +22,10 @@ describe("google request retries", () => {
           .mockRejectedValueOnce(googleApiError(429))
           .mockResolvedValue("ok");
 
-        const result = retryGoogleRequest(request, { maxRetries: 1 });
+        const result = yield* Effect.forkChild(retryGoogleRequest(request, { maxRetries: 1 }));
         yield* Effect.promise(() => vi.advanceTimersByTimeAsync(500));
 
-        yield* Effect.promise(() => expect(result).resolves.toBe("ok"));
+        expect(yield* Fiber.join(result)).toBe("ok");
         expect(request).toHaveBeenCalledTimes(2);
       }),
     ));
@@ -35,7 +36,7 @@ describe("google request retries", () => {
         const error = googleApiError(429);
         const request = vi.fn<() => Promise<string>>().mockRejectedValue(error);
 
-        yield* Effect.promise(() => expect(retryGoogleRequest(request)).rejects.toBe(error));
+        expect(yield* defectOf(retryGoogleRequest(request))).toBe(error);
         expect(request).toHaveBeenCalledTimes(1);
       }),
     ));
@@ -46,9 +47,7 @@ describe("google request retries", () => {
         const error = googleApiError(400);
         const request = vi.fn<() => Promise<string>>().mockRejectedValue(error);
 
-        yield* Effect.promise(() =>
-          expect(retryGoogleRequest(request, { maxRetries: 2 })).rejects.toBe(error),
-        );
+        expect(yield* defectOf(retryGoogleRequest(request, { maxRetries: 2 }))).toBe(error);
         expect(request).toHaveBeenCalledTimes(1);
       }),
     ));

@@ -105,8 +105,9 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
         if (nextParams !== undefined) {
           params = nextParams as GenerateContentParameters;
         }
-        const googleStream = yield* Effect.promise(() =>
-          retryGoogleRequest(() => client.models.generateContentStream(params), options),
+        const googleStream = yield* retryGoogleRequest(
+          () => client.models.generateContentStream(params),
+          options,
         );
         events.push({ type: "start", partial: output });
         let currentBlock = null as TextContent | ThinkingContent | null;

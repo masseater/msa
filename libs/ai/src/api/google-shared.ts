@@ -6,6 +6,7 @@ import {
   type Part,
   type ThinkingConfig,
 } from "@google/genai";
+import { Effect } from "effect";
 
 import { clampThinkingLevel } from "../models.ts";
 import type {
@@ -18,7 +19,7 @@ import type {
   Tool,
   TranscriptContext,
 } from "../types.ts";
-import { retryProviderRequest } from "../utils/provider-retry.ts";
+import { retryProviderEffect } from "../utils/provider-retry.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { collapseSystemMessages, withoutInitialSystemMessage } from "../utils/transcript.ts";
 import {
@@ -439,25 +440,24 @@ export function mapStopReasonString(reason: string): StopReason {
   }
 }
 
-export function retryGoogleRequest<T>(
+const withHeadersField = (error: unknown): unknown => {
+  if (error instanceof Error && "status" in error && !("headers" in error)) {
+    (error as { headers?: Headers | undefined }).headers = undefined;
+  }
+  return error;
+};
+
+export const retryGoogleRequest = <T>(
   request: () => Promise<T>,
   options?: Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
-): Promise<T> {
-  return retryProviderRequest(
-    async () => {
-      try {
-        return await request();
-      } catch (error) {
-        if (error instanceof Error && "status" in error && !("headers" in error)) {
-          (error as { headers?: Headers | undefined }).headers = undefined;
-        }
-        throw error;
-      }
-    },
+): Effect.Effect<T> =>
+  retryProviderEffect(
+    Effect.promise(() => Promise.resolve(request())).pipe(
+      Effect.catchDefect((error) => Effect.die(withHeadersField(error))),
+    ),
     {
       maxRetries: options?.maxRetries,
       maxRetryDelayMs: options?.maxRetryDelayMs,
       signal: options?.signal,
     },
   );
-}

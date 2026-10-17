@@ -465,15 +465,18 @@ function addResponseHeadersMiddleware(
   model: Model<"bedrock-converse-stream">,
   onObserved: () => void,
 ): void {
-  const middleware: DeserializeMiddleware<object, MetadataBearer> = (next) => async (args) => {
-    const result = await next(args);
-    const providerResponse = toProviderResponse(result.response);
-    if (providerResponse !== undefined) {
-      onObserved();
-      await onResponse(providerResponse, model);
-    }
-    return result;
-  };
+  const middleware: DeserializeMiddleware<object, MetadataBearer> = (next) => (args) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const result = yield* Effect.promise(() => next(args));
+        const providerResponse = toProviderResponse(result.response);
+        if (providerResponse !== undefined) {
+          onObserved();
+          yield* callHook(() => onResponse(providerResponse, model));
+        }
+        return result;
+      }),
+    );
   client.middlewareStack.add(middleware, { step: "deserialize", name: "msa-ai-response-headers" });
 }
 
