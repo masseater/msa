@@ -10,6 +10,13 @@ const formatPercent: {
   total === 0 ? "n/a" : `${((part / total) * 100).toFixed(1)}%`,
 );
 
+const ratio: {
+  (total: number): (part: number) => number | null;
+  (part: number, total: number): number | null;
+} = Function.dual(2, (part: number, total: number): number | null =>
+  total === 0 ? null : part / total,
+);
+
 const formatIsoMillis = (ms: number): string => DateTime.formatIso(DateTime.makeUnsafe(ms));
 
 const quantile: {
@@ -26,4 +33,4 @@ const quantile: {
 
 const median = (numbers: ReadonlyArray<number | null>): number | null => quantile(numbers, 0.5);
 
-export { formatInt, formatIsoMillis, formatPercent, median, quantile };
+export { formatInt, formatIsoMillis, formatPercent, median, quantile, ratio };

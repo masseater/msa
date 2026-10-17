@@ -82,6 +82,19 @@ const parseOptions = <A, E>(config: {
     { discard: true },
   ).pipe(Effect.as(config.parsed));
 
+const parseCommandLine = <A, E>(config: {
+  readonly defaults: A;
+  readonly fail: (message: string) => E;
+  readonly help: string;
+  readonly options: ReadonlyArray<readonly [string, CliOption<A, E>]>;
+}): Effect.Effect<A, E> =>
+  parseOptions({
+    args: process.argv.slice(2),
+    options: new Map([...config.options, ...helpOptions(config.help)]),
+    parsed: config.defaults,
+    unknown: (arg) => Effect.fail(config.fail(`Unknown argument: ${arg}`)),
+  });
+
 const ignoreUnknown = (): Effect.Effect<void> => Effect.void;
 
 export type { CliOption, CliOptions };
@@ -89,6 +102,7 @@ export {
   flagOption,
   helpOptions,
   ignoreUnknown,
+  parseCommandLine,
   parseOptions,
   requiredOption,
   stringOption,

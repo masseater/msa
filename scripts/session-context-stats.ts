@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 
 import { Console, Data, DateTime, Effect, Option, Schema } from "effect";
 
-import { flagOption, helpOptions, parseOptions, requiredOption } from "./cli-options.ts";
+import { flagOption, parseCommandLine, requiredOption } from "./cli-options.ts";
 import type { CliOption } from "./cli-options.ts";
 import { Host, runScript } from "./host.ts";
 import type { HostShape } from "./host.ts";
@@ -77,7 +77,7 @@ const flag = (
   set: (parsed: Args) => void,
 ): readonly [string, CliOption<Args, SessionContextStatsError>] => [name, flagOption(set)];
 
-const OPTIONS = new Map<string, CliOption<Args, SessionContextStatsError>>([
+const OPTIONS: ReadonlyArray<readonly [string, CliOption<Args, SessionContextStatsError>]> = [
   requiredValue("--sessions-dir", (parsed, value) => {
     parsed.sessionsDir = value;
   }),
@@ -111,16 +111,10 @@ const OPTIONS = new Map<string, CliOption<Args, SessionContextStatsError>>([
   flag("--git-commit-or-push", (parsed) => {
     parsed.bashContains.push("git commit", "git push");
   }),
-  ...helpOptions(HELP),
-]);
+];
 
 const parseArgs = (host: HostShape) =>
-  parseOptions({
-    args: process.argv.slice(2),
-    options: OPTIONS,
-    parsed: defaultArgs(host),
-    unknown: (arg) => Effect.fail(fail(`Unknown argument: ${arg}`)),
-  });
+  parseCommandLine({ defaults: defaultArgs(host), fail, help: HELP, options: OPTIONS });
 
 const sinceMillisOf = (since: string | undefined) =>
   Effect.gen(function* () {

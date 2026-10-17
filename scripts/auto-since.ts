@@ -1,6 +1,7 @@
 import { Data, DateTime, Effect, Option } from "effect";
 
 import type { HostShape } from "./host.ts";
+import { formatIsoMillis } from "./stats-format.ts";
 
 interface SinceFilter {
   readonly ms: number;
@@ -9,16 +10,26 @@ interface SinceFilter {
 
 class SinceError extends Data.TaggedError("SinceError")<{ readonly message: string }> {}
 
+const isPositiveFinite = (ms: number | undefined): ms is number =>
+  ms !== undefined && Number.isFinite(ms) && ms > 0;
+
 const fileSince = (host: HostShape, autoSincePath: string) =>
   Effect.gen(function* () {
     if (!(yield* host.exists(autoSincePath))) return null;
     const info = yield* host.stat(autoSincePath);
-    const birth = info.birthtimeMs;
-    const ms = birth !== undefined && Number.isFinite(birth) && birth > 0 ? birth : info.mtimeMs;
-    return ms !== undefined && Number.isFinite(ms) && ms > 0
-      ? { ms, source: `birth time of ${autoSincePath}` }
-      : null;
+    const ms = isPositiveFinite(info.birthtimeMs) ? info.birthtimeMs : info.mtimeMs;
+    return isPositiveFinite(ms) ? { ms, source: `birth time of ${autoSincePath}` } : null;
   });
+
+const isNonEmpty = (value: string | undefined): value is string =>
+  value !== undefined && value !== "";
+
+const explicitSince = (since: string): Effect.Effect<SinceFilter, SinceError> => {
+  const parsed = DateTime.make(since);
+  return Option.isNone(parsed)
+    ? Effect.fail(new SinceError({ message: `Invalid --since value: ${since}` }))
+    : Effect.succeed({ ms: DateTime.toEpochMillis(parsed.value), source: `--since ${since}` });
+};
 
 const resolveSince = (options: {
   readonly allSessions: boolean;
@@ -28,20 +39,15 @@ const resolveSince = (options: {
 }): Effect.Effect<SinceFilter | null, SinceError> =>
   Effect.gen(function* () {
     if (options.allSessions) return null;
-    if (options.since !== undefined && options.since !== "") {
-      const parsed = DateTime.make(options.since);
-      if (Option.isNone(parsed)) {
-        return yield* new SinceError({ message: `Invalid --since value: ${options.since}` });
-      }
-      return {
-        ms: DateTime.toEpochMillis(parsed.value),
-        source: `--since ${options.since}`,
-      };
-    }
+    if (isNonEmpty(options.since)) return yield* explicitSince(options.since);
     const { autoSincePath } = options;
-    if (autoSincePath === undefined || autoSincePath === "") return null;
-    return yield* fileSince(options.host, autoSincePath);
+    return isNonEmpty(autoSincePath) ? yield* fileSince(options.host, autoSincePath) : null;
   });
 
+const describeSince = (
+  since: SinceFilter | null,
+): { readonly ms: number; readonly iso: string; readonly source: string } | null =>
+  since === null ? null : { ms: since.ms, iso: formatIsoMillis(since.ms), source: since.source };
+
 export type { SinceFilter };
-export { resolveSince, SinceError };
+export { describeSince, resolveSince, SinceError };

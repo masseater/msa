@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 
 import { Data, Effect } from "effect";
 
-import { flagOption, helpOptions, parseOptions, valueOption } from "./cli-options.ts";
+import { flagOption, parseCommandLine, valueOption } from "./cli-options.ts";
 import type { CliOption } from "./cli-options.ts";
 import type { HostShape } from "./host.ts";
 import { scanOptions } from "./scan-options.ts";
@@ -72,7 +72,7 @@ const parseBucket = (
     ? Effect.succeed(value)
     : Effect.fail(fail("--bucket must be day or week"));
 
-const OPTIONS = new Map<string, CliOption<Args, ReadToolStatsError>>([
+const OPTIONS: ReadonlyArray<readonly [string, CliOption<Args, ReadToolStatsError>]> = [
   ...scanOptions<Args, ReadToolStatsError>(fail),
   [
     "--bucket",
@@ -88,16 +88,10 @@ const OPTIONS = new Map<string, CliOption<Args, ReadToolStatsError>>([
       parsed.text = true;
     }),
   ],
-  ...helpOptions(HELP),
-]);
+];
 
 const parseArgs = (host: HostShape) =>
-  parseOptions({
-    args: process.argv.slice(2),
-    options: OPTIONS,
-    parsed: defaultArgs(host),
-    unknown: (arg) => Effect.fail(fail(`Unknown argument: ${arg}`)),
-  });
+  parseCommandLine({ defaults: defaultArgs(host), fail, help: HELP, options: OPTIONS });
 
 export type { Args };
 export { parseArgs, ReadToolStatsError };

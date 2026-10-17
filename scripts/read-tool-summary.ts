@@ -1,5 +1,6 @@
+import { describeSince } from "./auto-since.ts";
 import type { ReadRecord, ReadScanMeta } from "./read-tool-scan.ts";
-import { formatIsoMillis, median } from "./stats-format.ts";
+import { median, ratio } from "./stats-format.ts";
 
 interface GroupStats {
   readonly key: string;
@@ -62,30 +63,26 @@ interface ReadSummary {
 const groupBy = (
   records: ReadonlyArray<ReadRecord>,
   keyOf: (record: ReadRecord) => string,
-): ReadonlyArray<readonly [string, ReadonlyArray<ReadRecord>]> => {
-  const groups = new Map<string, Array<ReadRecord>>();
-  for (const record of records) {
-    const key = keyOf(record);
-    const group = groups.get(key) ?? [];
-    groups.set(key, group);
-    group.push(record);
-  }
-  return [...groups.entries()];
-};
+): ReadonlyArray<readonly [string, ReadonlyArray<ReadRecord>]> => [
+  ...Map.groupBy(records, keyOf).entries(),
+];
 
 const messageKey = (record: ReadRecord): string =>
   `${record.sessionFile}::${record.assistantEntryId}`;
 
+const fullCount = (records: ReadonlyArray<ReadRecord>): number =>
+  records.filter((record) => record.mode === "full").length;
+
 const groupStats = (key: string, group: ReadonlyArray<ReadRecord>): GroupStats => {
-  const full = group.filter((record) => record.mode === "full").length;
+  const full = fullCount(group);
   return {
     key,
     reads: group.length,
     assistantMessages: new Set(group.map(messageKey)).size,
     full,
     partial: group.length - full,
-    fullRate: group.length === 0 ? null : full / group.length,
-    partialRate: group.length === 0 ? null : (group.length - full) / group.length,
+    fullRate: ratio(full, group.length),
+    partialRate: ratio(group.length - full, group.length),
   };
 };
 
@@ -98,13 +95,11 @@ const summarizeGroups = (
     .sort((left, right) => right.reads - left.reads || left.key.localeCompare(right.key));
 
 const sessionPartialRate = (group: ReadonlyArray<ReadRecord>): number | null =>
-  group.length === 0
-    ? null
-    : group.filter((record) => record.mode !== "full").length / group.length;
+  ratio(group.filter((record) => record.mode !== "full").length, group.length);
 
 const normalizedStats = (key: string, group: ReadonlyArray<ReadRecord>): NormalizedStats => {
   const sessions = groupBy(group, (record) => record.sessionFile).map(([, records]) => records);
-  const full = group.filter((record) => record.mode === "full").length;
+  const full = fullCount(group);
   const sessionCount = sessions.length;
   return {
     key,
@@ -112,9 +107,9 @@ const normalizedStats = (key: string, group: ReadonlyArray<ReadRecord>): Normali
     reads: group.length,
     full,
     partial: group.length - full,
-    readsPerSession: sessionCount === 0 ? null : group.length / sessionCount,
-    fullPerSession: sessionCount === 0 ? null : full / sessionCount,
-    partialPerSession: sessionCount === 0 ? null : (group.length - full) / sessionCount,
+    readsPerSession: ratio(group.length, sessionCount),
+    fullPerSession: ratio(full, sessionCount),
+    partialPerSession: ratio(group.length - full, sessionCount),
     medianSessionPartialRate: median(sessions.map(sessionPartialRate)),
   };
 };
@@ -148,6 +143,18 @@ const providerStatsOf = (options: {
   };
 };
 
+const countsOf = (records: ReadonlyArray<ReadRecord>): ReadSummary["counts"] => {
+  const full = fullCount(records);
+  return {
+    assistantMessagesWithReadCalls: new Set(records.map(messageKey)).size,
+    totalReadCalls: records.length,
+    full,
+    partial: records.length - full,
+    fullRate: ratio(full, records.length),
+    partialRate: ratio(records.length - full, records.length),
+  };
+};
+
 const buildReadSummary = (options: {
   readonly bucket: string;
   readonly bucketOf: (record: ReadRecord) => string;
@@ -158,7 +165,6 @@ const buildReadSummary = (options: {
   readonly top: number;
 }): ReadSummary => {
   const { bucketOf, hourOf, meta, records } = options;
-  const full = records.filter((record) => record.mode === "full").length;
   const providerStats = summarizeGroups(records, (record) => record.providerModel);
   return {
     filters: { model: options.modelFilter ?? null, bucket: options.bucket },
@@ -168,20 +174,10 @@ const buildReadSummary = (options: {
       sessionFilesIncluded: meta.sessionFilesIncluded,
       sessionFilesSkippedOlderThanSince: meta.sessionFilesSkippedOlderThanSince,
       sessionFilesWithReadCalls: meta.sessionFilesWithReadCalls,
-      since:
-        meta.since === null
-          ? null
-          : { ms: meta.since.ms, iso: formatIsoMillis(meta.since.ms), source: meta.since.source },
+      since: describeSince(meta.since),
       malformedLines: meta.malformedLines,
     },
-    counts: {
-      assistantMessagesWithReadCalls: new Set(records.map(messageKey)).size,
-      totalReadCalls: records.length,
-      full,
-      partial: records.length - full,
-      fullRate: records.length === 0 ? null : full / records.length,
-      partialRate: records.length === 0 ? null : (records.length - full) / records.length,
-    },
+    counts: countsOf(records),
     providerStats,
     timeStats: byKey(summarizeGroups(records, bucketOf)),
     normalizedTimeStats: summarizeNormalized(records, bucketOf),

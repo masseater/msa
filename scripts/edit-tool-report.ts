@@ -1,12 +1,17 @@
+import { Predicate } from "effect";
+
 import type { EditGroupStats, EditSummary } from "./edit-tool-summary.ts";
 import { formatInt, formatPercent } from "./stats-format.ts";
+
+const ratioDigits = (value: number): number => {
+  if (value >= 100) return 0;
+  return value >= 10 ? 1 : 2;
+};
 
 const formatRatio = (value: number | null): string => {
   if (value === null) return "no-core-change";
   if (!Number.isFinite(value)) return "∞";
-  if (value >= 100) return `${value.toFixed(0)}x`;
-  if (value >= 10) return `${value.toFixed(1)}x`;
-  return `${value.toFixed(2)}x`;
+  return `${value.toFixed(ratioDigits(value))}x`;
 };
 
 const formatBytes = (value: number): string => {
@@ -18,17 +23,16 @@ const formatBytes = (value: number): string => {
 const rate = (part: number, total: number, value: number | null): string =>
   value === null ? "n/a" : formatPercent(part, total).padStart(6);
 
+const isPresent = (value: string | null): value is string => value !== null && value !== "";
+
+const FILTER_PARTS: ReadonlyArray<(filters: EditSummary["filters"]) => string | undefined> = [
+  (filters) => (isPresent(filters.model) ? `model contains "${filters.model}"` : undefined),
+  (filters) => (isPresent(filters.extension) ? `extension = ${filters.extension}` : undefined),
+  (filters) => (filters.failedOnly ? "failed only" : undefined),
+];
+
 const filterLine = (summary: EditSummary): ReadonlyArray<string> => {
-  const { filters } = summary;
-  const parts = [
-    ...(filters.model === null || filters.model === ""
-      ? []
-      : [`model contains "${filters.model}"`]),
-    ...(filters.extension === null || filters.extension === ""
-      ? []
-      : [`extension = ${filters.extension}`]),
-    ...(filters.failedOnly ? ["failed only"] : []),
-  ];
+  const parts = FILTER_PARTS.map((part) => part(summary.filters)).filter(Predicate.isNotUndefined);
   return parts.length === 0 ? [] : [`Filters: ${parts.join(", ")}`];
 };
 
@@ -165,10 +169,7 @@ const exampleLines = (summary: EditSummary): ReadonlyArray<string> => [
 
 const parserNotes = (summary: EditSummary): ReadonlyArray<string> => {
   const { scan } = summary;
-  if (scan.malformedLines === 0 && scan.unmatchedToolResults === 0) return [];
-  return [
-    "",
-    "Parser notes",
+  const notes = [
     ...(scan.malformedLines > 0
       ? [`  malformed lines skipped: ${formatInt(scan.malformedLines)}`]
       : []),
@@ -176,6 +177,7 @@ const parserNotes = (summary: EditSummary): ReadonlyArray<string> => {
       ? [`  unmatched edit tool results: ${formatInt(scan.unmatchedToolResults)}`]
       : []),
   ];
+  return notes.length === 0 ? [] : ["", "Parser notes", ...notes];
 };
 
 const buildEditTextReport = (summary: EditSummary): string =>

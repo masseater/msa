@@ -1,3 +1,4 @@
+import { describeSince } from "./auto-since.ts";
 import {
   clusterStatsOf,
   hugeReplacementsOf,
@@ -14,10 +15,11 @@ import type {
   InflationBucket,
   LengthBucket,
   ModeStats,
+  Threshold,
   WorstExample,
 } from "./edit-tool-buckets.ts";
 import type { EditRecord, EditScanMeta } from "./edit-tool-scan.ts";
-import { formatIsoMillis, quantile } from "./stats-format.ts";
+import { quantile } from "./stats-format.ts";
 
 interface EditGroupStats {
   readonly key: string;
@@ -31,11 +33,6 @@ interface EditGroupStats {
   readonly successRate: number | null;
   readonly medianInflation: number | null;
   readonly p95Inflation: number | null;
-}
-
-interface Threshold {
-  readonly threshold: number;
-  readonly count: number;
 }
 
 interface EditSummary {
@@ -121,18 +118,10 @@ const groupStatsOf = (key: string, group: ReadonlyArray<EditRecord>): EditGroupS
 const summarizeGroups = (
   records: ReadonlyArray<EditRecord>,
   keyOf: (record: EditRecord) => string,
-): ReadonlyArray<EditGroupStats> => {
-  const groups = new Map<string, Array<EditRecord>>();
-  for (const record of records) {
-    const key = keyOf(record);
-    const group = groups.get(key) ?? [];
-    groups.set(key, group);
-    group.push(record);
-  }
-  return [...groups.entries()]
+): ReadonlyArray<EditGroupStats> =>
+  [...Map.groupBy(records, keyOf).entries()]
     .map(([key, group]) => groupStatsOf(key, group))
     .sort((left, right) => right.calls - left.calls || left.key.localeCompare(right.key));
-};
 
 const argStylesOf = (records: ReadonlyArray<EditRecord>) =>
   countsBy(records, (record) => record.argStyle)
@@ -196,10 +185,7 @@ const buildEditSummary = (options: {
       sessionFilesIncluded: meta.sessionFilesIncluded,
       sessionFilesSkippedOlderThanSince: meta.sessionFilesSkippedOlderThanSince,
       sessionFilesWithEditCalls: meta.sessionFilesWithEditCalls,
-      since:
-        meta.since === null
-          ? null
-          : { ms: meta.since.ms, iso: formatIsoMillis(meta.since.ms), source: meta.since.source },
+      since: describeSince(meta.since),
       malformedLines: meta.malformedLines,
       unmatchedToolResults: meta.unmatchedToolResults,
     },

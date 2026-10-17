@@ -2,8 +2,7 @@ import { homedir } from "node:os";
 
 import { Console, Data, Effect, Schema } from "effect";
 
-import { resolveSince } from "./auto-since.ts";
-import { flagOption, helpOptions, parseOptions, stringOption } from "./cli-options.ts";
+import { flagOption, parseCommandLine, stringOption } from "./cli-options.ts";
 import type { CliOption } from "./cli-options.ts";
 import { buildEditTextReport } from "./edit-tool-report.ts";
 import { scanEditCalls } from "./edit-tool-scan.ts";
@@ -12,7 +11,7 @@ import { buildEditSummary } from "./edit-tool-summary.ts";
 import { Host, runScript } from "./host.ts";
 import type { HostShape } from "./host.ts";
 import { IndentedJson } from "./json.ts";
-import { matchesModelFilter, scanOptions } from "./scan-options.ts";
+import { matchesModelFilter, resolveScanScope, scanOptions } from "./scan-options.ts";
 
 const DEFAULT_TOP = 20;
 
@@ -64,8 +63,10 @@ const defaultArgs = (host: HostShape): Args => ({
   top: DEFAULT_TOP,
 });
 
-const OPTIONS = new Map<string, CliOption<Args, EditToolStatsError>>([
-  ...scanOptions<Args, EditToolStatsError>((message) => new EditToolStatsError({ message })),
+const fail = (message: string) => new EditToolStatsError({ message });
+
+const OPTIONS: ReadonlyArray<readonly [string, CliOption<Args, EditToolStatsError>]> = [
+  ...scanOptions<Args, EditToolStatsError>(fail),
   [
     "--ext",
     stringOption((parsed, value) => {
@@ -78,16 +79,10 @@ const OPTIONS = new Map<string, CliOption<Args, EditToolStatsError>>([
       parsed.failedOnly = true;
     }),
   ],
-  ...helpOptions(HELP),
-]);
+];
 
 const parseArgs = (host: HostShape) =>
-  parseOptions({
-    args: process.argv.slice(2),
-    options: OPTIONS,
-    parsed: defaultArgs(host),
-    unknown: (arg) => Effect.fail(new EditToolStatsError({ message: `Unknown argument: ${arg}` })),
-  });
+  parseCommandLine({ defaults: defaultArgs(host), fail, help: HELP, options: OPTIONS });
 
 const matchesExtension = (record: EditRecord, extFilter: string | undefined): boolean =>
   extFilter === undefined || extFilter === "" || record.extension === extFilter;
@@ -100,19 +95,7 @@ const matchesFilters = (record: EditRecord, args: Args): boolean =>
 const program = Effect.gen(function* () {
   const host = yield* Host;
   const args = yield* parseArgs(host);
-  const sessionsDir = host.resolve(args.sessionsDir);
-  if (!(yield* host.exists(sessionsDir))) {
-    return yield* new EditToolStatsError({
-      message: `Sessions directory not found: ${sessionsDir}`,
-    });
-  }
-  const since = yield* resolveSince({
-    allSessions: args.allSessions,
-    autoSincePath: args.autoSincePath,
-    host,
-    since: args.since,
-  });
-  const { meta, records } = yield* scanEditCalls({ host, sessionsDir, since });
+  const { meta, records } = yield* scanEditCalls(yield* resolveScanScope({ args, fail, host }));
   const filtered = records.filter((record) => matchesFilters(record, args));
   const summary = buildEditSummary({
     extFilter: args.extFilter,

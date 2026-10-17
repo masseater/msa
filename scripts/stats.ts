@@ -10,6 +10,7 @@ import {
   defaultSessionsBase,
   encodeSessionDir,
   jsonlFiles,
+  requireSessionsDir,
   sessionEntries,
 } from "./sessions.ts";
 import type { Cost, SessionEntry, Usage } from "./sessions.ts";
@@ -238,9 +239,7 @@ const program = Effect.gen(function* () {
   const host = yield* Host;
   const args = yield* parseArgs(host);
   const sessionsDir = host.join(args.sessionsBase, encodeSessionDir(args.cwd));
-  if (!(yield* host.exists(sessionsDir))) {
-    return yield* new StatsError({ message: `Sessions directory not found: ${sessionsDir}` });
-  }
+  yield* requireSessionsDir({ fail: (message) => new StatsError({ message }), host, sessionsDir });
   const today = DateTime.startOf(yield* DateTime.nowInCurrentZone, "day");
   const start = DateTime.subtract(today, { days: args.days - 1 });
   const end = DateTime.add(today, { days: 1 });

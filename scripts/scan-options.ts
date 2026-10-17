@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 
+import { resolveSince } from "./auto-since.ts";
 import { flagOption, stringOption, valueOption } from "./cli-options.ts";
 import type { CliOption } from "./cli-options.ts";
+import type { HostShape } from "./host.ts";
+import { requireSessionsDir } from "./sessions.ts";
 
 interface ScanArgs {
   allSessions: boolean;
@@ -96,5 +99,23 @@ const matchesModelFilter = (options: {
   return model === undefined || model === "" || options.providerModel.toLowerCase().includes(model);
 };
 
+const resolveScanScope = <E>(options: {
+  readonly args: ScanArgs;
+  readonly fail: (message: string) => E;
+  readonly host: HostShape;
+}) =>
+  Effect.gen(function* () {
+    const { args, host } = options;
+    const sessionsDir = host.resolve(args.sessionsDir);
+    yield* requireSessionsDir({ fail: options.fail, host, sessionsDir });
+    const since = yield* resolveSince({
+      allSessions: args.allSessions,
+      autoSincePath: args.autoSincePath,
+      host,
+      since: args.since,
+    });
+    return { host, sessionsDir, since };
+  });
+
 export type { ScanArgs };
-export { matchesModelFilter, scanOptions };
+export { matchesModelFilter, resolveScanScope, scanOptions };

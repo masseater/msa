@@ -1,6 +1,5 @@
 import { Console, Effect, Schema } from "effect";
 
-import { resolveSince } from "./auto-since.ts";
 import { Host, runScript } from "./host.ts";
 import { IndentedJson } from "./json.ts";
 import { parseArgs, ReadToolStatsError } from "./read-tool-args.ts";
@@ -10,7 +9,7 @@ import { scanReadCalls } from "./read-tool-scan.ts";
 import type { ReadRecord } from "./read-tool-scan.ts";
 import { buildReadSummary } from "./read-tool-summary.ts";
 import { reportZone } from "./report-zone.ts";
-import { matchesModelFilter } from "./scan-options.ts";
+import { matchesModelFilter, resolveScanScope } from "./scan-options.ts";
 
 const encodeIndentedJson = Schema.encodeEffect(IndentedJson);
 
@@ -45,19 +44,9 @@ const printReport = (options: {
 const program = Effect.gen(function* () {
   const host = yield* Host;
   const args = yield* parseArgs(host);
-  const sessionsDir = host.resolve(args.sessionsDir);
-  if (!(yield* host.exists(sessionsDir))) {
-    return yield* new ReadToolStatsError({
-      message: `Sessions directory not found: ${sessionsDir}`,
-    });
-  }
-  const since = yield* resolveSince({
-    allSessions: args.allSessions,
-    autoSincePath: args.autoSincePath,
-    host,
-    since: args.since,
-  });
-  const { meta, records } = yield* scanReadCalls({ host, sessionsDir, since });
+  const { meta, records } = yield* scanReadCalls(
+    yield* resolveScanScope({ args, fail: (message) => new ReadToolStatsError({ message }), host }),
+  );
   const filtered = records.filter((record) =>
     matchesModelFilter({ modelFilter: args.modelFilter, providerModel: record.providerModel }),
   );

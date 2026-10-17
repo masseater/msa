@@ -69,10 +69,10 @@ const analyzeReplacement = (oldText: string, newText: string): Replacement => {
   const oldRemainder = oldText.slice(prefixChars);
   const newRemainder = newText.slice(prefixChars);
   const suffixChars = commonSuffixLength(oldRemainder, newRemainder);
-  const oldCore = suffixChars > 0 ? oldRemainder.slice(0, -suffixChars) : oldRemainder;
-  const newCore = suffixChars > 0 ? newRemainder.slice(0, -suffixChars) : newRemainder;
+  const oldCore = oldRemainder.slice(0, oldRemainder.length - suffixChars);
+  const newCore = newRemainder.slice(0, newRemainder.length - suffixChars);
   const sharedPrefixBytes = utf8Bytes(oldText.slice(0, prefixChars));
-  const sharedSuffixBytes = utf8Bytes(suffixChars > 0 ? oldRemainder.slice(-suffixChars) : "");
+  const sharedSuffixBytes = utf8Bytes(oldRemainder.slice(oldRemainder.length - suffixChars));
   const oldBytes = utf8Bytes(oldText);
   const newBytes = utf8Bytes(newText);
   const coreOldBytes = utf8Bytes(oldCore);
@@ -95,13 +95,13 @@ const analyzeReplacement = (oldText: string, newText: string): Replacement => {
   };
 };
 
+const dotfileExtension = (base: string): string =>
+  base.startsWith(".") && !base.slice(1).includes(".") ? base.toLowerCase() : "[no_ext]";
+
 const pathExtension = (host: HostShape, filePath: string): string => {
   if (filePath.length === 0) return "[unknown]";
   const extension = host.extname(filePath).toLowerCase();
-  if (extension !== "") return extension;
-  const base = host.basename(filePath);
-  if (base.startsWith(".") && !base.slice(1).includes(".")) return base.toLowerCase();
-  return "[no_ext]";
+  return extension === "" ? dotfileExtension(host.basename(filePath)) : extension;
 };
 
 const stringField = (args: unknown, key: string): string | undefined => {
@@ -116,18 +116,29 @@ const arrayField = (args: unknown, key: string): ReadonlyArray<unknown> | undefi
   return Arr.isArray(value) ? value : undefined;
 };
 
-const argStyleOf = (args: unknown): string => {
-  const hasEdits = arrayField(args, "edits") !== undefined;
-  const hasOldText =
-    stringField(args, "oldText") !== undefined || stringField(args, "newText") !== undefined;
-  const hasOldString =
-    stringField(args, "old_string") !== undefined || stringField(args, "new_string") !== undefined;
-  if (hasEdits) return "edits";
-  if (hasOldText && hasOldString) return "mixed";
-  if (hasOldText) return "oldText/newText";
-  if (hasOldString) return "old_string/new_string";
-  return "unknown";
-};
+const hasEitherString = (args: unknown, first: string, second: string): boolean =>
+  stringField(args, first) !== undefined || stringField(args, second) !== undefined;
+
+const REPLACEMENT_STYLES: ReadonlyMap<string, string> = new Map([
+  ["true:true", "mixed"],
+  ["true:false", "oldText/newText"],
+  ["false:true", "old_string/new_string"],
+  ["false:false", "unknown"],
+]);
+
+const replacementStyle = (hasOldText: boolean, hasOldString: boolean): string =>
+  REPLACEMENT_STYLES.get(`${hasOldText}:${hasOldString}`) ?? "unknown";
+
+const argStyleOf = (args: unknown): string =>
+  arrayField(args, "edits") === undefined
+    ? replacementStyle(
+        hasEitherString(args, "oldText", "newText"),
+        hasEitherString(args, "old_string", "new_string"),
+      )
+    : "edits";
+
+const stringFieldOr = (args: unknown, primary: string, fallback: string): string =>
+  stringField(args, primary) ?? stringField(args, fallback) ?? "";
 
 const sumReplacements = (perEdit: ReadonlyArray<Replacement>) =>
   perEdit.reduce(
@@ -197,8 +208,8 @@ const analyzeEditArguments = (options: {
   const edits = arrayField(args, "edits");
   if (edits !== undefined) return multiAnalysis({ argStyle, edits, extension, path });
   const replacement = analyzeReplacement(
-    stringField(args, "oldText") ?? stringField(args, "old_string") ?? "",
-    stringField(args, "newText") ?? stringField(args, "new_string") ?? "",
+    stringFieldOr(args, "oldText", "old_string"),
+    stringFieldOr(args, "newText", "new_string"),
   );
   return {
     path,

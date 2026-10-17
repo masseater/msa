@@ -55,6 +55,11 @@ interface WorstExample {
   readonly sessionFile: string;
 }
 
+interface Threshold {
+  readonly threshold: number;
+  readonly count: number;
+}
+
 const LENGTH_BUCKETS: ReadonlyArray<{
   readonly key: string;
   readonly label: string;
@@ -160,17 +165,13 @@ const inflationBucketsOf = (records: ReadonlyArray<EditRecord>): ReadonlyArray<I
     };
   });
 
-const hugeReplacementsOf = (
-  records: ReadonlyArray<EditRecord>,
-): ReadonlyArray<{ readonly threshold: number; readonly count: number }> =>
+const hugeReplacementsOf = (records: ReadonlyArray<EditRecord>): ReadonlyArray<Threshold> =>
   HUGE_THRESHOLDS.map((threshold) => ({
     threshold,
     count: records.filter((record) => record.totalEditBytes > threshold).length,
   }));
 
-const pathologicalOf = (
-  records: ReadonlyArray<EditRecord>,
-): ReadonlyArray<{ readonly threshold: number; readonly count: number }> =>
+const pathologicalOf = (records: ReadonlyArray<EditRecord>): ReadonlyArray<Threshold> =>
   PATHOLOGICAL_THRESHOLDS.map((threshold) => ({
     threshold,
     count: records.filter(
@@ -179,13 +180,7 @@ const pathologicalOf = (
   }));
 
 const clusterStatsOf = (records: ReadonlyArray<EditRecord>): ClusterStats => {
-  const groups = new Map<string, Array<EditRecord>>();
-  for (const record of records) {
-    const key = `${messageKey(record)}::${record.path}`;
-    const group = groups.get(key) ?? [];
-    groups.set(key, group);
-    group.push(record);
-  }
+  const groups = Map.groupBy(records, (record) => `${messageKey(record)}::${record.path}`);
   const clusters = [...groups.values()].filter((group) => group.length >= 2);
   const withCluster = new Set(
     clusters.flatMap((group) => (group[0] === undefined ? [] : [messageKey(group[0])])),
@@ -241,7 +236,15 @@ const worstExamplesOf = (options: {
     .slice(0, options.top)
     .map(worstExampleOf);
 
-export type { ClusterStats, InflationBucket, LengthBucket, ModeStats, Outcome, WorstExample };
+export type {
+  ClusterStats,
+  InflationBucket,
+  LengthBucket,
+  ModeStats,
+  Outcome,
+  Threshold,
+  WorstExample,
+};
 export {
   clusterStatsOf,
   hugeReplacementsOf,

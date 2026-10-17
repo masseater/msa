@@ -7,7 +7,7 @@ import { helpOptions, ignoreUnknown, parseOptions, valueOption } from "./cli-opt
 import type { CliOption } from "./cli-options.ts";
 import { Host, runScript } from "./host.ts";
 import type { HostShape } from "./host.ts";
-import { jsonlFilesRecursive } from "./sessions.ts";
+import { jsonlFilesRecursive, requireSessionsDir } from "./sessions.ts";
 import { renderReport } from "./tool-stats-report.ts";
 import type { HistogramRow } from "./tool-stats-report.ts";
 import { scanToolUsage } from "./tool-stats-scan.ts";
@@ -120,9 +120,11 @@ const bashRowsOf = (bashCommands: Map<string, BashCommandStats>): ReadonlyArray<
 const program = Effect.gen(function* () {
   const host = yield* Host;
   const { output, sessionsDir } = yield* parseArgs(host);
-  if (!(yield* host.exists(sessionsDir))) {
-    return yield* new ToolStatsError({ message: `Sessions directory not found: ${sessionsDir}` });
-  }
+  yield* requireSessionsDir({
+    fail: (message) => new ToolStatsError({ message }),
+    host,
+    sessionsDir,
+  });
   const files = yield* jsonlFilesRecursive({ directory: sessionsDir, host });
   const aggregate = yield* scanToolUsage({ files, host });
   const html = yield* renderReport({
