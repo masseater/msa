@@ -34,6 +34,7 @@ Extensions, prompt templates, and skills can add commands. The command menu in m
 | `/init`                                              |                                         | Ask the model to write an `AGENTS.md` that describes the repository                                                                                               |
 | `/import <path>`                                     |                                         | Import and resume a JSONL session                                                                                                                                 |
 | `/memory [list\|search <query>\|forget <id>\|stats]` |                                         | Open the memory view, or manage long-term memories; see [Long-Term Memory](memory.md)                                                                             |
+| `/sessions`                                          |                                         | Watch, steer, stop, and remodel the sessions the orchestrator started; needs `--orchestrator`, see [Orchestrate Parallel Sessions](orchestration.md)              |
 
 ## Export and share
 

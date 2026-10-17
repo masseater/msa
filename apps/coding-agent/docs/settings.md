@@ -105,6 +105,18 @@ See [Compaction Reference](compaction.md) for trigger, summarization, and valida
 
 See [Long-Term Memory](memory.md) for scopes, embeddings, and the `/memory` commands.
 
+## Orchestrator
+
+| Setting                              | Type   | Default                  | Description                                                                          |
+| ------------------------------------ | ------ | ------------------------ | ------------------------------------------------------------------------------------ |
+| `orchestrator.workerModel`           | string | The orchestrator's model | Model of the sessions it starts, as `provider/id`, unless `start_session` names one. |
+| `orchestrator.workerThinkingLevel`   | string | The orchestrator's level | Thinking level of those sessions.                                                    |
+| `orchestrator.reviewModel`           | string | The orchestrator's model | Model of the review session that closes each round.                                  |
+| `orchestrator.reviewThinkingLevel`   | string | The orchestrator's level | Thinking level of the review session.                                                |
+| `orchestrator.maxConcurrentSessions` | number | `4`                      | Tasks that run in parallel; a review always runs alone.                              |
+
+These apply when msa runs with [`--orchestrator`](cli.md#tools). See [Orchestrate Parallel Sessions](orchestration.md).
+
 ## Terminal and display
 
 | Setting                         | Type                                     | Default        | Description                                                                                                                                                                                                                                                                                           |

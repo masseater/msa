@@ -40,6 +40,10 @@
               "path": "memory.md"
             },
             {
+              "title": "Orchestrate Parallel Sessions",
+              "path": "orchestration.md"
+            },
+            {
               "title": "Run msa Safely",
               "path": "security.md"
             },

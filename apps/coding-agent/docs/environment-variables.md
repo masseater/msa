@@ -99,3 +99,13 @@ These variables are read by msa itself:
 | `OPENCODE_BIN`, `OPENCODE_FREE_DATA_HOME` | OpenCode binary and data directory for the `opencode-free` provider; see [Claude Code and OpenCode as models](cli-agents.md)                                                                                                                                     |
 
 Provider credentials such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and provider-specific configuration are listed in [Providers](providers.md#use-an-api-key-from-the-environment).
+
+## Orchestrator
+
+msa reads these when it runs with [`--orchestrator`](cli.md#tools), which keeps the dependencies between sessions in Neo4j. See [Orchestrate Parallel Sessions](orchestration.md).
+
+| Variable         | Description                                                   |
+| ---------------- | ------------------------------------------------------------- |
+| `NEO4J_URI`      | Bolt URI of the database; defaults to `bolt://localhost:7687` |
+| `NEO4J_USERNAME` | User to connect as; defaults to `neo4j`                       |
+| `NEO4J_PASSWORD` | Password; required, and the orchestrator fails without it     |

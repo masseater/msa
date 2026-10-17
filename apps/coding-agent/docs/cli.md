@@ -115,7 +115,7 @@ See [Settings](settings.md#tools) for configuring the default tool selection.
 - `-nt`, `--no-tools`<br>
   Starts with all built-in, extension, custom, and MCP tools disabled.
 - `--orchestrator`<br>
-  Adds the orchestrator tools (`start_session`, `list_sessions`, `read_session`, `send_to_session`, `set_session_model`, `stop_session`) to the selection. Sessions they start declare the sessions they depend on in Neo4j (`NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`), and every round ends in a review session that runs alone.
+  Adds the orchestrator tools (`start_session`, `list_sessions`, `read_session`, `send_to_session`, `set_session_model`, `stop_session`) to the selection, and enables `/sessions`. Sessions they start declare the sessions they depend on in Neo4j (`NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`), and every round ends in a review session that runs alone. See [Orchestrate Parallel Sessions](orchestration.md).
 
 Default enabled tools are `read`, `bash`, `edit`, and `write`, unless `defaultTools` changes them. `--tools` with plain names replaces the whole selection, so name every tool you want. Like `defaultTools`, it also accepts a list of only `+name` and `-name` entries, which adds tools to or removes them from the default selection: `msa --tools +codemode,-write` keeps the other default tools, enables `codemode`, and disables `write`. These entries take exact tool names, not `*` patterns; use `--exclude-tools` to disable tools by pattern. Plain names and `+name`/`-name` entries cannot be mixed. `/reload` enables tools newly added to `defaultTools`, but a tool removed with `-name` stays removed.
 

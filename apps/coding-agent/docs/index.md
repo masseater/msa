@@ -13,6 +13,7 @@ If msa is already installed, choose what you want to do:
 - [Use msa interactively](usage.md) to add files, run commands, direct ongoing work, and export results.
 - [Choose a model](models.md) or connect a subscription, API key, local model, or compatible endpoint.
 - [Continue or branch a session](sessions.md) to resume work or explore another approach without losing history.
+- [Orchestrate parallel sessions](orchestration.md) to split work across sessions with their own context windows, and watch them from `/sessions`.
 - [Configure msa](configuration.md) for your preferences, working folders, instructions, and reusable resources.
 - [Understand how msa works](how-msa-works.md), including tools, context, sessions, and the agent loop.
 

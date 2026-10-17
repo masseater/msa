@@ -2,6 +2,8 @@
 
 msa saves a conversation as a session. The active branch of that session supplies conversation history for the next model request. Use session commands to continue work, explore another branch, or reduce the amount of history sent to the model.
 
+To run several sessions at once instead of one at a time, see [Orchestrate Parallel Sessions](orchestration.md).
+
 ## Continue or switch sessions
 
 msa saves sessions automatically unless you start it with `--no-session`.
