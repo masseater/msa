@@ -3,30 +3,15 @@ import { getKeybindings } from "../keybindings.ts";
 import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../tui.ts";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
 import { Input } from "./input.ts";
+import {
+  type SettingItem,
+  type SettingsListOptions,
+  type SettingsListTheme,
+  settingsHint,
+  visibleItemRange,
+} from "./settings-list-items.ts";
 
-export interface SettingItem {
-  id: string;
-  label: string;
-  description?: string;
-  currentValue: string;
-  values?: string[];
-  submenu?: (
-    currentValue: string,
-    done: (selectedValue?: string, options?: { navigateTo?: string }) => void,
-  ) => Component;
-}
-
-export interface SettingsListTheme {
-  label: (text: string, selected: boolean) => string;
-  value: (text: string, selected: boolean) => string;
-  description: (text: string) => string;
-  cursor: string;
-  hint: (text: string) => string;
-}
-
-export interface SettingsListOptions {
-  enableSearch?: boolean;
-}
+export type { SettingItem, SettingsListOptions, SettingsListTheme };
 
 export class SettingsList implements Component {
   private items: SettingItem[];
@@ -114,35 +99,16 @@ export class SettingsList implements Component {
       return lines;
     }
 
-    const { startIndex, endIndex } = this.getVisibleRange(displayItems);
-
-    const maxLabelWidth = Math.min(
-      36,
-      Math.max(...this.items.map((item) => visibleWidth(item.label))),
-    );
+    const { startIndex, endIndex } = visibleItemRange({
+      selectedIndex: this.selectedIndex,
+      maxVisible: this.maxVisible,
+      itemCount: displayItems.length,
+    });
 
     for (let i = startIndex; i < endIndex; i++) {
       const item = displayItems[i];
       if (item === undefined) continue;
-
-      const isSelected = i === this.selectedIndex;
-      const prefix = isSelected ? this.theme.cursor : "  ";
-      const prefixWidth = visibleWidth(prefix);
-
-      const labelPadded =
-        item.label + " ".repeat(Math.max(0, maxLabelWidth - visibleWidth(item.label)));
-      const labelText = this.theme.label(labelPadded, isSelected);
-
-      const separator = "  ";
-      const usedWidth = prefixWidth + maxLabelWidth + visibleWidth(separator);
-      const valueMaxWidth = width - usedWidth - 2;
-
-      const valueText = this.theme.value(
-        truncateToWidth(item.currentValue, valueMaxWidth, ""),
-        isSelected,
-      );
-
-      lines.push(truncateToWidth(prefix + labelText + separator + valueText, width));
+      lines.push(this.renderItemLine(item, i === this.selectedIndex, width));
     }
 
     if (startIndex > 0 || endIndex < displayItems.length) {
@@ -150,18 +116,42 @@ export class SettingsList implements Component {
       lines.push(this.theme.hint(truncateToWidth(scrollText, width - 2, "")));
     }
 
-    const selectedItem = displayItems[this.selectedIndex];
-    if (selectedItem?.description !== undefined && selectedItem?.description !== "") {
-      lines.push("");
-      const wrappedDesc = wrapTextWithAnsi(selectedItem.description, width - 4);
-      for (const line of wrappedDesc) {
-        lines.push(this.theme.description(`  ${line}`));
-      }
-    }
-
+    this.addDescriptionLines(lines, displayItems[this.selectedIndex], width);
     this.addHintLine(lines, width);
 
     return lines;
+  }
+
+  private renderItemLine(item: SettingItem, isSelected: boolean, width: number): string {
+    const maxLabelWidth = Math.min(
+      36,
+      Math.max(...this.items.map((each) => visibleWidth(each.label))),
+    );
+    const prefix = isSelected ? this.theme.cursor : "  ";
+    const labelPadded =
+      item.label + " ".repeat(Math.max(0, maxLabelWidth - visibleWidth(item.label)));
+    const labelText = this.theme.label(labelPadded, isSelected);
+
+    const separator = "  ";
+    const usedWidth = visibleWidth(prefix) + maxLabelWidth + visibleWidth(separator);
+    const valueText = this.theme.value(
+      truncateToWidth(item.currentValue, width - usedWidth - 2, ""),
+      isSelected,
+    );
+
+    return truncateToWidth(prefix + labelText + separator + valueText, width);
+  }
+
+  private addDescriptionLines(
+    lines: string[],
+    selectedItem: SettingItem | undefined,
+    width: number,
+  ): void {
+    if (selectedItem?.description === undefined || selectedItem.description === "") return;
+    lines.push("");
+    for (const line of wrapTextWithAnsi(selectedItem.description, width - 4)) {
+      lines.push(this.theme.description(`  ${line}`));
+    }
   }
 
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
@@ -193,7 +183,11 @@ export class SettingsList implements Component {
       return undefined;
 
     const rowOffset = this.searchEnabled ? 2 : 0;
-    const { startIndex, endIndex } = this.getVisibleRange(displayItems);
+    const { startIndex, endIndex } = visibleItemRange({
+      selectedIndex: this.selectedIndex,
+      maxVisible: this.maxVisible,
+      itemCount: displayItems.length,
+    });
     const itemIndex = startIndex + event.y - rowOffset;
     if (itemIndex < startIndex || itemIndex >= endIndex) return undefined;
     if (event.type === "press") {
@@ -241,20 +235,6 @@ export class SettingsList implements Component {
 
   private getDisplayItems(): SettingItem[] {
     return this.searchEnabled ? this.filteredItems : this.items;
-  }
-
-  private getVisibleRange(displayItems: readonly SettingItem[]): {
-    startIndex: number;
-    endIndex: number;
-  } {
-    const startIndex = Math.max(
-      0,
-      Math.min(
-        this.selectedIndex - Math.floor(this.maxVisible / 2),
-        displayItems.length - this.maxVisible,
-      ),
-    );
-    return { startIndex, endIndex: Math.min(startIndex + this.maxVisible, displayItems.length) };
   }
 
   private activateItem(): void {
@@ -309,15 +289,6 @@ export class SettingsList implements Component {
 
   private addHintLine(lines: string[], width: number): void {
     lines.push("");
-    lines.push(
-      truncateToWidth(
-        this.theme.hint(
-          this.searchEnabled
-            ? "  Type to search · Enter/Space to change · Esc to cancel"
-            : "  Enter/Space to change · Esc to cancel",
-        ),
-        width,
-      ),
-    );
+    lines.push(truncateToWidth(this.theme.hint(settingsHint(this.searchEnabled)), width));
   }
 }

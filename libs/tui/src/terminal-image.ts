@@ -747,25 +747,30 @@ export const getImageDimensions: {
   return null;
 });
 
+export interface RenderedImage {
+  sequence: string;
+  columns: number;
+  rows: number;
+  imageId?: number | undefined;
+}
+
 export const renderImage: {
   (
     base64Data: string,
     imageDimensions: ImageDimensions,
     options?: ImageRenderOptions,
-  ): { sequence: string; columns: number; rows: number; imageId?: number | undefined } | null;
+  ): RenderedImage | null;
   (
     imageDimensions: ImageDimensions,
     options?: ImageRenderOptions,
-  ): (
-    base64Data: string,
-  ) => { sequence: string; columns: number; rows: number; imageId?: number | undefined } | null;
+  ): (base64Data: string) => RenderedImage | null;
 } = dual(
   (args) => typeof args[0] === "string",
   (
     base64Data: string,
     imageDimensions: ImageDimensions,
     options: ImageRenderOptions = {},
-  ): { sequence: string; columns: number; rows: number; imageId?: number | undefined } | null => {
+  ): RenderedImage | null => {
     const caps = getCapabilities();
 
     if (caps.images === null) {
