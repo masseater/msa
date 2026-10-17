@@ -4,7 +4,7 @@ import type { AnyContract, InputOf, Ref } from "./contract.ts";
 import type { HostCore, RefCore } from "./core.ts";
 import { ChordError, invalid } from "./errors.ts";
 import type { ObjectImpl } from "./object.ts";
-import type { RemoteHost } from "./remote.ts";
+import type { RemoteHost } from "./remote-types.ts";
 import { awaitReady, linkedSignal } from "./signal.ts";
 import type { Ctx, GetOptions } from "./types.ts";
 

@@ -32,27 +32,20 @@ export function linkedSignal(sources: readonly AbortSignal[]): {
 const callAborted = (signal: AbortSignal): ChordError =>
   new ChordError("aborted", "call aborted", { cause: signal.reason });
 
-export const raceSignal: {
-  (signal: AbortSignal): <T>(promise: Promise<T>) => Effect.Effect<T>;
-  <T>(promise: Promise<T>, signal: AbortSignal): Effect.Effect<T>;
-} = dual(2, <T>(promise: Promise<T>, signal: AbortSignal): Effect.Effect<T> =>
-  Effect.callback<T>((resume) => {
-    if (signal.aborted) {
-      resume(Effect.die(callAborted(signal)));
-      return undefined;
-    }
+const abortedBy = (signal: AbortSignal): Effect.Effect<never> =>
+  Effect.callback<never>((resume) => {
     const onAbort = (): void => resume(Effect.die(callAborted(signal)));
-    const settle = (outcome: Effect.Effect<T>): void => {
-      signal.removeEventListener("abort", onAbort);
-      resume(outcome);
-    };
     signal.addEventListener("abort", onAbort, { once: true });
-    promise.then(
-      (value) => settle(Effect.succeed(value)),
-      (error: unknown) => settle(Effect.die(error)),
-    );
     return Effect.sync(() => signal.removeEventListener("abort", onAbort));
-  }),
+  });
+
+export const raceSignal: {
+  (signal: AbortSignal): <T>(effect: Effect.Effect<T>) => Effect.Effect<T>;
+  <T>(effect: Effect.Effect<T>, signal: AbortSignal): Effect.Effect<T>;
+} = dual(2, <T>(effect: Effect.Effect<T>, signal: AbortSignal): Effect.Effect<T> =>
+  Effect.suspend(() =>
+    signal.aborted ? Effect.die(callAborted(signal)) : Effect.raceFirst(effect, abortedBy(signal)),
+  ),
 );
 
 export const unrefTimeout: {
@@ -62,6 +55,15 @@ export const unrefTimeout: {
   const timer = setTimeout(fire, ms);
   (timer as { unref?: () => void }).unref?.();
   return () => clearTimeout(timer);
+});
+
+export const unrefInterval: {
+  (ms: number): (tick: () => void) => () => void;
+  (tick: () => void, ms: number): () => void;
+} = dual(2, (tick: () => void, ms: number): (() => void) => {
+  const timer = setInterval(tick, ms);
+  (timer as { unref?: () => void }).unref?.();
+  return () => clearInterval(timer);
 });
 
 interface ReadyWait {
@@ -101,7 +103,10 @@ export const awaitReady: {
   Effect.acquireUseRelease(
     Effect.sync(() => startReadyWait(ref, signals, ms)),
     (wait) =>
-      raceSignal(ref.ready, wait.linked.signal).pipe(
+      raceSignal(
+        Effect.promise(() => ref.ready),
+        wait.linked.signal,
+      ).pipe(
         Effect.catchCause((cause) =>
           Effect.suspend(() => {
             ref.release();

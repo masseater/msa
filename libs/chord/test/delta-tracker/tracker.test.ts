@@ -281,8 +281,7 @@ describe("delta tracker transactional overlay lifecycle", () => {
   });
 
   it("reads deleted own properties as absent", () => {
-    // oxlint-disable-next-line eslint/no-extend-native -- 継承プロパティの読み取りテストで、prototype に値を仕込むのが目的
-    Object.defineProperty(Object.prototype, "trackerInherited", {
+    Object.defineProperty(Object.getPrototypeOf({}), "trackerInherited", {
       value: 7,
       writable: true,
       configurable: true,
@@ -1525,8 +1524,7 @@ describe("delta tracker object emission scaling", () => {
 describe("delta tracker security and storage-style cloning", () => {
   it("defines own properties without invoking inherited setters", () => {
     const tracker = track({} as Record<string, JsonValue>);
-    // oxlint-disable-next-line eslint/no-extend-native -- 継承 setter の耐性テストで、prototype を汚すのが目的
-    Object.defineProperty(Object.prototype, "trap", {
+    Object.defineProperty(Object.getPrototypeOf({}), "trap", {
       get() {
         return undefined;
       },

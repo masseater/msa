@@ -6,7 +6,7 @@ import type { RefCore, RefOwner } from "./core.ts";
 import { ChordError, invalid } from "./errors.ts";
 import { HostObjects } from "./host-objects.ts";
 import type { Route } from "./host-types.ts";
-import { RemoteBinding, RemoteRef } from "./remote.ts";
+import { RemoteBinding, RemoteRef } from "./remote-ref.ts";
 import { unrefTimeout } from "./signal.ts";
 import type { GetOptions } from "./types.ts";
 
@@ -107,7 +107,7 @@ export abstract class HostRemote extends HostObjects {
       return;
     }
     if (direct !== undefined) {
-      bindWhenSynced(Effect.promise(() => direct.whenSynced()).pipe(Effect.as(direct)));
+      bindWhenSynced(direct.whenSynced().pipe(Effect.as(direct)));
       return;
     }
     const route = this.#routeFor(binding.at);
@@ -149,7 +149,7 @@ export abstract class HostRemote extends HostObjects {
         principal: route.principal(hostName),
         peer: { kind: "host", name: hostName },
       });
-      yield* Effect.promise(() => connection.whenSynced());
+      yield* connection.whenSynced();
       if (!still()) throw revoked();
       return connection;
     });

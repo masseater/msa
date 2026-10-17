@@ -382,8 +382,7 @@ describe("path and prototype safety", () => {
   });
 
   it("does not run inherited setters", () => {
-    // oxlint-disable-next-line eslint/no-extend-native -- 継承 setter の耐性テストで、prototype を汚すのが目的
-    Object.defineProperty(Object.prototype, "trap", {
+    Object.defineProperty(Object.getPrototypeOf({}), "trap", {
       get() {
         return undefined;
       },
@@ -415,8 +414,7 @@ describe("path and prototype safety", () => {
       enumerable: true,
       configurable: true,
     });
-    // oxlint-disable-next-line eslint/no-extend-native -- 継承 setter の耐性テストで、prototype を汚すのが目的
-    Object.defineProperty(Object.prototype, "trap", {
+    Object.defineProperty(Object.getPrototypeOf({}), "trap", {
       get() {
         return undefined;
       },
@@ -432,8 +430,7 @@ describe("path and prototype safety", () => {
     }
 
     let value: { values: number[] } | undefined;
-    // oxlint-disable-next-line eslint/no-extend-native -- 継承 array setter の耐性テストで、prototype を汚すのが目的
-    Object.defineProperty(Array.prototype, "0", {
+    Object.defineProperty(Object.getPrototypeOf([]), "0", {
       get() {
         return undefined;
       },

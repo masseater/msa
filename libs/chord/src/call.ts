@@ -24,7 +24,11 @@ export class ObjectCalls {
       const object = this.#object;
       ctx.check(object.host);
       if (ref.status === "released" || ref.status === "gone") throw ref.terminalError();
-      if (ref.status === "loading") yield* raceSignal(ref.ready, ctx.signal);
+      if (ref.status === "loading")
+        yield* raceSignal(
+          Effect.promise(() => ref.ready),
+          ctx.signal,
+        );
       if (ref.status !== "live" || object.status !== "live") {
         throw ref.status === "live"
           ? new ChordError("gone", `${object.address} is ${object.status}`)
