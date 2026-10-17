@@ -22,18 +22,53 @@ export function createPhotonImages(wasm: SyncInitInput): ImageProcessor {
   };
 }
 
+function flipped(image: PhotonImage, orientation: number): void {
+  if (orientation === 1) return;
+  if (orientation !== 4) fliph(image);
+  if (orientation !== 2) flipv(image);
+}
+
+function fitWithin(
+  image: PhotonImage,
+  mimeType: string,
+  limits: ImageLimits,
+): PreparedImage | undefined {
+  const width = image.get_width();
+  const height = image.get_height();
+  const scale = Math.min(1, limits.maxWidth / width, limits.maxHeight / height);
+  let target = {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+  for (;;) {
+    const encoded = encodeWithin(image, target, limits.maxBytes, mimeType === "image/jpeg");
+    if (encoded !== undefined) {
+      const resized =
+        target.width === width && target.height === height
+          ? {}
+          : { resized: { from: { width, height }, to: target } };
+      const converted = encoded.mimeType === mimeType ? {} : { convertedFrom: mimeType };
+      return { ...encoded, ...converted, ...resized };
+    }
+    if (target.width === 1 && target.height === 1) return undefined;
+    target = {
+      width: Math.max(1, Math.floor(target.width * 0.75)),
+      height: Math.max(1, Math.floor(target.height * 0.75)),
+    };
+  }
+}
+
 function prepare(
   bytes: Uint8Array,
   mimeType: string,
   limits: ImageLimits,
 ): PreparedImage | undefined {
   const orientation = exifOrientation(bytes);
-  const inline = INLINE_IMAGE_TYPES.has(mimeType);
   let image: PhotonImage | undefined;
   try {
     image = PhotonImage.new_from_byteslice(bytes);
     if (
-      inline &&
+      INLINE_IMAGE_TYPES.has(mimeType) &&
       orientation === 1 &&
       image.get_width() <= limits.maxWidth &&
       image.get_height() <= limits.maxHeight &&
@@ -42,37 +77,14 @@ function prepare(
       return { data: toBase64(bytes), mimeType };
     }
     if (orientation >= 5) {
-      const upright = transposed(image, orientation);
+      const turned = transposed(image, orientation);
       image.free();
       image = undefined;
-      image = new PhotonImage(upright.pixels, upright.width, upright.height);
-    } else if (orientation !== 1) {
-      if (orientation !== 4) fliph(image);
-      if (orientation !== 2) flipv(image);
+      image = new PhotonImage(turned.pixels, turned.width, turned.height);
+    } else {
+      flipped(image, orientation);
     }
-    const width = image.get_width();
-    const height = image.get_height();
-    const scale = Math.min(1, limits.maxWidth / width, limits.maxHeight / height);
-    let target = {
-      width: Math.max(1, Math.round(width * scale)),
-      height: Math.max(1, Math.round(height * scale)),
-    };
-    for (;;) {
-      const encoded = encodeWithin(image, target, limits.maxBytes, mimeType === "image/jpeg");
-      if (encoded !== undefined) {
-        const resized =
-          target.width === width && target.height === height
-            ? {}
-            : { resized: { from: { width, height }, to: target } };
-        const converted = encoded.mimeType === mimeType ? {} : { convertedFrom: mimeType };
-        return { ...encoded, ...converted, ...resized };
-      }
-      if (target.width === 1 && target.height === 1) return undefined;
-      target = {
-        width: Math.max(1, Math.floor(target.width * 0.75)),
-        height: Math.max(1, Math.floor(target.height * 0.75)),
-      };
-    }
+    return fitWithin(image, mimeType, limits);
   } catch {
     return undefined;
   } finally {

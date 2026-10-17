@@ -1,9 +1,8 @@
-import { mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { Effect, Function } from "effect";
+import { Effect, FileSystem, Function, Path } from "effect";
 
+import { nodeRuntime } from "../../node-runtime.ts";
 import { promiseTry } from "../../promise-try.ts";
 import type { SqliteDatabase, SqliteExecutor } from "./database.ts";
 import { NodeSqliteExecutor } from "./node-executor.ts";
@@ -76,10 +75,16 @@ export class NodeSqliteDatabase extends NodeSqliteExecutor implements SqliteData
   }
 }
 
-const prepareDirectory = (path: string): Effect.Effect<void> =>
+const makeParentDirectory = Effect.fnUntraced(function* (path: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const paths = yield* Path.Path;
+  yield* fs.makeDirectory(paths.dirname(path), { recursive: true });
+});
+
+const prepareDirectory = (path: string) =>
   path === ":memory:"
     ? Effect.void
-    : Effect.asVoid(Effect.promise(() => mkdir(dirname(path), { recursive: true })));
+    : makeParentDirectory(path).pipe(Effect.mapError((error) => error.cause ?? error));
 
 const configure = Effect.fnUntraced(function* (
   adapter: NodeSqliteDatabase,
@@ -111,13 +116,13 @@ const isPath = (args: IArguments): boolean => typeof args[0] === "string";
 export const openNodeSqliteDatabase: Open<NodeSqliteDatabase> = Function.dual(
   isPath,
   (path: string, options: NodeSqliteStorageOptions = {}): Promise<NodeSqliteDatabase> =>
-    Effect.runPromise(openDatabase(path, options)),
+    nodeRuntime.runPromise(openDatabase(path, options)),
 );
 
 export const openNodeSqliteStorage: Open<SqliteStorage> = Function.dual(
   isPath,
   (path: string, options: NodeSqliteStorageOptions = {}): Promise<SqliteStorage> =>
-    Effect.runPromise(
+    nodeRuntime.runPromise(
       openDatabase(path, options).pipe(
         Effect.flatMap((database) => Effect.promise(() => SqliteStorage.open(database))),
       ),

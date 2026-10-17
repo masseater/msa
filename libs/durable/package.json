@@ -139,6 +139,7 @@
     "bench:codemode": "node --conditions=source --experimental-strip-types test/codemode-bench.ts"
   },
   "dependencies": {
+    "@effect/platform-node": "catalog:",
     "@msa/ai": "workspace:*",
     "@msa/chord": "workspace:*",
     "@msa/codemode": "workspace:*",

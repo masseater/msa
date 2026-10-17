@@ -753,6 +753,9 @@ importers:
 
   libs/durable:
     dependencies:
+      '@effect/platform-node':
+        specifier: 'catalog:'
+        version: 4.0.2(effect@4.0.2)(redis@6.3.0)
       '@msa/ai':
         specifier: workspace:*
         version: link:../ai

@@ -1,6 +1,4 @@
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { parentPort } from "node:worker_threads";
+import { parentPort, workerData } from "node:worker_threads";
 
 import type { ImageLimits, PreparedImage } from "../tools/image-processor.ts";
 import { createPhotonImages } from "./index.ts";
@@ -18,9 +16,7 @@ export type PrepareReply =
 
 const port = parentPort;
 if (port === null) throw new Error("The Photon image worker needs a parent thread");
-const images = createPhotonImages(
-  readFileSync(createRequire(import.meta.url).resolve("@silvia-odwyer/photon/photon_rs_bg.wasm")),
-);
+const images = createPhotonImages(workerData as Uint8Array);
 port.on("message", (request: PrepareRequest) => {
   void images.prepare(request.bytes, request.mimeType, request.limits).then(
     (result) => port.postMessage({ id: request.id, result } satisfies PrepareReply),
