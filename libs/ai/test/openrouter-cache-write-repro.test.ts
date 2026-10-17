@@ -15,74 +15,6 @@ function createLongSystemPrompt(): string {
     .join("\n\n")}`;
 }
 
-const regressionPreservesCacheWriteTokensOnFirst = Effect.fn(
-  "regressionPreservesCacheWriteTokensOnFirst",
-)(function* () {
-  const model = getModel("openrouter", "google/gemini-2.5-flash");
-  const context = {
-    systemPrompt: createLongSystemPrompt(),
-    messages: [
-      {
-        role: "user" as const,
-        content: "Reply with exactly: OK",
-        timestamp: yield* Clock.currentTimeMillis,
-      },
-    ],
-  };
-  return { model, context };
-});
-
-const regressionPreservesCacheWriteTokensOnRest = Effect.fn(
-  "regressionPreservesCacheWriteTokensOnRest",
-)(function* ({
-  model,
-  context,
-}: Effect.Success<ReturnType<typeof regressionPreservesCacheWriteTokensOnFirst>>) {
-  const options = {
-    apiKey: (yield* readEnv("OPENROUTER_API_KEY"))!,
-    maxTokens: 32,
-    temperature: 0,
-    onPayload: (payload: unknown) => {
-      const params = payload as {
-        messages?: Array<{
-          role?: string;
-          content?:
-            | string
-            | Array<{ type?: string; text?: string; cache_control?: { type: string } }>;
-        }>;
-      };
-      const messages = params.messages;
-      if (!Array.isArray(messages)) return payload;
-
-      for (const msg of messages.toReversed()) {
-        if (msg.role !== "user") continue;
-        if (typeof msg.content === "string") {
-          msg.content = [{ type: "text", text: msg.content, cache_control: { type: "ephemeral" } }];
-          break;
-        }
-        if (!Array.isArray(msg.content)) continue;
-        for (const part of msg.content.toReversed()) {
-          if (part.type === "text") {
-            part.cache_control = { type: "ephemeral" };
-            break;
-          }
-        }
-        break;
-      }
-      return payload;
-    },
-  };
-
-  const first = yield* Effect.promise(() => completeSimple(model, context, options));
-  expect(first.stopReason, first.errorMessage).toBe("stop");
-
-  const second = yield* Effect.promise(() => completeSimple(model, context, options));
-  expect(second.stopReason, second.errorMessage).toBe("stop");
-
-  const hasCacheWrite = first.usage.cacheWrite > 0 || second.usage.cacheWrite > 0;
-  expect(hasCacheWrite).toBe(true);
-});
-
 describe.skipIf(
   envValue("OPENROUTER_API_KEY") === undefined || envValue("OPENROUTER_API_KEY") === "",
 )("OpenRouter cache_write repro E2E", () => {
@@ -92,8 +24,63 @@ describe.skipIf(
     () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { model, context } = yield* regressionPreservesCacheWriteTokensOnFirst();
-          return yield* regressionPreservesCacheWriteTokensOnRest({ model, context });
+          const model = getModel("openrouter", "google/gemini-2.5-flash");
+          const context = {
+            systemPrompt: createLongSystemPrompt(),
+            messages: [
+              {
+                role: "user" as const,
+                content: "Reply with exactly: OK",
+                timestamp: yield* Clock.currentTimeMillis,
+              },
+            ],
+          };
+
+          const options = {
+            apiKey: (yield* readEnv("OPENROUTER_API_KEY"))!,
+            maxTokens: 32,
+            temperature: 0,
+            onPayload: (payload: unknown) => {
+              const params = payload as {
+                messages?: Array<{
+                  role?: string;
+                  content?:
+                    | string
+                    | Array<{ type?: string; text?: string; cache_control?: { type: string } }>;
+                }>;
+              };
+              const messages = params.messages;
+              if (!Array.isArray(messages)) return payload;
+
+              for (const msg of messages.toReversed()) {
+                if (msg.role !== "user") continue;
+                if (typeof msg.content === "string") {
+                  msg.content = [
+                    { type: "text", text: msg.content, cache_control: { type: "ephemeral" } },
+                  ];
+                  break;
+                }
+                if (!Array.isArray(msg.content)) continue;
+                for (const part of msg.content.toReversed()) {
+                  if (part.type === "text") {
+                    part.cache_control = { type: "ephemeral" };
+                    break;
+                  }
+                }
+                break;
+              }
+              return payload;
+            },
+          };
+
+          const first = yield* Effect.promise(() => completeSimple(model, context, options));
+          expect(first.stopReason, first.errorMessage).toBe("stop");
+
+          const second = yield* Effect.promise(() => completeSimple(model, context, options));
+          expect(second.stopReason, second.errorMessage).toBe("stop");
+
+          const hasCacheWrite = first.usage.cacheWrite > 0 || second.usage.cacheWrite > 0;
+          expect(hasCacheWrite).toBe(true);
         }),
       ),
   );

@@ -6,13 +6,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { stream as streamMistral } from "../src/api/mistral-conversations.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
-import type {
-  Api,
-  AssistantMessage,
-  FetchFunction,
-  Model,
-  ProviderResponse,
-} from "../src/types.ts";
+import type { Api, FetchFunction, Model, ProviderResponse } from "../src/types.ts";
 import { decodeJson, encodeJson } from "./json-codec.ts";
 
 const MSA_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
@@ -48,186 +42,138 @@ function createTerminalEvent(finishReason = "stop") {
   };
 }
 
-const serializesSDKStylePayloadsToTheFirst = Effect.fn("serializesSDKStylePayloadsToTheFirst")(
-  function* () {
-    const model = getModel("mistral", "mistral-large-latest");
-    const context = normalizeContext({
-      systemPrompt: "Be precise",
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "describe" },
-            { type: "image", data: "aGVsbG8=", mimeType: "image/png" },
-          ],
-          timestamp: 1,
-        },
-      ],
-      tools: [
-        {
-          name: "lookup",
-          description: "Look something up",
-          parameters: Type.Object({ query: Type.String() }),
-        },
-      ],
-    });
-    let requestUrl: string | undefined;
-    let requestInit: RequestInit | undefined;
-    let callbackPayload: Record<string, unknown> | undefined;
-    let callbackResponse: ProviderResponse | undefined;
-    const fetch: FetchFunction = (input, init) => {
-      requestUrl = String(input);
-      requestInit = init;
-      return Promise.resolve(
-        createSseResponse([createTerminalEvent()], { "x-request-id": "request-1" }),
-      );
-    };
-
-    const message = yield* Effect.promise(() =>
-      streamMistral(model, context, {
-        apiKey: "secret",
-        fetch,
-        headers: { "x-custom": "value" },
-        maxTokens: 123,
-        promptMode: "reasoning",
-        reasoningEffort: "high",
-        toolChoice: { type: "function", function: { name: "lookup" } },
-        sessionId: "session-1",
-        onPayload: (payload) => {
-          callbackPayload = payload as Record<string, unknown>;
-          return {
-            ...callbackPayload,
-            topP: 0.9,
-            randomSeed: 42,
-            responseFormat: {
-              type: "json_schema",
-              jsonSchema: {
-                name: "result",
-                schemaDefinition: {
-                  type: "object",
-                  properties: { maxTokens: { type: "number" } },
-                },
-              },
-            },
-            presencePenalty: 0.1,
-            frequencyPenalty: 0.2,
-            parallelToolCalls: true,
-            safePrompt: true,
-          };
-        },
-        onResponse: (response) => {
-          callbackResponse = response;
-        },
-      }).result(),
-    );
-    return { message, requestUrl, requestInit, callbackPayload, callbackResponse };
-  },
-);
-
-const serializesSDKStylePayloadsToTheFirst2 = Effect.fn("serializesSDKStylePayloadsToTheFirst2")(
-  function* (
-    message: AssistantMessage,
-    requestUrl: string | undefined,
-    requestInit: RequestInit | undefined,
-    callbackPayload: Record<string, unknown> | undefined,
-    callbackResponse: ProviderResponse | undefined,
-  ) {
-    expect(message.stopReason).toBe("stop");
-    expect(requestUrl).toBe("https://api.mistral.ai/v1/chat/completions");
-    const headers = new Headers(requestInit?.headers);
-    expect(headers.get("authorization")).toBe("Bearer secret");
-    expect(headers.get("accept")).toBe("text/event-stream");
-    expect(headers.get("x-affinity")).toBe("session-1");
-    expect(headers.get("x-custom")).toBe("value");
-    expect(headers.get("user-agent")).toBe(MSA_USER_AGENT);
-    expect(callbackPayload?.["maxTokens"]).toBe(123);
-    expect(callbackPayload?.["promptMode"]).toBe("reasoning");
-    expect(callbackPayload?.["promptCacheKey"]).toBe("session-1");
-    expect(callbackResponse).toEqual({
-      status: 200,
-      headers: { "content-type": "text/event-stream", "x-request-id": "request-1" },
-    });
-
-    const wirePayload = (yield* decodeJson(String(requestInit?.body))) as Record<string, unknown>;
-    expect(wirePayload["max_tokens"]).toBe(123);
-    expect(wirePayload["prompt_mode"]).toBe("reasoning");
-    expect(wirePayload["reasoning_effort"]).toBe("high");
-    expect(wirePayload["tool_choice"]).toEqual({
-      type: "function",
-      function: { name: "lookup" },
-    });
-    expect(wirePayload["prompt_cache_key"]).toBe("session-1");
-    return { wirePayload };
-  },
-);
-
-const serializesSDKStylePayloadsToTheRest2 = ({
-  wirePayload,
-}: Effect.Success<ReturnType<typeof serializesSDKStylePayloadsToTheFirst2>>) =>
-  Effect.sync(() => {
-    expect(wirePayload["top_p"]).toBe(0.9);
-    expect(wirePayload["random_seed"]).toBe(42);
-    expect(wirePayload["presence_penalty"]).toBe(0.1);
-    expect(wirePayload["frequency_penalty"]).toBe(0.2);
-    expect(wirePayload["parallel_tool_calls"]).toBe(true);
-    expect(wirePayload["safe_prompt"]).toBe(true);
-    expect(wirePayload["response_format"]).toEqual({
-      type: "json_schema",
-      json_schema: {
-        name: "result",
-        schema: {
-          type: "object",
-          properties: { maxTokens: { type: "number" } },
-        },
-      },
-    });
-    expect(wirePayload).not.toHaveProperty("maxTokens");
-    expect(wirePayload).not.toHaveProperty("promptMode");
-    expect(wirePayload).not.toHaveProperty("promptCacheKey");
-    expect(wirePayload["messages"]).toEqual([
-      { role: "system", content: "Be precise" },
-      {
-        role: "user",
-        content: [
-          { type: "text", text: "describe" },
-          { type: "image_url", image_url: "data:image/png;base64,aGVsbG8=" },
-        ],
-      },
-    ]);
-  });
-
-const serializesSDKStylePayloadsToTheRest = Effect.fn("serializesSDKStylePayloadsToTheRest")(
-  function* ({
-    message,
-    requestUrl,
-    requestInit,
-    callbackPayload,
-    callbackResponse,
-  }: Effect.Success<ReturnType<typeof serializesSDKStylePayloadsToTheFirst>>) {
-    const { wirePayload } = yield* serializesSDKStylePayloadsToTheFirst2(
-      message,
-      requestUrl,
-      requestInit,
-      callbackPayload,
-      callbackResponse,
-    );
-    return yield* serializesSDKStylePayloadsToTheRest2({ wirePayload });
-  },
-);
-
 describe("Mistral HTTP transport", () => {
   it("serializes SDK-style payloads to the Mistral wire format", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { message, requestUrl, requestInit, callbackPayload, callbackResponse } =
-          yield* serializesSDKStylePayloadsToTheFirst();
-        return yield* serializesSDKStylePayloadsToTheRest({
-          message,
-          requestUrl,
-          requestInit,
-          callbackPayload,
-          callbackResponse,
+        const model = getModel("mistral", "mistral-large-latest");
+        const context = normalizeContext({
+          systemPrompt: "Be precise",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "describe" },
+                { type: "image", data: "aGVsbG8=", mimeType: "image/png" },
+              ],
+              timestamp: 1,
+            },
+          ],
+          tools: [
+            {
+              name: "lookup",
+              description: "Look something up",
+              parameters: Type.Object({ query: Type.String() }),
+            },
+          ],
         });
+        let requestUrl: string | undefined;
+        let requestInit: RequestInit | undefined;
+        let callbackPayload: Record<string, unknown> | undefined;
+        let callbackResponse: ProviderResponse | undefined;
+        const fetch: FetchFunction = (input, init) => {
+          requestUrl = String(input);
+          requestInit = init;
+          return Promise.resolve(
+            createSseResponse([createTerminalEvent()], { "x-request-id": "request-1" }),
+          );
+        };
+
+        const message = yield* Effect.promise(() =>
+          streamMistral(model, context, {
+            apiKey: "secret",
+            fetch,
+            headers: { "x-custom": "value" },
+            maxTokens: 123,
+            promptMode: "reasoning",
+            reasoningEffort: "high",
+            toolChoice: { type: "function", function: { name: "lookup" } },
+            sessionId: "session-1",
+            onPayload: (payload) => {
+              callbackPayload = payload as Record<string, unknown>;
+              return {
+                ...callbackPayload,
+                topP: 0.9,
+                randomSeed: 42,
+                responseFormat: {
+                  type: "json_schema",
+                  jsonSchema: {
+                    name: "result",
+                    schemaDefinition: {
+                      type: "object",
+                      properties: { maxTokens: { type: "number" } },
+                    },
+                  },
+                },
+                presencePenalty: 0.1,
+                frequencyPenalty: 0.2,
+                parallelToolCalls: true,
+                safePrompt: true,
+              };
+            },
+            onResponse: (response) => {
+              callbackResponse = response;
+            },
+          }).result(),
+        );
+
+        expect(message.stopReason).toBe("stop");
+        expect(requestUrl).toBe("https://api.mistral.ai/v1/chat/completions");
+        const headers = new Headers(requestInit?.headers);
+        expect(headers.get("authorization")).toBe("Bearer secret");
+        expect(headers.get("accept")).toBe("text/event-stream");
+        expect(headers.get("x-affinity")).toBe("session-1");
+        expect(headers.get("x-custom")).toBe("value");
+        expect(headers.get("user-agent")).toBe(MSA_USER_AGENT);
+        expect(callbackPayload?.["maxTokens"]).toBe(123);
+        expect(callbackPayload?.["promptMode"]).toBe("reasoning");
+        expect(callbackPayload?.["promptCacheKey"]).toBe("session-1");
+        expect(callbackResponse).toEqual({
+          status: 200,
+          headers: { "content-type": "text/event-stream", "x-request-id": "request-1" },
+        });
+
+        const wirePayload = (yield* decodeJson(String(requestInit?.body))) as Record<
+          string,
+          unknown
+        >;
+        expect(wirePayload["max_tokens"]).toBe(123);
+        expect(wirePayload["prompt_mode"]).toBe("reasoning");
+        expect(wirePayload["reasoning_effort"]).toBe("high");
+        expect(wirePayload["tool_choice"]).toEqual({
+          type: "function",
+          function: { name: "lookup" },
+        });
+        expect(wirePayload["prompt_cache_key"]).toBe("session-1");
+        expect(wirePayload["top_p"]).toBe(0.9);
+        expect(wirePayload["random_seed"]).toBe(42);
+        expect(wirePayload["presence_penalty"]).toBe(0.1);
+        expect(wirePayload["frequency_penalty"]).toBe(0.2);
+        expect(wirePayload["parallel_tool_calls"]).toBe(true);
+        expect(wirePayload["safe_prompt"]).toBe(true);
+        expect(wirePayload["response_format"]).toEqual({
+          type: "json_schema",
+          json_schema: {
+            name: "result",
+            schema: {
+              type: "object",
+              properties: { maxTokens: { type: "number" } },
+            },
+          },
+        });
+        expect(wirePayload).not.toHaveProperty("maxTokens");
+        expect(wirePayload).not.toHaveProperty("promptMode");
+        expect(wirePayload).not.toHaveProperty("promptCacheKey");
+        expect(wirePayload["messages"]).toEqual([
+          { role: "system", content: "Be precise" },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "describe" },
+              { type: "image_url", image_url: "data:image/png;base64,aGVsbG8=" },
+            ],
+          },
+        ]);
       }),
     ));
 });
@@ -619,88 +565,66 @@ describe("Mistral HTTP transport", () => {
     ));
 });
 
-const doesNotAbortAnActiveStreamFirst = Effect.fn("doesNotAbortAnActiveStreamFirst")(function* () {
-  const effectContext = yield* Effect.context();
-  const model = getModel("mistral", "mistral-large-latest");
-  const context = normalizeContext({
-    messages: [{ role: "user", content: "hello", timestamp: 1 }],
-  });
-  const encoder = new TextEncoder();
-  const thinkingEvent = {
-    choices: [
-      {
-        index: 0,
-        delta: { content: [{ type: "thinking", thinking: [{ type: "text", text: "x" }] }] },
-      },
-    ],
-  };
-  return { effectContext, encoder, thinkingEvent, model, context };
-});
-
-const doesNotAbortAnActiveStreamRest = Effect.fn("doesNotAbortAnActiveStreamRest")(function* ({
-  effectContext,
-  encoder,
-  thinkingEvent,
-  model,
-  context,
-}: Effect.Success<ReturnType<typeof doesNotAbortAnActiveStreamFirst>>) {
-  const fetch: FetchFunction = () =>
-    Promise.resolve(
-      new Response(
-        new ReadableStream({
-          start(controller) {
-            return Effect.runPromiseWith(effectContext)(
-              Effect.gen(function* () {
-                for (let i = 0; i < 5; i++) {
-                  controller.enqueue(
-                    encoder.encode(`data: ${yield* encodeJson(thinkingEvent)}\n\n`),
-                  );
-                  yield* Effect.promise(
-                    () =>
-                      new Promise((resolve) => {
-                        setTimeout(resolve, 10);
-                      }),
-                  );
-                }
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${yield* encodeJson(createTerminalEvent())}\n\ndata: [DONE]\n\n`,
-                  ),
-                );
-                controller.close();
-              }),
-            );
-          },
-        }),
-        { headers: { "content-type": "text/event-stream" } },
-      ),
-    );
-
-  const message = yield* Effect.promise(() =>
-    streamMistral(model, context, {
-      apiKey: "test",
-      fetch,
-      timeoutMs: 20,
-    }).result(),
-  );
-
-  expect(message.stopReason).toBe("stop");
-  expect(message.content).toEqual([{ type: "thinking", thinking: "xxxxx" }]);
-});
-
 describe("Mistral HTTP transport", () => {
   it("does not abort an active stream that lasts longer than the request timeout", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { effectContext, encoder, thinkingEvent, model, context } =
-          yield* doesNotAbortAnActiveStreamFirst();
-        return yield* doesNotAbortAnActiveStreamRest({
-          effectContext,
-          encoder,
-          thinkingEvent,
-          model,
-          context,
+        const effectContext = yield* Effect.context();
+        const model = getModel("mistral", "mistral-large-latest");
+        const context = normalizeContext({
+          messages: [{ role: "user", content: "hello", timestamp: 1 }],
         });
+        const encoder = new TextEncoder();
+        const thinkingEvent = {
+          choices: [
+            {
+              index: 0,
+              delta: { content: [{ type: "thinking", thinking: [{ type: "text", text: "x" }] }] },
+            },
+          ],
+        };
+        const fetch: FetchFunction = () =>
+          Promise.resolve(
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  return Effect.runPromiseWith(effectContext)(
+                    Effect.gen(function* () {
+                      for (let i = 0; i < 5; i++) {
+                        controller.enqueue(
+                          encoder.encode(`data: ${yield* encodeJson(thinkingEvent)}\n\n`),
+                        );
+                        yield* Effect.promise(
+                          () =>
+                            new Promise((resolve) => {
+                              setTimeout(resolve, 10);
+                            }),
+                        );
+                      }
+                      controller.enqueue(
+                        encoder.encode(
+                          `data: ${yield* encodeJson(createTerminalEvent())}\n\ndata: [DONE]\n\n`,
+                        ),
+                      );
+                      controller.close();
+                    }),
+                  );
+                },
+              }),
+              { headers: { "content-type": "text/event-stream" } },
+            ),
+          );
+
+        const message = yield* Effect.promise(() =>
+          streamMistral(model, context, {
+            apiKey: "test",
+            fetch,
+            timeoutMs: 20,
+          }).result(),
+        );
+
+        expect(message.stopReason).toBe("stop");
+        expect(message.content).toEqual([{ type: "thinking", thinking: "xxxxx" }]);
       }),
     ));
 });

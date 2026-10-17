@@ -79,85 +79,70 @@ const wireUsage = {
 
 const image: ImageContent = { type: "image", data: "aW1hZ2U=", mimeType: "image/png" };
 
-const mapsQuestionsToDecisionsTypesAndFirst = Effect.fn("mapsQuestionsToDecisionsTypesAndFirst")(
-  function* () {
-    const fetch = vi.fn((_input: string | URL | Request, _init?: RequestInit) =>
-      Promise.resolve(
-        Response.json({
-          model: "gpt-6-luna",
-          answers: [...wireAnswers].reverse(),
-          usage: wireUsage,
-        }),
-      ),
-    );
-
-    const result = yield* Effect.promise(() =>
-      classify(model, context, { apiKey: "secret", fetch, temperature: 1.5 }),
-    );
-
-    expect(fetch).toHaveBeenCalledOnce();
-    const [url, init] = fetch.mock.calls[0]!;
-    expect(String(url)).toBe("https://api.openai.com/v1/decisions");
-    expect(new Headers(init?.headers).get("authorization")).toBe("Bearer secret");
-    return { init, result };
-  },
-);
-
-const mapsQuestionsToDecisionsTypesAndRest = Effect.fn("mapsQuestionsToDecisionsTypesAndRest")(
-  function* ({
-    init,
-    result,
-  }: Effect.Success<ReturnType<typeof mapsQuestionsToDecisionsTypesAndFirst>>) {
-    expect(yield* decodeJson(String(init?.body))).toEqual({
-      model: "gpt-6-luna",
-      input: yield* encodeJson(context.state),
-      questions: [
-        {
-          type: "choice",
-          name: "category",
-          instructions: "Classify the message",
-          choices: [{ value: "success", description: "Successful" }, { value: "failure" }],
-        },
-        {
-          type: "score",
-          name: "satisfaction",
-          instructions: "Score satisfaction",
-          levels: [{ label: "low" }, { label: "neutral" }, { label: "high" }],
-        },
-        {
-          type: "predicate",
-          name: "approved",
-          instructions: "Does the user approve?\n\nTrue means: Approval\nFalse means: No approval",
-        },
-      ],
-    });
-    expect(result.stopReason).toBe("stop");
-    expect(result.answers).toEqual({
-      category: {
-        type: "choice",
-        choice: "success",
-        probabilities: { success: 0.9, failure: 0.1 },
-        confidence: 0.8,
-      },
-      satisfaction: { type: "score", score: 1.8, confidence: 0.7 },
-      approved: { type: "bool", probability: 0.95 },
-    });
-    expect(result.usage).toMatchObject({
-      input: 164,
-      output: 0,
-      cacheRead: 0,
-      totalTokens: 164,
-    });
-    expect(result.usage?.cost.total).toBeCloseTo(0.0000164, 12);
-  },
-);
-
 describe("OpenAI Decisions", () => {
   it("maps questions to Decisions types and answers back by name", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { init, result } = yield* mapsQuestionsToDecisionsTypesAndFirst();
-        return yield* mapsQuestionsToDecisionsTypesAndRest({ init, result });
+        const fetch = vi.fn((_input: string | URL | Request, _init?: RequestInit) =>
+          Promise.resolve(
+            Response.json({
+              model: "gpt-6-luna",
+              answers: [...wireAnswers].reverse(),
+              usage: wireUsage,
+            }),
+          ),
+        );
+
+        const result = yield* Effect.promise(() =>
+          classify(model, context, { apiKey: "secret", fetch, temperature: 1.5 }),
+        );
+
+        expect(fetch).toHaveBeenCalledOnce();
+        const [url, init] = fetch.mock.calls[0]!;
+        expect(String(url)).toBe("https://api.openai.com/v1/decisions");
+        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer secret");
+        expect(yield* decodeJson(String(init?.body))).toEqual({
+          model: "gpt-6-luna",
+          input: yield* encodeJson(context.state),
+          questions: [
+            {
+              type: "choice",
+              name: "category",
+              instructions: "Classify the message",
+              choices: [{ value: "success", description: "Successful" }, { value: "failure" }],
+            },
+            {
+              type: "score",
+              name: "satisfaction",
+              instructions: "Score satisfaction",
+              levels: [{ label: "low" }, { label: "neutral" }, { label: "high" }],
+            },
+            {
+              type: "predicate",
+              name: "approved",
+              instructions:
+                "Does the user approve?\n\nTrue means: Approval\nFalse means: No approval",
+            },
+          ],
+        });
+        expect(result.stopReason).toBe("stop");
+        expect(result.answers).toEqual({
+          category: {
+            type: "choice",
+            choice: "success",
+            probabilities: { success: 0.9, failure: 0.1 },
+            confidence: 0.8,
+          },
+          satisfaction: { type: "score", score: 1.8, confidence: 0.7 },
+          approved: { type: "bool", probability: 0.95 },
+        });
+        expect(result.usage).toMatchObject({
+          input: 164,
+          output: 0,
+          cacheRead: 0,
+          totalTokens: 164,
+        });
+        expect(result.usage?.cost.total).toBeCloseTo(0.0000164, 12);
       }),
     ));
 });

@@ -6,7 +6,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import { transformMessages } from "../src/api/transform-messages.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
-import type { Api, Model, ToolCall, TranscriptContext } from "../src/types.ts";
+import type { Api, Model, ToolCall } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { decodeJson, encodeJson } from "./json-codec.ts";
 
@@ -232,74 +232,59 @@ describe("Anthropic raw SSE parsing", () => {
     ));
 });
 
-const failsSafelyWhenAnthropicFallsBackFirst = Effect.fn("failsSafelyWhenAnthropicFallsBackFirst")(
-  function* () {
-    const model = getModel("anthropic", "claude-opus-5");
-    const response = createSseResponse([
-      {
-        event: "message_start",
-        data: yield* encodeJson({
-          type: "message_start",
-          message: {
-            id: "msg_fallback",
-            model: "claude-opus-5",
-            usage: { input_tokens: 1, output_tokens: 0 },
-          },
-        }),
-      },
-      {
-        event: "content_block_start",
-        data: yield* encodeJson({
-          type: "content_block_start",
-          index: 0,
-          content_block: { type: "text", text: "partial" },
-        }),
-      },
-      {
-        event: "content_block_stop",
-        data: yield* encodeJson({ type: "content_block_stop", index: 0 }),
-      },
-      {
-        event: "content_block_start",
-        data: yield* encodeJson({
-          type: "content_block_start",
-          index: 1,
-          content_block: {
-            type: "fallback",
-            from: { model: "claude-opus-5" },
-            to: { model: "claude-opus-4-8" },
-          },
-        }),
-      },
-    ]);
-    return { model, response };
-  },
-);
-
-const failsSafelyWhenAnthropicFallsBackRest = Effect.fn("failsSafelyWhenAnthropicFallsBackRest")(
-  function* ({
-    model,
-    response,
-  }: Effect.Success<ReturnType<typeof failsSafelyWhenAnthropicFallsBackFirst>>) {
-    const result = yield* Effect.promise(() =>
-      streamAnthropic(
-        model,
-        normalizeContext({ messages: [{ role: "user", content: "Hello", timestamp: 1 }] }),
-        { client: createFakeAnthropicClient(response) },
-      ).result(),
-    );
-
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toContain("unsupported mid-output model fallback");
-  },
-);
-
 describe("Anthropic raw SSE parsing", () => {
   it("fails safely when Anthropic falls back after output begins", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { model, response } = yield* failsSafelyWhenAnthropicFallsBackFirst();
-        return yield* failsSafelyWhenAnthropicFallsBackRest({ model, response });
+        const model = getModel("anthropic", "claude-opus-5");
+        const response = createSseResponse([
+          {
+            event: "message_start",
+            data: yield* encodeJson({
+              type: "message_start",
+              message: {
+                id: "msg_fallback",
+                model: "claude-opus-5",
+                usage: { input_tokens: 1, output_tokens: 0 },
+              },
+            }),
+          },
+          {
+            event: "content_block_start",
+            data: yield* encodeJson({
+              type: "content_block_start",
+              index: 0,
+              content_block: { type: "text", text: "partial" },
+            }),
+          },
+          {
+            event: "content_block_stop",
+            data: yield* encodeJson({ type: "content_block_stop", index: 0 }),
+          },
+          {
+            event: "content_block_start",
+            data: yield* encodeJson({
+              type: "content_block_start",
+              index: 1,
+              content_block: {
+                type: "fallback",
+                from: { model: "claude-opus-5" },
+                to: { model: "claude-opus-4-8" },
+              },
+            }),
+          },
+        ]);
+
+        const result = yield* Effect.promise(() =>
+          streamAnthropic(
+            model,
+            normalizeContext({ messages: [{ role: "user", content: "Hello", timestamp: 1 }] }),
+            { client: createFakeAnthropicClient(response) },
+          ).result(),
+        );
+
+        expect(result.stopReason).toBe("error");
+        expect(result.errorMessage).toContain("unsupported mid-output model fallback");
       }),
     ));
 });
@@ -402,81 +387,63 @@ describe("Anthropic raw SSE parsing", () => {
     ));
 });
 
-const usesTheServingModelInputTransformationsFirst = Effect.fn(
-  "usesTheServingModelInputTransformationsFirst",
-)(function* () {
-  const events = minimalAnthropicEvents.map((event) => ({ ...event }));
-  const messageStart = events[0];
-  const messageDelta = events[4];
-  if (messageStart === undefined || messageDelta === undefined)
-    throw new Error("Expected minimal Anthropic events");
-  messageStart.data = yield* encodeJson({
-    type: "message_start",
-    message: {
-      id: "msg_transformations",
-      model: "claude-fable-5-1",
-      usage: { input_tokens: 12, output_tokens: 0 },
-      input_transformations: [
-        {
-          type: "thinking_dropped",
-          path: "messages.1.content.0",
-          reason: "prefix_binding_mismatch",
-        },
-      ],
-    },
-  });
-  const delta = (yield* decodeJson(messageDelta.data)) as Record<string, unknown>;
-  delta["input_transformations"] = [
-    {
-      type: "thinking_dropped",
-      path: "messages.3.content.0",
-      reason: "model_binding_mismatch",
-    },
-  ];
-  return { messageDelta, delta, events };
-});
-
-const usesTheServingModelInputTransformationsRest = Effect.fn(
-  "usesTheServingModelInputTransformationsRest",
-)(function* ({
-  messageDelta,
-  delta,
-  events,
-}: Effect.Success<ReturnType<typeof usesTheServingModelInputTransformationsFirst>>) {
-  messageDelta.data = yield* encodeJson(delta);
-
-  const result = yield* Effect.promise(() =>
-    streamAnthropic(
-      getModel("anthropic", "claude-fable-5-1"),
-      normalizeContext({ messages: [{ role: "user", content: "Hello", timestamp: 1 }] }),
-      { client: createFakeAnthropicClient(createSseResponse(events)) },
-    ).result(),
-  );
-
-  expect(result.diagnostics).toEqual([
-    {
-      type: "anthropic_input_transformations",
-      timestamp: expect.any(Number),
-      details: {
-        transformations: [
+describe("Anthropic raw SSE parsing", () => {
+  it("uses the serving model input transformations from the final stream event", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const events = minimalAnthropicEvents.map((event) => ({ ...event }));
+        const messageStart = events[0];
+        const messageDelta = events[4];
+        if (messageStart === undefined || messageDelta === undefined)
+          throw new Error("Expected minimal Anthropic events");
+        messageStart.data = yield* encodeJson({
+          type: "message_start",
+          message: {
+            id: "msg_transformations",
+            model: "claude-fable-5-1",
+            usage: { input_tokens: 12, output_tokens: 0 },
+            input_transformations: [
+              {
+                type: "thinking_dropped",
+                path: "messages.1.content.0",
+                reason: "prefix_binding_mismatch",
+              },
+            ],
+          },
+        });
+        const delta = (yield* decodeJson(messageDelta.data)) as Record<string, unknown>;
+        delta["input_transformations"] = [
           {
             type: "thinking_dropped",
             path: "messages.3.content.0",
             reason: "model_binding_mismatch",
           },
-        ],
-      },
-    },
-  ]);
-});
+        ];
+        messageDelta.data = yield* encodeJson(delta);
 
-describe("Anthropic raw SSE parsing", () => {
-  it("uses the serving model input transformations from the final stream event", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { messageDelta, delta, events } =
-          yield* usesTheServingModelInputTransformationsFirst();
-        return yield* usesTheServingModelInputTransformationsRest({ messageDelta, delta, events });
+        const result = yield* Effect.promise(() =>
+          streamAnthropic(
+            getModel("anthropic", "claude-fable-5-1"),
+            normalizeContext({ messages: [{ role: "user", content: "Hello", timestamp: 1 }] }),
+            { client: createFakeAnthropicClient(createSseResponse(events)) },
+          ).result(),
+        );
+
+        expect(result.diagnostics).toEqual([
+          {
+            type: "anthropic_input_transformations",
+            timestamp: expect.any(Number),
+            details: {
+              transformations: [
+                {
+                  type: "thinking_dropped",
+                  path: "messages.3.content.0",
+                  reason: "model_binding_mismatch",
+                },
+              ],
+            },
+          },
+        ]);
       }),
     ));
 });
@@ -570,371 +537,236 @@ describe("Anthropic raw SSE parsing", () => {
   });
 });
 
-const preservesContentFromContentBlockStartFirst2 = Effect.fn(
-  "preservesContentFromContentBlockStartFirst2",
-)(function* () {
-  const model = getModel("anthropic", "claude-haiku-4-5");
-  const context = normalizeContext({
-    messages: [{ role: "user", content: "Say hello.", timestamp: yield* Clock.currentTimeMillis }],
-  });
-  return { model, context };
-});
-
-const preservesContentFromContentBlockStartFirst6 = Effect.fn(
-  "preservesContentFromContentBlockStartFirst6",
-)(function* () {
-  const response = createSseResponse([
-    {
-      event: "message_start",
-      data: yield* encodeJson({
-        type: "message_start",
-        message: {
-          id: "msg_initial_content",
-          usage: {
-            input_tokens: 12,
-            output_tokens: 0,
-            cache_read_input_tokens: 0,
-            cache_creation_input_tokens: 0,
-          },
-        },
-      }),
-    },
-    {
-      event: "content_block_start",
-      data: yield* encodeJson({
-        type: "content_block_start",
-        index: 0,
-        content_block: { type: "text", text: "Initial text" },
-      }),
-    },
-    {
-      event: "content_block_delta",
-      data: yield* encodeJson({
-        type: "content_block_delta",
-        index: 0,
-        delta: { type: "text_delta", text: " plus delta" },
-      }),
-    },
-    {
-      event: "content_block_stop",
-      data: yield* encodeJson({ type: "content_block_stop", index: 0 }),
-    },
-    {
-      event: "content_block_start",
-      data: yield* encodeJson({
-        type: "content_block_start",
-        index: 1,
-        content_block: {
-          type: "thinking",
-          thinking: "Initial thinking",
-          signature: "initial signature",
-        },
-      }),
-    },
-    {
-      event: "content_block_delta",
-      data: yield* encodeJson({
-        type: "content_block_delta",
-        index: 1,
-        delta: { type: "thinking_delta", thinking: " plus delta" },
-      }),
-    },
-    {
-      event: "content_block_delta",
-      data: yield* encodeJson({
-        type: "content_block_delta",
-        index: 1,
-        delta: { type: "signature_delta", signature: " plus delta" },
-      }),
-    },
-    {
-      event: "content_block_stop",
-      data: yield* encodeJson({ type: "content_block_stop", index: 1 }),
-    },
-    {
-      event: "message_delta",
-      data: yield* encodeJson({
-        type: "message_delta",
-        delta: { stop_reason: "end_turn" },
-        usage: {
-          input_tokens: 12,
-          output_tokens: 5,
-          cache_read_input_tokens: 0,
-          cache_creation_input_tokens: 0,
-        },
-      }),
-    },
-    { event: "message_stop", data: yield* encodeJson({ type: "message_stop" }) },
-  ]);
-  return { response };
-});
-
-const preservesContentFromContentBlockStartRest6 = ({
-  response,
-}: Effect.Success<ReturnType<typeof preservesContentFromContentBlockStartFirst6>>) =>
-  Effect.sync(() => ({ response }));
-
-const preservesContentFromContentBlockStartFirst5 = Effect.fn(
-  "preservesContentFromContentBlockStartFirst5",
-)(function* () {
-  const { response } = yield* preservesContentFromContentBlockStartFirst6();
-  return yield* preservesContentFromContentBlockStartRest6({ response });
-});
-
-const preservesContentFromContentBlockStartRest5 = ({
-  response,
-}: Effect.Success<ReturnType<typeof preservesContentFromContentBlockStartFirst5>>) =>
-  Effect.sync(() => ({ response }));
-
-const preservesContentFromContentBlockStartFirst4 = Effect.fn(
-  "preservesContentFromContentBlockStartFirst4",
-)(function* () {
-  const { response } = yield* preservesContentFromContentBlockStartFirst5();
-  return yield* preservesContentFromContentBlockStartRest5({ response });
-});
-
-const preservesContentFromContentBlockStartRest4 = ({
-  response,
-}: Effect.Success<ReturnType<typeof preservesContentFromContentBlockStartFirst4>>) =>
-  Effect.sync(() => ({ response }));
-
-const preservesContentFromContentBlockStartFirst3 = Effect.fn(
-  "preservesContentFromContentBlockStartFirst3",
-)(function* () {
-  const { response } = yield* preservesContentFromContentBlockStartFirst4();
-  return yield* preservesContentFromContentBlockStartRest4({ response });
-});
-
-const preservesContentFromContentBlockStartRest3 = (
-  model: Model<"anthropic-messages">,
-  context: TranscriptContext,
-  { response }: Effect.Success<ReturnType<typeof preservesContentFromContentBlockStartFirst3>>,
-) => Effect.sync(() => ({ model, context, response }));
-
-const preservesContentFromContentBlockStartRest2 = Effect.fn(
-  "preservesContentFromContentBlockStartRest2",
-)(function* ({
-  model,
-  context,
-}: Effect.Success<ReturnType<typeof preservesContentFromContentBlockStartFirst2>>) {
-  const { response } = yield* preservesContentFromContentBlockStartFirst3();
-  return yield* preservesContentFromContentBlockStartRest3(model, context, { response });
-});
-
-const preservesContentFromContentBlockStartFirst = Effect.fn(
-  "preservesContentFromContentBlockStartFirst",
-)(function* () {
-  const { model, context } = yield* preservesContentFromContentBlockStartFirst2();
-  return yield* preservesContentFromContentBlockStartRest2({ model, context });
-});
-
-const preservesContentFromContentBlockStartRest = Effect.fn(
-  "preservesContentFromContentBlockStartRest",
-)(function* ({
-  model,
-  context,
-  response,
-}: Effect.Success<ReturnType<typeof preservesContentFromContentBlockStartFirst>>) {
-  const stream = streamAnthropic(model, context, {
-    client: createFakeAnthropicClient(response),
-  });
-  const result = yield* Effect.promise(() => stream.result());
-
-  expect(result.content).toEqual([
-    { type: "text", text: "Initial text plus delta" },
-    {
-      type: "thinking",
-      thinking: "Initial thinking plus delta",
-      thinkingSignature: "initial signature plus delta",
-    },
-  ]);
-});
-
 describe("Anthropic raw SSE parsing", () => {
   it("preserves content from content_block_start events", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { model, context, response } = yield* preservesContentFromContentBlockStartFirst();
-        return yield* preservesContentFromContentBlockStartRest({ model, context, response });
+        const model = getModel("anthropic", "claude-haiku-4-5");
+        const context = normalizeContext({
+          messages: [
+            { role: "user", content: "Say hello.", timestamp: yield* Clock.currentTimeMillis },
+          ],
+        });
+        const response = createSseResponse([
+          {
+            event: "message_start",
+            data: yield* encodeJson({
+              type: "message_start",
+              message: {
+                id: "msg_initial_content",
+                usage: {
+                  input_tokens: 12,
+                  output_tokens: 0,
+                  cache_read_input_tokens: 0,
+                  cache_creation_input_tokens: 0,
+                },
+              },
+            }),
+          },
+          {
+            event: "content_block_start",
+            data: yield* encodeJson({
+              type: "content_block_start",
+              index: 0,
+              content_block: { type: "text", text: "Initial text" },
+            }),
+          },
+          {
+            event: "content_block_delta",
+            data: yield* encodeJson({
+              type: "content_block_delta",
+              index: 0,
+              delta: { type: "text_delta", text: " plus delta" },
+            }),
+          },
+          {
+            event: "content_block_stop",
+            data: yield* encodeJson({ type: "content_block_stop", index: 0 }),
+          },
+          {
+            event: "content_block_start",
+            data: yield* encodeJson({
+              type: "content_block_start",
+              index: 1,
+              content_block: {
+                type: "thinking",
+                thinking: "Initial thinking",
+                signature: "initial signature",
+              },
+            }),
+          },
+          {
+            event: "content_block_delta",
+            data: yield* encodeJson({
+              type: "content_block_delta",
+              index: 1,
+              delta: { type: "thinking_delta", thinking: " plus delta" },
+            }),
+          },
+          {
+            event: "content_block_delta",
+            data: yield* encodeJson({
+              type: "content_block_delta",
+              index: 1,
+              delta: { type: "signature_delta", signature: " plus delta" },
+            }),
+          },
+          {
+            event: "content_block_stop",
+            data: yield* encodeJson({ type: "content_block_stop", index: 1 }),
+          },
+          {
+            event: "message_delta",
+            data: yield* encodeJson({
+              type: "message_delta",
+              delta: { stop_reason: "end_turn" },
+              usage: {
+                input_tokens: 12,
+                output_tokens: 5,
+                cache_read_input_tokens: 0,
+                cache_creation_input_tokens: 0,
+              },
+            }),
+          },
+          { event: "message_stop", data: yield* encodeJson({ type: "message_stop" }) },
+        ]);
+
+        const stream = streamAnthropic(model, context, {
+          client: createFakeAnthropicClient(response),
+        });
+        const result = yield* Effect.promise(() => stream.result());
+
+        expect(result.content).toEqual([
+          { type: "text", text: "Initial text plus delta" },
+          {
+            type: "thinking",
+            thinking: "Initial thinking plus delta",
+            thinkingSignature: "initial signature plus delta",
+          },
+        ]);
       }),
     ));
-});
-
-const preservesRefusalStopDetailsFromMessageFirst2 = Effect.fn(
-  "preservesRefusalStopDetailsFromMessageFirst2",
-)(function* () {
-  const model = getModel("anthropic", "claude-fable-5");
-  const context = normalizeContext({
-    messages: [
-      { role: "user", content: "blocked request", timestamp: yield* Clock.currentTimeMillis },
-    ],
-  });
-  const explanation =
-    "This request triggered restrictions on violative cyber content and was blocked under Anthropic's Usage Policy. To learn more, provide feedback, or request an exemption based on how you use Claude, visit our help center: https://support.claude.com/en/articles/14604842-real-time-cyber-safeguards-on-claude.";
-  return { explanation, model, context };
-});
-
-const preservesRefusalStopDetailsFromMessageRest2 = Effect.fn(
-  "preservesRefusalStopDetailsFromMessageRest2",
-)(function* ({
-  explanation,
-  model,
-  context,
-}: Effect.Success<ReturnType<typeof preservesRefusalStopDetailsFromMessageFirst2>>) {
-  const response = createSseResponse([
-    {
-      event: "message_start",
-      data: yield* encodeJson({
-        type: "message_start",
-        message: {
-          id: "msg_01XFUDYJgAACzvnptvVoYEL",
-          usage: {
-            input_tokens: 412,
-            output_tokens: 0,
-            cache_read_input_tokens: 0,
-            cache_creation_input_tokens: 0,
-          },
-        },
-      }),
-    },
-    {
-      event: "message_delta",
-      data: yield* encodeJson({
-        type: "message_delta",
-        delta: {
-          stop_reason: "refusal",
-          stop_details: {
-            type: "refusal",
-            category: "cyber",
-            explanation,
-          },
-        },
-        usage: {
-          input_tokens: 412,
-          output_tokens: 0,
-          cache_read_input_tokens: 0,
-          cache_creation_input_tokens: 0,
-        },
-      }),
-    },
-    {
-      event: "message_stop",
-      data: yield* encodeJson({ type: "message_stop" }),
-    },
-  ]);
-  return { model, context, response, explanation };
-});
-
-const preservesRefusalStopDetailsFromMessageFirst = Effect.fn(
-  "preservesRefusalStopDetailsFromMessageFirst",
-)(function* () {
-  const { explanation, model, context } = yield* preservesRefusalStopDetailsFromMessageFirst2();
-  return yield* preservesRefusalStopDetailsFromMessageRest2({ explanation, model, context });
-});
-
-const preservesRefusalStopDetailsFromMessageRest = Effect.fn(
-  "preservesRefusalStopDetailsFromMessageRest",
-)(function* ({
-  model,
-  context,
-  response,
-  explanation,
-}: Effect.Success<ReturnType<typeof preservesRefusalStopDetailsFromMessageFirst>>) {
-  const stream = streamAnthropic(model, context, {
-    client: createFakeAnthropicClient(response),
-  });
-  const result = yield* Effect.promise(() => stream.result());
-
-  expect(result.stopReason).toBe("error");
-  expect(result.rawStopReason).toBe("refusal");
-  expect(result.errorMessage).toBe(explanation);
 });
 
 describe("Anthropic raw SSE parsing", () => {
   it("preserves refusal stop details from message_delta", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { model, context, response, explanation } =
-          yield* preservesRefusalStopDetailsFromMessageFirst();
-        return yield* preservesRefusalStopDetailsFromMessageRest({
-          model,
-          context,
-          response,
-          explanation,
+        const model = getModel("anthropic", "claude-fable-5");
+        const context = normalizeContext({
+          messages: [
+            { role: "user", content: "blocked request", timestamp: yield* Clock.currentTimeMillis },
+          ],
         });
+        const explanation =
+          "This request triggered restrictions on violative cyber content and was blocked under Anthropic's Usage Policy. To learn more, provide feedback, or request an exemption based on how you use Claude, visit our help center: https://support.claude.com/en/articles/14604842-real-time-cyber-safeguards-on-claude.";
+        const response = createSseResponse([
+          {
+            event: "message_start",
+            data: yield* encodeJson({
+              type: "message_start",
+              message: {
+                id: "msg_01XFUDYJgAACzvnptvVoYEL",
+                usage: {
+                  input_tokens: 412,
+                  output_tokens: 0,
+                  cache_read_input_tokens: 0,
+                  cache_creation_input_tokens: 0,
+                },
+              },
+            }),
+          },
+          {
+            event: "message_delta",
+            data: yield* encodeJson({
+              type: "message_delta",
+              delta: {
+                stop_reason: "refusal",
+                stop_details: {
+                  type: "refusal",
+                  category: "cyber",
+                  explanation,
+                },
+              },
+              usage: {
+                input_tokens: 412,
+                output_tokens: 0,
+                cache_read_input_tokens: 0,
+                cache_creation_input_tokens: 0,
+              },
+            }),
+          },
+          {
+            event: "message_stop",
+            data: yield* encodeJson({ type: "message_stop" }),
+          },
+        ]);
+
+        const stream = streamAnthropic(model, context, {
+          client: createFakeAnthropicClient(response),
+        });
+        const result = yield* Effect.promise(() => stream.result());
+
+        expect(result.stopReason).toBe("error");
+        expect(result.rawStopReason).toBe("refusal");
+        expect(result.errorMessage).toBe(explanation);
       }),
     ));
 });
-
-const preservesSensitiveStopReasonsWithAFirst = Effect.fn(
-  "preservesSensitiveStopReasonsWithAFirst",
-)(function* () {
-  const model = getModel("anthropic", "claude-haiku-4-5");
-  const context = normalizeContext({
-    messages: [
-      { role: "user", content: "blocked request", timestamp: yield* Clock.currentTimeMillis },
-    ],
-  });
-  const response = createSseResponse([
-    {
-      event: "message_start",
-      data: yield* encodeJson({
-        type: "message_start",
-        message: {
-          id: "msg_sensitive",
-          usage: {
-            input_tokens: 12,
-            output_tokens: 0,
-            cache_read_input_tokens: 0,
-            cache_creation_input_tokens: 0,
-          },
-        },
-      }),
-    },
-    {
-      event: "message_delta",
-      data: yield* encodeJson({
-        type: "message_delta",
-        delta: { stop_reason: "sensitive" },
-        usage: {
-          input_tokens: 12,
-          output_tokens: 0,
-          cache_read_input_tokens: 0,
-          cache_creation_input_tokens: 0,
-        },
-      }),
-    },
-    {
-      event: "message_stop",
-      data: yield* encodeJson({ type: "message_stop" }),
-    },
-  ]);
-  return { model, context, response };
-});
-
-const preservesSensitiveStopReasonsWithARest = Effect.fn("preservesSensitiveStopReasonsWithARest")(
-  function* ({
-    model,
-    context,
-    response,
-  }: Effect.Success<ReturnType<typeof preservesSensitiveStopReasonsWithAFirst>>) {
-    const stream = streamAnthropic(model, context, {
-      client: createFakeAnthropicClient(response),
-    });
-    const result = yield* Effect.promise(() => stream.result());
-
-    expect(result.stopReason).toBe("error");
-    expect(result.rawStopReason).toBe("sensitive");
-    expect(result.errorMessage).toBe("Provider stopped with: sensitive");
-  },
-);
 
 describe("Anthropic raw SSE parsing", () => {
   it("preserves sensitive stop reasons with a descriptive error message", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { model, context, response } = yield* preservesSensitiveStopReasonsWithAFirst();
-        return yield* preservesSensitiveStopReasonsWithARest({ model, context, response });
+        const model = getModel("anthropic", "claude-haiku-4-5");
+        const context = normalizeContext({
+          messages: [
+            { role: "user", content: "blocked request", timestamp: yield* Clock.currentTimeMillis },
+          ],
+        });
+        const response = createSseResponse([
+          {
+            event: "message_start",
+            data: yield* encodeJson({
+              type: "message_start",
+              message: {
+                id: "msg_sensitive",
+                usage: {
+                  input_tokens: 12,
+                  output_tokens: 0,
+                  cache_read_input_tokens: 0,
+                  cache_creation_input_tokens: 0,
+                },
+              },
+            }),
+          },
+          {
+            event: "message_delta",
+            data: yield* encodeJson({
+              type: "message_delta",
+              delta: { stop_reason: "sensitive" },
+              usage: {
+                input_tokens: 12,
+                output_tokens: 0,
+                cache_read_input_tokens: 0,
+                cache_creation_input_tokens: 0,
+              },
+            }),
+          },
+          {
+            event: "message_stop",
+            data: yield* encodeJson({ type: "message_stop" }),
+          },
+        ]);
+
+        const stream = streamAnthropic(model, context, {
+          client: createFakeAnthropicClient(response),
+        });
+        const result = yield* Effect.promise(() => stream.result());
+
+        expect(result.stopReason).toBe("error");
+        expect(result.rawStopReason).toBe("sensitive");
+        expect(result.errorMessage).toBe("Provider stopped with: sensitive");
       }),
     ));
 });

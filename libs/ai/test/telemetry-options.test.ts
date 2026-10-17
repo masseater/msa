@@ -83,115 +83,73 @@ describe("ProviderRequestOptions.telemetryContext", () => {
   });
 });
 
-const survivesProviderAndModelsStreamDeferredFirst = () =>
-  Effect.sync(() => {
-    const observed: Array<TelemetryContext | undefined> = [];
-    const handle: DeferredHandle = {
-      provider: model.provider,
-      modelId: model.id,
-      api: model.api,
-      id: "response",
-    };
-    const provider = createProvider({
-      id: model.provider,
-      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-      models: [model],
-      api: {
-        stream: (requestModel, _context, options) => {
-          observed.push(options?.telemetryContext);
-          return completedStream(requestModel);
-        },
-        streamSimple: (requestModel, _context, options) => {
-          observed.push(options?.telemetryContext);
-          return completedStream(requestModel);
-        },
-        fetchDeferred: (requestModel, _handle, options) => {
-          observed.push(options?.telemetryContext);
-          return completedStream(requestModel);
-        },
-        cancelDeferred: (_requestModel, _handle, options) => {
-          observed.push(options?.telemetryContext);
-
-          return Promise.resolve();
-        },
-      },
-    });
-    return { provider, handle, observed };
-  });
-
-const survivesProviderAndModelsStreamDeferredRest = Effect.fn(
-  "survivesProviderAndModelsStreamDeferredRest",
-)(function* ({
-  provider,
-  handle,
-  observed,
-}: Effect.Success<ReturnType<typeof survivesProviderAndModelsStreamDeferredFirst>>) {
-  yield* Effect.promise(() => provider.stream(model, context, { telemetryContext }).result());
-  yield* Effect.promise(() => provider.streamSimple(model, context, { telemetryContext }).result());
-  yield* Effect.promise(() =>
-    provider.fetchDeferred!(model, handle, { telemetryContext }).result(),
-  );
-  yield* Effect.promise(() => provider.cancelDeferred!(model, handle, { telemetryContext }));
-
-  const models = createModels();
-  models.setProvider(provider);
-  yield* Effect.promise(() => models.stream(model, context, { telemetryContext }).result());
-  yield* Effect.promise(() => models.streamSimple(model, context, { telemetryContext }).result());
-  yield* Effect.promise(() => models.fetchDeferred(model, handle, { telemetryContext }));
-  yield* Effect.promise(() => models.cancelDeferred(model, handle, { telemetryContext }));
-
-  expect(observed).toHaveLength(8);
-  expect(observed.every((value) => value === telemetryContext)).toBe(true);
-});
-
 describe("ProviderRequestOptions.telemetryContext", () => {
   it("survives provider and Models stream/deferred dispatch", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { provider, handle, observed } =
-          yield* survivesProviderAndModelsStreamDeferredFirst();
-        return yield* survivesProviderAndModelsStreamDeferredRest({ provider, handle, observed });
+        const observed: Array<TelemetryContext | undefined> = [];
+        const handle: DeferredHandle = {
+          provider: model.provider,
+          modelId: model.id,
+          api: model.api,
+          id: "response",
+        };
+        const provider = createProvider({
+          id: model.provider,
+          auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
+          models: [model],
+          api: {
+            stream: (requestModel, _context, options) => {
+              observed.push(options?.telemetryContext);
+              return completedStream(requestModel);
+            },
+            streamSimple: (requestModel, _context, options) => {
+              observed.push(options?.telemetryContext);
+              return completedStream(requestModel);
+            },
+            fetchDeferred: (requestModel, _handle, options) => {
+              observed.push(options?.telemetryContext);
+              return completedStream(requestModel);
+            },
+            cancelDeferred: (_requestModel, _handle, options) => {
+              observed.push(options?.telemetryContext);
+
+              return Promise.resolve();
+            },
+          },
+        });
+
+        yield* Effect.promise(() => provider.stream(model, context, { telemetryContext }).result());
+        yield* Effect.promise(() =>
+          provider.streamSimple(model, context, { telemetryContext }).result(),
+        );
+        yield* Effect.promise(() =>
+          provider.fetchDeferred!(model, handle, { telemetryContext }).result(),
+        );
+        yield* Effect.promise(() => provider.cancelDeferred!(model, handle, { telemetryContext }));
+
+        const models = createModels();
+        models.setProvider(provider);
+        yield* Effect.promise(() => models.stream(model, context, { telemetryContext }).result());
+        yield* Effect.promise(() =>
+          models.streamSimple(model, context, { telemetryContext }).result(),
+        );
+        yield* Effect.promise(() => models.fetchDeferred(model, handle, { telemetryContext }));
+        yield* Effect.promise(() => models.cancelDeferred(model, handle, { telemetryContext }));
+
+        expect(observed).toHaveLength(8);
+        expect(observed.every((value) => value === telemetryContext)).toBe(true);
       }),
     ));
 });
 
-const survivesDirectAndModelsImageDispatchFirst = Effect.fn(
-  "survivesDirectAndModelsImageDispatchFirst",
-)(function* () {
-  const observed: Array<TelemetryContext | undefined> = [];
-  registerImagesApiProvider({
-    api: imageModel.api,
-    generateImages: (requestModel, _context, options) => {
-      observed.push(options?.telemetryContext);
-      return Promise.resolve({
-        api: requestModel.api,
-        provider: requestModel.provider,
-        model: requestModel.id,
-        output: [],
-        stopReason: "stop",
-        timestamp: 0,
-      });
-    },
-  });
-  yield* Effect.promise(() => generateImages(imageModel, imagesContext, { telemetryContext }));
-
-  const models = createModels();
-  return { models, observed };
-});
-
-const survivesDirectAndModelsImageDispatchRest = Effect.fn(
-  "survivesDirectAndModelsImageDispatchRest",
-)(function* ({
-  models,
-  observed,
-}: Effect.Success<ReturnType<typeof survivesDirectAndModelsImageDispatchFirst>>) {
-  models.setProvider(
-    createProvider({
-      id: imageModel.provider,
-      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-      models: [imageModel],
-      images: {
-        [imageModel.api]: {
+describe("ProviderRequestOptions.telemetryContext", () => {
+  it("survives direct and Models image dispatch", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const observed: Array<TelemetryContext | undefined> = [];
+        registerImagesApiProvider({
+          api: imageModel.api,
           generateImages: (requestModel, _context, options) => {
             observed.push(options?.telemetryContext);
             return Promise.resolve({
@@ -203,23 +161,39 @@ const survivesDirectAndModelsImageDispatchRest = Effect.fn(
               timestamp: 0,
             });
           },
-        },
-      },
-    }),
-  );
-  yield* Effect.promise(() =>
-    models.generateImages(imageModel, imagesContext, { telemetryContext }),
-  );
+        });
+        yield* Effect.promise(() =>
+          generateImages(imageModel, imagesContext, { telemetryContext }),
+        );
 
-  expect(observed).toEqual([telemetryContext, telemetryContext]);
-});
+        const models = createModels();
+        models.setProvider(
+          createProvider({
+            id: imageModel.provider,
+            auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
+            models: [imageModel],
+            images: {
+              [imageModel.api]: {
+                generateImages: (requestModel, _context, options) => {
+                  observed.push(options?.telemetryContext);
+                  return Promise.resolve({
+                    api: requestModel.api,
+                    provider: requestModel.provider,
+                    model: requestModel.id,
+                    output: [],
+                    stopReason: "stop",
+                    timestamp: 0,
+                  });
+                },
+              },
+            },
+          }),
+        );
+        yield* Effect.promise(() =>
+          models.generateImages(imageModel, imagesContext, { telemetryContext }),
+        );
 
-describe("ProviderRequestOptions.telemetryContext", () => {
-  it("survives direct and Models image dispatch", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const { models, observed } = yield* survivesDirectAndModelsImageDispatchFirst();
-        return yield* survivesDirectAndModelsImageDispatchRest({ models, observed });
+        expect(observed).toEqual([telemetryContext, telemetryContext]);
       }),
     ));
 });

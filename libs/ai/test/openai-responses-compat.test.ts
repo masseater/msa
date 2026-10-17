@@ -136,65 +136,6 @@ describe("openai-responses provider defaults", () => {
     ));
 });
 
-const forwardsRequiredToolChoiceFirst = Effect.fn("forwardsRequiredToolChoiceFirst")(function* () {
-  let capturedPayload: unknown;
-
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response("data: [DONE]\n\n", {
-      status: 200,
-      headers: { "content-type": "text/event-stream" },
-    }),
-  );
-
-  const stream = streamOpenAIResponses(
-    getModel("openai", "gpt-5.4"),
-    normalizeContext({
-      messages: [
-        {
-          role: "user",
-          content: "Do not call ping. Respond with text instead.",
-          timestamp: yield* Clock.currentTimeMillis,
-        },
-      ],
-      tools: [
-        {
-          name: "ping",
-          description: "Ping",
-          parameters: Type.Object({ value: Type.String() }),
-        },
-      ],
-    }),
-    {
-      apiKey: "sk-test-key",
-      toolChoice: "required",
-      onPayload: (payload) => {
-        capturedPayload = payload;
-      },
-    },
-  );
-  return { stream, capturedPayload };
-});
-
-const forwardsRequiredToolChoiceRest = Effect.fn("forwardsRequiredToolChoiceRest")(function* ({
-  stream,
-  capturedPayload,
-}: Effect.Success<ReturnType<typeof forwardsRequiredToolChoiceFirst>>) {
-  yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
-    Stream.orDie,
-    Stream.runForEachWhile((event) =>
-      Effect.sync(() => {
-        if (event.type === "done" || event.type === "error") return false;
-        return true;
-      }),
-    ),
-  );
-
-  expect(capturedPayload).toMatchObject({
-    tool_choice: "required",
-    tools: [expect.objectContaining({ name: "ping" })],
-  });
-});
-
 describe("openai-responses provider defaults", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -202,80 +143,58 @@ describe("openai-responses provider defaults", () => {
   it("forwards required tool choice", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { stream, capturedPayload } = yield* forwardsRequiredToolChoiceFirst();
-        return yield* forwardsRequiredToolChoiceRest({ stream, capturedPayload });
+        let capturedPayload: unknown;
+
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(
+          new Response("data: [DONE]\n\n", {
+            status: 200,
+            headers: { "content-type": "text/event-stream" },
+          }),
+        );
+
+        const stream = streamOpenAIResponses(
+          getModel("openai", "gpt-5.4"),
+          normalizeContext({
+            messages: [
+              {
+                role: "user",
+                content: "Do not call ping. Respond with text instead.",
+                timestamp: yield* Clock.currentTimeMillis,
+              },
+            ],
+            tools: [
+              {
+                name: "ping",
+                description: "Ping",
+                parameters: Type.Object({ value: Type.String() }),
+              },
+            ],
+          }),
+          {
+            apiKey: "sk-test-key",
+            toolChoice: "required",
+            onPayload: (payload) => {
+              capturedPayload = payload;
+            },
+          },
+        );
+
+        yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
+          Stream.orDie,
+          Stream.runForEachWhile((event) =>
+            Effect.sync(() => {
+              if (event.type === "done" || event.type === "error") return false;
+              return true;
+            }),
+          ),
+        );
+
+        expect(capturedPayload).toMatchObject({
+          tool_choice: "required",
+          tools: [expect.objectContaining({ name: "ping" })],
+        });
       }),
     ));
-});
-
-const setsStrictModeExplicitlyForCloudflareFirst = Effect.fn(
-  "setsStrictModeExplicitlyForCloudflareFirst",
-)(function* () {
-  const model = getModel("cloudflare-ai-gateway", "gpt-5.6-sol");
-  let capturedPayload: CapturedResponsesPayload | undefined;
-
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response("data: [DONE]\n\n", {
-      status: 200,
-      headers: { "content-type": "text/event-stream" },
-    }),
-  );
-
-  const stream = streamOpenAIResponses(
-    model,
-    normalizeContext({
-      messages: [
-        { role: "user", content: "Use a tool.", timestamp: yield* Clock.currentTimeMillis },
-      ],
-      tools: [
-        {
-          name: "ordinary",
-          description: "An ordinary tool",
-          parameters: Type.Object({
-            path: Type.String(),
-            offset: Type.Optional(Type.Number()),
-          }),
-        },
-        {
-          name: "constrained",
-          description: "A constrained tool",
-          parameters: Type.Object({ value: Type.String() }),
-          constrainedSampling: { type: "json_schema", strict: "prefer" },
-        },
-      ],
-    }),
-    {
-      apiKey: "sk-test-key",
-      onPayload: (payload) => {
-        capturedPayload = payload as CapturedResponsesPayload;
-      },
-    },
-  );
-  return { stream, model, capturedPayload };
-});
-
-const setsStrictModeExplicitlyForCloudflareRest = Effect.fn(
-  "setsStrictModeExplicitlyForCloudflareRest",
-)(function* ({
-  stream,
-  model,
-  capturedPayload,
-}: Effect.Success<ReturnType<typeof setsStrictModeExplicitlyForCloudflareFirst>>) {
-  yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
-    Stream.orDie,
-    Stream.runForEachWhile((event) =>
-      Effect.sync(() => {
-        if (event.type === "done" || event.type === "error") return false;
-        return true;
-      }),
-    ),
-  );
-
-  expect(model.compat?.supportsStrictMode).toBe(true);
-  expect(capturedPayload?.tools).toEqual([
-    expect.objectContaining({ name: "ordinary", strict: false }),
-    expect.objectContaining({ name: "constrained", strict: true }),
-  ]);
 });
 
 describe("openai-responses provider defaults", () => {
@@ -285,9 +204,62 @@ describe("openai-responses provider defaults", () => {
   it("sets strict mode explicitly for Cloudflare OpenAI Responses tools", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { stream, model, capturedPayload } =
-          yield* setsStrictModeExplicitlyForCloudflareFirst();
-        return yield* setsStrictModeExplicitlyForCloudflareRest({ stream, model, capturedPayload });
+        const model = getModel("cloudflare-ai-gateway", "gpt-5.6-sol");
+        let capturedPayload: CapturedResponsesPayload | undefined;
+
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(
+          new Response("data: [DONE]\n\n", {
+            status: 200,
+            headers: { "content-type": "text/event-stream" },
+          }),
+        );
+
+        const stream = streamOpenAIResponses(
+          model,
+          normalizeContext({
+            messages: [
+              { role: "user", content: "Use a tool.", timestamp: yield* Clock.currentTimeMillis },
+            ],
+            tools: [
+              {
+                name: "ordinary",
+                description: "An ordinary tool",
+                parameters: Type.Object({
+                  path: Type.String(),
+                  offset: Type.Optional(Type.Number()),
+                }),
+              },
+              {
+                name: "constrained",
+                description: "A constrained tool",
+                parameters: Type.Object({ value: Type.String() }),
+                constrainedSampling: { type: "json_schema", strict: "prefer" },
+              },
+            ],
+          }),
+          {
+            apiKey: "sk-test-key",
+            onPayload: (payload) => {
+              capturedPayload = payload as CapturedResponsesPayload;
+            },
+          },
+        );
+
+        yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(
+          Stream.orDie,
+          Stream.runForEachWhile((event) =>
+            Effect.sync(() => {
+              if (event.type === "done" || event.type === "error") return false;
+              return true;
+            }),
+          ),
+        );
+
+        expect(model.compat?.supportsStrictMode).toBe(true);
+        expect(capturedPayload?.tools).toEqual([
+          expect.objectContaining({ name: "ordinary", strict: false }),
+          expect.objectContaining({ name: "constrained", strict: true }),
+        ]);
       }),
     ));
 });
@@ -705,69 +677,6 @@ describe("openai-responses provider defaults", () => {
     ));
 });
 
-const appliesSCostMultiplierForRequestedFirst = Effect.fn(
-  "appliesSCostMultiplierForRequestedFirst",
-)(function* (
-  modelId: "gpt-5.5" | "gpt-6-luna" | "gpt-5.4",
-  responseServiceTier: "flex" | "priority" | "fast",
-) {
-  const model = getModel("openai", modelId);
-  const tokenCount = 100_000;
-  const tokenScale = tokenCount / 1_000_000;
-  const sse = `${[
-    `data: ${yield* encodeJson({
-      type: "response.completed",
-      response: {
-        status: "completed",
-        service_tier: responseServiceTier,
-        usage: {
-          input_tokens: tokenCount,
-          output_tokens: tokenCount,
-          total_tokens: tokenCount * 2,
-          input_tokens_details: { cached_tokens: 0 },
-        },
-      },
-    })}`,
-  ].join("\n\n")}\n\n`;
-
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response(sse, {
-      status: 200,
-      headers: { "content-type": "text/event-stream" },
-    }),
-  );
-  return { model, tokenScale };
-});
-
-const appliesSCostMultiplierForRequestedRest = Effect.fn("appliesSCostMultiplierForRequestedRest")(
-  function* (
-    serviceTier: "flex" | "priority" | "fast",
-    multiplier: 0.5 | 2 | 2.5,
-    {
-      model,
-      tokenScale,
-    }: Effect.Success<ReturnType<typeof appliesSCostMultiplierForRequestedFirst>>,
-  ) {
-    const stream = streamOpenAIResponses(
-      model,
-      normalizeContext({
-        systemPrompt: "sys",
-        messages: [{ role: "user", content: "hi", timestamp: yield* Clock.currentTimeMillis }],
-      }),
-      { apiKey: "sk-test-key", serviceTier },
-    );
-
-    const result = yield* Effect.promise(() => stream.result());
-
-    expect(result.usage.cost.input).toBeCloseTo(model.cost.input * multiplier * tokenScale, 12);
-    expect(result.usage.cost.output).toBeCloseTo(model.cost.output * multiplier * tokenScale, 12);
-    expect(result.usage.cost.total).toBeCloseTo(
-      (model.cost.input + model.cost.output) * multiplier * tokenScale,
-      12,
-    );
-  },
-);
-
 describe("openai-responses provider defaults", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -783,14 +692,57 @@ describe("openai-responses provider defaults", () => {
     (modelId, serviceTier, responseServiceTier, multiplier) =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { model, tokenScale } = yield* appliesSCostMultiplierForRequestedFirst(
-            modelId,
-            responseServiceTier,
+          const model = getModel("openai", modelId);
+          const tokenCount = 100_000;
+          const tokenScale = tokenCount / 1_000_000;
+          const sse = `${[
+            `data: ${yield* encodeJson({
+              type: "response.completed",
+              response: {
+                status: "completed",
+                service_tier: responseServiceTier,
+                usage: {
+                  input_tokens: tokenCount,
+                  output_tokens: tokenCount,
+                  total_tokens: tokenCount * 2,
+                  input_tokens_details: { cached_tokens: 0 },
+                },
+              },
+            })}`,
+          ].join("\n\n")}\n\n`;
+
+          vi.spyOn(globalThis, "fetch").mockResolvedValue(
+            new Response(sse, {
+              status: 200,
+              headers: { "content-type": "text/event-stream" },
+            }),
           );
-          return yield* appliesSCostMultiplierForRequestedRest(serviceTier, multiplier, {
+
+          const stream = streamOpenAIResponses(
             model,
-            tokenScale,
-          });
+            normalizeContext({
+              systemPrompt: "sys",
+              messages: [
+                { role: "user", content: "hi", timestamp: yield* Clock.currentTimeMillis },
+              ],
+            }),
+            { apiKey: "sk-test-key", serviceTier },
+          );
+
+          const result = yield* Effect.promise(() => stream.result());
+
+          expect(result.usage.cost.input).toBeCloseTo(
+            model.cost.input * multiplier * tokenScale,
+            12,
+          );
+          expect(result.usage.cost.output).toBeCloseTo(
+            model.cost.output * multiplier * tokenScale,
+            12,
+          );
+          expect(result.usage.cost.total).toBeCloseTo(
+            (model.cost.input + model.cost.output) * multiplier * tokenScale,
+            12,
+          );
         }),
       ),
   );

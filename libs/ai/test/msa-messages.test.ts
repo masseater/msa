@@ -30,68 +30,57 @@ afterEach(() => {
   server = undefined;
 });
 
-const startServerFirst = (options: ResponderOptions) =>
-  Effect.sync(() => {
-    const requests: RecordedRequest[] = [];
-
-    server = createServer((request: IncomingMessage, response: ServerResponse) => {
-      const chunks: Buffer[] = [];
-      request.on("data", (chunk: Buffer) => chunks.push(chunk));
-      request.on("end", () => {
-        const raw = Buffer.concat(chunks).toString("utf-8");
-        requests.push({
-          url: request.url ?? "",
-          headers: request.headers,
-          body: raw === "" ? undefined : JSON.parse(raw),
-        });
-
-        if (
-          options.status !== undefined &&
-          options.status !== 0 &&
-          !Number.isNaN(options.status) &&
-          options.status !== 200
-        ) {
-          response.statusCode = options.status;
-          response.setHeader("content-type", "application/json");
-          response.end(options.rawBody ?? "{}");
-          return;
-        }
-
-        response.statusCode = 200;
-        response.setHeader("content-type", "text/event-stream");
-        for (const [name, value] of Object.entries(options.headers ?? {})) {
-          response.setHeader(name, value);
-        }
-        for (const event of options.events ?? []) {
-          response.write(`data: ${JSON.stringify(event)}\n\n`);
-        }
-        response.end();
-      });
-    });
-    return { requests };
-  });
-
-const startServerRest = Effect.fn("startServerRest")(function* ({
-  requests,
-}: Effect.Success<ReturnType<typeof startServerFirst>>) {
-  yield* Effect.promise(
-    () =>
-      new Promise<void>((resolve) => {
-        server!.listen(0, "127.0.0.1", () => resolve());
-      }),
-  );
-
-  const address = server!.address() as AddressInfo;
-  return { baseUrl: `http://127.0.0.1:${address.port}/v1`, requests };
-});
-
 function startServer(
   options: ResponderOptions,
 ): Promise<{ baseUrl: string; requests: RecordedRequest[] }> {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const { requests } = yield* startServerFirst(options);
-      return yield* startServerRest({ requests });
+      const requests: RecordedRequest[] = [];
+
+      server = createServer((request: IncomingMessage, response: ServerResponse) => {
+        const chunks: Buffer[] = [];
+        request.on("data", (chunk: Buffer) => chunks.push(chunk));
+        request.on("end", () => {
+          const raw = Buffer.concat(chunks).toString("utf-8");
+          requests.push({
+            url: request.url ?? "",
+            headers: request.headers,
+            body: raw === "" ? undefined : JSON.parse(raw),
+          });
+
+          if (
+            options.status !== undefined &&
+            options.status !== 0 &&
+            !Number.isNaN(options.status) &&
+            options.status !== 200
+          ) {
+            response.statusCode = options.status;
+            response.setHeader("content-type", "application/json");
+            response.end(options.rawBody ?? "{}");
+            return;
+          }
+
+          response.statusCode = 200;
+          response.setHeader("content-type", "text/event-stream");
+          for (const [name, value] of Object.entries(options.headers ?? {})) {
+            response.setHeader(name, value);
+          }
+          for (const event of options.events ?? []) {
+            response.write(`data: ${JSON.stringify(event)}\n\n`);
+          }
+          response.end();
+        });
+      });
+
+      yield* Effect.promise(
+        () =>
+          new Promise<void>((resolve) => {
+            server!.listen(0, "127.0.0.1", () => resolve());
+          }),
+      );
+
+      const address = server!.address() as AddressInfo;
+      return { baseUrl: `http://127.0.0.1:${address.port}/v1`, requests };
     }),
   );
 }

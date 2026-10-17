@@ -321,77 +321,65 @@ describe("Models with image models", () => {
     ));
 });
 
-const returnsErrorResultsInsteadOfRejectingFirst = Effect.fn(
-  "returnsErrorResultsInsteadOfRejectingFirst",
-)(function* () {
-  const models = createModels({ authContext: fakeAuthContext({}) });
-
-  const ghost = yield* Effect.promise(() =>
-    models.generateImages(imageModel("ghost", "m"), context),
-  );
-  expect(ghost.stopReason).toBe("error");
-  expect(ghost.errorMessage).toContain("Unknown provider: ghost");
-
-  const calls: GenerateCall[] = [];
-  models.setProvider(testProvider({ id: "p1", envVar: "MISSING", calls }));
-  const model = models.getModelOfType("image", "p1", "model-a")!;
-  expect(yield* Effect.promise(() => models.getAuth(model))).toBeUndefined();
-  const unconfigured = yield* Effect.promise(() => models.generateImages(model, context));
-  expect(unconfigured.stopReason).toBe("error");
-  expect(unconfigured.errorMessage).toContain("not configured");
-  expect(calls).toEqual([]);
-
-  const controllerSignal = AbortSignal.abort();
-  const cancelled = yield* Effect.promise(() =>
-    models.generateImages(model, context, { signal: controllerSignal }),
-  );
-  expect(cancelled.stopReason).toBe("aborted");
-  expect(calls).toEqual([]);
-  return { models };
-});
-
-const returnsErrorResultsInsteadOfRejectingRest = Effect.fn(
-  "returnsErrorResultsInsteadOfRejectingRest",
-)(function* ({
-  models,
-}: Effect.Success<ReturnType<typeof returnsErrorResultsInsteadOfRejectingFirst>>) {
-  models.setProvider(
-    createProvider({
-      id: "chat-only",
-      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-      models: [imageModel("chat-only", "i")],
-      api: {
-        stream: () => new AssistantMessageEventStream(),
-        streamSimple: () => new AssistantMessageEventStream(),
-      },
-    }),
-  );
-  const unsupported = yield* Effect.promise(() =>
-    models.generateImages(models.getModelOfType("image", "chat-only", "i")!, context),
-  );
-  expect(unsupported.stopReason).toBe("error");
-  expect(unsupported.errorMessage).toContain("does not support image generation");
-
-  models.setProvider(
-    testProvider({
-      id: "wrong-api",
-      models: [imageModel("wrong-api", "i")],
-      images: { "other-images": true },
-    }),
-  );
-  const missingApi = yield* Effect.promise(() =>
-    models.generateImages(models.getModelOfType("image", "wrong-api", "i")!, context),
-  );
-  expect(missingApi.stopReason).toBe("error");
-  expect(missingApi.errorMessage).toContain('no image generation implementation for "test-images"');
-});
-
 describe("Models with image models", () => {
   it("returns error results instead of rejecting", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { models } = yield* returnsErrorResultsInsteadOfRejectingFirst();
-        return yield* returnsErrorResultsInsteadOfRejectingRest({ models });
+        const models = createModels({ authContext: fakeAuthContext({}) });
+
+        const ghost = yield* Effect.promise(() =>
+          models.generateImages(imageModel("ghost", "m"), context),
+        );
+        expect(ghost.stopReason).toBe("error");
+        expect(ghost.errorMessage).toContain("Unknown provider: ghost");
+
+        const calls: GenerateCall[] = [];
+        models.setProvider(testProvider({ id: "p1", envVar: "MISSING", calls }));
+        const model = models.getModelOfType("image", "p1", "model-a")!;
+        expect(yield* Effect.promise(() => models.getAuth(model))).toBeUndefined();
+        const unconfigured = yield* Effect.promise(() => models.generateImages(model, context));
+        expect(unconfigured.stopReason).toBe("error");
+        expect(unconfigured.errorMessage).toContain("not configured");
+        expect(calls).toEqual([]);
+
+        const controllerSignal = AbortSignal.abort();
+        const cancelled = yield* Effect.promise(() =>
+          models.generateImages(model, context, { signal: controllerSignal }),
+        );
+        expect(cancelled.stopReason).toBe("aborted");
+        expect(calls).toEqual([]);
+
+        models.setProvider(
+          createProvider({
+            id: "chat-only",
+            auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
+            models: [imageModel("chat-only", "i")],
+            api: {
+              stream: () => new AssistantMessageEventStream(),
+              streamSimple: () => new AssistantMessageEventStream(),
+            },
+          }),
+        );
+        const unsupported = yield* Effect.promise(() =>
+          models.generateImages(models.getModelOfType("image", "chat-only", "i")!, context),
+        );
+        expect(unsupported.stopReason).toBe("error");
+        expect(unsupported.errorMessage).toContain("does not support image generation");
+
+        models.setProvider(
+          testProvider({
+            id: "wrong-api",
+            models: [imageModel("wrong-api", "i")],
+            images: { "other-images": true },
+          }),
+        );
+        const missingApi = yield* Effect.promise(() =>
+          models.generateImages(models.getModelOfType("image", "wrong-api", "i")!, context),
+        );
+        expect(missingApi.stopReason).toBe("error");
+        expect(missingApi.errorMessage).toContain(
+          'no image generation implementation for "test-images"',
+        );
       }),
     ));
 });
