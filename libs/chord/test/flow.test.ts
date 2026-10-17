@@ -1,122 +1,23 @@
 import assert from "node:assert/strict";
 
 import { Effect } from "effect";
-import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import {
-  type Ctx,
   createHost,
   type Frame,
-  type Host,
-  hostNamed,
-  isChordError,
   type Link,
   memoryLinkPair,
-  method,
   PROTOCOL_VERSION,
-  remote,
 } from "../src/index.ts";
-import { latch, pollUntil } from "./fixtures/timing.ts";
-
-const until = (check: () => boolean, attempts = 200) => pollUntil(check, attempts, Effect.sleep(2));
-
-class AckGate implements Link {
-  readonly inner: Link;
-  readonly received: Frame[] = [];
-  paused = false;
-  #held: Frame | undefined;
-  constructor(inner: Link) {
-    this.inner = inner;
-  }
-  get closed(): boolean {
-    return this.inner.closed;
-  }
-  send(frame: Frame): number | undefined {
-    if (frame.t === "ack" && this.paused) {
-      this.#held = frame;
-      return 0;
-    }
-    return this.inner.send(frame);
-  }
-  release(): void {
-    this.paused = false;
-    if (this.#held !== undefined) this.inner.send(this.#held);
-    this.#held = undefined;
-  }
-  receive(handler: (frame: Frame) => void): void {
-    this.inner.receive((frame) => {
-      this.received.push(frame);
-      handler(frame);
-    });
-  }
-  onClose(handler: (reason: string) => void): void {
-    this.inner.onClose(handler);
-  }
-  close(reason?: string): void {
-    this.inner.close(reason);
-  }
-}
-
-const counterOn = (name: string, host: string) =>
-  remote(name, {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed(host),
-    variants: {
-      main: {
-        state: { count: Type.Object({ n: Type.Number() }) },
-        methods: { add: method(Type.Number(), Type.Number()), wait: method() },
-      },
-    },
-  });
-const Counter = counterOn("t.flow-counter", "server");
-const WorkerCounter = counterOn("t.flow-worker-counter", "w");
-
-let release = () => {};
-const waiting = () => {
-  const gate = latch();
-  const previous = release;
-  release = () => {
-    previous();
-    gate.open();
-  };
-  return gate.promise;
-};
-
-function serveCounter(host: Host, type = Counter): void {
-  host.serve(type, (_input, _principal, self) => {
-    const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
-    return {
-      variant: "main",
-      count,
-      add: (delta: number, ctx: Ctx) => {
-        count.change(ctx, (draft) => {
-          draft.n += delta;
-        });
-        return count.value.n;
-      },
-      wait: waiting,
-    };
-  });
-}
-
-function client(server: Host, window: number) {
-  const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { user: "u" }, window });
-  const gate = new AckGate(up);
-  const host = createHost({
-    self: { kind: "host" },
-    name: "browser",
-    kind: "client",
-    upstream: { link: gate, principal: { kind: "server" } },
-    onError: () => {},
-  });
-  return { host, gate };
-}
-
-const stateFrames = (frames: readonly Frame[]) =>
-  frames.filter((frame): frame is Extract<Frame, { t: "state" }> => frame.t === "state");
+import {
+  client,
+  Counter,
+  serveCounter,
+  stateFrames,
+  until,
+  WorkerCounter,
+} from "./fixtures/flow.ts";
 
 const holdsStateBackWhileTheWindow = Effect.gen(function* () {
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
@@ -295,39 +196,4 @@ describe("link flow control", () => {
 
   it("closes the link on an acknowledgement of frames never sent", () =>
     Effect.runPromise(closesTheLinkOnAnAcknowledgement));
-});
-
-const answersCallsBeyondMaxcallsAtOnce = Effect.gen(function* () {
-  const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
-  serveCounter(server);
-  const [down, up] = memoryLinkPair();
-  server.accept(down, { principal: { user: "u" }, maxCalls: 2 });
-  const host = createHost({
-    self: { kind: "host" },
-    name: "browser",
-    kind: "client",
-    upstream: { link: up, principal: { kind: "server" } },
-    onError: () => {},
-  });
-  const counter = host.hold(Counter, {});
-  yield* Effect.promise(() => counter.ready);
-  release = () => {};
-  const first = counter.wait();
-  const second = counter.wait();
-  yield* Effect.promise(() =>
-    assert.rejects(
-      counter.add(1),
-      (error) => isChordError(error, "unavailable") && error.reason === "too_many_calls",
-    ),
-  );
-  release();
-  yield* Effect.promise(() => Promise.all([first, second]));
-  assert.equal(yield* Effect.promise(() => counter.add(1)), 1);
-  yield* Effect.promise(() => host.close());
-  yield* Effect.promise(() => server.close());
-});
-
-describe("link call limit", () => {
-  it("answers calls beyond maxCalls at once with too_many_calls and keeps the link", () =>
-    Effect.runPromise(answersCallsBeyondMaxcallsAtOnce));
 });

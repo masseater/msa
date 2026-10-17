@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 
-import { Effect } from "effect";
+import { type Context, Effect } from "effect";
 import { Type } from "typebox";
-import { Value } from "typebox/value";
 import { describe, it } from "vite-plus/test";
 
 import {
@@ -15,7 +14,6 @@ import {
   method,
   remote,
 } from "../src/index.ts";
-import { fits } from "../src/schema.ts";
 import { Item } from "./fixtures/review.ts";
 import { latch, tick, ticks } from "./fixtures/timing.ts";
 
@@ -110,12 +108,11 @@ const case8ABreakingProviderChangeAnd = Effect.gen(function* () {
   assert.equal(yield* Effect.promise(() => consumer.ask()), "new");
 });
 
-const case10RetirementClosesDroppedResourcesBefore = Effect.gen(function* () {
-  const services = yield* Effect.context<never>();
-  const host = createHost({ self: { kind: "host" }, onError: () => {} });
-  const log: string[] = [];
-  const Dep = local("t.dep", { version: 1, input: Type.Object({}) });
-  const facet = (withDecls: boolean): Facet => ({
+const Dep = local("t.dep", { version: 1, input: Type.Object({}) });
+
+const retirementFacet =
+  (log: string[], services: Context.Context<never>) =>
+  (withDecls: boolean): Facet => ({
     name: "item",
     setup: (api) => {
       api.serve(Dep, (_input, _principal, self) => {
@@ -145,6 +142,12 @@ const case10RetirementClosesDroppedResourcesBefore = Effect.gen(function* () {
       });
     },
   });
+
+const case10RetirementClosesDroppedResourcesBefore = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const host = createHost({ self: { kind: "host" }, onError: () => {} });
+  const log: string[] = [];
+  const facet = retirementFacet(log, services);
   host.install(facet(true));
   const ref = host.hold(Item, { id: "a" });
   yield* Effect.promise(() => ref.ready);
@@ -166,103 +169,82 @@ const case10RetirementClosesDroppedResourcesBefore = Effect.gen(function* () {
   assert.deepEqual(log, ["own closed", "dep closed"]);
 });
 
-const case11FitsHasNoFalsePositives = (): void => {
-  const cases = [
-    [Type.String(), Type.String({ not: { const: "x" } }), "x"],
-    [Type.Array(Type.Number()), Type.Array(Type.Number(), { contains: Type.Literal(1) }), [2]],
-    [
-      Type.Object({ a: Type.String() }),
-      Type.Object({ a: Type.String() }, { additionalProperties: Type.Number() }),
-      { a: "s", b: "t" },
-    ],
-    [
-      Type.Object({ x: Type.String() }),
-      Type.Object({}, { patternProperties: { "^x$": Type.Number() } }),
-      { x: "s" },
-    ],
-    [Type.Number(), Type.Intersect([Type.Number(), Type.Number({ minimum: 1 })]), 0],
-    [
-      Type.Object({ a: Type.String() }, { additionalProperties: Type.Number() }),
-      Type.Object({ a: Type.String(), b: Type.Optional(Type.String()) }),
-      { a: "", b: 1 },
-    ],
-  ] as const;
-  for (const [sub, sup, value] of cases) {
-    assert.ok(
-      Value.Check(sub, value) && !Value.Check(sup, value),
-      `bad counterexample ${JSON.stringify(value)}`,
-    );
-    assert.equal(fits(sub, sup), false, `fits(${JSON.stringify(sub)}, ${JSON.stringify(sup)})`);
-  }
-  assert.ok(
-    fits(
-      Type.Object({ a: Type.String() }),
-      Type.Object({ a: Type.String(), b: Type.Optional(Type.Number()) }),
-    ),
-  );
-  assert.ok(
-    fits(
-      Type.Object({ a: Type.String(), extra: Type.Number() }),
-      Type.Object({ a: Type.String() }),
-    ),
-  );
-};
+const Db = local("t.db", {
+  version: 1,
+  input: Type.Object({}),
+  members: { read: method(undefined, Type.Unknown()) },
+});
 
-const case11ArgumentsAreStrippedToWhat = Effect.gen(function* () {
+const case7APrepareRerunCannotTouch = Effect.gen(function* () {
   const host = createHost({ self: { kind: "host" }, onError: () => {} });
-  const Strict = remote("t.strict", {
-    version: 1,
-    input: Type.Object({}),
-    host: hostNamed("host"),
-    variants: {
-      main: {
-        methods: {
-          echo: method(
-            Type.Object({ a: Type.String() }, { additionalProperties: false }),
-            Type.Unknown(),
-          ),
-        },
-      },
-    },
+  const native = { mutated: false };
+  const facet = (touch: boolean): Facet => ({
+    name: "db",
+    setup: (api) =>
+      api.serve(Db, (_input, _principal, self) => {
+        const db = self.resource("db", { version: 1, open: () => native });
+        if (touch) db.value.mutated = true;
+        return { read: () => db.value };
+      }),
   });
-  host.serve(Strict, () => ({ variant: "main", echo: (args) => args }));
-  const ref = host.hold(Strict, {});
-  assert.deepEqual(yield* Effect.promise(() => ref.echo({ a: "x", junk: 1 } as never)), {
-    a: "x",
+  host.install(facet(false));
+  const ref = host.hold(Db, {});
+  yield* Effect.promise(() => ref.ready);
+  yield* Effect.promise(() =>
+    assert.rejects(host.reload([facet(true)]), (error) => isChordError(error, "not_ready")),
+  );
+  assert.equal(native.mutated, false);
+  assert.deepEqual(yield* Effect.promise(() => ref.read()), { mutated: false });
+});
+
+const case9ExclusiveResourceAfterCloseFailure = (reopen: "works" | "fails") =>
+  Effect.gen(function* () {
+    const host = createHost({ self: { kind: "host" }, onError: () => {} });
+    const log: string[] = [];
+    let opens = 0;
+    const facet = (rev: number): Facet => ({
+      name: "db",
+      setup: (api) =>
+        api.serve(Db, (_input, _principal, self) => {
+          const port = self.resource("port", {
+            version: rev,
+            exclusive: true,
+            open: () => {
+              if (rev === 2) throw new Error("new port fails");
+              if (++opens > 1 && reopen === "fails") throw new Error("reopen fails");
+              log.push(`open ${rev}`);
+              return { rev };
+            },
+            close: () => {
+              log.push(`close ${rev}`);
+              throw new Error("close fails");
+            },
+          });
+          return { read: () => port.value };
+        }),
+    });
+    host.install(facet(1));
+    const ref = host.hold(Db, {});
+    yield* Effect.promise(() => ref.ready);
+    yield* Effect.promise(() => assert.rejects(host.reload([facet(2)]), /close fails/u));
+    if (reopen === "works") {
+      assert.deepEqual(log, ["open 1", "close 1", "open 1"]);
+      assert.deepEqual(yield* Effect.promise(() => ref.read()), { rev: 1 });
+    } else {
+      yield* Effect.promise(() =>
+        assert.rejects(ref.read(), (error) => isChordError(error, "unavailable")),
+      );
+    }
   });
+
+const case9AnExclusiveResourceWhoseClose = Effect.gen(function* () {
+  for (const reopen of ["works", "fails"] as const)
+    yield* case9ExclusiveResourceAfterCloseFailure(reopen);
 });
 
 describe("review: prepare isolation and contracts", () => {
-  const Db = local("t.db", {
-    version: 1,
-    input: Type.Object({}),
-    members: { read: method(undefined, Type.Unknown()) },
-  });
-
   it("#7 a prepare rerun cannot touch retained resources, even open ones", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const host = createHost({ self: { kind: "host" }, onError: () => {} });
-        const native = { mutated: false };
-        const facet = (touch: boolean): Facet => ({
-          name: "db",
-          setup: (api) =>
-            api.serve(Db, (_input, _principal, self) => {
-              const db = self.resource("db", { version: 1, open: () => native });
-              if (touch) db.value.mutated = true;
-              return { read: () => db.value };
-            }),
-        });
-        host.install(facet(false));
-        const ref = host.hold(Db, {});
-        yield* Effect.promise(() => ref.ready);
-        yield* Effect.promise(() =>
-          assert.rejects(host.reload([facet(true)]), (error) => isChordError(error, "not_ready")),
-        );
-        assert.equal(native.mutated, false);
-        assert.deepEqual(yield* Effect.promise(() => ref.read()), { mutated: false });
-      }),
-    ));
+    Effect.runPromise(case7APrepareRerunCannotTouch));
 
   it("#7 objects of types a reload adds start listeners and tasks only at commit", () =>
     Effect.runPromise(case7ObjectsOfTypesAReload));
@@ -271,57 +253,8 @@ describe("review: prepare isolation and contracts", () => {
     Effect.runPromise(case8ABreakingProviderChangeAnd));
 
   it("#9 an exclusive resource whose close failed is restored on rollback, or marked unavailable", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        for (const reopen of ["works", "fails"] as const) {
-          const host = createHost({ self: { kind: "host" }, onError: () => {} });
-          const log: string[] = [];
-          let opens = 0;
-          const facet = (rev: number): Facet => ({
-            name: "db",
-            setup: (api) =>
-              api.serve(Db, (_input, _principal, self) => {
-                const port = self.resource("port", {
-                  version: rev,
-                  exclusive: true,
-                  open: () => {
-                    if (rev === 2) throw new Error("new port fails");
-                    if (++opens > 1 && reopen === "fails") throw new Error("reopen fails");
-                    log.push(`open ${rev}`);
-                    return { rev };
-                  },
-                  close: () => {
-                    log.push(`close ${rev}`);
-                    throw new Error("close fails");
-                  },
-                });
-                return { read: () => port.value };
-              }),
-          });
-          host.install(facet(1));
-          const ref = host.hold(Db, {});
-          yield* Effect.promise(() => ref.ready);
-          yield* Effect.promise(() => assert.rejects(host.reload([facet(2)]), /close fails/u));
-          if (reopen === "works") {
-            assert.deepEqual(log, ["open 1", "close 1", "open 1"]);
-            assert.deepEqual(yield* Effect.promise(() => ref.read()), { rev: 1 });
-          } else {
-            yield* Effect.promise(() =>
-              assert.rejects(ref.read(), (error) => isChordError(error, "unavailable")),
-            );
-          }
-        }
-      }),
-    ));
+    Effect.runPromise(case9AnExclusiveResourceWhoseClose));
 
   it("#10 retirement closes dropped resources before releasing dropped holds", () =>
     Effect.runPromise(case10RetirementClosesDroppedResourcesBefore));
-
-  it(
-    "#11 fits has no false positives for unmodelled keywords; counterexamples checked with Value.Check",
-    case11FitsHasNoFalsePositives,
-  );
-
-  it("#11 arguments are stripped to what the consumer knows, then to what the provider knows", () =>
-    Effect.runPromise(case11ArgumentsAreStrippedToWhat));
 });
