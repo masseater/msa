@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -13,7 +13,7 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import { webFetchRenderers, webSearchRenderers } from "../src/core/tools/renderers/web.ts";
 import { createWebFetchToolDefinition } from "../src/core/tools/web-fetch.ts";
 import { createWebSearchToolDefinition } from "../src/core/tools/web-search.ts";
-import { getTregToken } from "../src/core/treg.ts";
+import { getTregCredentials } from "../src/core/treg.ts";
 import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
@@ -200,11 +200,47 @@ describe("web_fetch tool", () => {
   });
 });
 
-describe("getTregToken", () => {
-  it("reads TREG_TOKEN and ignores a blank value", () => {
-    expect(Redacted.value(getTregToken({ TREG_TOKEN: " token " })!)).toBe("token");
-    expect(getTregToken({ TREG_TOKEN: " " })).toBeUndefined();
-    expect(getTregToken({})).toBeUndefined();
+describe("getTregCredentials", () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), "msa-treg-home-"));
+  });
+
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  function saveLogin(config: unknown) {
+    mkdirSync(join(home, ".treg"));
+    writeFileSync(join(home, ".treg", "config.json"), JSON.stringify(config));
+  }
+
+  it("prefers TREG_TOKEN and ignores a blank value", () => {
+    saveLogin({ token: "saved", active_org: "team" });
+    const fromEnv = getTregCredentials({ TREG_TOKEN: " token " }, home)!;
+    expect(Redacted.value(fromEnv.token)).toBe("token");
+    expect(fromEnv.org).toBeUndefined();
+    expect(Redacted.value(getTregCredentials({ TREG_TOKEN: " " }, home)!.token)).toBe("saved");
+  });
+
+  it("uses the login treg login saved, with its active team", () => {
+    saveLogin({ base_url: "https://treg.to", token: "saved", active_org: "team", identity: true });
+    const credentials = getTregCredentials({}, home)!;
+    expect(Redacted.value(credentials.token)).toBe("saved");
+    expect(credentials.org).toBe("team");
+  });
+
+  it("finds nothing without a token or a saved login", () => {
+    expect(getTregCredentials({}, home)).toBeUndefined();
+    saveLogin({ email: "someone@example.com" });
+    expect(getTregCredentials({}, home)).toBeUndefined();
+  });
+
+  it("sends the saved team as X-Treg-Org", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => jsonResponse(searchResponse));
+    await run(createWebSearchToolDefinition({ token, org: "team", fetch }), { query: "q" });
+    expect(new Headers(fetch.mock.calls[0]![1]?.headers).get("x-treg-org")).toBe("team");
   });
 });
 
@@ -308,8 +344,9 @@ describe("web tool registration", () => {
     );
   });
 
-  it("leaves them out without TREG_TOKEN", async () => {
+  it("leaves them out without TREG_TOKEN or a treg login", async () => {
     vi.stubEnv("TREG_TOKEN", "");
+    vi.stubEnv("HOME", tempDir);
     const tools = await activeTools();
     expect(tools).not.toContain("web_search");
     expect(tools).not.toContain("web_fetch");

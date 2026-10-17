@@ -181,7 +181,7 @@ import { createAllToolDefinitions } from "./tools/index.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { createWebFetchToolDefinition } from "./tools/web-fetch.ts";
 import { createWebSearchToolDefinition } from "./tools/web-search.ts";
-import { getTregToken } from "./treg.ts";
+import { getTregCredentials } from "./treg.ts";
 import { addUsageToTotals, combineUsage, createUsageTotals } from "./usage-totals.ts";
 import {
   findLatestResponse,
@@ -4085,11 +4085,11 @@ export class AgentSession {
     this._baseToolDefinitions = new Map(
       Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
     );
-    const tregToken = getTregToken();
-    if (tregToken && !this._baseToolsOverride) {
+    const treg = getTregCredentials();
+    if (treg && !this._baseToolsOverride) {
       for (const tool of [
-        createWebSearchToolDefinition({ token: tregToken }),
-        createWebFetchToolDefinition({ token: tregToken }),
+        createWebSearchToolDefinition(treg),
+        createWebFetchToolDefinition(treg),
       ]) {
         this._baseToolDefinitions.set(tool.name, tool as ToolDefinition);
       }

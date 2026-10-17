@@ -92,7 +92,8 @@ function deepMergeObjects(
 
 /**
  * Tools enabled at startup when `defaultTools` does not change them. `web_search` and `web_fetch`
- * exist only when `TREG_TOKEN` is set; otherwise their names are ignored.
+ * exist only when treg credentials are found (see `getTregCredentials`); otherwise their names are
+ * ignored.
  */
 export const DEFAULT_TOOL_NAMES: readonly string[] = [
   "read",

@@ -5,11 +5,16 @@
  * a generated client cannot send a job; this is a thin Effect HTTP call instead.
  */
 
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 
@@ -31,6 +36,8 @@ const TregResponse = Schema.Struct({
 
 export interface TregOptions {
   token: Redacted.Redacted<string>;
+  /** The team an identity token from `treg login` acts for, sent as `X-Treg-Org`. */
+  org?: string;
   /** Replaces `globalThis.fetch`, for tests. */
   fetch?: typeof globalThis.fetch;
 }
@@ -41,12 +48,34 @@ export interface TregResult {
   costMicro?: number;
 }
 
-/** The treg token from `TREG_TOKEN`, or undefined when the web tools are unavailable. */
-export function getTregToken(
+const TregCliConfig = Schema.fromJsonString(
+  Schema.Struct({
+    token: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    active_org: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  }),
+);
+
+/**
+ * The treg credentials: `TREG_TOKEN`, else the login `treg login` saved in `~/.treg/config.json`.
+ * Undefined when neither exists, which leaves the web tools out.
+ */
+export function getTregCredentials(
   env: NodeJS.ProcessEnv = process.env,
-): Redacted.Redacted<string> | undefined {
+  home: string = homedir(),
+): Pick<TregOptions, "token" | "org"> | undefined {
   const token = env["TREG_TOKEN"]?.trim();
-  return token ? Redacted.make(token) : undefined;
+  if (token) return { token: Redacted.make(token) };
+  let config: string;
+  try {
+    config = readFileSync(join(home, ".treg", "config.json"), "utf8");
+  } catch {
+    return undefined;
+  }
+  return Option.match(Schema.decodeUnknownOption(TregCliConfig)(config), {
+    onNone: () => undefined,
+    onSome: ({ token: saved, active_org: org }) =>
+      saved?.trim() ? { token: Redacted.make(saved.trim()), ...(org ? { org } : {}) } : undefined,
+  });
 }
 
 function describeFailure(status: number, body: unknown): string {
@@ -69,6 +98,7 @@ export function callTreg(
           "X-Treg-Token": Redacted.value(options.token),
           "X-Treg-Route-Prefer": PREFERRED_VENDOR,
           "X-Treg-Route-Max-Cost": MAX_COST_USD,
+          ...(options.org ? { "X-Treg-Org": options.org } : {}),
         }),
         HttpClientRequest.bodyJsonUnsafe(body),
       ),
