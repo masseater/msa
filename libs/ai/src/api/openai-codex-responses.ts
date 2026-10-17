@@ -958,14 +958,6 @@ const throwIfRequestAborted = (signal: AbortSignal | undefined): void => {
   }
 };
 
-function releaseReaderLock(reader: ReadableStreamDefaultReader<Uint8Array>): void {
-  try {
-    reader.releaseLock();
-  } catch {
-    return;
-  }
-}
-
 const openCodexSseReader = (body: ReadableStream<Uint8Array>, signal: AbortSignal | undefined) =>
   Effect.acquireRelease(
     Effect.sync(() => {
@@ -979,7 +971,7 @@ const openCodexSseReader = (body: ReadableStream<Uint8Array>, signal: AbortSigna
     ({ reader, onAbort }) =>
       Effect.sync(() => signal?.removeEventListener("abort", onAbort)).pipe(
         Effect.andThen(Effect.promise(() => reader.cancel().catch(() => undefined))),
-        Effect.andThen(Effect.sync(() => releaseReaderLock(reader))),
+        Effect.andThen(Effect.sync(() => reader.releaseLock())),
       ),
   );
 

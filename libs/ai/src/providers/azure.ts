@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import { resolveAzureBaseUrl, resolveDeploymentName } from "../api/azure-openai-config.ts";
 import { azureOpenAIResponsesApi } from "../api/azure-openai-responses.lazy.ts";
 import { lazyStream } from "../api/lazy.ts";
@@ -5,6 +7,7 @@ import { openAICompletionsApi } from "../api/openai-completions.lazy.ts";
 import { envApiKeyAuth } from "../auth/helpers.ts";
 import { createProvider, type Provider } from "../models.ts";
 import type { Api, Model, ProviderStreams, StreamOptions } from "../types.ts";
+import { callHook } from "../utils/hooks.ts";
 import { AZURE_MODELS } from "./azure.models.ts";
 
 function resolveAzureModel(model: Model<Api>, options: StreamOptions | undefined): Model<Api> {
@@ -19,9 +22,13 @@ function withDeploymentName<T extends StreamOptions>(
   if (deploymentName === model.id) return options;
   return {
     ...options,
-    onPayload: async (payload, payloadModel) => {
+    onPayload: (payload, payloadModel) => {
       const params = { ...(payload as object), model: deploymentName };
-      return (await options?.onPayload?.(params, payloadModel)) ?? params;
+      return Effect.runPromise(
+        callHook(() => options?.onPayload?.(params, payloadModel)).pipe(
+          Effect.map((next) => next ?? params),
+        ),
+      );
     },
   } as T;
 }

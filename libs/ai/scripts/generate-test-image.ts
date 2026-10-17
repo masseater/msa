@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 
 import { createCanvas } from "canvas";
+import { Console, Effect } from "effect";
 
 const canvas = createCanvas(200, 200);
 const ctx = canvas.getContext("2d");
@@ -20,4 +21,4 @@ const outputPath = join(import.meta.dirname, "..", "test", "data", "red-circle.p
 mkdirSync(join(import.meta.dirname, "..", "test", "data"), { recursive: true });
 
 writeFileSync(outputPath, buffer);
-console.log(`Generated test image at: ${outputPath}`);
+Effect.runSync(Console.log(`Generated test image at: ${outputPath}`));
