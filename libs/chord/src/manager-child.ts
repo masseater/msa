@@ -1,8 +1,20 @@
-import { Config, Deferred, Effect, Option } from "effect";
+import { Socket } from "node:net";
+
+import * as NodeSink from "@effect/platform-node/NodeSink";
+import * as NodeStream from "@effect/platform-node/NodeStream";
+import { Config, Deferred, Effect, Option, Scope } from "effect";
 
 import { ChordError } from "./errors.ts";
+import { StreamChannel } from "./ipc-channel.ts";
+import type { IpcChannel } from "./link-ipc.ts";
 import { acquireProcessLock } from "./manager-lock.ts";
-import { type ControlMessage, controlOf, ignoreSendError, LOCK_ENV } from "./manager-types.ts";
+import {
+  CHANNEL_FDS,
+  type ControlMessage,
+  controlOf,
+  ignoreSendError,
+  LOCK_ENV,
+} from "./manager-types.ts";
 
 const fatalMessage = (error: unknown): ControlMessage => ({
   type: "fatal",
@@ -18,7 +30,27 @@ const lockFromEnvironment = Effect.fn(function* (fatal: (error: unknown) => void
   );
 });
 
-export function childControl(channel: NodeJS.Process = process): {
+const openParentChannel = (): IpcChannel => {
+  const channel = new StreamChannel();
+  const incoming = NodeStream.fromReadable({
+    evaluate: () => new Socket({ fd: CHANNEL_FDS.toChild, readable: true, writable: false }),
+  });
+  const outgoing = NodeSink.fromWritable({
+    evaluate: () => new Socket({ fd: CHANNEL_FDS.toParent, readable: false, writable: true }),
+    onError: (error) => error,
+  });
+  Effect.runSync(Scope.provide(channel.run(incoming, outgoing), Scope.makeUnsafe()));
+  return channel;
+};
+
+let parent: IpcChannel | undefined;
+
+export const parentChannel = (): IpcChannel => {
+  parent ??= openParentChannel();
+  return parent;
+};
+
+export function childControl(channel: IpcChannel = parentChannel()): {
   readonly init: Promise<unknown>;
   lock(): Promise<void>;
   ready(): void;
@@ -27,8 +59,7 @@ export function childControl(channel: NodeJS.Process = process): {
   onShutdown(handler: () => void | Promise<void>): void;
 } {
   const send = (message: ControlMessage): void => {
-    if (channel.connected)
-      channel.send?.({ chord2control: message }, undefined, undefined, ignoreSendError);
+    if (channel.connected) channel.send({ chord2control: message }, ignoreSendError);
   };
   const init = Deferred.makeUnsafe<unknown>();
   const shutdown = new Set<() => void | Promise<void>>();

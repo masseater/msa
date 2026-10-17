@@ -35,7 +35,7 @@ export interface Instance {
 }
 
 export interface Driver {
-  spawn(): Instance;
+  spawn(): Promise<Instance>;
 }
 
 export interface ForkDriverOptions {
@@ -68,6 +68,8 @@ export interface HostManager {
 }
 
 export const LOCK_ENV = "CHORD2_LOCK";
+
+export const CHANNEL_FDS = { toChild: 3, toParent: 4 } as const;
 
 export const ignoreSendError = (): void => {};
 

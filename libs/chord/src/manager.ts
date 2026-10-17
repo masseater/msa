@@ -9,7 +9,7 @@ import type {
   Liveness,
 } from "./manager-types.ts";
 
-export { childControl } from "./manager-child.ts";
+export { childControl, parentChannel } from "./manager-child.ts";
 export { forkDriver } from "./manager-fork.ts";
 export { processLock } from "./manager-lock.ts";
 export type {
@@ -173,7 +173,7 @@ function finishStart(state: ManagerState): void {
 }
 
 function spawn(state: ManagerState): Effect.Effect<Instance> {
-  return Effect.sync(() => state.options.driver.spawn()).pipe(
+  return Effect.promise(() => state.options.driver.spawn()).pipe(
     Effect.tapDefect(() =>
       Effect.sync(() => {
         state.status = "stopped";

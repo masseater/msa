@@ -104,9 +104,10 @@ const aChildOwnedKernelLockAdmits = Effect.gen(function* () {
   const watched: Driver = {
     spawn() {
       for (const pid of pids) assert.ok(!alive(pid), `pid ${pid} still alive`);
-      const instance = base.spawn();
-      pids.push(instance.pid);
-      return instance;
+      return base.spawn().then((instance) => {
+        pids.push(instance.pid);
+        return instance;
+      });
     },
   };
   const first = createHostManager({ driver: watched });
@@ -141,19 +142,20 @@ const aGracefulExitStillTakesThe = Effect.gen(function* () {
 const idleforCountsFromTheBusyIdle = Effect.gen(function* () {
   const listeners = new Set<(message: ControlMessage) => void>();
   const fake: Driver = {
-    spawn: () => ({
-      pid: 0,
-      link: ipcLink({
-        connected: false,
-        send: () => false,
-        on: () => undefined,
-        off: () => undefined,
+    spawn: () =>
+      Promise.resolve({
+        pid: 0,
+        link: ipcLink({
+          connected: false,
+          send: () => false,
+          on: () => undefined,
+          off: () => undefined,
+        }),
+        exited: latch<Exit>().promise,
+        send: () => {},
+        killTree: () => {},
+        onControl: (listener) => listeners.add(listener),
       }),
-      exited: latch<Exit>().promise,
-      send: () => {},
-      killTree: () => {},
-      onControl: (listener) => listeners.add(listener),
-    }),
   };
   const emit = (message: ControlMessage) => {
     for (const listener of listeners) listener(message);

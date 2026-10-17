@@ -1,9 +1,21 @@
-import { type ChildProcess, fork } from "node:child_process";
-
-import { Deferred, Effect } from "effect";
-
-import { type IpcChannel, ipcLink } from "./link.ts";
+import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcessSpawner";
+import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
+import * as NodePath from "@effect/platform-node/NodePath";
 import {
+  Deferred,
+  Effect,
+  Exit as EffectExit,
+  Layer,
+  ManagedRuntime,
+  type PlatformError,
+  Stream,
+} from "effect";
+import { ChildProcess, type ChildProcessSpawner } from "effect/process";
+
+import { StreamChannel } from "./ipc-channel.ts";
+import { ipcLink } from "./link.ts";
+import {
+  CHANNEL_FDS,
   type ControlMessage,
   controlOf,
   type Driver,
@@ -14,56 +26,77 @@ import {
   LOCK_ENV,
 } from "./manager-types.ts";
 
+const runtime = ManagedRuntime.make(
+  Layer.provideMerge(
+    NodeChildProcessSpawner.layer,
+    Layer.mergeAll(NodeFileSystem.layer, NodePath.layer),
+  ),
+);
+
+type Handle = ChildProcessSpawner.ChildProcessHandle;
 type OutputTap = NonNullable<ForkDriverOptions["onOutput"]>;
 
-function childEnv(options: ForkDriverOptions): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env };
+function childEnv(options: ForkDriverOptions): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = { ...process.env };
   delete env[LOCK_ENV];
   Object.assign(env, options.env);
   if (options.lock !== undefined) env[LOCK_ENV] = options.lock;
   return env;
 }
 
-function forkChild(options: ForkDriverOptions): ChildProcess {
+const childCommand = (options: ForkDriverOptions) => {
   const output = options.onOutput === undefined ? "inherit" : "pipe";
-  return fork(options.entry, [...(options.args ?? [])], {
-    env: childEnv(options),
-    execArgv: [...(options.execArgv ?? [])],
-    detached: true,
-    stdio: ["ignore", output, output, "ipc"],
-  });
-}
+  return ChildProcess.make(
+    process.execPath,
+    [...(options.execArgv ?? []), options.entry, ...(options.args ?? [])],
+    {
+      env: childEnv(options),
+      extendEnv: false,
+      detached: true,
+      killSignal: "SIGKILL",
+      stdin: "ignore",
+      stdout: output,
+      stderr: output,
+      additionalFds: {
+        [`fd${CHANNEL_FDS.toChild}` as const]: { type: "input" },
+        [`fd${CHANNEL_FDS.toParent}` as const]: { type: "output" },
+      },
+    },
+  );
+};
 
-function tapOutput(child: ChildProcess, onOutput: OutputTap): void {
-  for (const stream of ["stdout", "stderr"] as const) {
-    child[stream]?.on("data", (chunk: Buffer) => {
-      onOutput(stream, chunk);
-      process[stream].write(chunk);
-    });
-  }
-}
+const tapOutput = (handle: Handle, onOutput: OutputTap) =>
+  Effect.forEach(
+    ["stdout", "stderr"] as const,
+    (stream) =>
+      Effect.forkScoped(
+        Stream.runForEach(handle[stream], (chunk) =>
+          Effect.sync(() => {
+            onOutput(stream, chunk);
+            process[stream].write(chunk);
+          }),
+        ),
+      ),
+    { discard: true },
+  );
 
-function killGroup(pid: number): void {
-  try {
-    process.kill(-pid, "SIGKILL");
-  } catch {}
-}
+const signalOf = (error: unknown): string =>
+  /signal: '(?<signal>\w+)'/u.exec(String((error as { cause?: unknown }).cause))?.groups?.[
+    "signal"
+  ] ?? String(error);
 
-function exitOf(child: ChildProcess, pid: number): Promise<Exit> {
-  const exited = Deferred.makeUnsafe<Exit>();
-  child.once("exit", (code, signal) => {
-    killGroup(pid);
-    Deferred.doneUnsafe(exited, Effect.succeed({ code, signal }));
-  });
-  return Effect.runPromise(Deferred.await(exited));
-}
+const exitOf = (handle: Handle): Effect.Effect<Exit> =>
+  handle.exitCode.pipe(
+    Effect.map((code): Exit => ({ code, signal: null })),
+    Effect.catch((error) => Effect.succeed<Exit>({ code: null, signal: signalOf(error) })),
+  );
 
 function controlListeners(
-  child: ChildProcess,
+  channel: StreamChannel,
   options: ForkDriverOptions,
 ): Set<(message: ControlMessage) => void> {
   const listeners = new Set<(message: ControlMessage) => void>();
-  child.on("message", (message) => {
+  channel.on("message", (message) => {
     options.onMessage?.(message);
     const control = controlOf(message);
     if (control !== undefined) for (const listener of listeners) listener(control);
@@ -71,32 +104,65 @@ function controlListeners(
   return listeners;
 }
 
-function spawnInstance(options: ForkDriverOptions): Instance {
-  const child = forkChild(options);
-  if (options.onOutput !== undefined) tapOutput(child, options.onOutput);
-  const pid = child.pid ?? -1;
-  const exited = exitOf(child, pid);
-  const listeners = controlListeners(child, options);
+function instanceOf(handle: Handle, channel: StreamChannel, options: ForkDriverOptions) {
+  const listeners = controlListeners(channel, options);
   const send = (message: ControlMessage): void => {
-    if (child.connected) child.send({ chord2control: message }, ignoreSendError);
+    if (channel.connected) channel.send({ chord2control: message }, ignoreSendError);
   };
   if (options.init !== undefined) send({ type: "init", value: options.init });
-  return {
-    pid,
-    link: ipcLink(child as unknown as IpcChannel),
+  return (exited: Promise<Exit>): Instance => ({
+    pid: handle.pid,
+    link: ipcLink(channel),
     exited,
     send,
     killTree: () => {
-      try {
-        process.kill(-pid, "SIGKILL");
-      } catch {
-        child.kill("SIGKILL");
-      }
+      Effect.runFork(Effect.ignore(handle.kill({ killSignal: "SIGKILL" })));
     },
     onControl: (listener) => listeners.add(listener),
-  };
+  });
 }
 
+type Started = (exited: Promise<Exit>) => Instance;
+
+const runChild = (
+  options: ForkDriverOptions,
+  started: Deferred.Deferred<Started, PlatformError.PlatformError>,
+) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const handle = yield* childCommand(options);
+      const channel = new StreamChannel();
+      yield* channel.run(
+        handle.getOutputFd(CHANNEL_FDS.toParent),
+        handle.getInputFd(CHANNEL_FDS.toChild),
+      );
+      if (options.onOutput !== undefined) yield* tapOutput(handle, options.onOutput);
+      yield* Deferred.succeed(started, instanceOf(handle, channel, options));
+      return yield* exitOf(handle);
+    }),
+  );
+
+const spawnInstance = Effect.fn(function* (options: ForkDriverOptions) {
+  const started = yield* Deferred.make<Started, PlatformError.PlatformError>();
+  const exited = yield* Deferred.make<Exit>();
+  yield* Effect.forkDetach(
+    runtime.contextEffect.pipe(
+      Effect.flatMap((context) => Effect.provideContext(runChild(options, started), context)),
+      Effect.onExit((exit) =>
+        EffectExit.isSuccess(exit)
+          ? Deferred.succeed(exited, exit.value)
+          : Deferred.failCause(started, exit.cause),
+      ),
+    ),
+  );
+  return [yield* Deferred.await(started), exited] as const;
+});
+
 export function forkDriver(options: ForkDriverOptions): Driver {
-  return { spawn: () => spawnInstance(options) };
+  return {
+    spawn: () =>
+      Effect.runPromise(Effect.orDie(spawnInstance(options))).then(([instance, exited]) =>
+        instance(Effect.runPromise(Deferred.await(exited))),
+      ),
+  };
 }

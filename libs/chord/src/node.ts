@@ -11,5 +11,6 @@ export {
   type HostManagerOptions,
   type Instance,
   type Liveness,
+  parentChannel,
   processLock,
 } from "./manager.ts";

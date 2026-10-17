@@ -1,7 +1,7 @@
 import { Config, Effect, Option } from "effect";
 
-import { createHost, type IpcChannel, ipcLink } from "../../src/index.ts";
-import { childControl } from "../../src/manager.ts";
+import { createHost, ipcLink } from "../../src/index.ts";
+import { childControl, parentChannel } from "../../src/manager.ts";
 import { Echo } from "./echo.ts";
 import { startNode, writeText } from "./platform.ts";
 
@@ -25,7 +25,7 @@ const serve = (mode: string) =>
     const host = createHost({
       self: { kind: "host" },
       name,
-      upstream: { link: ipcLink(process as unknown as IpcChannel), principal: { kind: "server" } },
+      upstream: { link: ipcLink(parentChannel()), principal: { kind: "server" } },
       onError: () => {},
     });
     const init = (yield* Effect.promise(() => control.init)) as { greeting: string };
