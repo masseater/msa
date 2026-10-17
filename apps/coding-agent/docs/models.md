@@ -28,7 +28,7 @@ Keep `auth.json` and any credential commands private. Project settings and exten
 
 Run `/model` to search available models. The picker shows models whose providers have usable authentication. Press `Ctrl+S` on a model to save it as the default for new sessions.
 
-Run `/thinking` to select the thinking level for the current model. Press `Ctrl+S` there to save the startup level. msa limits the choices to levels supported by the selected model.
+Run `/effort` to select the thinking level for the current model. Press `Ctrl+S` there to save the startup level. msa limits the choices to levels supported by the selected model.
 
 `Ctrl+P` cycles through available models. Use `/scoped-models` to control that cycle and save the selection, or configure model patterns through [Settings](settings.md#model-cycling).
 
@@ -161,7 +161,7 @@ return result.answers;
 
 [Codemode](codemode.md#classify) describes the question and answer types.
 
-When the service reports token counts, as all System One services do, `result.usage` carries them with their cost. msa adds the usage of a script's classifier calls to the `codemode` tool result, so it counts toward the session cost in the footer and `/session`. The cost uses the model's catalog price; models without one, such as TypeSafe's direct `jev-latest`, report tokens at no cost.
+When the service reports token counts, as all System One services do, `result.usage` carries them with their cost. msa adds the usage of a script's classifier calls to the `codemode` tool result, so it counts toward the session cost in the footer and `/status`. The cost uses the model's catalog price; models without one, such as TypeSafe's direct `jev-latest`, report tokens at no cost.
 
 Extensions call classifiers through `ctx.modelRegistry.classify()`, without codemode. [Virtual models](virtual-models.md#route-requests) can use them to route requests; see the `jev-router.ts` example.
 

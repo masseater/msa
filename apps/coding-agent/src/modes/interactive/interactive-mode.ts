@@ -120,7 +120,14 @@ import {
   type UsageEntry,
 } from "../../core/session-manager.ts";
 import type { FullscreenExitOutput, TuiMode } from "../../core/settings-manager.ts";
-import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
+import {
+  BUILTIN_SLASH_COMMANDS,
+  canonicalizeBuiltinSlashCommand,
+  formatHelpMarkdown,
+  INIT_PROMPT,
+  isBuiltinSlashCommandName,
+  skillCommandName,
+} from "../../core/slash-commands.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
 import { withBuiltInRenderers } from "../../core/tools/renderers/index.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
@@ -665,10 +672,9 @@ export class InteractiveMode {
   private getBuiltInCommandConflictDiagnostics(
     extensionRunner: ExtensionRunner,
   ): ResourceDiagnostic[] {
-    const builtinNames = new Set(BUILTIN_SLASH_COMMANDS.map((command) => command.name));
     return extensionRunner
       .getRegisteredCommands()
-      .filter((command) => builtinNames.has(command.name))
+      .filter((command) => isBuiltinSlashCommandName(command.name))
       .map((command) => ({
         type: "warning" as const,
         message:
@@ -683,7 +689,9 @@ export class InteractiveMode {
     // Define commands for autocomplete
     const slashCommands: SlashCommand[] = BUILTIN_SLASH_COMMANDS.map((command) => ({
       name: command.name,
-      description: command.description,
+      description: command.aliases
+        ? `${command.description} (${command.aliases.map((alias) => `/${alias}`).join(", ")})`
+        : command.description,
       ...(command.argumentHint && { argumentHint: command.argumentHint }),
     }));
 
@@ -753,10 +761,9 @@ export class InteractiveMode {
     }));
 
     // Convert extension commands to SlashCommand format
-    const builtinCommandNames = new Set(slashCommands.map((c) => c.name));
     const extensionCommands: SlashCommand[] = this.session.extensionRunner
       .getRegisteredCommands()
-      .filter((cmd) => !builtinCommandNames.has(cmd.name))
+      .filter((cmd) => !isBuiltinSlashCommandName(cmd.name))
       .map((cmd) => ({
         name: cmd.invocationName,
         description: this.prefixAutocompleteDescription(cmd.description, cmd.sourceInfo),
@@ -767,8 +774,11 @@ export class InteractiveMode {
     this.skillCommands.clear();
     const skillCommandList: SlashCommand[] = [];
     if (this.settingsManager.getEnableSkillCommands()) {
+      const taken = new Set(
+        [...templateCommands, ...extensionCommands].map((command) => command.name),
+      );
       for (const skill of this.session.resourceLoader.getSkills().skills) {
-        const commandName = `skill:${skill.name}`;
+        const commandName = skillCommandName(skill.name, taken);
         this.skillCommands.set(commandName, skill.filePath);
         skillCommandList.push({
           name: commandName,
@@ -819,7 +829,7 @@ export class InteractiveMode {
     if (this.settingsManager.getCollapseChangelog()) {
       const versionMatch = this.changelogMarkdown.match(/##\s+\[?(\d+\.\d+\.\d+)\]?/);
       const latestVersion = versionMatch ? versionMatch[1] : this.version;
-      const condensedText = `Updated to v${latestVersion}. Use ${theme.bold("/changelog")} to view full changelog.`;
+      const condensedText = `Updated to v${latestVersion}. Use ${theme.bold("/release-notes")} to view full changelog.`;
       this.chatContainer.addChild(new Text(condensedText, 1, 0));
     } else {
       this.chatContainer.addChild(
@@ -2355,11 +2365,19 @@ export class InteractiveMode {
 
   private setupEditorSubmitHandler(): void {
     this.defaultEditor.onSubmit = async (text: string) => {
-      text = text.trim();
+      text = canonicalizeBuiltinSlashCommand(text.trim());
       if (!text) return;
 
       // Handle commands
-      if (text === "/settings") {
+      if (text === "/help") {
+        this.handleHelpCommand();
+        this.editor.setText("");
+        return;
+      }
+      if (text === "/init") {
+        text = INIT_PROMPT;
+      }
+      if (text === "/config") {
         this.showSettingsSelector();
         this.editor.setText("");
         return;
@@ -2375,8 +2393,8 @@ export class InteractiveMode {
         await this.handleModelCommand(searchTerm);
         return;
       }
-      if (text === "/thinking" || text.startsWith("/thinking ")) {
-        const searchTerm = text.startsWith("/thinking ") ? text.slice(10).trim() : undefined;
+      if (text === "/effort" || text.startsWith("/effort ")) {
+        const searchTerm = text.startsWith("/effort ") ? text.slice(8).trim() : undefined;
         this.editor.setText("");
         this.handleThinkingCommand(searchTerm);
         return;
@@ -2407,22 +2425,22 @@ export class InteractiveMode {
         this.editor.setText("");
         return;
       }
-      if (text === "/name" || text.startsWith("/name ")) {
+      if (text === "/rename" || text.startsWith("/rename ")) {
         this.handleNameCommand(text);
         this.editor.setText("");
         return;
       }
-      if (text === "/session") {
+      if (text === "/status") {
         this.handleSessionCommand();
         this.editor.setText("");
         return;
       }
-      if (text === "/changelog") {
+      if (text === "/release-notes") {
         this.handleChangelogCommand();
         this.editor.setText("");
         return;
       }
-      if (text === "/hotkeys") {
+      if (text === "/keybindings") {
         this.handleHotkeysCommand();
         this.editor.setText("");
         return;
@@ -2432,12 +2450,12 @@ export class InteractiveMode {
         this.editor.setText("");
         return;
       }
-      if (text === "/clone") {
+      if (text === "/branch") {
         this.editor.setText("");
         await this.handleCloneCommand();
         return;
       }
-      if (text === "/tree") {
+      if (text === "/rewind") {
         this.showTreeSelector();
         this.editor.setText("");
         return;
@@ -2458,7 +2476,7 @@ export class InteractiveMode {
         this.editor.setText("");
         return;
       }
-      if (text === "/new") {
+      if (text === "/clear") {
         this.editor.setText("");
         await this.handleClearCommand();
         return;
@@ -2494,7 +2512,7 @@ export class InteractiveMode {
         this.editor.setText("");
         return;
       }
-      if (text === "/quit") {
+      if (text === "/exit") {
         this.editor.setText("");
         await this.shutdown();
         return;
@@ -5332,7 +5350,7 @@ export class InteractiveMode {
   }
 
   private handleNameCommand(text: string): void {
-    const name = text.replace(/^\/name\s*/, "").trim();
+    const name = text.replace(/^\/rename\s*/, "").trim();
     if (!name) {
       const currentName = this.sessionManager.getSessionName();
       if (currentName) {
@@ -5341,7 +5359,7 @@ export class InteractiveMode {
           new ThemedText(() => theme.fg("dim", `Session name: ${currentName}`), 1, 0),
         );
       } else {
-        this.showWarning("Usage: /name <name>");
+        this.showWarning("Usage: /rename <name>");
       }
       this.ui.requestRender();
       return;
@@ -5403,6 +5421,24 @@ export class InteractiveMode {
     this.chatContainer.addChild(new Markdown(markdown, 1, 1, this.getMarkdownThemeWithSettings()));
     this.chatContainer.addChild(new DynamicBorder());
     this.ui.requestRender();
+  }
+
+  private handleHelpCommand(): void {
+    const commands = [
+      ...this.session.extensionRunner
+        .getRegisteredCommands()
+        .filter((command) => !isBuiltinSlashCommandName(command.name))
+        .map((command) => ({ name: command.invocationName, description: command.description })),
+      ...this.session.promptTemplates,
+    ];
+    const taken = new Set(commands.map((command) => command.name));
+    const skills = this.settingsManager.getEnableSkillCommands()
+      ? this.session.resourceLoader.getSkills().skills.map((skill) => ({
+          name: skillCommandName(skill.name, taken),
+          description: skill.description,
+        }))
+      : [];
+    this.addMarkdownPanel("Commands", formatHelpMarkdown([...commands, ...skills]));
   }
 
   private handleHotkeysCommand(): void {

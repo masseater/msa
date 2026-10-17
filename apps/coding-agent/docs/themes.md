@@ -25,7 +25,7 @@ msa asks the terminal for its colors when it starts. Terminals usually answer wi
 
 ## Choose a theme
 
-Open `/settings` and select **Theme**. You can use one theme for every terminal appearance or choose separate themes for light and dark terminals.
+Open `/config` and select **Theme**. You can use one theme for every terminal appearance or choose separate themes for light and dark terminals.
 
 The selection is saved as the `theme` [setting](settings.md#terminal-and-display):
 
@@ -63,7 +63,7 @@ Copy one of the [built-in themes](https://github.com/masseater/msa/tree/main/app
 1. Save the file as `<agent-dir>/themes/my-theme.json`. The agent directory defaults to `~/.msa/agent`.
 2. Set its `name` to `my-theme`.
 3. Change values in `vars` and `colors`.
-4. Select `my-theme` through `/settings`.
+4. Select `my-theme` through `/config`.
 
 Use the theme name as the filename. msa hot-reloads the active user theme only from `<agent-dir>/themes/<name>.json`. Run `/reload` after adding or changing a theme from any other source.
 

@@ -223,55 +223,58 @@ describe("AgentSession prompt characterization", () => {
     });
   });
 
-  it("expands skill commands before sending the prompt", async () => {
-    const tempDir = join(
-      tmpdir(),
-      `msa-skill-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    mkdirSync(tempDir, { recursive: true });
-    tempDirs.push(tempDir);
-    const skillPath = join(tempDir, "test-skill.md");
-    writeFileSync(skillPath, "# Test Skill\n\nUse the skill body.");
+  it.each(["/test", "/skill:test"])(
+    "expands the skill command %s before sending the prompt",
+    async (command) => {
+      const tempDir = join(
+        tmpdir(),
+        `msa-skill-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      mkdirSync(tempDir, { recursive: true });
+      tempDirs.push(tempDir);
+      const skillPath = join(tempDir, "test-skill.md");
+      writeFileSync(skillPath, "# Test Skill\n\nUse the skill body.");
 
-    const resourceLoader = {
-      ...createTestResourceLoader(),
-      getSkills: () => ({
-        skills: [
-          {
-            name: "test",
-            description: "Test skill",
-            filePath: skillPath,
-            disableModelInvocation: false,
-            baseDir: tempDir,
-            sourceInfo: createSyntheticSourceInfo(skillPath, {
-              source: "local",
-              scope: "project",
-              origin: "top-level",
+      const resourceLoader = {
+        ...createTestResourceLoader(),
+        getSkills: () => ({
+          skills: [
+            {
+              name: "test",
+              description: "Test skill",
+              filePath: skillPath,
+              disableModelInvocation: false,
               baseDir: tempDir,
-            }),
-          },
-        ],
-        diagnostics: [],
-      }),
-    };
-    const harness = await createHarness({ resourceLoader });
-    harnesses.push(harness);
-    let expandedPrompt = "";
+              sourceInfo: createSyntheticSourceInfo(skillPath, {
+                source: "local",
+                scope: "project",
+                origin: "top-level",
+                baseDir: tempDir,
+              }),
+            },
+          ],
+          diagnostics: [],
+        }),
+      };
+      const harness = await createHarness({ resourceLoader });
+      harnesses.push(harness);
+      let expandedPrompt = "";
 
-    harness.setResponses([
-      (context) => {
-        const user = context.messages.find((message) => message.role === "user");
-        expandedPrompt = user ? getMessageText(user) : "";
-        return fauxAssistantMessage("ok");
-      },
-    ]);
+      harness.setResponses([
+        (context) => {
+          const user = context.messages.find((message) => message.role === "user");
+          expandedPrompt = user ? getMessageText(user) : "";
+          return fauxAssistantMessage("ok");
+        },
+      ]);
 
-    await harness.session.prompt("/skill:test explain this");
+      await harness.session.prompt(`${command} explain this`);
 
-    expect(expandedPrompt).toContain('<skill name="test" location="');
-    expect(expandedPrompt).toContain("Use the skill body.");
-    expect(expandedPrompt).toContain("explain this");
-  });
+      expect(expandedPrompt).toContain('<skill name="test" location="');
+      expect(expandedPrompt).toContain("Use the skill body.");
+      expect(expandedPrompt).toContain("explain this");
+    },
+  );
 
   it("expands prompt templates before sending the prompt", async () => {
     const template: PromptTemplate = {

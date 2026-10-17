@@ -26,6 +26,7 @@ import {
   waitForRawStdoutBackpressure,
   writeRawStdout,
 } from "../../core/output-guard.ts";
+import { skillCommandName } from "../../core/slash-commands.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { type Theme, theme } from "../interactive/theme/theme.ts";
@@ -729,9 +730,10 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
           });
         }
 
+        const taken = new Set(commands.map((command) => command.name));
         for (const skill of session.resourceLoader.getSkills().skills) {
           commands.push({
-            name: `skill:${skill.name}`,
+            name: skillCommandName(skill.name, taken),
             description: skill.description,
             source: "skill",
             sourceInfo: skill.sourceInfo,

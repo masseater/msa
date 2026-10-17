@@ -35,7 +35,7 @@ If the agent is streaming and no `streamingBehavior` is specified, the command r
 
 **Extension commands**: If the message is an extension command (e.g., `/mycommand`), it executes immediately even during streaming. Extension commands manage their own LLM interaction via `msa.sendMessage()`.
 
-**Input expansion**: Skill commands (`/skill:name`) and prompt templates (`/template`) are expanded before sending/queueing.
+**Input expansion**: Skill commands (`/name` or `/skill:name`) and prompt templates (`/template`) are expanded before sending/queueing.
 
 Response:
 
@@ -907,7 +907,7 @@ Each command has:
   - `origin`: `"top-level"` for a directly loaded resource or `"package"` for a package resource
   - `baseDir`: Package base directory, when applicable
 
-**Note**: Built-in TUI commands (`/settings`, `/hotkeys`, etc.) are not included. They are handled only in interactive mode and would not execute if sent via `prompt`.
+**Note**: Built-in TUI commands (`/config`, `/keybindings`, etc.) are not included. They are handled only in interactive mode and would not execute if sent via `prompt`.
 
 ## Model object
 

@@ -368,7 +368,7 @@ export const SettingsSchema = Type.Object(
     ),
     enableSkillCommands: Type.Optional(
       Type.Boolean({
-        description: "Register skills as /skill:name commands.",
+        description: "Register skills as /name commands, or /skill:name when the name is taken.",
         default: SETTINGS_DEFAULTS.enableSkillCommands,
       }),
     ),

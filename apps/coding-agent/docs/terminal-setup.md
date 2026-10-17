@@ -16,7 +16,7 @@ msa uses extended-key protocols so terminals can distinguish combinations such a
 | An IME candidate window appears in the wrong place | [WezTerm](#wezterm) or [IntelliJ IDEA](#intellij-idea-integrated-terminal)             |
 | Modified keys fail only inside tmux                | [Run msa in tmux](tmux.md)                                                             |
 
-Use `/hotkeys` to inspect msa's active shortcuts. See [Keybindings](keybindings.md) to change them.
+Use `/keybindings` to inspect msa's active shortcuts. See [Keybindings](keybindings.md) to change them.
 
 ## Kitty
 

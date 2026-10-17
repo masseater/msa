@@ -153,7 +153,11 @@ import {
   DEFAULT_TOOL_NAMES,
   type SettingsManager,
 } from "./settings-manager.ts";
-import type { SlashCommandInfo } from "./slash-commands.ts";
+import {
+  isBuiltinSlashCommandName,
+  type SlashCommandInfo,
+  skillCommandName,
+} from "./slash-commands.ts";
 import {
   BUILTIN_PATH_PREFIX,
   createSyntheticSourceInfo,
@@ -2256,7 +2260,7 @@ export class AgentSession {
     }
     const { text: currentText, images: currentImages } = processedInput;
 
-    // Expand skill commands (/skill:name args) and prompt templates (/template args)
+    // Expand skill commands (/name or /skill:name args) and prompt templates (/template args)
     let expandedText = currentText;
     if (expandPromptTemplates) {
       expandedText = this._expandSkillCommand(expandedText);
@@ -2334,15 +2338,24 @@ export class AgentSession {
   }
 
   /**
-   * Expand skill commands (/skill:name args) to their full content.
+   * Expand skill commands (`/name args` or `/skill:name args`) to their full content. `/name` is
+   * left to a built-in command or prompt template of the same name.
    * Returns the expanded text, or the original text if not a skill command or skill not found.
    * Emits errors via extension runner if file read fails.
    */
   private _expandSkillCommand(text: string): string {
-    if (!text.startsWith("/skill:")) return text;
+    if (!text.startsWith("/")) return text;
 
     const spaceIndex = text.indexOf(" ");
-    const skillName = spaceIndex === -1 ? text.slice(7) : text.slice(7, spaceIndex);
+    const command = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
+    const explicit = command.startsWith("skill:");
+    const skillName = explicit ? command.slice("skill:".length) : command;
+    if (
+      !explicit &&
+      (isBuiltinSlashCommandName(skillName) ||
+        this.promptTemplates.some((template) => template.name === skillName))
+    )
+      return text;
     const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1).trim();
 
     const skill = this.resourceLoader.getSkills().skills.find((s) => s.name === skillName);
@@ -3739,8 +3752,9 @@ export class AgentSession {
         sourceInfo: template.sourceInfo,
       }));
 
+      const taken = new Set([...extensionCommands, ...templates].map((command) => command.name));
       const skills: SlashCommandInfo[] = this._resourceLoader.getSkills().skills.map((skill) => ({
-        name: `skill:${skill.name}`,
+        name: skillCommandName(skill.name, taken),
         description: skill.description,
         source: "skill",
         sourceInfo: skill.sourceInfo,
