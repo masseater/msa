@@ -23,5 +23,4 @@ export const collectGarbage = (rounds: number): Effect.Effect<void> =>
       yield* tick;
       global.gc();
     }
-    yield* tick;
   });

@@ -1,8 +1,10 @@
-import { spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { Console, Effect, Exit } from "effect";
+
+import { decodeJson, encodeJson, encodePrettyJson } from "../fixtures/benchmark.ts";
+import { runNode, writeText } from "../fixtures/platform.ts";
 
 type Mode = "tracker";
 type Scenario =
@@ -99,11 +101,10 @@ const worker = fileURLToPath(new URL("./benchmark.worker.ts", import.meta.url));
 const results: Result[] = [];
 const failures: Failure[] = [];
 
-for (let trial = 0; trial < trials; trial++) {
-  for (const scenario of scenarios) {
-    for (const mode of modes) {
-      const child = spawnSync(
-        process.execPath,
+const runScenario = (mode: Mode, scenario: Scenario, trial: number) =>
+  Effect.gen(function* () {
+    const exit = yield* Effect.exit(
+      runNode(
         [
           "--expose-gc",
           "--max-old-space-size=4096",
@@ -115,20 +116,28 @@ for (let trial = 0; trial < trials; trial++) {
           String(watchCount),
           String(watchUpdates),
         ],
-        { cwd: root, encoding: "utf8", timeout: 300_000, maxBuffer: 10 * 1024 * 1024 },
-      );
-      if (child.status !== 0) {
-        const failure = { mode, scenario, trial, stderr: child.stderr } satisfies Failure;
-        failures.push(failure);
-        console.log(JSON.stringify(failure));
-      } else {
-        const result = JSON.parse(child.stdout) as Result;
-        results.push(result);
-        console.log(JSON.stringify(result));
-      }
+        { cwd: root, timeout: 300_000 },
+      ),
+    );
+    if (Exit.isSuccess(exit) && exit.value.status === 0) {
+      const result = (yield* decodeJson(exit.value.stdout)) as Result;
+      results.push(result);
+      yield* Console.log(yield* encodeJson(result));
+    } else {
+      const stderr = Exit.isSuccess(exit) ? exit.value.stderr : String(exit.cause);
+      const failure = { mode, scenario, trial, stderr } satisfies Failure;
+      failures.push(failure);
+      yield* Console.log(yield* encodeJson(failure));
+    }
+  });
+
+const runScenarios = Effect.gen(function* () {
+  for (let trial = 0; trial < trials; trial++) {
+    for (const scenario of scenarios) {
+      for (const mode of modes) yield* runScenario(mode, scenario, trial);
     }
   }
-}
+});
 
 const average = (values: readonly number[]): number | null =>
   values.length === 0 ? null : values.reduce((total, value) => total + value, 0) / values.length;
@@ -163,50 +172,60 @@ const metricNames = [
   "maxRssMiB",
 ] as const satisfies readonly (keyof Result)[];
 
-const summary = scenarios.flatMap((scenario) =>
-  modes.map((mode) => {
-    const selected = results.filter(
-      (result) => result.mode === mode && result.scenario === scenario,
-    );
-    const averages: Record<string, number | null> = {};
-    const medians: Record<string, number | null> = {};
-    const ranges: Record<string, readonly [number, number] | null> = {};
-    for (const metric of metricNames) {
-      const values = selected.map((result) => result[metric]);
-      averages[metric] = average(values);
-      medians[metric] = median(values);
-      ranges[metric] = range(values);
-    }
-    return {
-      mode,
-      scenario,
-      watchProfile: selected[0]?.watchProfile ?? null,
-      watchCount: selected[0]?.watchCount ?? 0,
-      watchUpdates: selected[0]?.watchUpdates ?? 0,
-      averages,
-      medians,
-      ranges,
+const summarize = () =>
+  scenarios.flatMap((scenario) =>
+    modes.map((mode) => {
+      const selected = results.filter(
+        (result) => result.mode === mode && result.scenario === scenario,
+      );
+      const averages: Record<string, number | null> = {};
+      const medians: Record<string, number | null> = {};
+      const ranges: Record<string, readonly [number, number] | null> = {};
+      for (const metric of metricNames) {
+        const values = selected.map((result) => result[metric]);
+        averages[metric] = average(values);
+        medians[metric] = median(values);
+        ranges[metric] = range(values);
+      }
+      return {
+        mode,
+        scenario,
+        watchProfile: selected[0]?.watchProfile ?? null,
+        watchCount: selected[0]?.watchCount ?? 0,
+        watchUpdates: selected[0]?.watchUpdates ?? 0,
+        averages,
+        medians,
+        ranges,
+      };
+    }),
+  );
+const output = `${tmpdir()}/chord-delta-benchmark.json`;
+await Effect.runPromise(
+  Effect.gen(function* () {
+    yield* runScenarios;
+    const summary = summarize();
+    const report = {
+      node: process.version,
+      size,
+      trials,
+      watchCount,
+      watchUpdates,
+      results,
+      failures,
+      summary,
     };
-  }),
-);
-const output = join(tmpdir(), "chord-delta-benchmark.json");
-writeFileSync(
-  output,
-  JSON.stringify(
-    { node: process.version, size, trials, watchCount, watchUpdates, results, failures, summary },
-    null,
-    2,
-  ),
-);
-console.log(
-  JSON.stringify({
-    output,
-    node: process.version,
-    size,
-    trials,
-    watchCount,
-    watchUpdates,
-    failures: failures.length,
-    summary,
+    yield* writeText(output, yield* encodePrettyJson(report));
+    yield* Console.log(
+      yield* encodeJson({
+        output,
+        node: process.version,
+        size,
+        trials,
+        watchCount,
+        watchUpdates,
+        failures: failures.length,
+        summary,
+      }),
+    );
   }),
 );

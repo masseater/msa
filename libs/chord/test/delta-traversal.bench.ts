@@ -14,12 +14,13 @@ import {
   nowIso,
 } from "./fixtures/benchmark.ts";
 import { readText, runNode, writeText } from "./fixtures/platform.ts";
+import { tick } from "./fixtures/timing.ts";
 
 type Point = { x: number; y: number; pressure: number };
 type Drawing = { strokes: { id: number; color: string; width: number; points: Point[] }[] };
 type Mode = "raw" | "proxy" | "delta";
 const MiB = 1024 * 1024;
-const gc = collectGarbage(4);
+const gc = Effect.andThen(collectGarbage(4), tick);
 
 function fixture(strokes: number, points: number): Drawing {
   return {
