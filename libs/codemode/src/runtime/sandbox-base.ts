@@ -1,16 +1,64 @@
-import { toCodemodeIdentifier } from "../identifier.ts";
 import type {
   CodemodeDeclaredGlobal,
   CodemodeExecuteOptions,
+  CodemodeOutcome,
   CodemodeResult,
   CodemodeRun,
   CodemodeRunOptions,
   CodemodeSandboxBaseOptions,
   CodemodeTool,
 } from "../types.ts";
-import { serializeStore } from "./bridge.ts";
-import { Execution } from "./execution.ts";
-import type { VmLauncher } from "./launcher.ts";
+import { toCodemodeIdentifier } from "./bridge.ts";
+import { abort, complete, post, startExecution } from "./execution.ts";
+import { stringifyJson } from "./prelude-source.ts";
+import type { Execution, VmLauncher } from "./protocol.ts";
+
+function serializeStore(
+  store: Readonly<Record<string, unknown>> | undefined,
+): Record<string, string> {
+  const serialized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(store ?? {})) {
+    const json = JSON.stringify(value);
+    if (json !== undefined) serialized[key] = json;
+  }
+  return serialized;
+}
+
+function checkProperties(seq: number, outcome: CodemodeOutcome) {
+  const properties = outcome.ok ? undefined : outcome.properties;
+  if (
+    properties !== undefined &&
+    (typeof properties !== "object" || properties === null || Array.isArray(properties))
+  ) {
+    throw new Error(`The properties of result ${seq} are not an object`);
+  }
+  return properties;
+}
+
+function deliver(
+  execution: Execution,
+  seq: number,
+  now: number,
+  id: number,
+  outcome: CodemodeOutcome,
+) {
+  if (execution.finished) return;
+  if (!Number.isFinite(now))
+    throw new Error(`The clock value of result ${seq} is not a finite number`);
+  if (!Number.isInteger(seq) || seq < 1 || execution.delivered.has(seq)) {
+    throw new Error(`Result number ${seq} is not a positive integer used once`);
+  }
+  const pending = execution.pending.get(id);
+  if (pending === undefined) throw new Error(`Call ${id} is not waiting for a result`);
+  const properties = checkProperties(seq, outcome);
+  const payload = outcome.ok ? stringifyJson(outcome.value) : outcome.message;
+  const encoded = properties === undefined ? undefined : JSON.stringify(properties);
+  execution.delivered.add(seq);
+  execution.pending.delete(id);
+  complete(pending, outcome.ok);
+  const extra = encoded === undefined ? {} : { properties: encoded };
+  post(execution, { type: "result", id, ok: outcome.ok, payload, seq, now, ...extra });
+}
 
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
 const RESERVED_GLOBALS: ReadonlySet<string> = new Set([
@@ -105,7 +153,7 @@ export class CodemodeSandboxBase {
   execute(code: string, options: CodemodeExecuteOptions = {}): Promise<CodemodeResult> {
     if (this.closed) return Promise.reject(new Error("Sandbox is closed"));
     const tools = new Map(this.toolsByName);
-    const execution = new Execution({
+    const execution = startExecution({
       code,
       tools: [...tools.values()],
       globals: [...this.globalsByName.values()],
@@ -123,7 +171,7 @@ export class CodemodeSandboxBase {
   start(code: string, options: CodemodeRunOptions): CodemodeRun {
     if (this.closed) throw new Error("Sandbox is closed");
     checkRunOptions(options);
-    const execution = new Execution({
+    const execution = startExecution({
       code,
       tools: options.tools ?? [],
       globals: options.globals ?? [],
@@ -140,7 +188,7 @@ export class CodemodeSandboxBase {
     const result = execution.promise.finally(() => this.running.delete(execution));
     return {
       result,
-      deliver: (seq, now, id, outcome) => execution.deliver(seq, now, id, outcome),
+      deliver: (seq, now, id, outcome) => deliver(execution, seq, now, id, outcome),
       get finished() {
         return execution.finished;
       },
@@ -150,7 +198,7 @@ export class CodemodeSandboxBase {
   close(): Promise<void> {
     this.closed = true;
     return Promise.all(
-      [...this.running].map((execution) => execution.abort("Sandbox closed")),
+      [...this.running].map((execution) => abort(execution, "Sandbox closed")),
     ).then(() => undefined);
   }
 }

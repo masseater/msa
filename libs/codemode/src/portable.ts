@@ -1,4 +1,4 @@
-export { toCodemodeIdentifier } from "./identifier.ts";
+export { toCodemodeIdentifier } from "./runtime/bridge.ts";
 export { CodemodeSandboxBase } from "./runtime/sandbox-base.ts";
 export {
   DEFAULT_INTERRUPT_BUDGET,
@@ -11,7 +11,7 @@ export {
   MAX_STORE_TOTAL_CHARS,
   MAX_STORE_VALUE_CHARS,
 } from "./runtime/prelude-source.ts";
-export type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./runtime/launcher.ts";
+export type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./runtime/protocol.ts";
 export {
   type CodemodeRemote,
   type CodemodeRemoteExchange,
@@ -43,5 +43,5 @@ export type {
   CodemodeStoreWrites,
   CodemodeTool,
   CodemodeToolContext,
+  CodemodeWasmModule,
 } from "./types.ts";
-export type { CodemodeWasmModule } from "./wasm.ts";

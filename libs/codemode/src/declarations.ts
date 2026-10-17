@@ -1,6 +1,6 @@
 import { dual } from "effect/Function";
 
-import { toCodemodeIdentifier } from "./identifier.ts";
+import { toCodemodeIdentifier } from "./runtime/bridge.ts";
 import { schemaToType, schemaToTypeWithin } from "./schema-type.ts";
 import type { CodemodeJsonSchema, CodemodeTool } from "./types.ts";
 

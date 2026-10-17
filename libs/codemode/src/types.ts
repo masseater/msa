@@ -1,4 +1,4 @@
-import type { CodemodeWasmModule } from "./wasm.ts";
+export type CodemodeWasmModule = object;
 
 export interface CodemodeToolContext {
   signal: AbortSignal;

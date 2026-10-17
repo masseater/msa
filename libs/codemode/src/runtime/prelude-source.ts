@@ -1,4 +1,22 @@
-import { PRELUDE_HEAD } from "./prelude-head.ts";
+import * as Cause from "effect/Cause";
+
+import { PRELUDE_HEAD } from "./bridge.ts";
+
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function causeMessage(cause: Cause.Cause<unknown>): string {
+  return errorMessage(cause.pipe(Cause.squash));
+}
+
+export function parseJson(text: string): unknown {
+  return JSON.parse(text);
+}
+
+export function stringifyJson(value: unknown): string | undefined {
+  return value === undefined ? undefined : JSON.stringify(value);
+}
 
 export const MAX_STORE_VALUE_CHARS = 256 * 1024;
 export const MAX_STORE_TOTAL_CHARS = 1024 * 1024;

@@ -1,295 +1,299 @@
-import * as Effect from "effect/Effect";
-import { Intrinsics, JSException, MAX_STACK_SIZE, QuickJS, type JSValueHandle } from "quickjs-wasi";
+import { dual } from "effect/Function";
+import { JSException, type JSValueHandle, type QuickJS } from "quickjs-wasi";
 
-import type { CodemodeWasmModule } from "../wasm.ts";
-import { errorMessage } from "./bridge.ts";
-import {
-  LaunchError,
-  type HostToWorkerMessage,
-  type VmStartData,
-  type WorkerToHostMessage,
-} from "./launcher.ts";
 import { PRELUDE_SOURCE } from "./prelude-source.ts";
-import {
-  crashMessage,
-  deterministicWasi,
-  describeException,
-  discardOutput,
-  fnv1a,
-  type VirtualClock,
-  virtualClock,
-} from "./vm-wasi.ts";
+import type {
+  HostToWorkerMessage,
+  VmControllerOptions,
+  VmSession,
+  WorkerToHostMessage,
+} from "./protocol.ts";
 
-export interface VmSession {
-  deliver(message: HostToWorkerMessage): void;
-  dispose(): void;
+export interface VirtualClock {
+  creating: boolean;
+  startedAt: number;
+  now: number;
+  seed: number;
 }
 
-export interface VmControllerOptions {
-  data: VmStartData;
-  maxStackSize: number;
-  interruptBudget: number | undefined;
-  post(message: WorkerToHostMessage): void;
-  shouldInterrupt(): boolean;
-}
+type WasmMemory = { readonly buffer: ArrayBufferLike };
+type QuickJSExports = ReturnType<QuickJS["_getExports"]>;
+type Handle = JSValueHandle | undefined;
+type Handles = Record<"api" | "settle" | "run" | "stalled", JSValueHandle>;
 
-interface PreludeHandles {
-  api: JSValueHandle;
-  settle: JSValueHandle;
-  run: JSValueHandle;
-  stalled: JSValueHandle;
+interface Controller {
+  readonly vm: QuickJS;
+  readonly options: VmControllerOptions;
+  readonly clock: VirtualClock | undefined;
+  readonly exports: QuickJSExports;
+  readonly early: Map<number, HostToWorkerMessage>;
+  handles: Handles | undefined;
+  disposed: boolean;
+  issued: number;
+  nextSeq: number;
+  current: number;
 }
 
 const DETERMINISTIC_VERSION = 1;
-type QuickJSExports = ReturnType<QuickJS["_getExports"]>;
-
-const quickJsExports = (vm: QuickJS): QuickJSExports => vm["_getExports"]();
-
 const JOBS_PER_POLL = 50;
+
+export function fnv1a(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index++) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
 const PRELUDE_HASH = fnv1a(PRELUDE_SOURCE);
 
-type Handle = JSValueHandle | undefined;
+function prng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = Math.imul(state ^ (state >>> 15), 1 | state);
+    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+    return (value ^ (value >>> 14)) >>> 0;
+  };
+}
+
+export function discardOutput(memory: WasmMemory) {
+  return {
+    fd_write(_fd: number, iovsPtr: number, iovsLen: number, nwrittenPtr: number): number {
+      const view = new DataView(memory.buffer);
+      let written = 0;
+      for (let i = 0; i < iovsLen; i++) {
+        written += view.getUint32(iovsPtr + i * 8 + 4, true);
+      }
+      view.setUint32(nwrittenPtr, written, true);
+      return 0;
+    },
+  };
+}
+
+function clockReading(clock: VirtualClock, clockId: number): bigint {
+  if (clock.creating) return clockId === 0 ? BigInt(clock.seed + 1) * 1000n : 0n;
+  if (clockId === 0) return BigInt(Math.round(clock.now)) * 1_000_000n;
+  return BigInt(Math.round(clock.now - clock.startedAt)) * 1_000_000n;
+}
+
+export function deterministicWasi(clock: VirtualClock) {
+  const random = prng(clock.seed ^ 0x9e3779b9);
+  return (memory: WasmMemory) => ({
+    ...discardOutput(memory),
+    clock_time_get(clockId: number, _precision: bigint, resultPtr: number): number {
+      new DataView(memory.buffer).setBigUint64(resultPtr, clockReading(clock, clockId), true);
+      return 0;
+    },
+    random_get(bufPtr: number, bufLen: number): number {
+      const bytes = new Uint8Array(memory.buffer, bufPtr, bufLen);
+      for (let index = 0; index < bufLen; index += 4) {
+        const value = random();
+        for (let byte = 0; byte < 4 && index + byte < bufLen; byte++)
+          bytes[index + byte] = value >>> (byte * 8);
+      }
+      return 0;
+    },
+  });
+}
+
+function describeException(error: JSException): string {
+  const head = error.message === "" ? error.name : `${error.name}: ${error.message}`;
+  const stack = error.stack?.trimEnd();
+  return JSON.stringify({
+    name: error.name,
+    message: error.message,
+    stack: stack === undefined || stack === "" ? head : `${head}\n${stack}`,
+  });
+}
+
+export function crashMessage(error: unknown): WorkerToHostMessage {
+  return {
+    type: "crash",
+    message: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+  };
+}
+
+export function isHostToWorkerMessage(value: unknown): value is HostToWorkerMessage {
+  return (
+    typeof value === "object" && value !== null && (value as { type?: unknown }).type === "result"
+  );
+}
 
 const optionalString = (handle: Handle): string | undefined =>
   handle === undefined || handle.isUndefined ? undefined : handle.toString();
 
-export class VmController implements VmSession {
-  private disposed = false;
-  private issued = 0;
-  private nextSeq = 1;
-  private current = 0;
-  private readonly early = new Map<number, HostToWorkerMessage>();
-  private handles: PreludeHandles | undefined;
-  private readonly exports: QuickJSExports;
+function handlesOf(c: Controller): Handles {
+  if (c.handles === undefined) throw new Error("The VM prelude is not loaded");
+  return c.handles;
+}
 
-  private readonly vm: QuickJS;
-  private readonly options: VmControllerOptions;
-  private readonly clock: VirtualClock | undefined;
-
-  constructor(vm: QuickJS, options: VmControllerOptions, clock: VirtualClock | undefined) {
-    this.vm = vm;
-    this.options = options;
-    this.clock = clock;
-    this.exports = quickJsExports(vm);
+function drain(c: Controller): void {
+  const { api, stalled } = handlesOf(c);
+  let jobs = 0;
+  while (c.exports.qjs_is_job_pending() !== 0) {
+    if (c.exports.qjs_execute_pending_job() < 0) throw new Error("Promise job failed");
+    if (++jobs % JOBS_PER_POLL === 0 && c.options.shouldInterrupt())
+      throw new Error("Execution interrupted");
   }
+  c.vm.callFunction(stalled, api).dispose();
+}
 
-  deliver(message: HostToWorkerMessage): void {
-    if (this.disposed) return;
-    try {
-      if (this.clock === undefined) this.apply(message);
-      else this.deliverInOrder(message, this.clock);
-    } catch (error) {
-      this.options.post(crashMessage(error));
-    }
-  }
-
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    this.vm.dispose();
-  }
-
-  boot(): VmSession {
-    try {
-      this.handles = this.loadPrelude();
-      if (this.clock !== undefined) this.reportFingerprint();
-      let fn: JSValueHandle;
-      try {
-        fn = this.vm.evalCode(
-          `(async (tools, console) => {${this.options.data.code}\n})`,
-          "codemode.js",
-        );
-      } catch (error) {
-        if (!(error instanceof JSException)) throw error;
-        this.options.post({ type: "done", ok: false, error: describeException(error) });
-        return this;
-      }
-      this.vm.callFunction(this.handles.run, this.handles.api, fn).dispose();
-      fn.dispose();
-      this.drain();
-      if (this.clock !== undefined)
-        this.options.post({ type: "idle", seq: 0, issued: this.issued });
-    } catch (error) {
-      this.options.post(crashMessage(error));
-    }
-    return this;
-  }
-
-  private deliverInOrder(message: HostToWorkerMessage, clock: VirtualClock): void {
-    const { seq } = message;
-    if (seq === undefined || !Number.isInteger(seq) || seq < this.nextSeq || this.early.has(seq)) {
-      throw new Error(
-        `Result ${message.id} has sequence number ${seq}, expected ${this.nextSeq} or later, once`,
-      );
-    }
-    this.early.set(seq, message);
-    for (
-      let next = this.early.get(this.nextSeq);
-      next !== undefined;
-      next = this.early.get(this.nextSeq)
-    ) {
-      this.early.delete(this.nextSeq);
-      if (next.now !== undefined && Number.isFinite(next.now))
-        clock.now = Math.max(clock.now, next.now);
-      this.current = this.nextSeq;
-      this.apply(next);
-      this.options.post({ type: "idle", seq: this.nextSeq, issued: this.issued });
-      this.nextSeq++;
-    }
-  }
-
-  private prelude(): PreludeHandles {
-    if (this.handles === undefined) throw new Error("The VM prelude is not loaded");
-    return this.handles;
-  }
-
-  private apply(message: HostToWorkerMessage): void {
-    const { api, settle } = this.prelude();
-    const { vm } = this;
-    vm.withScope(() => {
-      vm.callFunction(
-        settle,
-        api,
-        vm.newNumber(message.id),
-        message.ok ? vm.true : vm.false,
-        message.payload === undefined ? vm.undefined : vm.newString(message.payload),
-        message.properties === undefined ? vm.undefined : vm.newString(message.properties),
-      );
-    });
-    this.drain();
-  }
-
-  private drain(): void {
-    const { api, stalled } = this.prelude();
-    let jobs = 0;
-    while (this.exports.qjs_is_job_pending() !== 0) {
-      if (this.exports.qjs_execute_pending_job() < 0) throw new Error("Promise job failed");
-      if (++jobs % JOBS_PER_POLL === 0 && this.options.shouldInterrupt())
-        throw new Error("Execution interrupted");
-    }
-    this.vm.callFunction(stalled, api).dispose();
-  }
-
-  private onBridge(kind: string, a: JSValueHandle, b: JSValueHandle, c: Handle): void {
-    const { post } = this.options;
-    if (kind === "call" || kind === "global") {
-      this.issued++;
-      post({
-        type: "call",
-        id: a.toNumber(),
-        target: kind === "call" ? "tool" : "global",
-        name: b.toString(),
-        args: optionalString(c),
-      });
-    } else if (kind === "output") {
-      const channel = a.toString();
-      post({
-        type: "output",
-        item:
-          channel === "image"
-            ? { type: "image", data: b.toString(), mimeType: (c as JSValueHandle).toString() }
-            : channel === "console"
-              ? { type: "text", text: b.toString(), console: true }
-              : { type: "text", text: b.toString() },
-      });
-    } else if (kind === "done") this.onDone(a, b, c);
-  }
-
-  private onDone(a: JSValueHandle, b: Handle, c: Handle): void {
-    const during =
-      this.clock === undefined ? {} : { during: { seq: this.current, issued: this.issued } };
-    if (a.toBoolean()) {
-      this.options.post({
-        type: "done",
-        ok: true,
-        value: optionalString(b),
-        writes: (c as JSValueHandle).toString(),
-        ...during,
-      });
-    } else {
-      this.options.post({
-        type: "done",
-        ok: false,
-        error: (b as JSValueHandle).toString(),
-        ...during,
-      });
-    }
-  }
-
-  private loadPrelude(): PreludeHandles {
-    const { vm } = this;
-    const { data } = this.options;
-    const bridge = vm.newFunction("bridge", (kind, a, b, c) => {
-      this.onBridge(kind.toString(), a, b, c);
-      return vm.undefined;
-    });
-    const api = vm.withScope((scope) =>
-      scope.escape(
-        vm.callFunction(
-          vm.evalCode(PRELUDE_SOURCE, "codemode-prelude.js"),
-          vm.undefined,
-          bridge,
-          vm.newString(JSON.stringify(data.tools)),
-          vm.newString(JSON.stringify(data.globals)),
-          vm.newString(JSON.stringify(data.store)),
-        ),
-      ),
+function apply(c: Controller, message: HostToWorkerMessage): void {
+  const { api, settle } = handlesOf(c);
+  const { vm } = c;
+  vm.withScope(() => {
+    vm.callFunction(
+      settle,
+      api,
+      vm.newNumber(message.id),
+      message.ok ? vm.true : vm.false,
+      message.payload === undefined ? vm.undefined : vm.newString(message.payload),
+      message.properties === undefined ? vm.undefined : vm.newString(message.properties),
     );
-    const settle = api.getProp("settle");
-    const run = api.getProp("run");
-    return { api, settle, run, stalled: api.getProp("stalled") };
-  }
-
-  private reportFingerprint(): void {
-    const { versions } = this.vm;
-    const { data, maxStackSize, interruptBudget } = this.options;
-    this.options.post({
-      type: "started",
-      fingerprint: `quickjs-wasi ${versions["quickjs-wasi"]}, quickjs ${versions["quickjs"]}, prelude ${PRELUDE_HASH}, deterministic ${DETERMINISTIC_VERSION}, stack ${maxStackSize}, heap ${data.memoryLimitBytes ?? "none"}, budget ${interruptBudget ?? "none"}`,
-    });
-  }
-}
-
-export interface StartVmOptions {
-  data: VmStartData;
-  wasm: CodemodeWasmModule;
-  maxStackSize?: number;
-  interruptBudget?: number;
-  post(message: WorkerToHostMessage): void;
-  shouldInterrupt(): boolean;
-}
-
-const createVm = (options: StartVmOptions, clock: VirtualClock | undefined, maxStackSize: number) =>
-  Effect.tryPromise({
-    try: () =>
-      QuickJS.create({
-        wasm: options.wasm,
-        memoryLimit: options.data.memoryLimitBytes,
-        maxStackSize,
-        interruptHandler: options.shouldInterrupt,
-        wasi: clock === undefined ? discardOutput : deterministicWasi(clock),
-        ...(clock === undefined
-          ? {}
-          : { timezoneOffset: 0, intrinsics: Intrinsics.ALL & ~Intrinsics.WEAK_REF }),
-      }),
-    catch: (cause) => new LaunchError({ message: errorMessage(cause), cause }),
   });
+  drain(c);
+}
 
-export const startVm = Effect.fn("startVm")(function* (options: StartVmOptions) {
-  const maxStackSize = options.maxStackSize ?? MAX_STACK_SIZE;
-  const clock = virtualClock(options.data);
-  const vm = yield* createVm(options, clock, maxStackSize);
-  if (clock !== undefined) clock.creating = false;
-  const controller = new VmController(
-    vm,
-    {
-      data: options.data,
-      maxStackSize,
-      interruptBudget: options.interruptBudget,
-      post: options.post,
-      shouldInterrupt: options.shouldInterrupt,
-    },
-    clock,
+function deliverInOrder(c: Controller, message: HostToWorkerMessage, clock: VirtualClock): void {
+  const { seq } = message;
+  if (seq === undefined || !Number.isInteger(seq) || seq < c.nextSeq || c.early.has(seq)) {
+    throw new Error(
+      `Result ${message.id} has sequence number ${seq}, expected ${c.nextSeq} or later, once`,
+    );
+  }
+  c.early.set(seq, message);
+  for (let next = c.early.get(c.nextSeq); next !== undefined; next = c.early.get(c.nextSeq)) {
+    c.early.delete(c.nextSeq);
+    if (next.now !== undefined && Number.isFinite(next.now))
+      clock.now = Math.max(clock.now, next.now);
+    c.current = c.nextSeq;
+    apply(c, next);
+    c.options.post({ type: "idle", seq: c.nextSeq, issued: c.issued });
+    c.nextSeq++;
+  }
+}
+
+function onDone(c: Controller, a: JSValueHandle, b: Handle, d: Handle): void {
+  const during = c.clock === undefined ? {} : { during: { seq: c.current, issued: c.issued } };
+  if (a.toBoolean()) {
+    const writes = (d as JSValueHandle).toString();
+    c.options.post({ type: "done", ok: true, value: optionalString(b), writes, ...during });
+  } else {
+    c.options.post({ type: "done", ok: false, error: (b as JSValueHandle).toString(), ...during });
+  }
+}
+
+function onBridge(c: Controller, kind: string, a: JSValueHandle, b: JSValueHandle, d: Handle) {
+  const { post } = c.options;
+  if (kind === "call" || kind === "global") {
+    c.issued++;
+    const target = kind === "call" ? "tool" : "global";
+    post({ type: "call", id: a.toNumber(), target, name: b.toString(), args: optionalString(d) });
+  } else if (kind === "output") {
+    const channel = a.toString();
+    post({
+      type: "output",
+      item:
+        channel === "image"
+          ? { type: "image", data: b.toString(), mimeType: (d as JSValueHandle).toString() }
+          : channel === "console"
+            ? { type: "text", text: b.toString(), console: true }
+            : { type: "text", text: b.toString() },
+    });
+  } else if (kind === "done") onDone(c, a, b, d);
+}
+
+function loadPrelude(c: Controller): Handles {
+  const { vm } = c;
+  const { data } = c.options;
+  const bridge = vm.newFunction("bridge", (kind, a, b, d) => {
+    onBridge(c, kind.toString(), a, b, d);
+    return vm.undefined;
+  });
+  const api = vm.withScope((scope) =>
+    scope.escape(
+      vm.callFunction(
+        vm.evalCode(PRELUDE_SOURCE, "codemode-prelude.js"),
+        vm.undefined,
+        bridge,
+        vm.newString(JSON.stringify(data.tools)),
+        vm.newString(JSON.stringify(data.globals)),
+        vm.newString(JSON.stringify(data.store)),
+      ),
+    ),
   );
-  return controller.boot();
-});
+  const settle = api.getProp("settle");
+  const run = api.getProp("run");
+  return { api, settle, run, stalled: api.getProp("stalled") };
+}
+
+function reportFingerprint(c: Controller): void {
+  const { versions } = c.vm;
+  const { data, maxStackSize, interruptBudget } = c.options;
+  c.options.post({
+    type: "started",
+    fingerprint: `quickjs-wasi ${versions["quickjs-wasi"]}, quickjs ${versions["quickjs"]}, prelude ${PRELUDE_HASH}, deterministic ${DETERMINISTIC_VERSION}, stack ${maxStackSize}, heap ${data.memoryLimitBytes ?? "none"}, budget ${interruptBudget ?? "none"}`,
+  });
+}
+
+function runScript(c: Controller): void {
+  const handles = loadPrelude(c);
+  c.handles = handles;
+  if (c.clock !== undefined) reportFingerprint(c);
+  let fn: JSValueHandle;
+  try {
+    fn = c.vm.evalCode(`(async (tools, console) => {${c.options.data.code}\n})`, "codemode.js");
+  } catch (error) {
+    if (!(error instanceof JSException)) throw error;
+    c.options.post({ type: "done", ok: false, error: describeException(error) });
+    return;
+  }
+  c.vm.callFunction(handles.run, handles.api, fn).dispose();
+  fn.dispose();
+  drain(c);
+  if (c.clock !== undefined) c.options.post({ type: "idle", seq: 0, issued: c.issued });
+}
+
+export const bootVm: {
+  (options: VmControllerOptions, clock: VirtualClock | undefined): (vm: QuickJS) => VmSession;
+  (vm: QuickJS, options: VmControllerOptions, clock: VirtualClock | undefined): VmSession;
+} = dual(
+  3,
+  (vm: QuickJS, options: VmControllerOptions, clock: VirtualClock | undefined): VmSession => {
+    const c: Controller = {
+      vm,
+      options,
+      clock,
+      exports: vm["_getExports"](),
+      early: new Map(),
+      handles: undefined,
+      disposed: false,
+      issued: 0,
+      nextSeq: 1,
+      current: 0,
+    };
+    try {
+      runScript(c);
+    } catch (error) {
+      options.post(crashMessage(error));
+    }
+    return {
+      deliver: (message) => {
+        if (c.disposed) return;
+        try {
+          if (c.clock === undefined) apply(c, message);
+          else deliverInOrder(c, message, c.clock);
+        } catch (error) {
+          options.post(crashMessage(error));
+        }
+      },
+      dispose: () => {
+        if (c.disposed) return;
+        c.disposed = true;
+        vm.dispose();
+      },
+    };
+  },
+);

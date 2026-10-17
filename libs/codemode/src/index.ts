@@ -9,7 +9,7 @@ export {
   schemaToType,
   schemaToTypeWithin,
 } from "./declarations.ts";
-export { toCodemodeIdentifier } from "./identifier.ts";
+export { toCodemodeIdentifier } from "./runtime/bridge.ts";
 export { CodemodeSandboxBase } from "./runtime/sandbox-base.ts";
 export { CodemodeSandbox } from "./runtime/host.ts";
 export {
@@ -63,5 +63,6 @@ export type {
   CodemodeStoreWrites,
   CodemodeTool,
   CodemodeToolContext,
+  CodemodeWasmModule,
 } from "./types.ts";
-export { type CodemodeWasmModule, loadQuickJSWasm } from "./wasm.ts";
+export { loadQuickJSWasm } from "./runtime/host.ts";

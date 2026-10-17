@@ -11,7 +11,7 @@ import {
   type CodemodeRemoteRequest,
   serveCodemodeRemote,
 } from "./runtime/remote.ts";
-import type { CodemodeWasmModule } from "./wasm.ts";
+import type { CodemodeWasmModule } from "./types.ts";
 
 export * from "./portable.ts";
 

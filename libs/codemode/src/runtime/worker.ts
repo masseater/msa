@@ -3,20 +3,17 @@ import { parentPort, workerData } from "node:worker_threads";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 
-import {
-  LaunchError,
-  isHostToWorkerMessage,
-  type WorkerData,
-  type WorkerToHostMessage,
-} from "./launcher.ts";
-import { startVm } from "./vm-session.ts";
-import { crashMessage } from "./vm-wasi.ts";
+import { RuntimeError } from "./bridge.ts";
+import { startVm } from "./inline.ts";
+import type { WorkerData, WorkerToHostMessage } from "./protocol.ts";
+import { crashMessage, isHostToWorkerMessage } from "./vm-session.ts";
 
 function post(message: WorkerToHostMessage): void {
   parentPort?.postMessage(message);
 }
 
-const original = (error: unknown): unknown => (error instanceof LaunchError ? error.cause : error);
+const original = (error: unknown): unknown =>
+  error instanceof RuntimeError && error.reason === "launch" ? error.cause : error;
 
 const main = (data: WorkerData) =>
   Effect.suspend(() => {
