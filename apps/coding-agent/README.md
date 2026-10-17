@@ -50,7 +50,7 @@ directory.
 Before submitting changes, run from the repository root:
 
 ```bash
-vp run verify   # lint, type check, tests, model data check
+vp run verify   # lint, type check, tests, model data check, fence ratchet
 ./test.sh       # tests (skips LLM-dependent tests without API keys)
 ```
 

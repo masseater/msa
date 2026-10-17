@@ -1,0 +1,17 @@
+{
+  "commit": "88b4fc551",
+  "measuredAt": "2026-10-16T20:18:50.086Z",
+  "flags": {
+    "exactOptionalPropertyTypes": 1070,
+    "noUncheckedIndexedAccess": 1711,
+    "noImplicitOverride": 11,
+    "noImplicitReturns": 20,
+    "noPropertyAccessFromIndexSignature": 2206,
+    "noFallthroughCasesInSwitch": 0,
+    "noUnusedLocals": 21,
+    "noUnusedParameters": 0,
+    "noUncheckedSideEffectImports": 0,
+    "allowUnreachableCode": 4,
+    "allowUnusedLabels": 0
+  }
+}
