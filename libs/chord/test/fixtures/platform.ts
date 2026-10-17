@@ -14,20 +14,13 @@ import { dual } from "effect/Function";
 import { ChildProcess } from "effect/process";
 
 const layer = Layer.provideMerge(
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- node:child_process has no stable Effect replacement
   NodeChildProcessSpawner.layer,
-  Layer.mergeAll(
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- node:fs has no stable Effect replacement
-    NodeFileSystem.layer,
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- node:path has no stable Effect replacement
-    NodePath.layer,
-  ),
+  Layer.mergeAll(NodeFileSystem.layer, NodePath.layer),
 );
 
 const runtime = ManagedRuntime.make(layer);
 
 const onPlatform = <A>(
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- node:fs has no stable Effect replacement
   effect: Effect.Effect<A, PlatformError.PlatformError, Layer.Success<typeof layer>>,
 ): Effect.Effect<A> =>
   Effect.flatMap(runtime.contextEffect, (context) =>
@@ -35,11 +28,8 @@ const onPlatform = <A>(
   );
 
 const useFileSystem = <A>(
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- node:fs has no stable Effect replacement
   use: (fs: FileSystem.FileSystem) => Effect.Effect<A, PlatformError.PlatformError>,
-): Effect.Effect<A> =>
-  // oxlint-disable-next-line effecttsgo/unstable-api-usage -- node:fs has no stable Effect replacement
-  onPlatform(FileSystem.FileSystem.use(use));
+): Effect.Effect<A> => onPlatform(FileSystem.FileSystem.use(use));
 
 export const readText = (path: string): Effect.Effect<string> =>
   useFileSystem((fs) => fs.readFileString(path));
@@ -74,7 +64,6 @@ export interface NodeRunOptions {
 const collect = (args: readonly string[], cwd: string | undefined) =>
   Effect.scoped(
     Effect.gen(function* () {
-      // oxlint-disable-next-line effecttsgo/unstable-api-usage -- node:child_process has no stable Effect replacement
       const child = yield* ChildProcess.make(
         process.execPath,
         args,
