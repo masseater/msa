@@ -137,7 +137,7 @@ describe("Session document checkpoints", () => {
       version: 2,
       scope: "session",
       initial: () => ({ count: 0 }),
-      migrate: (value) => ({ count: value.count as number }),
+      migrate: (value) => ({ count: value["count"] as number }),
       checkpointWhen: (_value, _ops, info) => {
         seen.push(info.deltasSinceBase);
         return false;
@@ -313,7 +313,7 @@ describe("Session document checkpoints", () => {
     expect(write.content.ops).toHaveLength(1);
     expect(write.content.ops[0]![0]).toBe("r");
     await session.unloadDocuments();
-    expect((await session.snapshot(Doc, context))!.field4099).toBe(1);
+    expect((await session.snapshot(Doc, context))!["field4099"]).toBe(1);
   });
 
   it("uses ordinary checkpoint selection before retirement", async () => {
@@ -364,7 +364,7 @@ describe("Session document migrations", () => {
       migrate: (value, fromVersion) => {
         expect(fromVersion).toBe(1);
         calls++;
-        retained = { count: value.count as number, labels: ["migrated"] };
+        retained = { count: value["count"] as number, labels: ["migrated"] };
         return retained;
       },
     });
@@ -402,7 +402,7 @@ describe("Session document migrations", () => {
       version: 3,
       scope: "session",
       initial: () => ({ count: 0 }),
-      migrate: (value, fromVersion) => ({ count: (value.count as number) + fromVersion - 1 }),
+      migrate: (value, fromVersion) => ({ count: (value["count"] as number) + fromVersion - 1 }),
       checkpointWhen: () => {
         checkpoints++;
         return false;
@@ -470,7 +470,7 @@ describe("Session document migrations", () => {
       initial: () => ({ count: 0, migrated: false }),
       migrate: (value) => {
         migrations++;
-        return { count: value.count as number, migrated: true };
+        return { count: value["count"] as number, migrated: true };
       },
     });
     const { session, storage, publications } = openTestSession();
@@ -593,7 +593,7 @@ describe("Session document migrations", () => {
       version: 2,
       scope: "session",
       initial: () => ({ count: 0 }),
-      migrate: (value) => ({ count: value.count as number }),
+      migrate: (value) => ({ count: value["count"] as number }),
       checkpointWhen: () => {
         throw new Error("must not run");
       },
@@ -633,7 +633,7 @@ describe("Session document migrations", () => {
       version: 2,
       scope: "session",
       initial: () => ({ count: 0 }),
-      migrate: (value) => ({ count: value.count as number }),
+      migrate: (value) => ({ count: value["count"] as number }),
     });
     defineDoc<{ count: number }>({
       kind: "migration.lazy.second",
@@ -642,7 +642,7 @@ describe("Session document migrations", () => {
       initial: () => ({ count: 0 }),
       migrate: (value) => {
         secondMigrations++;
-        return { count: value.count as number };
+        return { count: value["count"] as number };
       },
     });
     const { session, storage } = openTestSession();
@@ -693,7 +693,7 @@ describe("Session historical document snapshots", () => {
       initial: () => ({ count: 0, version: 3 }),
       migrate: (value, fromVersion) => {
         migrations.push(fromVersion);
-        return { count: value.count as number, version: 3 };
+        return { count: value["count"] as number, version: 3 };
       },
     });
     const { session, storage } = openTestSession();
@@ -835,7 +835,7 @@ describe("Session tracker cache across definition versions", () => {
     version: 2,
     scope: "session",
     initial: () => ({ names: [] }),
-    migrate: (value) => ({ names: [value.name as string] }),
+    migrate: (value) => ({ names: [value["name"] as string] }),
   });
 
   it("migrates a document cached by an older token without unloading", async () => {

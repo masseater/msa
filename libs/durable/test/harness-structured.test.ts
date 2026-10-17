@@ -633,14 +633,14 @@ describe("waiting", () => {
     script("orchestrator", {
       run: (runtime, ctx) =>
         runtime.commit(async (tx) => {
-          ids.worker = await spawn(tx, runtime.taskId, "worker");
+          ids["worker"] = await spawn(tx, runtime.taskId, "worker");
           return { status: "running", checkpoint: { phase: "resume", round: 1 } };
         }, ctx),
     });
     // The reviewer waits for the orchestrator's result.
     script("reviewer", {
       run: async (runtime, ctx) => {
-        await runtime.commit(() => waitOn([ids.orchestrator!], "allSettled"), ctx);
+        await runtime.commit(() => waitOn([ids["orchestrator"]!], "allSettled"), ctx);
         reviewerWaits.resolve();
       },
     });
@@ -648,19 +648,19 @@ describe("waiting", () => {
     script("worker", {
       run: async (runtime, ctx) => {
         await reviewerWaits.promise;
-        await runtime.commit(() => waitOn([ids.reviewer!], "allSettled"), ctx);
+        await runtime.commit(() => waitOn([ids["reviewer"]!], "allSettled"), ctx);
       },
     });
-    ids.orchestrator = await start(root, "orchestrator");
-    await until(async () => (await state(harness, ids.orchestrator!)).status === "completing");
-    ids.reviewer = await start(root, "reviewer");
+    ids["orchestrator"] = await start(root, "orchestrator");
+    await until(async () => (await state(harness, ids["orchestrator"]!)).status === "completing");
+    ids["reviewer"] = await start(root, "reviewer");
     const outcomes = await Promise.all(
       ["orchestrator", "worker", "reviewer"].map((name) => outcomeOf(harness, ids[name]!)),
     );
     expect(outcomes).toEqual(["completed", "faulted", "completed"]);
-    const worker = (await harness.waitForTask(ids.worker!, context)).state.outcome;
+    const worker = (await harness.waitForTask(ids["worker"]!, context)).state.outcome;
     expect(JSON.stringify(worker)).toContain(
-      `${ids.worker} -> ${ids.reviewer} -> ${ids.orchestrator} -> ${ids.worker} is a wait cycle`,
+      `${ids["worker"]} -> ${ids["reviewer"]} -> ${ids["orchestrator"]} -> ${ids["worker"]} is a wait cycle`,
     );
     await harness.close(context);
   });
@@ -672,22 +672,22 @@ describe("waiting", () => {
     // A diamond: top waits on left and right, both wait on bottom. No cycle.
     script("top", {
       run: (runtime, ctx) =>
-        runtime.commit(() => waitOn([ids.left!, ids.right!], "allSettled"), ctx),
+        runtime.commit(() => waitOn([ids["left"]!, ids["right"]!], "allSettled"), ctx),
     });
     script("left", {
-      run: (runtime, ctx) => runtime.commit(() => waitOn([ids.bottom!], "allSettled"), ctx),
+      run: (runtime, ctx) => runtime.commit(() => waitOn([ids["bottom"]!], "allSettled"), ctx),
     });
     script("right", {
-      run: (runtime, ctx) => runtime.commit(() => waitOn([ids.bottom!], "allSettled"), ctx),
+      run: (runtime, ctx) => runtime.commit(() => waitOn([ids["bottom"]!], "allSettled"), ctx),
     });
     await root.commit(async (tx) => {
-      ids.bottom = await tx.createTask(Node, { name: "bottom" }, OWN_CONVERSATION);
-      ids.left = await tx.createTask(Node, { name: "left" }, OWN_CONVERSATION);
-      ids.right = await tx.createTask(Node, { name: "right" }, OWN_CONVERSATION);
-      ids.top = await tx.createTask(Node, { name: "top" }, OWN_CONVERSATION);
+      ids["bottom"] = await tx.createTask(Node, { name: "bottom" }, OWN_CONVERSATION);
+      ids["left"] = await tx.createTask(Node, { name: "left" }, OWN_CONVERSATION);
+      ids["right"] = await tx.createTask(Node, { name: "right" }, OWN_CONVERSATION);
+      ids["top"] = await tx.createTask(Node, { name: "top" }, OWN_CONVERSATION);
     }, context);
     open("bottom");
-    expect(await outcomeOf(harness, ids.top)).toBe("completed");
+    expect(await outcomeOf(harness, ids["top"])).toBe("completed");
     await harness.close(context);
   });
 
@@ -700,8 +700,8 @@ describe("waiting", () => {
     script("b", {
       run: (runtime, ctx) =>
         runtime.commit(async (tx) => {
-          ids.c = await spawn(tx, runtime.taskId, "c");
-          return waitOn([ids.a!], "allSettled");
+          ids["c"] = await spawn(tx, runtime.taskId, "c");
+          return waitOn([ids["a"]!], "allSettled");
         }, ctx),
     });
     script("c", {
@@ -717,23 +717,23 @@ describe("waiting", () => {
     script("a", {
       run: async (runtime, ctx) => {
         await aWaits.promise;
-        await runtime.commit(() => waitOn([ids.b!], "allSettled"), ctx);
+        await runtime.commit(() => waitOn([ids["b"]!], "allSettled"), ctx);
       },
       resume: (runtime, ctx) => runtime.commit(() => end("completed", "a"), ctx),
     });
     await root.commit(async (tx) => {
-      ids.a = await tx.createTask(Node, { name: "a" }, OWN_CONVERSATION);
-      ids.b = await tx.createTask(Node, { name: "b" }, OWN_CONVERSATION);
+      ids["a"] = await tx.createTask(Node, { name: "a" }, OWN_CONVERSATION);
+      ids["b"] = await tx.createTask(Node, { name: "b" }, OWN_CONVERSATION);
     }, context);
-    await until(async () => (await state(harness, ids.b!)).status === "waiting");
-    expect(await harness.abortTask(ids.b!, context)).toBe("marked");
+    await until(async () => (await state(harness, ids["b"]!)).status === "waiting");
+    expect(await harness.abortTask(ids["b"]!, context)).toBe("marked");
     await until(() => log.includes("abort:c"));
     // a -> b would close a -> b -> a through b's stale wait; b now waits only for c.
     aWaits.resolve();
-    await until(async () => (await state(harness, ids.a!)).status === "waiting");
+    await until(async () => (await state(harness, ids["a"]!)).status === "waiting");
     cleanup.resolve();
-    expect(await outcomeOf(harness, ids.b!)).toBe("aborted");
-    expect(await outcomeOf(harness, ids.a!)).toBe("completed");
+    expect(await outcomeOf(harness, ids["b"]!)).toBe("aborted");
+    expect(await outcomeOf(harness, ids["a"]!)).toBe("completed");
     await harness.close(context);
   });
 

@@ -67,7 +67,7 @@ const encodeJson = (value: unknown): string => JSON.stringify(value) as string;
 const encodeIndexedString = (value: string): string => JSON.stringify(value);
 
 const cursorId = <I extends Id<string>>(cursor: Cursor | undefined): I | undefined => {
-  const after = cursor?.after;
+  const after = cursor?.["after"];
   if (after === undefined) return undefined;
   if (typeof after !== "number" || !Number.isSafeInteger(after))
     throw new StorageRequestError("Invalid storage cursor");

@@ -1712,8 +1712,8 @@ describe("ModelRegistry", () => {
     });
 
     test("apiKey with $ prefix resolves to env value", async () => {
-      const originalEnv = process.env.TEST_API_KEY_12345;
-      process.env.TEST_API_KEY_12345 = "env-api-key-value";
+      const originalEnv = process.env["TEST_API_KEY_12345"];
+      process.env["TEST_API_KEY_12345"] = "env-api-key-value";
 
       try {
         writeRawModelsJson({
@@ -1726,16 +1726,16 @@ describe("ModelRegistry", () => {
         expect(apiKey).toBe("env-api-key-value");
       } finally {
         if (originalEnv === undefined) {
-          delete process.env.TEST_API_KEY_12345;
+          delete process.env["TEST_API_KEY_12345"];
         } else {
-          process.env.TEST_API_KEY_12345 = originalEnv;
+          process.env["TEST_API_KEY_12345"] = originalEnv;
         }
       }
     });
 
     test("apiKey with braced env syntax resolves to env value", async () => {
-      const originalEnv = process.env.TEST_BRACED_API_KEY_12345;
-      process.env.TEST_BRACED_API_KEY_12345 = "braced-env-api-key-value";
+      const originalEnv = process.env["TEST_BRACED_API_KEY_12345"];
+      process.env["TEST_BRACED_API_KEY_12345"] = "braced-env-api-key-value";
       const bracedKey = "${TEST_BRACED_API_KEY_12345}";
 
       try {
@@ -1749,18 +1749,18 @@ describe("ModelRegistry", () => {
         expect(apiKey).toBe("braced-env-api-key-value");
       } finally {
         if (originalEnv === undefined) {
-          delete process.env.TEST_BRACED_API_KEY_12345;
+          delete process.env["TEST_BRACED_API_KEY_12345"];
         } else {
-          process.env.TEST_BRACED_API_KEY_12345 = originalEnv;
+          process.env["TEST_BRACED_API_KEY_12345"] = originalEnv;
         }
       }
     });
 
     test("apiKey interpolates braced env references inside literals", async () => {
-      const originalPartA = process.env.TEST_INTERPOLATED_PART_A_12345;
-      const originalPartB = process.env.TEST_INTERPOLATED_PART_B_12345;
-      process.env.TEST_INTERPOLATED_PART_A_12345 = "left";
-      process.env.TEST_INTERPOLATED_PART_B_12345 = "right";
+      const originalPartA = process.env["TEST_INTERPOLATED_PART_A_12345"];
+      const originalPartB = process.env["TEST_INTERPOLATED_PART_B_12345"];
+      process.env["TEST_INTERPOLATED_PART_A_12345"] = "left";
+      process.env["TEST_INTERPOLATED_PART_B_12345"] = "right";
       const interpolatedKey = [
         "$",
         "{TEST_INTERPOLATED_PART_A_12345}_$",
@@ -1778,14 +1778,14 @@ describe("ModelRegistry", () => {
         expect(apiKey).toBe("left_right");
       } finally {
         if (originalPartA === undefined) {
-          delete process.env.TEST_INTERPOLATED_PART_A_12345;
+          delete process.env["TEST_INTERPOLATED_PART_A_12345"];
         } else {
-          process.env.TEST_INTERPOLATED_PART_A_12345 = originalPartA;
+          process.env["TEST_INTERPOLATED_PART_A_12345"] = originalPartA;
         }
         if (originalPartB === undefined) {
-          delete process.env.TEST_INTERPOLATED_PART_B_12345;
+          delete process.env["TEST_INTERPOLATED_PART_B_12345"];
         } else {
-          process.env.TEST_INTERPOLATED_PART_B_12345 = originalPartB;
+          process.env["TEST_INTERPOLATED_PART_B_12345"] = originalPartB;
         }
       }
     });
@@ -1802,8 +1802,8 @@ describe("ModelRegistry", () => {
     });
 
     test("apiKey with $! escapes a literal bang and still interpolates later env refs", async () => {
-      const originalEnv = process.env.TEST_API_KEY_12345;
-      process.env.TEST_API_KEY_12345 = "env-api-key-value";
+      const originalEnv = process.env["TEST_API_KEY_12345"];
+      process.env["TEST_API_KEY_12345"] = "env-api-key-value";
 
       try {
         writeRawModelsJson({
@@ -1816,16 +1816,16 @@ describe("ModelRegistry", () => {
         expect(apiKey).toBe("!literal-env-api-key-value");
       } finally {
         if (originalEnv === undefined) {
-          delete process.env.TEST_API_KEY_12345;
+          delete process.env["TEST_API_KEY_12345"];
         } else {
-          process.env.TEST_API_KEY_12345 = originalEnv;
+          process.env["TEST_API_KEY_12345"] = originalEnv;
         }
       }
     });
 
     test("plain apiKey is used directly even when it matches an env var", async () => {
-      const originalEnv = process.env.TEST_API_KEY_12345;
-      process.env.TEST_API_KEY_12345 = "env-api-key-value";
+      const originalEnv = process.env["TEST_API_KEY_12345"];
+      process.env["TEST_API_KEY_12345"] = "env-api-key-value";
 
       try {
         writeRawModelsJson({
@@ -1838,16 +1838,16 @@ describe("ModelRegistry", () => {
         expect(apiKey).toBe("TEST_API_KEY_12345");
       } finally {
         if (originalEnv === undefined) {
-          delete process.env.TEST_API_KEY_12345;
+          delete process.env["TEST_API_KEY_12345"];
         } else {
-          process.env.TEST_API_KEY_12345 = originalEnv;
+          process.env["TEST_API_KEY_12345"] = originalEnv;
         }
       }
     });
 
     test("apiKey as literal value is used directly when not an env var", async () => {
       // Make sure this isn't an env var
-      delete process.env.literal_api_key_value;
+      delete process.env["literal_api_key_value"];
 
       writeRawModelsJson({
         "custom-provider": providerWithApiKey("literal_api_key_value"),

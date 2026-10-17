@@ -754,10 +754,10 @@ function matchesModifyOtherKeys(
 
 function isWindowsTerminalSession(): boolean {
   return (
-    Boolean(process.env.WT_SESSION) &&
-    !process.env.SSH_CONNECTION &&
-    !process.env.SSH_CLIENT &&
-    !process.env.SSH_TTY
+    Boolean(process.env["WT_SESSION"]) &&
+    !process.env["SSH_CONNECTION"] &&
+    !process.env["SSH_CLIENT"] &&
+    !process.env["SSH_TTY"]
   );
 }
 

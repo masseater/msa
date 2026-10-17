@@ -30,7 +30,7 @@ test("Linux ARM64 prebuild supports 64 KB system pages", () => {
 // Opt in on a Windows test desktop: this replaces the system clipboard contents.
 test(
   "writes Windows clipboard text through the native helper without command fallbacks",
-  { skip: process.platform !== "win32" || process.env.MSA_TEST_NATIVE_CLIPBOARD !== "1" },
+  { skip: process.platform !== "win32" || process.env["MSA_TEST_NATIVE_CLIPBOARD"] !== "1" },
   async () => {
     const clipboard = getNativeClipboard();
     assert.ok(clipboard?.setText);
@@ -65,8 +65,8 @@ test(
   async (t) => {
     const require = createRequire(import.meta.url);
     const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
-    const display = process.env.DISPLAY;
-    const waylandDisplay = process.env.WAYLAND_DISPLAY;
+    const display = process.env["DISPLAY"];
+    const waylandDisplay = process.env["WAYLAND_DISPLAY"];
     const modulePath = fileURLToPath(
       new URL(
         `../native/linux/prebuilds/linux-${process.arch}/linux-platform-x11.node`,
@@ -76,16 +76,16 @@ test(
     const previous = require.cache[modulePath];
     t.after(() => {
       Object.defineProperty(process, "platform", platform);
-      if (display === undefined) delete process.env.DISPLAY;
-      else process.env.DISPLAY = display;
-      if (waylandDisplay === undefined) delete process.env.WAYLAND_DISPLAY;
-      else process.env.WAYLAND_DISPLAY = waylandDisplay;
+      if (display === undefined) delete process.env["DISPLAY"];
+      else process.env["DISPLAY"] = display;
+      if (waylandDisplay === undefined) delete process.env["WAYLAND_DISPLAY"];
+      else process.env["WAYLAND_DISPLAY"] = waylandDisplay;
       if (previous) require.cache[modulePath] = previous;
       else delete require.cache[modulePath];
     });
     Object.defineProperty(process, "platform", { value: "linux" });
-    delete process.env.DISPLAY;
-    process.env.WAYLAND_DISPLAY = "wayland-0";
+    delete process.env["DISPLAY"];
+    process.env["WAYLAND_DISPLAY"] = "wayland-0";
     assert.equal(getNativeClipboard(), undefined); // Wayland paste uses wl-paste.
     let available = false;
     const helper = {
@@ -95,7 +95,7 @@ test(
     const module = new Module(modulePath);
     module.exports = helper;
     require.cache[modulePath] = module;
-    process.env.DISPLAY = ":0";
+    process.env["DISPLAY"] = ":0";
     const clipboard = getNativeClipboard()!;
     assert.equal(clipboard, helper);
     assert.equal(helper.getText.mock.callCount(), 0);
@@ -103,9 +103,9 @@ test(
     available = true;
     assert.equal(await clipboard.getText(), "X11");
     assert.equal(await clipboard.getImage(), null);
-    delete process.env.DISPLAY;
+    delete process.env["DISPLAY"];
     assert.equal(getNativeClipboard(), undefined);
-    process.env.DISPLAY = ":1";
+    process.env["DISPLAY"] = ":1";
     assert.equal(getNativeClipboard(), clipboard);
   },
 );

@@ -96,7 +96,7 @@ describe("context handlers and system messages", () => {
       extensionFactories: [
         (msa) => {
           msa.on("before_agent_start", (event) => {
-            if (++turn === 2) event.systemPromptOptions.sections.plan_mode = "Plan only.";
+            if (++turn === 2) event.systemPromptOptions.sections["plan_mode"] = "Plan only.";
           });
           msa.on("context", async (event) => ({ messages: event.messages }));
         },

@@ -124,7 +124,7 @@ describe("OpenAI Responses configuration_update", () => {
     }
     expect(second.payload.input.slice(0, first.payload.input.length)).toEqual(first.payload.input);
     expect(third.payload.input.slice(0, second.payload.input.length)).toEqual(second.payload.input);
-    expect(third.payload.input.filter((item) => item.type === "configuration_update")).toEqual([
+    expect(third.payload.input.filter((item) => item["type"] === "configuration_update")).toEqual([
       update("high"),
       update("high"),
       update("low"),
@@ -182,7 +182,7 @@ describe("OpenAI Responses configuration_update", () => {
       "low",
     );
 
-    expect(payload.input.map((item) => item.type ?? item.role)).toEqual([
+    expect(payload.input.map((item) => item["type"] ?? item["role"])).toEqual([
       "user",
       "message",
       "user",
@@ -195,7 +195,7 @@ describe("OpenAI Responses configuration_update", () => {
       "user",
       "configuration_update",
     ]);
-    expect(payload.input.filter((item) => item.type === "configuration_update")).toEqual([
+    expect(payload.input.filter((item) => item["type"] === "configuration_update")).toEqual([
       update("high"),
       update("low"),
     ]);
@@ -237,7 +237,7 @@ describe("OpenAI Responses configuration_update", () => {
       );
 
       expect(payload.reasoning?.effort).toBe(effort);
-      expect(payload.input.some((item) => item.type === "configuration_update")).toBe(false);
+      expect(payload.input.some((item) => item["type"] === "configuration_update")).toBe(false);
       expect(message.providerThinkingLevel).toBeUndefined();
     },
   );

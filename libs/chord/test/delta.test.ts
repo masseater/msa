@@ -373,7 +373,7 @@ describe("path and prototype safety", () => {
     expect(() =>
       apply({}, JSON.parse('[["s",["constructor","prototype","gadget"],true]]')),
     ).toThrow();
-    expect(({} as Record<string, unknown>).gadget).toBeUndefined();
+    expect(({} as Record<string, unknown>)["gadget"]).toBeUndefined();
     const wire = [
       ["#", 0, ["__proto__", "w"]],
       ["s", 0, true],
@@ -393,7 +393,7 @@ describe("path and prototype safety", () => {
       expect(() => apply({}, [["s", ["trap"], 1]])).not.toThrow();
       expect(apply({}, [["s", ["trap"], 1]])).toEqual({ trap: 1 });
     } finally {
-      delete (Object.prototype as Record<string, unknown>).trap;
+      delete (Object.prototype as Record<string, unknown>)["trap"];
     }
   });
 
@@ -401,7 +401,7 @@ describe("path and prototype safety", () => {
     const value = JSON.parse('{"__proto__":{"z":1}}') as JsonValue;
     const out = apply({}, [["s", ["value"], value]]);
     expect(Object.hasOwn((out as { value: object }).value, "__proto__")).toBe(true);
-    expect(({} as Record<string, unknown>).z).toBeUndefined();
+    expect(({} as Record<string, unknown>)["z"]).toBeUndefined();
   });
 
   it("imports own properties without invoking inherited setters", () => {
@@ -422,7 +422,7 @@ describe("path and prototype safety", () => {
     try {
       expect(() => track(root)).not.toThrow();
     } finally {
-      delete (Object.prototype as Record<string, unknown>).trap;
+      delete (Object.prototype as Record<string, unknown>)["trap"];
     }
 
     let value: { values: number[] } | undefined;

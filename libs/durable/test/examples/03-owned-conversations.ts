@@ -65,7 +65,7 @@ const setup = await session.commit(async (tx) => {
   // requestId is a fixed name for the child's first message. Later code sends
   // that message using this requestId, so a retry after a crash cannot
   // deliver it twice.
-  (await tx.doc(AgentRegistry, main.id)).agents.researcher = {
+  (await tx.doc(AgentRegistry, main.id)).agents["researcher"] = {
     conversationId: child.id,
     requestId: `researcher:first-message:${supervisorId}`,
   };

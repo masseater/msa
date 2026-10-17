@@ -1351,7 +1351,7 @@ function buildParams(
   }
 
   if (options?.metadata) {
-    const userId = options.metadata.user_id;
+    const userId = options.metadata["user_id"];
     if (typeof userId === "string") {
       params.metadata = { user_id: userId };
     }

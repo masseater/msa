@@ -22,17 +22,18 @@ export function parseDiscoveredCases(value: unknown): DiscoveredEvalCase[] {
   if (!Array.isArray(value)) throw new TypeError("Discovered eval cases must be an array.");
   const identities = new Set<string>();
   return value.map((item) => {
-    if (!isRecord(item) || typeof item.name !== "string" || typeof item.file !== "string") {
+    if (!isRecord(item) || typeof item["name"] !== "string" || typeof item["file"] !== "string") {
       throw new TypeError("Discovered eval case is invalid.");
     }
-    const [evalSet, caseId, ...extra] = item.name.split(" > ");
+    const [evalSet, caseId, ...extra] = item["name"].split(" > ");
     if (!evalSet?.trim() || !caseId?.trim() || extra.length > 0) {
-      throw new TypeError(`Documentation eval must use "<eval set> > <case>": ${item.name}`);
+      throw new TypeError(`Documentation eval must use "<eval set> > <case>": ${item["name"]}`);
     }
     const identity = JSON.stringify([evalSet, caseId]);
-    if (identities.has(identity)) throw new TypeError(`Duplicate eval case identity: ${item.name}`);
+    if (identities.has(identity))
+      throw new TypeError(`Duplicate eval case identity: ${item["name"]}`);
     identities.add(identity);
-    return { file: item.file, fullName: item.name, evalSet, caseId };
+    return { file: item["file"], fullName: item["name"], evalSet, caseId };
   });
 }
 

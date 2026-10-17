@@ -94,7 +94,9 @@ function resolveBranchWithGitAsync(repoDir: string): Promise<string | null> {
 }
 
 function isWslEnvironment(): boolean {
-  return process.platform === "linux" && !!(process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP);
+  return (
+    process.platform === "linux" && !!(process.env["WSL_DISTRO_NAME"] || process.env["WSL_INTEROP"])
+  );
 }
 
 function isWindowsMountedRepoPath(repoDir: string): boolean {

@@ -10,13 +10,13 @@ import { findEnvKeys, getEnvApiKey } from "../src/env-api-keys.ts";
 import { getSupportedThinkingLevels } from "../src/models.ts";
 import type { Context, Model, Tool } from "../src/types.ts";
 
-const originalFireworksApiKey = process.env.FIREWORKS_API_KEY;
+const originalFireworksApiKey = process.env["FIREWORKS_API_KEY"];
 
 afterEach(() => {
   if (originalFireworksApiKey === undefined) {
-    delete process.env.FIREWORKS_API_KEY;
+    delete process.env["FIREWORKS_API_KEY"];
   } else {
-    process.env.FIREWORKS_API_KEY = originalFireworksApiKey;
+    process.env["FIREWORKS_API_KEY"] = originalFireworksApiKey;
   }
 });
 
@@ -64,7 +64,7 @@ describe("Fireworks models", () => {
     await response.result();
 
     expect(payload).toBeDefined();
-    expect(payload?.prompt_cache_retention).toBeUndefined();
+    expect(payload?.["prompt_cache_retention"]).toBeUndefined();
   });
 
   it("routes Kimi K3 through the OpenAI-compatible API with native effort controls", async () => {
@@ -115,7 +115,7 @@ describe("Fireworks models", () => {
     );
     await response.result();
 
-    expect(payload?.reasoning_effort).toBe("max");
+    expect(payload?.["reasoning_effort"]).toBe("max");
   });
 
   // Regression for #9323: native effort must reach Messages without budget-based fallback.
@@ -144,10 +144,10 @@ describe("Fireworks models", () => {
         },
       ).result();
       expect(payload).toBeDefined();
-      expect(payload?.thinking).toEqual(
+      expect(payload?.["thinking"]).toEqual(
         level === "off" ? { type: "disabled" } : { type: "adaptive", display: "summarized" },
       );
-      expect(payload?.output_config).toEqual(level === "off" ? undefined : { effort: level });
+      expect(payload?.["output_config"]).toEqual(level === "off" ? undefined : { effort: level });
     }
   });
 
@@ -177,16 +177,16 @@ describe("Fireworks models", () => {
         },
       },
     ).result();
-    expect(payload?.thinking).toEqual({
+    expect(payload?.["thinking"]).toEqual({
       type: "enabled",
       budget_tokens: 16384,
       display: "summarized",
     });
-    expect(payload?.output_config).toBeUndefined();
+    expect(payload?.["output_config"]).toBeUndefined();
   });
 
   it("resolves FIREWORKS_API_KEY from the environment", () => {
-    process.env.FIREWORKS_API_KEY = "test-fireworks-key";
+    process.env["FIREWORKS_API_KEY"] = "test-fireworks-key";
 
     expect(findEnvKeys("fireworks")).toEqual(["FIREWORKS_API_KEY"]);
     expect(getEnvApiKey("fireworks")).toBe("test-fireworks-key");
@@ -331,7 +331,7 @@ async function captureAnthropicRequest(
 }
 
 function getTools(body: Record<string, unknown>): Record<string, unknown>[] {
-  const tools = body.tools;
+  const tools = body["tools"];
   if (!Array.isArray(tools)) {
     throw new Error("Expected tools in request body");
   }
@@ -403,7 +403,7 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
 
     const tools = getTools(request.body);
     const lastTool = tools[tools.length - 1];
-    expect(lastTool.cache_control).toBeUndefined();
+    expect(lastTool["cache_control"]).toBeUndefined();
   });
 
   it("omits eager_input_streaming on tools for Fireworks models", async () => {
@@ -412,7 +412,7 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
 
     const tools = getTools(request.body);
     for (const t of tools) {
-      expect(t.eager_input_streaming).toBeUndefined();
+      expect(t["eager_input_streaming"]).toBeUndefined();
     }
   });
 
@@ -422,8 +422,8 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
 
     const tools = getTools(request.body);
     const lastTool = tools[tools.length - 1];
-    expect(lastTool.cache_control).toBeDefined();
-    expect((lastTool.cache_control as { type: string }).type).toBe("ephemeral");
+    expect(lastTool["cache_control"]).toBeDefined();
+    expect((lastTool["cache_control"] as { type: string }).type).toBe("ephemeral");
   });
 
   it("sends eager_input_streaming on tools for native Anthropic models", async () => {
@@ -431,6 +431,6 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
     const request = await captureAnthropicRequest(model, createContext());
 
     const tools = getTools(request.body);
-    expect(tools[0].eager_input_streaming).toBe(true);
+    expect(tools[0]["eager_input_streaming"]).toBe(true);
   });
 });

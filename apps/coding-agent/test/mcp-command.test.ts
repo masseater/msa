@@ -169,7 +169,7 @@ describe("msa mcp", () => {
       agentDir,
     );
     expect(oauth.output).toContain("If it requires sign-in: msa mcp login sentry");
-    expect(readConfig(join(agentDir, "mcp.json")).mcpServers).toMatchObject({
+    expect(readConfig(join(agentDir, "mcp.json"))["mcpServers"]).toMatchObject({
       sentry: {
         url: "https://mcp.sentry.dev/mcp",
         oauth: { clientId: "msa", clientName: "Claude Code" },
@@ -216,7 +216,7 @@ describe("msa mcp", () => {
   it("removes global servers", async () => {
     const { exitCode, agentDir } = await run(["remove", "broken"], servers);
     expect(exitCode).toBe(0);
-    expect(Object.keys(readConfig(join(agentDir, "mcp.json")).mcpServers as object)).toEqual([
+    expect(Object.keys(readConfig(join(agentDir, "mcp.json"))["mcpServers"] as object)).toEqual([
       "fixture",
       "parked",
       "bad",

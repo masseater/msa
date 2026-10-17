@@ -4,13 +4,13 @@ import { getModel, streamSimple } from "../src/compat.ts";
 import { findEnvKeys, getEnvApiKey } from "../src/env-api-keys.ts";
 import { getSupportedThinkingLevels } from "../src/models.ts";
 
-const originalBasetenApiKey = process.env.BASETEN_API_KEY;
+const originalBasetenApiKey = process.env["BASETEN_API_KEY"];
 
 afterEach(() => {
   if (originalBasetenApiKey === undefined) {
-    delete process.env.BASETEN_API_KEY;
+    delete process.env["BASETEN_API_KEY"];
   } else {
-    process.env.BASETEN_API_KEY = originalBasetenApiKey;
+    process.env["BASETEN_API_KEY"] = originalBasetenApiKey;
   }
 });
 
@@ -53,8 +53,8 @@ describe("Baseten models", () => {
       },
     ).result();
 
-    expect(payload?.chat_template_args).toEqual({ enable_thinking: true });
-    expect(payload?.reasoning_effort).toBeUndefined();
+    expect(payload?.["chat_template_args"]).toEqual({ enable_thinking: true });
+    expect(payload?.["reasoning_effort"]).toBeUndefined();
   });
 
   it("sends Baseten chat_template_args with reasoning effort", async () => {
@@ -74,8 +74,8 @@ describe("Baseten models", () => {
       },
     ).result();
 
-    expect(payload?.chat_template_args).toEqual({ enable_thinking: true });
-    expect(payload?.reasoning_effort).toBe("high");
+    expect(payload?.["chat_template_args"]).toEqual({ enable_thinking: true });
+    expect(payload?.["reasoning_effort"]).toBe("high");
   });
 
   it("disables Baseten opt-in reasoning when thinking is off", async () => {
@@ -94,12 +94,12 @@ describe("Baseten models", () => {
       },
     ).result();
 
-    expect(payload?.chat_template_args).toEqual({ enable_thinking: false });
-    expect(payload?.reasoning_effort).toBe("none");
+    expect(payload?.["chat_template_args"]).toEqual({ enable_thinking: false });
+    expect(payload?.["reasoning_effort"]).toBe("none");
   });
 
   it("resolves BASETEN_API_KEY from the environment", () => {
-    process.env.BASETEN_API_KEY = "test-baseten-key";
+    process.env["BASETEN_API_KEY"] = "test-baseten-key";
 
     expect(findEnvKeys("baseten")).toEqual(["BASETEN_API_KEY"]);
     expect(getEnvApiKey("baseten")).toBe("test-baseten-key");

@@ -12,7 +12,7 @@ const DEFAULT_WAD_PATHS = ["./doom1.wad", "./DOOM1.WAD", "~/doom1.wad", "~/.doom
 
 export function findWadFile(customPath?: string): string | null {
   if (customPath) {
-    const resolved = resolve(customPath.replace(/^~/, process.env.HOME || ""));
+    const resolved = resolve(customPath.replace(/^~/, process.env["HOME"] || ""));
     if (existsSync(resolved)) return resolved;
     return null;
   }
@@ -24,7 +24,7 @@ export function findWadFile(customPath?: string): string | null {
 
   // Fall back to default paths
   for (const p of DEFAULT_WAD_PATHS) {
-    const resolved = resolve(p.replace(/^~/, process.env.HOME || ""));
+    const resolved = resolve(p.replace(/^~/, process.env["HOME"] || ""));
     if (existsSync(resolved)) return resolved;
   }
 

@@ -195,7 +195,7 @@ const readerV2 = (adapt = false): Facet => ({
     api.serve(ReadV2, () => ({ fetch: () => "two" }), {
       lifetime: "host",
       ...(adapt
-        ? { accepts: { 1: (current: Record<string, unknown>) => ({ read: current.fetch }) } }
+        ? { accepts: { 1: (current: Record<string, unknown>) => ({ read: current["fetch"] }) } }
         : {}),
     }),
 });

@@ -103,7 +103,7 @@ describe("OpenRouter OAuth", () => {
       code: "authorization-code",
       code_challenge_method: "S256",
     });
-    const verifier = exchangeBody?.code_verifier;
+    const verifier = exchangeBody?.["code_verifier"];
     expect(typeof verifier).toBe("string");
     const digest = await crypto.subtle.digest(
       "SHA-256",

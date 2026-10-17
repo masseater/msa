@@ -99,7 +99,7 @@ export async function resizeImage(
   // Bun compiled executables resolve worker entrypoints by string path, not via
   // new URL(..., import.meta.url). Try the string path first under Bun so the
   // release binary uses the embedded worker instead of falling back in-process.
-  if (typeof process.versions.bun === "string") {
+  if (typeof process.versions["bun"] === "string") {
     try {
       return await resizeImageInWorker(
         "./src/utils/image-resize-worker.ts",

@@ -43,7 +43,7 @@ import type {
 } from "../src/types.ts";
 import { resolveApiKey } from "./oauth.ts";
 
-const radiusKey = process.env.RADIUS_API_KEY ?? (await resolveApiKey("radius"));
+const radiusKey = process.env["RADIUS_API_KEY"] ?? (await resolveApiKey("radius"));
 const anthropicKey = getEnvApiKey("anthropic") ?? (await resolveApiKey("anthropic"));
 
 const tool: Tool = {

@@ -400,7 +400,7 @@ describe("links review: relay ownership", () => {
       {
         accepts: {
           1: (current) => {
-            const view = current.view as {
+            const view = current["view"] as {
               value: { body: string };
               events: (fn: (event: never) => void) => () => void;
             };

@@ -289,10 +289,10 @@ async function post(
 }
 
 function tokenIds(body: unknown): number[] {
-  if (!isRecord(body) || !Array.isArray(body.tokens))
+  if (!isRecord(body) || !Array.isArray(body["tokens"]))
     throw new Error(`${LABEL} returned an unexpected tokenization`);
-  return body.tokens.map((token) => {
-    const id = isRecord(token) ? token.id : token;
+  return body["tokens"].map((token) => {
+    const id = isRecord(token) ? token["id"] : token;
     if (typeof id !== "number") throw new Error(`${LABEL} returned an unexpected tokenization`);
     return id;
   });
@@ -378,12 +378,12 @@ async function renderPrompt(request: RequestContext, content: string): Promise<s
     },
     false,
   );
-  if (!isRecord(body) || typeof body.prompt !== "string")
+  if (!isRecord(body) || typeof body["prompt"] !== "string")
     throw new Error(`${LABEL} did not return a prompt`);
   // Some templates always open a reasoning block for the reply. Closing it at once
   // leaves an empty block, as templates with thinking disabled produce, so the next
   // token is the answer.
-  return body.prompt.endsWith("<think>") ? `${body.prompt}</think>` : body.prompt;
+  return body["prompt"].endsWith("<think>") ? `${body["prompt"]}</think>` : body["prompt"];
 }
 
 /** Log-probabilities of `tokens` at the next position, or `undefined` for tokens outside the top `depth`. */
@@ -408,16 +408,20 @@ async function nextTokenLogprobs(
     true,
   );
   const first =
-    isRecord(body) && Array.isArray(body.completion_probabilities)
-      ? body.completion_probabilities[0]
+    isRecord(body) && Array.isArray(body["completion_probabilities"])
+      ? body["completion_probabilities"][0]
       : undefined;
-  if (!isRecord(first) || !Array.isArray(first.top_logprobs)) {
+  if (!isRecord(first) || !Array.isArray(first["top_logprobs"])) {
     throw new Error(`${LABEL} did not return token probabilities`);
   }
   const byToken = new Map<number, number>();
-  for (const entry of first.top_logprobs) {
-    if (isRecord(entry) && typeof entry.id === "number" && typeof entry.logprob === "number") {
-      byToken.set(entry.id, entry.logprob);
+  for (const entry of first["top_logprobs"]) {
+    if (
+      isRecord(entry) &&
+      typeof entry["id"] === "number" &&
+      typeof entry["logprob"] === "number"
+    ) {
+      byToken.set(entry["id"], entry["logprob"]);
     }
   }
   return tokens.map((token) => byToken.get(token));

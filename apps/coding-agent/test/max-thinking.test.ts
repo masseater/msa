@@ -35,7 +35,7 @@ describe("max thinking level", () => {
       readFileSync(join(currentDir, "../src/modes/interactive/theme/dark.json"), "utf8"),
     ) as { name: string; colors: Record<string, unknown> };
     darkTheme.name = "legacy-theme";
-    delete darkTheme.colors.thinkingMax;
+    delete darkTheme.colors["thinkingMax"];
     const themePath = join(testDir, "legacy-theme.json");
     writeFileSync(themePath, JSON.stringify(darkTheme));
 

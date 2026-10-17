@@ -213,21 +213,21 @@ function resolveSpawnContext(
   ctx: ExtensionContext | undefined,
 ): BashSpawnContext {
   const env = { ...getShellEnv() };
-  delete env.MSA_SESSION_ID;
-  delete env.MSA_SESSION_FILE;
-  delete env.MSA_PROVIDER;
-  delete env.MSA_MODEL;
-  delete env.MSA_REASONING_LEVEL;
+  delete env["MSA_SESSION_ID"];
+  delete env["MSA_SESSION_FILE"];
+  delete env["MSA_PROVIDER"];
+  delete env["MSA_MODEL"];
+  delete env["MSA_REASONING_LEVEL"];
   if (exposeSessionEnvironment && ctx) {
     const model = ctx.model;
-    env.MSA_SESSION_ID = ctx.sessionManager.getSessionId();
+    env["MSA_SESSION_ID"] = ctx.sessionManager.getSessionId();
     const sessionFile = ctx.sessionManager.getSessionFile();
-    if (sessionFile) env.MSA_SESSION_FILE = sessionFile;
+    if (sessionFile) env["MSA_SESSION_FILE"] = sessionFile;
     if (model) {
-      env.MSA_PROVIDER = model.provider;
-      env.MSA_MODEL = model.id;
+      env["MSA_PROVIDER"] = model.provider;
+      env["MSA_MODEL"] = model.id;
     }
-    if (ctx.thinkingLevel) env.MSA_REASONING_LEVEL = ctx.thinkingLevel;
+    if (ctx.thinkingLevel) env["MSA_REASONING_LEVEL"] = ctx.thinkingLevel;
   }
   const baseContext: BashSpawnContext = { command, cwd, env };
   return spawnHook ? spawnHook(baseContext) : baseContext;

@@ -21,7 +21,7 @@ export function useWindowsKeybindings(
 ): boolean {
   return (
     platform === "win32" ||
-    (platform === "linux" && Boolean(env.WSL_DISTRO_NAME || env.WSL_INTEROP))
+    (platform === "linux" && Boolean(env["WSL_DISTRO_NAME"] || env["WSL_INTEROP"]))
   );
 }
 

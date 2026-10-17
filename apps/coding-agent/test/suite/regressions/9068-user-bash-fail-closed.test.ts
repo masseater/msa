@@ -201,7 +201,7 @@ describe("RPC user_bash failure handling (#9068)", () => {
 
       await vi.waitFor(() => {
         const response = parseOutputLines().find(
-          (output) => output.type === "response" && output.id === "bash-request",
+          (output) => output["type"] === "response" && output["id"] === "bash-request",
         );
         expect(response).toMatchObject({
           id: "bash-request",

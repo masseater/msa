@@ -30,8 +30,8 @@ afterEach(() => {
 describe("issue #6596 taskkill spawn failures", () => {
   it("uses System32 taskkill and consumes its asynchronous spawn error", () => {
     const child = new EventEmitter() as ChildProcess;
-    const previousSystemRoot = process.env.SystemRoot;
-    process.env.SystemRoot = "C:\\CustomWindows";
+    const previousSystemRoot = process.env["SystemRoot"];
+    process.env["SystemRoot"] = "C:\\CustomWindows";
     spawnMock.mockReturnValue(child);
 
     try {
@@ -39,8 +39,8 @@ describe("issue #6596 taskkill spawn failures", () => {
         killProcessTree(1234);
       });
     } finally {
-      if (previousSystemRoot === undefined) delete process.env.SystemRoot;
-      else process.env.SystemRoot = previousSystemRoot;
+      if (previousSystemRoot === undefined) delete process.env["SystemRoot"];
+      else process.env["SystemRoot"] = previousSystemRoot;
     }
 
     expect(spawnMock).toHaveBeenCalledWith(

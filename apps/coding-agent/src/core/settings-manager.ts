@@ -454,66 +454,66 @@ export class SettingsManager {
   private static migrateSettings(settings: Record<string, unknown>): Settings {
     // Migrate queueMode -> steeringMode
     if ("queueMode" in settings && !("steeringMode" in settings)) {
-      settings.steeringMode = settings.queueMode;
-      delete settings.queueMode;
+      settings["steeringMode"] = settings["queueMode"];
+      delete settings["queueMode"];
     }
 
     // Migrate legacy websockets boolean -> transport enum
-    if (!("transport" in settings) && typeof settings.websockets === "boolean") {
-      settings.transport = settings.websockets ? "websocket" : "sse";
-      delete settings.websockets;
+    if (!("transport" in settings) && typeof settings["websockets"] === "boolean") {
+      settings["transport"] = settings["websockets"] ? "websocket" : "sse";
+      delete settings["websockets"];
     }
 
     // Migrate old skills object format to new array format
     if (
       "skills" in settings &&
-      typeof settings.skills === "object" &&
-      settings.skills !== null &&
-      !Array.isArray(settings.skills)
+      typeof settings["skills"] === "object" &&
+      settings["skills"] !== null &&
+      !Array.isArray(settings["skills"])
     ) {
-      const skillsSettings = settings.skills as {
+      const skillsSettings = settings["skills"] as {
         enableSkillCommands?: boolean;
         customDirectories?: unknown;
       };
       if (
         skillsSettings.enableSkillCommands !== undefined &&
-        settings.enableSkillCommands === undefined
+        settings["enableSkillCommands"] === undefined
       ) {
-        settings.enableSkillCommands = skillsSettings.enableSkillCommands;
+        settings["enableSkillCommands"] = skillsSettings.enableSkillCommands;
       }
       if (
         Array.isArray(skillsSettings.customDirectories) &&
         skillsSettings.customDirectories.length > 0
       ) {
-        settings.skills = skillsSettings.customDirectories;
+        settings["skills"] = skillsSettings.customDirectories;
       } else {
-        delete settings.skills;
+        delete settings["skills"];
       }
     }
 
     // Migrate retry.maxDelayMs -> retry.provider.maxRetryDelayMs
     if (
       "retry" in settings &&
-      typeof settings.retry === "object" &&
-      settings.retry !== null &&
-      !Array.isArray(settings.retry)
+      typeof settings["retry"] === "object" &&
+      settings["retry"] !== null &&
+      !Array.isArray(settings["retry"])
     ) {
-      const retrySettings = settings.retry as Record<string, unknown>;
+      const retrySettings = settings["retry"] as Record<string, unknown>;
       const providerSettings =
-        typeof retrySettings.provider === "object" && retrySettings.provider !== null
-          ? (retrySettings.provider as Record<string, unknown>)
+        typeof retrySettings["provider"] === "object" && retrySettings["provider"] !== null
+          ? (retrySettings["provider"] as Record<string, unknown>)
           : undefined;
       if (
-        typeof retrySettings.maxDelayMs === "number" &&
-        (providerSettings?.maxRetryDelayMs === undefined ||
-          providerSettings?.maxRetryDelayMs === null)
+        typeof retrySettings["maxDelayMs"] === "number" &&
+        (providerSettings?.["maxRetryDelayMs"] === undefined ||
+          providerSettings?.["maxRetryDelayMs"] === null)
       ) {
-        retrySettings.provider = {
+        retrySettings["provider"] = {
           ...(providerSettings ?? {}),
-          maxRetryDelayMs: retrySettings.maxDelayMs,
+          maxRetryDelayMs: retrySettings["maxDelayMs"],
         };
       }
-      delete retrySettings.maxDelayMs;
+      delete retrySettings["maxDelayMs"];
     }
 
     return settings as Settings;
@@ -1081,7 +1081,7 @@ export class SettingsManager {
     if (typeof configuredEditor === "string" && configuredEditor.trim() !== "") {
       return configuredEditor;
     }
-    const environmentEditor = process.env.VISUAL || process.env.EDITOR;
+    const environmentEditor = process.env["VISUAL"] || process.env["EDITOR"];
     if (environmentEditor) {
       return environmentEditor;
     }
@@ -1309,7 +1309,7 @@ export class SettingsManager {
     if (this.settings.terminal?.clearOnShrink !== undefined) {
       return this.settings.terminal.clearOnShrink;
     }
-    if (process.env.MSA_CLEAR_ON_SHRINK === "1") return true;
+    if (process.env["MSA_CLEAR_ON_SHRINK"] === "1") return true;
     return SETTINGS_DEFAULTS.terminal.clearOnShrink;
   }
 
@@ -1469,7 +1469,7 @@ export class SettingsManager {
   }
 
   getShowHardwareCursor(): boolean {
-    return this.settings.showHardwareCursor ?? process.env.MSA_HARDWARE_CURSOR === "1";
+    return this.settings.showHardwareCursor ?? process.env["MSA_HARDWARE_CURSOR"] === "1";
   }
 
   setShowHardwareCursor(enabled: boolean): void {

@@ -569,7 +569,7 @@ describe("OpenAI Codex OAuth", () => {
         },
       });
 
-      expect(credential.accountId).toBe("acct");
+      expect(credential["accountId"]).toBe("acct");
       expect(exchangeBody?.get("code")).toBe("pasted-code");
       expect(exchangeBody?.get("redirect_uri")).toBe("http://localhost:1455/auth/callback");
     } finally {

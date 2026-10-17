@@ -14,7 +14,7 @@ const connection = new Connection({ command: [daemon] });
 afterAll(() => connection.close());
 
 const windows = process.platform === "win32";
-const gitBash = join(process.env.ProgramFiles ?? "C:\\Program Files", "Git", "bin", "bash.exe");
+const gitBash = join(process.env["ProgramFiles"] ?? "C:\\Program Files", "Git", "bin", "bash.exe");
 
 registerEnvConformance(
   { describe, expect, it },

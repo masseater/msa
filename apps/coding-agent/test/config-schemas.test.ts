@@ -345,7 +345,7 @@ describe("generated configuration schemas", () => {
       { ...builtIn, unexpected: true },
       {
         ...builtIn,
-        colors: { ...(builtIn.colors as Record<string, unknown>), scrollbarThmb: "" },
+        colors: { ...(builtIn["colors"] as Record<string, unknown>), scrollbarThmb: "" },
       },
       { ...builtIn, export: { unexpected: "" } },
     ]) {

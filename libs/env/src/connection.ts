@@ -25,10 +25,10 @@ export class RemoteError extends Error {
   readonly fields: Json;
 
   constructor(fields: Json) {
-    super(typeof fields.message === "string" ? fields.message : "Remote operation failed");
+    super(typeof fields["message"] === "string" ? fields["message"] : "Remote operation failed");
     this.name = "RemoteError";
-    this.code = typeof fields.code === "string" ? fields.code : "unknown";
-    if (typeof fields.path === "string") this.path = fields.path;
+    this.code = typeof fields["code"] === "string" ? fields["code"] : "unknown";
+    if (typeof fields["path"] === "string") this.path = fields["path"];
     this.fields = fields;
   }
 }
@@ -132,7 +132,7 @@ function lost(message: string): RemoteError {
 
 /** Whether an error means the connection was lost, not that the daemon refused the request. */
 export function isConnectionLost(error: unknown): boolean {
-  return error instanceof RemoteError && error.fields.lost === true;
+  return error instanceof RemoteError && error.fields["lost"] === true;
 }
 
 function closed(): RemoteError {
@@ -324,7 +324,7 @@ export class Connection {
         this.#send(session, "hello", { protocol: 1 }, {}),
         failed,
       ]);
-      if (json.protocol !== 1) throw lost(`Unsupported protocol ${json.protocol}`);
+      if (json["protocol"] !== 1) throw lost(`Unsupported protocol ${json["protocol"]}`);
       return { info: json as unknown as RemoteInfo, session };
     } catch (error) {
       this.#teardown(session, error instanceof Error ? error : lost(String(error)));

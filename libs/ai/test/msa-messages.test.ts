@@ -233,7 +233,7 @@ describe("msa-messages", () => {
     expect(message.errorMessage).toContain("Token expired");
     expect(message.errorMessage).toContain("unauthorized");
     expect(message.diagnostics?.[0]?.type).toBe("pi_messages_response_failure");
-    expect(message.diagnostics?.[0]?.details?.status).toBe(401);
+    expect(message.diagnostics?.[0]?.details?.["status"]).toBe(401);
   });
 
   it("propagates server-sent error events", async () => {

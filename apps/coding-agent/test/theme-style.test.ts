@@ -59,7 +59,7 @@ describe("theme styles", () => {
 
   it("loads OKLCH theme values", () => {
     const theme = loadTheme("dark", (json) => {
-      json.colors.accent = "oklch(62% 0.1 200)";
+      json.colors["accent"] = "oklch(62% 0.1 200)";
     });
     expect(theme.colors.accent).toEqual({ kind: "oklch", l: 0.62, c: 0.1, h: 200 });
   });
@@ -67,8 +67,8 @@ describe("theme styles", () => {
   it("loads OKHSL theme values, including through variables", () => {
     const theme = loadTheme("dark", (json) => {
       json.vars = { ...json.vars, brand: "okhsl(250 60% 55%)" };
-      json.colors.accent = "brand";
-      json.colors.error = "okhsl(20 90% 60%)";
+      json.colors["accent"] = "brand";
+      json.colors["error"] = "okhsl(20 90% 60%)";
     });
     expect(colorToHex(theme.colors.accent)).toBe(colorToHex(okhslColor(250, 0.6, 0.55)));
     expect(colorToHex(theme.colors.error)).toBe(colorToHex(okhslColor(20, 0.9, 0.6)));
@@ -99,8 +99,8 @@ describe("theme styles", () => {
 
   it("renders empty tokens as terminal defaults and reports concrete colors for them", () => {
     const theme = loadTheme("dark", (json) => {
-      json.colors.text = "";
-      json.colors.userMessageBg = "";
+      json.colors["text"] = "";
+      json.colors["userMessageBg"] = "";
     });
     expect(theme.fg("text", "x")).toBe("\x1b[39mx\x1b[39m");
     expect(theme.bg("userMessageBg", "x")).toBe("\x1b[49mx\x1b[49m");

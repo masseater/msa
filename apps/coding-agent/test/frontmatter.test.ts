@@ -7,8 +7,8 @@ describe("parseFrontmatter", () => {
     const input =
       "---\nname: \"skill-name\"\ndescription: 'A desc'\nfoo-bar: value\n---\n\nBody text";
     const { frontmatter, body } = parseFrontmatter<Record<string, string>>(input);
-    expect(frontmatter.name).toBe("skill-name");
-    expect(frontmatter.description).toBe("A desc");
+    expect(frontmatter["name"]).toBe("skill-name");
+    expect(frontmatter["description"]).toBe("A desc");
     expect(frontmatter["foo-bar"]).toBe("value");
     expect(body).toBe("Body text");
   });
@@ -27,7 +27,7 @@ describe("parseFrontmatter", () => {
   it("parses | multiline yaml syntax", () => {
     const input = "---\ndescription: |\n  Line one\n  Line two\n---\n\nBody";
     const { frontmatter, body } = parseFrontmatter<Record<string, string>>(input);
-    expect(frontmatter.description).toBe("Line one\nLine two\n");
+    expect(frontmatter["description"]).toBe("Line one\nLine two\n");
     expect(body).toBe("Body");
   });
 

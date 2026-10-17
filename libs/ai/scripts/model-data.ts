@@ -182,63 +182,65 @@ function validateModelValue(
     errors.push(`${label} must be an object`);
     return;
   }
-  if (value.id !== modelId)
-    errors.push(`${label} has id ${JSON.stringify(value.id)}, expected ${JSON.stringify(modelId)}`);
-  if (value.provider !== providerId) {
+  if (value["id"] !== modelId)
     errors.push(
-      `${label} has provider ${JSON.stringify(value.provider)}, expected ${JSON.stringify(providerId)}`,
+      `${label} has id ${JSON.stringify(value["id"])}, expected ${JSON.stringify(modelId)}`,
+    );
+  if (value["provider"] !== providerId) {
+    errors.push(
+      `${label} has provider ${JSON.stringify(value["provider"])}, expected ${JSON.stringify(providerId)}`,
     );
   }
-  if (value.api !== expectedApi) {
+  if (value["api"] !== expectedApi) {
     errors.push(
-      `${label} has api ${JSON.stringify(value.api)}, expected ${JSON.stringify(expectedApi)}`,
+      `${label} has api ${JSON.stringify(value["api"])}, expected ${JSON.stringify(expectedApi)}`,
     );
   }
-  if (typeof value.name !== "string" || value.name.length === 0)
+  if (typeof value["name"] !== "string" || value["name"].length === 0)
     errors.push(`${label} has no model name`);
-  if (typeof value.baseUrl !== "string") errors.push(`${label} has no baseUrl string`);
-  if (!isModalityList(value.input)) errors.push(`${label} has invalid input modalities`);
-  if (value.type === "image") {
-    if (!isModalityList(value.output) || !value.output.includes("image")) {
+  if (typeof value["baseUrl"] !== "string") errors.push(`${label} has no baseUrl string`);
+  if (!isModalityList(value["input"])) errors.push(`${label} has invalid input modalities`);
+  if (value["type"] === "image") {
+    if (!isModalityList(value["output"]) || !value["output"].includes("image")) {
       errors.push(`${label} has invalid output modalities`);
     }
-  } else if (value.output !== undefined) {
+  } else if (value["output"] !== undefined) {
     errors.push(`${label} has unsupported output modalities`);
   }
-  if (value.type === "chat") {
-    if (typeof value.reasoning !== "boolean") errors.push(`${label} has no reasoning boolean`);
+  if (value["type"] === "chat") {
+    if (typeof value["reasoning"] !== "boolean") errors.push(`${label} has no reasoning boolean`);
     if (
-      typeof value.contextWindow !== "number" ||
-      !Number.isFinite(value.contextWindow) ||
-      value.contextWindow <= 0
+      typeof value["contextWindow"] !== "number" ||
+      !Number.isFinite(value["contextWindow"]) ||
+      value["contextWindow"] <= 0
     ) {
       errors.push(`${label} has invalid contextWindow`);
     }
     if (
-      typeof value.maxTokens !== "number" ||
-      !Number.isFinite(value.maxTokens) ||
-      value.maxTokens <= 0
+      typeof value["maxTokens"] !== "number" ||
+      !Number.isFinite(value["maxTokens"]) ||
+      value["maxTokens"] <= 0
     ) {
       errors.push(`${label} has invalid maxTokens`);
     }
-  } else if (value.type === "classifier") {
+  } else if (value["type"] === "classifier") {
     if (
-      typeof value.contextWindow !== "number" ||
-      !Number.isFinite(value.contextWindow) ||
-      value.contextWindow <= 0
+      typeof value["contextWindow"] !== "number" ||
+      !Number.isFinite(value["contextWindow"]) ||
+      value["contextWindow"] <= 0
     ) {
       errors.push(`${label} has invalid contextWindow`);
     }
-  } else if (value.type !== "image") {
+  } else if (value["type"] !== "image") {
     errors.push(
-      `${label} has type ${JSON.stringify(value.type)}, expected "chat", "image", or "classifier"`,
+      `${label} has type ${JSON.stringify(value["type"])}, expected "chat", "image", or "classifier"`,
     );
   }
-  if (!isRecord(value.cost)) {
+  if (!isRecord(value["cost"])) {
     errors.push(`${label} has invalid cost metadata`);
   } else {
     for (const field of ["input", "output", "cacheRead", "cacheWrite"] as const) {
-      const cost = value.cost[field];
+      const cost = value["cost"][field];
       if (typeof cost !== "number" || !Number.isFinite(cost)) {
         errors.push(`${label} has invalid cost.${field}`);
       }
@@ -275,19 +277,22 @@ export function validateModelDataDirectory(structure: ModelDataStructure, dataDi
 
   const manifestPath = join(dataDir, MODEL_DATA_MANIFEST_FILE);
   const manifest = readJsonObject(manifestPath, "model data manifest", errors);
-  if (manifest?.schemaVersion !== MODEL_DATA_SCHEMA_VERSION) {
+  if (manifest?.["schemaVersion"] !== MODEL_DATA_SCHEMA_VERSION) {
     errors.push(
-      `model data schema is ${JSON.stringify(manifest?.schemaVersion)}, expected ${MODEL_DATA_SCHEMA_VERSION}`,
+      `model data schema is ${JSON.stringify(manifest?.["schemaVersion"])}, expected ${MODEL_DATA_SCHEMA_VERSION}`,
     );
   }
-  if (typeof manifest?.generatedAt !== "string" || Number.isNaN(Date.parse(manifest.generatedAt))) {
+  if (
+    typeof manifest?.["generatedAt"] !== "string" ||
+    Number.isNaN(Date.parse(manifest["generatedAt"]))
+  ) {
     errors.push("model data manifest has an invalid generation timestamp");
   }
   const expectedStructureHash = modelDataStructureHash(structure);
-  if (manifest?.structureHash !== expectedStructureHash) {
+  if (manifest?.["structureHash"] !== expectedStructureHash) {
     errors.push("model data generation stamp does not match the generated catalog");
   }
-  const manifestFiles = isRecord(manifest?.files) ? manifest.files : undefined;
+  const manifestFiles = isRecord(manifest?.["files"]) ? manifest["files"] : undefined;
   if (!manifestFiles) errors.push("model data manifest has no file hashes");
   else {
     const manifestFileNames = Object.keys(manifestFiles).sort();
@@ -324,7 +329,7 @@ export function validateModelDataDirectory(structure: ModelDataStructure, dataDi
         const separator = modelKey.indexOf(":");
         const modelId = separator >= 0 ? modelKey.slice(separator + 1) : modelKey;
         validateModelValue(model, providerId, modelId, api, errors);
-        if (isRecord(model) && modelKey !== `${String(model.type)}:${String(model.id)}`) {
+        if (isRecord(model) && modelKey !== `${String(model["type"])}:${String(model["id"])}`) {
           errors.push(`${providerId}/${modelKey} has mismatched type/id identity`);
         }
       }

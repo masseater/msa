@@ -79,7 +79,7 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
   if (process.platform === "win32") {
     // 2. Try Git Bash in known locations
     const paths: string[] = [];
-    const programFiles = process.env.ProgramFiles;
+    const programFiles = process.env["ProgramFiles"];
     if (programFiles) {
       paths.push(`${programFiles}\\Git\\bin\\bash.exe`);
     }
@@ -202,7 +202,7 @@ export function killProcessTree(pid: number): void {
     // Use the trusted System32 executable so cleanup does not depend on PATH.
     try {
       const child = spawn(
-        join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"),
+        join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe"),
         ["/F", "/T", "/PID", String(pid)],
         {
           stdio: "ignore",

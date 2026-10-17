@@ -322,17 +322,17 @@ class RemoteDirReader implements DirReader {
           path,
         );
         if (loopAbort) return loopAbort;
-        for (const entry of json.entries as RemoteDirEntry[]) {
+        for (const entry of json["entries"] as RemoteDirEntry[]) {
           const entryPath = paths.resolve(path, entry.name);
           if (entry.error !== undefined) {
             // Removed between enumeration and lstat: not part of the listing any more.
-            if (entry.error.code === "ENOENT") continue;
+            if (entry.error["code"] === "ENOENT") continue;
             return err(toFileError(new RemoteError(entry.error), entryPath));
           }
           const info = toInfo(entryPath, entry.info!, paths);
           if (info.ok) entries.push(info.value);
         }
-        this.#done = json.done === true;
+        this.#done = json["done"] === true;
       }
       return ok({ entries, done: this.#done });
     } catch (error) {
@@ -487,7 +487,7 @@ export class RemoteExecutionEnv implements ExecutionEnv {
   async #open(resolved: string, json: Json): Promise<{ handle: Handle; json: Json }> {
     const reply = await this.connection.request("open", { path: resolved, ...json });
     return {
-      handle: new Handle(this, reply.json.handle as number, reply.session, resolved),
+      handle: new Handle(this, reply.json["handle"] as number, reply.session, resolved),
       json: reply.json,
     };
   }
@@ -520,9 +520,9 @@ export class RemoteExecutionEnv implements ExecutionEnv {
       const aborted = () => signal?.aborted === true;
       const abort = () => new FileError("aborted", "The operation was aborted", resolved);
       try {
-        if (json.statError !== undefined) throw new RemoteError(json.statError as Json);
+        if (json["statError"] !== undefined) throw new RemoteError(json["statError"] as Json);
         if (aborted()) throw abort();
-        const stat = json.stat as RemoteFileInfo;
+        const stat = json["stat"] as RemoteFileInfo;
         const size = stat.kind === "file" ? stat.size : 0;
         if (size > READ_FILE_MAX) {
           throw new FileError("unknown", `File size (${size}) is greater than 2 GiB`, resolved);
@@ -671,7 +671,7 @@ export class RemoteExecutionEnv implements ExecutionEnv {
           { payload: first },
         );
         if (!keep) return;
-        const handle = new Handle(this, reply.json.handle as number, reply.session, resolved);
+        const handle = new Handle(this, reply.json["handle"] as number, reply.session, resolved);
         const inFlight: Promise<unknown>[] = [];
         try {
           for (let offset = WRITE_CHUNK; offset < bytes.length; offset += WRITE_CHUNK) {
@@ -786,8 +786,8 @@ export class RemoteExecutionEnv implements ExecutionEnv {
       try {
         for (let done = false; !done;) {
           const { json } = await handle.request("readdir", { max: 1000 });
-          entries.push(...(json.entries as RemoteDirEntry[]));
-          done = json.done === true;
+          entries.push(...(json["entries"] as RemoteDirEntry[]));
+          done = json["done"] === true;
         }
       } finally {
         await handle.close();
@@ -829,7 +829,7 @@ export class RemoteExecutionEnv implements ExecutionEnv {
 
   async #openDir(resolved: string): Promise<{ handle: Handle }> {
     const reply = await this.connection.request("opendir", { path: resolved });
-    return { handle: new Handle(this, reply.json.handle as number, reply.session, resolved) };
+    return { handle: new Handle(this, reply.json["handle"] as number, reply.session, resolved) };
   }
 
   async openDirReader(path: string, context: Context): Promise<Result<DirReader, FileError>> {
@@ -850,7 +850,7 @@ export class RemoteExecutionEnv implements ExecutionEnv {
   canonicalPath(path: string, context: Context): Promise<Result<string, FileError>> {
     return this.#fileOp(path, context, async (resolved) => {
       const { json } = await this.connection.request("realpath", { path: resolved });
-      return json.path as string;
+      return json["path"] as string;
     });
   }
 
@@ -900,7 +900,7 @@ export class RemoteExecutionEnv implements ExecutionEnv {
       const { json } = await this.connection.request("mkdtemp", {
         path: paths.join(tmpdir, prefix ?? "tmp-"),
       });
-      return ok(json.path as string);
+      return ok(json["path"] as string);
     } catch (error) {
       return err(toFileError(error));
     }
@@ -1026,15 +1026,15 @@ export class RemoteExecutionEnv implements ExecutionEnv {
             this.#running.set(requestId, session);
           },
           onEvent: (event, payload) => {
-            if (settled || callbackError !== undefined || event.kind !== "output") return;
+            if (settled || callbackError !== undefined || event["kind"] !== "output") return;
             const text = Buffer.from(payload.buffer, payload.byteOffset, payload.length).toString(
               "utf8",
             );
             if (text === "" || options?.onOutput === undefined) return;
             const info: ShellOutputInfo = {
-              stream: event.stream === "stderr" ? "stderr" : "stdout",
+              stream: event["stream"] === "stderr" ? "stderr" : "stdout",
             };
-            if (event.skipped !== undefined) info.skipped = event.skipped as ShellOutputSkip;
+            if (event["skipped"] !== undefined) info.skipped = event["skipped"] as ShellOutputSkip;
             try {
               options.onOutput(text, context, info);
             } catch (error) {
@@ -1047,8 +1047,8 @@ export class RemoteExecutionEnv implements ExecutionEnv {
       );
       if (callbackError) return err(callbackError);
       return ok({
-        exitCode: json.exitCode as number,
-        ...(typeof json.spillPath === "string" ? { spillPath: json.spillPath } : {}),
+        exitCode: json["exitCode"] as number,
+        ...(typeof json["spillPath"] === "string" ? { spillPath: json["spillPath"] } : {}),
       });
     } catch (error) {
       if (callbackError) return err(callbackError);
@@ -1065,7 +1065,8 @@ export class RemoteExecutionEnv implements ExecutionEnv {
             : error.code === "shell_unavailable" || error.code === "spawn_error"
               ? new ExecutionError(error.code, error.message)
               : new ExecutionError("unknown", error.message);
-      if (typeof error.fields.spillPath === "string") failure.spillPath = error.fields.spillPath;
+      if (typeof error.fields["spillPath"] === "string")
+        failure.spillPath = error.fields["spillPath"];
       return err(failure);
     } finally {
       settled = true;

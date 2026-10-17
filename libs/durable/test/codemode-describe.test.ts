@@ -102,12 +102,12 @@ describe("code mode description and section", () => {
     await (await root.submit({ type: "input", content: "go" }, context)).wait(context);
     const system = (await allEntries(root)).find((entry) => entry.kind === "msa.system")!;
     const sections = (system.model![0] as { sections?: Record<string, string> }).sections!;
-    expect(sections.codemode).toContain("### `read`");
-    expect(sections.codemode).toContain("### `mcp__github__list_issues`");
+    expect(sections["codemode"]).toContain("### `read`");
+    expect(sections["codemode"]).toContain("### `mcp__github__list_issues`");
     // Deferred tools are found with searchTools(), not listed.
-    expect(sections.codemode).not.toContain("mcp__github__get_issue");
+    expect(sections["codemode"]).not.toContain("mcp__github__get_issue");
     // The code mode tool itself is not callable from scripts.
-    expect(sections.codemode).not.toContain("### `codemode`");
+    expect(sections["codemode"]).not.toContain("### `codemode`");
     // The tool declaration carries the script grammar; msa-ai applies it only for models that support it.
     const tools = (
       system.model![0] as { toolsAdded?: { name: string; constrainedSampling?: unknown }[] }

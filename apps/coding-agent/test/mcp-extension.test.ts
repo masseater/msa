@@ -648,8 +648,8 @@ describe("MCP connections", () => {
     "expands ~ in the command, arguments, and cwd of stdio servers",
     async () => {
       const home = mkdtempSync(join(tmpdir(), "msa-mcp-home-"));
-      const previousHome = process.env.HOME;
-      process.env.HOME = home;
+      const previousHome = process.env["HOME"];
+      process.env["HOME"] = home;
       mkdirSync(join(home, "work"));
       // Answers every tool call with its working directory.
       writeFileSync(
@@ -684,7 +684,7 @@ for await (const line of createInterface({ input: process.stdin })) {
         );
       } finally {
         await connection.close();
-        process.env.HOME = previousHome;
+        process.env["HOME"] = previousHome;
         rmSync(home, { recursive: true, force: true });
       }
     },

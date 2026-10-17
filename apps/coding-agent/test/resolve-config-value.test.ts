@@ -30,8 +30,8 @@ describe("resolveConfigValue", () => {
   });
 
   test("resolves literals, environment templates, and escapes", () => {
-    process.env.TEST_CONFIG_LEFT = "left";
-    process.env.TEST_CONFIG_RIGHT = "right";
+    process.env["TEST_CONFIG_LEFT"] = "left";
+    process.env["TEST_CONFIG_RIGHT"] = "right";
     try {
       expect(resolveConfigValue("literal-key")).toBe("literal-key");
       expect(resolveConfigValue("$TEST_CONFIG_LEFT")).toBe("left");
@@ -39,19 +39,19 @@ describe("resolveConfigValue", () => {
       expect(resolveConfigValue("$$TEST_CONFIG_LEFT")).toBe("$TEST_CONFIG_LEFT");
       expect(resolveConfigValue("$!literal-$TEST_CONFIG_RIGHT")).toBe("!literal-right");
     } finally {
-      delete process.env.TEST_CONFIG_LEFT;
-      delete process.env.TEST_CONFIG_RIGHT;
+      delete process.env["TEST_CONFIG_LEFT"];
+      delete process.env["TEST_CONFIG_RIGHT"];
     }
   });
 
   test("uses credential-scoped environment before process.env", () => {
-    process.env.TEST_CONFIG_SCOPED = "process";
+    process.env["TEST_CONFIG_SCOPED"] = "process";
     try {
       expect(resolveConfigValue("$TEST_CONFIG_SCOPED", { TEST_CONFIG_SCOPED: "credential" })).toBe(
         "credential",
       );
     } finally {
-      delete process.env.TEST_CONFIG_SCOPED;
+      delete process.env["TEST_CONFIG_SCOPED"];
     }
   });
 
@@ -89,13 +89,13 @@ describe("resolveConfigValue", () => {
   });
 
   test("does not cache environment values", () => {
-    process.env.TEST_CONFIG_DYNAMIC = "first";
+    process.env["TEST_CONFIG_DYNAMIC"] = "first";
     try {
       expect(resolveConfigValue("$TEST_CONFIG_DYNAMIC")).toBe("first");
-      process.env.TEST_CONFIG_DYNAMIC = "second";
+      process.env["TEST_CONFIG_DYNAMIC"] = "second";
       expect(resolveConfigValue("$TEST_CONFIG_DYNAMIC")).toBe("second");
     } finally {
-      delete process.env.TEST_CONFIG_DYNAMIC;
+      delete process.env["TEST_CONFIG_DYNAMIC"];
     }
   });
 

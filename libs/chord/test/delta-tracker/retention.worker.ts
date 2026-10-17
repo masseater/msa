@@ -285,7 +285,7 @@ if (scenario === "settled-lifecycle") {
   global.gc();
   const retainedMiB = (process.memoryUsage().heapUsed - readyHeap) / (1024 * 1024);
   assert.ok(retainedMiB < 8, `same-job folded operations retained ${retainedMiB.toFixed(2)} MiB`);
-  assert.equal(tracker.value.field0, 100);
+  assert.equal(tracker.value["field0"], 100);
 } else if (scenario === "lifecycle-churn") {
   const tracker = track({ value: 0 });
   for (let index = 0; index < 100_000; index++) {

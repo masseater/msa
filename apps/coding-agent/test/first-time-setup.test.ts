@@ -9,7 +9,7 @@ import { ENV_AGENT_DIR } from "../src/config.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 
 describe("shouldRunFirstTimeSetup", () => {
-  const originalMsaExperimental = process.env.MSA_EXPERIMENTAL;
+  const originalMsaExperimental = process.env["MSA_EXPERIMENTAL"];
   const originalAgentDir = process.env[ENV_AGENT_DIR];
   let tempDir: string;
   let settingsPath: string;
@@ -17,16 +17,16 @@ describe("shouldRunFirstTimeSetup", () => {
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "msa-first-time-setup-"));
     settingsPath = join(tempDir, "settings.json");
-    process.env.MSA_EXPERIMENTAL = "1";
+    process.env["MSA_EXPERIMENTAL"] = "1";
     delete process.env[ENV_AGENT_DIR];
   });
 
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
     if (originalMsaExperimental === undefined) {
-      delete process.env.MSA_EXPERIMENTAL;
+      delete process.env["MSA_EXPERIMENTAL"];
     } else {
-      process.env.MSA_EXPERIMENTAL = originalMsaExperimental;
+      process.env["MSA_EXPERIMENTAL"] = originalMsaExperimental;
     }
     if (originalAgentDir === undefined) {
       delete process.env[ENV_AGENT_DIR];
@@ -40,7 +40,7 @@ describe("shouldRunFirstTimeSetup", () => {
   });
 
   it("returns false when experimental features are disabled", () => {
-    delete process.env.MSA_EXPERIMENTAL;
+    delete process.env["MSA_EXPERIMENTAL"];
 
     expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
   });

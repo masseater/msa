@@ -312,8 +312,8 @@ describe("Pico SqliteStorage", () => {
     const expected = { nested: { value: 4 }, rows: [{ id: 2 }, { id: 1 }] };
     const first = (await storage.document(id, "current", context))!;
     expect(first.value).toEqual(expected);
-    (first.value.nested as { value: number }).value = 99;
-    (first.value.rows as Array<{ id: number }>)[0]!.id = 99;
+    (first.value["nested"] as { value: number }).value = 99;
+    (first.value["rows"] as Array<{ id: number }>)[0]!.id = 99;
     expect((await storage.document(id, "current", context))?.value).toEqual(expected);
 
     const database = new DatabaseSync(path);

@@ -179,47 +179,48 @@ function isStringRecord(value: unknown): value is Record<string, string> {
 function validateOAuth(value: unknown): string | undefined {
   if (value === undefined) return undefined;
   if (!isRecord(value)) return "oauth must be an object";
-  if (value.clientId !== undefined && typeof value.clientId !== "string")
+  if (value["clientId"] !== undefined && typeof value["clientId"] !== "string")
     return "oauth.clientId must be a string";
-  if (value.clientSecret !== undefined && typeof value.clientSecret !== "string") {
+  if (value["clientSecret"] !== undefined && typeof value["clientSecret"] !== "string") {
     return "oauth.clientSecret must be a string";
   }
-  const port = value.callbackPort;
+  const port = value["callbackPort"];
   if (
     port !== undefined &&
     (typeof port !== "number" || !Number.isInteger(port) || port < 1 || port > 65535)
   ) {
     return "oauth.callbackPort must be a port number";
   }
-  if (value.callbackUrl !== undefined) {
-    if (typeof value.callbackUrl !== "string" || !isLoopbackRedirectUri(value.callbackUrl)) {
+  if (value["callbackUrl"] !== undefined) {
+    if (typeof value["callbackUrl"] !== "string" || !isLoopbackRedirectUri(value["callbackUrl"])) {
       return "oauth.callbackUrl must be an http URI on localhost, 127.0.0.1, or [::1] without query or fragment";
     }
-    const urlPort = new URL(value.callbackUrl).port;
+    const urlPort = new URL(value["callbackUrl"]).port;
     if (urlPort && port !== undefined && Number(urlPort) !== port) {
       return "oauth.callbackUrl and oauth.callbackPort name different ports";
     }
   }
-  if (value.scope !== undefined && typeof value.scope !== "string")
+  if (value["scope"] !== undefined && typeof value["scope"] !== "string")
     return "oauth.scope must be a string";
   if (
-    value.clientName !== undefined &&
-    (typeof value.clientName !== "string" || !value.clientName.trim())
+    value["clientName"] !== undefined &&
+    (typeof value["clientName"] !== "string" || !value["clientName"].trim())
   ) {
     return "oauth.clientName must be a non-empty string";
   }
-  if (value.clientRegistration !== undefined && value.clientRegistration !== "dcr") {
-    if (value.clientRegistration !== "cimd")
+  if (value["clientRegistration"] !== undefined && value["clientRegistration"] !== "dcr") {
+    if (value["clientRegistration"] !== "cimd")
       return 'oauth.clientRegistration must be "dcr" or "cimd"';
-    if (value.clientId !== undefined || value.clientName !== undefined) {
+    if (value["clientId"] !== undefined || value["clientName"] !== undefined) {
       return 'oauth.clientRegistration "cimd" cannot be combined with oauth.clientId or oauth.clientName';
     }
-    const callback = typeof value.callbackUrl === "string" ? new URL(value.callbackUrl) : undefined;
+    const callback =
+      typeof value["callbackUrl"] === "string" ? new URL(value["callbackUrl"]) : undefined;
     if (callback && (callback.hostname === "[::1]" || callback.pathname !== "/callback")) {
       return 'oauth.clientRegistration "cimd" requires oauth.callbackUrl on localhost or 127.0.0.1 with path /callback';
     }
   }
-  const metadataUrl = value.authServerMetadataUrl;
+  const metadataUrl = value["authServerMetadataUrl"];
   if (metadataUrl !== undefined) {
     const url =
       typeof metadataUrl === "string" && URL.canParse(metadataUrl)
@@ -251,9 +252,9 @@ function resolveExposureAlias(value: unknown): unknown {
 function resolveExposureAliases(value: Record<string, unknown>): Record<string, unknown> {
   const { exposure, toolExposure } = value;
   const resolved: Record<string, unknown> = { ...value };
-  if (exposure !== undefined) resolved.exposure = resolveExposureAlias(exposure);
+  if (exposure !== undefined) resolved["exposure"] = resolveExposureAlias(exposure);
   if (isRecord(toolExposure)) {
-    resolved.toolExposure = Object.fromEntries(
+    resolved["toolExposure"] = Object.fromEntries(
       Object.entries(toolExposure).map(([tool, entry]) => [tool, resolveExposureAlias(entry)]),
     );
   }
@@ -305,42 +306,42 @@ export function validateMcpServerConfig(name: string, raw: unknown): McpServerCo
     return `server "${name}": legacy SSE transport is not supported; use the streamable HTTP URL`;
 
   if (
-    typeof value.url === "string" &&
+    typeof value["url"] === "string" &&
     (type === undefined || type === "http" || type === "streamable-http")
   ) {
-    if (!URL.canParse(value.url) || !/^https?:$/.test(new URL(value.url).protocol)) {
+    if (!URL.canParse(value["url"]) || !/^https?:$/.test(new URL(value["url"]).protocol)) {
       return `server "${name}": url must be an http or https URL`;
     }
-    if (value.headers !== undefined && !isStringRecord(value.headers)) {
+    if (value["headers"] !== undefined && !isStringRecord(value["headers"])) {
       return `server "${name}": headers must map names to strings`;
     }
-    const oauthError = validateOAuth(value.oauth);
+    const oauthError = validateOAuth(value["oauth"]);
     if (oauthError) return `server "${name}": ${oauthError}`;
-    if (value.auth !== undefined) {
+    if (value["auth"] !== undefined) {
       if (
-        !isRecord(value.auth) ||
-        typeof value.auth.provider !== "string" ||
-        !value.auth.provider
+        !isRecord(value["auth"]) ||
+        typeof value["auth"]["provider"] !== "string" ||
+        !value["auth"]["provider"]
       ) {
         return `server "${name}": auth.provider must be a provider name`;
       }
-      const url = new URL(value.url);
+      const url = new URL(value["url"]);
       if (url.protocol !== "https:" && !LOOPBACK_HOSTS.includes(url.hostname)) {
         return `server "${name}": auth requires an https URL, or http on localhost, 127.0.0.1, or [::1]`;
       }
     }
     return value as unknown as McpHttpServerConfig;
   }
-  if (typeof value.command === "string" && (type === undefined || type === "stdio")) {
+  if (typeof value["command"] === "string" && (type === undefined || type === "stdio")) {
     if (
-      value.args !== undefined &&
-      !(Array.isArray(value.args) && value.args.every((arg) => typeof arg === "string"))
+      value["args"] !== undefined &&
+      !(Array.isArray(value["args"]) && value["args"].every((arg) => typeof arg === "string"))
     ) {
       return `server "${name}": args must be an array of strings`;
     }
-    if (value.env !== undefined && !isStringRecord(value.env))
+    if (value["env"] !== undefined && !isStringRecord(value["env"]))
       return `server "${name}": env must map names to strings`;
-    if (value.cwd !== undefined && typeof value.cwd !== "string")
+    if (value["cwd"] !== undefined && typeof value["cwd"] !== "string")
       return `server "${name}": cwd must be a string`;
     return value as unknown as McpStdioServerConfig;
   }

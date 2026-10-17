@@ -43,8 +43,8 @@ afterEach(() => {
 describe("node HTTP proxy resolution", () => {
   it("respects NO_PROXY exclusions", () => {
     resetProxyEnv();
-    process.env.HTTPS_PROXY = "http://proxy.example:8080";
-    process.env.NO_PROXY = "bedrock-runtime.us-east-1.amazonaws.com";
+    process.env["HTTPS_PROXY"] = "http://proxy.example:8080";
+    process.env["NO_PROXY"] = "bedrock-runtime.us-east-1.amazonaws.com";
 
     expect(
       resolveHttpProxyUrlForTarget("https://bedrock-runtime.us-east-1.amazonaws.com"),
@@ -53,7 +53,7 @@ describe("node HTTP proxy resolution", () => {
 
   it("resolves HTTP and HTTPS proxy URLs", () => {
     resetProxyEnv();
-    process.env.HTTPS_PROXY = "http://proxy.example:8080";
+    process.env["HTTPS_PROXY"] = "http://proxy.example:8080";
 
     expect(
       resolveHttpProxyUrlForTarget("https://bedrock-runtime.us-east-1.amazonaws.com")?.toString(),
@@ -62,7 +62,7 @@ describe("node HTTP proxy resolution", () => {
 
   it("prefers scoped proxy env aliases before process env aliases", () => {
     resetProxyEnv();
-    process.env.https_proxy = "http://process-proxy.example:8080";
+    process.env["https_proxy"] = "http://process-proxy.example:8080";
 
     expect(
       resolveHttpProxyUrlForTarget("https://bedrock-runtime.us-east-1.amazonaws.com", {
@@ -73,7 +73,7 @@ describe("node HTTP proxy resolution", () => {
 
   it("rejects SOCKS and PAC proxy URLs explicitly", () => {
     resetProxyEnv();
-    process.env.HTTPS_PROXY = "socks5://proxy.example:1080";
+    process.env["HTTPS_PROXY"] = "socks5://proxy.example:1080";
 
     expect(() =>
       resolveHttpProxyUrlForTarget("https://bedrock-runtime.us-east-1.amazonaws.com"),
@@ -82,8 +82,8 @@ describe("node HTTP proxy resolution", () => {
 
   it("handles subdomain wildcards, IPv6, and ports in NO_PROXY", () => {
     resetProxyEnv();
-    process.env.HTTPS_PROXY = "http://proxy.example:8080";
-    process.env.NO_PROXY =
+    process.env["HTTPS_PROXY"] = "http://proxy.example:8080";
+    process.env["NO_PROXY"] =
       "example.com, .wildcard.org, *.star.net, ::1, [2001:db8::1], 127.0.0.1:8080";
 
     expect(resolveHttpProxyUrlForTarget("https://example.com")).toBeUndefined();

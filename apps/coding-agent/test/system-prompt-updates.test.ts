@@ -116,7 +116,7 @@ describe("system prompt updates", () => {
   test("keeps the preamble untagged and replaces it like any section", () => {
     const previous = buildSystemPromptSections({ customPrompt: "You are A.", cwd: "/tmp" });
     const current = buildSystemPromptSections({ customPrompt: "You are B.", cwd: "/tmp" });
-    expect(previous.preamble).toBe("You are A.");
+    expect(previous["preamble"]).toBe("You are A.");
     expect(diffSystemPromptSections(previous, current)).toEqual({ preamble: "You are B." });
 
     expect(buildSystemPromptState({ forceSystemPrompt: "Exact prompt.", cwd: "/tmp" })).toEqual({
@@ -135,7 +135,7 @@ describe("system prompt updates", () => {
     let turn = 0;
     const extension: ExtensionFactory = (msa) => {
       msa.on("before_agent_start", (event) => {
-        if (++turn === 3) event.systemPromptOptions.sections.plan_mode = "Plan only.";
+        if (++turn === 3) event.systemPromptOptions.sections["plan_mode"] = "Plan only.";
         return turn === 2 || turn === 3 ? { systemPrompt: "Exact prompt." } : undefined;
       });
     };
@@ -233,7 +233,7 @@ describe("system prompt updates", () => {
       const initial = requests[0]?.messages[0];
       if (initial?.role !== "system") throw new Error("expected initial system message");
       expect(initial.toolsAdded?.map((value) => value.name)).toEqual(["first", "second"]);
-      expect(initial.sections?.tools).toContain("first prompt snippet");
+      expect(initial.sections?.["tools"]).toContain("first prompt snippet");
 
       const update = requests[1]?.messages.filter((message) => message.role === "system").at(-1);
       expect(update).toEqual({
@@ -246,8 +246,8 @@ describe("system prompt updates", () => {
         toolsRemoved: [{ name: "first" }],
         timestamp: expect.any(Number),
       });
-      expect(update?.sections?.tools).not.toContain("first prompt snippet");
-      expect(update?.sections?.rules).not.toContain("Use first carefully.");
+      expect(update?.sections?.["tools"]).not.toContain("first prompt snippet");
+      expect(update?.sections?.["rules"]).not.toContain("Use first carefully.");
 
       const result = requests[2]?.messages
         .filter((message) => message.role === "toolResult")

@@ -99,8 +99,8 @@ describe("DefaultPackageManager", () => {
   let previousOfflineEnv: string | undefined;
 
   beforeEach(() => {
-    previousOfflineEnv = process.env.MSA_OFFLINE;
-    delete process.env.MSA_OFFLINE;
+    previousOfflineEnv = process.env["MSA_OFFLINE"];
+    delete process.env["MSA_OFFLINE"];
     tempDir = join(tmpdir(), `pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tempDir, { recursive: true });
     agentDir = join(tempDir, "agent");
@@ -116,9 +116,9 @@ describe("DefaultPackageManager", () => {
 
   afterEach(() => {
     if (previousOfflineEnv === undefined) {
-      delete process.env.MSA_OFFLINE;
+      delete process.env["MSA_OFFLINE"];
     } else {
-      process.env.MSA_OFFLINE = previousOfflineEnv;
+      process.env["MSA_OFFLINE"] = previousOfflineEnv;
     }
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -244,8 +244,8 @@ Content`,
     });
 
     it("should resolve symlinked user and project resources once", async () => {
-      const previousHome = process.env.HOME;
-      process.env.HOME = tempDir;
+      const previousHome = process.env["HOME"];
+      process.env["HOME"] = tempDir;
 
       try {
         const sharedDir = join(tempDir, "shared-resources");
@@ -307,9 +307,9 @@ Content`,
         expect(result.themes[0].metadata.scope).toBe("project");
       } finally {
         if (previousHome === undefined) {
-          delete process.env.HOME;
+          delete process.env["HOME"];
         } else {
-          process.env.HOME = previousHome;
+          process.env["HOME"] = previousHome;
         }
       }
     });
@@ -394,8 +394,8 @@ Content`,
     });
 
     it("should use ~/.agents as baseDir for user .agents skills", async () => {
-      const previousHome = process.env.HOME;
-      process.env.HOME = tempDir;
+      const previousHome = process.env["HOME"];
+      process.env["HOME"] = tempDir;
 
       try {
         const agentsBaseDir = join(tempDir, ".agents");
@@ -411,9 +411,9 @@ Content`,
         expect(skill?.metadata.baseDir).toBe(agentsBaseDir);
       } finally {
         if (previousHome === undefined) {
-          delete process.env.HOME;
+          delete process.env["HOME"];
         } else {
-          process.env.HOME = previousHome;
+          process.env["HOME"] = previousHome;
         }
       }
     });
@@ -551,8 +551,8 @@ Content`,
     });
 
     it("should keep ~/.agents/skills user-scoped when cwd is under home in a non-git directory", async () => {
-      const previousHome = process.env.HOME;
-      process.env.HOME = tempDir;
+      const previousHome = process.env["HOME"];
+      process.env["HOME"] = tempDir;
 
       try {
         const cwd = join(tempDir, "scratch", "nested");
@@ -579,16 +579,16 @@ Content`,
         expect(matchingSkills[0]?.metadata.source).toBe("auto");
       } finally {
         if (previousHome === undefined) {
-          delete process.env.HOME;
+          delete process.env["HOME"];
         } else {
-          process.env.HOME = previousHome;
+          process.env["HOME"] = previousHome;
         }
       }
     });
 
     it("should dedupe user skill entries when ~/.msa/agent/skills is a symlink to ~/.agents/skills", async () => {
-      const previousHome = process.env.HOME;
-      process.env.HOME = tempDir;
+      const previousHome = process.env["HOME"];
+      process.env["HOME"] = tempDir;
 
       try {
         const agentSkillsDir = join(agentDir, "skills");
@@ -608,9 +608,9 @@ Content`,
         expect(fooSkills).toHaveLength(1);
       } finally {
         if (previousHome === undefined) {
-          delete process.env.HOME;
+          delete process.env["HOME"];
         } else {
-          process.env.HOME = previousHome;
+          process.env["HOME"] = previousHome;
         }
       }
     });
@@ -1844,8 +1844,8 @@ Content`,
   describe("pattern filtering in top-level arrays", () => {
     // #10765
     it("should expand ~ in exclusion and exact patterns", async () => {
-      const previousHome = process.env.HOME;
-      process.env.HOME = tempDir;
+      const previousHome = process.env["HOME"];
+      process.env["HOME"] = tempDir;
 
       try {
         const skillsDir = join(tempDir, "extra", "skills");
@@ -1869,9 +1869,9 @@ Content`,
         expect(result.skills.some((r) => isDisabled(r, "exact-excluded/SKILL.md"))).toBe(true);
       } finally {
         if (previousHome === undefined) {
-          delete process.env.HOME;
+          delete process.env["HOME"];
         } else {
-          process.env.HOME = previousHome;
+          process.env["HOME"] = previousHome;
         }
       }
     });
@@ -2989,7 +2989,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
     });
 
     it("should skip installing missing package sources when offline", async () => {
-      process.env.MSA_OFFLINE = "1";
+      process.env["MSA_OFFLINE"] = "1";
       settingsManager.setProjectPackages([
         "npm:missing-package",
         "git:github.com/example/missing-repo",
@@ -3009,7 +3009,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
     });
 
     it("should skip refreshing temporary git sources when offline", async () => {
-      process.env.MSA_OFFLINE = "1";
+      process.env["MSA_OFFLINE"] = "1";
       const gitSource = "git:github.com/example/repo";
       const parsedGitSource = (packageManager as any).parseSource(gitSource);
       const installedPath = (packageManager as any).getGitInstallPath(
@@ -3064,7 +3064,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
     });
 
     it("should not run npm view during resolve for installed unpinned packages", async () => {
-      process.env.MSA_OFFLINE = "1";
+      process.env["MSA_OFFLINE"] = "1";
       const installedPath = join(tempDir, ".msa", "npm", "node_modules", "example");
       mkdirSync(join(installedPath, "extensions"), { recursive: true });
       writeFileSync(
@@ -3101,7 +3101,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
     });
 
     it("should not check package updates when offline", async () => {
-      process.env.MSA_OFFLINE = "1";
+      process.env["MSA_OFFLINE"] = "1";
       const runCommandCaptureSpy = vi.spyOn(packageManager as any, "runCommandCapture");
 
       const updates = await packageManager.checkForAvailableUpdates();

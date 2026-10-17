@@ -242,7 +242,7 @@ describe("generated model data validation", () => {
   it("rejects a model without a known type", () => {
     const fixture = createFixture();
     const model = fixture.values["chat:model-a"] as Record<string, unknown>;
-    delete model.type;
+    delete model["type"];
     writeFixtureData(fixture.dataDir, fixture.structure, fixture.values);
     expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).toThrow(
       'expected "chat", "image", or "classifier"',
@@ -275,16 +275,16 @@ describe("generated model data validation", () => {
     };
     expect(validate).not.toThrow();
 
-    delete image.output;
+    delete image["output"];
     expect(validate).toThrow("invalid output modalities");
-    image.output = ["text"];
+    image["output"] = ["text"];
     expect(validate).toThrow("invalid output modalities");
   });
 
   it("rejects output modalities on chat models", () => {
     const fixture = createFixture();
     const model = fixture.values["chat:model-a"] as Record<string, unknown>;
-    model.output = ["text"];
+    model["output"] = ["text"];
     writeFixtureData(fixture.dataDir, fixture.structure, fixture.values);
     expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).toThrow(
       "unsupported output modalities",
@@ -372,7 +372,7 @@ describe("generated model data validation", () => {
 
     const manifestPath = join(fixture.dataDir, MODEL_DATA_MANIFEST_FILE);
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
-    manifest.structureHash = "stale";
+    manifest["structureHash"] = "stale";
     writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
     expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).toThrow(
       "generation stamp",
@@ -383,7 +383,7 @@ describe("generated model data validation", () => {
     const fixture = createFixture();
     const manifestPath = join(fixture.dataDir, MODEL_DATA_MANIFEST_FILE);
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
-    manifest.generatedAt = "invalid";
+    manifest["generatedAt"] = "invalid";
     writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
     expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).toThrow(
       "generation timestamp",

@@ -25,7 +25,7 @@ export const isBunBinary =
   import.meta.url.includes("%7EBUN");
 
 /** Detect if Bun is the runtime (compiled binary or bun run) */
-export const isBunRuntime = !!process.versions.bun;
+export const isBunRuntime = !!process.versions["bun"];
 
 /** Detect the esbuild-bundled Node.js distribution. */
 declare const MSA_BUNDLED_NODE: boolean;
@@ -140,7 +140,7 @@ function getSelfUpdateCommandForMethod(
         ? undefined
         : /^(.*[\\/]global[\\/][^\\/]+)[\\/]\.pnpm[\\/]/.exec(getPackageDir());
       const binDirArgs = match
-        ? [`--config.global-bin-dir=${process.env.PNPM_HOME || dirname(dirname(match[1]))}`]
+        ? [`--config.global-bin-dir=${process.env["PNPM_HOME"] || dirname(dirname(match[1]))}`]
         : [];
       return makeSelfUpdateCommand(
         makeSelfUpdateCommandStep("pnpm", [
@@ -441,7 +441,7 @@ export function findNodePackageDir(startDir: string): string {
 
 export function getPackageDir(): string {
   // Allow override via environment variable (useful for Nix/Guix where store paths tokenize poorly)
-  const envDir = process.env.MSA_PACKAGE_DIR;
+  const envDir = process.env["MSA_PACKAGE_DIR"];
   if (envDir) {
     return normalizePath(envDir);
   }
@@ -647,7 +647,7 @@ const DEFAULT_SHARE_VIEWER_URL = "https://pi.dev/session/";
 
 /** Get the share viewer URL for a gist ID. */
 export function getShareViewerUrl(gistId: string): string {
-  const baseUrl = process.env.MSA_SHARE_VIEWER_URL || DEFAULT_SHARE_VIEWER_URL;
+  const baseUrl = process.env["MSA_SHARE_VIEWER_URL"] || DEFAULT_SHARE_VIEWER_URL;
   return `${baseUrl}#${gistId}`;
 }
 

@@ -1128,7 +1128,7 @@ export class InteractiveMode {
   async run(): Promise<void> {
     await this.init();
 
-    if (!process.env.MSA_OFFLINE) {
+    if (!process.env["MSA_OFFLINE"]) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15_000);
       void refreshModelCatalogs(this.session.modelRuntime, controller.signal)
@@ -1243,7 +1243,7 @@ export class InteractiveMode {
   }
 
   private async checkForPackageUpdates(): Promise<string[]> {
-    if (process.env.MSA_OFFLINE) {
+    if (process.env["MSA_OFFLINE"]) {
       return [];
     }
 
@@ -1261,7 +1261,7 @@ export class InteractiveMode {
   }
 
   private async checkTmuxKeyboardSetup(): Promise<string | undefined> {
-    if (!process.env.TMUX) return undefined;
+    if (!process.env["TMUX"]) return undefined;
 
     const runTmuxShow = (option: string): Promise<string | undefined> => {
       return new Promise((resolve) => {
@@ -2087,23 +2087,23 @@ export class InteractiveMode {
       // If extending CustomEditor, copy app-level handlers
       // Use duck typing since instanceof fails across jiti module boundaries
       const customEditor = newEditor as unknown as Record<string, unknown>;
-      if ("actionHandlers" in customEditor && customEditor.actionHandlers instanceof Map) {
-        if (!customEditor.onEscape) {
-          customEditor.onEscape = () => this.defaultEditor.onEscape?.();
+      if ("actionHandlers" in customEditor && customEditor["actionHandlers"] instanceof Map) {
+        if (!customEditor["onEscape"]) {
+          customEditor["onEscape"] = () => this.defaultEditor.onEscape?.();
         }
-        if (!customEditor.onCtrlD) {
-          customEditor.onCtrlD = () => this.defaultEditor.onCtrlD?.();
+        if (!customEditor["onCtrlD"]) {
+          customEditor["onCtrlD"] = () => this.defaultEditor.onCtrlD?.();
         }
-        if (!customEditor.onPasteImage) {
-          customEditor.onPasteImage = () => this.defaultEditor.onPasteImage?.();
+        if (!customEditor["onPasteImage"]) {
+          customEditor["onPasteImage"] = () => this.defaultEditor.onPasteImage?.();
         }
-        if (!customEditor.onExtensionShortcut) {
-          customEditor.onExtensionShortcut = (data: string) =>
+        if (!customEditor["onExtensionShortcut"]) {
+          customEditor["onExtensionShortcut"] = (data: string) =>
             this.defaultEditor.onExtensionShortcut?.(data);
         }
         // Copy action handlers (clear, suspend, model switching, etc.)
         for (const [action, handler] of this.defaultEditor.actionHandlers) {
-          (customEditor.actionHandlers as Map<string, () => void>).set(action, handler);
+          (customEditor["actionHandlers"] as Map<string, () => void>).set(action, handler);
         }
       }
 
@@ -3477,13 +3477,13 @@ export class InteractiveMode {
     let count = 0;
     for (const diagnostic of message.diagnostics ?? []) {
       if (diagnostic.type !== "anthropic_input_transformations") continue;
-      const transformations = diagnostic.details?.transformations;
+      const transformations = diagnostic.details?.["transformations"];
       if (!Array.isArray(transformations)) continue;
       count += transformations.filter(
         (transformation) =>
           typeof transformation === "object" &&
           transformation !== null &&
-          (transformation as Record<string, unknown>).type === "thinking_dropped",
+          (transformation as Record<string, unknown>)["type"] === "thinking_dropped",
       ).length;
     }
     return count;

@@ -67,9 +67,9 @@ Call ${TOOL_NAME} exactly once as your final action. Do not return prose.`);
     expect(auditCalls).toHaveLength(1);
     const auditCall = auditCalls[0];
     expect(auditCall?.status).toBe("ok");
-    const explanation = auditCall?.arguments?.explanation;
+    const explanation = auditCall?.arguments?.["explanation"];
     expect(
-      auditCall?.arguments?.verdict,
+      auditCall?.arguments?.["verdict"],
       typeof explanation === "string" ? explanation : undefined,
     ).toBe("match");
   });

@@ -94,7 +94,7 @@ describe("Models with classifier models", () => {
     expect(models.getModelsOfType("classifier")).toEqual([classifier]);
     expect(models.getAllModels()).toHaveLength(2);
     expect(await models.getAvailableOfType("classifier")).toEqual([classifier]);
-    expect((await models.classify(classifier, context)).answers.approved).toEqual({
+    expect((await models.classify(classifier, context)).answers["approved"]).toEqual({
       type: "bool",
       probability: 0.9,
     });
@@ -175,7 +175,7 @@ describe("Models with classifier models", () => {
       },
     ]);
     expect(result.stopReason).toBe("stop");
-    expect(result.answers.approved).toEqual({ type: "bool", probability: 0.8 });
+    expect(result.answers["approved"]).toEqual({ type: "bool", probability: 0.8 });
   });
 
   it("rejects images for classifier models without image input before calling the provider", async () => {
@@ -239,7 +239,7 @@ describe("Models with classifier models", () => {
 
     expect(urls).toEqual(["https://api.openai.com/v1/decisions"]);
     expect(result.stopReason).toBe("stop");
-    expect(result.answers.approved).toEqual({ type: "bool", probability: 0.8 });
+    expect(result.answers["approved"]).toEqual({ type: "bool", probability: 0.8 });
   });
 
   it("lists OpenAI Decisions models only for API key credentials", async () => {

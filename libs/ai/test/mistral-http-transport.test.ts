@@ -117,27 +117,27 @@ describe("Mistral HTTP transport", () => {
     expect(headers.get("x-affinity")).toBe("session-1");
     expect(headers.get("x-custom")).toBe("value");
     expect(headers.get("user-agent")).toBe(MSA_USER_AGENT);
-    expect(callbackPayload?.maxTokens).toBe(123);
-    expect(callbackPayload?.promptMode).toBe("reasoning");
-    expect(callbackPayload?.promptCacheKey).toBe("session-1");
+    expect(callbackPayload?.["maxTokens"]).toBe(123);
+    expect(callbackPayload?.["promptMode"]).toBe("reasoning");
+    expect(callbackPayload?.["promptCacheKey"]).toBe("session-1");
     expect(callbackResponse).toEqual({
       status: 200,
       headers: { "content-type": "text/event-stream", "x-request-id": "request-1" },
     });
 
     const wirePayload = JSON.parse(String(requestInit?.body)) as Record<string, unknown>;
-    expect(wirePayload.max_tokens).toBe(123);
-    expect(wirePayload.prompt_mode).toBe("reasoning");
-    expect(wirePayload.reasoning_effort).toBe("high");
-    expect(wirePayload.tool_choice).toEqual({ type: "function", function: { name: "lookup" } });
-    expect(wirePayload.prompt_cache_key).toBe("session-1");
-    expect(wirePayload.top_p).toBe(0.9);
-    expect(wirePayload.random_seed).toBe(42);
-    expect(wirePayload.presence_penalty).toBe(0.1);
-    expect(wirePayload.frequency_penalty).toBe(0.2);
-    expect(wirePayload.parallel_tool_calls).toBe(true);
-    expect(wirePayload.safe_prompt).toBe(true);
-    expect(wirePayload.response_format).toEqual({
+    expect(wirePayload["max_tokens"]).toBe(123);
+    expect(wirePayload["prompt_mode"]).toBe("reasoning");
+    expect(wirePayload["reasoning_effort"]).toBe("high");
+    expect(wirePayload["tool_choice"]).toEqual({ type: "function", function: { name: "lookup" } });
+    expect(wirePayload["prompt_cache_key"]).toBe("session-1");
+    expect(wirePayload["top_p"]).toBe(0.9);
+    expect(wirePayload["random_seed"]).toBe(42);
+    expect(wirePayload["presence_penalty"]).toBe(0.1);
+    expect(wirePayload["frequency_penalty"]).toBe(0.2);
+    expect(wirePayload["parallel_tool_calls"]).toBe(true);
+    expect(wirePayload["safe_prompt"]).toBe(true);
+    expect(wirePayload["response_format"]).toEqual({
       type: "json_schema",
       json_schema: {
         name: "result",
@@ -150,7 +150,7 @@ describe("Mistral HTTP transport", () => {
     expect(wirePayload).not.toHaveProperty("maxTokens");
     expect(wirePayload).not.toHaveProperty("promptMode");
     expect(wirePayload).not.toHaveProperty("promptCacheKey");
-    expect(wirePayload.messages).toEqual([
+    expect(wirePayload["messages"]).toEqual([
       { role: "system", content: "Be precise" },
       {
         role: "user",

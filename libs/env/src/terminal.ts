@@ -80,7 +80,7 @@ export class RemoteTerminal {
       { target: this.#id },
       { session: this.#session },
     );
-    const foreground = reply.json.foreground as { pid: number; name: string | null } | null;
+    const foreground = reply.json["foreground"] as { pid: number; name: string | null } | null;
     if (!foreground) return undefined;
     return { pid: foreground.pid, ...(foreground.name ? { name: foreground.name } : {}) };
   }
@@ -122,14 +122,14 @@ export function openTerminal(
           request = { id, session };
         },
         onEvent: (json, payload) => {
-          if (json.kind === "output") options.onData(payload);
-          else if (json.kind === "started" && request) {
+          if (json["kind"] === "output") options.onData(payload);
+          else if (json["kind"] === "started" && request) {
             started.resolve(
               new RemoteTerminal(
                 connection,
                 request.id,
                 request.session,
-                Number(json.pid),
+                Number(json["pid"]),
                 exited,
                 abort,
               ),
@@ -138,7 +138,7 @@ export function openTerminal(
         },
       },
     )
-    .then((reply) => Number(reply.json.exitCode));
+    .then((reply) => Number(reply.json["exitCode"]));
   // Failing before it started rejects the open; afterwards, `exited` carries it.
   exited.catch(started.reject);
   return started.promise;

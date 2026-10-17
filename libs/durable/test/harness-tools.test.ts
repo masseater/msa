@@ -529,7 +529,7 @@ describe("tool results", () => {
         if (call.id === "block") return { block: "not today" };
         if (call.id === "throw") throw new Error("hook failed");
         if (call.id === "bad") return { arguments: { text: { not: "a string" } } };
-        return { arguments: { text: `${call.arguments.text}!` } };
+        return { arguments: { text: `${call.arguments["text"]}!` } };
       },
     });
     const { harness, entries } = await run(setup, [

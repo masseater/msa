@@ -15,7 +15,7 @@ let procEnvCache: Map<string, string> | null = null;
 function getBunSandboxEnvValue(name: string): string | undefined {
   if (
     typeof process === "undefined" ||
-    !process.versions?.bun ||
+    !process.versions?.["bun"] ||
     Object.keys(process.env).length > 0
   ) {
     return undefined;

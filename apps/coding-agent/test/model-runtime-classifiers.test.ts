@@ -38,6 +38,6 @@ describe("ModelRuntime classifiers", () => {
       return Response.json({ answers: { approved: { type: "noul", noul: 0.8 } } });
     });
     const result = await runtime.classify(jev, context, { fetch });
-    expect(result.answers.approved).toEqual({ type: "bool", probability: 0.8 });
+    expect(result.answers["approved"]).toEqual({ type: "bool", probability: 0.8 });
   });
 });

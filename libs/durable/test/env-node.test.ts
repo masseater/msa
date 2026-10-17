@@ -731,11 +731,11 @@ describe("NodeExecutionEnv shell", () => {
     await chmod(join(root, shellPath), 0o755);
 
     const originalCwd = process.cwd();
-    const originalPath = process.env.PATH;
+    const originalPath = process.env["PATH"];
     const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
     try {
       process.chdir(root);
-      process.env.PATH = `${root}${delimiter}${originalPath ?? ""}`;
+      process.env["PATH"] = `${root}${delimiter}${originalPath ?? ""}`;
       Object.defineProperty(process, "platform", {
         configurable: true,
         value: "win32",
@@ -755,7 +755,7 @@ describe("NodeExecutionEnv shell", () => {
       expect(result.exitCode).toBe(0);
     } finally {
       process.chdir(originalCwd);
-      process.env.PATH = originalPath;
+      process.env["PATH"] = originalPath;
       if (platformDescriptor) {
         Object.defineProperty(process, "platform", platformDescriptor);
       }
@@ -949,8 +949,8 @@ describe("NodeExecutionEnv shell", () => {
       const controller = new AbortController();
       const env = new NodeExecutionEnv({ cwd: root, shellPath: "/bin/bash" });
       const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
-      const previousSystemRoot = process.env.SystemRoot;
-      process.env.SystemRoot = "/definitely/missing/windows";
+      const previousSystemRoot = process.env["SystemRoot"];
+      process.env["SystemRoot"] = "/definitely/missing/windows";
       Object.defineProperty(process, "platform", { configurable: true, value: "win32" });
 
       let pid: number | undefined;
@@ -981,8 +981,8 @@ describe("NodeExecutionEnv shell", () => {
             process.kill(pid, "SIGKILL");
           } catch {}
         }
-        if (previousSystemRoot === undefined) delete process.env.SystemRoot;
-        else process.env.SystemRoot = previousSystemRoot;
+        if (previousSystemRoot === undefined) delete process.env["SystemRoot"];
+        else process.env["SystemRoot"] = previousSystemRoot;
         if (platformDescriptor) Object.defineProperty(process, "platform", platformDescriptor);
       }
     },

@@ -18,8 +18,8 @@ const modelRuntime = await ModelRuntime.create({
   authPath: "/tmp/my-agent/auth.json",
   modelsPath: "/tmp/my-agent/models.json",
 });
-if (process.env.MY_ANTHROPIC_KEY) {
-  await modelRuntime.setRuntimeApiKey("anthropic", process.env.MY_ANTHROPIC_KEY);
+if (process.env["MY_ANTHROPIC_KEY"]) {
+  await modelRuntime.setRuntimeApiKey("anthropic", process.env["MY_ANTHROPIC_KEY"]);
 }
 
 const model = getModel("anthropic", "claude-sonnet-4-5");

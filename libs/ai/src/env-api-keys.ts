@@ -14,7 +14,7 @@ const NODE_OS_SPECIFIER = "node:" + "os";
 const NODE_PATH_SPECIFIER = "node:" + "path";
 
 // Eagerly load in Node.js/Bun environment only
-if (typeof process !== "undefined" && (process.versions?.node || process.versions?.bun)) {
+if (typeof process !== "undefined" && (process.versions?.node || process.versions?.["bun"])) {
   dynamicImport(NODE_FS_SPECIFIER).then((m) => {
     _existsSync = (m as typeof import("node:fs")).existsSync;
   });
@@ -41,7 +41,7 @@ export const ANTHROPIC_WORKSPACE_ID_ENV = "ANTHROPIC_WORKSPACE_ID";
 let cachedVertexAdcCredentialsExists: boolean | null = null;
 
 function hasVertexAdcCredentials(env?: ProviderEnv): boolean {
-  const explicitCredentialsPath = env?.GOOGLE_APPLICATION_CREDENTIALS;
+  const explicitCredentialsPath = env?.["GOOGLE_APPLICATION_CREDENTIALS"];
   if (explicitCredentialsPath) {
     return _existsSync ? _existsSync(explicitCredentialsPath) : false;
   }
@@ -52,7 +52,7 @@ function hasVertexAdcCredentials(env?: ProviderEnv): boolean {
     // Only cache false permanently in a browser environment where fs is never available.
     if (!_existsSync || !_homedir || !_join) {
       const isNode =
-        typeof process !== "undefined" && (process.versions?.node || process.versions?.bun);
+        typeof process !== "undefined" && (process.versions?.node || process.versions?.["bun"]);
       if (!isNode) {
         // Definitively in a browser — safe to cache false permanently
         cachedVertexAdcCredentialsExists = false;

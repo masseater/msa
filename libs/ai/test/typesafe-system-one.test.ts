@@ -55,9 +55,9 @@ describe("TypeSafe System One", () => {
         questions: Record<string, { type: string }>;
       };
       expect(payload.model).toBe("jev-latest");
-      expect(payload.questions.category?.type).toBe("choice");
-      expect(payload.questions.satisfaction?.type).toBe("score");
-      expect(payload.questions.approved?.type).toBe("noul");
+      expect(payload.questions["category"]?.type).toBe("choice");
+      expect(payload.questions["satisfaction"]?.type).toBe("score");
+      expect(payload.questions["approved"]?.type).toBe("noul");
       // System One has no temperature field; the option is ignored.
       expect(payload).not.toHaveProperty("temperature");
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer secret");
@@ -78,9 +78,9 @@ describe("TypeSafe System One", () => {
     expect(fetch).toHaveBeenCalledOnce();
     expect(String(fetch.mock.calls[0]?.[0])).toBe("https://api.typesafe.ai/v1/systemone");
     expect(result.stopReason).toBe("stop");
-    expect(result.answers.approved).toEqual({ type: "bool", probability: 0.95 });
-    expect(result.answers.category).toMatchObject({ type: "choice", choice: "success" });
-    expect(result.answers.satisfaction).toEqual({ type: "score", score: 2, confidence: 0.7 });
+    expect(result.answers["approved"]).toEqual({ type: "bool", probability: 0.95 });
+    expect(result.answers["category"]).toMatchObject({ type: "choice", choice: "success" });
+    expect(result.answers["satisfaction"]).toEqual({ type: "score", score: 2, confidence: 0.7 });
     expect(result.usage).toBeUndefined();
     expect(pricedResult.usage).toMatchObject({ input: 308, output: 23, totalTokens: 331 });
     expect(pricedResult.usage?.cost.total).toBeCloseTo(0.000012936, 12);
@@ -112,7 +112,7 @@ describe("TypeSafe System One", () => {
 
     expect(String(fetch.mock.calls[0]?.[0])).toBe("https://openrouter.ai/api/v1/systemone");
     expect(result.stopReason).toBe("stop");
-    expect(result.answers.approved).toEqual({ type: "bool", probability: 0.95 });
+    expect(result.answers["approved"]).toEqual({ type: "bool", probability: 0.95 });
     // Priced from the catalog like chat usage; matches OpenRouter's reported cost.
     expect(result.usage?.cost.total).toBeCloseTo(0.000012936, 12);
   });
@@ -190,8 +190,8 @@ describe("TypeSafe System One", () => {
     expect(result.stopReason).toBe("stop");
     expect(Object.keys(result.answers)).toEqual(["__proto__"]);
     expect(Object.hasOwn(result.answers, "__proto__")).toBe(true);
-    expect(result.answers.__proto__).toEqual({ type: "bool", probability: 0.75 });
-    expect(serializedAnswers.__proto__).toEqual({ type: "bool", probability: 0.75 });
+    expect(result.answers["__proto__"]).toEqual({ type: "bool", probability: 0.75 });
+    expect(serializedAnswers["__proto__"]).toEqual({ type: "bool", probability: 0.75 });
   });
 
   it("reports request timeouts separately from caller cancellation", async () => {

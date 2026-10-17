@@ -47,7 +47,7 @@ export async function createMcpTools(client: McpClient, prefix: string): Promise
     parameters: Type.Unsafe({
       ...tool.inputSchema,
       type: "object",
-      properties: tool.inputSchema.properties ?? {},
+      properties: tool.inputSchema["properties"] ?? {},
     }),
     outputSchema: tool.outputSchema
       ? Type.Unsafe<Record<string, unknown>>(tool.outputSchema)

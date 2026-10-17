@@ -39,8 +39,8 @@ describe("ProjectTrustStore", () => {
   });
 
   it("detects trust-requiring project resources", () => {
-    const originalHome = process.env.HOME;
-    process.env.HOME = tempDir;
+    const originalHome = process.env["HOME"];
+    process.env["HOME"] = tempDir;
     try {
       mkdirSync(join(tempDir, ".msa", "agent"), { recursive: true });
       mkdirSync(join(tempDir, ".agents", "skills"), { recursive: true });
@@ -60,9 +60,9 @@ describe("ProjectTrustStore", () => {
       expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
     } finally {
       if (originalHome === undefined) {
-        delete process.env.HOME;
+        delete process.env["HOME"];
       } else {
-        process.env.HOME = originalHome;
+        process.env["HOME"] = originalHome;
       }
     }
   });

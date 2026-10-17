@@ -77,26 +77,26 @@ vi.mock("openai", () => {
 
 const azure = azureProvider();
 
-const originalBaseUrl = process.env.AZURE_OPENAI_BASE_URL;
-const originalCacheRetention = process.env.MSA_CACHE_RETENTION;
-const originalDeploymentMap = process.env.AZURE_OPENAI_DEPLOYMENT_NAME_MAP;
+const originalBaseUrl = process.env["AZURE_OPENAI_BASE_URL"];
+const originalCacheRetention = process.env["MSA_CACHE_RETENTION"];
+const originalDeploymentMap = process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"];
 
 beforeEach(() => {
   mockState.lastParams = undefined;
   mockState.lastClientOptions = undefined;
   mockState.dispatchedTo = undefined;
-  delete process.env.MSA_CACHE_RETENTION;
-  delete process.env.AZURE_OPENAI_DEPLOYMENT_NAME_MAP;
-  process.env.AZURE_OPENAI_BASE_URL = "https://my-resource.services.ai.azure.com";
+  delete process.env["MSA_CACHE_RETENTION"];
+  delete process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"];
+  process.env["AZURE_OPENAI_BASE_URL"] = "https://my-resource.services.ai.azure.com";
 });
 
 afterEach(() => {
-  if (originalBaseUrl === undefined) delete process.env.AZURE_OPENAI_BASE_URL;
-  else process.env.AZURE_OPENAI_BASE_URL = originalBaseUrl;
-  if (originalCacheRetention === undefined) delete process.env.MSA_CACHE_RETENTION;
-  else process.env.MSA_CACHE_RETENTION = originalCacheRetention;
-  if (originalDeploymentMap === undefined) delete process.env.AZURE_OPENAI_DEPLOYMENT_NAME_MAP;
-  else process.env.AZURE_OPENAI_DEPLOYMENT_NAME_MAP = originalDeploymentMap;
+  if (originalBaseUrl === undefined) delete process.env["AZURE_OPENAI_BASE_URL"];
+  else process.env["AZURE_OPENAI_BASE_URL"] = originalBaseUrl;
+  if (originalCacheRetention === undefined) delete process.env["MSA_CACHE_RETENTION"];
+  else process.env["MSA_CACHE_RETENTION"] = originalCacheRetention;
+  if (originalDeploymentMap === undefined) delete process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"];
+  else process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"] = originalDeploymentMap;
 });
 
 const context = normalizeContext({
@@ -135,7 +135,7 @@ describe("azure deepseek-v4-pro over Chat Completions", () => {
   });
 
   it("omits prompt cache parameters when long retention comes from MSA_CACHE_RETENTION", async () => {
-    process.env.MSA_CACHE_RETENTION = "long";
+    process.env["MSA_CACHE_RETENTION"] = "long";
 
     await azure
       .stream(deepSeekModel(), context, { apiKey: "test-key", sessionId: "session-env" })
@@ -242,7 +242,7 @@ describe("azure Chat Completions endpoint resolution", () => {
   });
 
   it("surfaces an unconfigured endpoint as an error event rather than throwing out of stream()", async () => {
-    delete process.env.AZURE_OPENAI_BASE_URL;
+    delete process.env["AZURE_OPENAI_BASE_URL"];
 
     const result = await azure.stream(deepSeekModel(), context, { apiKey: "test-key" }).result();
 
@@ -259,7 +259,7 @@ describe("azure Chat Completions endpoint resolution", () => {
   });
 
   it("sends the mapped deployment name while keeping the catalog id on the message", async () => {
-    process.env.AZURE_OPENAI_DEPLOYMENT_NAME_MAP = "deepseek-v4-pro=my-deepseek";
+    process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"] = "deepseek-v4-pro=my-deepseek";
 
     const result = await azure
       .streamSimple(deepSeekModel(), context, { apiKey: "test-key" })
@@ -270,7 +270,7 @@ describe("azure Chat Completions endpoint resolution", () => {
   });
 
   it("passes the deployment name through a caller's onPayload", async () => {
-    process.env.AZURE_OPENAI_DEPLOYMENT_NAME_MAP = "deepseek-v4-pro=my-deepseek";
+    process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"] = "deepseek-v4-pro=my-deepseek";
     let seenModel: unknown;
 
     await azure

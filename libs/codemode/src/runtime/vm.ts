@@ -329,7 +329,7 @@ export async function startVm(options: StartVmOptions): Promise<VmSession> {
       const budget = options.interruptBudget ?? "none";
       post({
         type: "started",
-        fingerprint: `quickjs-wasi ${versions["quickjs-wasi"]}, quickjs ${versions.quickjs}, prelude ${PRELUDE_HASH}, deterministic ${DETERMINISTIC_VERSION}, stack ${maxStackSize}, heap ${data.memoryLimitBytes ?? "none"}, budget ${budget}`,
+        fingerprint: `quickjs-wasi ${versions["quickjs-wasi"]}, quickjs ${versions["quickjs"]}, prelude ${PRELUDE_HASH}, deterministic ${DETERMINISTIC_VERSION}, stack ${maxStackSize}, heap ${data.memoryLimitBytes ?? "none"}, budget ${budget}`,
       });
     }
 

@@ -120,7 +120,7 @@ interface ChatCompletionsRequestBody {
 
 describe("openai-completions thinking-as-text replay", () => {
   afterEach(() => {
-    delete process.env.OPENAI_API_KEY;
+    delete process.env["OPENAI_API_KEY"];
   });
 
   it("serializes same-model thinking-plus-text replay as assistant text parts", () => {

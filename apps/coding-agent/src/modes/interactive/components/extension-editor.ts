@@ -57,8 +57,8 @@ export class ExtensionEditorComponent extends Container implements Focusable {
     this.keybindings = keybindings;
     this.externalEditorCommand =
       externalEditorCommand ||
-      process.env.VISUAL ||
-      process.env.EDITOR ||
+      process.env["VISUAL"] ||
+      process.env["EDITOR"] ||
       (process.platform === "win32" ? "notepad" : "nano");
     this.onSubmitCallback = onSubmit;
     this.onCancelCallback = onCancel;

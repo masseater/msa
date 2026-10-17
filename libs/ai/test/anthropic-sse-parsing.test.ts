@@ -345,7 +345,7 @@ describe("Anthropic raw SSE parsing", () => {
       },
     });
     const delta = JSON.parse(events[4].data) as Record<string, unknown>;
-    delta.input_transformations = [
+    delta["input_transformations"] = [
       { type: "thinking_dropped", path: "messages.3.content.0", reason: "model_binding_mismatch" },
     ];
     events[4].data = JSON.stringify(delta);

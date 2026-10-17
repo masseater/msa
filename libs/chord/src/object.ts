@@ -1046,7 +1046,7 @@ export class RefImpl {
 }
 
 export const variantOf = (implementation: Record<string, unknown>): string | undefined =>
-  typeof implementation.variant === "string" ? implementation.variant : undefined;
+  typeof implementation["variant"] === "string" ? implementation["variant"] : undefined;
 
 // ─── Objects ─────────────────────────────────────────────────────────────────
 
@@ -1854,7 +1854,7 @@ function validateImplementation(service: Service, implementation: Record<string,
     fail("factory must return an object");
   let members: Readonly<Record<string, MemberDescription>>;
   if (contract.scope === "remote") {
-    const variant = implementation.variant;
+    const variant = implementation["variant"];
     if (typeof variant !== "string" || contract.description.variants[variant] === undefined)
       fail(`unknown variant ${String(variant)}`);
     members = contract.description.variants[variant as string]!;

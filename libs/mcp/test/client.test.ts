@@ -180,7 +180,7 @@ describe("McpClient", () => {
       if (params.name === "fail") throw new McpError(1234, "tool failed", { retryable: false });
       return {
         content: [{ type: "text", text: "ok" }],
-        structuredContent: { count: params.arguments?.count },
+        structuredContent: { count: params.arguments?.["count"] },
       };
     });
     expect(await client.callTool("count", { count: 3 })).toEqual({
@@ -200,8 +200,9 @@ describe("McpClient", () => {
     vi.useFakeTimers();
     const { client, server } = await connect();
     server.setHandler("tools/call", async (request) => {
-      const token = ((request.params as Record<string, unknown>)._meta as Record<string, unknown>)
-        .progressToken as number;
+      const token = (
+        (request.params as Record<string, unknown>)["_meta"] as Record<string, unknown>
+      )["progressToken"] as number;
       setTimeout(() => {
         void server.transport.send({
           jsonrpc: "2.0",

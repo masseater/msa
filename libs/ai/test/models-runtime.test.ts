@@ -1198,7 +1198,7 @@ describe("Models runtime", () => {
     const apiKey: ApiKeyAuth = {
       name: "Scoped",
       resolve: async ({ credential, ctx }) => {
-        const account = credential?.env?.ACCOUNT_ID ?? (await ctx.env("ACCOUNT_ID"));
+        const account = credential?.env?.["ACCOUNT_ID"] ?? (await ctx.env("ACCOUNT_ID"));
         if (!credential?.key || !account) return undefined;
         return {
           auth: { apiKey: credential.key, baseUrl: `https://example.test/${account}` },

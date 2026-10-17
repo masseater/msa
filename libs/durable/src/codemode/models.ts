@@ -90,7 +90,7 @@ function toProvider(value: unknown): string | undefined {
 /** Catalog entry for scripts. `headers` is dropped because configured headers can carry credentials. */
 function toModelInfo(model: AnyModel): JsonValue {
   const info: Record<string, unknown> = { ...model };
-  delete info.headers;
+  delete info["headers"];
   return JSON.parse(JSON.stringify(info)) as JsonValue;
 }
 
@@ -129,8 +129,8 @@ function checkClassifierContext(context: unknown): ClassifierContext {
     new Error(`models.classify() ${problem}. Expected context: ${CLASSIFIER_CONTEXT_SHAPE}.`);
   if (!isRecord(context))
     throw fail(`expects a context object as its second argument, got ${describeValue(context)}`);
-  if (!isRecord(context.state))
-    throw fail(`context.state must be an object, got ${describeValue(context.state)}`);
+  if (!isRecord(context["state"]))
+    throw fail(`context.state must be an object, got ${describeValue(context["state"])}`);
   const { images } = context;
   if (images !== undefined) {
     if (!Array.isArray(images))
@@ -138,9 +138,9 @@ function checkClassifierContext(context: unknown): ClassifierContext {
     images.forEach((image: unknown, index) => {
       if (
         !isRecord(image) ||
-        image.type !== "image" ||
-        typeof image.data !== "string" ||
-        typeof image.mimeType !== "string"
+        image["type"] !== "image" ||
+        typeof image["data"] !== "string" ||
+        typeof image["mimeType"] !== "string"
       ) {
         throw fail(`context.images[${index}] must be an image block, got ${describeValue(image)}`);
       }
@@ -158,24 +158,24 @@ function checkClassifierContext(context: unknown): ClassifierContext {
     const at = `context.questions.${id}`;
     if (!isRecord(question))
       throw fail(`${at} must be a question object, got ${describeValue(question)}`);
-    if (typeof question.instructions !== "string")
+    if (typeof question["instructions"] !== "string")
       throw fail(`${at}.instructions must be a string`);
     const { criteria } = question;
-    if (question.type === "choice") {
+    if (question["type"] === "choice") {
       if (!isRecord(criteria) || !isStrings(Object.values(criteria))) {
         throw fail(`${at} is a "choice" question, so criteria must map each label to its meaning`);
       }
-    } else if (question.type === "score") {
+    } else if (question["type"] === "score") {
       if (!Array.isArray(criteria) || !isStrings(criteria)) {
         throw fail(
           `${at} is a "score" question, so criteria must list the levels as strings, lowest first`,
         );
       }
-    } else if (question.type === "bool") {
+    } else if (question["type"] === "bool") {
       if (
         !isRecord(criteria) ||
-        typeof criteria.true !== "string" ||
-        typeof criteria.false !== "string"
+        typeof criteria["true"] !== "string" ||
+        typeof criteria["false"] !== "string"
       ) {
         throw fail(
           `${at} is a "bool" question, so criteria must be { true: string, false: string }`,
@@ -183,7 +183,7 @@ function checkClassifierContext(context: unknown): ClassifierContext {
       }
     } else {
       throw fail(
-        `${at}.type must be "choice", "score", or "bool", got ${JSON.stringify(question.type)}`,
+        `${at}.type must be "choice", "score", or "bool", got ${JSON.stringify(question["type"])}`,
       );
     }
   }
@@ -203,12 +203,12 @@ function checkImagesContext(context: unknown): ImagesContext {
     throw fail(`context.input must be a non-empty array of blocks, got ${describeValue(input)}`);
   }
   input.forEach((block: unknown, index) => {
-    if (isRecord(block) && block.type === "text" && typeof block.text === "string") return;
+    if (isRecord(block) && block["type"] === "text" && typeof block["text"] === "string") return;
     if (
       isRecord(block) &&
-      block.type === "image" &&
-      typeof block.data === "string" &&
-      typeof block.mimeType === "string"
+      block["type"] === "image" &&
+      typeof block["data"] === "string" &&
+      typeof block["mimeType"] === "string"
     )
       return;
     throw fail(
@@ -229,7 +229,11 @@ function resolveModel<TType extends "classifier" | "image">(
   models: Models,
 ): ModelTypeMap[TType] {
   const listHint = `List the ${type} models you can use with models.getAvailableOfType("${type}").`;
-  if (!isRecord(model) || typeof model.provider !== "string" || typeof model.id !== "string") {
+  if (
+    !isRecord(model) ||
+    typeof model["provider"] !== "string" ||
+    typeof model["id"] !== "string"
+  ) {
     const undefinedHint =
       model === undefined || model === null
         ? " models.getModelOfType() returns undefined for an unknown provider or id."

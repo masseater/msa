@@ -43,25 +43,25 @@ describe("http proxy settings", () => {
   it("applies httpProxy to HTTP_PROXY and HTTPS_PROXY", () => {
     applyHttpProxySettings("http://127.0.0.1:7890");
 
-    expect(process.env.HTTP_PROXY).toBe("http://127.0.0.1:7890");
-    expect(process.env.HTTPS_PROXY).toBe("http://127.0.0.1:7890");
+    expect(process.env["HTTP_PROXY"]).toBe("http://127.0.0.1:7890");
+    expect(process.env["HTTPS_PROXY"]).toBe("http://127.0.0.1:7890");
   });
 
   it("does not override existing proxy env vars", () => {
-    process.env.HTTP_PROXY = "http://env-http:8080";
-    process.env.HTTPS_PROXY = "http://env-https:8080";
+    process.env["HTTP_PROXY"] = "http://env-http:8080";
+    process.env["HTTPS_PROXY"] = "http://env-https:8080";
 
     applyHttpProxySettings("http://settings:7890");
 
-    expect(process.env.HTTP_PROXY).toBe("http://env-http:8080");
-    expect(process.env.HTTPS_PROXY).toBe("http://env-https:8080");
+    expect(process.env["HTTP_PROXY"]).toBe("http://env-http:8080");
+    expect(process.env["HTTPS_PROXY"]).toBe("http://env-https:8080");
   });
 
   it("ignores empty values", () => {
     applyHttpProxySettings("   ");
 
-    expect(process.env.HTTP_PROXY).toBeUndefined();
-    expect(process.env.HTTPS_PROXY).toBeUndefined();
+    expect(process.env["HTTP_PROXY"]).toBeUndefined();
+    expect(process.env["HTTPS_PROXY"]).toBeUndefined();
   });
 });
 
@@ -133,7 +133,7 @@ describe("http dispatcher", () => {
       throw new Error("Proxy did not bind to a TCP port");
     }
 
-    process.env.HTTP_PROXY = `http://127.0.0.1:${proxyAddress.port}`;
+    process.env["HTTP_PROXY"] = `http://127.0.0.1:${proxyAddress.port}`;
     configureHttpDispatcher();
     const dispatcher = undici.getGlobalDispatcher();
     try {

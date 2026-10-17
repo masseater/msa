@@ -649,10 +649,10 @@ export async function main(args: string[], options?: MainOptions) {
   // Commands and startup selectors can load user-authored themes before runtime creation.
   setThemeJsonValidator(validateThemeJson);
   const extensionFactories = [...builtInExtensions, ...(options?.extensionFactories ?? [])];
-  const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.MSA_OFFLINE);
+  const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env["MSA_OFFLINE"]);
   if (offlineMode) {
-    process.env.MSA_OFFLINE = "1";
-    process.env.MSA_SKIP_VERSION_CHECK = "1";
+    process.env["MSA_OFFLINE"] = "1";
+    process.env["MSA_SKIP_VERSION_CHECK"] = "1";
   }
 
   if (await runAuthCommand(args)) {
@@ -1030,7 +1030,7 @@ export async function main(args: string[], options?: MainOptions) {
     process.exit(1);
   }
 
-  const startupBenchmark = isTruthyEnvFlag(process.env.MSA_STARTUP_BENCHMARK);
+  const startupBenchmark = isTruthyEnvFlag(process.env["MSA_STARTUP_BENCHMARK"]);
   if (startupBenchmark && appMode !== "interactive") {
     console.error(chalk.red("Error: MSA_STARTUP_BENCHMARK only supports interactive mode"));
     process.exit(1);

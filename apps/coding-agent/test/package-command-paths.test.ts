@@ -77,8 +77,8 @@ describe("package commands", () => {
 
     originalCwd = process.cwd();
     originalAgentDir = process.env[ENV_AGENT_DIR];
-    originalMsaPackageDir = process.env.MSA_PACKAGE_DIR;
-    originalPath = process.env.PATH;
+    originalMsaPackageDir = process.env["MSA_PACKAGE_DIR"];
+    originalPath = process.env["PATH"];
     originalExitCode = process.exitCode;
     originalExecPath = process.execPath;
     process.exitCode = undefined;
@@ -106,14 +106,14 @@ describe("package commands", () => {
       process.env[ENV_AGENT_DIR] = originalAgentDir;
     }
     if (originalMsaPackageDir === undefined) {
-      delete process.env.MSA_PACKAGE_DIR;
+      delete process.env["MSA_PACKAGE_DIR"];
     } else {
-      process.env.MSA_PACKAGE_DIR = originalMsaPackageDir;
+      process.env["MSA_PACKAGE_DIR"] = originalMsaPackageDir;
     }
     if (originalPath === undefined) {
-      delete process.env.PATH;
+      delete process.env["PATH"];
     } else {
-      process.env.PATH = originalPath;
+      process.env["PATH"] = originalPath;
     }
     Object.defineProperty(process, "execPath", { value: originalExecPath, configurable: true });
     rmSync(tempDir, { recursive: true, force: true });
@@ -602,8 +602,8 @@ describe("package commands", () => {
   });
 
   it("allows explicit self-update checks when automatic version checks are disabled", async () => {
-    const previousSkipVersionCheck = process.env.MSA_SKIP_VERSION_CHECK;
-    process.env.MSA_SKIP_VERSION_CHECK = "1";
+    const previousSkipVersionCheck = process.env["MSA_SKIP_VERSION_CHECK"];
+    process.env["MSA_SKIP_VERSION_CHECK"] = "1";
     const fetchMock = vi.fn(async () => Response.json({ tag_name: `v${VERSION}` }));
     vi.stubGlobal("fetch", fetchMock);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -620,16 +620,16 @@ describe("package commands", () => {
       expect(process.exitCode).toBeUndefined();
     } finally {
       if (previousSkipVersionCheck === undefined) {
-        delete process.env.MSA_SKIP_VERSION_CHECK;
+        delete process.env["MSA_SKIP_VERSION_CHECK"];
       } else {
-        process.env.MSA_SKIP_VERSION_CHECK = previousSkipVersionCheck;
+        process.env["MSA_SKIP_VERSION_CHECK"] = previousSkipVersionCheck;
       }
     }
   });
 
   it("retries a transient self-update version check", async () => {
-    const previousSkipVersionCheck = process.env.MSA_SKIP_VERSION_CHECK;
-    delete process.env.MSA_SKIP_VERSION_CHECK;
+    const previousSkipVersionCheck = process.env["MSA_SKIP_VERSION_CHECK"];
+    delete process.env["MSA_SKIP_VERSION_CHECK"];
     const fetchMock = vi
       .fn()
       .mockRejectedValueOnce(new Error("fetch failed"))
@@ -644,8 +644,8 @@ describe("package commands", () => {
       expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(errorSpy).not.toHaveBeenCalled();
     } finally {
-      if (previousSkipVersionCheck === undefined) delete process.env.MSA_SKIP_VERSION_CHECK;
-      else process.env.MSA_SKIP_VERSION_CHECK = previousSkipVersionCheck;
+      if (previousSkipVersionCheck === undefined) delete process.env["MSA_SKIP_VERSION_CHECK"];
+      else process.env["MSA_SKIP_VERSION_CHECK"] = previousSkipVersionCheck;
       logSpy.mockRestore();
       errorSpy.mockRestore();
     }
@@ -682,7 +682,7 @@ else fs.writeFileSync(${JSON.stringify(recordPath)},JSON.stringify(args));
         2,
       ),
     );
-    process.env.MSA_PACKAGE_DIR = selfPackageDir;
+    process.env["MSA_PACKAGE_DIR"] = selfPackageDir;
     Object.defineProperty(process, "execPath", {
       value: join(selfPackageDir, "dist", "cli.js"),
       configurable: true,
@@ -741,7 +741,7 @@ else fs.writeFileSync(${JSON.stringify(recordPath)},JSON.stringify(args));
         2,
       ),
     );
-    process.env.MSA_PACKAGE_DIR = selfPackageDir;
+    process.env["MSA_PACKAGE_DIR"] = selfPackageDir;
     Object.defineProperty(process, "execPath", {
       value: join(selfPackageDir, "dist", "cli.js"),
       configurable: true,
@@ -787,8 +787,9 @@ else fs.writeFileSync(${JSON.stringify(recordPath)},JSON.stringify(args));
         : `#!/bin/sh\nif [ "$1" = "root" ] && [ "$2" = "-g" ]; then\n\tprintf '%s\\n' '${globalRoot.replaceAll("'", "'\\''")}'\n\texit 0\nfi\nexit 23\n`;
     writeFileSync(fakePnpmPath, fakePnpmScript);
     chmodSync(fakePnpmPath, 0o755);
-    process.env.PATH = `${fakeBinDir}${process.env.PATH ? `${delimiter}${process.env.PATH}` : ""}`;
-    process.env.MSA_PACKAGE_DIR = selfPackageDir;
+    process.env["PATH"] =
+      `${fakeBinDir}${process.env["PATH"] ? `${delimiter}${process.env["PATH"]}` : ""}`;
+    process.env["MSA_PACKAGE_DIR"] = selfPackageDir;
     Object.defineProperty(process, "execPath", {
       value: join(tempDir, "pnpm", "bin", "node"),
       configurable: true,

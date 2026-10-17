@@ -182,7 +182,7 @@ function cmdTest(filePath: string): void {
 }
 
 function cmdTheme(themeName: string): void {
-  process.env.COLORTERM = "truecolor";
+  process.env["COLORTERM"] = "truecolor";
   initTheme(themeName);
 
   const parseAnsiRgb = (ansi: string): [number, number, number] | null => {

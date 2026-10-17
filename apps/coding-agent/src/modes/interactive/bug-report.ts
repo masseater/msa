@@ -55,7 +55,7 @@ export async function reportBug(context: BugReportContext, initialHint?: string)
     context.showStatus("Bug report cancelled");
     return;
   }
-  if (options.delivery === "upload" && process.env.MSA_OFFLINE) {
+  if (options.delivery === "upload" && process.env["MSA_OFFLINE"]) {
     context.showError("Uploading bug reports requires online mode. Use Export as Zip instead.");
     return;
   }

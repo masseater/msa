@@ -208,7 +208,7 @@ describe("xAI Responses provider", () => {
       include: ["reasoning.encrypted_content"],
     });
     expect(captured.body).not.toHaveProperty("prompt_cache_retention");
-    expect(captured.body.input).toEqual(
+    expect(captured.body["input"]).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           role: "developer",

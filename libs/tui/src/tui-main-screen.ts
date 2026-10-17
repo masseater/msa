@@ -108,7 +108,7 @@ function extractKittyImageRows(line: string): number {
 }
 
 function isTermuxSession(): boolean {
-  return Boolean(process.env.TERMUX_VERSION);
+  return Boolean(process.env["TERMUX_VERSION"]);
 }
 
 export interface TuiMainScreenRenderState {
@@ -328,7 +328,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
     };
 
     const redrawLogDirectory =
-      process.env.MSA_TUI_DEBUG_REDRAW === "1" ? this.logDirectory : undefined;
+      process.env["MSA_TUI_DEBUG_REDRAW"] === "1" ? this.logDirectory : undefined;
     const logRedraw = (reason: string): void => {
       if (redrawLogDirectory === undefined) return;
       const logPath = path.join(redrawLogDirectory, "msa-tui-debug.log");
@@ -590,7 +590,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
 
     output.append("\x1b[?2026l"); // End synchronized output
 
-    if (process.env.MSA_TUI_DEBUG === "1") {
+    if (process.env["MSA_TUI_DEBUG"] === "1") {
       const debugDir = "/tmp/tui";
       fs.mkdirSync(debugDir, { recursive: true });
       const debugPath = path.join(

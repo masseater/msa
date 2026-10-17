@@ -419,7 +419,7 @@ describe("llama.cpp extension", () => {
     );
 
     expect(result.errorMessage).toBeUndefined();
-    expect(result.answers.kind).toMatchObject({ type: "choice", choice: "ci" });
+    expect(result.answers["kind"]).toMatchObject({ type: "choice", choice: "ci" });
     expect(paths).toContain("/completion");
   });
 
@@ -529,7 +529,7 @@ describe("llama.cpp extension", () => {
       { apiKey: "local" },
     );
     expect(result.errorMessage).toBeUndefined();
-    expect(result.answers.angry).toEqual({ type: "bool", probability: 0.82 });
+    expect(result.answers["angry"]).toEqual({ type: "bool", probability: 0.82 });
     expect(result.usage).toMatchObject({ input: 42, output: 0 });
     expect(systemOneRequests).toEqual([
       {

@@ -415,7 +415,7 @@ export function createCodemodeToolDefinition(
     // Scripts must not start other scripts.
     exposure: "model-only",
     prepareLoadout: (loadout) => prepareCodemodeLoadout(loadout, options),
-    reachesTools: (input) => getScriptReach(input.code),
+    reachesTools: (input) => getScriptReach(input["code"]),
     // Capable models write the script as raw text instead of a JSON-escaped string.
     constrainedSampling: { type: "grammar", variants: { openai_lark: CODEMODE_SOURCE_GRAMMAR } },
     // The sandbox (worker, QuickJS wasm) loads on the first call, not at startup.

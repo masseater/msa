@@ -360,7 +360,7 @@ describe("AgentSession model and extension characterization", () => {
         typeof message.details === "object" &&
         message.details !== null &&
         !Array.isArray(message.details) &&
-        (message.details as JsonObject).patched === true,
+        (message.details as JsonObject)["patched"] === true,
     );
     expect(observedToolUsage).toEqual(toolUsage);
     expect(toolResult).toBeDefined();

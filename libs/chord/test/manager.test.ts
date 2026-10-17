@@ -36,8 +36,8 @@ describe("processLock", () => {
   it("admits one holder when the temporary directory is too deep for a socket path", async () => {
     const deep = join(scratch("deep"), "a".repeat(60), "b".repeat(60));
     mkdirSync(deep, { recursive: true });
-    const previous = process.env.TMPDIR;
-    process.env.TMPDIR = deep;
+    const previous = process.env["TMPDIR"];
+    process.env["TMPDIR"] = deep;
     try {
       const name = `deep-${process.pid}`;
       const release = await processLock(name);
@@ -50,8 +50,8 @@ describe("processLock", () => {
         await processLock(name)
       )();
     } finally {
-      if (previous === undefined) delete process.env.TMPDIR;
-      else process.env.TMPDIR = previous;
+      if (previous === undefined) delete process.env["TMPDIR"];
+      else process.env["TMPDIR"] = previous;
       rmSync(scratch("deep"), { recursive: true, force: true });
     }
   });
@@ -62,15 +62,15 @@ describe("host manager (real child processes)", () => {
   it("a child without a lock does not inherit the parent's lock", async () => {
     const name = `chord2-test-${process.pid}-inherited`;
     const release = await processLock(name);
-    const previous = process.env.CHORD2_LOCK;
-    process.env.CHORD2_LOCK = name;
+    const previous = process.env["CHORD2_LOCK"];
+    process.env["CHORD2_LOCK"] = name;
     const manager = createHostManager({ driver: driver() });
     try {
       await manager.start();
       assert.equal(manager.status, "running");
     } finally {
-      if (previous === undefined) delete process.env.CHORD2_LOCK;
-      else process.env.CHORD2_LOCK = previous;
+      if (previous === undefined) delete process.env["CHORD2_LOCK"];
+      else process.env["CHORD2_LOCK"] = previous;
       await manager.stop();
       await release();
     }

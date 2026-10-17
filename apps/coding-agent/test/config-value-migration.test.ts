@@ -62,10 +62,10 @@ describe("config value env var syntax migration", () => {
     const migrated = JSON.parse(
       fs.readFileSync(path.join(agentDir, "auth.json"), "utf-8"),
     ) as Record<string, Record<string, unknown>>;
-    expect(migrated.anthropic.key).toBe("ANTHROPIC_API_KEY");
-    expect(migrated.openai.key).toBe("$OPENAI_API_KEY");
-    expect(migrated.opencode.key).toBe("public");
-    expect(migrated.github.access).toBe("ACCESS_TOKEN");
+    expect(migrated["anthropic"]["key"]).toBe("ANTHROPIC_API_KEY");
+    expect(migrated["openai"]["key"]).toBe("$OPENAI_API_KEY");
+    expect(migrated["opencode"]["key"]).toBe("public");
+    expect(migrated["github"]["access"]).toBe("ACCESS_TOKEN");
     expect(logSpy).not.toHaveBeenCalled();
   });
 

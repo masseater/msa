@@ -101,7 +101,7 @@ function toProvider(value: unknown): string | undefined {
 /** Catalog entry for scripts. `headers` is dropped because models.json headers can carry credentials. */
 function toModelInfo(model: AnyModel): Record<string, unknown> {
   const info: Record<string, unknown> = { ...model };
-  delete info.headers;
+  delete info["headers"];
   return info;
 }
 
@@ -146,9 +146,9 @@ function checkClassifierContext(context: unknown): ClassifierContext {
       throw fail(`context.images must be an array, got ${describeValue(images)}`);
     images.forEach((image: ScriptValue, index) => {
       if (
-        image?.type !== "image" ||
-        typeof image.data !== "string" ||
-        typeof image.mimeType !== "string"
+        image?.["type"] !== "image" ||
+        typeof image["data"] !== "string" ||
+        typeof image["mimeType"] !== "string"
       ) {
         throw fail(`context.images[${index}] must be an image block, got ${describeValue(image)}`);
       }
@@ -190,7 +190,7 @@ function checkClassifierContext(context: unknown): ClassifierContext {
       }
     } else if (type === "bool") {
       const labels = criteria as ScriptValue;
-      if (typeof labels?.true !== "string" || typeof labels.false !== "string") {
+      if (typeof labels?.["true"] !== "string" || typeof labels["false"] !== "string") {
         throw fail(
           `${at} is a "bool" question, so criteria must be { true: string, false: string }`,
         );
@@ -216,11 +216,11 @@ function checkImagesContext(context: unknown): ImagesContext {
     throw fail(`context.input must be a non-empty array of blocks, got ${describeValue(input)}`);
   }
   input.forEach((block: ScriptValue, index) => {
-    if (block?.type === "text" && typeof block.text === "string") return;
+    if (block?.["type"] === "text" && typeof block["text"] === "string") return;
     if (
-      block?.type === "image" &&
-      typeof block.data === "string" &&
-      typeof block.mimeType === "string"
+      block?.["type"] === "image" &&
+      typeof block["data"] === "string" &&
+      typeof block["mimeType"] === "string"
     )
       return;
     throw fail(
@@ -756,7 +756,7 @@ function createModelGlobals(
   ): Promise<TResult> => {
     const listHint = `List the ${type} models you can use with models.getAvailableOfType("${type}").`;
     const given = model as ScriptValue;
-    if (typeof given?.provider !== "string" || typeof given.id !== "string") {
+    if (typeof given?.["provider"] !== "string" || typeof given["id"] !== "string") {
       // undefined arrives as null: spread arguments cross the sandbox as a JSON array.
       const undefinedHint =
         model === undefined || model === null
@@ -766,8 +766,8 @@ function createModelGlobals(
         `${name}() expects ${withArticle(type)} model as its first argument, got ${describeValue(model)}.${undefinedHint} ${listHint}`,
       );
     }
-    const provider = given.provider;
-    const id = given.id;
+    const provider = given["provider"];
+    const id = given["id"];
     const ref = `${provider}/${id}`;
     const resolved = models.getModelOfType(type, provider, id);
     if (!resolved) {

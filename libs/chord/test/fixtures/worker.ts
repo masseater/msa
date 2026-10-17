@@ -6,7 +6,7 @@ import { createHost, type IpcChannel, ipcLink } from "../../src/index.ts";
 import { childControl } from "../../src/manager.ts";
 import { Echo } from "./echo.ts";
 
-const mode = process.env.FIXTURE_MODE ?? "normal";
+const mode = process.env["FIXTURE_MODE"] ?? "normal";
 const control = childControl();
 if (mode === "fatal") {
   control.fatal(new Error("fixture refuses to start"));
@@ -19,7 +19,7 @@ if (mode === "fatal") {
   });
   const host = createHost({
     self: { kind: "host" },
-    name: process.env.HOST_NAME ?? "worker",
+    name: process.env["HOST_NAME"] ?? "worker",
     upstream: { link: ipcLink(process as unknown as IpcChannel), principal: { kind: "server" } },
     onError: () => {},
   });
@@ -29,11 +29,11 @@ if (mode === "fatal") {
     echo: (text: string) => `${init.greeting} ${text} from ${process.pid}`,
     pid: () => process.pid,
   }));
-  if (process.env.GRANDCHILD_FILE) {
+  if (process.env["GRANDCHILD_FILE"]) {
     const grandchild = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
       stdio: "ignore",
     });
-    writeFileSync(process.env.GRANDCHILD_FILE, String(grandchild.pid));
+    writeFileSync(process.env["GRANDCHILD_FILE"], String(grandchild.pid));
   }
   control.onShutdown(async () => {
     if (mode === "ignore-shutdown") return;

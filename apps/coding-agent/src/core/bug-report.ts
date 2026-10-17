@@ -75,20 +75,22 @@ function collectEnvironment() {
   return {
     version: VERSION,
     userAgent: getMsaUserAgent(VERSION),
-    runtime: process.versions.bun ? `bun/${process.versions.bun}` : `node/${process.version}`,
+    runtime: process.versions["bun"] ? `bun/${process.versions["bun"]}` : `node/${process.version}`,
     platform: process.platform,
     arch: process.arch,
     osRelease: os.release(),
     osVersion: os.version(),
-    shell: process.env.SHELL?.split(/[\\/]/).pop() || null,
+    shell: process.env["SHELL"]?.split(/[\\/]/).pop() || null,
     terminal: {
       term: env("TERM"),
       program: env("TERM_PROGRAM"),
       programVersion: env("TERM_PROGRAM_VERSION"),
       colorterm: env("COLORTERM"),
-      tmux: Boolean(process.env.TMUX),
-      ssh: Boolean(process.env.SSH_CONNECTION || process.env.SSH_CLIENT || process.env.SSH_TTY),
-      ci: Boolean(process.env.CI),
+      tmux: Boolean(process.env["TMUX"]),
+      ssh: Boolean(
+        process.env["SSH_CONNECTION"] || process.env["SSH_CLIENT"] || process.env["SSH_TTY"],
+      ),
+      ci: Boolean(process.env["CI"]),
     },
     // Names help diagnose configuration; values never leave the machine.
     piEnvironmentVariables: Object.keys(process.env)

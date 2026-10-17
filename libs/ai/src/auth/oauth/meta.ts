@@ -86,10 +86,11 @@ async function startDeviceAuthorization(signal: AbortSignal): Promise<DeviceAuth
       `Meta device authorization failed with status ${response.status}${errorDetail(json)}`,
     );
   }
-  const deviceCode = json?.device_code;
-  const userCode = json?.user_code;
+  const deviceCode = json?.["device_code"];
+  const userCode = json?.["user_code"];
   const verificationUri =
-    trustedHttpUrl(json?.verification_uri_complete) ?? trustedHttpUrl(json?.verification_uri);
+    trustedHttpUrl(json?.["verification_uri_complete"]) ??
+    trustedHttpUrl(json?.["verification_uri"]);
   if (
     typeof deviceCode !== "string" ||
     !deviceCode ||
@@ -103,8 +104,8 @@ async function startDeviceAuthorization(signal: AbortSignal): Promise<DeviceAuth
     deviceCode,
     userCode,
     verificationUri,
-    intervalSeconds: positiveNumber(json?.interval),
-    expiresInSeconds: positiveNumber(json?.expires_in),
+    intervalSeconds: positiveNumber(json?.["interval"]),
+    expiresInSeconds: positiveNumber(json?.["expires_in"]),
   };
 }
 
@@ -132,14 +133,14 @@ async function pollForIdentityToken(
         signal: requestSignal(signal),
       });
       const json = await readJson(response);
-      if (response.ok && typeof json?.access_token === "string" && json.access_token) {
-        return { status: "complete", value: json.access_token };
+      if (response.ok && typeof json?.["access_token"] === "string" && json["access_token"]) {
+        return { status: "complete", value: json["access_token"] };
       }
-      switch (json?.error) {
+      switch (json?.["error"]) {
         case "authorization_pending":
           return { status: "pending" };
         case "slow_down":
-          return { status: "slow_down", intervalSeconds: positiveNumber(json?.interval) };
+          return { status: "slow_down", intervalSeconds: positiveNumber(json?.["interval"]) };
         case "access_denied":
           return { status: "failed", message: "Meta login was denied." };
         case "expired_token":
@@ -180,9 +181,9 @@ async function mintApiKey(identityToken: string, signal: AbortSignal): Promise<O
   if (!response.ok) {
     throw new Error(`Meta API key mint failed with status ${response.status}${errorDetail(json)}`);
   }
-  const apiKey = json?.api_key;
+  const apiKey = json?.["api_key"];
   if (typeof apiKey !== "string" || !apiKey) {
-    const actionUrl = trustedHttpUrl(json?.action_url);
+    const actionUrl = trustedHttpUrl(json?.["action_url"]);
     throw new Error(
       `Meta did not issue an API key.${actionUrl ? ` Complete setup at ${actionUrl}` : ""}`,
     );

@@ -314,8 +314,8 @@ describe("immutable application complexity", () => {
       Object.keys = originalKeys;
     }
 
-    expect(result.field999).toBe(-999);
-    expect(base.field999).toBe(999);
+    expect(result["field999"]).toBe(-999);
+    expect(base["field999"]).toBe(999);
     expect(shallowCopies).toBe(1);
   });
 });

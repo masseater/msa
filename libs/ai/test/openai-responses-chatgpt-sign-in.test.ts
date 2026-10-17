@@ -48,7 +48,7 @@ describe("OpenAI Responses with Sign in with ChatGPT", () => {
 
     expect(payload).not.toHaveProperty("max_output_tokens");
     expect(payload).not.toHaveProperty("temperature");
-    expect(payload.prompt_cache_retention).toBeUndefined();
+    expect(payload["prompt_cache_retention"]).toBeUndefined();
   });
 
   it("omits prompt_cache_options on models with explicit prompt cache mode", async () => {
@@ -57,8 +57,8 @@ describe("OpenAI Responses with Sign in with ChatGPT", () => {
     const signInPayload = await capturePayload("chatgpt-access-token", explicitCacheModel);
     const apiKeyPayload = await capturePayload("sk-proj-test", explicitCacheModel);
 
-    expect(signInPayload.prompt_cache_options).toBeUndefined();
-    expect(apiKeyPayload.prompt_cache_options).toEqual({ ttl: "30m" });
+    expect(signInPayload["prompt_cache_options"]).toBeUndefined();
+    expect(apiKeyPayload["prompt_cache_options"]).toEqual({ ttl: "30m" });
   });
 
   it.each([
@@ -71,8 +71,8 @@ describe("OpenAI Responses with Sign in with ChatGPT", () => {
   ])("keeps those fields for $name", async ({ apiKey, requestModel }) => {
     const payload = await capturePayload(apiKey, requestModel);
 
-    expect(payload.max_output_tokens).toBe(1000);
-    expect(payload.temperature).toBe(0.5);
-    expect(payload.prompt_cache_retention).toBe("24h");
+    expect(payload["max_output_tokens"]).toBe(1000);
+    expect(payload["temperature"]).toBe(0.5);
+    expect(payload["prompt_cache_retention"]).toBe("24h");
   });
 });

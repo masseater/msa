@@ -23,10 +23,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isCatalogEntry(value: unknown): value is CatalogEntry {
   return (
     isRecord(value) &&
-    typeof value.type === "string" &&
-    typeof value.id === "string" &&
-    typeof value.api === "string" &&
-    value.api.length > 0
+    typeof value["type"] === "string" &&
+    typeof value["id"] === "string" &&
+    typeof value["api"] === "string" &&
+    value["api"].length > 0
   );
 }
 

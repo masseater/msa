@@ -50,19 +50,19 @@ describe("isolateProcessEnvironment", () => {
   it("removes runner metadata and restores the process environment", () => {
     vi.stubEnv("MSA_EVAL_VARIANT", "with_docs");
     vi.stubEnv("MSA_EVAL_ARTIFACT_DIR", "/tmp/artifacts");
-    const oldHome = process.env.HOME;
+    const oldHome = process.env["HOME"];
     try {
       const restore = applyIsolatedEnvironment("/tmp/eval-home", "/tmp/eval-agent");
       try {
         expect(homedir()).toBe("/tmp/eval-home");
-        expect(process.env.MSA_CODING_AGENT_DIR).toBe("/tmp/eval-agent");
-        expect(process.env.MSA_EVAL_VARIANT).toBeUndefined();
-        expect(process.env.MSA_EVAL_ARTIFACT_DIR).toBeUndefined();
+        expect(process.env["MSA_CODING_AGENT_DIR"]).toBe("/tmp/eval-agent");
+        expect(process.env["MSA_EVAL_VARIANT"]).toBeUndefined();
+        expect(process.env["MSA_EVAL_ARTIFACT_DIR"]).toBeUndefined();
       } finally {
         restore();
       }
-      expect(process.env.HOME).toBe(oldHome);
-      expect(process.env.MSA_EVAL_VARIANT).toBe("with_docs");
+      expect(process.env["HOME"]).toBe(oldHome);
+      expect(process.env["MSA_EVAL_VARIANT"]).toBe("with_docs");
     } finally {
       vi.unstubAllEnvs();
     }

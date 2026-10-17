@@ -11,8 +11,8 @@ describeEval("Answer a basic prompt", { harness }, (it) => {
     expect(result.output.trim()).toBe("Paris");
     expect(result.errors).toEqual([]);
     expect(result.usage).toMatchObject({
-      provider: process.env.MSA_PROVIDER,
-      model: process.env.MSA_MODEL,
+      provider: process.env["MSA_PROVIDER"],
+      model: process.env["MSA_MODEL"],
     });
     expect(result.usage.totalTokens).toBeGreaterThan(0);
   });

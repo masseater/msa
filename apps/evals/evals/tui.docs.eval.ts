@@ -146,8 +146,8 @@ async function inspectContextFooter(
   });
   const terminal = new RecordingTerminal();
   const mode = new InteractiveMode(runtime, { tuiMode: "regular", terminal });
-  const previousOffline = process.env.MSA_OFFLINE;
-  process.env.MSA_OFFLINE = "1";
+  const previousOffline = process.env["MSA_OFFLINE"];
+  process.env["MSA_OFFLINE"] = "1";
   try {
     oracleSession.sessionManager.appendMessage({
       ...createContextMessage(model, 0),
@@ -189,8 +189,8 @@ async function inspectContextFooter(
       try {
         await runtime.dispose();
       } finally {
-        if (previousOffline === undefined) delete process.env.MSA_OFFLINE;
-        else process.env.MSA_OFFLINE = previousOffline;
+        if (previousOffline === undefined) delete process.env["MSA_OFFLINE"];
+        else process.env["MSA_OFFLINE"] = previousOffline;
       }
     }
   }

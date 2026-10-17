@@ -56,6 +56,7 @@
     "apps/coding-agent/scripts/**/*.ts",
     "libs/*/src/**/*",
     "libs/*/test/**/*",
+    "libs/ai/scripts/**/*.ts",
     "apps/coding-agent/examples/**/*",
     "libs/agent/examples/**/*"
   ],

@@ -87,14 +87,14 @@ function isObject(value: unknown): value is Record<string, unknown> {
 /** Schema descriptions and property names, recursively. */
 function schemaText(schema: unknown, parts: string[]): void {
   if (!isObject(schema)) return;
-  if (typeof schema.description === "string") parts.push(schema.description);
-  if (isObject(schema.properties)) {
-    for (const [name, property] of Object.entries(schema.properties)) {
+  if (typeof schema["description"] === "string") parts.push(schema["description"]);
+  if (isObject(schema["properties"])) {
+    for (const [name, property] of Object.entries(schema["properties"])) {
       parts.push(name);
       schemaText(property, parts);
     }
   }
-  schemaText(schema.items, parts);
+  schemaText(schema["items"], parts);
   for (const key of ["anyOf", "oneOf", "allOf"]) {
     const variants = schema[key];
     if (Array.isArray(variants)) for (const variant of variants) schemaText(variant, parts);

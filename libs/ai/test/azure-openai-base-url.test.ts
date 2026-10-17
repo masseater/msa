@@ -60,49 +60,49 @@ const context: Context = {
   messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
 };
 
-const originalAzureOpenAIBaseUrl = process.env.AZURE_OPENAI_BASE_URL;
-const originalAzureOpenAIResourceName = process.env.AZURE_OPENAI_RESOURCE_NAME;
-const originalAzureOpenAIApiVersion = process.env.AZURE_OPENAI_API_VERSION;
-const originalAzureOpenAIApiKey = process.env.AZURE_OPENAI_API_KEY;
+const originalAzureOpenAIBaseUrl = process.env["AZURE_OPENAI_BASE_URL"];
+const originalAzureOpenAIResourceName = process.env["AZURE_OPENAI_RESOURCE_NAME"];
+const originalAzureOpenAIApiVersion = process.env["AZURE_OPENAI_API_VERSION"];
+const originalAzureOpenAIApiKey = process.env["AZURE_OPENAI_API_KEY"];
 
 beforeEach(() => {
   azureMock.constructorCalls.length = 0;
   azureMock.lastParams = undefined;
   azureMock.streamEvents = undefined;
-  delete process.env.AZURE_OPENAI_BASE_URL;
-  delete process.env.AZURE_OPENAI_RESOURCE_NAME;
-  delete process.env.AZURE_OPENAI_API_VERSION;
-  delete process.env.AZURE_OPENAI_API_KEY;
+  delete process.env["AZURE_OPENAI_BASE_URL"];
+  delete process.env["AZURE_OPENAI_RESOURCE_NAME"];
+  delete process.env["AZURE_OPENAI_API_VERSION"];
+  delete process.env["AZURE_OPENAI_API_KEY"];
 });
 
 afterEach(() => {
   if (originalAzureOpenAIBaseUrl === undefined) {
-    delete process.env.AZURE_OPENAI_BASE_URL;
+    delete process.env["AZURE_OPENAI_BASE_URL"];
   } else {
-    process.env.AZURE_OPENAI_BASE_URL = originalAzureOpenAIBaseUrl;
+    process.env["AZURE_OPENAI_BASE_URL"] = originalAzureOpenAIBaseUrl;
   }
 
   if (originalAzureOpenAIResourceName === undefined) {
-    delete process.env.AZURE_OPENAI_RESOURCE_NAME;
+    delete process.env["AZURE_OPENAI_RESOURCE_NAME"];
   } else {
-    process.env.AZURE_OPENAI_RESOURCE_NAME = originalAzureOpenAIResourceName;
+    process.env["AZURE_OPENAI_RESOURCE_NAME"] = originalAzureOpenAIResourceName;
   }
 
   if (originalAzureOpenAIApiVersion === undefined) {
-    delete process.env.AZURE_OPENAI_API_VERSION;
+    delete process.env["AZURE_OPENAI_API_VERSION"];
   } else {
-    process.env.AZURE_OPENAI_API_VERSION = originalAzureOpenAIApiVersion;
+    process.env["AZURE_OPENAI_API_VERSION"] = originalAzureOpenAIApiVersion;
   }
 
   if (originalAzureOpenAIApiKey === undefined) {
-    delete process.env.AZURE_OPENAI_API_KEY;
+    delete process.env["AZURE_OPENAI_API_KEY"];
   } else {
-    process.env.AZURE_OPENAI_API_KEY = originalAzureOpenAIApiKey;
+    process.env["AZURE_OPENAI_API_KEY"] = originalAzureOpenAIApiKey;
   }
 });
 
 async function captureClientBaseUrl(baseUrl: string): Promise<string> {
-  process.env.AZURE_OPENAI_BASE_URL = baseUrl;
+  process.env["AZURE_OPENAI_BASE_URL"] = baseUrl;
   const model = getModel("azure", "gpt-4o-mini");
   await streamAzureOpenAIResponses(model, normalizeContext(context), {
     apiKey: "test-api-key",
@@ -181,7 +181,7 @@ describe("azure base URL normalization", () => {
   });
 
   it("throws on invalid URLs", async () => {
-    process.env.AZURE_OPENAI_BASE_URL = "not-a-url";
+    process.env["AZURE_OPENAI_BASE_URL"] = "not-a-url";
     const model = getModel("azure", "gpt-4o-mini");
     const result = await streamAzureOpenAIResponses(model, normalizeContext(context), {
       apiKey: "test-api-key",
@@ -238,7 +238,7 @@ describe("azure base URL normalization", () => {
   });
 
   it("builds correct default URL from AZURE_OPENAI_RESOURCE_NAME", async () => {
-    process.env.AZURE_OPENAI_RESOURCE_NAME = "my-resource";
+    process.env["AZURE_OPENAI_RESOURCE_NAME"] = "my-resource";
     const model = getModel("azure", "gpt-4o-mini");
     await streamAzureOpenAIResponses(model, normalizeContext(context), {
       apiKey: "test-api-key",

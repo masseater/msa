@@ -90,7 +90,9 @@ function applyChanges(
       const field = change.type === "text_delta" ? "text" : "thinking";
       block[field] = `${block[field] as string}${change.delta}`;
     } else if (change.type === "toolcall_delta") {
-      let target = (next.content[change.contentIndex] as unknown as Mutable).arguments as Mutable;
+      let target = (next.content[change.contentIndex] as unknown as Mutable)[
+        "arguments"
+      ] as Mutable;
       for (const segment of change.path.slice(0, -1)) target = target[segment] as Mutable;
       const last = change.path.at(-1)!;
       target[last] = `${target[last] as string}${change.delta}`;

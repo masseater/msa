@@ -345,7 +345,7 @@ export const STORAGE_READ_BENCHMARKS: readonly StorageReadBenchmark[] = [
     async run(storage, dataset) {
       return Number(
         (await storage.document(dataset.replayDocumentIds[tail], "current", BACKGROUND_CONTEXT))
-          ?.value.count,
+          ?.value["count"],
       );
     },
     expected: () => tail,
@@ -360,7 +360,7 @@ export const STORAGE_READ_BENCHMARKS: readonly StorageReadBenchmark[] = [
             dataset.ancientAt,
             BACKGROUND_CONTEXT,
           )
-        )?.value.count,
+        )?.value["count"],
       );
     },
     expected: () => HISTORY_SEGMENT_LENGTH,
@@ -370,7 +370,7 @@ export const STORAGE_READ_BENCHMARKS: readonly StorageReadBenchmark[] = [
     async run(storage, dataset) {
       return Number(
         (await storage.document(dataset.historicalDocumentId, dataset.recentAt, BACKGROUND_CONTEXT))
-          ?.value.count,
+          ?.value["count"],
       );
     },
     expected: () => HISTORY_SEGMENT_LENGTH * 2,

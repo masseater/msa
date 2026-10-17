@@ -45,11 +45,11 @@ function parseAuthorizationInput(input: string): string | undefined {
 }
 
 function errorDetail(body: JsonObject): string | undefined {
-  if (typeof body.error_description === "string") return body.error_description;
-  if (typeof body.message === "string") return body.message;
-  if (typeof body.error === "string") return body.error;
-  if (body.error && typeof body.error === "object" && !Array.isArray(body.error)) {
-    const message = (body.error as JsonObject).message;
+  if (typeof body["error_description"] === "string") return body["error_description"];
+  if (typeof body["message"] === "string") return body["message"];
+  if (typeof body["error"] === "string") return body["error"];
+  if (body["error"] && typeof body["error"] === "object" && !Array.isArray(body["error"])) {
+    const message = (body["error"] as JsonObject)["message"];
     if (typeof message === "string") return message;
   }
   return undefined;
@@ -102,13 +102,13 @@ async function exchangeAuthorizationCode(
     );
   }
 
-  if (typeof body.key !== "string" || body.key.length === 0) {
+  if (typeof body["key"] !== "string" || body["key"].length === 0) {
     throw new Error('OpenRouter OAuth response carries no "key"');
   }
 
   return {
     type: "oauth",
-    access: body.key,
+    access: body["key"],
     refresh: "",
     expires: Number.MAX_SAFE_INTEGER,
   };

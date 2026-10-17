@@ -3,7 +3,7 @@
  * Enable with MSA_TIMING=1 environment variable.
  */
 
-const ENABLED = process.env.MSA_TIMING === "1";
+const ENABLED = process.env["MSA_TIMING"] === "1";
 interface TimingNamespace {
   timings: Array<{ label: string; ms: number }>;
   lastTime: number;

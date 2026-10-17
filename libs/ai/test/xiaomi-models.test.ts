@@ -56,12 +56,12 @@ describe("Xiaomi MiMo models", () => {
       };
 
       const enabled = await capturePayload("high");
-      expect(enabled?.thinking).toEqual({ type: "enabled" });
-      expect(enabled?.reasoning_effort).toBeUndefined();
+      expect(enabled?.["thinking"]).toEqual({ type: "enabled" });
+      expect(enabled?.["reasoning_effort"]).toBeUndefined();
 
       const disabled = await capturePayload(undefined);
-      expect(disabled?.thinking).toEqual({ type: "disabled" });
-      expect(disabled?.reasoning_effort).toBeUndefined();
+      expect(disabled?.["thinking"]).toEqual({ type: "disabled" });
+      expect(disabled?.["reasoning_effort"]).toBeUndefined();
     }
   });
 });

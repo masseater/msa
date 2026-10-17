@@ -35,7 +35,7 @@ describe("Amazon Bedrock Models", () => {
     expect(models.some((model) => model.id === "anthropic.claude-opus-5")).toBe(false);
   });
 
-  if (hasBedrockCredentials() && process.env.BEDROCK_EXTENSIVE_MODEL_TEST) {
+  if (hasBedrockCredentials() && process.env["BEDROCK_EXTENSIVE_MODEL_TEST"]) {
     for (const model of models) {
       it(`should make a simple request with ${model.id}`, { timeout: 10_000 }, async () => {
         const context: Context = {

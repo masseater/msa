@@ -69,7 +69,7 @@ function greeterFacet(spec: GreeterSpec): Facet {
                 const bump =
                   spec.bump ??
                   ((d: Record<string, number>) => {
-                    d.n = (d.n ?? 0) + 1;
+                    d["n"] = (d["n"] ?? 0) + 1;
                   });
                 bump(draft as Record<string, number>);
               });
@@ -199,7 +199,7 @@ describe("reload", () => {
       schema: Type.Object({ total: Type.Number() }),
       initial: { total: 0 },
       bump: (draft) => {
-        draft.total = (draft.total ?? 0) + 1;
+        draft["total"] = (draft["total"] ?? 0) + 1;
       },
       state: {
         version: 2,
@@ -596,7 +596,7 @@ describe("reload", () => {
           accepts: {
             1: (current) => ({
               variant: "main",
-              read: () => ({ text: `${(current.fetch as typeof fetch)().body} via adapter` }),
+              read: () => ({ text: `${(current["fetch"] as typeof fetch)().body} via adapter` }),
             }),
           },
         }),
