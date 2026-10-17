@@ -6,7 +6,7 @@ import {
   OAuthCallbackServer,
   type OAuthCallbackServerOptions,
 } from "../src/oauth/index.ts";
-import { send } from "./helpers.ts";
+import { webFetch } from "./web-fetch.ts";
 
 const withCallback = <A>(
   options: OAuthCallbackServerOptions | undefined,
@@ -18,7 +18,7 @@ const withCallback = <A>(
     (callback) => Effect.promise(() => callback.close()),
   );
 
-const get = (url: string) => Effect.promise(() => send(new Request(url)));
+const get = (url: string) => Effect.promise(() => webFetch(new Request(url)));
 
 const ignoreRejection = <A>(promise: Promise<A>): Promise<A> => {
   promise.catch(() => undefined);

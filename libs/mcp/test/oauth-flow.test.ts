@@ -15,7 +15,6 @@ import {
   listen,
   readBody,
   readMessage,
-  send,
 } from "./helpers.ts";
 import {
   authorizationServerMetadata,
@@ -23,6 +22,7 @@ import {
   sendJson,
   TestOAuthProvider,
 } from "./oauth-support.ts";
+import { webFetch } from "./web-fetch.ts";
 
 interface FlowState {
   expectedChallenge: string | undefined;
@@ -153,10 +153,10 @@ const completeAuthorization = (
   Effect.gen(function* () {
     const callbackResult = callback.waitForCallback("expected-state");
     const authorizationResponse = yield* Effect.promise(() =>
-      send(new Request(provider.authorizationUrl as URL, { redirect: "manual" })),
+      webFetch(new Request(provider.authorizationUrl as URL, { redirect: "manual" })),
     );
     yield* Effect.promise(() =>
-      send(new Request(authorizationResponse.headers.get("location") as string)),
+      webFetch(new Request(authorizationResponse.headers.get("location") as string)),
     );
     const { code } = yield* Effect.promise(() => callbackResult);
     expect(

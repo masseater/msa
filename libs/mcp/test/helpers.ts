@@ -15,8 +15,6 @@ class HttpTestError extends Data.TaggedError("HttpTestError")<{ readonly message
 
 const servers: Server[] = [];
 
-export const send = (request: Request): Promise<Response> => fetch(request);
-
 export const readBody = (request: IncomingMessage): Effect.Effect<string> =>
   Effect.callback<string>((resume) => {
     const chunks: Buffer[] = [];

@@ -51,6 +51,7 @@
     "effect": "catalog:stack"
   },
   "devDependencies": {
+    "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:stack",
     "@types/cross-spawn": "catalog:",
     "shx": "catalog:",

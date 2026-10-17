@@ -20,6 +20,7 @@ import {
   type RecordedRequest,
   startServer,
 } from "./http-fixture.ts";
+import { webFetch } from "./web-fetch.ts";
 
 const newClient = () => new McpClient({ name: "http-test", version: "1.0.0" });
 
@@ -147,11 +148,9 @@ const closesWithLastToken = Effect.gen(function* () {
   expect(deletes[0]?.headers["mcp-session-id"]).toBe("session-1");
 });
 
-const realFetch = globalThis.fetch;
-
 const strictFetch = function (this: unknown, input: string | URL, init?: RequestInit) {
   if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
-  return realFetch(input, init);
+  return webFetch(new Request(input, init));
 } satisfies McpFetch;
 
 const connectThrough = (url: string, fetch: McpFetch | undefined) =>
