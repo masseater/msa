@@ -4,14 +4,14 @@ import type { Args } from "./args.ts";
 
 export interface InitialMessageInput {
   parsed: Args;
-  fileText?: string;
-  fileImages?: ImageContent[];
-  stdinContent?: string;
+  fileText?: string | undefined;
+  fileImages?: ImageContent[] | undefined;
+  stdinContent?: string | undefined;
 }
 
 export interface InitialMessageResult {
-  initialMessage?: string;
-  initialImages?: ImageContent[];
+  initialMessage?: string | undefined;
+  initialImages?: ImageContent[] | undefined;
 }
 
 /**

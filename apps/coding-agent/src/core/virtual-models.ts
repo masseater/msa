@@ -65,17 +65,23 @@ export interface ModelRouteRequest<TState = unknown> {
   thinkingLevel: ModelThinkingLevel;
   reason: ModelRouteReason;
   /** Physical model and thinking level of the latest successful response in `messages`. */
-  previous?: { model: Model<Api>; thinkingLevel?: ModelThinkingLevel };
+  previous?: { model: Model<Api>; thinkingLevel?: ModelThinkingLevel | undefined } | undefined;
   /**
    * For `retry`: the failed request, which `messages` no longer contains. `message` carries its
    * `stopReason` and `errorMessage`. Absent when the router itself failed.
    */
-  failed?: { model: Model<Api>; thinkingLevel?: ModelThinkingLevel; message: AssistantMessage };
+  failed?:
+    | {
+        model: Model<Api>;
+        thinkingLevel?: ModelThinkingLevel | undefined;
+        message: AssistantMessage;
+      }
+    | undefined;
   /** Router state last returned on this session branch. Undefined before the first state and for `direct` requests. */
   state?: TState;
   /** Conversation for this request, including system messages. */
   messages: readonly Message[];
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 }
 
 /** Physical model and thinking level for one request. */
@@ -259,12 +265,14 @@ export function withVirtualModels(
       const real = physical(models);
       return [...(filterModels?.(real, credential) ?? real), ...virtual(models)];
     },
-    filterAllModels:
-      filterAllModels &&
-      ((models, credential) => [
-        ...filterAllModels(physical(models), credential),
-        ...virtual(models),
-      ]),
+    ...(filterAllModels
+      ? {
+          filterAllModels: (models, credential) => [
+            ...filterAllModels(physical(models), credential),
+            ...virtual(models),
+          ],
+        }
+      : {}),
     stream: (model, context, options) =>
       isVirtualModel(model) ? unroutedStream(model) : provider.stream(model, context, options),
     streamSimple: (model, context, options) =>

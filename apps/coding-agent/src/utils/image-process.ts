@@ -5,7 +5,7 @@ export interface ProcessImageOptions {
   /** Whether to resize images to inline provider limits. Default: true */
   autoResizeImages?: boolean;
   /** Optional resize overrides. Uses resizeImage defaults when omitted. */
-  resizeOptions?: ImageResizeOptions;
+  resizeOptions?: ImageResizeOptions | undefined;
 }
 
 export type ProcessImageResult =

@@ -262,7 +262,7 @@ export type AgentSessionEvent =
       result: CompactionResult | undefined;
       aborted: boolean;
       willRetry: boolean;
-      errorMessage?: string;
+      errorMessage?: string | undefined;
     }
   | {
       type: "auto_retry_start";
@@ -271,7 +271,12 @@ export type AgentSessionEvent =
       delayMs: number;
       errorMessage: string;
     }
-  | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+  | {
+      type: "auto_retry_end";
+      success: boolean;
+      attempt: number;
+      finalError?: string | undefined;
+    }
   | {
       type: "summarization_retry_scheduled";
       attempt: number;
@@ -286,7 +291,7 @@ export type AgentSessionEvent =
       reason: "manual" | "threshold" | "overflow";
     }
   | { type: "summarization_retry_finished" }
-  | { type: "bash_execution_update"; id?: string; delta: string }
+  | { type: "bash_execution_update"; id?: string | undefined; delta: string }
   /** The active `/goal` changed: set, evaluated, ended, or started or finished evaluating. */
   | { type: "goal_changed"; goal: GoalSnapshot | undefined }
   /** A session the orchestrator started changed state or streamed. */
@@ -319,11 +324,13 @@ export interface AgentSessionConfig {
   settingsManager: SettingsManager;
   cwd: string;
   /** Models to cycle through with Ctrl+P (from --models flag) */
-  scopedModels?: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel }>;
+  scopedModels?:
+    | Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel | undefined }>
+    | undefined;
   /** Resource loader for extensions, skills, prompts, themes, context files, and system prompt */
   resourceLoader: ResourceLoader;
   /** SDK custom tools registered outside extensions */
-  customTools?: ToolDefinition[];
+  customTools?: ToolDefinition[] | undefined;
   /** Canonical model/auth runtime used by coding-agent internals. */
   modelRuntime: ModelRuntime;
   /** Keeps the prompt cache entry of the last session request warm. */
@@ -332,43 +339,43 @@ export interface AgentSessionConfig {
     "cancel" | "status" | "onAgentSettled" | "onModeChanged" | "onWarmed"
   >;
   /** Initial active built-in tool names. Default: [read, bash, edit, write] */
-  initialActiveToolNames?: string[];
+  initialActiveToolNames?: string[] | undefined;
   /**
    * Whether the initial tools come from the `defaultTools` setting. When true, a resumed session
    * replaces them with the loadout its transcript records, with `defaultToolModifiers` applied, and
    * reload activates tools newly added to the setting. Tools removed from it stay active.
    */
-  usesDefaultTools?: boolean;
+  usesDefaultTools?: boolean | undefined;
   /**
    * `+name`/`-name` entries applied on top of the `defaultTools` setting, from `--tools`. Reload
    * applies them to the reloaded setting too, so a removed tool stays removed.
    */
-  defaultToolModifiers?: string[];
+  defaultToolModifiers?: string[] | undefined;
   /**
    * Optional allowlist of tool names or patterns (`*` matches any characters). When provided, only
    * matching tools are exposed. A non-empty list without `mcp__` entries also keeps MCP tools
    * registered for codemode and tool_search; only tool_search can declare them. An empty list
    * exposes no tools.
    */
-  allowedToolNames?: string[];
+  allowedToolNames?: string[] | undefined;
   /** Optional denylist of tool names or patterns. When provided, matching tools are not exposed. */
-  excludedToolNames?: string[];
+  excludedToolNames?: string[] | undefined;
   /**
    * Override base tools (useful for custom runtimes).
    *
    * These are synthesized into minimal ToolDefinitions internally so AgentSession can keep
    * a definition-first registry even when callers provide plain AgentTool instances.
    */
-  baseToolsOverride?: Record<string, AgentTool>;
+  baseToolsOverride?: Record<string, AgentTool> | undefined;
   /** Mutable ref used by Agent to access the current ExtensionRunner */
-  extensionRunnerRef?: { current?: ExtensionRunner };
+  extensionRunnerRef?: { current?: ExtensionRunner } | undefined;
   /** Session start event metadata emitted when extensions bind to this runtime. */
-  sessionStartEvent?: SessionStartEvent;
+  sessionStartEvent?: SessionStartEvent | undefined;
   /**
    * Creates the sessions the orchestrator tools start. Without it the session has no orchestrator
    * tools.
    */
-  createWorkerSession?: (options: CreateWorkerOptions) => Promise<WorkerSession>;
+  createWorkerSession?: ((options: CreateWorkerOptions) => Promise<WorkerSession>) | undefined;
 }
 
 export interface ExtensionBindings {
@@ -388,9 +395,9 @@ export interface PromptOptions {
   /** Whether to dispatch extension commands and expand skill commands and prompt templates (default: true) */
   expandPromptTemplates?: boolean;
   /** Image attachments */
-  images?: ImageContent[];
+  images?: ImageContent[] | undefined;
   /** When streaming, how to queue the message: "steer" (interrupt) or "followUp" (wait). Required if streaming. */
-  streamingBehavior?: "steer" | "followUp";
+  streamingBehavior?: "steer" | "followUp" | undefined;
   /** Source of input for extension input event handlers. Defaults to "interactive". */
   source?: InputSource;
   /** Internal hook used by RPC mode to observe how an accepted prompt was dispatched. Not called if the prompt is rejected. */
@@ -428,7 +435,7 @@ export interface SessionStats {
     total: number;
   };
   cost: number;
-  contextUsage?: ContextUsage;
+  contextUsage?: ContextUsage | undefined;
 }
 
 interface ToolDefinitionEntry {
@@ -453,10 +460,10 @@ export class AgentSession {
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;
 
-  private _scopedModels: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel }>;
+  private _scopedModels: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel | undefined }>;
 
   // Event subscription state
-  private _unsubscribeAgent?: () => void;
+  private _unsubscribeAgent?: (() => void) | undefined;
   private _eventListeners: AgentSessionEventListener[] = [];
   private _isAgentRunActive = false;
   private _agentRunAbortRequested = false;
@@ -513,8 +520,8 @@ export class AgentSession {
   private _customTools: ToolDefinition[];
   private _baseToolDefinitions: Map<string, ToolDefinition> = new Map();
   private _cwd: string;
-  private _extensionRunnerRef?: { current?: ExtensionRunner };
-  private _initialActiveToolNames?: string[];
+  private _extensionRunnerRef?: { current?: ExtensionRunner } | undefined;
+  private _initialActiveToolNames?: string[] | undefined;
   /**
    * Tools of the restored or reloaded loadout that are not registered yet, such as tools of MCP
    * servers that are still connecting. They are activated when they are registered, and dropped when
@@ -530,8 +537,8 @@ export class AgentSession {
    * (`mcp__*`). Otherwise it keeps MCP tools registered for codemode and tool_search.
    */
   private _allowlistFiltersMcp = false;
-  private _excludedTools?: (name: string) => boolean;
-  private _baseToolsOverride?: Record<string, AgentTool>;
+  private _excludedTools?: ((name: string) => boolean) | undefined;
+  private _baseToolsOverride?: Record<string, AgentTool> | undefined;
   private _sessionStartEvent: SessionStartEvent;
   private _extensionUIContext?: ExtensionUIContext;
   private _extensionMode: ExtensionMode = "print";
@@ -539,15 +546,14 @@ export class AgentSession {
   private _extensionAbortHandler?: () => void;
   private _extensionShutdownHandler?: ShutdownHandler;
   private _extensionErrorListener?: ExtensionErrorListener;
-  private _extensionErrorUnsubscriber?: () => void;
+  private _extensionErrorUnsubscriber?: (() => void) | undefined;
 
   private _modelRuntime: ModelRuntime;
   /** Long-term memory for this session; replaced when settings reload. */
   private _memory: MemoryService | undefined;
-  private _cacheWarmer?: Pick<
-    CacheWarmer,
-    "cancel" | "status" | "onAgentSettled" | "onModeChanged" | "onWarmed"
-  >;
+  private _cacheWarmer?:
+    | Pick<CacheWarmer, "cancel" | "status" | "onAgentSettled" | "onModeChanged" | "onWarmed">
+    | undefined;
 
   // Tool registry for extension getTools/setTools
   private _toolRegistry: Map<string, AgentTool> = new Map();
@@ -561,7 +567,7 @@ export class AgentSession {
 
   private _baseSystemPromptOptions!: NormalizedBuildSystemPromptOptions;
   /** Prompt options after before_agent_start mutations for the active run. */
-  private _runSystemPromptOptions?: NormalizedBuildSystemPromptOptions;
+  private _runSystemPromptOptions?: NormalizedBuildSystemPromptOptions | undefined;
 
   constructor(config: AgentSessionConfig) {
     this.agent = config.agent;
@@ -676,13 +682,13 @@ export class AgentSession {
     signal?: AbortSignal,
   ): Promise<{
     model: Model<any>;
-    apiKey?: string;
-    headers?: Record<string, string>;
-    env?: Record<string, string>;
+    apiKey?: string | undefined;
+    headers?: Record<string, string> | undefined;
+    env?: Record<string, string> | undefined;
   }> {
     let result: AuthResult | undefined;
     try {
-      result = await this._modelRuntime.getAuth(model, { signal });
+      result = await this._modelRuntime.getAuth(model, signal ? { signal } : {});
     } catch (error) {
       const cause = error instanceof Error ? error.cause : undefined;
       if (cause instanceof Error && cause.message === "authHeader requires a resolved API key") {
@@ -716,9 +722,9 @@ export class AgentSession {
     signal?: AbortSignal,
   ): Promise<{
     model: Model<any>;
-    apiKey?: string;
-    headers?: Record<string, string>;
-    env?: Record<string, string>;
+    apiKey?: string | undefined;
+    headers?: Record<string, string> | undefined;
+    env?: Record<string, string> | undefined;
     thinkingLevel: ThinkingLevel;
   }> {
     // Route a virtual model first: summaries size their input and output from the model they get.
@@ -734,7 +740,7 @@ export class AgentSession {
     }
 
     try {
-      const result = await this._modelRuntime.getAuth(model, { signal });
+      const result = await this._modelRuntime.getAuth(model, signal ? { signal } : {});
       if (!result) return { model, thinkingLevel };
       const requestModel = result.auth.baseUrl ? { ...model, baseUrl: result.auth.baseUrl } : model;
       return {
@@ -861,12 +867,15 @@ export class AgentSession {
     }
 
     // The hook result already dropped structured content that replaced content no longer matches.
+    const details = hookResult?.details;
+    const structuredContent = hookResult ? hookResult.structuredContent : result.structuredContent;
+    const usage = hookResult?.usage;
     return {
       content: normalizedContent,
-      details: hookResult?.details,
-      structuredContent: hookResult ? hookResult.structuredContent : result.structuredContent,
+      ...(details !== undefined ? { details } : {}),
+      ...(structuredContent !== undefined ? { structuredContent } : {}),
       isError: hookResult?.isError ?? isError,
-      usage: hookResult?.usage,
+      ...(usage !== undefined ? { usage } : {}),
     };
   }
 
@@ -901,7 +910,7 @@ export class AgentSession {
           context: { messages: this.agent.state.messages, tools: this.agent.state.tools },
           beforeToolCall: (context) => this._beforeToolCall(context, parentId),
           afterToolCall: (context) => this._afterToolCall(context, parentId),
-          signal,
+          ...(signal ? { signal } : {}),
           onUpdate,
         });
       },
@@ -1092,9 +1101,9 @@ export class AgentSession {
           ...nextContext,
           tools: this.agent.state.tools.slice(),
         },
-        messages: updateMessage
-          ? [...(previousSnapshot?.messages ?? []), updateMessage]
-          : previousSnapshot?.messages,
+        ...(updateMessage
+          ? { messages: [...(previousSnapshot?.messages ?? []), updateMessage] }
+          : {}),
         model: this.agent.state.model,
         thinkingLevel: this.agent.state.thinkingLevel,
       };
@@ -1648,7 +1657,7 @@ export class AgentSession {
   }
 
   /** Under a virtual selection, the physical model and thinking level of the latest successful response. */
-  get routedModel(): { model: Model<any>; thinkingLevel?: ThinkingLevel } | undefined {
+  get routedModel(): { model: Model<any>; thinkingLevel?: ThinkingLevel | undefined } | undefined {
     if (!this.model || !isVirtualModel(this.model)) return undefined;
     const latest = findLatestResponse(this.agent.state.messages);
     const model = latest && this._modelRuntime.getPhysicalModel(latest.provider, latest.model);
@@ -1867,12 +1876,17 @@ export class AgentSession {
   }
 
   /** Scoped models for cycling (from --models flag) */
-  get scopedModels(): ReadonlyArray<{ model: Model<any>; thinkingLevel?: ThinkingLevel }> {
+  get scopedModels(): ReadonlyArray<{
+    model: Model<any>;
+    thinkingLevel?: ThinkingLevel | undefined;
+  }> {
     return this._scopedModels;
   }
 
   /** Update scoped models for cycling */
-  setScopedModels(scopedModels: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel }>): void {
+  setScopedModels(
+    scopedModels: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel | undefined }>,
+  ): void {
     this._scopedModels = scopedModels;
   }
 
@@ -3841,7 +3855,7 @@ export class AgentSession {
           source,
           scope: "temporary",
           origin: "top-level",
-          baseDir,
+          ...(baseDir !== undefined ? { baseDir } : {}),
         },
       };
     });
@@ -4020,7 +4034,7 @@ export class AgentSession {
 
   private _refreshToolRegistry(options?: {
     activeToolNames?: string[];
-    includeAllExtensionTools?: boolean;
+    includeAllExtensionTools?: boolean | undefined;
   }): void {
     // Tools that were already activated on registration. A tool whose exposure changes to
     // `direct` or `model-only` (for example from `hidden`) is activated like a new tool.
@@ -4141,7 +4155,7 @@ export class AgentSession {
   }
 
   private _buildRuntime(options: {
-    activeToolNames?: string[];
+    activeToolNames?: string[] | undefined;
     flagValues?: Map<string, boolean | string>;
     includeAllExtensionTools?: boolean;
   }): void {
@@ -4439,7 +4453,11 @@ export class AgentSession {
   async executeBash(
     command: string,
     onChunk?: (chunk: string) => void,
-    options?: { excludeFromContext?: boolean; id?: string; operations?: BashOperations },
+    options?: {
+      excludeFromContext?: boolean | undefined;
+      id?: string | undefined;
+      operations?: BashOperations | undefined;
+    },
   ): Promise<BashResult> {
     const abortController = new AbortController();
     this._bashAbortControllers.add(abortController);
@@ -4477,7 +4495,7 @@ export class AgentSession {
   recordBashResult(
     command: string,
     result: BashResult,
-    options?: { excludeFromContext?: boolean },
+    options?: { excludeFromContext?: boolean | undefined },
   ): void {
     const bashMessage: BashExecutionMessage = {
       role: "bashExecution",
@@ -4569,16 +4587,16 @@ export class AgentSession {
   async navigateTree(
     targetId: string,
     options: {
-      summarize?: boolean;
-      customInstructions?: string;
-      replaceInstructions?: boolean;
-      label?: string;
+      summarize?: boolean | undefined;
+      customInstructions?: string | undefined;
+      replaceInstructions?: boolean | undefined;
+      label?: string | undefined;
     } = {},
   ): Promise<{
-    editorText?: string;
+    editorText?: string | undefined;
     cancelled: boolean;
     aborted?: boolean;
-    summaryEntry?: BranchSummaryEntry;
+    summaryEntry?: BranchSummaryEntry | undefined;
   }> {
     if (this.isStreaming) {
       throw new Error(
@@ -4903,7 +4921,10 @@ export class AgentSession {
    * @param options Optional export presentation settings
    * @returns Path to exported file
    */
-  async exportToHtml(outputPath?: string, options: { themeName?: string } = {}): Promise<string> {
+  async exportToHtml(
+    outputPath?: string,
+    options: { themeName?: string | undefined } = {},
+  ): Promise<string> {
     const themeName = [options.themeName, this.settingsManager.getTheme()].find(
       (candidate) => candidate !== undefined && getThemeByName(candidate) !== undefined,
     );
@@ -4937,7 +4958,10 @@ export class AgentSession {
    * Ask the current model to describe what went wrong in this session for a bug report.
    * Used when the user declines to share the transcript itself.
    */
-  async summarizeForBugReport(options: { hint?: string; signal: AbortSignal }): Promise<string> {
+  async summarizeForBugReport(options: {
+    hint?: string | undefined;
+    signal: AbortSignal;
+  }): Promise<string> {
     const model = this.model;
     if (!model) {
       throw new Error("No model selected");

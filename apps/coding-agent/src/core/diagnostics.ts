@@ -10,6 +10,6 @@ export interface ResourceCollision {
 export interface ResourceDiagnostic {
   type: "warning" | "error" | "collision";
   message: string;
-  path?: string;
-  collision?: ResourceCollision;
+  path?: string | undefined;
+  collision?: ResourceCollision | undefined;
 }

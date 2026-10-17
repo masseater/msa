@@ -11,10 +11,10 @@ export interface InteractiveTuiOptions {
   readonly tuiMode: "regular" | "fullscreen";
   readonly showHardwareCursor: boolean;
   readonly logDirectory: string;
-  readonly terminal?: Terminal;
-  readonly onRightClickPaste?: () => void;
-  readonly fullscreenCopyOnSelect?: boolean;
-  readonly fullscreenWheelScrollLines?: WheelScrollLines;
+  readonly terminal?: Terminal | undefined;
+  readonly onRightClickPaste?: (() => void) | undefined;
+  readonly fullscreenCopyOnSelect?: boolean | undefined;
+  readonly fullscreenWheelScrollLines?: WheelScrollLines | undefined;
 }
 
 /** Composition root shared by coding-agent presentations. */
@@ -40,8 +40,10 @@ export function createInteractiveTui(options: InteractiveTuiOptions): TuiMainScr
         return theme.bg("selectedBg", theme.fg("text", label));
       },
       openUrl: openBrowser,
-      onRightClickPaste: options.onRightClickPaste,
-      copyOnSelect: options.fullscreenCopyOnSelect,
+      ...(options.onRightClickPaste ? { onRightClickPaste: options.onRightClickPaste } : {}),
+      ...(options.fullscreenCopyOnSelect !== undefined
+        ? { copyOnSelect: options.fullscreenCopyOnSelect }
+        : {}),
       wheelScrollLines: options.fullscreenWheelScrollLines ?? "auto",
       copySelection: async (text) => {
         try {

@@ -16,13 +16,13 @@ export type AuthSelectorProvider = {
   id: string;
   name: string;
   authType: "oauth" | "api_key";
-  method?: ApiKeyAuth | OAuthAuth;
-  status?: AuthCheck;
+  method?: ApiKeyAuth | OAuthAuth | undefined;
+  status?: AuthCheck | undefined;
   /**
    * Whether the provider's OAuth sign-in is backed by a subscription. `false` labels it as an account;
    * unset keeps the "subscription" label.
    */
-  subscription?: boolean;
+  subscription?: boolean | undefined;
 };
 
 export function formatAuthSelectorProviderType(

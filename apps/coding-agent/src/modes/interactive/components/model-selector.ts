@@ -26,7 +26,7 @@ interface ModelItem {
 
 interface ScopedModelItem {
   model: Model<any>;
-  thinkingLevel?: string;
+  thinkingLevel?: string | undefined;
 }
 
 interface DefaultModelReference {
@@ -57,17 +57,17 @@ export class ModelSelectorComponent extends Container implements Focusable {
   private activeModels: ModelItem[] = [];
   private filteredModels: ModelItem[] = [];
   private selectedIndex: number = 0;
-  private currentModel?: Model<any>;
+  private currentModel?: Model<any> | undefined;
   private modelRuntime: ModelRuntime;
   private onSelectCallback: (model: Model<any>) => void;
-  private onSelectAsDefaultCallback?: (model: Model<any>) => void;
+  private onSelectAsDefaultCallback?: ((model: Model<any>) => void) | undefined;
   private onCancelCallback: () => void;
-  private errorMessage?: string;
+  private errorMessage?: string | undefined;
   private refreshStatusMessage = "Refreshing model catalogs…";
   private refreshStatusSuccess = false;
   private tui: TUI;
   private scopedModels: ReadonlyArray<ScopedModelItem>;
-  private defaultModel?: DefaultModelReference;
+  private defaultModel?: DefaultModelReference | undefined;
   private scope: ModelScope = "all";
   private scopeText?: Text;
   private scopeHintText?: Text;

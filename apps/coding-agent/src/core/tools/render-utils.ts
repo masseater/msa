@@ -142,8 +142,8 @@ export function formatToolDuration(ms: number): string {
 /** Renderer state of {@link startToolTimer} and {@link toolTimerText}, kept in `ToolRenderContext.state`. */
 interface ToolTimerState {
   startedAt?: number;
-  endedAt?: number;
-  interval?: ReturnType<typeof setInterval>;
+  endedAt?: number | undefined;
+  interval?: ReturnType<typeof setInterval> | undefined;
 }
 
 /** Start the row's clock once execution starts. Call from `renderCall`. */

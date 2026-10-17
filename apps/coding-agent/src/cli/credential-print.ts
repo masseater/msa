@@ -29,7 +29,7 @@ export async function resolveCredentialForPrint(
 ): Promise<string> {
   const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, kind);
   const credentialTypes = new Map<string, CredentialInfo["type"]>(
-    (await modelRuntime.listCredentials({ signal })).map((credential) => [
+    (await modelRuntime.listCredentials(signal ? { signal } : {})).map((credential) => [
       credential.providerId,
       credential.type,
     ]),
@@ -81,7 +81,7 @@ export async function resolveCredentialForPrint(
       ...(kind === "bearer_token"
         ? { minOAuthValidityMs: minExpiryMs ?? DEFAULT_BEARER_TOKEN_MIN_EXPIRY_MS }
         : {}),
-      signal,
+      ...(signal ? { signal } : {}),
     };
     const auth = provider.model
       ? await modelRuntime.getAuth(provider.model, authOptions)

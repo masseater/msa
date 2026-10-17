@@ -63,11 +63,13 @@ export interface CreateAgentSessionOptions {
   modelRuntime?: ModelRuntime;
 
   /** Model to use. Default: from settings, else first available */
-  model?: Model<any>;
+  model?: Model<any> | undefined;
   /** Thinking level. Default: from settings, else 'medium' (clamped to model capabilities) */
-  thinkingLevel?: ThinkingLevel;
+  thinkingLevel?: ThinkingLevel | undefined;
   /** Models available for cycling (Ctrl+P in interactive mode) */
-  scopedModels?: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel }>;
+  scopedModels?:
+    | Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel | undefined }>
+    | undefined;
 
   /**
    * Optional default tool suppression mode when no explicit allowlist is provided.
@@ -76,7 +78,7 @@ export interface CreateAgentSessionOptions {
    * - "builtin": disable the default built-in tools (read, bash, edit, write)
    *   but keep extension/custom tools enabled
    */
-  noTools?: "all" | "builtin";
+  noTools?: "all" | "builtin" | undefined;
   /**
    * Optional allowlist of tool names or patterns, where `*` matches any characters.
    *
@@ -92,14 +94,14 @@ export interface CreateAgentSessionOptions {
    * to or removes them from the default selection, like the `defaultTools` setting.
    * These entries take exact names. Mixing them with plain entries throws.
    */
-  tools?: string[];
+  tools?: string[] | undefined;
   /**
    * Optional denylist of tool names or patterns to disable. Applies after `tools` when both are
    * provided, MCP tools included.
    */
-  excludeTools?: string[];
+  excludeTools?: string[] | undefined;
   /** Custom tools to register (in addition to built-in tools). */
-  customTools?: ToolDefinition[];
+  customTools?: ToolDefinition[] | undefined;
 
   /** Resource loader. When omitted, DefaultResourceLoader is used. */
   resourceLoader?: ResourceLoader;
@@ -110,12 +112,12 @@ export interface CreateAgentSessionOptions {
   /** Settings manager. Default: SettingsManager.create(cwd, agentDir) */
   settingsManager?: SettingsManager;
   /** Session start event metadata for extension runtime startup. */
-  sessionStartEvent?: SessionStartEvent;
+  sessionStartEvent?: SessionStartEvent | undefined;
   /**
    * Register the orchestrator tools (`start_session` and the rest). They start inactive; activate
    * them with `tools` or the `defaultTools` setting.
    */
-  orchestrator?: boolean;
+  orchestrator?: boolean | undefined;
 }
 
 /** Result from createAgentSession */
@@ -125,7 +127,7 @@ export interface CreateAgentSessionResult {
   /** Extensions result (for UI context setup in interactive mode) */
   extensionsResult: LoadExtensionsResult;
   /** Warning if session was restored with a different model than saved */
-  modelFallbackMessage?: string;
+  modelFallbackMessage?: string | undefined;
 }
 
 // Re-exports
@@ -438,10 +440,11 @@ export async function createAgentSession(
     });
   };
 
+  const thinkingBudgets = settingsManager.getThinkingBudgets();
   const agent = new Agent({
     initialState: {
       systemPrompt: "",
-      model,
+      ...(model ? { model } : {}),
       thinkingLevel,
       tools: [],
       messages: existingSession.messages,
@@ -474,7 +477,7 @@ export async function createAgentSession(
     steeringMode: settingsManager.getSteeringMode(),
     followUpMode: settingsManager.getFollowUpMode(),
     transport: settingsManager.getTransport(),
-    thinkingBudgets: settingsManager.getThinkingBudgets(),
+    ...(thinkingBudgets ? { thinkingBudgets } : {}),
     maxRetryDelayMs: settingsManager.getProviderRetrySettings().maxRetryDelayMs,
   });
 

@@ -313,7 +313,7 @@ class SessionList implements Component, Focusable {
   private keybindings: KeybindingsManager;
   private showPath = false;
   private confirmingDeletePath: string | null = null;
-  private currentSessionCanonicalPath?: string;
+  private currentSessionCanonicalPath?: string | undefined;
   public onSelect?: (sessionPath: string) => void;
   public onCancel?: () => void;
   public onExit: () => void = () => {};
@@ -751,7 +751,9 @@ export class SessionSelectorComponent extends Container implements Focusable {
   private currentSessionsLoader: SessionsLoader;
   private allSessionsLoader: SessionsLoader;
   private requestRender: () => void;
-  private renameSession?: (sessionPath: string, currentName: string | undefined) => Promise<void>;
+  private renameSession?:
+    | ((sessionPath: string, currentName: string | undefined) => Promise<void>)
+    | undefined;
   private currentLoad: AbortController | null = null;
   private allLoad: AbortController | null = null;
 

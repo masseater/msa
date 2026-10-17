@@ -111,27 +111,27 @@ interface ModelRuntimeSnapshot {
 
 export interface CreateModelRuntimeOptions {
   /** Credential storage. Defaults to the file at authPath. */
-  credentials?: CredentialStore;
-  authPath?: string;
-  modelsPath?: string | null;
-  modelsStore?: ModelsStore;
-  modelsStorePath?: string;
+  credentials?: CredentialStore | undefined;
+  authPath?: string | undefined;
+  modelsPath?: string | null | undefined;
+  modelsStore?: ModelsStore | undefined;
+  modelsStorePath?: string | undefined;
   /** Allow create() to refresh model catalogs over the network. Defaults to false. */
-  allowModelNetwork?: boolean;
+  allowModelNetwork?: boolean | undefined;
   /** Timeout for the create-time network model refresh. */
-  modelRefreshTimeoutMs?: number;
-  catalogBaseUrl?: string;
+  modelRefreshTimeoutMs?: number | undefined;
+  catalogBaseUrl?: string | undefined;
   /** Optional caller cancellation for initial cache restoration and availability checks. */
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   /** Skip initial catalog and availability refresh. Static models remain available. */
-  refreshOnCreate?: boolean;
+  refreshOnCreate?: boolean | undefined;
 }
 
 export interface ModelRuntimeAuthOverrides extends AuthOperationOptions {
-  apiKey?: string;
-  env?: Record<string, string>;
+  apiKey?: string | undefined;
+  env?: Record<string, string> | undefined;
   /** Require this much remaining OAuth-token validity; defaults to five minutes. */
-  minOAuthValidityMs?: number;
+  minOAuthValidityMs?: number | undefined;
 }
 
 export type CredentialSynchronizationOperation =
@@ -281,7 +281,7 @@ export class ModelRuntime implements Models {
       : options.signal;
     try {
       if (options.refreshOnCreate !== false) {
-        await runtime.refresh({ allowNetwork: refreshFromNetwork, signal });
+        await runtime.refresh({ allowNetwork: refreshFromNetwork, ...(signal ? { signal } : {}) });
       }
     } finally {
       if (timeout) clearTimeout(timeout);
@@ -748,7 +748,7 @@ export class ModelRuntime implements Models {
     const resolution = await this.getAuth(model, {
       apiKey: options?.apiKey,
       env: options?.env,
-      signal: options?.signal,
+      ...(options?.signal ? { signal: options.signal } : {}),
     });
     if (!resolution) throw new ModelsError("auth", `Provider is not configured: ${model.provider}`);
 
@@ -1150,8 +1150,8 @@ export class ModelRuntime implements Models {
     options: {
       reason: ModelRouteReason;
       thinkingLevel: ModelThinkingLevel;
-      signal?: AbortSignal;
-      failed?: AssistantMessage;
+      signal?: AbortSignal | undefined;
+      failed?: AssistantMessage | undefined;
       state?: unknown;
     },
   ): Promise<ModelRoute> {

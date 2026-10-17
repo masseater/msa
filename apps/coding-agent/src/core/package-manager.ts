@@ -118,7 +118,7 @@ export interface ConfiguredPackage {
   source: string;
   scope: "user" | "project";
   filtered: boolean;
-  installedPath?: string;
+  installedPath?: string | undefined;
 }
 
 export interface PackageManager {
@@ -153,8 +153,8 @@ type NpmSource = {
   type: "npm";
   spec: string;
   name: string;
-  version?: string;
-  range?: string;
+  version?: string | undefined;
+  range?: string | undefined;
   pinned: boolean;
 };
 

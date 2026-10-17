@@ -37,8 +37,8 @@ type EditToolResultLike = {
   details?: EditToolDetails;
 };
 type EditCallRenderComponent = Box & {
-  preview?: EditPreview;
-  previewArgsKey?: string;
+  preview?: EditPreview | undefined;
+  previewArgsKey?: string | undefined;
   previewPending?: boolean;
   settledError?: boolean;
 };

@@ -41,7 +41,7 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
   private allItems: SelectItem[];
   private onSelect: (level: ThinkingLevel) => void;
   private onCancel: () => void;
-  private onSelectAsDefault?: (level: ThinkingLevel) => void;
+  private onSelectAsDefault?: ((level: ThinkingLevel) => void) | undefined;
   private _focused = false;
 
   get focused(): boolean {

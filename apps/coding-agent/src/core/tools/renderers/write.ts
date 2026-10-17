@@ -25,7 +25,7 @@ type WriteHighlightCache = {
   highlightedLines: string[];
 };
 class WriteCallRenderComponent extends Text {
-  cache?: WriteHighlightCache;
+  cache?: WriteHighlightCache | undefined;
 
   constructor() {
     super("", 0, 0);

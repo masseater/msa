@@ -18,11 +18,11 @@ export class CustomEditor extends Editor {
   public actionHandlers: Map<AppKeybinding, () => void> = new Map();
 
   // Special handlers that can be dynamically replaced
-  public onEscape?: () => void;
+  public onEscape?: (() => void) | undefined;
   public onCtrlD?: () => void;
   public onPasteImage?: () => void;
   /** Handler for extension-registered shortcuts. Returns true if handled. */
-  public onExtensionShortcut?: (data: string) => boolean;
+  public onExtensionShortcut?: ((data: string) => boolean) | undefined;
 
   constructor(
     tui: TUI,

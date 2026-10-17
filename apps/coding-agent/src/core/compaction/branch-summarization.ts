@@ -34,7 +34,7 @@ import {
 
 export interface BranchSummaryResult {
   summary?: string;
-  usage?: Usage;
+  usage?: Usage | undefined;
   readFiles?: string[];
   modifiedFiles?: string[];
   aborted?: boolean;
@@ -69,17 +69,17 @@ export interface GenerateBranchSummaryOptions {
   /** Model to use for summarization */
   model: Model<any>;
   /** API key for the model */
-  apiKey?: string;
+  apiKey?: string | undefined;
   /** Request headers for the model */
-  headers?: Record<string, string>;
+  headers?: Record<string, string> | undefined;
   /** Provider-scoped environment values for the model */
-  env?: Record<string, string>;
+  env?: Record<string, string> | undefined;
   /** Abort signal for cancellation */
   signal: AbortSignal;
   /** Optional custom instructions for summarization */
-  customInstructions?: string;
+  customInstructions?: string | undefined;
   /** If true, customInstructions replaces the default prompt instead of being appended */
-  replaceInstructions?: boolean;
+  replaceInstructions?: boolean | undefined;
   /** Tokens reserved when selecting branch history (default 16384) */
   reserveTokens?: number;
   /** Optional session stream function. Used to preserve SDK request behavior without mutating agent state. */

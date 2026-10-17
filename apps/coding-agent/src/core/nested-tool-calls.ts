@@ -118,9 +118,9 @@ export class NestedCallRecorder {
 
 export interface NestedToolCallOptions {
   /** Defaults to the calling tool's signal. */
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   /** Receives partial results of the nested tool, in addition to `tool_execution_update` events. */
-  onUpdate?: AgentToolUpdateCallback;
+  onUpdate?: AgentToolUpdateCallback | undefined;
 }
 
 /** `tool_execution_*` events of nested calls. */

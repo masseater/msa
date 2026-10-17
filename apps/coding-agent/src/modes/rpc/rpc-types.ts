@@ -25,64 +25,74 @@ import type { SourceInfo } from "../../core/source-info.ts";
 export type RpcCommand =
   // Prompting
   | {
-      id?: string;
+      id?: string | undefined;
       type: "prompt";
       message: string;
-      images?: ImageContent[];
-      streamingBehavior?: "steer" | "followUp";
+      images?: ImageContent[] | undefined;
+      streamingBehavior?: "steer" | "followUp" | undefined;
     }
-  | { id?: string; type: "steer"; message: string; images?: ImageContent[] }
-  | { id?: string; type: "follow_up"; message: string; images?: ImageContent[] }
-  | { id?: string; type: "abort" }
-  | { id?: string; type: "clear_queue" }
-  | { id?: string; type: "new_session"; parentSession?: string }
+  | { id?: string | undefined; type: "steer"; message: string; images?: ImageContent[] | undefined }
+  | {
+      id?: string | undefined;
+      type: "follow_up";
+      message: string;
+      images?: ImageContent[] | undefined;
+    }
+  | { id?: string | undefined; type: "abort" }
+  | { id?: string | undefined; type: "clear_queue" }
+  | { id?: string | undefined; type: "new_session"; parentSession?: string | undefined }
 
   // State
-  | { id?: string; type: "get_state" }
+  | { id?: string | undefined; type: "get_state" }
 
   // Model
-  | { id?: string; type: "set_model"; provider: string; modelId: string }
-  | { id?: string; type: "cycle_model" }
-  | { id?: string; type: "get_available_models" }
+  | { id?: string | undefined; type: "set_model"; provider: string; modelId: string }
+  | { id?: string | undefined; type: "cycle_model" }
+  | { id?: string | undefined; type: "get_available_models" }
 
   // Thinking
-  | { id?: string; type: "set_thinking_level"; level: ThinkingLevel }
-  | { id?: string; type: "cycle_thinking_level" }
-  | { id?: string; type: "get_available_thinking_levels" }
+  | { id?: string | undefined; type: "set_thinking_level"; level: ThinkingLevel }
+  | { id?: string | undefined; type: "cycle_thinking_level" }
+  | { id?: string | undefined; type: "get_available_thinking_levels" }
 
   // Queue modes
-  | { id?: string; type: "set_steering_mode"; mode: "all" | "one-at-a-time" }
-  | { id?: string; type: "set_follow_up_mode"; mode: "all" | "one-at-a-time" }
+  | { id?: string | undefined; type: "set_steering_mode"; mode: "all" | "one-at-a-time" }
+  | { id?: string | undefined; type: "set_follow_up_mode"; mode: "all" | "one-at-a-time" }
 
   // Compaction
-  | { id?: string; type: "compact"; customInstructions?: string }
-  | { id?: string; type: "set_auto_compaction"; enabled: boolean }
+  | { id?: string | undefined; type: "compact"; customInstructions?: string | undefined }
+  | { id?: string | undefined; type: "set_auto_compaction"; enabled: boolean }
 
   // Retry
-  | { id?: string; type: "set_auto_retry"; enabled: boolean }
-  | { id?: string; type: "abort_retry" }
+  | { id?: string | undefined; type: "set_auto_retry"; enabled: boolean }
+  | { id?: string | undefined; type: "abort_retry" }
 
   // Bash
-  | { id?: string; type: "bash"; command: string; excludeFromContext?: boolean }
-  | { id?: string; type: "abort_bash" }
+  | {
+      id?: string | undefined;
+      type: "bash";
+      command: string;
+      excludeFromContext?: boolean | undefined;
+    }
+  | { id?: string | undefined; type: "abort_bash" }
 
   // Session
-  | { id?: string; type: "get_session_stats" }
-  | { id?: string; type: "export_html"; outputPath?: string }
-  | { id?: string; type: "switch_session"; sessionPath: string }
-  | { id?: string; type: "fork"; entryId: string }
-  | { id?: string; type: "clone" }
-  | { id?: string; type: "get_fork_messages" }
-  | { id?: string; type: "get_entries"; since?: string }
-  | { id?: string; type: "get_tree" }
-  | { id?: string; type: "get_last_assistant_text" }
-  | { id?: string; type: "set_session_name"; name: string }
+  | { id?: string | undefined; type: "get_session_stats" }
+  | { id?: string | undefined; type: "export_html"; outputPath?: string | undefined }
+  | { id?: string | undefined; type: "switch_session"; sessionPath: string }
+  | { id?: string | undefined; type: "fork"; entryId: string }
+  | { id?: string | undefined; type: "clone" }
+  | { id?: string | undefined; type: "get_fork_messages" }
+  | { id?: string | undefined; type: "get_entries"; since?: string | undefined }
+  | { id?: string | undefined; type: "get_tree" }
+  | { id?: string | undefined; type: "get_last_assistant_text" }
+  | { id?: string | undefined; type: "set_session_name"; name: string }
 
   // Messages
-  | { id?: string; type: "get_messages" }
+  | { id?: string | undefined; type: "get_messages" }
 
   // Commands (available for invocation via prompt)
-  | { id?: string; type: "get_commands" };
+  | { id?: string | undefined; type: "get_commands" };
 
 // ============================================================================
 // RPC Slash Command (for get_commands response)
@@ -93,7 +103,7 @@ export interface RpcSlashCommand {
   /** Command name (without leading slash) */
   name: string;
   /** Human-readable description */
-  description?: string;
+  description?: string | undefined;
   /** What kind of command this is */
   source: "extension" | "prompt" | "skill";
   /** Source metadata for the owning resource */
@@ -105,15 +115,15 @@ export interface RpcSlashCommand {
 // ============================================================================
 
 export interface RpcSessionState {
-  model?: Model<any>;
+  model?: Model<any> | undefined;
   thinkingLevel: ThinkingLevel;
   isStreaming: boolean;
   isCompacting: boolean;
   steeringMode: "all" | "one-at-a-time";
   followUpMode: "all" | "one-at-a-time";
-  sessionFile?: string;
+  sessionFile?: string | undefined;
   sessionId: string;
-  sessionName?: string;
+  sessionName?: string | undefined;
   autoCompactionEnabled: boolean;
   messageCount: number;
   pendingMessageCount: number;
@@ -127,36 +137,36 @@ export interface RpcSessionState {
 export type RpcResponse =
   // Prompting
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "prompt";
       success: true;
       data: { disposition: PromptDisposition };
     }
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "steer";
       success: true;
       data: { disposition: QueuedInputDisposition };
     }
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "follow_up";
       success: true;
       data: { disposition: QueuedInputDisposition };
     }
-  | { id?: string; type: "response"; command: "abort"; success: true }
+  | { id?: string | undefined; type: "response"; command: "abort"; success: true }
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "clear_queue";
       success: true;
       data: { steering: string[]; followUp: string[] };
     }
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "new_session";
       success: true;
@@ -164,25 +174,31 @@ export type RpcResponse =
     }
 
   // State
-  | { id?: string; type: "response"; command: "get_state"; success: true; data: RpcSessionState }
+  | {
+      id?: string | undefined;
+      type: "response";
+      command: "get_state";
+      success: true;
+      data: RpcSessionState;
+    }
 
   // Model
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "set_model";
       success: true;
       data: Model<any>;
     }
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "cycle_model";
       success: true;
       data: { model: Model<any>; thinkingLevel: ThinkingLevel; isScoped: boolean } | null;
     }
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "get_available_models";
       success: true;
@@ -190,16 +206,16 @@ export type RpcResponse =
     }
 
   // Thinking
-  | { id?: string; type: "response"; command: "set_thinking_level"; success: true }
+  | { id?: string | undefined; type: "response"; command: "set_thinking_level"; success: true }
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "cycle_thinking_level";
       success: true;
       data: { level: ThinkingLevel } | null;
     }
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "get_available_thinking_levels";
       success: true;
@@ -207,78 +223,96 @@ export type RpcResponse =
     }
 
   // Queue modes
-  | { id?: string; type: "response"; command: "set_steering_mode"; success: true }
-  | { id?: string; type: "response"; command: "set_follow_up_mode"; success: true }
+  | { id?: string | undefined; type: "response"; command: "set_steering_mode"; success: true }
+  | { id?: string | undefined; type: "response"; command: "set_follow_up_mode"; success: true }
 
   // Compaction
-  | { id?: string; type: "response"; command: "compact"; success: true; data: CompactionResult }
-  | { id?: string; type: "response"; command: "set_auto_compaction"; success: true }
+  | {
+      id?: string | undefined;
+      type: "response";
+      command: "compact";
+      success: true;
+      data: CompactionResult;
+    }
+  | { id?: string | undefined; type: "response"; command: "set_auto_compaction"; success: true }
 
   // Retry
-  | { id?: string; type: "response"; command: "set_auto_retry"; success: true }
-  | { id?: string; type: "response"; command: "abort_retry"; success: true }
+  | { id?: string | undefined; type: "response"; command: "set_auto_retry"; success: true }
+  | { id?: string | undefined; type: "response"; command: "abort_retry"; success: true }
 
   // Bash
-  | { id?: string; type: "response"; command: "bash"; success: true; data: BashResult }
-  | { id?: string; type: "response"; command: "abort_bash"; success: true }
+  | { id?: string | undefined; type: "response"; command: "bash"; success: true; data: BashResult }
+  | { id?: string | undefined; type: "response"; command: "abort_bash"; success: true }
 
   // Session
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "get_session_stats";
       success: true;
       data: SessionStats;
     }
-  | { id?: string; type: "response"; command: "export_html"; success: true; data: { path: string } }
   | {
-      id?: string;
+      id?: string | undefined;
+      type: "response";
+      command: "export_html";
+      success: true;
+      data: { path: string };
+    }
+  | {
+      id?: string | undefined;
       type: "response";
       command: "switch_session";
       success: true;
       data: { cancelled: boolean };
     }
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "fork";
       success: true;
       data: { text: string; cancelled: boolean };
     }
-  | { id?: string; type: "response"; command: "clone"; success: true; data: { cancelled: boolean } }
   | {
-      id?: string;
+      id?: string | undefined;
+      type: "response";
+      command: "clone";
+      success: true;
+      data: { cancelled: boolean };
+    }
+  | {
+      id?: string | undefined;
       type: "response";
       command: "get_fork_messages";
       success: true;
       data: { messages: Array<{ entryId: string; text: string }> };
     }
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "get_entries";
       success: true;
       data: { entries: SessionEntry[]; leafId: string | null };
     }
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "get_tree";
       success: true;
       data: { tree: SessionTreeNode[]; leafId: string | null };
     }
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "get_last_assistant_text";
       success: true;
       data: { text: string | null };
     }
-  | { id?: string; type: "response"; command: "set_session_name"; success: true }
+  | { id?: string | undefined; type: "response"; command: "set_session_name"; success: true }
 
   // Messages
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "get_messages";
       success: true;
@@ -287,7 +321,7 @@ export type RpcResponse =
 
   // Commands
   | {
-      id?: string;
+      id?: string | undefined;
       type: "response";
       command: "get_commands";
       success: true;
@@ -295,7 +329,7 @@ export type RpcResponse =
     }
 
   // Error response (any command can fail)
-  | { id?: string; type: "response"; command: string; success: false; error: string };
+  | { id?: string | undefined; type: "response"; command: string; success: false; error: string };
 
 // ============================================================================
 // Extension UI Events (stdout)
@@ -309,7 +343,7 @@ export type RpcExtensionUIRequest =
       method: "select";
       title: string;
       options: string[];
-      timeout?: number;
+      timeout?: number | undefined;
     }
   | {
       type: "extension_ui_request";
@@ -317,23 +351,29 @@ export type RpcExtensionUIRequest =
       method: "confirm";
       title: string;
       message: string;
-      timeout?: number;
+      timeout?: number | undefined;
     }
   | {
       type: "extension_ui_request";
       id: string;
       method: "input";
       title: string;
-      placeholder?: string;
-      timeout?: number;
+      placeholder?: string | undefined;
+      timeout?: number | undefined;
     }
-  | { type: "extension_ui_request"; id: string; method: "editor"; title: string; prefill?: string }
+  | {
+      type: "extension_ui_request";
+      id: string;
+      method: "editor";
+      title: string;
+      prefill?: string | undefined;
+    }
   | {
       type: "extension_ui_request";
       id: string;
       method: "notify";
       message: string;
-      notifyType?: "info" | "warning" | "error";
+      notifyType?: "info" | "warning" | "error" | undefined;
     }
   | {
       type: "extension_ui_request";
@@ -348,7 +388,7 @@ export type RpcExtensionUIRequest =
       method: "setWidget";
       widgetKey: string;
       widgetLines: string[] | undefined;
-      widgetPlacement?: "aboveEditor" | "belowEditor";
+      widgetPlacement?: "aboveEditor" | "belowEditor" | undefined;
     }
   | { type: "extension_ui_request"; id: string; method: "setTitle"; title: string }
   | { type: "extension_ui_request"; id: string; method: "set_editor_text"; text: string };

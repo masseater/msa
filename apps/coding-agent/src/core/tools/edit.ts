@@ -76,7 +76,7 @@ export interface EditToolDetails {
   /** Standard unified patch of the changes made */
   patch: string;
   /** Line number of the first change in the new file (for editor navigation) */
-  firstChangedLine?: number;
+  firstChangedLine?: number | undefined;
 }
 
 /**

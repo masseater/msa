@@ -363,27 +363,27 @@ function createFuzzyAutocompleteItems<T>(
  */
 export interface InteractiveModeOptions {
   /** Providers that were migrated to auth.json (shows warning) */
-  migratedProviders?: string[];
+  migratedProviders?: string[] | undefined;
   /** Diagnostics collected before the interactive TUI was initialized. */
-  startupDiagnostics?: AgentSessionRuntimeDiagnostic[];
+  startupDiagnostics?: AgentSessionRuntimeDiagnostic[] | undefined;
   /** Warning message if session model couldn't be restored */
-  modelFallbackMessage?: string;
+  modelFallbackMessage?: string | undefined;
   /** Cwd to trust after reload if it gained a .msa directory during this implicitly trusted session. */
-  autoTrustOnReloadCwd?: string;
+  autoTrustOnReloadCwd?: string | undefined;
   /** Initial message to send on startup (can include @file content) */
-  initialMessage?: string;
+  initialMessage?: string | undefined;
   /** Images to attach to the initial message */
-  initialImages?: ImageContent[];
+  initialImages?: ImageContent[] | undefined;
   /** Additional messages to send after the initial message */
-  initialMessages?: string[];
+  initialMessages?: string[] | undefined;
   /** Force verbose startup (overrides quietStartup setting) */
-  verbose?: boolean;
+  verbose?: boolean | undefined;
   /** TUI layout mode. */
-  tuiMode?: TuiMode;
+  tuiMode?: TuiMode | undefined;
   /** Initial interactive theme setting for this invocation. */
-  initialThemeSetting?: string;
+  initialThemeSetting?: string | undefined;
   /** Terminal implementation. Defaults to the current process terminal. */
-  terminal?: Terminal;
+  terminal?: Terminal | undefined;
 }
 
 export class InteractiveMode {
@@ -414,7 +414,7 @@ export class InteractiveMode {
   private keybindings: KeybindingsManager;
   private version: string;
   private isInitialized = false;
-  private onInputCallback?: (text: string) => void;
+  private onInputCallback?: ((text: string) => void) | undefined;
   private goalTicker: ReturnType<typeof setInterval> | undefined;
   private pendingUserInputs: string[] = [];
   private activeStatusIndicator: StatusIndicator | undefined = undefined;
@@ -463,7 +463,7 @@ export class InteractiveMode {
   private skillCommands = new Map<string, string>();
 
   // Agent subscription unsubscribe function
-  private unsubscribe?: () => void;
+  private unsubscribe?: (() => void) | undefined;
   private signalCleanupHandlers: Array<() => void> = [];
 
   // Track if editor is in bash mode (text starts with !)
@@ -476,10 +476,10 @@ export class InteractiveMode {
   private pendingBashComponents: BashExecutionComponent[] = [];
 
   // Auto-compaction state
-  private autoCompactionEscapeHandler?: () => void;
+  private autoCompactionEscapeHandler?: (() => void) | undefined;
 
   // Auto-retry state
-  private retryEscapeHandler?: () => void;
+  private retryEscapeHandler?: (() => void) | undefined;
 
   // Messages queued while compaction is running
   private compactionQueuedMessages: CompactionQueuedMessage[] = [];
@@ -658,15 +658,16 @@ export class InteractiveMode {
     return scopePrefix;
   }
 
-  private prefixAutocompleteDescription(
+  /** The autocomplete description tagged with its source, as a property to spread. */
+  private autocompleteDescription(
     description: string | undefined,
     sourceInfo?: SourceInfo,
-  ): string | undefined {
+  ): { description?: string } {
     const sourceTag = this.getAutocompleteSourceTag(sourceInfo);
     if (!sourceTag) {
-      return description;
+      return description === undefined ? {} : { description };
     }
-    return description ? `[${sourceTag}] ${description}` : `[${sourceTag}]`;
+    return { description: description ? `[${sourceTag}] ${description}` : `[${sourceTag}]` };
   }
 
   private getBuiltInCommandConflictDiagnostics(
@@ -766,7 +767,7 @@ export class InteractiveMode {
     // Convert prompt templates to SlashCommand format for autocomplete
     const templateCommands: SlashCommand[] = this.session.promptTemplates.map((cmd) => ({
       name: cmd.name,
-      description: this.prefixAutocompleteDescription(cmd.description, cmd.sourceInfo),
+      ...this.autocompleteDescription(cmd.description, cmd.sourceInfo),
       ...(cmd.argumentHint && { argumentHint: cmd.argumentHint }),
     }));
 
@@ -776,8 +777,10 @@ export class InteractiveMode {
       .filter((cmd) => !isBuiltinSlashCommandName(cmd.name))
       .map((cmd) => ({
         name: cmd.invocationName,
-        description: this.prefixAutocompleteDescription(cmd.description, cmd.sourceInfo),
-        getArgumentCompletions: cmd.getArgumentCompletions,
+        ...this.autocompleteDescription(cmd.description, cmd.sourceInfo),
+        ...(cmd.getArgumentCompletions
+          ? { getArgumentCompletions: cmd.getArgumentCompletions }
+          : {}),
       }));
 
     // Build skill commands from session.skills (if enabled)
@@ -788,7 +791,7 @@ export class InteractiveMode {
         this.skillCommands.set(skill.name, skill.filePath);
         skillCommandList.push({
           name: skill.name,
-          description: this.prefixAutocompleteDescription(skill.description, skill.sourceInfo),
+          ...this.autocompleteDescription(skill.description, skill.sourceInfo),
         });
       }
     }
@@ -903,7 +906,7 @@ export class InteractiveMode {
       fullscreenWheelScrollLines: this.settingsManager.getFullscreenWheelScrollLines(),
     });
     nextUi.setClearOnShrink(clearOnShrink);
-    nextUi.onDebug = onDebug;
+    if (onDebug) nextUi.onDebug = onDebug;
     if (nextUi instanceof TuiMainScreen && this.mainScreenRenderState) {
       nextUi.restoreRenderState(this.mainScreenRenderState);
     }
@@ -2065,8 +2068,8 @@ export class InteractiveMode {
       const newEditor = factory(this.ui, getEditorTheme(), this.keybindings);
 
       // Wire up callbacks from the default editor
-      newEditor.onSubmit = this.defaultEditor.onSubmit;
-      newEditor.onChange = this.defaultEditor.onChange;
+      if (this.defaultEditor.onSubmit) newEditor.onSubmit = this.defaultEditor.onSubmit;
+      if (this.defaultEditor.onChange) newEditor.onChange = this.defaultEditor.onChange;
 
       // Copy text from previous editor
       newEditor.setText(currentText);

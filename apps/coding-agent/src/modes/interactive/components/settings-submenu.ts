@@ -20,9 +20,9 @@ const SUBMENU_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
 
 export interface SelectSubmenuOptions {
   /** Enable type-to-search fuzzy filtering. */
-  searchable?: boolean;
+  searchable?: boolean | undefined;
   /** Override the select list layout (column widths). */
-  layout?: SelectListLayoutOptions;
+  layout?: SelectListLayoutOptions | undefined;
 }
 
 /**
@@ -37,7 +37,7 @@ export class SelectSubmenu extends Container {
   private searchInput: Input | undefined;
   private onSelectCb: (value: string) => void;
   private onCancelCb: () => void;
-  private onSelectionChangeCb?: (value: string) => void;
+  private onSelectionChangeCb?: ((value: string) => void) | undefined;
 
   constructor(
     title: string,

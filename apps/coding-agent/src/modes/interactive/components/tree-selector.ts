@@ -1405,7 +1405,9 @@ export class TreeSelectorComponent extends Container implements Focusable {
   private labelInput: LabelInput | null = null;
   private labelInputContainer: Container;
   private treeContainer: Container;
-  private onLabelChangeCallback?: (entryId: string, label: string | undefined) => void;
+  private onLabelChangeCallback?:
+    | ((entryId: string, label: string | undefined) => void)
+    | undefined;
   public onCopy?: (text: string | undefined) => void;
 
   // Focusable implementation - propagate to labelInput when active for IME cursor positioning

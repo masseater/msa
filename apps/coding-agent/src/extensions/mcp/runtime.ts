@@ -108,10 +108,11 @@ export function createDefaultTransport(
 ): McpTransport {
   const { config, name } = entry;
   if ("url" in config) {
+    const headers = resolveHeadersOrThrow(config.headers, `MCP server "${name}"`);
     return new StreamableHttpTransport({
       url: config.url,
-      headers: resolveHeadersOrThrow(config.headers, `MCP server "${name}"`),
-      authProvider,
+      ...(headers ? { headers } : {}),
+      ...(authProvider ? { authProvider } : {}),
     });
   }
   const env: Record<string, string> = {};
@@ -120,7 +121,7 @@ export function createDefaultTransport(
   }
   return new StdioTransport({
     command: expandHome(config.command),
-    args: config.args?.map(expandHome),
+    ...(config.args ? { args: config.args.map(expandHome) } : {}),
     cwd: resolve(cwd, expandHome(config.cwd ?? ".")),
     env,
     stderr: "pipe",

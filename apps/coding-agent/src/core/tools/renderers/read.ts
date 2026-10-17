@@ -126,7 +126,7 @@ function formatCompactReadCall(
 }
 function formatReadResult(
   args: ReadRenderArgs | undefined,
-  result: { content: (TextContent | ImageContent)[]; details?: ReadToolDetails },
+  result: { content: (TextContent | ImageContent)[]; details?: ReadToolDetails | undefined },
   options: ToolRenderResultOptions,
   theme: Theme,
   showImages: boolean,
