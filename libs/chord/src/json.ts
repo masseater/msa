@@ -54,46 +54,57 @@ function copy(
   if (active.has(value)) throw new TypeError("Value contains cycles and is not strict JSON");
   active.add(value);
   try {
-    if (Array.isArray(value)) {
-      if (
-        Object.getPrototypeOf(value) !== Array.prototype ||
-        Reflect.ownKeys(value).length !== value.length + 1
-      ) {
-        throw new TypeError("Value must contain strict JSON dense plain arrays");
-      }
-      const result = new Array<JsonValue>(value.length);
-      for (let index = 0; index < value.length; index++) {
-        const descriptor = Object.getOwnPropertyDescriptor(value, index);
-        if (
-          descriptor === undefined ||
-          descriptor.enumerable !== true ||
-          !("value" in descriptor)
-        ) {
-          throw new TypeError("Value must contain strict JSON enumerable indexed data properties");
-        }
-        defineData(result, String(index), copy(descriptor.value, active, omitUndefinedProperties));
-      }
-      return result;
-    }
-    const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) {
-      throw new TypeError("Value must contain strict JSON plain objects or arrays");
-    }
-    const result = Object.create(prototype) as Record<string, JsonValue>;
-    for (const key of Reflect.ownKeys(value)) {
-      if (typeof key === "symbol")
-        throw new TypeError("Value contains a symbol key and is not strict JSON");
-      const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
-      if (descriptor.enumerable !== true || !("value" in descriptor)) {
-        throw new TypeError("Value must contain strict JSON enumerable data properties");
-      }
-      if (descriptor.value === undefined && omitUndefinedProperties) continue;
-      defineData(result, key, copy(descriptor.value, active, omitUndefinedProperties));
-    }
-    return result;
+    return Array.isArray(value)
+      ? copyArray(value, active, omitUndefinedProperties)
+      : copyObject(value, active, omitUndefinedProperties);
   } finally {
     active.delete(value);
   }
+}
+
+function copyArray(
+  value: unknown[],
+  active: Set<object>,
+  omitUndefinedProperties: boolean,
+): JsonValue {
+  if (
+    Object.getPrototypeOf(value) !== Array.prototype ||
+    Reflect.ownKeys(value).length !== value.length + 1
+  ) {
+    throw new TypeError("Value must contain strict JSON dense plain arrays");
+  }
+  const result = new Array<JsonValue>(value.length);
+  for (let index = 0; index < value.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    if (descriptor === undefined || descriptor.enumerable !== true || !("value" in descriptor)) {
+      throw new TypeError("Value must contain strict JSON enumerable indexed data properties");
+    }
+    defineData(result, String(index), copy(descriptor.value, active, omitUndefinedProperties));
+  }
+  return result;
+}
+
+function copyObject(
+  value: object,
+  active: Set<object>,
+  omitUndefinedProperties: boolean,
+): JsonValue {
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError("Value must contain strict JSON plain objects or arrays");
+  }
+  const result = Object.create(prototype) as Record<string, JsonValue>;
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key === "symbol")
+      throw new TypeError("Value contains a symbol key and is not strict JSON");
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+    if (descriptor.enumerable !== true || !("value" in descriptor)) {
+      throw new TypeError("Value must contain strict JSON enumerable data properties");
+    }
+    if (descriptor.value === undefined && omitUndefinedProperties) continue;
+    defineData(result, key, copy(descriptor.value, active, omitUndefinedProperties));
+  }
+  return result;
 }
 
 function defineData(target: object, key: PropertyKey, value: JsonValue): void {

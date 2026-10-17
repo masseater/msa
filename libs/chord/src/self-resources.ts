@@ -9,6 +9,8 @@ import { ResourceFacade } from "./resource-facade.ts";
 import { ResourceImpl, resourceOf } from "./resource.ts";
 import type { Exposed } from "./types.ts";
 
+export type { ListenerDecl, Resource, ResourceDeclaration } from "./declare.ts";
+
 export interface ResourceScope {
   readonly decls: Decls;
   readonly created: Run["created"];

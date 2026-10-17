@@ -2,12 +2,17 @@ import type { Static, TSchema } from "typebox";
 
 import { Cell, Derived, type Sources, type SourceValues } from "./cell.ts";
 import type { AnyContract, InputOf, Ref } from "./contract.ts";
-import type { ListenerDecl, Resource, ResourceDeclaration } from "./declare.ts";
 import { Decls, isStateInit, type Run } from "./decls.ts";
 import { invalid } from "./errors.ts";
 import type { ObjectImpl } from "./object.ts";
 import type { Registry } from "./registry.ts";
-import { declareResource, exposeResource } from "./self-resources.ts";
+import {
+  declareResource,
+  exposeResource,
+  type ListenerDecl,
+  type Resource,
+  type ResourceDeclaration,
+} from "./self-resources.ts";
 import type { Self, StateInit, StateOptions } from "./service.ts";
 import type { Ctx, Exposed, GetOptions, Readable } from "./types.ts";
 
