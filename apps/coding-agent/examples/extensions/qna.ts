@@ -10,6 +10,7 @@
 import type { UserMessage } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { BorderedLoader } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 const SYSTEM_PROMPT = `You are a question extractor. Given text from a conversation, extract any questions that need answering and format them for the user to fill in.
 
@@ -102,11 +103,12 @@ export default function (msa: ExtensionAPI) {
             .join("\n");
         };
 
-        doExtract()
-          // oxlint-disable-next-line promise/no-callback-in-promise -- ローダーの完了コールバックを promise の完了で呼ぶブリッジ
-          .then(done)
-          // oxlint-disable-next-line promise/no-callback-in-promise -- ローダーの完了コールバックを promise の完了で呼ぶブリッジ
-          .catch(() => done(null));
+        Effect.runFork(
+          Effect.tryPromise(doExtract).pipe(
+            Effect.orElseSucceed(() => null),
+            Effect.flatMap((text) => Effect.sync(() => done(text))),
+          ),
+        );
 
         return loader;
       });

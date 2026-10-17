@@ -16,6 +16,7 @@ import type { AgentMessage } from "@msa/agent-core";
 import { type Message, uuidv7 } from "@msa/ai";
 import type { ExtensionAPI, SessionEntry } from "@msa/coding-agent";
 import { BorderedLoader, convertToLlm, serializeConversation } from "@msa/coding-agent";
+import { Effect } from "effect";
 
 const SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversation history and the user's goal for a new thread, generate a focused prompt that:
 
@@ -144,14 +145,14 @@ export default function (msa: ExtensionAPI) {
             .join("\n");
         };
 
-        doGenerate()
-          // oxlint-disable-next-line promise/no-callback-in-promise -- ローダーの完了コールバックを promise の完了で呼ぶブリッジ
-          .then(done)
-          .catch((err) => {
-            console.error("Handoff generation failed:", err);
-            // oxlint-disable-next-line promise/no-callback-in-promise -- ローダーの完了コールバックを promise の完了で呼ぶブリッジ
-            done(null);
-          });
+        Effect.runFork(
+          Effect.tryPromise(doGenerate).pipe(
+            Effect.catch((error) =>
+              Effect.as(Effect.logError("Handoff generation failed:", error.cause), null),
+            ),
+            Effect.flatMap((text) => Effect.sync(() => done(text))),
+          ),
+        );
 
         return loader;
       });
