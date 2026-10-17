@@ -37,9 +37,7 @@ function deviceAuthorizationResponse(overrides?: Record<string, unknown>): Respo
 function createInteraction(events: Array<Record<string, unknown>>): ProviderAuthInteraction {
   return {
     signal: new AbortController().signal,
-    prompt: () => {
-      return Promise.reject(new Error("Kimi Code login should not prompt"));
-    },
+    prompt: () => Promise.reject(new Error("Kimi Code login should not prompt")),
     notify: (event) => events.push(event),
   };
 }

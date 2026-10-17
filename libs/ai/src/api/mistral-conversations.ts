@@ -206,11 +206,11 @@ export const streamSimple: StreamFunction<"mistral-conversations", SimpleStreamO
   const reasoning = clampedReasoning === "off" ? undefined : clampedReasoning;
   const effortMap = model.reasoning ? model.thinkingLevelMap : undefined;
   const reasoningEffort =
-    effortMap !== undefined
-      ? reasoning === undefined
+    effortMap === undefined
+      ? undefined
+      : reasoning === undefined
         ? (effortMap.off ?? undefined)
-        : (effortMap[reasoning] ?? "high")
-      : undefined;
+        : (effortMap[reasoning] ?? "high");
 
   return stream(model, context, {
     ...base,

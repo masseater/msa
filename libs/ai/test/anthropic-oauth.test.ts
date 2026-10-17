@@ -156,9 +156,7 @@ describe("Anthropic OAuth", () => {
     expect(
       anthropicOAuth.login({
         signal: neverAbortedSignal,
-        prompt: () => {
-          return Promise.reject(new Error("Login cancelled"));
-        },
+        prompt: () => Promise.reject(new Error("Login cancelled")),
         notify: () => {},
       }),
     ).rejects.toThrow("Login cancelled"));

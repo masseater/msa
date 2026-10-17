@@ -142,7 +142,7 @@ describe("transcript system messages", () => {
         const initial = yield* capturePayload<AnthropicPayload>(anthropicNativeModel, {
           messages: context.messages.slice(0, 2),
         });
-        expect(initial.tools?.map((tool) => tool.name)).toEqual([
+        expect(initial.tools?.map((declared) => declared.name)).toEqual([
           "base_tool",
           "__pi_deferred_placeholder__",
         ]);

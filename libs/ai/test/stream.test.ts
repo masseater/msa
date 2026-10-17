@@ -1,7 +1,6 @@
 import { type ChildProcess, execSync, spawn } from "child_process";
 import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { join } from "path";
 
 import { Clock, Console, Effect, Random, Stream } from "effect";
 import { Type } from "typebox";
@@ -31,9 +30,6 @@ import {
   hasCloudflareWorkersAICredentials,
 } from "./cloudflare-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
 const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
@@ -281,7 +277,7 @@ const handleImage = Effect.fn("handleImage")(function* <TApi extends Api>(
     return;
   }
 
-  const imagePath = join(__dirname, "data", "red-circle.png");
+  const imagePath = join(import.meta.dirname, "data", "red-circle.png");
   const imageBuffer = readFileSync(imagePath);
   const base64Image = imageBuffer.toString("base64");
 
@@ -974,8 +970,8 @@ describe("Generate E2E Tests", () => {
       it("should handle thinking mode", { retry: 3 }, () =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const llm = getModel("mistral", "mistral-small-2603");
-            yield* Effect.promise(() => handleThinking(llm, { reasoningEffort: "high" }));
+            const mistralModel = getModel("mistral", "mistral-small-2603");
+            yield* Effect.promise(() => handleThinking(mistralModel, { reasoningEffort: "high" }));
           }),
         ),
       );
@@ -983,8 +979,8 @@ describe("Generate E2E Tests", () => {
       it("should handle multi-turn with thinking and tools", { retry: 3 }, () =>
         Effect.runPromise(
           Effect.gen(function* () {
-            const llm = getModel("mistral", "mistral-small-2603");
-            yield* Effect.promise(() => multiTurn(llm, { reasoningEffort: "high" }));
+            const mistralModel = getModel("mistral", "mistral-small-2603");
+            yield* Effect.promise(() => multiTurn(mistralModel, { reasoningEffort: "high" }));
           }),
         ),
       );

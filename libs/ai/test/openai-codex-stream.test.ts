@@ -529,9 +529,9 @@ describe("openai-codex streaming", () => {
         const timers: ReturnType<typeof setTimeout>[] = [];
         let cancelled = false;
         const stream = new ReadableStream<Uint8Array>({
-          start(controller) {
+          start(streamController) {
             const enqueue = (chunk: string) => {
-              if (!cancelled) controller.enqueue(encoder.encode(chunk));
+              if (!cancelled) streamController.enqueue(encoder.encode(chunk));
             };
             enqueue(
               `${[
@@ -585,7 +585,7 @@ describe("openai-codex streaming", () => {
                     })}`,
                   ].join("\n\n")}\n\n`,
                 );
-                controller.close();
+                streamController.close();
               }, 20),
             );
           },

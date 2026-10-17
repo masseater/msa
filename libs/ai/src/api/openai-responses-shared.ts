@@ -567,9 +567,8 @@ export async function processResponsesStream<TApi extends Api>(
   const getOrCreateSlot = (
     outputIndex: number,
     item: ResponseOutputItem,
-  ): ResponsesOutputSlot | undefined => {
-    return outputSlots.get(outputIndex) ?? createSlot(outputIndex, item);
-  };
+  ): ResponsesOutputSlot | undefined =>
+    outputSlots.get(outputIndex) ?? createSlot(outputIndex, item);
   const backfillReasoningSignatures = (responseOutput: ResponseOutputItem[]): void => {
     for (const item of responseOutput) {
       if (
@@ -814,11 +813,11 @@ export async function processResponsesStream<TApi extends Api>(
       const error = event.response?.error;
       const details = event.response?.incomplete_details;
       const msg =
-        error !== null
-          ? `${error.code || "unknown"}: ${error.message || "no message"}`
-          : details?.reason === undefined
+        error === null
+          ? details?.reason === undefined
             ? "Unknown error (no error details in response)"
-            : `incomplete: ${details.reason}`;
+            : `incomplete: ${details.reason}`
+          : `${error.code || "unknown"}: ${error.message || "no message"}`;
       throw new Error(msg);
     }
   }
@@ -864,8 +863,8 @@ function mapStopReason(
     case "queued":
       return { stopReason: "stop" };
     default: {
-      const _exhaustive: never = status;
-      throw new Error(`Unhandled stop reason: ${_exhaustive}`);
+      const exhaustive: never = status;
+      throw new Error(`Unhandled stop reason: ${exhaustive}`);
     }
   }
 }

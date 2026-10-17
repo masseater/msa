@@ -307,9 +307,7 @@ describe("OpenRouter OAuth", () => {
           expect(
             openRouterOAuth.login({
               signal: neverAbortedSignal,
-              prompt: () => {
-                return Promise.reject(new Error("Login cancelled"));
-              },
+              prompt: () => Promise.reject(new Error("Login cancelled")),
               notify: () => {},
             }),
           ).rejects.toThrow("Login cancelled"),

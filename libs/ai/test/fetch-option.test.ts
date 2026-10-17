@@ -35,9 +35,9 @@ function createModel<TApi extends Api>(api: TApi): Model<TApi> {
 }
 
 function mockFetches() {
-  const fallback = vi.fn<FetchFunction>(() => {
-    return Promise.reject(new Error("ambient fetch must not be called"));
-  });
+  const fallback = vi.fn<FetchFunction>(() =>
+    Promise.reject(new Error("ambient fetch must not be called")),
+  );
   const custom = vi.fn<FetchFunction>(() =>
     Promise.resolve(
       new Response(JSON.stringify({ error: { message: "upstream rejected request" } }), {

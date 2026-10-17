@@ -8,8 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from "fs";
-import { dirname, join, resolve } from "path";
-import { fileURLToPath } from "url";
+import { join, resolve } from "path";
 
 import {
   CLOUDFLARE_AI_GATEWAY_ANTHROPIC_BASE_URL,
@@ -59,9 +58,7 @@ import {
   type OpenRouterModelListItem,
 } from "./openrouter-catalog.ts";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const packageRoot = join(__dirname, "..");
+const packageRoot = join(import.meta.dirname, "..");
 
 function readGeneratorOptions(args: string[]): {
   strict: boolean;

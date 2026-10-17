@@ -39,7 +39,7 @@ vi.mock("openai", () => {
       completions: {
         create: (params: unknown) => {
           mockState.lastParams = params;
-          const stream = {
+          const fakeStream = {
             async *[Symbol.asyncIterator]() {
               const chunks = mockState.chunks ?? [
                 {
@@ -57,15 +57,15 @@ vi.mock("openai", () => {
               }
             },
           };
-          const promise = Promise.resolve(stream) as Promise<typeof stream> & {
+          const promise = Promise.resolve(fakeStream) as Promise<typeof fakeStream> & {
             withResponse: () => Promise<{
-              data: typeof stream;
+              data: typeof fakeStream;
               response: { status: number; headers: Headers };
             }>;
           };
           promise.withResponse = () =>
             Promise.resolve({
-              data: stream,
+              data: fakeStream,
               response: { status: 200, headers: new Headers() },
             });
           return promise;

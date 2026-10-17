@@ -123,9 +123,7 @@ function envKeyAuth(key: string | undefined): ApiKeyAuth {
 function testOAuth(overrides?: Partial<OAuthAuth>): OAuthAuth {
   return {
     name: "Test OAuth",
-    login: () => {
-      return Promise.reject(new Error("not used"));
-    },
+    login: () => Promise.reject(new Error("not used")),
     refresh: (credential) => Promise.resolve(credential),
     toAuth: (credential) => Promise.resolve({ apiKey: credential.access }),
     ...overrides,
@@ -231,8 +229,8 @@ describe("Models runtime", () => {
     expect(found && hasApi(found, "openai-completions")).toBe(false);
     expect(found && hasApi(found, "test-api")).toBe(true);
     if (found !== undefined && hasApi(found, "test-api")) {
-      const _typed: Model<"test-api"> = found;
-      expect(_typed.id).toBe("m3");
+      const typed: Model<"test-api"> = found;
+      expect(typed.id).toBe("m3");
     }
 
     return Promise.resolve();
@@ -386,9 +384,7 @@ describe("Models runtime", () => {
             },
           },
           models: [],
-          fetchModels: () => {
-            return Promise.reject(new Error("must not fetch"));
-          },
+          fetchModels: () => Promise.reject(new Error("must not fetch")),
           api: {
             stream: () => new AssistantMessageEventStream(),
             streamSimple: () => new AssistantMessageEventStream(),
@@ -430,12 +426,12 @@ describe("Models runtime", () => {
         models.setProvider(
           testProvider({
             id: "dynamic",
-            refreshModels: (context) =>
+            refreshModels: (refreshContext) =>
               Effect.runPromiseWith(effectContext)(
                 Effect.gen(function* () {
-                  expect(context.stored?.models[0]?.id).toBe("stored");
+                  expect(refreshContext.stored?.models[0]?.id).toBe("stored");
                   yield* Effect.promise(() =>
-                    context.publish({
+                    refreshContext.publish({
                       persist: null,
                       update: () => {
                         expect(entry).toBeUndefined();
@@ -444,7 +440,7 @@ describe("Models runtime", () => {
                     }),
                   );
                   yield* Effect.promise(() =>
-                    context.publish({
+                    refreshContext.publish({
                       update: () => {
                         state = "ephemeral";
                       },
@@ -494,9 +490,7 @@ describe("Models runtime", () => {
 
         const offline = createModels({ credentials, modelsStore });
         offline.setProvider(
-          createDynamicProvider(() => {
-            return Promise.reject(new Error("must not fetch"));
-          }),
+          createDynamicProvider(() => Promise.reject(new Error("must not fetch"))),
         );
         expect(
           (yield* Effect.promise(() => offline.refresh({ allowNetwork: false }))).errors.size,
@@ -516,10 +510,10 @@ describe("Models runtime", () => {
           testProvider({
             id: "configured",
             auth: { apiKey: envKeyAuth("ambient-key") },
-            refreshModels: (context) => {
-              if (!context.allowNetwork) return Promise.resolve();
-              effectiveCredential = context.credential;
-              forceRefresh = context.force;
+            refreshModels: (refreshContext) => {
+              if (!refreshContext.allowNetwork) return Promise.resolve();
+              effectiveCredential = refreshContext.credential;
+              forceRefresh = refreshContext.force;
 
               return Promise.resolve();
             },
@@ -555,8 +549,8 @@ describe("Models runtime", () => {
         const inner: Provider = {
           ...testProvider({
             id: "dynamic",
-            refreshModels: (context) => {
-              baseUrls.push(context.baseUrl);
+            refreshModels: (refreshContext) => {
+              baseUrls.push(refreshContext.baseUrl);
 
               return Promise.resolve();
             },
@@ -604,8 +598,8 @@ describe("Models runtime", () => {
                   }),
               }),
             },
-            refreshModels: (context) => {
-              if (context.allowNetwork) modelRefreshCredential = context.credential;
+            refreshModels: (refreshContext) => {
+              if (refreshContext.allowNetwork) modelRefreshCredential = refreshContext.credential;
 
               return Promise.resolve();
             },
@@ -730,13 +724,13 @@ describe("Models runtime", () => {
           testProvider({
             id: "dynamic",
             auth: { apiKey: envKeyAuth("key") },
-            refreshModels: (context) =>
+            refreshModels: (refreshContext) =>
               Effect.runPromiseWith(effectContext)(
                 Effect.gen(function* () {
-                  providerSignal = context.signal;
-                  if (!context.allowNetwork) return;
+                  providerSignal = refreshContext.signal;
+                  if (!refreshContext.allowNetwork) return;
                   yield* Effect.promise(() =>
-                    context.publish({ persist: { models: [testModel("dynamic", "fresh")] } }),
+                    refreshContext.publish({ persist: { models: [testModel("dynamic", "fresh")] } }),
                   );
                 }),
               ),
@@ -844,10 +838,10 @@ describe("Models runtime", () => {
         models.setProvider(
           testProvider({
             id: "dynamic",
-            refreshModels: (context) =>
+            refreshModels: (refreshContext) =>
               Effect.runPromiseWith(effectContext)(
                 Effect.gen(function* () {
-                  if (!context.allowNetwork) return;
+                  if (!refreshContext.allowNetwork) return;
                   calls++;
                   const current = calls;
                   if (current === 1) {
@@ -856,7 +850,7 @@ describe("Models runtime", () => {
                   }
                   const value = `generation-${current}`;
                   yield* Effect.promise(() =>
-                    context.publish({
+                    refreshContext.publish({
                       persist: { models: [testModel("dynamic", value)] },
                       update: () => {
                         state = value;
@@ -1340,9 +1334,7 @@ describe("Models runtime", () => {
       Effect.gen(function* () {
         const credentials = new InMemoryCredentialStore();
         const oauth = testOAuth({
-          refresh: () => {
-            return Promise.reject(new Error("invalid_grant"));
-          },
+          refresh: () => Promise.reject(new Error("invalid_grant")),
         });
         const models = createModels({ credentials });
         models.setProvider(testProvider({ id: "p1", auth: { oauth } }));
@@ -1452,9 +1444,7 @@ describe("Models runtime", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const readFailing: CredentialStore = {
-          read: () => {
-            return Promise.reject(new Error("disk on fire"));
-          },
+          read: () => Promise.reject(new Error("disk on fire")),
           list: () => Promise.resolve([]),
           modify: () => Promise.resolve(undefined),
           delete: async () => {},
@@ -1468,9 +1458,7 @@ describe("Models runtime", () => {
         const modifyFailing: CredentialStore = {
           read: () => Promise.resolve({ type: "oauth", access: "old", refresh: "r", expires: 0 }),
           list: () => Promise.resolve([{ providerId: "p1", type: "oauth" }]),
-          modify: () => {
-            return Promise.reject(new Error("disk on fire"));
-          },
+          modify: () => Promise.reject(new Error("disk on fire")),
           delete: async () => {},
         };
         const oauthModels = createModels({ credentials: modifyFailing });
@@ -1501,9 +1489,8 @@ describe("Models runtime", () => {
             id: "p1",
             auth: {
               oauth: testOAuth({
-                refresh: () => {
-                  return Promise.reject(new Error("token refresh failed (400): invalid_grant"));
-                },
+                refresh: () =>
+                  Promise.reject(new Error("token refresh failed (400): invalid_grant")),
               }),
             },
           }),
@@ -1522,9 +1509,7 @@ describe("Models runtime", () => {
       Effect.gen(function* () {
         const failing: ApiKeyAuth = {
           name: "Failing",
-          resolve: () => {
-            return Promise.reject(new Error("nope"));
-          },
+          resolve: () => Promise.reject(new Error("nope")),
         };
         const models = createModels();
         models.setProvider(testProvider({ id: "p1", auth: { apiKey: failing } }));

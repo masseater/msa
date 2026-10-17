@@ -20,9 +20,7 @@ vi.mock("openai", () => {
           if (signal?.aborted === true) {
             const error = new Error("Request aborted");
             return {
-              withResponse: () => {
-                return Promise.reject(error);
-              },
+              withResponse: () => Promise.reject(error),
             };
           }
           const response = {

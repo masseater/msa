@@ -1,31 +1,36 @@
-let _existsSync: typeof import("node:fs").existsSync | null = null;
-let _homedir: typeof import("node:os").homedir | null = null;
-let _join: typeof import("node:path").join | null = null;
+import { Function } from "effect";
+
+import type { ProviderEnv } from "./types.ts";
+import { getProviderEnvValue } from "./utils/provider-env.ts";
+
+let nodeExistsSync: typeof import("node:fs").existsSync | null = null;
+let nodeHomedir: typeof import("node:os").homedir | null = null;
+let nodeJoin: typeof import("node:path").join | null = null;
 
 type DynamicImport = (specifier: string) => Promise<unknown>;
 
 const dynamicImport: DynamicImport = (specifier) => import(specifier);
-// oxlint-disable-next-line eslint/no-useless-concat -- browser-safe 検査が node: 組込みの実 import と見なさないよう、畳まずに組む
-const NODE_FS_SPECIFIER = "node:" + "fs";
-// oxlint-disable-next-line eslint/no-useless-concat -- browser-safe 検査が node: 組込みの実 import と見なさないよう、畳まずに組む
-const NODE_OS_SPECIFIER = "node:" + "os";
-// oxlint-disable-next-line eslint/no-useless-concat -- browser-safe 検査が node: 組込みの実 import と見なさないよう、畳まずに組む
-const NODE_PATH_SPECIFIER = "node:" + "path";
+const nodeSpecifier = (name: string): string => ["node", name].join(":");
 
-if (typeof process !== "undefined" && (process.versions?.node || process.versions?.["bun"])) {
-  dynamicImport(NODE_FS_SPECIFIER).then((m) => {
-    _existsSync = (m as typeof import("node:fs")).existsSync;
+const isNodeLike = (): boolean =>
+  typeof process !== "undefined" &&
+  ((process.versions?.node !== undefined && process.versions.node !== "") ||
+    (process.versions?.["bun"] !== undefined && process.versions["bun"] !== ""));
+
+if (isNodeLike()) {
+  void dynamicImport(nodeSpecifier("fs")).then((m) => {
+    nodeExistsSync = (m as typeof import("node:fs")).existsSync;
+    return nodeExistsSync;
   });
-  dynamicImport(NODE_OS_SPECIFIER).then((m) => {
-    _homedir = (m as typeof import("node:os")).homedir;
+  void dynamicImport(nodeSpecifier("os")).then((m) => {
+    nodeHomedir = (m as typeof import("node:os")).homedir;
+    return nodeHomedir;
   });
-  dynamicImport(NODE_PATH_SPECIFIER).then((m) => {
-    _join = (m as typeof import("node:path")).join;
+  void dynamicImport(nodeSpecifier("path")).then((m) => {
+    nodeJoin = (m as typeof import("node:path")).join;
+    return nodeJoin;
   });
 }
-
-import type { KnownProvider, ProviderEnv } from "./types.ts";
-import { getProviderEnvValue } from "./utils/provider-env.ts";
 
 export const ANTHROPIC_AUTH_TOKEN_ENV = "ANTHROPIC_AUTH_TOKEN";
 export const ANTHROPIC_OAUTH_TOKEN_ENV = "ANTHROPIC_OAUTH_TOKEN";
@@ -41,25 +46,21 @@ let cachedVertexAdcCredentialsExists: boolean | null = null;
 function hasVertexAdcCredentials(env?: ProviderEnv): boolean {
   const explicitCredentialsPath = env?.["GOOGLE_APPLICATION_CREDENTIALS"];
   if (explicitCredentialsPath !== undefined && explicitCredentialsPath !== "") {
-    return _existsSync === null ? false : _existsSync(explicitCredentialsPath);
+    return nodeExistsSync === null ? false : nodeExistsSync(explicitCredentialsPath);
   }
 
   if (cachedVertexAdcCredentialsExists === null) {
-    if (_existsSync === null || _homedir === null || _join === null) {
-      const isNode =
-        typeof process !== "undefined" && (process.versions?.node || process.versions?.["bun"]);
-      if (isNode === undefined || isNode === false || isNode === "") {
-        cachedVertexAdcCredentialsExists = false;
-      }
+    if (nodeExistsSync === null || nodeHomedir === null || nodeJoin === null) {
+      if (!isNodeLike()) cachedVertexAdcCredentialsExists = false;
       return false;
     }
 
     const gacPath = getProviderEnvValue("GOOGLE_APPLICATION_CREDENTIALS", env);
     if (gacPath !== undefined && gacPath !== "") {
-      cachedVertexAdcCredentialsExists = _existsSync(gacPath);
+      cachedVertexAdcCredentialsExists = nodeExistsSync(gacPath);
     } else {
-      cachedVertexAdcCredentialsExists = _existsSync(
-        _join(_homedir(), ".config", "gcloud", "application_default_credentials.json"),
+      cachedVertexAdcCredentialsExists = nodeExistsSync(
+        nodeJoin(nodeHomedir(), ".config", "gcloud", "application_default_credentials.json"),
       );
     }
   }
@@ -116,21 +117,47 @@ function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
   return envVar !== undefined && envVar !== "" ? [envVar] : undefined;
 }
 
-export function findEnvKeys(provider: KnownProvider, env?: ProviderEnv): string[] | undefined;
-export function findEnvKeys(provider: string, env?: ProviderEnv): string[] | undefined;
-export function findEnvKeys(provider: string, env?: ProviderEnv): string[] | undefined {
+const hasEnvValue = (name: string, env: ProviderEnv | undefined): boolean => {
+  const value = getProviderEnvValue(name, env);
+  return value !== undefined && value !== "";
+};
+
+const findKeys = (provider: string, env?: ProviderEnv): string[] | undefined => {
   const envVars = getApiKeyEnvVars(provider);
   if (envVars === undefined) return undefined;
 
-  const found = envVars.filter((envVar) => !!getProviderEnvValue(envVar, env));
+  const found = envVars.filter((envVar) => hasEnvValue(envVar, env));
   return found.length > 0 ? found : undefined;
-}
+};
 
-export function getEnvApiKey(provider: KnownProvider, env?: ProviderEnv): string | undefined;
-export function getEnvApiKey(provider: string, env?: ProviderEnv): string | undefined;
-export function getEnvApiKey(provider: string, env?: ProviderEnv): string | undefined {
-  const envKeys = findEnvKeys(provider, env);
-  if (envKeys?.[0] !== undefined && envKeys?.[0] !== "") {
+const isProviderFirst = (args: IArguments): boolean => typeof args[0] === "string";
+
+export const findEnvKeys: {
+  (env?: ProviderEnv): (provider: string) => string[] | undefined;
+  (provider: string, env?: ProviderEnv): string[] | undefined;
+} = Function.dual(isProviderFirst, findKeys);
+
+const AWS_CREDENTIAL_ENV_VARS = [
+  "AWS_PROFILE",
+  "AWS_BEARER_TOKEN_BEDROCK",
+  "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+  "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+  "AWS_WEB_IDENTITY_TOKEN_FILE",
+] as const;
+
+const hasVertexAuthentication = (env: ProviderEnv | undefined): boolean =>
+  hasVertexAdcCredentials(env) &&
+  (hasEnvValue("GOOGLE_CLOUD_PROJECT", env) || hasEnvValue("GCLOUD_PROJECT", env)) &&
+  hasEnvValue("GOOGLE_CLOUD_LOCATION", env);
+
+const hasBedrockAuthentication = (env: ProviderEnv | undefined): boolean =>
+  hasEnvValue("AWS_PROFILE", env) ||
+  (hasEnvValue("AWS_ACCESS_KEY_ID", env) && hasEnvValue("AWS_SECRET_ACCESS_KEY", env)) ||
+  AWS_CREDENTIAL_ENV_VARS.some((name) => hasEnvValue(name, env));
+
+const getKey = (provider: string, env?: ProviderEnv): string | undefined => {
+  const envKeys = findKeys(provider, env);
+  if (envKeys?.[0] !== undefined && envKeys[0] !== "") {
     const apiKeyEnv =
       provider === "anthropic"
         ? envKeys.find((key) => key !== ANTHROPIC_AUTH_TOKEN_ENV)
@@ -138,31 +165,12 @@ export function getEnvApiKey(provider: string, env?: ProviderEnv): string | unde
     if (apiKeyEnv !== undefined && apiKeyEnv !== "") return getProviderEnvValue(apiKeyEnv, env);
   }
 
-  if (provider === "google-vertex") {
-    const hasCredentials = hasVertexAdcCredentials(env);
-    const hasProject = !!(
-      getProviderEnvValue("GOOGLE_CLOUD_PROJECT", env) || getProviderEnvValue("GCLOUD_PROJECT", env)
-    );
-    const hasLocation = !!getProviderEnvValue("GOOGLE_CLOUD_LOCATION", env);
-
-    if (hasCredentials && hasProject && hasLocation) {
-      return "<authenticated>";
-    }
-  }
-
-  if (provider === "amazon-bedrock") {
-    if (
-      getProviderEnvValue("AWS_PROFILE", env) ||
-      (getProviderEnvValue("AWS_ACCESS_KEY_ID", env) &&
-        getProviderEnvValue("AWS_SECRET_ACCESS_KEY", env)) ||
-      getProviderEnvValue("AWS_BEARER_TOKEN_BEDROCK", env) ||
-      getProviderEnvValue("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", env) ||
-      getProviderEnvValue("AWS_CONTAINER_CREDENTIALS_FULL_URI", env) ||
-      getProviderEnvValue("AWS_WEB_IDENTITY_TOKEN_FILE", env)
-    ) {
-      return "<authenticated>";
-    }
-  }
-
+  if (provider === "google-vertex" && hasVertexAuthentication(env)) return "<authenticated>";
+  if (provider === "amazon-bedrock" && hasBedrockAuthentication(env)) return "<authenticated>";
   return undefined;
-}
+};
+
+export const getEnvApiKey: {
+  (env?: ProviderEnv): (provider: string) => string | undefined;
+  (provider: string, env?: ProviderEnv): string | undefined;
+} = Function.dual(isProviderFirst, getKey);

@@ -27,9 +27,7 @@ function getUrl(input: unknown): string {
 function createInteraction(events: Array<Record<string, unknown>>): ProviderAuthInteraction {
   return {
     signal: new AbortController().signal,
-    prompt: () => {
-      return Promise.reject(new Error("Meta login should not prompt"));
-    },
+    prompt: () => Promise.reject(new Error("Meta login should not prompt")),
     notify: (event) => events.push(event),
   };
 }

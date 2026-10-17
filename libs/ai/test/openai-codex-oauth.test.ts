@@ -287,9 +287,7 @@ describe("OpenAI Codex OAuth", () => {
     expect(
       openaiCodexOAuth.login({
         signal: neverAbortedSignal,
-        prompt: () => {
-          return Promise.reject(new Error("Login cancelled"));
-        },
+        prompt: () => Promise.reject(new Error("Login cancelled")),
         notify: () => {},
       }),
     ).rejects.toThrow("Login cancelled"));
@@ -511,8 +509,8 @@ describe("OpenAI Codex OAuth", () => {
         const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
         vi.stubGlobal(
           "fetch",
-          vi.fn((): Promise<Response> => {
-            return Promise.resolve(
+          vi.fn((): Promise<Response> =>
+            Promise.resolve(
               new Response(
                 JSON.stringify({
                   error: {
@@ -526,8 +524,8 @@ describe("OpenAI Codex OAuth", () => {
                   headers: { "Content-Type": "application/json" },
                 },
               ),
-            );
-          }),
+            ),
+          ),
         );
 
         yield* Effect.promise(() =>

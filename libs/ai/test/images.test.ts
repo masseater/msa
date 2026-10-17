@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
 import { Console, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -14,9 +13,6 @@ import type {
   ProviderImagesOptions,
 } from "../src/types.ts";
 import { envValue } from "./env.ts";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 type ImagesOptionsWithExtras = ProviderImagesOptions & Record<string, unknown>;
 
@@ -47,7 +43,7 @@ const handleImageInput = Effect.fn("handleImageInput")(function* <TApi extends s
     return;
   }
 
-  const imagePath = join(__dirname, "data", "red-circle.png");
+  const imagePath = join(import.meta.dirname, "data", "red-circle.png");
   const imageBuffer = readFileSync(imagePath);
   const imageContent: ImageContent = {
     type: "image",

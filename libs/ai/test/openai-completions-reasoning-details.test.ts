@@ -21,8 +21,8 @@ vi.mock("openai", () => {
           const chunks = mockState.chunkSets.shift() ?? [];
           const stream = {
             async *[Symbol.asyncIterator]() {
-              for (const chunk of chunks) {
-                yield chunk;
+              for (const streamChunk of chunks) {
+                yield streamChunk;
               }
             },
           };

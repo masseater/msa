@@ -1041,9 +1041,9 @@ type WebSocketConstructor = new (
   protocols?: string | string[] | { headers?: Record<string, string> },
 ) => WebSocketLike;
 
-let _cachedWebsocket: WebSocketConstructor | null = null;
+let cachedWebsocket: WebSocketConstructor | null = null;
 function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketConstructor | null> {
-  if (env === undefined && _cachedWebsocket !== null) return Promise.resolve(_cachedWebsocket);
+  if (env === undefined && cachedWebsocket !== null) return Promise.resolve(cachedWebsocket);
 
   if (
     typeof process !== "undefined" &&
@@ -1052,11 +1052,11 @@ function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketConstructo
   ) {
     const WebSocketWithProxy = class extends WebSocket {
       constructor(url: string | URL, options?: string | string[] | Record<string, unknown>) {
-        let _opts: Record<string, unknown>;
+        let socketOptions: Record<string, unknown>;
         if (Array.isArray(options) || typeof options === "string") {
-          _opts = { protocols: options };
+          socketOptions = { protocols: options };
         } else {
-          _opts = { ...options };
+          socketOptions = { ...options };
         }
 
         const proxyUrl = resolveHttpProxyUrlForTarget(
@@ -1064,13 +1064,13 @@ function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketConstructo
           env,
         );
         super(url, {
-          ..._opts,
+          ...socketOptions,
           ...(proxyUrl === undefined ? {} : { proxy: proxyUrl.toString() }),
         } as any);
       }
     };
     if (env === undefined) {
-      _cachedWebsocket = WebSocketWithProxy;
+      cachedWebsocket = WebSocketWithProxy;
     }
     return Promise.resolve(WebSocketWithProxy);
   }

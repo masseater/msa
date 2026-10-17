@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
 import { Clock, Console, Effect } from "effect";
 import type { ResponseFunctionCallOutputItemList } from "openai/resources/responses/responses.js";
@@ -14,9 +13,6 @@ import { envValue } from "./env.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const openaiCodexToken = await resolveApiKey("openai-codex");
 
@@ -45,7 +41,7 @@ const verifyToolResultImagesStayInFunctionCallOutput = Effect.fn(
     return;
   }
 
-  const imagePath = join(__dirname, "data", "red-circle.png");
+  const imagePath = join(import.meta.dirname, "data", "red-circle.png");
   const base64Image = readFileSync(imagePath).toString("base64");
   const toolText = "A red circle with a diameter of 100 pixels.";
 
