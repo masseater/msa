@@ -20,19 +20,11 @@ import {
   remote,
   type ServeOptionsFor,
 } from "../src/index.ts";
+import { pollUntil, tick } from "./fixtures/timing.ts";
 
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 const quiet = (errors: unknown[] = []) =>
   createHost({ self: { kind: "host" }, onError: (error) => errors.push(error) });
-function until(check: () => boolean): Promise<void> {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      for (let attempt = 0; attempt < 200 && !check(); attempt++)
-        yield* Effect.promise(() => tick());
-      assert.ok(check(), "condition not reached");
-    }),
-  );
-}
+const until = (check: () => boolean) => pollUntil(check, 200, tick);
 
 const Counter = local("t.counter", {
   version: 1,
@@ -97,7 +89,7 @@ const activatesGoesLiveBindsMembersLate = Effect.gen(function* () {
   yield* Effect.promise(() =>
     assert.rejects(ref.add(1), (error) => isChordError(error, "released")),
   );
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(log, ["factory a", "open a", "close a"]);
 });
 
@@ -110,10 +102,10 @@ const coalescesConcurrentGetsAndKeepsThe = Effect.gen(function* () {
   yield* Effect.promise(() => Promise.all([a.ready, b.ready]));
   assert.deepEqual(log, ["factory x", "open x"]);
   a.release();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.equal(yield* Effect.promise(() => b.add(1)), 1);
   b.release();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(log, ["factory x", "open x", "close x"]);
 });
 
@@ -152,15 +144,15 @@ const disposesAnAbandonedActivationOnceIt = Effect.gen(function* () {
     return {};
   });
   const ref = host.hold(Slow, {});
-  yield* Effect.promise(() => tick());
+  yield* tick;
   ref.release();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   release();
-  yield* Effect.promise(() => tick());
-  yield* Effect.promise(() => tick());
+  yield* tick;
+  yield* tick;
   assert.deepEqual(log, ["abort seen", "closed"]);
   const again = host.hold(Slow, {});
-  yield* Effect.promise(() => tick());
+  yield* tick;
   release();
   yield* Effect.promise(() => again.ready);
   assert.equal(again.status, "live");
@@ -227,8 +219,8 @@ const unwindsDeclarationsWhenAFactoryThrows = Effect.gen(function* () {
   yield* Effect.promise(() =>
     assert.rejects(host.hold(Bad, { async: true }).ready, /synchronous/u),
   );
-  yield* Effect.promise(() => tick());
-  yield* Effect.promise(() => tick());
+  yield* tick;
+  yield* tick;
   assert.equal(leafLive, 0);
 });
 
@@ -291,8 +283,8 @@ const closesResourcesInReverseOrderRuns = Effect.gen(function* () {
   const ref = host.hold(Multi, {});
   yield* Effect.promise(() => ref.ready);
   ref.release();
-  yield* Effect.promise(() => tick());
-  yield* Effect.promise(() => tick());
+  yield* tick;
+  yield* tick;
   assert.equal(log.at(-1), "close a");
   assert.equal(log.length, 3);
   assert.ok(errors[0] instanceof AggregateError);
@@ -315,7 +307,7 @@ const releasesCtxGetHoldsWhenThe = Effect.gen(function* () {
     ),
   );
   assert.equal(value, 3);
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(log, ["factory c", "open c", "close c"]);
 });
 
@@ -437,13 +429,13 @@ const aListenerOnStateGetsThe = Effect.gen(function* () {
       ),
   });
   yield* Effect.promise(() => host.install(facet("v1")));
-  yield* Effect.promise(() => until(() => seen.length === 1));
+  yield* until(() => seen.length === 1);
   yield* Effect.promise(() => host.root((ctx) => host.hold(Doubled, {}).set(5, ctx)));
-  yield* Effect.promise(() => until(() => seen.length === 2));
+  yield* until(() => seen.length === 2);
   assert.deepEqual(seen, [2, 10]);
   yield* Effect.promise(() => host.reload([facet("v2")]));
-  yield* Effect.promise(() => until(() => seen.length === 3));
-  yield* Effect.promise(() => tick());
+  yield* until(() => seen.length === 3);
+  yield* tick;
   assert.deepEqual(seen, [2, 10, 10]);
 });
 
@@ -532,7 +524,7 @@ describe("host: lifetime", () => {
         );
         guest.release();
         defaults.release();
-        yield* Effect.promise(() => tick());
+        yield* tick;
         const again = host.hold(Store, {});
         yield* Effect.promise(() => again.ready);
         assert.equal(created.length, 1);
@@ -562,7 +554,7 @@ const forcedDisposalMakesReferencesGoneAnd = Effect.gen(function* () {
   const ref = host.hold(Slow, {}, { principal: { user: "u" } });
   yield* Effect.promise(() => ref.ready);
   const call = ref.wait();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   yield* Effect.promise(() =>
     host.invalidatePrincipal((principal) => (principal as { user: string }).user === "u"),
   );
@@ -720,8 +712,8 @@ describe("host: registries", () => {
         );
         const tables: string[][] = [];
         host.registry(Routes).subscribe((table) => tables.push([...table.keys()]));
-        yield* Effect.promise(() => tick());
-        yield* Effect.promise(() => tick());
+        yield* tick;
+        yield* tick;
         assert.deepEqual([...host.registry(Routes).table().keys()], ["GET /a", "GET /c", "GET /b"]);
         assert.equal(host.registry(Routes).get("GET /b"), "b");
         assert.deepEqual(tables.at(-1), ["GET /a", "GET /c", "GET /b"]);
@@ -755,8 +747,8 @@ describe("host: registries", () => {
             { lifetime: "host" },
           );
         }
-        yield* Effect.promise(() => tick());
-        yield* Effect.promise(() => tick());
+        yield* tick;
+        yield* tick;
         assert.ok(errors.some((error) => /registry_conflict/u.test(String(error))));
       }),
     ));
@@ -863,11 +855,11 @@ describe("host: composition", () => {
         });
         const mirror = host.hold(Mirror, {});
         yield* Effect.promise(() => mirror.ready);
-        yield* Effect.promise(() => tick());
+        yield* tick;
         assert.equal(mirror.copy.value, 1);
         assert.equal(mirror.doubled.value, 2);
         yield* Effect.promise(() => host.hold(Source, {}).set(5));
-        yield* Effect.promise(() => tick());
+        yield* tick;
         assert.equal(mirror.copy.value, 5);
         assert.equal(mirror.doubled.value, 10);
       }),

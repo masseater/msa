@@ -18,16 +18,9 @@ import {
   remote,
 } from "../src/index.ts";
 import { CountingLink, stateFrames } from "./fixtures/counting.ts";
+import { pollUntil } from "./fixtures/timing.ts";
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-function until(check: () => boolean, attempts = 400): Promise<void> {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      for (let i = 0; i < attempts && !check(); i++) yield* Effect.promise(() => sleep(2));
-      assert.ok(check(), "condition not reached");
-    }),
-  );
-}
+const until = (check: () => boolean, attempts = 400) => pollUntil(check, attempts, Effect.sleep(2));
 
 const Blob = remote("t.e8-blob", {
   version: 1,
@@ -95,7 +88,7 @@ const withLargeStreamsWaitingBehindA = Effect.gen(function* () {
   assert.equal(yield* Effect.promise(() => bigs[0]!.ping()), "pong");
   assert.ok(bigs[0]!.lines.value.length < 550, "the large streams still wait");
   link.release();
-  yield* Effect.promise(() => until(() => bigs.every((big) => big.lines.value.length === 550)));
+  yield* until(() => bigs.every((big) => big.lines.value.length === 550));
   yield* Effect.promise(() => server.close());
 });
 
@@ -110,7 +103,7 @@ const aSnapshotLargerThanTheWindow = Effect.gen(function* () {
   for (let i = 0; i < 40; i++) yield* Effect.promise(() => big.push(`${i}:${"z".repeat(1000)}`));
   assert.ok(big.lines.value.length < 340);
   link.release();
-  yield* Effect.promise(() => until(() => big.lines.value.length === 340));
+  yield* until(() => big.lines.value.length === 340);
   yield* Effect.promise(() => server.close());
 });
 
@@ -143,7 +136,7 @@ const aLinkThatReportsNoSizes = Effect.gen(function* () {
   const blob = host.hold(Blob, { name: "x" });
   yield* Effect.promise(() => blob.ready);
   for (let i = 0; i < 20; i++) yield* Effect.promise(() => blob.push(`${i}`));
-  yield* Effect.promise(() => until(() => blob.lines.value.length === 21));
+  yield* until(() => blob.lines.value.length === 21);
   yield* Effect.promise(() => server.close());
 });
 
@@ -164,7 +157,7 @@ const waitingOpsStayUnderThePer = Effect.gen(function* () {
   assert.ok(peak <= cap, `waiting ops ${peak} exceed the cap ${cap}`);
   const before = link.received.length;
   link.release();
-  yield* Effect.promise(() => until(() => blobs.every((blob) => blob.lines.value.length === 31)));
+  yield* until(() => blobs.every((blob) => blob.lines.value.length === 31));
   const resets = stateFrames(link.received.slice(before)).filter((frame) => frame.as === "reset");
   const per = new Map<number, number>();
   for (const frame of resets) per.set(frame.hold, (per.get(frame.hold) ?? 0) + 1);
@@ -273,11 +266,11 @@ describe("relay topology", () => {
         assert.equal(c.served().length, 3);
         a.release();
         a2.release();
-        yield* Effect.promise(() => until(() => c.served().length === 2 && c.relayed() === 2));
+        yield* until(() => c.served().length === 2 && c.relayed() === 2);
         two.up.close();
-        yield* Effect.promise(() => until(() => c.served().length === 1 && c.relayed() === 1));
+        yield* until(() => c.served().length === 1 && c.relayed() === 1);
         yield* Effect.promise(() => c.server.invalidatePrincipal({ guest: "h" }));
-        yield* Effect.promise(() => until(() => c.served().length === 0 && c.relayed() === 0));
+        yield* until(() => c.served().length === 0 && c.relayed() === 0);
         yield* Effect.promise(() => c.server.close());
       }),
     ));
@@ -295,7 +288,7 @@ describe("relay topology", () => {
         const seen: number[] = [];
         live.n.subscribe((value) => seen.push(value));
         for (let i = 0; i < 200; i++) yield* Effect.promise(() => live.add(1));
-        yield* Effect.promise(() => until(() => live.n.value === 200));
+        yield* until(() => live.n.value === 200);
         assert.ok(seen.length > 100, "the fast tab saw the changes as they came");
         assert.ok(stalled.n.value < 200, "the stalled tab waits");
         assert.ok(
@@ -303,7 +296,7 @@ describe("relay topology", () => {
           "the relay asked the worker for a reset",
         );
         slow.link.release();
-        yield* Effect.promise(() => until(() => stalled.n.value === 200));
+        yield* until(() => stalled.n.value === 200);
         yield* Effect.promise(() => c.server.close());
       }),
     ));

@@ -16,16 +16,9 @@ import {
   remote,
 } from "../src/index.ts";
 import { CountingLink, stateFrames } from "./fixtures/counting.ts";
+import { pollUntil } from "./fixtures/timing.ts";
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-function until(check: () => boolean, attempts = 200): Promise<void> {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      for (let i = 0; i < attempts && !check(); i++) yield* Effect.promise(() => sleep(2));
-      assert.ok(check(), "condition not reached");
-    }),
-  );
-}
+const until = (check: () => boolean, attempts = 200) => pollUntil(check, attempts, Effect.sleep(2));
 
 const Doc = remote("t.e8-doc", {
   version: 1,
@@ -102,7 +95,7 @@ const aNewVariantSMembersArrive = Effect.gen(function* () {
   });
   const before = stateFrames(link.received).length;
   yield* Effect.promise(() => server.reload([docFacet("b")]));
-  yield* Effect.promise(() => until(() => view(doc).variant === "b"));
+  yield* until(() => view(doc).variant === "b");
   assert.equal(view(doc).y.value, "why");
   assert.equal(view(doc).x.value, 1);
   const unit = stateFrames(link.received).slice(before);
@@ -112,7 +105,7 @@ const aNewVariantSMembersArrive = Effect.gen(function* () {
     "only the new member's snapshot",
   );
   yield* Effect.promise(() => server.reload([docFacet("c")]));
-  yield* Effect.promise(() => until(() => view(doc).variant === "c"));
+  yield* until(() => view(doc).variant === "c");
   assert.throws(
     () => view(doc).x.value,
     (error) => isChordError(error, "not_in_variant"),
@@ -143,9 +136,9 @@ const keepsTheLastValuesReadableSends = Effect.gen(function* () {
   const doc = browser.hold(Doc, {});
   yield* Effect.promise(() => doc.ready);
   yield* Effect.promise(() => doc.bump());
-  yield* Effect.promise(() => until(() => view(doc).x.value === 2));
+  yield* until(() => view(doc).x.value === 2);
   up.close();
-  yield* Effect.promise(() => until(() => doc.status === "loading"));
+  yield* until(() => doc.status === "loading");
   assert.equal(view(doc).x.value, 2);
   const joining = browser.hold(Doc, {});
   assert.equal(joining.status, "loading");
@@ -154,7 +147,7 @@ const keepsTheLastValuesReadableSends = Effect.gen(function* () {
     joined = true;
     return undefined;
   });
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   assert.equal(joined, false, "a reference joining during the re-hold waits for the fresh unit");
 
   const [down2, up2] = memoryLinkPair();

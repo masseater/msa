@@ -14,16 +14,9 @@ import {
   remote,
 } from "../src/index.ts";
 import { CountingLink } from "./fixtures/counting.ts";
+import { pollUntil } from "./fixtures/timing.ts";
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-function until(check: () => boolean, attempts = 200): Promise<void> {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      for (let i = 0; i < attempts && !check(); i++) yield* Effect.promise(() => sleep(2));
-      assert.ok(check(), "condition not reached");
-    }),
-  );
-}
+const until = (check: () => boolean, attempts = 200) => pollUntil(check, attempts, Effect.sleep(2));
 
 const Slow = remote("t.e8-slow", {
   version: 1,
@@ -63,17 +56,17 @@ const anAbortedGetRejectsAndReleases = Effect.gen(function* () {
   const abort = abortController();
   const first = browser.get(Slow, {}, { signal: abort.signal });
   const second = browser.get(Slow, {});
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   abort.abort();
   yield* Effect.promise(() => assert.rejects(first, (error) => isChordError(error, "aborted")));
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   assert.equal(link.count("sent", "release"), 0, "the other awaiting get keeps the hold");
   open();
   const ref = yield* Effect.promise(() => second);
   assert.equal(ref.n.value, 1);
   assert.equal(link.count("sent", "hold"), 1);
   ref.release();
-  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  yield* until(() => link.count("sent", "release") === 1);
   yield* Effect.promise(() => server.close());
 });
 
@@ -92,7 +85,7 @@ const aCtxGetStillWaitingWhen = Effect.gen(function* () {
     ),
   );
   yield* Effect.promise(() => assert.rejects(pending!, (error) => isChordError(error, "aborted")));
-  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  yield* until(() => link.count("sent", "release") === 1);
   open();
   yield* Effect.promise(() => server.close());
 });
@@ -105,7 +98,7 @@ const aGetTimesOutAfterReadytimeout = Effect.gen(function* () {
       (error) => isChordError(error, "unavailable") && error.reason === "ready_timeout",
     ),
   );
-  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  yield* until(() => link.count("sent", "release") === 1);
   yield* Effect.promise(() => server.close());
 });
 
@@ -124,7 +117,7 @@ const ctxGetResolvesHydratedTheCall = Effect.gen(function* () {
     ),
   );
   assert.equal(value, 1);
-  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  yield* until(() => link.count("sent", "release") === 1);
   yield* Effect.promise(() => server.close());
 });
 

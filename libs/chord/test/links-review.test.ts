@@ -20,25 +20,9 @@ import {
   PROTOCOL_VERSION,
   remote,
 } from "../src/index.ts";
+import { latch, pollUntil, tick } from "./fixtures/timing.ts";
 
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-function until(check: () => boolean, attempts = 100): Promise<void> {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      for (let i = 0; i < attempts && !check(); i++) yield* Effect.promise(() => sleep(2));
-      assert.ok(check(), "condition not reached");
-    }),
-  );
-}
-
-function latch() {
-  let open = () => {};
-  const promise = new Promise<void>((resolve) => {
-    open = resolve;
-  });
-  return { promise, open };
-}
+const until = (check: () => boolean, attempts = 100) => pollUntil(check, attempts, Effect.sleep(2));
 
 class WatchedLink implements Link {
   readonly inner: Link;
@@ -197,7 +181,7 @@ const case1TheAcceptorDecidesWhatA = Effect.gen(function* () {
   c.server.accept(down, { principal: { guest: "g" } });
   raw.receive(() => {});
   raw.send({ t: "hello", name: "session:S9", kind: "host", codeVersion: 1 });
-  yield* Effect.promise(() => until(() => raw.closed));
+  yield* until(() => raw.closed);
   assert.throws(
     () => c.server.accept(memoryLinkPair()[0], { principal: {}, kind: "host" }),
     /needs its name/u,
@@ -237,11 +221,11 @@ const case1RootEndIsHonoredOnly = Effect.gen(function* () {
       Effect.gen(function* () {
         const echo = yield* Effect.promise(() => ctx.get(Echo, {}));
         rootId = (yield* Effect.promise(() => echo.root(ctx))) as string;
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
       }),
     ),
   );
-  yield* Effect.promise(() => until(() => rootId !== ""));
+  yield* until(() => rootId !== "");
   const [clientDown, raw] = memoryLinkPair();
   server.accept(clientDown, { principal: { guest: "g" } });
   raw.receive(() => {});
@@ -253,7 +237,7 @@ const case1RootEndIsHonoredOnly = Effect.gen(function* () {
     codeVersion: 0,
   });
   raw.send({ t: "root_end", rootId });
-  yield* Effect.promise(() => sleep(10));
+  yield* Effect.sleep(10);
   yield* Effect.promise(() =>
     assert.rejects(server.reload([facet(2)], { gateDeadline: 40 }), (error) => {
       assert.ok(isChordError(error, "aborted") && error.reason === "gate_deadline");
@@ -274,11 +258,11 @@ const case2ARevocationWhileTheRoute = Effect.gen(function* () {
     revision: 2,
   }));
   const counter = browser.host.hold(Counter, { name: "a" });
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   yield* Effect.promise(() => c.server.invalidatePrincipal({ guest: "g" }));
-  yield* Effect.promise(() => until(() => counter.status === "gone"));
+  yield* until(() => counter.status === "gone");
   gate.open();
-  yield* Effect.promise(() => sleep(10));
+  yield* Effect.sleep(10);
   assert.deepEqual(c.principals, []);
   const again = browser.host.hold(Counter, { name: "a" });
   assert.deepEqual(yield* Effect.promise(() => again.who()), { guest: "g", revision: 2 });
@@ -288,12 +272,12 @@ const case10MalformedFramesAndDuplicateIds = Effect.gen(function* () {
   const c = cluster();
   const first = c.raw({ guest: "g" });
   first.raw.send({ t: "call", hold: 1 } as never);
-  yield* Effect.promise(() => until(() => first.raw.closed));
+  yield* until(() => first.raw.closed);
   const second = c.raw({ guest: "g" });
   const token = Counter.description;
   second.raw.send({ t: "hold", id: 1, at: "session:S1", token, input: { name: "a" } });
   second.raw.send({ t: "hold", id: 1, at: "session:S1", token, input: { name: "b" } });
-  yield* Effect.promise(() => until(() => second.raw.closed));
+  yield* until(() => second.raw.closed);
 });
 
 describe("links review: identity and stamping", () => {
@@ -316,9 +300,9 @@ const case7ABrowserDisconnectCancelsIts = Effect.gen(function* () {
   const counter = browser.host.hold(Counter, { name: "a" });
   yield* Effect.promise(() => counter.ready);
   void counter.slow().catch(() => {});
-  yield* Effect.promise(() => sleep(10));
+  yield* Effect.sleep(10);
   browser.up.close();
-  yield* Effect.promise(() => until(() => c.log.includes("slow aborted")));
+  yield* until(() => c.log.includes("slow aborted"));
   const down = [...internals(c.server).connections].find(
     (connection) => connection.peer.name === "session:S1",
   )!;
@@ -338,14 +322,12 @@ const case9StateStoppedWhileTheRoute = Effect.gen(function* () {
     input: { name: "a" },
   });
   raw.send({ t: "unsub", hold: 1 });
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   gate.open();
-  yield* Effect.promise(() =>
-    until(
-      () => c.workers.get("session:S1")?.link.sent.some((frame) => frame.t === "hold") === true,
-    ),
+  yield* until(
+    () => c.workers.get("session:S1")?.link.sent.some((frame) => frame.t === "hold") === true,
   );
-  yield* Effect.promise(() => sleep(10));
+  yield* Effect.sleep(10);
   const sent = c.workers.get("session:S1")!.link.sent;
   const hold = sent.find((frame) => frame.t === "hold");
   assert.ok(hold?.t === "hold" && hold.state === false);
@@ -365,15 +347,13 @@ const case9AReleaseWhileTheRoute = Effect.gen(function* () {
     input: { name: "a" },
   });
   raw.send({ t: "call", id: 2, hold: 1, member: "add", args: 1 });
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   raw.send({ t: "release", id: 1 });
-  yield* Effect.promise(() =>
-    until(() => frames.some((frame) => frame.t === "result" && frame.id === 2)),
-  );
+  yield* until(() => frames.some((frame) => frame.t === "result" && frame.id === 2));
   const result = frames.find((frame) => frame.t === "result" && frame.id === 2);
   assert.ok(result?.t === "result" && result.error !== undefined);
   gate.open();
-  yield* Effect.promise(() => sleep(10));
+  yield* Effect.sleep(10);
   assert.ok(!(c.workers.get("session:S1")?.link.sent ?? []).some((frame) => frame.t === "hold"));
 });
 
@@ -388,8 +368,8 @@ const case9AnOriginDisconnectRemovesIts = Effect.gen(function* () {
   )!;
   assert.equal(down.relayedRefs.size, 1);
   browser.up.close();
-  yield* Effect.promise(() => until(() => down.relayedRefs.size === 0));
-  yield* Effect.promise(() => until(() => c.log.includes("close a")));
+  yield* until(() => down.relayedRefs.size === 0);
+  yield* until(() => c.log.includes("close a"));
 });
 
 const twoBrowsersShareOneWorkerConnection = Effect.gen(function* () {
@@ -403,9 +383,7 @@ const twoBrowsersShareOneWorkerConnection = Effect.gen(function* () {
   assert.equal(c.workers.size, 1);
   assert.deepEqual(c.principals, [{ guest: "g1" }, { guest: "g2" }]);
   one.up.close();
-  yield* Effect.promise(() =>
-    until(() => c.log.filter((entry) => entry === "close same").length === 1),
-  );
+  yield* until(() => c.log.filter((entry) => entry === "close same").length === 1);
   assert.equal(yield* Effect.promise(() => b.add(1)), 6);
 });
 
@@ -540,7 +518,7 @@ describe("links review: cross-host reload", () => {
       Effect.gen(function* () {
         const gate = latch();
         const { server, worker, modules } = setup({ slowLoad: gate.promise });
-        yield* Effect.promise(() => tick());
+        yield* tick;
         modules.set("greeter", greeterFacet("v2"));
         yield* Effect.promise(() =>
           assert.rejects(
@@ -549,7 +527,7 @@ describe("links review: cross-host reload", () => {
           ),
         );
         gate.open();
-        yield* Effect.promise(() => until(() => !internals(worker).reloading));
+        yield* until(() => !internals(worker).reloading);
         yield* Effect.promise(() => server.reload([], { remote: { "session:": ["greeter"] } }));
         assert.equal(yield* Effect.promise(() => server.hold(Greeter, {}).greet("x")), "v2 x");
       }),
@@ -560,14 +538,14 @@ describe("links review: cross-host reload", () => {
       Effect.gen(function* () {
         const gate = latch();
         const { server, worker, modules, link } = setup({ slowLoad: gate.promise });
-        yield* Effect.promise(() => tick());
+        yield* tick;
         modules.set("greeter", greeterFacet("v2"));
         const reload = server.reload([], { remote: { "session:": ["greeter"] } });
-        yield* Effect.promise(() => sleep(5));
+        yield* Effect.sleep(5);
         link.close("gone");
         yield* Effect.promise(() => assert.rejects(reload));
         gate.open();
-        yield* Effect.promise(() => until(() => !internals(worker).reloading));
+        yield* until(() => !internals(worker).reloading);
         assert.equal(worker.codeVersion, 1);
       }),
     ));
@@ -577,7 +555,7 @@ describe("links review: cross-host reload", () => {
       Effect.gen(function* () {
         const services = yield* Effect.context<never>();
         const { server, modules } = setup();
-        yield* Effect.promise(() => tick());
+        yield* tick;
         const results: unknown[] = [];
         const Caller = local("t.caller", { version: 1, input: Type.Object({}) });
         const callerFacet = (active: boolean): Facet => ({
@@ -608,12 +586,12 @@ describe("links review: cross-host reload", () => {
             ),
         });
         server.install(callerFacet(false));
-        yield* Effect.promise(() => sleep(10));
+        yield* Effect.sleep(10);
         modules.set("greeter", greeterFacet("v2"));
         yield* Effect.promise(() =>
           server.reload([callerFacet(true)], { remote: { "session:": ["greeter"] } }),
         );
-        yield* Effect.promise(() => until(() => results.length === 1));
+        yield* until(() => results.length === 1);
         assert.deepEqual(results, ["v2 t"]);
       }),
     ));
@@ -622,11 +600,11 @@ describe("links review: cross-host reload", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const { server, worker, modules, link, connect } = setup();
-        yield* Effect.promise(() => tick());
+        yield* tick;
         modules.set("greeter", greeterFacet("v2"));
         link.closeOn = (frame) => frame.t === "commit";
         yield* Effect.promise(() => server.reload([], { remote: { "session:": ["greeter"] } }));
-        yield* Effect.promise(() => until(() => !internals(worker).reloading));
+        yield* until(() => !internals(worker).reloading);
         assert.notEqual(worker.codeVersion, server.codeVersion);
         const next = connect();
         worker.connect(next.up, { principal: { kind: "server" } });
@@ -641,7 +619,7 @@ describe("links review: cross-host reload", () => {
       Effect.gen(function* () {
         const services = yield* Effect.context<never>();
         const { server, worker } = setup();
-        yield* Effect.promise(() => tick());
+        yield* tick;
         const Echo = remote("t.echo2", {
           version: 1,
           input: Type.Object({}),
@@ -676,7 +654,7 @@ describe("links review: cross-host reload", () => {
             ),
         }));
         yield* Effect.promise(() => server.root((ctx) => server.hold(Bouncer, {}).bounce(ctx)));
-        yield* Effect.promise(() => sleep(10));
+        yield* Effect.sleep(10);
         yield* Effect.promise(() => server.reload([echoFacet(2)], { gateDeadline: 200 }));
       }),
     ));

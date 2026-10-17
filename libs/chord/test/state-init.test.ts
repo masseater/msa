@@ -5,25 +5,9 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import { type Ctx, createHost, type Facet, isChordError, local, method } from "../src/index.ts";
+import { latch, pollUntil, tick } from "./fixtures/timing.ts";
 
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-function until(check: () => boolean): Promise<void> {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      for (let attempt = 0; attempt < 200 && !check(); attempt++)
-        yield* Effect.promise(() => tick());
-      assert.ok(check(), "condition not reached");
-    }),
-  );
-}
-
-function latch<T>() {
-  let open: (value: T) => void = () => {};
-  const promise = new Promise<T>((resolve) => {
-    open = resolve;
-  });
-  return { promise, open };
-}
+const until = (check: () => boolean) => pollUntil(check, 200, tick);
 
 const Notes = local("t.notes", {
   version: 1,
@@ -86,12 +70,12 @@ const runsAfterTheResourcesAreOpen = Effect.gen(function* () {
   const seen: unknown[] = [];
   ref.notes.subscribe((value) => seen.push(value));
   const has = host.root((ctx) => ref.has("a", ctx));
-  yield* Effect.promise(() => until(() => log.includes("init")));
+  yield* until(() => log.includes("init"));
   assert.equal(ref.status, "loading");
   loaded.open(["a", "b"]);
   assert.equal(yield* Effect.promise(() => has), true);
   assert.equal(ref.count.value, 2);
-  yield* Effect.promise(() => until(() => log.length === 4));
+  yield* until(() => log.length === 4);
   assert.deepEqual(log, ["open", "init", "listener a,b", "task a,b"]);
   assert.deepEqual(
     seen.filter((value) => value !== undefined),

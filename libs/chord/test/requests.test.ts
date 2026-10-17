@@ -22,25 +22,9 @@ import {
   remote,
   type StateEvent,
 } from "../src/index.ts";
+import { latch, pollUntil, tick } from "./fixtures/timing.ts";
 
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-function until(check: () => boolean, attempts = 100): Promise<void> {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      for (let i = 0; i < attempts && !check(); i++) yield* Effect.promise(() => sleep(2));
-      assert.ok(check(), "condition not reached");
-    }),
-  );
-}
-
-function latch() {
-  let open = () => {};
-  const promise = new Promise<void>((resolve) => {
-    open = resolve;
-  });
-  return { promise, open };
-}
+const until = (check: () => boolean, attempts = 100) => pollUntil(check, attempts, Effect.sleep(2));
 
 const View = Type.Object({ text: Type.String() });
 
@@ -77,7 +61,7 @@ const case1AHeldObjectSState = Effect.gen(function* () {
   chat.view.subscribe((value) => values.push(value));
   yield* Effect.promise(() => chat.ready);
   yield* Effect.promise(() => server.hold(Conv, {}).set("hi"));
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(chat.view.value, { text: "hi" });
   assert.deepEqual(values.at(-1), { text: "hi" });
 
@@ -93,9 +77,7 @@ const case1AHeldObjectSState = Effect.gen(function* () {
   const remoteChat = browser.hold(Chat, {});
   yield* Effect.promise(() => remoteChat.ready);
   yield* Effect.promise(() => server.hold(Conv, {}).set("there"));
-  yield* Effect.promise(() =>
-    until(() => (remoteChat.view.value as { text: string } | undefined)?.text === "there"),
-  );
+  yield* until(() => (remoteChat.view.value as { text: string } | undefined)?.text === "there");
 });
 
 const case2FacetsReachTheirOwnHost = Effect.gen(function* () {
@@ -127,7 +109,7 @@ const case2FacetsReachTheirOwnHost = Effect.gen(function* () {
   });
   const host = createHost({ self: { kind: "host" }, name: "worker", onError: () => {} });
   host.install(facet("v1"));
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   const api = captured[0]!;
   assert.equal(api.name, "worker");
   assert.equal(
@@ -144,7 +126,7 @@ const case2FacetsReachTheirOwnHost = Effect.gen(function* () {
     "v1",
   );
   yield* Effect.promise(() => host.reload([facet("v2")]));
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   assert.equal(captured[1]!.registry(Config).get("greeting"), "v2");
   assert.equal(
     yield* Effect.promise(() =>
@@ -202,7 +184,7 @@ const case3AListenerKeepsItsSubscription = Effect.gen(function* () {
   yield* Effect.promise(() => host.reload([facet("v2")]));
   yield* Effect.promise(() => host.reload([facet("v3")]));
   emit("b");
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   assert.equal(subscribers, 1);
   assert.deepEqual(ref.seen.value, ["v1:a", "v3:b"]);
 });
@@ -274,7 +256,7 @@ const case4ReplaceDiffsANewRevision = Effect.gen(function* () {
   const shared = ref.doc.value as { entries: string[] };
   yield* Effect.promise(() => ref.set({ entries: shared.entries, status: "done" }));
   assert.equal(opsOf(events.at(-1))[0]?.[0], "r");
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(replica, ref.doc.value);
 });
 
@@ -315,7 +297,7 @@ const case5RootsOfAChildThat = Effect.gen(function* () {
   const call = worker.root((ctx) =>
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
         const remote = yield* Effect.promise(() => ctx.get(Echo, {}));
         return yield* Effect.promise(() => remote.codeVersion(ctx));
       }),
@@ -326,7 +308,7 @@ const case5RootsOfAChildThat = Effect.gen(function* () {
   worker.connect(up, { principal: { kind: "server" } });
   go.open();
   assert.equal(yield* Effect.promise(() => call), 2);
-  yield* Effect.promise(() => until(() => worker.codeVersion === 2));
+  yield* until(() => worker.codeVersion === 2);
   yield* Effect.promise(() =>
     assert.rejects(
       server.root(() => 0, { codeVersion: 1 }),
@@ -369,7 +351,7 @@ const case7AClusterReloadReportsWhat = Effect.gen(function* () {
     onError: () => {},
   });
   worker.install(greeter("v1"));
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const ref = server.hold(Greeter, {});
   assert.equal(yield* Effect.promise(() => ref.greet("a")), "v1 a");
   modules.set("greeter", greeter("v2"));
@@ -417,10 +399,10 @@ const case8AHeldRemoteReferenceKeeps = Effect.gen(function* () {
   assert.equal(counter.n.value, 0);
   const stop = counter.n.subscribe(() => {});
   yield* Effect.promise(() => counter.set(1));
-  yield* Effect.promise(() => until(() => counter.n.value === 1));
+  yield* until(() => counter.n.value === 1);
   stop();
   yield* Effect.promise(() => counter.set(2));
-  yield* Effect.promise(() => until(() => counter.n.value === 2));
+  yield* until(() => counter.n.value === 2);
   const seen: unknown[] = [];
   const again = counter.n.subscribe((value) => seen.push(value));
   assert.deepEqual(seen, [2]);
@@ -442,9 +424,9 @@ const case9ReferencesReportStatusChangesLive = Effect.gen(function* () {
     localStatus.push(status === "gone" ? [status, (error as { code: string }).code] : status),
   );
   yield* Effect.promise(() => localThing.ready);
-  yield* Effect.promise(() => tick());
+  yield* tick;
   yield* Effect.promise(() => server.invalidatePrincipal({ user: "u" }));
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(localStatus, ["live", ["gone", "gone"]]);
 
   const [down, up] = memoryLinkPair();
@@ -461,13 +443,13 @@ const case9ReferencesReportStatusChangesLive = Effect.gen(function* () {
   remoteThing.onStatus((status) => remoteStatus.push(status));
   yield* Effect.promise(() => remoteThing.ready);
   up.close();
-  yield* Effect.promise(() => until(() => remoteStatus.length === 2));
+  yield* until(() => remoteStatus.length === 2);
   const [down2, up2] = memoryLinkPair();
   server.accept(down2, { principal: { guest: "g" } });
   browser.connect(up2, { principal: { kind: "server" } });
-  yield* Effect.promise(() => until(() => remoteStatus.length === 3));
+  yield* until(() => remoteStatus.length === 3);
   remoteThing.release();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(remoteStatus, ["live", "loading", "live", "released"]);
 });
 
@@ -513,7 +495,7 @@ const case10HostCloseDisposesHoldersBefore = Effect.gen(function* () {
     },
     { lifetime: "host" },
   );
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   worker.serve(Chat, (_input, _principal, self) => {
     const proc = self.get(Proc, {});
     const upstream = self.get(Remote, {});
@@ -574,7 +556,7 @@ describe("application requests", () => {
             open: () =>
               Effect.runPromiseWith(services)(
                 Effect.gen(function* () {
-                  yield* Effect.promise(() => gate.promise);
+                  yield* gate.wait;
                   return native;
                 }),
               ),

@@ -19,17 +19,9 @@ import {
   type StateEvent,
   type StateOptions,
 } from "../src/index.ts";
+import { latch, tick } from "./fixtures/timing.ts";
 
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 const quiet = () => createHost({ self: { kind: "host" }, onError: () => {} });
-
-function latch() {
-  let open = () => {};
-  const promise = new Promise<void>((resolve) => {
-    open = resolve;
-  });
-  return { promise, open };
-}
 
 const Greeter = local("t.greeter", {
   version: 1,
@@ -88,7 +80,7 @@ function until(check: () => Promise<boolean>, attempts = 200): Promise<void> {
     Effect.gen(function* () {
       for (let attempt = 0; attempt < attempts; attempt++) {
         if (yield* Effect.promise(() => check())) return;
-        yield* Effect.promise(() => tick());
+        yield* tick;
       }
       throw new Error("condition not reached");
     }),
@@ -106,12 +98,12 @@ const compatibleReloadNoGatePinnedRoots = Effect.gen(function* () {
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
         const first = yield* Effect.promise(() => ref.greet("p", ctx));
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
         return [first, yield* Effect.promise(() => ref.greet("p", ctx))];
       }),
     ),
   );
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const shapes: string[] = [];
   ref.onShape((shape) => shapes.push(shape.contract));
   const report = yield* Effect.promise(() => host.reload([greeterFacet({ greeting: "hi" })]));
@@ -206,7 +198,7 @@ const stateBumpGateMigrateOldFromversion = Effect.gen(function* () {
   const late = host.root((ctx) =>
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
         return yield* Effect.promise(() => ref.greet("late", ctx));
       }),
     ),
@@ -292,12 +284,12 @@ const gateLateOldRootsGetUpgrade = Effect.gen(function* () {
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
         yield* Effect.promise(() => ref.greet("g", ctx));
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
         return yield* Effect.promise(() => ref.greet("g", ctx));
       }),
     ),
   );
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const reload = host.reload([greeterFacet({ greeting: "hi", state: { version: 2 } })]);
   yield* Effect.promise(() =>
     until(() =>
@@ -348,11 +340,11 @@ const gateDeadlineReloadAbortsReportsBlocking = Effect.gen(function* () {
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
         yield* Effect.promise(() => ref.greet("b", ctx));
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
       }),
     ),
   );
-  yield* Effect.promise(() => tick());
+  yield* tick;
   yield* Effect.promise(() =>
     assert.rejects(host.reload([facet("hi", 2)], { gateDeadline: 30 }), (error) => {
       assert.ok(isChordError(error, "aborted") && error.reason === "gate_deadline");
@@ -361,7 +353,7 @@ const gateDeadlineReloadAbortsReportsBlocking = Effect.gen(function* () {
     }),
   );
   assert.equal(yield* Effect.promise(() => ref.greet("x")), "hello x");
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(log, ["start hello", "stop hello", "start hello"]);
   go.open();
   yield* Effect.promise(() => blocker);
@@ -399,7 +391,7 @@ const exclusiveResourcesAreReplacedAtThe = Effect.gen(function* () {
   const report = yield* Effect.promise(() => host.reload([facet(2)]));
   assert.equal(report.gated.length, 1);
   assert.equal(yield* Effect.promise(() => ref.greet("x")), "2 x");
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(log, ["open cache 2", "close lock 1", "open lock 2", "close cache 1"]);
 });
 
@@ -415,12 +407,12 @@ const twoVersionRuleTheNextReload = Effect.gen(function* () {
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
         yield* Effect.promise(() => ref.greet("p", ctx));
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
         return yield* Effect.promise(() => ref.greet("p", ctx));
       }),
     ),
   );
-  yield* Effect.promise(() => tick());
+  yield* tick;
   yield* Effect.promise(() => host.reload([greeterFacet({ greeting: "v2" })]));
   assert.equal(host.previousCodeVersion, first);
   yield* Effect.promise(() =>
@@ -460,7 +452,7 @@ const forcedRetirementAbortsTheLeftoverRoots = Effect.gen(function* () {
             Effect.runPromiseWith(services)(
               Effect.gen(function* () {
                 if (name === "hold") {
-                  yield* Effect.promise(() => hold.promise);
+                  yield* hold.wait;
                   return `held on ${conn.value.version}, aborted ${ctx.signal.aborted}`;
                 }
                 if (name !== "wait") return name;
@@ -481,13 +473,13 @@ const forcedRetirementAbortsTheLeftoverRoots = Effect.gen(function* () {
   const ref = host.hold(Greeter, {});
   yield* Effect.promise(() => ref.ready);
   const old = host.root((ctx) => ref.greet("wait", ctx));
-  yield* Effect.promise(() => tick());
+  yield* tick;
   yield* Effect.promise(() => host.reload([facet(2)]));
   const current = host.root((ctx) => ref.greet("hold", ctx));
-  yield* Effect.promise(() => tick());
+  yield* tick;
   yield* Effect.promise(() => host.reload([facet(3)], { retireDeadline: 20 }));
   assert.equal(yield* Effect.promise(() => old), "wait");
-  for (let i = 0; i < 50 && !log.includes("close 1"); i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 50 && !log.includes("close 1"); i++) yield* tick;
   assert.deepEqual(log, ["aborted, conn 1", "close 1"]);
   hold.open();
   assert.equal(yield* Effect.promise(() => current), "held on 2, aborted false");
@@ -518,7 +510,7 @@ const aKeptResourceClosesWithThe = Effect.gen(function* () {
   assert.equal(yield* Effect.promise(() => ref.greet("x")), "c x");
   assert.deepEqual(log, [], "kept, not reopened");
   ref.release();
-  for (let i = 0; i < 10 && log.length === 0; i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 10 && log.length === 0; i++) yield* tick;
   assert.deepEqual(log, ["close by c"]);
 });
 
@@ -544,7 +536,7 @@ const aTaskThatIgnoresItsAbort = Effect.gen(function* () {
           Effect.runPromiseWith(services)(
             Effect.gen(function* () {
               log.push(`start ${label}`);
-              if (label === "a") yield* Effect.promise(() => stuck.promise);
+              if (label === "a") yield* stuck.wait;
             }),
           ),
         );
@@ -557,11 +549,11 @@ const aTaskThatIgnoresItsAbort = Effect.gen(function* () {
   yield* Effect.promise(() => ref.ready);
   yield* Effect.promise(() => host.reload([facet("b")]));
   yield* Effect.promise(() => vi.advanceTimersByTimeAsync(29));
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(log, ["start a"], "waits for the old run");
   assert.equal(errors.length, 0);
   yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1));
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(log, ["start a", "start b"]);
   assert.ok(
     errors.some(
@@ -726,11 +718,11 @@ const rebindsListenersToTheNewCode = Effect.gen(function* () {
   const ref = host.hold(Sum, {});
   yield* Effect.promise(() => ref.ready);
   emit(1);
-  yield* Effect.promise(() => tick());
+  yield* tick;
   yield* Effect.promise(() => host.reload([facet(10)]));
   assert.equal(listeners.size, 1);
   emit(1);
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(ref.sum.value, { v: 11 });
   assert.deepEqual(log, ["start 1", "stop 1", "start 10"]);
 });
@@ -753,8 +745,8 @@ const keepsRegistryTablesPerCodeVersion = Effect.gen(function* () {
       ),
   });
   host.install(facet("one"));
-  yield* Effect.promise(() => tick());
-  yield* Effect.promise(() => tick());
+  yield* tick;
+  yield* tick;
   const seen: [string | undefined, number][] = [];
   host
     .registry(Routes)
@@ -763,7 +755,7 @@ const keepsRegistryTablesPerCodeVersion = Effect.gen(function* () {
   const pinned = host.root((ctx) =>
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
         return host.registry(Routes).get("GET /", ctx);
       }),
     ),
@@ -832,7 +824,7 @@ const theGateRejectsNewObjectsOf = Effect.gen(function* () {
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
         yield* Effect.promise(() => ref.greet("g", ctx));
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
       }),
     ),
   );
@@ -840,12 +832,12 @@ const theGateRejectsNewObjectsOf = Effect.gen(function* () {
   const pinned = host.root((ctx) =>
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
-        yield* Effect.promise(() => later.promise);
+        yield* later.wait;
         return yield* Effect.promise(() => ref.greet("old", ctx));
       }),
     ),
   );
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const reload = host.reload([greeterFacet({ greeting: "hi", state: { version: 2 } })]);
   yield* Effect.promise(() =>
     until(() =>

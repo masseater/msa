@@ -20,22 +20,7 @@ import {
 } from "../src/index.ts";
 import { fits } from "../src/schema.ts";
 import { CountingLink } from "./fixtures/counting.ts";
-
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-const ticks = (n = 10) =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      for (let i = 0; i < n; i++) yield* Effect.promise(() => tick());
-    }),
-  );
-
-function latch() {
-  let open = () => {};
-  const promise = new Promise<void>((resolve) => {
-    open = resolve;
-  });
-  return { promise, open };
-}
+import { latch, tick, ticks } from "./fixtures/timing.ts";
 
 function emitter<E>(options: { failSubscribe?: boolean } = {}) {
   const listeners = new Set<(event: E) => void>();
@@ -146,7 +131,7 @@ const case2MigrationIsValidatedAgainstThe = Effect.gen(function* () {
   const values: unknown[] = [];
   second.count.subscribe((value) => values.push(value));
   yield* Effect.promise(() => second.ready);
-  yield* Effect.promise(() => ticks());
+  yield* ticks();
   assert.deepEqual(second.count.value, { total: 3 });
 });
 
@@ -241,7 +226,7 @@ const case5DisposalWaitsForRunningMethods = Effect.gen(function* () {
       work: () =>
         Effect.runPromiseWith(services)(
           Effect.gen(function* () {
-            yield* Effect.promise(() => go.promise);
+            yield* go.wait;
             log.push(`done ${id}`);
             return connResource.value.closed;
           }),
@@ -250,23 +235,23 @@ const case5DisposalWaitsForRunningMethods = Effect.gen(function* () {
   });
   const released = host.hold(Worker, { id: "r" });
   const call = released.work();
-  yield* Effect.promise(() => ticks());
+  yield* ticks();
   released.release();
-  yield* Effect.promise(() => ticks());
+  yield* ticks();
   go.open();
   assert.equal(yield* Effect.promise(() => call), false);
-  yield* Effect.promise(() => ticks());
+  yield* ticks();
   assert.deepEqual(log, ["done r", "close r"]);
 
   go = latch();
   log.length = 0;
   const forced = host.hold(Worker, { id: "f" }, { principal: { user: "u" } });
   const forcedCall = forced.work();
-  yield* Effect.promise(() => ticks());
+  yield* ticks();
   const invalidated = host.invalidatePrincipal(
     (principal) => (principal as { user?: string }).user === "u",
   );
-  yield* Effect.promise(() => ticks());
+  yield* ticks();
   assert.equal(forced.status, "gone");
   assert.deepEqual(log, []);
   go.open();
@@ -298,7 +283,7 @@ const case6ARegistryConflictFoundWhile = Effect.gen(function* () {
       { lifetime: "host" },
     );
   }
-  yield* Effect.promise(() => ticks(20));
+  yield* ticks(20);
   assert.equal(log.filter((entry) => entry.startsWith("open")).length, 2);
   assert.equal(log.filter((entry) => entry.startsWith("close")).length, 1);
   assert.equal(host.registry(Routes).table().size, 1);
@@ -330,7 +315,7 @@ describe("review: leases, invocations, activation", () => {
               self.on("slow", events, () =>
                 Effect.runPromiseWith(services)(
                   Effect.gen(function* () {
-                    yield* Effect.promise(() => go.promise);
+                    yield* go.wait;
                     seen.push(count.value);
                   }),
                 ),
@@ -341,7 +326,7 @@ describe("review: leases, invocations, activation", () => {
         const ref = host.hold(Store, {});
         yield* Effect.promise(() => ref.ready);
         events.emit(1);
-        yield* Effect.promise(() => tick());
+        yield* tick;
         const codeVersion = host.codeVersion;
         const reload = host.reload(
           [
@@ -360,7 +345,7 @@ describe("review: leases, invocations, activation", () => {
           ],
           { gateDeadline: 2000 },
         );
-        yield* Effect.promise(() => ticks(20));
+        yield* ticks(20);
         assert.equal(host.codeVersion, codeVersion, "the gate must wait for the listener");
         go.open();
         yield* Effect.promise(() => reload);
@@ -396,7 +381,7 @@ describe("review: leases, invocations, activation", () => {
         const held = host.hold(Store, {});
         ref = held;
         yield* Effect.promise(() => held.ready.catch(() => {}));
-        yield* Effect.promise(() => ticks(20));
+        yield* ticks(20);
         assert.deepEqual(log, ["open", "close"]);
         const again = host.hold(Store, {});
         ref = undefined;
@@ -442,10 +427,10 @@ const case7ObjectsOfTypesAReload = Effect.gen(function* () {
     },
   ];
   yield* Effect.promise(() => assert.rejects(host.reload(plugins(true)), /b fails/u));
-  yield* Effect.promise(() => ticks());
+  yield* ticks();
   assert.deepEqual(log, []);
   yield* Effect.promise(() => host.reload(plugins(false)));
-  yield* Effect.promise(() => ticks());
+  yield* ticks();
   assert.deepEqual(log, ["task started"]);
 });
 
@@ -522,7 +507,7 @@ const case10RetirementClosesDroppedResourcesBefore = Effect.gen(function* () {
             close: () =>
               Effect.runPromiseWith(services)(
                 Effect.gen(function* () {
-                  yield* Effect.promise(() => ticks(3));
+                  yield* ticks(3);
                   log.push("own closed");
                 }),
               ),
@@ -540,16 +525,16 @@ const case10RetirementClosesDroppedResourcesBefore = Effect.gen(function* () {
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
         yield* Effect.promise(() => ref.version(ctx));
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
       }),
     ),
   );
-  yield* Effect.promise(() => tick());
+  yield* tick;
   yield* Effect.promise(() => host.reload([facet(false)]));
   assert.deepEqual(log, []);
   go.open();
   yield* Effect.promise(() => pinned);
-  yield* Effect.promise(() => ticks(20));
+  yield* ticks(20);
   assert.deepEqual(log, ["own closed", "dep closed"]);
 });
 
@@ -751,7 +736,7 @@ const aRemoteReferenceRefusesAForeign = Effect.gen(function* () {
       (error) => isChordError(error, "invalid") && error.reason === "foreign_ctx",
     ),
   );
-  yield* Effect.promise(() => ticks());
+  yield* ticks();
   assert.equal(hits, 0);
   assert.equal(link.count("sent", "call"), 0);
   yield* Effect.promise(() => worker.root((ctx) => target.hit(ctx)));
@@ -784,7 +769,7 @@ describe("review: ctx races", () => {
           self.task((ctx) =>
             Effect.runPromiseWith(services)(
               Effect.gen(function* () {
-                yield* Effect.promise(() => go.promise);
+                yield* go.wait;
                 outcome = yield* Effect.promise(() =>
                   target.hit(ctx).catch((error: unknown) => error),
                 );
@@ -798,9 +783,9 @@ describe("review: ctx races", () => {
         const target = host.hold(Target, {});
         yield* Effect.promise(() => target.ready);
         runner.release();
-        yield* Effect.promise(() => ticks());
+        yield* ticks();
         go.open();
-        yield* Effect.promise(() => ticks(20));
+        yield* ticks(20);
         assert.equal(hits, 0);
         assert.ok(isChordError(outcome, "aborted"));
       }),

@@ -21,17 +21,9 @@ import {
   remote,
 } from "../src/index.ts";
 import { CountingLink, stateFrames } from "./fixtures/counting.ts";
+import { pollUntil, tick } from "./fixtures/timing.ts";
 
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-function until(check: () => boolean, attempts = 200): Promise<void> {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      for (let i = 0; i < attempts && !check(); i++) yield* Effect.promise(() => sleep(2));
-      assert.ok(check(), "condition not reached");
-    }),
-  );
-}
+const until = (check: () => boolean, attempts = 200) => pollUntil(check, attempts, Effect.sleep(2));
 
 const NoteSchema = Type.Array(Type.String());
 const Notes = remote("t.e8-notes", {
@@ -125,12 +117,10 @@ const nReferencesToOneObjectOne = Effect.gen(function* () {
 
   const before = stateFrames(link.received).length;
   yield* Effect.promise(() => a.add("milk"));
-  yield* Effect.promise(() =>
-    until(
-      () => a.notes.value.length === 1 && b.notes.value.length === 1 && panel.count.value === 1,
-    ),
+  yield* until(
+    () => a.notes.value.length === 1 && b.notes.value.length === 1 && panel.count.value === 1,
   );
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.equal(
     stateFrames(link.received).length - before,
     1,
@@ -140,10 +130,10 @@ const nReferencesToOneObjectOne = Effect.gen(function* () {
   const sent = link.traffic("sent").length;
   a.release();
   panel.release();
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   assert.equal(link.traffic("sent").length, sent, "releasing all but one reference sends nothing");
   b.release();
-  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  yield* until(() => link.count("sent", "release") === 1);
   yield* Effect.promise(() => browser.close());
   yield* Effect.promise(() => server.close());
 });
@@ -154,7 +144,7 @@ const aHeldReferenceStaysSubscribedWithout = Effect.gen(function* () {
   yield* Effect.promise(() => notes.ready);
   assert.deepEqual(notes.notes.value, []);
   yield* Effect.promise(() => notes.add("bread"));
-  yield* Effect.promise(() => until(() => notes.notes.value.length === 1));
+  yield* until(() => notes.notes.value.length === 1);
   assert.equal(notes.title.value, "untitled");
   yield* Effect.promise(() => browser.close());
   yield* Effect.promise(() => server.close());
@@ -173,7 +163,7 @@ const aLingeringBindingKeepsItsHold = Effect.gen(function* () {
   const first = yield* Effect.promise(() => browser.get(Notes, {}));
   const frames = link.traffic("received").length;
   first.release();
-  yield* Effect.promise(() => sleep(10));
+  yield* Effect.sleep(10);
   assert.equal(link.count("sent", "release"), 0, "not released before the linger");
   for (let i = 0; i < 3; i++) {
     const again = yield* Effect.promise(() => browser.get(Notes, {}));
@@ -182,7 +172,7 @@ const aLingeringBindingKeepsItsHold = Effect.gen(function* () {
   }
   assert.equal(link.count("sent", "hold"), 1);
   assert.equal(link.traffic("received").length, frames, "nothing new crossed the link");
-  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  yield* until(() => link.count("sent", "release") === 1);
   yield* Effect.promise(() => browser.close());
   yield* Effect.promise(() => server.close());
 });
@@ -194,10 +184,10 @@ const atMostCapBindingsLingerThe = Effect.gen(function* () {
   const a = yield* Effect.promise(() => browser.get(Notes, { list: "a" }));
   const b = yield* Effect.promise(() => browser.get(Notes, { list: "b" }));
   a.release();
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   assert.equal(link.count("sent", "release"), 0);
   b.release();
-  yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+  yield* until(() => link.count("sent", "release") === 1);
   const release = link.sent.find((frame) => frame.t === "release");
   const holdOfA = link.sent.find(
     (frame) => frame.t === "hold" && (frame.input as { list: string }).list === "a",
@@ -385,10 +375,10 @@ const transferNoStateAloneAFull = Effect.gen(function* () {
   assert.equal(link.count("sent", "sub"), 1);
   assert.equal(link.count("sent", "hold"), 1, "the same hold");
   viewer.release();
-  yield* Effect.promise(() => until(() => link.count("sent", "unsub") === 1));
+  yield* until(() => link.count("sent", "unsub") === 1);
   const after = stateFrames(link.received).length;
   yield* Effect.promise(() => caller.add("y"));
-  yield* Effect.promise(() => sleep(5));
+  yield* Effect.sleep(5);
   assert.equal(
     stateFrames(link.received).length,
     after,
@@ -485,9 +475,7 @@ describe("origins of client holds", () => {
 
         const before = new Set(c.origins());
         one.up.close();
-        yield* Effect.promise(() =>
-          until(() => c.origins().filter((origin) => origin !== undefined).length === 1),
-        );
+        yield* until(() => c.origins().filter((origin) => origin !== undefined).length === 1);
         const three = c.browser();
         yield* Effect.promise(() => three.host.hold(Counter, { session: "S1" }).ready);
         const after = c.origins().filter((origin) => origin !== undefined);
@@ -522,9 +510,7 @@ describe("origins of client holds", () => {
           input: { session: "S1" },
           origin: "spoofed",
         });
-        yield* Effect.promise(() =>
-          until(() => c.sentToWorker().some((frame) => frame.t === "hold")),
-        );
+        yield* until(() => c.sentToWorker().some((frame) => frame.t === "hold"));
         const hold = c.sentToWorker().find((frame) => frame.t === "hold");
         assert.ok(hold?.t === "hold" && hold.origin !== undefined && hold.origin !== "spoofed");
         yield* Effect.promise(() => c.server.close());

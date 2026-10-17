@@ -20,16 +20,7 @@ import {
   remote,
   type Self,
 } from "../src/index.ts";
-
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-
-function latch() {
-  let open = () => {};
-  const promise = new Promise<void>((resolve) => {
-    open = resolve;
-  });
-  return { promise, open };
-}
+import { latch, tick } from "./fixtures/timing.ts";
 
 const Greeter = remote("t.greeter", {
   version: 1,
@@ -139,7 +130,7 @@ function setup() {
 const preparesEveryHostCommitsTheServer = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const { server, worker, modules } = setup();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const greeter = server.hold(Greeter, { session: "S1" });
   assert.equal(yield* Effect.promise(() => greeter.greet("a")), "v1 a");
   const go = latch();
@@ -147,12 +138,12 @@ const preparesEveryHostCommitsTheServer = Effect.gen(function* () {
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
         yield* Effect.promise(() => greeter.greet("p", ctx));
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
         return yield* Effect.promise(() => greeter.greet("p", ctx));
       }),
     ),
   );
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const shapes: string[] = [];
   greeter.onShape((shape) => shapes.push(shape.contract));
   modules.set("greeter", greeterFacet("v2"));
@@ -165,15 +156,14 @@ const preparesEveryHostCommitsTheServer = Effect.gen(function* () {
   go.open();
   assert.equal(yield* Effect.promise(() => pinned), "v1 p");
   assert.equal(shapes.length, 1, "one shape push at the commit");
-  for (let i = 0; i < 20 && worker.previousCodeVersion !== undefined; i++)
-    yield* Effect.promise(() => tick());
+  for (let i = 0; i < 20 && worker.previousCodeVersion !== undefined; i++) yield* tick;
   assert.equal(server.previousCodeVersion, undefined);
   assert.equal(worker.previousCodeVersion, undefined);
 });
 
 const aFailingVoteAbortsEveryHost = Effect.gen(function* () {
   const { server, worker, modules } = setup();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const greeter = server.hold(Greeter, { session: "S1" });
   yield* Effect.promise(() => greeter.greet("a"));
   const before = [server.codeVersion, worker.codeVersion];
@@ -192,18 +182,18 @@ const aFailingVoteAbortsEveryHost = Effect.gen(function* () {
 const aWorkerGateBlockedPastIts = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const { server, worker, modules } = setup();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const greeter = server.hold(Greeter, { session: "S1" });
   const go = latch();
   const blocker = server.root((ctx) =>
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
         yield* Effect.promise(() => greeter.greet("g", ctx));
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
       }),
     ),
   );
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const before = [server.codeVersion, worker.codeVersion];
   const bumped = greeterFacet("v2", { stateVersion: 2 });
   modules.set("greeter", bumped);
@@ -235,7 +225,7 @@ const removesFacetsFromServerAndWorkers = Effect.gen(function* () {
     ),
   );
   yield* Effect.promise(() => server.install(greeterFacet("v1")));
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const onServer = server.hold(ServerGreeter, {});
   const child = server.hold(Greeter, { session: "S1" });
   assert.equal(yield* Effect.promise(() => onServer.greet("a")), "v1 a");
@@ -243,7 +233,7 @@ const removesFacetsFromServerAndWorkers = Effect.gen(function* () {
   yield* Effect.promise(() =>
     server.reload([], { remove: ["greeter"], remoteRemove: { "session:": ["greeter"] } }),
   );
-  for (let i = 0; i < 20 && child.status !== "gone"; i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 20 && child.status !== "gone"; i++) yield* tick;
   assert.equal(onServer.status, "gone");
   assert.equal(child.status, "gone");
 
@@ -265,7 +255,7 @@ const removesFacetsFromServerAndWorkers = Effect.gen(function* () {
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { worker: "cold" }, kind: "host", name: "session:cold" });
   cold.connect(up, { principal: { kind: "server" } });
-  for (let i = 0; i < 20 && old.status !== "gone"; i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 20 && old.status !== "gone"; i++) yield* tick;
   assert.equal(old.status, "gone");
   assert.equal(cold.codeVersion, server.codeVersion);
   yield* Effect.promise(() => cold.close());
@@ -305,7 +295,7 @@ const removesFacetsFromServerAndWorkers = Effect.gen(function* () {
 
 const onlyTheServerCoordinatesReloads = Effect.gen(function* () {
   const { worker } = setup();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   yield* Effect.promise(() =>
     assert.rejects(worker.reload([]), (error) => isChordError(error, "unavailable")),
   );
@@ -339,7 +329,7 @@ const browsersAreNotParticipantsTheySee = Effect.gen(function* () {
   viewer.onShape((shape) => shapes.push(shape.contract));
   modules.set("greeter", greeterFacet("v2"));
   yield* Effect.promise(() => server.reload([], { remote: { "session:": ["greeter"] } }));
-  for (let i = 0; i < 20 && shapes.length === 0; i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 20 && shapes.length === 0; i++) yield* tick;
   assert.equal(shapes.length, 1, "one shape push at the commit");
   assert.equal(yield* Effect.promise(() => viewer.greet("b")), "v2 b");
 
@@ -352,7 +342,7 @@ const browsersAreNotParticipantsTheySee = Effect.gen(function* () {
       })),
   });
   yield* Effect.promise(() => server.reload([], { remote: { "session:": ["greeter"] } }));
-  for (let i = 0; i < 20 && viewer.status !== "gone"; i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 20 && viewer.status !== "gone"; i++) yield* tick;
   assert.equal(viewer.status, "gone");
   assert.ok(isChordError(viewer.error, "upgrade_required"));
 });
@@ -360,7 +350,7 @@ const browsersAreNotParticipantsTheySee = Effect.gen(function* () {
 const anAbortWhileAWorkerIs = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const { server, worker, modules } = setup();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const greeter = server.hold(Greeter, { session: "S1" });
   yield* Effect.promise(() => greeter.greet("a"));
   const log: string[] = [];
@@ -374,7 +364,7 @@ const anAbortWhileAWorkerIs = Effect.gen(function* () {
           open: () =>
             Effect.runPromiseWith(services)(
               Effect.gen(function* () {
-                yield* Effect.promise(() => go.promise);
+                yield* go.wait;
                 log.push("opened");
               }),
             ),
@@ -393,7 +383,7 @@ const anAbortWhileAWorkerIs = Effect.gen(function* () {
     ),
   );
   go.open();
-  for (let i = 0; i < 50 && !log.includes("closed"); i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 50 && !log.includes("closed"); i++) yield* tick;
   assert.deepEqual(log, ["opened", "closed"]);
   assert.equal(worker.codeVersion, codeVersion);
   modules.set("greeter", greeterFacet("v3"));
@@ -412,7 +402,7 @@ const aChildThatSaysHelloWhile = Effect.gen(function* () {
     loader: (names) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
-          yield* Effect.promise(() => loading.promise);
+          yield* loading.wait;
           return names.map((name) => ({ name: String(name), setup: () => {} }));
         }),
       ),
@@ -435,7 +425,7 @@ const aChildThatSaysHelloWhile = Effect.gen(function* () {
   });
   onTestFinished(() => worker.close());
   worker.install(modules.get("greeter")!);
-  yield* Effect.promise(() => tick());
+  yield* tick;
   modules.set("greeter", greeterFacet("v2"));
   loading.open();
   const report = yield* Effect.promise(() => reloading);
@@ -448,7 +438,7 @@ const aChildThatSaysHelloWhile = Effect.gen(function* () {
 const aChildKeepsThePreviousCode = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const { server, worker, modules } = setup();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const greeter = server.hold(Greeter, { session: "S1" });
   assert.equal(yield* Effect.promise(() => greeter.greet("a")), "v1 a");
   const first = server.codeVersion;
@@ -456,7 +446,7 @@ const aChildKeepsThePreviousCode = Effect.gen(function* () {
   const pinned = server.root((ctx) =>
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
-        yield* Effect.promise(() => go.promise);
+        yield* go.wait;
         return yield* Effect.promise(() => greeter.greet("p", ctx));
       }),
     ),
@@ -465,8 +455,8 @@ const aChildKeepsThePreviousCode = Effect.gen(function* () {
   yield* Effect.promise(() => server.reload([], { remote: { "session:": ["greeter"] } }));
   assert.equal(worker.previousCodeVersion, first);
   const second = server.reload([], { remote: { "session:": [] }, retireDeadline: 2000 });
-  yield* Effect.promise(() => tick());
-  yield* Effect.promise(() => tick());
+  yield* tick;
+  yield* tick;
   assert.equal(worker.previousCodeVersion, first);
   go.open();
   assert.equal(yield* Effect.promise(() => pinned), "v1 p");
@@ -500,11 +490,9 @@ const aChildReconciledAfterItsParent = Effect.gen(function* () {
   });
   onTestFinished(() => worker.close());
   worker.install(modules.get("greeter")!);
-  for (let i = 0; i < 50 && worker.codeVersion !== server.codeVersion; i++)
-    yield* Effect.promise(() => tick());
+  for (let i = 0; i < 50 && worker.codeVersion !== server.codeVersion; i++) yield* tick;
   assert.equal(worker.codeVersion, server.codeVersion);
-  for (let i = 0; i < 20 && worker.previousCodeVersion !== undefined; i++)
-    yield* Effect.promise(() => tick());
+  for (let i = 0; i < 20 && worker.previousCodeVersion !== undefined; i++) yield* tick;
   assert.equal(worker.previousCodeVersion, undefined);
   const started = yield* Clock.currentTimeMillis;
   yield* Effect.promise(() =>
@@ -525,7 +513,7 @@ const aReconciliationRunningWhenAReload = Effect.gen(function* () {
     loader: (names) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
-          if (blockServer) yield* Effect.promise(() => serverLoading.promise);
+          if (blockServer) yield* serverLoading.wait;
           return names.map((name) => ({ name: String(name), setup: () => {} }));
         }),
       ),
@@ -546,7 +534,7 @@ const aReconciliationRunningWhenAReload = Effect.gen(function* () {
     loader: (names) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
-          if (blockWorker) yield* Effect.promise(() => workerLoading.promise);
+          if (blockWorker) yield* workerLoading.wait;
           return names.map((name) => modules.get(String(name))!);
         }),
       ),
@@ -554,13 +542,13 @@ const aReconciliationRunningWhenAReload = Effect.gen(function* () {
   });
   onTestFinished(() => worker.close());
   worker.install(modules.get("greeter")!);
-  yield* Effect.promise(() => tick());
+  yield* tick;
   blockServer = true;
   modules.set("greeter", greeterFacet("v2"));
   const reloading = server.reload(["server-plugin"], { remote: { "session:": ["greeter"] } });
   blockWorker = false;
   workerLoading.open();
-  for (let i = 0; i < 50 && worker.codeVersion !== 2; i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 50 && worker.codeVersion !== 2; i++) yield* tick;
   assert.equal(worker.codeVersion, 2);
   serverLoading.open();
   const report = yield* Effect.promise(() => reloading);
@@ -585,7 +573,7 @@ const aChildBehindWhoseHelloWaits = Effect.gen(function* () {
     loader: (names) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
-          yield* Effect.promise(() => loading.promise);
+          yield* loading.wait;
           return names.map((name) => ({ name: String(name), setup: () => {} }));
         }),
       ),
@@ -617,8 +605,7 @@ const aChildBehindWhoseHelloWaits = Effect.gen(function* () {
   assert.equal(answer, "pong");
   loading.open();
   yield* Effect.promise(() => reloading);
-  for (let i = 0; i < 50 && worker.codeVersion !== server.codeVersion; i++)
-    yield* Effect.promise(() => tick());
+  for (let i = 0; i < 50 && worker.codeVersion !== server.codeVersion; i++) yield* tick;
   assert.equal(worker.codeVersion, server.codeVersion);
 });
 
@@ -647,13 +634,13 @@ const aReconnectingChildBehindItsParent = Effect.gen(function* () {
   });
   onTestFinished(() => worker.close());
   worker.install(modules.get("greeter")!);
-  yield* Effect.promise(() => tick());
+  yield* tick;
   modules.set("greeter", greeterFacet("v2"));
   yield* Effect.promise(() => server.reload([], { remote: { "session:": ["greeter"] } }));
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.equal(worker.previousCodeVersion, 1);
   up.close("gone");
-  yield* Effect.promise(() => tick());
+  yield* tick;
   modules.set("greeter", greeterFacet("v3"));
   yield* Effect.promise(() => server.reload([{ name: "server-plugin", setup: () => {} }]));
   const [down2, up2] = memoryLinkPair();
@@ -692,7 +679,7 @@ const forcedRetirementCancelsABrowserCall = Effect.gen(function* () {
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
           ctx.signal.addEventListener("abort", () => log.push("worker aborted"));
-          yield* Effect.promise(() => never.promise);
+          yield* never.wait;
         }),
       ),
   }));
@@ -735,8 +722,7 @@ const forcedRetirementCancelsABrowserCall = Effect.gen(function* () {
   onTestFinished(() => browser.close());
   const call = browser.hold(Slow, {}).wait();
   call.catch(() => {});
-  for (let i = 0; i < 50 && log.length === 0 && worker.codeVersion === 0; i++)
-    yield* Effect.promise(() => tick());
+  for (let i = 0; i < 50 && log.length === 0 && worker.codeVersion === 0; i++) yield* tick;
   yield* Effect.sleep(10);
   yield* Effect.promise(() => server.reload([storeFacet(2)]));
   yield* Effect.promise(() => server.reload([storeFacet(3)], { retireDeadline: 20 }));
@@ -750,8 +736,7 @@ const forcedRetirementCancelsABrowserCall = Effect.gen(function* () {
     ]),
   );
   assert.equal(settled, "rejected", "the browser's call is cancelled with its root");
-  for (let i = 0; i < 50 && !log.includes("worker aborted"); i++)
-    yield* Effect.promise(() => tick());
+  for (let i = 0; i < 50 && !log.includes("worker aborted"); i++) yield* tick;
   assert.deepEqual(
     log.filter((entry) => entry === "cancel sent" || entry === "server closes 1"),
     ["cancel sent", "server closes 1"],

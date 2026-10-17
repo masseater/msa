@@ -22,9 +22,7 @@ import {
   type StateEvent,
 } from "../src/index.ts";
 import { Packed, unpack } from "../src/link.ts";
-
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+import { tick } from "./fixtures/timing.ts";
 
 const counterVariants = {
   main: {
@@ -121,7 +119,7 @@ const stateMembersSnapshotThenDeltaEncoded = Effect.gen(function* () {
   yield* Effect.promise(() => counter.ready);
   yield* Effect.promise(() => counter.add(1));
   yield* Effect.promise(() => counter.add(1));
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(counter.count.value, { n: 2 });
   assert.deepEqual(
     events.map((event) => event.type),
@@ -134,7 +132,7 @@ const theServerReachesAConnectedChild = Effect.gen(function* () {
   const { server, worker } = serverWithWorker("session:w1");
   const principals: unknown[] = [];
   serveCounter(worker, principals);
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const counter = server.hold(SessionCounter, { session: "w1", name: "x" });
   assert.equal(yield* Effect.promise(() => counter.add(5)), 5);
   assert.deepEqual(principals, [{ kind: "server" }]);
@@ -260,7 +258,7 @@ const relaysBrowserServerWorkerTheWorker = Effect.gen(function* () {
   const values: unknown[] = [];
   counter.count.subscribe((value) => values.push(value));
   yield* Effect.promise(() => counter.add(1));
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(values.at(-1), { n: 4 });
 });
 
@@ -288,7 +286,7 @@ const ignoresPayloadPrincipalsFromClientsAnd = Effect.gen(function* () {
   });
   raw.send({ t: "call", id: 2, hold: 1, member: "who", args: null });
   for (let i = 0; i < 50 && !frames.some((frame) => frame.t === "result"); i++)
-    yield* Effect.promise(() => sleep(5));
+    yield* Effect.sleep(5);
   const result = frames.find((frame) => frame.t === "result");
   assert.deepEqual(result?.t === "result" ? result.value : undefined, guest);
 
@@ -306,7 +304,7 @@ const ignoresPayloadPrincipalsFromClientsAnd = Effect.gen(function* () {
   });
   up.send({ t: "call", id: 8, hold: 7, member: "who", args: null });
   for (let i = 0; i < 50 && !childFrames.some((frame) => frame.t === "result"); i++)
-    yield* Effect.promise(() => sleep(5));
+    yield* Effect.sleep(5);
   const childResult = childFrames.find((frame) => frame.t === "result");
   assert.deepEqual(childResult?.t === "result" ? childResult.value : undefined, {
     worker: "w9",
@@ -375,7 +373,7 @@ const aBrowserDisconnectReleasesExactlyIts = Effect.gen(function* () {
   const other = two.host.hold(SessionCounter, { session: "S1", name: "b" });
   yield* Effect.promise(() => other.add(1));
   one.up.close();
-  for (let i = 0; i < 20 && !c.log.includes("close a"); i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 20 && !c.log.includes("close a"); i++) yield* tick;
   assert.ok(c.log.includes("close a"));
   assert.ok(!c.log.includes("close b"));
   assert.equal(yield* Effect.promise(() => other.add(1)), 2);
@@ -388,7 +386,7 @@ const aDeadLinkNoPongsIs = Effect.gen(function* () {
     browser.host.hold(SessionCounter, { session: "S1", name: "a" }).add(1),
   );
   browser.up.sever();
-  for (let i = 0; i < 40 && !c.log.includes("close a"); i++) yield* Effect.promise(() => sleep(10));
+  for (let i = 0; i < 40 && !c.log.includes("close a"); i++) yield* Effect.sleep(10);
   assert.ok(c.log.includes("close a"));
 });
 
@@ -431,9 +429,9 @@ const invalidateprincipalReStampsTheLinkAnd = Effect.gen(function* () {
   const counter = browser.host.hold(SessionCounter, { session: "S1", name: "a" });
   yield* Effect.promise(() => counter.add(1));
   yield* Effect.promise(() => c.server.invalidatePrincipal({ guest: "g1" }));
-  for (let i = 0; i < 20 && counter.status !== "gone"; i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 20 && counter.status !== "gone"; i++) yield* tick;
   assert.equal(counter.status, "gone");
-  for (let i = 0; i < 20 && !c.log.includes("close a"); i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 20 && !c.log.includes("close a"); i++) yield* tick;
   assert.ok(c.log.includes("close a"));
   const again = browser.host.hold(SessionCounter, { session: "S1", name: "a" });
   assert.deepEqual(yield* Effect.promise(() => again.who()), { guest: "g1", revision: 2 });
@@ -447,12 +445,12 @@ const afterAReconnectStateSubscribersGet = Effect.gen(function* () {
   counter.count.events((event) => events.push(event.type));
   yield* Effect.promise(() => counter.add(2));
   browser.up.close();
-  yield* Effect.promise(() => tick());
-  yield* Effect.promise(() => tick());
+  yield* tick;
+  yield* tick;
   assert.equal(counter.status, "loading");
   browser.reconnect();
   assert.equal(yield* Effect.promise(() => counter.add(1)), 1);
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(counter.count.value, { n: 1 });
   assert.equal(events[0], "snap");
   assert.ok(events.includes("reset"));
@@ -598,7 +596,7 @@ describe("links: protocol version", () => {
           token: Counter.description,
           input: { name: "c" },
         });
-        yield* Effect.promise(() => tick());
+        yield* tick;
         assert.deepEqual(accepted.seen, [{ local: PROTOCOL_VERSION, peer: 1 }]);
         assert.equal(closed, `protocol-version ${PROTOCOL_VERSION}`);
         assert.equal(down.closed, true);
@@ -631,7 +629,7 @@ describe("links: protocol version", () => {
           kind: "host",
           codeVersion: 1,
         });
-        yield* Effect.promise(() => tick());
+        yield* tick;
         assert.deepEqual(client.seen, [{ local: PROTOCOL_VERSION, peer: PROTOCOL_VERSION + 1 }]);
         assert.equal(up.closed, true);
 
@@ -648,7 +646,7 @@ describe("links: protocol version", () => {
           onProtocolMismatch: told.onProtocolMismatch,
         });
         down2.close(`protocol-version ${PROTOCOL_VERSION + 1}`);
-        yield* Effect.promise(() => tick());
+        yield* tick;
         assert.deepEqual(told.seen, [{ local: PROTOCOL_VERSION, peer: PROTOCOL_VERSION + 1 }]);
       }),
     ));
@@ -673,9 +671,9 @@ describe("links: protocol version", () => {
           principal: { kind: "server" },
           onProtocolMismatch: both.onProtocolMismatch,
         });
-        yield* Effect.promise(() => tick());
+        yield* tick;
         up.close("bye");
-        yield* Effect.promise(() => tick());
+        yield* tick;
         assert.deepEqual(both.seen, []);
       }),
     ));
@@ -717,8 +715,7 @@ const largeArgsResultsAndSnapshotsCross = Effect.gen(function* () {
   const big = browser.hold(Big, {});
   assert.deepEqual(yield* Effect.promise(() => big.echo(large("c"))), large("c"));
   big.notes.subscribe(() => {});
-  for (let i = 0; i < 100 && big.notes.value === undefined; i++)
-    yield* Effect.promise(() => sleep(5));
+  for (let i = 0; i < 100 && big.notes.value === undefined; i++) yield* Effect.sleep(5);
   assert.deepEqual(big.notes.value, large("a"));
 });
 
@@ -729,7 +726,7 @@ const onlyPayloadsAboveTheThresholdAre = Effect.gen(function* () {
   a.send({ t: "result", id: 1, value: large("v") });
   a.send({ t: "result", id: 2, value: ["small"] });
   a.send({ t: "state", hold: 3, m: "notes", as: "snap", value: large("s") });
-  for (let i = 0; i < 50 && frames.length < 3; i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 50 && frames.length < 3; i++) yield* tick;
   const [packed, small, snap] = frames;
   assert(packed?.t === "result" && packed.value instanceof Packed);
   assert.deepEqual(unpack(packed.value), large("v"));
@@ -742,7 +739,7 @@ const onlyPayloadsAboveTheThresholdAre = Effect.gen(function* () {
   const forwarded: Frame[] = [];
   d.receive((frame) => forwarded.push(frame));
   c.send({ ...packed, id: 9 });
-  for (let i = 0; i < 50 && forwarded.length < 1; i++) yield* Effect.promise(() => tick());
+  for (let i = 0; i < 50 && forwarded.length < 1; i++) yield* tick;
   const relayed = forwarded[0];
   assert(relayed?.t === "result" && relayed.value instanceof Packed);
   assert.deepEqual(relayed.value.bytes, packed.value.bytes);
@@ -775,7 +772,7 @@ const aWriteThatFailsAfterThe = Effect.gen(function* () {
   const reasons: string[] = [];
   link.onClose((reason) => reasons.push(reason));
   link.send({ t: "ping", n: 1 });
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.equal(link.closed, true);
   assert.deepEqual(reasons, ["ipc send failed: EPIPE"]);
   assert.equal(sent.length, 1);

@@ -20,8 +20,7 @@ import {
   PROTOCOL_VERSION,
   remote,
 } from "../src/index.ts";
-
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+import { tick } from "./fixtures/timing.ts";
 
 const Note = remote("t.note", {
   version: 1,
@@ -80,7 +79,7 @@ function cluster() {
 
 const aGetGoesWhereTheContract = Effect.gen(function* () {
   const { server, s1, close } = cluster();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.equal(
     yield* Effect.promise(() => server.hold(Note, { session: "S1", id: "a" }).where()),
     "session:S1 a",
@@ -125,7 +124,7 @@ const serveRefusesATypeTheHost = Effect.gen(function* () {
 const aHostRefusesAHoldIts = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   const { server, close } = cluster();
-  yield* Effect.promise(() => tick());
+  yield* tick;
   const holds = (target: string, input: unknown): Promise<Frame | undefined> =>
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
@@ -146,7 +145,7 @@ const aHostRefusesAHoldIts = Effect.gen(function* () {
           i < 50 && !frames.some((frame) => frame.t === "shape" || frame.t === "gone");
           i++
         )
-          yield* Effect.promise(() => tick());
+          yield* tick;
         return frames.find((frame) => frame.t === "shape" || frame.t === "gone");
       }),
     );
@@ -174,7 +173,7 @@ const theHostComesFromTheNormalized = Effect.gen(function* () {
   });
   const { server, s1, close } = cluster();
   s1.serve(Doc, () => ({ variant: "main", where: () => "session:S1" }));
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.equal(yield* Effect.promise(() => server.hold(Doc, {} as never).where()), "session:S1");
   assert.throws(
     () => server.hold(Note, { session: "", id: "x" }),

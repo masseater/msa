@@ -13,8 +13,7 @@ import {
   method,
   type StateEvent,
 } from "../src/index.ts";
-
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+import { tick } from "./fixtures/timing.ts";
 
 function emitter<E>() {
   const listeners = new Set<(event: E) => void>();
@@ -232,12 +231,12 @@ const listenersRunEachEventInA = Effect.gen(function* () {
   yield* Effect.promise(() => ref.ready);
   events.emit(2);
   events.emit(3);
-  yield* Effect.promise(() => tick());
+  yield* tick;
   assert.deepEqual(ref.seen.value, { sum: 5 });
   assert.equal(roots.size, 2);
   ref.release();
-  yield* Effect.promise(() => tick());
-  yield* Effect.promise(() => tick());
+  yield* tick;
+  yield* tick;
   assert.equal(events.size, 0);
   assert.ok(taskAborted);
 });

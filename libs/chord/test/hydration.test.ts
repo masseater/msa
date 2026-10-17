@@ -16,8 +16,6 @@ import {
   remote,
 } from "../src/index.ts";
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 const Source = remote("t.e8-source", {
   version: 1,
   input: Type.Object({}),
@@ -207,7 +205,7 @@ const aReferenceCycleAcrossHostsFails = Effect.gen(function* () {
         /cycle/u.test(error.message),
     ),
   );
-  yield* Effect.promise(() => sleep(10));
+  yield* Effect.sleep(10);
   yield* Effect.promise(() => c.server.close());
   yield* Effect.promise(() => c.worker.close());
 });

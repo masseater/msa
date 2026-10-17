@@ -31,8 +31,6 @@ vi.mock("../src/delta/index.ts", (importOriginal) =>
   ),
 );
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 const List = remote("t.e8-cost", {
   version: 1,
   input: Type.Object({}),
@@ -75,7 +73,7 @@ const oneChangeToKClientsK = Effect.gen(function* () {
   const encodes = counts.encodes;
   const before = clients.map((client) => stateFrames(client.link.received).length);
   yield* Effect.promise(() => clients[0]!.ref.add("x"));
-  yield* Effect.promise(() => sleep(10));
+  yield* Effect.sleep(10);
   assert.equal(counts.encodes - encodes, K, "one encode per feed");
   assert.equal(counts.encoders, encoders, "no new streams for a change");
   const frames = clients.map((client, i) => stateFrames(client.link.received).slice(before[i]));

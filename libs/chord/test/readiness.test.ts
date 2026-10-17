@@ -15,8 +15,8 @@ import {
   memoryLinkPair,
   remote,
 } from "../src/index.ts";
+import { tick } from "./fixtures/timing.ts";
 
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 const unexpectedError = (error: unknown) => assert.fail(String(error));
 const Eager = local("ready.eager", { version: 1, input: Type.Object({}) });
 const Lazy = local("ready.lazy", { version: 1, input: Type.Object({}) });
@@ -108,7 +108,7 @@ describe("host: eager readiness", () => {
               settled = true;
               return undefined;
             });
-            yield* Effect.promise(() => tick());
+            yield* tick;
             assert.equal(settled, false);
             assert.equal(host.registry(entries).get("eager"), undefined);
             opened();
@@ -273,7 +273,7 @@ describe("host: eager readiness", () => {
                 settled = true;
                 return undefined;
               });
-              yield* Effect.promise(() => tick());
+              yield* tick;
               assert.equal(settled, false);
               assert.equal(reported, false);
               server.accept(parent, {
