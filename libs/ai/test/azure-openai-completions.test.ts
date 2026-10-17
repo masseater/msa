@@ -152,7 +152,9 @@ describe("azure deepseek-v4-pro over Chat Completions", () => {
         expect(mockState.lastParams?.thinking).toBeUndefined();
       }),
     ));
+});
 
+describe("azure deepseek-v4-pro over Chat Completions", () => {
   it("omits prompt cache parameters when long retention comes from MSA_CACHE_RETENTION", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -184,7 +186,9 @@ describe("azure deepseek-v4-pro over Chat Completions", () => {
         });
       }),
     ));
+});
 
+describe("azure deepseek-v4-pro over Chat Completions", () => {
   it("keeps mid-conversation system messages in place", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -227,7 +231,9 @@ describe("azure deepseek-v4-pro over Chat Completions", () => {
         expect(mockState.lastParams?.prompt_cache_retention).toBeUndefined();
       }),
     ));
+});
 
+describe("azure deepseek-v4-pro over Chat Completions", () => {
   it("replays reasoning_content on assistant turns so the cached prefix is unchanged", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -315,7 +321,9 @@ describe("azure Chat Completions endpoint resolution", () => {
         expect(result.model).toBe("deepseek-v4-pro");
       }),
     ));
+});
 
+describe("azure Chat Completions endpoint resolution", () => {
   it("sends the mapped deployment name while keeping the catalog id on the message", () =>
     Effect.runPromise(
       Effect.gen(function* () {

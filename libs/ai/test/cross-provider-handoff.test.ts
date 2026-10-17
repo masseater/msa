@@ -334,7 +334,6 @@ async function generateContext(
 describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
   let contexts: Record<string, CachedContext>;
   let availablePairs: ProviderModelPair[];
-
   beforeAll(
     () =>
       Effect.runPromise(
@@ -378,11 +377,57 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
       ),
     300000,
   );
-
   it.skipIf(!hasAnyApiKey())("should have at least 2 fixtures to test handoffs", () => {
     expect(Object.keys(contexts).length).toBeGreaterThanOrEqual(2);
   });
+});
 
+describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
+  let contexts: Record<string, CachedContext>;
+  let availablePairs: ProviderModelPair[];
+  beforeAll(
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          contexts = {};
+          availablePairs = [];
+
+          yield* Console.log("\n=== Generating Fixtures ===\n");
+
+          for (const pair of PROVIDER_MODEL_PAIRS) {
+            const apiKey = yield* Effect.promise(() => getApiKey(pair.provider));
+            if (apiKey === undefined || apiKey === "" || !hasApiKey(pair)) {
+              yield* Console.log(`[${pair.label}] Skipping - no auth for ${pair.provider}`);
+              continue;
+            }
+
+            yield* Console.log(`[${pair.label}] Generating fixture...`);
+            const result = yield* Effect.promise(() => generateContext(pair, apiKey));
+
+            if (result === null || result.messages.length < 4) {
+              yield* Console.log(`[${pair.label}] Failed to generate fixture, skipping`);
+              continue;
+            }
+
+            contexts[pair.label] = {
+              label: pair.label,
+              provider: pair.provider,
+              model: pair.model,
+              api: result.api,
+              messages: result.messages,
+              generatedAt: DateTime.formatIso(yield* DateTime.now),
+            };
+            availablePairs.push(pair);
+            yield* Console.log(`[${pair.label}] Generated ${result.messages.length} messages`);
+          }
+
+          yield* Console.log(
+            `\n=== ${availablePairs.length}/${PROVIDER_MODEL_PAIRS.length} contexts available ===\n`,
+          );
+        }),
+      ),
+    300000,
+  );
   it.skipIf(!hasAnyApiKey())(
     "should handle cross-provider handoffs for each target",
     async () => {

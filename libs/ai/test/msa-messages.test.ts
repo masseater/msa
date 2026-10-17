@@ -190,7 +190,9 @@ describe("msa-messages", () => {
       options: { maxTokens: 100, sessionId: "session-1", toolChoice: "auto" },
     });
   });
+});
 
+describe("msa-messages", () => {
   it("forwards parsed wire events in order before converting them", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -229,7 +231,9 @@ describe("msa-messages", () => {
         ]);
       }),
     ));
+});
 
+describe("msa-messages", () => {
   it("appends debug=1 and reports response headers via onResponse", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -258,7 +262,9 @@ describe("msa-messages", () => {
         expect(observedHeaders?.["x-msa-gateway-upstream-provider"]).toBe("anthropic");
       }),
     ));
+});
 
+describe("msa-messages", () => {
   it("surfaces backend error responses with diagnostics", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -308,7 +314,9 @@ describe("msa-messages", () => {
         expect(message.usage).toEqual(usage);
       }),
     ));
+});
 
+describe("msa-messages", () => {
   it("errors when no API key is provided", () =>
     Effect.runPromise(
       Effect.gen(function* () {

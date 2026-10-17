@@ -146,7 +146,9 @@ describe("Google raw stop reasons", () => {
         expect(message.errorMessage).toBe("Provider stopped with: MALFORMED_FUNCTION_CALL");
       }),
     ));
+});
 
+describe("Google raw stop reasons", () => {
   it("preserves raw Gemini finish reasons for Google Vertex errors", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -169,7 +171,9 @@ describe("Google raw stop reasons", () => {
         expect(message.errorMessage).toBe("Provider stopped with: SAFETY");
       }),
     ));
+});
 
+describe("Google raw stop reasons", () => {
   const adapters = [
     {
       name: "Google Generative AI",
@@ -187,7 +191,6 @@ describe("Google raw stop reasons", () => {
         }),
     },
   ];
-
   it.each(adapters)(
     "preserves MAX_TOKENS with a tool call as length for $name",
     ({ createStream }) =>

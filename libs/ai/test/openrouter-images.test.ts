@@ -64,7 +64,6 @@ describe("openrouter images", () => {
     mockState.lastParams = undefined;
     mockState.lastRequestOptions = undefined;
   });
-
   it("returns text plus images in final output", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -109,7 +108,13 @@ describe("openrouter images", () => {
         });
       }),
     ));
+});
 
+describe("openrouter images", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.lastRequestOptions = undefined;
+  });
   it("passes through abort signal and returns aborted result", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -140,7 +145,13 @@ describe("openrouter images", () => {
         expect(mockState.lastRequestOptions).toMatchObject({ signal: controllerSignal });
       }),
     ));
+});
 
+describe("openrouter images", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.lastRequestOptions = undefined;
+  });
   it("generateImages resolves the final assistant images result", () =>
     Effect.runPromise(
       Effect.gen(function* () {

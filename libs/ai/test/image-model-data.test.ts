@@ -93,7 +93,9 @@ describe("OpenRouter catalog parsing", () => {
     expect(catalog.images).toEqual([]);
     expect(catalog.classifiers).toEqual([]);
   });
+});
 
+describe("OpenRouter catalog parsing", () => {
   it("emits decision models as System One classifier models", () => {
     const catalog = buildOpenRouterCatalog([], [], [decisionModel, decisionModel]);
     expect(catalog.chat).toEqual([]);

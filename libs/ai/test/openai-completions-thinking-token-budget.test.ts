@@ -110,7 +110,6 @@ describe("openai-completions thinking token budget", () => {
   beforeEach(() => {
     mockState.lastParams = undefined;
   });
-
   it("sends the configured budget for the requested level", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -145,7 +144,12 @@ describe("openai-completions thinking token budget", () => {
         expect(params.thinking_token_budget).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions thinking token budget", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+  });
   it("clamps xhigh and max to the high budget", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -181,7 +185,12 @@ describe("openai-completions thinking token budget", () => {
         expect(params.thinking_token_budget).toBe(4096 - 1024);
       }),
     ));
+});
 
+describe("openai-completions thinking token budget", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+  });
   it.each(["thinking_budget", "thinking_budget_tokens"] as const)(
     "sends %s when thinkingTokenBudgetField is set",
     (field) =>
@@ -215,7 +224,12 @@ describe("openai-completions thinking token budget", () => {
         expect(params.thinking_token_budget).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions thinking token budget", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+  });
   it("puts the clamped budget in chat_template_kwargs when $var is thinking.budget", () =>
     Effect.runPromise(
       Effect.gen(function* () {

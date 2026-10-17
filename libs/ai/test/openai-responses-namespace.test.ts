@@ -167,7 +167,9 @@ describe("OpenAI Responses tool-call namespaces", () => {
       namespace: "dynamic_tools",
     });
   });
+});
 
+describe("OpenAI Responses tool-call namespaces", () => {
   it("round-trips a custom-tool namespace received only on output_item.done", async () => {
     const output = createOutput();
     const grammarToolInputProperties = new Map([["query", "input"]]);
@@ -206,7 +208,9 @@ describe("OpenAI Responses tool-call namespaces", () => {
       namespace: "dynamic_tools",
     });
   });
+});
 
+describe("OpenAI Responses tool-call namespaces", () => {
   it("drops namespaces when the target cannot replay their load items", () => {
     const output = createOutput();
     output.content.push(
@@ -254,7 +258,9 @@ describe("OpenAI Responses tool-call namespaces", () => {
       expect(customToolCall).not.toHaveProperty("namespace");
     }
   });
+});
 
+describe("OpenAI Responses tool-call namespaces", () => {
   it("does not add a namespace to ordinary function calls", () => {
     const output = createOutput();
     output.content.push({

@@ -108,7 +108,9 @@ describe("builtin providers", () => {
     });
     expect(getBuiltinModel("anthropic", "claude-haiku-4-5").compat?.supportsStrictTools).toBe(true);
   });
+});
 
+describe("builtin providers", () => {
   it("keeps the conservative resize profile on every vision model", () => {
     const visionModels = getBuiltinProviders()
       .flatMap((provider) => getBuiltinModels(provider))
@@ -148,7 +150,9 @@ describe("builtin providers", () => {
     );
     expect(openRouterModel?.inputLimits).toEqual({ images: { resize: DEFAULT_IMAGE_RESIZE } });
   });
+});
 
+describe("builtin providers", () => {
   it("uses models.dev effort levels for Google thinking models", () => {
     for (const provider of ["google", "google-vertex"] as const) {
       expect(getSupportedThinkingLevels(getBuiltinModel(provider, "gemini-3.6-flash"))).toContain(
@@ -173,7 +177,9 @@ describe("builtin providers", () => {
       "high",
     ]);
   });
+});
 
+describe("builtin providers", () => {
   it("enables mid-conversation system messages only for verified models", () => {
     const models = builtinModels();
     const supported = [
@@ -227,7 +233,9 @@ describe("builtin providers", () => {
       );
     }
   });
+});
 
+describe("builtin providers", () => {
   it("routes proxied tool changes through verified transports only", () => {
     const models = builtinModels();
     expect(models.getModel("opencode", "gpt-5.6-terra")?.compat).toMatchObject({
@@ -274,7 +282,9 @@ describe("builtin providers", () => {
       });
     }
   });
+});
 
+describe("builtin providers", () => {
   it("uses API-equivalent implied pricing for Kimi Coding subscription models", () => {
     const models = builtinModels();
     const expectedCosts = {
@@ -322,7 +332,9 @@ describe("builtin providers", () => {
         expect(result?.source).toBe("ANTHROPIC_OAUTH_TOKEN");
       }),
     ));
+});
 
+describe("builtin providers", () => {
   it("runs provider-owned Bedrock bearer token and AWS profile login flows", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -370,7 +382,9 @@ describe("builtin providers", () => {
         ).toMatchObject({ auth: {}, env: { AWS_PROFILE: "work" } });
       }),
     ));
+});
 
+describe("builtin providers", () => {
   it("reports bedrock as configured from ambient AWS credentials without an api key", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -412,7 +426,9 @@ describe("builtin providers", () => {
         expect(result?.env).toEqual({ CLOUDFLARE_ACCOUNT_ID: "account-id" });
       }),
     ));
+});
 
+describe("builtin providers", () => {
   it("requires Cloudflare AI Gateway account and gateway config and returns scoped env headers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -449,7 +465,9 @@ describe("builtin providers", () => {
         });
       }),
     ));
+});
 
+describe("builtin providers", () => {
   it("runs provider-owned Vertex API key and ADC login flows", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -506,7 +524,9 @@ describe("builtin providers", () => {
         });
       }),
     ));
+});
 
+describe("builtin providers", () => {
   it("resolves vertex via ADC file plus project and location", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -574,7 +594,9 @@ describe("envApiKeyAuth", () => {
         ).toBeUndefined();
       }),
     ));
+});
 
+describe("envApiKeyAuth", () => {
   it("login prompts for a secret and returns an api-key credential", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -609,7 +631,6 @@ describe("createProvider", () => {
     };
     return { stream: respond, streamSimple: respond };
   }
-
   function testModel(api: string, id: string): Model<Api> {
     return {
       id,
@@ -624,7 +645,6 @@ describe("createProvider", () => {
       maxTokens: 1000,
     };
   }
-
   it("lazily exposes only declared deferred capabilities", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -654,7 +674,35 @@ describe("createProvider", () => {
         expect(loads).toBe(1);
       }),
     ));
+});
 
+describe("createProvider", () => {
+  function recordingStreams(label: string, calls: string[]): ProviderStreams {
+    const respond = (model: Model<Api>) => {
+      calls.push(`${label}:${model.id}`);
+      const stream = new AssistantMessageEventStream();
+      const message = fauxAssistantMessage("ok");
+      stream.push({ type: "start", partial: message });
+      stream.push({ type: "done", reason: "stop", message });
+      stream.end(message);
+      return stream;
+    };
+    return { stream: respond, streamSimple: respond };
+  }
+  function testModel(api: string, id: string): Model<Api> {
+    return {
+      id,
+      name: id,
+      api,
+      provider: "mixed",
+      baseUrl: "https://example.test/v1",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 10000,
+      maxTokens: 1000,
+    };
+  }
   it("dispatches on model.api for mixed-API providers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -673,7 +721,35 @@ describe("createProvider", () => {
         expect(calls).toEqual(["a:model-a", "b:model-b"]);
       }),
     ));
+});
 
+describe("createProvider", () => {
+  function recordingStreams(label: string, calls: string[]): ProviderStreams {
+    const respond = (model: Model<Api>) => {
+      calls.push(`${label}:${model.id}`);
+      const stream = new AssistantMessageEventStream();
+      const message = fauxAssistantMessage("ok");
+      stream.push({ type: "start", partial: message });
+      stream.push({ type: "done", reason: "stop", message });
+      stream.end(message);
+      return stream;
+    };
+    return { stream: respond, streamSimple: respond };
+  }
+  function testModel(api: string, id: string): Model<Api> {
+    return {
+      id,
+      name: id,
+      api,
+      provider: "mixed",
+      baseUrl: "https://example.test/v1",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 10000,
+      maxTokens: 1000,
+    };
+  }
   it("merges provider-resolved env into stream options", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -724,7 +800,35 @@ describe("createProvider", () => {
         });
       }),
     ));
+});
 
+describe("createProvider", () => {
+  function recordingStreams(label: string, calls: string[]): ProviderStreams {
+    const respond = (model: Model<Api>) => {
+      calls.push(`${label}:${model.id}`);
+      const stream = new AssistantMessageEventStream();
+      const message = fauxAssistantMessage("ok");
+      stream.push({ type: "start", partial: message });
+      stream.push({ type: "done", reason: "stop", message });
+      stream.end(message);
+      return stream;
+    };
+    return { stream: respond, streamSimple: respond };
+  }
+  function testModel(api: string, id: string): Model<Api> {
+    return {
+      id,
+      name: id,
+      api,
+      provider: "mixed",
+      baseUrl: "https://example.test/v1",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 10000,
+      maxTokens: 1000,
+    };
+  }
   it("applies resolved request options to deferred fetch and cancellation", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -809,7 +913,35 @@ describe("createProvider", () => {
         });
       }),
     ));
+});
 
+describe("createProvider", () => {
+  function recordingStreams(label: string, calls: string[]): ProviderStreams {
+    const respond = (model: Model<Api>) => {
+      calls.push(`${label}:${model.id}`);
+      const stream = new AssistantMessageEventStream();
+      const message = fauxAssistantMessage("ok");
+      stream.push({ type: "start", partial: message });
+      stream.push({ type: "done", reason: "stop", message });
+      stream.end(message);
+      return stream;
+    };
+    return { stream: respond, streamSimple: respond };
+  }
+  function testModel(api: string, id: string): Model<Api> {
+    return {
+      id,
+      name: id,
+      api,
+      provider: "mixed",
+      baseUrl: "https://example.test/v1",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 10000,
+      maxTokens: 1000,
+    };
+  }
   it("produces a stream error for a model whose api has no implementation", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -826,7 +958,35 @@ describe("createProvider", () => {
         expect(result.errorMessage).toContain("no API implementation");
       }),
     ));
+});
 
+describe("createProvider", () => {
+  function recordingStreams(label: string, calls: string[]): ProviderStreams {
+    const respond = (model: Model<Api>) => {
+      calls.push(`${label}:${model.id}`);
+      const stream = new AssistantMessageEventStream();
+      const message = fauxAssistantMessage("ok");
+      stream.push({ type: "start", partial: message });
+      stream.push({ type: "done", reason: "stop", message });
+      stream.end(message);
+      return stream;
+    };
+    return { stream: respond, streamSimple: respond };
+  }
+  function testModel(api: string, id: string): Model<Api> {
+    return {
+      id,
+      name: id,
+      api,
+      provider: "mixed",
+      baseUrl: "https://example.test/v1",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 10000,
+      maxTokens: 1000,
+    };
+  }
   it("lets a newer dynamic refresh bypass and supersede older network work", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -908,7 +1068,9 @@ describe("fauxProvider", () => {
         expect(faux.state.callCount).toBe(1);
       }),
     ));
+});
 
+describe("fauxProvider", () => {
   it("submits, polls, and redeems deferred responses", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -953,7 +1115,9 @@ describe("fauxProvider", () => {
         expect(faux.state).toMatchObject({ callCount: 1, deferredFetchCount: 2 });
       }),
     ));
+});
 
+describe("fauxProvider", () => {
   it("records cancellation and returns deferred fetch failures in-band", () =>
     Effect.runPromise(
       Effect.gen(function* () {

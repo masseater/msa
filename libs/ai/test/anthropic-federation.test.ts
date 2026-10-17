@@ -140,7 +140,9 @@ describe("Anthropic workload identity federation", () => {
         ).toBeUndefined();
       }),
     ));
+});
 
+describe("Anthropic workload identity federation", () => {
   it("treats ANTHROPIC_SERVICE_ACCOUNT_ID as optional, like the SDK", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -184,7 +186,9 @@ describe("Anthropic workload identity federation", () => {
         });
       }),
     ));
+});
 
+describe("Anthropic workload identity federation", () => {
   it("hands the SDK a federation config instead of a key", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -221,7 +225,9 @@ describe("Anthropic workload identity federation", () => {
         expect(mockState.constructorOpts?.["config"]).toEqual(expectedConfig);
       }),
     ));
+});
 
+describe("Anthropic workload identity federation", () => {
   it("lets an explicit API key win over federation env", () =>
     Effect.runPromise(
       Effect.gen(function* () {

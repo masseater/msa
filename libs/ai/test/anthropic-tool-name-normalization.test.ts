@@ -12,7 +12,6 @@ describe.skipIf(oauthToken === undefined || oauthToken === "")(
   "Anthropic OAuth tool name normalization",
   () => {
     const model = getModel("anthropic", "claude-sonnet-4-6");
-
     it("should normalize user-defined tool matching CC name (todowrite -> TodoWrite -> todowrite)", () =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -60,7 +59,13 @@ describe.skipIf(oauthToken === undefined || oauthToken === "")(
           expect(toolCallName).toBe("todowrite");
         }),
       ));
+  },
+);
 
+describe.skipIf(oauthToken === undefined || oauthToken === "")(
+  "Anthropic OAuth tool name normalization",
+  () => {
+    const model = getModel("anthropic", "claude-sonnet-4-6");
     it("should handle msa's built-in tools (read, write, edit, bash)", () =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -107,7 +112,13 @@ describe.skipIf(oauthToken === undefined || oauthToken === "")(
           expect(toolCallName).toBe("read");
         }),
       ));
+  },
+);
 
+describe.skipIf(oauthToken === undefined || oauthToken === "")(
+  "Anthropic OAuth tool name normalization",
+  () => {
+    const model = getModel("anthropic", "claude-sonnet-4-6");
     it("should NOT map find to Glob - find is not a CC tool name", () =>
       Effect.runPromise(
         Effect.gen(function* () {
@@ -154,7 +165,13 @@ describe.skipIf(oauthToken === undefined || oauthToken === "")(
           expect(toolCallName).toBe("find");
         }),
       ));
+  },
+);
 
+describe.skipIf(oauthToken === undefined || oauthToken === "")(
+  "Anthropic OAuth tool name normalization",
+  () => {
+    const model = getModel("anthropic", "claude-sonnet-4-6");
     it("should handle custom tools that don't match any CC tool names", () =>
       Effect.runPromise(
         Effect.gen(function* () {

@@ -125,7 +125,6 @@ describe("openai-completions tool_choice", () => {
     mockState.lastParams = undefined;
     mockState.chunks = undefined;
   });
-
   it("forwards toolChoice from simple options to payload", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -175,7 +174,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.tools?.length ?? 0).toBeGreaterThan(0);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("includes toolChoice when no tools are provided", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -210,7 +215,13 @@ describe("openai-completions tool_choice", () => {
         expect(params).not.toHaveProperty("tools");
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("omits strict when compat disables strict mode", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -263,7 +274,13 @@ describe("openai-completions tool_choice", () => {
         expect("strict" in (tool ?? {})).toBe(false);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("defaults unknown OpenAI-compatible endpoints to non-strict tools", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -308,7 +325,13 @@ describe("openai-completions tool_choice", () => {
         expect(functionTool?.parameters?.required).toEqual(["required"]);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("preserves strict tools for capable built-in Chat Completions models", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -350,7 +373,13 @@ describe("openai-completions tool_choice", () => {
         expect(functionTool?.parameters?.required).toEqual(["required", "optional"]);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("maps Groq Qwen reasoning levels to default reasoning_effort", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -384,7 +413,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.reasoning_effort).toBe("default");
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("keeps normal reasoning_effort for groq models without compat mapping", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -418,7 +453,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.reasoning_effort).toBe("medium");
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("enables tool_stream for supported z.ai models with tools", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -461,7 +502,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.tool_stream).toBe(true);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("stores z.ai tool_stream support in model compat metadata", () => {
     expect(getModel("zai", "glm-4.7")?.compat?.zaiToolStream).toBe(true);
     expect(getModel("zai", "glm-4.7")?.compat?.zaiToolStream).toBe(true);
@@ -498,7 +545,13 @@ describe("openai-completions tool_choice", () => {
       });
     }
   });
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("maps z.ai GLM-5.2 thinking levels to reasoning_effort", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -545,7 +598,13 @@ describe("openai-completions tool_choice", () => {
         }
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("preserves z.ai thinking when replaying reasoning_content", async () => {
     const model = getModel("zai", "glm-5.2")!;
     const assistantMessage: AssistantMessage = {
@@ -605,7 +664,13 @@ describe("openai-completions tool_choice", () => {
     expect(replayedAssistant).toMatchObject({ reasoning_content: "prior reasoning" });
     expect(params.thinking).toEqual({ type: "enabled", clear_thinking: false });
   });
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("omits z.ai GLM-5.2 reasoning_effort when thinking is off", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -642,7 +707,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.reasoning_effort).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("respects explicit z.ai tool_stream compat override", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -692,7 +763,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.tool_stream).toBe(true);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("omits tool_stream when no tools are provided", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -725,7 +802,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.tool_stream).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("maps non-standard provider finish_reason values to stopReason error", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -766,7 +849,13 @@ describe("openai-completions tool_choice", () => {
         expect(response.errorMessage).toBe("Provider finish_reason: network_error");
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("ignores null stream chunks from openai-compatible providers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -814,7 +903,13 @@ describe("openai-completions tool_choice", () => {
         expect(response.content).toEqual([{ type: "text", text: "OK" }]);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("errors when a stream ends after only null finish_reason chunks", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -852,7 +947,13 @@ describe("openai-completions tool_choice", () => {
         expect(response.errorMessage).toBe("Stream ended without finish_reason");
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("accepts streams without finish_reason when compat disables it", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -887,7 +988,13 @@ describe("openai-completions tool_choice", () => {
         expect(response.content).toEqual([{ type: "text", text: "complete answer" }]);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("ignores empty custom objects on function tool call deltas", async () => {
     mockState.chunks = [
       {
@@ -936,7 +1043,13 @@ describe("openai-completions tool_choice", () => {
       },
     ]);
   });
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("coalesces tool call deltas by stable index when provider mutates ids mid-stream", async () => {
     mockState.chunks = [
       {
@@ -1058,7 +1171,13 @@ describe("openai-completions tool_choice", () => {
     expect(toolCall).not.toHaveProperty("streamIndex");
     expect(toolCall).not.toHaveProperty("partialArgs");
   });
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("accumulates mixed content, reasoning, and parallel tool call deltas independently", async () => {
     mockState.chunks = [
       {
@@ -1301,7 +1420,13 @@ describe("openai-completions tool_choice", () => {
     expect(writeCall).not.toHaveProperty("streamIndex");
     expect(writeCall).not.toHaveProperty("partialArgs");
   });
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("uses system messages for non-OpenAI/Anthropic OpenRouter reasoning model instructions", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1329,7 +1454,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.messages?.[0]?.role).toBe("system");
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("keeps developer messages for OpenAI and Anthropic OpenRouter batch instructions", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1362,7 +1493,13 @@ describe("openai-completions tool_choice", () => {
         }
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("keeps developer messages for OpenAI reasoning model instructions", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1397,7 +1534,13 @@ describe("openai-completions tool_choice", () => {
     expect(model.compat?.supportsDeveloperRole).toBe(false);
     expect(model.compat?.requiresReasoningContentOnAssistantMessages).toBe(true);
   });
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("stores Xiaomi MiMo reasoning replay compat in built-in metadata", () => {
     const providers = [
       "xiaomi",
@@ -1430,7 +1573,13 @@ describe("openai-completions tool_choice", () => {
       expect(model.compat?.supportsStore).toBe(false);
     }
   });
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("replays Xiaomi MiMo assistant tool calls with empty reasoning_content when thinking is missing", async () => {
     const model = getModel("xiaomi", "mimo-v2.6-pro")!;
     const assistantMessage: AssistantMessage = {
@@ -1488,7 +1637,13 @@ describe("openai-completions tool_choice", () => {
     expect(params.thinking).toEqual({ type: "enabled" });
     expect(params.reasoning_effort).toBeUndefined();
   });
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("normalizes OpenCode Go reasoning deltas to reasoning_content for replay", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1521,7 +1676,13 @@ describe("openai-completions tool_choice", () => {
         ]);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("keeps non-OpenCode Go reasoning deltas on the original reasoning field", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1554,7 +1715,13 @@ describe("openai-completions tool_choice", () => {
         ]);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("replays OpenCode Go reasoning thinking blocks as reasoning_content", () => {
     const { compat: _compat, ...baseModel } = getModel("opencode-go", "kimi-k3")!;
     const model = { ...baseModel, api: "openai-completions" } as Model<"openai-completions">;
@@ -1613,7 +1780,13 @@ describe("openai-completions tool_choice", () => {
     expect(messages[0]).toMatchObject({ role: "assistant", reasoning_content: "think" });
     expect(messages[0]).not.toHaveProperty("reasoning");
   });
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("sends thinking disabled for OpenCode Kimi K2.6 when thinking is off", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1644,7 +1817,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.reasoning_effort).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("sends thinking enabled for OpenCode Kimi K2.6 when thinking is enabled", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1676,7 +1855,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.reasoning_effort).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("omits disabled thinking for Moonshot Kimi K2.7 Code models", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1714,7 +1899,13 @@ describe("openai-completions tool_choice", () => {
         }
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("keeps disabled thinking for Moonshot Kimi K2.6 when thinking is off", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1745,7 +1936,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.reasoning_effort).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("sends max_tokens for OpenCode completions models", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1784,7 +1981,13 @@ describe("openai-completions tool_choice", () => {
         }
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("sends max_tokens for built-in and custom DeepSeek API models", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1840,7 +2043,13 @@ describe("openai-completions tool_choice", () => {
         }
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("sends max_tokens for Z.AI completions models", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1876,7 +2085,13 @@ describe("openai-completions tool_choice", () => {
         }
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("omits reasoning effort for OpenCode Grok Build", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1904,7 +2119,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.reasoning_effort).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("does not double-count reasoning tokens in completion usage", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1945,7 +2166,13 @@ describe("openai-completions tool_choice", () => {
         expect(response.usage.totalTokens).toBe(43);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("preserves prompt_tokens_details cache read/write fields from chunk usage", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1991,7 +2218,13 @@ describe("openai-completions tool_choice", () => {
         expect(response.usage.totalTokens).toBe(105);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("preserves prompt_tokens_details cache read/write fields from choice usage fallback", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -2042,7 +2275,13 @@ describe("openai-completions tool_choice", () => {
         expect(response.usage.totalTokens).toBe(105);
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("uses OpenRouter reasoning object instead of reasoning_effort", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -2080,7 +2319,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.reasoning_effort).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("uses configurable chat template boolean thinking kwargs", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -2107,7 +2352,13 @@ describe("openai-completions tool_choice", () => {
         }
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("uses qwen chat template thinking kwargs", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -2135,7 +2386,13 @@ describe("openai-completions tool_choice", () => {
         }
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("uses configurable chat template effort kwargs with static kwargs", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -2163,7 +2420,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.reasoning_effort).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("uses Ant Ling compatibility metadata", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -2222,7 +2485,13 @@ describe("openai-completions tool_choice", () => {
         expect(params.prompt_cache_retention).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions tool_choice", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.chunks = undefined;
+  });
   it("omits Ant Ling reasoning for unmapped direct reasoning efforts and non-reasoning models", () =>
     Effect.runPromise(
       Effect.gen(function* () {

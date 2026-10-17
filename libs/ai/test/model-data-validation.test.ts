@@ -85,7 +85,6 @@ describe("published model catalog hydration", () => {
   function chatModel(values: Record<string, unknown>): Record<string, unknown> {
     return values["chat:model-a"] as Record<string, unknown>;
   }
-
   it("hydrates a clean checkout deterministically without changing generated TypeScript", () => {
     const { dataDir, packageRoot, structure, values } = createFixture();
     const aggregatorPath = join(packageRoot, "src", "models.generated.ts");
@@ -127,7 +126,12 @@ describe("published model catalog hydration", () => {
       },
     });
   });
+});
 
+describe("published model catalog hydration", () => {
+  function chatModel(values: Record<string, unknown>): Record<string, unknown> {
+    return values["chat:model-a"] as Record<string, unknown>;
+  }
   it("keys chat and image models with the same id separately", () => {
     const { packageRoot, values } = createFixture();
     const image = {
@@ -168,7 +172,12 @@ describe("published model catalog hydration", () => {
       /missing provider/u,
     );
   });
+});
 
+describe("published model catalog hydration", () => {
+  function chatModel(values: Record<string, unknown>): Record<string, unknown> {
+    return values["chat:model-a"] as Record<string, unknown>;
+  }
   it.each([
     null,
     [],
@@ -248,7 +257,9 @@ describe("generated model data validation", () => {
       'expected "chat", "image", or "classifier"',
     );
   });
+});
 
+describe("generated model data validation", () => {
   it("validates image models with output modalities and without chat limits", () => {
     const fixture = createFixture();
     const structure: ModelDataStructure = { "test-provider": { "image:image-a": "test-images" } };
@@ -290,7 +301,9 @@ describe("generated model data validation", () => {
       "unsupported output modalities",
     );
   });
+});
 
+describe("generated model data validation", () => {
   it("validates classifier models without chat output limits", () => {
     const fixture = createFixture();
     const structure: ModelDataStructure = {
@@ -330,7 +343,9 @@ describe("generated model data validation", () => {
       "grouped under API",
     );
   });
+});
 
+describe("generated model data validation", () => {
   it("rejects duplicate model IDs across API groups", () => {
     const fixture = createFixture();
     const filename = "test-provider.json";
@@ -378,7 +393,9 @@ describe("generated model data validation", () => {
       "generation stamp",
     );
   });
+});
 
+describe("generated model data validation", () => {
   it("rejects an invalid generation timestamp", () => {
     const fixture = createFixture();
     const manifestPath = join(fixture.dataDir, MODEL_DATA_MANIFEST_FILE);

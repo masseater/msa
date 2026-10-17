@@ -45,7 +45,9 @@ describe("normalizeProviderError", () => {
     expect(norm.messageCarriesBody).toBe(true);
     expect(norm.message).toBe(JSON.stringify(body));
   });
+});
 
+describe("normalizeProviderError", () => {
   it("extracts status and body from a Bedrock-shaped ServiceException", () => {
     const error = Object.assign(new Error("UnknownError"), {
       name: "UnknownError",
@@ -82,7 +84,9 @@ describe("normalizeProviderError", () => {
     expect(norm.message).toContain("on-demand throughput isn't supported");
     expect(norm.messageCarriesBody).toBe(true);
   });
+});
 
+describe("normalizeProviderError", () => {
   it("ignores a class-instance response body without a pipe method instead of serializing it", () => {
     class SdkHttpResponseBody {
       locked = false;
@@ -130,7 +134,9 @@ describe("normalizeProviderError", () => {
     expect(norm.body).toBe('{"message":"schema validation failed","field":"tools[0]"}');
     expect(norm.messageCarriesBody).toBe(false);
   });
+});
 
+describe("normalizeProviderError", () => {
   it("JSON-stringifies a non-Error thrown value", () => {
     const norm = normalizeProviderError({ reason: "boom" });
 

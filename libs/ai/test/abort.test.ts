@@ -162,7 +162,9 @@ describe("AI Providers Abort Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Abort Tests", () => {
   describe.skipIf(!hasAzureOpenAICredentials())("Azure OpenAI Responses Provider Abort", () => {
     const llm = getModel("azure", "gpt-4o-mini");
     const azureDeploymentName = resolveAzureDeploymentName(llm.id);
@@ -210,7 +212,9 @@ describe("AI Providers Abort Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Abort Tests", () => {
   describe.skipIf(
     envValue("TOGETHER_API_KEY") === undefined || envValue("TOGETHER_API_KEY") === "",
   )("Together AI Provider Abort", () => {
@@ -252,7 +256,9 @@ describe("AI Providers Abort Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Abort Tests", () => {
   describe.skipIf(envValue("XIAOMI_API_KEY") === undefined || envValue("XIAOMI_API_KEY") === "")(
     "Xiaomi MiMo (API billing) Provider Abort",
     () => {
@@ -304,7 +310,9 @@ describe("AI Providers Abort Tests", () => {
       Effect.runPromise(testImmediateAbort(llm)),
     );
   });
+});
 
+describe("AI Providers Abort Tests", () => {
   describe.skipIf(
     envValue("QWEN_TOKEN_PLAN_API_KEY") === undefined || envValue("QWEN_TOKEN_PLAN_API_KEY") === "",
   )("Qwen Token Plan Provider Abort", () => {
@@ -354,7 +362,9 @@ describe("AI Providers Abort Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Abort Tests", () => {
   describe.skipIf(
     envValue("AI_GATEWAY_API_KEY") === undefined || envValue("AI_GATEWAY_API_KEY") === "",
   )("Vercel AI Gateway Provider Abort", () => {
@@ -392,7 +402,9 @@ describe("AI Providers Abort Tests", () => {
         ),
     );
   });
+});
 
+describe("AI Providers Abort Tests", () => {
   describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock Provider Abort", () => {
     const llm = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-4-5-20250929-v1:0");
 

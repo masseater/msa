@@ -111,7 +111,9 @@ describe("fetch stream option", () => {
         expect(globalThis.fetch).toBe(fallback);
       }),
     ));
+});
 
+describe("fetch stream option", () => {
   it("uses fetch for Mistral, Codex SSE, and msa-messages HTTP requests", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -144,7 +146,9 @@ describe("fetch stream option", () => {
         expect(globalThis.fetch).toBe(fallback);
       }),
     ));
+});
 
+describe("fetch stream option", () => {
   it("rejects custom fetch for Google adapters instead of silently bypassing it", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -173,7 +177,9 @@ describe("fetch stream option", () => {
         expect(globalThis.fetch).toBe(fallback);
       }),
     ));
+});
 
+describe("fetch stream option", () => {
   it("allows Google adapters to receive globalThis.fetch explicitly", () =>
     Effect.runPromise(
       Effect.gen(function* () {

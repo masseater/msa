@@ -205,7 +205,9 @@ describe("Models with image models", () => {
     expect(models.getModelOfType("image", "p1", "i1")?.id).toBe("i1");
     expect(models.getModelOfType("image", "p1", "c1")).toBeUndefined();
   });
+});
 
+describe("Models with image models", () => {
   it("splits available models by type", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -236,7 +238,9 @@ describe("Models with image models", () => {
         ]);
       }),
     ));
+});
 
+describe("Models with image models", () => {
   it("resolves auth through the provider and merges it into image requests; explicit options win", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -262,7 +266,9 @@ describe("Models with image models", () => {
         expect(calls[1]?.options?.apiKey).toBe("explicit");
       }),
     ));
+});
 
+describe("Models with image models", () => {
   it("merges provider-resolved env and applies header transforms", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -311,7 +317,9 @@ describe("Models with image models", () => {
         expect(calls[0]?.options?.headers).toEqual({ "x-base": "1", "x-extra": "2" });
       }),
     ));
+});
 
+describe("Models with image models", () => {
   it("returns error results instead of rejecting", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -372,7 +380,9 @@ describe("Models with image models", () => {
         );
       }),
     ));
+});
 
+describe("Models with image models", () => {
   it("rejects chat models at the image entry point at runtime", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -422,7 +432,9 @@ describe("Models with image models", () => {
     expect(() => createEmptyProvider({ images: {} })).toThrow(message);
     expect(() => createEmptyProvider({ classifiers: {} })).toThrow(message);
   });
+});
 
+describe("Models with image models", () => {
   it("supports dynamic providers listing image models via refresh", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -471,7 +483,9 @@ describe("Models with image models", () => {
     );
     expect(getBuiltinImageModel("openrouter", "black-forest-labs/flux.2-pro").type).toBe("image");
   });
+});
 
+describe("Models with image models", () => {
   it("builtinModels exposes OpenRouter image models under the openrouter provider", () =>
     Effect.runPromise(
       Effect.gen(function* () {

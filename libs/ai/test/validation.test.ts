@@ -61,7 +61,9 @@ describe("validateToolArguments", () => {
       globalThis.Function = originalFunction;
     }
   });
+});
 
+describe("validateToolArguments", () => {
   it("coerces serialized plain JSON schemas with AJV-compatible primitive rules", () => {
     const passingCases: Array<{
       schema: Tool["parameters"];
@@ -98,7 +100,9 @@ describe("validateToolArguments", () => {
       expect(validateToolArguments(tool, toolCall)).toEqual({ value: testCase.expected });
     }
   });
+});
 
+describe("validateToolArguments", () => {
   it("treats null as omission for optional non-nullable properties", () => {
     const tool: Tool = {
       name: "echo",
@@ -143,7 +147,9 @@ describe("validateToolArguments", () => {
 
     expect(validateToolArguments(tool, toolCall)).toEqual({ value: null });
   });
+});
 
+describe("validateToolArguments", () => {
   it("preserves a value that already matches a nullable union arm", () => {
     const tool: Tool = {
       name: "echo",
@@ -192,7 +198,9 @@ describe("validateToolArguments", () => {
     expect(generatedCheck(toolCall.arguments)).toBe(true);
     expect(validateToolArguments(tool, toolCall)).toEqual({ value: null });
   });
+});
 
+describe("validateToolArguments", () => {
   it("rejects invalid coercions for serialized plain JSON schemas", () => {
     const failingCases: Array<{
       schema: Tool["parameters"];
@@ -209,6 +217,7 @@ describe("validateToolArguments", () => {
       expect(() => validateToolArguments(tool, toolCall)).toThrow("Validation failed");
     }
   });
+
   it("reports malformed arguments JSON instead of validating empty arguments", () => {
     const tool: Tool = {
       name: "echo",

@@ -174,7 +174,9 @@ describe("Anthropic thinking disable payload", () => {
         expect(payload.output_config).toEqual({ effort: "high" });
       }),
     ));
+});
 
+describe("Anthropic thinking disable payload", () => {
   it("uses adaptive thinking for Claude Sonnet 5 when reasoning is enabled", () =>
     Effect.runPromise(
       Effect.gen(function* () {

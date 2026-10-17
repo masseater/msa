@@ -91,7 +91,6 @@ describe("openai-responses provider defaults", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
   it("omits reasoning when no reasoning is requested", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -135,7 +134,12 @@ describe("openai-responses provider defaults", () => {
         });
       }),
     ));
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("forwards required tool choice", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -191,7 +195,12 @@ describe("openai-responses provider defaults", () => {
         });
       }),
     ));
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("sets strict mode explicitly for Cloudflare OpenAI Responses tools", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -253,7 +262,12 @@ describe("openai-responses provider defaults", () => {
         ]);
       }),
     ));
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it.each([
     "gpt-5.1",
     "gpt-5.2",
@@ -314,7 +328,12 @@ describe("openai-responses provider defaults", () => {
         }),
       ),
   );
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it.each([
     "gpt-5",
     "gpt-5-mini",
@@ -366,7 +385,12 @@ describe("openai-responses provider defaults", () => {
       }),
     ),
   );
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("sets cache-affinity headers for official OpenAI Responses requests with a sessionId", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -378,7 +402,12 @@ describe("openai-responses provider defaults", () => {
         expect(captured.clientRequestId).toBe("session-123");
       }),
     ));
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("clamps prompt_cache_key to OpenAI's 64-character limit", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -419,7 +448,12 @@ describe("openai-responses provider defaults", () => {
         expect(capturedPayload?.prompt_cache_key).toBe("x".repeat(64));
       }),
     ));
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("sets cache-affinity headers for proxy OpenAI Responses requests with a sessionId", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -466,7 +500,12 @@ describe("openai-responses provider defaults", () => {
         expect(capturedPayload?.prompt_cache_key).toBe("session-proxy");
       }),
     ));
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("auto-detects OpenRouter session-affinity header for OpenRouter Responses endpoints", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -495,7 +534,12 @@ describe("openai-responses provider defaults", () => {
         expect(capturedPayload?.prompt_cache_key).toBe("session-openrouter");
       }),
     ));
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("uses OpenAI no-session format when configured", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -525,7 +569,12 @@ describe("openai-responses provider defaults", () => {
         expect(capturedPayload?.prompt_cache_key).toBe("session-proxy");
       }),
     ));
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("uses OpenAI no-session format for OpenCode Responses models", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -550,7 +599,12 @@ describe("openai-responses provider defaults", () => {
         expect(capturedPayload?.prompt_cache_key).toBe("session-opencode");
       }),
     ));
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("can omit OpenAI session_id header while preserving other affinity data", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -596,7 +650,12 @@ describe("openai-responses provider defaults", () => {
         expect(captured.clientRequestId).toBe("override-request");
       }),
     ));
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("omits OpenAI cache-affinity headers when cacheRetention is none", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -611,7 +670,12 @@ describe("openai-responses provider defaults", () => {
         expect(captured.clientRequestId).toBeNull();
       }),
     ));
+});
 
+describe("openai-responses provider defaults", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it.each([
     ["gpt-5.4", "priority", "priority", 2],
     ["gpt-5.5", "priority", "priority", 2.5],
@@ -683,7 +747,6 @@ describe("openai-responses max_output_tokens compat", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
   it("sends max_output_tokens by default", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -724,7 +787,12 @@ describe("openai-responses max_output_tokens compat", () => {
         expect(capturedPayload?.max_output_tokens).toBe(1024);
       }),
     ));
+});
 
+describe("openai-responses max_output_tokens compat", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("omits max_output_tokens when supportsMaxOutputTokens is false", () =>
     Effect.runPromise(
       Effect.gen(function* () {

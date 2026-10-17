@@ -130,7 +130,9 @@ describe("google-shared convertMessages — Gemini 3 unsigned tool calls", () =>
     const historicalText = textParts.filter((p) => p.text?.includes("Historical context"));
     expect(historicalText).toHaveLength(0);
   });
+});
 
+describe("google-shared convertMessages — Gemini 3 unsigned tool calls", () => {
   it("does not add skip_thought_signature_validator for unsigned Vertex tool calls", () => {
     const model = makeGemini3Model("google-vertex", "google-vertex");
     const contents = convertMessages(model, normalizeContext(makeContext(model)));

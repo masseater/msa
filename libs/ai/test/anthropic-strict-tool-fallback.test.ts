@@ -153,7 +153,9 @@ describe("Anthropic preferred strict tool fallback", () => {
       }),
     ),
   );
+});
 
+describe("Anthropic preferred strict tool fallback", () => {
   it("downgrades inline additions and same-name redefinitions without downgrading require", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -202,7 +204,9 @@ describe("Anthropic preferred strict tool fallback", () => {
         expect(secondAdditions[1]).toEqual(firstAdditions[1]);
       }),
     ));
+});
 
+describe("Anthropic preferred strict tool fallback", () => {
   it.each([
     ["required", [tool("lookup", "require")]],
     ["ordinary", [tool("lookup")]],
@@ -245,7 +249,9 @@ describe("Anthropic preferred strict tool fallback", () => {
       }),
     ),
   );
+});
 
+describe("Anthropic preferred strict tool fallback", () => {
   it("surfaces a second rejection rather than retrying again", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -290,7 +296,9 @@ describe("Anthropic preferred strict tool fallback", () => {
         expect(result.diagnostics).toBeUndefined();
       }),
     ));
+});
 
+describe("Anthropic preferred strict tool fallback", () => {
   it("honors cancellation before the fallback attempt", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -328,7 +336,9 @@ describe("Anthropic preferred strict tool fallback", () => {
         expect(payloads).toHaveLength(1);
       }),
     ));
+});
 
+describe("Anthropic preferred strict tool fallback", () => {
   it("does not disable strict sampling on later requests", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -345,7 +355,9 @@ describe("Anthropic preferred strict tool fallback", () => {
         ]);
       }),
     ));
+});
 
+describe("Anthropic preferred strict tool fallback", () => {
   it("preserves prefer through msa-messages so the gateway's Anthropic adapter can fall back", () =>
     Effect.runPromise(
       Effect.gen(function* () {

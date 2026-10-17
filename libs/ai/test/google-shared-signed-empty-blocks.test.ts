@@ -101,7 +101,9 @@ describe("google-shared convertMessages — signed empty blocks", () => {
     expect(modelTurn?.parts).toHaveLength(1);
     expect(modelTurn?.parts?.[0]?.functionCall).toBeTruthy();
   });
+});
 
+describe("google-shared convertMessages — signed empty blocks", () => {
   it("still drops signed empty blocks from a different provider/model (signature unusable)", () => {
     const model = makeModel();
     const contents = convertMessages(

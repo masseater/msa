@@ -24,13 +24,12 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe("OAuthAuth adapters", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("keeps the extension OAuth barrel free of built-in flow implementations", () => {
     expect(extensionOAuthCompatibility).not.toHaveProperty("loginAnthropic");
     expect(extensionOAuthCompatibility).not.toHaveProperty("anthropicOAuth");
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
   });
 
   it("identifies only subscription-backed OAuth flows as subscriptions", () => {
@@ -70,7 +69,12 @@ describe("OAuthAuth adapters", () => {
       loginLabel: "Sign in with ChatGPT",
     });
   });
+});
 
+describe("OAuthAuth adapters", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("openai-codex toAuth derives the api key from the access token", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -118,7 +122,12 @@ describe("OAuthAuth adapters", () => {
         expect(auth).toEqual({ apiKey: "token" });
       }),
     ));
+});
 
+describe("OAuthAuth adapters", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("anthropic refresh exchanges the refresh token and returns a typed credential", () =>
     Effect.runPromise(
       Effect.gen(function* () {

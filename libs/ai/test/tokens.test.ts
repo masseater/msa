@@ -142,7 +142,9 @@ describe("Token Statistics on Abort", () => {
       testTokensOnAbort(llm, azureOptions),
     );
   });
+});
 
+describe("Token Statistics on Abort", () => {
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider", () => {
@@ -174,7 +176,9 @@ describe("Token Statistics on Abort", () => {
       );
     },
   );
+});
 
+describe("Token Statistics on Abort", () => {
   describe.skipIf(
     envValue("CEREBRAS_API_KEY") === undefined || envValue("CEREBRAS_API_KEY") === "",
   )("Cerebras Provider", () => {
@@ -223,7 +227,9 @@ describe("Token Statistics on Abort", () => {
       );
     },
   );
+});
 
+describe("Token Statistics on Abort", () => {
   describe.skipIf(
     envValue("TOGETHER_API_KEY") === undefined || envValue("TOGETHER_API_KEY") === "",
   )("Together AI Provider", () => {
@@ -266,7 +272,9 @@ describe("Token Statistics on Abort", () => {
       );
     },
   );
+});
 
+describe("Token Statistics on Abort", () => {
   describe.skipIf(envValue("MINIMAX_API_KEY") === undefined || envValue("MINIMAX_API_KEY") === "")(
     "MiniMax Provider",
     () => {
@@ -309,7 +317,9 @@ describe("Token Statistics on Abort", () => {
       testTokensOnAbort(llm),
     );
   });
+});
 
+describe("Token Statistics on Abort", () => {
   describe.skipIf(envValue("XIAOMI_API_KEY") === undefined || envValue("XIAOMI_API_KEY") === "")(
     "Xiaomi MiMo (API billing) Provider",
     () => {
@@ -361,7 +371,9 @@ describe("Token Statistics on Abort", () => {
       () => testTokensOnAbort(llm),
     );
   });
+});
 
+describe("Token Statistics on Abort", () => {
   describe.skipIf(
     envValue("QWEN_TOKEN_PLAN_API_KEY") === undefined || envValue("QWEN_TOKEN_PLAN_API_KEY") === "",
   )("Qwen Token Plan Provider", () => {
@@ -402,7 +414,9 @@ describe("Token Statistics on Abort", () => {
       () => testTokensOnAbort(llm, { apiKey: anthropicOAuthToken }),
     );
   });
+});
 
+describe("Token Statistics on Abort", () => {
   describe("OpenAI Codex Provider", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should include token stats when aborted mid-stream",

@@ -47,7 +47,12 @@ describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API
           }),
         ));
     });
+  },
+);
 
+describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
+  "xhigh reasoning",
+  () => {
     describe("gpt-5-mini (does not support xhigh)", () => {
       it("should error with openai-responses when using xhigh", () =>
         Effect.runPromise(

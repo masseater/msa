@@ -98,7 +98,9 @@ describe("TypeSafe System One", () => {
         expect(pricedResult.usage?.cost.total).toBeCloseTo(0.000012936, 12);
       }),
     ));
+});
 
+describe("TypeSafe System One", () => {
   it("posts OpenRouter System One requests to its TypeSafe-compatible endpoint", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -134,7 +136,9 @@ describe("TypeSafe System One", () => {
         expect(result.usage?.cost.total).toBeCloseTo(0.000012936, 12);
       }),
     ));
+});
 
+describe("TypeSafe System One", () => {
   it("rejects models for other classifier APIs", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -171,7 +175,9 @@ describe("TypeSafe System One", () => {
         expect(result.errorMessage).toBe("System One API does not support image input");
       }),
     ));
+});
 
+describe("TypeSafe System One", () => {
   it("merges headers case-insensitively and supports null suppression", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -212,7 +218,9 @@ describe("TypeSafe System One", () => {
         expect(requests[1]).not.toHaveProperty("authorization");
       }),
     ));
+});
 
+describe("TypeSafe System One", () => {
   it("preserves prototype-sensitive question IDs in answers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -243,7 +251,9 @@ describe("TypeSafe System One", () => {
         expect(serializedAnswers["__proto__"]).toEqual({ type: "bool", probability: 0.75 });
       }),
     ));
+});
 
+describe("TypeSafe System One", () => {
   it("reports request timeouts separately from caller cancellation", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -269,7 +279,9 @@ describe("TypeSafe System One", () => {
         expect(result.errorMessage).toBe("Request timed out after 5ms");
       }),
     ));
+});
 
+describe("TypeSafe System One", () => {
   it("creates a fresh timeout for every retry attempt", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -319,7 +331,9 @@ describe("TypeSafe System One", () => {
         expect(result.usage).toMatchObject({ input: 10, output: 2 });
       }),
     ));
+});
 
+describe("TypeSafe System One", () => {
   it("ignores malformed usage", () =>
     Effect.runPromise(
       Effect.gen(function* () {

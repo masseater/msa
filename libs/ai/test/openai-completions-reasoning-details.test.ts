@@ -125,7 +125,6 @@ describe("openai-completions reasoning_details streaming", () => {
     mockState.chunkSets = [];
     mockState.payloads = [];
   });
-
   it("preserves reasoning_details in the thinking signature", async () => {
     mockState.chunkSets = [
       [chunk({ reasoning_details: [reasoningDetail] }), toolCallChunk(), chunk({}, "tool_calls")],
@@ -153,7 +152,13 @@ describe("openai-completions reasoning_details streaming", () => {
       reasoningDetail,
     ]);
   });
+});
 
+describe("openai-completions reasoning_details streaming", () => {
+  beforeEach(() => {
+    mockState.chunkSets = [];
+    mockState.payloads = [];
+  });
   it("falls back to encrypted tool-call signatures for older stored assistant messages", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -182,7 +187,13 @@ describe("openai-completions reasoning_details streaming", () => {
         ]);
       }),
     ));
+});
 
+describe("openai-completions reasoning_details streaming", () => {
+  beforeEach(() => {
+    mockState.chunkSets = [];
+    mockState.payloads = [];
+  });
   it("preserves signed text and summary reasoning_details in their original sequence", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -219,7 +230,13 @@ describe("openai-completions reasoning_details streaming", () => {
         expect(payload?.reasoning).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions reasoning_details streaming", () => {
+  beforeEach(() => {
+    mockState.chunkSets = [];
+    mockState.payloads = [];
+  });
   it("merges consecutive text and summary reasoning_details deltas before replay", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -118,7 +118,9 @@ describe("bedrock custom headers middleware", () => {
         expect(nextSpy).toHaveBeenCalledWith(fakeArgs);
       }),
     ));
+});
 
+describe("bedrock custom headers middleware", () => {
   it("VC2: skips reserved headers case-insensitively while applying allowed ones", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -162,7 +164,9 @@ describe("bedrock custom headers middleware", () => {
         expect(nextSpy).toHaveBeenCalledTimes(1);
       }),
     ));
+});
 
+describe("bedrock custom headers middleware", () => {
   it("VC3: registers no middleware when headers is undefined", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -206,7 +210,9 @@ describe("bedrock custom headers middleware", () => {
         expect(nextSpy).toHaveBeenCalledTimes(2);
       }),
     ));
+});
 
+describe("bedrock custom headers middleware", () => {
   it("VC4: streamSimpleBedrock forwards headers end-to-end (regression guard)", () =>
     Effect.runPromise(
       Effect.gen(function* () {

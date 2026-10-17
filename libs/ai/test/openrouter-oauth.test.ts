@@ -29,7 +29,6 @@ describe("OpenRouter OAuth", () => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
-
   it("is exposed alongside API-key auth", () => {
     const provider = openrouterProvider();
     expect(provider.auth.apiKey).toBeDefined();
@@ -69,7 +68,13 @@ describe("OpenRouter OAuth", () => {
         );
       }),
     ));
+});
 
+describe("OpenRouter OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
   it("runs PKCE on a one-shot loopback callback and exchanges the code for a permanent API key", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -133,7 +138,13 @@ describe("OpenRouter OAuth", () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
       }),
     ));
+});
 
+describe("OpenRouter OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
   it("reports token exchange failures through both the callback page and login", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -162,7 +173,13 @@ describe("OpenRouter OAuth", () => {
         expect((yield* Effect.promise(() => Promise.resolve(callbackResponse)))?.status).toBe(502);
       }),
     ));
+});
 
+describe("OpenRouter OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
   it("allows only one token exchange for a callback", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -205,7 +222,13 @@ describe("OpenRouter OAuth", () => {
         expect((yield* Effect.promise(() => Promise.resolve(firstCallback)))?.status).toBe(200);
       }),
     ));
+});
 
+describe("OpenRouter OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
   it("rejects a successful response that does not contain a key", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -232,7 +255,13 @@ describe("OpenRouter OAuth", () => {
         expect((yield* Effect.promise(() => Promise.resolve(callbackResponse)))?.status).toBe(502);
       }),
     ));
+});
 
+describe("OpenRouter OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
   it("mints a key from a pasted redirect URL when the loopback callback never arrives", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -271,7 +300,13 @@ describe("OpenRouter OAuth", () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
       }),
     ));
+});
 
+describe("OpenRouter OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
   it("accepts a bare authorization code from the manual prompt", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -315,7 +350,13 @@ describe("OpenRouter OAuth", () => {
         expect(fetchMock).not.toHaveBeenCalled();
       }),
     ));
+});
 
+describe("OpenRouter OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
   it("rejects empty manual input without exchanging a code", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -356,7 +397,13 @@ describe("OpenRouter OAuth", () => {
       }),
     );
   });
+});
 
+describe("OpenRouter OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
   it("rejects before opening a callback server when login is already cancelled", () =>
     Effect.runPromise(
       Effect.gen(function* () {

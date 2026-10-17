@@ -57,7 +57,6 @@ describe("openai-completions empty tools handling", () => {
     mockState.lastParams = undefined;
     mockState.lastClientOptions = undefined;
   });
-
   it("omits tools field when context.tools is an empty array", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -102,7 +101,13 @@ describe("openai-completions empty tools handling", () => {
         expect("tools" in (params as object)).toBe(false);
       }),
     ));
+});
 
+describe("openai-completions empty tools handling", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.lastClientOptions = undefined;
+  });
   it("sends default maxTokens", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -128,7 +133,13 @@ describe("openai-completions empty tools handling", () => {
         expect(params.max_completion_tokens).toBe(model.maxTokens);
       }),
     ));
+});
 
+describe("openai-completions empty tools handling", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.lastClientOptions = undefined;
+  });
   it("sends explicit maxTokens", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -154,7 +165,13 @@ describe("openai-completions empty tools handling", () => {
         expect(params.max_completion_tokens).toBe(1234);
       }),
     ));
+});
 
+describe("openai-completions empty tools handling", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.lastClientOptions = undefined;
+  });
   it("clamps default maxTokens to remaining context", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -185,7 +202,13 @@ describe("openai-completions empty tools handling", () => {
         expect(params.max_completion_tokens).toBe(3618);
       }),
     ));
+});
 
+describe("openai-completions empty tools handling", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.lastClientOptions = undefined;
+  });
   it("clamps explicit maxTokens to remaining context", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -216,7 +239,13 @@ describe("openai-completions empty tools handling", () => {
         expect(params.max_completion_tokens).toBe(3618);
       }),
     ));
+});
 
+describe("openai-completions empty tools handling", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.lastClientOptions = undefined;
+  });
   it("uses conservative OpenAI-compatible fields for Cloudflare AI Gateway /compat models", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -261,7 +290,13 @@ describe("openai-completions empty tools handling", () => {
         expect(clientOptions.defaultHeaders?.["cf-aig-authorization"]).toBe("Bearer cf-token");
       }),
     ));
+});
 
+describe("openai-completions empty tools handling", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.lastClientOptions = undefined;
+  });
   it("resolves Cloudflare AI Gateway base URL through provider auth", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -283,7 +318,13 @@ describe("openai-completions empty tools handling", () => {
         );
       }),
     ));
+});
 
+describe("openai-completions empty tools handling", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.lastClientOptions = undefined;
+  });
   it("preserves inline upstream Authorization for Cloudflare AI Gateway BYOK requests", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -310,7 +351,13 @@ describe("openai-completions empty tools handling", () => {
         expect(clientOptions.defaultHeaders?.["cf-aig-authorization"]).toBe("Bearer cf-token");
       }),
     ));
+});
 
+describe("openai-completions empty tools handling", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.lastClientOptions = undefined;
+  });
   it("sends session affinity headers for Workers AI through Cloudflare AI Gateway", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -341,7 +388,13 @@ describe("openai-completions empty tools handling", () => {
         expect(clientOptions.defaultHeaders?.["x-session-affinity"]).toBe("session-1");
       }),
     ));
+});
 
+describe("openai-completions empty tools handling", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+    mockState.lastClientOptions = undefined;
+  });
   it("still emits tools: [] for Anthropic/LiteLLM proxy when conversation has tool history", async () => {
     const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
     const model = { ...baseModel, api: "openai-completions" } as const;

@@ -162,7 +162,9 @@ describe("sampling params", () => {
         expect(payload.top_p).toBe(0.5);
       }),
     ));
+});
 
+describe("sampling params", () => {
   it("applies sampling params for the effective thinking level over model defaults", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -213,7 +215,9 @@ describe("sampling params", () => {
         expect(payload.top_p).toBe(0.5);
       }),
     ));
+});
 
+describe("sampling params", () => {
   it.each(["openai-completions", "openai-responses", "azure-openai-responses"] as const)(
     "applies thinking-level params between model and request params for %s",
     (api) =>
@@ -259,7 +263,9 @@ describe("sampling params", () => {
         }),
       ),
   );
+});
 
+describe("sampling params", () => {
   it("overrides named request fields", () =>
     Effect.runPromise(
       Effect.gen(function* () {

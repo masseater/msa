@@ -120,7 +120,9 @@ describe("Fireworks model generation", () => {
     }
     expect(models["accounts/fireworks/models/kimi-k2p6"]?.thinkingLevelMap).toBeUndefined();
   });
+});
 
+describe("Fireworks model generation", () => {
   it("automatically sends native effort for newly cataloged Messages models", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -165,7 +167,9 @@ describe("Fireworks model generation", () => {
       expect(model.thinkingLevelMap).toBeUndefined();
     }
   });
+});
 
+describe("Fireworks model generation", () => {
   it("prefers updated upstream efforts over fixed maps and the Qwen fallback", () => {
     const models = generateFireworksModels({
       "deepseek-v4-flash-0731": [{ type: "effort", values: ["high", "max"] }],

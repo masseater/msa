@@ -52,7 +52,9 @@ describe("Azure OpenAI tool choice", () => {
         expect((payload as { tools?: unknown[] }).tools).toHaveLength(1);
       }),
     ));
+});
 
+describe("Azure OpenAI tool choice", () => {
   it("forwards provider-neutral tool choice from simple options", () =>
     Effect.runPromise(
       Effect.gen(function* () {

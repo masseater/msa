@@ -57,7 +57,6 @@ describe("openai-completions responseModel", () => {
   beforeEach(() => {
     mockState.chunks = [];
   });
-
   it("surfaces routed chunk.model on responseModel without changing model", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -95,7 +94,12 @@ describe("openai-completions responseModel", () => {
         expect(message.stopReason).toBe("stop");
       }),
     ));
+});
 
+describe("openai-completions responseModel", () => {
+  beforeEach(() => {
+    mockState.chunks = [];
+  });
   it("leaves responseModel undefined when chunks echo the requested id", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -131,7 +135,12 @@ describe("openai-completions responseModel", () => {
         expect(message.responseModel).toBeUndefined();
       }),
     ));
+});
 
+describe("openai-completions responseModel", () => {
+  beforeEach(() => {
+    mockState.chunks = [];
+  });
   it("ignores empty or missing chunk.model", () =>
     Effect.runPromise(
       Effect.gen(function* () {

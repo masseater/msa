@@ -79,7 +79,6 @@ describe("xAI OAuth device flow", () => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
-
   it("uses the device grant, delays polling, and handles pending and slow_down", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -152,7 +151,14 @@ describe("xAI OAuth device flow", () => {
         });
       }),
     ));
+});
 
+describe("xAI OAuth device flow", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("falls back to the default poll interval when the response reports interval 0", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -177,7 +183,14 @@ describe("xAI OAuth device flow", () => {
         expect(pollTimes).toEqual([startTime + 5000]);
       }),
     ));
+});
 
+describe("xAI OAuth device flow", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("prefers verification_uri_complete when the server provides it", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -213,7 +226,14 @@ describe("xAI OAuth device flow", () => {
         ]);
       }),
     ));
+});
 
+describe("xAI OAuth device flow", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("rejects a non-https verification_uri_complete", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -238,7 +258,14 @@ describe("xAI OAuth device flow", () => {
         );
       }),
     ));
+});
 
+describe("xAI OAuth device flow", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it.each(["http://accounts.x.ai/oauth2/device", "file:///etc/passwd", "not a url"])(
     "rejects a non-https verification URI: %s",
     (verificationUri) =>
@@ -261,7 +288,14 @@ describe("xAI OAuth device flow", () => {
         }),
       ),
   );
+});
 
+describe("xAI OAuth device flow", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it.each(["access_denied", "authorization_denied"])(
     "fails when device authorization is denied: %s",
     (error) =>
@@ -290,7 +324,14 @@ describe("xAI OAuth device flow", () => {
         }),
       ),
   );
+});
 
+describe("xAI OAuth device flow", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("cancels while waiting for the first token poll", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -309,7 +350,14 @@ describe("xAI OAuth device flow", () => {
       }),
     );
   });
+});
 
+describe("xAI OAuth device flow", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("refreshes tokens and preserves an unrotated refresh token", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -348,7 +396,14 @@ describe("xAI OAuth device flow", () => {
         );
       }),
     ));
+});
 
+describe("xAI OAuth device flow", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("assumes a one-hour lifetime when expires_in is missing", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -380,7 +435,14 @@ describe("xAI OAuth device flow", () => {
         );
       }),
     ));
+});
 
+describe("xAI OAuth device flow", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("surfaces the upstream error code and description on refresh failure", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -145,7 +145,9 @@ describe("bedrock failure diagnostics", () => {
         );
       }),
     ));
+});
 
+describe("bedrock failure diagnostics", () => {
   it("reports only the request id for a modeled mid-stream exception", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -197,7 +199,9 @@ describe("bedrock failure diagnostics", () => {
         expect(findDiagnostic(message)).toBeUndefined();
       }),
     ));
+});
 
+describe("bedrock failure diagnostics", () => {
   it("emits no diagnostic for an aborted turn", () =>
     Effect.runPromise(
       Effect.gen(function* () {

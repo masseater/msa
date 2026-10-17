@@ -301,7 +301,9 @@ describe("OpenAI Responses terminal event handling", () => {
         );
       }),
     ));
+});
 
+describe("OpenAI Responses terminal event handling", () => {
   it("rejects parallel tool calls without output_index instead of running mixed-up calls", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -321,7 +323,9 @@ describe("OpenAI Responses terminal event handling", () => {
         );
       }),
     ));
+});
 
+describe("OpenAI Responses terminal event handling", () => {
   it("forwards parsed provider stream events in order", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -357,7 +361,9 @@ describe("OpenAI Responses terminal event handling", () => {
         expect(eventModels).toEqual([model, model, model]);
       }),
     ));
+});
 
+describe("OpenAI Responses terminal event handling", () => {
   it("emits an error final result when the wrapper stream ends before a terminal response event", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -391,7 +397,9 @@ describe("OpenAI Responses terminal event handling", () => {
         );
       }),
     ));
+});
 
+describe("OpenAI Responses terminal event handling", () => {
   it.each([
     { phases: ["commentary", "commentary"], expected: ["pending", "pending"] },
     { phases: ["final_answer", "final_answer"], expected: ["stop", "stop"] },
@@ -418,7 +426,9 @@ describe("OpenAI Responses terminal event handling", () => {
       }),
     ),
   );
+});
 
+describe("OpenAI Responses terminal event handling", () => {
   it("replaces a provisional final-answer stop with an incomplete terminal reason", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -445,7 +455,9 @@ describe("OpenAI Responses terminal event handling", () => {
         expect(output.stopReason).toBe("length");
       }),
     ));
+});
 
+describe("OpenAI Responses terminal event handling", () => {
   it("finalizes completed terminal events as stop", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -493,7 +505,9 @@ describe("OpenAI Responses terminal event handling", () => {
         });
       }),
     ));
+});
 
+describe("OpenAI Responses terminal event handling", () => {
   it("finalizes content-filtered incomplete responses as non-retryable errors", () =>
     Effect.runPromise(
       Effect.gen(function* () {

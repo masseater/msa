@@ -30,7 +30,9 @@ describe("Xiaomi MiMo models", () => {
     const modelIds = getModels(provider).map((model) => model.id);
     for (const modelId of REPLACEMENT_MODEL_IDS) expect(modelIds).toContain(modelId);
   });
+});
 
+describe("Xiaomi MiMo models", () => {
   it.each(XIAOMI_PROVIDERS)("models %s reasoning as an off/on toggle", (provider) =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -112,7 +112,9 @@ describe("Anthropic strict tool schemas", () => {
         });
       }),
     ));
+});
 
+describe("Anthropic strict tool schemas", () => {
   it("sends prefer tools non-strict when they use keywords Anthropic strict mode rejects", () =>
     Effect.runPromise(
       Effect.gen(function* () {

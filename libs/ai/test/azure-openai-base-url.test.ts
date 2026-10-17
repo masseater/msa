@@ -186,7 +186,9 @@ describe("azure base URL normalization", () => {
         expect(baseURL).toBe("https://my-resource.cognitiveservices.azure.com/openai/v1");
       }),
     ));
+});
 
+describe("azure base URL normalization", () => {
   it("normalizes /openai/v1/responses to /openai/v1", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -237,7 +239,9 @@ describe("azure base URL normalization", () => {
         expect(result.errorMessage).toContain("Invalid Azure OpenAI base URL");
       }),
     ));
+});
 
+describe("azure base URL normalization", () => {
   it("clamps prompt_cache_key to OpenAI's 64-character limit", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -268,7 +272,9 @@ describe("azure base URL normalization", () => {
         expect(azureMock.lastParams?.store).toBe(false);
       }),
     ));
+});
 
+describe("azure base URL normalization", () => {
   it("honors supportsStrictMode: false", () =>
     Effect.runPromise(
       Effect.gen(function* () {

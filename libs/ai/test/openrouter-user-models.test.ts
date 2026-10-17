@@ -116,7 +116,9 @@ describe("personalizeOpenRouterCatalog", () => {
         expect(result[4]).toBe(classifierModel);
       }),
     ));
+});
 
+describe("personalizeOpenRouterCatalog", () => {
   it.each([401, 403, 404])(
     "returns the catalog unchanged when the endpoint rejects the key or is missing (%i)",
     (status) =>

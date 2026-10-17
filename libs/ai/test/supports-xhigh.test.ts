@@ -39,7 +39,9 @@ describe("getSupportedThinkingLevels", () => {
     });
     expect(getSupportedThinkingLevels(model)).toEqual(["low", "medium", "high", "xhigh", "max"]);
   });
+});
 
+describe("getSupportedThinkingLevels", () => {
   it("includes Claude Sonnet 5.5 with managed effort levels and official pricing", () => {
     const model = getModel("anthropic", "claude-sonnet-5-5");
     expect(model).toMatchObject({
@@ -85,7 +87,9 @@ describe("getSupportedThinkingLevels", () => {
     expect(getSupportedThinkingLevels(model!)).not.toContain("xhigh");
     expect(getSupportedThinkingLevels(model!)).not.toContain("max");
   });
+});
 
+describe("getSupportedThinkingLevels", () => {
   it.each([
     "gpt-5.5",
     "gpt-5.6-sol",
@@ -130,7 +134,9 @@ describe("getSupportedThinkingLevels", () => {
       expect(model!.thinkingLevelMap?.off).toBeNull();
     }
   });
+});
 
+describe("getSupportedThinkingLevels", () => {
   it.each([
     ["gpt-6-sol", { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 }, 272000],
     ["gpt-6-luna", { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 }, 272000],
@@ -178,7 +184,9 @@ describe("getSupportedThinkingLevels", () => {
     expect(model).toBeDefined();
     expect(getSupportedThinkingLevels(model!)).toEqual(["medium", "high", "xhigh"]);
   });
+});
 
+describe("getSupportedThinkingLevels", () => {
   it("includes low/high/max plus off for DeepSeek V4.1 Flash on the DeepSeek provider", () => {
     const model = getModel("deepseek", "deepseek-flash");
     expect(model).toBeDefined();
@@ -229,7 +237,9 @@ describe("getSupportedThinkingLevels", () => {
     expect(model).toBeDefined();
     expect(getSupportedThinkingLevels(model!)).not.toContain("off");
   });
+});
 
+describe("getSupportedThinkingLevels", () => {
   it("includes only high for OpenCode Grok Build", () => {
     const model = getModel("opencode", "grok-build-0.1");
     expect(model).toBeDefined();

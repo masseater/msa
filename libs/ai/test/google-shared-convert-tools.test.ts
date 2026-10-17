@@ -53,7 +53,9 @@ describe("google-shared convertTools", () => {
     expect(decl?.["parameters"]).not.toHaveProperty("$defs");
     expect(decl?.["parameters"]).not.toHaveProperty("definitions");
   });
+});
 
+describe("google-shared convertTools", () => {
   it("recursively strips nested JSON Schema meta keys", () => {
     const tools = [
       makeTool({
@@ -82,7 +84,9 @@ describe("google-shared convertTools", () => {
       },
     });
   });
+});
 
+describe("google-shared convertTools", () => {
   it("preserves $ref while stripping meta keys", () => {
     const tools = [
       makeTool({
@@ -111,7 +115,9 @@ describe("google-shared convertTools", () => {
       },
     });
   });
+});
 
+describe("google-shared convertTools", () => {
   it("does not mutate the original Tool.parameters object", () => {
     const originalParameters = {
       $schema: "http://json-schema.org/draft-07/schema#",
@@ -160,7 +166,9 @@ describe("google-shared convertTools", () => {
       required: ["command"],
     });
   });
+});
 
+describe("google-shared convertTools", () => {
   it("handles tools without $schema gracefully", () => {
     const tools = [
       makeTool({

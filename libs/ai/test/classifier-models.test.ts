@@ -109,7 +109,9 @@ describe("Models with classifier models", () => {
         });
       }),
     ));
+});
 
+describe("Models with classifier models", () => {
   it("rejects chat models at the classifier entry point at runtime", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -150,7 +152,9 @@ describe("Models with classifier models", () => {
     expect(models.getModel("typesafe", "jev-latest")).toBeUndefined();
     expect(models.getModelOfType("classifier", "typesafe", "jev-latest")).toEqual(jev);
   });
+});
 
+describe("Models with classifier models", () => {
   it.each([
     ["vercel-ai-gateway", "typesafe-ai/jev", "https://ai-gateway.vercel.sh/typesafe/v1/systemone"],
     ["opencode", "jev-1.13", "https://opencode.ai/inference/v1/systemone"],
@@ -197,7 +201,9 @@ describe("Models with classifier models", () => {
       }),
     ),
   );
+});
 
+describe("Models with classifier models", () => {
   it("rejects images for classifier models without image input before calling the provider", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -238,7 +244,9 @@ describe("Models with classifier models", () => {
         expect(classify).toHaveBeenCalledOnce();
       }),
     ));
+});
 
+describe("Models with classifier models", () => {
   it("routes OpenAI GPT-6 Luna through the Decisions API with images", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -276,7 +284,9 @@ describe("Models with classifier models", () => {
         expect(result.answers["approved"]).toEqual({ type: "bool", probability: 0.8 });
       }),
     ));
+});
 
+describe("Models with classifier models", () => {
   it("lists OpenAI Decisions models only for API key credentials", () =>
     Effect.runPromise(
       Effect.gen(function* () {

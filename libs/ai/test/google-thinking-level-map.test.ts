@@ -153,7 +153,9 @@ describe("Google thinking level maps", () => {
       "Unsupported Google thinking level mapping for test-google/gemini-3.7-flash: max -> undefined",
     );
   });
+});
 
+describe("Google thinking level maps", () => {
   it.each(googleAdapters)(
     "uses the lowest supported $name level when reasoning is omitted",
     ({ capture }) =>
@@ -175,7 +177,9 @@ describe("Google thinking level maps", () => {
         }),
       ),
   );
+});
 
+describe("Google thinking level maps", () => {
   it.each(googleAdapters)(
     "preserves native medium effort for Gemini 3.1 Pro on $name",
     ({ capture }) =>
@@ -216,7 +220,9 @@ describe("Google thinking level maps", () => {
         }),
       ),
   );
+});
 
+describe("Google thinking level maps", () => {
   it.each(googleAdapters)("uses thinking levels for Gemini 4 models on $name", ({ capture }) =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -259,7 +265,9 @@ describe("Google thinking level maps", () => {
         expect(payload).toMatchObject({ config: { thinkingConfig: { thinkingLevel: "LOW" } } });
       }),
     ));
+});
 
+describe("Google thinking level maps", () => {
   it("uses mapped Google Generative AI levels for token budgets", () =>
     Effect.runPromise(
       Effect.gen(function* () {

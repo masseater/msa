@@ -43,7 +43,9 @@ describe("Together models", () => {
       supportsLongCacheRetention: false,
     });
   });
+});
 
+describe("Together models", () => {
   it("models Together reasoning controls from the Together API surface", () => {
     const gptOss = getModel("together", "openai/gpt-oss-120b");
     expect(gptOss.thinkingLevelMap).toEqual({

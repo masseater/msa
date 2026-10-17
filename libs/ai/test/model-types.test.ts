@@ -88,7 +88,9 @@ describe("chat models without a type", () => {
         expect(result.stopReason).toBe("stop");
       }),
     ));
+});
 
+describe("chat models without a type", () => {
   it("narrow mixed lists with isModelType", () => {
     const mixed = [
       chatModel("p", "c"),

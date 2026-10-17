@@ -201,7 +201,9 @@ describe("AI Providers Empty Message Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Responses Provider Empty Messages",
     () => {
@@ -226,7 +228,9 @@ describe("AI Providers Empty Message Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(!hasAzureOpenAICredentials())(
     "Azure OpenAI Responses Provider Empty Messages",
     () => {
@@ -256,7 +260,9 @@ describe("AI Providers Empty Message Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(
     envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
   )("Anthropic Provider Empty Messages", () => {
@@ -303,7 +309,9 @@ describe("AI Providers Empty Message Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(envValue("GROQ_API_KEY") === undefined || envValue("GROQ_API_KEY") === "")(
     "Groq Provider Empty Messages",
     () => {
@@ -350,7 +358,9 @@ describe("AI Providers Empty Message Tests", () => {
       Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(!hasCloudflareWorkersAICredentials())(
     "Cloudflare Workers AI Provider Empty Messages",
     () => {
@@ -400,7 +410,9 @@ describe("AI Providers Empty Message Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(envValue("HF_TOKEN") === undefined || envValue("HF_TOKEN") === "")(
     "Hugging Face Provider Empty Messages",
     () => {
@@ -447,7 +459,9 @@ describe("AI Providers Empty Message Tests", () => {
       Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(envValue("BASETEN_API_KEY") === undefined || envValue("BASETEN_API_KEY") === "")(
     "Baseten Provider Empty Messages",
     () => {
@@ -473,7 +487,9 @@ describe("AI Providers Empty Message Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(envValue("ZAI_API_KEY") === undefined || envValue("ZAI_API_KEY") === "")(
     "zAI Provider Empty Messages",
     () => {
@@ -523,7 +539,9 @@ describe("AI Providers Empty Message Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(envValue("MINIMAX_API_KEY") === undefined || envValue("MINIMAX_API_KEY") === "")(
     "MiniMax Provider Empty Messages",
     () => {
@@ -573,7 +591,9 @@ describe("AI Providers Empty Message Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(
     envValue("XIAOMI_TOKEN_PLAN_CN_API_KEY") === undefined ||
       envValue("XIAOMI_TOKEN_PLAN_CN_API_KEY") === "",
@@ -619,7 +639,9 @@ describe("AI Providers Empty Message Tests", () => {
       Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(
     envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === undefined ||
       envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === "",
@@ -664,7 +686,9 @@ describe("AI Providers Empty Message Tests", () => {
       Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(
     envValue("QWEN_TOKEN_PLAN_API_KEY") === undefined || envValue("QWEN_TOKEN_PLAN_API_KEY") === "",
   )("Qwen Token Plan Individual Provider Empty Messages", () => {
@@ -709,7 +733,9 @@ describe("AI Providers Empty Message Tests", () => {
       Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(envValue("KIMI_API_KEY") === undefined || envValue("KIMI_API_KEY") === "")(
     "Kimi For Coding Provider Empty Messages",
     () => {
@@ -756,7 +782,9 @@ describe("AI Providers Empty Message Tests", () => {
       Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock Provider Empty Messages", () => {
     const llm = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-4-5-20250929-v1:0");
 
@@ -804,7 +832,9 @@ describe("AI Providers Empty Message Tests", () => {
       () => Effect.runPromise(testEmptyAssistantMessage(llm, { apiKey: anthropicOAuthToken })),
     );
   });
+});
 
+describe("AI Providers Empty Message Tests", () => {
   describe("OpenAI Codex Provider Empty Messages", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should handle empty content array",

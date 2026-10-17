@@ -92,7 +92,9 @@ describe("system message replay", () => {
       toolsAdded: [tool("x")],
     });
   });
+});
 
+describe("system message replay", () => {
   test("renders complete prompts and framed updates", () => {
     const leading = transcript.messages[0];
     const update = transcript.messages[4];
@@ -138,7 +140,9 @@ describe("system message replay", () => {
       toolsRemoved: [],
     });
   });
+});
 
+describe("system message replay", () => {
   test("detects non-additive tool history and redefinitions", () => {
     expect(hasNonAdditiveToolChanges(transcript.messages)).toBe(true);
     expect(hasToolRedefinitions(transcript.messages)).toBe(false);

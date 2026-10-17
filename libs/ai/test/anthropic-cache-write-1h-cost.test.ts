@@ -96,7 +96,9 @@ describe("Anthropic 1h cache write cost", () => {
         expect(result.usage.cost.cacheWrite).toBeCloseTo(7.75, 10);
       }),
     ));
+});
 
+describe("Anthropic 1h cache write cost", () => {
   it("prices 1h cache writes reported only in message_delta", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -138,7 +140,9 @@ describe("Anthropic 1h cache write cost", () => {
         );
       }),
     ));
+});
 
+describe("Anthropic 1h cache write cost", () => {
   it("falls back to the 5m rate when no breakdown is reported", () =>
     Effect.runPromise(
       Effect.gen(function* () {

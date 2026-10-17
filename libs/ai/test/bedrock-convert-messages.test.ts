@@ -220,7 +220,9 @@ describe("bedrock convertMessages skips unknown content types", () => {
         expect(p.messages[0]?.content[0]).toEqual({ text: "hello" });
       }),
     ));
+});
 
+describe("bedrock convertMessages skips unknown content types", () => {
   it("skips unknown assistant content blocks instead of throwing", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -254,7 +256,9 @@ describe("bedrock convertMessages skips unknown content types", () => {
         expect(p.messages[0]?.content[0]).toEqual({ text: "hello" });
       }),
     ));
+});
 
+describe("bedrock convertMessages skips unknown content types", () => {
   it("replaces user messages with only unknown content blocks with a placeholder", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -288,7 +292,9 @@ describe("bedrock convertMessages skips unknown content types", () => {
         expect(p.messages[0]?.content).toEqual([{ text: "<empty>" }]);
       }),
     ));
+});
 
+describe("bedrock convertMessages skips unknown content types", () => {
   it("filters blank user text blocks when other content remains", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -331,7 +337,9 @@ describe("bedrock convertMessages skips unknown content types", () => {
         expect(p.messages[0]?.content).toEqual([{ text: "<empty>" }]);
       }),
     ));
+});
 
+describe("bedrock convertMessages skips unknown content types", () => {
   it("skips assistant text blocks emptied by surrogate sanitization", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -360,7 +368,9 @@ describe("bedrock convertMessages skips unknown content types", () => {
         expect(p.messages).toHaveLength(0);
       }),
     ));
+});
 
+describe("bedrock convertMessages skips unknown content types", () => {
   it("replaces blank tool result content with a placeholder", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -383,7 +393,9 @@ describe("bedrock convertMessages skips unknown content types", () => {
         expect(p.messages[0]?.content[0]?.toolResult.content).toEqual([{ text: "<empty>" }]);
       }),
     ));
+});
 
+describe("bedrock convertMessages skips unknown content types", () => {
   it("skips assistant messages with only unknown content blocks", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -412,7 +424,9 @@ describe("bedrock convertMessages skips unknown content types", () => {
         expect(p.messages).toHaveLength(0);
       }),
     ));
+});
 
+describe("bedrock convertMessages skips unknown content types", () => {
   it("removes empty property names only from replayed Bedrock input", async () => {
     const toolArguments: { path: string; edits: Array<Record<string, string>> } = {
       path: "/workspace/foobar/file.js",

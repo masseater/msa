@@ -168,7 +168,9 @@ describe("Qwen Token Plan models", () => {
       }
     },
   );
+});
 
+describe("Qwen Token Plan models", () => {
   it.each(QWEN_THINKING_MODEL_CASES)(
     "sends Qwen thinking fields for $provider/$modelId",
     ({ provider, modelId }) =>
@@ -207,7 +209,9 @@ describe("Qwen Token Plan models", () => {
         }),
       ),
   );
+});
 
+describe("Qwen Token Plan models", () => {
   it.each(QWEN_REASONING_EFFORT_MODEL_CASES)(
     "exposes Qwen reasoning_effort levels for $provider/$modelId",
     ({ provider, modelId }) => {
@@ -251,7 +255,9 @@ describe("Qwen Token Plan models", () => {
       expect(modelIds).not.toContain("qwen3.8-max-preview");
     },
   );
+});
 
+describe("Qwen Token Plan models", () => {
   it.each(QWEN_REASONING_EFFORT_MODEL_CASES)(
     "sends Qwen reasoning_effort for $provider/$modelId",
     ({ provider, modelId }) =>
@@ -289,7 +295,9 @@ describe("Qwen Token Plan models", () => {
         }),
       ),
   );
+});
 
+describe("Qwen Token Plan models", () => {
   it.each(QWEN38_MODEL_CASES)(
     "sends qwen3.8 xhigh reasoning_effort for $provider/$modelId",
     ({ provider, modelId }) =>

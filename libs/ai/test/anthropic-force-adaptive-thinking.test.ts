@@ -118,7 +118,9 @@ describe("Anthropic forceAdaptiveThinking compat override", () => {
         expect(payload.output_config).toBeUndefined();
       }),
     ));
+});
 
+describe("Anthropic forceAdaptiveThinking compat override", () => {
   it("preserves thinking.type=disabled when reasoning is off regardless of override", () =>
     Effect.runPromise(
       Effect.gen(function* () {

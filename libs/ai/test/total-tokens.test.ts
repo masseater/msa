@@ -110,7 +110,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe("Anthropic (OAuth)", () => {
     it.skipIf(anthropicOAuthToken === undefined || anthropicOAuthToken === "")(
       "claude-sonnet-4 - should return totalTokens equal to sum of components",
@@ -137,7 +139,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Completions",
     () => {
@@ -167,7 +171,9 @@ describe("totalTokens field", () => {
       );
     },
   );
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Responses",
     () => {
@@ -192,7 +198,9 @@ describe("totalTokens field", () => {
       );
     },
   );
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(!hasAzureOpenAICredentials())("Azure OpenAI Responses", () => {
     it(
       "gpt-4o-mini - should return totalTokens equal to sum of components",
@@ -219,7 +227,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(envValue("GEMINI_API_KEY") === undefined || envValue("GEMINI_API_KEY") === "")(
     "Google",
     () => {
@@ -244,7 +254,9 @@ describe("totalTokens field", () => {
       );
     },
   );
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(envValue("XAI_API_KEY") === undefined || envValue("XAI_API_KEY") === "")(
     "xAI",
     () => {
@@ -271,7 +283,9 @@ describe("totalTokens field", () => {
       );
     },
   );
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(envValue("GROQ_API_KEY") === undefined || envValue("GROQ_API_KEY") === "")(
     "Groq",
     () => {
@@ -298,7 +312,9 @@ describe("totalTokens field", () => {
       );
     },
   );
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(
     envValue("CEREBRAS_API_KEY") === undefined || envValue("CEREBRAS_API_KEY") === "",
   )("Cerebras", () => {
@@ -348,7 +364,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(!hasCloudflareAiGatewayCredentials())("Cloudflare AI Gateway", () => {
     it(
       "workers-ai/@cf/moonshotai/kimi-k2.6 - should return totalTokens equal to sum of components",
@@ -372,7 +390,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(envValue("HF_TOKEN") === undefined || envValue("HF_TOKEN") === "")(
     "Hugging Face",
     () => {
@@ -399,7 +419,9 @@ describe("totalTokens field", () => {
       );
     },
   );
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(
     envValue("TOGETHER_API_KEY") === undefined || envValue("TOGETHER_API_KEY") === "",
   )("Together AI", () => {
@@ -426,7 +448,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(envValue("BASETEN_API_KEY") === undefined || envValue("BASETEN_API_KEY") === "")(
     "Baseten",
     () => {
@@ -454,7 +478,9 @@ describe("totalTokens field", () => {
       );
     },
   );
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(envValue("ZAI_API_KEY") === undefined || envValue("ZAI_API_KEY") === "")(
     "z.ai",
     () => {
@@ -481,7 +507,9 @@ describe("totalTokens field", () => {
       );
     },
   );
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(envValue("MISTRAL_API_KEY") === undefined || envValue("MISTRAL_API_KEY") === "")(
     "Mistral",
     () => {
@@ -508,7 +536,9 @@ describe("totalTokens field", () => {
       );
     },
   );
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(envValue("MINIMAX_API_KEY") === undefined || envValue("MINIMAX_API_KEY") === "")(
     "MiniMax",
     () => {
@@ -535,7 +565,9 @@ describe("totalTokens field", () => {
       );
     },
   );
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(envValue("XIAOMI_API_KEY") === undefined || envValue("XIAOMI_API_KEY") === "")(
     "Xiaomi MiMo (API billing)",
     () => {
@@ -562,7 +594,9 @@ describe("totalTokens field", () => {
       );
     },
   );
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(
     envValue("XIAOMI_TOKEN_PLAN_CN_API_KEY") === undefined ||
       envValue("XIAOMI_TOKEN_PLAN_CN_API_KEY") === "",
@@ -589,7 +623,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(
     envValue("XIAOMI_TOKEN_PLAN_AMS_API_KEY") === undefined ||
       envValue("XIAOMI_TOKEN_PLAN_AMS_API_KEY") === "",
@@ -616,7 +652,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(
     envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === undefined ||
       envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === "",
@@ -643,7 +681,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(
     envValue("QWEN_TOKEN_PLAN_API_KEY") === undefined || envValue("QWEN_TOKEN_PLAN_API_KEY") === "",
   )("Qwen Token Plan", () => {
@@ -669,7 +709,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(
     envValue("QWEN_TOKEN_PLAN_API_KEY") === undefined || envValue("QWEN_TOKEN_PLAN_API_KEY") === "",
   )("Qwen Token Plan Individual", () => {
@@ -695,7 +737,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(
     envValue("QWEN_TOKEN_PLAN_CN_API_KEY") === undefined ||
       envValue("QWEN_TOKEN_PLAN_CN_API_KEY") === "",
@@ -722,7 +766,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(envValue("KIMI_API_KEY") === undefined || envValue("KIMI_API_KEY") === "")(
     "Kimi For Coding",
     () => {
@@ -749,7 +795,9 @@ describe("totalTokens field", () => {
       );
     },
   );
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(
     envValue("AI_GATEWAY_API_KEY") === undefined || envValue("AI_GATEWAY_API_KEY") === "",
   )("Vercel AI Gateway", () => {
@@ -775,7 +823,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(
     envValue("OPENROUTER_API_KEY") === undefined || envValue("OPENROUTER_API_KEY") === "",
   )("OpenRouter", () => {
@@ -889,7 +939,9 @@ describe("totalTokens field", () => {
         ),
     );
   });
+});
 
+describe("totalTokens field", () => {
   describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock", () => {
     it(
       "claude-sonnet-4-5 - should return totalTokens equal to sum of components",

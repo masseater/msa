@@ -10,7 +10,6 @@ describe("OAuth device-code polling", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
-
   it("polls immediately and returns the completed value", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -52,7 +51,12 @@ describe("OAuth device-code polling", () => {
         ]);
       }),
     ));
+});
 
+describe("OAuth device-code polling", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it("can wait before the first poll", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -81,7 +85,12 @@ describe("OAuth device-code polling", () => {
         ]);
       }),
     ));
+});
 
+describe("OAuth device-code polling", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it("increases the interval by 5 seconds after slow_down without a server interval", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -117,7 +126,12 @@ describe("OAuth device-code polling", () => {
         expect(pollTimes).toEqual([startTime, startTime + 7000]);
       }),
     ));
+});
 
+describe("OAuth device-code polling", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it("honors a server-provided slow_down interval", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -153,7 +167,12 @@ describe("OAuth device-code polling", () => {
         expect(pollTimes).toEqual([startTime, startTime + 30000]);
       }),
     ));
+});
 
+describe("OAuth device-code polling", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it("cancels an in-flight wait", () => {
     const controller = new AbortController();
     return Effect.runPromise(

@@ -120,7 +120,9 @@ describe("google-vertex api key resolution", () => {
         expect(googleGenAiMock.constructorCalls[0]).not.toHaveProperty("apiKey");
       }),
     ));
+});
 
+describe("google-vertex api key resolution", () => {
   it("falls back to ADC when GOOGLE_CLOUD_API_KEY is a placeholder marker", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -163,7 +165,9 @@ describe("google-vertex api key resolution", () => {
         expect(googleGenAiMock.constructorCalls[0]).not.toHaveProperty("location");
       }),
     ));
+});
 
+describe("google-vertex api key resolution", () => {
   it("does not forward generated Vertex base URL placeholders", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -198,7 +202,9 @@ describe("google-vertex api key resolution", () => {
         });
       }),
     ));
+});
 
+describe("google-vertex api key resolution", () => {
   it("forwards custom baseUrl to the ADC client", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -226,7 +232,9 @@ describe("google-vertex api key resolution", () => {
         });
       }),
     ));
+});
 
+describe("google-vertex api key resolution", () => {
   it("forwards custom baseUrl to the API key client", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -252,7 +260,9 @@ describe("google-vertex api key resolution", () => {
         });
       }),
     ));
+});
 
+describe("google-vertex api key resolution", () => {
   it("does not append apiVersion when custom baseUrl already includes one", () =>
     Effect.runPromise(
       Effect.gen(function* () {

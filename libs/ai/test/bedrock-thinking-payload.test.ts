@@ -122,7 +122,9 @@ describe("Bedrock thinking payload", () => {
         ]);
       }),
     ));
+});
 
+describe("Bedrock thinking payload", () => {
   it("uses adaptive thinking for Claude Fable 5 when reasoning is enabled", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -167,7 +169,9 @@ describe("Bedrock thinking payload", () => {
         ]);
       }),
     ));
+});
 
+describe("Bedrock thinking payload", () => {
   it("maps xhigh reasoning to effort=xhigh for Claude Opus 5", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -208,7 +212,9 @@ describe("Bedrock thinking payload", () => {
         ]);
       }),
     ));
+});
 
+describe("Bedrock thinking payload", () => {
   it.each(["global.anthropic.claude-opus-4-6-v1", "global.anthropic.claude-sonnet-4-6"] as const)(
     "omits block_binding for %s",
     (modelId) =>
@@ -251,7 +257,9 @@ describe("Bedrock thinking payload", () => {
         ]);
       }),
     ));
+});
 
+describe("Bedrock thinking payload", () => {
   it("omits display for GovCloud regions on adaptive Claude thinking", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -315,7 +323,9 @@ describe("Bedrock OpenAI reasoning payload", () => {
         expect(payload.additionalModelRequestFields).toEqual({ reasoning: { effort: "medium" } });
       }),
     ));
+});
 
+describe("Bedrock OpenAI reasoning payload", () => {
   it("sends flat reasoning_effort for gpt-oss, clamped to high", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -341,7 +351,9 @@ describe("Bedrock OpenAI reasoning payload", () => {
         });
       }),
     ));
+});
 
+describe("Bedrock OpenAI reasoning payload", () => {
   it("sends no reasoning fields when reasoning is off", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -432,7 +444,9 @@ describe("Application inference profile support", () => {
         expect(payload.additionalModelRequestFields?.output_config).toEqual({ effort: "high" });
       }),
     ));
+});
 
+describe("Application inference profile support", () => {
   it("injects cache points when model.name identifies a supported Claude model", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -478,7 +492,9 @@ describe("Application inference profile support", () => {
         expect(lastContent).toHaveProperty("cachePoint");
       }),
     ));
+});
 
+describe("Application inference profile support", () => {
   it("falls back to fixed-budget thinking for non-adaptive Claude via model.name", () =>
     Effect.runPromise(
       Effect.gen(function* () {

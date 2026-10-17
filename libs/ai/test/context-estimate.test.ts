@@ -78,7 +78,9 @@ describe("context token estimation", () => {
     });
     expect(buildBaseOptions(model, context).maxTokens).toBe(4_755);
   });
+});
 
+describe("context token estimation", () => {
   it("uses assistant usage again after a response to the inserted context", () => {
     const context = normalizeContext({
       messages: [

@@ -51,7 +51,9 @@ describe("isContextOverflow", () => {
     );
     expect(isContextOverflow(message, 1048576)).toBe(true);
   });
+});
 
+describe("isContextOverflow", () => {
   it("detects Together AI context length errors", () => {
     const message = createErrorMessage(
       "400 The input (516368 tokens) is longer than the model's context length (262144 tokens).",
@@ -72,7 +74,9 @@ describe("isContextOverflow", () => {
     );
     expect(isContextOverflow(message, 262144)).toBe(true);
   });
+});
 
+describe("isContextOverflow", () => {
   it("detects OpenRouter Poolside maximum allowed input length errors", () => {
     const message = createErrorMessage(
       "Provider returned error: Input length 131393 exceeds the maximum allowed input length of 131040 tokens.",
@@ -91,7 +95,9 @@ describe("isContextOverflow", () => {
     );
     expect(isContextOverflow(commaMessage, 256000)).toBe(true);
   });
+});
 
+describe("isContextOverflow", () => {
   it("does not treat generic non-overflow Ollama errors as overflow", () => {
     const message = createErrorMessage("500 `model runner crashed unexpectedly`");
     expect(isContextOverflow(message, 32768)).toBe(false);
@@ -112,7 +118,9 @@ describe("isContextOverflow", () => {
     );
     expect(isContextOverflow(message, 200000)).toBe(false);
   });
+});
 
+describe("isContextOverflow", () => {
   it("does not treat Bedrock service unavailable as overflow", () => {
     const message = createErrorMessage(
       "Service unavailable: The service is temporarily unavailable.",
@@ -129,7 +137,9 @@ describe("isContextOverflow", () => {
     const message = createErrorMessage("Too many requests. Please slow down.");
     expect(isContextOverflow(message, 200000)).toBe(false);
   });
+});
 
+describe("isContextOverflow", () => {
   function createLengthStopMessage(options: {
     input: number;
     cacheRead: number;
@@ -158,7 +168,6 @@ describe("isContextOverflow", () => {
       timestamp: currentTimeMillis(),
     };
   }
-
   it("detects Xiaomi-style overflow (length stop with zero output and filled context)", () => {
     const message = createLengthStopMessage({
       input: 58,
@@ -169,7 +178,37 @@ describe("isContextOverflow", () => {
     });
     expect(isContextOverflow(message, 1048576)).toBe(true);
   });
+});
 
+describe("isContextOverflow", () => {
+  function createLengthStopMessage(options: {
+    input: number;
+    cacheRead: number;
+    output: number;
+    cacheWrite?: number;
+    api?: AssistantMessage["api"];
+    provider?: string;
+    model?: string;
+  }): AssistantMessage {
+    const cacheWrite = options.cacheWrite ?? 0;
+    return {
+      role: "assistant",
+      content: [],
+      api: options.api ?? "openai-completions",
+      provider: options.provider ?? "test-provider",
+      model: options.model ?? "test-model",
+      usage: {
+        input: options.input,
+        output: options.output,
+        cacheRead: options.cacheRead,
+        cacheWrite,
+        totalTokens: options.input + options.cacheRead + cacheWrite + options.output,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "length",
+      timestamp: currentTimeMillis(),
+    };
+  }
   it("treats a length stop below the desired output limit as recoverable", () => {
     const message = createLengthStopMessage({
       input: 3,
@@ -192,7 +231,37 @@ describe("isContextOverflow", () => {
     const message = createLengthStopMessage({ input: 100, cacheRead: 0, output: 0 });
     expect(isRecoverableLength(message, 128000)).toBe(true);
   });
+});
 
+describe("isContextOverflow", () => {
+  function createLengthStopMessage(options: {
+    input: number;
+    cacheRead: number;
+    output: number;
+    cacheWrite?: number;
+    api?: AssistantMessage["api"];
+    provider?: string;
+    model?: string;
+  }): AssistantMessage {
+    const cacheWrite = options.cacheWrite ?? 0;
+    return {
+      role: "assistant",
+      content: [],
+      api: options.api ?? "openai-completions",
+      provider: options.provider ?? "test-provider",
+      model: options.model ?? "test-model",
+      usage: {
+        input: options.input,
+        output: options.output,
+        cacheRead: options.cacheRead,
+        cacheWrite,
+        totalTokens: options.input + options.cacheRead + cacheWrite + options.output,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "length",
+      timestamp: currentTimeMillis(),
+    };
+  }
   it("does not treat normal length stops with output as context overflow", () => {
     const message = createLengthStopMessage({ input: 1000, cacheRead: 0, output: 4096 });
     expect(isContextOverflow(message, 200000)).toBe(false);

@@ -38,7 +38,6 @@ describe("Radius OAuth", () => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
-
   it("uses gateway endpoints directly for device login", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -105,7 +104,14 @@ describe("Radius OAuth", () => {
         expect(urls).toEqual([`${GATEWAY}/v1/oauth/device`, `${GATEWAY}/v1/oauth/token`]);
       }),
     ));
+});
 
+describe("Radius OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("refreshes directly through the gateway without discovery", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -137,7 +143,14 @@ describe("Radius OAuth", () => {
         expect(fetchMock).toHaveBeenCalledOnce();
       }),
     ));
+});
 
+describe("Radius OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("discovers only the interactive browser authorization endpoint", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -156,7 +169,14 @@ describe("Radius OAuth", () => {
         expect(fetchMock).toHaveBeenCalledOnce();
       }),
     ));
+});
 
+describe("Radius OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("exchanges the browser callback code before showing the sign-in page", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -87,7 +87,9 @@ describe("faux provider", () => {
     ]);
     expect(response.stopReason).toBe("toolUse");
   });
+});
 
+describe("faux provider", () => {
   it("supports multiple models with per-model reasoning and model-aware factories", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -127,7 +129,9 @@ describe("faux provider", () => {
         expect(thinker.content).toEqual([{ type: "text", text: "faux-thinker:true" }]);
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("rewrites api, provider, and model on returned messages", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -175,7 +179,9 @@ describe("faux provider", () => {
         expect(registration.state.callCount).toBe(3);
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("can replace and append queued responses", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -212,7 +218,9 @@ describe("faux provider", () => {
         expect(registration.getPendingResponseCount()).toBe(0);
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("supports async response factories", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -262,7 +270,9 @@ describe("faux provider", () => {
         }
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("rejects a queued response without a terminal stop reason", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -288,7 +298,9 @@ describe("faux provider", () => {
         }
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("estimates prompt and output tokens from serialized context", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -343,7 +355,9 @@ describe("faux provider", () => {
         expect(response.usage.totalTokens).toBe(expectedPromptTokens + expectedOutputTokens);
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("does not share cache across sessions or requests without sessionId", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -387,7 +401,9 @@ describe("faux provider", () => {
         expect(third.usage.cacheWrite).toBe(0);
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("simulates prompt caching per sessionId", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -426,7 +442,9 @@ describe("faux provider", () => {
         expect(second.usage.input + second.usage.cacheRead).toBeGreaterThan(second.usage.input);
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("counts cached characters up to the first difference in the joined prompt", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -462,7 +480,9 @@ describe("faux provider", () => {
         expect(edited.usage).toMatchObject({ input: 4, cacheRead: 3, cacheWrite: 4 });
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("does not simulate caching when cacheRetention is none", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -496,7 +516,9 @@ describe("faux provider", () => {
         expect(second.usage.cacheWrite).toBe(0);
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("streams thinking, text, and partial tool call deltas", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -541,7 +563,9 @@ describe("faux provider", () => {
         expect(yield* decodeJson(toolCallDeltas.join(""))).toEqual({ text: "hi", count: 12 });
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("streams an exact event order for fixed-size chunks", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -581,7 +605,9 @@ describe("faux provider", () => {
         ]);
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("streams multiple tool calls in one message", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -610,7 +636,9 @@ describe("faux provider", () => {
         expect(events.filter((event) => event.type === "toolcall_end")).toHaveLength(2);
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("streams an explicit assistant error message as a terminal error", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -649,7 +677,9 @@ describe("faux provider", () => {
         }
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("streams an explicit assistant aborted message as a terminal error", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -688,7 +718,9 @@ describe("faux provider", () => {
         }
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("supports aborting before the first chunk", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -719,7 +751,9 @@ describe("faux provider", () => {
         }
       }),
     ));
+});
 
+describe("faux provider", () => {
   it("supports aborting mid-text stream when paced", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -761,7 +795,9 @@ describe("faux provider", () => {
       }),
     );
   });
+});
 
+describe("faux provider", () => {
   it("supports aborting mid-thinking stream when paced", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -808,7 +844,9 @@ describe("faux provider", () => {
       }),
     );
   });
+});
 
+describe("faux provider", () => {
   it("supports aborting mid-toolcall stream when paced", async () => {
     const registration = registerFauxProvider({
       tokensPerSecond: 100,
@@ -859,7 +897,9 @@ describe("faux provider", () => {
     expect(events).toContain("error");
     expect(events).not.toContain("toolcall_end");
   });
+});
 
+describe("faux provider", () => {
   it("unregisters the provider", () =>
     Effect.runPromise(
       Effect.gen(function* () {

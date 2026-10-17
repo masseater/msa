@@ -107,7 +107,9 @@ describe("lazy provider module loading", () => {
 
     expect(result.loadedSpecifiers).toEqual(["@anthropic-ai/sdk"]);
   });
+});
 
+describe("lazy provider module loading", () => {
   it("loads only the Anthropic SDK when dispatching through streamSimple", () => {
     const result = runProbe(`
 			const compat = await import(${JSON.stringify(compatEntryUrl)});

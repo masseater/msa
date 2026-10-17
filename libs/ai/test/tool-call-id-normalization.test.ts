@@ -103,7 +103,9 @@ describe("Tool Call ID Normalization - Live Handoff", () => {
       ),
     60000,
   );
+});
 
+describe("Tool Call ID Normalization - Live Handoff", () => {
   it.skipIf(
     openaiKey === undefined || openaiKey === "" || codexToken === undefined || codexToken === "",
   )(

@@ -322,7 +322,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Responses Provider Unicode Handling",
     () => {
@@ -345,7 +347,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(!hasAzureOpenAICredentials())(
     "Azure OpenAI Responses Provider Unicode Handling",
     () => {
@@ -395,7 +399,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       () => testUnpairedHighSurrogate(llm),
     );
   });
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe("Anthropic OAuth Provider Unicode Handling", () => {
     const llm = getModel("anthropic", "claude-haiku-4-5");
 
@@ -440,7 +446,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(envValue("GROQ_API_KEY") === undefined || envValue("GROQ_API_KEY") === "")(
     "Groq Provider Unicode Handling",
     () => {
@@ -485,7 +493,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       () => testUnpairedHighSurrogate(llm),
     );
   });
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(!hasCloudflareWorkersAICredentials())(
     "Cloudflare Workers AI Provider Unicode Handling",
     () => {
@@ -531,7 +541,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(envValue("HF_TOKEN") === undefined || envValue("HF_TOKEN") === "")(
     "Hugging Face Provider Unicode Handling",
     () => {
@@ -577,7 +589,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       () => testUnpairedHighSurrogate(llm, options),
     );
   });
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(envValue("BASETEN_API_KEY") === undefined || envValue("BASETEN_API_KEY") === "")(
     "Baseten Provider Unicode Handling",
     () => {
@@ -624,7 +638,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(envValue("MISTRAL_API_KEY") === undefined || envValue("MISTRAL_API_KEY") === "")(
     "Mistral Provider Unicode Handling",
     () => {
@@ -670,7 +686,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(envValue("XIAOMI_API_KEY") === undefined || envValue("XIAOMI_API_KEY") === "")(
     "Xiaomi MiMo (API billing) Provider Unicode Handling",
     () => {
@@ -716,7 +734,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       () => testUnpairedHighSurrogate(llm),
     );
   });
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(
     envValue("XIAOMI_TOKEN_PLAN_AMS_API_KEY") === undefined ||
       envValue("XIAOMI_TOKEN_PLAN_AMS_API_KEY") === "",
@@ -762,7 +782,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       () => testUnpairedHighSurrogate(llm),
     );
   });
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(
     envValue("QWEN_TOKEN_PLAN_API_KEY") === undefined || envValue("QWEN_TOKEN_PLAN_API_KEY") === "",
   )("Qwen Token Plan Provider Unicode Handling", () => {
@@ -806,7 +828,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       () => testUnpairedHighSurrogate(llm),
     );
   });
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(
     envValue("QWEN_TOKEN_PLAN_CN_API_KEY") === undefined ||
       envValue("QWEN_TOKEN_PLAN_CN_API_KEY") === "",
@@ -852,7 +876,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       );
     },
   );
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe.skipIf(
     envValue("AI_GATEWAY_API_KEY") === undefined || envValue("AI_GATEWAY_API_KEY") === "",
   )("Vercel AI Gateway Provider Unicode Handling", () => {
@@ -894,7 +920,9 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       () => testUnpairedHighSurrogate(llm),
     );
   });
+});
 
+describe("AI Providers Unicode Surrogate Pair Tests", () => {
   describe("OpenAI Codex Provider Unicode Handling", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should handle emoji in tool results",

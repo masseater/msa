@@ -75,7 +75,9 @@ describe("createAiBindingFetch", () => {
   it("rejects a binding with no fetch() at construction, not on first request", () => {
     expect(() => createAiBindingFetch({ aiGatewayLogId: null })).toThrow("does not expose fetch()");
   });
+});
 
+describe("createAiBindingFetch", () => {
   it("keeps SDK placeholder auth off the wire when paired with null auth headers", () =>
     Effect.runPromise(
       Effect.gen(function* () {

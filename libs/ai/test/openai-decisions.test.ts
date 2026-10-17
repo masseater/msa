@@ -145,7 +145,9 @@ describe("OpenAI Decisions", () => {
         expect(result.usage?.cost.total).toBeCloseTo(0.0000164, 12);
       }),
     ));
+});
 
+describe("OpenAI Decisions", () => {
   it("prices long-context requests at the long-context input rate", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -165,7 +167,9 @@ describe("OpenAI Decisions", () => {
         expect(result.usage?.cost.total).toBeCloseTo(0.06, 12);
       }),
     ));
+});
 
+describe("OpenAI Decisions", () => {
   it("sends images after the state in one user message", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -199,7 +203,9 @@ describe("OpenAI Decisions", () => {
         ]);
       }),
     ));
+});
 
+describe("OpenAI Decisions", () => {
   it("rejects more than 128 images before sending", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -244,7 +250,9 @@ describe("OpenAI Decisions", () => {
         expect(result.usage).toMatchObject({ input: 164 });
       }),
     ));
+});
 
+describe("OpenAI Decisions", () => {
   it("returns missing and mistyped answers as classifier errors", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -272,7 +280,9 @@ describe("OpenAI Decisions", () => {
         expect(mistyped.errorMessage).toContain("did not return a predicate answer for approved");
       }),
     ));
+});
 
+describe("OpenAI Decisions", () => {
   it("preserves prototype-sensitive question IDs in answers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -299,7 +309,9 @@ describe("OpenAI Decisions", () => {
         expect(result.answers["__proto__"]).toEqual({ type: "bool", probability: 0.75 });
       }),
     ));
+});
 
+describe("OpenAI Decisions", () => {
   it("does not retry gateway timeouts and explains them instead of returning the HTML page", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -344,7 +356,9 @@ describe("OpenAI Decisions", () => {
         expect(result.stopReason).toBe("stop");
       }),
     ));
+});
 
+describe("OpenAI Decisions", () => {
   it("includes the API error body for other HTTP failures", () =>
     Effect.runPromise(
       Effect.gen(function* () {

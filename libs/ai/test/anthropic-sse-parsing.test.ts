@@ -160,7 +160,9 @@ describe("Anthropic raw SSE parsing", () => {
         expect(eventModels).toEqual([model, model, model, model, model, model]);
       }),
     ));
+});
 
+describe("Anthropic raw SSE parsing", () => {
   it("keeps signed thinking replayable when a proxy relabels the model", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -191,7 +193,9 @@ describe("Anthropic raw SSE parsing", () => {
         ]);
       }),
     ));
+});
 
+describe("Anthropic raw SSE parsing", () => {
   it("uses a returned fallback model for cost attribution", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -226,7 +230,9 @@ describe("Anthropic raw SSE parsing", () => {
         expect(result.usage.cost.output).toBeCloseTo(0.0001, 10);
       }),
     ));
+});
 
+describe("Anthropic raw SSE parsing", () => {
   it("fails safely when Anthropic falls back after output begins", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -281,7 +287,9 @@ describe("Anthropic raw SSE parsing", () => {
         expect(result.errorMessage).toContain("unsupported mid-output model fallback");
       }),
     ));
+});
 
+describe("Anthropic raw SSE parsing", () => {
   it("forces streaming after an onPayload replacement", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -313,7 +321,9 @@ describe("Anthropic raw SSE parsing", () => {
         expect(streaming).toBe(true);
       }),
     ));
+});
 
+describe("Anthropic raw SSE parsing", () => {
   it("omits the interleaved-thinking beta when thinking is disabled", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -342,7 +352,9 @@ describe("Anthropic raw SSE parsing", () => {
         expect(betaFeatures ?? []).not.toContain("interleaved-thinking-2025-05-14");
       }),
     ));
+});
 
+describe("Anthropic raw SSE parsing", () => {
   it("passes managed beta features to injected clients", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -373,7 +385,9 @@ describe("Anthropic raw SSE parsing", () => {
         expect(betaFeatures).toContain("thinking-binding-controls-2026-08-01");
       }),
     ));
+});
 
+describe("Anthropic raw SSE parsing", () => {
   it("uses the serving model input transformations from the final stream event", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -432,6 +446,9 @@ describe("Anthropic raw SSE parsing", () => {
         ]);
       }),
     ));
+});
+
+describe("Anthropic raw SSE parsing", () => {
   it("repairs malformed SSE JSON and malformed streamed tool JSON", async () => {
     const model = getModel("anthropic", "claude-haiku-4-5");
     const context = normalizeContext({
@@ -518,7 +535,9 @@ describe("Anthropic raw SSE parsing", () => {
       text: "col1\tcol2",
     });
   });
+});
 
+describe("Anthropic raw SSE parsing", () => {
   it("preserves content from content_block_start events", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -627,7 +646,9 @@ describe("Anthropic raw SSE parsing", () => {
         ]);
       }),
     ));
+});
 
+describe("Anthropic raw SSE parsing", () => {
   it("preserves refusal stop details from message_delta", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -691,7 +712,9 @@ describe("Anthropic raw SSE parsing", () => {
         expect(result.errorMessage).toBe(explanation);
       }),
     ));
+});
 
+describe("Anthropic raw SSE parsing", () => {
   it("preserves sensitive stop reasons with a descriptive error message", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -746,7 +769,9 @@ describe("Anthropic raw SSE parsing", () => {
         expect(result.errorMessage).toBe("Provider stopped with: sensitive");
       }),
     ));
+});
 
+describe("Anthropic raw SSE parsing", () => {
   it("treats message_delta without usage as a no-op for usage accumulation", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -782,7 +807,9 @@ describe("Anthropic raw SSE parsing", () => {
         expect(result.usage.totalTokens).toBe(12);
       }),
     ));
+});
 
+describe("Anthropic raw SSE parsing", () => {
   it("ignores unknown SSE events after message_stop", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -63,7 +63,9 @@ describe("Baseten models", () => {
         expect(payload?.["reasoning_effort"]).toBeUndefined();
       }),
     ));
+});
 
+describe("Baseten models", () => {
   it("sends Baseten chat_template_args with reasoning effort", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -89,7 +91,9 @@ describe("Baseten models", () => {
         expect(payload?.["reasoning_effort"]).toBe("high");
       }),
     ));
+});
 
+describe("Baseten models", () => {
   it("disables Baseten opt-in reasoning when thinking is off", () =>
     Effect.runPromise(
       Effect.gen(function* () {

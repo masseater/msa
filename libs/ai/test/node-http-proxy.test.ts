@@ -80,7 +80,9 @@ describe("node HTTP proxy resolution", () => {
       resolveHttpProxyUrlForTarget("https://bedrock-runtime.us-east-1.amazonaws.com"),
     ).toThrow(UNSUPPORTED_PROXY_PROTOCOL_MESSAGE);
   });
+});
 
+describe("node HTTP proxy resolution", () => {
   it("handles subdomain wildcards, IPv6, and ports in NO_PROXY", () => {
     resetProxyEnv();
     vi.stubEnv("HTTPS_PROXY", "http://proxy.example:8080");

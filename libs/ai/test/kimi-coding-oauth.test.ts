@@ -51,7 +51,6 @@ describe("Kimi Code OAuth", () => {
     vi.unstubAllEnvs();
     vi.useRealTimers();
   });
-
   it("logs in with the device authorization flow", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -129,7 +128,15 @@ describe("Kimi Code OAuth", () => {
         expect(pollTimes).toEqual([startTime + 5000, startTime + 10000]);
       }),
     ));
+});
 
+describe("Kimi Code OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
+  });
   it("fails when the device code expires", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -154,7 +161,15 @@ describe("Kimi Code OAuth", () => {
         yield* Effect.promise(() => assertion);
       }),
     ));
+});
 
+describe("Kimi Code OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
+  });
   it("fails when the user denies the login", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -179,7 +194,15 @@ describe("Kimi Code OAuth", () => {
         yield* Effect.promise(() => assertion);
       }),
     ));
+});
 
+describe("Kimi Code OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
+  });
   it("honors the KIMI_CODE_OAUTH_HOST override", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -215,7 +238,15 @@ describe("Kimi Code OAuth", () => {
         ]);
       }),
     ));
+});
 
+describe("Kimi Code OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
+  });
   it("refreshes tokens and returns a Bearer header for requests", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -265,7 +296,15 @@ describe("Kimi Code OAuth", () => {
         );
       }),
     ));
+});
 
+describe("Kimi Code OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.useRealTimers();
+  });
   it("retries refresh on 429 and fails unauthorized on invalid_grant", () =>
     Effect.runPromise(
       Effect.gen(function* () {

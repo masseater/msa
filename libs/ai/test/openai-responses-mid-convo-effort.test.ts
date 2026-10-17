@@ -142,7 +142,9 @@ describe("OpenAI Responses configuration_update", () => {
         ]);
       }),
     ));
+});
 
+describe("OpenAI Responses configuration_update", () => {
   it("applies a level change made during a tool loop to the next reply", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -161,7 +163,9 @@ describe("OpenAI Responses configuration_update", () => {
         expect(afterTool.message.providerThinkingLevel).toBe("low");
       }),
     ));
+});
 
+describe("OpenAI Responses configuration_update", () => {
   it("adds items only before replies recorded by this model", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -213,7 +217,9 @@ describe("OpenAI Responses configuration_update", () => {
         ]);
       }),
     ));
+});
 
+describe("OpenAI Responses configuration_update", () => {
   it.each([
     {
       name: "Sign in with ChatGPT",

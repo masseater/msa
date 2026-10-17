@@ -141,7 +141,6 @@ describe("openai-completions cacheControlFormat", () => {
   beforeEach(() => {
     mockState.lastParams = undefined;
   });
-
   it("applies Anthropic-style cache markers when model compat enables them", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -179,7 +178,12 @@ describe("openai-completions cacheControlFormat", () => {
         expectAnthropicCacheMarkers(params);
       }),
     ));
+});
 
+describe("openai-completions cacheControlFormat", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+  });
   it("moves the conversation cache marker to a tool result", async () => {
     const model = getModel("openrouter", "anthropic/claude-fable-5.1:batch");
     const timestamp = currentTimeMillis();
@@ -223,7 +227,12 @@ describe("openai-completions cacheControlFormat", () => {
     expect(Array.isArray(toolMessage.content)).toBe(true);
     expect((toolMessage.content as TextPart[])[0]?.cache_control).toEqual({ type: "ephemeral" });
   });
+});
 
+describe("openai-completions cacheControlFormat", () => {
+  beforeEach(() => {
+    mockState.lastParams = undefined;
+  });
   it("omits Anthropic-style cache markers when cacheRetention is none", () =>
     Effect.runPromise(
       Effect.gen(function* () {

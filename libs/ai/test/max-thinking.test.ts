@@ -54,7 +54,9 @@ describe("max thinking level", () => {
       ]);
     },
   );
+});
 
+describe("max thinking level", () => {
   it("supports a hole between high and max", () => {
     const model: Model<"openai-completions"> = {
       id: "high-and-max",
@@ -80,7 +82,9 @@ describe("max thinking level", () => {
     ]);
     expect(clampThinkingLevel(model, "xhigh")).toBe("max");
   });
+});
 
+describe("max thinking level", () => {
   it.each(["gpt-5.6-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"] as const)(
     "sends max to the Codex Responses API for %s",
     (modelId) =>

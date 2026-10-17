@@ -176,7 +176,9 @@ describe("Mistral HTTP transport", () => {
         ]);
       }),
     ));
+});
 
+describe("Mistral HTTP transport", () => {
   it("serializes assistant thinking, tool calls, and tool results for replay", async () => {
     const model = getModel("mistral", "mistral-large-latest");
     const context = normalizeContext({
@@ -253,7 +255,9 @@ describe("Mistral HTTP transport", () => {
       },
     ]);
   });
+});
 
+describe("Mistral HTTP transport", () => {
   it("parses native thinking, text, fragmented tool calls, and cached-token usage", async () => {
     const model = getModel("mistral", "mistral-large-latest");
     const context = normalizeContext({
@@ -348,7 +352,9 @@ describe("Mistral HTTP transport", () => {
       totalTokens: 14,
     });
   });
+});
 
+describe("Mistral HTTP transport", () => {
   it("ignores empty content deltas", async () => {
     const model = getModel("mistral", "zai-glm-5-3");
     const context = normalizeContext({
@@ -388,7 +394,9 @@ describe("Mistral HTTP transport", () => {
       { type: "toolCall", id: "abc123456", name: "read", arguments: { path: "a.txt" } },
     ]);
   });
+});
 
+describe("Mistral HTTP transport", () => {
   it("forwards each parsed SSE payload before normalizing it", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -432,7 +440,9 @@ describe("Mistral HTTP transport", () => {
         expect(result.content).toEqual([{ type: "text", text: "hello" }]);
       }),
     ));
+});
 
+describe("Mistral HTTP transport", () => {
   it("parses SSE and UTF-8 sequences split across transport chunks", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -458,7 +468,9 @@ describe("Mistral HTTP transport", () => {
         expect(message.content).toEqual([{ type: "text", text: "héllo 🌍" }]);
       }),
     ));
+});
 
+describe("Mistral HTTP transport", () => {
   it("honors case-insensitive header overrides and explicit affinity suppression", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -489,7 +501,9 @@ describe("Mistral HTTP transport", () => {
         expect(requestHeaders?.get("user-agent")).toBe("custom-agent");
       }),
     ));
+});
 
+describe("Mistral HTTP transport", () => {
   it("aborts while waiting for an SSE chunk", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -520,7 +534,9 @@ describe("Mistral HTTP transport", () => {
       }),
     );
   });
+});
 
+describe("Mistral HTTP transport", () => {
   it("applies the request timeout while waiting for response headers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -547,7 +563,9 @@ describe("Mistral HTTP transport", () => {
         expect(message.errorMessage).toBe("Mistral response headers timed out after 5ms");
       }),
     ));
+});
 
+describe("Mistral HTTP transport", () => {
   it("does not abort an active stream that lasts longer than the request timeout", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -609,7 +627,9 @@ describe("Mistral HTTP transport", () => {
         expect(message.content).toEqual([{ type: "thinking", thinking: "xxxxx" }]);
       }),
     ));
+});
 
+describe("Mistral HTTP transport", () => {
   it("preserves HTTP status and response bodies in errors", () =>
     Effect.runPromise(
       Effect.gen(function* () {

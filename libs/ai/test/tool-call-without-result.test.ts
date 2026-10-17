@@ -126,7 +126,9 @@ describe("Tool Call Without Result Tests", () => {
       );
     },
   );
+});
 
+describe("Tool Call Without Result Tests", () => {
   describe.skipIf(!hasAzureOpenAICredentials())("Azure OpenAI Responses Provider", () => {
     const model = getModel("azure", "gpt-4o-mini");
     const azureDeploymentName = resolveAzureDeploymentName(model.id);
@@ -166,7 +168,9 @@ describe("Tool Call Without Result Tests", () => {
       );
     },
   );
+});
 
+describe("Tool Call Without Result Tests", () => {
   describe.skipIf(envValue("GROQ_API_KEY") === undefined || envValue("GROQ_API_KEY") === "")(
     "Groq Provider",
     () => {
@@ -211,7 +215,9 @@ describe("Tool Call Without Result Tests", () => {
       () => Effect.runPromise(testToolCallWithoutResult(model)),
     );
   });
+});
 
+describe("Tool Call Without Result Tests", () => {
   describe.skipIf(envValue("HF_TOKEN") === undefined || envValue("HF_TOKEN") === "")(
     "Hugging Face Provider",
     () => {
@@ -262,7 +268,9 @@ describe("Tool Call Without Result Tests", () => {
       );
     },
   );
+});
 
+describe("Tool Call Without Result Tests", () => {
   describe.skipIf(envValue("MISTRAL_API_KEY") === undefined || envValue("MISTRAL_API_KEY") === "")(
     "Mistral Provider",
     () => {
@@ -314,7 +322,9 @@ describe("Tool Call Without Result Tests", () => {
       () => Effect.runPromise(testToolCallWithoutResult(model)),
     );
   });
+});
 
+describe("Tool Call Without Result Tests", () => {
   describe.skipIf(
     envValue("XIAOMI_TOKEN_PLAN_AMS_API_KEY") === undefined ||
       envValue("XIAOMI_TOKEN_PLAN_AMS_API_KEY") === "",
@@ -364,7 +374,9 @@ describe("Tool Call Without Result Tests", () => {
       () => Effect.runPromise(testToolCallWithoutResult(model)),
     );
   });
+});
 
+describe("Tool Call Without Result Tests", () => {
   describe.skipIf(
     envValue("QWEN_TOKEN_PLAN_CN_API_KEY") === undefined ||
       envValue("QWEN_TOKEN_PLAN_CN_API_KEY") === "",
@@ -412,7 +424,9 @@ describe("Tool Call Without Result Tests", () => {
       () => Effect.runPromise(testToolCallWithoutResult(model)),
     );
   });
+});
 
+describe("Tool Call Without Result Tests", () => {
   describe("Anthropic OAuth Provider", () => {
     const model = getModel("anthropic", "claude-haiku-4-5");
 

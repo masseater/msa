@@ -14,7 +14,6 @@ describe("provider request retries", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
-
   it("retries retryable provider errors", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -61,7 +60,12 @@ describe("provider request retries", () => {
         expect(request).toHaveBeenCalledTimes(1);
       }),
     ));
+});
 
+describe("provider request retries", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it("rejects a provider-requested retry delay above the limit", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -96,7 +100,12 @@ describe("provider request retries", () => {
         expect(request).toHaveBeenCalledTimes(2);
       }),
     ));
+});
 
+describe("provider request retries", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it("aborts a provider-requested retry delay", () => {
     const controller = new AbortController();
     return Effect.runPromise(

@@ -226,7 +226,9 @@ describe("Tool Results with Images", () => {
       );
     },
   );
+});
 
+describe("Tool Results with Images", () => {
   describe.skipIf(!hasAzureOpenAICredentials())(
     "Azure OpenAI Responses Provider (gpt-4o-mini)",
     () => {
@@ -274,7 +276,9 @@ describe("Tool Results with Images", () => {
       Effect.runPromise(handleToolWithTextAndImageResult(llm)),
     );
   });
+});
 
+describe("Tool Results with Images", () => {
   describe.skipIf(envValue("MISTRAL_API_KEY") === undefined || envValue("MISTRAL_API_KEY") === "")(
     "Mistral Provider (pixtral-12b)",
     () => {
@@ -320,7 +324,9 @@ describe("Tool Results with Images", () => {
       );
     },
   );
+});
 
+describe("Tool Results with Images", () => {
   describe.skipIf(envValue("XIAOMI_API_KEY") === undefined || envValue("XIAOMI_API_KEY") === "")(
     "Xiaomi MiMo (API billing) Provider (mimo-v2.6-pro)",
     () => {
@@ -365,7 +371,9 @@ describe("Tool Results with Images", () => {
       Effect.runPromise(handleToolWithTextAndImageResult(llm)),
     );
   });
+});
 
+describe("Tool Results with Images", () => {
   describe.skipIf(
     envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === undefined ||
       envValue("XIAOMI_TOKEN_PLAN_SGP_API_KEY") === "",
@@ -408,7 +416,9 @@ describe("Tool Results with Images", () => {
       Effect.runPromise(handleToolWithTextAndImageResult(llm)),
     );
   });
+});
 
+describe("Tool Results with Images", () => {
   describe.skipIf(
     envValue("QWEN_TOKEN_PLAN_CN_API_KEY") === undefined ||
       envValue("QWEN_TOKEN_PLAN_CN_API_KEY") === "",
@@ -452,7 +462,9 @@ describe("Tool Results with Images", () => {
       Effect.runPromise(handleToolWithTextAndImageResult(llm)),
     );
   });
+});
 
+describe("Tool Results with Images", () => {
   describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock Provider (claude-sonnet-4-5)", () => {
     const llm = getModel("amazon-bedrock", "global.anthropic.claude-sonnet-4-5-20250929-v1:0");
 
@@ -481,7 +493,9 @@ describe("Tool Results with Images", () => {
         Effect.runPromise(handleToolWithTextAndImageResult(model, { apiKey: anthropicOAuthToken })),
     );
   });
+});
 
+describe("Tool Results with Images", () => {
   describe("OpenAI Codex Provider", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "gpt-5.5 - should handle tool result with only image",

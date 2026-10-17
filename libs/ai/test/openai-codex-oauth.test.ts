@@ -77,7 +77,6 @@ describe("OpenAI Codex OAuth", () => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
-
   it("logs in with the OpenAI Codex device code flow", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -187,7 +186,14 @@ describe("OpenAI Codex OAuth", () => {
         expect(pollTimes).toEqual([startTime, startTime + 5000]);
       }),
     ));
+});
 
+describe("OpenAI Codex OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("offers browser login first and uses the selected OpenAI Codex device code flow", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -282,7 +288,14 @@ describe("OpenAI Codex OAuth", () => {
         ]);
       }),
     ));
+});
 
+describe("OpenAI Codex OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("cancels when OpenAI Codex login method selection is cancelled", () =>
     expect(
       openaiCodexOAuth.login({
@@ -291,7 +304,14 @@ describe("OpenAI Codex OAuth", () => {
         notify: () => {},
       }),
     ).rejects.toThrow("Login cancelled"));
+});
 
+describe("OpenAI Codex OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("cancels the OpenAI Codex device code flow while waiting", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -344,7 +364,14 @@ describe("OpenAI Codex OAuth", () => {
       }),
     );
   });
+});
 
+describe("OpenAI Codex OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("times out the OpenAI Codex device code flow after 15 minutes", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -394,7 +421,14 @@ describe("OpenAI Codex OAuth", () => {
         expect((rejection as Error).message).toBe("Device flow timed out");
       }),
     ));
+});
 
+describe("OpenAI Codex OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("treats OpenAI Codex device auth 403 and 404 responses as pending", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -465,7 +499,14 @@ describe("OpenAI Codex OAuth", () => {
         expect(pollTimes).toHaveLength(3);
       }),
     ));
+});
 
+describe("OpenAI Codex OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("includes the response body in OpenAI Codex device auth poll failures", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -502,7 +543,14 @@ describe("OpenAI Codex OAuth", () => {
         );
       }),
     ));
+});
 
+describe("OpenAI Codex OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("does not write token refresh failures to stderr", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -546,7 +594,14 @@ describe("OpenAI Codex OAuth", () => {
         expect(consoleError).not.toHaveBeenCalled();
       }),
     ));
+});
 
+describe("OpenAI Codex OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("uses the app's agent name as the browser login originator", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -588,7 +643,14 @@ describe("OpenAI Codex OAuth", () => {
         expect(new URL(authUrl).searchParams.get("originator")).toBe("my-app");
       }),
     ));
+});
 
+describe("OpenAI Codex OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("falls back to the pasted redirect URL when the fixed callback port is taken", async () => {
     const blocker = createServer();
     await new Promise<void>((resolve) => {

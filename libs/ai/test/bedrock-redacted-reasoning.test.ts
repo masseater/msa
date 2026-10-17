@@ -139,7 +139,6 @@ describe("Bedrock redacted reasoning", () => {
   beforeEach(() => {
     bedrockMock.streamEvents = undefined;
   });
-
   it("does not fail the stream when reasoning arrives as redactedContent", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -171,7 +170,12 @@ describe("Bedrock redacted reasoning", () => {
         expect("redactedChunks" in thinking!).toBe(false);
       }),
     ));
+});
 
+describe("Bedrock redacted reasoning", () => {
+  beforeEach(() => {
+    bedrockMock.streamEvents = undefined;
+  });
   it("encodes the payload when the stream never sends contentBlockStop", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -196,7 +200,12 @@ describe("Bedrock redacted reasoning", () => {
         expect("index" in thinking!).toBe(false);
       }),
     ));
+});
 
+describe("Bedrock redacted reasoning", () => {
+  beforeEach(() => {
+    bedrockMock.streamEvents = undefined;
+  });
   it("joins encrypted reasoning split across deltas", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -231,7 +240,12 @@ describe("Bedrock redacted reasoning", () => {
         expect(thinking?.thinking).toBe("[Reasoning redacted]");
       }),
     ));
+});
 
+describe("Bedrock redacted reasoning", () => {
+  beforeEach(() => {
+    bedrockMock.streamEvents = undefined;
+  });
   it("replays redacted reasoning as reasoningContent.redactedContent", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -268,7 +282,12 @@ describe("Bedrock redacted reasoning", () => {
         ]);
       }),
     ));
+});
 
+describe("Bedrock redacted reasoning", () => {
+  beforeEach(() => {
+    bedrockMock.streamEvents = undefined;
+  });
   it("replays redacted reasoning before the toolUse block it belongs to", async () => {
     const messages: Message[] = [
       { role: "user", content: "read the file", timestamp: currentTimeMillis() },

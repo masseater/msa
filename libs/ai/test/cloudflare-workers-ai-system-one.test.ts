@@ -111,7 +111,9 @@ describe("Cloudflare Workers AI System One", () => {
         expect(result.usage).toMatchObject({ input: 426, output: 73, totalTokens: 499 });
       }),
     ));
+});
 
+describe("Cloudflare Workers AI System One", () => {
   it.each([
     ["@cf/cloudflare/clef", 0.24],
     ["@cf/cloudflare/clef-flash", 0.09],
@@ -153,7 +155,9 @@ describe("Cloudflare Workers AI System One", () => {
       }),
     ),
   );
+});
 
+describe("Cloudflare Workers AI System One", () => {
   it("reports runs that did not complete", () =>
     Effect.runPromise(
       Effect.gen(function* () {

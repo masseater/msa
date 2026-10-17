@@ -121,7 +121,9 @@ describe("Anthropic empty thinking signature compat", () => {
     expect(models.length).toBeGreaterThan(0);
     expect(models.every((model) => model.compat?.allowEmptySignature === true)).toBe(true);
   });
+});
 
+describe("Anthropic empty thinking signature compat", () => {
   it.each([
     "accounts/fireworks/models/deepseek-v4p1-flash",
     "accounts/fireworks/models/qwen3p8-max",

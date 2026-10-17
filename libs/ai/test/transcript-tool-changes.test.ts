@@ -148,7 +148,9 @@ describe("transcript system messages", () => {
         ]);
       }),
     ));
+});
 
+describe("transcript system messages", () => {
   test("redefines an Anthropic tool by value under the same name", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -187,7 +189,9 @@ describe("transcript system messages", () => {
         expect(payload.messages.at(-1)?.content).toHaveLength(1);
       }),
     ));
+});
 
+describe("transcript system messages", () => {
   test("sends the current Anthropic tool list without an initial tool", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -232,7 +236,9 @@ describe("transcript system messages", () => {
         expect(payload.messages.map((message) => message.role)).toEqual(["user"]);
       }),
     ));
+});
 
+describe("transcript system messages", () => {
   test("requires both Anthropic capabilities for native tool changes", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -255,7 +261,9 @@ describe("transcript system messages", () => {
         expect(payload.messages.map((message) => message.role)).toEqual(["user"]);
       }),
     ));
+});
 
+describe("transcript system messages", () => {
   test("anchors OpenAI additions at their developer message", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -290,7 +298,9 @@ describe("transcript system messages", () => {
         ).toEqual(["base prompt", "updated guidance"]);
       }),
     ));
+});
 
+describe("transcript system messages", () => {
   test("maps system-message additions into synthetic tool search", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -316,7 +326,9 @@ describe("transcript system messages", () => {
         ).toEqual(["late_tool"]);
       }),
     ));
+});
 
+describe("transcript system messages", () => {
   test("folds OpenAI updates into the leading developer message without native support", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -362,7 +374,9 @@ describe("transcript system messages", () => {
         expect(payload.input.filter((item) => item.role === "developer")).toHaveLength(2);
       }),
     ));
+});
 
+describe("transcript system messages", () => {
   test("anchors Kimi additions in tool-bearing system messages", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -396,12 +410,13 @@ describe("transcript system messages", () => {
         ).toEqual(["base prompt", undefined, "updated guidance"]);
       }),
     ));
+});
 
+describe("transcript system messages", () => {
   type KimiPayload = {
     tools?: Array<{ function?: { name: string } }>;
     messages: Array<{ role: string; tools?: Array<{ function?: { name: string } }> }>;
   };
-
   test.each(["k3", "k3-256k", "kimi-for-coding"] as const)(
     "anchors additions for Kimi Coding %s",
     (modelId) =>
@@ -437,7 +452,9 @@ describe("transcript system messages", () => {
         expect(payload.messages.some((message) => message.tools !== undefined)).toBe(false);
       }),
     ));
+});
 
+describe("transcript system messages", () => {
   test("keeps Kimi K2 system text inline without dynamic tool messages", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -470,7 +487,9 @@ describe("transcript system messages", () => {
         ).toEqual(["base prompt", "updated guidance"]);
       }),
     ));
+});
 
+describe("transcript system messages", () => {
   test("folds OpenAI-compatible updates into the system prompt without native support", () =>
     Effect.runPromise(
       Effect.gen(function* () {

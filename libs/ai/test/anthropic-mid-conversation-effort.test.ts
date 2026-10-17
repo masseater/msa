@@ -135,7 +135,9 @@ describe("Anthropic mid-conversation effort", () => {
         expect(first.message.providerThinkingLevel).toBe("low");
       }),
     ));
+});
 
+describe("Anthropic mid-conversation effort", () => {
   it.each(["low", "medium", "high", "xhigh", "max"] as const)(
     "preserves native effort %s",
     (effort) =>
@@ -185,7 +187,9 @@ describe("Anthropic mid-conversation effort", () => {
         ]);
       }),
     ));
+});
 
+describe("Anthropic mid-conversation effort", () => {
   it("sends plain disabled thinking without effort when off is supported", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -232,7 +236,9 @@ describe("Anthropic mid-conversation effort", () => {
         expect(message.providerThinkingLevel).toBe("high");
       }),
     ));
+});
 
+describe("Anthropic mid-conversation effort", () => {
   it("leaves unsupported models on top-level effort", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -249,7 +255,9 @@ describe("Anthropic mid-conversation effort", () => {
         expect(message.providerThinkingLevel).toBeUndefined();
       }),
     ));
+});
 
+describe("Anthropic mid-conversation effort", () => {
   it("sends the effort and binding beta headers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -293,7 +301,9 @@ describe("Anthropic mid-conversation effort", () => {
         expect(betaHeader).toContain("thinking-binding-controls-2026-08-01");
       }),
     ));
+});
 
+describe("Anthropic mid-conversation effort", () => {
   it("generates exact model and transport gates", () => {
     const direct = getModel("anthropic", "claude-fable-5-1");
     const openRouter = getModel("openrouter", "anthropic/claude-fable-5.1");

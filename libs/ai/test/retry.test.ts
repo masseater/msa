@@ -70,7 +70,9 @@ describe("provider retry classification", () => {
       ),
     ).toBe(true);
   });
+});
 
+describe("provider retry classification", () => {
   it.each([
     wrappedDnsLookupError,
     "connect ENOTFOUND api.example.com",
@@ -118,7 +120,9 @@ describe("provider retry classification", () => {
       ),
     ).toBe(true);
   });
+});
 
+describe("provider retry classification", () => {
   it("keeps provider limit errors non-retryable", () => {
     expect(
       isRetryableAssistantError(
@@ -179,9 +183,7 @@ describe("retryDelayMs", () => {
 });
 
 describe("retryAssistantCall", () => {
-  const disabled: RetryPolicy = { enabled: false, maxRetries: 3, baseDelayMs: 0 };
   const enabled: RetryPolicy = { enabled: true, maxRetries: 3, baseDelayMs: 0 };
-
   it("returns a successful response immediately without retrying", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -230,7 +232,10 @@ describe("retryAssistantCall", () => {
         expect(onRetryFinished).not.toHaveBeenCalled();
       }),
     ));
+});
 
+describe("retryAssistantCall", () => {
+  const enabled: RetryPolicy = { enabled: true, maxRetries: 3, baseDelayMs: 0 };
   it("retries a transient error up to maxRetries then returns the final error", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -253,7 +258,9 @@ describe("retryAssistantCall", () => {
         expect(onRetryFinished).toHaveBeenCalledWith(false, 3, "terminated");
       }),
     ));
+});
 
+describe("retryAssistantCall", () => {
   it("reports capped retry delays", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -281,7 +288,10 @@ describe("retryAssistantCall", () => {
         expect(onRetryScheduled.mock.calls.map((call) => call[2])).toEqual([10, 15, 15, 15]);
       }),
     ));
+});
 
+describe("retryAssistantCall", () => {
+  const enabled: RetryPolicy = { enabled: true, maxRetries: 3, baseDelayMs: 0 };
   it("stops retrying once a call succeeds", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -325,7 +335,10 @@ describe("retryAssistantCall", () => {
         expect(onRetryFinished).toHaveBeenCalledWith(false, 1);
       }),
     ));
+});
 
+describe("retryAssistantCall", () => {
+  const disabled: RetryPolicy = { enabled: false, maxRetries: 3, baseDelayMs: 0 };
   it("does not retry when policy is disabled", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -348,7 +361,10 @@ describe("retryAssistantCall", () => {
         expect(onRetryFinished).not.toHaveBeenCalled();
       }),
     ));
+});
 
+describe("retryAssistantCall", () => {
+  const enabled: RetryPolicy = { enabled: true, maxRetries: 3, baseDelayMs: 0 };
   it("emits onRetryAttemptStart after backoff before each retried call", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -389,7 +405,9 @@ describe("retryAssistantCall", () => {
         ]);
       }),
     ));
+});
 
+describe("retryAssistantCall", () => {
   it("aborts backoff sleep via signal, returns an aborted message, and emits onRetryFinished(false)", () => {
     const controller = new AbortController();
     return Effect.runPromise(

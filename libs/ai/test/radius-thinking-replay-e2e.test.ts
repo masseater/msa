@@ -137,7 +137,9 @@ describe("replayed Claude thinking stays in context", () => {
         }),
       ),
   );
+});
 
+describe("replayed Claude thinking stays in context", () => {
   it.skipIf(radiusKey === undefined || radiusKey === "")(
     "radius keeps it when the client supplies the level",
     { timeout: 180000 },

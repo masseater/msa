@@ -95,7 +95,9 @@ describe("Mistral reasoning mode selection", () => {
         expect(payload.reasoningEffort).toBeUndefined();
       }),
     ));
+});
 
+describe("Mistral reasoning mode selection", () => {
   describe.each(["mistral-small-2603", "mistral-medium-latest", "zai-glm-5-2"] as const)(
     "%s",
     (modelId) => {
@@ -135,7 +137,9 @@ describe("Mistral reasoning mode selection", () => {
         ));
     },
   );
+});
 
+describe("Mistral reasoning mode selection", () => {
   it("sends max for GLM-5.2", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -184,7 +188,9 @@ describe("Mistral reasoning mode selection", () => {
         expect(payload.promptMode).toBeUndefined();
       }),
     ));
+});
 
+describe("Mistral reasoning mode selection", () => {
   it("uses the session id as prompt cache key", () =>
     Effect.runPromise(
       Effect.gen(function* () {

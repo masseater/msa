@@ -132,7 +132,9 @@ describe("bedrock endpoint resolution", () => {
         expect(config["region"]).toBe("eu-central-1");
       }),
     ));
+});
 
+describe("bedrock endpoint resolution", () => {
   it("handles missing regions for explicit, scoped, and ambient profiles", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -177,7 +179,9 @@ describe("bedrock endpoint resolution", () => {
         expect(config["region"]).toBe("us-west-2");
       }),
     ));
+});
 
+describe("bedrock endpoint resolution", () => {
   it("extracts region from inference profile ARN regardless of AWS_REGION", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -227,7 +231,9 @@ describe("bedrock endpoint resolution", () => {
         expect(config["authSchemePreference"]).toBeUndefined();
       }),
     ));
+});
 
+describe("bedrock endpoint resolution", () => {
   it("uses the generic API key option as a Bedrock bearer token", () =>
     Effect.runPromise(
       Effect.gen(function* () {

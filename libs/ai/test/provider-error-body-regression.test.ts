@@ -124,7 +124,6 @@ describe("provider error body passthrough (per-tier regression)", () => {
   beforeEach(() => {
     openaiMock.parsedBody = { error: "blocked by gateway WAF" };
   });
-
   it("openai-completions (body-blind text) surfaces status + body", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -170,7 +169,12 @@ describe("provider error body passthrough (per-tier regression)", () => {
         expect(output.errorMessage).toContain("blocked by gateway WAF");
       }),
     ));
+});
 
+describe("provider error body passthrough (per-tier regression)", () => {
+  beforeEach(() => {
+    openaiMock.parsedBody = { error: "blocked by gateway WAF" };
+  });
   it("bedrock (body-blind) surfaces the gateway body instead of Unknown: UnknownError", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -193,7 +197,12 @@ describe("provider error body passthrough (per-tier regression)", () => {
         expect(output.errorMessage).not.toContain("Unknown: UnknownError");
       }),
     ));
+});
 
+describe("provider error body passthrough (per-tier regression)", () => {
+  beforeEach(() => {
+    openaiMock.parsedBody = { error: "blocked by gateway WAF" };
+  });
   it("bedrock preserves the SDK validation message when the response body is a stream", () =>
     Effect.runPromise(
       Effect.gen(function* () {

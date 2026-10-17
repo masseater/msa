@@ -42,7 +42,6 @@ describe("Anthropic OAuth", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
-
   it("keeps the localhost redirect_uri for manual callback login", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -89,7 +88,12 @@ describe("Anthropic OAuth", () => {
         expect(fetchMock).toHaveBeenCalledOnce();
       }),
     ));
+});
 
+describe("Anthropic OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("offers browser login first and uses the selected Anthropic copy code flow", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -151,7 +155,12 @@ describe("Anthropic OAuth", () => {
         ]);
       }),
     ));
+});
 
+describe("Anthropic OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("cancels when Anthropic login method selection is cancelled", () =>
     expect(
       anthropicOAuth.login({
@@ -160,7 +169,12 @@ describe("Anthropic OAuth", () => {
         notify: () => {},
       }),
     ).rejects.toThrow("Login cancelled"));
+});
 
+describe("Anthropic OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("omits scope from refresh token requests", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -199,7 +213,12 @@ describe("Anthropic OAuth", () => {
         expect(fetchMock).toHaveBeenCalledOnce();
       }),
     ));
+});
 
+describe("Anthropic OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("anthropicOAuth.login resolves through the manual_code prompt and aborts it after settling", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -241,7 +260,12 @@ describe("Anthropic OAuth", () => {
         expect(manualSignal?.aborted).toBe(true);
       }),
     ));
+});
 
+describe("Anthropic OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("completes login through the browser callback and shows the sign-in page", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -173,7 +173,9 @@ describe("llama.cpp classifier", () => {
         expect(template?.body["chat_template_kwargs"]).toEqual({ enable_thinking: false });
       }),
     ));
+});
 
+describe("llama.cpp classifier", () => {
   it("repeats the state around all questions and ends with this question's labels", () => {
     const rendered = renderQuestion(context, "team");
     const state = 'State:\n{\n "message": "Help! My payouts have been failing for 3 days."\n}';
@@ -217,7 +219,9 @@ describe("llama.cpp classifier", () => {
       ].join("\n"),
     );
   });
+});
 
+describe("llama.cpp classifier", () => {
   it("shares everything before the final question across the questions of a request", () => {
     const prefix = (id: string) => {
       const { content } = renderQuestion(context, id);
@@ -256,7 +260,9 @@ describe("llama.cpp classifier", () => {
         expect(labelProbabilities([-0.1, -2.5], 2)).toEqual(expected);
       }),
     ));
+});
 
+describe("llama.cpp classifier", () => {
   it("rejects non-positive temperatures before sending requests", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -299,7 +305,9 @@ describe("llama.cpp classifier", () => {
         expect(completionDepths(never.requests)).toEqual([256, 4096, 32768]);
       }),
     ));
+});
 
+describe("llama.cpp classifier", () => {
   it("closes a reasoning block the template leaves open", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -321,7 +329,9 @@ describe("llama.cpp classifier", () => {
         expect(completion?.body["prompt"]).toBe("<|assistant|>\n<think></think>");
       }),
     ));
+});
 
+describe("llama.cpp classifier", () => {
   it("reads labels in reply position and rejects labels that are not one token", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -360,7 +370,9 @@ describe("llama.cpp classifier", () => {
         expect(result.errorMessage).toContain('Label "Yes" is not a single token for qwen');
       }),
     ));
+});
 
+describe("llama.cpp classifier", () => {
   it("caches label tokens per server and model", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -385,7 +397,9 @@ describe("llama.cpp classifier", () => {
         );
       }),
     ));
+});
 
+describe("llama.cpp classifier", () => {
   it("validates option counts before sending requests", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -416,7 +430,9 @@ describe("llama.cpp classifier", () => {
         expect(server.requests).toEqual([]);
       }),
     ));
+});
 
+describe("llama.cpp classifier", () => {
   it("passes completion payloads and responses through the request hooks", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -455,7 +471,9 @@ describe("llama.cpp classifier", () => {
         ).toBe(1);
       }),
     ));
+});
 
+describe("llama.cpp classifier", () => {
   it("reports server errors and cancellation", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -506,7 +524,9 @@ describe("llama.cpp classifier", () => {
     expect(llamaServerRoot("https://example.com/prefix/v1")).toBe("https://example.com/prefix");
     expect(llamaServerRoot("http://127.0.0.1:8080")).toBe("http://127.0.0.1:8080");
   });
+});
 
+describe("llama.cpp classifier", () => {
   it("computes TypeSafe's confidence and expected scores", () => {
     expect(peakConfidence([0.89, 0.06, 0.05])).toBeCloseTo(0.835);
     expect(peakConfidence([0.5, 0.5])).toBe(0);

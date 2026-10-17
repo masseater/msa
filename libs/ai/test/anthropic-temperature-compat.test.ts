@@ -113,7 +113,9 @@ describe("Anthropic temperature compatibility", () => {
         expect(payload.temperature).toBe(0);
       }),
     ));
+});
 
+describe("Anthropic temperature compatibility", () => {
   it("keeps temperature for Claude Sonnet 4.6", () =>
     Effect.runPromise(
       Effect.gen(function* () {

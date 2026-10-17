@@ -92,7 +92,14 @@ describe.skipIf(
       }),
     ),
   );
+});
 
+describe.skipIf(
+  envValue("OPENAI_API_KEY") === undefined ||
+    envValue("OPENAI_API_KEY") === "" ||
+    envValue("ANTHROPIC_API_KEY") === undefined ||
+    envValue("ANTHROPIC_API_KEY") === "",
+)("OpenAI Responses reasoning replay e2e", () => {
   it("handles same-provider different-model handoff with tool calls", { retry: 2 }, () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -186,7 +193,14 @@ describe.skipIf(
       }),
     ),
   );
+});
 
+describe.skipIf(
+  envValue("OPENAI_API_KEY") === undefined ||
+    envValue("OPENAI_API_KEY") === "" ||
+    envValue("ANTHROPIC_API_KEY") === undefined ||
+    envValue("ANTHROPIC_API_KEY") === "",
+)("OpenAI Responses reasoning replay e2e", () => {
   it("handles cross-provider handoff from Anthropic to OpenAI Codex", { retry: 2 }, () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -81,7 +81,9 @@ describe("responseId E2E Tests", () => {
       );
     },
   );
+});
 
+describe("responseId E2E Tests", () => {
   describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Responses Provider",
     () => {
@@ -126,7 +128,9 @@ describe("responseId E2E Tests", () => {
       );
     },
   );
+});
 
+describe("responseId E2E Tests", () => {
   describe("OpenAI Codex Provider", () => {
     it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "should expose responseId",

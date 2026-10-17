@@ -110,7 +110,9 @@ describe("Bedrock provider stream events", () => {
         expect(result.content).toEqual([{ type: "text", text: "hello" }]);
       }),
     ));
+});
 
+describe("Bedrock provider stream events", () => {
   it("forwards SDK error items before reporting them", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -123,7 +123,9 @@ describe("Anthropic auth token env", () => {
         });
       }),
     ));
+});
 
+describe("Anthropic auth token env", () => {
   it("preserves ANTHROPIC_OAUTH_TOKEN as OAuth-shaped API auth", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -152,7 +154,9 @@ describe("Anthropic auth token env", () => {
         });
       }),
     ));
+});
 
+describe("Anthropic auth token env", () => {
   it("uses Authorization headers without OAuth-mode request shaping", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -199,7 +203,9 @@ describe("Anthropic auth token env", () => {
         ]);
       }),
     ));
+});
 
+describe("Anthropic auth token env", () => {
   it("preserves OAuth request shaping for ANTHROPIC_OAUTH_TOKEN", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -287,7 +293,9 @@ describe("Anthropic-compatible user agents", () => {
         expect(mockState.createParams?.["betas"]).toEqual(["custom-beta"]);
       }),
     ));
+});
 
+describe("Anthropic-compatible user agents", () => {
   it("preserves explicit Anthropic beta header suppression", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -38,7 +38,6 @@ describe("Meta OAuth", () => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
-
   it("logs in with the device flow and mints a Model API key", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -112,7 +111,14 @@ describe("Meta OAuth", () => {
         );
       }),
     ));
+});
 
+describe("Meta OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("re-mints the API key from the stored identity token on refresh", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -143,7 +149,14 @@ describe("Meta OAuth", () => {
         );
       }),
     ));
+});
 
+describe("Meta OAuth", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
   it("reports the setup URL when Meta issues no key", () =>
     Effect.runPromise(
       Effect.gen(function* () {

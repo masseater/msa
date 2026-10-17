@@ -88,7 +88,9 @@ describe("Radius provider catalogs", () => {
         ]);
       }),
     ));
+});
 
+describe("Radius provider catalogs", () => {
   it("replaces the static public catalog with a cached catalog without network access", () =>
     Effect.runPromise(
       Effect.gen(function* () {

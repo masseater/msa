@@ -73,7 +73,6 @@ describe("bedrock credential priority", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
-
   it("prefers explicit and scoped profiles over ambient AWS access keys", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -109,7 +108,12 @@ describe("bedrock credential priority", () => {
         });
       }),
     ));
+});
 
+describe("bedrock credential priority", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
   it("uses ambient AWS access keys when only an ambient profile is set", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -157,7 +157,9 @@ describe("Models runtime", () => {
         ]);
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("applies request-wide pricing tiers above the configured input threshold", () => {
     const model = testModel("openai", "gpt-5.6-sol");
     model.cost = {
@@ -193,7 +195,9 @@ describe("Models runtime", () => {
     expect(long.cacheRead).toBe(0.072);
     expect(long.cacheWrite).toBe(0.0000125);
   });
+});
 
+describe("Models runtime", () => {
   it("registers, replaces, and deletes providers", () => {
     const models = createModels();
     models.setProvider(testProvider({ id: "p1" }));
@@ -235,7 +239,9 @@ describe("Models runtime", () => {
 
     return Promise.resolve();
   });
+});
 
+describe("Models runtime", () => {
   it("keeps chat reads independent from the all-model catalog", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -271,7 +277,9 @@ describe("Models runtime", () => {
     expect(models.getModels("broken")).toEqual([]);
     expect(() => models.getProvider("broken")?.getModels()).toThrow("boom");
   });
+});
 
+describe("Models runtime", () => {
   it("refresh() updates every configured dynamic provider and reports failures", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -323,7 +331,9 @@ describe("Models runtime", () => {
         expect(second.errors.get("flaky")?.message).toBe("fetch failed");
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("restricts refresh work to selected providers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -350,7 +360,9 @@ describe("Models runtime", () => {
         expect(calls).toEqual(["two:cache", "two:network"]);
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("restores cached models before waiting for network auth", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -402,7 +414,9 @@ describe("Models runtime", () => {
       }),
     );
   });
+});
 
+describe("Models runtime", () => {
   it("lets providers choose persistent deletion and ephemeral publication atomically", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -458,7 +472,9 @@ describe("Models runtime", () => {
         expect(state).toBe("ephemeral");
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("persists dynamic catalogs and restores them without network access", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -498,7 +514,9 @@ describe("Models runtime", () => {
         expect(offline.getModel("dynamic", "fetched")).toBeDefined();
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("passes effective API-key credentials and refresh options while skipping unconfigured providers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -541,7 +559,9 @@ describe("Models runtime", () => {
         expect(unconfiguredRefreshes).toBe(0);
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("passes the registered provider's base URL, including wrapper overrides, to refreshModels", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -567,7 +587,9 @@ describe("Models runtime", () => {
         ]);
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("refreshes expired OAuth before refreshing models", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -618,7 +640,9 @@ describe("Models runtime", () => {
         });
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("persists an OAuth refresh that started before the model refresh was cancelled", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -673,7 +697,9 @@ describe("Models runtime", () => {
       }),
     );
   });
+});
 
+describe("Models runtime", () => {
   it("always gives providers a concrete signal", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -696,7 +722,9 @@ describe("Models runtime", () => {
         expect(receivedSignal?.aborted).toBe(false);
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("binds model-store waits to the provider refresh signal", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -746,7 +774,9 @@ describe("Models runtime", () => {
         expect(storageSignals.every((signal) => signal === providerSignal)).toBe(true);
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("returns aborted state without reporting cancellation as a provider error", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -770,7 +800,9 @@ describe("Models runtime", () => {
       }),
     );
   });
+});
 
+describe("Models runtime", () => {
   it("stops waiting on abort when a provider ignores its signal", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -820,7 +852,9 @@ describe("Models runtime", () => {
       }),
     );
   });
+});
 
+describe("Models runtime", () => {
   it("rejects late publication from a superseded non-cooperative provider", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -883,7 +917,9 @@ describe("Models runtime", () => {
         );
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("passes caller signals to provider auth callbacks", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -921,7 +957,9 @@ describe("Models runtime", () => {
       }),
     );
   });
+});
 
+describe("Models runtime", () => {
   it("stops waiting for non-cooperative auth callbacks", () => {
     const authController = new AbortController();
     const availableController = new AbortController();
@@ -989,7 +1027,9 @@ describe("Models runtime", () => {
       }),
     );
   });
+});
 
+describe("Models runtime", () => {
   it("cancels queued credential mutations without running them later", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -1037,7 +1077,9 @@ describe("Models runtime", () => {
       }),
     );
   });
+});
 
+describe("Models runtime", () => {
   it("persists an OAuth refresh that started before the request was cancelled", () => {
     const controller = new AbortController();
     return Effect.runPromise(
@@ -1093,7 +1135,9 @@ describe("Models runtime", () => {
       }),
     );
   });
+});
 
+describe("Models runtime", () => {
   it("resolves auth: stored credential owns the provider, ambient only when nothing stored", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1135,7 +1179,9 @@ describe("Models runtime", () => {
         expect(apiKeyResolution?.source).toBe("stored");
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("checks provider auth without refreshing OAuth and filters available models", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1192,7 +1238,9 @@ describe("Models runtime", () => {
         ).toEqual(["ambient"]);
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("runs provider login and logout through the credential store", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1236,7 +1284,9 @@ describe("Models runtime", () => {
         expect(yield* Effect.promise(() => models.getAuth("p1"))).toBeUndefined();
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("refreshes expired oauth credentials and persists the rotated credential", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1269,7 +1319,9 @@ describe("Models runtime", () => {
         ).toBe("new-token");
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("refreshes oauth credentials with less than five minutes remaining", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1298,7 +1350,9 @@ describe("Models runtime", () => {
         expect(refresh).toHaveBeenCalledOnce();
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("honors a caller's longer OAuth minimum validity", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1330,7 +1384,9 @@ describe("Models runtime", () => {
         expect(refresh).toHaveBeenCalledOnce();
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("rejects with code oauth when refresh fails, preserving the stored credential", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1359,7 +1415,9 @@ describe("Models runtime", () => {
         ).toBe("old");
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("serializes concurrent OAuth refreshes through store.modify (no double refresh)", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1409,7 +1467,9 @@ describe("Models runtime", () => {
         expect(b?.auth.apiKey).toBe("new-1");
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("valid oauth tokens resolve without touching modify", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1441,7 +1501,9 @@ describe("Models runtime", () => {
         expect(modifies).toBe(0);
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("wraps credential store failures in ModelsError", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1470,7 +1532,9 @@ describe("Models runtime", () => {
         );
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("keeps the underlying reason in wrapped oauth refresh errors", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1520,7 +1584,9 @@ describe("Models runtime", () => {
         );
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("uses explicit request api key and env during provider auth resolution", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1564,7 +1630,9 @@ describe("Models runtime", () => {
         expect(calls[0]?.options?.env).toEqual({ ACCOUNT_ID: "acct" });
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("merges resolved auth into stream options; explicit options win per field", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1605,7 +1673,9 @@ describe("Models runtime", () => {
         expect(calls[1]?.options?.apiKey).toBe("resolved-key");
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("adds model headers only for model auth and transforms assembled headers once", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -1647,7 +1717,9 @@ describe("Models runtime", () => {
         expect(calls[0]?.options).not.toHaveProperty("transformHeaders");
       }),
     ));
+});
 
+describe("Models runtime", () => {
   it("produces an error stream for unknown providers instead of throwing", () =>
     Effect.runPromise(
       Effect.gen(function* () {

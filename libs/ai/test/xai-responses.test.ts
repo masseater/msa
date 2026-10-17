@@ -132,7 +132,6 @@ describe("xAI Responses provider", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
   it("excludes retired and redundant models from the built-in catalog", () => {
     for (const modelId of [
       "grok-3",
@@ -170,7 +169,12 @@ describe("xAI Responses provider", () => {
       "high",
     ]);
   });
+});
 
+describe("xAI Responses provider", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("includes Grok 4.7 capabilities and long-context pricing", () => {
     expect(XAI_MODELS["grok-4.7"]).toMatchObject({
       api: "openai-responses",
@@ -195,7 +199,12 @@ describe("xAI Responses provider", () => {
       },
     });
   });
+});
 
+describe("xAI Responses provider", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("uses /responses with bearer auth and xAI-compatible request fields", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -236,7 +245,12 @@ describe("xAI Responses provider", () => {
         );
       }),
     ));
+});
 
+describe("xAI Responses provider", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("requests encrypted reasoning without an effort override", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -280,7 +294,12 @@ describe("xAI Responses provider", () => {
         });
       }),
     ));
+});
 
+describe("xAI Responses provider", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("uses /responses for Grok 4.3", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -304,7 +323,12 @@ describe("xAI Responses provider", () => {
         });
       }),
     ));
+});
 
+describe("xAI Responses provider", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("uses msa's User-Agent by default for Responses requests", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -351,7 +375,12 @@ describe("xAI Responses provider", () => {
         expect(yield* captureCompletionsUserAgent()).toBe(MSA_USER_AGENT);
       }),
     ));
+});
 
+describe("xAI Responses provider", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it("lets explicit headers override the default Completions User-Agent", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -74,7 +74,9 @@ describe("Fireworks models", () => {
       }),
     ),
   );
+});
 
+describe("Fireworks models", () => {
   it("routes Kimi K3 through the OpenAI-compatible API with native effort controls", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -128,7 +130,9 @@ describe("Fireworks models", () => {
         expect(payload?.["reasoning_effort"]).toBe("max");
       }),
     ));
+});
 
+describe("Fireworks models", () => {
   it.each([
     ["accounts/fireworks/models/deepseek-v4p1-flash", ["off", "low", "high", "max"]],
     ["accounts/fireworks/models/qwen3p8-max", ["off", "low", "medium", "xhigh"]],
@@ -177,7 +181,9 @@ describe("Fireworks models", () => {
   ] as const)("exposes distinct native effort levels for %s", (modelId, levels) => {
     expect(getSupportedThinkingLevels(getModel("fireworks", modelId))).toEqual(levels);
   });
+});
 
+describe("Fireworks models", () => {
   it("keeps toggle-only Messages models without a verified fallback on budget-based thinking", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -423,7 +429,9 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
         expect(request.headers["x-session-affinity"]).toBeUndefined();
       }),
     ));
+});
 
+describe("Anthropic-compatible session affinity and tool compat", () => {
   it("sends only x-session-id for OpenRouter models", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -466,7 +474,9 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
         expect(request.headers["x-session-id"]).toBeUndefined();
       }),
     ));
+});
 
+describe("Anthropic-compatible session affinity and tool compat", () => {
   it("omits cache_control on tools for Fireworks models", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -512,7 +522,9 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
         expect((lastTool["cache_control"] as { type: string }).type).toBe("ephemeral");
       }),
     ));
+});
 
+describe("Anthropic-compatible session affinity and tool compat", () => {
   it("sends eager_input_streaming on tools for native Anthropic models", () =>
     Effect.runPromise(
       Effect.gen(function* () {

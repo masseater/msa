@@ -81,7 +81,9 @@ describe("ProviderRequestOptions.telemetryContext", () => {
       telemetryContext,
     );
   });
+});
 
+describe("ProviderRequestOptions.telemetryContext", () => {
   it("survives provider and Models stream/deferred dispatch", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -139,7 +141,9 @@ describe("ProviderRequestOptions.telemetryContext", () => {
         expect(observed.every((value) => value === telemetryContext)).toBe(true);
       }),
     ));
+});
 
+describe("ProviderRequestOptions.telemetryContext", () => {
   it("survives direct and Models image dispatch", () =>
     Effect.runPromise(
       Effect.gen(function* () {

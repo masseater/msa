@@ -81,7 +81,6 @@ describe("OpenAI ChatGPT OAuth", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
-
   it("registers a user-owned client and stores its issued ID and granted scopes", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -125,7 +124,12 @@ describe("OpenAI ChatGPT OAuth", () => {
         });
       }),
     ));
+});
 
+describe("OpenAI ChatGPT OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("uses the app's agent name as the name hint", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -161,7 +165,12 @@ describe("OpenAI ChatGPT OAuth", () => {
         expect(fetchMock).not.toHaveBeenCalled();
       }),
     ));
+});
 
+describe("OpenAI ChatGPT OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("rejects a token response that did not grant direct token use", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -198,7 +207,12 @@ describe("OpenAI ChatGPT OAuth", () => {
         expect(authorizationStarted).toBe(false);
       }),
     ));
+});
 
+describe("OpenAI ChatGPT OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("requires refresh responses to rotate the refresh token", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -212,7 +226,12 @@ describe("OpenAI ChatGPT OAuth", () => {
         );
       }),
     ));
+});
 
+describe("OpenAI ChatGPT OAuth", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   it("refreshes with the credential's issued client ID and stores replacement scopes", () =>
     Effect.runPromise(
       Effect.gen(function* () {

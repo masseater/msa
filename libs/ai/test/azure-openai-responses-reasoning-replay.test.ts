@@ -121,7 +121,9 @@ describe("Azure OpenAI Responses reasoning replay", () => {
         });
       }),
     ));
+});
 
+describe("Azure OpenAI Responses reasoning replay", () => {
   it("fills encrypted_content when output_item.done omitted it", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -64,7 +64,9 @@ describe("OpenRouter pricing overrides", () => {
       { inputTokensAbove: 200000, input: 4, output: 18, cacheRead: 0.2, cacheWrite: 0.375 },
     ]);
   });
+});
 
+describe("OpenRouter pricing overrides", () => {
   it("skips time-of-day overrides", () => {
     expect(
       openRouterChatCost({

@@ -84,11 +84,9 @@ describe("openai-completions provider retries", () => {
     mockState.requestOptions = [];
     mockState.requestErrors = [];
   });
-
   afterEach(() => {
     vi.useRealTimers();
   });
-
   it("disables SDK retries by default", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -131,7 +129,16 @@ describe("openai-completions provider retries", () => {
         ]);
       }),
     ));
+});
 
+describe("openai-completions provider retries", () => {
+  beforeEach(() => {
+    mockState.requestOptions = [];
+    mockState.requestErrors = [];
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it("fails immediately when a provider-requested retry delay exceeds the limit", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -137,7 +137,9 @@ describe("constrained tool sampling", () => {
       convertResponsesTools([makeTool()]),
     );
   });
+});
 
+describe("constrained tool sampling", () => {
   it("derives strict provider schemas without changing tool definitions", () => {
     const parameters = Type.Object({
       path: Type.String(),
@@ -164,7 +166,9 @@ describe("constrained tool sampling", () => {
       },
     });
   });
+});
 
+describe("constrained tool sampling", () => {
   it("falls back or rejects schemas that cannot be safely converted", () => {
     const cases: Array<{ parameters: Tool["parameters"]; error: string }> = [
       {
@@ -214,7 +218,9 @@ describe("constrained tool sampling", () => {
       expect(() => resolveJsonSchemaStrictSampling(tool, true)).toThrow(error);
     }
   });
+});
 
+describe("constrained tool sampling", () => {
   it("replays grammar calls as custom Responses items", () => {
     const replayedToolCall: ToolCall = {
       type: "toolCall",
@@ -272,7 +278,9 @@ describe("constrained tool sampling", () => {
       output: "done",
     });
   });
+});
 
+describe("constrained tool sampling", () => {
   it("drops foreign item ids when replaying grammar calls as custom Responses items", () => {
     const context = normalizeContext({
       messages: [
@@ -312,7 +320,9 @@ describe("constrained tool sampling", () => {
     expect(call).toMatchObject({ type: "custom_tool_call", call_id: "call_1", input: "abc" });
     expect(call !== undefined && "id" in call ? call.id : undefined).toBeUndefined();
   });
+});
 
+describe("constrained tool sampling", () => {
   it("keeps grammar input JSON deltas append-only", () => {
     const buffer = { input: "", started: false, closed: false };
     const first = appendGrammarToolInputJsonDelta(buffer, "payload", 'a"', false);
@@ -324,7 +334,9 @@ describe("constrained tool sampling", () => {
       'grammar tool input for property "payload" changed after it was closed',
     );
   });
+});
 
+describe("constrained tool sampling", () => {
   it("starts custom Responses tool calls with their initial input", async () => {
     const output = makeOutput();
     const stream = new AssistantMessageEventStream();

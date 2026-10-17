@@ -37,11 +37,9 @@ function stopAfterPayload<TPayload>(
 
 describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
   const originalEnv = envValue("MSA_CACHE_RETENTION");
-
   beforeEach(() => {
     vi.stubEnv("MSA_CACHE_RETENTION", undefined);
   });
-
   afterEach(() => {
     if (originalEnv === undefined) {
       vi.stubEnv("MSA_CACHE_RETENTION", undefined);
@@ -49,12 +47,10 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       vi.stubEnv("MSA_CACHE_RETENTION", originalEnv);
     }
   });
-
   const context = normalizeContext({
     systemPrompt: "You are a helpful assistant.",
     messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
   });
-
   describe("Anthropic Provider", () => {
     it.skipIf(envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "")(
       "should use default cache TTL (no ttl field) when MSA_CACHE_RETENTION is not set",
@@ -275,7 +271,24 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
     });
   });
+});
 
+describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
+  const originalEnv = envValue("MSA_CACHE_RETENTION");
+  beforeEach(() => {
+    vi.stubEnv("MSA_CACHE_RETENTION", undefined);
+  });
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      vi.stubEnv("MSA_CACHE_RETENTION", undefined);
+    } else {
+      vi.stubEnv("MSA_CACHE_RETENTION", originalEnv);
+    }
+  });
+  const context = normalizeContext({
+    systemPrompt: "You are a helpful assistant.",
+    messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
+  });
   describe("OpenAI Responses Provider", () => {
     it.each([
       "gpt-5.6-luna",
@@ -514,7 +527,24 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       },
     );
   });
+});
 
+describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
+  const originalEnv = envValue("MSA_CACHE_RETENTION");
+  beforeEach(() => {
+    vi.stubEnv("MSA_CACHE_RETENTION", undefined);
+  });
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      vi.stubEnv("MSA_CACHE_RETENTION", undefined);
+    } else {
+      vi.stubEnv("MSA_CACHE_RETENTION", originalEnv);
+    }
+  });
+  const context = normalizeContext({
+    systemPrompt: "You are a helpful assistant.",
+    messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
+  });
   describe("OpenAI Completions Provider", () => {
     function createCompletionsModel(
       compat?: Model<"openai-completions">["compat"],

@@ -131,7 +131,6 @@ describe("openai-completions thinking-as-text replay", () => {
   afterEach(() => {
     vi.stubEnv("OPENAI_API_KEY", undefined);
   });
-
   it("serializes same-model thinking-plus-text replay as assistant text parts", () => {
     const messages = convertMessages(
       buildModel(),
@@ -169,7 +168,12 @@ describe("openai-completions thinking-as-text replay", () => {
       content: [{ type: "text", text: "internal reasoning" }],
     });
   });
+});
 
+describe("openai-completions thinking-as-text replay", () => {
+  afterEach(() => {
+    vi.stubEnv("OPENAI_API_KEY", undefined);
+  });
   it("reaches the endpoint when replay contains both thinking and text", async () => {
     const requestBodies: ChatCompletionsRequestBody[] = [];
     const server = http.createServer((req, res) =>
