@@ -1,5 +1,6 @@
 import type * as NodeZlib from "node:zlib";
 
+import { Effect } from "effect";
 import type {
   Tool as OpenAITool,
   ResponseCreateParamsStreaming,
@@ -688,23 +689,25 @@ async function processStream(
   grammarToolInputProperties: ReadonlyMap<string, string>,
   options?: OpenAICodexResponsesOptions,
 ): Promise<void> {
-  await processResponsesStream(
-    mapCodexEvents(
-      parseSSE(response, options?.signal),
+  await Effect.runPromise(
+    processResponsesStream(
+      mapCodexEvents(
+        parseSSE(response, options?.signal),
+        output,
+        model,
+        options?.onProviderStreamEvent,
+      ),
       output,
+      events,
       model,
-      options?.onProviderStreamEvent,
+      {
+        serviceTier: options?.serviceTier,
+        grammarToolInputProperties,
+        resolveServiceTier: resolveCodexServiceTier,
+        applyServiceTierPricing: (usage, serviceTier) =>
+          applyServiceTierPricing(usage, serviceTier, model),
+      },
     ),
-    output,
-    events,
-    model,
-    {
-      serviceTier: options?.serviceTier,
-      grammarToolInputProperties,
-      resolveServiceTier: resolveCodexServiceTier,
-      applyServiceTierPricing: (usage, serviceTier) =>
-        applyServiceTierPricing(usage, serviceTier, model),
-    },
   );
 }
 
@@ -1625,26 +1628,28 @@ async function processWebSocketStream(
   }
   try {
     socket.send(JSON.stringify({ type: "response.create", ...requestBody }));
-    await processResponsesStream(
-      startWebSocketOutputOnFirstEvent(
-        mapCodexEvents(
-          parseWebSocket(socket, options?.signal, idleTimeoutMs),
-          output,
-          model,
-          options?.onProviderStreamEvent,
+    await Effect.runPromise(
+      processResponsesStream(
+        startWebSocketOutputOnFirstEvent(
+          mapCodexEvents(
+            parseWebSocket(socket, options?.signal, idleTimeoutMs),
+            output,
+            model,
+            options?.onProviderStreamEvent,
+          ),
+          onStart,
         ),
-        onStart,
+        output,
+        events,
+        model,
+        {
+          serviceTier: options?.serviceTier,
+          grammarToolInputProperties,
+          resolveServiceTier: resolveCodexServiceTier,
+          applyServiceTierPricing: (usage, serviceTier) =>
+            applyServiceTierPricing(usage, serviceTier, model),
+        },
       ),
-      output,
-      events,
-      model,
-      {
-        serviceTier: options?.serviceTier,
-        grammarToolInputProperties,
-        resolveServiceTier: resolveCodexServiceTier,
-        applyServiceTierPricing: (usage, serviceTier) =>
-          applyServiceTierPricing(usage, serviceTier, model),
-      },
     );
     if (options?.signal?.aborted === true) {
       keepConnection = false;

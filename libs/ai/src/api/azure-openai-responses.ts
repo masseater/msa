@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { AzureOpenAI } from "openai";
 import type { ResponseCreateParamsStreaming } from "openai/resources/responses/responses.js";
 import type { ReasoningEffort } from "openai/resources/shared.js";
@@ -15,7 +16,8 @@ import { currentTimeMillis } from "../utils/clock.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
-import { retryProviderRequest } from "../utils/provider-retry.ts";
+import { callHook } from "../utils/hooks.ts";
+import { providerRequestWithRetry } from "../utils/provider-retry.ts";
 import {
   getDeclaredTools,
   resolveTranscript,
@@ -60,97 +62,99 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
     model.compat?.supportsMidConvoSystemMessages,
   );
 
-  (async () => {
-    const deploymentName = resolveDeploymentName(model, options);
-
-    const output: AssistantMessage = {
-      role: "assistant",
-      content: [],
-      api: "azure-openai-responses" as Api,
-      provider: model.provider,
-      model: model.id,
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
-      stopReason: "pending",
-      timestamp: currentTimeMillis(),
-    };
-
-    try {
-      const apiKey = options?.apiKey;
-      if (apiKey === undefined || apiKey === "") {
-        throw new Error(`No API key for provider: ${model.provider}`);
-      }
-      const client = createClient(model, apiKey, options);
-      const grammarToolInputProperties = createGrammarToolInputProperties(
-        getDeclaredTools(normalizedContext.messages),
-        model.compat?.supportsOpenAIGrammarTools ?? false,
-      );
-      let params = buildParams(
-        model,
-        normalizedContext,
-        options,
-        deploymentName,
-        grammarToolInputProperties,
-      );
-      const nextParams = await options?.onPayload?.(params, model);
-      if (nextParams !== undefined) {
-        params = nextParams as ResponseCreateParamsStreaming;
-      }
-      const requestOptions = {
-        ...(options?.signal === undefined ? {} : { signal: options.signal }),
-        ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
-        maxRetries: 0,
-      };
-      const { data: openaiStream, response } = await retryProviderRequest(
-        () => client.responses.create(params, requestOptions).withResponse(),
-        {
-          maxRetries: options?.maxRetries,
-          maxRetryDelayMs: options?.maxRetryDelayMs,
-          signal: options?.signal,
+  Effect.runFork(
+    Effect.gen(function* () {
+      const deploymentName = resolveDeploymentName(model, options);
+      const output: AssistantMessage = {
+        role: "assistant",
+        content: [],
+        api: "azure-openai-responses" as Api,
+        provider: model.provider,
+        model: model.id,
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
         },
+        stopReason: "pending",
+        timestamp: currentTimeMillis(),
+      };
+      yield* Effect.gen(function* () {
+        const apiKey = options?.apiKey;
+        if (apiKey === undefined || apiKey === "") {
+          throw new Error(`No API key for provider: ${model.provider}`);
+        }
+        const client = createClient(model, apiKey, options);
+        const grammarToolInputProperties = createGrammarToolInputProperties(
+          getDeclaredTools(normalizedContext.messages),
+          model.compat?.supportsOpenAIGrammarTools ?? false,
+        );
+        let params = buildParams(
+          model,
+          normalizedContext,
+          options,
+          deploymentName,
+          grammarToolInputProperties,
+        );
+        const nextParams = yield* callHook(() => options?.onPayload?.(params, model));
+        if (nextParams !== undefined) {
+          params = nextParams as ResponseCreateParamsStreaming;
+        }
+        const requestOptions = {
+          ...(options?.signal === undefined ? {} : { signal: options.signal }),
+          ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
+          maxRetries: 0,
+        };
+        const { data: openaiStream, response } = yield* providerRequestWithRetry(
+          () => client.responses.create(params, requestOptions).withResponse(),
+          {
+            maxRetries: options?.maxRetries,
+            maxRetryDelayMs: options?.maxRetryDelayMs,
+            signal: options?.signal,
+          },
+        );
+        yield* callHook(() =>
+          options?.onResponse?.(
+            { status: response.status, headers: headersToRecord(response.headers) },
+            model,
+          ),
+        );
+        events.push({ type: "start", partial: output });
+        yield* processResponsesStream(openaiStream, output, events, model, {
+          onProviderStreamEvent: options?.onProviderStreamEvent,
+          grammarToolInputProperties,
+        });
+        if (options?.signal?.aborted === true) {
+          throw new Error("Request was aborted");
+        }
+        if (output.stopReason === "pending") {
+          throw new Error("Azure OpenAI Responses stream ended without a stop reason");
+        }
+        if (output.stopReason === "aborted" || output.stopReason === "error") {
+          throw new Error(output.errorMessage || "An unknown error occurred");
+        }
+        events.push({ type: "done", reason: output.stopReason, message: output });
+        events.end();
+      }).pipe(
+        Effect.catchDefect((error) =>
+          Effect.sync(() => {
+            for (const block of output.content) {
+              delete (block as { index?: number }).index;
+              delete (block as { partialJson?: string }).partialJson;
+              delete (block as { customInput?: unknown }).customInput;
+            }
+            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+            output.errorMessage = formatAzureOpenAIError(error);
+            events.push({ type: "error", reason: output.stopReason, error: output });
+            events.end();
+          }),
+        ),
       );
-      await options?.onResponse?.(
-        { status: response.status, headers: headersToRecord(response.headers) },
-        model,
-      );
-      events.push({ type: "start", partial: output });
-
-      await processResponsesStream(openaiStream, output, events, model, {
-        onProviderStreamEvent: options?.onProviderStreamEvent,
-        grammarToolInputProperties,
-      });
-
-      if (options?.signal?.aborted === true) {
-        throw new Error("Request was aborted");
-      }
-
-      if (output.stopReason === "pending") {
-        throw new Error("Azure OpenAI Responses stream ended without a stop reason");
-      }
-      if (output.stopReason === "aborted" || output.stopReason === "error") {
-        throw new Error(output.errorMessage || "An unknown error occurred");
-      }
-
-      events.push({ type: "done", reason: output.stopReason, message: output });
-      events.end();
-    } catch (error) {
-      for (const block of output.content) {
-        delete (block as { index?: number }).index;
-        delete (block as { partialJson?: string }).partialJson;
-        delete (block as { customInput?: unknown }).customInput;
-      }
-      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-      output.errorMessage = formatAzureOpenAIError(error);
-      events.push({ type: "error", reason: output.stopReason, error: output });
-      events.end();
-    }
-  })();
+    }),
+  );
 
   return events;
 };

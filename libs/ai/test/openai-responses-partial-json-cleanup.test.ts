@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -87,7 +88,9 @@ describe("openai responses partialJson cleanup", () => {
     const pushSpy = vi.spyOn(stream, "push");
     const argumentsJson = '{"path":"README.md","content":"updated"}';
 
-    await processResponsesStream(createFunctionCallEvents(argumentsJson), output, stream, model);
+    await Effect.runPromise(
+      processResponsesStream(createFunctionCallEvents(argumentsJson), output, stream, model),
+    );
 
     expect(output.content).toHaveLength(1);
     const persistedToolCall = output.content[0];
@@ -127,7 +130,9 @@ describe("openai responses partialJson cleanup", () => {
     const stream = new AssistantMessageEventStream();
     const argumentsJson = '{"path":"README.md","content":"updated","mode":.5}';
 
-    await processResponsesStream(createFunctionCallEvents(argumentsJson), output, stream, model);
+    await Effect.runPromise(
+      processResponsesStream(createFunctionCallEvents(argumentsJson), output, stream, model),
+    );
 
     const toolCall = output.content[0];
     if (toolCall === undefined || toolCall.type !== "toolCall")

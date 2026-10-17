@@ -3,7 +3,8 @@ import { expect, it } from "vite-plus/test";
 
 import { waitForCallbackOrManualInput } from "../src/auth/oauth/callback-server.ts";
 import type { AuthPrompt, ProviderAuthInteraction } from "../src/auth/types.ts";
-import { callbackUrl, expectDefect, request, start } from "./oauth-callback.ts";
+import { expectDefect } from "./effect-assert.ts";
+import { callbackUrl, request, start } from "./oauth-callback.ts";
 
 const interaction = (prompt: (prompt: AuthPrompt) => Promise<string>): ProviderAuthInteraction => ({
   signal: new AbortController().signal,

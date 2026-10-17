@@ -105,13 +105,11 @@ describe("Azure OpenAI Responses reasoning replay", () => {
           encrypted_content: "from-response-completed",
         };
 
-        yield* Effect.promise(() =>
-          processResponsesStream(
-            createEvents(doneItem, completedItem),
-            output,
-            new AssistantMessageEventStream(),
-            model,
-          ),
+        yield* processResponsesStream(
+          createEvents(doneItem, completedItem),
+          output,
+          new AssistantMessageEventStream(),
+          model,
         );
 
         expect(getReplayedReasoning(model, output)).toMatchObject({
@@ -139,13 +137,11 @@ describe("Azure OpenAI Responses reasoning replay", () => {
           encrypted_content: "from-response-completed",
         };
 
-        yield* Effect.promise(() =>
-          processResponsesStream(
-            createEvents(doneItem, completedItem),
-            output,
-            new AssistantMessageEventStream(),
-            model,
-          ),
+        yield* processResponsesStream(
+          createEvents(doneItem, completedItem),
+          output,
+          new AssistantMessageEventStream(),
+          model,
         );
 
         expect(getReplayedReasoning(model, output)).toMatchObject({

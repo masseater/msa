@@ -121,13 +121,11 @@ describe("OpenAI Responses terminal messages", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const output = createOutput();
-        yield* Effect.promise(() =>
-          processResponsesStream(
-            createFunctionCallEvents(),
-            output,
-            new AssistantMessageEventStream(),
-            model,
-          ),
+        yield* processResponsesStream(
+          createFunctionCallEvents(),
+          output,
+          new AssistantMessageEventStream(),
+          model,
         );
 
         expect(output).not.toHaveProperty("errorMessage");
@@ -138,11 +136,13 @@ describe("OpenAI Responses terminal messages", () => {
 describe("OpenAI Responses tool-call namespaces", () => {
   it("round-trips a function namespace received only on output_item.done", async () => {
     const output = createOutput();
-    await processResponsesStream(
-      createFunctionCallEvents(),
-      output,
-      new AssistantMessageEventStream(),
-      model,
+    await Effect.runPromise(
+      processResponsesStream(
+        createFunctionCallEvents(),
+        output,
+        new AssistantMessageEventStream(),
+        model,
+      ),
     );
 
     const toolCall = getToolCall(output);
@@ -173,14 +173,16 @@ describe("OpenAI Responses tool-call namespaces", () => {
   it("round-trips a custom-tool namespace received only on output_item.done", async () => {
     const output = createOutput();
     const grammarToolInputProperties = new Map([["query", "input"]]);
-    await processResponsesStream(
-      createCustomToolCallEvents(),
-      output,
-      new AssistantMessageEventStream(),
-      model,
-      {
-        grammarToolInputProperties,
-      },
+    await Effect.runPromise(
+      processResponsesStream(
+        createCustomToolCallEvents(),
+        output,
+        new AssistantMessageEventStream(),
+        model,
+        {
+          grammarToolInputProperties,
+        },
+      ),
     );
 
     const toolCall = getToolCall(output);

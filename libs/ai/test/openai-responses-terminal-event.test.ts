@@ -8,6 +8,7 @@ import type { Api, AssistantMessage, AssistantMessageEvent, Model } from "../src
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
+import { expectDefect } from "./effect-assert.ts";
 
 vi.mock("openai", () => {
   async function* createMockResponsesStream(): AsyncIterable<ResponseStreamEvent> {
@@ -274,10 +275,9 @@ describe("OpenAI Responses terminal event handling", () => {
         const output = createOutput(model);
         const stream = new AssistantMessageEventStream();
 
-        yield* Effect.promise(() =>
-          expect(
-            processResponsesStream(createEarlyEofEvents(), output, stream, model),
-          ).rejects.toThrow("OpenAI Responses stream ended before a terminal response event"),
+        yield* expectDefect(
+          processResponsesStream(createEarlyEofEvents(), output, stream, model),
+          "OpenAI Responses stream ended before a terminal response event",
         );
       }),
     ));
@@ -287,17 +287,14 @@ describe("OpenAI Responses terminal event handling", () => {
       Effect.gen(function* () {
         const model = createModel();
 
-        yield* Effect.promise(() =>
-          expect(
-            processResponsesStream(
-              createUnfinishedToolCallEvents(),
-              createOutput(model),
-              new AssistantMessageEventStream(),
-              model,
-            ),
-          ).rejects.toThrow(
-            "OpenAI Responses stream completed with an unfinished tool call: bash (call_1|fc_1)",
+        yield* expectDefect(
+          processResponsesStream(
+            createUnfinishedToolCallEvents(),
+            createOutput(model),
+            new AssistantMessageEventStream(),
+            model,
           ),
+          "OpenAI Responses stream completed with an unfinished tool call: bash (call_1|fc_1)",
         );
       }),
     ));
@@ -309,17 +306,14 @@ describe("OpenAI Responses terminal event handling", () => {
       Effect.gen(function* () {
         const model = createModel();
 
-        yield* Effect.promise(() =>
-          expect(
-            processResponsesStream(
-              createToolCallsWithoutOutputIndexEvents(),
-              createOutput(model),
-              new AssistantMessageEventStream(),
-              model,
-            ),
-          ).rejects.toThrow(
-            "OpenAI Responses stream completed with an unfinished tool call: bash (call_a|fc_a)",
+        yield* expectDefect(
+          processResponsesStream(
+            createToolCallsWithoutOutputIndexEvents(),
+            createOutput(model),
+            new AssistantMessageEventStream(),
+            model,
           ),
+          "OpenAI Responses stream completed with an unfinished tool call: bash (call_a|fc_a)",
         );
       }),
     ));
@@ -417,9 +411,7 @@ describe("OpenAI Responses terminal event handling", () => {
           push(event);
         };
 
-        yield* Effect.promise(() =>
-          processResponsesStream(createPhasedMessageEvents(phases), output, stream, model),
-        );
+        yield* processResponsesStream(createPhasedMessageEvents(phases), output, stream, model);
 
         expect(observedStopReasons).toEqual(expected);
         expect(output.stopReason).toBe("stop");
@@ -442,13 +434,11 @@ describe("OpenAI Responses terminal event handling", () => {
           push(event);
         };
 
-        yield* Effect.promise(() =>
-          processResponsesStream(
-            createPhasedMessageEvents(["final_answer", "final_answer"], "incomplete"),
-            output,
-            stream,
-            model,
-          ),
+        yield* processResponsesStream(
+          createPhasedMessageEvents(["final_answer", "final_answer"], "incomplete"),
+          output,
+          stream,
+          model,
         );
 
         expect(observedStopReasons).toEqual(["stop", "stop"]);
@@ -465,9 +455,7 @@ describe("OpenAI Responses terminal event handling", () => {
         const output = createOutput(model);
         const stream = new AssistantMessageEventStream();
 
-        yield* Effect.promise(() =>
-          processResponsesStream(createCompletedEvents(), output, stream, model),
-        );
+        yield* processResponsesStream(createCompletedEvents(), output, stream, model);
 
         expect(output.responseId).toBe("resp_completed");
         expect(output.stopReason).toBe("stop");
@@ -489,9 +477,7 @@ describe("OpenAI Responses terminal event handling", () => {
         const output = createOutput(model);
         const stream = new AssistantMessageEventStream();
 
-        yield* Effect.promise(() =>
-          processResponsesStream(createIncompleteEvents(), output, stream, model),
-        );
+        yield* processResponsesStream(createIncompleteEvents(), output, stream, model);
 
         expect(output.responseId).toBe("resp_incomplete");
         expect(output.stopReason).toBe("length");
@@ -515,8 +501,11 @@ describe("OpenAI Responses terminal event handling", () => {
         const output = createOutput(model);
         const stream = new AssistantMessageEventStream();
 
-        yield* Effect.promise(() =>
-          processResponsesStream(createIncompleteEvents("content_filter"), output, stream, model),
+        yield* processResponsesStream(
+          createIncompleteEvents("content_filter"),
+          output,
+          stream,
+          model,
         );
 
         expect(output.stopReason).toBe("error");
@@ -532,8 +521,11 @@ describe("OpenAI Responses terminal event handling", () => {
         const output = createOutput(model);
         const stream = new AssistantMessageEventStream();
 
-        yield* Effect.promise(() =>
-          processResponsesStream(createIncompleteEvents("max_time_limit"), output, stream, model),
+        yield* processResponsesStream(
+          createIncompleteEvents("max_time_limit"),
+          output,
+          stream,
+          model,
         );
 
         expect(output.stopReason).toBe("error");
@@ -551,10 +543,9 @@ describe("OpenAI Responses terminal event handling", () => {
         const output = createOutput(model);
         const stream = new AssistantMessageEventStream();
 
-        yield* Effect.promise(() =>
-          expect(
-            processResponsesStream(createFailedEvents(), output, stream, model),
-          ).rejects.toThrow("server_error: boom"),
+        yield* expectDefect(
+          processResponsesStream(createFailedEvents(), output, stream, model),
+          "server_error: boom",
         );
         expect(output.rawStopReason).toBe("failed");
       }),

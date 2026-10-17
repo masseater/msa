@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
@@ -385,9 +386,11 @@ describe("constrained tool sampling", () => {
       },
     ] as ResponseStreamEvent[];
 
-    await processResponsesStream(iterateEvents(events), output, stream, makeModel(), {
-      grammarToolInputProperties: new Map([["sample_tool", "payload"]]),
-    });
+    await Effect.runPromise(
+      processResponsesStream(iterateEvents(events), output, stream, makeModel(), {
+        grammarToolInputProperties: new Map([["sample_tool", "payload"]]),
+      }),
+    );
 
     expect(output.stopReason).toBe("toolUse");
     expect(starts).toEqual([{ payload: "a" }]);

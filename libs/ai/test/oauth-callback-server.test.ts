@@ -1,7 +1,8 @@
 import { Deferred, Effect, Fiber } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { callbackUrl, defectOf, expectDefect, request, send, start } from "./oauth-callback.ts";
+import { defectOf, expectDefect } from "./effect-assert.ts";
+import { callbackUrl, request, send, start } from "./oauth-callback.ts";
 
 it("ignores stray requests", () =>
   Effect.runPromise(
