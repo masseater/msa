@@ -14,12 +14,23 @@ import type {
 } from "../types.ts";
 import { ModelsError } from "./models-error.ts";
 
-/** The type of a model. Models without `type` are chat models. */
+/**
+ * The type of a model. Models without `type` are chat models.
+ *
+ * @param {AnyModel} model - model to inspect
+ * @returns {ModelType} the model type
+ */
 export function getModelType(model: AnyModel): ModelType {
   return model.type ?? "chat";
 }
 
-/** Runtime-checked model type narrowing, including legacy chat models without `type`. */
+/**
+ * Runtime-checked model type narrowing, including legacy chat models without `type`.
+ *
+ * @param {AnyModel} model - model to check
+ * @param {TType} type - expected model type
+ * @returns {boolean} whether the model has the type
+ */
 export function isModelType<TType extends ModelType>(
   model: AnyModel,
   type: TType,
@@ -50,7 +61,12 @@ export function assertClassifierModel(
   }
 }
 
-/** Rejects classifier images for models whose catalog entry does not accept image input. */
+/**
+ * Rejects classifier images for models whose catalog entry does not accept image input.
+ *
+ * @param {ClassifierModel<ClassifierApi>} model - classifier model
+ * @param {ClassifierContext} context - classifier request context
+ */
 export function assertClassifierInputSupported(
   model: ClassifierModel<ClassifierApi>,
   context: ClassifierContext,

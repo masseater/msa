@@ -8,7 +8,13 @@ import type {
 
 type Content = TextContent | ImageContent | ThinkingContent | ToolCall;
 
-/** Extract and join text from message content. */
+/**
+ * Extract and join text from message content.
+ *
+ * @param {string | readonly Content[]} content - message content
+ * @param {string} [separator="\n"] - text placed between parts
+ * @returns {string} the joined text
+ */
 export function contentText(content: string | readonly Content[], separator = "\n"): string {
   if (typeof content === "string") return content;
   return content
@@ -17,7 +23,12 @@ export function contentText(content: string | readonly Content[], separator = "\
     .join(separator);
 }
 
-/** Render a system message as a complete prompt: its content followed by its sections. */
+/**
+ * Render a system message as a complete prompt: its content followed by its sections.
+ *
+ * @param {SystemMessage} message - system message to render
+ * @returns {string} the prompt text
+ */
 export function getSystemMessageText(message: SystemMessage): string {
   const parts = [contentText(message.content)];
   for (const text of Object.values(message.sections ?? {})) {
@@ -30,6 +41,9 @@ export function getSystemMessageText(message: SystemMessage): string {
  * Render a later system message for APIs that accept system messages mid-conversation.
  * Section changes are framed by name so the model can relate them to the leading prompt.
  * This framing is request-time only and may change between versions.
+ *
+ * @param {SystemMessage} message - later system message
+ * @returns {string} the update text
  */
 export function renderSystemMessageUpdate(message: SystemMessage): string {
   const parts: string[] = [];

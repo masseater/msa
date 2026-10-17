@@ -199,6 +199,12 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  *
  * When `policy` is undefined or disabled, the first response is returned unchanged
  * (equivalent to calling `produce()` directly).
+ *
+ * @param {() => Promise<AssistantMessage>} produce - makes one assistant call
+ * @param {RetryPolicy | undefined} policy - retry policy
+ * @param {AbortSignal | undefined} signal - aborts the call and the backoff
+ * @param {RetryCallbacks} [callbacks] - retry notifications
+ * @returns {Promise<AssistantMessage>} the final assistant message
  */
 export async function retryAssistantCall(
   produce: () => Promise<AssistantMessage>,
@@ -261,6 +267,9 @@ export async function retryAssistantCall(
  * This does not implement retry policy. Callers should first handle context
  * overflow separately, then apply their own retry budget, backoff, and reporting
  * before restarting the assistant turn.
+ *
+ * @param {AssistantMessage} message - failed assistant message
+ * @returns {boolean} whether the error looks transient
  */
 export function isRetryableAssistantError(message: AssistantMessage): boolean {
   if (message.stopReason !== "error" || !message.errorMessage) return false;

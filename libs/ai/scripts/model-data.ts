@@ -369,6 +369,10 @@ export interface ModelCatalogEntry {
 /**
  * Group one provider's typed catalog entries by API and key them by `type:id`,
  * the layout of `src/providers/data/<provider>.json`.
+ *
+ * @param {string} providerId - provider id
+ * @param {readonly T[]} models - typed catalog entries
+ * @returns {{ groups: Record<string, Record<string, T>>; structure: Record<string, string> }} the groups and their structure
  */
 export function groupProviderModelData<T extends ModelCatalogEntry>(
   providerId: string,

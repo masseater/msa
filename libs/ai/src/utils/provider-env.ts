@@ -11,6 +11,9 @@ let procEnvCache: Map<string, string> | null = null;
  * apps/coding-agent/src/bun/restore-sandbox-env.ts. The ai package can be
  * used directly, without going through that entrypoint, so provider env lookup
  * must not depend on process.env having been patched.
+ *
+ * @param {string} name - environment variable name
+ * @returns {string | undefined} the value from /proc/self/environ, or undefined
  */
 function getBunSandboxEnvValue(name: string): string | undefined {
   if (
@@ -45,6 +48,10 @@ function getBunSandboxEnvValue(name: string): string | undefined {
 /**
  * Resolve a provider env value from scoped overrides, normal process.env, then
  * the duplicated Bun sandbox fallback for direct msa-ai consumers.
+ *
+ * @param {string} name - environment variable name
+ * @param {ProviderEnv} [env] - scoped provider env overrides
+ * @returns {string | undefined} the resolved value, or undefined when unset
  */
 export function getProviderEnvValue(name: string, env?: ProviderEnv): string | undefined {
   return (

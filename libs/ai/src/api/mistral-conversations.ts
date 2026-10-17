@@ -128,9 +128,6 @@ type MistralCompletionEvent = {
   };
 };
 
-/**
- * Stream responses from the native Mistral Chat Completions endpoint.
- */
 export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
   model: Model<"mistral-conversations">,
   context: TranscriptContext,
@@ -193,9 +190,6 @@ export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
   return events;
 };
 
-/**
- * Maps provider-agnostic `SimpleStreamOptions` to Mistral options.
- */
 export const streamSimple: StreamFunction<"mistral-conversations", SimpleStreamOptions> = (
   model: Model<"mistral-conversations">,
   context: TranscriptContext,

@@ -166,6 +166,11 @@ export async function startOAuthCallbackServer<T>(
  * Wait for the browser callback, or for the user to paste the code or redirect URL when the browser
  * cannot reach the loopback server (for example over SSH). Without a callback server only the manual
  * prompt is used.
+ *
+ * @param {ProviderAuthInteraction} interaction - login interaction
+ * @param {OAuthCallbackServer<T> | undefined} callback - loopback callback server, if one started
+ * @param {{ message: string; placeholder: string }} prompt - manual prompt text
+ * @returns {Promise<{ type: "callback"; value: T } | { type: "manual"; input: string }>} the callback value or the pasted input
  */
 export async function waitForCallbackOrManualInput<T>(
   interaction: ProviderAuthInteraction,

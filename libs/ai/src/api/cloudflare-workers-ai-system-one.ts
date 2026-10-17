@@ -45,6 +45,13 @@ const transport: SystemOneTransport = {
   },
 };
 
-/** Cloudflare Workers AI System One classification with public `bool` values mapped to wire-level `noul`. */
+/**
+ * Cloudflare Workers AI System One classification with public `bool` values mapped to wire-level `noul`.
+ *
+ * @param {ClassifierModel<ClassifierApi>} model - classifier model
+ * @param {ClassifierContext} context - classifier request
+ * @param {ClassifierOptions} [options] - request options
+ * @returns {Promise<ClassifierResult>} the classification result
+ */
 export const classify: ClassifierFunction<ClassifierOptions> = (model, context, options) =>
   classifySystemOne(transport, model, context, options);

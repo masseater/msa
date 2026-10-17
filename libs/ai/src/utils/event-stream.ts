@@ -135,7 +135,11 @@ export class AssistantMessageEventStream extends EventStream<
   }
 }
 
-/** Factory function for AssistantMessageEventStream (for use in extensions) */
+/**
+ * Factory function for AssistantMessageEventStream (for use in extensions)
+ *
+ * @returns {AssistantMessageEventStream} a new empty stream
+ */
 export function createAssistantMessageEventStream(): AssistantMessageEventStream {
   return new AssistantMessageEventStream();
 }

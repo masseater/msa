@@ -18,7 +18,13 @@ export class ModelsError extends Error {
   }
 }
 
-/** Callers surface `error.message` only, so keep the underlying reason in it. */
+/**
+ * Callers surface `error.message` only, so keep the underlying reason in it.
+ *
+ * @param {string} message - message to show
+ * @param {unknown} cause - underlying error
+ * @returns {string} the message with the cause appended
+ */
 function withCauseDetail(message: string, cause: unknown): string {
   if (cause === undefined || cause === null) return message;
   const detail = formatThrownValue(cause).trim();

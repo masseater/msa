@@ -34,6 +34,11 @@ function modalities(values: string[] | undefined): ("text" | "image")[] {
  * default listing omits image-only and decision models, so those come from
  * the other listings. An upstream model may appear in several results; it then
  * gets separate entries per operation.
+ *
+ * @param {readonly OpenRouterModelListItem[]} listed - default listing
+ * @param {readonly OpenRouterModelListItem[]} imageListed - image listing
+ * @param {readonly OpenRouterModelListItem[]} decisionListed - decisions listing
+ * @returns {OpenRouterCatalog} the catalog
  */
 export function buildOpenRouterCatalog(
   listed: readonly OpenRouterModelListItem[],

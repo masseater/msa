@@ -54,7 +54,12 @@ function errorDetail(json: Record<string, unknown> | null): string {
   return "";
 }
 
-/** The verification URI is opened in the user's browser; only http(s) URLs are trusted. */
+/**
+ * The verification URI is opened in the user's browser; only http(s) URLs are trusted.
+ *
+ * @param {unknown} value - verification URI
+ * @returns {string | null} the URL, or null when it is not http(s)
+ */
 function trustedHttpUrl(value: unknown): string | null {
   if (typeof value !== "string" || !value) return null;
   try {
@@ -155,7 +160,13 @@ function pollForIdentityToken(device: DeviceAuthorization, signal: AbortSignal):
   });
 }
 
-/** Exchange an identity token for a Model API key. Keys are valid for about a day. */
+/**
+ * Exchange an identity token for a Model API key. Keys are valid for about a day.
+ *
+ * @param {string} identityToken - identity token
+ * @param {AbortSignal} signal - cancels the request
+ * @returns {Promise<OAuthCredential>} the API key credential
+ */
 async function mintApiKey(identityToken: string, signal: AbortSignal): Promise<OAuthCredential> {
   const response = await fetch(API_KEY_MINT_URL, {
     method: "POST",

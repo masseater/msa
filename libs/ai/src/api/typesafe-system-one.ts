@@ -17,6 +17,13 @@ const transport: SystemOneTransport = {
   },
 };
 
-/** TypeSafe System One classification with public `bool` values mapped to wire-level `noul`. */
+/**
+ * TypeSafe System One classification with public `bool` values mapped to wire-level `noul`.
+ *
+ * @param {ClassifierModel<ClassifierApi>} model - classifier model
+ * @param {ClassifierContext} context - classifier request
+ * @param {ClassifierOptions} [options] - request options
+ * @returns {Promise<ClassifierResult>} the classification result
+ */
 export const classify: ClassifierFunction<ClassifierOptions> = (model, context, options) =>
   classifySystemOne(transport, model, context, options);

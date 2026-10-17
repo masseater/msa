@@ -57,7 +57,12 @@ async function readJson(response: Response): Promise<Record<string, unknown> | n
   }
 }
 
-/** The verification URI is opened in the user's browser; only http(s) URLs are trusted. */
+/**
+ * The verification URI is opened in the user's browser; only http(s) URLs are trusted.
+ *
+ * @param {unknown} value - verification URI
+ * @returns {string | null} the URL, or null when it is not http(s)
+ */
 function trustedHttpUrl(value: unknown): string | null {
   if (typeof value !== "string" || !value) return null;
   try {

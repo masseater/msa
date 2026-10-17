@@ -78,6 +78,8 @@ function getModelFixture(): Model<"bedrock-converse-stream"> {
  * Drive a stream to completion so the middleware (registered before `client.send`)
  * is captured even though the mocked `send()` rejects. Errors are swallowed because
  * the rejecting mock is expected — we only care about the recorded registrations.
+ *
+ * @param {BedrockOptions} options - stream options
  */
 async function driveBedrock(options: BedrockOptions): Promise<void> {
   await streamBedrock(getModelFixture(), context, options)

@@ -72,7 +72,6 @@ type BuiltinClassifierModelId<TProvider extends BuiltinProvider> =
 /** API ids of catalog entries. Built-in getters return `Model<Api>` shapes, not literal entry types. */
 type CatalogApi<TEntry> = TEntry extends { api: infer TApi extends string } ? TApi : never;
 
-/** Typed read of one generated built-in chat model. */
 export function getBuiltinModel<
   TProvider extends BuiltinProvider,
   TModelId extends BuiltinChatModelId<TProvider>,
@@ -82,7 +81,6 @@ export function getBuiltinModel<
   ] as Model<CatalogApi<(typeof MODELS)[TProvider][TModelId]>>;
 }
 
-/** Typed read of one generated built-in image model. */
 export function getBuiltinImageModel<
   TProvider extends BuiltinProvider,
   TModelId extends BuiltinImageModelId<TProvider>,
@@ -95,7 +93,6 @@ export function getBuiltinImageModel<
   ]?.[modelId as string] as ImageModel<CatalogApi<(typeof IMAGE_MODELS)[TProvider][TModelId]>>;
 }
 
-/** Typed read of one generated built-in classifier model. */
 export function getBuiltinClassifierModel<
   TProvider extends BuiltinProvider,
   TModelId extends BuiltinClassifierModelId<TProvider>,
@@ -114,7 +111,11 @@ export function getBuiltinProviders(): BuiltinProvider[] {
   return Object.keys(MODELS) as BuiltinProvider[];
 }
 
-/** Generation timestamp shared by all built-in provider catalogs. */
+/**
+ * Generation timestamp shared by all built-in provider catalogs.
+ *
+ * @returns {number | undefined} the generation timestamp, or undefined when no catalog is loaded
+ */
 export function getBuiltinModelDataGeneratedAt(): number | undefined {
   const generatedAt = Date.parse(modelDataManifest.generatedAt);
   return Number.isNaN(generatedAt) ? undefined : generatedAt;
@@ -163,7 +164,11 @@ export function getAllBuiltinModels<TProvider extends BuiltinProvider>(
   ];
 }
 
-/** All built-in providers, freshly constructed. */
+/**
+ * All built-in providers, freshly constructed.
+ *
+ * @returns {Provider[]} the built-in providers
+ */
 export function builtinProviders(): Provider[] {
   return [
     amazonBedrockProvider(),
@@ -210,7 +215,12 @@ export function builtinProviders(): Provider[] {
   ];
 }
 
-/** A `Models` collection with every built-in provider registered. */
+/**
+ * A `Models` collection with every built-in provider registered.
+ *
+ * @param {CreateModelsOptions} [options] - options for the collection
+ * @returns {MutableModels} the collection
+ */
 export function builtinModels(options?: CreateModelsOptions): MutableModels {
   const models = createModels(options);
   for (const provider of builtinProviders()) {

@@ -30,6 +30,9 @@ const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
  *
  * Example error from Anthropic:
  * "The request body is not valid JSON: no low surrogate in string: line 1 column 197667"
+ *
+ * @param {Model<TApi>} llm - model under test
+ * @param {StreamOptionsWithExtras} [options={}] - stream options
  */
 
 async function testEmojiInToolResults<TApi extends Api>(

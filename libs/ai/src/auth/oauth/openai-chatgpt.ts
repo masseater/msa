@@ -250,7 +250,12 @@ async function refreshAccessToken(
   return credentialFromTokenResponse(token, clientId);
 }
 
-/** OpenAI identifies each installation ("agent host") by a stable URI such as `urn:uuid:<uuid>`. */
+/**
+ * OpenAI identifies each installation ("agent host") by a stable URI such as `urn:uuid:<uuid>`.
+ *
+ * @param {string | undefined} deviceId - installation id
+ * @returns {string} the agent host URI
+ */
 function agentHostId(deviceId: string | undefined): string {
   if (!deviceId || !UUID_PATTERN.test(deviceId)) {
     throw new Error("Sign in with ChatGPT requires a device ID (UUID) for this installation");

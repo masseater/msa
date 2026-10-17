@@ -31,7 +31,13 @@ for (const [provider, models] of Object.entries(IMAGE_MODELS)) {
   if (imageModels.size > 0) imageModelsByProvider.set(provider, imageModels);
 }
 
-/** @deprecated Static catalog read. Use `getBuiltinImageModel` from "@msa/ai/providers/all" or `Models.getModelOfType("image", ...)`. */
+/**
+ * @deprecated Static catalog read. Use `getBuiltinImageModel` from "@msa/ai/providers/all" or `Models.getModelOfType("image", ...)`.
+ *
+ * @param {TProvider} provider - built-in provider id
+ * @param {TModelId} modelId - image model id
+ * @returns {BuiltinImageModel<TProvider, TModelId>} the image model
+ */
 export function getImageModel<
   TProvider extends BuiltinImageProvider,
   TModelId extends ImageModelIds<TProvider>,
@@ -42,12 +48,21 @@ export function getImageModel<
   >;
 }
 
-/** @deprecated Static catalog read. Use `Models.getProviders()`. */
+/**
+ * @deprecated Static catalog read. Use `Models.getProviders()`.
+ *
+ * @returns {BuiltinImageProvider[]} the built-in providers with image models
+ */
 export function getImageProviders(): BuiltinImageProvider[] {
   return Array.from(imageModelsByProvider.keys()) as BuiltinImageProvider[];
 }
 
-/** @deprecated Static catalog read. Use `getBuiltinImageModels` from "@msa/ai/providers/all" or `Models.getModelsOfType("image")`. */
+/**
+ * @deprecated Static catalog read. Use `getBuiltinImageModels` from "@msa/ai/providers/all" or `Models.getModelsOfType("image")`.
+ *
+ * @param {TProvider} provider - built-in provider id
+ * @returns {BuiltinImageModel<TProvider, ImageModelIds<TProvider>>[]} the provider's image models
+ */
 export function getImageModels<TProvider extends BuiltinImageProvider>(
   provider: TProvider,
 ): BuiltinImageModel<TProvider, ImageModelIds<TProvider>>[] {

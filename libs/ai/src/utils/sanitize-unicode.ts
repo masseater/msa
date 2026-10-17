@@ -7,8 +7,8 @@
  * Valid emoji and other characters outside the Basic Multilingual Plane use properly paired
  * surrogates and will NOT be affected by this function.
  *
- * @param text - The text to sanitize
- * @returns The sanitized text with unpaired surrogates removed
+ * @param {string} text - The text to sanitize
+ * @returns {string} The sanitized text with unpaired surrogates removed
  *
  * @example
  * // Valid emoji (properly paired surrogates) are preserved

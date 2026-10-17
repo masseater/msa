@@ -24,6 +24,9 @@ const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
  * 1. Tool results can contain image content blocks
  * 2. Providers correctly pass images from tool results to the LLM
  * 3. The LLM can see and describe images returned by tools
+ *
+ * @param {Model<TApi>} model - model under test
+ * @param {StreamOptionsWithExtras} [options] - stream options
  */
 async function handleToolWithImageResult<TApi extends Api>(
   model: Model<TApi>,
@@ -116,6 +119,9 @@ async function handleToolWithImageResult<TApi extends Api>(
  * 1. Tool results can contain mixed content blocks (text + images)
  * 2. Providers correctly pass both text and images from tool results to the LLM
  * 3. The LLM can see both the text and images in tool results
+ *
+ * @param {Model<TApi>} model - model under test
+ * @param {StreamOptionsWithExtras} [options] - stream options
  */
 async function handleToolWithTextAndImageResult<TApi extends Api>(
   model: Model<TApi>,

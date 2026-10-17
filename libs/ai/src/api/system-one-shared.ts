@@ -93,7 +93,12 @@ function parseAnswers(
   return Object.fromEntries(answers);
 }
 
-/** Maps public `bool` questions to TypeSafe's wire-level `noul` type. */
+/**
+ * Maps public `bool` questions to TypeSafe's wire-level `noul` type.
+ *
+ * @param {ClassifierContext} context - classifier request
+ * @returns {SystemOneWireRequest} the wire request
+ */
 function wireRequest(context: ClassifierContext): SystemOneWireRequest {
   return {
     state: context.state,
@@ -106,7 +111,15 @@ function wireRequest(context: ClassifierContext): SystemOneWireRequest {
   };
 }
 
-/** Runs one System One classification over the given transport. */
+/**
+ * Runs one System One classification over the given transport.
+ *
+ * @param {SystemOneTransport} transport - sends the wire request
+ * @param {ClassifierModel<ClassifierApi>} model - classifier model
+ * @param {ClassifierContext} context - classifier request
+ * @param {ClassifierOptions | undefined} options - request options
+ * @returns {Promise<ClassifierResult>} the classification result
+ */
 export async function classifySystemOne(
   transport: SystemOneTransport,
   model: ClassifierModel<ClassifierApi>,

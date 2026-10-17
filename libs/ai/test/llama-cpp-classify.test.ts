@@ -12,7 +12,11 @@ import type { ClassifierContext, ClassifierModel, ClassifierOptions } from "../s
 
 let serverCount = 0;
 
-/** A fresh server URL per test: label tokens are cached per server and model. */
+/**
+ * A fresh server URL per test: label tokens are cached per server and model.
+ *
+ * @returns {ClassifierModel<"llama-cpp-classify">} the model
+ */
 function model(): ClassifierModel<"llama-cpp-classify"> {
   serverCount++;
   return {
@@ -41,7 +45,12 @@ interface FakeServerOptions {
   tokenize?: (content: string) => number[];
 }
 
-/** Token IDs: one per character, the character code. */
+/**
+ * Token IDs: one per character, the character code.
+ *
+ * @param {string} content - text to tokenize
+ * @returns {number[]} the token ids
+ */
 function charTokens(content: string): number[] {
   return [...content].map((char) => char.codePointAt(0)!);
 }
@@ -87,7 +96,12 @@ function fakeServer(options: FakeServerOptions = {}) {
   return { fetch, requests };
 }
 
-/** Completion log-probabilities for bool (Yes/No) and letter labels; the fake tokenizer maps a label to its first character. */
+/**
+ * Completion log-probabilities for bool (Yes/No) and letter labels; the fake tokenizer maps a label to its first character.
+ *
+ * @param {string} prompt - rendered prompt
+ * @returns {Record<string, number>} the log-probabilities by label
+ */
 function answerByPrompt(prompt: string): Record<string, number> {
   if (prompt.includes("Answer Yes or No.")) return { Y: -0.05, N: -3 };
   if (prompt.includes("Answer with one level number.")) return { "2": -0.2, "1": -1.8, "0": -4 };
@@ -115,7 +129,12 @@ const context: ClassifierContext = {
   },
 };
 
-/** Maps multi-character labels to single tokens, as a real vocabulary would. */
+/**
+ * Maps multi-character labels to single tokens, as a real vocabulary would.
+ *
+ * @param {string} content - text to tokenize
+ * @returns {number[]} the token ids
+ */
 function wordTokens(content: string): number[] {
   const words: Record<string, number> = { Yes: 89, No: 78 };
   const tokens: number[] = [];

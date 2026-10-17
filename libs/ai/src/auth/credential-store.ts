@@ -10,7 +10,14 @@ export class InMemoryCredentialStore implements CredentialStore {
   private credentials = new Map<string, Credential>();
   private chains = new Map<string, Promise<unknown>>();
 
-  /** Serialize tasks per provider id without releasing the chain before active work settles. */
+  /**
+   * Serialize tasks per provider id without releasing the chain before active work settles.
+   *
+   * @param {string} providerId - provider id to serialize on
+   * @param {() => Promise<T>} task - work to run
+   * @param {AuthOperationOptions} [options] - operation options
+   * @returns {Promise<T>} the task result
+   */
   private enqueue<T>(
     providerId: string,
     task: () => Promise<T>,

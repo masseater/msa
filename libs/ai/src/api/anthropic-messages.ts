@@ -73,6 +73,10 @@ import { transformMessages } from "./transform-messages.ts";
 /**
  * Resolve cache retention preference.
  * Defaults to "short" and uses MSA_CACHE_RETENTION for backward compatibility.
+ *
+ * @param {CacheRetention} [cacheRetention] - caller preference
+ * @param {ProviderEnv} [env] - scoped provider env overrides
+ * @returns {CacheRetention} the cache retention to use
  */
 function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEnv): CacheRetention {
   if (cacheRetention) {
@@ -140,9 +144,6 @@ const fromClaudeCodeName = (name: string, tools?: Tool[]) => {
   return name;
 };
 
-/**
- * Convert content blocks to Anthropic API format
- */
 function convertContentBlocks(content: (TextContent | ImageContent)[]):
   | string
   | Array<
@@ -359,6 +360,12 @@ type AnthropicFederationConfig = NonNullable<ClientOptions["config"]>;
  * Anthropic SDK documents; the SDK performs the token exchange and refresh.
  * Only for the anthropic provider, since the exchange is an Anthropic API
  * endpoint, and only when no key or auth header was resolved.
+ *
+ * @param {Model<"anthropic-messages">} model - model the request targets
+ * @param {string | undefined} apiKey - resolved API key, if any
+ * @param {ProviderHeaders | undefined} headers - resolved request headers
+ * @param {ProviderEnv | undefined} env - scoped provider env overrides
+ * @returns {AnthropicFederationConfig | undefined} the federation config, or undefined when federation does not apply
  */
 function getAnthropicFederation(
   model: Model<"anthropic-messages">,
@@ -995,6 +1002,10 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
  * Map ThinkingLevel to Anthropic effort levels for adaptive thinking.
  * Note: effort "max" is available on all adaptive-thinking Claude models, while native
  * "xhigh" is only available on Opus 4.7/4.8, Sonnet 5, and Fable 5.
+ *
+ * @param {Model<"anthropic-messages">} model - Anthropic model the request targets
+ * @param {SimpleStreamOptions["reasoning"]} level - requested thinking level
+ * @returns {AnthropicEffort} the Anthropic effort level
  */
 function mapThinkingLevelToEffort(
   model: Model<"anthropic-messages">,

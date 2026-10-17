@@ -19,6 +19,8 @@ function getProcessEnv(): Record<string, string | undefined> | undefined {
 /**
  * Default auth context: env vars from `process.env` (undefined in browsers),
  * file existence via node:fs (always false in browsers).
+ *
+ * @returns {AuthContext} the auth context
  */
 export function defaultProviderAuthContext(): AuthContext {
   return {

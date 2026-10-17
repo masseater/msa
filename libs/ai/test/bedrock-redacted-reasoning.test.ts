@@ -87,7 +87,11 @@ const emptyUsage = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
-/** Mirrors the ConverseStream frames GPT-5.6 emits: encrypted reasoning, then text. */
+/**
+ * Mirrors the ConverseStream frames GPT-5.6 emits: encrypted reasoning, then text.
+ *
+ * @returns {unknown[]} the stream frames
+ */
 function redactedReasoningEvents(): unknown[] {
   return [
     { messageStart: { role: "assistant" } },

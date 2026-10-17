@@ -33,7 +33,12 @@ function interaction(
   return { signal: signal ?? new AbortController().signal, notify: () => {}, prompt };
 }
 
-/** A manual prompt that stays open until its signal aborts. */
+/**
+ * A manual prompt that stays open until its signal aborts.
+ *
+ * @param {(prompt: AuthPrompt) => void} [onPrompt] - called with each prompt
+ * @returns {(prompt: AuthPrompt) => Promise<string>} the prompt function
+ */
 function pendingPrompt(
   onPrompt?: (prompt: AuthPrompt) => void,
 ): (prompt: AuthPrompt) => Promise<string> {

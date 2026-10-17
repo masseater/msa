@@ -11,7 +11,13 @@ function resolveAzureModel(model: Model<Api>, options: StreamOptions | undefined
   return { ...model, baseUrl: resolveAzureBaseUrl(model, options) };
 }
 
-/** Send the deployment name as the request's model, keeping `model.id` as the catalog id. */
+/**
+ * Send the deployment name as the request's model, keeping `model.id` as the catalog id.
+ *
+ * @param {Model<Api>} model - Azure model the request targets
+ * @param {T | undefined} options - caller stream options
+ * @returns {T | undefined} the options with the deployment name as the request model
+ */
 function withDeploymentName<T extends StreamOptions>(
   model: Model<Api>,
   options: T | undefined,
@@ -30,6 +36,9 @@ function withDeploymentName<T extends StreamOptions>(
 /**
  * Resolve the Azure endpoint and deployment before dispatch, inside `lazyStream` so an
  * unconfigured endpoint errors on the stream instead of throwing out of `stream()`.
+ *
+ * @param {ProviderStreams} streams - API implementation to wrap
+ * @returns {ProviderStreams} the wrapped implementation
  */
 function azureStreams(streams: ProviderStreams): ProviderStreams {
   return {

@@ -21,6 +21,11 @@ function resolveImagesApiProvider(api: ImageApi) {
  * Global image generation dispatched on `model.api` through the images api
  * registry. Auth must be passed explicitly via `options.apiKey`; prefer
  * `Models.generateImages()`, which resolves provider auth.
+ *
+ * @param {ImageModel<ImageApi>} model - image model the request targets
+ * @param {ImagesContext} context - image request context
+ * @param {ProviderImagesOptions} [options] - request options with auth
+ * @returns {Promise<AssistantImages>} the generated images
  */
 export function generateImages(
   model: ImageModel<ImageApi>,

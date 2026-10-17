@@ -54,6 +54,8 @@ function saveAuthStorage(storage: AuthStorage): void {
  * For API key credentials, returns the key directly.
  * For OAuth credentials, returns the access token (refreshing if expired and saving back).
  *
+ * @param {string} provider - provider id
+ * @returns {Promise<string | undefined>} the API key or access token, or undefined when none is stored
  */
 export async function resolveApiKey(provider: string): Promise<string | undefined> {
   const storage = loadAuthStorage();

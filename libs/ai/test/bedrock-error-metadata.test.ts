@@ -67,7 +67,13 @@ function getModelFixture(): Model<"bedrock-converse-stream"> {
   return getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
 }
 
-/** What the SDK's `handleError` path throws for a non-2xx response; `name` is the modeled AWS error code. */
+/**
+ * What the SDK's `handleError` path throws for a non-2xx response; `name` is the modeled AWS error code.
+ *
+ * @param {string} name - modeled AWS error code
+ * @param {Record<string, unknown>} [extra={}] - extra fields
+ * @returns {Error} the exception
+ */
 function makeServiceException(name: string, extra: Record<string, unknown> = {}): Error {
   const error = new bedrockMock.ServiceException(VALIDATION_MESSAGE) as Error &
     Record<string, unknown>;
@@ -76,7 +82,12 @@ function makeServiceException(name: string, extra: Record<string, unknown> = {})
   return error;
 }
 
-/** Fails after `messageStart`, throwing from inside the iterator like `getMessageUnmarshaller` does. */
+/**
+ * Fails after `messageStart`, throwing from inside the iterator like `getMessageUnmarshaller` does.
+ *
+ * @param {unknown} thrown - value to throw from the iterator
+ * @returns {SendResult} the send result
+ */
 function respondWithFailingStream(thrown: unknown): SendResult {
   return {
     kind: "resolve",

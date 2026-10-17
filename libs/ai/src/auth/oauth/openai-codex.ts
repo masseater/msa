@@ -427,9 +427,6 @@ async function loginOpenAICodex(
   }
 }
 
-/**
- * Refresh OpenAI Codex OAuth token
- */
 async function refreshOpenAICodexToken(
   refreshToken: string,
   signal: AbortSignal,

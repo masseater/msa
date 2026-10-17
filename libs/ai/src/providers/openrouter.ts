@@ -24,6 +24,10 @@ const OPENROUTER_USER_MODELS_TIMEOUT_MS = 15_000;
  * endpoints such as `https://us.openrouter.ai/api/v1` apply their region's filtering. When the
  * endpoint rejects the key (401/403) or does not exist (404), for example with a proxy configured
  * in models.json, the catalog is returned unchanged.
+ *
+ * @param {readonly AnyModel[]} catalog - OpenRouter catalog
+ * @param {RefreshModelsContext} context - refresh context with auth and network access
+ * @returns {Promise<readonly AnyModel[]>} the catalog restricted to the key
  */
 export async function personalizeOpenRouterCatalog(
   catalog: readonly AnyModel[],

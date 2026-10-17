@@ -261,9 +261,6 @@ async function loginAnthropicCopyCode(
   );
 }
 
-/**
- * Refresh Anthropic OAuth token
- */
 async function refreshAnthropicToken(
   refreshToken: string,
   signal: AbortSignal,

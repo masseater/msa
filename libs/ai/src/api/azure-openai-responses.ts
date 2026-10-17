@@ -50,9 +50,6 @@ export interface AzureOpenAIResponsesOptions extends AzureEndpointOptions {
   reasoningSummary?: "auto" | "detailed" | "concise" | null | undefined;
 }
 
-/**
- * Generate function for Azure OpenAI Responses API
- */
 export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIResponsesOptions> = (
   model: Model<"azure-openai-responses">,
   context: TranscriptContext,

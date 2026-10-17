@@ -30,6 +30,9 @@ function escapeControlCharacter(char: string): string {
  * Repairs malformed JSON string literals by:
  * - escaping raw control characters inside strings
  * - doubling backslashes before invalid escape characters
+ *
+ * @param {string} json - JSON text
+ * @returns {string} the repaired JSON text
  */
 export function repairJson(json: string): string {
   let repaired = "";
@@ -103,6 +106,9 @@ export function parseJsonWithRepair<T>(json: string): T {
  * finished, text that is not a valid JSON object means the model sent malformed arguments. In that
  * case `arguments` is `{}` and `argumentsError` describes the problem, including the text the
  * model sent, so tool validation can report it back to the model.
+ *
+ * @param {string | undefined} json - complete arguments text
+ * @returns {Pick<ToolCall, "arguments" | "argumentsError">} the parsed arguments, or `{}` with an error description
  */
 export function parseToolCallArguments(
   json: string | undefined,
@@ -126,8 +132,8 @@ export function parseToolCallArguments(
  * Attempts to parse potentially incomplete JSON during streaming.
  * Always returns a valid object, even if the JSON is incomplete.
  *
- * @param partialJson The partial JSON string from streaming
- * @returns Parsed object or empty object if parsing fails
+ * @param {string | undefined} partialJson - The partial JSON string from streaming
+ * @returns {T} Parsed object or empty object if parsing fails
  */
 export function parseStreamingJson<T = Record<string, unknown>>(
   partialJson: string | undefined,

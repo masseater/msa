@@ -129,12 +129,22 @@ export type ModelsClassifierOptions = ClassifierOptions & ModelsRequestTransform
 
 const KNOWN_MODEL_TYPES: Record<ModelType, true> = { chat: true, image: true, classifier: true };
 
-/** Models from stores and remote sources may have types that only newer versions know. */
+/**
+ * Models from stores and remote sources may have types that only newer versions know.
+ *
+ * @param {AnyModel} model - stored model
+ * @returns {boolean} whether this version knows the model type
+ */
 function hasKnownModelType(model: AnyModel): boolean {
   return Object.hasOwn(KNOWN_MODEL_TYPES, getModelType(model));
 }
 
-/** Drops stored models whose type this version does not know. */
+/**
+ * Drops stored models whose type this version does not know.
+ *
+ * @param {ModelsStoreEntry} entry - stored entry
+ * @returns {ModelsStoreEntry} the entry with known model types only
+ */
 function withKnownModelTypes(entry: ModelsStoreEntry): ModelsStoreEntry {
   return { ...entry, models: entry.models.filter(hasKnownModelType) };
 }
@@ -1183,6 +1193,9 @@ export interface CreateProviderOptions<TApi extends Api = Api> {
  * no entry produces a stream error. One-shot operation maps dispatch on
  * `model.api` the same way. At least one concrete implementation across
  * `api`/`images`/`classifiers` is required; empty maps are rejected.
+ *
+ * @param {CreateProviderOptions<TApi>} input - provider parts
+ * @returns {Provider<TApi>} the provider
  */
 export function createProvider<TApi extends Api = Api>(
   input: CreateProviderOptions<TApi>,
@@ -1371,6 +1384,10 @@ export function createProvider<TApi extends Api = Api>(
  * ```
  *
  * Non-chat models never match, even when their api id equals `api`.
+ *
+ * @param {AnyModel} model - model to check
+ * @param {TApi} api - expected api id
+ * @returns {boolean} whether the model is a chat model of the api
  */
 export function hasApi<TApi extends Api>(model: AnyModel, api: TApi): model is Model<TApi> {
   return isModelType(model, "chat") && model.api === api;
@@ -1444,6 +1461,10 @@ export function clampThinkingLevel<TApi extends Api>(
 /**
  * Check if two models are equal by comparing their type, id, and provider.
  * Returns false if either model is null or undefined.
+ *
+ * @param {AnyModel | null | undefined} a - first model
+ * @param {AnyModel | null | undefined} b - second model
+ * @returns {boolean} whether both models are the same
  */
 export function modelsAreEqual(
   a: AnyModel | null | undefined,

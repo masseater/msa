@@ -155,9 +155,9 @@ const NON_OVERFLOW_PATTERNS = [
  * 4. The pattern should be added to OVERFLOW_PATTERNS in this file, or
  *    check the errorMessage yourself before calling this function
  *
- * @param message - The assistant message to check
- * @param contextWindow - Optional context window size for detecting silent overflow (z.ai)
- * @returns true if the message indicates a context overflow
+ * @param {AssistantMessage} message - The assistant message to check
+ * @param {number} [contextWindow] - Optional context window size for detecting silent overflow (z.ai)
+ * @returns {boolean} true if the message indicates a context overflow
  */
 export function isContextOverflow(message: AssistantMessage, contextWindow?: number): boolean {
   // Case 1: Check error message patterns
@@ -203,6 +203,10 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
  * Such responses may be caused by context pressure or provider-side truncation, so callers
  * can make one bounded compact-and-retry attempt. `desiredMaxOutput` must be the original
  * limit before any context-based clamping.
+ *
+ * @param {AssistantMessage} message - assistant message that stopped for length
+ * @param {number} desiredMaxOutput - original output limit
+ * @returns {boolean} whether a compact-and-retry attempt may help
  */
 export function isRecoverableLength(message: AssistantMessage, desiredMaxOutput: number): boolean {
   return (
@@ -214,6 +218,8 @@ export function isRecoverableLength(message: AssistantMessage, desiredMaxOutput:
 
 /**
  * Get the overflow patterns for testing purposes.
+ *
+ * @returns {RegExp[]} the overflow patterns
  */
 export function getOverflowPatterns(): RegExp[] {
   return [...OVERFLOW_PATTERNS];

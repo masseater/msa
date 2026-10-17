@@ -221,7 +221,13 @@ function messageToText(message: Message): string {
   return toolResultToText(message);
 }
 
-/** Length of the prompt text that joins `messages` with blank lines. */
+/**
+ * Length of the prompt text that joins `messages` with blank lines.
+ *
+ * @param {readonly string[]} messages - prompt messages
+ * @param {number} [count=messages.length] - number of leading messages to join
+ * @returns {number} the length of the joined text
+ */
 function joinedLength(messages: readonly string[], count = messages.length): number {
   let length = count > 0 ? (count - 1) * 2 : 0;
   for (let index = 0; index < count; index++) length += messages[index]!.length;
@@ -231,6 +237,10 @@ function joinedLength(messages: readonly string[], count = messages.length): num
 /**
  * Length of the common prefix of the two joined prompts. Equal messages are compared whole; characters are compared
  * only from the first message that differs.
+ *
+ * @param {readonly string[]} previous - messages of the previous prompt
+ * @param {readonly string[]} current - messages of the current prompt
+ * @returns {number} the length of the common prefix
  */
 function commonPromptPrefixLength(previous: readonly string[], current: readonly string[]): number {
   let index = 0;
@@ -781,6 +791,9 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
  * models.setProvider(faux.provider);
  * faux.setResponses([fauxAssistantMessage("hi")]);
  * ```
+ *
+ * @param {RegisterFauxProviderOptions} [options={}] - faux provider options
+ * @returns {FauxProviderHandle} the provider and its response controls
  */
 export function fauxProvider(options: RegisterFauxProviderOptions = {}): FauxProviderHandle {
   const core = createFauxCore(options);

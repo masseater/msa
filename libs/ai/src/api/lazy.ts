@@ -53,6 +53,10 @@ async function forwardStream(
  * Returns a stream synchronously while running async setup (auth resolution,
  * lazy module loading) behind it. Setup failures, thrown or rejected, terminate
  * the stream with an error event.
+ *
+ * @param {Model<Api>} model - model the stream is for
+ * @param {() => Promise<AsyncIterable<AssistantMessageEvent>> | AsyncIterable<AssistantMessageEvent>} setup - resolves the inner stream
+ * @returns {AssistantMessageEventStream} the outer stream
  */
 export function lazyStream(
   model: Model<Api>,

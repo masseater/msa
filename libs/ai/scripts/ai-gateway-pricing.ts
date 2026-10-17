@@ -34,6 +34,9 @@ function perMillion(value: string | number | undefined): number {
 /**
  * Convert AI Gateway pricing to $/million tokens. Each rate lists its own prompt-length brackets;
  * every bracket start above zero becomes a request-wide tier with the rates in effect there.
+ *
+ * @param {AiGatewayPricing | undefined} pricing - AI Gateway pricing
+ * @returns {ModelCost} the cost in $/1M tokens
  */
 export function getAiGatewayCost(pricing: AiGatewayPricing | undefined): ModelCost {
   const base: ModelCostRates = {

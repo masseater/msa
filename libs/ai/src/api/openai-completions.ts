@@ -69,11 +69,6 @@ import {
 } from "./simple-options.ts";
 import { transformMessages } from "./transform-messages.ts";
 
-/**
- * Check if conversation messages contain tool calls or tool results.
- * This is needed because Anthropic (via proxy) requires the tools param
- * to be present when messages include tool_calls or tool role messages.
- */
 function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean {
   if (!headers) return false;
   const expected = name.toLowerCase();
@@ -94,6 +89,14 @@ function getClientApiKey(
   throw new Error(`No API key for provider: ${provider}`);
 }
 
+/**
+ * Check if conversation messages contain tool calls or tool results.
+ * This is needed because Anthropic (via proxy) requires the tools param
+ * to be present when messages include tool_calls or tool role messages.
+ *
+ * @param {Message[]} messages - conversation messages
+ * @returns {boolean} whether any message holds a tool call or tool result
+ */
 function hasToolHistory(messages: Message[]): boolean {
   for (const msg of messages) {
     if (msg.role === "toolResult") {
@@ -1705,6 +1708,9 @@ function mapStopReason(reason: ChatCompletionChunk.Choice["finish_reason"] | str
  * Auto-detect compatibility settings from provider name and baseUrl.
  * Used as the base when model.compat is not set; explicit model.compat
  * entries override these detected values.
+ *
+ * @param {Model<"openai-completions">} model - model to inspect
+ * @returns {ResolvedOpenAICompletionsCompat} the detected compat settings
  */
 function detectCompat(model: Model<"openai-completions">): ResolvedOpenAICompletionsCompat {
   const provider = model.provider;
@@ -1820,6 +1826,9 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 /**
  * Get resolved compatibility settings for a model.
  * Auto-detects from provider/URL then overrides with explicit model.compat.
+ *
+ * @param {Model<"openai-completions">} model - model to inspect
+ * @returns {ResolvedOpenAICompletionsCompat} the resolved compat settings
  */
 function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletionsCompat {
   const detected = detectCompat(model);
