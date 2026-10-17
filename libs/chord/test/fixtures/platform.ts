@@ -2,6 +2,7 @@ import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcess
 import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
 import * as NodePath from "@effect/platform-node/NodePath";
 import {
+  Deferred,
   type Duration,
   Effect,
   FileSystem,
@@ -87,3 +88,24 @@ export const runNode: {
 } = dual(2, (args: readonly string[], options: NodeRunOptions): Effect.Effect<NodeRun> =>
   onPlatform(collect(args, options.cwd)).pipe(Effect.timeout(options.timeout), Effect.orDie),
 );
+
+const holdNode = (args: readonly string[], pid: Deferred.Deferred<number>) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const child = yield* ChildProcess.make(process.execPath, args, {
+        detached: false,
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "ignore",
+      });
+      yield* Deferred.succeed(pid, child.pid);
+      return yield* Effect.never;
+    }),
+  );
+
+export const startNode = (args: readonly string[]): Effect.Effect<number> =>
+  Effect.gen(function* () {
+    const pid = yield* Deferred.make<number>();
+    yield* Effect.forkDetach(onPlatform(holdNode(args, pid)));
+    return yield* Deferred.await(pid);
+  });

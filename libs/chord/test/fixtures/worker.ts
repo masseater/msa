@@ -1,11 +1,9 @@
-import { spawn } from "node:child_process";
-
 import { Config, Effect, Option } from "effect";
 
 import { createHost, type IpcChannel, ipcLink } from "../../src/index.ts";
 import { childControl } from "../../src/manager.ts";
 import { Echo } from "./echo.ts";
-import { writeText } from "./platform.ts";
+import { startNode, writeText } from "./platform.ts";
 
 const control = childControl();
 
@@ -14,10 +12,8 @@ const exitSoon = Effect.sleep(200).pipe(Effect.andThen(Effect.sync(() => process
 const recordGrandchild = Effect.gen(function* () {
   const file = yield* Effect.orDie(Config.option(Config.String("GRANDCHILD_FILE")));
   if (Option.isNone(file) || file.value === "") return;
-  const grandchild = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
-    stdio: "ignore",
-  });
-  yield* writeText(file.value, String(grandchild.pid));
+  const grandchild = yield* startNode(["-e", "setInterval(() => {}, 1000)"]);
+  yield* writeText(file.value, String(grandchild));
 });
 
 const serve = (mode: string) =>
