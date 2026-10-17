@@ -6,6 +6,7 @@ import {
   ResourceScope,
   type ThinkingConfig,
 } from "@google/genai";
+import { Effect, Stream } from "effect";
 
 import { calculateCost, clampThinkingLevel } from "../models.ts";
 import type {
@@ -27,6 +28,8 @@ import { currentTimeMillis } from "../utils/clock.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { providerHeadersToRecord } from "../utils/headers.ts";
+import { callHook } from "../utils/hooks.ts";
+import { encodeJsonSync } from "../utils/json-codec.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { getSystemMessageText } from "../utils/text.ts";
@@ -78,259 +81,276 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
   const events = new AssistantMessageEventStream();
   const normalizedContext = collapseSystemMessages(context);
 
-  (async () => {
-    const output: AssistantMessage = {
-      role: "assistant",
-      content: [],
-      api: "google-vertex" as Api,
-      provider: model.provider,
-      model: model.id,
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
-      stopReason: "pending",
-      timestamp: currentTimeMillis(),
-    };
+  Effect.runFork(
+    Effect.gen(function* () {
+      const output: AssistantMessage = {
+        role: "assistant",
+        content: [],
+        api: "google-vertex" as Api,
+        provider: model.provider,
+        model: model.id,
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "pending",
+        timestamp: currentTimeMillis(),
+      };
+      yield* Effect.gen(function* () {
+        if (options?.fetch !== undefined && options.fetch !== globalThis.fetch) {
+          throw new Error("Custom fetch is not supported by the Google Vertex adapter");
+        }
+        const apiKey = resolveApiKey(options);
+        const client =
+          apiKey !== undefined && apiKey !== ""
+            ? createClientWithApiKey(model, apiKey, options?.headers)
+            : createClient(
+                model,
+                resolveProject(options),
+                resolveLocation(options),
+                options?.headers,
+                options?.env,
+              );
+        let params = buildParams(model, normalizedContext, options);
+        const nextParams = yield* callHook(() => options?.onPayload?.(params, model));
+        if (nextParams !== undefined) {
+          params = nextParams as GenerateContentParameters;
+        }
+        const googleStream = yield* Effect.promise(() =>
+          retryGoogleRequest(() => client.models.generateContentStream(params), options),
+        );
+        events.push({ type: "start", partial: output });
+        let currentBlock = null as TextContent | ThinkingContent | null;
+        const blocks = output.content;
+        const blockIndex = () => blocks.length - 1;
+        yield* Stream.fromAsyncIterable(googleStream, (error) => error).pipe(
+          Stream.orDie,
+          Stream.runForEach((chunk) =>
+            Effect.gen(function* () {
+              yield* callHook(() => options?.onProviderStreamEvent?.(chunk, model));
+              output.responseId ||= chunk.responseId;
+              const candidate = chunk.candidates?.[0];
+              if (candidate?.content?.parts !== undefined) {
+                for (const part of candidate.content.parts) {
+                  if (part.text !== undefined) {
+                    const isThinking = isThinkingPart(part);
+                    if (
+                      currentBlock === null ||
+                      (isThinking && currentBlock.type !== "thinking") ||
+                      (!isThinking && currentBlock.type !== "text")
+                    ) {
+                      if (currentBlock !== null) {
+                        if (currentBlock.type === "text") {
+                          events.push({
+                            type: "text_end",
+                            contentIndex: blocks.length - 1,
+                            content: currentBlock.text,
+                            partial: output,
+                          });
+                        } else {
+                          events.push({
+                            type: "thinking_end",
+                            contentIndex: blockIndex(),
+                            content: currentBlock.thinking,
+                            partial: output,
+                          });
+                        }
+                      }
+                      if (isThinking) {
+                        currentBlock = {
+                          type: "thinking",
+                          thinking: "",
+                          thinkingSignature: undefined,
+                        };
+                        output.content.push(currentBlock);
+                        events.push({
+                          type: "thinking_start",
+                          contentIndex: blockIndex(),
+                          partial: output,
+                        });
+                      } else {
+                        currentBlock = { type: "text", text: "" };
+                        output.content.push(currentBlock);
+                        events.push({
+                          type: "text_start",
+                          contentIndex: blockIndex(),
+                          partial: output,
+                        });
+                      }
+                    }
+                    if (currentBlock.type === "thinking") {
+                      currentBlock.thinking += part.text;
+                      currentBlock.thinkingSignature = retainThoughtSignature(
+                        currentBlock.thinkingSignature,
+                        part.thoughtSignature,
+                      );
+                      events.push({
+                        type: "thinking_delta",
+                        contentIndex: blockIndex(),
+                        delta: part.text,
+                        partial: output,
+                      });
+                    } else {
+                      currentBlock.text += part.text;
+                      currentBlock.textSignature = retainThoughtSignature(
+                        currentBlock.textSignature,
+                        part.thoughtSignature,
+                      );
+                      events.push({
+                        type: "text_delta",
+                        contentIndex: blockIndex(),
+                        delta: part.text,
+                        partial: output,
+                      });
+                    }
+                  }
 
-    try {
-      if (options?.fetch !== undefined && options.fetch !== globalThis.fetch) {
-        throw new Error("Custom fetch is not supported by the Google Vertex adapter");
-      }
-      const apiKey = resolveApiKey(options);
-      const client =
-        apiKey !== undefined && apiKey !== ""
-          ? createClientWithApiKey(model, apiKey, options?.headers)
-          : createClient(
-              model,
-              resolveProject(options),
-              resolveLocation(options),
-              options?.headers,
-              options?.env,
-            );
-      let params = buildParams(model, normalizedContext, options);
-      const nextParams = await options?.onPayload?.(params, model);
-      if (nextParams !== undefined) {
-        params = nextParams as GenerateContentParameters;
-      }
-      const googleStream = await retryGoogleRequest(
-        () => client.models.generateContentStream(params),
-        options,
-      );
+                  if (part.functionCall !== undefined) {
+                    if (currentBlock !== null) {
+                      if (currentBlock.type === "text") {
+                        events.push({
+                          type: "text_end",
+                          contentIndex: blockIndex(),
+                          content: currentBlock.text,
+                          partial: output,
+                        });
+                      } else {
+                        events.push({
+                          type: "thinking_end",
+                          contentIndex: blockIndex(),
+                          content: currentBlock.thinking,
+                          partial: output,
+                        });
+                      }
+                      currentBlock = null;
+                    }
 
-      events.push({ type: "start", partial: output });
-      let currentBlock: TextContent | ThinkingContent | null = null;
-      const blocks = output.content;
-      const blockIndex = () => blocks.length - 1;
-      for await (const chunk of googleStream) {
-        await options?.onProviderStreamEvent?.(chunk, model);
-        output.responseId ||= chunk.responseId;
-        const candidate = chunk.candidates?.[0];
-        if (candidate?.content?.parts !== undefined) {
-          for (const part of candidate.content.parts) {
-            if (part.text !== undefined) {
-              const isThinking = isThinkingPart(part);
-              if (
-                currentBlock === null ||
-                (isThinking && currentBlock.type !== "thinking") ||
-                (!isThinking && currentBlock.type !== "text")
-              ) {
-                if (currentBlock !== null) {
-                  if (currentBlock.type === "text") {
+                    const providedId = part.functionCall.id;
+                    const needsNewId =
+                      providedId === undefined ||
+                      providedId === "" ||
+                      output.content.some((b) => b.type === "toolCall" && b.id === providedId);
+                    const toolCallId = needsNewId
+                      ? `${part.functionCall.name}_${currentTimeMillis()}_${++toolCallCounter}`
+                      : providedId;
+
+                    const toolCall: ToolCall = {
+                      type: "toolCall",
+                      id: toolCallId,
+                      name: part.functionCall.name || "",
+                      arguments: (part.functionCall.args as Record<string, any>) ?? {},
+                      ...(part.thoughtSignature && { thoughtSignature: part.thoughtSignature }),
+                    };
+
+                    output.content.push(toolCall);
                     events.push({
-                      type: "text_end",
-                      contentIndex: blocks.length - 1,
-                      content: currentBlock.text,
+                      type: "toolcall_start",
+                      contentIndex: blockIndex(),
                       partial: output,
                     });
-                  } else {
                     events.push({
-                      type: "thinking_end",
+                      type: "toolcall_delta",
                       contentIndex: blockIndex(),
-                      content: currentBlock.thinking,
+                      delta: encodeJsonSync(toolCall.arguments),
+                      partial: output,
+                    });
+                    events.push({
+                      type: "toolcall_end",
+                      contentIndex: blockIndex(),
+                      toolCall,
                       partial: output,
                     });
                   }
                 }
-                if (isThinking) {
-                  currentBlock = { type: "thinking", thinking: "", thinkingSignature: undefined };
-                  output.content.push(currentBlock);
-                  events.push({
-                    type: "thinking_start",
-                    contentIndex: blockIndex(),
-                    partial: output,
-                  });
-                } else {
-                  currentBlock = { type: "text", text: "" };
-                  output.content.push(currentBlock);
-                  events.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+              }
+              if (candidate?.finishReason !== undefined) {
+                output.rawStopReason = candidate.finishReason;
+                output.stopReason = mapStopReason(candidate.finishReason);
+                if (
+                  output.content.some((b) => b.type === "toolCall") &&
+                  output.stopReason === "stop"
+                ) {
+                  output.stopReason = "toolUse";
                 }
               }
-              if (currentBlock.type === "thinking") {
-                currentBlock.thinking += part.text;
-                currentBlock.thinkingSignature = retainThoughtSignature(
-                  currentBlock.thinkingSignature,
-                  part.thoughtSignature,
-                );
-                events.push({
-                  type: "thinking_delta",
-                  contentIndex: blockIndex(),
-                  delta: part.text,
-                  partial: output,
-                });
-              } else {
-                currentBlock.text += part.text;
-                currentBlock.textSignature = retainThoughtSignature(
-                  currentBlock.textSignature,
-                  part.thoughtSignature,
-                );
-                events.push({
-                  type: "text_delta",
-                  contentIndex: blockIndex(),
-                  delta: part.text,
-                  partial: output,
-                });
+              if (chunk.usageMetadata !== undefined) {
+                output.usage = {
+                  input:
+                    (chunk.usageMetadata.promptTokenCount || 0) -
+                    (chunk.usageMetadata.cachedContentTokenCount || 0),
+                  output:
+                    (chunk.usageMetadata.candidatesTokenCount || 0) +
+                    (chunk.usageMetadata.thoughtsTokenCount || 0),
+                  cacheRead: chunk.usageMetadata.cachedContentTokenCount || 0,
+                  cacheWrite: 0,
+                  reasoning: chunk.usageMetadata.thoughtsTokenCount || 0,
+                  totalTokens: chunk.usageMetadata.totalTokenCount || 0,
+                  cost: {
+                    input: 0,
+                    output: 0,
+                    cacheRead: 0,
+                    cacheWrite: 0,
+                    total: 0,
+                  },
+                };
+                calculateCost(model, output.usage);
               }
-            }
-
-            if (part.functionCall !== undefined) {
-              if (currentBlock !== null) {
-                if (currentBlock.type === "text") {
-                  events.push({
-                    type: "text_end",
-                    contentIndex: blockIndex(),
-                    content: currentBlock.text,
-                    partial: output,
-                  });
-                } else {
-                  events.push({
-                    type: "thinking_end",
-                    contentIndex: blockIndex(),
-                    content: currentBlock.thinking,
-                    partial: output,
-                  });
-                }
-                currentBlock = null;
-              }
-
-              const providedId = part.functionCall.id;
-              const needsNewId =
-                providedId === undefined ||
-                providedId === "" ||
-                output.content.some((b) => b.type === "toolCall" && b.id === providedId);
-              const toolCallId = needsNewId
-                ? `${part.functionCall.name}_${currentTimeMillis()}_${++toolCallCounter}`
-                : providedId;
-
-              const toolCall: ToolCall = {
-                type: "toolCall",
-                id: toolCallId,
-                name: part.functionCall.name || "",
-                arguments: (part.functionCall.args as Record<string, any>) ?? {},
-                ...(part.thoughtSignature && { thoughtSignature: part.thoughtSignature }),
-              };
-
-              output.content.push(toolCall);
-              events.push({ type: "toolcall_start", contentIndex: blockIndex(), partial: output });
-              events.push({
-                type: "toolcall_delta",
-                contentIndex: blockIndex(),
-                delta: JSON.stringify(toolCall.arguments),
-                partial: output,
-              });
-              events.push({
-                type: "toolcall_end",
-                contentIndex: blockIndex(),
-                toolCall,
-                partial: output,
-              });
-            }
+            }),
+          ),
+        );
+        if (currentBlock !== null) {
+          if (currentBlock.type === "text") {
+            events.push({
+              type: "text_end",
+              contentIndex: blockIndex(),
+              content: currentBlock.text,
+              partial: output,
+            });
+          } else {
+            events.push({
+              type: "thinking_end",
+              contentIndex: blockIndex(),
+              content: currentBlock.thinking,
+              partial: output,
+            });
           }
         }
-
-        if (candidate?.finishReason !== undefined) {
-          output.rawStopReason = candidate.finishReason;
-          output.stopReason = mapStopReason(candidate.finishReason);
-          if (output.content.some((b) => b.type === "toolCall") && output.stopReason === "stop") {
-            output.stopReason = "toolUse";
-          }
+        if (options?.signal?.aborted === true) {
+          throw new Error("Request was aborted");
         }
-
-        if (chunk.usageMetadata !== undefined) {
-          output.usage = {
-            input:
-              (chunk.usageMetadata.promptTokenCount || 0) -
-              (chunk.usageMetadata.cachedContentTokenCount || 0),
-            output:
-              (chunk.usageMetadata.candidatesTokenCount || 0) +
-              (chunk.usageMetadata.thoughtsTokenCount || 0),
-            cacheRead: chunk.usageMetadata.cachedContentTokenCount || 0,
-            cacheWrite: 0,
-            reasoning: chunk.usageMetadata.thoughtsTokenCount || 0,
-            totalTokens: chunk.usageMetadata.totalTokenCount || 0,
-            cost: {
-              input: 0,
-              output: 0,
-              cacheRead: 0,
-              cacheWrite: 0,
-              total: 0,
-            },
-          };
-          calculateCost(model, output.usage);
+        if (output.stopReason === "pending") {
+          throw new Error("Google Vertex stream ended without a finish reason");
         }
-      }
-
-      if (currentBlock !== null) {
-        if (currentBlock.type === "text") {
-          events.push({
-            type: "text_end",
-            contentIndex: blockIndex(),
-            content: currentBlock.text,
-            partial: output,
-          });
-        } else {
-          events.push({
-            type: "thinking_end",
-            contentIndex: blockIndex(),
-            content: currentBlock.thinking,
-            partial: output,
-          });
+        if (output.stopReason === "aborted" || output.stopReason === "error") {
+          const errorMessage =
+            output.rawStopReason !== undefined && output.rawStopReason !== ""
+              ? `Provider stopped with: ${output.rawStopReason}`
+              : "An unknown error occurred";
+          throw new Error(errorMessage);
         }
-      }
-
-      if (options?.signal?.aborted === true) {
-        throw new Error("Request was aborted");
-      }
-
-      if (output.stopReason === "pending") {
-        throw new Error("Google Vertex stream ended without a finish reason");
-      }
-      if (output.stopReason === "aborted" || output.stopReason === "error") {
-        const errorMessage =
-          output.rawStopReason !== undefined && output.rawStopReason !== ""
-            ? `Provider stopped with: ${output.rawStopReason}`
-            : "An unknown error occurred";
-        throw new Error(errorMessage);
-      }
-
-      events.push({ type: "done", reason: output.stopReason, message: output });
-      events.end();
-    } catch (error) {
-      for (const block of output.content) {
-        if ("index" in block) {
-          delete (block as { index?: number }).index;
-        }
-      }
-      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-      output.errorMessage = formatProviderError(normalizeProviderError(error));
-      events.push({ type: "error", reason: output.stopReason, error: output });
-      events.end();
-    }
-  })();
+        events.push({ type: "done", reason: output.stopReason, message: output });
+        events.end();
+      }).pipe(
+        Effect.catchDefect((error) =>
+          Effect.sync(() => {
+            for (const block of output.content) {
+              if ("index" in block) {
+                delete (block as { index?: number }).index;
+              }
+            }
+            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+            output.errorMessage = formatProviderError(normalizeProviderError(error));
+            events.push({ type: "error", reason: output.stopReason, error: output });
+            events.end();
+          }),
+        ),
+      );
+    }),
+  );
 
   return events;
 };

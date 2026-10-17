@@ -1,3 +1,4 @@
+import { Effect, Stream } from "effect";
 import OpenAI from "openai";
 import type {
   ChatCompletionAssistantMessageParam,
@@ -40,9 +41,10 @@ import { formatProviderError, normalizeProviderError } from "../utils/error-body
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { shortHash } from "../utils/hash.ts";
 import { headersToRecord } from "../utils/headers.ts";
+import { callHook } from "../utils/hooks.ts";
 import { parseStreamingJson, parseToolCallArguments } from "../utils/json-parse.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
-import { retryProviderRequest } from "../utils/provider-retry.ts";
+import { providerRequestWithRetry } from "../utils/provider-retry.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { getSystemMessageText, renderSystemMessageUpdate } from "../utils/text.ts";
 import {
@@ -349,434 +351,445 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
     getCompat(model).supportsMidConvoSystemMessages,
   );
 
-  (async () => {
-    const output: AssistantMessage = {
-      role: "assistant",
-      content: [],
-      api: model.api,
-      provider: model.provider,
-      model: model.id,
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
-      stopReason: "pending",
-      timestamp: currentTimeMillis(),
-    };
-
-    let streamedReasoningDetails: OpenAIReasoningDetail[] | undefined;
-    const applyStreamedReasoningDetails = (block: ThinkingContent): void => {
-      if (streamedReasoningDetails !== undefined) {
-        block.thinkingSignature = JSON.stringify(streamedReasoningDetails);
-      }
-    };
-
-    try {
-      const apiKey = getClientApiKey(model.provider, options?.apiKey, options?.headers);
-      const compat = getCompat(model);
-      const grammarToolInputProperties = createGrammarToolInputProperties(
-        getDeclaredTools(normalizedContext.messages),
-        compat.supportsOpenAIGrammarTools,
-      );
-      const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
-      const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
-      const client = createClient(
-        model,
-        apiKey,
-        options?.headers,
-        options?.fetch,
-        cacheSessionId,
-        compat,
-      );
-      let params = buildParams(
-        model,
-        normalizedContext,
-        options,
-        compat,
-        cacheRetention,
-        grammarToolInputProperties,
-      );
-      const nextParams = await options?.onPayload?.(params, model);
-      if (nextParams !== undefined) {
-        params = nextParams as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
-      }
-      const requestOptions = {
-        ...(options?.signal === undefined ? {} : { signal: options.signal }),
-        ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
-        maxRetries: 0,
-      };
-      const { data: openaiStream, response } = await retryProviderRequest(
-        () => client.chat.completions.create(params, requestOptions).withResponse(),
-        {
-          maxRetries: options?.maxRetries,
-          maxRetryDelayMs: options?.maxRetryDelayMs,
-          signal: options?.signal,
+  Effect.runFork(
+    Effect.gen(function* () {
+      const output: AssistantMessage = {
+        role: "assistant",
+        content: [],
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
         },
-      );
-      await options?.onResponse?.(
-        { status: response.status, headers: headersToRecord(response.headers) },
-        model,
-      );
-      events.push({ type: "start", partial: output });
-
-      interface StreamingToolCallBlock extends ToolCall {
-        partialArgs?: string | undefined;
-        customInput?:
-          | {
-              property: string;
-              jsonBuffer: GrammarToolInputJsonBuffer;
-            }
-          | undefined;
-        streamIndex?: number | undefined;
-      }
-      type StreamingBlock = TextContent | ThinkingContent | StreamingToolCallBlock;
-      type StreamingToolCallDelta = {
-        index?: number;
-        id?: string;
-        type?: string;
-        function?: { name?: string; arguments?: string };
-        custom?: { name?: string; input?: string };
+        stopReason: "pending",
+        timestamp: currentTimeMillis(),
       };
-
-      let textBlock: TextContent | null = null;
-      let thinkingBlock: ThinkingContent | null = null;
-      let hasFinishReason = false;
-      const toolCallBlocksByIndex = new Map<number, StreamingToolCallBlock>();
-      const toolCallBlocksById = new Map<string, StreamingToolCallBlock>();
-      const blocks = output.content as StreamingBlock[];
-      const getContentIndex = (block: StreamingBlock) => blocks.indexOf(block);
-      const getCustomToolCallInput = (block: StreamingToolCallBlock): string => {
-        const property = block.customInput?.property;
-        if (property === undefined) return "";
-        const value = block.arguments[property];
-        return typeof value === "string" ? value : "";
+      let streamedReasoningDetails: OpenAIReasoningDetail[] | undefined;
+      const applyStreamedReasoningDetails = (block: ThinkingContent): void => {
+        if (streamedReasoningDetails !== undefined) {
+          block.thinkingSignature = JSON.stringify(streamedReasoningDetails);
+        }
       };
-      const appendCustomToolCallInput = (
-        block: StreamingToolCallBlock,
-        nextInput: string,
-        close: boolean,
-      ): string | undefined => {
-        const customInput = block.customInput;
-        if (customInput === undefined) return undefined;
-        const delta = appendGrammarToolInputJsonDelta(
-          customInput.jsonBuffer,
-          customInput.property,
-          nextInput,
-          close,
+      yield* Effect.gen(function* () {
+        const apiKey = getClientApiKey(model.provider, options?.apiKey, options?.headers);
+        const compat = getCompat(model);
+        const grammarToolInputProperties = createGrammarToolInputProperties(
+          getDeclaredTools(normalizedContext.messages),
+          compat.supportsOpenAIGrammarTools,
         );
-        block.arguments = { [customInput.property]: nextInput };
-        return delta;
-      };
-      const finishBlock = (block: StreamingBlock) => {
-        const contentIndex = getContentIndex(block);
-        if (contentIndex === -1) {
-          return;
+        const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
+        const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
+        const client = createClient(
+          model,
+          apiKey,
+          options?.headers,
+          options?.fetch,
+          cacheSessionId,
+          compat,
+        );
+        let params = buildParams(
+          model,
+          normalizedContext,
+          options,
+          compat,
+          cacheRetention,
+          grammarToolInputProperties,
+        );
+        const nextParams = yield* callHook(() => options?.onPayload?.(params, model));
+        if (nextParams !== undefined) {
+          params = nextParams as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
         }
-        if (block.type === "text") {
-          events.push({
-            type: "text_end",
-            contentIndex,
-            content: block.text,
-            partial: output,
-          });
-        } else if (block.type === "thinking") {
-          applyStreamedReasoningDetails(block);
-          events.push({
-            type: "thinking_end",
-            contentIndex,
-            content: block.thinking,
-            partial: output,
-          });
-        } else if (block.type === "toolCall") {
-          if (block.customInput === undefined) {
-            Object.assign(block, parseToolCallArguments(block.partialArgs));
-          } else {
-            const delta = appendCustomToolCallInput(block, getCustomToolCallInput(block), true);
-            if (delta !== undefined) {
-              events.push({
-                type: "toolcall_delta",
-                contentIndex,
-                delta,
-                partial: output,
-              });
-            }
+        const requestOptions = {
+          ...(options?.signal === undefined ? {} : { signal: options.signal }),
+          ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
+          maxRetries: 0,
+        };
+        const { data: openaiStream, response } = yield* providerRequestWithRetry(
+          () => client.chat.completions.create(params, requestOptions).withResponse(),
+          {
+            maxRetries: options?.maxRetries,
+            maxRetryDelayMs: options?.maxRetryDelayMs,
+            signal: options?.signal,
+          },
+        );
+        yield* callHook(() =>
+          options?.onResponse?.(
+            { status: response.status, headers: headersToRecord(response.headers) },
+            model,
+          ),
+        );
+        events.push({ type: "start", partial: output });
+        interface StreamingToolCallBlock extends ToolCall {
+          partialArgs?: string | undefined;
+          customInput?:
+            | {
+                property: string;
+                jsonBuffer: GrammarToolInputJsonBuffer;
+              }
+            | undefined;
+          streamIndex?: number | undefined;
+        }
+        type StreamingBlock = TextContent | ThinkingContent | StreamingToolCallBlock;
+        type StreamingToolCallDelta = {
+          index?: number;
+          id?: string;
+          type?: string;
+          function?: { name?: string; arguments?: string };
+          custom?: { name?: string; input?: string };
+        };
+        let textBlock: TextContent | null = null;
+        let thinkingBlock: ThinkingContent | null = null;
+        let hasFinishReason = false;
+        const toolCallBlocksByIndex = new Map<number, StreamingToolCallBlock>();
+        const toolCallBlocksById = new Map<string, StreamingToolCallBlock>();
+        const blocks = output.content as StreamingBlock[];
+        const getContentIndex = (block: StreamingBlock) => blocks.indexOf(block);
+        const getCustomToolCallInput = (block: StreamingToolCallBlock): string => {
+          const property = block.customInput?.property;
+          if (property === undefined) return "";
+          const value = block.arguments[property];
+          return typeof value === "string" ? value : "";
+        };
+        const appendCustomToolCallInput = (
+          block: StreamingToolCallBlock,
+          nextInput: string,
+          close: boolean,
+        ): string | undefined => {
+          const customInput = block.customInput;
+          if (customInput === undefined) return undefined;
+          const delta = appendGrammarToolInputJsonDelta(
+            customInput.jsonBuffer,
+            customInput.property,
+            nextInput,
+            close,
+          );
+          block.arguments = { [customInput.property]: nextInput };
+          return delta;
+        };
+        const finishBlock = (block: StreamingBlock) => {
+          const contentIndex = getContentIndex(block);
+          if (contentIndex === -1) {
+            return;
           }
-          delete block.partialArgs;
-          delete block.customInput;
-          delete block.streamIndex;
-          events.push({
-            type: "toolcall_end",
-            contentIndex,
-            toolCall: block,
-            partial: output,
-          });
-        }
-      };
-      const ensureTextBlock = () => {
-        if (textBlock === null) {
-          textBlock = { type: "text", text: "" };
-          blocks.push(textBlock);
-          events.push({
-            type: "text_start",
-            contentIndex: getContentIndex(textBlock),
-            partial: output,
-          });
-        }
-        return textBlock;
-      };
-      const ensureThinkingBlock = (thinkingSignature: string) => {
-        if (thinkingBlock === null) {
-          thinkingBlock = {
-            type: "thinking",
-            thinking: "",
-            thinkingSignature,
-          };
-          blocks.push(thinkingBlock);
-          events.push({
-            type: "thinking_start",
-            contentIndex: getContentIndex(thinkingBlock),
-            partial: output,
-          });
-        }
-        return thinkingBlock;
-      };
-      const ensureToolCallBlock = (toolCall: StreamingToolCallDelta) => {
-        const streamIndex = typeof toolCall.index === "number" ? toolCall.index : undefined;
-        const name = toolCall.function?.name ?? toolCall.custom?.name ?? "";
-        let block = streamIndex === undefined ? undefined : toolCallBlocksByIndex.get(streamIndex);
-        if (block === undefined && toolCall.id !== undefined && toolCall.id !== "") {
-          block = toolCallBlocksById.get(toolCall.id);
-        }
-        if (block === undefined) {
-          const customInputProperty =
-            toolCall.custom !== undefined && toolCall.function === undefined
-              ? (grammarToolInputProperties.get(name) ?? "input")
-              : undefined;
-          const hasCustomInput = customInputProperty !== undefined;
-          block = {
-            type: "toolCall",
-            id: toolCall.id || "",
-            name,
-            arguments: hasCustomInput ? { [customInputProperty]: "" } : {},
-            partialArgs: hasCustomInput ? undefined : "",
-            customInput: hasCustomInput
-              ? {
-                  property: customInputProperty,
-                  jsonBuffer: { input: "", started: false, closed: false },
-                }
-              : undefined,
-            streamIndex,
-          };
-          if (streamIndex !== undefined) {
+          if (block.type === "text") {
+            events.push({
+              type: "text_end",
+              contentIndex,
+              content: block.text,
+              partial: output,
+            });
+          } else if (block.type === "thinking") {
+            applyStreamedReasoningDetails(block);
+            events.push({
+              type: "thinking_end",
+              contentIndex,
+              content: block.thinking,
+              partial: output,
+            });
+          } else if (block.type === "toolCall") {
+            if (block.customInput === undefined) {
+              Object.assign(block, parseToolCallArguments(block.partialArgs));
+            } else {
+              const delta = appendCustomToolCallInput(block, getCustomToolCallInput(block), true);
+              if (delta !== undefined) {
+                events.push({
+                  type: "toolcall_delta",
+                  contentIndex,
+                  delta,
+                  partial: output,
+                });
+              }
+            }
+            delete block.partialArgs;
+            delete block.customInput;
+            delete block.streamIndex;
+            events.push({
+              type: "toolcall_end",
+              contentIndex,
+              toolCall: block,
+              partial: output,
+            });
+          }
+        };
+        const ensureTextBlock = () => {
+          if (textBlock === null) {
+            textBlock = { type: "text", text: "" };
+            blocks.push(textBlock);
+            events.push({
+              type: "text_start",
+              contentIndex: getContentIndex(textBlock),
+              partial: output,
+            });
+          }
+          return textBlock;
+        };
+        const ensureThinkingBlock = (thinkingSignature: string) => {
+          if (thinkingBlock === null) {
+            thinkingBlock = {
+              type: "thinking",
+              thinking: "",
+              thinkingSignature,
+            };
+            blocks.push(thinkingBlock);
+            events.push({
+              type: "thinking_start",
+              contentIndex: getContentIndex(thinkingBlock),
+              partial: output,
+            });
+          }
+          return thinkingBlock;
+        };
+        const ensureToolCallBlock = (toolCall: StreamingToolCallDelta) => {
+          const streamIndex = typeof toolCall.index === "number" ? toolCall.index : undefined;
+          const name = toolCall.function?.name ?? toolCall.custom?.name ?? "";
+          let block =
+            streamIndex === undefined ? undefined : toolCallBlocksByIndex.get(streamIndex);
+          if (block === undefined && toolCall.id !== undefined && toolCall.id !== "") {
+            block = toolCallBlocksById.get(toolCall.id);
+          }
+          if (block === undefined) {
+            const customInputProperty =
+              toolCall.custom !== undefined && toolCall.function === undefined
+                ? (grammarToolInputProperties.get(name) ?? "input")
+                : undefined;
+            const hasCustomInput = customInputProperty !== undefined;
+            block = {
+              type: "toolCall",
+              id: toolCall.id || "",
+              name,
+              arguments: hasCustomInput ? { [customInputProperty]: "" } : {},
+              partialArgs: hasCustomInput ? undefined : "",
+              customInput: hasCustomInput
+                ? {
+                    property: customInputProperty,
+                    jsonBuffer: { input: "", started: false, closed: false },
+                  }
+                : undefined,
+              streamIndex,
+            };
+            if (streamIndex !== undefined) {
+              toolCallBlocksByIndex.set(streamIndex, block);
+            }
+            if (toolCall.id !== undefined && toolCall.id !== "") {
+              toolCallBlocksById.set(toolCall.id, block);
+            }
+            blocks.push(block);
+            events.push({
+              type: "toolcall_start",
+              contentIndex: getContentIndex(block),
+              partial: output,
+            });
+          }
+          if (streamIndex !== undefined && block.streamIndex === undefined) {
+            block.streamIndex = streamIndex;
             toolCallBlocksByIndex.set(streamIndex, block);
           }
           if (toolCall.id !== undefined && toolCall.id !== "") {
             toolCallBlocksById.set(toolCall.id, block);
           }
-          blocks.push(block);
-          events.push({
-            type: "toolcall_start",
-            contentIndex: getContentIndex(block),
-            partial: output,
-          });
-        }
-        if (streamIndex !== undefined && block.streamIndex === undefined) {
-          block.streamIndex = streamIndex;
-          toolCallBlocksByIndex.set(streamIndex, block);
-        }
-        if (toolCall.id !== undefined && toolCall.id !== "") {
-          toolCallBlocksById.set(toolCall.id, block);
-        }
-        if (block.name === "" && name !== "") {
-          block.name = name;
-        }
-        if (
-          toolCall.custom !== undefined &&
-          toolCall.function === undefined &&
-          block.customInput === undefined
-        ) {
-          const customInputProperty = grammarToolInputProperties.get(block.name) ?? "input";
-          block.arguments = { [customInputProperty]: "" };
-          block.customInput = {
-            property: customInputProperty,
-            jsonBuffer: { input: "", started: false, closed: false },
-          };
-          delete block.partialArgs;
-        }
-        return block;
-      };
-
-      for await (const chunk of openaiStream) {
-        await options?.onProviderStreamEvent?.(chunk, model);
-        if (typeof chunk !== "object" || chunk === null) continue;
-
-        output.responseId ||= chunk.id;
-        if (typeof chunk.model === "string" && chunk.model.length > 0 && chunk.model !== model.id) {
-          output.responseModel ||= chunk.model;
-        }
-        if (chunk.usage !== undefined && chunk.usage !== null) {
-          output.usage = parseChunkUsage(chunk.usage, model);
-        }
-
-        const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined;
-        if (choice === undefined) continue;
-
-        if ((chunk.usage === undefined || chunk.usage === null) && Boolean((choice as any).usage)) {
-          output.usage = parseChunkUsage((choice as any).usage, model);
-        }
-
-        if (choice.finish_reason !== null) {
-          output.rawStopReason = choice.finish_reason;
-          const finishReasonResult = mapStopReason(choice.finish_reason);
-          output.stopReason = finishReasonResult.stopReason;
+          if (block.name === "" && name !== "") {
+            block.name = name;
+          }
           if (
-            finishReasonResult.errorMessage !== undefined &&
-            finishReasonResult.errorMessage !== ""
+            toolCall.custom !== undefined &&
+            toolCall.function === undefined &&
+            block.customInput === undefined
           ) {
-            output.errorMessage = finishReasonResult.errorMessage;
+            const customInputProperty = grammarToolInputProperties.get(block.name) ?? "input";
+            block.arguments = { [customInputProperty]: "" };
+            block.customInput = {
+              property: customInputProperty,
+              jsonBuffer: { input: "", started: false, closed: false },
+            };
+            delete block.partialArgs;
           }
-          hasFinishReason = true;
-        }
-
-        if (choice.delta !== undefined && choice.delta !== null) {
-          const reasoningFields = ["reasoning_content", "reasoning", "reasoning_text"];
-          const deltaFields = choice.delta as Record<string, unknown>;
-          let foundReasoningField: string | null = null;
-          for (const field of reasoningFields) {
-            const value = deltaFields[field];
-            if (typeof value === "string" && value.length > 0) {
-              foundReasoningField = field;
-              break;
-            }
-          }
-
-          if (foundReasoningField !== null && foundReasoningField !== "") {
-            const delta = deltaFields[foundReasoningField];
-            if (typeof delta === "string" && delta.length > 0) {
-              const thinkingSignature =
-                model.provider === "opencode-go" && foundReasoningField === "reasoning"
-                  ? "reasoning_content"
-                  : foundReasoningField;
-              const block = ensureThinkingBlock(thinkingSignature);
-              block.thinking += delta;
-              events.push({
-                type: "thinking_delta",
-                contentIndex: getContentIndex(block),
-                delta,
-                partial: output,
-              });
-            }
-          }
-
-          const reasoningDetails = (choice.delta as { reasoning_details?: unknown })
-            .reasoning_details;
-          if (Array.isArray(reasoningDetails)) {
-            for (const detail of reasoningDetails) {
-              if (!isOpenAIReasoningDetail(detail)) continue;
-              ensureThinkingBlock("");
-              streamedReasoningDetails ??= [];
-              appendOpenAIReasoningDetail(streamedReasoningDetails, detail);
-            }
-          }
-
-          if (
-            choice.delta.content !== null &&
-            choice.delta.content !== undefined &&
-            choice.delta.content.length > 0
-          ) {
-            const block = ensureTextBlock();
-            block.text += choice.delta.content;
-            events.push({
-              type: "text_delta",
-              contentIndex: getContentIndex(block),
-              delta: choice.delta.content,
-              partial: output,
-            });
-          }
-
-          if (choice?.delta?.tool_calls !== undefined) {
-            for (const toolCall of choice.delta.tool_calls as StreamingToolCallDelta[]) {
-              const block = ensureToolCallBlock(toolCall);
-              if (block.id === "" && toolCall.id !== undefined && toolCall.id !== "") {
-                block.id = toolCall.id;
-                toolCallBlocksById.set(toolCall.id, block);
-              }
-              const name = toolCall.function?.name ?? toolCall.custom?.name;
-              if (block.name === "" && name !== undefined && name !== "") {
-                block.name = name;
-              }
-
-              let delta = "";
+          return block;
+        };
+        yield* Stream.fromAsyncIterable(openaiStream, (error) => error).pipe(
+          Stream.orDie,
+          Stream.runForEach((chunk) =>
+            Effect.gen(function* () {
+              yield* callHook(() => options?.onProviderStreamEvent?.(chunk, model));
+              if (typeof chunk !== "object" || chunk === null) return;
+              output.responseId ||= chunk.id;
               if (
-                toolCall.function?.arguments !== undefined &&
-                toolCall.function?.arguments !== ""
+                typeof chunk.model === "string" &&
+                chunk.model.length > 0 &&
+                chunk.model !== model.id
               ) {
-                delta = toolCall.function.arguments;
-                block.partialArgs = (block.partialArgs ?? "") + toolCall.function.arguments;
-                block.arguments = parseStreamingJson(block.partialArgs);
-              } else if (toolCall.custom?.input !== undefined && toolCall.custom?.input !== "") {
-                const nextInput = getCustomToolCallInput(block) + toolCall.custom.input;
-                delta = appendCustomToolCallInput(block, nextInput, false) ?? "";
+                output.responseModel ||= chunk.model;
               }
-              events.push({
-                type: "toolcall_delta",
-                contentIndex: getContentIndex(block),
-                delta,
-                partial: output,
-              });
+              if (chunk.usage !== undefined && chunk.usage !== null) {
+                output.usage = parseChunkUsage(chunk.usage, model);
+              }
+              const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined;
+              if (choice === undefined) return;
+              if (
+                (chunk.usage === undefined || chunk.usage === null) &&
+                Boolean((choice as any).usage)
+              ) {
+                output.usage = parseChunkUsage((choice as any).usage, model);
+              }
+              if (choice.finish_reason !== null) {
+                output.rawStopReason = choice.finish_reason;
+                const finishReasonResult = mapStopReason(choice.finish_reason);
+                output.stopReason = finishReasonResult.stopReason;
+                if (
+                  finishReasonResult.errorMessage !== undefined &&
+                  finishReasonResult.errorMessage !== ""
+                ) {
+                  output.errorMessage = finishReasonResult.errorMessage;
+                }
+                hasFinishReason = true;
+              }
+              if (choice.delta !== undefined && choice.delta !== null) {
+                const reasoningFields = ["reasoning_content", "reasoning", "reasoning_text"];
+                const deltaFields = choice.delta as Record<string, unknown>;
+                let foundReasoningField: string | null = null;
+                for (const field of reasoningFields) {
+                  const value = deltaFields[field];
+                  if (typeof value === "string" && value.length > 0) {
+                    foundReasoningField = field;
+                    break;
+                  }
+                }
+
+                if (foundReasoningField !== null && foundReasoningField !== "") {
+                  const delta = deltaFields[foundReasoningField];
+                  if (typeof delta === "string" && delta.length > 0) {
+                    const thinkingSignature =
+                      model.provider === "opencode-go" && foundReasoningField === "reasoning"
+                        ? "reasoning_content"
+                        : foundReasoningField;
+                    const block = ensureThinkingBlock(thinkingSignature);
+                    block.thinking += delta;
+                    events.push({
+                      type: "thinking_delta",
+                      contentIndex: getContentIndex(block),
+                      delta,
+                      partial: output,
+                    });
+                  }
+                }
+
+                const reasoningDetails = (choice.delta as { reasoning_details?: unknown })
+                  .reasoning_details;
+                if (Array.isArray(reasoningDetails)) {
+                  for (const detail of reasoningDetails) {
+                    if (!isOpenAIReasoningDetail(detail)) continue;
+                    ensureThinkingBlock("");
+                    streamedReasoningDetails ??= [];
+                    appendOpenAIReasoningDetail(streamedReasoningDetails, detail);
+                  }
+                }
+
+                if (
+                  choice.delta.content !== null &&
+                  choice.delta.content !== undefined &&
+                  choice.delta.content.length > 0
+                ) {
+                  const block = ensureTextBlock();
+                  block.text += choice.delta.content;
+                  events.push({
+                    type: "text_delta",
+                    contentIndex: getContentIndex(block),
+                    delta: choice.delta.content,
+                    partial: output,
+                  });
+                }
+
+                if (choice?.delta?.tool_calls !== undefined) {
+                  for (const toolCall of choice.delta.tool_calls as StreamingToolCallDelta[]) {
+                    const block = ensureToolCallBlock(toolCall);
+                    if (block.id === "" && toolCall.id !== undefined && toolCall.id !== "") {
+                      block.id = toolCall.id;
+                      toolCallBlocksById.set(toolCall.id, block);
+                    }
+                    const name = toolCall.function?.name ?? toolCall.custom?.name;
+                    if (block.name === "" && name !== undefined && name !== "") {
+                      block.name = name;
+                    }
+
+                    let delta = "";
+                    if (
+                      toolCall.function?.arguments !== undefined &&
+                      toolCall.function?.arguments !== ""
+                    ) {
+                      delta = toolCall.function.arguments;
+                      block.partialArgs = (block.partialArgs ?? "") + toolCall.function.arguments;
+                      block.arguments = parseStreamingJson(block.partialArgs);
+                    } else if (
+                      toolCall.custom?.input !== undefined &&
+                      toolCall.custom?.input !== ""
+                    ) {
+                      const nextInput = getCustomToolCallInput(block) + toolCall.custom.input;
+                      delta = appendCustomToolCallInput(block, nextInput, false) ?? "";
+                    }
+                    events.push({
+                      type: "toolcall_delta",
+                      contentIndex: getContentIndex(block),
+                      delta,
+                      partial: output,
+                    });
+                  }
+                }
+              }
+            }),
+          ),
+        );
+        for (const block of blocks) {
+          finishBlock(block);
+        }
+        if (options?.signal?.aborted === true) {
+          throw new Error("Request was aborted");
+        }
+        if (output.stopReason === "aborted") {
+          throw new Error("Request was aborted");
+        }
+        if (!hasFinishReason && !compat.supportsFinishReason) {
+          output.stopReason = output.content.some((block) => block.type === "toolCall")
+            ? "toolUse"
+            : "stop";
+        }
+        if (output.stopReason === "error") {
+          throw new Error(output.errorMessage || "Provider returned an error stop reason");
+        }
+        if ((compat.supportsFinishReason && !hasFinishReason) || output.stopReason === "pending") {
+          throw new Error("Stream ended without finish_reason");
+        }
+        events.push({ type: "done", reason: output.stopReason, message: output });
+        events.end();
+      }).pipe(
+        Effect.catchDefect((error) =>
+          Effect.sync(() => {
+            for (const block of output.content) {
+              if (block.type === "thinking") {
+                applyStreamedReasoningDetails(block);
+              }
+              delete (block as { index?: number }).index;
+              delete (block as { partialArgs?: string }).partialArgs;
+              delete (block as { customInput?: unknown }).customInput;
+              delete (block as { streamIndex?: number }).streamIndex;
             }
-          }
-        }
-      }
-
-      for (const block of blocks) {
-        finishBlock(block);
-      }
-      if (options?.signal?.aborted === true) {
-        throw new Error("Request was aborted");
-      }
-
-      if (output.stopReason === "aborted") {
-        throw new Error("Request was aborted");
-      }
-      if (!hasFinishReason && !compat.supportsFinishReason) {
-        output.stopReason = output.content.some((block) => block.type === "toolCall")
-          ? "toolUse"
-          : "stop";
-      }
-      if (output.stopReason === "error") {
-        throw new Error(output.errorMessage || "Provider returned an error stop reason");
-      }
-      if ((compat.supportsFinishReason && !hasFinishReason) || output.stopReason === "pending") {
-        throw new Error("Stream ended without finish_reason");
-      }
-
-      events.push({ type: "done", reason: output.stopReason, message: output });
-      events.end();
-    } catch (error) {
-      for (const block of output.content) {
-        if (block.type === "thinking") {
-          applyStreamedReasoningDetails(block);
-        }
-        delete (block as { index?: number }).index;
-        delete (block as { partialArgs?: string }).partialArgs;
-        delete (block as { customInput?: unknown }).customInput;
-        delete (block as { streamIndex?: number }).streamIndex;
-      }
-      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-      output.errorMessage = formatProviderError(normalizeProviderError(error));
-      const rawMetadata = (error as any)?.error?.metadata?.raw;
-      if (Boolean(rawMetadata) && !output.errorMessage.includes(String(rawMetadata))) {
-        output.errorMessage += `\n${rawMetadata}`;
-      }
-      events.push({ type: "error", reason: output.stopReason, error: output });
-      events.end();
-    }
-  })();
+            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+            output.errorMessage = formatProviderError(normalizeProviderError(error));
+            const rawMetadata = (error as any)?.error?.metadata?.raw;
+            if (Boolean(rawMetadata) && !output.errorMessage.includes(String(rawMetadata))) {
+              output.errorMessage += `\n${rawMetadata}`;
+            }
+            events.push({ type: "error", reason: output.stopReason, error: output });
+            events.end();
+          }),
+        ),
+      );
+    }),
+  );
 
   return events;
 };
