@@ -1,0 +1,239 @@
+import assert from "node:assert/strict";
+
+import { Effect } from "effect";
+import { Type } from "typebox";
+import { describe, it, onTestFinished, vi } from "vite-plus/test";
+
+import {
+  createHost,
+  type Facet,
+  hostNamed,
+  isChordError,
+  local,
+  method,
+  remote,
+} from "../src/index.ts";
+import { CountV1, Greeter, quiet } from "./fixtures/reload.ts";
+import { abortOf, latch, tick } from "./fixtures/timing.ts";
+
+const aTaskThatIgnoresItsAbort = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  onTestFinished(() => {
+    vi.useRealTimers();
+  });
+  const errors: unknown[] = [];
+  const host = createHost({
+    self: { kind: "host" },
+    onError: (error) => errors.push(error),
+    taskStopDeadline: 30,
+  });
+  const log: string[] = [];
+  const stuck = latch();
+  const facet = (label: string): Facet => ({
+    name: "greeter",
+    setup: (api) =>
+      api.serve(Greeter, (_input, _principal, self) => {
+        self.task(() =>
+          Effect.runPromiseWith(services)(
+            Effect.gen(function* () {
+              log.push(`start ${label}`);
+              if (label === "a") yield* stuck.wait;
+            }),
+          ),
+        );
+        const count = self.state("count", CountV1, { n: 0 });
+        return { count, greet: (name: string) => name };
+      }),
+  });
+  host.install(facet("a"));
+  const ref = host.hold(Greeter, {});
+  yield* Effect.promise(() => ref.ready);
+  yield* Effect.promise(() => host.reload([facet("b")]));
+  yield* Effect.promise(() => vi.advanceTimersByTimeAsync(29));
+  yield* tick;
+  assert.deepEqual(log, ["start a"], "waits for the old run");
+  assert.equal(errors.length, 0);
+  yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1));
+  yield* tick;
+  assert.deepEqual(log, ["start a", "start b"]);
+  assert.ok(
+    errors.some(
+      (error) => isChordError(error, "aborted") && /still running after 30 ms/u.test(error.message),
+    ),
+  );
+  stuck.open();
+});
+
+const aFacetSSignalAbortsWhen = Effect.gen(function* () {
+  const host = quiet();
+  const signals = new Map<string, AbortSignal>();
+  const facet = (label: string, fail = false): Facet => ({
+    name: "greeter",
+    setup: (api) => {
+      signals.set(label, api.signal);
+      api.serve(Greeter, (_input, _principal, self) => {
+        if (fail) throw new Error("broken");
+        const count = self.state("count", CountV1, { n: 0 });
+        return { count, greet: (name: string) => name };
+      });
+    },
+  });
+  const other: Facet = {
+    name: "other",
+    setup: (api) => void signals.set("other", api.signal),
+  };
+  host.install(facet("a"));
+  host.install(other);
+  yield* Effect.promise(() => host.hold(Greeter, {}).ready);
+  yield* Effect.promise(() => assert.rejects(host.reload([facet("b", true)])));
+  assert.equal(signals.get("b")?.aborted, true, "the aborted reload's run");
+  assert.equal(signals.get("a")?.aborted, false, "still installed");
+  yield* Effect.promise(() => host.reload([facet("c")]));
+  assert.equal(signals.get("a")?.aborted, true, "replaced");
+  assert.equal(signals.get("c")?.aborted, false);
+  yield* Effect.promise(() => host.reload([], { remove: ["other"] }));
+  assert.equal(signals.get("other")?.aborted, true, "removed");
+  yield* Effect.promise(() => host.close());
+  assert.equal(signals.get("c")?.aborted, true, "host closed");
+});
+
+const checksContractsAtReloadForgottenBumps = Effect.gen(function* () {
+  const DocV1 = remote("t.rdoc", {
+    version: 1,
+    input: Type.Object({}),
+    host: hostNamed("host"),
+    variants: {
+      main: { methods: { read: method(undefined, Type.Object({ text: Type.String() })) } },
+    },
+  });
+  const DocBroken = remote("t.rdoc", {
+    version: 1,
+    input: Type.Object({}),
+    host: hostNamed("host"),
+    variants: {
+      main: { methods: { read: method(undefined, Type.Object({ text: Type.Number() })) } },
+    },
+  });
+  const DocV2 = remote("t.rdoc", {
+    version: 2,
+    input: Type.Object({}),
+    host: hostNamed("host"),
+    variants: {
+      main: { methods: { fetch: method(undefined, Type.Object({ body: Type.String() })) } },
+    },
+  });
+  const host = quiet();
+  host.install({
+    name: "doc",
+    setup: (api) => api.serve(DocV1, () => ({ variant: "main", read: () => ({ text: "v1" }) })),
+  });
+  const consumer = host.hold(DocV1, {});
+  assert.deepEqual(yield* Effect.promise(() => consumer.read()), { text: "v1" });
+
+  const broken: Facet = {
+    name: "doc",
+    setup: (api) => api.serve(DocBroken, () => ({ variant: "main", read: () => ({ text: 1 }) })),
+  };
+  yield* Effect.promise(() => assert.rejects(host.reload([broken]), /without a version bump/u));
+
+  const fetch = () => ({ body: "v2" });
+  const v2: Facet = {
+    name: "doc",
+    setup: (api) => api.serve(DocV2, () => ({ variant: "main", fetch })),
+  };
+  yield* Effect.promise(() =>
+    assert.rejects(host.reload([v2]), (error) => isChordError(error, "contract_mismatch")),
+  );
+
+  const adapted: Facet = {
+    name: "doc",
+    setup: (api) =>
+      api.serve(DocV2, () => ({ variant: "main", fetch }), {
+        accepts: {
+          1: (current) => ({
+            variant: "main",
+            read: () => ({
+              text: `${(current["fetch"] as typeof fetch)().body} via adapter`,
+            }),
+          }),
+        },
+      }),
+  };
+  yield* Effect.promise(() => host.reload([adapted]));
+  assert.deepEqual(yield* Effect.promise(() => consumer.read()), { text: "v2 via adapter" });
+  const modern = host.hold(DocV2, {});
+  assert.deepEqual(yield* Effect.promise(() => modern.fetch()), { body: "v2" });
+});
+
+const rebindsListenersToTheNewCode = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const host = quiet();
+  const listeners = new Set<(event: number) => void>();
+  const events = {
+    subscribe: (fn: (event: number) => void) => {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+  };
+  const emit = (value: number) => {
+    for (const fn of listeners) fn(value);
+  };
+  const log: string[] = [];
+  const Sum = local("t.sum", {
+    version: 1,
+    input: Type.Object({}),
+    members: { sum: Type.Object({ v: Type.Number() }) },
+  });
+  const facet = (factor: number): Facet => ({
+    name: "sum",
+    setup: (api) =>
+      api.serve(Sum, (_input, _principal, self) => {
+        const sum = self.state("sum", Type.Object({ v: Type.Number() }), { v: 0 });
+        self.on(
+          "add",
+          events,
+          (source) => source,
+          (value, ctx) =>
+            sum.change(ctx, (draft) => {
+              draft.v += value * factor;
+            }),
+        );
+        self.task((ctx) =>
+          Effect.runPromiseWith(services)(
+            Effect.gen(function* () {
+              log.push(`start ${factor}`);
+              yield* abortOf(ctx.signal);
+              log.push(`stop ${factor}`);
+            }),
+          ),
+        );
+        return { sum };
+      }),
+  });
+  host.install(facet(1));
+  const ref = host.hold(Sum, {});
+  yield* Effect.promise(() => ref.ready);
+  emit(1);
+  yield* tick;
+  yield* Effect.promise(() => host.reload([facet(10)]));
+  assert.equal(listeners.size, 1);
+  emit(1);
+  yield* tick;
+  assert.deepEqual(ref.sum.value, { v: 11 });
+  assert.deepEqual(log, ["start 1", "stop 1", "start 10"]);
+});
+
+describe("reload", () => {
+  it("a task that ignores its abort delays its replacement at most taskStopDeadline (reported)", () =>
+    Effect.runPromise(aTaskThatIgnoresItsAbort));
+
+  it("a facet's signal aborts when its run is replaced or removed, when its reload aborts, and when the host closes", () =>
+    Effect.runPromise(aFacetSSignalAbortsWhen));
+
+  it("checks contracts at reload: forgotten bumps, live consumers, accepts adapters", () =>
+    Effect.runPromise(checksContractsAtReloadForgottenBumps));
+
+  it("rebinds listeners to the new code and restarts tasks", () =>
+    Effect.runPromise(rebindsListenersToTheNewCode));
+});
