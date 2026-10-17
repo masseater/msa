@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { getModel } from "@msa/ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { findExternalService } from "../src/core/external-services.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -12,7 +13,7 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import { webFetchRenderers, webSearchRenderers } from "../src/core/tools/renderers/web.ts";
 import { createWebFetchToolDefinition } from "../src/core/tools/web-fetch.ts";
 import { createWebSearchToolDefinition } from "../src/core/tools/web-search.ts";
-import { findTreg, type TregRunner } from "../src/core/treg.ts";
+import { findTreg, loginTreg, logoutTreg, type TregRunner } from "../src/core/treg.ts";
 import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
@@ -257,6 +258,91 @@ describe("findTreg", () => {
   });
 });
 
+describe("treg sign-in", () => {
+  let bin: string;
+
+  beforeEach(() => {
+    bin = join(tmpdir(), `msa-treg-login-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(bin);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(bin, { recursive: true, force: true });
+  });
+
+  function script(name: string, body: string): string {
+    const path = join(bin, name);
+    writeFileSync(path, `#!/bin/sh\n${body}\n`);
+    chmodSync(path, 0o755);
+    return path;
+  }
+
+  it("shows the page and code treg login prints, and finishes when it does", async () => {
+    const command = script(
+      "treg",
+      [
+        `echo "Opening your browser to sign in…"`,
+        `echo "If it doesn't open, visit:"`,
+        `echo "  https://treg.to/login?cli=abc#code=8HPQ"`,
+        `echo "  The sign-in page shows this code — check it matches:  8HPQ"`,
+        `echo "Waiting for authorization…"`,
+        `echo "Signed in as you@example.com"`,
+      ].join("\n"),
+    );
+    const onPage = vi.fn();
+    await loginTreg(command, onPage);
+    expect(onPage).toHaveBeenCalledExactlyOnceWith({
+      url: "https://treg.to/login?cli=abc#code=8HPQ",
+      code: "8HPQ",
+    });
+  });
+
+  it("reports why treg login failed", async () => {
+    const command = script(
+      "treg",
+      `echo "Waiting for authorization…"\necho "Sign-in expired" >&2\nexit 1`,
+    );
+    await expect(loginTreg(command, () => {})).rejects.toThrow(
+      "treg login failed: Sign-in expired",
+    );
+  });
+
+  it("stops treg login when the dialog is cancelled", async () => {
+    const command = script("treg", "sleep 60");
+    const controller = new AbortController();
+    const pending = loginTreg(command, () => {}, controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toThrow();
+  });
+
+  it("reports why treg logout failed", async () => {
+    await expect(logoutTreg(script("treg", `echo "no login" >&2\nexit 2`))).rejects.toThrow(
+      "treg logout failed: no login",
+    );
+  });
+
+  it("tells /login how to install treg when it is missing", () => {
+    vi.stubEnv("PATH", bin);
+    expect(findExternalService("treg")?.status()).toEqual({
+      installed: false,
+      install: "curl -fsSL https://treg.to/install.sh | sh",
+    });
+    expect(findExternalService("TREG")?.tools()).toEqual([]);
+  });
+
+  it("reports whether treg is signed in", () => {
+    fakeTreg(bin, true);
+    vi.stubEnv("PATH", `${bin}:${process.env["PATH"]}`);
+    expect(findExternalService("treg")?.status()).toEqual({ installed: true, signedIn: true });
+    expect(
+      findExternalService("treg")
+        ?.tools()
+        .map((tool) => tool.name),
+    ).toEqual(["web_search", "web_fetch"]);
+  });
+});
+
 describe("web tool renderers", () => {
   function renderResult(
     renderers: typeof webSearchRenderers,
@@ -335,7 +421,7 @@ describe("web tool registration", () => {
     if (existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true });
   });
 
-  async function activeTools() {
+  async function createSession() {
     const agentDir = join(tempDir, "agent");
     const settingsManager = SettingsManager.inMemory();
     const resourceLoader = new DefaultResourceLoader({ cwd: tempDir, agentDir, settingsManager });
@@ -348,7 +434,11 @@ describe("web tool registration", () => {
       sessionManager: SessionManager.inMemory(tempDir),
       resourceLoader,
     });
-    return session.getActiveToolNames();
+    return session;
+  }
+
+  async function activeTools() {
+    return (await createSession()).getActiveToolNames();
   }
 
   it("activates web_search and web_fetch by default when treg is signed in", async () => {
@@ -366,5 +456,18 @@ describe("web tool registration", () => {
     const tools = await activeTools();
     expect(tools).not.toContain("web_search");
     expect(tools).not.toContain("web_fetch");
+  });
+
+  it("adds them to a running session once treg is signed in", async () => {
+    fakeTreg(join(tempDir, "bin"), false);
+    vi.stubEnv("PATH", `${join(tempDir, "bin")}:${process.env["PATH"]}`);
+    vi.stubEnv("TREG_TOKEN", "");
+    const session = await createSession();
+    expect(session.getActiveToolNames()).not.toContain("web_search");
+    fakeTreg(join(tempDir, "bin"), true);
+    session.refreshExternalServiceTools();
+    expect(session.getActiveToolNames()).toEqual(
+      expect.arrayContaining(["read", "web_search", "web_fetch"]),
+    );
   });
 });

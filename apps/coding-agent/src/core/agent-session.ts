@@ -117,6 +117,7 @@ import {
   wrapRegisteredTools,
 } from "./extensions/index.ts";
 import { type BeforeAgentStartTrigger, emitSessionShutdownEvent } from "./extensions/runner.ts";
+import { EXTERNAL_SERVICES } from "./external-services.ts";
 import {
   findActiveGoalCondition,
   GOAL_CONTINUE_MESSAGE_TYPE,
@@ -189,9 +190,6 @@ import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts"
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createMemoryToolDefinition } from "./tools/memory.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
-import { createWebFetchToolDefinition } from "./tools/web-fetch.ts";
-import { createWebSearchToolDefinition } from "./tools/web-search.ts";
-import { findTreg } from "./treg.ts";
 import { addUsageToTotals, combineUsage, createUsageTotals } from "./usage-totals.ts";
 import {
   findLatestResponse,
@@ -4162,15 +4160,7 @@ export class AgentSession {
     this._baseToolDefinitions = new Map(
       Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
     );
-    const treg = findTreg();
-    if (treg && !this._baseToolsOverride) {
-      for (const tool of [
-        createWebSearchToolDefinition(treg),
-        createWebFetchToolDefinition(treg),
-      ]) {
-        this._baseToolDefinitions.set(tool.name, tool as ToolDefinition);
-      }
-    }
+    if (!this._baseToolsOverride) this._addExternalServiceTools();
     if (this._orchestrator && !this._baseToolsOverride) {
       for (const [name, tool] of Object.entries(
         createOrchestratorToolDefinitions(this._orchestrator),
@@ -4206,6 +4196,39 @@ export class AgentSession {
     this._refreshToolRegistry({
       activeToolNames: baseActiveToolNames,
       includeAllExtensionTools: options.includeAllExtensionTools,
+    });
+  }
+
+  /** Adds the tools of the external services that are signed in, and returns their names. */
+  private _addExternalServiceTools(): string[] {
+    const names: string[] = [];
+    for (const service of EXTERNAL_SERVICES) {
+      for (const tool of service.tools()) {
+        this._baseToolDefinitions.set(tool.name, tool);
+        names.push(tool.name);
+      }
+    }
+    return names;
+  }
+
+  /**
+   * Registers the tools of external services signed in since the runtime was built, activating the
+   * ones the default tools include. Call it after a `/login` to a service.
+   */
+  refreshExternalServiceTools(): void {
+    if (this._baseToolsOverride) return;
+    const names = this._addExternalServiceTools();
+    const defaultTools = this._usesDefaultTools
+      ? applyToolModifiers(
+          this.settingsManager.getDefaultTools() ?? DEFAULT_TOOL_NAMES,
+          this._defaultToolModifiers,
+        )
+      : [];
+    this._refreshToolRegistry({
+      activeToolNames: [
+        ...this.getActiveToolNames(),
+        ...names.filter((name) => defaultTools.includes(name)),
+      ],
     });
   }
 
