@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { ScrollView } from "../src/components/scroll-view.ts";
-import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image.ts";
+import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image-kitty.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
 import { scrollLineByLine, someWriteSince, withCapabilities } from "./tui-alt-screen-helpers.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";

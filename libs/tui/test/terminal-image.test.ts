@@ -4,10 +4,10 @@ import { describe, it } from "node:test";
 import {
   detectCapabilities,
   getCapabilities,
-  isImageLine,
   resetCapabilitiesCache,
   setCapabilityOverrides,
-} from "../src/terminal-image.ts";
+} from "../src/terminal-capabilities.ts";
+import { isImageLine } from "../src/terminal-image-kitty.ts";
 import { withEnv } from "./terminal-image-helpers.ts";
 
 describe("isImageLine", () => {

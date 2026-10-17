@@ -29,7 +29,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("new implementation returns true correctly", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { isImageLine } = yield* Effect.promise(() => import("../src/terminal-image.ts"));
+          const { isImageLine } = yield* Effect.promise(
+            () => import("../src/terminal-image-kitty.ts"),
+          );
 
           const lineWithImageSequence =
             "Read image file [image/jpeg]\x1b]1337;File=size=800,600;inline=1:base64data...\x07";
@@ -46,7 +48,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("new implementation detects Kitty sequences in any position", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { isImageLine } = yield* Effect.promise(() => import("../src/terminal-image.ts"));
+          const { isImageLine } = yield* Effect.promise(
+            () => import("../src/terminal-image-kitty.ts"),
+          );
 
           const scenarios = [
             "At start: \x1b_Ga=T,f=100,data...\x1b\\",
@@ -73,7 +77,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("new implementation detects iTerm2 sequences in any position", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { isImageLine } = yield* Effect.promise(() => import("../src/terminal-image.ts"));
+          const { isImageLine } = yield* Effect.promise(
+            () => import("../src/terminal-image-kitty.ts"),
+          );
 
           const scenarios = [
             "At start: \x1b]1337;File=size=100,100:base64...\x07",
@@ -100,7 +106,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("detects image sequences in read tool output", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { isImageLine } = yield* Effect.promise(() => import("../src/terminal-image.ts"));
+          const { isImageLine } = yield* Effect.promise(
+            () => import("../src/terminal-image-kitty.ts"),
+          );
 
           const toolOutputLine =
             "Read image file [image/jpeg]\x1b]1337;File=size=800,600;inline=1:base64image...\x07";
@@ -120,7 +128,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("detects Kitty sequences from Image component", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { isImageLine } = yield* Effect.promise(() => import("../src/terminal-image.ts"));
+          const { isImageLine } = yield* Effect.promise(
+            () => import("../src/terminal-image-kitty.ts"),
+          );
 
           const kittyLine = "\x1b_Ga=T,f=100,t=f,d=base64data...\x1b\\\x1b_Gm=i=1;\x1b\\";
 
@@ -135,7 +145,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("handles ANSI codes before image sequences", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { isImageLine } = yield* Effect.promise(() => import("../src/terminal-image.ts"));
+          const { isImageLine } = yield* Effect.promise(
+            () => import("../src/terminal-image-kitty.ts"),
+          );
 
           const lines = [
             "\x1b[31mError\x1b[0m: \x1b]1337;File=inline=1:base64==\x07",
@@ -160,7 +172,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("does NOT crash on very long lines with image sequences", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { isImageLine } = yield* Effect.promise(() => import("../src/terminal-image.ts"));
+          const { isImageLine } = yield* Effect.promise(
+            () => import("../src/terminal-image-kitty.ts"),
+          );
 
           const base64Char = "A".repeat(100);
           const iterm2Sequence = "\x1b]1337;File=size=800,600;inline=1:";
@@ -186,7 +200,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("handles lines exactly matching crash log dimensions", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { isImageLine } = yield* Effect.promise(() => import("../src/terminal-image.ts"));
+          const { isImageLine } = yield* Effect.promise(
+            () => import("../src/terminal-image-kitty.ts"),
+          );
 
           const targetWidth = 58649;
           const prefix = "Text";

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
-import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
+import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-capabilities.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
 
 describe("Markdown component", () => {

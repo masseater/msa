@@ -4,7 +4,7 @@ import { it } from "node:test";
 import { Effect } from "effect";
 
 import { HStack, Image, ScrollView, Text, TuiAltScreen, VStack } from "../src/index.ts";
-import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image.ts";
+import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image-kitty.ts";
 import {
   scrollLineByLine,
   someWriteSince,

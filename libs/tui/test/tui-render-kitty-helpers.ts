@@ -7,7 +7,7 @@ import {
   resetCapabilitiesCache,
   setCapabilities,
   setCellDimensions,
-} from "../src/terminal-image.ts";
+} from "../src/terminal-capabilities.ts";
 
 export const withKittyCells = <A>(effect: Effect.Effect<A>): Effect.Effect<A> =>
   Effect.suspend(() => {

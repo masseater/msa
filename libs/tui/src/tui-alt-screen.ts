@@ -28,17 +28,19 @@ import {
   type ScrollbarGeometry,
 } from "./layout.ts";
 import {
+  getCapabilities,
+  type ImageProtocol,
+  setCapabilities,
+  type TerminalCapabilities,
+} from "./terminal-capabilities.ts";
+import {
   deleteAllKittyImages,
   deleteAllKittyPlacements,
   deleteKittyImage,
-  getCapabilities,
   getKittyImagePlacement,
   getKittyImagePlacementRows,
-  type ImageProtocol,
   isImageLine,
-  setCapabilities,
-  type TerminalCapabilities,
-} from "./terminal-image.ts";
+} from "./terminal-image-kitty.ts";
 import type { Terminal } from "./terminal.ts";
 import {
   type Component,

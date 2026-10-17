@@ -5,6 +5,11 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { Image } from "../src/components/image.ts";
 import { pathOperations } from "../src/platform.ts";
 import {
+  resetCapabilitiesCache,
+  setCapabilities,
+  setCellDimensions,
+} from "../src/terminal-capabilities.ts";
+import {
   cropKittyImageLine,
   deleteAllKittyImages,
   deleteAllKittyPlacements,
@@ -14,11 +19,8 @@ import {
   getKittyImagePlacement,
   getKittyImagePlacementRows,
   registerKittyImageMetadata,
-  renderImage,
-  resetCapabilitiesCache,
-  setCapabilities,
-  setCellDimensions,
-} from "../src/terminal-image.ts";
+} from "../src/terminal-image-kitty.ts";
+import { renderImage } from "../src/terminal-image.ts";
 import { visibleWidth } from "../src/utils.ts";
 
 const { join } = pathOperations;

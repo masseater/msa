@@ -8,7 +8,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("does not detect images in regular long text", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { isImageLine } = yield* Effect.promise(() => import("../src/terminal-image.ts"));
+          const { isImageLine } = yield* Effect.promise(
+            () => import("../src/terminal-image-kitty.ts"),
+          );
 
           const longText = "A".repeat(100000);
 
@@ -23,7 +25,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("does not detect images in lines with file paths", () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { isImageLine } = yield* Effect.promise(() => import("../src/terminal-image.ts"));
+          const { isImageLine } = yield* Effect.promise(
+            () => import("../src/terminal-image-kitty.ts"),
+          );
 
           const filePaths = [
             "/path/to/1337/image.jpg",

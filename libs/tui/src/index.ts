@@ -119,32 +119,38 @@ export {
 } from "./terminal-colors.ts";
 export {
   allocateImageId,
-  type CellDimensions,
-  calculateImageRows,
   deleteAllKittyImages,
   deleteKittyImage,
-  detectCapabilities,
-  encodeITerm2,
   encodeKitty,
+} from "./terminal-image-kitty.ts";
+export {
+  type CellDimensions,
+  detectCapabilities,
   getCapabilities,
   getCellDimensions,
-  getGifDimensions,
-  getImageDimensions,
-  getJpegDimensions,
-  getPngDimensions,
   getTerminalColorMode,
-  getWebpDimensions,
-  hyperlink,
-  type ImageDimensions,
   type ImageProtocol,
-  type ImageRenderOptions,
-  imageFallback,
-  renderImage,
   resetCapabilitiesCache,
   setCapabilities,
   setCapabilityOverrides,
   setCellDimensions,
   type TerminalCapabilities,
+} from "./terminal-capabilities.ts";
+export {
+  calculateImageRows,
+  getGifDimensions,
+  getImageDimensions,
+  getJpegDimensions,
+  getPngDimensions,
+  getWebpDimensions,
+  type ImageDimensions,
+} from "./terminal-image-size.ts";
+export {
+  encodeITerm2,
+  hyperlink,
+  type ImageRenderOptions,
+  imageFallback,
+  renderImage,
 } from "./terminal-image.ts";
 export {
   type Component,

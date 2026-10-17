@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { type MarkdownTheme } from "../src/components/markdown.ts";
-import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
+import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-capabilities.ts";
 import { getCell } from "./markdown-helpers.ts";
 import { findViewportRow, renderMarkdownInTerminal } from "./markdown-terminal-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";

@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import { type Component, type TerminalCapabilities, TuiAltScreen, VStack } from "../src/index.ts";
-import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
+import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-capabilities.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 export const OSC133_ZONE_START = "\x1b]133;A\x07";
