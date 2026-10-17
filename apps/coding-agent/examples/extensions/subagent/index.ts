@@ -172,8 +172,7 @@ interface SubagentDetails {
 }
 
 function getFinalOutput(messages: Message[]): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
+  for (const msg of messages.toReversed()) {
     if (msg.role === "assistant") {
       for (const part of msg.content) {
         if (part.type === "text") return part.text;
@@ -231,12 +230,13 @@ async function mapWithConcurrencyLimit<TIn, TOut>(
   if (items.length === 0) return [];
   const limit = Math.max(1, Math.min(concurrency, items.length));
   const results: TOut[] = new Array(items.length);
-  let nextIndex = 0;
+  const queue = items.entries();
   const workers = new Array(limit).fill(null).map(async () => {
     while (true) {
-      const current = nextIndex++;
-      if (current >= items.length) return;
-      results[current] = await fn(items[current], current);
+      const next = queue.next();
+      if (next.done) return;
+      const [current, item] = next.value;
+      results[current] = await fn(item, current);
     }
   });
   await Promise.all(workers);
@@ -589,8 +589,7 @@ export default function (msa: ExtensionAPI) {
         const results: SingleResult[] = [];
         let previousOutput = "";
 
-        for (let i = 0; i < params.chain.length; i++) {
-          const step = params.chain[i];
+        for (const [i, step] of params.chain.entries()) {
           const taskWithContext = step.task.replace(/\{previous\}/g, previousOutput);
 
           // Create update callback that includes all previous results
@@ -642,7 +641,7 @@ export default function (msa: ExtensionAPI) {
           content: [
             {
               type: "text",
-              text: getFinalOutput(results[results.length - 1].messages) || "(no output)",
+              text: previousOutput || "(no output)",
             },
           ],
           details: makeDetails("chain")(results),
@@ -665,11 +664,11 @@ export default function (msa: ExtensionAPI) {
         const allResults: SingleResult[] = new Array(params.tasks.length);
 
         // Initialize placeholder results
-        for (let i = 0; i < params.tasks.length; i++) {
+        for (const [i, t] of params.tasks.entries()) {
           allResults[i] = {
-            agent: params.tasks[i].agent,
+            agent: t.agent,
             agentSource: "unknown",
-            task: params.tasks[i].task,
+            task: t.task,
             exitCode: -1, // -1 = still running
             messages: [],
             stderr: "",
@@ -792,8 +791,7 @@ export default function (msa: ExtensionAPI) {
           theme.fg("toolTitle", theme.bold("subagent ")) +
           theme.fg("accent", `chain (${args.chain.length} steps)`) +
           theme.fg("muted", ` [${scope}]`);
-        for (let i = 0; i < Math.min(args.chain.length, 3); i++) {
-          const step = args.chain[i];
+        for (const [i, step] of args.chain.slice(0, 3).entries()) {
           // Clean up {previous} placeholder for display
           const cleanTask = step.task.replace(/\{previous\}/g, "").trim();
           const preview = cleanTask.length > 40 ? `${cleanTask.slice(0, 40)}...` : cleanTask;
@@ -860,8 +858,9 @@ export default function (msa: ExtensionAPI) {
         return text.trimEnd();
       };
 
-      if (details.mode === "single" && details.results.length === 1) {
-        const r = details.results[0];
+      const singleResult = details.results.length === 1 ? details.results[0] : undefined;
+      if (details.mode === "single" && singleResult !== undefined) {
+        const r = singleResult;
         const isError = isFailedResult(r);
         const icon = isError ? theme.fg("error", "✗") : theme.fg("success", "✓");
         const displayItems = getDisplayItems(r.messages);

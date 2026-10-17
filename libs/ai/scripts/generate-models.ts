@@ -469,7 +469,7 @@ function withOpenAiLongContextPricing(cost: Model<Api>["cost"]): Model<Api>["cos
 // Keep current OpenAI prices authoritative until models.dev and passthrough
 // catalogs catch up.
 // https://developers.openai.com/api/docs/pricing
-const OPENAI_STANDARD_COSTS: Record<string, ModelCost> = {
+const OPENAI_STANDARD_COSTS = {
   "gpt-5.6-luna": { input: 0.2, output: 1.2, cacheRead: 0.02, cacheWrite: 0.25 },
   "gpt-5.6-sol": { input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5 },
   "gpt-5.6-terra": { input: 2, output: 12, cacheRead: 0.2, cacheWrite: 2.5 },
@@ -477,7 +477,8 @@ const OPENAI_STANDARD_COSTS: Record<string, ModelCost> = {
   "gpt-6-luna": { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
   "gpt-6-sol": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   "gpt-6.1-sol": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
-};
+} satisfies Record<string, ModelCost>;
+const OPENAI_STANDARD_COSTS_BY_ID: Readonly<Record<string, ModelCost>> = OPENAI_STANDARD_COSTS;
 
 const OPENAI_RESPONSES_NONE_REASONING_MODELS = new Set([
   "gpt-5.1",
@@ -2860,12 +2861,12 @@ async function generateModels() {
       candidate.provider === "openai" &&
       OPENAI_LONG_CONTEXT_PRICING_MODEL_IDS.has(candidate.id)
     ) {
-      const standardCost = OPENAI_STANDARD_COSTS[candidate.id];
+      const standardCost = OPENAI_STANDARD_COSTS_BY_ID[candidate.id];
       candidate.cost = withOpenAiLongContextPricing(standardCost ?? candidate.cost);
     }
     // Cloudflare AI Gateway passes OpenAI usage through at OpenAI list prices.
     if (candidate.provider === "cloudflare-ai-gateway") {
-      const standardCost = OPENAI_STANDARD_COSTS[candidate.id];
+      const standardCost = OPENAI_STANDARD_COSTS_BY_ID[candidate.id];
       if (standardCost) candidate.cost = withOpenAiLongContextPricing(standardCost);
     }
     // models.dev reports gpt-5-pro output as 272000 (a duplicate of the input sub-limit);
@@ -3134,8 +3135,7 @@ async function generateModels() {
     "MiniMax-M3",
   ]);
 
-  for (let i = allModels.length - 1; i >= 0; i--) {
-    const candidate = allModels[i];
+  for (const [i, candidate] of [...allModels.entries()].toReversed()) {
     if (
       (candidate.provider === "minimax" || candidate.provider === "minimax-cn") &&
       !minimaxDirectSupportedIds.has(candidate.id)
@@ -3415,15 +3415,15 @@ async function generateModels() {
     classifier: Record<string, ClassifierModel<ClassifierApi>>;
   };
   const providers: Record<string, ProviderCatalog> = {};
+  const providerCatalog = (provider: string): ProviderCatalog =>
+    (providers[provider] ??= { chat: {}, image: {}, classifier: {} });
   for (const model of allModels) {
-    providers[model.provider] ??= { chat: {}, image: {}, classifier: {} };
     // Only add if not already present (models.dev takes priority over OpenRouter).
-    providers[model.provider].chat[model.id] ??= { ...model, type: "chat" };
+    providerCatalog(model.provider).chat[model.id] ??= { ...model, type: "chat" };
   }
   for (const model of openRouterCatalog.images) {
     applyImageInputMetadata(model);
-    providers[model.provider] ??= { chat: {}, image: {}, classifier: {} };
-    providers[model.provider].image[model.id] ??= model;
+    providerCatalog(model.provider).image[model.id] ??= model;
   }
   const classifierModels: ClassifierModel<ClassifierApi>[] = [
     ...modelsDevClassifierModels,
@@ -3434,11 +3434,13 @@ async function generateModels() {
     ...OPENAI_CLASSIFIER_MODELS,
   ];
   for (const model of classifierModels) {
-    providers[model.provider] ??= { chat: {}, image: {}, classifier: {} };
-    providers[model.provider].classifier[model.id] ??= model;
+    providerCatalog(model.provider).classifier[model.id] ??= model;
   }
 
-  const sortedProviderIds = Object.keys(providers).sort();
+  const sortedProviders = Object.entries(providers).sort(([left], [right]) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  );
+  const sortedProviderIds = sortedProviders.map(([providerId]) => providerId);
   const jsonChatProviders: Record<string, Record<string, Model<Api>>> = {};
   const jsonImageProviders: Record<string, Record<string, ImageModel<ImageApi>>> = {};
   const jsonClassifierProviders: Record<
@@ -3446,26 +3448,23 @@ async function generateModels() {
     Record<string, ClassifierModel<ClassifierApi>>
   > = {};
   const jsonAllProviders: Record<string, (AnyModel & ModelCatalogEntry)[]> = {};
-  for (const providerId of sortedProviderIds) {
-    jsonChatProviders[providerId] = Object.fromEntries(
-      Object.entries(providers[providerId].chat).sort(([left], [right]) =>
-        left.localeCompare(right),
-      ),
+  for (const [providerId, catalog] of sortedProviders) {
+    const chat = Object.fromEntries(
+      Object.entries(catalog.chat).sort(([left], [right]) => left.localeCompare(right)),
     );
-    jsonImageProviders[providerId] = Object.fromEntries(
-      Object.entries(providers[providerId].image).sort(([left], [right]) =>
-        left.localeCompare(right),
-      ),
+    const image = Object.fromEntries(
+      Object.entries(catalog.image).sort(([left], [right]) => left.localeCompare(right)),
     );
-    jsonClassifierProviders[providerId] = Object.fromEntries(
-      Object.entries(providers[providerId].classifier).sort(([left], [right]) =>
-        left.localeCompare(right),
-      ),
+    const classifier = Object.fromEntries(
+      Object.entries(catalog.classifier).sort(([left], [right]) => left.localeCompare(right)),
     );
+    jsonChatProviders[providerId] = chat;
+    jsonImageProviders[providerId] = image;
+    jsonClassifierProviders[providerId] = classifier;
     jsonAllProviders[providerId] = [
-      ...Object.values(jsonChatProviders[providerId]),
-      ...Object.values(jsonImageProviders[providerId]),
-      ...Object.values(jsonClassifierProviders[providerId]),
+      ...Object.values(chat),
+      ...Object.values(image),
+      ...Object.values(classifier),
     ] as (AnyModel & ModelCatalogEntry)[];
   }
 
@@ -3486,7 +3485,11 @@ async function generateModels() {
   const generatedDataProviders: Record<string, Record<string, Record<string, AnyModel>>> = {};
   const modelDataStructure: ModelDataStructure = {};
   for (const providerId of generatedDataProviderIds) {
-    const { groups, structure } = groupProviderModelData(providerId, jsonAllProviders[providerId]);
+    const providerModels = jsonAllProviders[providerId];
+    if (providerModels === undefined) {
+      throw new Error(`Cannot hydrate missing providers: ${providerId}`);
+    }
+    const { groups, structure } = groupProviderModelData(providerId, providerModels);
     generatedDataProviders[providerId] = groups;
     modelDataStructure[providerId] = structure;
   }

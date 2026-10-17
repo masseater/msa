@@ -221,8 +221,7 @@ export default function presetExtension(msa: ExtensionAPI) {
     }
 
     // Build select items with descriptions
-    const items: SelectItem[] = presetNames.map((name) => {
-      const preset = presets[name];
+    const items: SelectItem[] = Object.entries(presets).map(([name, preset]) => {
       const isActive = name === activePresetName;
       return {
         value: name,
@@ -336,6 +335,7 @@ export default function presetExtension(msa: ExtensionAPI) {
     const currentIndex = cycleList.indexOf(currentName);
     const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % cycleList.length;
     const nextName = cycleList[nextIndex];
+    if (nextName === undefined) return;
 
     if (nextName === "(none)") {
       activePresetName = undefined;

@@ -145,7 +145,7 @@ class OverlayTestComponent implements Focusable {
         let inputDisplay = item.text;
         if (isSelected) {
           const before = inputDisplay.slice(0, item.cursor);
-          const cursorChar = item.cursor < inputDisplay.length ? inputDisplay[item.cursor] : " ";
+          const cursorChar = inputDisplay[item.cursor] ?? " ";
           const after = inputDisplay.slice(item.cursor + 1);
           // Emit hardware cursor marker for IME support when focused
           const marker = this.focused ? CURSOR_MARKER : "";

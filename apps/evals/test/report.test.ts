@@ -156,8 +156,10 @@ describe("readTaskObservation", () => {
       estimatedCostUsd: 0.01,
     });
     const hashes = await readdir(join(directory, task.variant, "sessions"));
+    const [hash] = hashes;
+    if (hash === undefined) throw new Error("Expected a persisted session directory.");
     await expect(
-      readFile(join(directory, task.variant, "sessions", hashes[0], "session.jsonl"), "utf8"),
+      readFile(join(directory, task.variant, "sessions", hash, "session.jsonl"), "utf8"),
     ).resolves.toBe(SESSION);
   });
 
@@ -187,8 +189,10 @@ describe("readTaskObservation", () => {
     });
     const hashes = await readdir(join(directory, task.variant, "sessions"));
     expect(hashes).toHaveLength(1);
+    const [hash] = hashes;
+    if (hash === undefined) throw new Error("Expected a persisted session directory.");
     await expect(
-      readFile(join(directory, task.variant, "sessions", hashes[0], "session.jsonl"), "utf8"),
+      readFile(join(directory, task.variant, "sessions", hash, "session.jsonl"), "utf8"),
     ).resolves.toBe(SESSION);
   });
 

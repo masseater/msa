@@ -256,6 +256,7 @@ export default function questionnaire(msa: ExtensionAPI) {
           // Select option
           if (matchesKey(data, Key.enter) && q) {
             const opt = opts[optionIndex];
+            if (opt === undefined) return;
             if (opt.isOther) {
               inputMode = true;
               inputQuestionId = q.id;
@@ -304,10 +305,10 @@ export default function questionnaire(msa: ExtensionAPI) {
           // Tab bar (multi-question only)
           if (isMulti) {
             const tabs: string[] = ["← "];
-            for (let i = 0; i < questions.length; i++) {
+            for (const [i, question] of questions.entries()) {
               const isActive = i === currentTab;
-              const isAnswered = answers.has(questions[i].id);
-              const lbl = questions[i].label;
+              const isAnswered = answers.has(question.id);
+              const lbl = question.label;
               const box = isAnswered ? "■" : "□";
               const color = isAnswered ? "success" : "muted";
               const text = ` ${box} ${lbl} `;
@@ -329,8 +330,7 @@ export default function questionnaire(msa: ExtensionAPI) {
 
           // Helper to render options list
           function renderOptions() {
-            for (let i = 0; i < opts.length; i++) {
-              const opt = opts[i];
+            for (const [i, opt] of opts.entries()) {
               const selected = i === optionIndex;
               const isOther = opt.isOther === true;
               const prefix = selected ? theme.fg("accent", "> ") : "  ";

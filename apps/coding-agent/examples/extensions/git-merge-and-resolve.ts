@@ -98,7 +98,7 @@ export default function (msa: ExtensionAPI) {
       if (upstreamCode !== 0) return;
 
       ref = upstream.trim();
-      const remote = ref.split("/")[0];
+      const remote = ref.split("/")[0] ?? "";
       ctx.ui.notify(`git-merge-and-resolve: fetching ${remote}, merging ${ref}`, "info");
 
       const { code: fetchCode, stderr: fetchErr } = await msa.exec("git", ["fetch", remote]);

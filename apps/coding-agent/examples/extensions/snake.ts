@@ -103,6 +103,7 @@ class SnakeComponent {
 
     // Calculate new head position
     const head = this.state.snake[0];
+    if (head === undefined) return;
     let newHead: Point;
 
     switch (this.state.direction) {
@@ -245,10 +246,11 @@ class SnakeComponent {
     lines.push(this.padLine(dim(` ├${"─".repeat(boxWidth)}┤`), width));
 
     // Game grid
+    const head = this.state.snake[0];
     for (let y = 0; y < effectiveHeight; y++) {
       let row = "";
       for (let x = 0; x < effectiveWidth; x++) {
-        const isHead = this.state.snake[0].x === x && this.state.snake[0].y === y;
+        const isHead = head !== undefined && head.x === x && head.y === y;
         const isBody = this.state.snake.slice(1).some((s) => s.x === x && s.y === y);
         const isFood = this.state.food.x === x && this.state.food.y === y;
 
@@ -319,8 +321,7 @@ export default function (msa: ExtensionAPI) {
       // Load saved state from session
       const entries = ctx.sessionManager.getEntries();
       let savedState: GameState | undefined;
-      for (let i = entries.length - 1; i >= 0; i--) {
-        const entry = entries[i];
+      for (const entry of entries.toReversed()) {
         if (entry.type === "custom" && entry.customType === SNAKE_SAVE_TYPE) {
           savedState = entry.data as GameState;
           break;

@@ -105,7 +105,7 @@ describe("summarizeEvalObservations", () => {
         reasons: ["with_docs: expected 1 observation, found 0"],
       }),
     ]);
-    expect(report.operationalTotals[0].totalTokens).toEqual({ availableRuns: 2, total: 300 });
+    expect(report.operationalTotals[0]?.totalTokens).toEqual({ availableRuns: 2, total: 300 });
   });
 
   it("blocks duplicate observations and keeps missing metrics distinct from zero", () => {
@@ -116,11 +116,11 @@ describe("summarizeEvalObservations", () => {
       withoutTokens,
       scored("with_docs", 1, 1, { totalTokens: 0 }),
     ]);
-    expect(report.blockedPairs[0].reasons).toEqual([
+    expect(report.blockedPairs[0]?.reasons).toEqual([
       "without_docs: expected 1 observation, found 2",
     ]);
-    expect(report.operationalTotals[0].totalTokens).toEqual({ availableRuns: 0, total: null });
-    expect(report.operationalTotals[1].totalTokens).toEqual({ availableRuns: 1, total: 0 });
+    expect(report.operationalTotals[0]?.totalTokens).toEqual({ availableRuns: 0, total: null });
+    expect(report.operationalTotals[1]?.totalTokens).toEqual({ availableRuns: 1, total: 0 });
   });
 
   it("formats blocked comparisons and operational totals", () => {

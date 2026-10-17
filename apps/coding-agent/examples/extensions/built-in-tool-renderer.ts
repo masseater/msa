@@ -116,8 +116,8 @@ export default function (msa: ExtensionAPI) {
       const content = result.content[0];
       const output = content?.type === "text" ? content.text : "";
 
-      const exitMatch = output.match(/exit code: (\d+)/);
-      const exitCode = exitMatch ? parseInt(exitMatch[1], 10) : null;
+      const exitCodeText = output.match(/exit code: (\d+)/)?.[1];
+      const exitCode = exitCodeText !== undefined ? parseInt(exitCodeText, 10) : null;
       const lineCount = output.split("\n").filter((l) => l.trim()).length;
 
       let text = "";
@@ -164,7 +164,7 @@ export default function (msa: ExtensionAPI) {
       const content = result.content[0];
 
       if (content?.type === "text" && content.text.startsWith("Error")) {
-        return new Text(theme.fg("error", content.text.split("\n")[0]), 0, 0);
+        return new Text(theme.fg("error", content.text.split("\n")[0] ?? ""), 0, 0);
       }
 
       if (!details?.diff) {
@@ -221,7 +221,7 @@ export default function (msa: ExtensionAPI) {
 
       const content = result.content[0];
       if (content?.type === "text" && content.text.startsWith("Error")) {
-        return new Text(theme.fg("error", content.text.split("\n")[0]), 0, 0);
+        return new Text(theme.fg("error", content.text.split("\n")[0] ?? ""), 0, 0);
       }
 
       return new Text(theme.fg("success", "Written"), 0, 0);
