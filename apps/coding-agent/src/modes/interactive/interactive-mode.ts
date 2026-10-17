@@ -94,6 +94,7 @@ import type {
   ExtensionRunner,
   ExtensionUIContext,
   MarkdownTransformer,
+  MessageRenderer,
   ProjectTrustContext,
   UserBashEventResult,
   WorkingIndicatorOptions,
@@ -110,6 +111,7 @@ import {
   findExactModelReferenceMatch,
   resolveModelScopeFromModels,
 } from "../../core/model-resolver.ts";
+import { ORCHESTRATOR_REPORT_MESSAGE_TYPE } from "../../core/orchestrator/orchestrator.ts";
 import { DefaultPackageManager } from "../../core/package-manager.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
@@ -172,6 +174,7 @@ import { createMermaidMarkdownTransformer } from "./components/mermaid.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
+import { createSessionReportRenderer, SessionsView } from "./components/sessions-view.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.ts";
 import {
@@ -1475,6 +1478,9 @@ export class InteractiveMode {
     }
     this.footer.setSession(this.session);
     this.updateGoalTicker();
+    if (this.session.getActiveToolNames().includes("start_session")) {
+      void this.session.orchestrator?.refresh();
+    }
     this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
     this.footerDataProvider.setCwd(this.sessionManager.getCwd());
     this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
@@ -2494,6 +2500,11 @@ export class InteractiveMode {
         this.editor.setText("");
         return;
       }
+      if (text === "/sessions") {
+        this.showSessionsView();
+        this.editor.setText("");
+        return;
+      }
       if (text === "/quit") {
         this.editor.setText("");
         await this.shutdown();
@@ -2988,6 +2999,11 @@ export class InteractiveMode {
         this.ui.requestRender();
         break;
 
+      case "orchestrator_changed":
+        this.footer.invalidate();
+        this.ui.requestRender();
+        break;
+
       case "goal_status": {
         const goal = event.goal;
         const now = Date.now();
@@ -3164,7 +3180,10 @@ export class InteractiveMode {
       }
       case "custom": {
         if (message.display) {
-          const renderer = this.session.extensionRunner.getMessageRenderer(message.customType);
+          const renderer =
+            message.customType === ORCHESTRATOR_REPORT_MESSAGE_TYPE
+              ? (createSessionReportRenderer(this.session.orchestrator) as MessageRenderer)
+              : this.session.extensionRunner.getMessageRenderer(message.customType);
           const component = new CustomMessageComponent(
             message,
             renderer,
@@ -5008,6 +5027,64 @@ export class InteractiveMode {
         }
       };
       return { component: selector, focus: selector };
+    });
+  }
+
+  private showSessionsView(initialId?: string): void {
+    const orchestrator = this.session.orchestrator;
+    if (!orchestrator || !this.session.getActiveToolNames().includes("start_session")) {
+      this.showStatus(`Requires ${APP_NAME} --orchestrator`);
+      return;
+    }
+    void orchestrator.refresh();
+    this.editorSlot.showSelector((done) => {
+      const tick = setInterval(() => this.ui.requestRender(), 1000);
+      const view = new SessionsView(
+        {
+          orchestrator,
+          onClose: () => {
+            clearInterval(tick);
+            done();
+            this.ui.requestRender();
+          },
+          onPickModel: (id) => {
+            clearInterval(tick);
+            this.showSessionModelSelector(id);
+          },
+          onError: (message) => this.showError(message),
+          requestRender: () => this.ui.requestRender(),
+          maxHeight: () => this.ui.terminal.rows - 4,
+        },
+        initialId,
+      );
+      return { component: view, focus: view };
+    });
+  }
+
+  private showSessionModelSelector(id: string): void {
+    const orchestrator = this.session.orchestrator;
+    if (!orchestrator) return;
+    this.editorSlot.showSelector((done) => {
+      const back = () => {
+        done();
+        this.showSessionsView(id);
+      };
+      const selector = new ModelSelectorComponent(
+        this.ui,
+        undefined,
+        this.session.modelRuntime,
+        this.session.scopedModels,
+        (model) => {
+          orchestrator
+            .setModel(id, `${model.provider}/${model.id}`)
+            .then(back, (error: unknown) => {
+              back();
+              this.showError(toErrorMessage(error));
+            });
+        },
+        back,
+      );
+      return { component: selector, focus: selector, dispose: () => selector.dispose() };
     });
   }
 

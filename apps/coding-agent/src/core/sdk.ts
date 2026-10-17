@@ -541,7 +541,13 @@ export async function createAgentSession(
               ...(options.noTools ? { noTools: options.noTools } : {}),
               sessionManager: worker.sessionFile
                 ? SessionManager.open(worker.sessionFile)
-                : SessionManager.create(worker.cwd, getDefaultSessionDir(worker.cwd, agentDir)),
+                : SessionManager.create(
+                    worker.cwd,
+                    join(
+                      sessionManager.getSessionDir() || getDefaultSessionDir(worker.cwd, agentDir),
+                      "workers",
+                    ),
+                  ),
             });
             await workerSession.bindExtensions({ mode: "print" });
             return workerSession;
