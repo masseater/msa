@@ -22,7 +22,8 @@ function normalize(text: string): string {
     .filter((token, index) => !(token === "," && closers.has(tokens[index + 1] ?? "")))
     .join(" ");
 }
-const runnable = ` ${normalize(await readSibling("tutorial.test.ts"))} `;
+const sources = ["fixtures/tutorial.ts", "tutorial.test.ts", "tutorial-2.test.ts"];
+const runnable = ` ${(await Promise.all(sources.map(readSibling))).map(normalize).join(" ")} `;
 it("every TypeScript example in the tutorial is tracked under its own name", () => {
   assert.equal(new Set(printed.map((entry) => entry[1])).size, printed.length);
   assert.equal((tutorial.match(/```ts\n/gu) ?? []).length, printed.length);
