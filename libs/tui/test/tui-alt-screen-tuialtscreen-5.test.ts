@@ -3,15 +3,9 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { ScrollView } from "../src/components/scroll-view.ts";
 import { overrideEnv } from "../src/env.ts";
-import {
-  encodeKitty,
-  registerKittyImageMetadata,
-  resetCapabilitiesCache,
-  setCapabilities,
-} from "../src/terminal-image.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
+import { resetCapabilitiesCache, ScrollView, setCapabilities, TuiAltScreen } from "../src/index.ts";
+import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image-kitty.ts";
 import { someWriteSince, writesSince } from "./tui-alt-screen-helpers.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
 import {

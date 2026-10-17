@@ -5,7 +5,7 @@ import { Clock, DateTime, Effect, Random } from "effect";
 
 import { isEnvSet, readEnv } from "./env.ts";
 import { pathOperations } from "./platform.ts";
-import { deleteKittyImage, isImageLine } from "./terminal-image.ts";
+import { deleteKittyImage, isImageLine } from "./terminal-image-kitty.ts";
 import { type TUI, TuiBase, type TuiStopOptions } from "./tui.ts";
 import { visibleWidth } from "./utils.ts";
 

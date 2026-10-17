@@ -1,15 +1,15 @@
 import {
-  allocateImageId,
   getCapabilities,
   getCellDimensions,
+  type ImageProtocol,
+} from "../terminal-capabilities.ts";
+import { allocateImageId } from "../terminal-image-kitty.ts";
+import {
   getImageDimensions,
   getPngDimensions,
   type ImageDimensions,
-  imageFallback,
-  type ImageProtocol,
-  renderImage,
-  type RenderedImage,
-} from "../terminal-image.ts";
+} from "../terminal-image-size.ts";
+import { imageFallback, renderImage, type RenderedImage } from "../terminal-image.ts";
 import type { Component } from "../tui.ts";
 import { truncateToWidth } from "../utils.ts";
 

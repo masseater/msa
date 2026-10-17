@@ -6,7 +6,7 @@ import {
   getCellDimensions,
   resetCapabilitiesCache,
   setCellDimensions,
-} from "../src/terminal-image.ts";
+} from "../src/terminal-capabilities.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import type { Component, TUI } from "../src/tui.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";

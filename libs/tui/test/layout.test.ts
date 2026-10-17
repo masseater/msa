@@ -6,7 +6,7 @@ import { ScrollView } from "../src/components/scroll-view.ts";
 import { Text } from "../src/components/text.ts";
 import { VStack } from "../src/components/v-stack.ts";
 import { renderLayoutFrame } from "../src/layout.ts";
-import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image.ts";
+import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image-kitty.ts";
 import { visibleLines } from "./layout-helpers.ts";
 
 describe("viewport layout", () => {

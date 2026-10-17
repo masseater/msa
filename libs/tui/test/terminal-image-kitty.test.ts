@@ -6,15 +6,16 @@ import { stripHyperlinkSequences } from "../src/ansi-sequences.ts";
 import { Image } from "../src/components/image.ts";
 import { pathOperations } from "../src/platform.ts";
 import {
-  cropKittyImageLine,
-  getKittyImageMetadata,
-  getKittyImagePlacement,
-  imageFallback,
-  renderImage,
   resetCapabilitiesCache,
   setCapabilities,
   setCellDimensions,
-} from "../src/terminal-image.ts";
+} from "../src/terminal-capabilities.ts";
+import {
+  cropKittyImageLine,
+  getKittyImageMetadata,
+  getKittyImagePlacement,
+} from "../src/terminal-image-kitty.ts";
+import { imageFallback, renderImage } from "../src/terminal-image.ts";
 
 const { join } = pathOperations;
 

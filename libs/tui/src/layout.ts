@@ -3,7 +3,7 @@ import { dual } from "effect/Function";
 import { stripOsc133ZonePrefix } from "./ansi-sequences.ts";
 import type { ScrollView } from "./components/scroll-view.ts";
 import { type LayoutContext, layoutComponent } from "./layout-tree.ts";
-import { cropKittyImageLine, getKittyImageMetadata, isImageLine } from "./terminal-image.ts";
+import { cropKittyImageLine, getKittyImageMetadata, isImageLine } from "./terminal-image-kitty.ts";
 import { type Component, compositeTuiLine } from "./tui.ts";
 import {
   extractAnsiCode,

@@ -5,6 +5,7 @@ import { dual } from "effect/Function";
 
 import { type CancelDelay, runAfter } from "./delay.ts";
 import { isKeyRelease, matchesKey } from "./keys.ts";
+import { getCapabilities, setCellDimensions } from "./terminal-capabilities.ts";
 import {
   parseOscColorResponse,
   parseTerminalColorSchemeReport,
@@ -12,7 +13,7 @@ import {
   type TerminalColorScheme,
   type TerminalColors,
 } from "./terminal-colors.ts";
-import { getCapabilities, isImageLine, setCellDimensions } from "./terminal-image.ts";
+import { isImageLine } from "./terminal-image-kitty.ts";
 import type { Terminal } from "./terminal.ts";
 import { type OverlayOptions, resolveOverlayLayout } from "./tui-overlay-layout.ts";
 import {

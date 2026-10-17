@@ -1,6 +1,6 @@
 import type { Token } from "marked";
 
-import { isImageLine } from "../terminal-image.ts";
+import { isImageLine } from "../terminal-image-kitty.ts";
 import type { Component } from "../tui.ts";
 import { applyBackgroundToLine, flattenLines, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
 import { MarkdownTokenRenderer } from "./markdown-token-renderer.ts";

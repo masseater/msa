@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 
 import { Image, setImageTranscoder } from "../src/components/image.ts";
 import {
-  hyperlink,
   resetCapabilitiesCache,
   setCapabilities,
   setCellDimensions,
-} from "../src/terminal-image.ts";
+} from "../src/terminal-capabilities.ts";
+import { hyperlink } from "../src/terminal-image.ts";
 import { jpeg, png, render } from "./terminal-image-helpers.ts";
 
 describe("Image transcoding", () => {

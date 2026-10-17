@@ -1,7 +1,8 @@
 import type { Token, Tokens } from "marked";
 
 import { renderLatex } from "../latex.ts";
-import { getCapabilities, hyperlink } from "../terminal-image.ts";
+import { getCapabilities } from "../terminal-capabilities.ts";
+import { hyperlink } from "../terminal-image.ts";
 import type {
   DefaultTextStyle,
   InlineStyleContext,
