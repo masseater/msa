@@ -16,7 +16,7 @@ import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { getOrThrow } from "@msa/durable/env";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { Connection } from "../src/connection.ts";
 import { LocalExecutionEnv } from "../src/list-files.ts";

@@ -208,6 +208,30 @@
         }
       }
     },
+    "orchestrator": {
+      "type": "object",
+      "properties": {
+        "workerModel": {
+          "type": "string",
+          "description": "Model of the sessions the orchestrator starts, as \"provider/id\", unless start_session names one. Default: the orchestrator's model."
+        },
+        "workerThinkingLevel": {
+          "$ref": "#/$defs/ModelThinkingLevel"
+        },
+        "reviewModel": {
+          "type": "string",
+          "description": "Model of the review session that closes each round, as \"provider/id\". Default: the orchestrator's model."
+        },
+        "reviewThinkingLevel": {
+          "$ref": "#/$defs/ModelThinkingLevel"
+        },
+        "maxConcurrentSessions": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 4
+        }
+      }
+    },
     "hideThinkingBlock": {
       "type": "boolean",
       "default": true
@@ -471,6 +495,83 @@
           "type": "boolean",
           "description": "When true, prevents all images from being sent to LLM providers.",
           "default": false
+        }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Long-term memory: the memory tool, recall, and the /memory command.",
+          "default": true
+        },
+        "database": {
+          "type": "string",
+          "description": "SQLite file holding memories. Default: <agent dir>/memory.db."
+        },
+        "embedding": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Compute embeddings so memories are searchable by meaning, not only keywords.",
+              "default": true
+            },
+            "baseUrl": {
+              "type": "string",
+              "description": "OpenAI-compatible base URL such as http://127.0.0.1:11434/v1 (Ollama) or https://api.openai.com/v1. /embeddings is appended.",
+              "default": "http://127.0.0.1:11434/v1"
+            },
+            "model": {
+              "type": "string",
+              "description": "Embedding model name at that endpoint.",
+              "default": "embeddinggemma-2"
+            },
+            "queryPrefix": {
+              "type": "string",
+              "description": "Prepended to search queries, for models trained with task prefixes (EmbeddingGemma). Clear it for models that use none.",
+              "default": "task: search result | query: "
+            },
+            "documentPrefix": {
+              "type": "string",
+              "description": "Prepended to memory text before embedding.",
+              "default": "title: none | text: "
+            },
+            "apiKeyEnv": {
+              "type": "string",
+              "description": "Environment variable holding the API key, for endpoints that need one."
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Embedding request timeout in milliseconds.",
+              "default": 5000
+            }
+          }
+        },
+        "recall": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Recall memories relevant to each user prompt and add them to the run.",
+              "default": true
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Maximum memories added to a run.",
+              "default": 5
+            },
+            "minScore": {
+              "type": "number",
+              "description": "Minimum relevance (0-1) for a memory to be recalled: its embedding similarity, or the share of query words it holds. Embedding models differ in their score range, so tune this with the model.",
+              "default": 0.72
+            }
+          }
         }
       }
     },

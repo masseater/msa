@@ -13,7 +13,7 @@ import {
   type StorageWrite,
   watchEvents,
 } from "@msa/durable";
-import { describe, expect, it, onTestFinished } from "vitest";
+import { describe, expect, it, onTestFinished } from "vite-plus/test";
 
 import { SessionImpl, setDefaultDocumentRetention } from "../src/session/session.ts";
 import { chatSetup, openChat } from "./chat-support.ts";

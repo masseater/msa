@@ -57,6 +57,17 @@ jobs:
       - name: Build release binaries
         run: vp run build-binaries
 
+      - name: Render the Homebrew formula
+        run: vp run render-homebrew-formula
+
+      - name: Upload the Homebrew formula
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: homebrew-formula-${{ env.RELEASE_TAG }}
+          if-no-files-found: error
+          retention-days: 7
+          path: .artifacts/homebrew/msa.rb
+
       - name: Upload release assets
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -190,6 +201,8 @@ jobs:
           - Linux: msa-linux-x64.tar.gz, msa-linux-arm64.tar.gz
           - Windows: msa-windows-x64.zip, msa-windows-arm64.zip
 
+          Homebrew (macOS/Linux): `brew install masseater/tap/msa`.
+
           Extract the archive for your platform and run `msa` (`msa.exe` on Windows).
           Checksums are listed in SHA256SUMS.
           NOTES
@@ -271,6 +284,45 @@ jobs:
           fi
 
           gh release edit "${RELEASE_TAG}" --draft=false
+
+  publish-homebrew:
+    runs-on: ubuntu-latest
+    needs:
+      - release
+    permissions:
+      actions: read
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - name: Checkout the Homebrew tap
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: masseater/homebrew-tap
+          ssh-key: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          persist-credentials: true
+          path: tap
+
+      - name: Download the Homebrew formula
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: homebrew-formula-${{ env.RELEASE_TAG }}
+          path: tap/Formula
+
+      - name: Commit and push the formula
+        working-directory: tap
+        run: |
+          set -euo pipefail
+
+          version="${RELEASE_TAG#v}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/msa.rb
+          if git diff --cached --quiet; then
+            echo "Formula is already up to date."
+            exit 0
+          fi
+          git commit -m "msa ${version}"
+          git push
 
   cleanup-draft-release:
     runs-on: ubuntu-latest

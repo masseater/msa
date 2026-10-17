@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { complete, getModel } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
@@ -7,11 +7,7 @@ import { resolveApiKey } from "./oauth.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-const oauthTokens = await Promise.all([
-  resolveApiKey("github-copilot"),
-  resolveApiKey("openai-codex"),
-]);
-const [githubCopilotToken, openaiCodexToken] = oauthTokens;
+const openaiCodexToken = await resolveApiKey("openai-codex");
 
 async function expectResponseId<TApi extends Api>(
   model: Model<TApi>,
@@ -110,26 +106,6 @@ describe("responseId E2E Tests", () => {
     it("should expose responseId", { retry: 3, timeout: 30000 }, async () => {
       await expectResponseId(llm);
     });
-  });
-
-  describe("GitHub Copilot Provider", () => {
-    it.skipIf(!githubCopilotToken)(
-      "OpenAI path should expose responseId",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "gpt-5.3-codex");
-        await expectResponseId(llm, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)(
-      "Anthropic path should expose responseId",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-sonnet-4.6");
-        await expectResponseId(llm, { apiKey: githubCopilotToken });
-      },
-    );
   });
 
   describe("OpenAI Codex Provider", () => {

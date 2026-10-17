@@ -1222,8 +1222,8 @@ export function createProvider<TApi extends Api = Api>(
     model: Model<Api>,
     run: (streams: ProviderStreams) => AssistantMessageEventStream,
   ): AssistantMessageEventStream => {
-    const streams = apiFor(model);
-    if (!streams) {
+    const providerStreams = apiFor(model);
+    if (!providerStreams) {
       return lazyStream(model, async () => {
         throw new ModelsError(
           "stream",
@@ -1231,7 +1231,7 @@ export function createProvider<TApi extends Api = Api>(
         );
       });
     }
-    return run(streams);
+    return run(providerStreams);
   };
 
   const provider: Provider<TApi> = {
@@ -1274,9 +1274,9 @@ export function createProvider<TApi extends Api = Api>(
     filterModels: input.filterModels,
     filterAllModels: input.filterAllModels,
     stream: (model, context, options) =>
-      dispatch(model, (streams) => streams.stream(model, context, options)),
+      dispatch(model, (providerStreams) => providerStreams.stream(model, context, options)),
     streamSimple: (model, context, options) =>
-      dispatch(model, (streams) => streams.streamSimple(model, context, options)),
+      dispatch(model, (providerStreams) => providerStreams.streamSimple(model, context, options)),
   };
 
   if (streams.some((entry) => entry.fetchDeferred !== undefined)) {

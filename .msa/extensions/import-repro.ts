@@ -67,15 +67,14 @@ function parseRef(
     return { type: "file", path: isAbsolute(ref) ? ref : resolve(cwd, ref) };
   }
 
-  const shareMatch = ref.match(SHARE_URL_RE);
-  if (shareMatch) return { type: "gist", id: shareMatch[1] };
+  const [, shareId] = ref.match(SHARE_URL_RE) ?? [];
+  if (shareId) return { type: "gist", id: shareId };
 
-  const gistMatch = ref.match(GIST_URL_RE);
-  if (gistMatch) return { type: "gist", id: gistMatch[1] };
+  const [, gistId] = ref.match(GIST_URL_RE) ?? [];
+  if (gistId) return { type: "gist", id: gistId };
 
-  const issueMatch = ref.match(ISSUE_URL_RE);
-  if (issueMatch)
-    return { type: "issue", owner: issueMatch[1], repo: issueMatch[2], issue: issueMatch[3] };
+  const [, owner, repo, issue] = ref.match(ISSUE_URL_RE) ?? [];
+  if (owner && repo && issue) return { type: "issue", owner, repo, issue };
 
   if (GIST_ID_RE.test(ref)) return { type: "gist", id: ref };
 
@@ -106,12 +105,12 @@ function parseSessionJsonl(raw: string): { header: SessionHeader; jsonl: string 
 }
 
 function decodeExportedHtml(html: string): { header: SessionHeader; jsonl: string } {
-  const match = html.match(SESSION_DATA_RE);
-  if (!match) throw new Error("HTML does not contain embedded msa session data");
+  const [, encoded] = html.match(SESSION_DATA_RE) ?? [];
+  if (!encoded) throw new Error("HTML does not contain embedded msa session data");
 
   let data: unknown;
   try {
-    data = JSON.parse(Buffer.from(match[1], "base64").toString("utf8"));
+    data = JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
   } catch {
     throw new Error("embedded msa session data is not valid JSON");
   }
@@ -155,14 +154,10 @@ function getPathTailName(value: string): string {
 
 function getWindowsDrivePathParts(value: string): { drive: string; rest: string } | undefined {
   const trimmed = trimTrailingPathSeparators(value);
-  const driveMatch = trimmed.match(/^([A-Za-z]):[\\/](.*)$/);
-  if (driveMatch) {
-    return { drive: driveMatch[1].toUpperCase(), rest: driveMatch[2].replace(/[\\/]+/g, "/") };
-  }
-
-  const msysMatch = trimmed.match(/^\/([A-Za-z])\/(.*)$/);
-  if (msysMatch) {
-    return { drive: msysMatch[1].toUpperCase(), rest: msysMatch[2].replace(/[\\/]+/g, "/") };
+  const [, drive, rest] =
+    trimmed.match(/^([A-Za-z]):[\\/](.*)$/) ?? trimmed.match(/^\/([A-Za-z])\/(.*)$/) ?? [];
+  if (drive !== undefined && rest !== undefined) {
+    return { drive: drive.toUpperCase(), rest: rest.replace(/[\\/]+/g, "/") };
   }
 
   return undefined;
@@ -265,8 +260,8 @@ async function findIssueGistId(owner: string, repo: string, issue: string): Prom
     const comments = (await response.json()) as IssueComment[];
     for (const comment of comments) {
       if (comment.user?.login !== "github-actions[bot]") continue;
-      for (const match of (comment.body ?? "").matchAll(GIST_URL_IN_TEXT_RE)) {
-        gistIds.push(match[1]);
+      for (const [, gistId] of (comment.body ?? "").matchAll(GIST_URL_IN_TEXT_RE)) {
+        if (gistId) gistIds.push(gistId);
       }
     }
 

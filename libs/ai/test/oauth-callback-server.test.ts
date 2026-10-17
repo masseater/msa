@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   startOAuthCallbackServer,
@@ -47,7 +47,7 @@ function pendingPrompt(
   };
 }
 
-describe.sequential("OAuth callback server", () => {
+describe("OAuth callback server", () => {
   const servers: { close(): void }[] = [];
   const start = async <T>(
     options: Partial<Parameters<typeof startOAuthCallbackServer<T>>[0]> = {},
@@ -206,7 +206,7 @@ describe.sequential("OAuth callback server", () => {
   });
 });
 
-describe.sequential("waitForCallbackOrManualInput", () => {
+describe("waitForCallbackOrManualInput", () => {
   it("returns the browser callback and aborts the manual prompt", async () => {
     let manualSignal: AbortSignal | undefined;
     const server = await startOAuthCallbackServer({

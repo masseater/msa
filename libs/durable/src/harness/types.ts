@@ -5,7 +5,7 @@ import type {
   Models,
   ModelThinkingLevel,
   Static,
-  Tool,
+  Tool as AiTool,
   ToolCall,
   ToolResultMessage,
   Transport,
@@ -298,7 +298,7 @@ export interface ToolExecutionApi<TDetails extends JsonValue = JsonValue>
 export type ToolRegistration<
   TParameters extends TSchema = TSchema,
   TDetails extends JsonValue = JsonValue,
-> = Tool<TParameters> & {
+> = AiTool<TParameters> & {
   /** Whether an interrupted execution may rerun on recovery. Default `unsafe`. */
   readonly replay?: "safe" | "unsafe";
   /** Default: the settings' `toolExecution`. One sequential call makes its whole round sequential. */

@@ -25,7 +25,7 @@
 import { writeFileSync } from "fs";
 
 import { Type } from "typebox";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { completeSimple, getEnvApiKey, getModel } from "../src/compat.ts";
 import type {
@@ -79,15 +79,6 @@ const PROVIDER_MODEL_PAIRS: ProviderModelPair[] = [
   { provider: "azure", model: "gpt-4o-mini", label: "azure-gpt-4o-mini" },
   // OpenAI Codex
   { provider: "openai-codex", model: "gpt-5.5", label: "openai-codex-gpt-5.5" },
-  // GitHub Copilot
-  { provider: "github-copilot", model: "claude-sonnet-4.5", label: "copilot-claude-sonnet-4.5" },
-  { provider: "github-copilot", model: "gpt-5.1-codex", label: "copilot-gpt-5.1-codex" },
-  {
-    provider: "github-copilot",
-    model: "gemini-3-flash-preview",
-    label: "copilot-gemini-3-flash-preview",
-  },
-  { provider: "github-copilot", model: "grok-code-fast-1", label: "copilot-grok-code-fast-1" },
   // Amazon Bedrock
   {
     provider: "amazon-bedrock",

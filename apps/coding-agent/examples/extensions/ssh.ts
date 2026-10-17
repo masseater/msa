@@ -230,5 +230,6 @@ export default function (msa: ExtensionAPI) {
       );
       return { systemPrompt: modified };
     }
+    return undefined;
   });
 }

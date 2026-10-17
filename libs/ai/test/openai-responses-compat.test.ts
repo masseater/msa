@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
@@ -79,7 +79,7 @@ describe("openai-responses provider defaults", () => {
   });
 
   it("omits reasoning when no reasoning is requested", async () => {
-    const model = getModel("github-copilot", "gpt-5-mini");
+    const model = getModel("openai", "gpt-5-mini");
     let capturedPayload: unknown;
 
     vi.spyOn(globalThis, "fetch").mockResolvedValue(

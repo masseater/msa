@@ -7,7 +7,7 @@ import {
   type UserMessage,
 } from "@msa/ai/compat";
 import { Type } from "typebox";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   Agent,

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { colorToHex, okhslColor, styleText } from "@msa/tui";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { loadThemeFromPath, setTerminalColors } from "../src/modes/interactive/theme/theme.ts";
 

@@ -284,22 +284,22 @@ function constraintTags(schema: unknown): string {
       ? [property, branch as Record<string, unknown>]
       : [property];
   // Draft-04 and OpenAPI 3.0 make `minimum`/`maximum` exclusive with a boolean `exclusiveMinimum`/`exclusiveMaximum`.
-  const schemas = branches.map((schema): Record<string, unknown> => ({
-    ...schema,
-    ...(schema.exclusiveMinimum === true
-      ? { minimum: undefined, exclusiveMinimum: schema.minimum }
+  const schemas = branches.map((candidate): Record<string, unknown> => ({
+    ...candidate,
+    ...(candidate.exclusiveMinimum === true
+      ? { minimum: undefined, exclusiveMinimum: candidate.minimum }
       : {}),
-    ...(schema.exclusiveMaximum === true
-      ? { maximum: undefined, exclusiveMaximum: schema.maximum }
+    ...(candidate.exclusiveMaximum === true
+      ? { maximum: undefined, exclusiveMaximum: candidate.maximum }
       : {}),
   }));
 
   const tags: string[] = [];
   const isInteger = (type: unknown) =>
     type === "integer" || (Array.isArray(type) && type.includes("integer"));
-  if (schemas.some((schema) => isInteger(schema.type))) tags.push("@integer");
+  if (schemas.some((normalized) => isInteger(normalized.type))) tags.push("@integer");
   for (const keyword of TAG_KEYWORDS) {
-    const values = schemas.map((schema) => schema[keyword]);
+    const values = schemas.map((normalized) => normalized[keyword]);
     if (LOWER_BOUNDS.has(keyword) || UPPER_BOUNDS.has(keyword)) {
       const numbers = values.filter((value) => typeof value === "number");
       if (numbers.length === 0) continue;
@@ -312,7 +312,7 @@ function constraintTags(schema: unknown): string {
       if (typeof value === "number" || typeof value === "string") tags.push(`@${keyword} ${value}`);
     }
   }
-  if (schemas.some((schema) => schema.uniqueItems === true)) tags.push("@uniqueItems");
+  if (schemas.some((normalized) => normalized.uniqueItems === true)) tags.push("@uniqueItems");
   // Annotations, unlike constraints, come from the property itself.
   if (property.default !== undefined && property.default !== null) {
     tags.push(`@default ${JSON.stringify(property.default)}`);

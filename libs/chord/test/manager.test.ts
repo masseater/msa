@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, it } from "vitest";
+import { describe, it } from "vite-plus/test";
 
 import { createHost, ipcLink, isChordError } from "../src/index.ts";
 import {

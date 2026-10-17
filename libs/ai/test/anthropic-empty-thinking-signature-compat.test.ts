@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { getModel, getModels, streamSimple } from "../src/compat.ts";
 import type { AssistantMessage, Context, Model } from "../src/types.ts";

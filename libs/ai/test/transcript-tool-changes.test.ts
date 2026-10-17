@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 
 import { getModel, streamSimple } from "../src/compat.ts";
 import type { Api, Context, Model, Tool } from "../src/types.ts";

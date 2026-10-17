@@ -1,5 +1,5 @@
 import { Container, Editor, setKeybindings, TuiMainScreen } from "@msa/tui";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";
 import type { AgentSession } from "../src/core/agent-session.ts";
@@ -28,6 +28,7 @@ describe("LoginFlow", () => {
     const session = {
       model: undefined,
       settingsManager: { getOrCreateDeviceId: () => "device" },
+      getExternalServices: () => [],
       modelRuntime: {
         getProviders: () => [provider],
         getProviderAuthStatus: () => ({ configured: false }),

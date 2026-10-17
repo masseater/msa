@@ -921,7 +921,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { type Static, Type } from "typebox";
-import { it, onTestFinished } from "vitest";
+import { it, onTestFinished } from "vite-plus/test";
 
 import {
   type Ctx,

@@ -2,7 +2,7 @@
  * Tests for image processing utilities using Photon.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { convertToPng, loadPngTranscoder } from "../src/utils/image-convert.ts";
 import { formatDimensionNote, resizeImage } from "../src/utils/image-resize.ts";

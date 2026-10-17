@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import * as path from "node:path";
 
 import { type AutocompleteProvider, CombinedAutocompleteProvider } from "@msa/tui";
-import { beforeAll, describe, expect, test, vi } from "vitest";
+import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import { TuiMainScreen } from "../../../libs/tui/src/tui-main-screen.ts";
 import { type Component, Container, type Focusable, type TUI } from "../../../libs/tui/src/tui.ts";
@@ -427,6 +427,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
         promptTemplates: [];
         extensionRunner: { getRegisteredCommands: () => [] };
         resourceLoader: { getSkills: () => { skills: [] } };
+        getExternalServices: () => [];
       };
       settingsManager: { getEnableSkillCommands: () => boolean };
       skillCommands: Map<string, string>;
@@ -442,7 +443,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
       }
     ).prototype.createBaseAutocompleteProvider;
     const models = [
-      { id: "gpt-5.2-codex", provider: "github-copilot", name: "GPT-5.2 Codex" },
+      { id: "openai/gpt-5.2-codex", provider: "openrouter", name: "GPT-5.2 Codex" },
       { id: "gpt-5.5", provider: "openai-codex", name: "GPT-5.5" },
     ];
     const fakeThis: FakeInteractiveMode = {
@@ -452,6 +453,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
         promptTemplates: [],
         extensionRunner: { getRegisteredCommands: () => [] },
         resourceLoader: { getSkills: () => ({ skills: [] }) },
+        getExternalServices: () => [],
       },
       settingsManager: { getEnableSkillCommands: () => false },
       skillCommands: new Map(),
@@ -467,7 +469,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
 
     expect(suggestions?.items.map((item) => item.value)).toEqual([
       "openai-codex/gpt-5.5",
-      "github-copilot/gpt-5.2-codex",
+      "openrouter/openai/gpt-5.2-codex",
     ]);
   });
 
@@ -479,6 +481,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
         promptTemplates: [];
         extensionRunner: { getRegisteredCommands: () => [] };
         resourceLoader: { getSkills: () => { skills: [] } };
+        getExternalServices: () => [];
       };
       settingsManager: { getEnableSkillCommands: () => boolean };
       skillCommands: Map<string, string>;
@@ -501,6 +504,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
         promptTemplates: [],
         extensionRunner: { getRegisteredCommands: () => [] },
         resourceLoader: { getSkills: () => ({ skills: [] }) },
+        getExternalServices: () => [],
       },
       settingsManager: { getEnableSkillCommands: () => false },
       skillCommands: new Map(),

@@ -104,7 +104,9 @@ export default function (msa: ExtensionAPI) {
         };
 
         doExtract()
+          // oxlint-disable-next-line promise/no-callback-in-promise -- ローダーの完了コールバックを promise の完了で呼ぶブリッジ
           .then(done)
+          // oxlint-disable-next-line promise/no-callback-in-promise -- ローダーの完了コールバックを promise の完了で呼ぶブリッジ
           .catch(() => done(null));
 
         return loader;

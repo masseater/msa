@@ -3,7 +3,7 @@ import { existsSync, type FSWatcher, mkdirSync, mkdtempSync, rmSync, writeFileSy
 import { tmpdir } from "os";
 import { join } from "path";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 let resolvedBranch = "main";
 

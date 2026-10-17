@@ -1,3 +1,5 @@
+import type { OxlintConfig } from "vite-plus/lint";
+
 const EFFECT_ONLY_UTILS = "検証、日時、ログ、関数型ユーティリティは Effect だけで扱う";
 const EFFECT_ONLY_HTTP = "HTTP クライアントは Effect だけで扱う";
 const EFFECT_ONLY_TRACING = "計装は Effect のトレーシングだけで扱う";
@@ -67,6 +69,80 @@ const generated = [
   "pnpm-lock.yaml",
 ];
 
-const engine = ["apps/**", "libs/**", "scripts/**", ".msa/**"];
+const lintPlugins: NonNullable<OxlintConfig["plugins"]> = [
+  "oxc",
+  "import",
+  "promise",
+  "node",
+  "jsdoc",
+  "effecttsgo",
+];
+const strictCategories = ["perf", "pedantic", "nursery"];
+const strictCategoryExclusions = ["eslint/no-undef"];
 
-export { engine, generated, requiredStack, restrictedImports };
+const strictCategoryRules = [
+  "eslint/accessor-pairs",
+  "eslint/array-callback-return",
+  "eslint/eqeqeq",
+  "eslint/max-classes-per-file",
+  "eslint/max-depth",
+  "eslint/max-lines",
+  "eslint/max-lines-per-function",
+  "eslint/max-nested-callbacks",
+  "eslint/no-array-constructor",
+  "eslint/no-await-in-loop",
+  "eslint/no-case-declarations",
+  "eslint/no-constructor-return",
+  "eslint/no-else-return",
+  "eslint/no-fallthrough",
+  "eslint/no-inline-comments",
+  "eslint/no-inner-declarations",
+  "eslint/no-lonely-if",
+  "eslint/no-loop-func",
+  "eslint/no-negated-condition",
+  "eslint/no-new-wrappers",
+  "eslint/no-object-constructor",
+  "eslint/no-promise-executor-return",
+  "eslint/no-prototype-builtins",
+  "eslint/no-redeclare",
+  "eslint/no-restricted-exports",
+  "eslint/no-self-compare",
+  "eslint/no-throw-literal",
+  "eslint/no-unreachable-loop",
+  "eslint/no-useless-assignment",
+  "eslint/no-useless-call",
+  "eslint/no-useless-return",
+  "eslint/no-warning-comments",
+  "eslint/prefer-promise-reject-errors",
+  "eslint/radix",
+  "eslint/require-await",
+  "eslint/require-unicode-regexp",
+  "eslint/sort-vars",
+  "eslint/symbol-description",
+  "import/export",
+  "import/max-dependencies",
+  "import/named",
+  "jsdoc/require-param",
+  "jsdoc/require-param-description",
+  "jsdoc/require-param-name",
+  "jsdoc/require-param-type",
+  "jsdoc/require-returns",
+  "jsdoc/require-returns-description",
+  "jsdoc/require-returns-type",
+  "jsdoc/require-throws-type",
+  "jsdoc/require-yields-type",
+  "oxc/branches-sharing-code",
+  "oxc/no-accumulating-spread",
+  "oxc/no-map-spread",
+  "promise/no-return-in-finally",
+];
+
+export {
+  generated,
+  lintPlugins,
+  requiredStack,
+  restrictedImports,
+  strictCategories,
+  strictCategoryExclusions,
+  strictCategoryRules,
+};

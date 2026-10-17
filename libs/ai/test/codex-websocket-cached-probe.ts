@@ -91,7 +91,6 @@ function parseArgs(argv: string[]): Args {
       case "--help":
         printHelp();
         process.exit(0);
-        break;
       default:
         throw new Error(`Unknown argument: ${arg}`);
     }

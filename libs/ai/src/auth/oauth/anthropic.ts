@@ -128,6 +128,7 @@ async function exchangeAuthorizationCode(
   } catch (error) {
     throw new Error(
       `Token exchange request failed. url=${TOKEN_URL}; redirect_uri=${redirectUri}; response_type=authorization_code; details=${formatErrorDetails(error)}`,
+      { cause: error },
     );
   }
 
@@ -141,6 +142,7 @@ async function exchangeAuthorizationCode(
   } catch (error) {
     throw new Error(
       `Token exchange returned invalid JSON. url=${TOKEN_URL}; body=${responseBody}; details=${formatErrorDetails(error)}`,
+      { cause: error },
     );
   }
 
@@ -277,6 +279,7 @@ async function refreshAnthropicToken(
   } catch (error) {
     throw new Error(
       `Anthropic token refresh request failed. url=${TOKEN_URL}; details=${formatErrorDetails(error)}`,
+      { cause: error },
     );
   }
 
@@ -291,6 +294,7 @@ async function refreshAnthropicToken(
   } catch (error) {
     throw new Error(
       `Anthropic token refresh returned invalid JSON. url=${TOKEN_URL}; body=${responseBody}; details=${formatErrorDetails(error)}`,
+      { cause: error },
     );
   }
 

@@ -3,7 +3,7 @@ import { type Static, type TSchemaOptions, Type } from "typebox";
 
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 
-function nonNegativeSafeInteger(options: { default?: number } = {}) {
+function nonNegativeSafeInteger(options: TSchemaOptions & { default?: number } = {}) {
   return Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER, ...options });
 }
 
@@ -128,6 +128,88 @@ const ImageSettingsSchema = Type.Object({
       default: SETTINGS_DEFAULTS.images.blockImages,
     }),
   ),
+});
+
+const MemoryEmbeddingSettingsSchema = Type.Object({
+  enabled: Type.Optional(
+    Type.Boolean({
+      description: "Compute embeddings so memories are searchable by meaning, not only keywords.",
+      default: SETTINGS_DEFAULTS.memory.embedding.enabled,
+    }),
+  ),
+  baseUrl: Type.Optional(
+    Type.String({
+      description:
+        "OpenAI-compatible base URL such as http://127.0.0.1:11434/v1 (Ollama) or https://api.openai.com/v1. /embeddings is appended.",
+      default: SETTINGS_DEFAULTS.memory.embedding.baseUrl,
+    }),
+  ),
+  model: Type.Optional(
+    Type.String({
+      description: "Embedding model name at that endpoint.",
+      default: SETTINGS_DEFAULTS.memory.embedding.model,
+    }),
+  ),
+  queryPrefix: Type.Optional(
+    Type.String({
+      description:
+        "Prepended to search queries, for models trained with task prefixes (EmbeddingGemma). Clear it for models that use none.",
+      default: SETTINGS_DEFAULTS.memory.embedding.queryPrefix,
+    }),
+  ),
+  documentPrefix: Type.Optional(
+    Type.String({
+      description: "Prepended to memory text before embedding.",
+      default: SETTINGS_DEFAULTS.memory.embedding.documentPrefix,
+    }),
+  ),
+  apiKeyEnv: Type.Optional(
+    Type.String({
+      description: "Environment variable holding the API key, for endpoints that need one.",
+    }),
+  ),
+  timeoutMs: Type.Optional(
+    nonNegativeSafeInteger({
+      description: "Embedding request timeout in milliseconds.",
+      default: SETTINGS_DEFAULTS.memory.embedding.timeoutMs,
+    }),
+  ),
+});
+
+const MemoryRecallSettingsSchema = Type.Object({
+  enabled: Type.Optional(
+    Type.Boolean({
+      description: "Recall memories relevant to each user prompt and add them to the run.",
+      default: SETTINGS_DEFAULTS.memory.recall.enabled,
+    }),
+  ),
+  limit: Type.Optional(
+    nonNegativeSafeInteger({
+      description: "Maximum memories added to a run.",
+      default: SETTINGS_DEFAULTS.memory.recall.limit,
+    }),
+  ),
+  minScore: Type.Optional(
+    Type.Number({
+      description:
+        "Minimum relevance (0-1) for a memory to be recalled: its embedding similarity, or the share of query words it holds. Embedding models differ in their score range, so tune this with the model.",
+      default: SETTINGS_DEFAULTS.memory.recall.minScore,
+    }),
+  ),
+});
+
+const MemorySettingsSchema = Type.Object({
+  enabled: Type.Optional(
+    Type.Boolean({
+      description: "Long-term memory: the memory tool, recall, and the /memory command.",
+      default: SETTINGS_DEFAULTS.memory.enabled,
+    }),
+  ),
+  database: Type.Optional(
+    Type.String({ description: "SQLite file holding memories. Default: <agent dir>/memory.db." }),
+  ),
+  embedding: Type.Optional(MemoryEmbeddingSettingsSchema),
+  recall: Type.Optional(MemoryRecallSettingsSchema),
 });
 
 function thinkingBudgetsSettings(options?: TSchemaOptions) {
@@ -275,6 +357,30 @@ export const SettingsSchema = Type.Object(
         ),
       }),
     ),
+    orchestrator: Type.Optional(
+      Type.Object({
+        workerModel: Type.Optional(
+          Type.String({
+            description:
+              'Model of the sessions the orchestrator starts, as "provider/id", unless start_session names one. Default: the orchestrator\'s model.',
+          }),
+        ),
+        workerThinkingLevel: Type.Optional(ModelThinkingLevelSchema),
+        reviewModel: Type.Optional(
+          Type.String({
+            description:
+              'Model of the review session that closes each round, as "provider/id". Default: the orchestrator\'s model.',
+          }),
+        ),
+        reviewThinkingLevel: Type.Optional(ModelThinkingLevelSchema),
+        maxConcurrentSessions: Type.Optional(
+          Type.Integer({
+            minimum: 1,
+            default: SETTINGS_DEFAULTS.orchestrator.maxConcurrentSessions,
+          }),
+        ),
+      }),
+    ),
     hideThinkingBlock: Type.Optional(
       Type.Boolean({ default: SETTINGS_DEFAULTS.hideThinkingBlock }),
     ),
@@ -374,6 +480,7 @@ export const SettingsSchema = Type.Object(
     ),
     terminal: Type.Optional(TerminalSettingsSchema),
     images: Type.Optional(ImageSettingsSchema),
+    memory: Type.Optional(MemorySettingsSchema),
     enabledModels: Type.Optional(
       Type.Array(Type.String(), {
         description: "Model patterns for cycling, in the same format as the --models CLI flag.",
@@ -518,6 +625,7 @@ export interface ProviderRetrySettings extends Static<typeof ProviderRetrySettin
 export interface RetrySettings extends Omit<Static<typeof RetrySettingsSchema>, "maxDelayMs"> {}
 export interface TerminalSettings extends Static<typeof TerminalSettingsSchema> {}
 export interface ImageSettings extends Static<typeof ImageSettingsSchema> {}
+export interface MemorySettings extends Static<typeof MemorySettingsSchema> {}
 export interface ThinkingBudgetsSettings extends Static<typeof ThinkingBudgetsSettingsSchema> {}
 export type MermaidRenderingMode = NonNullable<Static<typeof MarkdownSettingsSchema>["mermaid"]>;
 export interface MarkdownSettings extends Static<typeof MarkdownSettingsSchema> {}

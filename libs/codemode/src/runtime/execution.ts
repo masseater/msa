@@ -485,6 +485,7 @@ class Execution {
       this.resolveResult(result);
       return;
     }
+    // oxlint-disable-next-line promise/no-promise-in-callback -- この処理は Promise の resolver を呼ぶのが仕事で、channel の停止を待って解決する
     this.channel
       .stop()
       .catch(() => undefined)

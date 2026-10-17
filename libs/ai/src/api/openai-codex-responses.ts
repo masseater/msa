@@ -255,7 +255,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
   context: TranscriptContext,
   options?: OpenAICodexResponsesOptions,
 ): AssistantMessageEventStream => {
-  const stream = new AssistantMessageEventStream();
+  const events = new AssistantMessageEventStream();
   const normalizedContext = resolveTranscript(
     context,
     model.compat?.supportsMidConvoSystemMessages,
@@ -342,13 +342,13 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
               body,
               websocketHeaders,
               output,
-              stream,
+              events,
               model,
               () => {
                 websocketStarted = true;
                 if (!startEmitted) {
                   startEmitted = true;
-                  stream.push({ type: "start", partial: output });
+                  events.push({ type: "start", partial: output });
                 }
               },
               httpTimeoutMs,
@@ -363,12 +363,12 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
               throw new Error("Request was aborted");
             }
             assertSuccessfulOutput(output);
-            stream.push({
+            events.push({
               type: "done",
               reason: output.stopReason,
               message: output,
             });
-            stream.end();
+            events.end();
             return;
           } catch (error) {
             const aborted = options?.signal?.aborted;
@@ -442,7 +442,9 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
             });
           } catch (error) {
             if (headerTimeoutSignal?.aborted && !options?.signal?.aborted) {
-              throw new Error(`Codex SSE response headers timed out after ${httpTimeoutMs}ms`);
+              throw new Error(`Codex SSE response headers timed out after ${httpTimeoutMs}ms`, {
+                cause: error,
+              });
             }
             throw error;
           } finally {
@@ -479,7 +481,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
         } catch (error) {
           if (error instanceof Error) {
             if (error.name === "AbortError" || error.message === "Request was aborted") {
-              throw new Error("Request was aborted");
+              throw new Error("Request was aborted", { cause: error });
             }
           }
           lastError = error instanceof Error ? error : new Error(String(error));
@@ -507,17 +509,17 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 
       if (!startEmitted) {
         startEmitted = true;
-        stream.push({ type: "start", partial: output });
+        events.push({ type: "start", partial: output });
       }
-      await processStream(response, output, stream, model, grammarToolInputProperties, options);
+      await processStream(response, output, events, model, grammarToolInputProperties, options);
 
       if (options?.signal?.aborted) {
         throw new Error("Request was aborted");
       }
 
       assertSuccessfulOutput(output);
-      stream.push({ type: "done", reason: output.stopReason, message: output });
-      stream.end();
+      events.push({ type: "done", reason: output.stopReason, message: output });
+      events.end();
     } catch (error) {
       for (const block of output.content) {
         // Streaming scratch buffers are only used during parsing; never persist them.
@@ -526,12 +528,12 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
       }
       output.stopReason = options?.signal?.aborted ? "aborted" : "error";
       output.errorMessage = formatProviderError(normalizeProviderError(error));
-      stream.push({ type: "error", reason: output.stopReason, error: output });
-      stream.end();
+      events.push({ type: "error", reason: output.stopReason, error: output });
+      events.end();
     }
   })();
 
-  return stream;
+  return events;
 };
 
 export const streamSimple: StreamFunction<"openai-codex-responses", SimpleStreamOptions> = (
@@ -706,7 +708,7 @@ function resolveCodexWebSocketUrl(baseUrl?: string): string {
 async function processStream(
   response: Response,
   output: AssistantMessage,
-  stream: AssistantMessageEventStream,
+  events: AssistantMessageEventStream,
   model: Model<"openai-codex-responses">,
   grammarToolInputProperties: ReadonlyMap<string, string>,
   options?: OpenAICodexResponsesOptions,
@@ -719,7 +721,7 @@ async function processStream(
       options?.onProviderStreamEvent,
     ),
     output,
-    stream,
+    events,
     model,
     {
       serviceTier: options?.serviceTier,
@@ -1594,7 +1596,7 @@ async function processWebSocketStream(
   body: RequestBody,
   headers: Headers,
   output: AssistantMessage,
-  stream: AssistantMessageEventStream,
+  events: AssistantMessageEventStream,
   model: Model<"openai-codex-responses">,
   onStart: () => void,
   idleTimeoutMs: number | undefined,
@@ -1652,7 +1654,7 @@ async function processWebSocketStream(
         onStart,
       ),
       output,
-      stream,
+      events,
       model,
       {
         serviceTier: options?.serviceTier,

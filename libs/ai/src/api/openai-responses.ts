@@ -28,7 +28,6 @@ import {
 } from "../utils/transcript.ts";
 import { getMsaUserAgent } from "../utils/user-agent.ts";
 import { createGrammarToolInputProperties } from "./constrained-sampling.ts";
-import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.ts";
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
 import {
   convertResponsesMessages,
@@ -170,7 +169,7 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
   context: TranscriptContext,
   options?: OpenAIResponsesOptions,
 ): AssistantMessageEventStream => {
-  const stream = new AssistantMessageEventStream();
+  const events = new AssistantMessageEventStream();
   const normalizedContext = resolveTranscript(
     context,
     getCompat(model).supportsMidConvoSystemMessages,
@@ -210,14 +209,7 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
         getDeclaredTools(normalizedContext.messages),
         compat.supportsOpenAIGrammarTools,
       );
-      const client = createClient(
-        model,
-        normalizedContext,
-        apiKey,
-        options?.headers,
-        options?.fetch,
-        cacheSessionId,
-      );
+      const client = createClient(model, apiKey, options?.headers, options?.fetch, cacheSessionId);
       let params = buildParams(
         model,
         normalizedContext,
@@ -247,9 +239,9 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
         { status: response.status, headers: headersToRecord(response.headers) },
         model,
       );
-      stream.push({ type: "start", partial: output });
+      events.push({ type: "start", partial: output });
 
-      await processResponsesStream(openaiStream, output, stream, model, {
+      await processResponsesStream(openaiStream, output, events, model, {
         onProviderStreamEvent: options?.onProviderStreamEvent,
         serviceTier: options?.serviceTier,
         grammarToolInputProperties,
@@ -268,8 +260,8 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
         throw new Error(output.errorMessage || "An unknown error occurred");
       }
 
-      stream.push({ type: "done", reason: output.stopReason, message: output });
-      stream.end();
+      events.push({ type: "done", reason: output.stopReason, message: output });
+      events.end();
     } catch (error) {
       for (const block of output.content) {
         delete (block as { index?: number }).index;
@@ -286,12 +278,12 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
       output.errorMessage = errorMessage.includes("subscription_sharing_usage_limit_exceeded")
         ? `${errorMessage}\nCheck your ChatGPT usage: ${CHATGPT_USAGE_URL}`
         : errorMessage;
-      stream.push({ type: "error", reason: output.stopReason, error: output });
-      stream.end();
+      events.push({ type: "error", reason: output.stopReason, error: output });
+      events.end();
     }
   })();
 
-  return stream;
+  return events;
 };
 
 export const streamSimple: StreamFunction<"openai-responses", SimpleStreamOptions> = (
@@ -318,7 +310,6 @@ export const streamSimple: StreamFunction<"openai-responses", SimpleStreamOption
 
 function createClient(
   model: Model<"openai-responses">,
-  context: TranscriptContext,
   apiKey: string,
   optionsHeaders?: ProviderHeaders,
   fetch?: typeof globalThis.fetch,
@@ -326,14 +317,6 @@ function createClient(
 ) {
   const compat = getCompat(model);
   const headers: ProviderHeaders = { "User-Agent": getMsaUserAgent(), ...model.headers };
-  if (model.provider === "github-copilot") {
-    const hasImages = hasCopilotVisionInput(context.messages);
-    const copilotHeaders = buildCopilotDynamicHeaders({
-      messages: context.messages,
-      hasImages,
-    });
-    Object.assign(headers, copilotHeaders);
-  }
 
   if (sessionId) {
     if (compat.sessionAffinityFormat === "openrouter") {
@@ -441,7 +424,7 @@ function buildParams(
         summary: options?.reasoningSummary || "auto",
       };
       params.include = ["reasoning.encrypted_content"];
-    } else if (model.provider !== "github-copilot" && model.thinkingLevelMap?.off !== null) {
+    } else if (model.thinkingLevelMap?.off !== null) {
       params.reasoning = {
         effort: (model.thinkingLevelMap?.off ?? "none") as NonNullable<
           typeof params.reasoning

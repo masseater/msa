@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach } from "vitest";
+import { afterAll, beforeAll, beforeEach } from "vite-plus/test";
 import { describeEval, StructuredOutputJudge } from "vitest-evals";
 
 import { createMsaDocumentationEvalHarness } from "../src/harness.ts";

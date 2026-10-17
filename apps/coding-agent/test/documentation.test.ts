@@ -2,7 +2,7 @@ import { existsSync, globSync, readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute, posix, relative, resolve, sep } from "node:path";
 
 import { lexer, type Token, type Tokens, walkTokens } from "marked";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 type NavigationItem =
   | { title: string; path: string; items?: NavigationItem[] }

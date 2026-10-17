@@ -80,6 +80,12 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
   },
   { name: "trust", description: "Save project trust decision for future sessions" },
   {
+    name: "memory",
+    description: "Open the memory view, or manage long-term memory with an argument",
+    argumentHint: "[list|search <query>|forget <id>|stats]",
+  },
+  { name: "sessions", description: "Show the sessions the orchestrator started" },
+  {
     name: "reload",
     description: "Reload keybindings, extensions, skills, prompts, themes, and context files",
     aliases: ["reload-skills", "reload-plugins"],

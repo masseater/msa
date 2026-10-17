@@ -61,7 +61,6 @@ import {
   resolveGrammarConstrainedSampling,
   resolveJsonSchemaStrictSampling,
 } from "./constrained-sampling.ts";
-import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.ts";
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
 import {
   buildBaseOptions,
@@ -332,7 +331,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
   context: TranscriptContext,
   options?: OpenAICompletionsOptions,
 ): AssistantMessageEventStream => {
-  const stream = new AssistantMessageEventStream();
+  const events = new AssistantMessageEventStream();
   const normalizedContext = resolveTranscript(
     context,
     getCompat(model).supportsMidConvoSystemMessages,
@@ -377,7 +376,6 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
       const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
       const client = createClient(
         model,
-        normalizedContext,
         apiKey,
         options?.headers,
         options?.fetch,
@@ -413,7 +411,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
         { status: response.status, headers: headersToRecord(response.headers) },
         model,
       );
-      stream.push({ type: "start", partial: output });
+      events.push({ type: "start", partial: output });
 
       interface StreamingToolCallBlock extends ToolCall {
         partialArgs?: string;
@@ -467,7 +465,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
           return;
         }
         if (block.type === "text") {
-          stream.push({
+          events.push({
             type: "text_end",
             contentIndex,
             content: block.text,
@@ -475,7 +473,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
           });
         } else if (block.type === "thinking") {
           applyStreamedReasoningDetails(block);
-          stream.push({
+          events.push({
             type: "thinking_end",
             contentIndex,
             content: block.thinking,
@@ -485,7 +483,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
           if (block.customInput) {
             const delta = appendCustomToolCallInput(block, getCustomToolCallInput(block), true);
             if (delta !== undefined) {
-              stream.push({
+              events.push({
                 type: "toolcall_delta",
                 contentIndex,
                 delta,
@@ -500,7 +498,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
           delete block.partialArgs;
           delete block.customInput;
           delete block.streamIndex;
-          stream.push({
+          events.push({
             type: "toolcall_end",
             contentIndex,
             toolCall: block,
@@ -512,7 +510,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
         if (!textBlock) {
           textBlock = { type: "text", text: "" };
           blocks.push(textBlock);
-          stream.push({
+          events.push({
             type: "text_start",
             contentIndex: getContentIndex(textBlock),
             partial: output,
@@ -528,7 +526,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
             thinkingSignature,
           };
           blocks.push(thinkingBlock);
-          stream.push({
+          events.push({
             type: "thinking_start",
             contentIndex: getContentIndex(thinkingBlock),
             partial: output,
@@ -572,7 +570,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
             toolCallBlocksById.set(toolCall.id, block);
           }
           blocks.push(block);
-          stream.push({
+          events.push({
             type: "toolcall_start",
             contentIndex: getContentIndex(block),
             partial: output,
@@ -660,7 +658,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
                   : foundReasoningField;
               const block = ensureThinkingBlock(thinkingSignature);
               block.thinking += delta;
-              stream.push({
+              events.push({
                 type: "thinking_delta",
                 contentIndex: getContentIndex(block),
                 delta,
@@ -690,7 +688,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
           ) {
             const block = ensureTextBlock();
             block.text += choice.delta.content;
-            stream.push({
+            events.push({
               type: "text_delta",
               contentIndex: getContentIndex(block),
               delta: choice.delta.content,
@@ -719,7 +717,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
                 const nextInput = getCustomToolCallInput(block) + toolCall.custom.input;
                 delta = appendCustomToolCallInput(block, nextInput, false) ?? "";
               }
-              stream.push({
+              events.push({
                 type: "toolcall_delta",
                 contentIndex: getContentIndex(block),
                 delta,
@@ -752,8 +750,8 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
         throw new Error("Stream ended without finish_reason");
       }
 
-      stream.push({ type: "done", reason: output.stopReason, message: output });
-      stream.end();
+      events.push({ type: "done", reason: output.stopReason, message: output });
+      events.end();
     } catch (error) {
       for (const block of output.content) {
         if (block.type === "thinking") {
@@ -775,12 +773,12 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
       if (rawMetadata && !output.errorMessage.includes(String(rawMetadata))) {
         output.errorMessage += `\n${rawMetadata}`;
       }
-      stream.push({ type: "error", reason: output.stopReason, error: output });
-      stream.end();
+      events.push({ type: "error", reason: output.stopReason, error: output });
+      events.end();
     }
   })();
 
-  return stream;
+  return events;
 };
 
 export const streamSimple: StreamFunction<"openai-completions", SimpleStreamOptions> = (
@@ -808,7 +806,6 @@ export const streamSimple: StreamFunction<"openai-completions", SimpleStreamOpti
 
 function createClient(
   model: Model<"openai-completions">,
-  context: TranscriptContext,
   apiKey: string,
   optionsHeaders?: ProviderHeaders,
   fetch?: typeof globalThis.fetch,
@@ -816,14 +813,6 @@ function createClient(
   compat: ResolvedOpenAICompletionsCompat = getCompat(model),
 ) {
   const headers: ProviderHeaders = { "User-Agent": getMsaUserAgent(), ...model.headers };
-  if (model.provider === "github-copilot") {
-    const hasImages = hasCopilotVisionInput(context.messages);
-    const copilotHeaders = buildCopilotDynamicHeaders({
-      messages: context.messages,
-      hasImages,
-    });
-    Object.assign(headers, copilotHeaders);
-  }
 
   if (sessionId && compat.sendSessionAffinityHeaders) {
     if (compat.sessionAffinityFormat === "openrouter") {
@@ -1282,7 +1271,7 @@ export function convertMessages(
   const normalizeToolCallId = (id: string): string => {
     // Handle pipe-separated IDs from OpenAI Responses API
     // Format: {call_id}|{id} where {id} can be 400+ chars with special chars (+, /, =)
-    // These come from providers like github-copilot, openai-codex, opencode
+    // These come from providers like openai-codex, opencode
     // Extract just the call_id part and normalize it
     // Multiple tool calls in the same turn can share call_id but differ by item_id.
     // Preserve item-level uniqueness when replaying into Chat Completions, which

@@ -17,7 +17,13 @@ Use msa [interactively](apps/coding-agent/docs/usage.md), automate it in [print 
 
 ## Getting started
 
-msa is not published to npm, and the pi.dev installer installs pi, so install msa from a [release](https://github.com/masseater/msa/releases/latest) or run it from a checkout:
+msa is not published to npm, and the pi.dev installer installs pi, so install msa with [Homebrew](https://github.com/masseater/homebrew-tap), from a [release](https://github.com/masseater/msa/releases/latest), or run it from a checkout:
+
+```bash
+brew install masseater/tap/msa
+```
+
+Or download and extract a release archive directly:
 
 ```bash
 curl -fsSLO https://github.com/masseater/msa/releases/latest/download/msa-darwin-arm64.tar.gz
@@ -39,6 +45,8 @@ vp install
 The checkout requires Node.js 22.19 or newer. State lives in `~/.msa/agent`, next to `settings.json`, `auth.json`, and sessions.
 
 Run `/login` inside msa to connect a subscription or API key, then give msa a task.
+
+Install the [treg](https://treg.to/web-access) CLI and sign in from msa with `/login treg` (or `treg login`, or set `TREG_TOKEN`), and msa gets `web_search` and `web_fetch` tools, on by default. treg tries free TinyFish first and falls back to other vendors, and uses keys you registered in treg (Exa, for example) before its own.
 
 Values that identify the client to external services (the `pi/<version>` User-Agent, pi.dev endpoints, the Codex and xAI login identifiers) intentionally keep the pi name, because those services know the client by it.
 
@@ -71,14 +79,15 @@ If you need stronger boundaries, containerize or sandbox msa. See [apps/coding-a
 ```bash
 vp install            # Install all dependencies
 vp run build          # Refresh model data, then build all packages
-vp run verify         # Lint, type check, tests, model data check, fence ratchet
+vp run verify         # Lint, type check, tests, model data check
 ./test.sh             # Run tests (skips LLM-dependent tests without API keys)
 ./scripts/msa-dev.sh  # Run msa from sources (can be run from any directory)
+vp run install-local  # Build and install the host binary to ~/.local
 ```
 
 ### Release binaries
 
-`vp run build-binaries` builds `msa` for every release platform into `.artifacts/binaries` (`msa-<platform>.tar.gz`, `msa-<platform>.zip`, and `SHA256SUMS`). Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds them in CI, smoke-tests the result, and publishes a GitHub Release.
+`vp run build-binaries` builds `msa` for every release platform into `.artifacts/binaries` (`msa-<platform>.tar.gz`, `msa-<platform>.zip`, and `SHA256SUMS`). Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds them in CI, smoke-tests the result, and publishes a GitHub Release. `vp run render-homebrew-formula` renders `Formula/msa.rb` from `SHA256SUMS` into `.artifacts/homebrew`; the workflow pushes it to [masseater/homebrew-tap](https://github.com/masseater/homebrew-tap) once the release is published.
 
 ## License
 

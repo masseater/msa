@@ -265,6 +265,7 @@ export function resolveJsonSchemaStrictSampling(
       if (config.strict !== "require") return undefined;
       throw new Error(
         `Tool "${tool.name}" requires JSON-schema constrained sampling, but ${error.message}.`,
+        { cause: error },
       );
     }
   }
@@ -308,7 +309,9 @@ export function resolveGrammarConstrainedSampling(
     };
   } catch (error) {
     const message = toErrorMessage(error);
-    throw new Error(`Tool "${tool.name}" cannot use grammar constrained sampling: ${message}.`);
+    throw new Error(`Tool "${tool.name}" cannot use grammar constrained sampling: ${message}.`, {
+      cause: error,
+    });
   }
 }
 

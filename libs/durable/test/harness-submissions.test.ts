@@ -15,7 +15,7 @@ import {
   type SubmissionRecord,
   UserEntry,
 } from "@msa/durable";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { SessionImpl } from "../src/session/session.ts";
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";

@@ -1,6 +1,6 @@
 import type { Usage } from "@msa/ai";
 import { Container } from "@msa/tui";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vite-plus/test";
 
 import type { SessionEntry } from "../src/core/session-manager.ts";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";

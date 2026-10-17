@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
 import { InMemoryModelsStore } from "../src/models-store.ts";

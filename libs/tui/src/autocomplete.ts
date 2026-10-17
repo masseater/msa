@@ -753,7 +753,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
       });
 
       return suggestions;
-    } catch (_e) {
+    } catch {
       // Directory doesn't exist or not accessible
       return [];
     }

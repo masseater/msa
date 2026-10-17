@@ -16,7 +16,7 @@ console.log("Loading image from:", testImagePath);
 let imageBuffer: Buffer;
 try {
   imageBuffer = readFileSync(testImagePath);
-} catch (_e) {
+} catch {
   console.error(`Failed to load image: ${testImagePath}`);
   console.error("Usage: node test/image-test.ts [path-to-image.png]");
   process.exit(1);

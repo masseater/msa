@@ -506,7 +506,7 @@ function parseThemeJsonContent(label: string, content: string): ThemeJson {
   try {
     json = JSON.parse(stripBom(content));
   } catch (error) {
-    throw new Error(`Failed to parse theme ${label}: ${error}`);
+    throw new Error(`Failed to parse theme ${label}: ${error}`, { cause: error });
   }
   return parseThemeJson(label, json);
 }
@@ -702,10 +702,10 @@ const registeredThemes = new Map<string, Theme>();
 
 export function setRegisteredThemes(themes: Theme[]): void {
   registeredThemes.clear();
-  for (const theme of themes) {
-    if (theme.name) {
-      assertThemeNameIsValid(theme.name);
-      registeredThemes.set(theme.name, theme);
+  for (const entry of themes) {
+    if (entry.name) {
+      assertThemeNameIsValid(entry.name);
+      registeredThemes.set(entry.name, entry);
     }
   }
 }
@@ -718,7 +718,7 @@ export function initTheme(themeName?: string, enableWatcher: boolean = false): v
     if (enableWatcher) {
       startThemeWatcher();
     }
-  } catch (_error) {
+  } catch {
     // Theme is invalid - fall back to the system theme silently
     currentThemeName = SYSTEM_THEME_NAME;
     setGlobalTheme(loadTheme(SYSTEM_THEME_NAME));
@@ -814,7 +814,7 @@ function startThemeWatcher(): void {
         if (onThemeChangeCallback) {
           onThemeChangeCallback();
         }
-      } catch (_error) {
+      } catch {
         // Ignore errors (file might be in invalid state while being edited)
       }
     }, 100);

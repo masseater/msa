@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { openaiChatGPTOAuth } from "../src/auth/oauth/openai-chatgpt.ts";
 import type { OAuthCredential, ProviderAuthInteraction } from "../src/auth/types.ts";

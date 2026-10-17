@@ -1,5 +1,5 @@
 import type { ModelsRefreshOptions, ModelsRefreshResult } from "@msa/ai";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { refreshModelCatalogs } from "../src/modes/interactive/model-catalog-refresh.ts";
 

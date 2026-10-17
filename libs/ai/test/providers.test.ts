@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { lazyApi } from "../src/api/lazy.ts";
 import { envApiKeyAuth } from "../src/auth/helpers.ts";
@@ -196,10 +196,6 @@ describe("builtin providers", () => {
       ["opencode", "claude-opus-5"],
       ["opencode", "kimi-k3"],
       ["opencode-go", "kimi-k3"],
-      ["github-copilot", "gpt-5.6-terra"],
-      ["github-copilot", "claude-opus-5"],
-      ["github-copilot", "claude-opus-4.8"],
-      ["github-copilot", "kimi-k3"],
       ["deepseek", "deepseek-v4-pro"],
       ["openrouter", "openai/gpt-5.6-terra"],
     ] as const;
@@ -211,7 +207,6 @@ describe("builtin providers", () => {
       ["google", "gemini-2.5-pro"],
       ["opencode", "gpt-5.2"],
       ["opencode", "claude-sonnet-4-5"],
-      ["github-copilot", "claude-sonnet-4.6"],
       ["deepseek", "deepseek-flash"],
       ["openrouter", "anthropic/claude-opus-5"],
       ["openrouter", "moonshotai/kimi-k3"],
@@ -232,29 +227,21 @@ describe("builtin providers", () => {
 
   it("routes proxied tool changes through verified transports only", () => {
     const models = builtinModels();
-    for (const [provider, modelId] of [
-      ["opencode", "gpt-5.6-terra"],
-      ["github-copilot", "gpt-5.6-terra"],
-    ] as const) {
-      // Proxies pass `additional_tools` through to OpenAI but are not verified for tool search.
-      expect(models.getModel(provider, modelId)?.compat, `${provider}/${modelId}`).toMatchObject({
-        supportsAdditionalTools: true,
-      });
-      expect(
-        models.getModel(provider, modelId)?.compat,
-        `${provider}/${modelId}`,
-      ).not.toHaveProperty("supportsToolSearch");
-    }
+    // Proxies pass `additional_tools` through to OpenAI but are not verified for tool search.
+    expect(models.getModel("opencode", "gpt-5.6-terra")?.compat).toMatchObject({
+      supportsAdditionalTools: true,
+    });
+    expect(models.getModel("opencode", "gpt-5.6-terra")?.compat).not.toHaveProperty(
+      "supportsToolSearch",
+    );
     // Proxied Anthropic endpoints reject `tool_addition`/`tool_removal` blocks.
-    for (const provider of ["opencode", "github-copilot"] as const) {
-      expect(models.getModel(provider, "claude-opus-5")?.compat, provider).not.toHaveProperty(
-        "supportsMidConvoToolChanges",
-      );
-    }
+    expect(models.getModel("opencode", "claude-opus-5")?.compat).not.toHaveProperty(
+      "supportsMidConvoToolChanges",
+    );
     expect(models.getModel("anthropic", "claude-opus-5")?.compat).toMatchObject({
       supportsMidConvoToolChanges: true,
     });
-    // Kimi-style tool-bearing system messages survive Moonshot and OpenCode but not Copilot.
+    // Kimi-style tool-bearing system messages survive Moonshot and OpenCode but not OpenRouter.
     for (const provider of ["moonshotai", "moonshotai-cn", "opencode", "opencode-go"] as const) {
       expect(models.getModel(provider, "kimi-k3")?.compat, provider).toMatchObject({
         supportsMidConvoToolAdditions: true,
@@ -268,7 +255,7 @@ describe("builtin providers", () => {
         ).not.toHaveProperty("supportsMidConvoToolAdditions");
       }
     }
-    expect(models.getModel("github-copilot", "kimi-k3")?.compat).not.toHaveProperty(
+    expect(models.getModel("openrouter", "moonshotai/kimi-k3")?.compat).not.toHaveProperty(
       "supportsMidConvoToolAdditions",
     );
     expect(models.getModel("openrouter", "openai/gpt-5.6-terra")?.compat).not.toHaveProperty(

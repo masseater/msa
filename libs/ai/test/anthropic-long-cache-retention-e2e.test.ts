@@ -1,24 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { type BuiltinProvider, complete, getModels, getProviders } from "../src/compat.ts";
 import { getEnvApiKey } from "../src/env-api-keys.ts";
-import type { Api, KnownProvider, Model, ProviderStreamOptions } from "../src/types.ts";
-import { resolveApiKey } from "./oauth.ts";
-
-const githubCopilotToken = await resolveApiKey("github-copilot");
+import type { Api, Model, ProviderStreamOptions } from "../src/types.ts";
 
 interface AnthropicLongCacheRetentionE2ECase {
   name: string;
   provider: BuiltinProvider;
   model: Model<"anthropic-messages">;
   apiKey: string | undefined;
-}
-
-function getE2EApiKey(provider: KnownProvider): string | undefined {
-  if (provider === "github-copilot") {
-    return githubCopilotToken;
-  }
-  return getEnvApiKey(provider);
 }
 
 function getAnthropicMessagesModels(provider: BuiltinProvider): Model<"anthropic-messages">[] {
@@ -34,7 +24,7 @@ const anthropicMessagesCases: AnthropicLongCacheRetentionE2ECase[] = getProvider
       name: `${provider}/${model.id}`,
       provider,
       model,
-      apiKey: getE2EApiKey(provider),
+      apiKey: getEnvApiKey(provider),
     })),
 );
 

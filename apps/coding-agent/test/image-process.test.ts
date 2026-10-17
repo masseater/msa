@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { processImage } from "../src/utils/image-process.ts";
 import { detectSupportedImageMimeType } from "../src/utils/mime.ts";

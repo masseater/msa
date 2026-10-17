@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,7 +9,7 @@ import {
   getModel,
   type Model,
 } from "@msa/ai/compat";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { AgentSessionRuntime } from "../src/core/agent-session-runtime.ts";
 import { AgentSession } from "../src/core/agent-session.ts";
@@ -98,6 +98,8 @@ async function createRuntimeHost(options: {
     `msa-rpc-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
   mkdirSync(tempDir, { recursive: true });
+  // Memory stays out of these tests: recall would add a real embedding request and timing noise.
+  writeFileSync(join(tempDir, "settings.json"), JSON.stringify({ memory: { enabled: false } }));
 
   const model = options.model ?? getModel("anthropic", "claude-sonnet-4-5");
   if (!model) {
@@ -256,6 +258,7 @@ describe("RPC prompt response semantics", () => {
           msa.registerCommand("handled", { handler: async () => {} });
           msa.on("input", (event) => {
             if (event.text === "handled input") return { action: "handled" };
+            return undefined;
           });
         },
       ]),
@@ -338,6 +341,7 @@ describe("RPC prompt response semantics", () => {
                 msa.sendUserMessage("B", { deliverAs: type === "steer" ? "steer" : "followUp" });
                 return { action: "handled" };
               }
+              return undefined;
             });
           },
         ]),
@@ -387,6 +391,7 @@ describe("RPC prompt response semantics", () => {
           (msa) => {
             msa.on("input", (event) => {
               if (event.text === "A") return { action: "transform", text: "B" };
+              return undefined;
             });
           },
         ]),

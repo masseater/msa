@@ -4,7 +4,7 @@ import { join, parse } from "node:path";
 
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@msa/ai/compat";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
   type CreateAgentSessionRuntimeFactory,
@@ -316,6 +316,7 @@ describe("AgentSessionRuntime characterization", () => {
         if (event.reason === cancelReason) {
           return { cancel: true };
         }
+        return undefined;
       });
       msa.on("session_start", (event) => {
         events.push(event);
@@ -359,6 +360,7 @@ describe("AgentSessionRuntime characterization", () => {
           cancelNextFork = false;
           return { cancel: true };
         }
+        return undefined;
       });
       msa.on("session_shutdown", (event) => {
         events.push(event);

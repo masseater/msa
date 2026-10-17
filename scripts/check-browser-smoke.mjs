@@ -13,13 +13,13 @@ const generatedCatalogDataDir = join(process.cwd(), "libs/ai/src/providers/data"
 // Fresh checkouts do not materialize provider JSON until model data is hydrated.
 const generatedCatalogDataPlugin = {
   name: "generated-model-catalog",
-  setup(build) {
-    build.onResolve({ filter: /^\.\/data\/[^/]+\.json$/ }, (args) => {
+  setup(esbuild) {
+    esbuild.onResolve({ filter: /^\.\/data\/[^/]+\.json$/ }, (args) => {
       const path = resolve(dirname(args.importer), args.path);
       if (dirname(path) !== generatedCatalogDataDir || existsSync(path)) return;
       return { path, namespace: "empty-generated-model-catalog" };
     });
-    build.onLoad({ filter: /.*/, namespace: "empty-generated-model-catalog" }, () => ({
+    esbuild.onLoad({ filter: /.*/, namespace: "empty-generated-model-catalog" }, () => ({
       contents: "{}",
       loader: "json",
     }));

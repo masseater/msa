@@ -6,7 +6,7 @@ import {
   stripTerminalSequences,
   TuiMainScreen,
 } from "@msa/tui";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";
 import type { AgentSession } from "../src/core/agent-session.ts";

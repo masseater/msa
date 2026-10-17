@@ -14,7 +14,7 @@ import {
   type TaskId,
   watchEvents,
 } from "@msa/durable";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { safeNow } from "../src/harness/harness.ts";
 import { conversationViews } from "../src/harness/view.ts";

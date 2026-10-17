@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
-import { onTestFinished, test } from "vitest";
+import { onTestFinished, test } from "vite-plus/test";
 
 import { HostImpl } from "../src/host.ts";
 import {

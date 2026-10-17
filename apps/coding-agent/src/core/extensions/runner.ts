@@ -16,6 +16,7 @@ import { type Theme, theme } from "../../modes/interactive/theme/theme.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import type { CacheWarmingAction } from "../cache-warmer.ts";
 import type { ResourceDiagnostic } from "../diagnostics.ts";
+import type { ExternalService } from "../external-services.ts";
 import type { KeybindingsConfig } from "../keybindings.ts";
 import type { ModelRegistry } from "../model-registry.ts";
 import type { ScopedModel } from "../model-resolver.ts";
@@ -827,6 +828,10 @@ export class ExtensionRunner {
       }
     }
     return undefined;
+  }
+
+  getExternalServices(): ExternalService[] {
+    return this.extensions.flatMap((ext) => ext.externalServices ?? []);
   }
 
   getMarkdownTransformers(): MarkdownTransformer[] {

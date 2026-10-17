@@ -2,7 +2,7 @@ import { type AssistantMessage, fauxAssistantMessage, fauxText, Type } from "@ms
 import { CodemodeSandbox } from "@msa/codemode";
 import { CODEMODE_SOURCE_GRAMMAR } from "@msa/codemode/source";
 import { defineTool, MemoryStorage, type ToolRegistration } from "@msa/durable";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { createCodemodeExtension } from "../src/codemode/codemode.ts";
 import {

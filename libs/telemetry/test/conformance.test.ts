@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { InMemoryTelemetryContext, type SpanAttributes } from "../src/index.ts";
 import {
@@ -40,8 +40,8 @@ describe("InMemoryTelemetryContext conformance", () => {
     const [first] = context.getSpans();
     expect(first?.settled).toBe(true);
     expect(first?.endSequence).toBe(1);
-    (first?.attributes as SpanAttributes).tags = ["mutated"];
-    (first?.events[0]?.attributes as SpanAttributes).value = 2;
+    (first!.attributes as SpanAttributes).tags = ["mutated"];
+    (first!.events[0]!.attributes as SpanAttributes).value = 2;
 
     const [second] = context.getSpans();
     expect(second?.attributes).toEqual({ tags: ["initial"] });

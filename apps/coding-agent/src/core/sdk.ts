@@ -20,6 +20,7 @@ import { createToolNameMatcher } from "./mcp-servers.ts";
 import { convertToLlm } from "./messages.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { ModelRuntime } from "./model-runtime.ts";
+import { isOrchestratorTool, ORCHESTRATOR_TOOL_NAMES } from "./orchestrator/tools.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
 import type { ResourceLoader } from "./resource-loader.ts";
 import { DefaultResourceLoader } from "./resource-loader.ts";
@@ -110,6 +111,11 @@ export interface CreateAgentSessionOptions {
   settingsManager?: SettingsManager;
   /** Session start event metadata for extension runtime startup. */
   sessionStartEvent?: SessionStartEvent;
+  /**
+   * Register the orchestrator tools (`start_session` and the rest). They start inactive; activate
+   * them with `tools` or the `defaultTools` setting.
+   */
+  orchestrator?: boolean;
 }
 
 /** Result from createAgentSession */
@@ -361,24 +367,24 @@ export async function createAgentSession(
   );
   const buildRequestOptions = (
     requestModel: Model<any>,
-    options: ModelsSimpleStreamOptions = {},
+    streamOptions: ModelsSimpleStreamOptions = {},
   ): ModelsSimpleStreamOptions => {
     const providerRetrySettings = settingsManager.getProviderRetrySettings();
     const httpIdleTimeoutMs = settingsManager.getHttpIdleTimeoutMs();
     const effectiveTimeoutMs = httpIdleTimeoutMs === 0 ? 2147483647 : httpIdleTimeoutMs;
     const headerRunner = extensionRunnerRef.current;
     return {
-      ...options,
-      timeoutMs: options.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs,
+      ...streamOptions,
+      timeoutMs: streamOptions.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs,
       websocketConnectTimeoutMs:
-        options.websocketConnectTimeoutMs ?? settingsManager.getWebSocketConnectTimeoutMs(),
-      maxRetries: options.maxRetries ?? providerRetrySettings.maxRetries,
-      maxRetryDelayMs: options.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,
+        streamOptions.websocketConnectTimeoutMs ?? settingsManager.getWebSocketConnectTimeoutMs(),
+      maxRetries: streamOptions.maxRetries ?? providerRetrySettings.maxRetries,
+      maxRetryDelayMs: streamOptions.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,
       transformHeaders: async (requestHeaders) => {
         const headers = mergeProviderAttributionHeaders(
           requestModel,
           settingsManager,
-          options.sessionId,
+          streamOptions.sessionId,
           requestHeaders,
         );
         return headerRunner?.hasHandlers("before_provider_headers")
@@ -420,15 +426,15 @@ export async function createAgentSession(
   };
   const handleProviderStreamEvent: NonNullable<
     ModelsSimpleStreamOptions["onProviderStreamEvent"]
-  > = async (data, model) => {
+  > = async (data, eventModel) => {
     const runner = extensionRunnerRef.current;
     if (!runner?.hasHandlers("provider_stream_event")) return;
     await runner.emit({
       data,
       type: "provider_stream_event",
-      provider: model.provider,
-      api: model.api,
-      model: model.id,
+      provider: eventModel.provider,
+      api: eventModel.api,
+      model: eventModel.id,
     });
   };
 
@@ -441,20 +447,20 @@ export async function createAgentSession(
       messages: existingSession.messages,
     },
     convertToLlm: convertToLlmWithBlockImages,
-    streamFn: async (model, context, options) => {
-      const requestOptions = buildRequestOptions(model, options);
+    streamFn: async (requestModel, context, streamOptions) => {
+      const requestOptions = buildRequestOptions(requestModel, streamOptions);
       // Compaction and summaries use their own routing ids; only session requests
       // replace the cache entry, so warming restarts from them. Keep warming while
       // the current transcript still extends the request's prefix. Agent state may
       // shallow-copy the messages array or refresh the model object without changing
       // the provider request, so top-level object identity is not a valid cache key.
-      if (options?.sessionId === sessionManager.getSessionId()) {
+      if (streamOptions?.sessionId === sessionManager.getSessionId()) {
         cacheWarmer.start(
-          { model, context, options: requestOptions },
-          cacheContextIsCurrent(model),
+          { model: requestModel, context, options: requestOptions },
+          cacheContextIsCurrent(requestModel),
         );
       }
-      return modelRuntime.streamSimple(model, context, requestOptions);
+      return modelRuntime.streamSimple(requestModel, context, requestOptions);
     },
     onPayload: transformProviderPayload,
     onResponse: handleProviderResponse,
@@ -503,6 +509,50 @@ export async function createAgentSession(
     excludedToolNames,
     extensionRunnerRef,
     sessionStartEvent: options.sessionStartEvent,
+    // Workers get the orchestrator's settings, project trust, resources, and tool selection, minus
+    // the orchestrator tools; the worker cwd only moves their tools and transcripts.
+    createWorkerSession:
+      options.orchestrator && resourceLoader instanceof DefaultResourceLoader
+        ? async (worker) => {
+            const workerResourceLoader = resourceLoader.fork();
+            await workerResourceLoader.reload();
+            // Extension flags from the orchestrator's command line apply to its workers too.
+            const workerFlagValues = workerResourceLoader.getExtensions().runtime.flagValues;
+            for (const [name, value] of session.extensionRunner.getFlagValues()) {
+              workerFlagValues.set(name, value);
+            }
+            const workerTools = options.tools?.filter(
+              (entry) => !isOrchestratorTool(entry.replace(/^[+-]/, "")),
+            );
+            const { session: workerSession } = await createAgentSession({
+              cwd: worker.cwd,
+              agentDir,
+              modelRuntime,
+              settingsManager,
+              resourceLoader: workerResourceLoader,
+              ...(options.customTools ? { customTools: options.customTools } : {}),
+              model: worker.model,
+              thinkingLevel: worker.thinkingLevel,
+              // An emptied allowlist still means no tools; emptied +/- entries mean the defaults.
+              ...(workerTools && !(workerTools.length === 0 && toolModifiers)
+                ? { tools: workerTools }
+                : {}),
+              excludeTools: [...(options.excludeTools ?? []), ...ORCHESTRATOR_TOOL_NAMES],
+              ...(options.noTools ? { noTools: options.noTools } : {}),
+              sessionManager: worker.sessionFile
+                ? SessionManager.open(worker.sessionFile)
+                : SessionManager.create(
+                    worker.cwd,
+                    join(
+                      sessionManager.getSessionDir() || getDefaultSessionDir(worker.cwd, agentDir),
+                      "workers",
+                    ),
+                  ),
+            });
+            await workerSession.bindExtensions({ mode: "print" });
+            return workerSession;
+          }
+        : undefined,
   });
 
   const extensionsResult = resourceLoader.getExtensions();

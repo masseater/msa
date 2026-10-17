@@ -5,7 +5,7 @@
  * This tests the fix for WSL2/WSLg where clipboard often provides image/bmp
  * instead of image/png.
  */
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vite-plus/test";
 
 import { readClipboardImage } from "../src/utils/clipboard-image.ts";
 

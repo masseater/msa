@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
-import { describe, it } from "vitest";
+import { describe, it } from "vite-plus/test";
 
 import { type Ctx, createHost, type Facet, isChordError, local, method } from "../src/index.ts";
 
@@ -93,7 +93,7 @@ describe("state init", () => {
     host.serve(Notes, (_input, _principal, self) => {
       const notes = self.state("notes", NotesSchema, { init: () => [] });
       const count = self.derive([notes], (list) => list.length);
-      notes.value;
+      void notes.value;
       return { notes, count, has: () => false, add: () => {} };
     });
     await assert.rejects(

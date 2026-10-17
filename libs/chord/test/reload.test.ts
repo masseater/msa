@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
-import { describe, it, onTestFinished, vi } from "vitest";
+import { describe, it, onTestFinished, vi } from "vite-plus/test";
 
 import {
   type Ctx,

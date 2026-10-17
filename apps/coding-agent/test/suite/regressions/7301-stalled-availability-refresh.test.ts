@@ -1,5 +1,5 @@
 import type { Models } from "@msa/ai";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createHarness, type Harness } from "../harness.ts";
 

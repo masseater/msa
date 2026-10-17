@@ -669,7 +669,7 @@ export class SettingsSelectorComponent extends Container {
                   if (bKey === currentDefaultModelKey) return 1;
                   return a.provider.localeCompare(b.provider);
                 });
-                const items: SelectItem[] = sorted.map((model) => {
+                const modelItems: SelectItem[] = sorted.map((model) => {
                   const key = modelSettingKey(model);
                   const override = currentModelThinkingLevels[key];
                   return {
@@ -678,14 +678,14 @@ export class SettingsSelectorComponent extends Container {
                     description: override ?? undefined,
                   };
                 });
-                if (items.length === 0) {
-                  items.push({
+                if (modelItems.length === 0) {
+                  modelItems.push({
                     value: "__none__",
                     label: "No models available",
                     description: "Log in to a provider or configure an API key first",
                   });
                 }
-                return items;
+                return modelItems;
               },
               preselect: () => currentModelKey ?? currentDefaultModelKey,
               searchable: true,
@@ -705,19 +705,19 @@ export class SettingsSelectorComponent extends Container {
                   model.reasoning ? getSupportedThinkingLevels(model) : ["off"]
                 ) as ThinkingLevel[];
                 const activeLevel = currentModelThinkingLevels[ctx.model];
-                const items: SelectItem[] = levels.map((level) => ({
+                const levelItems: SelectItem[] = levels.map((level) => ({
                   value: level,
                   label: `${level === activeLevel ? "✓ " : "  "}${level}`,
                   description: THINKING_DESCRIPTIONS[level],
                 }));
                 if (currentModelThinkingLevels[ctx.model] !== undefined) {
-                  items.push({
+                  levelItems.push({
                     value: CLEAR_OVERRIDE_VALUE,
                     label: "  (clear override)",
                     description: `Revert to global default (${config.thinkingLevel})`,
                   });
                 }
-                return items;
+                return levelItems;
               },
               preselect: (ctx) => currentModelThinkingLevels[ctx.model],
             },

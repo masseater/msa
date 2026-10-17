@@ -3,15 +3,38 @@ import { fileURLToPath } from "node:url";
 import { presets as effectPresets } from "@effect/tsgo/oxlint-presets";
 import { defineConfig } from "vite-plus";
 
-import { engine, generated, restrictedImports } from "./lint.config.ts";
+import { generated, lintPlugins, restrictedImports, strictCategoryRules } from "./lint.config.ts";
 
 type Rules = Readonly<Record<string, "error">>;
 
 const asErrors = (names: readonly string[]): Rules =>
   Object.fromEntries(names.map((name) => [name, "error"] as const));
 
-const effectRules = asErrors(
-  Object.values(effectPresets).flatMap((preset) => Object.keys(preset.rules ?? {})),
+const effectRuleNames = Object.values(effectPresets).flatMap((preset) =>
+  Object.keys(preset.rules ?? {}),
+);
+
+const effectRulesPendingMigration = new Set([
+  "effecttsgo/async-function",
+  "effecttsgo/crypto-random-uuid",
+  "effecttsgo/extends-native-error",
+  "effecttsgo/global-console",
+  "effecttsgo/global-date",
+  "effecttsgo/global-fetch",
+  "effecttsgo/global-random",
+  "effecttsgo/global-timers",
+  "effecttsgo/missing-pipeable-signature",
+  "effecttsgo/new-promise",
+  "effecttsgo/node-builtin-import",
+  "effecttsgo/process-env",
+  "effecttsgo/strict-boolean-expressions",
+  "effecttsgo/unnecessary-arrow-block",
+  "effecttsgo/unnecessary-pipe-chain",
+]);
+
+const effectRules = asErrors(effectRuleNames);
+const landedEffectRules = asErrors(
+  effectRuleNames.filter((name) => !effectRulesPendingMigration.has(name)),
 );
 
 export const workspaceSourcePaths = {
@@ -101,14 +124,17 @@ export default defineConfig({
     sortPackageJson: true,
   },
   lint: {
-    ignorePatterns: [...generated, ...engine],
-    plugins: ["oxc", "import", "promise", "node", "jsdoc", "effecttsgo"],
+    ignorePatterns: [
+      ...generated,
+      "apps/coding-agent/examples/extensions/gondolin/**",
+      "libs/ai/bedrock-provider.d.ts",
+      "libs/ai/bedrock-provider.js",
+      "libs/codemode/examples/**",
+    ],
+    plugins: lintPlugins,
     categories: {
       correctness: "error",
       suspicious: "error",
-      perf: "error",
-      pedantic: "error",
-      nursery: "error",
     },
     jsPlugins: [
       { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
@@ -116,18 +142,45 @@ export default defineConfig({
     ],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",
-      "no-comments/disallowComments": ["error", { allow: ["oxlint-disable", "eslint-disable"] }],
+      "eslint/no-control-regex": "off",
       "eslint/no-duplicate-imports": ["error", { allowSeparateTypeImports: true }],
       "eslint/no-restricted-imports": ["error", restrictedImports],
       "eslint/no-undef": "off",
+      "eslint/no-underscore-dangle": "off",
+      "eslint/no-unmodified-loop-condition": "off",
       "eslint/one-var": ["error", "never"],
       "eslint/sort-imports": "off",
       "eslint/sort-keys": "off",
       "import/no-named-export": "off",
       "import/prefer-default-export": "off",
       "node/no-top-level-await": "off",
-      ...effectRules,
+      "promise/always-return": "off",
+      ...landedEffectRules,
     },
+    overrides: [
+      {
+        files: ["**/test/**", "**/*.test.ts", "**/*.bench.ts"],
+        rules: {
+          "eslint/no-shadow": "off",
+        },
+      },
+      {
+        files: ["tools/**", "lint.config.ts", "syncpack.config.ts", "vite.config.ts"],
+        rules: {
+          "no-comments/disallowComments": [
+            "error",
+            { allow: ["oxlint-disable", "eslint-disable"] },
+          ],
+          "eslint/no-control-regex": "error",
+          "eslint/no-shadow": "error",
+          "eslint/no-underscore-dangle": "error",
+          "eslint/no-unmodified-loop-condition": "error",
+          "promise/always-return": "error",
+          ...asErrors(strictCategoryRules),
+          ...effectRules,
+        },
+      },
+    ],
     options: {
       typeAware: true,
       typeCheck: true,
@@ -142,7 +195,7 @@ export default defineConfig({
         dependsOn: [
           "engine-checks",
           "workspace-layout",
-          "fence-check",
+          "lint-categories",
           "syncpack",
           "actions-lint",
           "mcp-conformance",
@@ -155,11 +208,8 @@ export default defineConfig({
         command:
           "node scripts/check-ts-relative-imports.mjs && node scripts/check-entry-graphs.mjs && node scripts/check-browser-smoke.mjs",
       },
-      "fence-check": {
-        command: "node tools/fence-counts.ts",
-        dependsOn: ["build"],
-      },
       "workspace-layout": "node tools/workspace-layout.ts",
+      "lint-categories": "node tools/lint-categories.ts",
       "actions-lint": {
         command:
           'uvx --from actionlint-py@1.7.12.25 actionlint && uvx zizmor@1.30.1 $(test -n "$CLAUDE_CODE_REMOTE" && echo --no-online-audits) .github && ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows',
@@ -198,6 +248,14 @@ export default defineConfig({
         command: "node tools/build-binaries.ts",
         cache: false,
       },
+      "install-local": {
+        command: "node tools/local-install.ts",
+        cache: false,
+      },
+      "render-homebrew-formula": {
+        command: "node tools/render-homebrew-formula.ts",
+        cache: false,
+      },
       test: {
         command: "vp run --no-cache test:scripts && vp run --no-cache -r test",
         cache: false,
@@ -205,7 +263,7 @@ export default defineConfig({
       "test-all": {
         command: "bash test.sh",
         cache: false,
-        dependsOn: ["build", "daemon-build", "engine-checks", "fence-check"],
+        dependsOn: ["build", "daemon-build", "engine-checks"],
       },
     },
   },

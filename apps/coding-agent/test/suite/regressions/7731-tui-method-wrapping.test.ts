@@ -1,5 +1,5 @@
 import type { TUI } from "@msa/tui";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { createInteractiveTuiReference } from "../../../src/modes/interactive/interactive-mode.ts";
 

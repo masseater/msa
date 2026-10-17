@@ -1,5 +1,5 @@
 import { colorToOklch, colorToRgb, parseColor, type RgbColor, rgbColor } from "@msa/tui";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
   generateSystemThemeColors,

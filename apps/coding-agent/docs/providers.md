@@ -36,7 +36,6 @@ This table covers providers with a single primary API-key variable. Providers th
 | DeepSeek                                                        | `DEEPSEEK_API_KEY`              |
 | NVIDIA NIM                                                      | `NVIDIA_API_KEY`                |
 | Google Gemini                                                   | `GEMINI_API_KEY`                |
-| GitHub Copilot                                                  | `COPILOT_GITHUB_TOKEN`          |
 | Mistral                                                         | `MISTRAL_API_KEY`               |
 | Groq                                                            | `GROQ_API_KEY`                  |
 | Cerebras                                                        | `CEREBRAS_API_KEY`              |

@@ -1,7 +1,7 @@
 import type * as ChildProcess from "node:child_process";
 import type * as Fs from "node:fs";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { ensureTool, getLatestVersion, type ToolStatus } from "../src/utils/tools-manager.ts";
 

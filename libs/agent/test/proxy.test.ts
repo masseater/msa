@@ -1,6 +1,6 @@
 import type { AssistantMessage, AssistantMessageEvent, Model } from "@msa/ai";
 import { normalizeContext } from "@msa/ai";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { type ProxyAssistantMessageEvent, streamProxy } from "../src/proxy.ts";
 

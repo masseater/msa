@@ -63,6 +63,7 @@ import type { InlineExtension } from "./core/extensions/types.ts";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.ts";
 import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
+import { ORCHESTRATOR_TOOL_NAMES } from "./core/orchestrator/tools.ts";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import type { CreateAgentSessionOptions } from "./core/sdk.ts";
@@ -74,7 +75,7 @@ import {
 } from "./core/session-cwd.ts";
 import { assertValidSessionId, SessionManager } from "./core/session-manager.ts";
 import { collectSettingsDiagnostics, deduplicateDiagnostics } from "./core/settings-diagnostics.ts";
-import { SettingsManager } from "./core/settings-manager.ts";
+import { isToolModifier, SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
 import { builtInExtensions } from "./extensions/index.ts";
@@ -609,6 +610,15 @@ function buildSessionOptions(
   if (parsed.tools) {
     options.tools = [...parsed.tools];
   }
+  if (parsed.orchestrator) {
+    const tools = options.tools ?? [];
+    options.tools = [
+      ...tools,
+      ...(tools.length === 0 || tools.every(isToolModifier)
+        ? ORCHESTRATOR_TOOL_NAMES.map((name) => `+${name}`)
+        : ORCHESTRATOR_TOOL_NAMES),
+    ];
+  }
   if (parsed.excludeTools) {
     options.excludeTools = [...parsed.excludeTools];
   }
@@ -668,8 +678,7 @@ export async function main(args: string[], options?: MainOptions) {
       // https://github.com/nodejs/node/issues/56645
       return;
     }
-    process.exit(exitCode);
-    return;
+    return process.exit(exitCode);
   }
 
   if (await handleConfigCommand(args, { extensionFactories })) {
@@ -806,16 +815,16 @@ export async function main(args: string[], options?: MainOptions) {
   const resolvedPromptTemplatePaths = resolveCliPaths(cwd, parsed.promptTemplates);
   const resolvedThemePaths = resolveCliPaths(cwd, parsed.themes);
   const createRuntime: CreateAgentSessionRuntimeFactory = async ({
-    cwd,
-    agentDir,
-    sessionManager,
+    cwd: runtimeCwd,
+    agentDir: runtimeAgentDir,
+    sessionManager: runtimeSessionManager,
     sessionStartEvent,
     projectTrustContext,
   }) => {
     const isInitialRuntime = sessionStartEvent === undefined;
     const projectTrustDiagnostics: AgentSessionRuntimeDiagnostic[] = [];
-    const cachedProjectTrust = projectTrustByCwd.get(cwd);
-    const hasTrustRequiringResources = hasTrustRequiringProjectResources(cwd);
+    const cachedProjectTrust = projectTrustByCwd.get(runtimeCwd);
+    const hasTrustRequiringResources = hasTrustRequiringProjectResources(runtimeCwd);
     const shouldResolveProjectTrust =
       parsed.projectTrustOverride === undefined &&
       cachedProjectTrust === undefined &&
@@ -824,11 +833,13 @@ export async function main(args: string[], options?: MainOptions) {
       ? false
       : (cachedProjectTrust ??
         parsed.projectTrustOverride ??
-        (!hasTrustRequiringResources || trustStore.get(cwd) === true));
-    const runtimeSettingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
+        (!hasTrustRequiringResources || trustStore.get(runtimeCwd) === true));
+    const runtimeSettingsManager = SettingsManager.create(runtimeCwd, runtimeAgentDir, {
+      projectTrusted,
+    });
     const services = await createAgentSessionServices({
-      cwd,
-      agentDir,
+      cwd: runtimeCwd,
+      agentDir: runtimeAgentDir,
       settingsManager: runtimeSettingsManager,
       modelRuntimeSignal: AbortSignal.timeout(15_000),
       extensionFlagValues: parsed.unknownFlags,
@@ -836,7 +847,7 @@ export async function main(args: string[], options?: MainOptions) {
         ? {
             resolveProjectTrust: async ({ extensionsResult }) => {
               const trusted = await resolveProjectTrusted({
-                cwd,
+                cwd: runtimeCwd,
                 trustStore,
                 trustOverride: parsed.projectTrustOverride,
                 defaultProjectTrust: startupSettingsManager.getDefaultProjectTrust(),
@@ -844,7 +855,7 @@ export async function main(args: string[], options?: MainOptions) {
                 projectTrustContext:
                   projectTrustContext ??
                   createProjectTrustContext({
-                    cwd,
+                    cwd: runtimeCwd,
                     mode: isInitialRuntime ? trustPromptMode : appMode,
                     settingsManager: startupSettingsManager,
                     hasUI: isInitialRuntime && trustPromptMode === "interactive",
@@ -852,7 +863,7 @@ export async function main(args: string[], options?: MainOptions) {
                 onExtensionError: (message) =>
                   projectTrustDiagnostics.push({ type: "warning", message }),
               });
-              projectTrustByCwd.set(cwd, trusted);
+              projectTrustByCwd.set(runtimeCwd, trusted);
               return trusted;
             },
           }
@@ -902,7 +913,7 @@ export async function main(args: string[], options?: MainOptions) {
     } = buildSessionOptions(
       parsed,
       scopedModels,
-      sessionManager.buildSessionContext().messages.length > 0,
+      runtimeSessionManager.buildSessionContext().messages.length > 0,
       modelRuntime,
       settingsManager,
     );
@@ -922,7 +933,7 @@ export async function main(args: string[], options?: MainOptions) {
 
     const created = await createAgentSessionFromServices({
       services,
-      sessionManager,
+      sessionManager: runtimeSessionManager,
       sessionStartEvent,
       model: sessionOptions.model,
       thinkingLevel: sessionOptions.thinkingLevel,
@@ -931,6 +942,7 @@ export async function main(args: string[], options?: MainOptions) {
       excludeTools: sessionOptions.excludeTools,
       noTools: sessionOptions.noTools,
       customTools: sessionOptions.customTools,
+      orchestrator: true,
     });
     const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
     if (created.session.model && cliThinkingOverride) {

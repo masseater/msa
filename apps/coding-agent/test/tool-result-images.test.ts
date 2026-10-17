@@ -1,6 +1,6 @@
 import { crc32, deflateSync } from "node:zlib";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import type { ToolResultContent } from "../src/utils/tool-result-images.ts";
 import { normalizeToolResultImages } from "../src/utils/tool-result-images.ts";

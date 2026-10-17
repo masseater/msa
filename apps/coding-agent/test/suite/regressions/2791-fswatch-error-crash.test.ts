@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 /**
  * Regression test for https://github.com/earendil-works/pi/issues/2791
@@ -87,11 +87,10 @@ process.exit(0);
 `,
     );
 
-    let _stdout = "";
     let stderr = "";
     let exitCode: number;
     try {
-      _stdout = execFileSync(process.execPath, [scriptPath], {
+      execFileSync(process.execPath, [scriptPath], {
         timeout: 10000,
         encoding: "utf-8",
         env: { ...process.env, MSA_CODING_AGENT_DIR: agentDir },
@@ -99,8 +98,7 @@ process.exit(0);
       });
       exitCode = 0;
     } catch (err: unknown) {
-      const e = err as { status: number; stdout: string; stderr: string };
-      _stdout = e.stdout ?? "";
+      const e = err as { status: number; stderr: string };
       stderr = e.stderr ?? "";
       exitCode = e.status ?? 1;
     }

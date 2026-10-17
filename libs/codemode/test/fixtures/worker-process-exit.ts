@@ -3,7 +3,8 @@ import { CodemodeSandbox } from "../../src/runtime/host.ts";
 const how = process.argv[2];
 if (how !== "abort" && how !== "timeout" && how !== "close")
   throw new Error(`Unknown stop mode: ${how}`);
-const started = performance.now();
+// Measured from when the script runs, so a worker slow to start under load does not count as slow cancellation.
+let started = performance.now();
 process.on("exit", () => {
   console.log(JSON.stringify({ type: "exit", elapsedMs: performance.now() - started }));
 });
@@ -21,6 +22,7 @@ const sandbox = new CodemodeSandbox({
     {
       name: "ready",
       execute: () => {
+        started = performance.now();
         if (how !== "timeout") {
           timer = setTimeout(() => {
             if (how === "abort") controller.abort();

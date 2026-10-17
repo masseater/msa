@@ -36,6 +36,10 @@
               "path": "sessions.md"
             },
             {
+              "title": "Use Long-Term Memory",
+              "path": "memory.md"
+            },
+            {
               "title": "Run msa Safely",
               "path": "security.md"
             },

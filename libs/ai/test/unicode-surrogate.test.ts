@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { complete, getModel } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions, ToolResultMessage } from "../src/types.ts";
@@ -18,12 +18,8 @@ import { resolveApiKey } from "./oauth.ts";
 const emptySchema = Type.Object({});
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([
-  resolveApiKey("anthropic"),
-  resolveApiKey("github-copilot"),
-  resolveApiKey("openai-codex"),
-]);
-const [anthropicOAuthToken, githubCopilotToken, openaiCodexToken] = oauthTokens;
+const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
+const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
 
 /**
  * Test for Unicode surrogate pair handling in tool results.
@@ -457,62 +453,6 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
       { retry: 3, timeout: 30000 },
       async () => {
         await testUnpairedHighSurrogate(llm, { apiKey: anthropicOAuthToken });
-      },
-    );
-  });
-
-  describe("GitHub Copilot Provider Unicode Handling", () => {
-    it.skipIf(!githubCopilotToken)(
-      "claude-haiku-4.5 - should handle emoji in tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-haiku-4.5");
-        await testEmojiInToolResults(llm, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)(
-      "claude-haiku-4.5 - should handle real-world LinkedIn comment data with emoji",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-haiku-4.5");
-        await testRealWorldLinkedInData(llm, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)(
-      "claude-haiku-4.5 - should handle unpaired high surrogate (0xD83D) in tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-haiku-4.5");
-        await testUnpairedHighSurrogate(llm, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)(
-      "claude-sonnet-4 - should handle emoji in tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-sonnet-4.6");
-        await testEmojiInToolResults(llm, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)(
-      "claude-sonnet-4 - should handle real-world LinkedIn comment data with emoji",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-sonnet-4.6");
-        await testRealWorldLinkedInData(llm, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)(
-      "claude-sonnet-4 - should handle unpaired high surrogate (0xD83D) in tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-sonnet-4.6");
-        await testUnpairedHighSurrogate(llm, { apiKey: githubCopilotToken });
       },
     );
   });

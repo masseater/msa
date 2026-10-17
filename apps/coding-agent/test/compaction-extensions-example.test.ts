@@ -2,7 +2,7 @@
  * Verify the documentation example from extensions.md compiles and works.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import type {
   ExtensionAPI,

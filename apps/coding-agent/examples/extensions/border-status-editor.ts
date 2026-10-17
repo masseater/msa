@@ -128,7 +128,7 @@ export default function (msa: ExtensionAPI) {
         activeTui = tui;
       }
 
-      render(width: number): string[] {
+      override render(width: number): string[] {
         const lines = super.render(width);
         if (lines.length < 2) return lines;
 

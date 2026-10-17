@@ -20,7 +20,7 @@ import {
   type Submission,
   type TaskId,
 } from "@msa/durable";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import { chatSetup, openChat } from "./chat-support.ts";
@@ -329,11 +329,13 @@ describe("ownership", () => {
         yield value;
       }
     }
+    // oxlint-disable-next-line eslint/no-extend-native -- Set のイテレーション回数を計測するため、prototype を差し替える
     Set.prototype[Symbol.iterator] = counted as unknown as typeof iterator;
     try {
       open("owner", "completed");
       expect((await harness.waitForTask(owner, context)).state.outcome.status).toBe("completed");
     } finally {
+      // oxlint-disable-next-line eslint/no-extend-native -- 計測用に差し替えた Set のイテレータを戻す
       Set.prototype[Symbol.iterator] = iterator;
     }
     expect(entries).toBeLessThan(chains);
@@ -673,10 +675,12 @@ describe("ownership", () => {
         yield value;
       }
     }
+    // oxlint-disable-next-line eslint/no-extend-native -- Set のイテレーション回数を計測するため、prototype を差し替える
     Set.prototype[Symbol.iterator] = counted as unknown as typeof iterator;
     try {
       expect((await harness.waitForTask(top, context)).state.outcome.status).toBe("completed");
     } finally {
+      // oxlint-disable-next-line eslint/no-extend-native -- 計測用に差し替えた Set のイテレータを戻す
       Set.prototype[Symbol.iterator] = iterator;
     }
     expect(entries).toBeLessThan(count * 20);

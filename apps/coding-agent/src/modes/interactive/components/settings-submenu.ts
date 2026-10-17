@@ -253,7 +253,7 @@ export class SteppedSubmenu extends Container {
     );
   }
 
-  render(width: number): string[] {
+  override render(width: number): string[] {
     return this.activeComponent.render(width);
   }
 
@@ -261,7 +261,7 @@ export class SteppedSubmenu extends Container {
     this.activeComponent.handleInput?.(data);
   }
 
-  invalidate(): void {
+  override invalidate(): void {
     this.activeComponent.invalidate?.();
   }
 }

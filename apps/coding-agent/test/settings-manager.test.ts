@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS } from "../src/core/http-dispatcher.ts";
 import { type Settings, SettingsManager } from "../src/core/settings-manager.ts";
@@ -707,7 +707,7 @@ describe("SettingsManager", () => {
     it("applies +name and -name to the default selection", () => {
       expect(
         SettingsManager.inMemory({ defaultTools: ["+codemode", "-write"] }).getDefaultTools(),
-      ).toEqual(["read", "bash", "edit", "codemode"]);
+      ).toEqual(["read", "bash", "edit", "memory", "web_search", "web_fetch", "codemode"]);
       expect(
         SettingsManager.inMemory({ defaultTools: ["read", "+grep", "+read"] }).getDefaultTools(),
       ).toEqual(["read", "grep"]);
@@ -741,6 +741,9 @@ describe("SettingsManager", () => {
         "bash",
         "edit",
         "write",
+        "memory",
+        "web_search",
+        "web_fetch",
         "codemode",
       ]);
     });

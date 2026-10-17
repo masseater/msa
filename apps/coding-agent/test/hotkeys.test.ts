@@ -1,5 +1,5 @@
 import { setKeybindings } from "@msa/tui";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import type { ExtensionShortcut } from "../src/core/extensions/index.ts";
 import { KeybindingsManager } from "../src/core/keybindings.ts";

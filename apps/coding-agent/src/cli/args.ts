@@ -34,6 +34,7 @@ export interface Args {
   excludeTools?: string[];
   noTools?: boolean;
   noBuiltinTools?: boolean;
+  orchestrator?: boolean;
   extensions?: string[];
   noExtensions?: boolean;
   noMcp?: boolean;
@@ -149,6 +150,8 @@ export function parseArgs(args: string[]): Args {
       result.noTools = true;
     } else if (arg === "--no-builtin-tools" || arg === "-nbt") {
       result.noBuiltinTools = true;
+    } else if (arg === "--orchestrator") {
+      result.orchestrator = true;
     } else if ((arg === "--tools" || arg === "-t") && i + 1 < args.length) {
       const tools = args[++i]
         .split(",")
@@ -330,6 +333,7 @@ ${chalk.bold("Options:")}
                                  Only +name/-name entries add to or remove from the defaults
   --exclude-tools, -xt <tools>   Comma-separated denylist of tool names or patterns (*) to disable
                                  Applies to all tools, MCP tools included
+  --orchestrator                 Enable the tools that start and steer separate sessions
   --thinking <level>             Set thinking level: off, minimal, low, medium, high, xhigh, max
   --extension, -e <path>         Load an extension file or builtin:<name> (can be used multiple times)
   --no-extensions, -ne           Disable extension discovery and built-in extensions (explicit -e paths still work)
@@ -399,7 +403,7 @@ ${chalk.bold("Examples:")}
   ${APP_NAME} --models claude-sonnet,claude-haiku,gpt-4o
 
   # Limit to a specific provider with glob pattern
-  ${APP_NAME} --models "github-copilot/*"
+  ${APP_NAME} --models "openai/*"
 
   # Cycle models with fixed thinking levels
   ${APP_NAME} --models sonnet:high,haiku:low

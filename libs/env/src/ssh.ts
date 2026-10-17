@@ -342,10 +342,10 @@ function parseProbe(target: SshTarget, output: string): Probe {
   const lines = output.split(/\r?\n/);
   const start = lines.indexOf("MSA-ENV-PROBE");
   if (start === -1) throw new Error(`Unexpected answer from ${target.host}: ${output.trim()}`);
-  const [system = "", machine = "", os = "", home = "", tmpdir = "-", preload = "-"] = lines.slice(
+  const [system = "", machine = "", os = "", home = "", tmp = "-", preload = "-"] = lines.slice(
     start + 1,
   );
-  return { system, machine, os, home, tmpdir, preload };
+  return { system, machine, os, home, tmpdir: tmp, preload };
 }
 
 /** Termux works only with its own `TMPDIR` and with `termux-exec`, which makes `#!/usr/bin/env` shebangs work. */

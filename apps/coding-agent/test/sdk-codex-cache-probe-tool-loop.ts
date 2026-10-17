@@ -116,7 +116,6 @@ function parseArgs(argv: string[]): Args {
       case "--help": {
         printHelp();
         process.exit(0);
-        return { turns, sessionPath, transport, maxTokens };
       }
       default:
         throw new Error(`Unknown argument: ${arg}`);

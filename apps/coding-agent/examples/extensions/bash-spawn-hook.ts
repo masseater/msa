@@ -14,9 +14,9 @@ export default function (msa: ExtensionAPI) {
   const cwd = process.cwd();
 
   const bashTool = createBashTool(cwd, {
-    spawnHook: ({ command, cwd, env }) => ({
+    spawnHook: ({ command, cwd: spawnCwd, env }) => ({
       command: `source ~/.profile\n${command}`,
-      cwd,
+      cwd: spawnCwd,
       env: { ...env, MSA_SPAWN_HOOK: "1" },
     }),
   });

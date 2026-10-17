@@ -151,9 +151,11 @@ export default function (msa: ExtensionAPI) {
         };
 
         doGenerate()
+          // oxlint-disable-next-line promise/no-callback-in-promise -- ローダーの完了コールバックを promise の完了で呼ぶブリッジ
           .then(done)
           .catch((err) => {
             console.error("Handoff generation failed:", err);
+            // oxlint-disable-next-line promise/no-callback-in-promise -- ローダーの完了コールバックを promise の完了で呼ぶブリッジ
             done(null);
           });
 

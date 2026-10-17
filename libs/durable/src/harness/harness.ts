@@ -224,7 +224,7 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
       submissions: this.#submissions,
       views: new ConversationViews(this, storage),
       now,
-      create: (target, createOptions, context) => this.#create(target, createOptions, context),
+      create: (target, createOptions, ctx) => this.#create(target, createOptions, ctx),
     };
   }
 

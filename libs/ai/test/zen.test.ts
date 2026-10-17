@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { complete } from "../src/compat.ts";
 import { MODELS } from "../src/models.generated.ts";

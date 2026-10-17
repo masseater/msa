@@ -1,4 +1,5 @@
 import type { InlineExtension } from "../core/extensions/types.ts";
+import accountsExtension from "./accounts/index.ts";
 import cliAgentsExtension from "./cli-agents/index.ts";
 import codemodeExtension from "./codemode/index.ts";
 import llamaExtension from "./llama/index.ts";
@@ -8,6 +9,7 @@ import toolSearchExtension from "./tool-search/index.ts";
 export const builtInExtensions: InlineExtension[] = [
   { name: "llama.cpp", factory: llamaExtension, builtin: true },
   { name: "cli-agents", factory: cliAgentsExtension, builtin: true },
+  { name: "accounts", factory: accountsExtension, builtin: true },
   // Replaceable: an extension that registers `codemode`, `tool_search`, or `/mcp` (such as a third-party
   // MCP extension) takes over instead of running alongside the built-in one.
   { name: "codemode", factory: codemodeExtension, replaceable: true, builtin: true },

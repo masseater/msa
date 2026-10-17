@@ -1,6 +1,6 @@
 import { readFileSync } from "fs";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 describe("export HTML skill block rendering", () => {
   const templateJs = readFileSync(

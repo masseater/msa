@@ -1,6 +1,6 @@
 import { arch, platform, release } from "node:os";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const googleGenAiMock = vi.hoisted(() => ({
   constructorCalls: [] as Array<Record<string, unknown>>,

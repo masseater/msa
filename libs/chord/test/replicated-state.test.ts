@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { BACKGROUND_CONTEXT } from "../src/context/index.ts";
 import type { Draft, Op } from "../src/delta/index.ts";

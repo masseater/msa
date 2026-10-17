@@ -1,4 +1,4 @@
-import { vi } from "vitest";
+import { vi } from "vite-plus/test";
 
 /** Enable network code paths for tests that replace external I/O with local fixtures or mocks. */
 export function allowNetwork(): void {

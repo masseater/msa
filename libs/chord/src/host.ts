@@ -391,8 +391,8 @@ export class HostImpl implements Host, HostCore {
     try {
       facet.setup(
         this.facetApi(
-          ((type, factory, options = {}) => {
-            const service = makeService(type, factory, options, facet.name);
+          ((type, factory, setupOptions = {}) => {
+            const service = makeService(type, factory, setupOptions, facet.name);
             this.serveInto(this.current.services, service);
             added.push(service);
           }) satisfies AnyServe as Serve,
@@ -853,19 +853,19 @@ export class HostImpl implements Host, HostCore {
     const byRegistry = new Map<string, Map<string, { value: unknown; object: ObjectImpl }>>();
     for (const [object, decls] of entries) {
       for (const { registry, key, value } of decls.registrations.values()) {
-        let entries = byRegistry.get(registry.name);
-        if (entries === undefined) {
-          entries = new Map();
-          byRegistry.set(registry.name, entries);
+        let registryEntries = byRegistry.get(registry.name);
+        if (registryEntries === undefined) {
+          registryEntries = new Map();
+          byRegistry.set(registry.name, registryEntries);
         }
-        const existing = entries.get(key);
+        const existing = registryEntries.get(key);
         if (existing !== undefined && existing.object !== object && registry.conflict === "error") {
           throw invalid(
             "registry_conflict",
             `${registry.name}: ${key} registered by ${existing.object.address} and ${object.address}`,
           );
         }
-        entries.set(key, { value, object });
+        registryEntries.set(key, { value, object });
         let order = this.#order.get(registry.name);
         if (order === undefined) {
           order = new Map();
@@ -875,9 +875,9 @@ export class HostImpl implements Host, HostCore {
       }
     }
     const tables = new Map<string, RegistryTable<unknown>>();
-    for (const [name, entries] of byRegistry) {
+    for (const [name, tableEntries] of byRegistry) {
       const order = this.#order.get(name)!;
-      const sorted = [...entries].sort(([a], [b]) => order.get(a)! - order.get(b)!);
+      const sorted = [...tableEntries].sort(([a], [b]) => order.get(a)! - order.get(b)!);
       tables.set(name, new Map(sorted.map(([key, entry]) => [key, entry.value])));
     }
     return tables;

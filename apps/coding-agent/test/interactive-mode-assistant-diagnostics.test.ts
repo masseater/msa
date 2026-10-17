@@ -1,6 +1,6 @@
 import type { AssistantMessage } from "@msa/ai";
 import { Container } from "@msa/tui";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";

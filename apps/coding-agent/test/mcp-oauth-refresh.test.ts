@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { type OAuthChallenge, OAuthIssuerMismatchError } from "@msa/mcp/oauth";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { InMemoryAuthStorageBackend } from "../src/core/auth-storage.ts";
 import {

@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { complete, getModel } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions, Tool } from "../src/types.ts";
@@ -15,12 +15,8 @@ import {
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([
-  resolveApiKey("anthropic"),
-  resolveApiKey("github-copilot"),
-  resolveApiKey("openai-codex"),
-]);
-const [anthropicOAuthToken, githubCopilotToken, openaiCodexToken] = oauthTokens;
+const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
+const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
 
 // Simple calculate tool
 const calculateSchema = Type.Object({
@@ -446,26 +442,6 @@ describe("Tool Call Without Result Tests", () => {
       { retry: 3, timeout: 30000 },
       async () => {
         await testToolCallWithoutResult(model, { apiKey: anthropicOAuthToken });
-      },
-    );
-  });
-
-  describe("GitHub Copilot Provider", () => {
-    it.skipIf(!githubCopilotToken)(
-      "claude-haiku-4.5 - should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const model = getModel("github-copilot", "claude-haiku-4.5");
-        await testToolCallWithoutResult(model, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)(
-      "claude-sonnet-4 - should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const model = getModel("github-copilot", "claude-sonnet-4.6");
-        await testToolCallWithoutResult(model, { apiKey: githubCopilotToken });
       },
     );
   });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { cloudflareStreams } from "../src/providers/cloudflare-stream.ts";
 import type { Api, Model } from "../src/types.ts";

@@ -223,7 +223,7 @@ export class ReadOnlyAuthStorage implements CredentialStore {
         this.data = {};
         return this.data;
       }
-      throw new Error(`Failed to read auth.json: ${toErrorMessage(error)}`);
+      throw new Error(`Failed to read auth.json: ${toErrorMessage(error)}`, { cause: error });
     }
 
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {

@@ -6,7 +6,7 @@ import {
   type ToolResultMessage,
   type Usage,
 } from "@msa/ai/compat";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";

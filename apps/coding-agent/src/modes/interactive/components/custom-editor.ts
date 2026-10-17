@@ -97,7 +97,7 @@ export class CustomEditor extends Editor {
     this.actionHandlers.set(action, handler);
   }
 
-  handleInput(data: string): void {
+  override handleInput(data: string): void {
     // Check extension-registered shortcuts first
     if (this.onExtensionShortcut?.(data)) {
       return;

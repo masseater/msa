@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { getOrThrow } from "@msa/durable/env";
 import { registerEnvConformance } from "@msa/durable/testing";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { type Connection, nodePlatform } from "../src/connection.ts";
 import { RemoteExecutionEnv } from "../src/remote-env.ts";

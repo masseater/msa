@@ -89,6 +89,25 @@ See [Compaction Reference](compaction.md) for trigger, summarization, and valida
 | `branchSummary.reserveTokens` | number  | `16384` | Tokens reserved when summarizing branch history.          |
 | `branchSummary.skipPrompt`    | boolean | `false` | Skip the branch-summary prompt and default to no summary. |
 
+## Memory
+
+| Setting                           | Type    | Default                          | Description                                                                    |
+| --------------------------------- | ------- | -------------------------------- | ------------------------------------------------------------------------------ |
+| `memory.enabled`                  | boolean | `true`                           | Register the `memory` tool, prompt recall, and `/memory`.                      |
+| `memory.database`                 | string  | `<agent dir>/memory.db`          | SQLite file holding memories. Relative paths resolve from the agent directory. |
+| `memory.embedding.enabled`        | boolean | `true`                           | Compute embeddings for meaning-based search.                                   |
+| `memory.embedding.baseUrl`        | string  | `http://127.0.0.1:11434/v1`      | OpenAI-compatible base URL; `/embeddings` is appended.                         |
+| `memory.embedding.model`          | string  | `embeddinggemma-2`               | Embedding model at that endpoint.                                              |
+| `memory.embedding.queryPrefix`    | string  | EmbeddingGemma's task prefix     | Prepended to search queries; clear it for models without task prefixes.        |
+| `memory.embedding.documentPrefix` | string  | EmbeddingGemma's document prefix | Prepended to memory text before embedding.                                     |
+| `memory.embedding.apiKeyEnv`      | string  | None                             | Environment variable holding the API key, for endpoints that need one.         |
+| `memory.embedding.timeoutMs`      | number  | `5000`                           | Embedding request timeout in milliseconds.                                     |
+| `memory.recall.enabled`           | boolean | `true`                           | Search memory on every user prompt and add matches to the run.                 |
+| `memory.recall.limit`             | number  | `5`                              | Maximum memories added to a run.                                               |
+| `memory.recall.minScore`          | number  | `0.72`                           | Minimum relevance for a memory to be recalled; tune it with the model.         |
+
+See [Long-Term Memory](memory.md) for scopes, embeddings, and the `/memory` commands.
+
 ## Terminal and display
 
 | Setting                         | Type                                     | Default        | Description                                                                                                                                                                                                                                                                                           |

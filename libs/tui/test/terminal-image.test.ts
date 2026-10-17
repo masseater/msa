@@ -89,7 +89,7 @@ describe("isImageLine", () => {
     it("should detect iTerm2 image escape sequence in middle of long line", () => {
       // Simulate a very long line with image data in the middle
       const longLineWithImage =
-        "Text before image..." + "\x1b]1337;File=inline=1:verylongbase64data==" + "...text after";
+        "Text before image...\x1b]1337;File=inline=1:verylongbase64data==...text after";
       assert.strictEqual(isImageLine(longLineWithImage), true);
     });
 

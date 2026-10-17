@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { completeSimple, getEnvApiKey, streamSimple } from "../src/compat.ts";
 import type { AssistantMessage, Context, Model } from "../src/types.ts";
@@ -115,10 +115,11 @@ describe.skipIf(!apiKey)("Xiaomi Token Plan AMS Anthropic empty thinking signatu
       const replayedText = (
         assistantPayload!.content as Array<{ type: string; text?: string }>
       ).filter((block) => block.type === "text");
+      const firstThinking = thinkingBlocks.at(0)?.thinking;
       expect(replayedThinking).toEqual([
-        { type: "thinking", thinking: thinkingBlocks[0].thinking, signature: "" },
+        { type: "thinking", thinking: firstThinking, signature: "" },
       ]);
-      expect(replayedText.some((block) => block.text === thinkingBlocks[0].thinking)).toBe(false);
+      expect(replayedText.some((block) => block.text === firstThinking)).toBe(false);
     },
   );
 });

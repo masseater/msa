@@ -373,8 +373,8 @@ export default function questionnaire(msa: ExtensionAPI) {
               addWrappedWithPrefix(" ", theme.fg("success", "Press Enter to submit"));
             } else {
               const missing = questions
-                .filter((q) => !answers.has(q.id))
-                .map((q) => q.label)
+                .filter((question) => !answers.has(question.id))
+                .map((question) => question.label)
                 .join(", ");
               addWrappedWithPrefix(" ", theme.fg("warning", `Unanswered: ${missing}`));
             }

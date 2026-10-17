@@ -2,7 +2,7 @@ import { arch, platform, release } from "node:os";
 
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { Type } from "typebox";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamAzureOpenAIResponses } from "../src/api/azure-openai-responses.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";

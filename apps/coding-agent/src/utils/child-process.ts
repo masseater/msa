@@ -10,7 +10,7 @@ import {
   type StdioNull,
   type StdioPipe,
 } from "node:child_process";
-import type { Readable } from "node:stream";
+import type { Readable, Writable } from "node:stream";
 
 import crossSpawn from "cross-spawn";
 
@@ -21,6 +21,11 @@ export function spawnProcess(
   args: string[],
   options: SpawnOptionsWithStdioTuple<StdioNull, StdioPipe, StdioPipe>,
 ): ChildProcessByStdio<null, Readable, Readable>;
+export function spawnProcess(
+  command: string,
+  args: string[],
+  options: SpawnOptionsWithStdioTuple<StdioPipe, StdioPipe, StdioPipe>,
+): ChildProcessByStdio<Writable, Readable, Readable>;
 export function spawnProcess(command: string, args: string[], options: SpawnOptions): ChildProcess;
 export function spawnProcess(command: string, args: string[], options: SpawnOptions): ChildProcess {
   return process.platform === "win32"

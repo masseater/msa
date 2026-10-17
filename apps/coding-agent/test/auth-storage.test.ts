@@ -12,7 +12,7 @@ import { join } from "node:path";
 
 import { type CredentialStore, createModels, type Provider } from "@msa/ai";
 import lockfile from "proper-lockfile";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage, FileAuthStorageBackend } from "../src/core/auth-storage.ts";
 

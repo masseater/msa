@@ -1,6 +1,6 @@
 import { arch, platform, release } from "node:os";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import type { OpenAIResponsesOptions } from "../src/api/openai-responses.ts";
