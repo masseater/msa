@@ -1,312 +1,202 @@
-import { toErrorMessage } from "../../utils/errors.ts";
-import { getProviderEnvValue } from "../../utils/provider-env.ts";
-import { sleep } from "../../utils/sleep.ts";
+import { Effect } from "effect";
+
+import { httpRequest } from "../../utils/http.ts";
+import { encodeJson } from "../../utils/json-codec.ts";
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
-import { pollOAuthDeviceCodeFlow } from "./device-code.ts";
+import { type OAuthDeviceCodePollResult, pollOAuthDeviceCodeFlow } from "./device-code.ts";
+import { refreshKimiToken } from "./kimi-refresh.ts";
+import {
+  CLIENT_ID,
+  DEFAULT_POLL_INTERVAL_SECONDS,
+  DEVICE_CODE_TIMEOUT_SECONDS,
+  getOauthHost,
+  parseTokenResponse,
+  type TokenResponse,
+  toCredential,
+  tokenUrl,
+} from "./kimi-shared.ts";
+import {
+  formHeaders,
+  positiveNumber,
+  readJson,
+  readText,
+  requestSignal,
+  trustedHttpUrl,
+} from "./response-json.ts";
 
-const CLIENT_ID = "17e5f671-d194-4dfb-9706-5516cb48c098";
-const DEFAULT_OAUTH_HOST = "https://auth.kimi.com";
-const DEVICE_CODE_TIMEOUT_SECONDS = 15 * 60;
-const DEFAULT_POLL_INTERVAL_SECONDS = 5;
-const REQUEST_TIMEOUT_MS = 30 * 1000;
-const REFRESH_MAX_RETRIES = 3;
-
-type DeviceAuthorization = {
-  deviceCode: string;
-  userCode: string;
-  verificationUri: string;
-  verificationUriComplete: string;
-  intervalSeconds: number;
-  expiresInSeconds: number;
-};
-
-type TokenResponse = {
-  access: string;
-  refresh: string;
-  expires: number;
-};
-
-function getOauthHost(): string {
-  const override =
-    getProviderEnvValue("KIMI_CODE_OAUTH_HOST") || getProviderEnvValue("KIMI_OAUTH_HOST");
-  return (override || DEFAULT_OAUTH_HOST).replace(/\/+$/u, "");
+interface DeviceAuthorization {
+  readonly deviceCode: string;
+  readonly userCode: string;
+  readonly verificationUri: string;
+  readonly verificationUriComplete: string;
+  readonly intervalSeconds: number;
+  readonly expiresInSeconds: number;
 }
 
-function requestSignal(signal: AbortSignal): AbortSignal {
-  return AbortSignal.any([AbortSignal.timeout(REQUEST_TIMEOUT_MS), signal]);
-}
-
-function formUrlEncode(fields: Record<string, string>): string {
-  return new URLSearchParams(fields).toString();
-}
-
-async function readJson(response: Response): Promise<Record<string, unknown> | null> {
-  try {
-    const json = await response.json();
-    return json && typeof json === "object" ? (json as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
-
-function trustedHttpUrl(value: unknown): string | null {
-  if (typeof value !== "string" || value === "") return null;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-    return url.href;
-  } catch {
-    return null;
-  }
-}
-
-async function startDeviceAuthorization(
-  oauthHost: string,
-  signal: AbortSignal,
-): Promise<DeviceAuthorization> {
-  const response = await fetch(`${oauthHost}/api/oauth/device_authorization`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-    body: formUrlEncode({ client_id: CLIENT_ID }),
-    signal: requestSignal(signal),
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(
-      `Kimi Code device authorization failed with status ${response.status}${text === "" ? "" : `: ${text}`}`,
-    );
-  }
-
-  const json = await readJson(response);
-  const deviceCode = json?.["device_code"];
-  const userCode = json?.["user_code"];
-  const verificationUri = json?.["verification_uri"];
-  const verificationUriComplete = json?.["verification_uri_complete"];
-  if (
-    typeof deviceCode !== "string" ||
-    typeof userCode !== "string" ||
-    typeof verificationUri !== "string" ||
-    typeof verificationUriComplete !== "string" ||
-    !trustedHttpUrl(verificationUriComplete) ||
-    !trustedHttpUrl(verificationUri)
-  ) {
-    throw new Error(`Invalid Kimi Code device authorization response: ${JSON.stringify(json)}`);
-  }
-
-  const interval = json?.["interval"];
-  const expiresIn = json?.["expires_in"];
-  return {
-    deviceCode,
-    userCode,
-    verificationUri,
-    verificationUriComplete,
-    intervalSeconds:
-      typeof interval === "number" && Number.isFinite(interval) && interval > 0
-        ? interval
-        : DEFAULT_POLL_INTERVAL_SECONDS,
-    expiresInSeconds:
-      typeof expiresIn === "number" && Number.isFinite(expiresIn) && expiresIn > 0
-        ? expiresIn
-        : DEVICE_CODE_TIMEOUT_SECONDS,
-  };
-}
-
-function parseTokenResponse(
+const readDeviceAuthorization = (
   json: Record<string, unknown> | null,
-  operation: string,
-): TokenResponse {
-  const accessToken = json?.["access_token"];
-  const refreshValue = json?.["refresh_token"];
-  const expiresIn = json?.["expires_in"];
-  if (
-    typeof accessToken !== "string" ||
-    accessToken === "" ||
-    typeof refreshValue !== "string" ||
-    refreshValue === "" ||
-    typeof expiresIn !== "number" ||
-    !Number.isFinite(expiresIn) ||
-    expiresIn <= 0
-  ) {
-    throw new Error(
-      `Kimi Code token ${operation} response missing fields: ${JSON.stringify(json)}`,
-    );
-  }
-  return {
-    access: accessToken,
-    refresh: refreshValue,
-    expires: Date.now() + expiresIn * 1000,
-  };
-}
-
-function pollForToken(
-  oauthHost: string,
-  device: DeviceAuthorization,
-  signal: AbortSignal,
-): Promise<TokenResponse> {
-  return pollOAuthDeviceCodeFlow<TokenResponse>({
-    intervalSeconds: device.intervalSeconds,
-    expiresInSeconds: device.expiresInSeconds,
-    waitBeforeFirstPoll: true,
-    signal,
-    poll: async () => {
-      const response = await fetch(`${oauthHost}/api/oauth/token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json",
-        },
-        body: formUrlEncode({
-          client_id: CLIENT_ID,
-          device_code: device.deviceCode,
-          grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-        }),
-        signal: requestSignal(signal),
-      });
-
-      if (response.status >= 500) {
-        const text = await response.text().catch(() => "");
-        return {
-          status: "failed",
-          message: `Kimi Code device token request failed with status ${response.status}${text === "" ? "" : `: ${text}`}`,
-        };
-      }
-
-      const json = await readJson(response);
-      if (response.ok && typeof json?.["access_token"] === "string") {
-        try {
-          return { status: "complete", value: parseTokenResponse(json, "poll") };
-        } catch (error) {
-          return {
-            status: "failed",
-            message: toErrorMessage(error),
-          };
-        }
-      }
-
-      const error = json?.["error"];
-      const description =
-        typeof json?.["error_description"] === "string" ? `: ${json["error_description"]}` : "";
-      if (error === "authorization_pending") {
-        return { status: "pending" };
-      }
-      if (error === "slow_down") {
-        const interval = json?.["interval"];
-        return {
-          status: "slow_down",
-          intervalSeconds: typeof interval === "number" && interval > 0 ? interval : undefined,
-        };
-      }
-      if (error === "expired_token") {
-        return {
-          status: "failed",
-          message: "Kimi Code device authorization expired. Please restart login.",
-        };
-      }
-      if (error === "access_denied") {
-        return { status: "failed", message: "Kimi Code login was denied." };
-      }
-      return {
-        status: "failed",
-        message: `Kimi Code device token request failed (status ${response.status})${typeof error === "string" ? `: ${error}${description}` : ""}`,
-      };
-    },
+): Effect.Effect<DeviceAuthorization> =>
+  Effect.gen(function* () {
+    const deviceCode = json?.["device_code"];
+    const userCode = json?.["user_code"];
+    const verificationUri = json?.["verification_uri"];
+    const verificationUriComplete = json?.["verification_uri_complete"];
+    if (
+      typeof deviceCode !== "string" ||
+      typeof userCode !== "string" ||
+      typeof verificationUri !== "string" ||
+      typeof verificationUriComplete !== "string" ||
+      trustedHttpUrl(verificationUri) === null ||
+      trustedHttpUrl(verificationUriComplete) === null
+    ) {
+      return yield* Effect.die(
+        new Error(`Invalid Kimi Code device authorization response: ${yield* encodeJson(json)}`),
+      );
+    }
+    return {
+      deviceCode,
+      userCode,
+      verificationUri,
+      verificationUriComplete,
+      intervalSeconds: positiveNumber(json?.["interval"]) ?? DEFAULT_POLL_INTERVAL_SECONDS,
+      expiresInSeconds: positiveNumber(json?.["expires_in"]) ?? DEVICE_CODE_TIMEOUT_SECONDS,
+    };
   });
-}
 
-function isRetryableRefreshFailure(response: Response): boolean {
-  return response.status === 429 || response.status >= 500;
-}
-
-async function refreshToken(
+const startDeviceAuthorization = (
   oauthHost: string,
-  refreshTokenValue: string,
   signal: AbortSignal,
-): Promise<TokenResponse> {
-  let lastError: Error | undefined;
-  for (let attempt = 0; attempt <= REFRESH_MAX_RETRIES; attempt++) {
-    if (attempt > 0) {
-      await sleep(1000 * 2 ** (attempt - 1), signal);
-    }
-    if (signal.aborted) {
-      throw new Error("Kimi Code token refresh aborted");
-    }
+): Effect.Effect<DeviceAuthorization> =>
+  Effect.gen(function* () {
+    const reply = yield* httpRequest({
+      url: `${oauthHost}/api/oauth/device_authorization`,
+      method: "POST",
+      headers: formHeaders,
+      body: new URLSearchParams({ client_id: CLIENT_ID }).toString(),
+      signal: requestSignal(signal),
+    });
 
-    let response: Response;
-    try {
-      response = await fetch(`${oauthHost}/api/oauth/token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json",
-        },
-        body: formUrlEncode({
-          client_id: CLIENT_ID,
-          grant_type: "refresh_token",
-          refresh_token: refreshTokenValue,
-        }),
-        signal: requestSignal(signal),
-      });
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      continue;
-    }
-
-    const json = await readJson(response);
-    if (response.ok) {
-      return parseTokenResponse(json, "refresh");
-    }
-
-    if (response.status === 401 || response.status === 403 || json?.["error"] === "invalid_grant") {
-      const description =
-        typeof json?.["error_description"] === "string" ? `: ${json["error_description"]}` : "";
-      throw new Error(
-        `Kimi Code token refresh unauthorized (status ${response.status})${description}`,
+    if (!reply.ok) {
+      const text = yield* readText(reply);
+      return yield* Effect.die(
+        new Error(
+          `Kimi Code device authorization failed with status ${reply.status}${text === "" ? "" : `: ${text}`}`,
+        ),
       );
     }
 
-    if (isRetryableRefreshFailure(response) && attempt < REFRESH_MAX_RETRIES) {
-      lastError = new Error(`Kimi Code token refresh failed with status ${response.status}`);
-      continue;
+    return yield* readDeviceAuthorization(yield* readJson(reply));
+  });
+
+const tokenFailure = (
+  reply: { readonly status: number },
+  json: Record<string, unknown> | null,
+): OAuthDeviceCodePollResult<TokenResponse> => {
+  const error = json?.["error"];
+  const errorDescription = json?.["error_description"];
+  const description = typeof errorDescription === "string" ? `: ${errorDescription}` : "";
+  switch (error) {
+    case "authorization_pending":
+      return { status: "pending" };
+    case "slow_down":
+      return { status: "slow_down", intervalSeconds: positiveNumber(json?.["interval"]) };
+    case "expired_token":
+      return {
+        status: "failed",
+        message: "Kimi Code device authorization expired. Please restart login.",
+      };
+    case "access_denied":
+      return { status: "failed", message: "Kimi Code login was denied." };
+    default:
+      return {
+        status: "failed",
+        message: `Kimi Code device token request failed (status ${reply.status})${typeof error === "string" ? `: ${error}${description}` : ""}`,
+      };
+  }
+};
+
+const pollTokenOnce = (
+  oauthHost: string,
+  device: DeviceAuthorization,
+  signal: AbortSignal,
+): Effect.Effect<OAuthDeviceCodePollResult<TokenResponse>> =>
+  Effect.gen(function* () {
+    const reply = yield* httpRequest({
+      url: tokenUrl(oauthHost),
+      method: "POST",
+      headers: formHeaders,
+      body: new URLSearchParams({
+        client_id: CLIENT_ID,
+        device_code: device.deviceCode,
+        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      }).toString(),
+      signal: requestSignal(signal),
+    });
+
+    if (reply.status >= 500) {
+      const text = yield* readText(reply);
+      return {
+        status: "failed",
+        message: `Kimi Code device token request failed with status ${reply.status}${text === "" ? "" : `: ${text}`}`,
+      };
     }
 
-    const text = JSON.stringify(json);
-    throw new Error(
-      `Kimi Code token refresh failed with status ${response.status}${text === "" ? "" : `: ${text}`}`,
-    );
-  }
+    const json = yield* readJson(reply);
+    if (reply.ok && typeof json?.["access_token"] === "string") {
+      return yield* parseTokenResponse({ json, operation: "poll" }).pipe(
+        Effect.map((value): OAuthDeviceCodePollResult<TokenResponse> => ({
+          status: "complete",
+          value,
+        })),
+        Effect.catchDefect((error) =>
+          Effect.succeed<OAuthDeviceCodePollResult<TokenResponse>>({
+            status: "failed",
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        ),
+      );
+    }
 
-  throw lastError ?? new Error("Kimi Code token refresh failed");
-}
-
-async function loginKimiCoding(interaction: ProviderAuthInteraction): Promise<OAuthCredential> {
-  const oauthHost = getOauthHost();
-  const device = await startDeviceAuthorization(oauthHost, interaction.signal);
-  interaction.notify({
-    type: "device_code",
-    userCode: device.userCode,
-    verificationUri: device.verificationUriComplete,
-    intervalSeconds: device.intervalSeconds,
-    expiresInSeconds: device.expiresInSeconds,
+    return tokenFailure(reply, json);
   });
-  const token = await pollForToken(oauthHost, device, interaction.signal);
-  return { type: "oauth", access: token.access, refresh: token.refresh, expires: token.expires };
-}
+
+const loginKimiCoding = (interaction: ProviderAuthInteraction): Effect.Effect<OAuthCredential> =>
+  Effect.gen(function* () {
+    const runPoll = Effect.runPromiseWith(yield* Effect.context<never>());
+    const oauthHost = getOauthHost();
+    const device = yield* startDeviceAuthorization(oauthHost, interaction.signal);
+    interaction.notify({
+      type: "device_code",
+      userCode: device.userCode,
+      verificationUri: device.verificationUriComplete,
+      intervalSeconds: device.intervalSeconds,
+      expiresInSeconds: device.expiresInSeconds,
+    });
+    const token = yield* Effect.promise(() =>
+      pollOAuthDeviceCodeFlow<TokenResponse>({
+        intervalSeconds: device.intervalSeconds,
+        expiresInSeconds: device.expiresInSeconds,
+        waitBeforeFirstPoll: true,
+        signal: interaction.signal,
+        poll: () => runPoll(pollTokenOnce(oauthHost, device, interaction.signal)),
+      }),
+    );
+    return toCredential(token);
+  });
 
 export const kimiCodingOAuth: OAuthAuth = {
   name: "Kimi Code (subscription)",
   isSubscription: true,
   loginLabel: "Sign in with Kimi Code",
 
-  login: loginKimiCoding,
+  login: (interaction) => Effect.runPromise(loginKimiCoding(interaction)),
 
-  refresh: async (credential, signal) => {
-    const token = await refreshToken(getOauthHost(), credential.refresh, signal);
-    return { type: "oauth", access: token.access, refresh: token.refresh, expires: token.expires };
-  },
+  refresh: (credential, signal) =>
+    Effect.runPromise(
+      refreshKimiToken({ oauthHost: getOauthHost(), refresh: credential.refresh, signal }).pipe(
+        Effect.map(toCredential),
+      ),
+    ),
 
   toAuth(credential) {
     return Promise.resolve({ headers: { Authorization: `Bearer ${credential.access}` } });

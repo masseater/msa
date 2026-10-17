@@ -78,8 +78,8 @@ describe("Kimi Code OAuth", () => {
             if (url === `${OAUTH_HOST}/api/oauth/device_authorization`) {
               expect(init?.method).toBe("POST");
               expect(init?.headers).toMatchObject({
-                "Content-Type": "application/x-www-form-urlencoded",
-                Accept: "application/json",
+                "content-type": "application/x-www-form-urlencoded",
+                accept: "application/json",
               });
               expect(new URLSearchParams(String(init?.body)).get("client_id")).toBe(CLIENT_ID);
               return Promise.resolve(deviceAuthorizationResponse());

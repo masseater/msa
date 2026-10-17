@@ -1,9 +1,17 @@
 import { Clock, Effect } from "effect";
 
-import { type HttpReply, httpRequest } from "../../utils/http.ts";
+import { httpRequest } from "../../utils/http.ts";
 import { encodeJson } from "../../utils/json-codec.ts";
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import { pollOAuthDeviceCodeFlow } from "./device-code.ts";
+import {
+  errorDetail,
+  formHeaders,
+  positiveNumber,
+  readJson,
+  requestSignal,
+  trustedHttpUrl,
+} from "./response-json.ts";
 
 const CLIENT_ID = "1031625952748946";
 const AUTH_HOST = "https://auth.meta.com";
@@ -11,7 +19,6 @@ const DEVICE_AUTHORIZATION_URL = `${AUTH_HOST}/oidc/device/authorization/`;
 const DEVICE_TOKEN_URL = `${AUTH_HOST}/oidc/device/token/`;
 const API_KEY_MINT_URL = "https://api.meta.ai/muse-code/key";
 const API_KEY_LIFETIME_MS = 24 * 60 * 60 * 1000;
-const REQUEST_TIMEOUT_MS = 30 * 1000;
 
 type DeviceAuthorization = {
   deviceCode: string;
@@ -20,44 +27,6 @@ type DeviceAuthorization = {
   intervalSeconds?: number | undefined;
   expiresInSeconds?: number | undefined;
 };
-
-const requestSignal = (signal: AbortSignal): AbortSignal =>
-  AbortSignal.any([AbortSignal.timeout(REQUEST_TIMEOUT_MS), signal]);
-
-const readJson = (reply: HttpReply): Effect.Effect<Record<string, unknown> | null> =>
-  reply.json.pipe(
-    Effect.map((json) =>
-      json !== null && typeof json === "object" ? (json as Record<string, unknown>) : null,
-    ),
-    Effect.catchDefect(() => Effect.succeed(null)),
-  );
-
-const errorDetail = (json: Record<string, unknown> | null): string => {
-  for (const key of ["error_description", "detail", "message", "error"]) {
-    const value = json?.[key];
-    if (typeof value === "string" && value.trim() !== "") return `: ${value.trim()}`;
-  }
-  return "";
-};
-
-const trustedHttpUrl = (value: unknown): string | null => {
-  if (typeof value !== "string" || value === "") return null;
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-    return url.href;
-  } catch {
-    return null;
-  }
-};
-
-const positiveNumber = (value: unknown): number | undefined =>
-  typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
-
-const formHeaders = {
-  "Content-Type": "application/x-www-form-urlencoded",
-  Accept: "application/json",
-} as const;
 
 const startDeviceAuthorization = (signal: AbortSignal): Effect.Effect<DeviceAuthorization> =>
   Effect.gen(function* () {

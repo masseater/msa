@@ -19,11 +19,8 @@ export const randomBytes = (size: number): Uint8Array =>
 export const digest: {
   (data: Uint8Array): (algorithm: DigestAlgorithm) => Effect.Effect<Uint8Array>;
   (algorithm: DigestAlgorithm, data: Uint8Array): Effect.Effect<Uint8Array>;
-} = Function.dual(
-  2,
-  (algorithm: DigestAlgorithm, data: Uint8Array): Effect.Effect<Uint8Array> =>
-    Effect.orDie(webCrypto.digest(algorithm, data)),
+} = Function.dual(2, (algorithm: DigestAlgorithm, data: Uint8Array): Effect.Effect<Uint8Array> =>
+  Effect.orDie(webCrypto.digest(algorithm, data)),
 );
 
 export const randomUuid = (): string => Effect.runSync(Effect.orDie(webCrypto.randomUUIDv4));
-
