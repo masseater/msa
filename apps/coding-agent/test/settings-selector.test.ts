@@ -33,7 +33,6 @@ describe("SettingsSelectorComponent", () => {
       fullscreenScrollbar: "auto",
       fullscreenCopyOnSelect: true,
       fullscreenWheelScrollLines: 7,
-      warnings: {},
       defaultModel: "not set",
       availableDefaultModels: [],
       availableThinkingLevels: [],
@@ -68,7 +67,6 @@ describe("SettingsSelectorComponent", () => {
     const onSessionShareDestinationChange = vi.fn();
     const config = {
       sessionShareDestination: "auto",
-      warnings: {},
       defaultModel: "not set",
       availableDefaultModels: [],
       availableThinkingLevels: [],
@@ -94,7 +92,6 @@ describe("SettingsSelectorComponent", () => {
       currentTheme: "dark",
       terminalTheme: "dark",
       availableThemes: ["system", "dark", "light"],
-      warnings: {},
     } as unknown as SettingsConfig;
     const callbacks = {
       onThemePreview: vi.fn(),
@@ -124,7 +121,6 @@ describe("SettingsSelectorComponent", () => {
       currentTheme: "light/dark",
       terminalTheme: "dark",
       availableThemes: ["dark", "light", "other"],
-      warnings: {},
     } as unknown as SettingsConfig;
     const callbacks = {
       onThemePreview: vi.fn(),

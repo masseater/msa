@@ -58,7 +58,6 @@ describe("LoginFlow", () => {
       showWarning: () => {},
       showError,
       refreshAuthState: () => {},
-      maybeWarnAboutAnthropicSubscriptionAuth: async () => {},
       reload: async () => {},
     });
 
