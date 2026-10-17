@@ -61,7 +61,9 @@ export const failSession: Dual2<SessionState, unknown, void> = Function.dual(
     if (state.failure !== undefined) return;
     state.failure = { error };
     state.failed.reject(new SessionFailed(error));
-    closeSession(state, BACKGROUND_CONTEXT).catch(() => {});
+    Effect.runFork(
+      Effect.ignoreCause(Effect.promise(() => closeSession(state, BACKGROUND_CONTEXT))),
+    );
     state.hooks.report(error);
   },
 );
