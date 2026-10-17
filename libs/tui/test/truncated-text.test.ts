@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { Chalk } from "chalk";
 
+import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { TruncatedText } from "../src/components/truncated-text.ts";
 import { visibleWidth } from "../src/utils.ts";
 
@@ -46,7 +47,7 @@ describe("TruncatedText component", () => {
 
     assert.strictEqual(visibleWidth(line), 30);
 
-    const stripped = line.replace(/\x1b\[[0-9;]*m/gu, "");
+    const stripped = stripStyleSequences(line);
     assert.ok(stripped.includes("..."));
   });
 
@@ -89,7 +90,7 @@ describe("TruncatedText component", () => {
     assert.ok(line !== undefined);
     assert.strictEqual(visibleWidth(line), 30);
 
-    const stripped = line.replace(/\x1b\[[0-9;]*m/gu, "");
+    const stripped = stripStyleSequences(line);
     assert.ok(!stripped.includes("..."));
   });
 
@@ -115,7 +116,7 @@ describe("TruncatedText component", () => {
     assert.ok(line !== undefined);
     assert.strictEqual(visibleWidth(line), 40);
 
-    const stripped = line.replace(/\x1b\[[0-9;]*m/gu, "").trim();
+    const stripped = stripStyleSequences(line).trim();
     assert.ok(stripped.includes("First line"));
     assert.ok(!stripped.includes("Second line"));
     assert.ok(!stripped.includes("Third line"));
@@ -131,7 +132,7 @@ describe("TruncatedText component", () => {
     assert.ok(line !== undefined);
     assert.strictEqual(visibleWidth(line), 25);
 
-    const stripped = line.replace(/\x1b\[[0-9;]*m/gu, "");
+    const stripped = stripStyleSequences(line);
     assert.ok(stripped.includes("..."));
     assert.ok(!stripped.includes("Second line"));
   });

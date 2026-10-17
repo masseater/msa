@@ -4,6 +4,7 @@ import type { Terminal as XtermTerminalType } from "@xterm/headless";
 import { Chalk } from "chalk";
 import { dual } from "effect/Function";
 
+import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 export const chalk = new Chalk({ level: 3 });
@@ -25,5 +26,5 @@ export const getCell: {
 );
 
 export function stripAnsi(line: string): string {
-  return line.replace(/\x1b\[[0-9;]*m/gu, "");
+  return stripStyleSequences(line);
 }

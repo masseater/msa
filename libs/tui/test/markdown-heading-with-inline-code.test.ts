@@ -3,6 +3,11 @@ import { afterEach, describe, it } from "node:test";
 
 import { Effect } from "effect";
 
+import {
+  stripEscapeSequences,
+  stripHyperlinkSequences,
+  stripStyleSequences,
+} from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
 import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
@@ -30,7 +35,7 @@ describe("Markdown component", () => {
 
           const renderedLine = markdown.render(80)[0];
           assert.ok(renderedLine, "Should render heading line");
-          const contentWidth = renderedLine.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd().length;
+          const contentWidth = stripStyleSequences(renderedLine).trimEnd().length;
           assert.ok(contentWidth > 0, "Should have visible heading content");
 
           for (let col = contentWidth; col < 80; col++) {
@@ -83,7 +88,7 @@ describe("Markdown component", () => {
 
       const lines = markdown.render(80);
       const joinedOutput = lines.join("\n");
-      const joinedPlain = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "")).join(" ");
+      const joinedPlain = lines.map((line) => stripStyleSequences(line)).join(" ");
 
       assert.ok(joinedOutput.includes("\x1b[9m"), "Should apply strikethrough styling");
       assert.ok(joinedPlain.includes("strikethrough"), "Should include struck text content");
@@ -95,7 +100,7 @@ describe("Markdown component", () => {
 
       const lines = markdown.render(80);
       const joinedOutput = lines.join("\n");
-      const joinedPlain = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "")).join(" ");
+      const joinedPlain = lines.map((line) => stripStyleSequences(line)).join(" ");
 
       assert.ok(
         joinedPlain.includes("~strikethrough~"),
@@ -124,7 +129,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const joinedPlain = plainLines.join(" ");
 
       assert.ok(joinedPlain.includes("user@example.com"), "Should contain email");
@@ -151,7 +156,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const joinedPlain = plainLines.join(" ");
 
       const urlCount = (joinedPlain.match(/https:\/\/example\.com/gu) || []).length;
@@ -168,7 +173,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const joinedPlain = plainLines.join(" ");
 
       assert.ok(joinedPlain.includes("click here"), "Should contain link text");
@@ -192,7 +197,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const joinedPlain = plainLines.join(" ");
 
       assert.ok(joinedPlain.includes("Email me"), "Should contain link text");
@@ -226,13 +231,9 @@ describe("Markdown component", () => {
         "Should contain OSC 8 open sequence",
       );
       assert.ok(joined.includes("\x1b]8;;\x1b\\"), "Should contain OSC 8 close sequence");
-      const plainLines = lines.map((line) =>
-        line.replace(/\x1b[^a-zA-Z]*[a-zA-Z]|\x1b\].*?\x1b\\/gu, ""),
-      );
+      const plainLines = lines.map((line) => stripEscapeSequences(line));
       assert.ok(plainLines.join("").includes("click here"), "Should contain link text");
-      const rawPlain = lines.map((line) =>
-        line.replace(/\x1b\]8;;[^\x1b]*\x1b\\/gu, "").replace(/\x1b\[[0-9;]*m/gu, ""),
-      );
+      const rawPlain = lines.map((line) => stripStyleSequences(stripHyperlinkSequences(line)));
       assert.ok(
         !rawPlain.join("").includes("(https://example.com)"),
         "URL should not appear inline in parentheses",

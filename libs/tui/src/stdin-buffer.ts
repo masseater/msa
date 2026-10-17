@@ -1,14 +1,26 @@
 import { EventEmitter } from "events";
 
+import { type EscapeKind, introducerOf, matchCsiSequence } from "./ansi-sequences.ts";
 import { type CancelDelay, runAfter } from "./delay.ts";
+
+const KITTY_PRINTABLE_BODY = /^(\d+)(?::\d*)?(?::\d+)?$/u;
 
 const ESC = "\x1b";
 const DEFAULT_SEQUENCE_TIMEOUT_MS = 50;
 const DEFAULT_ESCAPE_TIMEOUT_MS = 10;
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
-const TERMINAL_REPLY_HEADER_PATTERN =
-  /^\x1b(?:\](?:1[01];|4;\d{1,3};|7501;\?)|P>\||_G(?:[a-z]=\d+,)*[a-z]=\d+;)/u;
+const TERMINAL_REPLY_HEADER_BODIES: ReadonlyArray<readonly [EscapeKind, RegExp]> = [
+  ["osc", /^(?:1[01];|4;\d{1,3};|7501;\?)/u],
+  ["dcs", /^>\|/u],
+  ["apc", /^G(?:[a-z]=\d+,)*[a-z]=\d+;/u],
+];
+
+function startsWithTerminalReplyHeader(data: string): boolean {
+  return TERMINAL_REPLY_HEADER_BODIES.some(
+    ([kind, body]) => data.startsWith(introducerOf(kind)) && body.test(data.slice(2)),
+  );
+}
 
 function isControlString(data: string): boolean {
   return data.startsWith(`${ESC}]`) || data.startsWith(`${ESC}P`) || data.startsWith(`${ESC}_`);
@@ -128,8 +140,12 @@ function isCompleteApcSequence(data: string): "complete" | "incomplete" {
 }
 
 function parseUnmodifiedKittyPrintableCodepoint(sequence: string): number | undefined {
-  const match = sequence.match(/^\x1b\[(\d+)(?::\d*)?(?::\d+)?u$/u);
-  if (match === null) return undefined;
+  const match = matchCsiSequence({
+    data: sequence,
+    finals: "u",
+    body: KITTY_PRINTABLE_BODY,
+  })?.groups;
+  if (match === undefined || match === null) return undefined;
 
   const codepoint = parseInt(match[1]!, 10);
   return codepoint >= 32 ? codepoint : undefined;
@@ -143,8 +159,7 @@ function extractCompleteSequences(buffer: string): { sequences: string[]; remain
     const remaining = buffer.slice(pos);
 
     if (remaining.startsWith(ESC)) {
-      const terminalReply =
-        isControlString(remaining) && TERMINAL_REPLY_HEADER_PATTERN.test(remaining);
+      const terminalReply = isControlString(remaining) && startsWithTerminalReplyHeader(remaining);
       let seqEnd = 1;
       while (seqEnd <= remaining.length) {
         if (terminalReply && seqEnd > 2) {
@@ -314,7 +329,7 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
     }
 
     if (this.buffer.length > 0) {
-      if (TERMINAL_REPLY_HEADER_PATTERN.test(this.buffer)) return;
+      if (startsWithTerminalReplyHeader(this.buffer)) return;
       const timeoutMs = this.buffer === ESC ? this.escapeTimeoutMs : this.timeoutMs;
       this.cancelTimeout = runAfter(timeoutMs, () => {
         const flushed = this.flush();

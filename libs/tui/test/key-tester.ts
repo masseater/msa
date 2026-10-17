@@ -7,6 +7,14 @@ import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import type { Component, TUI } from "../src/tui.ts";
 import { truncateToWidth } from "../src/utils.ts";
 
+const CONTROL_NAMES = new Map([
+  ["\u001b", "\\x1b"],
+  ["\r", "\\r"],
+  ["\n", "\\n"],
+  ["\t", "\\t"],
+  ["\u007f", "\\x7f"],
+]);
+
 class KeyLogger implements Component {
   private log: string[] = [];
   private maxLines = 20;
@@ -29,12 +37,9 @@ class KeyLogger implements Component {
     const charCodes = Array.from(data)
       .map((c) => c.charCodeAt(0))
       .join(", ");
-    const repr = data
-      .replace(/\x1b/gu, "\\x1b")
-      .replace(/\r/gu, "\\r")
-      .replace(/\n/gu, "\\n")
-      .replace(/\t/gu, "\\t")
-      .replace(/\x7f/gu, "\\x7f");
+    const repr = Array.from(data)
+      .map((character) => CONTROL_NAMES.get(character) ?? character)
+      .join("");
 
     const logLine = `Hex: ${hex.padEnd(20)} | Chars: [${charCodes.padEnd(15)}] | Repr: "${repr}"`;
 

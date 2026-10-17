@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
 import { stripAnsi } from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
@@ -33,7 +34,7 @@ function listsCases1(): void {
     );
 
     const lines = markdown.render(80);
-    const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trim());
+    const plainLines = lines.map((line) => stripStyleSequences(line).trim());
 
     const numberedLines = plainLines.filter((line) => /^\d+\./u.test(line));
 
@@ -175,7 +176,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
 
       assert.ok(plainLines.some((line) => line.includes("Name")));
       assert.ok(plainLines.some((line) => line.includes("Age")));
@@ -197,7 +198,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const dividerLines = plainLines.filter((line) => line.includes("┼"));
 
       assert.strictEqual(dividerLines.length, 2, "Expected header + row divider");
@@ -220,7 +221,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(32);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const dataLine = plainLines.find((line) => line.includes(longestWord));
       assert.ok(dataLine, "Expected data row containing longest word");
 

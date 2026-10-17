@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
+import { stripHyperlinkSequences } from "../src/ansi-sequences.ts";
 import { Image } from "../src/components/image.ts";
 import {
   cropKittyImageLine,
@@ -223,7 +224,7 @@ describe("imageFallback", () => {
         result.includes(abs.replaceAll("\\", "/")) || result.includes(abs),
         "file URL should target absolute path",
       );
-      const visible = result.replace(/\x1b\]8;;.*?\x1b\\/gu, "");
+      const visible = stripHyperlinkSequences(result);
       assert.strictEqual(visible, "[Image: ~/.msa/agent/shot.png [image/png] 10x10]");
     } finally {
       resetCapabilitiesCache();

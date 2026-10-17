@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
 import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
@@ -18,7 +19,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(25);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       const dataRows = plainLines.filter((line) => line.startsWith("│") && !line.includes("─"));
       assert.ok(dataRows.length > 2, `Expected wrapped rows, got ${dataRows.length} rows`);
@@ -48,7 +49,7 @@ describe("Markdown component", () => {
       const width = 30;
       const lines = markdown.render(width);
       resetCapabilitiesCache();
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       for (const line of plainLines) {
         assert.ok(
@@ -88,7 +89,7 @@ describe("Markdown component", () => {
       const joinedOutput = lines.join("\n");
       assert.ok(joinedOutput.includes("\x1b[33m"), "Inline code should be styled (yellow)");
 
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
       for (const line of plainLines) {
         assert.ok(
           line.length <= width,
@@ -118,7 +119,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(15);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       assert.ok(lines.length > 0, "Should produce output");
 
@@ -142,7 +143,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       const headerLine = plainLines.find((line) => line.includes("A") && line.includes("B"));
       assert.ok(headerLine, "Should have header row");
@@ -170,7 +171,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(40);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       for (const line of plainLines) {
         assert.ok(line.length <= 40, `Line exceeds width 40: "${line}" (length: ${line.length})`);
@@ -195,7 +196,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       assert.notStrictEqual(
         plainLines.at(-1),
