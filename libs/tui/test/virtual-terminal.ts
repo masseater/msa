@@ -2,7 +2,7 @@ import type { Terminal as XtermTerminalType } from "@xterm/headless";
 import xterm from "@xterm/headless";
 import { Effect } from "effect";
 
-import type { Terminal } from "../src/terminal.ts";
+import type { Terminal } from "../src/terminal-protocol.ts";
 import { nextTick } from "./effect-helpers.ts";
 
 const XtermTerminal = xterm.Terminal;

@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 
-import type { Terminal } from "../src/terminal.ts";
+import type { Terminal } from "../src/terminal-protocol.ts";
 
 export const COLUMNS = 100;
 export const ROWS = 30;
