@@ -73,13 +73,13 @@ const handleCallback = <T>(
 ): Effect.Effect<void> => {
   const { options, state } = flow;
   if (method !== "GET" || url.pathname !== options.path) {
-    return reply(page(404, oauthErrorHtml("Callback route not found.")));
+    return reply(page(404, oauthErrorHtml("Callback route not found.", undefined)));
   }
   if (options.state !== undefined && url.searchParams.get("state") !== options.state) {
-    return reply(page(400, oauthErrorHtml("State mismatch.")));
+    return reply(page(400, oauthErrorHtml("State mismatch.", undefined)));
   }
   if (state.claimed || state.settled) {
-    return reply(page(409, oauthErrorHtml("This sign-in has already been handled.")));
+    return reply(page(409, oauthErrorHtml("This sign-in has already been handled.", undefined)));
   }
   const error = url.searchParams.get("error");
   if (error !== null && error !== "") {
@@ -94,7 +94,7 @@ const handleCallback = <T>(
   }
   const code = url.searchParams.get("code");
   if (code === null || code === "") {
-    return reply(page(400, oauthErrorHtml("Missing authorization code.")));
+    return reply(page(400, oauthErrorHtml("Missing authorization code.", undefined)));
   }
   return claim(flow, code, reply);
 };

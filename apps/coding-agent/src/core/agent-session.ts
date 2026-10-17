@@ -2927,7 +2927,7 @@ export class AgentSession {
     if (response.stopReason === "aborted") throw new Error("cancelled");
     if (response.stopReason === "error") throw new Error(response.errorMessage || "Unknown error");
     if (response.stopReason === "length") throw new Error("the response hit the token cap");
-    return contentText(response.content).trim();
+    return contentText(response.content, "\n").trim();
   }
 
   // =========================================================================

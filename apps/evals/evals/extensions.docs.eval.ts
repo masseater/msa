@@ -21,7 +21,7 @@ const harness = createMsaDocumentationEvalHarness({
       response,
       extensionErrors: extensions.errors,
       toolLoaded: extensions.extensions.some(({ tools }) => tools.has(TOOL_NAME)),
-      toolResult: result?.role === "toolResult" ? contentText(result.content) : null,
+      toolResult: result?.role === "toolResult" ? contentText(result.content, "\n") : null,
     };
   },
 });

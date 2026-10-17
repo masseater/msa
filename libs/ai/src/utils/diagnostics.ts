@@ -33,18 +33,24 @@ export function extractDiagnosticError(error: unknown): DiagnosticErrorInfo {
   };
 }
 
-export function createAssistantMessageDiagnostic(
-  type: string,
-  error: unknown,
-  details?: JsonObject,
-): AssistantMessageDiagnostic {
-  return {
-    type,
-    timestamp: Effect.runSync(Clock.currentTimeMillis),
-    error: extractDiagnosticError(error),
-    details,
-  };
-}
+export const createAssistantMessageDiagnostic: {
+  (error: unknown, details: JsonObject | undefined): (type: string) => AssistantMessageDiagnostic;
+  (type: string, error: unknown, details: JsonObject | undefined): AssistantMessageDiagnostic;
+} = Function.dual(
+  3,
+  function (
+    type: string,
+    error: unknown,
+    details: JsonObject | undefined,
+  ): AssistantMessageDiagnostic {
+    return {
+      type,
+      timestamp: Effect.runSync(Clock.currentTimeMillis),
+      error: extractDiagnosticError(error),
+      details,
+    };
+  },
+);
 
 export const appendAssistantMessageDiagnostic: {
   <T extends { diagnostics?: AssistantMessageDiagnostic[] }>(

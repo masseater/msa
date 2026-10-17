@@ -391,7 +391,7 @@ export async function generateBranchSummary(
     return { error: "Branch summarization attempted to call a tool" };
   }
 
-  let summary = contentText(response.content);
+  let summary = contentText(response.content, "\n");
 
   // Prepend preamble to provide context about the branch summary
   summary = BRANCH_SUMMARY_PREAMBLE + summary;

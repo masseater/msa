@@ -95,7 +95,7 @@ export async function inspectProvider(
         validRequestReceived: scenario.validRequestReceived(),
         model: modelFields(model),
         response: {
-          text: contentText(response.content),
+          text: contentText(response.content, "\n"),
           stopReason: response.stopReason,
           inputTokens: response.usage.input,
           outputTokens: response.usage.output,

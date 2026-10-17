@@ -462,7 +462,7 @@ export class Orchestrator {
         (message): message is AssistantMessage => message.role === "assistant",
       );
       let status: SessionStatus = "completed";
-      let report = last ? contentText(last.content).trim() : "";
+      let report = last ? contentText(last.content, "\n").trim() : "";
       if (error !== undefined) {
         status = "failed";
         report = toErrorMessage(error);

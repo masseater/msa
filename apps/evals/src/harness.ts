@@ -217,11 +217,11 @@ function toTranscriptEvents(messages: AgentSession["messages"]): TranscriptEvent
   const events: TranscriptEvent[] = [];
   for (const message of messages) {
     if (message.role === "user") {
-      events.push({ type: "message", role: "user", content: contentText(message.content) });
+      events.push({ type: "message", role: "user", content: contentText(message.content, "\n") });
       continue;
     }
     if (message.role === "assistant") {
-      const text = contentText(message.content);
+      const text = contentText(message.content, "\n");
       if (text) events.push({ type: "message", role: "assistant", content: text });
       for (const part of message.content) {
         if (part.type !== "toolCall") continue;
@@ -235,7 +235,7 @@ function toTranscriptEvents(messages: AgentSession["messages"]): TranscriptEvent
       continue;
     }
     if (message.role === "toolResult") {
-      const text = contentText(message.content);
+      const text = contentText(message.content, "\n");
       const content = message.content.every((part) => part.type === "text")
         ? text
         : toJsonValue(message.content);

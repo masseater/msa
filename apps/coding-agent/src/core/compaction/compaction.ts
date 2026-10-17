@@ -790,7 +790,7 @@ export async function generateSummaryWithUsage(
     throw new Error("Summarization attempted to call a tool");
   }
 
-  const textContent = contentText(response.content);
+  const textContent = contentText(response.content, "\n");
 
   return { text: textContent, usage: response.usage };
 }
@@ -1187,7 +1187,7 @@ async function generateTurnPrefixSummary(
   }
 
   return {
-    text: contentText(response.content),
+    text: contentText(response.content, "\n"),
     usage: response.usage,
   };
 }

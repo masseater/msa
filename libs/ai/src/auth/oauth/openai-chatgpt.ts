@@ -102,7 +102,7 @@ const handleCallback = (
   result: Deferred.Deferred<AuthorizationResult>,
 ): Effect.Effect<LocalHttpResponse> => {
   if (url.pathname !== CALLBACK_PATH) {
-    return Effect.succeed(html(404, oauthErrorHtml("Callback route not found.")));
+    return Effect.succeed(html(404, oauthErrorHtml("Callback route not found.", undefined)));
   }
   const error = url.searchParams.get("error");
   if (error !== null && error !== "") {
@@ -119,7 +119,7 @@ const handleCallback = (
       ),
     ),
     Effect.catchTag("CallbackError", (failure) =>
-      Effect.succeed(html(400, oauthErrorHtml(failure.message))),
+      Effect.succeed(html(400, oauthErrorHtml(failure.message, undefined))),
     ),
   );
 };
@@ -139,7 +139,7 @@ const listenForCallback = (expectedState: string): Effect.Effect<CallbackListene
         handleCallback(request, expectedState, result).pipe(
           Effect.catchDefect(() =>
             Effect.succeed(
-              html(500, oauthErrorHtml("Internal error while processing the callback.")),
+              html(500, oauthErrorHtml("Internal error while processing the callback.", undefined)),
             ),
           ),
           Effect.flatMap(reply),

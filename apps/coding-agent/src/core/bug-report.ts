@@ -394,7 +394,7 @@ export async function generateBugReportSummary(
   if (response.content.some((block) => block.type === "toolCall")) {
     throw new Error("Bug report summary attempted to call a tool");
   }
-  const text = contentText(response.content).trim();
+  const text = contentText(response.content, "\n").trim();
   if (!text) throw new Error("Bug report summary was empty");
   return text;
 }

@@ -68,7 +68,7 @@ export function getCurrentSystemMessage(messages: TranscriptMessages): SystemMes
   for (const message of messages) {
     if (!isSystemMessage(message)) continue;
     timestamp ??= message.timestamp;
-    const text = contentText(message.content);
+    const text = contentText(message.content, "\n");
     if (text.length > 0) content.push(text);
     for (const [name, value] of Object.entries(message.sections ?? {})) {
       if (value === null) sections.delete(name);

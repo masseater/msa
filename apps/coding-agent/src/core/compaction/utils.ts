@@ -150,7 +150,7 @@ export function serializeConversation(
       }
 
       if (msg.content.some((block) => block.type === "text")) {
-        parts.push(`[Assistant]: ${contentText(msg.content)}`);
+        parts.push(`[Assistant]: ${contentText(msg.content, "\n")}`);
       }
       if (toolCalls.length > 0) {
         parts.push(`[Assistant tool calls]: ${toolCalls.join("; ")}`);

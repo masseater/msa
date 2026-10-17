@@ -11,7 +11,7 @@ const content: AssistantMessage["content"] = [
 
 describe("contentText", () => {
   it("extracts assistant text blocks", () => {
-    expect(contentText(content)).toBe("first\nsecond");
+    expect(contentText(content, "\n")).toBe("first\nsecond");
   });
 
   it("supports custom separators", () => {
@@ -19,7 +19,7 @@ describe("contentText", () => {
   });
 
   it("passes string content through", () => {
-    expect(contentText("hello")).toBe("hello");
+    expect(contentText("hello", "\n")).toBe("hello");
   });
 
   it("extracts text from tool-result content", () => {
