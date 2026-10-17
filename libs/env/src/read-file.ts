@@ -31,7 +31,7 @@ const readUnknownSize = (read: FileRead): Effect.Effect<Uint8Array | string, Fil
     let total = 0;
     let text = "";
     for (;;) {
-      if (abortedRead(read)) return yield* Effect.fail(abortError(read));
+      if (abortedRead(read)) return yield* abortError(read);
       const bytes = yield* Effect.promise(() =>
         read.handle.pread(undefined, READ_FILE_UNKNOWN_CHUNK),
       );
@@ -83,7 +83,7 @@ const readDecoded = (read: FileRead, size: number): Effect.Effect<string, FileEr
       }
       const head = inFlight.shift()!;
       const bytes = yield* Effect.promise(() => head);
-      if (abortedRead(read)) return yield* Effect.fail(abortError(read));
+      if (abortedRead(read)) return yield* abortError(read);
       total += bytes.length;
       if (bytes.length === 0 || total === size || bytes.length !== length) {
         return first ? Buffer.from(bytes).toString("utf8") : text + decoder.end(Buffer.from(bytes));
@@ -97,12 +97,14 @@ const readContents = (read: FileRead): Effect.Effect<Uint8Array | string, FileEr
   Effect.gen(function* () {
     const statError = read.opened["statError"];
     if (statError !== undefined) return yield* Effect.die(new RemoteError(statError as Json));
-    if (abortedRead(read)) return yield* Effect.fail(abortError(read));
+    if (abortedRead(read)) return yield* abortError(read);
     const stat = remoteFileInfo(read.opened["stat"] as Json);
     const size = stat.kind === "file" ? stat.size : 0;
     if (size > READ_FILE_MAX) {
-      return yield* Effect.fail(
-        new FileError("unknown", `File size (${size}) is greater than 2 GiB`, read.handle.path),
+      return yield* new FileError(
+        "unknown",
+        `File size (${size}) is greater than 2 GiB`,
+        read.handle.path,
       );
     }
     if (size === 0) return yield* readUnknownSize(read);

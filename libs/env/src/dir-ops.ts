@@ -60,11 +60,11 @@ export const listDirAt = (request: PathRequest): Promise<Result<FileInfo[], File
           const infos: FileInfo[] = [];
           for (const entry of entries) {
             if (signal?.aborted === true) {
-              return yield* Effect.fail(new FileError("aborted", "aborted", resolved));
+              return yield* new FileError("aborted", "aborted", resolved);
             }
             const entryPath = paths.resolve(resolved, entry.name);
             if (entry.error !== undefined) {
-              return yield* Effect.fail(toFileError(new RemoteError(entry.error), entryPath));
+              return yield* toFileError(new RemoteError(entry.error), entryPath);
             }
             const info = toInfo(entryPath, entry.info!, paths);
             if (info.ok) infos.push(info.value);
