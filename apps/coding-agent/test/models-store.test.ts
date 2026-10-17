@@ -12,7 +12,7 @@ import { join } from "node:path";
 
 import type { Model } from "@msa/ai";
 import lockfile from "proper-lockfile";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import { FileModelsStore } from "../src/core/models-store.ts";
 

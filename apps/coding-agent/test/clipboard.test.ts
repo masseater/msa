@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import type * as OsModule from "node:os";
 
 import type { NativeClipboard } from "@msa/tui";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { copyToClipboard, readClipboardText } from "../src/utils/clipboard.ts";
 

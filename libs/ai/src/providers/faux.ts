@@ -257,7 +257,7 @@ function withUsageEstimate(
   promptCache: Map<string, readonly string[]>,
 ): AssistantMessage {
   // One text per message; the whole prompt joins them with blank lines.
-  const prompt = context.messages.map((message) => `${message.role}:${messageToText(message)}`);
+  const prompt = context.messages.map((entry) => `${entry.role}:${messageToText(entry)}`);
   const promptLength = joinedLength(prompt);
   const promptTokens = Math.ceil(promptLength / 4);
   const outputTokens = estimateTokens(assistantContentToText(message.content));

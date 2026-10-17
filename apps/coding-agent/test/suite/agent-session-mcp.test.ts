@@ -5,7 +5,7 @@ import type { SystemMessage, ToolResultMessage } from "@msa/ai/compat";
 import { type JsonRpcRequest, LATEST_PROTOCOL_VERSION } from "@msa/mcp";
 import { createInMemoryTransportPair } from "@msa/mcp/testing";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { ExtensionAPI, ExtensionFactory } from "../../src/core/extensions/types.ts";
 import type { SessionManager } from "../../src/core/session-manager.ts";

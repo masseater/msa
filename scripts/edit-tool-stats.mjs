@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import { createReadStream } from "node:fs";
-import { promises as fs } from "node:fs";
+import { createReadStream, promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
@@ -679,7 +678,7 @@ function printHumanReport(summary) {
   );
   if (filters.model || filters.extension || filters.failedOnly) {
     const filterParts = [];
-    if (filters.model) filterParts.push(`model contains \"${filters.model}\"`);
+    if (filters.model) filterParts.push(`model contains "${filters.model}"`);
     if (filters.extension) filterParts.push(`extension = ${filters.extension}`);
     if (filters.failedOnly) filterParts.push("failed only");
     console.log(`Filters: ${filterParts.join(", ")}`);
@@ -890,7 +889,7 @@ async function scanSessions(sessionsDir, since) {
         }
         const text = extractTextContent(message.content);
         record.matchedResult = true;
-        record.success = message.isError === true ? false : true;
+        record.success = message.isError !== true;
         record.resultSummary = text;
         record.errorText = message.isError === true ? text : "";
         record.errorKind = classifyErrorKind(text, message.isError === true, true);

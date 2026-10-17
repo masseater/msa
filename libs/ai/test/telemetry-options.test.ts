@@ -1,5 +1,5 @@
 import { NOOP_TELEMETRY_CONTEXT, type TelemetryContext } from "@msa/telemetry";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { buildBaseOptions } from "../src/api/simple-options.ts";
 import { registerImagesApiProvider } from "../src/images-api-registry.ts";

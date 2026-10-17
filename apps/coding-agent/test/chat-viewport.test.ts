@@ -1,5 +1,5 @@
 import { Container } from "@msa/tui";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 
 import { createChatViewport } from "../src/modes/interactive/chat-viewport.ts";
 

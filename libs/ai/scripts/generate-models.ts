@@ -33,7 +33,6 @@ import type {
   ClassifierModel,
   ImageApi,
   ImageModel,
-  KnownProvider,
   Model,
   ModelCost,
   ModelPromptCache,
@@ -45,6 +44,7 @@ import {
   assertExactModelIds,
   createModelDataManifest,
   groupProviderModelData,
+  type ModelCatalogEntry,
   type ModelDataStructure,
   MODEL_DATA_MANIFEST_FILE,
   readModelDataProviderIds,
@@ -538,7 +538,9 @@ function recordModelsDevReasoningOptions(
 }
 
 function supportsDirectReasoningEffort(model: Model<Api>): boolean {
-  if (model.api === "anthropic-messages") return model.compat?.forceAdaptiveThinking === true;
+  if (model.api === "anthropic-messages") {
+    return (model.compat as AnthropicMessagesCompat | undefined)?.forceAdaptiveThinking === true;
+  }
   if (
     model.api === "openai-responses" ||
     model.api === "azure-openai-responses" ||
@@ -685,7 +687,20 @@ function isAnthropicTemperatureUnsupportedModel(modelId: string): boolean {
   );
 }
 
-const OPENAI_COMPLETIONS_DEFAULT_COMPAT = {
+type OpenAICompletionsResolvedCompat = Required<
+  Omit<
+    OpenAICompletionsCompat,
+    | "cacheControlFormat"
+    | "sessionAffinityFormat"
+    | "supportsThinkingTokenBudget"
+    | "thinkingTokenBudgetField"
+    | "vllmPriority"
+  >
+> & {
+  cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
+};
+
+const OPENAI_COMPLETIONS_DEFAULT_COMPAT: OpenAICompletionsResolvedCompat = {
   supportsStore: true,
   supportsDeveloperRole: true,
   supportsReasoningEffort: true,
@@ -708,17 +723,6 @@ const OPENAI_COMPLETIONS_DEFAULT_COMPAT = {
   supportsMidConvoToolAdditions: false,
   sendSessionAffinityHeaders: false,
   supportsLongCacheRetention: true,
-} satisfies Required<
-  Omit<
-    OpenAICompletionsCompat,
-    "cacheControlFormat" | "supportsThinkingTokenBudget" | "thinkingTokenBudgetField"
-  >
-> & {
-  cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
-};
-
-type OpenAICompletionsResolvedCompat = typeof OPENAI_COMPLETIONS_DEFAULT_COMPAT & {
-  cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
 };
 
 function mergeAnthropicMessagesCompat(model: Model<Api>, compat: AnthropicMessagesCompat): void {
@@ -859,10 +863,6 @@ function openAICompletionsCompatDelta(
     }
   }
   return delta;
-}
-
-function mergeOpenAICompletionsCompat(model: Model<Api>, compat: OpenAICompletionsCompat): void {
-  model.compat = { ...(model.compat as OpenAICompletionsCompat | undefined), ...compat };
 }
 
 function applyOpenAICompletionsCompatMetadata(model: Model<Api>): void {
@@ -1253,7 +1253,10 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
     mergeThinkingLevelMap(model, { xhigh: "xhigh" });
   }
   if (model.provider === "fireworks") {
-    if (model.api === "anthropic-messages" && model.compat?.forceAdaptiveThinking) {
+    if (
+      model.api === "anthropic-messages" &&
+      (model.compat as AnthropicMessagesCompat | undefined)?.forceAdaptiveThinking
+    ) {
       // Qwen Max currently advertises only a toggle. Prefer upstream effort
       // metadata once available instead of replacing it with this fallback.
       if (model.id === "accounts/fireworks/models/qwen3p8-max" && !model.thinkingLevelMap) {
@@ -1451,7 +1454,7 @@ async function fetchAiGatewayModels(): Promise<{
     console.log("Fetching models from Vercel AI Gateway API...");
     const response = await fetch(`${AI_GATEWAY_MODELS_URL}/models`);
     if (!response.ok) throw new Error(`Vercel AI Gateway API returned ${response.status}`);
-    const data = await response.json();
+    const data = (await response.json()) as { data?: unknown };
     const models: Model<any>[] = [];
     const classifiers: ClassifierModel<"typesafe-system-one">[] = [];
 
@@ -1548,7 +1551,7 @@ function processZaiModels(data: ModelsDevCatalog): Model<Api>[] {
         thinkingLevelMap.off = "none";
       }
       const supportsReasoningEffort = thinkingLevelMap !== undefined;
-      const referenceCost = data.zai?.models[modelId]?.cost ?? m.cost;
+      const referenceCost = data.zai?.models?.[modelId]?.cost ?? m.cost;
 
       models.push({
         id: modelId,
@@ -2314,9 +2317,10 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     ] as const;
 
     for (const variant of opencodeVariants) {
-      if (!data[variant.key]?.models) continue;
+      const variantData = data[variant.key];
+      if (!variantData?.models) continue;
 
-      for (const [modelId, model] of Object.entries(data[variant.key].models)) {
+      for (const [modelId, model] of Object.entries(variantData.models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
         if (m.status === "deprecated") continue;
@@ -3441,7 +3445,7 @@ async function generateModels() {
     string,
     Record<string, ClassifierModel<ClassifierApi>>
   > = {};
-  const jsonAllProviders: Record<string, AnyModel[]> = {};
+  const jsonAllProviders: Record<string, (AnyModel & ModelCatalogEntry)[]> = {};
   for (const providerId of sortedProviderIds) {
     jsonChatProviders[providerId] = Object.fromEntries(
       Object.entries(providers[providerId].chat).sort(([left], [right]) =>
@@ -3462,7 +3466,7 @@ async function generateModels() {
       ...Object.values(jsonChatProviders[providerId]),
       ...Object.values(jsonImageProviders[providerId]),
       ...Object.values(jsonClassifierProviders[providerId]),
-    ];
+    ] as (AnyModel & ModelCatalogEntry)[];
   }
 
   const serializeJson = (value: unknown) =>

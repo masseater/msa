@@ -18,7 +18,7 @@ import {
 } from "@msa/ai";
 import type { ToolResultMessage, Usage } from "@msa/ai/compat";
 import { Type } from "typebox";
-import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vite-plus/test";
 
 import type { ExtensionAPI } from "../../src/core/extensions/types.ts";
 import type { CustomEntry } from "../../src/core/session-manager.ts";

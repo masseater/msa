@@ -169,7 +169,7 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
   context: TranscriptContext,
   options?: OpenAIResponsesOptions,
 ): AssistantMessageEventStream => {
-  const stream = new AssistantMessageEventStream();
+  const events = new AssistantMessageEventStream();
   const normalizedContext = resolveTranscript(
     context,
     getCompat(model).supportsMidConvoSystemMessages,
@@ -239,9 +239,9 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
         { status: response.status, headers: headersToRecord(response.headers) },
         model,
       );
-      stream.push({ type: "start", partial: output });
+      events.push({ type: "start", partial: output });
 
-      await processResponsesStream(openaiStream, output, stream, model, {
+      await processResponsesStream(openaiStream, output, events, model, {
         onProviderStreamEvent: options?.onProviderStreamEvent,
         serviceTier: options?.serviceTier,
         grammarToolInputProperties,
@@ -260,8 +260,8 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
         throw new Error(output.errorMessage || "An unknown error occurred");
       }
 
-      stream.push({ type: "done", reason: output.stopReason, message: output });
-      stream.end();
+      events.push({ type: "done", reason: output.stopReason, message: output });
+      events.end();
     } catch (error) {
       for (const block of output.content) {
         delete (block as { index?: number }).index;
@@ -278,12 +278,12 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
       output.errorMessage = errorMessage.includes("subscription_sharing_usage_limit_exceeded")
         ? `${errorMessage}\nCheck your ChatGPT usage: ${CHATGPT_USAGE_URL}`
         : errorMessage;
-      stream.push({ type: "error", reason: output.stopReason, error: output });
-      stream.end();
+      events.push({ type: "error", reason: output.stopReason, error: output });
+      events.end();
     }
   })();
 
-  return stream;
+  return events;
 };
 
 export const streamSimple: StreamFunction<"openai-responses", SimpleStreamOptions> = (

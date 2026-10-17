@@ -9,7 +9,7 @@ import {
   getModel,
   type Model,
 } from "@msa/ai/compat";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { AgentSessionRuntime } from "../src/core/agent-session-runtime.ts";
 import { AgentSession } from "../src/core/agent-session.ts";

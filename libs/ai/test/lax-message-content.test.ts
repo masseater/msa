@@ -6,7 +6,7 @@
  * empty array (issues #6259, #6276).
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { transformMessages } from "../src/api/transform-messages.ts";
 import type { Message, Model } from "../src/types.ts";

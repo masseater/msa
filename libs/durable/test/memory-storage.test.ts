@@ -1,6 +1,6 @@
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { registerStorageConformance } from "@msa/durable/testing";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber, seqFromNumber } from "../src/ids.ts";
 import { MemoryStorage } from "../src/storage/memory.ts";

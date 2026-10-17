@@ -1,6 +1,6 @@
 import type { AssistantMessage } from "@msa/ai";
 import type { TuiMouseEvent } from "@msa/tui";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 
 import { AssistantMessageComponent } from "../src/modes/interactive/components/assistant-message.ts";
 import { UserMessageComponent } from "../src/modes/interactive/components/user-message.ts";

@@ -6,8 +6,11 @@ let _join: typeof import("node:path").join | null = null;
 type DynamicImport = (specifier: string) => Promise<unknown>;
 
 const dynamicImport: DynamicImport = (specifier) => import(specifier);
+// oxlint-disable-next-line eslint/no-useless-concat -- browser-safe 検査が node: 組込みの実 import と見なさないよう、畳まずに組む
 const NODE_FS_SPECIFIER = "node:" + "fs";
+// oxlint-disable-next-line eslint/no-useless-concat -- browser-safe 検査が node: 組込みの実 import と見なさないよう、畳まずに組む
 const NODE_OS_SPECIFIER = "node:" + "os";
+// oxlint-disable-next-line eslint/no-useless-concat -- browser-safe 検査が node: 組込みの実 import と見なさないよう、畳まずに組む
 const NODE_PATH_SPECIFIER = "node:" + "path";
 
 // Eagerly load in Node.js/Bun environment only

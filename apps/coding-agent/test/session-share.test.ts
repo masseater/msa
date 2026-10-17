@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { readFileSync, writeFileSync } from "node:fs";
 import { PassThrough } from "node:stream";
 
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const childProcessMocks = vi.hoisted(() => ({
   spawn: vi.fn(),

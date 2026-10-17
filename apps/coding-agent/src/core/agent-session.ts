@@ -669,7 +669,7 @@ export class AgentSession {
     } catch (error) {
       const cause = error instanceof Error ? error.cause : undefined;
       if (cause instanceof Error && cause.message === "authHeader requires a resolved API key") {
-        throw new Error(formatNoApiKeyFoundMessage(model.provider));
+        throw new Error(formatNoApiKeyFoundMessage(model.provider), { cause: error });
       }
       throw error;
     }
@@ -804,7 +804,7 @@ export class AgentSession {
       if (err instanceof Error) {
         throw err;
       }
-      throw new Error(`Extension failed, blocking execution: ${String(err)}`);
+      throw new Error(`Extension failed, blocking execution: ${String(err)}`, { cause: err });
     }
   }
 

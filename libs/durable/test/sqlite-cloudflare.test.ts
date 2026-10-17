@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 
 import { registerStorageConformance } from "@msa/durable/testing";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   DurableObjectSqliteDatabase,

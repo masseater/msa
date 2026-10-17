@@ -8,7 +8,7 @@ import {
   type TuiMouseEvent,
 } from "@msa/tui";
 import { Type } from "typebox";
-import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import { getReadmePath } from "../src/config.ts";
 import type { ToolDefinition } from "../src/core/extensions/types.ts";

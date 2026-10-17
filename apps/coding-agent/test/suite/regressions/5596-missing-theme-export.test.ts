@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { Agent } from "@msa/agent-core";
 import { fauxAssistantMessage, registerFauxProvider, streamSimple } from "@msa/ai/compat";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { AgentSession } from "../../../src/core/agent-session.ts";
 import { AuthStorage } from "../../../src/core/auth-storage.ts";

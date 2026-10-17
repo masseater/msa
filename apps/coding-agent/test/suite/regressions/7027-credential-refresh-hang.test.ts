@@ -1,5 +1,5 @@
 import type { Api, Model, Provider } from "@msa/ai";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../../../src/core/auth-storage.ts";
 import { defaultModelPerProvider } from "../../../src/core/model-resolver.ts";

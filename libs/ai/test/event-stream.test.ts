@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import type { AssistantMessage } from "../src/types.ts";
 import { AssistantMessageEventStream, EventStream } from "../src/utils/event-stream.ts";

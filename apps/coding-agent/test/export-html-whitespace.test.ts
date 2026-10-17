@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 
 import type { Component } from "@msa/tui";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { ansiLinesToHtml } from "../src/core/export-html/ansi-to-html.ts";
 import { createToolHtmlRenderer } from "../src/core/export-html/tool-renderer.ts";

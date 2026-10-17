@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { classify } from "../src/api/openai-decisions.ts";
 import type { ClassifierContext, ClassifierModel, ImageContent } from "../src/types.ts";

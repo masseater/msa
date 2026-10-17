@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@msa/agent-core";
 import type { AssistantMessage } from "@msa/ai";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import planModeExtension from "../examples/extensions/plan-mode/index.ts";
 import type { ExtensionAPI, ExtensionContext } from "../src/core/extensions/index.ts";

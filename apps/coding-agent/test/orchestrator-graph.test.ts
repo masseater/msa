@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import neo4j from "neo4j-driver";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import type { SessionGraph, SessionNode } from "../src/core/orchestrator/graph.ts";
 import { Neo4jSessionGraph } from "../src/core/orchestrator/neo4j-graph.ts";

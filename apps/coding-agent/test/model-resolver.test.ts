@@ -6,7 +6,7 @@ import { Agent } from "@msa/agent-core";
 import type { Api, Model } from "@msa/ai";
 import { getModel, streamSimple } from "@msa/ai/compat";
 import { getBuiltinModels, getBuiltinProviders } from "@msa/ai/providers/all";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";

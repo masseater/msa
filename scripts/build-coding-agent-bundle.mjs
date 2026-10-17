@@ -35,12 +35,12 @@ const allowedExternalPackages = new Set([
 
 const lazyJitiPlugin = {
   name: "lazy-jiti-transform",
-  setup(build) {
-    build.onResolve({ filter: /^jiti\/static$/ }, () => ({
+  setup(esbuild) {
+    esbuild.onResolve({ filter: /^jiti\/static$/ }, () => ({
       namespace: "lazy-jiti",
       path: "jiti/static",
     }));
-    build.onLoad({ filter: /.*/, namespace: "lazy-jiti" }, () => ({
+    esbuild.onLoad({ filter: /.*/, namespace: "lazy-jiti" }, () => ({
       contents: `
 import { createRequire } from "node:module";
 
@@ -59,15 +59,15 @@ export function createJiti(...args) {
 
 const httpsProxyAgentNamedExportPlugin = {
   name: "https-proxy-agent-named-export",
-  setup(build) {
-    build.onResolve({ filter: /^https-proxy-agent$/ }, (args) => {
+  setup(esbuild) {
+    esbuild.onResolve({ filter: /^https-proxy-agent$/ }, (args) => {
       if (args.kind !== "dynamic-import") return undefined;
       return {
         namespace: "https-proxy-agent-named-export",
         path: args.path,
       };
     });
-    build.onLoad(
+    esbuild.onLoad(
       {
         filter: /^https-proxy-agent$/,
         namespace: "https-proxy-agent-named-export",

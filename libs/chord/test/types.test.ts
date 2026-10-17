@@ -1,7 +1,7 @@
 // Entry 8: reference types. State members are plain values (a reference you hold has its state); a remote reference is a
 // union discriminated by `variant`, so another variant's members are reachable only after narrowing. Checked by tsc.
 import { Type } from "typebox";
-import { describe, expectTypeOf, it } from "vitest";
+import { describe, expectTypeOf, it } from "vite-plus/test";
 
 import {
   type Ctx,

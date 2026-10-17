@@ -1717,11 +1717,11 @@ export class ObjectImpl {
   #invoke<T>(fn: () => T | Promise<T>): Promise<T> {
     const invocation = (async () => fn())();
     this.#invocations.add(invocation);
-    const done = (): void => {
+    const settle = (): void => {
       this.#invocations.delete(invocation);
       if (this.#invocations.size === 0) this.#maybeIdle();
     };
-    invocation.then(done, done);
+    invocation.then(settle, settle);
     return invocation;
   }
 

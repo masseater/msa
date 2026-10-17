@@ -16,7 +16,7 @@ import {
   type Tx,
   type TypedEntry,
 } from "@msa/durable";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
 import { context } from "./session-support.ts";

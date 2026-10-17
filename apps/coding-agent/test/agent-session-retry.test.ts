@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Agent, type AgentEvent, type AgentTool } from "@msa/agent-core";
 import { type AssistantMessage, createAssistantMessageEventStream, getModel } from "@msa/ai/compat";
 import { Type } from "typebox";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";

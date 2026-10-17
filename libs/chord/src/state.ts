@@ -390,7 +390,9 @@ function attachReplicatedStateSource<T>(
     try {
       attachment.dispose();
     } catch (disposeError) {
-      throw new AggregateError([error, disposeError], "Failed to attach replicated state source");
+      throw new AggregateError([error, disposeError], "Failed to attach replicated state source", {
+        cause: disposeError,
+      });
     }
     throw error;
   }

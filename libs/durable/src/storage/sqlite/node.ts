@@ -161,6 +161,7 @@ export class NodeSqliteDatabase extends NodeSqliteExecutor implements SqliteData
           throw new AggregateError(
             [error, rollbackError],
             "SQLite transaction failed and rollback failed",
+            { cause: rollbackError },
           );
         }
         throw error;

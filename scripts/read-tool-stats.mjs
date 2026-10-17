@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import { createReadStream } from "node:fs";
-import { promises as fs } from "node:fs";
+import { createReadStream, promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
@@ -185,15 +184,6 @@ function median(numbers) {
 function bar(part, total) {
   const filled = total === 0 ? 0 : Math.round((part / total) * CHART_WIDTH);
   return `${"█".repeat(filled)}${"░".repeat(CHART_WIDTH - filled)}`;
-}
-
-function extractTextContent(content) {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((block) => block?.type === "text" && typeof block.text === "string")
-    .map((block) => block.text)
-    .join("\n");
 }
 
 function classifyRead(args) {

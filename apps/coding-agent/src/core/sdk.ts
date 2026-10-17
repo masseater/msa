@@ -367,24 +367,24 @@ export async function createAgentSession(
   );
   const buildRequestOptions = (
     requestModel: Model<any>,
-    options: ModelsSimpleStreamOptions = {},
+    streamOptions: ModelsSimpleStreamOptions = {},
   ): ModelsSimpleStreamOptions => {
     const providerRetrySettings = settingsManager.getProviderRetrySettings();
     const httpIdleTimeoutMs = settingsManager.getHttpIdleTimeoutMs();
     const effectiveTimeoutMs = httpIdleTimeoutMs === 0 ? 2147483647 : httpIdleTimeoutMs;
     const headerRunner = extensionRunnerRef.current;
     return {
-      ...options,
-      timeoutMs: options.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs,
+      ...streamOptions,
+      timeoutMs: streamOptions.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs,
       websocketConnectTimeoutMs:
-        options.websocketConnectTimeoutMs ?? settingsManager.getWebSocketConnectTimeoutMs(),
-      maxRetries: options.maxRetries ?? providerRetrySettings.maxRetries,
-      maxRetryDelayMs: options.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,
+        streamOptions.websocketConnectTimeoutMs ?? settingsManager.getWebSocketConnectTimeoutMs(),
+      maxRetries: streamOptions.maxRetries ?? providerRetrySettings.maxRetries,
+      maxRetryDelayMs: streamOptions.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,
       transformHeaders: async (requestHeaders) => {
         const headers = mergeProviderAttributionHeaders(
           requestModel,
           settingsManager,
-          options.sessionId,
+          streamOptions.sessionId,
           requestHeaders,
         );
         return headerRunner?.hasHandlers("before_provider_headers")
@@ -426,15 +426,15 @@ export async function createAgentSession(
   };
   const handleProviderStreamEvent: NonNullable<
     ModelsSimpleStreamOptions["onProviderStreamEvent"]
-  > = async (data, model) => {
+  > = async (data, eventModel) => {
     const runner = extensionRunnerRef.current;
     if (!runner?.hasHandlers("provider_stream_event")) return;
     await runner.emit({
       data,
       type: "provider_stream_event",
-      provider: model.provider,
-      api: model.api,
-      model: model.id,
+      provider: eventModel.provider,
+      api: eventModel.api,
+      model: eventModel.id,
     });
   };
 
@@ -447,20 +447,20 @@ export async function createAgentSession(
       messages: existingSession.messages,
     },
     convertToLlm: convertToLlmWithBlockImages,
-    streamFn: async (model, context, options) => {
-      const requestOptions = buildRequestOptions(model, options);
+    streamFn: async (requestModel, context, streamOptions) => {
+      const requestOptions = buildRequestOptions(requestModel, streamOptions);
       // Compaction and summaries use their own routing ids; only session requests
       // replace the cache entry, so warming restarts from them. Keep warming while
       // the current transcript still extends the request's prefix. Agent state may
       // shallow-copy the messages array or refresh the model object without changing
       // the provider request, so top-level object identity is not a valid cache key.
-      if (options?.sessionId === sessionManager.getSessionId()) {
+      if (streamOptions?.sessionId === sessionManager.getSessionId()) {
         cacheWarmer.start(
-          { model, context, options: requestOptions },
-          cacheContextIsCurrent(model),
+          { model: requestModel, context, options: requestOptions },
+          cacheContextIsCurrent(requestModel),
         );
       }
-      return modelRuntime.streamSimple(model, context, requestOptions);
+      return modelRuntime.streamSimple(requestModel, context, requestOptions);
     },
     onPayload: transformProviderPayload,
     onResponse: handleProviderResponse,

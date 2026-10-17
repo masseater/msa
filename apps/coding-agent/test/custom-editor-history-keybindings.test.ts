@@ -1,5 +1,5 @@
 import { setKeybindings, TuiMainScreen } from "@msa/tui";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { defaultEditorTheme } from "../../../libs/tui/test/test-themes.ts";
 import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";

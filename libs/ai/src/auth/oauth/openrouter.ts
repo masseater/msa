@@ -86,8 +86,9 @@ async function exchangeAuthorizationCode(
       if (response.ok) throw new Error("OpenRouter OAuth returned invalid JSON");
     }
   } catch (error) {
-    if (signal.aborted) throw new Error("Login cancelled");
-    if (controller.signal.aborted) throw new Error("OpenRouter OAuth token exchange timed out");
+    if (signal.aborted) throw new Error("Login cancelled", { cause: error });
+    if (controller.signal.aborted)
+      throw new Error("OpenRouter OAuth token exchange timed out", { cause: error });
     throw error;
   } finally {
     clearTimeout(timeout);

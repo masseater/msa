@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { getModel } from "@msa/ai/compat";
 import type { TUI } from "@msa/tui";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import type { ToolDefinition } from "../src/core/extensions/types.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";

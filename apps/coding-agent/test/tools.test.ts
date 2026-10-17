@@ -3,7 +3,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 
 import { applyPatch } from "diff";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { executeBashWithOperations } from "../src/core/bash-executor.ts";
 import type { ExtensionToolContext } from "../src/core/extensions/types.ts";
@@ -707,9 +707,9 @@ describe("Coding Agent Tools", () => {
       });
       const chunks: Buffer[] = [];
       const ops = createLocalBashOperations({ shellPath: "C:\\Windows\\System32\\bash.exe" });
-      const nameExpansion = "$" + "{name}";
-      const countExpansion = "$" + "{count}";
-      const iExpansion = "$" + "{i}";
+      const nameExpansion = "${name}";
+      const countExpansion = "${count}";
+      const iExpansion = "${i}";
       const command = `name='World'; echo "Hello, ${nameExpansion}!"; count=3; for i in $(seq 1 ${countExpansion}); do echo "Iteration ${iExpansion} of ${countExpansion}"; done`;
 
       const result = await ops.exec(command, testDir, {

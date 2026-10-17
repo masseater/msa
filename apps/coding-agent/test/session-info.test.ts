@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vite-plus/test";
 
 import type { SessionStats } from "../src/core/agent-session.ts";
 import { formatSessionInfo, type SessionInfo } from "../src/modes/interactive/session-info.ts";

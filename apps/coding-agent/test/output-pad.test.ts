@@ -1,6 +1,6 @@
 import { type Component, TuiMainScreen } from "@msa/tui";
 import { Type } from "typebox";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 
 import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";
 import type { ToolDefinition } from "../src/core/extensions/types.ts";

@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 const bedrockMock = vi.hoisted(() => ({
   constructorCalls: [] as Array<Record<string, unknown>>,

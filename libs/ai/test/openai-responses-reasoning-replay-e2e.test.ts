@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { complete, getEnvApiKey, getModel } from "../src/compat.ts";
 import type { AssistantMessage, Context, Message, Tool, ToolCall } from "../src/types.ts";

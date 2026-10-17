@@ -1,7 +1,7 @@
 import type { AgentTool } from "@msa/agent-core";
 import { type FauxResponseStep, fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { ExtensionContext } from "../../src/core/extensions/index.ts";
 import {

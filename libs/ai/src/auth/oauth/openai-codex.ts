@@ -119,7 +119,7 @@ async function fetchWithLoginCancellation(input: string, init: RequestInit): Pro
     return await fetch(input, init);
   } catch (error) {
     if (init.signal?.aborted) {
-      throw new Error("Login cancelled");
+      throw new Error("Login cancelled", { cause: error });
     }
     throw error;
   }
@@ -191,7 +191,7 @@ async function refreshAccessToken(refreshToken: string, signal: AbortSignal): Pr
       signal,
     });
   } catch (error) {
-    throw new Error(`OpenAI Codex token refresh error: ${toErrorMessage(error)}`);
+    throw new Error(`OpenAI Codex token refresh error: ${toErrorMessage(error)}`, { cause: error });
   }
 
   return readTokenResponse(response, "refresh");

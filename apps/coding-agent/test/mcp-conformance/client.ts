@@ -153,7 +153,7 @@ async function run(serverUrl: string, scenario: string): Promise<void> {
         const url = connection.oauthUrl;
         if (connection.state !== "needs-auth" || !url) throw error;
         if (signIns >= MAX_SIGN_INS)
-          throw new Error(`Still requires sign-in after ${signIns} sign-ins`);
+          throw new Error(`Still requires sign-in after ${signIns} sign-ins`, { cause: error });
         signIns++;
         log(
           `sign-in ${signIns}${connection.challenge?.scope ? ` (scope: ${connection.challenge.scope})` : ""}`,

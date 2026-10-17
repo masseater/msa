@@ -10,7 +10,7 @@ import type { ToolDiagnostic, ToolExecutionApi, ToolExecutionResult } from "@msa
 import { createNodePhotonImages } from "@msa/durable/images/node";
 import { createCodingTools } from "@msa/durable/tools";
 import { initSync, PhotonImage } from "@silvia-odwyer/photon/photon_rs.js";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { getOrThrow } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";

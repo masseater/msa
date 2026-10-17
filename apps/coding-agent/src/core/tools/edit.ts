@@ -187,7 +187,7 @@ export function createEditToolDefinition(
           throwIfAborted();
           const errorMessage =
             error instanceof Error && "code" in error ? `Error code: ${error.code}` : String(error);
-          throw new Error(`Could not edit file: ${path}. ${errorMessage}.`);
+          throw new Error(`Could not edit file: ${path}. ${errorMessage}.`, { cause: error });
         }
         throwIfAborted();
 

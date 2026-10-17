@@ -397,7 +397,7 @@ async function run(
     memo: runtime.memo,
     createTask: async <I, S extends { phase: string }, R, H extends object>(
       task: Task<I, S, R, H>,
-      input: I,
+      taskInput: I,
       options: Omit<TaskOptions, "conversationId">,
       taskContext: Context,
     ): Promise<TaskId<R>> => {
@@ -407,7 +407,7 @@ async function run(
           : options;
       let id: TaskId<R> | undefined;
       await runtime.commit(async (tx) => {
-        id = await tx.createTask(task, input, child);
+        id = await tx.createTask(task, taskInput, child);
         return undefined;
       }, taskContext);
       return id!;

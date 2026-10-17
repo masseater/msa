@@ -168,7 +168,7 @@ function finalizeTruncatedResult(
 ): string {
   const reset = "\x1b[0m";
   const hyperlinkClose = getActiveOsc8Close(prefix);
-  const visibleWidth = prefixWidth + ellipsisWidth;
+  const contentWidth = prefixWidth + ellipsisWidth;
   let result: string;
 
   if (ellipsis.length > 0) {
@@ -177,7 +177,7 @@ function finalizeTruncatedResult(
     result = `${prefix}${hyperlinkClose}${reset}`;
   }
 
-  return pad ? result + " ".repeat(Math.max(0, maxWidth - visibleWidth)) : result;
+  return pad ? result + " ".repeat(Math.max(0, maxWidth - contentWidth)) : result;
 }
 
 /**
@@ -1006,7 +1006,7 @@ function wrapSingleLine(line: string, width: number): string[] {
   }
 
   // Trailing whitespace can cause lines to exceed the requested width
-  return wrapped.length > 0 ? wrapped.map((line) => line.trimEnd()) : [""];
+  return wrapped.length > 0 ? wrapped.map((wrappedLine) => wrappedLine.trimEnd()) : [""];
 }
 
 export const PUNCTUATION_REGEX = /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/;
@@ -1069,9 +1069,9 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
     // Skip empty graphemes to avoid issues with string-width calculation
     if (!grapheme) continue;
 
-    const graphemeWidth = visibleWidth(grapheme);
+    const clusterWidth = visibleWidth(grapheme);
 
-    if (currentWidth + graphemeWidth > width) {
+    if (currentWidth + clusterWidth > width) {
       // Add specific reset for underline only (preserves background)
       const lineEndReset = tracker.getLineEndReset();
       if (lineEndReset) {
@@ -1083,7 +1083,7 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
     }
 
     currentLine += grapheme;
-    currentWidth += graphemeWidth;
+    currentWidth += clusterWidth;
   }
 
   if (currentLine) {
@@ -1302,11 +1302,11 @@ export function sliceWithWidth(
 ): { text: string; width: number } {
   if (length <= 0) return { text: "", width: 0 };
   const endCol = startCol + length;
-  let result = "",
-    resultWidth = 0,
-    currentCol = 0,
-    i = 0,
-    pendingAnsi = "";
+  let result = "";
+  let resultWidth = 0;
+  let currentCol = 0;
+  let i = 0;
+  let pendingAnsi = "";
 
   while (i < line.length) {
     const ansi = extractAnsiCode(line, i);
@@ -1359,12 +1359,12 @@ export function extractSegments(
   afterLen: number,
   strictAfter = false,
 ): { before: string; beforeWidth: number; after: string; afterWidth: number } {
-  let before = "",
-    beforeWidth = 0,
-    after = "",
-    afterWidth = 0;
-  let currentCol = 0,
-    i = 0;
+  let before = "";
+  let beforeWidth = 0;
+  let after = "";
+  let afterWidth = 0;
+  let currentCol = 0;
+  let i = 0;
   let pendingAnsiBefore = "";
   let afterStarted = false;
   const afterEnd = afterStart + afterLen;

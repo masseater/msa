@@ -117,7 +117,7 @@ function readTrustFile(path: string): TrustFile {
     parsed = JSON.parse(stripBom(readFileSync(path, "utf-8")));
   } catch (error) {
     const message = toErrorMessage(error);
-    throw new Error(`Failed to read trust store ${path}: ${message}`);
+    throw new Error(`Failed to read trust store ${path}: ${message}`, { cause: error });
   }
 
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {

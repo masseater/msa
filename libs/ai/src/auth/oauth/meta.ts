@@ -210,7 +210,7 @@ async function loginMeta(interaction: ProviderAuthInteraction): Promise<OAuthCre
     return await mintApiKey(identityToken, interaction.signal);
   } catch (e) {
     // An in-flight fetch rejects with a DOMException on abort; the login UI matches on this message.
-    if (interaction.signal.aborted) throw new Error("Login cancelled");
+    if (interaction.signal.aborted) throw new Error("Login cancelled", { cause: e });
     throw e;
   }
 }

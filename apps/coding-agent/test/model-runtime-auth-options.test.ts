@@ -1,5 +1,5 @@
 import { type AuthType, type CredentialStore, InMemoryCredentialStore } from "@msa/ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";

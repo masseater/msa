@@ -119,8 +119,8 @@ function startCallbackServer(expectedState: string): Promise<CallbackServer> {
         let authorizationResult: AuthorizationResult;
         try {
           authorizationResult = authorizationResultFromCallback(url, expectedState);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "Invalid callback";
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : "Invalid callback";
           sendHtml(response, 400, oauthErrorHtml(message));
           return;
         }
@@ -319,7 +319,7 @@ async function loginOpenAIChatGPT(
       interaction.signal,
     );
   } catch (error) {
-    if (interaction.signal.aborted) throw new Error("Login cancelled");
+    if (interaction.signal.aborted) throw new Error("Login cancelled", { cause: error });
     throw error;
   } finally {
     manualAbort.abort();

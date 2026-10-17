@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 
 import type { Message, Tool, TranscriptContext } from "../src/types.ts";
 import { getSystemMessageText, renderSystemMessageUpdate } from "../src/utils/text.ts";

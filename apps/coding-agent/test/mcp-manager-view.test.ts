@@ -1,5 +1,5 @@
 import { setKeybindings, type TUI } from "@msa/tui";
-import { beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { McpManagerView } from "../src/extensions/mcp/ui.ts";

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
-import { describe, it, vi } from "vitest";
+import { describe, it, vi } from "vite-plus/test";
 
 import type * as delta from "../src/delta/index.ts";
 import { type Ctx, createHost, hostNamed, memoryLinkPair, method, remote } from "../src/index.ts";

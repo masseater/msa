@@ -1,7 +1,7 @@
 import type { AgentTool, AgentToolCall } from "@msa/agent-core";
 import type { Usage } from "@msa/ai";
 import { Type } from "typebox";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   NESTED_CALL_LIMITS,

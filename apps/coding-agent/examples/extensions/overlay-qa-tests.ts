@@ -916,7 +916,9 @@ class AnimationDemoComponent extends BaseOverlay {
 
 // HSL to RGB helper for color cycling animation
 function hslToRgb(h: number, s: number, l: number): [number, number, number] {
-  let r: number, g: number, b: number;
+  let r: number;
+  let g: number;
+  let b: number;
   if (s === 0) {
     r = g = b = l;
   } else {

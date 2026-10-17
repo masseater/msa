@@ -1,5 +1,5 @@
 import { truncateToWidth, visibleWidth } from "@msa/tui";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 /**
  * Tests for truncateToWidth behavior with Unicode characters.
