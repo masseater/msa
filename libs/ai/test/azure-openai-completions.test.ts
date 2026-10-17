@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { getModel, normalizeContext } from "../src/compat.ts";
 import { azureProvider } from "../src/providers/azure.ts";

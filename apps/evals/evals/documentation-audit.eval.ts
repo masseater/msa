@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { Type } from "@msa/ai";
 import { defineTool } from "@msa/coding-agent";
-import { expect } from "vitest";
+import { expect } from "vite-plus/test";
 import { describeEval, toolCalls } from "vitest-evals";
 
 import { createMsaCodingAgentHarness } from "../src/harness.ts";

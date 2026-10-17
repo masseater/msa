@@ -14,7 +14,7 @@ import type {
   ToolRegistration,
 } from "@msa/durable";
 import { applyPatch } from "diff";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import {
   type ExecutionEnv,

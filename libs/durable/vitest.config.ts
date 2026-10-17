@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import { defineConfig } from "vitest/config";
+import { defineConfig } from "vite-plus";
 
 const durableSrcIndex = fileURLToPath(new URL("./src/index.ts", import.meta.url));
 const durableSrcTesting = fileURLToPath(new URL("./src/testing/index.ts", import.meta.url));

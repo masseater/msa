@@ -124,7 +124,9 @@ export function describeSessionCounts(
         : undefined;
   return [
     label ? theme.fg("muted", label) : undefined,
-    ...parts.filter(([n]) => n > 0).map(([n, glyph, label]) => `${glyph} ${n} ${label}`),
+    ...parts
+      .filter(([n]) => n > 0)
+      .map(([n, glyph, statusLabel]) => `${glyph} ${n} ${statusLabel}`),
     reviewText,
   ]
     .filter(Boolean)

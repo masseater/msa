@@ -9,7 +9,7 @@ import {
   MemoryStorage,
   type ToolRegistration,
 } from "@msa/durable";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { createToolSearchExtension } from "../src/tool-search/index.ts";
 import { allEntries, type ChatSetup, chatSetup, openChat } from "./chat-support.ts";

@@ -313,7 +313,7 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
         return await run(client);
       } catch (error) {
         if (readOnly && attempt === 1 && error instanceof McpHttpError && isTransientError(error)) {
-          await new Promise((resolve) => setTimeout(resolve, CONNECT_RETRY_DELAYS_MS[0]));
+          await new Promise((proceed) => setTimeout(proceed, CONNECT_RETRY_DELAYS_MS[0]));
           continue;
         }
         if (error instanceof McpSessionExpiredError && attempt === 1) {
@@ -326,7 +326,7 @@ export class McpServerConnection implements McpToolCaller, McpResourceServer {
         if (!this.needsSignIn(error)) throw error;
         await this.dropClient(client);
         this.markNeedsAuth();
-        throw new Error(signInRequiredMessage(this.entry));
+        throw new Error(signInRequiredMessage(this.entry), { cause: error });
       }
     }
   }

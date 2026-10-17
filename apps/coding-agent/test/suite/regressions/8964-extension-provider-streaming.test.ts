@@ -1,6 +1,6 @@
 import { type AssistantMessage, fauxAssistantMessage, fauxProvider } from "@msa/ai";
 import { getApiProvider } from "@msa/ai/compat";
-import { expect, it } from "vitest";
+import { expect, it } from "vite-plus/test";
 
 import { createHarness } from "../harness.ts";
 

@@ -77,7 +77,7 @@ If you need stronger boundaries, containerize or sandbox msa. See [apps/coding-a
 ```bash
 vp install            # Install all dependencies
 vp run build          # Refresh model data, then build all packages
-vp run verify         # Lint, type check, tests, model data check, fence ratchet
+vp run verify         # Lint, type check, tests, model data check
 ./test.sh             # Run tests (skips LLM-dependent tests without API keys)
 ./scripts/msa-dev.sh  # Run msa from sources (can be run from any directory)
 vp run install-local  # Build and install the host binary to ~/.local

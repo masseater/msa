@@ -29,9 +29,9 @@ export default function (msa: ExtensionAPI) {
             invalidate() {},
             render(width: number): string[] {
               // Compute tokens from ctx (already accessible to extensions)
-              let input = 0,
-                output = 0,
-                cost = 0;
+              let input = 0;
+              let output = 0;
+              let cost = 0;
               for (const e of ctx.sessionManager.getBranch()) {
                 if (e.type === "message" && e.message.role === "assistant") {
                   const m = e.message as AssistantMessage;

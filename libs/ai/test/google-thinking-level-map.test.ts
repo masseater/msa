@@ -1,5 +1,5 @@
 import type { GenerateContentParameters } from "@google/genai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleGoogle } from "../src/api/google-generative-ai.ts";
 import { resolveGoogleThinkingLevel } from "../src/api/google-shared.ts";

@@ -1,6 +1,6 @@
 import type { Static } from "typebox";
 import { Compile } from "typebox/compile";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 
 import {
   AnthropicMessagesCompatSchema,

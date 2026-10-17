@@ -106,13 +106,13 @@ function formatCompactReadCall(
   args: ReadRenderArgs | undefined,
   theme: Theme,
 ): string {
-  const expandHint = theme.fg("dim", ` (${keyText("app.tools.expand")} to expand)`);
+  const hint = theme.fg("dim", ` (${keyText("app.tools.expand")} to expand)`);
   if (classification.kind === "skill") {
     return (
       theme.fg("customMessageLabel", `\x1b[1m[skill]\x1b[22m `) +
       theme.fg("customMessageText", classification.label) +
       styledReadLineRange(args, theme) +
-      expandHint
+      hint
     );
   }
 
@@ -121,7 +121,7 @@ function formatCompactReadCall(
     " " +
     theme.fg("accent", classification.label) +
     styledReadLineRange(args, theme) +
-    expandHint
+    hint
   );
 }
 function formatReadResult(

@@ -25,7 +25,7 @@
 import { writeFileSync } from "fs";
 
 import { Type } from "typebox";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { completeSimple, getEnvApiKey, getModel } from "../src/compat.ts";
 import type {

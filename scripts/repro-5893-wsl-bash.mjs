@@ -4,9 +4,9 @@ import { existsSync } from "node:fs";
 import { createBashTool } from "../apps/coding-agent/src/core/tools/bash.ts";
 
 const shellPath = "C:\\Windows\\System32\\bash.exe";
-const nameExpansion = "$" + "{name}";
-const countExpansion = "$" + "{count}";
-const iExpansion = "$" + "{i}";
+const nameExpansion = "${name}";
+const countExpansion = "${count}";
+const iExpansion = "${i}";
 
 function getTextOutput(result) {
   return result.content

@@ -30,7 +30,7 @@ import {
   UsageDoc,
   watchEvents,
 } from "@msa/durable";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { selectCut, serializeConversation } from "../src/harness/compaction.ts";
 import { orderToolResults } from "../src/harness/context.ts";

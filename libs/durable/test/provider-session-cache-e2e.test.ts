@@ -9,7 +9,7 @@ import {
   MemoryStorage,
   ProviderDoc,
 } from "@msa/durable";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleOpenAICodexResponses } from "../../ai/src/api/openai-codex-responses.ts";
 import { resolveApiKey } from "../../ai/test/oauth.ts";

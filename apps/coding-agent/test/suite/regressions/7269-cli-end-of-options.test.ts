@@ -1,5 +1,5 @@
 import { fauxAssistantMessage } from "@msa/ai";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { parseArgs } from "../../../src/cli/args.ts";
 import { createHarness, getUserTexts, type Harness } from "../harness.ts";

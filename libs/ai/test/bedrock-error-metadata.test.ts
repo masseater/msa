@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 type SendResult = { kind: "reject"; error: unknown } | { kind: "resolve"; response: unknown };
 

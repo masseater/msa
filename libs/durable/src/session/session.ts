@@ -4,7 +4,7 @@ import { type Op, track } from "@msa/chord/delta";
 
 import {
   type AnyDocToken,
-  addressId,
+  addressId as documentAddressId,
   checkRecordScope,
   checkRecordVersion,
   materializeDocument,
@@ -228,6 +228,7 @@ export class SessionImpl implements Session {
     this.#failed.reject(new SessionFailed(error));
     // Seal first, so a report handler that calls back finds the Session failed. Closing runs the close listeners
     // synchronously; a failing backend close is the caller's to see, and here nobody waits.
+    // oxlint-disable-next-line promise/no-promise-in-callback -- close を待たないのは意図的な fire-and-forget（呼び出し側が待つ）
     this.close(BACKGROUND_CONTEXT).catch(() => {});
     this.report(error);
   }
@@ -784,7 +785,7 @@ export class SessionImpl implements Session {
       this.fail(error);
       throw error;
     }
-    for (const document of documents) this.#touchDocument(addressId(document.record));
+    for (const document of documents) this.#touchDocument(documentAddressId(document.record));
     this.#publish(seq, writes, documents, context);
     this.#sweepDocuments();
     return result;

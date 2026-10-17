@@ -7,7 +7,7 @@ import {
   type UserMessage,
 } from "@msa/ai";
 import { Type } from "typebox";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { agentLoop, agentLoopContinue, runAgentLoop, runToolCall } from "../src/agent-loop.ts";
 import { setDefaultStreamFn } from "../src/index.ts";

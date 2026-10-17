@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 
 import { getDocsPath, getExamplesPath, getReadmePath } from "@msa/coding-agent";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { buildSystemPrompt } from "../../coding-agent/src/core/system-prompt.ts";
 import {

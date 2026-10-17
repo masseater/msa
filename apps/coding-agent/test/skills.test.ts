@@ -1,7 +1,7 @@
 import { homedir } from "os";
 import { join, resolve } from "path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import type { ResourceDiagnostic } from "../src/core/diagnostics.ts";
 import {

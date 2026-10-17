@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import type { AuthContext } from "../src/auth/types.ts";
 import { getModels as getCompatModels } from "../src/compat.ts";

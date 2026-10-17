@@ -500,7 +500,7 @@ export function calculateImageCellSize(
   imageDimensions: ImageDimensions,
   maxWidthCells: number,
   maxHeightCells?: number,
-  cellDimensions: CellDimensions = { widthPx: 9, heightPx: 18 },
+  cellSize: CellDimensions = { widthPx: 9, heightPx: 18 },
   optimizeAspectRatio = false,
 ): ImageCellSize {
   const maxWidth = Math.max(1, Math.floor(maxWidthCells));
@@ -509,15 +509,15 @@ export function calculateImageCellSize(
   const imageWidth = Math.max(1, imageDimensions.widthPx);
   const imageHeight = Math.max(1, imageDimensions.heightPx);
 
-  const widthScale = (maxWidth * cellDimensions.widthPx) / imageWidth;
+  const widthScale = (maxWidth * cellSize.widthPx) / imageWidth;
   const heightScale =
-    maxHeight === undefined ? widthScale : (maxHeight * cellDimensions.heightPx) / imageHeight;
+    maxHeight === undefined ? widthScale : (maxHeight * cellSize.heightPx) / imageHeight;
   const scale = Math.min(widthScale, heightScale);
 
   const scaledWidthPx = imageWidth * scale;
   const scaledHeightPx = imageHeight * scale;
-  let columns = Math.max(1, Math.min(maxWidth, Math.ceil(scaledWidthPx / cellDimensions.widthPx)));
-  const heightRows = scaledHeightPx / cellDimensions.heightPx;
+  let columns = Math.max(1, Math.min(maxWidth, Math.ceil(scaledWidthPx / cellSize.widthPx)));
+  const heightRows = scaledHeightPx / cellSize.heightPx;
   let rows = Math.max(1, Math.ceil(heightRows));
   if (maxHeight !== undefined) {
     rows = Math.min(maxHeight, rows);
@@ -529,11 +529,11 @@ export function calculateImageCellSize(
 
   if (widthScale <= heightScale) {
     const idealRows =
-      (columns * cellDimensions.widthPx * imageHeight) / (imageWidth * cellDimensions.heightPx);
+      (columns * cellSize.widthPx * imageHeight) / (imageWidth * cellDimensions.heightPx);
     rows = chooseLessDistortedCellCount(rows, idealRows);
   } else {
     const idealColumns =
-      (rows * cellDimensions.heightPx * imageWidth) / (imageHeight * cellDimensions.widthPx);
+      (rows * cellSize.heightPx * imageWidth) / (imageHeight * cellDimensions.widthPx);
     columns = chooseLessDistortedCellCount(columns, idealColumns);
   }
 
@@ -543,9 +543,9 @@ export function calculateImageCellSize(
 export function calculateImageRows(
   imageDimensions: ImageDimensions,
   targetWidthCells: number,
-  cellDimensions: CellDimensions = { widthPx: 9, heightPx: 18 },
+  cellSize: CellDimensions = { widthPx: 9, heightPx: 18 },
 ): number {
-  return calculateImageCellSize(imageDimensions, targetWidthCells, undefined, cellDimensions).rows;
+  return calculateImageCellSize(imageDimensions, targetWidthCells, undefined, cellSize).rows;
 }
 
 export function getPngDimensions(base64Data: string): ImageDimensions | null {

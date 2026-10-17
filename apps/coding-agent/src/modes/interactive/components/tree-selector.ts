@@ -739,9 +739,9 @@ class TreeList implements Component {
       const totalChars = displayIndent * 3;
       const prefixChars: string[] = [];
       const isFolded = this.foldedNodes.has(entry.id);
-      for (let i = 0; i < totalChars; i++) {
-        const level = Math.floor(i / 3);
-        const posInLevel = i % 3;
+      for (let charIndex = 0; charIndex < totalChars; charIndex++) {
+        const level = Math.floor(charIndex / 3);
+        const posInLevel = charIndex % 3;
 
         // Check if there's a gutter at this level
         const gutter = flatNode.gutters.find((g) => g.position === level);

@@ -9,7 +9,7 @@ import {
   type TaskId,
   type TaskRecord,
 } from "@msa/durable";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
 import {

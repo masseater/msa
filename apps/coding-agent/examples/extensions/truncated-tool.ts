@@ -80,7 +80,7 @@ export default function (msa: ExtensionAPI) {
             details: { pattern, path: searchPath, glob, matchCount: 0 } as RgDetails,
           };
         }
-        throw new Error(`ripgrep failed: ${err.message}`);
+        throw new Error(`ripgrep failed: ${err.message}`, { cause: err });
       }
 
       if (!output.trim()) {

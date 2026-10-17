@@ -43,14 +43,14 @@ async function describeAccounts(): Promise<string> {
         : account.tokenCommand
           ? "tokenCommand"
           : "msa environment";
-      const login = status.loggedIn
+      const loginText = status.loggedIn
         ? `logged in${status.email ? ` as ${status.email}` : ""}`
         : `not logged in${status.detail ? ` (${status.detail})` : ""}`;
       const block = blockOf(account);
       const state = block
         ? `blocked until ${new Date(block.until).toLocaleString()} (${block.reason})`
         : "available";
-      return `${index + 1}. ${account.name}  ${auth}  ${login}  ${state}${account.auto === false ? "  (not in rotation)" : ""}`;
+      return `${index + 1}. ${account.name}  ${auth}  ${loginText}  ${state}${account.auto === false ? "  (not in rotation)" : ""}`;
     })
     .join("\n");
 }

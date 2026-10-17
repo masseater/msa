@@ -2,7 +2,7 @@ import type { AgentTool } from "@msa/agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createHarness, getAssistantTexts, getUserTexts, type Harness } from "../harness.ts";
 

@@ -1051,7 +1051,7 @@ export class DefaultPackageManager implements PackageManager {
         ? "project"
         : "user";
     // `-e builtin:<name>` loads a built-in extension; the resource loader reports unknown names.
-    for (const source of sources.filter((source) => source.startsWith(BUILTIN_PATH_PREFIX))) {
+    for (const source of sources.filter((candidate) => candidate.startsWith(BUILTIN_PATH_PREFIX))) {
       this.addResource(
         accumulator.extensions,
         source,

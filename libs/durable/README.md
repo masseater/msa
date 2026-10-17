@@ -756,7 +756,7 @@ Custom backends can run the shared conformance suite with any Vitest- or Jest-co
 
 ```typescript
 import { registerStorageConformance } from "@msa/durable/testing";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 registerStorageConformance({ describe, expect, it }, "My Storage", async (use) => {
   const storage = await openMyStorage();

@@ -6,7 +6,7 @@
 import type { AgentTool } from "@msa/agent-core";
 import type { AssistantMessage } from "@msa/ai";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createHarness, createHarnessWithExtensions, type Harness } from "./test-harness.ts";
 

@@ -4,7 +4,7 @@ import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
 import { Type } from "typebox";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { complete, getModel, stream } from "../src/compat.ts";
 import type {
@@ -1768,7 +1768,7 @@ describe("Generate E2E Tests", () => {
         console.log("Pulling gpt-oss:20b model for Ollama tests...");
         try {
           execSync("ollama pull gpt-oss:20b", { stdio: "inherit" });
-        } catch (_e) {
+        } catch {
           console.warn("Failed to pull gpt-oss:20b model, tests will be skipped");
           return;
         }

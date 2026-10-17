@@ -443,13 +443,13 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
           getClient: async () => {
             // A prepared call can outlive this definition's connection while the readiness
             // hook waits for a disable/re-enable. Resolve the replacement at execution time.
-            const current = findServer(server);
-            if (!current || !isEnabled(current))
+            const resolved = findServer(server);
+            if (!resolved || !isEnabled(resolved))
               throw new Error(`MCP server "${server}" is disabled.`);
-            const client = current.connection;
+            const client = resolved.connection;
             if (!client) throw new Error(`MCP server "${server}" is still starting.`);
             if (
-              getMcpToolExposure(current.entry.config, tool.name) === "hidden" ||
+              getMcpToolExposure(resolved.entry.config, tool.name) === "hidden" ||
               (client.state === "connected" &&
                 !client.tools.some((offered) => offered.name === tool.name))
             ) {
@@ -457,7 +457,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
             }
             return client;
           },
-          readableResources: () => resourceServers().some((current) => current.name === server),
+          readableResources: () => resourceServers().some((candidate) => candidate.name === server),
         });
         definitions.set(definition.name, definition);
         msa.registerTool(definition);
@@ -617,12 +617,12 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         credentials: getCredentials(runtime),
         providerToken: async (provider) => modelRegistry?.getApiKeyForProvider(provider),
         log: getServerLog(runtime),
-        onTools: (connection) => {
-          if (isCurrent()) registerTools(connection);
+        onTools: (serverConnection) => {
+          if (isCurrent()) registerTools(serverConnection);
         },
-        onChange: (connection) => {
-          if (isCurrent()) onConnectionChange(connection);
-          else tokensAtSignIn.delete(connection);
+        onChange: (serverConnection) => {
+          if (isCurrent()) onConnectionChange(serverConnection);
+          else tokensAtSignIn.delete(serverConnection);
         },
       });
       server.connection = connection;
@@ -670,8 +670,8 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
         let onAbort: (() => void) | undefined;
         await Promise.race([
           Promise.all(ready.map((attempt) => attempt.ready)),
-          new Promise<void>((resolve) => {
-            onAbort = () => resolve();
+          new Promise<void>((done) => {
+            onAbort = () => done();
             signal?.addEventListener("abort", onAbort, { once: true });
           }),
         ]);
@@ -962,10 +962,11 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
 
     const showTools = async (ui: McpUi, server: McpServer) => {
       const exposure = exposureOf(server.entry);
-      const overridden = Object.keys(server.entry.config.toolExposure ?? {}).length > 0;
+      const hasToolExposureOverrides =
+        Object.keys(server.entry.config.toolExposure ?? {}).length > 0;
       await ui.menu(() => ({
         title: `Tools of ${server.entry.name}`,
-        details: `Exposure ${exposure}: ${exposure === "hidden" ? "unreachable" : EXPOSURE_DESCRIPTIONS[exposure]}${overridden ? "\nSome tools override it with toolExposure." : ""}`,
+        details: `Exposure ${exposure}: ${exposure === "hidden" ? "unreachable" : EXPOSURE_DESCRIPTIONS[exposure]}${hasToolExposureOverrides ? "\nSome tools override it with toolExposure." : ""}`,
         items: (server.connection?.tools ?? []).map((tool) => {
           const toolExposure = getMcpToolExposure(server.entry.config, tool.name);
           const description = firstLine(tool.description ?? "");
@@ -1140,7 +1141,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
     const pickServer = async (
       name: string | undefined,
       ctx: ExtensionCommandContext,
-      options: {
+      criteria: {
         eligible: (server: McpServer) => boolean;
         preferred: (server: McpServer) => boolean;
         none: string;
@@ -1149,15 +1150,15 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       if (name) {
         const server = findServer(name);
         if (!server) ctx.ui.notify(`No MCP server named "${name}".`, "error");
-        else if (!options.eligible(server)) ctx.ui.notify(options.none, "error");
-        return server && options.eligible(server) ? server : undefined;
+        else if (!criteria.eligible(server)) ctx.ui.notify(criteria.none, "error");
+        return server && criteria.eligible(server) ? server : undefined;
       }
-      const candidates = servers.filter(options.eligible);
+      const candidates = servers.filter(criteria.eligible);
       if (candidates.length === 0) {
-        ctx.ui.notify(options.none, "info");
+        ctx.ui.notify(criteria.none, "info");
         return undefined;
       }
-      const preferred = candidates.filter(options.preferred);
+      const preferred = candidates.filter(criteria.preferred);
       if (candidates.length === 1) return candidates[0];
       if (preferred.length === 1) return preferred[0];
       const choice = await ctx.ui.select(
@@ -1192,11 +1193,11 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
             ctx.ui.notify(`Sign in to MCP server "${name}" in your browser:\n${url.href}`, "info");
             openUrl(url.href);
           },
-          promptForRedirectUrl: (signal) =>
+          promptForRedirectUrl: (promptSignal) =>
             ctx.ui.input(
               `Waiting for sign-in to "${name}". If the browser cannot reach this machine, paste the URL it was redirected to.`,
               "http://127.0.0.1:.../callback?code=...",
-              { signal },
+              { signal: promptSignal },
             ),
         });
       }
@@ -1239,7 +1240,7 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       }
       // The MCP client loads only now, so sessions without servers never pay for it. Waiting one
       // event loop turn lets the first render happen before loading and connecting.
-      const runtime = new Promise((resolve) => setImmediate(resolve)).then(() => loadMcpRuntime());
+      const runtime = new Promise((proceed) => setImmediate(proceed)).then(() => loadMcpRuntime());
       pending = Promise.all(enabled.map((server) => startConnection(server, runtime)))
         .then(() => {
           if (!signal.aborted) reportProblems(ctx);
@@ -1265,8 +1266,8 @@ export function createMcpExtension(options: McpExtensionOptions = {}): Extension
       let timer: NodeJS.Timeout | undefined;
       const finished = await Promise.race([
         Promise.all(ready).then(() => true),
-        new Promise<boolean>((resolve) => {
-          timer = setTimeout(() => resolve(false), startupWaitMs);
+        new Promise<boolean>((finish) => {
+          timer = setTimeout(() => finish(false), startupWaitMs);
         }),
       ]);
       clearTimeout(timer);

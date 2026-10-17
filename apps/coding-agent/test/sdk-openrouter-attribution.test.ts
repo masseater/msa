@@ -11,7 +11,7 @@ import {
   type ProviderHeaders,
   type SimpleStreamOptions,
 } from "@msa/ai";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { createAgentSession } from "../src/core/sdk.ts";

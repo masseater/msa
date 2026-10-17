@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { ModelsDevReasoningOption } from "../scripts/models-dev-reasoning-options.ts";
 import { streamSimple } from "../src/api/anthropic-messages.ts";

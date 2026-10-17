@@ -8,7 +8,7 @@ import {
   fauxToolCall,
 } from "@msa/ai";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import jevRouter from "../examples/extensions/jev-router.ts";
 import {

@@ -434,20 +434,20 @@ export class TaskScheduler {
     const reached = await this.#session.commitWith(async (tx) => {
       const queued = await this.#loadScopes(true);
       const scope = { conversation: conversationId };
-      const reached: TaskId[] = [];
+      const reachedIds: TaskId[] = [];
       const walk = this.#walkDown(conversationNode(conversationId), {
         crossBackground: background,
       });
       for (const { node, live } of walk) {
         if (live === undefined || (node.background && !background)) continue;
-        reached.push(live.id);
+        reachedIds.push(live.id);
         if (!live.abortRequested || live.abortReason !== undefined) tx.setTask(withAbortMark(live));
       }
       for (const id of queued) {
         if (this.#inScope({ conversation: id }, scope, background) === true)
           await this.#withdrawInputs(tx, id);
       }
-      return reached;
+      return reachedIds;
     }, context);
     if (background) for (const id of reached) await this.waitForTask(id, context);
     await this.waitForIdle(conversationId, context);
@@ -975,7 +975,11 @@ export class TaskScheduler {
     return overlay?.tasks.get(id) ?? this.#live.get(id) ?? this.#settled.get(id);
   }
 
-  /** Walk up from `start`: owner tasks and conversations, ending at an ownerless root or an edge not loaded yet. */
+  /**
+   * Walk up from `start`: owner tasks and conversations, ending at an ownerless root or an edge not loaded yet.
+   *
+   * @yields The owner task or conversation at each step, and `unknown` when the edge is not loaded.
+   */
   *#above(start: Up, overlay?: Overlay): Generator<Step> {
     let at: Up | undefined = start;
     while (at !== undefined) {
@@ -1003,6 +1007,8 @@ export class TaskScheduler {
    * The tasks below `start` that a walk down reaches: those `#below` lists and, under an overlay, the commit's new tasks,
    * with its candidates in place of committed records. Background tasks are reached but not entered, unless
    * `crossBackground`, and neither are the tasks `enter` rejects. A loop, as chains can be deeper than the call stack.
+   *
+   * @yields Tasks below `start` in walk order.
    */
   *#walkDown(
     start: Node,
@@ -1421,8 +1427,8 @@ export class TaskScheduler {
     const runtime = this.#runtime(invocation, phase);
     let previous: PhaseResult | undefined;
     for (;;) {
-      const current = await this.#step(invocation, (tx, current) =>
-        this.#decide(tx, current, previous, state),
+      const current = await this.#step(invocation, (tx, phaseState) =>
+        this.#decide(tx, phaseState, previous, state),
       );
       // Close may seal between the decision and dispatch.
       if (current === undefined || this.#closing) return;

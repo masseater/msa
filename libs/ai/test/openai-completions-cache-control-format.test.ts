@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
@@ -114,7 +114,7 @@ function expectAnthropicCacheMarkers(params: CapturedParams): void {
   const instructionMessage = getInstructionMessage(params);
   expect(instructionMessage).toBeDefined();
   expect(Array.isArray(instructionMessage?.content)).toBe(true);
-  expect((instructionMessage?.content as TextPart[])[0]?.cache_control).toEqual({
+  expect((instructionMessage?.content as TextPart[] | undefined)?.[0]?.cache_control).toEqual({
     type: "ephemeral",
   });
 

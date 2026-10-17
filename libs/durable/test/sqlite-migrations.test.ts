@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
 import {

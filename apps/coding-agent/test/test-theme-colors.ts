@@ -28,10 +28,10 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   r /= 255;
   g /= 255;
   b /= 255;
-  const max = Math.max(r, g, b),
-    min = Math.min(r, g, b);
-  let h = 0,
-    s = 0;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
   const l = (max + min) / 2;
   if (max !== min) {
     const d = max - min;
@@ -52,7 +52,9 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
 }
 
 function hslToRgb(h: number, s: number, l: number): [number, number, number] {
-  let r: number, g: number, b: number;
+  let r: number;
+  let g: number;
+  let b: number;
   if (s === 0) {
     r = g = b = l;
   } else {

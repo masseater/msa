@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { convertMessages } from "../src/api/openai-completions.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";

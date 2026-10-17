@@ -513,9 +513,11 @@ export async function showLlamaUi(
   await ctx.ui.custom<void>((tui, theme, keybindings, done) => {
     const view = new LlamaView(tui, theme, keybindings);
     void run(view).then(
+      // oxlint-disable-next-line promise/no-callback-in-promise -- UI の完了コールバックを promise の完了で呼ぶブリッジ
       () => done(),
       (error: unknown) => {
         ctx.ui.notify(toErrorMessage(error), "error");
+        // oxlint-disable-next-line promise/no-callback-in-promise -- UI の完了コールバックを promise の完了で呼ぶブリッジ
         done();
       },
     );

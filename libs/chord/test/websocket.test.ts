@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import type { IncomingMessage } from "node:http";
 
 import { Type } from "typebox";
-import { describe, it } from "vitest";
+import { describe, it } from "vite-plus/test";
 import { WebSocketServer } from "ws";
 
 import {

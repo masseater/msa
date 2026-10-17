@@ -6,7 +6,7 @@ import {
   type TranscriptContext,
 } from "@msa/ai";
 import { Type } from "typebox";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import type { ExtensionAPI, ExtensionFactory } from "../../../src/index.ts";
 import { createHarness } from "../harness.ts";

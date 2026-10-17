@@ -1,7 +1,7 @@
 import { Worker } from "node:worker_threads";
 
 import * as codemode from "@msa/codemode";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { executeCodemode } from "../src/extensions/codemode/execute.ts";
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { describe, it } from "vitest";
+import { describe, it } from "vite-plus/test";
 
 import { createHost } from "../src/index.ts";
 

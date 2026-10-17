@@ -13,7 +13,7 @@ import {
   McpSessionExpiredError,
 } from "@msa/mcp";
 import { createInMemoryTransportPair, type InMemoryTransport } from "@msa/mcp/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { InMemoryAuthStorageBackend } from "../src/core/auth-storage.ts";
 import { truncateMiddle } from "../src/core/tools/truncate.ts";

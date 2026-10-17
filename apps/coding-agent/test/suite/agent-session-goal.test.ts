@@ -7,7 +7,7 @@ import {
   type TranscriptContext,
 } from "@msa/ai";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { GOAL_ENTRY_TYPE, type GoalEntryData } from "../../src/core/goal.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";

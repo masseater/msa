@@ -1460,8 +1460,8 @@ export class Editor implements Component, Focusable {
         }
 
         // Renumber markers with ids greater than the removed one.
-        this.state.lines = this.state.lines.map((line) =>
-          line.replace(PASTE_MARKER_REGEX, (fullMatch, idGroup, suffixGroup) => {
+        this.state.lines = this.state.lines.map((lineText) =>
+          lineText.replace(PASTE_MARKER_REGEX, (fullMatch, idGroup, suffixGroup) => {
             const x = Number(idGroup);
             if (x <= targetId) return fullMatch;
             return `[paste #${x - 1}${suffixGroup}]`;
@@ -1875,8 +1875,8 @@ export class Editor implements Component, Focusable {
     if (this.autocompleteState) {
       this.updateAutocomplete();
     } else {
-      const currentLine = this.state.lines[this.state.cursorLine] || "";
-      const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
+      const cursorText = this.state.lines[this.state.cursorLine] || "";
+      const textBeforeCursor = cursorText.slice(0, this.state.cursorCol);
       // Slash command context
       if (this.isInSlashCommandContext(textBeforeCursor)) {
         this.tryTriggerAutocomplete();

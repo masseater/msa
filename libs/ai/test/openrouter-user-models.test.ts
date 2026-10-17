@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { RefreshModelsContext } from "../src/models.ts";
 import type { OpenRouterModel } from "../src/providers/openrouter-api.ts";

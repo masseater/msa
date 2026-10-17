@@ -275,14 +275,14 @@ function toMetricName(label) {
 }
 
 async function waitForExit(child, errorPrefix) {
-  return await new Promise((resolve, reject) => {
+  return await new Promise((finish, reject) => {
     child.once("error", reject);
     child.once("exit", (code, signal) => {
       if (signal) {
         reject(new Error(`${errorPrefix} exited from signal ${signal}`));
         return;
       }
-      resolve(code ?? 0);
+      finish(code ?? 0);
     });
   });
 }

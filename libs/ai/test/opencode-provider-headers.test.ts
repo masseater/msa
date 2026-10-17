@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { fauxAssistantMessage } from "../src/providers/faux.ts";
 import { withOpenCodeSessionHeader } from "../src/providers/opencode-headers.ts";

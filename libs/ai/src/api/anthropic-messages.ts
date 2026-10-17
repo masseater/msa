@@ -1,4 +1,4 @@
-import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
+import Anthropic, { APIError, type ClientOptions } from "@anthropic-ai/sdk";
 import type {
   BetaInputTransformation,
   BetaStopReason,
@@ -575,6 +575,7 @@ async function* iterateAnthropicEvents(
       const message = toErrorMessage(error);
       throw new Error(
         `Could not parse Anthropic SSE event ${sse.event}: ${message}; data=${sse.data}; raw=${sse.raw.join("\\n")}`,
+        { cause: error },
       );
     }
   }
@@ -589,7 +590,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
   context: TranscriptContext,
   options?: AnthropicOptions,
 ): AssistantMessageEventStream => {
-  const stream = new AssistantMessageEventStream();
+  const events = new AssistantMessageEventStream();
   const normalizedContext = resolveTranscript(
     context,
     getAnthropicCompat(model).supportsMidConvoSystemMessages,
@@ -681,7 +682,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
             options?.signal?.aborted ||
             disablePreferredStrictTools ||
             !built.hasPreferredStrictTools ||
-            !(error instanceof Anthropic.APIError) ||
+            !(error instanceof APIError) ||
             error.status !== 400 ||
             error.type !== "invalid_request_error" ||
             ![
@@ -705,7 +706,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
         { status: response.status, headers: headersToRecord(response.headers) },
         model,
       );
-      stream.push({ type: "start", partial: output });
+      events.push({ type: "start", partial: output });
 
       type Block = (ThinkingContent | TextContent | (ToolCall & { partialJson: string })) & {
         index: number;
@@ -757,7 +758,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
               index: event.index,
             };
             output.content.push(block);
-            stream.push({
+            events.push({
               type: "text_start",
               contentIndex: output.content.length - 1,
               partial: output,
@@ -770,7 +771,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
               index: event.index,
             };
             output.content.push(block);
-            stream.push({
+            events.push({
               type: "thinking_start",
               contentIndex: output.content.length - 1,
               partial: output,
@@ -784,7 +785,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
               index: event.index,
             };
             output.content.push(block);
-            stream.push({
+            events.push({
               type: "thinking_start",
               contentIndex: output.content.length - 1,
               partial: output,
@@ -801,7 +802,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
               index: event.index,
             };
             output.content.push(block);
-            stream.push({
+            events.push({
               type: "toolcall_start",
               contentIndex: output.content.length - 1,
               partial: output,
@@ -813,7 +814,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
             const block = blocks[index];
             if (block && block.type === "text") {
               block.text += event.delta.text;
-              stream.push({
+              events.push({
                 type: "text_delta",
                 contentIndex: index,
                 delta: event.delta.text,
@@ -825,7 +826,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
             const block = blocks[index];
             if (block && block.type === "thinking") {
               block.thinking += event.delta.thinking;
-              stream.push({
+              events.push({
                 type: "thinking_delta",
                 contentIndex: index,
                 delta: event.delta.thinking,
@@ -838,7 +839,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
             if (block && block.type === "toolCall") {
               block.partialJson += event.delta.partial_json;
               block.arguments = parseStreamingJson(block.partialJson);
-              stream.push({
+              events.push({
                 type: "toolcall_delta",
                 contentIndex: index,
                 delta: event.delta.partial_json,
@@ -859,14 +860,14 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
           if (block) {
             delete (block as any).index;
             if (block.type === "text") {
-              stream.push({
+              events.push({
                 type: "text_end",
                 contentIndex: index,
                 content: block.text,
                 partial: output,
               });
             } else if (block.type === "thinking") {
-              stream.push({
+              events.push({
                 type: "thinking_end",
                 contentIndex: index,
                 content: block.thinking,
@@ -877,7 +878,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
               // Finalize in-place and strip the scratch buffer so replay only
               // carries parsed arguments.
               delete (block as { partialJson?: string }).partialJson;
-              stream.push({
+              events.push({
                 type: "toolcall_end",
                 contentIndex: index,
                 toolCall: block,
@@ -963,8 +964,8 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
         });
       }
 
-      stream.push({ type: "done", reason: output.stopReason, message: output });
-      stream.end();
+      events.push({ type: "done", reason: output.stopReason, message: output });
+      events.end();
     } catch (error) {
       for (const block of output.content) {
         delete (block as { index?: number }).index;
@@ -973,12 +974,12 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
       }
       output.stopReason = options?.signal?.aborted ? "aborted" : "error";
       output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
-      stream.push({ type: "error", reason: output.stopReason, error: output });
-      stream.end();
+      events.push({ type: "error", reason: output.stopReason, error: output });
+      events.end();
     }
   })();
 
-  return stream;
+  return events;
 };
 
 /**
@@ -1139,7 +1140,7 @@ function createClient(
 function getBetaFeatures(
   model: Model<"anthropic-messages">,
   context: TranscriptContext,
-  isOAuthToken: boolean,
+  usesOAuth: boolean,
   nativeToolChanges: boolean,
   options?: AnthropicOptions,
 ): NonNullable<MessageCreateParamsStreaming["betas"]> {
@@ -1162,7 +1163,7 @@ function getBetaFeatures(
   }
 
   const features: NonNullable<MessageCreateParamsStreaming["betas"]> = [];
-  if (isOAuthToken) features.push("claude-code-20250219", "oauth-2025-04-20");
+  if (usesOAuth) features.push("claude-code-20250219", "oauth-2025-04-20");
   if (shouldUseFineGrainedToolStreamingBeta(model, context))
     features.push(FINE_GRAINED_TOOL_STREAMING_BETA);
   if (
@@ -1184,7 +1185,7 @@ function getBetaFeatures(
 function buildParams(
   model: Model<"anthropic-messages">,
   context: TranscriptContext,
-  isOAuthToken: boolean,
+  usesOAuth: boolean,
   options?: AnthropicOptions,
   disablePreferredStrictTools = false,
 ): {
@@ -1212,7 +1213,7 @@ function buildParams(
   ): BetaTool[] => {
     const definitions = convertTools(
       tools,
-      isOAuthToken,
+      usesOAuth,
       compat.supportsEagerToolInputStreaming,
       compat.supportsStrictTools,
       toolCacheControl,
@@ -1244,14 +1245,14 @@ function buildParams(
   const effortMessages = model.compat?.supportsMidConvoEffort === true && !thinkingDisabled;
   const converted = convertMessages(
     conversationMessages,
-    isOAuthToken,
+    usesOAuth,
     cacheControl,
     compat.allowEmptySignature,
     effortMessages ? model.provider : undefined,
     nativeToolChanges ? convertToolDefinitions : undefined,
   );
   const activeEffort = options?.effort ?? "high";
-  const betaFeatures = getBetaFeatures(model, context, isOAuthToken, nativeToolChanges, options);
+  const betaFeatures = getBetaFeatures(model, context, usesOAuth, nativeToolChanges, options);
   const params: MessageCreateParamsStreaming = {
     model: model.id,
     messages: effortMessages
@@ -1263,7 +1264,7 @@ function buildParams(
   };
 
   // For OAuth tokens, we MUST include Claude Code identity
-  if (isOAuthToken) {
+  if (usesOAuth) {
     params.system = [
       {
         type: "text",
@@ -1409,7 +1410,7 @@ interface ConvertedAnthropicMessages {
 
 function convertMessages(
   transformedMessages: Message[],
-  isOAuthToken: boolean,
+  usesOAuth: boolean,
   cacheControl?: CacheControlEphemeral,
   allowEmptySignature = false,
   managedProvider?: string,
@@ -1448,7 +1449,7 @@ function convertMessages(
             type: "tool_removal",
             tool: {
               type: "tool_reference",
-              name: isOAuthToken ? toClaudeCodeName(tool.name) : tool.name,
+              name: usesOAuth ? toClaudeCodeName(tool.name) : tool.name,
             },
           });
         }
@@ -1549,7 +1550,7 @@ function convertMessages(
           blocks.push({
             type: "tool_use",
             id: block.id,
-            name: isOAuthToken ? toClaudeCodeName(block.name) : block.name,
+            name: usesOAuth ? toClaudeCodeName(block.name) : block.name,
             input: block.arguments ?? {},
           });
         }
@@ -1694,7 +1695,7 @@ const isAnthropicStrictUnsupportedKeyword: UnsupportedStrictSchemaKeywordCheck =
 
 function convertTools(
   tools: Tool[],
-  isOAuthToken: boolean,
+  usesOAuth: boolean,
   supportsEagerToolInputStreaming: boolean,
   supportsStrictTools: boolean,
   cacheControl?: CacheControlEphemeral,
@@ -1731,7 +1732,7 @@ function convertTools(
         : legacyInputSchema;
 
     return {
-      name: isOAuthToken ? toClaudeCodeName(tool.name) : tool.name,
+      name: usesOAuth ? toClaudeCodeName(tool.name) : tool.name,
       description: tool.description,
       ...(supportsEagerToolInputStreaming ? { eager_input_streaming: true } : {}),
       ...(strict === true ? { strict: true } : {}),

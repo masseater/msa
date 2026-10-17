@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
 import type { ToolResultMessage } from "@msa/ai/compat";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { InMemoryAuthStorageBackend } from "../../src/core/auth-storage.ts";
 import { emitSessionShutdownEvent } from "../../src/core/extensions/runner.ts";

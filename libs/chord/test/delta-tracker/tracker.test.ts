@@ -1,6 +1,6 @@
 import { isProxy } from "node:util/types";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   apply,
@@ -283,6 +283,7 @@ describe("delta tracker transactional overlay lifecycle", () => {
   });
 
   it("reads deleted own properties as absent", () => {
+    // oxlint-disable-next-line eslint/no-extend-native -- 継承プロパティの読み取りテストで、prototype に値を仕込むのが目的
     Object.defineProperty(Object.prototype, "trackerInherited", {
       value: 7,
       writable: true,
@@ -1526,6 +1527,7 @@ describe("delta tracker object emission scaling", () => {
 describe("delta tracker security and storage-style cloning", () => {
   it("defines own properties without invoking inherited setters", () => {
     const tracker = track({} as Record<string, JsonValue>);
+    // oxlint-disable-next-line eslint/no-extend-native -- 継承 setter の耐性テストで、prototype を汚すのが目的
     Object.defineProperty(Object.prototype, "trap", {
       set() {
         throw new Error("inherited setter ran");

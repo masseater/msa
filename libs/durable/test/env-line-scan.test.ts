@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { StreamDecoder } from "../src/env/decode.ts";
 import { LineScanner } from "../src/env/line-scan.ts";

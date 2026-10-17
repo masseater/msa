@@ -4,7 +4,7 @@ import { join } from "path";
 import type { AgentMessage } from "@msa/agent-core";
 import type { AssistantMessage, Usage } from "@msa/ai/compat";
 import { getModel } from "@msa/ai/compat";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
   type CompactionSettings,

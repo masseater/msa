@@ -8,7 +8,7 @@ import {
   type Usage,
 } from "@msa/ai";
 import { getBuiltinModel } from "@msa/ai/providers/all";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import {

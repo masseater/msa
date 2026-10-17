@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import {
   clearConfigValueCache,
@@ -35,7 +35,7 @@ describe("resolveConfigValue", () => {
     try {
       expect(resolveConfigValue("literal-key")).toBe("literal-key");
       expect(resolveConfigValue("$TEST_CONFIG_LEFT")).toBe("left");
-      expect(resolveConfigValue("$" + "{TEST_CONFIG_LEFT}_$TEST_CONFIG_RIGHT")).toBe("left_right");
+      expect(resolveConfigValue("${TEST_CONFIG_LEFT}_$TEST_CONFIG_RIGHT")).toBe("left_right");
       expect(resolveConfigValue("$$TEST_CONFIG_LEFT")).toBe("$TEST_CONFIG_LEFT");
       expect(resolveConfigValue("$!literal-$TEST_CONFIG_RIGHT")).toBe("!literal-right");
     } finally {
@@ -119,7 +119,7 @@ describe("resolveConfigValue", () => {
     });
     try {
       Object.defineProperty(process, "platform", { configurable: true, value: "win32" });
-      const expansion = "$" + "{name}";
+      const expansion = "${name}";
       expect(resolveConfigValueUncached(`!name='World'; echo "Hello, ${expansion}!"`)).toBe(
         "Hello, World!",
       );

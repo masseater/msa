@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { registerEnvConformance } from "@msa/durable/testing";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { Connection } from "../src/connection.ts";
 import { LocalExecutionEnv } from "../src/list-files.ts";

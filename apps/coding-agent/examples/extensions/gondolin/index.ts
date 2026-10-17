@@ -368,7 +368,7 @@ function createGondolinBashOps(vm: VM, localCwd: string, shellPath: string): Bas
         const result = await proc;
         return { exitCode: result.exitCode };
       } catch (error) {
-        if (signal?.aborted) throw new Error("aborted");
+        if (signal?.aborted) throw new Error("aborted", { cause: error });
         if (timedOut) throw new Error(`timeout:${timeout}`);
         throw error;
       } finally {

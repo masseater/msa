@@ -180,7 +180,7 @@ import {
   createTelemetryAdapterConformance,
   type TelemetryAdapterFixture,
 } from "@msa/telemetry/testing";
-import { describe, it } from "vitest";
+import { describe, it } from "vite-plus/test";
 
 const conformance = createTelemetryAdapterConformance(async () => {
   const adapter = createMyTelemetryAdapter();

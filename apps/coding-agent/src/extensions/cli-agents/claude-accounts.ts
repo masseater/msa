@@ -149,7 +149,9 @@ async function runTokenCommand(command: string): Promise<string> {
     ({ stdout } = await promisify(execFile)(process.env["SHELL"] || "/bin/sh", ["-c", command]));
   } catch (error) {
     const stderr = String((error as { stderr?: unknown }).stderr ?? "").trim();
-    throw new Error(`tokenCommand ${command}: ${stderr.split("\n").at(-1) || "failed"}`);
+    throw new Error(`tokenCommand ${command}: ${stderr.split("\n").at(-1) || "failed"}`, {
+      cause: error,
+    });
   }
   const token = stdout.trim();
   if (!token) throw new Error(`tokenCommand ${command}: printed nothing`);

@@ -281,15 +281,15 @@ export function validateMcpServerConfig(name: string, raw: unknown): McpServerCo
   if (!isRecord(raw)) return `server "${name}" must be an object`;
   const value = resolveExposureAliases(raw);
   const { type, exposure, enabled, timeout, toolExposure, description } = value;
-  const exposures = MCP_EXPOSURES.map((value) => `"${value}"`).join(", ");
+  const exposures = MCP_EXPOSURES.map((exposureName) => `"${exposureName}"`).join(", ");
   if (exposure !== undefined && !isExposure(exposure)) {
     return `server "${name}": exposure must be one of ${exposures}`;
   }
   if (toolExposure !== undefined) {
     if (!isRecord(toolExposure))
       return `server "${name}": toolExposure must map tool names to exposures`;
-    for (const [tool, value] of Object.entries(toolExposure)) {
-      if (!isExposure(value))
+    for (const [tool, toolValue] of Object.entries(toolExposure)) {
+      if (!isExposure(toolValue))
         return `server "${name}": toolExposure "${tool}" must be one of ${exposures}`;
     }
   }

@@ -1,5 +1,5 @@
 import type { Message } from "@msa/ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { serializeConversation } from "../src/core/compaction/utils.ts";
 

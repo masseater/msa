@@ -17,7 +17,7 @@ import {
   ProviderDoc,
   UsageDoc,
 } from "@msa/durable";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { allEntries, chatSetup, openChat, waitFor } from "./chat-support.ts";
 import { context } from "./session-support.ts";

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 
 import { findExtensionStackMatches } from "../src/core/crash-log.ts";
 

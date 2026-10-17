@@ -32,7 +32,7 @@ import {
   ToolResultEntry,
   ToolTask,
 } from "@msa/durable";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import { createBashTool, createEditTool, createReadTool } from "../src/tools/index.ts";

@@ -213,7 +213,11 @@ const page = <T extends { readonly id: Id<string> }>(
   return { items: clone(items), next: nextCursor(items.at(-1)!.id, order) };
 };
 
-/** Indexes of sorted `ids` in scan order, after the cursor's ID when there is one. */
+/**
+ * Indexes of sorted `ids` in scan order, after the cursor's ID when there is one.
+ *
+ * @yields Indexes of `ids` in scan order.
+ */
 function* scanIndexes(ids: readonly Id<string>[], start: ScanStart): Generator<number> {
   if (start.order === "ascending") {
     const first = start.after === undefined ? 0 : upperBound(ids, start.after);
@@ -747,7 +751,11 @@ export class MemoryStorage implements Storage {
     }
   }
 
-  /** Visible entries oldest first: the fork chain's segments from the root conversation forward. */
+  /**
+   * Visible entries oldest first: the fork chain's segments from the root conversation forward.
+   *
+   * @yields Visible entries of the fork chain's segments, oldest first.
+   */
   private *visibleEntriesAscending(
     conversationId: ConversationId,
     minEntryId: number = Number.NEGATIVE_INFINITY,

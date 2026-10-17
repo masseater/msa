@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { type AssistantMessage, createModels, fauxAssistantMessage, type Message } from "@msa/ai";
 import { AssistantEntry, type Harness, LiveDoc, type TaskId } from "@msa/durable";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import {

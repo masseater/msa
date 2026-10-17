@@ -3123,7 +3123,11 @@ export class InteractiveMode {
     this.chatContainer.addChild(component);
   }
 
-  /** Chat components, including the ones folded into tool groups. */
+  /**
+   * Chat components, including the ones folded into tool groups.
+   *
+   * @yields Chat components in display order.
+   */
   private *chatComponents(): Generator<Component> {
     for (const child of this.chatContainer.children) {
       yield child;

@@ -1,4 +1,4 @@
-import { expect } from "vitest";
+import { expect } from "vite-plus/test";
 import { describeEval } from "vitest-evals";
 
 import { createMsaCodingAgentHarness } from "../src/harness.ts";

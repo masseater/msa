@@ -5,7 +5,7 @@ import { basename, join } from "node:path";
 import type { Context, JsonValue } from "@msa/chord";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { registerStorageConformance } from "@msa/durable/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { err, FileError, type FileSystem, type Result } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";

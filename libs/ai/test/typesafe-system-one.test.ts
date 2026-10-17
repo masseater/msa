@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { classify } from "../src/api/typesafe-system-one.ts";
 import type { ClassifierContext, ClassifierModel } from "../src/types.ts";

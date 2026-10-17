@@ -6,7 +6,7 @@ import {
   type Model,
   type SimpleStreamOptions,
 } from "@msa/ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { generateBranchSummary } from "../src/core/compaction/index.ts";
 import type { SessionEntry } from "../src/core/session-manager.ts";

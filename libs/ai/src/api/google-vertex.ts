@@ -75,7 +75,7 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
   context: TranscriptContext,
   options?: GoogleVertexOptions,
 ): AssistantMessageEventStream => {
-  const stream = new AssistantMessageEventStream();
+  const events = new AssistantMessageEventStream();
   const normalizedContext = collapseSystemMessages(context);
 
   (async () => {
@@ -122,7 +122,7 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
         options,
       );
 
-      stream.push({ type: "start", partial: output });
+      events.push({ type: "start", partial: output });
       let currentBlock: TextContent | ThinkingContent | null = null;
       const blocks = output.content;
       const blockIndex = () => blocks.length - 1;
@@ -143,14 +143,14 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
               ) {
                 if (currentBlock) {
                   if (currentBlock.type === "text") {
-                    stream.push({
+                    events.push({
                       type: "text_end",
                       contentIndex: blocks.length - 1,
                       content: currentBlock.text,
                       partial: output,
                     });
                   } else {
-                    stream.push({
+                    events.push({
                       type: "thinking_end",
                       contentIndex: blockIndex(),
                       content: currentBlock.thinking,
@@ -161,7 +161,7 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
                 if (isThinking) {
                   currentBlock = { type: "thinking", thinking: "", thinkingSignature: undefined };
                   output.content.push(currentBlock);
-                  stream.push({
+                  events.push({
                     type: "thinking_start",
                     contentIndex: blockIndex(),
                     partial: output,
@@ -169,7 +169,7 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
                 } else {
                   currentBlock = { type: "text", text: "" };
                   output.content.push(currentBlock);
-                  stream.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+                  events.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
                 }
               }
               if (currentBlock.type === "thinking") {
@@ -178,7 +178,7 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
                   currentBlock.thinkingSignature,
                   part.thoughtSignature,
                 );
-                stream.push({
+                events.push({
                   type: "thinking_delta",
                   contentIndex: blockIndex(),
                   delta: part.text,
@@ -190,7 +190,7 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
                   currentBlock.textSignature,
                   part.thoughtSignature,
                 );
-                stream.push({
+                events.push({
                   type: "text_delta",
                   contentIndex: blockIndex(),
                   delta: part.text,
@@ -202,14 +202,14 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
             if (part.functionCall) {
               if (currentBlock) {
                 if (currentBlock.type === "text") {
-                  stream.push({
+                  events.push({
                     type: "text_end",
                     contentIndex: blockIndex(),
                     content: currentBlock.text,
                     partial: output,
                   });
                 } else {
-                  stream.push({
+                  events.push({
                     type: "thinking_end",
                     contentIndex: blockIndex(),
                     content: currentBlock.thinking,
@@ -236,14 +236,14 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
               };
 
               output.content.push(toolCall);
-              stream.push({ type: "toolcall_start", contentIndex: blockIndex(), partial: output });
-              stream.push({
+              events.push({ type: "toolcall_start", contentIndex: blockIndex(), partial: output });
+              events.push({
                 type: "toolcall_delta",
                 contentIndex: blockIndex(),
                 delta: JSON.stringify(toolCall.arguments),
                 partial: output,
               });
-              stream.push({
+              events.push({
                 type: "toolcall_end",
                 contentIndex: blockIndex(),
                 toolCall,
@@ -287,14 +287,14 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
 
       if (currentBlock) {
         if (currentBlock.type === "text") {
-          stream.push({
+          events.push({
             type: "text_end",
             contentIndex: blockIndex(),
             content: currentBlock.text,
             partial: output,
           });
         } else {
-          stream.push({
+          events.push({
             type: "thinking_end",
             contentIndex: blockIndex(),
             content: currentBlock.thinking,
@@ -317,8 +317,8 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
         throw new Error(errorMessage);
       }
 
-      stream.push({ type: "done", reason: output.stopReason, message: output });
-      stream.end();
+      events.push({ type: "done", reason: output.stopReason, message: output });
+      events.end();
     } catch (error) {
       // Remove internal index property used during streaming
       for (const block of output.content) {
@@ -328,12 +328,12 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
       }
       output.stopReason = options?.signal?.aborted ? "aborted" : "error";
       output.errorMessage = formatProviderError(normalizeProviderError(error));
-      stream.push({ type: "error", reason: output.stopReason, error: output });
-      stream.end();
+      events.push({ type: "error", reason: output.stopReason, error: output });
+      events.end();
     }
   })();
 
-  return stream;
+  return events;
 };
 
 export const streamSimple: StreamFunction<"google-vertex", SimpleStreamOptions> = (

@@ -14,7 +14,7 @@ import {
 import type { Context } from "@msa/chord";
 import { CodemodeSandbox } from "@msa/codemode";
 import { MemoryStorage, ToolResultEntry, UsageDoc } from "@msa/durable";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { createCodemodeExtension } from "../src/codemode/codemode.ts";
 import type { ExecutionEnv } from "../src/env/index.ts";

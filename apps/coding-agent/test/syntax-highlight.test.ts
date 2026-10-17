@@ -1,5 +1,5 @@
 import { resetCapabilitiesCache, setCapabilities } from "@msa/tui";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import {
   getMarkdownTheme,
@@ -62,7 +62,7 @@ describe("syntax highlight renderer", () => {
   });
 
   it("inherits parent formatting for unmapped nested scopes", () => {
-    const interpolation = "$" + "{x}";
+    const interpolation = "${x}";
     const rendered = renderHighlightedHtml(
       `<span class="hljs-string">a<span class="hljs-subst">${interpolation}</span>b</span>`,
       {

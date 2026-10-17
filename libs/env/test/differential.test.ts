@@ -9,7 +9,7 @@ import type { ToolExecutionApi } from "@msa/durable";
 import type { ExecutionEnv, FileError, Result } from "@msa/durable/env";
 import { NodeExecutionEnv } from "@msa/durable/env/node";
 import { createBashTool, createReadTool } from "@msa/durable/tools";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { Connection } from "../src/connection.ts";
 import { RemoteExecutionEnv } from "../src/remote-env.ts";

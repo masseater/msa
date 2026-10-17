@@ -1,5 +1,5 @@
 import type { Box, TuiMouseEvent } from "@msa/tui";
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vite-plus/test";
 
 import { BranchSummaryMessageComponent } from "../src/modes/interactive/components/branch-summary-message.ts";
 import { CompactionSummaryMessageComponent } from "../src/modes/interactive/components/compaction-summary-message.ts";

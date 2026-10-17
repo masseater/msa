@@ -135,7 +135,7 @@ export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
   context: TranscriptContext,
   options?: MistralOptions,
 ): AssistantMessageEventStream => {
-  const stream = new AssistantMessageEventStream();
+  const events = new AssistantMessageEventStream();
   const normalizedContext = resolveTranscript(
     context,
     model.compat?.supportsMidConvoSystemMessages,
@@ -161,8 +161,8 @@ export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
         payload = nextPayload as MistralChatPayload;
       }
       const mistralStream = await requestMistralStream(model, payload, apiKey, options);
-      stream.push({ type: "start", partial: output });
-      await consumeChatStream(model, output, stream, mistralStream, options?.onProviderStreamEvent);
+      events.push({ type: "start", partial: output });
+      await consumeChatStream(model, output, events, mistralStream, options?.onProviderStreamEvent);
 
       if (options?.signal?.aborted) {
         throw new Error("Request was aborted");
@@ -175,8 +175,8 @@ export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
         throw new Error(output.errorMessage || "An unknown error occurred");
       }
 
-      stream.push({ type: "done", reason: output.stopReason, message: output });
-      stream.end();
+      events.push({ type: "done", reason: output.stopReason, message: output });
+      events.end();
     } catch (error) {
       for (const block of output.content) {
         // partialArgs is only a streaming scratch buffer; never persist it.
@@ -184,12 +184,12 @@ export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
       }
       output.stopReason = options?.signal?.aborted ? "aborted" : "error";
       output.errorMessage = formatMistralError(error);
-      stream.push({ type: "error", reason: output.stopReason, error: output });
-      stream.end();
+      events.push({ type: "error", reason: output.stopReason, error: output });
+      events.end();
     }
   })();
 
-  return stream;
+  return events;
 };
 
 /**
@@ -333,7 +333,7 @@ async function requestMistralStream(
     });
   } catch (error) {
     if (headerTimeoutSignal.aborted && !options?.signal?.aborted) {
-      throw new Error(`Mistral response headers timed out after ${timeoutMs}ms`);
+      throw new Error(`Mistral response headers timed out after ${timeoutMs}ms`, { cause: error });
     }
     throw error;
   } finally {
@@ -612,7 +612,7 @@ function getMistralCachedPromptTokens(usage: unknown, promptTokens: number): num
 async function consumeChatStream(
   model: Model<"mistral-conversations">,
   output: AssistantMessage,
-  stream: AssistantMessageEventStream,
+  events: AssistantMessageEventStream,
   mistralStream: AsyncIterable<MistralCompletionEvent>,
   onProviderStreamEvent: StreamOptions["onProviderStreamEvent"],
 ): Promise<void> {
@@ -624,7 +624,7 @@ async function consumeChatStream(
   const finishCurrentBlock = (block?: typeof currentBlock) => {
     if (!block) return;
     if (block.type === "text") {
-      stream.push({
+      events.push({
         type: "text_end",
         contentIndex: blockIndex(),
         content: block.text,
@@ -633,7 +633,7 @@ async function consumeChatStream(
       return;
     }
     if (block.type === "thinking") {
-      stream.push({
+      events.push({
         type: "thinking_end",
         contentIndex: blockIndex(),
         content: block.thinking,
@@ -688,10 +688,10 @@ async function consumeChatStream(
             finishCurrentBlock(currentBlock);
             currentBlock = { type: "text", text: "" };
             output.content.push(currentBlock);
-            stream.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+            events.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
           }
           currentBlock.text += textDelta;
-          stream.push({
+          events.push({
             type: "text_delta",
             contentIndex: blockIndex(),
             delta: textDelta,
@@ -711,10 +711,10 @@ async function consumeChatStream(
             finishCurrentBlock(currentBlock);
             currentBlock = { type: "thinking", thinking: "" };
             output.content.push(currentBlock);
-            stream.push({ type: "thinking_start", contentIndex: blockIndex(), partial: output });
+            events.push({ type: "thinking_start", contentIndex: blockIndex(), partial: output });
           }
           currentBlock.thinking += thinkingDelta;
-          stream.push({
+          events.push({
             type: "thinking_delta",
             contentIndex: blockIndex(),
             delta: thinkingDelta,
@@ -730,10 +730,10 @@ async function consumeChatStream(
             finishCurrentBlock(currentBlock);
             currentBlock = { type: "text", text: "" };
             output.content.push(currentBlock);
-            stream.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
+            events.push({ type: "text_start", contentIndex: blockIndex(), partial: output });
           }
           currentBlock.text += textDelta;
-          stream.push({
+          events.push({
             type: "text_delta",
             contentIndex: blockIndex(),
             delta: textDelta,
@@ -774,7 +774,7 @@ async function consumeChatStream(
         };
         output.content.push(block);
         toolBlocksByKey.set(key, output.content.length - 1);
-        stream.push({
+        events.push({
           type: "toolcall_start",
           contentIndex: output.content.length - 1,
           partial: output,
@@ -787,7 +787,7 @@ async function consumeChatStream(
           : JSON.stringify(toolCall.function.arguments || {});
       block.partialArgs = (block.partialArgs || "") + argsDelta;
       block.arguments = parseStreamingJson<ToolCall["arguments"]>(block.partialArgs);
-      stream.push({
+      events.push({
         type: "toolcall_delta",
         contentIndex: toolBlocksByKey.get(key)!,
         delta: argsDelta,
@@ -805,7 +805,7 @@ async function consumeChatStream(
     // Finalize in-place and strip the scratch buffer so replay only
     // carries parsed arguments.
     delete toolBlock.partialArgs;
-    stream.push({
+    events.push({
       type: "toolcall_end",
       contentIndex: index,
       toolCall: toolBlock,

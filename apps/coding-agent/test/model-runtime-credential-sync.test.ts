@@ -1,5 +1,5 @@
 import type { ApiKeyCredential, Credential, CredentialStore, Model, Provider } from "@msa/ai";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { CredentialSynchronizationError, ModelRuntime } from "../src/core/model-runtime.ts";

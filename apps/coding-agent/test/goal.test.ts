@@ -1,5 +1,5 @@
 import { type Api, fauxAssistantMessage, type Model } from "@msa/ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   classifyGoalError,

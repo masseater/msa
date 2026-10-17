@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { getModels, streamSimple } from "../src/compat.ts";
 import { getSupportedThinkingLevels } from "../src/models.ts";

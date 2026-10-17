@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("@aws-sdk/client-bedrock-runtime", () => {
   class BedrockRuntimeServiceException extends Error {}

@@ -15,7 +15,7 @@ import {
   wrapSection,
   wrapTool,
 } from "@msa/durable";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { agentHooks, resolveAgent, resolveSettings } from "../src/harness/agent.ts";
 import { context } from "./session-support.ts";

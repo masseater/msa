@@ -11,7 +11,7 @@ import {
   type ToolResultMessage,
   type UserMessage,
 } from "@msa/ai/compat";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { Agent, type AgentEvent } from "../src/index.ts";
 import { calculateTool } from "./utils/calculate.ts";

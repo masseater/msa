@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 
 import { fauxAssistantMessage, registerFauxProvider } from "@msa/ai/compat";
 import neo4j from "neo4j-driver";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";

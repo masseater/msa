@@ -6,7 +6,7 @@ import {
   type JsonObject,
   type StorageWrite,
 } from "@msa/durable";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   context,

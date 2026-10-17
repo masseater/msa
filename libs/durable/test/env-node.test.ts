@@ -6,7 +6,7 @@ import { delimiter, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { FileError, getOrThrow, type ShellExecOptions } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";
@@ -742,7 +742,7 @@ describe("NodeExecutionEnv shell", () => {
       });
 
       const wslEnv = new NodeExecutionEnv({ cwd: root, shellPath });
-      const nameExpansion = "$" + "{name}";
+      const nameExpansion = "${name}";
       const collected = await collectShellOutput(
         wslEnv,
         `name='World'; echo "Hello, ${nameExpansion}!"`,
