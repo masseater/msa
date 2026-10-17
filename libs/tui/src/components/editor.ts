@@ -1,4 +1,8 @@
+import { Effect } from "effect";
+import { dual } from "effect/Function";
+
 import type { AutocompleteProvider, AutocompleteSuggestions } from "../autocomplete.ts";
+import { type CancelDelay, runAfter } from "../delay.ts";
 import { getKeybindings } from "../keybindings.ts";
 import { decodePrintableKey, matchesKey } from "../keys.ts";
 import { KillRing } from "../kill-ring.ts";
@@ -89,98 +93,100 @@ export interface TextChunk {
   endIndex: number;
 }
 
-export function wordWrapLine(
-  line: string,
-  maxWidth: number,
-  preSegmented?: Intl.SegmentData[],
-): TextChunk[] {
-  if (line === "" || maxWidth <= 0) {
-    return [{ text: "", startIndex: 0, endIndex: 0 }];
-  }
-
-  const lineWidth = visibleWidth(line);
-  if (lineWidth <= maxWidth) {
-    return [{ text: line, startIndex: 0, endIndex: line.length }];
-  }
-
-  const chunks: TextChunk[] = [];
-  const segments = preSegmented ?? [...graphemeSegmenter.segment(line)];
-
-  let currentWidth = 0;
-  let chunkStart = 0;
-
-  let wrapOppIndex = -1;
-  let wrapOppWidth = 0;
-
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i]!;
-    const grapheme = seg.segment;
-    const gWidth = visibleWidth(grapheme);
-    const charIndex = seg.index;
-    const isWs = !isPasteMarker(grapheme) && isWhitespaceChar(grapheme);
-
-    if (currentWidth + gWidth > maxWidth) {
-      if (wrapOppIndex >= 0 && currentWidth - wrapOppWidth + gWidth <= maxWidth) {
-        chunks.push({
-          text: line.slice(chunkStart, wrapOppIndex),
-          startIndex: chunkStart,
-          endIndex: wrapOppIndex,
-        });
-        chunkStart = wrapOppIndex;
-        currentWidth -= wrapOppWidth;
-      } else if (chunkStart < charIndex) {
-        chunks.push({
-          text: line.slice(chunkStart, charIndex),
-          startIndex: chunkStart,
-          endIndex: charIndex,
-        });
-        chunkStart = charIndex;
-        currentWidth = 0;
-      }
-      wrapOppIndex = -1;
+export const wordWrapLine: {
+  (line: string, maxWidth: number, preSegmented?: Intl.SegmentData[]): TextChunk[];
+  (maxWidth: number, preSegmented?: Intl.SegmentData[]): (line: string) => TextChunk[];
+} = dual(
+  (args) => typeof args[0] === "string",
+  (line: string, maxWidth: number, preSegmented?: Intl.SegmentData[]): TextChunk[] => {
+    if (line === "" || maxWidth <= 0) {
+      return [{ text: "", startIndex: 0, endIndex: 0 }];
     }
 
-    if (gWidth > maxWidth) {
-      const subChunks = wordWrapLine(grapheme, maxWidth);
-      for (let j = 0; j < subChunks.length - 1; j++) {
-        const sc = subChunks[j]!;
-        chunks.push({
-          text: sc.text,
-          startIndex: charIndex + sc.startIndex,
-          endIndex: charIndex + sc.endIndex,
-        });
-      }
-      const last = subChunks[subChunks.length - 1]!;
-      chunkStart = charIndex + last.startIndex;
-      currentWidth = visibleWidth(last.text);
-      wrapOppIndex = -1;
-      continue;
+    const lineWidth = visibleWidth(line);
+    if (lineWidth <= maxWidth) {
+      return [{ text: line, startIndex: 0, endIndex: line.length }];
     }
 
-    currentWidth += gWidth;
+    const chunks: TextChunk[] = [];
+    const segments = preSegmented ?? [...graphemeSegmenter.segment(line)];
 
-    const next = segments[i + 1];
-    if (
-      isWs &&
-      next !== undefined &&
-      (isPasteMarker(next.segment) || !isWhitespaceChar(next.segment))
-    ) {
-      wrapOppIndex = next.index;
-      wrapOppWidth = currentWidth;
-    } else if (!isWs && next !== undefined && !isWhitespaceChar(next.segment)) {
-      const isCjk = !isPasteMarker(grapheme) && cjkBreakRegex.test(grapheme);
-      const nextIsCjk = !isPasteMarker(next.segment) && cjkBreakRegex.test(next.segment);
-      if (isCjk || nextIsCjk) {
+    let currentWidth = 0;
+    let chunkStart = 0;
+
+    let wrapOppIndex = -1;
+    let wrapOppWidth = 0;
+
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i]!;
+      const grapheme = seg.segment;
+      const gWidth = visibleWidth(grapheme);
+      const charIndex = seg.index;
+      const isWs = !isPasteMarker(grapheme) && isWhitespaceChar(grapheme);
+
+      if (currentWidth + gWidth > maxWidth) {
+        if (wrapOppIndex >= 0 && currentWidth - wrapOppWidth + gWidth <= maxWidth) {
+          chunks.push({
+            text: line.slice(chunkStart, wrapOppIndex),
+            startIndex: chunkStart,
+            endIndex: wrapOppIndex,
+          });
+          chunkStart = wrapOppIndex;
+          currentWidth -= wrapOppWidth;
+        } else if (chunkStart < charIndex) {
+          chunks.push({
+            text: line.slice(chunkStart, charIndex),
+            startIndex: chunkStart,
+            endIndex: charIndex,
+          });
+          chunkStart = charIndex;
+          currentWidth = 0;
+        }
+        wrapOppIndex = -1;
+      }
+
+      if (gWidth > maxWidth) {
+        const subChunks = wordWrapLine(grapheme, maxWidth);
+        for (let j = 0; j < subChunks.length - 1; j++) {
+          const sc = subChunks[j]!;
+          chunks.push({
+            text: sc.text,
+            startIndex: charIndex + sc.startIndex,
+            endIndex: charIndex + sc.endIndex,
+          });
+        }
+        const last = subChunks[subChunks.length - 1]!;
+        chunkStart = charIndex + last.startIndex;
+        currentWidth = visibleWidth(last.text);
+        wrapOppIndex = -1;
+        continue;
+      }
+
+      currentWidth += gWidth;
+
+      const next = segments[i + 1];
+      if (
+        isWs &&
+        next !== undefined &&
+        (isPasteMarker(next.segment) || !isWhitespaceChar(next.segment))
+      ) {
         wrapOppIndex = next.index;
         wrapOppWidth = currentWidth;
+      } else if (!isWs && next !== undefined && !isWhitespaceChar(next.segment)) {
+        const isCjk = !isPasteMarker(grapheme) && cjkBreakRegex.test(grapheme);
+        const nextIsCjk = !isPasteMarker(next.segment) && cjkBreakRegex.test(next.segment);
+        if (isCjk || nextIsCjk) {
+          wrapOppIndex = next.index;
+          wrapOppWidth = currentWidth;
+        }
       }
     }
-  }
 
-  chunks.push({ text: line.slice(chunkStart), startIndex: chunkStart, endIndex: line.length });
+    chunks.push({ text: line.slice(chunkStart), startIndex: chunkStart, endIndex: line.length });
 
-  return chunks;
-}
+    return chunks;
+  },
+);
 
 interface EditorState {
   lines: string[];
@@ -292,7 +298,7 @@ export class Editor implements Component, Focusable {
   private autocompletePrefix: string = "";
   private autocompleteMaxVisible: number = 5;
   private autocompleteAbort?: AbortController | undefined;
-  private autocompleteDebounceTimer?: ReturnType<typeof setTimeout> | undefined;
+  private cancelAutocompleteDebounce?: CancelDelay | undefined;
   private autocompleteRequestTask: Promise<void> = Promise.resolve();
   private autocompleteStartToken: number = 0;
   private autocompleteRequestId: number = 0;
@@ -2030,44 +2036,46 @@ export class Editor implements Component, Focusable {
 
     const debounceMs = this.getAutocompleteDebounceMs(options);
     if (debounceMs > 0) {
-      this.autocompleteDebounceTimer = setTimeout(() => {
-        this.autocompleteDebounceTimer = undefined;
+      this.cancelAutocompleteDebounce = runAfter(debounceMs, () => {
+        this.cancelAutocompleteDebounce = undefined;
         void this.startAutocompleteRequest(startToken, options);
-      }, debounceMs);
+      });
       return;
     }
 
     void this.startAutocompleteRequest(startToken, options);
   }
 
-  private async startAutocompleteRequest(
+  private startAutocompleteRequest(
     startToken: number,
     options: { force: boolean; explicitTab: boolean },
   ): Promise<void> {
     const previousTask = this.autocompleteRequestTask;
-    this.autocompleteRequestTask = (async () => {
-      await previousTask;
-      if (startToken !== this.autocompleteStartToken || this.autocompleteProvider === undefined) {
-        return;
-      }
+    const controller = new AbortController();
+    this.autocompleteRequestTask = Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        yield* Effect.promise(() => previousTask);
+        if (startToken !== this.autocompleteStartToken || this.autocompleteProvider === undefined) {
+          return;
+        }
 
-      const controller = new AbortController();
-      this.autocompleteAbort = controller;
-      const requestId = ++this.autocompleteRequestId;
-      const snapshotText = this.getText();
-      const snapshotLine = this.state.cursorLine;
-      const snapshotCol = this.state.cursorCol;
+        this.autocompleteAbort = controller;
+        const requestId = ++this.autocompleteRequestId;
+        const snapshotText = this.getText();
+        const snapshotLine = this.state.cursorLine;
+        const snapshotCol = this.state.cursorCol;
 
-      await this.runAutocompleteRequest(
-        requestId,
-        controller,
-        snapshotText,
-        snapshotLine,
-        snapshotCol,
-        options,
-      );
-    })();
-    await this.autocompleteRequestTask;
+        yield* this.runAutocompleteRequest(
+          requestId,
+          controller,
+          snapshotText,
+          snapshotLine,
+          snapshotCol,
+          options,
+        );
+      }),
+    );
+    return this.autocompleteRequestTask;
   }
 
   private setAutocompleteTriggerCharacters(triggerCharacters: string[]): void {
@@ -2100,23 +2108,47 @@ export class Editor implements Component, Focusable {
       : 0;
   }
 
-  private async runAutocompleteRequest(
+  private runAutocompleteRequest(
     requestId: number,
     controller: AbortController,
     snapshotText: string,
     snapshotLine: number,
     snapshotCol: number,
     options: { force: boolean; explicitTab: boolean },
-  ): Promise<void> {
-    if (this.autocompleteProvider === undefined) return;
-
-    const suggestions = await this.autocompleteProvider.getSuggestions(
-      this.state.lines,
-      this.state.cursorLine,
-      this.state.cursorCol,
-      { signal: controller.signal, force: options.force },
+  ): Effect.Effect<void> {
+    const provider = this.autocompleteProvider;
+    if (provider === undefined) return Effect.void;
+    return Effect.promise(() =>
+      provider.getSuggestions(this.state.lines, this.state.cursorLine, this.state.cursorCol, {
+        signal: controller.signal,
+        force: options.force,
+      }),
+    ).pipe(
+      Effect.map((suggestions) =>
+        this.handleAutocompleteSuggestions(
+          provider,
+          suggestions,
+          requestId,
+          controller,
+          snapshotText,
+          snapshotLine,
+          snapshotCol,
+          options,
+        ),
+      ),
     );
+  }
 
+  private handleAutocompleteSuggestions(
+    provider: AutocompleteProvider,
+    suggestions: AutocompleteSuggestions | null,
+    requestId: number,
+    controller: AbortController,
+    snapshotText: string,
+    snapshotLine: number,
+    snapshotCol: number,
+    options: { force: boolean; explicitTab: boolean },
+  ): void {
     if (
       !this.isAutocompleteRequestCurrent(
         requestId,
@@ -2145,7 +2177,7 @@ export class Editor implements Component, Focusable {
       const item = suggestions.items[0]!;
       this.pushUndoSnapshot();
       this.lastAction = null;
-      const result = this.autocompleteProvider.applyCompletion(
+      const result = provider.applyCompletion(
         this.state.lines,
         this.state.cursorLine,
         this.state.cursorCol,
@@ -2200,9 +2232,9 @@ export class Editor implements Component, Focusable {
 
   private cancelAutocompleteRequest(): void {
     this.autocompleteStartToken += 1;
-    if (this.autocompleteDebounceTimer !== undefined) {
-      clearTimeout(this.autocompleteDebounceTimer);
-      this.autocompleteDebounceTimer = undefined;
+    if (this.cancelAutocompleteDebounce !== undefined) {
+      this.cancelAutocompleteDebounce();
+      this.cancelAutocompleteDebounce = undefined;
     }
     this.autocompleteAbort?.abort();
     this.autocompleteAbort = undefined;

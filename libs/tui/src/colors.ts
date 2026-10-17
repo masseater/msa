@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 import { linearSrgbToRgb, okhslToRgb, oklabToLinearSrgb, rgbToOkhsl, rgbToOklab } from "./oklab.ts";
 import type { RgbColor } from "./terminal-colors.ts";
 
@@ -61,7 +63,10 @@ export function indexedColor(index: number): IndexedColor {
   return Object.freeze({ kind: "indexed", index });
 }
 
-export function rgbColor(r: number, g: number, b: number): RgbColorValue {
+export const rgbColor: {
+  (r: number, g: number, b: number): RgbColorValue;
+  (g: number, b: number): (r: number) => RgbColorValue;
+} = dual(3, (r: number, g: number, b: number): RgbColorValue => {
   for (const [name, value] of [
     ["r", r],
     ["g", g],
@@ -71,16 +76,19 @@ export function rgbColor(r: number, g: number, b: number): RgbColorValue {
     if (value < 0 || value > 255) throw new Error(`${name} must be between 0 and 255: ${value}`);
   }
   return Object.freeze({ kind: "rgb", r, g, b });
-}
+});
 
-export function oklchColor(l: number, c: number, h: number): OklchColorValue {
+export const oklchColor: {
+  (l: number, c: number, h: number): OklchColorValue;
+  (c: number, h: number): (l: number) => OklchColorValue;
+} = dual(3, (l: number, c: number, h: number): OklchColorValue => {
   requireFinite(l, "l");
   requireFinite(c, "c");
   requireFinite(h, "h");
   if (l < 0 || l > 1) throw new Error(`l must be between 0 and 1: ${l}`);
   if (c < 0) throw new Error(`c must not be negative: ${c}`);
   return Object.freeze({ kind: "oklch", l, c, h: ((h % 360) + 360) % 360 });
-}
+});
 
 const NUMBER_PATTERN = String.raw`[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?`;
 const DEGREE_PATTERN = "[Dd][Ee][Gg]";
@@ -93,7 +101,10 @@ const OKHSL_PATTERN = new RegExp(
   "u",
 );
 
-export function okhslColor(h: number, s: number, l: number): RgbColorValue {
+export const okhslColor: {
+  (h: number, s: number, l: number): RgbColorValue;
+  (s: number, l: number): (h: number) => RgbColorValue;
+} = dual(3, (h: number, s: number, l: number): RgbColorValue => {
   requireFinite(h, "h");
   requireFinite(s, "s");
   requireFinite(l, "l");
@@ -101,7 +112,7 @@ export function okhslColor(h: number, s: number, l: number): RgbColorValue {
   if (l < 0 || l > 1) throw new Error(`l must be between 0 and 1: ${l}`);
   const { r, g, b } = okhslToRgb(h, s, l);
   return rgbColor(r, g, b);
-}
+});
 
 export function colorToOkhsl(color: Color): OkhslChannels {
   return rgbToOkhsl(colorToRgb(color));
@@ -237,36 +248,37 @@ export function colorToHex(color: Color): string {
   return `#${channel(r)}${channel(g)}${channel(b)}`;
 }
 
-export function mixColors(
-  first: Color,
-  second: Color,
-  amount: number,
-  space: ColorMixSpace = "oklch",
-): Color {
-  requireFinite(amount, "amount");
-  if (amount < 0 || amount > 1) throw new Error(`amount must be between 0 and 1: ${amount}`);
+export const mixColors: {
+  (first: Color, second: Color, amount: number, space?: ColorMixSpace): Color;
+  (second: Color, amount: number, space?: ColorMixSpace): (first: Color) => Color;
+} = dual(
+  (args) => typeof args[2] === "number",
+  (first: Color, second: Color, amount: number, space: ColorMixSpace = "oklch"): Color => {
+    requireFinite(amount, "amount");
+    if (amount < 0 || amount > 1) throw new Error(`amount must be between 0 and 1: ${amount}`);
 
-  if (space === "srgb") {
-    const a = colorToRgb(first);
-    const b = colorToRgb(second);
-    return rgbColor(
-      a.r + (b.r - a.r) * amount,
-      a.g + (b.g - a.g) * amount,
-      a.b + (b.b - a.b) * amount,
+    if (space === "srgb") {
+      const a = colorToRgb(first);
+      const b = colorToRgb(second);
+      return rgbColor(
+        a.r + (b.r - a.r) * amount,
+        a.g + (b.g - a.g) * amount,
+        a.b + (b.b - a.b) * amount,
+      );
+    }
+
+    const a = colorToOklch(first);
+    const b = colorToOklch(second);
+    const firstHue = a.c < 1e-7 ? b.h : a.h;
+    const secondHue = b.c < 1e-7 ? firstHue : b.h;
+    const hueDelta = ((secondHue - firstHue + 540) % 360) - 180;
+    return oklchColor(
+      a.l + (b.l - a.l) * amount,
+      a.c + (b.c - a.c) * amount,
+      firstHue + hueDelta * amount,
     );
-  }
-
-  const a = colorToOklch(first);
-  const b = colorToOklch(second);
-  const firstHue = a.c < 1e-7 ? b.h : a.h;
-  const secondHue = b.c < 1e-7 ? firstHue : b.h;
-  const hueDelta = ((secondHue - firstHue + 540) % 360) - 180;
-  return oklchColor(
-    a.l + (b.l - a.l) * amount,
-    a.c + (b.c - a.c) * amount,
-    firstHue + hueDelta * amount,
-  );
-}
+  },
+);
 
 function findClosest(values: readonly number[], target: number): { index: number; value: number } {
   let closest: { index: number; value: number; distance: number } | undefined;
@@ -317,57 +329,77 @@ function colorAnsi(color: Color, mode: TerminalColorMode, background: boolean): 
   return `\x1b[${background ? 48 : 38};5;${rgbToAnsi256(rgb)}m`;
 }
 
-export function foregroundAnsi(color: Color, mode: TerminalColorMode): string {
-  return colorAnsi(color, mode, false);
-}
+export const foregroundAnsi: {
+  (color: Color, mode: TerminalColorMode): string;
+  (mode: TerminalColorMode): (color: Color) => string;
+} = dual(2, (color: Color, mode: TerminalColorMode): string => colorAnsi(color, mode, false));
 
-export function backgroundAnsi(color: Color, mode: TerminalColorMode): string {
-  return colorAnsi(color, mode, true);
-}
+export const backgroundAnsi: {
+  (color: Color, mode: TerminalColorMode): string;
+  (mode: TerminalColorMode): (color: Color) => string;
+} = dual(2, (color: Color, mode: TerminalColorMode): string => colorAnsi(color, mode, true));
 
-export function styleText(text: string, options: TextStyle, mode: TerminalColorMode): string {
-  return styleTextWithAnsi(
+export const styleText: {
+  (text: string, options: TextStyle, mode: TerminalColorMode): string;
+  (options: TextStyle, mode: TerminalColorMode): (text: string) => string;
+} = dual(3, (text: string, options: TextStyle, mode: TerminalColorMode): string =>
+  styleTextWithAnsi(
     text,
     options.fg && foregroundAnsi(options.fg, mode),
     options.bg && backgroundAnsi(options.bg, mode),
     options,
-  );
-}
+  ),
+);
 
-export function styleTextWithAnsi(
-  text: string,
-  fgAnsi: string | undefined,
-  bgAnsi: string | undefined,
-  options: TextAttributes,
-): string {
-  let prefix = "";
-  let suffix = "";
-  if (fgAnsi !== undefined && fgAnsi !== "") {
-    prefix += fgAnsi;
-    suffix = "\x1b[39m";
-  }
-  if (bgAnsi !== undefined && bgAnsi !== "") {
-    prefix += bgAnsi;
-    suffix = `\x1b[49m${suffix}`;
-  }
-  if (options.bold === true) prefix += "\x1b[1m";
-  if (options.dim === true) prefix += "\x1b[2m";
-  if (options.bold === true || options.dim === true) suffix = `\x1b[22m${suffix}`;
-  if (options.italic === true) {
-    prefix += "\x1b[3m";
-    suffix = `\x1b[23m${suffix}`;
-  }
-  if (options.underline === true) {
-    prefix += "\x1b[4m";
-    suffix = `\x1b[24m${suffix}`;
-  }
-  if (options.inverse === true) {
-    prefix += "\x1b[7m";
-    suffix = `\x1b[27m${suffix}`;
-  }
-  if (options.strikethrough === true) {
-    prefix += "\x1b[9m";
-    suffix = `\x1b[29m${suffix}`;
-  }
-  return `${prefix}${text}${suffix}`;
-}
+export const styleTextWithAnsi: {
+  (
+    text: string,
+    fgAnsi: string | undefined,
+    bgAnsi: string | undefined,
+    options: TextAttributes,
+  ): string;
+  (
+    fgAnsi: string | undefined,
+    bgAnsi: string | undefined,
+    options: TextAttributes,
+  ): (text: string) => string;
+} = dual(
+  4,
+  (
+    text: string,
+    fgAnsi: string | undefined,
+    bgAnsi: string | undefined,
+    options: TextAttributes,
+  ): string => {
+    let prefix = "";
+    let suffix = "";
+    if (fgAnsi !== undefined && fgAnsi !== "") {
+      prefix += fgAnsi;
+      suffix = "\x1b[39m";
+    }
+    if (bgAnsi !== undefined && bgAnsi !== "") {
+      prefix += bgAnsi;
+      suffix = `\x1b[49m${suffix}`;
+    }
+    if (options.bold === true) prefix += "\x1b[1m";
+    if (options.dim === true) prefix += "\x1b[2m";
+    if (options.bold === true || options.dim === true) suffix = `\x1b[22m${suffix}`;
+    if (options.italic === true) {
+      prefix += "\x1b[3m";
+      suffix = `\x1b[23m${suffix}`;
+    }
+    if (options.underline === true) {
+      prefix += "\x1b[4m";
+      suffix = `\x1b[24m${suffix}`;
+    }
+    if (options.inverse === true) {
+      prefix += "\x1b[7m";
+      suffix = `\x1b[27m${suffix}`;
+    }
+    if (options.strikethrough === true) {
+      prefix += "\x1b[9m";
+      suffix = `\x1b[29m${suffix}`;
+    }
+    return `${prefix}${text}${suffix}`;
+  },
+);

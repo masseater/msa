@@ -1,3 +1,4 @@
+import { dual } from "effect/Function";
 export type OverlayAnchor =
   | "center"
   | "top-left"
@@ -150,40 +151,60 @@ function resolveCol(
   return marginLeft + Math.floor(maxCol * percent);
 }
 
-export function resolveOverlayLayout(
-  options: OverlayOptions | undefined,
-  overlayHeight: number,
-  termWidth: number,
-  termHeight: number,
-): { width: number; row: number; col: number; maxHeight: number | undefined } {
-  const opt = options ?? {};
-  const margin = resolveMargin(opt.margin);
+export const resolveOverlayLayout: {
+  (
+    options: OverlayOptions | undefined,
+    overlayHeight: number,
+    termWidth: number,
+    termHeight: number,
+  ): { width: number; row: number; col: number; maxHeight: number | undefined };
+  (
+    overlayHeight: number,
+    termWidth: number,
+    termHeight: number,
+  ): (options: OverlayOptions | undefined) => {
+    width: number;
+    row: number;
+    col: number;
+    maxHeight: number | undefined;
+  };
+} = dual(
+  4,
+  (
+    options: OverlayOptions | undefined,
+    overlayHeight: number,
+    termWidth: number,
+    termHeight: number,
+  ): { width: number; row: number; col: number; maxHeight: number | undefined } => {
+    const opt = options ?? {};
+    const margin = resolveMargin(opt.margin);
 
-  const availWidth = Math.max(1, termWidth - margin.left - margin.right);
-  const availHeight = Math.max(1, termHeight - margin.top - margin.bottom);
+    const availWidth = Math.max(1, termWidth - margin.left - margin.right);
+    const availHeight = Math.max(1, termHeight - margin.top - margin.bottom);
 
-  let width = parseSizeValue(opt.width, termWidth) ?? Math.min(80, availWidth);
-  if (opt.minWidth !== undefined) {
-    width = Math.max(width, opt.minWidth);
-  }
-  width = Math.max(1, Math.min(width, availWidth));
+    let width = parseSizeValue(opt.width, termWidth) ?? Math.min(80, availWidth);
+    if (opt.minWidth !== undefined) {
+      width = Math.max(width, opt.minWidth);
+    }
+    width = Math.max(1, Math.min(width, availWidth));
 
-  let maxHeight = parseSizeValue(opt.maxHeight, termHeight);
-  if (maxHeight !== undefined) {
-    maxHeight = Math.max(1, Math.min(maxHeight, availHeight));
-  }
+    let maxHeight = parseSizeValue(opt.maxHeight, termHeight);
+    if (maxHeight !== undefined) {
+      maxHeight = Math.max(1, Math.min(maxHeight, availHeight));
+    }
 
-  const effectiveHeight =
-    maxHeight === undefined ? overlayHeight : Math.min(overlayHeight, maxHeight);
+    const effectiveHeight =
+      maxHeight === undefined ? overlayHeight : Math.min(overlayHeight, maxHeight);
 
-  let row = resolveRow(opt, effectiveHeight, availHeight, margin.top);
-  let col = resolveCol(opt, width, availWidth, margin.left);
+    let row = resolveRow(opt, effectiveHeight, availHeight, margin.top);
+    let col = resolveCol(opt, width, availWidth, margin.left);
 
-  if (opt.offsetY !== undefined) row += opt.offsetY;
-  if (opt.offsetX !== undefined) col += opt.offsetX;
+    if (opt.offsetY !== undefined) row += opt.offsetY;
+    if (opt.offsetX !== undefined) col += opt.offsetX;
 
-  row = Math.max(margin.top, Math.min(row, termHeight - margin.bottom - effectiveHeight));
-  col = Math.max(margin.left, Math.min(col, termWidth - margin.right - width));
+    row = Math.max(margin.top, Math.min(row, termHeight - margin.bottom - effectiveHeight));
+    col = Math.max(margin.left, Math.min(col, termWidth - margin.right - width));
 
-  return { width, row, col, maxHeight };
-}
+    return { width, row, col, maxHeight };
+  },
+);

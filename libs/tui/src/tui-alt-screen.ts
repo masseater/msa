@@ -1,3 +1,5 @@
+import { Clock, Effect } from "effect";
+
 import {
   AltScreenSearchComponent,
   AltScreenSearchIndex,
@@ -6,6 +8,8 @@ import {
 } from "./alt-screen-search.ts";
 import { AltScreenFlashContainer } from "./components/alt-screen-flash.ts";
 import { ScrollView } from "./components/scroll-view.ts";
+import { type CancelDelay, runEvery } from "./delay.ts";
+import { isEnvSet, readEnv } from "./env.ts";
 import { getKeybindings } from "./keybindings.ts";
 import { isKeyRelease } from "./keys.ts";
 import { getLayoutNode } from "./layout-node.ts";
@@ -198,7 +202,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
   private lastClick?: ClickTarget | undefined;
   private selectionDragPointer?: { x: number; y: number } | undefined;
   private selectionAutoScrollDirection: -1 | 0 | 1 = 0;
-  private selectionAutoScrollTimer?: NodeJS.Timeout | undefined;
+  private cancelSelectionAutoScroll?: CancelDelay | undefined;
   private selectionPressActive = false;
   private scrollbarDrag?: ScrollbarDrag | undefined;
   private scrollbarHover?: ScrollView | undefined;
@@ -347,11 +351,11 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     this.clearComponentMouseGesture();
     this.lastComponentClick = undefined;
     this.resetRenderState();
-    const term = process.env["TERM"]?.toLowerCase() ?? "";
+    const term = readEnv("TERM")?.toLowerCase() ?? "";
     const mouseSequence =
-      process.env["TMUX"] !== undefined ||
-      process.env["ZELLIJ"] !== undefined ||
-      process.env["STY"] !== undefined ||
+      readEnv("TMUX") !== undefined ||
+      readEnv("ZELLIJ") !== undefined ||
+      readEnv("STY") !== undefined ||
       term.startsWith("tmux") ||
       term.startsWith("screen")
         ? ENABLE_BUTTON_MOTION_MOUSE
@@ -895,7 +899,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
   }
 
   private getComponentClickCount(target: TuiMouseDispatchTarget, x: number, y: number): number {
-    const now = Date.now();
+    const now = Effect.runSync(Clock.currentTimeMillis);
     const previous = this.lastComponentClick;
     const count =
       previous !== undefined &&
@@ -1051,7 +1055,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     if (
       this.onRightClickPaste === undefined ||
       process.platform !== "win32" ||
-      process.env["TERM_PROGRAM"]?.toLowerCase() === "vscode" ||
+      readEnv("TERM_PROGRAM")?.toLowerCase() === "vscode" ||
       event.release ||
       event.button !== 2
     ) {
@@ -1299,7 +1303,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
   }
 
   private getClickCount(point: SelectionPoint, word: SelectionRange | undefined): number {
-    const now = Date.now();
+    const now = Effect.runSync(Clock.currentTimeMillis);
     const previous = this.lastClick;
     const count =
       word !== undefined &&
@@ -1349,9 +1353,8 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
       this.stopSelectionAutoScroll();
       return;
     }
-    if (this.selectionAutoScrollTimer !== undefined) return;
-    this.selectionAutoScrollTimer = setInterval(() => this.autoScrollSelection(), 50);
-    this.selectionAutoScrollTimer.unref();
+    if (this.cancelSelectionAutoScroll !== undefined) return;
+    this.cancelSelectionAutoScroll = runEvery(50, () => this.autoScrollSelection());
   }
 
   private autoScrollSelection(): void {
@@ -1373,9 +1376,9 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
   }
 
   private stopSelectionAutoScroll(): void {
-    if (this.selectionAutoScrollTimer !== undefined) {
-      clearInterval(this.selectionAutoScrollTimer);
-      this.selectionAutoScrollTimer = undefined;
+    if (this.cancelSelectionAutoScroll !== undefined) {
+      this.cancelSelectionAutoScroll();
+      this.cancelSelectionAutoScroll = undefined;
     }
     this.selectionAutoScrollDirection = 0;
     this.selectionDragPointer = undefined;
@@ -1530,19 +1533,29 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     return text.length === 0 ? undefined : text;
   }
 
-  private async copyTextToClipboard(text: string): Promise<boolean> {
-    if (this.copySelection !== undefined) {
-      const result = await this.copySelection(text);
-      const ok = result === true;
-      this.flash(
-        ok ? "Copied!" : typeof result === "string" ? result : "Copy failed",
-        ok ? undefined : COPY_ERROR_FLASH_DURATION_MS,
+  private copyTextToClipboard(text: string): Promise<boolean> {
+    const copySelection = this.copySelection;
+    if (copySelection === undefined) {
+      return Effect.runPromise(
+        Effect.sync(() => {
+          this.terminal.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
+          this.flash("Copied!");
+          return true;
+        }),
       );
-      return ok;
     }
-    this.terminal.write(`\x1b]52;c;${Buffer.from(text).toString("base64")}\x07`);
-    this.flash("Copied!");
-    return true;
+    return Effect.runPromise(
+      Effect.promise(() => copySelection(text)).pipe(
+        Effect.map((result) => {
+          const ok = result === true;
+          this.flash(
+            ok ? "Copied!" : typeof result === "string" ? result : "Copy failed",
+            ok ? undefined : COPY_ERROR_FLASH_DURATION_MS,
+          );
+          return ok;
+        }),
+      ),
+    );
   }
 
   private applySearchTextHighlight(text: string, current: boolean): string {
@@ -1801,8 +1814,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
         changedRows[row] && (isImageLine(line) || isImageLine(this.previousScreen[row] ?? "")),
     );
     const isWezTerm =
-      Boolean(process.env["WEZTERM_PANE"]) ||
-      process.env["TERM_PROGRAM"]?.toLowerCase() === "wezterm";
+      isEnvSet("WEZTERM_PANE") || readEnv("TERM_PROGRAM")?.toLowerCase() === "wezterm";
     const imageCellsNeedRedraw =
       !imageAnchorsNeedRedraw &&
       isWezTerm &&

@@ -1,6 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { Clock, DateTime, Effect } from "effect";
+import { dual } from "effect/Function";
+
+import { type CancelDelay, runAfter, runEvery } from "./delay.ts";
+import { readEnv } from "./env.ts";
 import { setKittyProtocolActive } from "./keys.ts";
 import { isNativeModifierPressed } from "./native-modifiers.ts";
 import { getNativePlatformHelper } from "./native-platform.ts";
@@ -43,7 +48,7 @@ function isKeyboardProtocolNegotiationSequencePrefix(sequence: string): boolean 
 }
 
 export function isAppleTerminalSession(): boolean {
-  return process.platform === "darwin" && process.env["TERM_PROGRAM"] === "Apple_Terminal";
+  return process.platform === "darwin" && readEnv("TERM_PROGRAM") === "Apple_Terminal";
 }
 
 export function refreshTerminalDimensions(): void {
@@ -53,23 +58,24 @@ export function refreshTerminalDimensions(): void {
   } catch {}
 }
 
-export function normalizeNativeShiftEnterInput(
-  data: string,
-  shouldDetectNativeShiftEnter: boolean,
-  isShiftPressed: boolean,
-): string {
-  if (shouldDetectNativeShiftEnter && data === "\r" && isShiftPressed)
-    return NATIVE_SHIFT_ENTER_SEQUENCE;
-  return data;
-}
+export const normalizeNativeShiftEnterInput: {
+  (data: string, shouldDetectNativeShiftEnter: boolean, isShiftPressed: boolean): string;
+  (shouldDetectNativeShiftEnter: boolean, isShiftPressed: boolean): (data: string) => string;
+} = dual(
+  3,
+  (data: string, shouldDetectNativeShiftEnter: boolean, isShiftPressed: boolean): string => {
+    if (shouldDetectNativeShiftEnter && data === "\r" && isShiftPressed)
+      return NATIVE_SHIFT_ENTER_SEQUENCE;
+    return data;
+  },
+);
 
-export function normalizeAppleTerminalInput(
-  data: string,
-  isAppleTerminal: boolean,
-  isShiftPressed: boolean,
-): string {
-  return normalizeNativeShiftEnterInput(data, isAppleTerminal, isShiftPressed);
-}
+export const normalizeAppleTerminalInput: {
+  (data: string, isAppleTerminal: boolean, isShiftPressed: boolean): string;
+  (isAppleTerminal: boolean, isShiftPressed: boolean): (data: string) => string;
+} = dual(3, (data: string, isAppleTerminal: boolean, isShiftPressed: boolean): string =>
+  normalizeNativeShiftEnterInput(data, isAppleTerminal, isShiftPressed),
+);
 
 export interface Terminal {
   start(onInput: (data: string) => void, onResize: () => void): void;
@@ -127,20 +133,25 @@ export class ProcessTerminal implements Terminal {
   private keyboardProtocolPushed = false;
   private pendingKeyboardProtocolDeviceAttributes = 0;
   private keyboardProtocolNegotiationBuffer = "";
-  private keyboardProtocolBufferFlushTimer?: ReturnType<typeof setTimeout> | undefined;
+  private cancelKeyboardProtocolBufferFlush?: CancelDelay | undefined;
   private stdinBuffer?: StdinBuffer | undefined;
   private stdinDataHandler?: ((data: string) => void) | undefined;
-  private progressInterval?: ReturnType<typeof setInterval> | undefined;
+  private cancelProgressKeepalive?: CancelDelay | undefined;
   private programStatus?: ProgramStatus | undefined;
   private programStatusSupported = false;
   private programStatusQueryPending = false;
   private writeLogPath = (() => {
-    const env = process.env["MSA_TUI_WRITE_LOG"] || "";
+    const env = readEnv("MSA_TUI_WRITE_LOG") ?? "";
     if (env === "") return "";
     try {
       if (fs.statSync(env).isDirectory()) {
-        const now = new Date();
-        const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}`;
+        const now = DateTime.toParts(
+          DateTime.makeZonedUnsafe(Effect.runSync(DateTime.now), {
+            timeZone: DateTime.zoneMakeLocal(),
+          }),
+        );
+        const pad = (value: number): string => String(value).padStart(2, "0");
+        const ts = `${now.year}-${pad(now.month)}-${pad(now.day)}_${pad(now.hour)}-${pad(now.minute)}-${pad(now.second)}`;
         return path.join(env, `tui-${ts}-${process.pid}.log`);
       }
     } catch {}
@@ -221,7 +232,7 @@ export class ProcessTerminal implements Terminal {
     this.keyboardProtocolPushed = true;
     this.pendingKeyboardProtocolDeviceAttributes += 1;
     this.clearKeyboardProtocolNegotiationBuffer();
-    const programStatusOverride = process.env["MSA_PROGRAM_STATUS"];
+    const programStatusOverride = readEnv("MSA_PROGRAM_STATUS");
     this.programStatusSupported = programStatusOverride === "1";
     this.programStatusQueryPending = programStatusOverride !== "1" && programStatusOverride !== "0";
     const programStatusQuery = this.programStatusQueryPending ? PROGRAM_STATUS_QUERY : "";
@@ -306,19 +317,22 @@ export class ProcessTerminal implements Terminal {
   private scheduleKeyboardProtocolNegotiationBufferFlush(): void {
     if (
       this.keyboardProtocolNegotiationBuffer === "" ||
-      this.keyboardProtocolBufferFlushTimer !== undefined
+      this.cancelKeyboardProtocolBufferFlush !== undefined
     )
       return;
-    this.keyboardProtocolBufferFlushTimer = setTimeout(() => {
-      this.keyboardProtocolBufferFlushTimer = undefined;
-      this.flushKeyboardProtocolNegotiationBufferAsInput();
-    }, KEYBOARD_PROTOCOL_RESPONSE_FRAGMENT_TIMEOUT_MS);
+    this.cancelKeyboardProtocolBufferFlush = runAfter(
+      KEYBOARD_PROTOCOL_RESPONSE_FRAGMENT_TIMEOUT_MS,
+      () => {
+        this.cancelKeyboardProtocolBufferFlush = undefined;
+        this.flushKeyboardProtocolNegotiationBufferAsInput();
+      },
+    );
   }
 
   private clearKeyboardProtocolNegotiationBufferFlushTimer(): void {
-    if (this.keyboardProtocolBufferFlushTimer === undefined) return;
-    clearTimeout(this.keyboardProtocolBufferFlushTimer);
-    this.keyboardProtocolBufferFlushTimer = undefined;
+    if (this.cancelKeyboardProtocolBufferFlush === undefined) return;
+    this.cancelKeyboardProtocolBufferFlush();
+    this.cancelKeyboardProtocolBufferFlush = undefined;
   }
 
   private forwardInputSequence(sequence: string): void {
@@ -352,45 +366,50 @@ export class ProcessTerminal implements Terminal {
     } catch {}
   }
 
-  async drainInput(maxMs = 1000, idleMs = 50): Promise<void> {
-    const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this._kittyProtocolActive;
-    this.clearKeyboardProtocolNegotiationBuffer();
-    if (shouldDisableKittyProtocol) {
-      process.stdout.write("\x1b[<u");
-      this.keyboardProtocolPushed = false;
-      this._kittyProtocolActive = false;
-      setKittyProtocolActive(false);
-    }
-    this.disableModifyOtherKeys();
+  drainInput(maxMs = 1000, idleMs = 50): Promise<void> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this._kittyProtocolActive;
+        this.clearKeyboardProtocolNegotiationBuffer();
+        if (shouldDisableKittyProtocol) {
+          process.stdout.write("\x1b[<u");
+          this.keyboardProtocolPushed = false;
+          this._kittyProtocolActive = false;
+          setKittyProtocolActive(false);
+        }
+        this.disableModifyOtherKeys();
 
-    const previousHandler = this.inputHandler;
-    this.inputHandler = undefined;
+        const previousHandler = this.inputHandler;
+        this.inputHandler = undefined;
 
-    let lastDataTime = Date.now();
-    const onData = () => {
-      lastDataTime = Date.now();
-    };
+        const clock = yield* Clock.Clock;
+        let lastDataTime = clock.currentTimeMillisUnsafe();
+        const onData = (): void => {
+          lastDataTime = clock.currentTimeMillisUnsafe();
+        };
 
-    process.stdin.on("data", onData);
-    const endTime = Date.now() + maxMs;
+        process.stdin.on("data", onData);
+        const endTime = clock.currentTimeMillisUnsafe() + maxMs;
 
-    const waitUntilIdle = async (): Promise<void> => {
-      const now = Date.now();
-      const timeLeft = endTime - now;
-      if (timeLeft <= 0) return;
-      if (now - lastDataTime >= idleMs) return;
-      await new Promise((resolve) => {
-        setTimeout(resolve, Math.min(idleMs, timeLeft));
-      });
-      await waitUntilIdle();
-    };
+        const waitUntilIdle = Effect.gen(function* () {
+          for (;;) {
+            const now = clock.currentTimeMillisUnsafe();
+            const timeLeft = endTime - now;
+            if (timeLeft <= 0 || now - lastDataTime >= idleMs) return;
+            yield* Effect.sleep(Math.min(idleMs, timeLeft));
+          }
+        });
 
-    try {
-      await waitUntilIdle();
-    } finally {
-      process.stdin.removeListener("data", onData);
-      this.inputHandler = previousHandler;
-    }
+        yield* waitUntilIdle.pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              process.stdin.removeListener("data", onData);
+              this.inputHandler = previousHandler;
+            }),
+          ),
+        );
+      }),
+    );
   }
 
   stop(): void {
@@ -448,11 +467,11 @@ export class ProcessTerminal implements Terminal {
   }
 
   get columns(): number {
-    return process.stdout.columns || Number(process.env["COLUMNS"]) || 80;
+    return process.stdout.columns || Number(readEnv("COLUMNS")) || 80;
   }
 
   get rows(): number {
-    return process.stdout.rows || Number(process.env["LINES"]) || 24;
+    return process.stdout.rows || Number(readEnv("LINES")) || 24;
   }
 
   moveBy(lines: number): void {
@@ -501,10 +520,10 @@ export class ProcessTerminal implements Terminal {
   setProgress(active: boolean): void {
     if (active) {
       process.stdout.write(TERMINAL_PROGRESS_ACTIVE_SEQUENCE);
-      if (this.progressInterval === undefined) {
-        this.progressInterval = setInterval(() => {
+      if (this.cancelProgressKeepalive === undefined) {
+        this.cancelProgressKeepalive = runEvery(TERMINAL_PROGRESS_KEEPALIVE_MS, () => {
           process.stdout.write(TERMINAL_PROGRESS_ACTIVE_SEQUENCE);
-        }, TERMINAL_PROGRESS_KEEPALIVE_MS);
+        });
       }
     } else {
       this.clearProgressInterval();
@@ -513,9 +532,9 @@ export class ProcessTerminal implements Terminal {
   }
 
   private clearProgressInterval(): boolean {
-    if (this.progressInterval === undefined) return false;
-    clearInterval(this.progressInterval);
-    this.progressInterval = undefined;
+    if (this.cancelProgressKeepalive === undefined) return false;
+    this.cancelProgressKeepalive();
+    this.cancelProgressKeepalive = undefined;
     return true;
   }
 }

@@ -1,3 +1,5 @@
+import { dual } from "effect/Function";
+
 import { Input } from "./components/input.ts";
 import { getKeybindings } from "./keybindings.ts";
 import type { Component, Focusable } from "./tui.ts";
@@ -192,15 +194,15 @@ export class AltScreenSearchIndex {
   }
 }
 
-export function findAltScreenSearchMatches(
-  lines: readonly string[],
-  query: string,
-): AltScreenSearchMatch[] {
+export const findAltScreenSearchMatches: {
+  (lines: readonly string[], query: string): AltScreenSearchMatch[];
+  (query: string): (lines: readonly string[]) => AltScreenSearchMatch[];
+} = dual(2, (lines: readonly string[], query: string): AltScreenSearchMatch[] => {
   const normalizedQuery = normalizeQuery(query);
   return normalizedQuery === ""
     ? []
     : findSearchCorpusMatches(buildSearchCorpus(lines), normalizedQuery);
-}
+});
 
 export function getAltScreenSearchMatchKey(match: AltScreenSearchMatch): string {
   const first = match.segments[0];

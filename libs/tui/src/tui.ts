@@ -1,5 +1,9 @@
 import { performance } from "node:perf_hooks";
 
+import { Effect } from "effect";
+import { dual } from "effect/Function";
+
+import { type CancelDelay, runAfter } from "./delay.ts";
 import { isKeyRelease, matchesKey } from "./keys.ts";
 import {
   parseOscColorResponse,
@@ -59,10 +63,10 @@ export interface TuiMouseDispatchResult extends TuiMouseEventResult {
   focusTarget?: Component;
 }
 
-export function dispatchMouseEvent(
-  component: Component,
-  event: TuiMouseEvent,
-): TuiMouseDispatchResult | undefined {
+export const dispatchMouseEvent: {
+  (component: Component, event: TuiMouseEvent): TuiMouseDispatchResult | undefined;
+  (event: TuiMouseEvent): (component: Component) => TuiMouseDispatchResult | undefined;
+} = dual(2, (component: Component, event: TuiMouseEvent): TuiMouseDispatchResult | undefined => {
   const result = component.handleMouse?.(event);
   if (result === undefined) return undefined;
   if ("target" in result) {
@@ -84,20 +88,18 @@ export function dispatchMouseEvent(
       height: event.height,
     },
   };
-}
+});
 
-export function retargetMouseEvent(
-  event: TuiMouseEvent,
-  target: TuiMouseDispatchTarget,
-): TuiMouseEvent {
-  return {
-    ...event,
-    x: event.screenX - target.originX,
-    y: event.screenY - target.originY,
-    width: target.width,
-    height: target.height,
-  };
-}
+export const retargetMouseEvent: {
+  (event: TuiMouseEvent, target: TuiMouseDispatchTarget): TuiMouseEvent;
+  (target: TuiMouseDispatchTarget): (event: TuiMouseEvent) => TuiMouseEvent;
+} = dual(2, (event: TuiMouseEvent, target: TuiMouseDispatchTarget): TuiMouseEvent => ({
+  ...event,
+  x: event.screenX - target.originX,
+  y: event.screenY - target.originY,
+  width: target.width,
+  height: target.height,
+}));
 
 export interface Component {
   render(width: number): string[];
@@ -119,7 +121,7 @@ type PendingTerminalColorQuery = {
   palette: Array<RgbColor | undefined>;
   replied: Set<string>;
   deliver: ((colors: TerminalColors) => void) | undefined;
-  timer: NodeJS.Timeout | undefined;
+  cancelTimeout: CancelDelay | undefined;
 };
 
 const TERMINAL_PALETTE_SIZE = 16;
@@ -282,36 +284,53 @@ export class Container implements Component {
 
 const SEGMENT_RESET = "\x1b[0m\x1b]8;;\x07";
 
-export function compositeTuiLine(
-  baseLine: string,
-  overlayLine: string,
-  startCol: number,
-  overlayWidth: number,
-  totalWidth: number,
-): string {
-  if (isImageLine(baseLine)) return baseLine;
+export const compositeTuiLine: {
+  (
+    baseLine: string,
+    overlayLine: string,
+    startCol: number,
+    overlayWidth: number,
+    totalWidth: number,
+  ): string;
+  (
+    overlayLine: string,
+    startCol: number,
+    overlayWidth: number,
+    totalWidth: number,
+  ): (baseLine: string) => string;
+} = dual(
+  5,
+  (
+    baseLine: string,
+    overlayLine: string,
+    startCol: number,
+    overlayWidth: number,
+    totalWidth: number,
+  ): string => {
+    if (isImageLine(baseLine)) return baseLine;
 
-  const afterStart = startCol + overlayWidth;
-  const base = extractSegments(baseLine, startCol, afterStart, totalWidth - afterStart, true);
-  const overlay = sliceWithWidth(overlayLine, 0, overlayWidth, true);
-  const beforePad = Math.max(0, startCol - base.beforeWidth);
-  const overlayPad = Math.max(0, overlayWidth - overlay.width);
-  const actualBeforeWidth = Math.max(startCol, base.beforeWidth);
-  const actualOverlayWidth = Math.max(overlayWidth, overlay.width);
-  const afterTarget = Math.max(0, totalWidth - actualBeforeWidth - actualOverlayWidth);
-  const afterPad = Math.max(0, afterTarget - base.afterWidth);
-  const result =
-    base.before +
-    " ".repeat(beforePad) +
-    SEGMENT_RESET +
-    overlay.text +
-    " ".repeat(overlayPad) +
-    SEGMENT_RESET +
-    base.after +
-    " ".repeat(afterPad);
+    const afterStart = startCol + overlayWidth;
+    const base = extractSegments(baseLine, startCol, afterStart, totalWidth - afterStart, true);
+    const overlay = sliceWithWidth(overlayLine, 0, overlayWidth, true);
+    const beforePad = Math.max(0, startCol - base.beforeWidth);
+    const overlayPad = Math.max(0, overlayWidth - overlay.width);
+    const actualBeforeWidth = Math.max(startCol, base.beforeWidth);
+    const actualOverlayWidth = Math.max(overlayWidth, overlay.width);
+    const afterTarget = Math.max(0, totalWidth - actualBeforeWidth - actualOverlayWidth);
+    const afterPad = Math.max(0, afterTarget - base.afterWidth);
+    const result =
+      base.before +
+      " ".repeat(beforePad) +
+      SEGMENT_RESET +
+      overlay.text +
+      " ".repeat(overlayPad) +
+      SEGMENT_RESET +
+      base.after +
+      " ".repeat(afterPad);
 
-  return visibleWidth(result) <= totalWidth ? result : sliceByColumn(result, 0, totalWidth, true);
-}
+    return visibleWidth(result) <= totalWidth ? result : sliceByColumn(result, 0, totalWidth, true);
+  },
+);
 
 export type TuiMode = "regular" | "fullscreen";
 
@@ -370,7 +389,7 @@ export abstract class TuiBase extends Container implements TUI {
   public onDebug?: () => void;
   private renderRequested = false;
   private immediateRenderScheduled = false;
-  private renderTimer: NodeJS.Timeout | undefined;
+  private cancelPendingRender: CancelDelay | undefined;
   private lastRenderAt = 0;
   private static readonly MIN_RENDER_INTERVAL_MS = 16;
   private showHardwareCursor = false;
@@ -887,19 +906,19 @@ export abstract class TuiBase extends Container implements TUI {
   }
 
   private cancelRenderTimer(): void {
-    if (this.renderTimer === undefined) return;
-    clearTimeout(this.renderTimer);
-    this.renderTimer = undefined;
+    if (this.cancelPendingRender === undefined) return;
+    this.cancelPendingRender();
+    this.cancelPendingRender = undefined;
   }
 
   private scheduleRender(): void {
-    if (this.stopped || this.renderTimer !== undefined || !this.renderRequested) {
+    if (this.stopped || this.cancelPendingRender !== undefined || !this.renderRequested) {
       return;
     }
     const elapsed = performance.now() - this.lastRenderAt;
     const delay = Math.max(0, TuiBase.MIN_RENDER_INTERVAL_MS - elapsed);
-    this.renderTimer = setTimeout(() => {
-      this.renderTimer = undefined;
+    this.cancelPendingRender = runAfter(delay, () => {
+      this.cancelPendingRender = undefined;
       if (this.stopped || !this.renderRequested) {
         return;
       }
@@ -909,7 +928,7 @@ export abstract class TuiBase extends Container implements TUI {
       if (this.renderRequested) {
         this.scheduleRender();
       }
-    }, delay);
+    });
   }
 
   private handleTerminalInput(data: string): void {
@@ -1030,7 +1049,7 @@ export abstract class TuiBase extends Container implements TUI {
   private completeTerminalColorQuery(query: PendingTerminalColorQuery): void {
     const deliver = query.deliver;
     query.deliver = undefined;
-    clearTimeout(query.timer);
+    query.cancelTimeout?.();
     deliver?.(this.terminalColorQueryResult(query));
   }
 
@@ -1195,19 +1214,22 @@ export abstract class TuiBase extends Container implements TUI {
     timeoutMs: number;
     onLateReply?: (colors: TerminalColors) => void;
   }): Promise<TerminalColors> {
-    return new Promise((resolve) => {
-      const query: PendingTerminalColorQuery = {
-        palette: Array.from({ length: TERMINAL_PALETTE_SIZE }, () => undefined),
-        replied: new Set(),
-        deliver: resolve,
-        timer: undefined,
-      };
-      query.timer = setTimeout(() => {
-        query.deliver = onLateReply;
-        resolve(this.terminalColorQueryResult(query));
-      }, timeoutMs);
-      this.pendingTerminalColorQueries.push(query);
-      this.terminal.write(TERMINAL_COLOR_QUERY);
-    });
+    return Effect.runPromise(
+      Effect.callback<TerminalColors>((resume) => {
+        const resolve = (colors: TerminalColors): void => resume(Effect.succeed(colors));
+        const query: PendingTerminalColorQuery = {
+          palette: Array.from({ length: TERMINAL_PALETTE_SIZE }, () => undefined),
+          replied: new Set(),
+          deliver: resolve,
+          cancelTimeout: undefined,
+        };
+        query.cancelTimeout = runAfter(timeoutMs, () => {
+          query.deliver = onLateReply;
+          resolve(this.terminalColorQueryResult(query));
+        });
+        this.pendingTerminalColorQueries.push(query);
+        this.terminal.write(TERMINAL_COLOR_QUERY);
+      }),
+    );
   }
 }
