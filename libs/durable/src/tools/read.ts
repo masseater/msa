@@ -54,7 +54,11 @@ export type ReadToolDetails = {
 
 const READ_CHUNK = 64 * 1024;
 
-/** `Array.prototype.slice`'s conversion of an index: NaN is 0, other values truncate toward zero. */
+/**
+ * `Array.prototype.slice`'s conversion of an index: NaN is 0, other values truncate toward zero.
+ * @param {number} value - The index.
+ * @returns {number} The converted index.
+ */
 function sliceIndex(value: number): number {
   return Number.isNaN(value) ? 0 : Math.trunc(value);
 }
@@ -62,8 +66,14 @@ function sliceIndex(value: number): number {
 /**
  * The decoded start of bytes `[start, end)` of the file, decoded as part of the whole file: all of it, or enough for
  * `truncateHeadOf` (more than `DEFAULT_MAX_BYTES + 1` bytes, or `DEFAULT_MAX_LINES` newlines).
+ * @param {BinaryReader} reader - The open file.
+ * @param {number} start - The first byte.
+ * @param {number} end - The byte after the last.
+ * @param {boolean} skipBom - Whether to drop a leading BOM.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<string>} The decoded text.
  */
-async function readHead(
+function readHead(
   reader: BinaryReader,
   start: number,
   end: number,
@@ -73,19 +83,20 @@ async function readHead(
   const decoder = rangeDecoder();
   let text = "";
   let newlines = 0;
-  for (let position = skipBom && start === 0 ? 3 : start; position < end;) {
+  const readFrom = async (position: number): Promise<string> => {
+    if (position >= end) return text + decoder.decode();
     const bytes = getOrThrow(
       await reader.read(position, Math.min(READ_CHUNK, end - position), context),
     );
-    if (bytes.length === 0) break;
-    position += bytes.length;
+    if (bytes.length === 0) return text + decoder.decode();
     const decoded = decoder.decode(bytes, { stream: true });
     text += decoded;
     for (let index = decoded.indexOf("\n"); index !== -1; index = decoded.indexOf("\n", index + 1))
       newlines++;
     if (newlines >= DEFAULT_MAX_LINES || utf8ByteLength(text) > DEFAULT_MAX_BYTES + 1) return text;
-  }
-  return text + decoder.decode();
+    return readFrom(position + bytes.length);
+  };
+  return readFrom(skipBom && start === 0 ? 3 : start);
 }
 
 export type ReadToolOptions = {
@@ -96,6 +107,8 @@ export type ReadToolOptions = {
 /**
  * Reads text files and images. Remarks about truncation, continuation, and image processing are diagnostics; the content
  * is only file text, or one image, which programs get as its `ImageContent`.
+ * @param {ReadToolOptions} options - The tool's options.
+ * @returns {ToolRegistration<typeof readSchema, ReadToolDetails>} The tool.
  */
 export function createReadTool(
   options: ReadToolOptions = {},
@@ -113,7 +126,9 @@ export function createReadTool(
       try {
         // A concurrent writer can change the file between the scan and the reads. Appending (a growing log) leaves
         // the scanned text as it was; an image must be whole. Otherwise the file is read again once.
-        for (let attempt = 0; ; attempt++) {
+        const attemptRead = async (
+          attempt: number,
+        ): Promise<ToolExecutionResult<ReadToolDetails>> => {
           const before = getOrThrow(await reader.info(context));
           const mimeType = await detectSupportedImageMimeTypeOf({
             size: before.size,
@@ -136,7 +151,9 @@ export function createReadTool(
           const unchanged = after.size === before.size && after.mtimeMs === before.mtimeMs;
           if (unchanged || (mimeType === undefined && after.size > before.size)) return result;
           if (attempt === 1) throw new Error(`${path} changed while it was read`);
-        }
+          return attemptRead(attempt + 1);
+        };
+        return await attemptRead(0);
       } finally {
         await reader.close(context);
       }
@@ -148,6 +165,16 @@ export function createReadTool(
  * One image block, prepared by `processor` or, without one, as it is when its format is inline and it fits the limits
  * (its size is checked before reading it, its dimensions from its header); otherwise an error result saying why. What happened to the image is an `info` diagnostic, so programs get the
  * bare `ImageContent`. A model without image input sees msa-ai's placeholder instead; a diagnostic says so.
+ * @param {BinaryReader} reader - The open file.
+ * @param {FileInfo} info - The file's info.
+ * @param {string} path - The path the model gave.
+ * @param {string} mimeType - The image's MIME type.
+ * @param {ImageProcessor | undefined} processor - Prepares the image, if configured.
+ * @param {ImageModel} model - What the model takes.
+ * @param {boolean} model.vision - Whether it takes images.
+ * @param {ImageLimits} model.limits - The image limits.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<ToolExecutionResult<ReadToolDetails>>} The tool's result.
  */
 async function readImage(
   reader: BinaryReader,
@@ -158,46 +185,12 @@ async function readImage(
   { vision, limits }: ImageModel,
   context: Context,
 ): Promise<ToolExecutionResult<ReadToolDetails>> {
-  let image: { readonly data: string; readonly mimeType: string };
-  const notes: string[] = [];
-  if (processor !== undefined) {
-    const bytes = getOrThrow(await reader.read(0, info.size, context));
-    const prepared = await processor.prepare(bytes, mimeType, limits);
-    if (prepared === undefined)
-      return imageError(`${path} is an image (${mimeType}) that cannot be prepared for the model`);
-    image = prepared;
-    if (prepared.convertedFrom !== undefined)
-      notes.push(`Converted from ${prepared.convertedFrom} to ${prepared.mimeType}.`);
-    if (prepared.resized !== undefined) {
-      const { from, to } = prepared.resized;
-      const scale = (from.width / to.width).toFixed(2);
-      notes.push(
-        `Resized from ${from.width}x${from.height} to ${to.width}x${to.height}. Multiply coordinates by ${scale} to map them to the original.`,
-      );
-    }
-  } else {
-    if (!INLINE_IMAGE_TYPES.has(mimeType)) {
-      return imageError(
-        `${path} is an image (${mimeType}) that needs converting, and no image processor is configured`,
-      );
-    }
-    const unshrinkable = "and no image processor is configured to shrink it";
-    if (base64Length(info.size) > limits.maxBytes) {
-      return imageError(
-        `${path} is an image (${mimeType}) of ${formatSize(info.size)}, too large to send, ${unshrinkable}`,
-      );
-    }
-    const bytes = getOrThrow(await reader.read(0, info.size, context));
-    const size = imageDimensions(bytes, mimeType);
-    if (size === undefined)
-      return imageError(`${path} is an image (${mimeType}) whose size cannot be read`);
-    if (size.width > limits.maxWidth || size.height > limits.maxHeight) {
-      return imageError(
-        `${path} is an image (${mimeType}) of ${size.width}x${size.height}, larger than ${limits.maxWidth}x${limits.maxHeight}, ${unshrinkable}`,
-      );
-    }
-    image = { data: toBase64(bytes), mimeType };
-  }
+  const loaded =
+    processor === undefined
+      ? await inlineImage(reader, info, path, mimeType, limits, context)
+      : await preparedImage(reader, info, path, mimeType, processor, limits, context);
+  if ("error" in loaded) return loaded.error;
+  const { image, notes } = loaded;
   if (!vision)
     notes.push("The current model does not support images; it sees a placeholder instead.");
   const diagnostics: ToolDiagnostic[] = [
@@ -210,12 +203,87 @@ async function readImage(
   return { output: [{ type: "image", data: image.data, mimeType: image.mimeType }], diagnostics };
 }
 
+type ImageLoad =
+  | {
+      readonly image: { readonly data: string; readonly mimeType: string };
+      readonly notes: string[];
+    }
+  | { readonly error: ToolExecutionResult<ReadToolDetails> };
+
+async function preparedImage(
+  reader: BinaryReader,
+  info: FileInfo,
+  path: string,
+  mimeType: string,
+  processor: ImageProcessor,
+  limits: ImageLimits,
+  context: Context,
+): Promise<ImageLoad> {
+  const bytes = getOrThrow(await reader.read(0, info.size, context));
+  const prepared = await processor.prepare(bytes, mimeType, limits);
+  if (prepared === undefined)
+    return {
+      error: imageError(`${path} is an image (${mimeType}) that cannot be prepared for the model`),
+    };
+  const notes: string[] = [];
+  if (prepared.convertedFrom !== undefined)
+    notes.push(`Converted from ${prepared.convertedFrom} to ${prepared.mimeType}.`);
+  if (prepared.resized !== undefined) {
+    const { from, to } = prepared.resized;
+    const scale = (from.width / to.width).toFixed(2);
+    notes.push(
+      `Resized from ${from.width}x${from.height} to ${to.width}x${to.height}. Multiply coordinates by ${scale} to map them to the original.`,
+    );
+  }
+  return { image: prepared, notes };
+}
+
+async function inlineImage(
+  reader: BinaryReader,
+  info: FileInfo,
+  path: string,
+  mimeType: string,
+  limits: ImageLimits,
+  context: Context,
+): Promise<ImageLoad> {
+  if (!INLINE_IMAGE_TYPES.has(mimeType)) {
+    return {
+      error: imageError(
+        `${path} is an image (${mimeType}) that needs converting, and no image processor is configured`,
+      ),
+    };
+  }
+  const unshrinkable = "and no image processor is configured to shrink it";
+  if (base64Length(info.size) > limits.maxBytes) {
+    return {
+      error: imageError(
+        `${path} is an image (${mimeType}) of ${formatSize(info.size)}, too large to send, ${unshrinkable}`,
+      ),
+    };
+  }
+  const bytes = getOrThrow(await reader.read(0, info.size, context));
+  const size = imageDimensions(bytes, mimeType);
+  if (size === undefined)
+    return { error: imageError(`${path} is an image (${mimeType}) whose size cannot be read`) };
+  if (size.width > limits.maxWidth || size.height > limits.maxHeight) {
+    return {
+      error: imageError(
+        `${path} is an image (${mimeType}) of ${size.width}x${size.height}, larger than ${limits.maxWidth}x${limits.maxHeight}, ${unshrinkable}`,
+      ),
+    };
+  }
+  return { image: { data: toBase64(bytes), mimeType }, notes: [] };
+}
+
 /** What the conversation's model takes: whether images, and within which limits. */
 type ImageModel = { readonly vision: boolean; readonly limits: ImageLimits };
 
 /**
  * The conversation model's image input: `DEFAULT_IMAGE_LIMITS` overridden by its `inputLimits.images.resize`. Without
  * a resolvable model, it counts as one that takes images within the defaults.
+ * @param {ToolExecutionApi} api - The tool call's API.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<ImageModel>} What the model takes.
  */
 async function imageModel(api: ToolExecutionApi, context: Context): Promise<ImageModel> {
   const ref = (await api.agent(context)).model;
@@ -242,6 +310,12 @@ function imageError(message: string): ToolExecutionResult<ReadToolDetails> {
 /**
  * The read result for the opened file. It equals decoding the whole file with `TextDecoder`, splitting it on `\n`,
  * and bounding the selected lines with `truncateHead`, while reading only one scan's worth of the file plus the head.
+ * @param {BinaryReader} reader - The open file.
+ * @param {string} path - The path the model gave.
+ * @param {number | undefined} offset - The first line, 1-based.
+ * @param {number | undefined} limit - How many lines.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<ToolExecutionResult<ReadToolDetails>>} The tool's result.
  */
 async function readText(
   reader: BinaryReader,

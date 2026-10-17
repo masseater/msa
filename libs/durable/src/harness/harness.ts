@@ -3,6 +3,7 @@ import { withAbortSignal, withoutAbortSignal } from "@msa/chord/context";
 
 import { ResetEntry } from "../entries.ts";
 import type { ExecutionEnv } from "../env/index.ts";
+import { promiseTry } from "../promise-try.ts";
 import { contained, SessionImpl } from "../session/session.ts";
 import type { Transaction } from "../session/transaction.ts";
 import type {
@@ -228,7 +229,13 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
     };
   }
 
-  /** Resolve a conversation's committed `msa.agent` against `snapshot`, or the current one, and the current settings. */
+  /**
+   * Resolve a conversation's committed `msa.agent` against `snapshot`, or the current one, and the current settings.
+   * @param {ConversationId} id - The conversation.
+   * @param {RegistrySnapshot<Tool> | undefined} snapshot - The registry snapshot, or the current one.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<Agent<Tool>>} The agent.
+   */
   async resolveAgent(
     id: ConversationId,
     snapshot: RegistrySnapshot<Tool> | undefined,
@@ -239,7 +246,12 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
     return resolveAgent(state, registry, resolveSettings(this.#options.settings), this.#report);
   }
 
-  /** Build a conversation's environment from its current `cwd`; `undefined` without an `env` option. */
+  /**
+   * Build a conversation's environment from its current `cwd`; `undefined` without an `env` option.
+   * @param {ConversationId} id - The conversation.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<ExecutionEnv | undefined>} The environment.
+   */
   async buildEnv(id: ConversationId, context: Context): Promise<ExecutionEnv | undefined> {
     const build = this.#options.env;
     if (build === undefined) return undefined;
@@ -250,7 +262,11 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
     );
   }
 
-  /** Reconcile surviving `running` tasks to `pending`; part of open. */
+  /**
+   * Reconcile surviving `running` tasks to `pending`; part of open.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<void>} Settles once reconciled.
+   */
   openTasks(context: Context): Promise<void> {
     return this.#tasks.open(context);
   }
@@ -269,7 +285,10 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
     >;
   }
 
-  /** Internal, for tests: sizes of the scheduler's ownership indexes. */
+  /**
+   * Internal, for tests: sizes of the scheduler's ownership indexes.
+   * @returns {TaskScheduler["indexSizes"]} The sizes.
+   */
   get [SCHEDULER_INDEX_SIZES](): TaskScheduler["indexSizes"] {
     return this.#tasks.indexSizes;
   }
@@ -314,13 +333,17 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
     return this.#tasks.waitForIdle(undefined, context);
   }
 
-  /** Sum every conversation's committed `msa.usage`. Each document is read at its own point; totals only grow. */
+  /**
+   * Sum every conversation's committed `msa.usage`. Each document is read at its own point; totals only grow.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<UsageState>} The sum.
+   */
   async usage(context: Context): Promise<UsageState> {
     const conversations = await this.readOnLine(() =>
       scanAll((cursor) => this.storage.scanConversations({}, SCAN_PAGE_SIZE, cursor, context)),
     );
     const total = UsageDoc.definition.initial();
-    for (const { id } of conversations) {
+    for await (const { id } of conversations) {
       const state = await this.snapshot(UsageDoc, id, context);
       if (state !== undefined) addUsageState(total, state);
     }
@@ -356,7 +379,10 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
     this.#report(error);
   }
 
-  /** Signal and join task invocations after the close listeners and before Storage closes; writes no task outcome. */
+  /**
+   * Signal and join task invocations after the close listeners and before Storage closes; writes no task outcome.
+   * @returns {Promise<void>} Settles once the invocations are joined.
+   */
   protected override beforeClose(): Promise<void> {
     return this.#tasks.join();
   }
@@ -388,6 +414,8 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
    * The built-in creation hook, in every commit that creates or forks a conversation: empty `msa.live`, `msa.inbox`, and
    * `msa.usage`, a fresh `msa.provider`, the conversation's `msa.agent` (see `createAgent()`), then
    * `HarnessOptions.conversationCreated`.
+   * @param {Transaction} tx - The commit's transaction.
+   * @param {ConversationRecord} record - The staged conversation.
    */
   protected override async conversationCreated(
     tx: Transaction,
@@ -402,7 +430,11 @@ class HarnessImpl<Tool extends ToolRegistration> extends SessionImpl implements 
   }
 }
 
-/** `onReport` that cannot fail: it is the last place an error goes, so its own throw or rejection is dropped. */
+/**
+ * `onReport` that cannot fail: it is the last place an error goes, so its own throw or rejection is dropped.
+ * @param {((error: unknown) => void) | undefined} onReport - The host's handler.
+ * @returns {(error: unknown) => void} The safe handler.
+ */
 function safeReport(onReport: ((error: unknown) => void) | undefined): (error: unknown) => void {
   return (error) =>
     contained(
@@ -414,6 +446,9 @@ function safeReport(onReport: ((error: unknown) => void) | undefined): (error: u
 /**
  * The host clock, falling back to `Date.now` when it throws: a broken clock must not stop commits. The first throw is
  * reported; the clock is read in every task change, so later ones are not.
+ * @param {(() => number) | undefined} now - The host clock.
+ * @param {(error: unknown) => void} report - Receives errors that must not fail the caller.
+ * @returns {() => number} The safe clock.
  */
 export function safeNow(
   now: (() => number) | undefined,
@@ -438,6 +473,11 @@ export function safeNow(
 /**
  * Invocation-bound handle for tasks and tools. Every operation, and every operation of a submission it returns, first
  * checks the invocation and runs under its signal, so it rejects once the invocation ends; admitted work stays durable.
+ * @param {ConversationId} id - The conversation.
+ * @param {InvocationBinding} binding - The invocation.
+ * @param {Submissions} submissions - The submissions.
+ * @param {TaskScheduler} tasks - The scheduler.
+ * @returns {ConversationHandle} The handle.
  */
 function boundConversation(
   id: ConversationId,
@@ -447,10 +487,11 @@ function boundConversation(
 ): ConversationHandle {
   const bind = (context: Context): Context => withAbortSignal(binding.signal, context);
   const bound = <T>(operation: (context: Context) => Promise<T>) => {
-    return async (context: Context): Promise<T> => {
-      binding.check();
-      return operation(bind(context));
-    };
+    return (context: Context): Promise<T> =>
+      promiseTry(() => {
+        binding.check();
+        return operation(bind(context));
+      });
   };
   return {
     id,
@@ -464,10 +505,11 @@ function boundConversation(
         abort: bound((callContext) => submission.abort(callContext)),
       };
     },
-    abort: async (context, options) => {
-      binding.check();
-      return tasks.abortConversation(id, options?.background === true, bind(context));
-    },
+    abort: (context, options) =>
+      promiseTry(() => {
+        binding.check();
+        return tasks.abortConversation(id, options?.background === true, bind(context));
+      }),
     waitForIdle: bound((callContext) => tasks.waitForIdle(id, callContext)),
   };
 }
@@ -475,8 +517,14 @@ function boundConversation(
 /** Durable agent harness over one Session. */
 export type Harness = HarnessType;
 
-export const Harness = {
-  /** Open a Harness over storage. The registry may keep changing while the Harness runs. */
+const HarnessFactory = {
+  /**
+   * Open a Harness over storage. The registry may keep changing while the Harness runs.
+   * @param {Storage} storage - The storage backend.
+   * @param {HarnessOptions<Tool>} options - The Harness options.
+   * @param {Context} context - The caller's context.
+   * @returns {Promise<Harness>} The Harness.
+   */
   async open<Tool extends ToolRegistration>(
     storage: Storage,
     options: HarnessOptions<Tool>,
@@ -503,3 +551,5 @@ export const Harness = {
     return harness;
   },
 };
+
+export { HarnessFactory as Harness };

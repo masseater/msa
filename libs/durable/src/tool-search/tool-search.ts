@@ -31,7 +31,11 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Schema descriptions and property names, recursively. */
+/**
+ * Schema descriptions and property names, recursively.
+ * @param {unknown} schema - The schema.
+ * @param {string[]} parts - Receives the text.
+ */
 function schemaText(schema: unknown, parts: string[]): void {
   if (!isObject(schema)) return;
   if (typeof schema["description"] === "string") parts.push(schema["description"]);
@@ -48,7 +52,11 @@ function schemaText(schema: unknown, parts: string[]): void {
   }
 }
 
-/** Search text of a tool: its name, the name with `_` as spaces, its description, and its parameters' text. */
+/**
+ * Search text of a tool: its name, the name with `_` as spaces, its description, and its parameters' text.
+ * @param {ToolRegistration} tool - The tool.
+ * @returns {string} The text.
+ */
 function searchText(tool: ToolRegistration): string {
   const parts = [tool.name, tool.name.replaceAll("_", " "), tool.description];
   schemaText(tool.parameters, parts);
@@ -77,7 +85,7 @@ export function createToolSearchTool() {
               .map((name) => {
                 const description =
                   candidates.find((tool) => tool.name === name)?.description ?? "";
-                return `- ${name}: ${description.trim().split(/\r?\n/)[0]}`;
+                return `- ${name}: ${description.trim().split(/\r?\n/u)[0]}`;
               })
               .join("\n")}`;
       const details: ToolSearchToolDetails = { loaded };
@@ -90,7 +98,10 @@ export function createToolSearchTool() {
   });
 }
 
-/** The `tool_search` extension: install it and select it where the model should find deferred tools. */
+/**
+ * The `tool_search` extension: install it and select it where the model should find deferred tools.
+ * @returns {Extension} The extension.
+ */
 export function createToolSearchExtension() {
   return defineExtension({ name: "tool-search", tools: [createToolSearchTool()] });
 }

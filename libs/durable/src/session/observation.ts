@@ -221,7 +221,10 @@ export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T>
     this.#terminate({ reason: "cancelled" });
   }
 
-  /** End with `session_closed`, or with `session_failed` and the error when the Session failed. */
+  /**
+   * End with `session_closed`, or with `session_failed` and the error when the Session failed.
+   * @param {{ readonly error: unknown }} failure - The Session's failure, if any.
+   */
   closeSession(failure?: { readonly error: unknown }): void {
     this.#terminate(
       failure === undefined
@@ -256,32 +259,39 @@ export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T>
     if (this.#running || this.#end !== undefined || !this.#started) return;
     this.#running = true;
     try {
-      while (this.#end === undefined) {
-        const frame = this.#pending.shift();
-        if (frame === undefined) break;
-        this.#value = frame.value;
-        const deliveryContext = withoutAbortSignal(frame.context);
-        try {
-          await this.#listener!(frame.value, frame.ops, deliveryContext);
-        } catch (error) {
-          if (this.#end === undefined) {
-            this.#report(error);
-            this.#terminate({ reason: "listener_error", error: toError(error) });
-          }
-          break;
-        }
-        if (frame.value === null) {
-          this.#terminate({ reason: "retired" });
-          break;
-        }
-      }
+      await this.#deliverNext();
     } finally {
       this.#running = false;
       if (this.#end === undefined && this.#pending.length > 0) this.#schedule();
     }
   }
 
-  /** End the watch, once: detach, drop pending frames, and settle `closed`. A callback already running keeps running. */
+  async #deliverNext(): Promise<void> {
+    if (this.#end !== undefined) return;
+    const frame = this.#pending.shift();
+    if (frame === undefined) return;
+    this.#value = frame.value;
+    const deliveryContext = withoutAbortSignal(frame.context);
+    try {
+      await this.#listener!(frame.value, frame.ops, deliveryContext);
+    } catch (error) {
+      if (this.#end === undefined) {
+        this.#report(error);
+        this.#terminate({ reason: "listener_error", error: toError(error) });
+      }
+      return;
+    }
+    if (frame.value === null) {
+      this.#terminate({ reason: "retired" });
+      return;
+    }
+    await this.#deliverNext();
+  }
+
+  /**
+   * End the watch, once: detach, drop pending frames, and settle `closed`. A callback already running keeps running.
+   * @param {WatchEnd} end - How the watch ends.
+   */
   #terminate(end: WatchEnd): void {
     if (this.#end !== undefined) return;
     this.#end = end;

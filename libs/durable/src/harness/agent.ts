@@ -54,7 +54,11 @@ export const AgentDoc = defineDoc<AgentState>({
 /** Default `settings.contextRetentionMs`: ten minutes. */
 const DEFAULT_CONTEXT_RETENTION_MS = 600_000;
 
-/** Resolve the host settings: every field over its built-in default, object fields merged. */
+/**
+ * Resolve the host settings: every field over its built-in default, object fields merged.
+ * @param {HarnessSettings | undefined} settings - The host settings.
+ * @returns {Settings} The resolved settings.
+ */
 export function resolveSettings(settings: HarnessSettings | undefined): Settings {
   const extensions = settings?.extensions;
   return {
@@ -77,7 +81,12 @@ export function resolveSettings(settings: HarnessSettings | undefined): Settings
   };
 }
 
-/** Apply one change to `msa.agent`: a given field replaces the stored one, `null` clears it, `undefined` changes nothing. */
+/**
+ * Apply one change to `msa.agent`: a given field replaces the stored one, `null` clears it, `undefined` changes nothing.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {AgentChange} change - The change.
+ */
 export async function configure(
   tx: Tx,
   conversationId: ConversationId,
@@ -93,6 +102,9 @@ export async function configure(
  * is written for it. An unset or object `modelTools` also gets each name appended to its `add`, which loads deferred
  * tools and has no effect for others. By name, without the registry: a tool that is not registered now, such as one of
  * an MCP server that is reconnecting, is offered once it is again.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {readonly string[]} added - The added tool names.
  */
 export async function addTools(
   tx: Tx,
@@ -178,6 +190,8 @@ function names(items: readonly { readonly name: string }[]): string[] {
  * Built-in part of every Harness commit that creates or forks a conversation, for `msa.agent`: a fork keeps its `asOf`
  * copy; a new task-owned conversation copies the stored agent of its owner task's conversation; a new ownerless one
  * starts empty.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationRecord} conversation - The created conversation.
  */
 export async function createAgent(tx: Tx, conversation: ConversationRecord): Promise<void> {
   if (conversation.parent !== undefined) return;
@@ -187,7 +201,12 @@ export async function createAgent(tx: Tx, conversation: ConversationRecord): Pro
   Object.assign(agent, copyJson(owner) as AgentState);
 }
 
-/** Handlers of the selected extensions' hooks for a task name, in extension order. */
+/**
+ * Handlers of the selected extensions' hooks for a task name, in extension order.
+ * @param {Agent} agent - The agent.
+ * @param {string} taskName - The task name.
+ * @returns {object[]} The handlers.
+ */
 export function agentHooks(agent: Agent, taskName: string): object[] {
   const handlers: object[] = [];
   for (const extension of agent.extensions) {
@@ -200,6 +219,11 @@ export function agentHooks(agent: Agent, taskName: string): object[] {
 /**
  * Resolve an agent from its stored state (absent: every field unset), a registry snapshot, and resolved settings. A
  * wrapper that throws or renames drops its target and is reported; a wrapper without a target does nothing.
+ * @param {Readonly<AgentState> | undefined} state - The stored state.
+ * @param {RegistrySnapshot<Tool>} snapshot - The registry snapshot.
+ * @param {Settings} settings - The resolved settings.
+ * @param {(error: unknown) => void} report - Receives errors that must not fail the caller.
+ * @returns {Agent<Tool>} The agent.
  */
 export function resolveAgent<Tool extends ToolRegistration>(
   state: Readonly<AgentState> | undefined,
@@ -265,7 +289,12 @@ export function resolveAgent<Tool extends ToolRegistration>(
   return agent;
 }
 
-/** The tools offered to the model, as `AgentState.modelTools` describes. */
+/**
+ * The tools offered to the model, as `AgentState.modelTools` describes.
+ * @param {Tool[]} tools - The agent's tools.
+ * @param {AgentState["modelTools"]} filter - The stored filter.
+ * @returns {Tool[]} The offered tools.
+ */
 function offeredTools<Tool extends ToolRegistration>(
   tools: Tool[],
   filter: AgentState["modelTools"],
@@ -282,7 +311,12 @@ function offeredTools<Tool extends ToolRegistration>(
   return [...kept, ...loaded];
 }
 
-/** `tools` through a stored filter: an array selects exactly its names, in its order; `{ remove }` drops names. */
+/**
+ * `tools` through a stored filter: an array selects exactly its names, in its order; `{ remove }` drops names.
+ * @param {Tool[]} tools - The tools.
+ * @param {AgentState["tools"]} filter - The stored filter.
+ * @returns {Tool[]} The selected tools.
+ */
 function filterTools<Tool extends ToolRegistration>(
   tools: Tool[],
   filter: AgentState["tools"],
@@ -299,7 +333,13 @@ function filterTools<Tool extends ToolRegistration>(
   return tools.filter((tool) => !removed.has(tool.name));
 }
 
-/** Selected installed extensions: the stored array, or the default selection edited by `{ add, remove }`. */
+/**
+ * Selected installed extensions: the stored array, or the default selection edited by `{ add, remove }`.
+ * @param {AgentState["extensions"]} stored - The stored selection.
+ * @param {RegistrySnapshot<Tool>} snapshot - The registry snapshot.
+ * @param {Settings} settings - The resolved settings.
+ * @returns {Extension<Tool>[]} The extensions.
+ */
 function selectExtensions<Tool extends ToolRegistration>(
   stored: AgentState["extensions"],
   snapshot: RegistrySnapshot<Tool>,

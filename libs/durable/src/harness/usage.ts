@@ -22,7 +22,14 @@ export const UsageDoc = defineDoc<UsageState>({
   checkpointWhen: () => true,
 });
 
-/** Add `usage` to one bucket of the conversation's `msa.usage`, in the commit that records the response. */
+/**
+ * Add `usage` to one bucket of the conversation's `msa.usage`, in the commit that records the response.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {keyof UsageState} bucket - The bucket.
+ * @param {string} key - The model or tool.
+ * @param {Usage} usage - The usage.
+ */
 export async function recordUsage(
   tx: Tx,
   conversationId: ConversationId,
@@ -39,7 +46,11 @@ export async function recordUsage(
   else addUsage(total, usage);
 }
 
-/** Add every counter of `usage` to `total`; optional counters are added once either side reports them. */
+/**
+ * Add every counter of `usage` to `total`; optional counters are added once either side reports them.
+ * @param {Draft<Usage> | Usage} total - The total.
+ * @param {Usage} usage - The usage to add.
+ */
 export function addUsage(total: Draft<Usage> | Usage, usage: Usage): void {
   total.input += usage.input;
   total.output += usage.output;
@@ -56,19 +67,23 @@ export function addUsage(total: Draft<Usage> | Usage, usage: Usage): void {
   total.cost.total += usage.cost.total;
 }
 
-/** Add every bucket of `state` into `sum`. */
+/**
+ * Add every bucket of `state` into `sum`.
+ * @param {UsageState} sum - The sum.
+ * @param {Readonly<UsageState>} state - The state to add.
+ */
 export function addUsageState(sum: UsageState, state: Readonly<UsageState>): void {
   for (const bucket of ["models", "tools"] as const) {
     for (const [key, usage] of Object.entries(state[bucket])) {
       const total = Object.hasOwn(sum[bucket], key) ? sum[bucket][key] : undefined;
       // Define rather than assign: assigning a tool named `__proto__` would set the prototype.
-      if (total !== undefined) addUsage(total, usage);
-      else
+      if (total === undefined)
         Object.defineProperty(sum[bucket], key, {
           value: structuredClone(usage),
           enumerable: true,
           writable: true,
         });
+      else addUsage(total, usage);
     }
   }
 }

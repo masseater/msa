@@ -11,6 +11,7 @@ import {
   type WatchChange,
   type WatchTarget,
 } from "../env/index.ts";
+import { range } from "./range.ts";
 import type { EnvConformanceCase, EnvConformanceOptions } from "./types.ts";
 
 const context = BACKGROUND_CONTEXT;
@@ -37,7 +38,7 @@ async function readAll(
   const reader = getOrThrow(await env.openDirReader(path, context));
   const pages: FileInfo[][] = [];
   try {
-    for (let page = 0; page < 1000; page++) {
+    for await (const _page of range(0, 1000)) {
       const next = getOrThrow(await reader.next(maxEntries, context));
       pages.push(next.entries);
       if (next.done) return { pages, done: true };
@@ -48,7 +49,13 @@ async function readAll(
   }
 }
 
-/** A listing as `<kind letter> <path>` lines (`f`, `d`, `l`), with its truncation. */
+/**
+ * A listing as `<kind letter> <path>` lines (`f`, `d`, `l`), with its truncation.
+ * @param {ExecutionEnv} env - The execution environment.
+ * @param {string} path - The directory to list.
+ * @param {ListFilesOptions} options - The listing options.
+ * @returns {Promise<{ entries: string[]; truncated: boolean }>} The listing's lines and truncation.
+ */
 async function listed(
   env: ExecutionEnv,
   path: string,
@@ -63,7 +70,12 @@ async function listed(
   };
 }
 
-/** Whether a change reports `path`: an overflow, or a reported path at or above it. */
+/**
+ * Whether a change reports `path`: an overflow, or a reported path at or above it.
+ * @param {WatchChange} change - The reported change.
+ * @param {string} path - The path.
+ * @returns {boolean} Whether `change` reports `path`.
+ */
 function covers(change: WatchChange, path: string): boolean {
   if ("overflow" in change) return true;
   if (!("paths" in change)) return false;
@@ -73,7 +85,12 @@ function covers(change: WatchChange, path: string): boolean {
   );
 }
 
-/** Watch `targets` while `run` changes files, with a helper that waits for a change reporting a path. */
+/**
+ * Watch `targets` while `run` changes files, with a helper that waits for a change reporting a path.
+ * @param {ExecutionEnv} env - The execution environment.
+ * @param {readonly WatchTarget[]} targets - What to watch.
+ * @param {(helpers: WatchHelpers) => Promise<void>} run - Changes files and waits for their reports.
+ */
 async function watching(
   env: ExecutionEnv,
   targets: readonly WatchTarget[],
@@ -96,14 +113,19 @@ async function watching(
         const from = changes.length;
         await change();
         const deadline = Date.now() + 3000;
-        while (!changes.slice(from).some((entry) => covers(entry, target))) {
+        const poll = async (): Promise<void> => {
+          if (changes.slice(from).some((entry) => covers(entry, target))) return;
           if (Date.now() > deadline) {
             throw new Error(
               `No change reported ${target}; got ${JSON.stringify(changes.slice(from))}`,
             );
           }
-          await new Promise((resolve) => setTimeout(resolve, 20));
-        }
+          await new Promise((resolve) => {
+            setTimeout(resolve, 20);
+          });
+          await poll();
+        };
+        await poll();
       },
     });
   } finally {
@@ -114,6 +136,8 @@ async function watching(
 /**
  * Creates runner-independent cases for an `ExecutionEnv`. `withEnv` must call and await its callback exactly once per
  * case with an environment whose `cwd` is a fresh, empty, writable directory.
+ * @param {EnvConformanceOptions} options - The environment under test and its capabilities.
+ * @returns {readonly EnvConformanceCase[]} The cases.
  */
 export function createEnvConformance(
   options: EnvConformanceOptions,
@@ -186,7 +210,7 @@ export function createEnvConformance(
           [3, undefined],
           [4, 9],
         ];
-        for (const [startLine, endLine] of ranges) {
+        for await (const [startLine, endLine] of ranges) {
           const scan = getOrThrow(
             await reader.scanLines(
               { startLine, ...(endLine === undefined ? {} : { endLine }) },
@@ -194,12 +218,12 @@ export function createEnvConformance(
             ),
           );
           const selected = lines.slice(startLine, endLine);
-          const range = (from: number, to: number) =>
+          const decodeSpan = (from: number, to: number) =>
             new TextDecoder("utf-8", { ignoreBOM: from > 0 }).decode(bytes.subarray(from, to));
           assert.strictEqual(scan.newlines, lines.length - 1);
-          assert.strictEqual(range(scan.start, scan.end), selected.join("\n"));
+          assert.strictEqual(decodeSpan(scan.start, scan.end), selected.join("\n"));
           assert.strictEqual(scan.selectedBytes, encoder.encode(selected.join("\n")).length);
-          assert.strictEqual(range(scan.start, scan.firstLineEnd), lines[startLine]);
+          assert.strictEqual(decodeSpan(scan.start, scan.firstLineEnd), lines[startLine]);
           assert.strictEqual(scan.firstLineBytes, encoder.encode(lines[startLine]).length);
         }
         assert.partialDeepEqual(getOrThrow(await reader.scanLines({ startLine: 9 }, context)), {
@@ -250,7 +274,7 @@ export function createEnvConformance(
 
     createCase("directory reader pages every entry exactly once", async (env) => {
       const names = ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt"];
-      for (const name of names) getOrThrow(await env.writeFile(name, name, context));
+      for await (const name of names) getOrThrow(await env.writeFile(name, name, context));
       getOrThrow(await env.createDir("sub", undefined, context));
       const { pages, done } = await readAll(env, ".", 2);
       assert.ok(done, "directory reader reached the end");
@@ -286,14 +310,14 @@ export function createEnvConformance(
 
     createCase("directory reader skips entries removed during enumeration", async (env) => {
       getOrThrow(await env.createDir("dir", undefined, context));
-      for (const name of ["x", "y", "z"])
+      for await (const name of ["x", "y", "z"])
         getOrThrow(await env.writeFile(`dir/${name}`, name, context));
       const reader = getOrThrow(await env.openDirReader("dir", context));
       try {
-        for (const name of ["x", "y", "z"])
+        for await (const name of ["x", "y", "z"])
           getOrThrow(await env.remove(`dir/${name}`, undefined, context));
         const entries: FileInfo[] = [];
-        for (let page = 0; page < 10; page++) {
+        for await (const _page of range(0, 10)) {
           const next = getOrThrow(await reader.next(10, context));
           entries.push(...next.entries);
           if (next.done) break;
@@ -440,7 +464,9 @@ export function createEnvConformance(
       await watcher.close(context);
       await watcher.close(context);
       getOrThrow(await env.writeFile("file.txt", "x", context));
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 300);
+      });
       assert.deepEqual(changes, []);
     }),
 
@@ -545,7 +571,7 @@ export function createEnvConformance(
 
   if (options.listFiles) {
     const writeAll = async (env: ExecutionEnv, files: readonly string[]) => {
-      for (const file of files) getOrThrow(await env.writeFile(file, "", context));
+      for await (const file of files) getOrThrow(await env.writeFile(file, "", context));
     };
     cases.push(
       createCase("listFiles lists files and directories depth first in name order", async (env) => {

@@ -13,7 +13,12 @@ export interface StorageConformanceRunner {
   readonly it: (name: string, test: () => Promise<void>, timeoutMs?: number) => unknown;
 }
 
-/** Registers the runner-independent cases with a Vitest/Jest-compatible test runner. */
+/**
+ * Registers the runner-independent cases with a Vitest/Jest-compatible test runner.
+ * @param {StorageConformanceRunner} runner - The test runner.
+ * @param {string} name - The suite name.
+ * @param {StorageConformanceProvider} withStorage - Provides the storage.
+ */
 export function registerStorageConformance(
   runner: StorageConformanceRunner,
   name: string,
@@ -28,7 +33,13 @@ export function registerStorageConformance(
   });
 }
 
-/** Registers the runner-independent `ExecutionEnv` cases with a Vitest/Jest-compatible test runner. */
+/**
+ * Registers the runner-independent `ExecutionEnv` cases with a Vitest/Jest-compatible test runner.
+ * @param {StorageConformanceRunner} runner - The test runner.
+ * @param {string} name - The suite name.
+ * @param {EnvConformanceProvider} withEnv - Provides the environment.
+ * @param {Pick<EnvConformanceOptions, "shell" | "symlinks" | "listFiles">} options - The environment's capabilities.
+ */
 export function registerEnvConformance(
   runner: StorageConformanceRunner,
   name: string,

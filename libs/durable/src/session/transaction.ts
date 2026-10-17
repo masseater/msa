@@ -13,6 +13,7 @@ import {
   resolveAddress,
 } from "../documents.ts";
 import { ReadAfterWrite } from "../errors.ts";
+import { scanAll } from "../harness/util.ts";
 import type {
   ConversationDocFamilyToken,
   ConversationDocToken,
@@ -66,6 +67,9 @@ type SubmissionChange =
 /**
  * Complete record after applying one change. Placement turns a queued input `placed` and a queued write `done`; only a
  * placed input can be answered. A settled record stays.
+ * @param {SubmissionRecord} current - The current record.
+ * @param {SubmissionChange} change - The change.
+ * @returns {SubmissionRecord} The changed record.
  */
 function applySubmissionChange(
   current: SubmissionRecord,
@@ -282,12 +286,21 @@ export class Transaction implements Tx {
     );
   }
 
-  /** Internal: committed submission record. */
+  /**
+   * Internal: committed submission record.
+   * @param {SubmissionId} id - The submission.
+   * @returns {Promise<SubmissionRecord | undefined>} Its record.
+   */
   submission(id: SubmissionId): Promise<SubmissionRecord | undefined> {
     return this.#read("submission", () => this.#host.storage.submission(id, this.#context));
   }
 
-  /** Committed submission with a conversation-scoped request ID. */
+  /**
+   * Committed submission with a conversation-scoped request ID.
+   * @param {ConversationId} conversationId - The conversation.
+   * @param {string} requestId - The request ID.
+   * @returns {Promise<SubmissionRecord | undefined>} The record.
+   */
   submissionByRequest(
     conversationId: ConversationId,
     requestId: string,
@@ -305,7 +318,10 @@ export class Transaction implements Tx {
     return this.#write(() => this.#stageConversation(undefined, options.ownership));
   }
 
-  /** Internal final-form bootstrap path for the reserved root identity. */
+  /**
+   * Internal final-form bootstrap path for the reserved root identity.
+   * @returns {Promise<ConversationRecord>} The root conversation.
+   */
   createRootConversation(): Promise<ConversationRecord> {
     return this.#write(() =>
       this.#stageConversation(undefined, { kind: "ownerless" }, ROOT_CONVERSATION_ID),
@@ -465,7 +481,11 @@ export class Transaction implements Tx {
     });
   }
 
-  /** Create a raw submission record with a fresh ID; no admission rules apply. */
+  /**
+   * Create a raw submission record with a fresh ID; no admission rules apply.
+   * @param {SubmissionCreate} create - The record to create.
+   * @returns {Promise<SubmissionRecord>} The created record.
+   */
   createSubmission(create: SubmissionCreate): Promise<SubmissionRecord> {
     return this.#write(async () => {
       await this.#requireConversation(create.conversationId);
@@ -484,6 +504,8 @@ export class Transaction implements Tx {
   /**
    * Settle a submission. Resolved during assembly against the transaction's latest candidate record, falling back to
    * committed state, so it is not a caller table read and works after the first table write.
+   * @param {SubmissionId} id - The submission.
+   * @param {SubmissionSettlement} settlement - How it settles.
    */
   settleSubmission(id: SubmissionId, settlement: SubmissionSettlement): void {
     this.#assertOpen();
@@ -491,14 +513,21 @@ export class Transaction implements Tx {
     this.#submissionChanges.push({ id, change: copyJson(settlement) as SubmissionSettlement });
   }
 
-  /** Place a queued submission at `entry`; resolved during assembly like `settleSubmission()`. */
+  /**
+   * Place a queued submission at `entry`; resolved during assembly like `settleSubmission()`.
+   * @param {SubmissionId} id - The submission.
+   * @param {EntryId} entry - The entry it is placed at.
+   */
   placeSubmission(id: SubmissionId, entry: EntryId): void {
     this.#assertOpen();
     this.#hasTableWrite = true;
     this.#submissionChanges.push({ id, change: { status: "placed", entry } });
   }
 
-  /** Internal: replace one task record completely. Tasks change their own state through their runtime. */
+  /**
+   * Internal: replace one task record completely. Tasks change their own state through their runtime.
+   * @param {AnyTaskRecord} value - The new record.
+   */
   setTask(value: AnyTaskRecord): void {
     this.#assertOpen();
     this.#hasTableWrite = true;
@@ -519,7 +548,10 @@ export class Transaction implements Tx {
     };
   }
 
-  /** Internal: candidate records of the tasks this transaction created or replaced so far. */
+  /**
+   * Internal: candidate records of the tasks this transaction created or replaced so far.
+   * @returns {AnyTaskRecord[]} The records.
+   */
   stagedTasks(): AnyTaskRecord[] {
     const records: AnyTaskRecord[] = [];
     for (const task of this.#tasksById.values())
@@ -527,7 +559,10 @@ export class Transaction implements Tx {
     return records;
   }
 
-  /** Internal: conversations this transaction created or forked so far. */
+  /**
+   * Internal: conversations this transaction created or forked so far.
+   * @returns {ConversationRecord[]} The records.
+   */
   stagedConversations(): ConversationRecord[] {
     const records: ConversationRecord[] = [];
     for (const write of this.#writes) if (write.type === "conversation") records.push(write.value);
@@ -738,6 +773,7 @@ export class Transaction implements Tx {
   /**
    * Seal after callback success, prepare every open change, and assemble the atomic batch.
    * Any failure aborts every change before Storage admission.
+   * @returns {Promise<readonly StorageWrite[]>} The batch.
    */
   async settleSuccess(): Promise<readonly StorageWrite[]> {
     this.#sealed = true;
@@ -763,7 +799,11 @@ export class Transaction implements Tx {
     this.#abortChanges();
   }
 
-  /** Adopt every prepared change by pointer swap after Storage success and describe the publication. */
+  /**
+   * Adopt every prepared change by pointer swap after Storage success and describe the publication.
+   * @param {Seq} seq - The commit's sequence number.
+   * @returns {DocumentCommitChange[]} The publication's document changes.
+   */
   adopt(seq: Seq): DocumentCommitChange[] {
     const publications: DocumentCommitChange[] = [];
     for (const plan of this.#plans) {
@@ -831,7 +871,7 @@ export class Transaction implements Tx {
     }
     this.#rejectForkSourceWrites(plans);
     await this.#validateOwners();
-    for (const [id, task] of this.#tasksById) {
+    for await (const [id, task] of this.#tasksById) {
       if (task.write?.kind !== "replace") continue;
       const committed = await this.#committedTask(id);
       if (committed === undefined) throw new Error(`Task ${id} does not exist`);
@@ -854,28 +894,26 @@ export class Transaction implements Tx {
         plan.retire = true;
         retiring.add(plan.record.id);
       }
-      for (const taskId of terminalTaskIds) {
+      for await (const taskId of terminalTaskIds) {
         if (this.#tasksById.get(taskId)?.write?.kind === "create") continue;
-        let cursor: Cursor | undefined;
-        do {
-          const page = await storage.scanDocuments(
+        const records = await scanAll((cursor) =>
+          storage.scanDocuments(
             { scope: { kind: "task", taskId }, at: "current" },
             INTERNAL_SCAN_PAGE_SIZE,
             cursor,
             this.#context,
-          );
-          for (const record of page.items) {
-            if (retiring.has(record.id)) continue;
-            plans.push({ addressId: addressId(record), record, retire: true });
-            retiring.add(record.id);
-          }
-          cursor = page.next;
-        } while (cursor !== undefined);
+          ),
+        );
+        for (const record of records) {
+          if (retiring.has(record.id)) continue;
+          plans.push({ addressId: addressId(record), record, retire: true });
+          retiring.add(record.id);
+        }
       }
     }
 
     // Resolve publication ownership before Storage admission so adoption remains synchronous.
-    for (const plan of plans) {
+    for await (const plan of plans) {
       if (!publishes(plan)) continue;
       const scope = plan.record.scope;
       if (scope.kind === "conversation") plan.conversationId = scope.conversationId;
@@ -888,7 +926,7 @@ export class Transaction implements Tx {
       plan.conversationId = task.publicationConversationId;
     }
 
-    for (const { id, change } of this.#submissionChanges) {
+    for await (const { id, change } of this.#submissionChanges) {
       const current = this.#submissions.get(id) ?? (await storage.submission(id, this.#context));
       if (current === undefined) throw new Error(`Submission ${id} does not exist`);
       const next = applySubmissionChange(current, change);
@@ -939,7 +977,7 @@ export class Transaction implements Tx {
       const record = task.write?.kind === "create" ? task.write.record : undefined;
       if (record?.owner !== undefined) owners.push({ what: "Task owner", taskId: record.owner });
     }
-    for (const { what, taskId } of owners) {
+    for await (const { what, taskId } of owners) {
       const task = await this.#currentTask(taskId);
       if (task === undefined) throw new Error(`${what} ${taskId} does not exist`);
       if (task.state.status === "terminal" || task.state.status === "completing") {
@@ -988,7 +1026,11 @@ export class Transaction implements Tx {
     }
   }
 
-  /** Register an operation so callback settlement can reject and drain it. */
+  /**
+   * Register an operation so callback settlement can reject and drain it.
+   * @param {Promise<T>} operation - The operation.
+   * @returns {Promise<T>} The operation.
+   */
   #track<T>(operation: Promise<T>): Promise<T> {
     this.#pendingOperations.add(operation);
     const settle = (): void => {
@@ -1028,6 +1070,9 @@ export class Transaction implements Tx {
   /**
    * Lifecycle times: `startedAt` on the first change to `running`, `endedAt` on the change to `terminal`. Once set,
    * they carry over from the replaced record; records written before they existed lack them.
+   * @param {AnyTaskRecord} value - The new record.
+   * @param {AnyTaskRecord | undefined} candidate - The record it replaces.
+   * @returns {AnyTaskRecord} `value` with its times.
    */
   #stampTimes(value: AnyTaskRecord, candidate: AnyTaskRecord | undefined): AnyTaskRecord {
     const status = value.state.status;
@@ -1051,7 +1096,11 @@ export class Transaction implements Tx {
     return task;
   }
 
-  /** Latest candidate task record, falling back to committed state; not a caller table read. */
+  /**
+   * Latest candidate task record, falling back to committed state; not a caller table read.
+   * @param {TaskId} id - The task.
+   * @returns {Promise<AnyTaskRecord | undefined>} Its record.
+   */
   async #currentTask(id: TaskId): Promise<AnyTaskRecord | undefined> {
     return this.#tasksById.get(id)?.write?.record ?? (await this.#committedTask(id));
   }
@@ -1063,7 +1112,11 @@ export class Transaction implements Tx {
   }
 }
 
-/** Plan of one staged document: its record, content write, and prepared change. Retirement is decided later. */
+/**
+ * Plan of one staged document: its record, content write, and prepared change. Retirement is decided later.
+ * @param {DocumentEntry} document - The staged document.
+ * @returns {DocumentPlan | undefined} The plan.
+ */
 function planDocument(document: DocumentEntry): DocumentPlan | undefined {
   const target = document.target;
   if (target === undefined) return undefined;
@@ -1129,6 +1182,8 @@ function planDocument(document: DocumentEntry): DocumentPlan | undefined {
 /**
  * Whether adoption publishes the plan: every creation, copy, and retirement, and a loaded incarnation that writes
  * content, which includes a migration-only base so observers of the older shape receive the new value.
+ * @param {DocumentPlan} plan - The plan.
+ * @returns {boolean} Whether it is published.
  */
 function publishes(plan: DocumentPlan): boolean {
   return plan.retire || plan.change?.loaded === undefined || plan.content !== undefined;

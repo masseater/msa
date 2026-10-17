@@ -21,6 +21,7 @@ import { Compile } from "typebox/compile";
 import { defineDocFamily } from "../documents.ts";
 import { AssistantEntry, ToolResultEntry } from "../entries.ts";
 import { errorMessage } from "../errors.ts";
+import { promiseTry } from "../promise-try.ts";
 import { defineTask } from "../tasks.ts";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, utf8ByteLength } from "../truncate.ts";
 import type {
@@ -192,9 +193,17 @@ export const ToolTask = defineTask<ToolTaskInput, ToolTaskCheckpoint, ToolTaskRe
       }, context);
       await run(runtime, task.input, call, tool, final, context);
     },
-    /** Recovery after intent: rerun only when the stored and the current policy both say `safe`. */
+    /**
+     * Recovery after intent: rerun only when the stored and the current policy both say `safe`.
+     * @param {RunningTask<ToolTaskInput, ToolTaskCheckpoint>} task - The running tool task.
+     * @param {TaskRuntime<ToolTaskInput, ToolTaskCheckpoint, ToolTaskResult, ToolHooks>} runtime - The task's runtime.
+     * @param {Context} context - The caller's context.
+     * @returns {Promise<NextTaskState<ToolTaskCheckpoint, ToolTaskResult>>} The next state.
+     */
     execute: async (task, runtime, context) => {
-      const { arguments: args, replay } = task.state.checkpoint;
+      const { checkpoint } = task.state;
+      const args = checkpoint.arguments;
+      const replay = checkpoint.replay;
       const call = await readCall(runtime, task.input, context);
       const tool = await resolveTool(runtime, task.input, call.name, context);
       if (replay === "safe" && tool?.replay === "safe") {
@@ -223,14 +232,14 @@ export const ToolTask = defineTask<ToolTaskInput, ToolTaskCheckpoint, ToolTaskRe
     const call = await readCall(runtime, task.input, context);
     // Abandoned after a restart (`TaskOptions.abandonOnRestart`): say whether the call may have run.
     const [code, message] =
-      task.abortReason !== "restart"
-        ? ["aborted", `Tool ${call.name} was aborted`]
-        : task.state.checkpoint.phase === "execute"
+      task.abortReason === "restart"
+        ? task.state.checkpoint.phase === "execute"
           ? [
               "interrupted",
               `Tool ${call.name} was interrupted by a restart and may have partially run`,
             ]
-          : ["abandoned", `Tool ${call.name} was not started: its caller ended with a restart`];
+          : ["abandoned", `Tool ${call.name} was not started: its caller ended with a restart`]
+        : ["aborted", `Tool ${call.name} was aborted`];
     const ending = { status: "aborted" } as const;
     await settle(
       runtime,
@@ -243,7 +252,14 @@ export const ToolTask = defineTask<ToolTaskInput, ToolTaskCheckpoint, ToolTaskRe
   },
 });
 
-/** The called tool: among the tools the model is offered for a model-issued call, else among those tools may call. */
+/**
+ * The called tool: among the tools the model is offered for a model-issued call, else among those tools may call.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {ToolTaskInput} input - The tool task's input.
+ * @param {string} name - The tool name.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<ToolRegistration | undefined>} The tool.
+ */
 async function resolveTool(
   runtime: Runtime,
   input: ToolTaskInput,
@@ -254,7 +270,13 @@ async function resolveTool(
   return (input.kind === "model" ? agent.tools : agent.callable).find((tool) => tool.name === name);
 }
 
-/** The call: from the input for a nested call, which hooks see with its parent, else from the assistant entry. */
+/**
+ * The call: from the input for a nested call, which hooks see with its parent, else from the assistant entry.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {ToolTaskInput} input - The tool task's input.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<ToolHookCall>} The call.
+ */
 async function readCall(
   runtime: Runtime,
   input: ToolTaskInput,
@@ -279,7 +301,12 @@ async function readCall(
 /** Arguments, or why they are invalid. */
 type Checked = { readonly args: JsonObject } | { readonly error: string };
 
-/** The call's arguments as repaired by the tool; a throwing repair makes them invalid. */
+/**
+ * The call's arguments as repaired by the tool; a throwing repair makes them invalid.
+ * @param {ToolRegistration} tool - The tool.
+ * @param {JsonObject} args - The arguments.
+ * @returns {Checked} The checked arguments.
+ */
 function prepare(tool: ToolRegistration, args: JsonObject): Checked {
   if (tool.prepareArguments === undefined) return { args };
   try {
@@ -289,7 +316,13 @@ function prepare(tool: ToolRegistration, args: JsonObject): Checked {
   }
 }
 
-/** Arguments validated and coerced against the implementation's schema. */
+/**
+ * Arguments validated and coerced against the implementation's schema.
+ * @param {ToolRegistration} tool - The tool.
+ * @param {ToolCall} call - The call.
+ * @param {JsonObject} args - The arguments.
+ * @returns {Checked} The checked arguments.
+ */
 function validate(tool: ToolRegistration, call: ToolCall, args: JsonObject): Checked {
   try {
     return { args: validateToolArguments(tool, { ...call, arguments: args }) as JsonObject };
@@ -310,7 +343,15 @@ type Reported = {
   details: JsonValue | undefined;
 };
 
-/** Execute with the resolved implementation, then settle its result. */
+/**
+ * Execute with the resolved implementation, then settle its result.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {ToolTaskInput} input - The tool task's input.
+ * @param {ToolHookCall} call - The tool call.
+ * @param {ToolRegistration} tool - The tool.
+ * @param {JsonObject} args - The checked arguments.
+ * @param {Context} context - The caller's context.
+ */
 async function run(
   runtime: Runtime,
   input: ToolTaskInput,
@@ -377,15 +418,16 @@ async function run(
       );
       progress.mark();
     },
-    details: async (value, detailsContext) => {
-      assertLive();
-      detailsContext.abortSignal?.throwIfAborted();
-      reported.details = copyJson(value, { omitUndefinedProperties: true });
-      const committed = progress.markAndWait();
-      // Cancelling the wait leaves the update in place; the commit's own outcome stays observed.
-      committed.catch(() => {});
-      return awaitWithContext(committed, detailsContext);
-    },
+    details: (value, detailsContext) =>
+      promiseTry(() => {
+        assertLive();
+        detailsContext.abortSignal?.throwIfAborted();
+        reported.details = copyJson(value, { omitUndefinedProperties: true });
+        const committed = progress.markAndWait();
+        // Cancelling the wait leaves the update in place; the commit's own outcome stays observed.
+        committed.catch(() => {});
+        return awaitWithContext(committed, detailsContext);
+      }),
     commit: async (change, commitContext) => {
       let result: Awaited<ReturnType<typeof change>> | undefined;
       await runtime.commit(async (tx) => {
@@ -495,6 +537,11 @@ async function run(
 /**
  * Throttled commits of what the tool reported into its slot, in `msa.live.tools` or `msa.live.nestedTools`, each writing
  * only what changed since the last one; none when `enabled` is false.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {Reported} reported - What the tool reported.
+ * @param {boolean} enabled - Whether to publish.
+ * @param {Context} context - The caller's context.
+ * @returns {Progress} The publisher.
  */
 function publishProgress(
   runtime: Runtime,
@@ -560,6 +607,14 @@ function publishProgress(
  * those reported through the api, `afterTool` applied, explicit text bounded, and `structuredOutput` checked against the
  * tool's schema, with the Harness's diagnostics last. A nested call whose `structuredOutput` breaks the contract gets an
  * error result without it; a model-issued call only loses it, and the break is reported to the host.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {ToolTaskInput} input - The tool task's input.
+ * @param {ToolHookCall} call - The tool call.
+ * @param {ToolRegistration} tool - The tool.
+ * @param {ToolExecutionResult} result - The tool's result.
+ * @param {Reported} reported - What it reported through the api.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<ToolExecutionResult>} The settled result.
  */
 async function finalResult(
   runtime: Runtime,
@@ -636,7 +691,12 @@ async function finalResult(
 
 const structuredValidators = new WeakMap<object, ReturnType<typeof Compile>>();
 
-/** Why a result's `structuredOutput` breaks the tool's contract, or `undefined` when it keeps it. */
+/**
+ * Why a result's `structuredOutput` breaks the tool's contract, or `undefined` when it keeps it.
+ * @param {ToolRegistration} tool - The tool.
+ * @param {ToolExecutionResult} result - The result.
+ * @returns {string | undefined} Why, if it does.
+ */
 function structuredOutputError(
   tool: ToolRegistration,
   result: ToolExecutionResult,
@@ -658,7 +718,7 @@ function structuredOutputError(
   }
   if (validator.Check(value)) return undefined;
   const [first] = validator.Errors(value);
-  const path = first?.instancePath.replace(/^\//, "").replace(/\//g, ".") || "root";
+  const path = first?.instancePath.replace(/^\//u, "").replace(/\//gu, ".") || "root";
   return `Tool ${tool.name} returned structuredOutput that does not match its schema: ${path}: ${first?.message ?? "invalid"}`;
 }
 
@@ -668,6 +728,13 @@ function structuredOutputError(
  * small receipt. Nested calls this call left running are aborted first, so they report into their slots before the
  * slots below the call leave `msa.live`. `build` receives the slot so interruption and abort can report the durable
  * partial output.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {ToolTaskInput} input - The tool task's input.
+ * @param {ToolHookCall} call - The tool call.
+ * @param {Ending} ending - How the task ends.
+ * @param {(slot: Readonly<ToolSlot | NestedToolSlot> | undefined) => ToolExecutionResult} build - Builds the result from the slot.
+ * @param {Context} context - The caller's context.
+ * @param {number} durationMs - How long the call ran.
  */
 async function settle(
   runtime: Runtime,
@@ -746,6 +813,10 @@ async function settle(
 /**
  * A nested call's result, as stored and returned: strict JSON, without `output`, which only the model reads, and
  * without `control`, which only model-issued calls apply.
+ * @param {TaskId} taskId - The tool task.
+ * @param {ToolExecutionResult} result - The result.
+ * @param {number | undefined} durationMs - How long the call ran.
+ * @returns {NestedToolExecutionResult} The stored result.
  */
 function nestedResult(
   taskId: TaskId,
@@ -769,6 +840,13 @@ function nestedResult(
 /**
  * Create nested call `key` of the call `parentCallId` in one commit: its tool task, owned by the calling task, its slot,
  * and its `NestedCallDoc`. A key already made returns that call's task when it names the same tool and arguments.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {string} parentCallId - The calling call.
+ * @param {string} name - The tool name.
+ * @param {JsonObject} args - The arguments.
+ * @param {NestedCallOptions} options - The key, progress, and restart behavior.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<TaskId<ToolTaskResult>>} The nested call's task.
  */
 async function startNestedCall(
   runtime: Runtime,
@@ -841,6 +919,8 @@ async function startNestedCall(
 /**
  * What programs get of a tool's output when it declares no schema: one text item as its string, one image as itself,
  * nothing as `""`, and anything else as the content list.
+ * @param {Content} output - The output.
+ * @returns {string | ImageContent | Content} The value.
  */
 function outputValue(output: Content): string | ImageContent | Content {
   if (output.length === 0) return "";
@@ -849,7 +929,13 @@ function outputValue(output: Content): string | ImageContent | Content {
   return only!.type === "text" ? only!.text : only!;
 }
 
-/** What the caller gets for a nested call without a stored result: one the scheduler faulted or orphaned. */
+/**
+ * What the caller gets for a nested call without a stored result: one the scheduler faulted or orphaned.
+ * @param {TaskId} taskId - The tool task.
+ * @param {string} name - The tool name.
+ * @param {TaskOutcome<ToolTaskResult>} outcome - The task's outcome.
+ * @returns {NestedToolExecutionResult} The result.
+ */
 function fallbackResult(
   taskId: TaskId,
   name: string,
@@ -875,7 +961,13 @@ type Ending =
 
 const COMPLETED: Ending = { status: "completed" };
 
-/** An error result from the slot's durable partial output, details, and diagnostics. */
+/**
+ * An error result from the slot's durable partial output, details, and diagnostics.
+ * @param {Readonly<ToolSlot | NestedToolSlot> | undefined} slot - The slot.
+ * @param {string} code - The error code.
+ * @param {string} message - The message.
+ * @returns {ToolExecutionResult} The result.
+ */
 function fromSlot(
   slot: Readonly<ToolSlot | NestedToolSlot> | undefined,
   code: string,
@@ -895,7 +987,12 @@ function fromSlot(
   };
 }
 
-/** An error result the Harness writes itself: no content and one `error` diagnostic with `code`. */
+/**
+ * An error result the Harness writes itself: no content and one `error` diagnostic with `code`.
+ * @param {string} code - The error code.
+ * @param {string} message - The message.
+ * @returns {ToolExecutionResult} The result.
+ */
 export function harnessError(code: string, message: string): ToolExecutionResult {
   return { output: [], isError: true, diagnostics: [toolDiagnostic(code, message)] };
 }
@@ -904,7 +1001,12 @@ function toolDiagnostic(code: string, message: string): ToolDiagnostic {
   return { severity: "error", code, message };
 }
 
-/** The Harness's truncation diagnostic; `retain` is unknown when rebuilt from a slot after recovery. */
+/**
+ * The Harness's truncation diagnostic; `retain` is unknown when rebuilt from a slot after recovery.
+ * @param {{ readonly droppedLines: number; readonly droppedBytes: number }} dropped - What was dropped.
+ * @param {"head" | "tail"} retain - Which end was kept.
+ * @returns {ToolDiagnostic} The diagnostic.
+ */
 function truncated(
   dropped: { readonly droppedLines: number; readonly droppedBytes: number },
   retain?: "head" | "tail",
@@ -920,7 +1022,12 @@ function truncated(
 /** Error text a nested call's summary keeps. */
 const MAX_SUMMARY_ERROR_CHARS = 500;
 
-/** How a nested call ended, for its slot: error text, from its diagnostics or else its `output`, bounded. */
+/**
+ * How a nested call ended, for its slot: error text, from its diagnostics or else its `output`, bounded.
+ * @param {NestedToolExecutionResult} result - The result.
+ * @param {Content} output - Its output.
+ * @returns {NestedToolSummary} The summary.
+ */
 function summaryOf(result: NestedToolExecutionResult, output: Content): NestedToolSummary {
   const error = result.isError ? errorTextOf(result, output).slice(0, MAX_SUMMARY_ERROR_CHARS) : "";
   return {
@@ -937,7 +1044,12 @@ function summaryOf(result: NestedToolExecutionResult, output: Content): NestedTo
   };
 }
 
-/** The error messages of a nested result, else the text items of its output, joined with newlines. */
+/**
+ * The error messages of a nested result, else the text items of its output, joined with newlines.
+ * @param {NestedToolExecutionResult} result - The result.
+ * @param {Content} output - Its output.
+ * @returns {string} The text.
+ */
 function errorTextOf(result: NestedToolExecutionResult, output: Content): string {
   const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
   if (errors.length > 0) return errors.map((diagnostic) => diagnostic.message).join("\n");
@@ -947,6 +1059,12 @@ function errorTextOf(result: NestedToolExecutionResult, output: Content): string
 /**
  * Append a `msa.tool-result` entry. The content ends with the rendered diagnostics, so the stored message is exactly
  * what the model sees; `data` keeps the structured list. A result's usage is added to `msa.usage` in the same commit.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {ToolCall} call - The tool call.
+ * @param {ToolExecutionResult} result - The result.
+ * @param {{ readonly timestamp: number; readonly durationMs?: number | undefined }} meta - The time and duration.
+ * @returns {Promise<TypedEntry<{ diagnostics: ToolDiagnostic[] }>>} The entry.
  */
 export async function appendToolResult(
   tx: Tx,
@@ -985,6 +1103,9 @@ function renderDiagnostics(diagnostics: readonly ToolDiagnostic[]): string {
 /**
  * Bound the text of result content. When the joined text exceeds the limits, the text items are replaced by one bounded
  * item at the position of the first (head) or last (tail) text item; other content is kept.
+ * @param {Content} content - The content.
+ * @param {OutputLimits} limits - The limits.
+ * @returns {{ content: Content; droppedBytes: number; droppedLines: number }} The bounded content.
  */
 function boundContent(
   content: Content,
@@ -1009,16 +1130,22 @@ function boundContent(
 /**
  * Explicit nested call keys are path segments of the call ID, so IDs of different nested calls never collide, and are
  * never plain positive integers, which default keys use. `__proto__` stays reserved, as it was when keys indexed a JSON object.
+ * @param {string} key - The key.
  */
 function checkKey(key: string): void {
-  if (key === "" || key.includes("/") || key === "__proto__" || /^[1-9][0-9]*$/.test(key)) {
+  if (key === "" || key.includes("/") || key === "__proto__" || /^[1-9][0-9]*$/u.test(key)) {
     throw new Error(
       `Nested call key ${JSON.stringify(key)} must be non-empty, without "/", not "__proto__", and not a positive integer`,
     );
   }
 }
 
-/** Structural JSON equality; object key order does not matter. */
+/**
+ * Structural JSON equality; object key order does not matter.
+ * @param {JsonValue} a - One value.
+ * @param {JsonValue} b - The other.
+ * @returns {boolean} Whether they are equal.
+ */
 function jsonEqual(a: JsonValue, b: JsonValue): boolean {
   if (a === b) return true;
   if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;

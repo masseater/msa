@@ -1,3 +1,4 @@
+import { promiseTry } from "../../promise-try.ts";
 import type { SqliteDatabase, SqliteExecutor, SqliteValue } from "./database.ts";
 import { SqliteStorage } from "./storage.ts";
 
@@ -29,7 +30,11 @@ class SerialQueue {
   }
 }
 
-/** Durable Object SQL binds numbers as doubles: a `bigint` outside the safe integer range would lose precision. */
+/**
+ * Durable Object SQL binds numbers as doubles: a `bigint` outside the safe integer range would lose precision.
+ * @param {SqliteValue} value - The value to bind.
+ * @returns {DurableObjectSqlValue} The bound value.
+ */
 function bindValue(value: SqliteValue): DurableObjectSqlValue {
   if (value instanceof Uint8Array) return value.slice().buffer as ArrayBuffer;
   if (typeof value !== "bigint") return value;
@@ -41,7 +46,11 @@ function bindValue(value: SqliteValue): DurableObjectSqlValue {
 
 const bind = (params: readonly SqliteValue[]): DurableObjectSqlValue[] => params.map(bindValue);
 
-/** Rows as returned, with `BLOB` columns converted to `Uint8Array` in place; no other copy is made. */
+/**
+ * Rows as returned, with `BLOB` columns converted to `Uint8Array` in place; no other copy is made.
+ * @param {Record<string, DurableObjectSqlValue>[]} input - The rows a query returned.
+ * @returns {T[]} The same rows.
+ */
 function rows<T>(input: Record<string, DurableObjectSqlValue>[]): T[] {
   for (const row of input) {
     for (const key in row) {
@@ -61,24 +70,32 @@ class DurableObjectSqliteExecutor implements SqliteExecutor {
     this.storage = storage;
   }
 
-  async exec(sql: string): Promise<void> {
-    this.check();
-    this.storage.sql.exec(sql);
+  exec(sql: string): Promise<void> {
+    return promiseTry(() => {
+      this.check();
+      this.storage.sql.exec(sql);
+    });
   }
 
-  async run(sql: string, ...params: SqliteValue[]): Promise<void> {
-    this.check();
-    this.storage.sql.exec(sql, ...bind(params));
+  run(sql: string, ...params: SqliteValue[]): Promise<void> {
+    return promiseTry(() => {
+      this.check();
+      this.storage.sql.exec(sql, ...bind(params));
+    });
   }
 
-  async get<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T | undefined> {
-    this.check();
-    return rows<T>(this.storage.sql.exec(sql, ...bind(params)).toArray())[0];
+  get<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T | undefined> {
+    return promiseTry(() => {
+      this.check();
+      return rows<T>(this.storage.sql.exec(sql, ...bind(params)).toArray())[0];
+    });
   }
 
-  async all<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T[]> {
-    this.check();
-    return rows<T>(this.storage.sql.exec(sql, ...bind(params)).toArray());
+  all<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T[]> {
+    return promiseTry(() => {
+      this.check();
+      return rows<T>(this.storage.sql.exec(sql, ...bind(params)).toArray());
+    });
   }
 
   /** Throws when this handle may no longer run SQL. */
@@ -120,7 +137,11 @@ export class DurableObjectSqliteDatabase
     return this.queue.run(() => super.all<T>(sql, ...params));
   }
 
-  /** `ctx.storage.transaction()` commits when the callback resolves and rolls back when it rejects. */
+  /**
+   * `ctx.storage.transaction()` commits when the callback resolves and rolls back when it rejects.
+   * @param {(transaction: SqliteExecutor) => Promise<T>} callback - The work to run in the transaction.
+   * @returns {Promise<T>} What `callback` resolves with.
+   */
   transaction<T>(callback: (transaction: SqliteExecutor) => Promise<T>): Promise<T> {
     return this.queue.run(() =>
       this.storage.transaction(async () => {
@@ -134,13 +155,20 @@ export class DurableObjectSqliteDatabase
     );
   }
 
-  /** Waits for queued work. The Durable Object owns its storage, so nothing else closes. */
+  /**
+   * Waits for queued work. The Durable Object owns its storage, so nothing else closes.
+   * @returns {Promise<void>} Settles once queued work is done.
+   */
   close(): Promise<void> {
     return this.queue.run(() => {});
   }
 }
 
-/** Open durable storage on a SQLite-backed Durable Object's `ctx.storage`. */
+/**
+ * Open durable storage on a SQLite-backed Durable Object's `ctx.storage`.
+ * @param {DurableObjectSqliteStorage} storage - The Durable Object's `ctx.storage`.
+ * @returns {Promise<SqliteStorage>} The opened storage.
+ */
 export function openDurableObjectSqliteStorage(
   storage: DurableObjectSqliteStorage,
 ): Promise<SqliteStorage> {

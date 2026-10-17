@@ -56,6 +56,10 @@ export type BoundaryResult = { readonly users: SubmissionId[]; readonly reset: b
 /**
  * Read what a boundary needs. Table reads must precede the commit's first table write, so callers prepare the
  * boundary at the start of their commit.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {QueueModes} modes - How queued items are placed.
+ * @returns {Promise<Boundary>} The boundary.
  */
 export async function prepareBoundary(
   tx: Tx,
@@ -79,6 +83,11 @@ export async function prepareBoundary(
  * items after them, each in ID order, so user items queued before a reset run in the new context. A write whose head
  * targets an entry before the active range, including a range started earlier in this commit, is stale. Selected and
  * stale items are removed positionally.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {Boundary} boundary - The prepared boundary.
+ * @param {"postTools" | "final"} at - Which boundary.
+ * @param {number} now - The commit's time.
+ * @returns {Promise<BoundaryResult>} What was placed.
  */
 export async function applyBoundary(
   tx: Tx,
@@ -102,7 +111,7 @@ export async function applyBoundary(
   users.sort((a, b) => a - b);
 
   // `appendEntry()` copies the drafts' values; the items are removed only afterwards.
-  for (const index of writes) {
+  for await (const index of writes) {
     const item = items[index] as Draft<Extract<InboxItem, { mode: "write" }>>;
     const draft = item.entry as unknown as EntryDraft;
     if (isStale(boundary, draft)) {
@@ -114,7 +123,7 @@ export async function applyBoundary(
     tx.placeSubmission(item.id, entry.id);
   }
   const placed: SubmissionId[] = [];
-  for (const index of users) {
+  for await (const index of users) {
     const item = items[index] as Draft<Extract<InboxItem, { mode: "steer" | "followUp" }>>;
     const entry = await appendInput(
       tx,
@@ -131,7 +140,15 @@ export async function applyBoundary(
   return { users: placed, reset };
 }
 
-/** Append the entry an input is placed as: `entry`'s kind and data, or `msa.user`, with the user message of `content`. */
+/**
+ * Append the entry an input is placed as: `entry`'s kind and data, or `msa.user`, with the user message of `content`.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {UserInput} content - The input's content.
+ * @param {InputEntry | undefined} entry - The input's entry, if given.
+ * @param {number} now - The commit's time.
+ * @returns {Promise<EntryRecord>} The appended entry.
+ */
 export function appendInput(
   tx: Tx,
   conversationId: ConversationId,
@@ -144,7 +161,13 @@ export function appendInput(
   return tx.appendEntry(conversationId, { ...pickInputEntry(entry), model: [message] });
 }
 
-/** The kind and data of an input's entry as strict JSON, without other fields an untyped caller might pass. */
+/**
+ * The kind and data of an input's entry as strict JSON, without other fields an untyped caller might pass.
+ * @param {InputEntry} entry - The input entry.
+ * @param {string} entry.kind - Its kind.
+ * @param {import("@msa/chord").JsonValue | undefined} entry.data - Its data.
+ * @returns {JsonRepresentation<InputEntry>} The kind and data.
+ */
 export function pickInputEntry({ kind, data }: InputEntry): JsonRepresentation<InputEntry> {
   const picked = data === undefined ? { kind } : { kind, data };
   return copyJson(picked, { omitUndefinedProperties: true }) as JsonRepresentation<InputEntry>;
@@ -153,24 +176,40 @@ export function pickInputEntry({ kind, data }: InputEntry): JsonRepresentation<I
 /**
  * Whether a write is display-only: it has no `model`, `head`, or `edits` (present counts, even if empty), so it changes
  * nothing the model sees and needs no boundary.
+ * @param {EntryDraft} entry - The write.
+ * @returns {boolean} Whether it is display-only.
  */
 export function isDisplayOnly(entry: EntryDraft): boolean {
   return entry.model === undefined && entry.head === undefined && entry.edits === undefined;
 }
 
-/** Whether a reset (`head: "self"` write) is queued; entries appended before it leave the active range when it lands. */
+/**
+ * Whether a reset (`head: "self"` write) is queued; entries appended before it leave the active range when it lands.
+ * @param {readonly InboxItem[]} items - The inbox items.
+ * @returns {boolean} Whether a reset is queued.
+ */
 export function hasQueuedReset(items: readonly InboxItem[]): boolean {
   return items.some((item) => item.mode === "write" && item.entry["head"] === "self");
 }
 
-/** Whether a head write targets an entry before the active range, so placing it would bring back cut history. */
+/**
+ * Whether a head write targets an entry before the active range, so placing it would bring back cut history.
+ * @param {Boundary} boundary - The boundary.
+ * @param {EntryDraft} entry - The write.
+ * @returns {boolean} Whether it is stale.
+ */
 export function isStale(boundary: Boundary, entry: EntryDraft): boolean {
   return (
     typeof entry.head === "number" && boundary.head !== undefined && entry.head < boundary.head
   );
 }
 
-/** Remove a withdrawn submission's item; the caller settles the submission. */
+/**
+ * Remove a withdrawn submission's item; the caller settles the submission.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {SubmissionId} id - The submission.
+ */
 export async function removeInboxItem(
   tx: Tx,
   conversationId: ConversationId,
@@ -184,6 +223,8 @@ export async function removeInboxItem(
 /**
  * Withdraw every queued input of a conversation, as `Conversation.abort()` and abort cascades do: each settles
  * `unanswered` with `aborted` and leaves the inbox; queued writes stay for later placement.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
  */
 export async function withdrawQueuedInputs(tx: Tx, conversationId: ConversationId): Promise<void> {
   const items = (await tx.doc(InboxDoc, conversationId)).items;

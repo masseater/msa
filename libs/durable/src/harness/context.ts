@@ -7,13 +7,13 @@ import type { SessionImpl } from "../session/session.ts";
 import type {
   ContextEdit,
   ConversationId,
-  Cursor,
   EntryId,
   EntryQuery,
   EntryRecord,
   Storage,
 } from "../types.ts";
 import type { ContextView } from "./types.ts";
+import { scanAll } from "./util.ts";
 
 const SCAN_PAGE_SIZE = 256;
 const EXCLUDED_STOP_REASONS: ReadonlySet<AssistantMessage["stopReason"]> = new Set([
@@ -33,6 +33,11 @@ export type ContextBounds = {
  * Capture the bounds of the current context, or of the context cut off at the visible entry `at`, with two O(1)
  * reads. Run this on the Session line; entries at or below the tail are immutable, so `deriveContext()` can then scan
  * them off the line.
+ * @param {Storage} storage - The storage backend.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {Context} context - The caller's context.
+ * @param {EntryId} at - The visible entry to cut off at.
+ * @returns {Promise<ContextBounds | undefined>} The bounds.
  */
 export async function captureContextBounds(
   storage: Storage,
@@ -82,6 +87,13 @@ type Baseline = Message | null | undefined;
  * `readContext()` that reuses `previous`, an earlier range of the same conversation: with the same head marker, only
  * entries after its tail are scanned. Returns the view and the range to pass to the next read. A range outlives the
  * read, so its entries are frozen like `MemoryStorage` records, and the returned view has its own arrays.
+ * @param {SessionImpl} session - The Session.
+ * @param {Storage} storage - The storage backend.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {Context} context - The caller's context.
+ * @param {EntryId | undefined} at - The visible entry to cut off at.
+ * @param {ContextRange | undefined} previous - An earlier range.
+ * @returns {Promise<{ view: ContextView; range: ContextRange | undefined }>} The view and the range.
  */
 export async function readContextFrom(
   session: SessionImpl,
@@ -131,7 +143,15 @@ export async function readContextFrom(
   };
 }
 
-/** Committed context of one conversation: bounds captured on the Session line, entries derived off it. */
+/**
+ * Committed context of one conversation: bounds captured on the Session line, entries derived off it.
+ * @param {SessionImpl} session - The Session.
+ * @param {Storage} storage - The storage backend.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {Context} context - The caller's context.
+ * @param {EntryId} at - The visible entry to cut off at.
+ * @returns {Promise<ContextView>} The view.
+ */
 export async function readContext(
   session: SessionImpl,
   storage: Storage,
@@ -150,6 +170,11 @@ export async function readContext(
  *
  * H = newest visible head marker; the range runs from `H.head` (or transcript start) through the tail. Per target,
  * the newest edit in the range wins. Context entries are H followed by the range's non-head entries.
+ * @param {Storage} storage - The storage backend.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {ContextBounds | undefined} bounds - The captured bounds.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<ContextView>} The view.
  */
 export async function deriveContext(
   storage: Storage,
@@ -166,7 +191,12 @@ function emptyView(): ContextView {
   return { head: undefined, entries: [], contributions: [], messages: [] };
 }
 
-/** Derive the context view from the entries scanned within `bounds`. */
+/**
+ * Derive the context view from the entries scanned within `bounds`.
+ * @param {ContextBounds} bounds - The captured bounds.
+ * @param {readonly EntryRecord[]} entries - The scanned entries.
+ * @returns {ContextRange} The range.
+ */
 function deriveRange(bounds: ContextBounds, entries: readonly EntryRecord[]): ContextRange {
   const edits = new Map<EntryId, ContextEdit>();
   // Edits of every entry in the range count, including older head markers that `selectActive()` drops.
@@ -183,6 +213,10 @@ function deriveRange(bounds: ContextBounds, entries: readonly EntryRecord[]): Co
 /**
  * `previous` extended by the entries `added` after its tail under the same head marker: only their contributions and
  * the open messages are derived. An added edit can change an earlier entry, so it derives the whole range again.
+ * @param {ContextRange} previous - The earlier range.
+ * @param {ContextBounds} bounds - The captured bounds.
+ * @param {readonly EntryRecord[]} added - The new entries.
+ * @returns {ContextRange} The range.
  */
 function extendRange(
   previous: ContextRange,
@@ -201,7 +235,7 @@ function extendRange(
   const contributions = added.map((entry) => contribute(entry, undefined));
   const { settled, open } = settle(previous.settled, [...previous.open, ...contributions.flat()]);
   const baseline =
-    previous.baseline !== undefined ? previous.baseline : findBaseline(bounds.head, added);
+    previous.baseline === undefined ? findBaseline(bounds.head, added) : previous.baseline;
   const view = {
     head: bounds.head,
     entries: [...previous.view.entries, ...added],
@@ -217,6 +251,9 @@ function extendRange(
  * head marker it always does, and omits the retained `msa.system` entries. Without one it does when it saw no system
  * message before, which holds unless an earlier entry carries one, even if an edit omits it later. An edit that targets
  * the baseline contributes other messages, or none, so none leads; a later entry does not take its place.
+ * @param {ContextBounds["head"]} head - The head marker.
+ * @param {readonly EntryRecord[]} entries - The entries.
+ * @returns {Baseline} The baseline.
  */
 function findBaseline(head: ContextBounds["head"], entries: readonly EntryRecord[]): Baseline {
   for (const entry of entries) {
@@ -228,7 +265,11 @@ function findBaseline(head: ContextBounds["head"], entries: readonly EntryRecord
   return undefined;
 }
 
-/** Whether an entry's own messages, or the replacement messages of its edits, include a system message. */
+/**
+ * Whether an entry's own messages, or the replacement messages of its edits, include a system message.
+ * @param {EntryRecord} entry - The entry.
+ * @returns {boolean} Whether it does.
+ */
 function carriesSystemMessage(entry: EntryRecord): boolean {
   const isSystem = (message: Message) => message.role === "system";
   return (
@@ -246,6 +287,9 @@ function carriesSystemMessage(entry: EntryRecord): boolean {
  * request's tool list and invalidates the whole prompt cache. Only the first system message moves, so replaying
  * system messages in order gives the same sections and tools. Any other system message, before an assistant message,
  * stays where it was committed: moving it would change what it means to the model.
+ * @param {Message[]} messages - The messages.
+ * @param {Baseline} baseline - The baseline.
+ * @returns {Message[]} The messages.
  */
 function leadWithSystem(messages: Message[], baseline: Baseline): Message[] {
   const index = messages.findIndex((message) => message.role === "system");
@@ -257,7 +301,12 @@ function leadWithSystem(messages: Message[], baseline: Baseline): Message[] {
   return [system, ...messages.slice(0, index), ...messages.slice(index + 1)];
 }
 
-/** One active entry's model messages after its edit and excluded stop reasons, before tool result ordering. */
+/**
+ * One active entry's model messages after its edit and excluded stop reasons, before tool result ordering.
+ * @param {EntryRecord} entry - The entry.
+ * @param {ContextEdit | undefined} edit - Its edit, if any.
+ * @returns {readonly Message[]} The messages.
+ */
 function contribute(entry: EntryRecord, edit: ContextEdit | undefined): readonly Message[] {
   if (edit?.action === "omit") return Object.freeze([]);
   const contributed = edit?.action === "replace" ? edit.messages : (entry.model ?? []);
@@ -271,7 +320,11 @@ function contribute(entry: EntryRecord, edit: ContextEdit | undefined): readonly
 /** Objects `freezeJson()` froze with everything in them. `Object.isFrozen()` holds for shallow freezes too. */
 const deeplyFrozen = new WeakSet<object>();
 
-/** Freeze a JSON value and everything in it. */
+/**
+ * Freeze a JSON value and everything in it.
+ * @param {T} value - The value.
+ * @returns {T} The value.
+ */
 function freezeJson<T>(value: T): T {
   if (value === null || typeof value !== "object" || deeplyFrozen.has(value)) return value;
   for (const child of Object.values(value)) freezeJson(child);
@@ -283,6 +336,9 @@ function freezeJson<T>(value: T): T {
 /**
  * Move the ordered messages before the last assistant message of `open` to `settled`. `orderToolResults()` of a
  * sequence equals the concatenation over its parts when each later part starts with an assistant message.
+ * @param {readonly Message[]} settled - The settled messages.
+ * @param {readonly Message[]} open - The open messages.
+ * @returns {{ readonly settled: readonly Message[]; readonly open: readonly Message[] }} Both lists.
  */
 function settle(
   settled: readonly Message[],
@@ -296,7 +352,14 @@ function settle(
   };
 }
 
-/** The raw active entries within captured bounds, without deriving model context. */
+/**
+ * The raw active entries within captured bounds, without deriving model context.
+ * @param {Storage} storage - The storage backend.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {ContextBounds | undefined} bounds - The captured bounds.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<readonly EntryRecord[]>} The entries.
+ */
 export async function activeEntries(
   storage: Storage,
   conversationId: ConversationId,
@@ -310,7 +373,11 @@ export async function activeEntries(
   );
 }
 
-/** The visible range of `bounds`: from the head marker's head, or transcript start, through the tail. */
+/**
+ * The visible range of `bounds`: from the head marker's head, or transcript start, through the tail.
+ * @param {ContextBounds} bounds - The captured bounds.
+ * @returns {Omit<EntryQuery, "conversationId">} The query.
+ */
 function rangeQuery(bounds: ContextBounds): Omit<EntryQuery, "conversationId"> {
   const head = bounds.head;
   return head === undefined
@@ -318,29 +385,32 @@ function rangeQuery(bounds: ContextBounds): Omit<EntryQuery, "conversationId"> {
     : { minEntryId: head.head, maxEntryId: bounds.tail };
 }
 
-/** Visible entries within `range`, oldest first. */
+/**
+ * Visible entries within `range`, oldest first.
+ * @param {Storage} storage - The storage backend.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {Omit<EntryQuery, "conversationId">} range - The range.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<EntryRecord[]>} The entries.
+ */
 async function scanRange(
   storage: Storage,
   conversationId: ConversationId,
   range: Omit<EntryQuery, "conversationId">,
   context: Context,
 ): Promise<EntryRecord[]> {
-  const entries: EntryRecord[] = [];
-  let cursor: Cursor | undefined;
-  do {
-    const page = await storage.scanEntries(
-      { conversationId, ...range },
-      SCAN_PAGE_SIZE,
-      cursor,
-      context,
-    );
-    entries.push(...page.items);
-    cursor = page.next;
-  } while (cursor !== undefined);
+  const entries = await scanAll((cursor) =>
+    storage.scanEntries({ conversationId, ...range }, SCAN_PAGE_SIZE, cursor, context),
+  );
   return entries.reverse();
 }
 
-/** The head marker followed by the range's non-head entries, or the whole range without a marker. */
+/**
+ * The head marker followed by the range's non-head entries, or the whole range without a marker.
+ * @param {ContextBounds["head"]} head - The head marker.
+ * @param {readonly EntryRecord[]} range - The range's entries.
+ * @returns {readonly EntryRecord[]} The entries.
+ */
 function selectActive(
   head: ContextBounds["head"],
   range: readonly EntryRecord[],
@@ -351,6 +421,8 @@ function selectActive(
 /**
  * Place each assistant's tool results directly after it in call order. Results are taken from the messages before
  * the next assistant; a missing result is synthesized and unmatched results are dropped.
+ * @param {readonly Message[]} messages - The messages.
+ * @returns {Message[]} The ordered messages.
  */
 export function orderToolResults(messages: readonly Message[]): Message[] {
   const ordered: Message[] = [];

@@ -3,6 +3,8 @@ import type { ConversationId } from "./types.ts";
 /**
  * The message of a thrown value, without throwing itself: `String()` throws for values such as `Object.create(null)`,
  * and code that formats an error must not fail for the value it formats.
+ * @param {unknown} error - The thrown value.
+ * @returns {string} Its message.
  */
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;

@@ -10,7 +10,8 @@ import { utf8ByteLength } from "@msa/chord/output";
  */
 
 export const DEFAULT_MAX_LINES = 2000;
-export const DEFAULT_MAX_BYTES = 50 * 1024; // 50KB
+// 50KB
+export const DEFAULT_MAX_BYTES = 50 * 1024;
 
 export interface TruncationResult {
   /** The truncated content */
@@ -56,15 +57,17 @@ function splitLinesForCounting(content: string): string[] {
 
 /**
  * Format bytes as human-readable size.
+ * @param {number} bytes - The size in bytes.
+ * @returns {string} The formatted size.
  */
 export function formatSize(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes}B`;
-  } else if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)}KB`;
-  } else {
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
   }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)}KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
 /**
@@ -73,6 +76,9 @@ export function formatSize(bytes: number): string {
  *
  * Never returns partial lines. If first line exceeds byte limit,
  * returns empty content with firstLineExceedsLimit=true.
+ * @param {string} content - The text.
+ * @param {TruncationOptions} options - The limits.
+ * @returns {TruncationResult} The truncated text.
  */
 export function truncateHead(content: string, options: TruncationOptions = {}): TruncationResult {
   return truncateHeadOf(
@@ -86,6 +92,10 @@ export function truncateHead(content: string, options: TruncationOptions = {}): 
  * `truncateHead` of a text known by a prefix and its totals (`lines` counted like `truncateHead`, ignoring a trailing
  * newline). The prefix must be the whole text, or longer than `maxBytes + 1` UTF-8 bytes, or hold at least `maxLines`
  * newlines; then the result equals `truncateHead` of the whole text.
+ * @param {string} prefix - The text's prefix.
+ * @param {{ readonly lines: number; readonly bytes: number }} totals - The whole text's lines and bytes.
+ * @param {TruncationOptions} options - The limits.
+ * @returns {TruncationResult} The truncated text.
  */
 export function truncateHeadOf(
   prefix: string,
@@ -145,7 +155,8 @@ export function truncateHeadOf(
 
   for (const [i, line] of lines.entries()) {
     if (i >= maxLines) break;
-    const lineBytes = utf8ByteLength(line) + (i > 0 ? 1 : 0); // +1 for newline
+    // +1 for newline
+    const lineBytes = utf8ByteLength(line) + (i > 0 ? 1 : 0);
 
     if (outputBytesCount + lineBytes > maxBytes) {
       truncatedBy = "bytes";

@@ -272,6 +272,11 @@ export const CompactionTask = defineTask<
 /**
  * Create a compaction task with its status in this commit. `owner` is the generation that waits for it (a blocking
  * compaction); without one it is conversation-owned, and `background` unless it is manual.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {ConversationId} conversationId - The conversation.
+ * @param {CompactionInput} input - The compaction's input.
+ * @param {TaskId} owner - The waiting generation, if any.
+ * @returns {Promise<TaskId<CompactionResult>>} The compaction task.
  */
 export async function createCompaction(
   tx: Tx,
@@ -299,6 +304,9 @@ export async function createCompaction(
  * (spec §8.7). Walks back from the tail until `keepRecentTokens` are kept, then cuts at the first candidate at or after
  * that entry: an entry whose contribution starts with a user or assistant message, never a tool result, and never a
  * user entry that a result of the preceding assistant's calls still follows.
+ * @param {ContextView} view - The conversation's context view.
+ * @param {number} keepRecentTokens - How many recent tokens to keep.
+ * @returns {number | undefined} The index.
  */
 export function selectCut(view: ContextView, keepRecentTokens: number): number | undefined {
   const { contributions } = view;
@@ -344,7 +352,12 @@ function isCandidate(contributions: ContextView["contributions"], index: number)
   return true;
 }
 
-/** Model messages of the entries before `cut`: the head marker first, ordered like model context (spec §2.1). */
+/**
+ * Model messages of the entries before `cut`: the head marker first, ordered like model context (spec §2.1).
+ * @param {ContextView} view - The conversation's context view.
+ * @param {number} cut - The first kept entry's index.
+ * @returns {Message[]} The messages.
+ */
 export function summarizedMessages(view: ContextView, cut: number): Message[] {
   return orderToolResults(view.contributions.slice(0, cut).flat());
 }
@@ -353,6 +366,9 @@ export function summarizedMessages(view: ContextView, cut: number): Message[] {
  * Size of a request over `view` followed by `extra` (spec §8.3): the usage of the newest assistant appended after the
  * head marker, whose request included the marker, plus estimates of the messages after it; without one, estimates of
  * every message.
+ * @param {ContextView} view - The conversation's context view.
+ * @param {readonly Message[]} extra - The messages after the view.
+ * @returns {number} The estimated tokens.
  */
 export function estimateContext(view: ContextView, extra: readonly Message[]): number {
   let measured: AssistantMessage | undefined;
@@ -371,7 +387,11 @@ export function estimateContext(view: ContextView, extra: readonly Message[]): n
   return tokens;
 }
 
-/** The summary of a clean `stop` with text and no tool call; anything else is not a summary. */
+/**
+ * The summary of a clean `stop` with text and no tool call; anything else is not a summary.
+ * @param {AssistantMessage} message - The summarizer's answer.
+ * @returns {string | undefined} The summary.
+ */
 function summaryText(message: AssistantMessage): string | undefined {
   if (
     message.stopReason !== "stop" ||
@@ -396,7 +416,12 @@ function summaryFailure(message: AssistantMessage): string {
   return "Summarization produced no text";
 }
 
-/** The summarizer's user message: the serialized conversation, the prompt, and any instructions. */
+/**
+ * The summarizer's user message: the serialized conversation, the prompt, and any instructions.
+ * @param {readonly Message[]} messages - The messages.
+ * @param {string | undefined} instructions - Extra instructions, if any.
+ * @returns {string} The message.
+ */
 function summaryPrompt(messages: readonly Message[], instructions: string | undefined): string {
   const focus = instructions === undefined ? "" : `\n\nAdditional focus: ${instructions}`;
   return `<conversation>\n${serializeConversation(messages)}\n</conversation>\n\n${SUMMARIZATION_PROMPT}${focus}`;
@@ -407,6 +432,8 @@ function summaryPrompt(messages: readonly Message[], instructions: string | unde
  * Thinking is omitted too: providers return summaries of the real reasoning, and replayed thinking is often not part of
  * the live context (a block that does not match its request is dropped), so including it can make the request larger
  * than the context it summarizes. Visible text, tool calls, and tool results record what happened.
+ * @param {readonly Message[]} messages - The messages.
+ * @returns {string} The transcript.
  */
 export function serializeConversation(messages: readonly Message[]): string {
   const parts: string[] = [];
@@ -451,7 +478,13 @@ function truncate(text: string, maxChars: number): string {
   return `${text.slice(0, maxChars)}\n\n[... ${text.length - maxChars} more characters truncated]`;
 }
 
-/** Place a summary supplied by a hook in its own commit. */
+/**
+ * Place a summary supplied by a hook in its own commit.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {EntryId} firstKept - The first kept entry.
+ * @param {string} summary - The summary.
+ * @param {Context} context - The caller's context.
+ */
 async function place(
   runtime: Runtime,
   firstKept: EntryId,
@@ -477,6 +510,13 @@ async function place(
  * generation holds the run and waits. A conversation-owned one admits it as a write submission, placed at once when
  * idle, otherwise at the next boundary, or settled `stale`.
  * REMINDER: nothing else may append to a busy conversation, so every non-blocking summary goes through admission.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {RunningTask<CompactionInput, CompactionCheckpoint, CompactionResult>} current - The running compaction.
+ * @param {Draft<LiveState>} live - The `msa.live` draft.
+ * @param {EntryId} firstKept - The first kept entry.
+ * @param {string} summary - The summary.
+ * @returns {Promise<Next>} The next state.
  */
 async function placeSummary(
   tx: Tx,
@@ -510,7 +550,11 @@ async function placeSummary(
   return { status: "terminal", outcome: { status: "completed", result } };
 }
 
-/** Remove the status and complete without a summary. */
+/**
+ * Remove the status and complete without a summary.
+ * @param {Runtime} runtime - The task's runtime.
+ * @param {Context} context - The caller's context.
+ */
 async function complete(runtime: Runtime, context: Context): Promise<void> {
   await runtime.commit(async (tx) => {
     removeCompactionStatus(await tx.doc(LiveDoc, runtime.conversationId), runtime.taskId);

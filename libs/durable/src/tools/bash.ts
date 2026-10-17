@@ -75,7 +75,14 @@ function validateTimeout(timeout: number | undefined): void {
   }
 }
 
-/** The execution of one call: the command with its prefix, in the environment's working directory, then `prepare`. */
+/**
+ * The execution of one call: the command with its prefix, in the environment's working directory, then `prepare`.
+ * @param {string} command - The model's command.
+ * @param {{ commandPrefix?: string; prepare?: BashPrepare } | undefined} options - The tool's options.
+ * @param {ToolExecutionApi} api - The tool call's API.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<BashExecution>} The execution.
+ */
 async function prepareExecution(
   command: string,
   options: { commandPrefix?: string; prepare?: BashPrepare } | undefined,
@@ -96,6 +103,12 @@ async function prepareExecution(
  * Run each command form in turn until one starts, streaming output to `api.output()` within the retained window, and
  * turn the result into the tool's result: a spill diagnostic, an error result for a nonzero exit, and a thrown error for
  * a failure such as a timeout. The structured output repeats the retained output with the exit code.
+ * @param {readonly (string | readonly string[])[]} commands - The command forms to try.
+ * @param {BashExecution} execution - The prepared execution.
+ * @param {number | undefined} timeout - The timeout in seconds.
+ * @param {ToolExecutionApi} api - The tool call's API.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<ToolExecutionResult>} The tool's result.
  */
 async function runCommand(
   commands: readonly (string | readonly string[])[],
@@ -106,7 +119,7 @@ async function runCommand(
 ): Promise<ToolExecutionResult> {
   const env = requireEnv(api);
   let result: Awaited<ReturnType<typeof env.exec>> | undefined;
-  for (const command of commands) {
+  for await (const command of commands) {
     result = await env.exec(
       command,
       {
@@ -159,6 +172,8 @@ async function runCommand(
  * environment, which may omit output outside it and report how much it omitted, so dropped counts stay exact. Output
  * beyond the limits is spilled to a file whose path is reported as a diagnostic. A nonzero exit is an error result with
  * the exit code; a timeout throws, which makes an error result that still carries the output and diagnostics.
+ * @param {BashToolOptions} options - The tool's options.
+ * @returns {ToolRegistration<typeof bashSchema>} The tool.
  */
 export function createBashTool(options?: BashToolOptions): ToolRegistration<typeof bashSchema> {
   return defineTool({
@@ -188,6 +203,8 @@ const POWERSHELL_ARGS = [
 /**
  * Runs a PowerShell command, like `bash` but through PowerShell instead of the environment's shell: `pwsh` (PowerShell
  * 7), else Windows PowerShell, started directly with the command as an argument, so no other shell parses it.
+ * @param {PowerShellToolOptions} options - The tool's options.
+ * @returns {ToolRegistration<typeof powershellSchema>} The tool.
  */
 export function createPowerShellTool(
   options?: PowerShellToolOptions,
@@ -203,7 +220,7 @@ export function createPowerShellTool(
       validateTimeout(args.timeout);
       const execution = await prepareExecution(args.command, options, api, context);
       const script = `${UTF8_OUTPUT}\n${execution.command}`;
-      const commands = programs.map((program) => [program, ...POWERSHELL_ARGS, script]);
+      const commands = programs.map((program) => [program].concat(POWERSHELL_ARGS, script));
       return runCommand(commands, execution, args.timeout, api, context);
     },
   });

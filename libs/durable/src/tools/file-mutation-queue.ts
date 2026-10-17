@@ -13,6 +13,10 @@ async function mutationKey(env: ExecutionEnv, path: string, context: Context): P
 /**
  * The canonical path; for a file that does not exist yet, its canonical parent joined with its name, so a `write` that
  * creates a file and a later mutation of it share one key even under a symlinked directory.
+ * @param {ExecutionEnv} env - The execution environment.
+ * @param {string} absolutePath - The file's absolute path.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<string>} The key mutations of the file share.
  */
 async function canonical(
   env: ExecutionEnv,
@@ -26,7 +30,7 @@ async function canonical(
   // The file system splits the path, so a name may contain characters that are separators elsewhere.
   const parent = getOrThrow(await env.joinPath([absolutePath, ".."], context));
   if (parent === absolutePath || !absolutePath.startsWith(parent)) return absolutePath;
-  const name = absolutePath.slice(parent.length + (/[/\\]$/.test(parent) ? 0 : 1));
+  const name = absolutePath.slice(parent.length + (/[/\\]$/u.test(parent) ? 0 : 1));
   return getOrThrow(await env.joinPath([await canonical(env, parent, context), name], context));
 }
 
@@ -34,6 +38,11 @@ async function canonical(
  * Serialize `edit` and `write` mutations of one file within this process: same file system id and canonical path,
  * whichever environment object the call got. Other files, and other file systems, never wait. Concurrent calls on one
  * file run in the order their keys resolve. Not a lock against `bash` or other processes.
+ * @param {ExecutionEnv} env - The execution environment.
+ * @param {string} path - The file to mutate.
+ * @param {() => Promise<T>} fn - The mutation.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<T>} What `fn` returns.
  */
 export async function withFileMutationQueue<T>(
   env: ExecutionEnv,

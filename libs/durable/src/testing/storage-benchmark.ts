@@ -14,6 +14,7 @@ import type {
   TaskRecord,
 } from "../types.ts";
 import { ROOT_CONVERSATION_ID } from "../types.ts";
+import { range } from "./range.ts";
 
 export type StorageBenchmarkScale = {
   readonly name: string;
@@ -84,7 +85,12 @@ function task(id: TaskId<JsonValue>, index: number): StoredTask {
   return { ...common, state: { status, checkpoint: { index, payload: "x".repeat(64) } } };
 }
 
-/** Seed deterministic representative data through only the public `Storage` contract. */
+/**
+ * Seed deterministic representative data through only the public `Storage` contract.
+ * @param {Storage} storage - The storage to seed.
+ * @param {StorageBenchmarkScale} scale - How much data to write.
+ * @returns {Promise<StorageBenchmarkDataset>} What was written.
+ */
 export async function seedStorageBenchmark(
   storage: Storage,
   scale: StorageBenchmarkScale = TIMING_SCALE,
@@ -95,9 +101,9 @@ export async function seedStorageBenchmark(
   );
 
   let firstEntryId: EntryId | undefined;
-  for (let start = 0; start < scale.entryCount; start += BATCH_SIZE) {
+  for await (const start of range(0, scale.entryCount, BATCH_SIZE)) {
     const writes: StorageWrite[] = [];
-    for (let index = start; index < Math.min(start + BATCH_SIZE, scale.entryCount); index++) {
+    for await (const index of range(start, Math.min(start + BATCH_SIZE, scale.entryCount))) {
       const id = await storage.mintId<EntryId>();
       if (index === 0) firstEntryId = id;
       writes.push({
@@ -114,18 +120,18 @@ export async function seedStorageBenchmark(
     await storage.commit(writes, BACKGROUND_CONTEXT);
   }
 
-  for (let start = 0; start < scale.taskCount; start += BATCH_SIZE) {
+  for await (const start of range(0, scale.taskCount, BATCH_SIZE)) {
     const writes: StorageWrite[] = [];
-    for (let index = start; index < Math.min(start + BATCH_SIZE, scale.taskCount); index++) {
+    for await (const index of range(start, Math.min(start + BATCH_SIZE, scale.taskCount))) {
       writes.push({ type: "task", value: task(await storage.mintId<TaskId<JsonValue>>(), index) });
     }
     await storage.commit(writes, BACKGROUND_CONTEXT);
   }
 
   let exactDocumentId: DocumentId | undefined;
-  for (let start = 0; start < scale.documentCount; start += BATCH_SIZE) {
+  for await (const start of range(0, scale.documentCount, BATCH_SIZE)) {
     const writes: StorageWrite[] = [];
-    for (let index = start; index < Math.min(start + BATCH_SIZE, scale.documentCount); index++) {
+    for await (const index of range(start, Math.min(start + BATCH_SIZE, scale.documentCount))) {
       const id = await storage.mintId<DocumentId>();
       exactDocumentId = id;
       writes.push({
@@ -158,7 +164,7 @@ export async function seedStorageBenchmark(
     })),
     BACKGROUND_CONTEXT,
   );
-  for (let count = 1; count <= REPLAY_TAILS.at(-1)!; count++) {
+  for await (const count of range(1, REPLAY_TAILS.at(-1)! + 1)) {
     await storage.commit(
       replayEntries
         .filter(({ tail }) => count <= tail)
@@ -190,7 +196,7 @@ export async function seedStorageBenchmark(
     BACKGROUND_CONTEXT,
   );
   let ancientAt: Seq | undefined;
-  for (let count = 1; count <= HISTORY_SEGMENT_LENGTH; count++) {
+  for await (const count of range(1, HISTORY_SEGMENT_LENGTH + 1)) {
     ancientAt = await storage.commit(
       [
         {
@@ -214,7 +220,7 @@ export async function seedStorageBenchmark(
   );
   if (ancientAt === undefined) throw new Error("Benchmark history seed produced no commits");
   let recentAt = ancientAt;
-  for (let count = HISTORY_SEGMENT_LENGTH + 1; count <= HISTORY_SEGMENT_LENGTH * 2; count++) {
+  for await (const count of range(HISTORY_SEGMENT_LENGTH + 1, HISTORY_SEGMENT_LENGTH * 2 + 1)) {
     recentAt = await storage.commit(
       [
         {
@@ -231,7 +237,7 @@ export async function seedStorageBenchmark(
   let parentConversationId = ROOT_CONVERSATION_ID;
   let parentAt = firstEntryId;
   let deepestConversationId = ROOT_CONVERSATION_ID;
-  for (let depth = 0; depth < FORK_DEPTH; depth++) {
+  for await (const depth of range(0, FORK_DEPTH)) {
     const conversationId = await storage.mintId<ConversationId>();
     await storage.commit(
       [
@@ -411,7 +417,10 @@ export type StorageWriteBenchmark = {
   run(storage: Storage): Promise<number>;
 };
 
-/** Seed the common state expected by every write benchmark sample. */
+/**
+ * Seed the common state expected by every write benchmark sample.
+ * @param {Storage} storage - The storage to seed.
+ */
 export async function seedStorageWriteBenchmark(storage: Storage): Promise<void> {
   await storage.commit(
     [{ type: "conversation", value: { id: ROOT_CONVERSATION_ID } }],

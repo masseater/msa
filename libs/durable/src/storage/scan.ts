@@ -11,6 +11,10 @@ export type ScanStart = {
  * Resolve a scan's order and position. A cursor continues in the order it was created with, whether the query repeats
  * that order or omits it; a different `order` throws. A cursor without an order, written before scans had one,
  * continues in the scan's default order.
+ * @param {ScanOrder | undefined} requested - The query's order.
+ * @param {Readonly<Record<string, unknown>> | undefined} cursor - The cursor, if any.
+ * @param {ScanOrder} fallback - The scan's default order.
+ * @returns {ScanStart} The order and position.
  */
 export function scanStart(
   requested: ScanOrder | undefined,
@@ -36,7 +40,12 @@ export function scanStart(
   return { order, after };
 }
 
-/** The continuation of a scan whose last returned item has `id`. */
+/**
+ * The continuation of a scan whose last returned item has `id`.
+ * @param {Id<string>} id - The last item's ID.
+ * @param {ScanOrder} order - The scan's order.
+ * @returns {{ readonly after: number; readonly order: ScanOrder }} The cursor.
+ */
 export function nextCursor(
   id: Id<string>,
   order: ScanOrder,

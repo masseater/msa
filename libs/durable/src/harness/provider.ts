@@ -23,6 +23,9 @@ export const ProviderDoc = defineDoc<ProviderState>({
 /**
  * Return the persisted identity without writing in the normal path. A legacy conversation without `msa.provider` gets
  * one migration commit whose `tx.doc()` runs `initial()` before the provider request starts.
+ * @param {TaskRuntime<I, S, R, H>} runtime - The task's runtime.
+ * @param {Context} context - The caller's context.
+ * @returns {Promise<string>} The identity.
  */
 export async function ensureProviderSessionId<I, S, R, H extends object>(
   runtime: TaskRuntime<I, S, R, H>,

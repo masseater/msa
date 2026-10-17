@@ -143,6 +143,10 @@ const COMPACTION_TASK_KIND = "msa.compaction";
 /**
  * End the run owned by `taskId`: settle each of its inputs and remove `run`. Always removes `generation`, `tools`, and
  * `nestedTools`, whose presentation belongs to the ending run.
+ * @param {Tx} tx - The commit's transaction.
+ * @param {Draft<LiveState>} live - The `msa.live` draft.
+ * @param {TaskId} taskId - The run's owner task.
+ * @param {SubmissionSettlement} settlement - How its inputs settle.
  */
 export function endRun(
   tx: Tx,
@@ -159,13 +163,22 @@ export function endRun(
   delete live.nestedTools;
 }
 
-/** Add the status of a compaction task created in this commit; statuses stay in task ID order. */
+/**
+ * Add the status of a compaction task created in this commit; statuses stay in task ID order.
+ * @param {Draft<LiveState>} live - The `msa.live` draft.
+ * @param {CompactionStatus} status - The status.
+ */
 export function addCompactionStatus(live: Draft<LiveState>, status: CompactionStatus): void {
   live.compactions ??= [];
   live.compactions.push(status);
 }
 
-/** The status of compaction task `taskId`, if listed. */
+/**
+ * The status of compaction task `taskId`, if listed.
+ * @param {Draft<LiveState>} live - The `msa.live` draft.
+ * @param {TaskId} taskId - The task.
+ * @returns {Draft<CompactionStatus> | undefined} The status.
+ */
 export function compactionStatus(
   live: Draft<LiveState>,
   taskId: TaskId,
@@ -173,7 +186,11 @@ export function compactionStatus(
   return live.compactions?.find((status) => status.taskId === taskId);
 }
 
-/** Remove the status of compaction task `taskId`, and the list once empty. */
+/**
+ * Remove the status of compaction task `taskId`, and the list once empty.
+ * @param {Draft<LiveState>} live - The `msa.live` draft.
+ * @param {TaskId} taskId - The task.
+ */
 export function removeCompactionStatus(live: Draft<LiveState>, taskId: TaskId): void {
   const statuses = live.compactions;
   if (statuses === undefined) return;
@@ -182,7 +199,12 @@ export function removeCompactionStatus(live: Draft<LiveState>, taskId: TaskId): 
   if (statuses.length === 0) delete live.compactions;
 }
 
-/** Remove the status of compaction task `taskId` and record that it failed with `error`. */
+/**
+ * Remove the status of compaction task `taskId` and record that it failed with `error`.
+ * @param {Draft<LiveState>} live - The `msa.live` draft.
+ * @param {TaskId} taskId - The task.
+ * @param {string} error - The failure's message.
+ */
 export function failCompactionStatus(live: Draft<LiveState>, taskId: TaskId, error: string): void {
   const status = compactionStatus(live, taskId);
   if (status !== undefined)
@@ -195,6 +217,9 @@ export function failCompactionStatus(live: Draft<LiveState>, taskId: TaskId, err
  * search: a tool may make thousands of nested calls, each of which looks up its slot in several commits, and every
  * element a search reads costs a node in the draft's change tracker. Their task IDs ascend: each slot is appended in
  * the commit that creates its task, task IDs ascend in commit order, and removal keeps the order.
+ * @param {Draft<LiveState>} live - The `msa.live` draft.
+ * @param {TaskId} taskId - The task.
+ * @returns {Draft<ToolSlot | NestedToolSlot> | undefined} The slot.
  */
 export function toolSlot(
   live: Draft<LiveState>,
@@ -218,13 +243,18 @@ export function toolSlot(
 /**
  * Mark a slot done and clear its running output; the caller sets a model-issued call's result `entry`, or a nested
  * call's `summary`. Neither is set when the task faulted or was orphaned.
+ * @param {Draft<ToolSlot | NestedToolSlot>} slot - The tool's slot.
  */
 export function finishSlot(slot: Draft<ToolSlot | NestedToolSlot>): void {
   slot.status = "done";
   clearProgress(slot);
 }
 
-/** Remove the nested slots below tool task `taskId`, transitively; the list holds parents before their children. */
+/**
+ * Remove the nested slots below tool task `taskId`, transitively; the list holds parents before their children.
+ * @param {Draft<LiveState>} live - The `msa.live` draft.
+ * @param {TaskId} taskId - The task.
+ */
 export function removeNestedSlots(live: Draft<LiveState>, taskId: TaskId): void {
   const nested = live.nestedTools;
   if (nested === undefined) return;
@@ -236,7 +266,10 @@ export function removeNestedSlots(live: Draft<LiveState>, taskId: TaskId): void 
   if (nested.length === 0) delete live.nestedTools;
 }
 
-/** Remove what a tool published while running; its result entry or a rerun replaces it. */
+/**
+ * Remove what a tool published while running; its result entry or a rerun replaces it.
+ * @param {Draft<SlotProgress>} slot - The slot.
+ */
 export function clearProgress(slot: Draft<SlotProgress>): void {
   delete slot.output;
   delete slot.droppedBytes;
@@ -256,6 +289,9 @@ export function clearProgress(slot: Draft<SlotProgress>): void {
  * no task scope, so that entry has no `byTaskId`. Faults come from task bugs
  * or malformed provider data (a non-JSON value in a response), or a commit the Storage rejected without effect; an
  * uncertain storage failure poisons the Session instead and writes no outcome.
+ * @param {Transaction} tx - The commit's transaction.
+ * @param {TaskRecord<JsonValue, JsonValue, JsonValue>} record - The task's record.
+ * @param {SchedulerOutcome} outcome - The outcome.
  */
 export async function settleSchedulerOutcome(
   tx: Transaction,

@@ -22,6 +22,7 @@ import {
   type TaskId,
   type TaskRecord,
 } from "../types.ts";
+import { range } from "./range.ts";
 import type {
   StorageConformanceAssertions,
   StorageConformanceCase,
@@ -101,7 +102,11 @@ function createCase(
   return { name, run: () => options.withStorage(test) };
 }
 
-/** Creates runner-independent cases. `withStorage` must call and await its callback exactly once per case. */
+/**
+ * Creates runner-independent cases. `withStorage` must call and await its callback exactly once per case.
+ * @param {StorageConformanceOptions} options - The storage under test.
+ * @returns {readonly StorageConformanceCase[]} The cases.
+ */
 export function createStorageConformance(
   options: StorageConformanceOptions,
 ): readonly StorageConformanceCase[] {
@@ -661,7 +666,7 @@ export function createStorageConformance(
         const conversationIds = [rootId];
         const taskIds: TaskId<JsonValue>[] = [];
         const submissionIds: SubmissionId[] = [];
-        for (let index = 0; index < 3; index++) {
+        for await (const _index of range(0, 3)) {
           const conversationId = await storage.mintId<ConversationId>();
           const taskId = await storage.mintId<TaskId<JsonValue>>();
           const submissionId = await storage.mintId<SubmissionId>();
@@ -708,16 +713,16 @@ export function createStorageConformance(
         ];
         const all = async (scan: Scan, order: ScanOrder | undefined): Promise<number[]> => {
           const found: number[] = [];
-          let page = await scan(order, undefined);
-          found.push(...page.items.map(({ id }) => id));
-          while (page.next !== undefined) {
-            // A cursor carries its order; the query may omit it.
-            page = await scan(undefined, JSON.parse(JSON.stringify(page.next)) as Cursor);
+          const collect = async (page: Page<Identified, Cursor>): Promise<void> => {
             found.push(...page.items.map(({ id }) => id));
-          }
+            if (page.next === undefined) return;
+            // A cursor carries its order; the query may omit it.
+            await collect(await scan(undefined, JSON.parse(JSON.stringify(page.next)) as Cursor));
+          };
+          await collect(await scan(order, undefined));
           return found;
         };
-        for (const [scan, ids] of scans) {
+        for await (const [scan, ids] of scans) {
           const reversed = [...ids].reverse();
           expect(await all(scan, undefined)).toEqual(ids);
           expect(await all(scan, "ascending")).toEqual(ids);
@@ -911,12 +916,12 @@ export function createStorageConformance(
 
         const ids = async (query: SubmissionQuery) => {
           const found: SubmissionId[] = [];
-          let cursor: Cursor | undefined;
-          do {
+          const collect = async (cursor: Cursor | undefined): Promise<void> => {
             const page = await storage.scanSubmissions(query, 1, cursor, context);
             found.push(...page.items.map(({ id }) => id));
-            cursor = page.next;
-          } while (cursor !== undefined);
+            if (page.next !== undefined) await collect(page.next);
+          };
+          await collect(undefined);
           return found;
         };
         expect(await ids({})).toEqual([firstId, secondId, otherConversationId]);
@@ -1162,7 +1167,7 @@ export function createStorageConformance(
         );
         const beforeReplacement = structuredClone(initial);
         let beforeReplacementAt = createdAt;
-        for (let revision = 1; revision <= 24; revision++) {
+        for await (const revision of range(1, 25)) {
           const index = (revision * 17) % beforeReplacement.rows.length;
           beforeReplacement.rows[index]!.value = -revision;
           beforeReplacement.revision = revision;
@@ -1206,7 +1211,7 @@ export function createStorageConformance(
         replacement.rows[0]!.value = -999;
 
         const current = structuredClone(replacementSnapshot);
-        for (let revision = 101; revision <= 124; revision++) {
+        for await (const revision of range(101, 125)) {
           const index = (revision * 19) % current.rows.length;
           current.rows[index]!.value = -revision;
           current.revision = revision;
