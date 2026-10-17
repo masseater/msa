@@ -16,6 +16,7 @@ import {
   truncateToWidth,
   visibleWidth,
 } from "@msa/tui";
+import { Effect } from "effect";
 
 import type { ExtensionCommandContext } from "../../core/extensions/types.ts";
 import type { KeybindingsManager } from "../../core/keybindings.ts";
@@ -279,14 +280,13 @@ export async function showMcpManager(
 ): Promise<void> {
   await ctx.ui.custom<void>((tui, theme, keybindings, done) => {
     const view = new McpManagerView(tui, theme, keybindings);
-    void manage(view).then(
-      // oxlint-disable-next-line promise/no-callback-in-promise -- UI の完了コールバックを promise の完了で呼ぶブリッジ
-      () => done(),
-      (error: unknown) => {
-        ctx.ui.notify(toErrorMessage(error), "error");
-        // oxlint-disable-next-line promise/no-callback-in-promise -- UI の完了コールバックを promise の完了で呼ぶブリッジ
-        done();
-      },
+    Effect.runFork(
+      Effect.tryPromise(() => manage(view)).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => ctx.ui.notify(toErrorMessage(error.cause), "error")),
+        ),
+        Effect.ensuring(Effect.sync(() => done())),
+      ),
     );
     return view;
   });
