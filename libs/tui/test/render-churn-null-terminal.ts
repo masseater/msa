@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import type { Terminal } from "../src/terminal.ts";
 
 export const COLUMNS = 100;
@@ -7,7 +9,9 @@ export class NullTerminal implements Terminal {
   bytesWritten = 0;
   start(_onInput: (data: string) => void, _onResize: () => void): void {}
   stop(): void {}
-  async drainInput(): Promise<void> {}
+  drainInput(): Promise<void> {
+    return Effect.runPromise(Effect.sync(() => {}));
+  }
   write(data: string): void {
     this.bytesWritten += data.length;
   }

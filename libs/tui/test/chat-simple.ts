@@ -1,10 +1,12 @@
 import chalk from "chalk";
+import { Effect, Random } from "effect";
 
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
 import { Loader } from "../src/components/loader.ts";
 import { Markdown } from "../src/components/markdown.ts";
 import { Text } from "../src/components/text.ts";
+import { runAfter } from "../src/delay.ts";
 import { ProcessTerminal } from "../src/terminal.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import type { TUI } from "../src/tui.ts";
@@ -79,7 +81,7 @@ editor.onSubmit = (value: string) => {
 
     tui.requestRender();
 
-    setTimeout(() => {
+    runAfter(1000, () => {
       tui.removeChild(loader);
 
       const responses = [
@@ -92,7 +94,7 @@ editor.onSubmit = (value: string) => {
         "Great point!",
         "Thanks for sharing that.",
       ];
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+      const randomResponse = responses[Math.floor(Effect.runSync(Random.next) * responses.length)];
       if (randomResponse === undefined) throw new Error("No response was picked");
 
       const botMessage = new Markdown(randomResponse, 1, 1, defaultMarkdownTheme);
@@ -102,7 +104,7 @@ editor.onSubmit = (value: string) => {
       editor.disableSubmit = false;
 
       tui.requestRender();
-    }, 1000);
+    });
   }
 };
 

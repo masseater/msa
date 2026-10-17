@@ -1,44 +1,68 @@
+import { Effect } from "effect";
+import { dual } from "effect/Function";
+
 import { Editor } from "../src/components/editor.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import { type TUI } from "../src/tui.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
-export function createTestTUI(cols = 80, rows = 24): TUI {
-  return new TuiMainScreen(new VirtualTerminal(cols, rows));
+export function createTestTUI(cols = 80): TUI {
+  return new TuiMainScreen(new VirtualTerminal(cols, 24));
 }
 
-export function applyCompletion(
-  lines: string[],
-  cursorLine: number,
-  cursorCol: number,
-  item: { value: string },
-  prefix: string,
-): { lines: string[]; cursorLine: number; cursorCol: number } {
-  const line = lines[cursorLine] || "";
-  const before = line.slice(0, cursorCol - prefix.length);
-  const after = line.slice(cursorCol);
-  const newLines = [...lines];
-  newLines[cursorLine] = before + item.value + after;
-  return {
-    lines: newLines,
-    cursorLine,
-    cursorCol: cursorCol - prefix.length + item.value.length,
-  };
-}
+export const applyCompletion: {
+  (
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    item: { value: string },
+    prefix: string,
+  ): { lines: string[]; cursorLine: number; cursorCol: number };
+  (
+    cursorLine: number,
+    cursorCol: number,
+    item: { value: string },
+    prefix: string,
+  ): (lines: string[]) => { lines: string[]; cursorLine: number; cursorCol: number };
+} = dual(
+  5,
+  (
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    item: { value: string },
+    prefix: string,
+  ): { lines: string[]; cursorLine: number; cursorCol: number } => {
+    const line = lines[cursorLine] || "";
+    const before = line.slice(0, cursorCol - prefix.length);
+    const after = line.slice(cursorCol);
+    const newLines = [...lines];
+    newLines[cursorLine] = before + item.value + after;
+    return {
+      lines: newLines,
+      cursorLine,
+      cursorCol: cursorCol - prefix.length + item.value.length,
+    };
+  },
+);
 
-export async function flushAutocomplete(): Promise<void> {
-  await Promise.resolve();
-  await new Promise((resolve) => {
-    setImmediate(resolve);
-  });
-}
+export const flushAutocomplete: Effect.Effect<void> = Effect.promise(() => Promise.resolve()).pipe(
+  Effect.andThen(
+    Effect.callback<void>((resume) => {
+      setImmediate(() => resume(Effect.void));
+    }),
+  ),
+);
 
-export function positionCursor(editor: Editor, line: number, col: number): void {
+export const positionCursor: {
+  (editor: Editor, line: number, col: number): void;
+  (line: number, col: number): (editor: Editor) => void;
+} = dual(3, (editor: Editor, line: number, col: number): void => {
   for (let i = 0; i < 20; i++) editor.handleInput("\x1b[A");
   for (let i = 0; i < line; i++) editor.handleInput("\x1b[B");
   editor.handleInput("\x01");
   for (let i = 0; i < col; i++) editor.handleInput("\x1b[C");
-}
+});
 
 export function pasteWithMarker(editor: Editor): string {
   const bigContent = "line\n".repeat(20).trimEnd();
@@ -50,6 +74,9 @@ export function bigPaste(tag: string): string {
   return Array.from({ length: 12 }, (_, i) => `${tag}${i}`).join("\n");
 }
 
-export function typeText(target: { handleInput(data: string): void }, text: string): void {
+export const typeText: {
+  (target: { handleInput(data: string): void }, text: string): void;
+  (text: string): (target: { handleInput(data: string): void }) => void;
+} = dual(2, (target: { handleInput(data: string): void }, text: string): void => {
   for (const char of text) target.handleInput(char);
-}
+});

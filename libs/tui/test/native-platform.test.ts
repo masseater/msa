@@ -4,6 +4,9 @@ import { createRequire, Module } from "node:module";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { Effect } from "effect";
+
+import { overrideEnv, readEnv } from "../src/env.ts";
 import { getNativeClipboard, getNativePlatformHelper } from "../src/native-platform.ts";
 
 test("Linux ARM64 prebuild supports 64 KB system pages", () => {
@@ -29,16 +32,28 @@ test("Linux ARM64 prebuild supports 64 KB system pages", () => {
 
 test(
   "writes Windows clipboard text through the native helper without command fallbacks",
-  { skip: process.platform !== "win32" || process.env["MSA_TEST_NATIVE_CLIPBOARD"] !== "1" },
-  async () => {
-    const clipboard = getNativeClipboard();
-    assert.ok(clipboard?.setText);
-    for await (const text of ["clipboard café 日本語", "", "second write"]) {
-      await clipboard.setText(text);
-      assert.equal(await clipboard.getText(), text);
-      assert.equal(await clipboard.getImage(), null);
-    }
-  },
+  { skip: process.platform !== "win32" || readEnv("MSA_TEST_NATIVE_CLIPBOARD") !== "1" },
+  () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const clipboard = getNativeClipboard();
+        assert.ok(clipboard?.setText);
+        const setText: (text: string) => Promise<void> = clipboard.setText.bind(clipboard);
+        for (const text of ["clipboard café 日本語", "", "second write"]) {
+          yield* Effect.promise(() => setText(text));
+          assert.equal(
+            yield* Effect.promise((): Promise<string | null | undefined> => clipboard.getText()),
+            text,
+          );
+          assert.equal(
+            yield* Effect.promise((): Promise<Uint8Array | null | undefined> =>
+              clipboard.getImage(),
+            ),
+            null,
+          );
+        }
+      }),
+    ),
 );
 
 test(
@@ -61,53 +76,50 @@ test(
 test(
   "Linux loads X11 lazily and rechecks DISPLAY",
   { skip: !["arm64", "x64"].includes(process.arch) },
-  async (t) => {
-    const require = createRequire(import.meta.url);
-    const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
-    const display = process.env["DISPLAY"];
-    const waylandDisplay = process.env["WAYLAND_DISPLAY"];
-    const modulePath = fileURLToPath(
-      new URL(
-        `../native/linux/prebuilds/linux-${process.arch}/linux-platform-x11.node`,
-        import.meta.url,
-      ),
-    );
-    const previous = require.cache[modulePath];
-    t.after(() => {
-      Object.defineProperty(process, "platform", platform);
-      if (display === undefined) delete process.env["DISPLAY"];
-      else process.env["DISPLAY"] = display;
-      if (waylandDisplay === undefined) delete process.env["WAYLAND_DISPLAY"];
-      else process.env["WAYLAND_DISPLAY"] = waylandDisplay;
-      if (previous === undefined) {
-        delete require.cache[modulePath];
-      } else {
-        require.cache[modulePath] = previous;
-      }
-    });
-    Object.defineProperty(process, "platform", { value: "linux" });
-    delete process.env["DISPLAY"];
-    process.env["WAYLAND_DISPLAY"] = "wayland-0";
-    assert.equal(getNativeClipboard(), undefined);
-    let available = false;
-    const helper = {
-      getText: t.mock.fn(() => Promise.resolve(available ? "X11" : undefined)),
-      getImage: t.mock.fn(() => Promise.resolve(null)),
-    };
-    const module = new Module(modulePath);
-    module.exports = helper;
-    require.cache[modulePath] = module;
-    process.env["DISPLAY"] = ":0";
-    const clipboard = getNativeClipboard()!;
-    assert.equal(clipboard, helper);
-    assert.equal(helper.getText.mock.callCount(), 0);
-    assert.equal(await clipboard.getText(), undefined);
-    available = true;
-    assert.equal(await clipboard.getText(), "X11");
-    assert.equal(await clipboard.getImage(), null);
-    delete process.env["DISPLAY"];
-    assert.equal(getNativeClipboard(), undefined);
-    process.env["DISPLAY"] = ":1";
-    assert.equal(getNativeClipboard(), clipboard);
-  },
+  (t) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const require = createRequire(import.meta.url);
+        const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
+        const modulePath = fileURLToPath(
+          new URL(
+            `../native/linux/prebuilds/linux-${process.arch}/linux-platform-x11.node`,
+            import.meta.url,
+          ),
+        );
+        const previous = require.cache[modulePath];
+        const restoreEnv = overrideEnv({ DISPLAY: undefined, WAYLAND_DISPLAY: "wayland-0" });
+        t.after(() => {
+          Object.defineProperty(process, "platform", platform);
+          restoreEnv();
+          if (previous === undefined) {
+            delete require.cache[modulePath];
+          } else {
+            require.cache[modulePath] = previous;
+          }
+        });
+        Object.defineProperty(process, "platform", { value: "linux" });
+        assert.equal(getNativeClipboard(), undefined);
+        let available = false;
+        const helper = {
+          getText: t.mock.fn(() => Promise.resolve(available ? "X11" : undefined)),
+          getImage: t.mock.fn(() => Promise.resolve(null)),
+        };
+        const module = new Module(modulePath);
+        module.exports = helper;
+        require.cache[modulePath] = module;
+        overrideEnv({ DISPLAY: ":0" });
+        const clipboard = getNativeClipboard()!;
+        assert.equal(clipboard, helper);
+        assert.equal(helper.getText.mock.callCount(), 0);
+        assert.equal(yield* Effect.promise(() => clipboard.getText()), undefined);
+        available = true;
+        assert.equal(yield* Effect.promise(() => clipboard.getText()), "X11");
+        assert.equal(yield* Effect.promise(() => clipboard.getImage()), null);
+        overrideEnv({ DISPLAY: undefined });
+        assert.equal(getNativeClipboard(), undefined);
+        overrideEnv({ DISPLAY: ":1" });
+        assert.equal(getNativeClipboard(), clipboard);
+      }),
+    ),
 );

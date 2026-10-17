@@ -128,8 +128,8 @@ export class ProcessTerminal implements Terminal {
   private wasRaw = false;
   private inputHandler?: ((data: string) => void) | undefined;
   private resizeHandler?: (() => void) | undefined;
-  private _kittyProtocolActive = false;
-  private _modifyOtherKeysActive = false;
+  #kittyProtocolActive = false;
+  #modifyOtherKeysActive = false;
   private keyboardProtocolPushed = false;
   private pendingKeyboardProtocolDeviceAttributes = 0;
   private keyboardProtocolNegotiationBuffer = "";
@@ -159,11 +159,11 @@ export class ProcessTerminal implements Terminal {
   })();
 
   get kittyProtocolActive(): boolean {
-    return this._kittyProtocolActive;
+    return this.#kittyProtocolActive;
   }
 
   get modifyOtherKeysActive(): boolean {
-    return this._modifyOtherKeysActive;
+    return this.#modifyOtherKeysActive;
   }
 
   start(onInput: (data: string) => void, onResize: () => void): void {
@@ -257,15 +257,15 @@ export class ProcessTerminal implements Terminal {
         this.enableModifyOtherKeys();
       } else {
         this.disableModifyOtherKeys();
-        if (!this._kittyProtocolActive) {
-          this._kittyProtocolActive = true;
+        if (!this.#kittyProtocolActive) {
+          this.#kittyProtocolActive = true;
           setKittyProtocolActive(true);
         }
       }
       return true;
     }
 
-    if (!this._kittyProtocolActive) {
+    if (!this.#kittyProtocolActive) {
       this.enableModifyOtherKeys();
     }
     return true;
@@ -348,15 +348,15 @@ export class ProcessTerminal implements Terminal {
   }
 
   private enableModifyOtherKeys(): void {
-    if (this._kittyProtocolActive || this._modifyOtherKeysActive) return;
+    if (this.#kittyProtocolActive || this.#modifyOtherKeysActive) return;
     process.stdout.write("\x1b[>4;2m");
-    this._modifyOtherKeysActive = true;
+    this.#modifyOtherKeysActive = true;
   }
 
   private disableModifyOtherKeys(): void {
-    if (!this._modifyOtherKeysActive) return;
+    if (!this.#modifyOtherKeysActive) return;
     process.stdout.write("\x1b[>4;0m");
-    this._modifyOtherKeysActive = false;
+    this.#modifyOtherKeysActive = false;
   }
 
   private enableWindowsVTInput(): void {
@@ -369,12 +369,12 @@ export class ProcessTerminal implements Terminal {
   drainInput(maxMs = 1000, idleMs = 50): Promise<void> {
     return Effect.runPromise(
       Effect.gen({ self: this }, function* () {
-        const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this._kittyProtocolActive;
+        const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this.#kittyProtocolActive;
         this.clearKeyboardProtocolNegotiationBuffer();
         if (shouldDisableKittyProtocol) {
           process.stdout.write("\x1b[<u");
           this.keyboardProtocolPushed = false;
-          this._kittyProtocolActive = false;
+          this.#kittyProtocolActive = false;
           setKittyProtocolActive(false);
         }
         this.disableModifyOtherKeys();
@@ -424,13 +424,13 @@ export class ProcessTerminal implements Terminal {
 
     process.stdout.write("\x1b[?2004l");
 
-    const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this._kittyProtocolActive;
+    const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this.#kittyProtocolActive;
     this.clearKeyboardProtocolNegotiationBuffer();
 
     if (shouldDisableKittyProtocol) {
       process.stdout.write("\x1b[<u");
       this.keyboardProtocolPushed = false;
-      this._kittyProtocolActive = false;
+      this.#kittyProtocolActive = false;
       setKittyProtocolActive(false);
     }
     this.disableModifyOtherKeys();

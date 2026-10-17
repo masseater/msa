@@ -1,14 +1,14 @@
 import { dual } from "effect/Function";
 
 import { isEnvSet } from "./env.ts";
-let _kittyProtocolActive = false;
+let kittyProtocolEnabled = false;
 
 export function setKittyProtocolActive(active: boolean): void {
-  _kittyProtocolActive = active;
+  kittyProtocolEnabled = active;
 }
 
 export function isKittyProtocolActive(): boolean {
-  return _kittyProtocolActive;
+  return kittyProtocolEnabled;
 }
 
 type Letter =
@@ -768,7 +768,7 @@ export const matchesKey: {
       );
 
     case "space":
-      if (!_kittyProtocolActive) {
+      if (!kittyProtocolEnabled) {
         if (modifier === MODIFIERS.ctrl && data === "\x00") {
           return true;
         }
@@ -816,7 +816,7 @@ export const matchesKey: {
         if (matchesModifyOtherKeys(data, CODEPOINTS.enter, MODIFIERS.shift)) {
           return true;
         }
-        if (_kittyProtocolActive) {
+        if (kittyProtocolEnabled) {
           return data === "\x1b\r" || data === "\n";
         }
         return false;
@@ -831,7 +831,7 @@ export const matchesKey: {
         if (matchesModifyOtherKeys(data, CODEPOINTS.enter, MODIFIERS.alt)) {
           return true;
         }
-        if (!_kittyProtocolActive) {
+        if (!kittyProtocolEnabled) {
           return data === "\x1b\r";
         }
         return false;
@@ -839,7 +839,7 @@ export const matchesKey: {
       if (modifier === 0) {
         return (
           data === "\r" ||
-          (!_kittyProtocolActive && data === "\n") ||
+          (!kittyProtocolEnabled && data === "\n") ||
           data === "\x1bOM" ||
           matchesKittySequence(data, CODEPOINTS.enter, 0) ||
           matchesKittySequence(data, CODEPOINTS.kpEnter, 0)
@@ -992,7 +992,7 @@ export const matchesKey: {
       if (modifier === MODIFIERS.alt) {
         return (
           data === "\x1b[1;3D" ||
-          (!_kittyProtocolActive && data === "\x1bB") ||
+          (!kittyProtocolEnabled && data === "\x1bB") ||
           data === "\x1bb" ||
           matchesKittySequence(data, ARROW_CODEPOINTS.left, MODIFIERS.alt)
         );
@@ -1019,7 +1019,7 @@ export const matchesKey: {
       if (modifier === MODIFIERS.alt) {
         return (
           data === "\x1b[1;3C" ||
-          (!_kittyProtocolActive && data === "\x1bF") ||
+          (!kittyProtocolEnabled && data === "\x1bF") ||
           data === "\x1bf" ||
           matchesKittySequence(data, ARROW_CODEPOINTS.right, MODIFIERS.alt)
         );
@@ -1070,7 +1070,7 @@ export const matchesKey: {
 
     if (
       modifier === MODIFIERS.ctrl + MODIFIERS.alt &&
-      !_kittyProtocolActive &&
+      !kittyProtocolEnabled &&
       rawCtrl !== null &&
       rawCtrl !== ""
     ) {
@@ -1079,7 +1079,7 @@ export const matchesKey: {
 
     if (
       modifier === MODIFIERS.alt &&
-      !_kittyProtocolActive &&
+      !kittyProtocolEnabled &&
       (isLetter || isDigit || SYMBOL_KEYS.has(key))
     ) {
       if (data === `\x1b${key}`) return true;
@@ -1197,7 +1197,7 @@ export function parseKey(data: string): string | undefined {
     );
   }
 
-  if (_kittyProtocolActive) {
+  if (kittyProtocolEnabled) {
     if (data === "\x1b\r" || data === "\n") return "shift+enter";
   }
 
@@ -1213,19 +1213,19 @@ export function parseKey(data: string): string | undefined {
   if (data === "\x1b\x1d") return "ctrl+alt+]";
   if (data === "\x1b\x1f") return "ctrl+alt+-";
   if (data === "\t") return "tab";
-  if (data === "\r" || (!_kittyProtocolActive && data === "\n") || data === "\x1bOM")
+  if (data === "\r" || (!kittyProtocolEnabled && data === "\n") || data === "\x1bOM")
     return "enter";
   if (data === "\x00") return "ctrl+space";
   if (data === " ") return "space";
   if (data === "\x7f") return "backspace";
   if (data === "\x08") return isWindowsTerminalSession() ? "ctrl+backspace" : "backspace";
   if (data === "\x1b[Z") return "shift+tab";
-  if (!_kittyProtocolActive && data === "\x1b\r") return "alt+enter";
-  if (!_kittyProtocolActive && data === "\x1b ") return "alt+space";
+  if (!kittyProtocolEnabled && data === "\x1b\r") return "alt+enter";
+  if (!kittyProtocolEnabled && data === "\x1b ") return "alt+space";
   if (data === "\x1b\x7f" || data === "\x1b\b") return "alt+backspace";
-  if (!_kittyProtocolActive && data === "\x1bB") return "alt+left";
-  if (!_kittyProtocolActive && data === "\x1bF") return "alt+right";
-  if (!_kittyProtocolActive && data.length === 2 && data[0] === "\x1b") {
+  if (!kittyProtocolEnabled && data === "\x1bB") return "alt+left";
+  if (!kittyProtocolEnabled && data === "\x1bF") return "alt+right";
+  if (!kittyProtocolEnabled && data.length === 2 && data[0] === "\x1b") {
     const code = data.charCodeAt(1);
     if (code >= 1 && code <= 26) {
       return `ctrl+alt+${String.fromCharCode(code + 96)}`;

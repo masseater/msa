@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import {
   dependenciesAvailable,
   exec,
@@ -55,21 +57,32 @@ function nativeLinuxClipboardCases8(): void {
     if (directory !== "") rmSync(directory, { recursive: true, force: true });
   });
   ["text", "image"].forEach((content) => {
-    it(`frees partially received X11 ${content} after invalid metadata`, async (t) => {
-      const { env } = await startX11(t);
-      await startServer(t, join(directory, "x11-test"), ["invalid"], env);
-      const { stdout } = await exec(join(directory, "x11-test"), [content], { env, timeout: 6000 });
-      assert.equal(stdout.trim(), "clean");
-    });
+    it(`frees partially received X11 ${content} after invalid metadata`, (t) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const { env } = yield* startX11(t);
+          yield* startServer({ t, command: join(directory, "x11-test"), args: ["invalid"], env });
+          const { stdout } = yield* exec({
+            file: join(directory, "x11-test"),
+            args: [content],
+            env,
+            timeout: 6000,
+          });
+          assert.equal(stdout.trim(), "clean");
+        }),
+      ));
 
-    it(`times out stalled X11 ${content} after a partial transfer without blocking JS`, async (t) => {
-      const { env } = await startX11(t);
-      await startServer(t, join(directory, "x11-test"), ["partial"], env);
-      const started = performance.now();
-      const result = await readClipboard(content === "text" ? "getText" : "getImage", env);
-      assert.equal(result.ok, false);
-      assert.match(result.error ?? "", /X11 clipboard/u);
-      assert.ok(performance.now() - started < 3500);
-    });
+    it(`times out stalled X11 ${content} after a partial transfer without blocking JS`, (t) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const { env } = yield* startX11(t);
+          yield* startServer({ t, command: join(directory, "x11-test"), args: ["partial"], env });
+          const started = performance.now();
+          const result = yield* readClipboard(content === "text" ? "getText" : "getImage", env);
+          assert.equal(result.ok, false);
+          assert.match(result.error ?? "", /X11 clipboard/u);
+          assert.ok(performance.now() - started < 3500);
+        }),
+      ));
   });
 }

@@ -1,6 +1,8 @@
 import { Session } from "node:inspector/promises";
 import { performance } from "node:perf_hooks";
 
+import { Console, Effect } from "effect";
+
 import { ScrollView } from "../src/components/scroll-view.ts";
 import { Text } from "../src/components/text.ts";
 import { VStack } from "../src/components/v-stack.ts";
@@ -74,37 +76,41 @@ interface ScenarioResult {
   bytesWritten: number;
 }
 
-async function runScenario(
+function runScenario(
   session: Session,
   terminal: NullTerminal,
   tui: TuiAltScreen,
   frame: (index: number) => void,
-): Promise<ScenarioResult> {
-  const writtenBefore = terminal.bytesWritten;
-  await session.post("HeapProfiler.startSampling", {
-    samplingInterval: SAMPLING_INTERVAL,
-    includeObjectsCollectedByMajorGC: true,
-    includeObjectsCollectedByMinorGC: true,
+): Effect.Effect<ScenarioResult> {
+  return Effect.gen(function* () {
+    const writtenBefore = terminal.bytesWritten;
+    yield* Effect.promise(() =>
+      session.post("HeapProfiler.startSampling", {
+        samplingInterval: SAMPLING_INTERVAL,
+        includeObjectsCollectedByMajorGC: true,
+        includeObjectsCollectedByMinorGC: true,
+      }),
+    );
+    const start = performance.now();
+    for (let i = 0; i < FRAMES; i++) {
+      frame(i);
+      tui.renderNow();
+    }
+    const elapsedMs = performance.now() - start;
+    const { profile } = yield* Effect.promise(() => session.post("HeapProfiler.stopSampling"));
+    return {
+      allocatedBytes: sumProfile(profile.head as SamplingNode),
+      elapsedMs,
+      bytesWritten: terminal.bytesWritten - writtenBefore,
+    };
   });
-  const start = performance.now();
-  for (let i = 0; i < FRAMES; i++) {
-    frame(i);
-    tui.renderNow();
-  }
-  const elapsedMs = performance.now() - start;
-  const { profile } = await session.post("HeapProfiler.stopSampling");
-  return {
-    allocatedBytes: sumProfile(profile.head as SamplingNode),
-    elapsedMs,
-    bytesWritten: terminal.bytesWritten - writtenBefore,
-  };
 }
 
-function report(name: string, result: ScenarioResult): void {
+function report(name: string, result: ScenarioResult): Effect.Effect<void> {
   const perFrameKiB = result.allocatedBytes / FRAMES / 1024;
   const totalMiB = result.allocatedBytes / 1024 / 1024;
   const msPerFrame = result.elapsedMs / FRAMES;
-  console.log(
+  return Console.log(
     `${name.padEnd(8)} allocated ${totalMiB.toFixed(1).padStart(7)} MiB total  ` +
       `${perFrameKiB.toFixed(1).padStart(8)} KiB/frame  ` +
       `${msPerFrame.toFixed(3).padStart(7)} ms/frame  ` +
@@ -112,50 +118,54 @@ function report(name: string, result: ScenarioResult): void {
   );
 }
 
-async function main(): Promise<void> {
-  const terminal = new NullTerminal();
-  const tui = new TuiAltScreen(terminal, false, "/tmp/msa-tui-bench");
+function main(): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const terminal = new NullTerminal();
+      const tui = new TuiAltScreen(terminal, false, "/tmp/msa-tui-bench");
 
-  const transcript = buildTranscript();
-  const editor = new EditorSim();
-  const scrollView = new ScrollView(transcript, {
-    follow: "end",
-    primary: true,
-    overscroll: "chain",
-    scrollbar: "auto",
-  });
-  const status = new Text("\x1b[2mstatus: idle\x1b[22m", 1, 0);
-  const footer = new Text("\x1b[2m~/workspaces/msa  main  100k tokens\x1b[22m", 1, 0);
-  const dock = new VStack([
-    { component: status, shrink: 1, minSize: 0 },
-    { component: editor, shrink: 1, minSize: 3 },
-    { component: footer, shrink: 1, minSize: 1 },
-  ]);
-  const root = new VStack([
-    { component: scrollView, basis: 0, grow: 1, shrink: 1, minSize: 1 },
-    { component: dock, basis: "auto", grow: 0, shrink: 1, minSize: 1 },
-  ]);
-  tui.setLayoutRoot(root);
-  tui.start();
+      const transcript = buildTranscript();
+      const editor = new EditorSim();
+      const scrollView = new ScrollView(transcript, {
+        follow: "end",
+        primary: true,
+        overscroll: "chain",
+        scrollbar: "auto",
+      });
+      const status = new Text("\x1b[2mstatus: idle\x1b[22m", 1, 0);
+      const footer = new Text("\x1b[2m~/workspaces/msa  main  100k tokens\x1b[22m", 1, 0);
+      const dock = new VStack([
+        { component: status, shrink: 1, minSize: 0 },
+        { component: editor, shrink: 1, minSize: 3 },
+        { component: footer, shrink: 1, minSize: 1 },
+      ]);
+      const root = new VStack([
+        { component: scrollView, basis: 0, grow: 1, shrink: 1, minSize: 1 },
+        { component: dock, basis: "auto", grow: 0, shrink: 1, minSize: 1 },
+      ]);
+      tui.setLayoutRoot(root);
+      tui.start();
 
-  for (let i = 0; i < WARMUP_FRAMES; i++) tui.renderNow();
+      for (let i = 0; i < WARMUP_FRAMES; i++) tui.renderNow();
 
-  const session = new Session();
-  session.connect();
+      const session = new Session();
+      session.connect();
 
-  const staticResult = await runScenario(session, terminal, tui, () => {});
-  const editorResult = await runScenario(session, terminal, tui, (i) => {
-    editor.append(String.fromCharCode(97 + (i % 26)));
-  });
+      const staticResult = yield* runScenario(session, terminal, tui, () => {});
+      const editorResult = yield* runScenario(session, terminal, tui, (i) => {
+        editor.append(String.fromCharCode(97 + (i % 26)));
+      });
 
-  session.disconnect();
-  tui.stop();
+      session.disconnect();
+      tui.stop();
 
-  console.log(
-    `frames=${FRAMES} viewport=${COLUMNS}x${ROWS} transcript=${transcript.render(COLUMNS).length} lines`,
+      yield* Console.log(
+        `frames=${FRAMES} viewport=${COLUMNS}x${ROWS} transcript=${transcript.render(COLUMNS).length} lines`,
+      );
+      yield* report("static", staticResult);
+      yield* report("editor", editorResult);
+    }),
   );
-  report("static", staticResult);
-  report("editor", editorResult);
 }
 
 await main();

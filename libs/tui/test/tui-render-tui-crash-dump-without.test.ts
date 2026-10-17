@@ -1,8 +1,11 @@
 import assert from "node:assert";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { syncBuiltinESMExports } from "node:module";
+import os, { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it, mock } from "node:test";
+
+import { Effect } from "effect";
 
 import { Image } from "../src/components/image.ts";
 import {
@@ -13,43 +16,51 @@ import {
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import { type TUI } from "../src/tui.ts";
 import { tuiKittyImageCleanupCases1 } from "./tui-render-cases-helpers.ts";
-import { overrideEnv } from "./tui-render-helpers.ts";
 import { LoggingVirtualTerminal } from "./tui-render-logging-virtual-terminal.ts";
 import { TestComponent } from "./tui-render-test-component.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("TUI crash dump without configured log directory", () => {
-  it("writes the crash dump to the OS temp directory instead of a home-directory default", async () => {
-    const crashDir = mkdtempSync(join(tmpdir(), "msa-tui-crash-"));
-    const crashLogPath = join(crashDir, "msa-tui-crash.log");
-    const restoreTmpdirEnv = overrideEnv(["TMPDIR", "TEMP", "TMP"], crashDir);
-    try {
-      const terminal = new VirtualTerminal(40, 10);
-      const tui: TUI = new TuiMainScreen(terminal);
-      const component = new TestComponent();
-      tui.addChild(component);
-      component.lines = ["ok"];
-      tui.start();
-      await terminal.waitForRender();
+  it("writes the crash dump to the OS temp directory instead of a home-directory default", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const crashDir = mkdtempSync(join(tmpdir(), "msa-tui-crash-"));
+        const crashLogPath = join(crashDir, "msa-tui-crash.log");
+        const tmpdirMock = mock.method(os, "tmpdir", () => crashDir);
+        syncBuiltinESMExports();
+        yield* Effect.gen(function* () {
+          const terminal = new VirtualTerminal(40, 10);
+          const tui: TUI = new TuiMainScreen(terminal);
+          const component = new TestComponent();
+          tui.addChild(component);
+          component.lines = ["ok"];
+          tui.start();
+          yield* Effect.promise(() => terminal.waitForRender());
 
-      component.lines = ["ok", "x".repeat(60)];
-      assert.throws(
-        () => tui.renderNow(),
-        (error: unknown) => {
-          assert.ok(error instanceof Error);
-          assert.ok(
-            error.message.includes(crashLogPath),
-            `error message should reference ${crashLogPath}`,
+          component.lines = ["ok", "x".repeat(60)];
+          assert.throws(
+            () => tui.renderNow(),
+            (error: unknown) => {
+              assert.ok(error instanceof Error);
+              assert.ok(
+                error.message.includes(crashLogPath),
+                `error message should reference ${crashLogPath}`,
+              );
+              return true;
+            },
           );
-          return true;
-        },
-      );
-      assert.match(readFileSync(crashLogPath, "utf-8"), /Terminal width: 40/u);
-    } finally {
-      restoreTmpdirEnv();
-      rmSync(crashDir, { recursive: true, force: true });
-    }
-  });
+          assert.match(readFileSync(crashLogPath, "utf-8"), /Terminal width: 40/u);
+        }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              tmpdirMock.mock.restore();
+              syncBuiltinESMExports();
+              rmSync(crashDir, { recursive: true, force: true });
+            }),
+          ),
+        );
+      }),
+    ));
 });
 
 describe("TUI Kitty image cleanup", () => {
@@ -57,42 +68,52 @@ describe("TUI Kitty image cleanup", () => {
 });
 
 describe("TUI Kitty image cleanup", () => {
-  it("falls back to full redraw when Kitty image pre-clear would scroll", async () => {
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-    setCellDimensions({ widthPx: 10, heightPx: 10 });
-    try {
-      const terminal = new LoggingVirtualTerminal(40, 2);
-      const tui: TUI = new TuiMainScreen(terminal);
-      const component = new TestComponent();
-      tui.addChild(component);
+  it("falls back to full redraw when Kitty image pre-clear would scroll", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+        setCellDimensions({ widthPx: 10, heightPx: 10 });
+        yield* Effect.gen(function* () {
+          const terminal = new LoggingVirtualTerminal(40, 2);
+          const tui: TUI = new TuiMainScreen(terminal);
+          const component = new TestComponent();
+          tui.addChild(component);
 
-      component.lines = ["before"];
-      tui.start();
-      await terminal.waitForRender();
-      const redrawsBeforeImage = tui.fullRedraws;
-      terminal.clearWrites();
+          component.lines = ["before"];
+          tui.start();
+          yield* Effect.promise(() => terminal.waitForRender());
+          const redrawsBeforeImage = tui.fullRedraws;
+          terminal.clearWrites();
 
-      const image = new Image(
-        "AAAA",
-        "image/png",
-        { fallbackColor: (value) => value },
-        { maxWidthCells: 3 },
-        { widthPx: 30, heightPx: 30 },
-      );
-      component.lines = ["before", ...image.render(40), "after"];
-      tui.requestRender();
-      await terminal.waitForRender();
+          const image = new Image(
+            "AAAA",
+            "image/png",
+            { fallbackColor: (value) => value },
+            { maxWidthCells: 3 },
+            { widthPx: 30, heightPx: 30 },
+          );
+          component.lines = ["before", ...image.render(40), "after"];
+          tui.requestRender();
+          yield* Effect.promise(() => terminal.waitForRender());
 
-      assert.ok(
-        tui.fullRedraws > redrawsBeforeImage,
-        "unsafe image pre-clear should force a full redraw",
-      );
-      assert.ok(terminal.getWrites().includes("\x1b[2J"), "fallback should clear and fully redraw");
+          assert.ok(
+            tui.fullRedraws > redrawsBeforeImage,
+            "unsafe image pre-clear should force a full redraw",
+          );
+          assert.ok(
+            terminal.getWrites().includes("\x1b[2J"),
+            "fallback should clear and fully redraw",
+          );
 
-      tui.stop();
-    } finally {
-      resetCapabilitiesCache();
-      setCellDimensions({ widthPx: 9, heightPx: 18 });
-    }
-  });
+          tui.stop();
+        }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              resetCapabilitiesCache();
+              setCellDimensions({ widthPx: 9, heightPx: 18 });
+            }),
+          ),
+        );
+      }),
+    ));
 });

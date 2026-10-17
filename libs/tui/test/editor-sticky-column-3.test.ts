@@ -13,7 +13,7 @@ describe("Editor component", () => {
 
 function stickyColumnCases18(): void {
   it("handles editor resizes when preferredVisualCol is on a different line", () => {
-    const tui = createTestTUI(80, 24);
+    const tui = createTestTUI(80);
     const editor = new Editor(tui, defaultEditorTheme);
 
     editor.setText("short\n12345678901234567890");
@@ -43,7 +43,7 @@ function stickyColumnCases18(): void {
 describe("Editor component", () => {
   describe("Sticky column", () => {
     it("rewrapped lines: target fits current visual column", () => {
-      const tui = createTestTUI(80, 24);
+      const tui = createTestTUI(80);
       const editor = new Editor(tui, defaultEditorTheme);
       editor.setText("abcdefghijklmnopqr\n123456789012345678");
 
@@ -68,7 +68,7 @@ describe("Editor component", () => {
 describe("Editor component", () => {
   describe("Sticky column", () => {
     it("rewrapped lines: target shorter than current visual column", () => {
-      const tui = createTestTUI(80, 24);
+      const tui = createTestTUI(80);
       const editor = new Editor(tui, defaultEditorTheme);
       editor.setText("abcdefghijklmnopqr\n123456789012345678\nab");
 

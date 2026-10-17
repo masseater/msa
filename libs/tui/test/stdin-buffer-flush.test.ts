@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { StdinBuffer } from "../src/stdin-buffer.ts";
 import { wait } from "./stdin-buffer-helpers.ts";
 
@@ -32,14 +34,17 @@ describe("StdinBuffer", () => {
       assert.deepStrictEqual(flushed, []);
     });
 
-    it("should emit flushed data via timeout", async () => {
-      processInput("\x1b[<35");
-      assert.deepStrictEqual(emittedSequences, []);
+    it("should emit flushed data via timeout", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          processInput("\x1b[<35");
+          assert.deepStrictEqual(emittedSequences, []);
 
-      await wait(15);
+          yield* wait(15);
 
-      assert.deepStrictEqual(emittedSequences, ["\x1b[<35"]);
-    });
+          assert.deepStrictEqual(emittedSequences, ["\x1b[<35"]);
+        }),
+      ));
   });
 });
 

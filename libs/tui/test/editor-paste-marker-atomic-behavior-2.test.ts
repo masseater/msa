@@ -126,7 +126,7 @@ describe("Editor component", () => {
 
 function pasteMarkerAtomicBehaviorCases19(): void {
   it("preserves sticky column when navigating through paste marker line", () => {
-    const tui = createTestTUI(30, 24);
+    const tui = createTestTUI(30);
     const editor = new Editor(tui, defaultEditorTheme);
 
     for (const ch of "1234567890123456") editor.handleInput(ch);

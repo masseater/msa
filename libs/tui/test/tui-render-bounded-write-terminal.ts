@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import type { Terminal } from "../src/terminal.ts";
 
 export class BoundedWriteTerminal implements Terminal {
@@ -8,7 +10,9 @@ export class BoundedWriteTerminal implements Terminal {
 
   start(_onInput: (data: string) => void, _onResize: () => void): void {}
   stop(): void {}
-  async drainInput(_maxMs?: number, _idleMs?: number): Promise<void> {}
+  drainInput(_maxMs?: number, _idleMs?: number): Promise<void> {
+    return Effect.runPromise(Effect.sync(() => {}));
+  }
   write(data: string): void {
     this.writes.push(data);
   }

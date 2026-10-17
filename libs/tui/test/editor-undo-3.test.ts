@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { type AutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
 import { applyCompletion, createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
@@ -110,37 +112,40 @@ describe("Editor component", () => {
 
 describe("Editor component", () => {
   describe("Undo", () => {
-    it("undoes autocomplete", async () => {
-      const editor = new Editor(createTestTUI(), defaultEditorTheme);
+    it("undoes autocomplete", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      const mockProvider: AutocompleteProvider = {
-        getSuggestions: (lines, _cursorLine, cursorCol) => {
-          const text = lines[0] || "";
-          const prefix = text.slice(0, cursorCol);
-          if (prefix === "di") {
-            return Promise.resolve({
-              items: [{ value: "dist/", label: "dist/" }],
-              prefix: "di",
-            });
-          }
-          return Promise.resolve(null);
-        },
-        applyCompletion,
-      };
+          const mockProvider: AutocompleteProvider = {
+            getSuggestions: (lines, _cursorLine, cursorCol) => {
+              const text = lines[0] || "";
+              const prefix = text.slice(0, cursorCol);
+              if (prefix === "di") {
+                return Promise.resolve({
+                  items: [{ value: "dist/", label: "dist/" }],
+                  prefix: "di",
+                });
+              }
+              return Promise.resolve(null);
+            },
+            applyCompletion,
+          };
 
-      editor.setAutocompleteProvider(mockProvider);
+          editor.setAutocompleteProvider(mockProvider);
 
-      editor.handleInput("d");
-      editor.handleInput("i");
-      assert.strictEqual(editor.getText(), "di");
+          editor.handleInput("d");
+          editor.handleInput("i");
+          assert.strictEqual(editor.getText(), "di");
 
-      editor.handleInput("\t");
-      await flushAutocomplete();
-      assert.strictEqual(editor.getText(), "dist/");
-      assert.strictEqual(editor.isShowingAutocomplete(), false);
+          editor.handleInput("\t");
+          yield* flushAutocomplete;
+          assert.strictEqual(editor.getText(), "dist/");
+          assert.strictEqual(editor.isShowingAutocomplete(), false);
 
-      editor.handleInput("\x1b[45;5u");
-      assert.strictEqual(editor.getText(), "di");
-    });
+          editor.handleInput("\x1b[45;5u");
+          assert.strictEqual(editor.getText(), "di");
+        }),
+      ));
   });
 });

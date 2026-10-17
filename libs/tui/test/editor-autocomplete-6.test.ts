@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
 import { createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
@@ -8,29 +10,32 @@ import { defaultEditorTheme } from "./test-themes.ts";
 
 describe("Editor component", () => {
   describe("Autocomplete", () => {
-    it("does not show argument completions when command has no argument completer", async () => {
-      const editor = new Editor(createTestTUI(), defaultEditorTheme);
-      const provider = new CombinedAutocompleteProvider(
-        [
-          { name: "help", description: "Show help" },
-          {
-            name: "model",
-            description: "Switch model",
-            getArgumentCompletions: () => [{ value: "claude-opus", label: "claude-opus" }],
-          },
-        ],
-        process.cwd(),
-      );
-      editor.setAutocompleteProvider(provider);
+    it("does not show argument completions when command has no argument completer", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const editor = new Editor(createTestTUI(), defaultEditorTheme);
+          const provider = new CombinedAutocompleteProvider(
+            [
+              { name: "help", description: "Show help" },
+              {
+                name: "model",
+                description: "Switch model",
+                getArgumentCompletions: () => [{ value: "claude-opus", label: "claude-opus" }],
+              },
+            ],
+            process.cwd(),
+          );
+          editor.setAutocompleteProvider(provider);
 
-      typeText(editor, "/he");
-      await flushAutocomplete();
-      assert.strictEqual(editor.isShowingAutocomplete(), true);
+          typeText(editor, "/he");
+          yield* flushAutocomplete;
+          assert.strictEqual(editor.isShowingAutocomplete(), true);
 
-      editor.handleInput("\t");
-      assert.strictEqual(editor.getText(), "/help ");
-      assert.strictEqual(editor.isShowingAutocomplete(), false);
-    });
+          editor.handleInput("\t");
+          assert.strictEqual(editor.getText(), "/help ");
+          assert.strictEqual(editor.isShowingAutocomplete(), false);
+        }),
+      ));
   });
 });
 

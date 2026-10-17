@@ -1,7 +1,9 @@
 import type { Terminal as XtermTerminalType } from "@xterm/headless";
 import xterm from "@xterm/headless";
+import { Effect } from "effect";
 
 import type { Terminal } from "../src/terminal.ts";
+import { nextTick } from "./effect-helpers.ts";
 
 const XtermTerminal = xterm.Terminal;
 
@@ -9,12 +11,12 @@ export class VirtualTerminal implements Terminal {
   private xterm: XtermTerminalType;
   private inputHandler?: ((data: string) => void) | undefined;
   private resizeHandler?: (() => void) | undefined;
-  private _columns: number;
-  private _rows: number;
+  private columnCount: number;
+  private rowCount: number;
 
   constructor(columns = 80, rows = 24) {
-    this._columns = columns;
-    this._rows = rows;
+    this.columnCount = columns;
+    this.rowCount = rows;
 
     this.xterm = new XtermTerminal({
       cols: columns,
@@ -30,7 +32,9 @@ export class VirtualTerminal implements Terminal {
     this.xterm.write("\x1b[?2004h");
   }
 
-  async drainInput(_maxMs?: number, _idleMs?: number): Promise<void> {}
+  drainInput(_maxMs?: number, _idleMs?: number): Promise<void> {
+    return Promise.resolve();
+  }
 
   stop(): void {
     this.xterm.write("\x1b[?2004l");
@@ -43,11 +47,11 @@ export class VirtualTerminal implements Terminal {
   }
 
   get columns(): number {
-    return this._columns;
+    return this.columnCount;
   }
 
   get rows(): number {
-    return this._rows;
+    return this.rowCount;
   }
 
   get kittyProtocolActive(): boolean {
@@ -96,8 +100,8 @@ export class VirtualTerminal implements Terminal {
   }
 
   resize(columns: number, rows: number): void {
-    this._columns = columns;
-    this._rows = rows;
+    this.columnCount = columns;
+    this.rowCount = rows;
     this.xterm.resize(columns, rows);
     if (this.resizeHandler !== undefined) {
       this.resizeHandler();
@@ -105,14 +109,17 @@ export class VirtualTerminal implements Terminal {
   }
 
   flush(): Promise<void> {
-    return new Promise<void>((resolve) => {
-      this.xterm.write("", () => resolve());
-    });
+    return Effect.runPromise(this.flushEffect());
   }
 
-  async flushAndGetViewport(): Promise<string[]> {
-    await this.flush();
-    return this.getViewport();
+  flushAndGetViewport(): Promise<string[]> {
+    return Effect.runPromise(this.flushEffect().pipe(Effect.map(() => this.getViewport())));
+  }
+
+  private flushEffect(): Effect.Effect<void> {
+    return Effect.callback<void>((resume) => {
+      this.xterm.write("", () => resume(Effect.void));
+    });
   }
 
   getViewport(): string[] {
@@ -163,13 +170,9 @@ export class VirtualTerminal implements Terminal {
     };
   }
 
-  async waitForRender(): Promise<void> {
-    await new Promise<void>((resolve) => {
-      process.nextTick(resolve);
-    });
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 20);
-    });
-    await this.flush();
+  waitForRender(): Promise<void> {
+    return Effect.runPromise(
+      nextTick.pipe(Effect.andThen(Effect.sleep(20)), Effect.andThen(this.flushEffect())),
+    );
   }
 }

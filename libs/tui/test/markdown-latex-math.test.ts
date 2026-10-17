@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { Markdown } from "../src/components/markdown.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import type { Component, TUI } from "../src/tui.ts";
@@ -147,49 +149,52 @@ describe("Markdown component", () => {
 });
 
 function preStyledTextThinkingCases4(): void {
-  it("should not leak styles into following lines when rendered in TUI", async () => {
-    class MarkdownWithInput implements Component {
-      public markdownLineCount = 0;
-      private readonly markdown: Markdown;
+  it("should not leak styles into following lines when rendered in TUI", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        class MarkdownWithInput implements Component {
+          public markdownLineCount = 0;
+          private readonly markdown: Markdown;
 
-      constructor(markdown: Markdown) {
-        this.markdown = markdown;
-      }
+          constructor(markdown: Markdown) {
+            this.markdown = markdown;
+          }
 
-      render(width: number): string[] {
-        const lines = this.markdown.render(width);
-        this.markdownLineCount = lines.length;
-        return [...lines, "INPUT"];
-      }
+          render(width: number): string[] {
+            const lines = this.markdown.render(width);
+            this.markdownLineCount = lines.length;
+            return [...lines, "INPUT"];
+          }
 
-      invalidate(): void {
-        this.markdown.invalidate();
-      }
-    }
+          invalidate(): void {
+            this.markdown.invalidate();
+          }
+        }
 
-    const markdown = new Markdown(
-      "This is thinking with `inline code`",
-      1,
-      0,
-      defaultMarkdownTheme,
-      {
-        color: (text) => chalk.gray(text),
-        italic: true,
-      },
-    );
+        const markdown = new Markdown(
+          "This is thinking with `inline code`",
+          1,
+          0,
+          defaultMarkdownTheme,
+          {
+            color: (text) => chalk.gray(text),
+            italic: true,
+          },
+        );
 
-    const terminal = new VirtualTerminal(80, 6);
-    const tui: TUI = new TuiMainScreen(terminal);
-    const component = new MarkdownWithInput(markdown);
-    tui.addChild(component);
-    tui.start();
-    await terminal.waitForRender();
+        const terminal = new VirtualTerminal(80, 6);
+        const tui: TUI = new TuiMainScreen(terminal);
+        const component = new MarkdownWithInput(markdown);
+        tui.addChild(component);
+        tui.start();
+        yield* Effect.promise(() => terminal.waitForRender());
 
-    assert.ok(component.markdownLineCount > 0);
-    const inputRow = component.markdownLineCount;
-    assert.strictEqual(getCell(terminal, inputRow, 0).isItalic(), 0);
-    tui.stop();
-  });
+        assert.ok(component.markdownLineCount > 0);
+        const inputRow = component.markdownLineCount;
+        assert.strictEqual(getCell(terminal, inputRow, 0).isItalic(), 0);
+        tui.stop();
+      }),
+    ));
 }
 
 describe("Markdown component", () => {

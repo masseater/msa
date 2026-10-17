@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { Input } from "../src/components/input.ts";
 import { SelectList } from "../src/components/select-list.ts";
 import { SettingsList } from "../src/components/settings-list.ts";
@@ -72,22 +74,25 @@ describe("mouse-aware components", () => {
 });
 
 describe("mouse-aware components", () => {
-  it("keeps a delegating overlay focused when its nested input is clicked", async () => {
-    const terminal = new VirtualTerminal(20, 4);
-    const tui = new TuiAltScreen(terminal);
-    const overlay = new InputOverlay();
-    overlay.input.setValue("hi");
-    tui.start();
-    tui.showOverlay(overlay, { anchor: "top-left", width: 20 });
-    await terminal.waitForRender();
+  it("keeps a delegating overlay focused when its nested input is clicked", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const terminal = new VirtualTerminal(20, 4);
+        const tui = new TuiAltScreen(terminal);
+        const overlay = new InputOverlay();
+        overlay.input.setValue("hi");
+        tui.start();
+        tui.showOverlay(overlay, { anchor: "top-left", width: 20 });
+        yield* Effect.promise(() => terminal.waitForRender());
 
-    terminal.sendInput("\x1b[<0;5;1M");
-    terminal.sendInput("\x1b[<0;5;1m");
-    terminal.sendInput("!");
-    await terminal.waitForRender();
+        terminal.sendInput("\x1b[<0;5;1M");
+        terminal.sendInput("\x1b[<0;5;1m");
+        terminal.sendInput("!");
+        yield* Effect.promise(() => terminal.waitForRender());
 
-    assert.strictEqual(overlay.input.getValue(), "hi!");
-    assert.strictEqual(tui.getFocusedComponent(), overlay);
-    tui.stop();
-  });
+        assert.strictEqual(overlay.input.getValue(), "hi!");
+        assert.strictEqual(tui.getFocusedComponent(), overlay);
+        tui.stop();
+      }),
+    ));
 });

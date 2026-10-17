@@ -13,7 +13,7 @@ describe("Editor component", () => {
 
 function pasteMarkerAtomicBehaviorCases20(): void {
   it("does not get stuck moving down from a multi-visual-line paste marker", () => {
-    const tui = createTestTUI(20, 24);
+    const tui = createTestTUI(20);
     const editor = new Editor(tui, defaultEditorTheme);
 
     for (const ch of "abcdefgh") editor.handleInput(ch);
@@ -60,7 +60,7 @@ describe("Editor component", () => {
 
 function pasteMarkerAtomicBehaviorCases21(): void {
   it("skips marker continuation VLs when preferred col falls in marker tail", () => {
-    const tui = createTestTUI(20, 24);
+    const tui = createTestTUI(20);
     const editor = new Editor(tui, defaultEditorTheme);
 
     for (const ch of "abcdefgh") editor.handleInput(ch);

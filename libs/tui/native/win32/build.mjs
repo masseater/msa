@@ -12,6 +12,8 @@ import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { Console, Effect } from "effect";
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const sourceFile = path.join(scriptDir, "src", "win32-platform.c");
 const temporaryDir = mkdtempSync(path.join(tmpdir(), "msa-tui-win32-"));
@@ -63,37 +65,35 @@ function msvcHostArch() {
   return process.arch === "arm64" ? "arm64" : "x64";
 }
 
-function findVisualStudioDevCmd() {
+function vswhereCandidates(programFilesX86) {
+  if (programFilesX86 === undefined || programFilesX86 === "") return [];
+  const vswhere = path.join(programFilesX86, "Microsoft Visual Studio", "Installer", "vswhere.exe");
+  if (existsSync(vswhere) !== true) return [];
+  const result = spawnSync(
+    vswhere,
+    [
+      "-latest",
+      "-products",
+      "*",
+      "-requires",
+      "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+      "-property",
+      "installationPath",
+    ],
+    { encoding: "utf8" },
+  );
   const candidates = [];
-  const programFilesX86 = process.env["ProgramFiles(x86)"];
-  if (programFilesX86 !== undefined && programFilesX86 !== "") {
-    const vswhere = path.join(
-      programFilesX86,
-      "Microsoft Visual Studio",
-      "Installer",
-      "vswhere.exe",
-    );
-    if (existsSync(vswhere) === true) {
-      const result = spawnSync(
-        vswhere,
-        [
-          "-latest",
-          "-products",
-          "*",
-          "-requires",
-          "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
-          "-property",
-          "installationPath",
-        ],
-        { encoding: "utf8" },
-      );
-      for (const line of result.stdout.split(/\r?\n/u)) {
-        const installationPath = line.trim();
-        if (installationPath !== "")
-          candidates.push(path.join(installationPath, "Common7", "Tools", "VsDevCmd.bat"));
-      }
-    }
+  for (const line of result.stdout.split(/\r?\n/u)) {
+    const installationPath = line.trim();
+    if (installationPath !== "")
+      candidates.push(path.join(installationPath, "Common7", "Tools", "VsDevCmd.bat"));
   }
+  return candidates;
+}
+
+function findVisualStudioDevCmd() {
+  const programFilesX86 = process.env["ProgramFiles(x86)"];
+  const candidates = vswhereCandidates(programFilesX86);
 
   for (const base of [process.env.ProgramFiles, programFilesX86]) {
     if (base === undefined || base === "") continue;
@@ -154,7 +154,7 @@ function installOutput(temporaryOutput, target) {
   const output = path.join(outputDir, "win32-platform.node");
   copyFileSync(temporaryOutput, output);
   chmodSync(output, 0o755);
-  console.log(`Built ${path.relative(process.cwd(), output)}`);
+  Effect.runSync(Console.log(`Built ${path.relative(process.cwd(), output)}`));
 }
 
 function buildWithMsvc(target, vsDevCmd) {
@@ -231,7 +231,8 @@ function buildWithMingw(target) {
 }
 
 if (process.argv.includes("--help") === true || process.argv.includes("-h") === true) {
-  console.log(`Usage: npm --prefix libs/tui run build:native:win32
+  Effect.runSync(
+    Console.log(`Usage: npm --prefix libs/tui run build:native:win32
 
 Builds win32-x64 and win32-arm64 native prebuilds.
 
@@ -239,7 +240,8 @@ Environment:
   MSA_TUI_WIN32_TOOLCHAIN=msvc|mingw
   CC_X64=/path/to/x86_64-w64-mingw32-gcc
   CC_ARM64=/path/to/aarch64-w64-mingw32-gcc
-  CC=/path/to/clang`);
+  CC=/path/to/clang`),
+  );
   process.exit(0);
 }
 

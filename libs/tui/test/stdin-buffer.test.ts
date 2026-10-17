@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { matchesKey } from "../src/keys.ts";
 import { StdinBuffer } from "../src/stdin-buffer.ts";
 import { wait } from "./stdin-buffer-helpers.ts";
@@ -179,14 +181,17 @@ describe("StdinBuffer", () => {
       assert.deepStrictEqual(emittedSequences, ["\x1b[<35;20;5m"]);
     });
 
-    it("should flush incomplete sequence after timeout", async () => {
-      processInput("\x1b[<35");
-      assert.deepStrictEqual(emittedSequences, []);
+    it("should flush incomplete sequence after timeout", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          processInput("\x1b[<35");
+          assert.deepStrictEqual(emittedSequences, []);
 
-      await wait(15);
+          yield* wait(15);
 
-      assert.deepStrictEqual(emittedSequences, ["\x1b[<35"]);
-    });
+          assert.deepStrictEqual(emittedSequences, ["\x1b[<35"]);
+        }),
+      ));
   });
 });
 
@@ -206,13 +211,16 @@ describe("StdinBuffer", () => {
     buffer.process(data);
   }
   describe("Partial Escape Sequences", () => {
-    it("should flush a lone ESC as Escape when CR arrives after the timeout", async () => {
-      processInput("\x1b");
-      await wait(20);
-      processInput("\r");
+    it("should flush a lone ESC as Escape when CR arrives after the timeout", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          processInput("\x1b");
+          yield* wait(20);
+          processInput("\r");
 
-      assert.deepStrictEqual(emittedSequences, ["\x1b", "\r"]);
-      assert.equal(matchesKey(emittedSequences[0] ?? "", "escape"), true);
-    });
+          assert.deepStrictEqual(emittedSequences, ["\x1b", "\r"]);
+          assert.equal(matchesKey(emittedSequences[0] ?? "", "escape"), true);
+        }),
+      ));
   });
 });
