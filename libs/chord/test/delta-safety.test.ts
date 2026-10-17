@@ -10,6 +10,7 @@ import {
   track,
   type WireOp,
 } from "../src/delta/index.ts";
+import { trappedArray, trappedObject } from "./fixtures/prototypes.ts";
 
 const rejectsConstructorWalksAndForbiddenInterned = (): void => {
   expect(() =>
@@ -24,21 +25,8 @@ const rejectsConstructorWalksAndForbiddenInterned = (): void => {
 };
 
 const doesNotRunInheritedSetters = (): void => {
-  Object.defineProperty(Object.getPrototypeOf({}), "trap", {
-    get() {
-      return undefined;
-    },
-    set() {
-      throw new Error("inherited setter ran");
-    },
-    configurable: true,
-  });
-  try {
-    expect(() => apply({}, [["s", ["trap"], 1]])).not.toThrow();
-    expect(apply({}, [["s", ["trap"], 1]])).toEqual({ trap: 1 });
-  } finally {
-    delete (Object.prototype as Record<string, unknown>)["trap"];
-  }
+  expect(() => apply(trappedObject(), [["s", ["trap"], 1]])).not.toThrow();
+  expect(apply(trappedObject(), [["s", ["trap"], 1]])).toEqual({ trap: 1 });
 };
 
 const allowsReservedNamesInsideValuesWithout = (): void => {
@@ -49,44 +37,15 @@ const allowsReservedNamesInsideValuesWithout = (): void => {
 };
 
 const importsOwnPropertiesWithoutInvokingInherited = (): void => {
-  const root = {} as Record<string, JsonValue>;
+  const root = trappedObject();
   Object.defineProperty(root, "trap", {
     value: 1,
     writable: true,
     enumerable: true,
     configurable: true,
   });
-  Object.defineProperty(Object.getPrototypeOf({}), "trap", {
-    get() {
-      return undefined;
-    },
-    set() {
-      throw new Error("inherited setter ran");
-    },
-    configurable: true,
-  });
-  try {
-    expect(() => track(root)).not.toThrow();
-  } finally {
-    delete (Object.prototype as Record<string, unknown>)["trap"];
-  }
-
-  let value: { values: number[] } | undefined;
-  Object.defineProperty(Object.getPrototypeOf([]), "0", {
-    get() {
-      return undefined;
-    },
-    set() {
-      throw new Error("inherited array setter ran");
-    },
-    configurable: true,
-  });
-  try {
-    value = track({ values: [1, 2] }).value;
-  } finally {
-    delete (Array.prototype as unknown as Record<number, unknown>)[0];
-  }
-  expect(value).toEqual({ values: [1, 2] });
+  expect(() => track(root)).not.toThrow();
+  expect(track({ values: trappedArray([1, 2]) }).value).toEqual({ values: [1, 2] });
 };
 
 describe("path and prototype safety", () => {

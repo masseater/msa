@@ -1,26 +1,17 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type JsonValue, track } from "../../src/delta/index.ts";
+import { track } from "../../src/delta/index.ts";
+import { type JsonRecord, TrapSetter, trappedObject } from "../fixtures/prototypes.ts";
 import { replay, settle } from "../fixtures/tracker.ts";
 
 const definesOwnPropertiesWithoutInvokingInherited = (): void => {
-  const tracker = track({} as Record<string, JsonValue>);
-  Object.defineProperty(Object.getPrototypeOf({}), "trap", {
-    get() {
-      return undefined;
-    },
-    set() {
-      throw new Error("inherited setter ran");
-    },
-    configurable: true,
-  });
-  try {
+  for (const initial of [trappedObject(), new TrapSetter()]) {
+    const tracker = track<JsonRecord>(initial);
     settle(tracker, (draft) => {
       draft["trap"] = 1;
     });
     expect(tracker.value).toEqual({ trap: 1 });
-  } finally {
-    delete (Object.prototype as Record<string, unknown>)["trap"];
+    expect(Object.hasOwn(tracker.value, "trap")).toBe(true);
   }
 };
 

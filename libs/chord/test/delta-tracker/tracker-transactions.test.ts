@@ -45,28 +45,27 @@ const rejectsForeignAndAbortedPreparedValues = (): void => {
   expect(() => first.adopt(prepared)).toThrow(/aborted/u);
 };
 
+type Inheriting = { value?: number; trackerInherited?: number };
+
 const readsDeletedOwnPropertiesAsAbsent = (): void => {
-  Object.defineProperty(Object.getPrototypeOf({}), "trackerInherited", {
-    value: 7,
-    writable: true,
-    configurable: true,
-  });
-  try {
-    const tracker = track({ value: 1 } as { value?: number; trackerInherited?: number });
-    const change = tracker.beginChange();
-    delete change.state.value;
-    change.state.trackerInherited = 1;
-    delete change.state.trackerInherited;
-    expect(change.state.value).toBeUndefined();
-    expect(change.state.trackerInherited).toBeUndefined();
-    const prepared = change.prepare();
-    expect(prepared.value.value).toBeUndefined();
-    expect(prepared.value.trackerInherited).toBe(7);
-    tracker.adopt(prepared);
-    expect(Object.keys(tracker.value)).toEqual([]);
-  } finally {
-    delete (Object.prototype as Record<string, unknown>)["trackerInherited"];
-  }
+  const initial = Object.create(
+    Object.create(Object.prototype, {
+      trackerInherited: { value: 7, writable: true, configurable: true },
+    }),
+  ) as Inheriting;
+  initial.value = 1;
+  const tracker = track(initial);
+  const change = tracker.beginChange();
+  delete change.state.value;
+  change.state.trackerInherited = 1;
+  delete change.state.trackerInherited;
+  expect(change.state.value).toBeUndefined();
+  expect(change.state.trackerInherited).toBeUndefined();
+  const prepared = change.prepare();
+  expect(prepared.value.value).toBeUndefined();
+  expect(prepared.value.trackerInherited).toBe(7);
+  tracker.adopt(prepared);
+  expect(Object.keys(tracker.value)).toEqual([]);
 };
 
 const detachesOldHandlesForDeeplyEqual = (): void => {
