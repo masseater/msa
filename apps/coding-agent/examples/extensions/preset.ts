@@ -402,6 +402,7 @@ export default function presetExtension(msa: ExtensionAPI) {
         systemPrompt: `${event.systemPrompt}\n\n${activePreset.instructions}`,
       };
     }
+    return undefined;
   });
 
   // Initialize on session start

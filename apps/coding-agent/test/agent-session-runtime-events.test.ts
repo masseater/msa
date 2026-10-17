@@ -236,6 +236,7 @@ describe("AgentSessionRuntime session lifecycle events", () => {
           cancelNextFork = false;
           return { cancel: true };
         }
+        return undefined;
       });
       msa.on("session_shutdown", (event) => {
         events.push(event);

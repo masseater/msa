@@ -64,7 +64,7 @@ class RainbowEditor extends CustomEditor {
     }
   }
 
-  handleInput(data: string): void {
+  override handleInput(data: string): void {
     super.handleInput(data);
     if (this.hasUltrathink()) {
       this.startAnimation();
@@ -73,7 +73,7 @@ class RainbowEditor extends CustomEditor {
     }
   }
 
-  render(width: number): string[] {
+  override render(width: number): string[] {
     // Cycle: 10 shine positions + 10 pause frames
     const cycle = this.frame % 20;
     const shinePos = cycle < 10 ? cycle : -1; // -1 means no shine (pause)

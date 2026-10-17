@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { presets as effectPresets } from "@effect/tsgo/oxlint-presets";
 import { defineConfig } from "vite-plus";
 
-import { generated, restrictedImports, strictCategoryRules } from "./lint.config.ts";
+import { generated, lintPlugins, restrictedImports, strictCategoryRules } from "./lint.config.ts";
 
 type Rules = Readonly<Record<string, "error">>;
 
@@ -131,7 +131,7 @@ export default defineConfig({
       "libs/ai/bedrock-provider.js",
       "libs/codemode/examples/**",
     ],
-    plugins: ["oxc", "import", "promise", "node", "jsdoc", "effecttsgo"],
+    plugins: lintPlugins,
     categories: {
       correctness: "error",
       suspicious: "error",
@@ -195,7 +195,7 @@ export default defineConfig({
         dependsOn: [
           "engine-checks",
           "workspace-layout",
-          "fence-check",
+          "lint-categories",
           "syncpack",
           "actions-lint",
           "mcp-conformance",
@@ -208,11 +208,8 @@ export default defineConfig({
         command:
           "node scripts/check-ts-relative-imports.mjs && node scripts/check-entry-graphs.mjs && node scripts/check-browser-smoke.mjs",
       },
-      "fence-check": {
-        command: "node tools/fence-counts.ts",
-        dependsOn: ["build"],
-      },
       "workspace-layout": "node tools/workspace-layout.ts",
+      "lint-categories": "node tools/lint-categories.ts",
       "actions-lint": {
         command:
           'uvx --from actionlint-py@1.7.12.25 actionlint && uvx zizmor@1.30.1 $(test -n "$CLAUDE_CODE_REMOTE" && echo --no-online-audits) .github && ast-grep scan --rule .github/rules/no-full-history-checkout.yml .github/workflows',
@@ -266,7 +263,7 @@ export default defineConfig({
       "test-all": {
         command: "bash test.sh",
         cache: false,
-        dependsOn: ["build", "daemon-build", "engine-checks", "fence-check"],
+        dependsOn: ["build", "daemon-build", "engine-checks"],
       },
     },
   },

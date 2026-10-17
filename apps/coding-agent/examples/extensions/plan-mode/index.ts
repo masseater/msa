@@ -178,6 +178,7 @@ export default function planModeExtension(msa: ExtensionAPI): void {
         reason: `Plan mode: command blocked (not allowlisted). Use /plan to disable plan mode first.\nCommand: ${command}`,
       };
     }
+    return undefined;
   });
 
   // Filter out stale plan mode context when not in plan mode
@@ -255,6 +256,7 @@ After completing a step, include a [DONE:n] tag in your response.`,
         },
       };
     }
+    return undefined;
   });
 
   // Track progress after each turn

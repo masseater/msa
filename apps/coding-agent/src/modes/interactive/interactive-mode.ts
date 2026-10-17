@@ -3314,9 +3314,8 @@ export class InteractiveMode {
         // Tool results are rendered inline with tool calls, handled separately
         break;
       }
-      default: {
-        const _exhaustive: never = message;
-      }
+      default:
+        message satisfies never;
     }
   }
 

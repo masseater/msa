@@ -355,8 +355,6 @@ export function estimateTokens(message: AgentMessage): number {
       return Math.ceil(chars / 4);
     }
   }
-
-  return 0;
 }
 
 function isCutPointMessage(message: AgentMessage): boolean {

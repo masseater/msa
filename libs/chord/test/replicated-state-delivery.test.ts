@@ -83,6 +83,7 @@ describe.each<Kind>(["mutable", "attached"])("%s public delivery", (kind) => {
     state.subscribe((value) => {
       received.push(value.value);
       if (value.value === 0) return hydration.promise;
+      return undefined;
     });
     for (let value = 1; value <= count; value += 1) publish({ value }, BACKGROUND_CONTEXT);
     expect(received).toEqual([0]);
@@ -103,6 +104,7 @@ describe.each<Kind>(["mutable", "attached"])("%s public delivery", (kind) => {
     state.subscribe((value, context, delivery) => {
       received.push({ value, context, delivery });
       if (value.value === 1) return gate.promise;
+      return undefined;
     });
     for (let value = 1; value < 102; value += 1) publish({ value }, BACKGROUND_CONTEXT);
     const newest = { value: 102 };
@@ -136,6 +138,7 @@ describe.each<Kind>(["mutable", "attached"])("%s public delivery", (kind) => {
     const listener = (value: Value) => {
       received.push(value.value);
       if (value.value === 0) return gate.promise;
+      return undefined;
     };
     const stopFirst = state.subscribe(listener);
     const stopSecond = state.subscribe(listener);
@@ -203,6 +206,7 @@ describe("attached listener errors", () => {
       if (value.value === 0) return gate.promise;
       if (value.value === 1) throw new Error("sync update");
       if (value.value === 2) return Promise.reject(new Error("async update"));
+      return undefined;
     });
     state.subscribe((value) => fast.push(value.value));
     for (let value = 1; value <= 3; value += 1) publish({ value }, BACKGROUND_CONTEXT);
@@ -246,6 +250,7 @@ test("mutable state reports rejected callbacks through its default error reporte
     state.subscribe((value) => {
       received.push(value.value);
       if (value.value === 0) return Promise.reject(failure);
+      return undefined;
     });
     expect(() => state.replace(BACKGROUND_CONTEXT, { value: 1 })).not.toThrow();
     await Promise.resolve();

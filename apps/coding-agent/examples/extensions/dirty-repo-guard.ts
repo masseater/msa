@@ -42,6 +42,7 @@ async function checkDirtyRepo(
     ctx.ui.notify("Commit your changes first", "warning");
     return { cancel: true };
   }
+  return undefined;
 }
 
 export default function (msa: ExtensionAPI) {

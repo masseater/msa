@@ -76,6 +76,7 @@ export default function (msa: ExtensionAPI) {
       ctx.ui.notify("Clear cancelled", "info");
       return { cancel: true };
     }
+    return undefined;
   });
 
   // -- input via command --

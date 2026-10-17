@@ -1,3 +1,5 @@
+import type { OxlintConfig } from "vite-plus/lint";
+
 const EFFECT_ONLY_UTILS = "検証、日時、ログ、関数型ユーティリティは Effect だけで扱う";
 const EFFECT_ONLY_HTTP = "HTTP クライアントは Effect だけで扱う";
 const EFFECT_ONLY_TRACING = "計装は Effect のトレーシングだけで扱う";
@@ -67,6 +69,17 @@ const generated = [
   "pnpm-lock.yaml",
 ];
 
+const lintPlugins: NonNullable<OxlintConfig["plugins"]> = [
+  "oxc",
+  "import",
+  "promise",
+  "node",
+  "jsdoc",
+  "effecttsgo",
+];
+const strictCategories = ["perf", "pedantic", "nursery"];
+const strictCategoryExclusions = ["eslint/no-undef"];
+
 const strictCategoryRules = [
   "eslint/accessor-pairs",
   "eslint/array-callback-return",
@@ -124,4 +137,12 @@ const strictCategoryRules = [
   "promise/no-return-in-finally",
 ];
 
-export { generated, requiredStack, restrictedImports, strictCategoryRules };
+export {
+  generated,
+  lintPlugins,
+  requiredStack,
+  restrictedImports,
+  strictCategories,
+  strictCategoryExclusions,
+  strictCategoryRules,
+};
