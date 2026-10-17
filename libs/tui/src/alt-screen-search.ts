@@ -34,7 +34,7 @@ export interface AltScreenSearchMatch {
   segments: AltScreenSearchSegment[];
 }
 
-const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
+const PRINTABLE_ASCII = /^[\x20-\x7e]*$/u;
 
 function buildSearchCorpus(lines: readonly string[]): SearchCorpus {
   const chunks: string[] = [];
@@ -115,7 +115,7 @@ function normalizeQuery(query: string): string {
 }
 
 function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function findSearchCorpusMatches(

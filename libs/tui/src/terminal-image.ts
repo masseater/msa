@@ -378,17 +378,17 @@ export function registerKittyImageMetadata(metadata: KittyImageMetadata): void {
 function getRegisteredKittyImageMetadataFromControls(
   controls: string,
 ): RegisteredKittyImageMetadata | undefined {
-  const imageId = /(?:^|,)i=(\d+)(?:,|$)/.exec(controls)?.[1];
+  const imageId = /(?:^|,)i=(\d+)(?:,|$)/u.exec(controls)?.[1];
   return imageId === undefined ? undefined : kittyImageMetadata.get(Number.parseInt(imageId, 10));
 }
 
 function getRegisteredKittyImageMetadata(line: string): RegisteredKittyImageMetadata | undefined {
-  const controls = /\x1b_G([^;]*);/.exec(line)?.[1];
+  const controls = /\x1b_G([^;]*);/u.exec(line)?.[1];
   return controls === undefined ? undefined : getRegisteredKittyImageMetadataFromControls(controls);
 }
 
 function getExplicitKittyImageRows(controls: string): number | undefined {
-  const value = /(?:^|,)r=(\d+)(?:,|$)/.exec(controls)?.[1];
+  const value = /(?:^|,)r=(\d+)(?:,|$)/u.exec(controls)?.[1];
   if (value === undefined) return undefined;
   const rows = Number.parseInt(value, 10);
   return rows > 0 ? rows : undefined;
@@ -432,7 +432,7 @@ const KITTY_PLACEMENT_CONTROL_KEYS = new Set([
 
 /** Read the number of rows covered by an image placement without scanning its payload. */
 export function getKittyImagePlacementRows(line: string): number | undefined {
-  const controls = /\x1b_G([^;]*);/.exec(line)?.[1];
+  const controls = /\x1b_G([^;]*);/u.exec(line)?.[1];
   if (controls === undefined) return undefined;
   const explicitRows = getExplicitKittyImageRows(controls);
   if (explicitRows !== undefined) return explicitRows;
@@ -441,7 +441,7 @@ export function getKittyImagePlacementRows(line: string): number | undefined {
 
 /** Build a placement-only command for an image line emitted by {@link renderImage}. */
 export function getKittyImagePlacement(line: string): KittyImagePlacement | undefined {
-  const match = /\x1b_G([^;]*);/.exec(line);
+  const match = /\x1b_G([^;]*);/u.exec(line);
   const imageControls = match?.[1];
   if (!match || imageControls === undefined) return undefined;
   const metadata = getRegisteredKittyImageMetadataFromControls(imageControls);
@@ -454,7 +454,7 @@ export function getKittyImagePlacement(line: string): KittyImagePlacement | unde
     const terminator = line.indexOf("\x1b\\", commandStart + KITTY_PREFIX.length);
     if (terminator === -1) return undefined;
     transmissionEnd = terminator + 2;
-    if (!/(?:^|,)m=1(?:,|$)/.test(commandControls)) break;
+    if (!/(?:^|,)m=1(?:,|$)/u.test(commandControls)) break;
     commandStart = transmissionEnd;
     if (!line.startsWith(KITTY_PREFIX, commandStart)) return undefined;
     const controlsEnd = line.indexOf(";", commandStart + KITTY_PREFIX.length);
@@ -479,7 +479,7 @@ export function getKittyImagePlacement(line: string): KittyImagePlacement | unde
 
 export function cropKittyImageLine(line: string, hiddenRows: number, visibleRows: number): string {
   const metadata = getKittyImageMetadata(line);
-  const match = /\x1b_G([^;]*);/.exec(line);
+  const match = /\x1b_G([^;]*);/u.exec(line);
   const imageControls = match?.[1];
   if (
     !metadata ||
@@ -495,7 +495,7 @@ export function cropKittyImageLine(line: string, hiddenRows: number, visibleRows
   const sourceY = Math.floor((metadata.heightPx * hiddenRows) / metadata.rows);
   const sourceEnd = Math.ceil((metadata.heightPx * (hiddenRows + croppedRows)) / metadata.rows);
   const sourceHeight = Math.max(1, Math.min(metadata.heightPx, sourceEnd) - sourceY);
-  const controls = imageControls.split(",").filter((control) => !/^[yhr]=/.test(control));
+  const controls = imageControls.split(",").filter((control) => !/^[yhr]=/u.test(control));
   controls.push(`y=${sourceY}`, `h=${sourceHeight}`, `r=${croppedRows}`);
   return `${line.slice(0, match.index)}\x1b_G${controls.join(",")};${line.slice(match.index + match[0].length)}`;
 }

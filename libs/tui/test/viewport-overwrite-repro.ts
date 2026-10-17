@@ -66,8 +66,10 @@ async function main(): Promise<void> {
   ui.start();
 
   const height = ui.terminal.rows;
-  const preCount = height + 8; // Ensure content exceeds viewport
-  const toolCount = height + 12; // Tool output pushes further into scrollback
+  // Ensure content exceeds viewport
+  const preCount = height + 8;
+  // Tool output pushes further into scrollback
+  const toolCount = height + 12;
   const postCount = 6;
 
   buffer.set([

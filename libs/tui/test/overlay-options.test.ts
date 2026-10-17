@@ -125,11 +125,13 @@ describe("TUI overlay options", () => {
       const terminal = new VirtualTerminal(80, 24);
       const tui: TUI = new TuiMainScreen(terminal);
       // Wide chars (each takes 2 columns) at the edge of declared width
-      const wideCharLine = "中文日本語한글テスト漢字"; // Mix of CJK chars
+      // Mix of CJK chars
+      const wideCharLine = "中文日本語한글テスト漢字";
       const overlay = new StaticOverlay([wideCharLine]);
 
       tui.addChild(new EmptyContent());
-      tui.showOverlay(overlay, { width: 15 }); // Odd width to potentially hit boundary
+      // Odd width to potentially hit boundary
+      tui.showOverlay(overlay, { width: 15 });
       tui.start();
       await renderAndFlush(tui, terminal);
 

@@ -184,7 +184,7 @@ const TERMINAL_COLOR_QUERY = `\x1b]10;?\x07\x1b]11;?\x07${Array.from(
   { length: TERMINAL_PALETTE_SIZE },
   (_, index) => `\x1b]4;${index};?\x07`,
 ).join("")}\x1b[c`;
-const DEVICE_ATTRIBUTES_RESPONSE_PATTERN = /^\x1b\[\?[\d;]*c$/;
+const DEVICE_ATTRIBUTES_RESPONSE_PATTERN = /^\x1b\[\?[\d;]*c$/u;
 
 /**
  * Interface for components that can receive focus and display a hardware cursor.
@@ -214,7 +214,7 @@ export const CURSOR_MARKER = "\x1b_pi:c\x07";
 export const FAKE_CURSOR_START = "\x1b_pi:fc\x07";
 export const FAKE_CURSOR_END = "\x1b_pi:/fc\x07";
 // CURSOR_MARKER + FAKE_CURSOR_START + text + FAKE_CURSOR_END. Truncating the line right after the cursor cell drops the end.
-const FOCUSED_FAKE_CURSOR = /(\x1b_pi:c\x07)\x1b_pi:fc\x07(.*?)(?:\x1b_pi:\/fc\x07|$)/s;
+const FOCUSED_FAKE_CURSOR = /(\x1b_pi:c\x07)\x1b_pi:fc\x07(.*?)(?:\x1b_pi:\/fc\x07|$)/su;
 
 /** Wrap text in fake cursor markers. */
 export function renderFakeCursor(text: string): string {
@@ -255,7 +255,7 @@ function parseSizeValue(value: SizeValue | undefined, referenceSize: number): nu
   if (value === undefined) return undefined;
   if (typeof value === "number") return value;
   // Parse percentage string like "50%"
-  const percent = value.match(/^(\d+(?:\.\d+)?)%$/)?.[1];
+  const percent = value.match(/^(\d+(?:\.\d+)?)%$/u)?.[1];
   if (percent !== undefined) {
     return Math.floor((referenceSize * parseFloat(percent)) / 100);
   }
@@ -1248,7 +1248,7 @@ export abstract class TuiBase extends Container implements TUI {
 
   private consumeCellSizeResponse(data: string): boolean {
     // Response format: ESC [ 6 ; height ; width t
-    const [, height, width] = data.match(/^\x1b\[6;(\d+);(\d+)t$/) ?? [];
+    const [, height, width] = data.match(/^\x1b\[6;(\d+);(\d+)t$/u) ?? [];
     if (height === undefined || width === undefined) {
       return false;
     }
@@ -1319,7 +1319,7 @@ export abstract class TuiBase extends Container implements TUI {
     if (opt.row !== undefined) {
       if (typeof opt.row === "string") {
         // Percentage: 0% = top, 100% = bottom (overlay stays within bounds)
-        const rowPercent = opt.row.match(/^(\d+(?:\.\d+)?)%$/)?.[1];
+        const rowPercent = opt.row.match(/^(\d+(?:\.\d+)?)%$/u)?.[1];
         if (rowPercent !== undefined) {
           const maxRow = Math.max(0, availHeight - effectiveHeight);
           const percent = parseFloat(rowPercent) / 100;
@@ -1341,7 +1341,7 @@ export abstract class TuiBase extends Container implements TUI {
     if (opt.col !== undefined) {
       if (typeof opt.col === "string") {
         // Percentage: 0% = left, 100% = right (overlay stays within bounds)
-        const colPercent = opt.col.match(/^(\d+(?:\.\d+)?)%$/)?.[1];
+        const colPercent = opt.col.match(/^(\d+(?:\.\d+)?)%$/u)?.[1];
         if (colPercent !== undefined) {
           const maxCol = Math.max(0, availWidth - width);
           const percent = parseFloat(colPercent) / 100;

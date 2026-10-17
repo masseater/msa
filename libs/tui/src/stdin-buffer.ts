@@ -27,7 +27,7 @@ const BRACKETED_PASTE_END = "\x1b[201~";
 // Color and program-status OSC replies, XTVersion, and Kitty graphics replies.
 // Until their header is complete, the input may be batched legacy Alt keystrokes.
 const TERMINAL_REPLY_HEADER_PATTERN =
-  /^\x1b(?:\](?:1[01];|4;\d{1,3};|7501;\?)|P>\||_G(?:[a-z]=\d+,)*[a-z]=\d+;)/;
+  /^\x1b(?:\](?:1[01];|4;\d{1,3};|7501;\?)|P>\||_G(?:[a-z]=\d+,)*[a-z]=\d+;)/u;
 
 function isControlString(data: string): boolean {
   return data.startsWith(`${ESC}]`) || data.startsWith(`${ESC}P`) || data.startsWith(`${ESC}_`);
@@ -113,7 +113,7 @@ function isCompleteCsiSequence(data: string): "complete" | "incomplete" {
     // Format: ESC[<B;X;Ym or ESC[<B;X;YM
     if (payload.startsWith("<")) {
       // Must have format: <digits;digits;digits[Mm]
-      const mouseMatch = /^<\d+;\d+;\d+[Mm]$/.test(payload);
+      const mouseMatch = /^<\d+;\d+;\d+[Mm]$/u.test(payload);
       if (mouseMatch) {
         return "complete";
       }
@@ -121,7 +121,7 @@ function isCompleteCsiSequence(data: string): "complete" | "incomplete" {
       if (lastChar === "M" || lastChar === "m") {
         // Check if we have the right structure
         const parts = payload.slice(1, -1).split(";");
-        if (parts.length === 3 && parts.every((p) => /^\d+$/.test(p))) {
+        if (parts.length === 3 && parts.every((p) => /^\d+$/u.test(p))) {
           return "complete";
         }
       }
@@ -192,7 +192,7 @@ function isCompleteApcSequence(data: string): "complete" | "incomplete" {
  * Split accumulated buffer into complete sequences
  */
 function parseUnmodifiedKittyPrintableCodepoint(sequence: string): number | undefined {
-  const match = sequence.match(/^\x1b\[(\d+)(?::\d*)?(?::\d+)?u$/);
+  const match = sequence.match(/^\x1b\[(\d+)(?::\d*)?(?::\d+)?u$/u);
   if (!match) return undefined;
 
   const codepoint = parseInt(match[1]!, 10);
@@ -243,11 +243,16 @@ function extractCompleteSequences(buffer: string): { sequences: string[]; remain
           if (candidate === "\x1b\x1b") {
             const nextChar = remaining[seqEnd];
             if (
-              nextChar === "[" || // CSI
-              nextChar === "]" || // OSC
-              nextChar === "O" || // SS3
-              nextChar === "P" || // DCS
-              nextChar === "_" // APC
+              // CSI
+              nextChar === "[" ||
+              // OSC
+              nextChar === "]" ||
+              // SS3
+              nextChar === "O" ||
+              // DCS
+              nextChar === "P" ||
+              // APC
+              nextChar === "_"
             ) {
               sequences.push(ESC);
               pos += 1;

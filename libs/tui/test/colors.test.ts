@@ -22,8 +22,8 @@ describe("colors", () => {
       c: 0.1,
       h: 200,
     });
-    assert.throws(() => parseColor(""), /Invalid color value/);
-    assert.throws(() => parseColor("red"), /Invalid color value/);
+    assert.throws(() => parseColor(""), /Invalid color value/u);
+    assert.throws(() => parseColor("red"), /Invalid color value/u);
   });
 
   it("gamut-maps OKLCH to sRGB, including the lightness limits", () => {
@@ -40,7 +40,7 @@ describe("colors", () => {
     // Full saturation at the red cusp is pure sRGB red.
     assert.deepStrictEqual(parseColor("okhsl(29.23 100% 56.8%)"), rgbColor(255, 0, 0));
     assert.deepStrictEqual(parseColor("OKHSL(250deg 60% 55%)"), okhslColor(250, 0.6, 0.55));
-    assert.throws(() => parseColor("okhsl(250 160% 55%)"), /s must be between 0 and 1/);
+    assert.throws(() => parseColor("okhsl(250 160% 55%)"), /s must be between 0 and 1/u);
     for (const hex of ["#4f8eb3", "#20242a", "#f8f9fa"]) {
       const { h, s, l } = colorToOkhsl(parseColor(hex));
       assert.strictEqual(colorToHex(okhslColor(h, s, l)), hex);
@@ -58,7 +58,7 @@ describe("colors", () => {
     );
     assert.match(
       styleText("Ready", { fg: rgbColor(18, 52, 86) }, "256color"),
-      /^\x1b\[38;5;\d+mReady\x1b\[39m$/,
+      /^\x1b\[38;5;\d+mReady\x1b\[39m$/u,
     );
   });
 });

@@ -71,8 +71,8 @@ const FOCUS_IN = "\x1b[I";
 const FOCUS_OUT = "\x1b[O";
 const BEGIN_SYNCHRONIZED_OUTPUT = "\x1b[?2026h";
 const END_SYNCHRONIZED_OUTPUT = "\x1b[?2026l";
-const OSC133_ZONE_PREFIX = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/;
-const OSC133_PROMPT_START = /^\x1b\]133;A(?:\x07|\x1b\\)/;
+const OSC133_ZONE_PREFIX = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/u;
+const OSC133_PROMPT_START = /^\x1b\]133;A(?:\x07|\x1b\\)/u;
 const PAGE_SCROLL_OVERLAP = 4;
 const ALT_WHEEL_SCROLL_MULTIPLIER = 5;
 const MAX_CACHED_OFFSCREEN_KITTY_IMAGES = 16;
@@ -1018,7 +1018,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
   }
 
   private parseWheelEvent(data: string): WheelEvent | undefined {
-    const [, sgrButton, sgrX, sgrY] = /^\x1b\[<(\d+);(\d+);(\d+)[Mm]$/.exec(data) ?? [];
+    const [, sgrButton, sgrX, sgrY] = /^\x1b\[<(\d+);(\d+);(\d+)[Mm]$/u.exec(data) ?? [];
     if (sgrButton !== undefined && sgrX !== undefined && sgrY !== undefined) {
       const button = Number.parseInt(sgrButton, 10);
       if ((button & 64) === 0) return undefined;
@@ -1063,7 +1063,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
   }
 
   private parseSgrMouseEvent(data: string): SgrMouseEvent | undefined {
-    const [, button, x, y, final] = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/.exec(data) ?? [];
+    const [, button, x, y, final] = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/u.exec(data) ?? [];
     if (button === undefined || x === undefined || y === undefined) return undefined;
     return {
       button: Number.parseInt(button, 10),
@@ -1738,7 +1738,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
 
   private isMouseSequence(data: string): boolean {
     return (
-      /^\x1b\[<\d+;\d+;\d+[Mm]$/.test(data) || (data.length === 6 && data.startsWith("\x1b[M"))
+      /^\x1b\[<\d+;\d+;\d+[Mm]$/u.test(data) || (data.length === 6 && data.startsWith("\x1b[M"))
     );
   }
 

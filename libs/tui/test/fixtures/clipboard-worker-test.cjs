@@ -41,7 +41,8 @@ async function waitFor(predicate) {
   if (mode === "process-exit") {
     assert.equal(await pending, undefined);
     console.log("passed");
-    return; // The private callback never finishes; Node must still exit naturally.
+    // The private callback never finishes; Node must still exit naturally.
+    return;
   }
   const concurrentStarted = performance.now();
   const concurrent = Array.from({ length: 20 }, (_, index) =>

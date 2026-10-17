@@ -48,7 +48,8 @@ describe("Editor component", () => {
     it("does nothing on Up arrow when history is empty", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      editor.handleInput("\x1b[A"); // Up arrow
+      // Up arrow
+      editor.handleInput("\x1b[A");
 
       assert.strictEqual(editor.getText(), "");
     });
@@ -59,7 +60,8 @@ describe("Editor component", () => {
       editor.addToHistory("first prompt");
       editor.addToHistory("second prompt");
 
-      editor.handleInput("\x1b[A"); // Up arrow
+      // Up arrow
+      editor.handleInput("\x1b[A");
 
       assert.strictEqual(editor.getText(), "second prompt");
     });
@@ -71,16 +73,20 @@ describe("Editor component", () => {
       editor.addToHistory("second");
       editor.addToHistory("third");
 
-      editor.handleInput("\x1b[A"); // Up - shows "third"
+      // Up - shows "third"
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "third");
 
-      editor.handleInput("\x1b[A"); // Up - shows "second"
+      // Up - shows "second"
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "second");
 
-      editor.handleInput("\x1b[A"); // Up - shows "first"
+      // Up - shows "first"
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "first");
 
-      editor.handleInput("\x1b[A"); // Up - stays at "first" (oldest)
+      // Up - stays at "first" (oldest)
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "first");
     });
 
@@ -92,14 +98,17 @@ describe("Editor component", () => {
       editor.handleInput("\x1b[D");
       editor.handleInput("\x1b[D");
 
-      editor.handleInput("\x1b[A"); // Up - jumps to start before history browsing
+      // Up - jumps to start before history browsing
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "draft");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      editor.handleInput("\x1b[A"); // Up at start - shows "prompt"
+      // Up at start - shows "prompt"
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "prompt");
 
-      editor.handleInput("\x1b[B"); // Down - restores draft
+      // Down - restores draft
+      editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "draft");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
     });
@@ -113,19 +122,26 @@ describe("Editor component", () => {
       editor.setText("draft");
 
       // Go to oldest
-      editor.handleInput("\x1b[A"); // start of draft
-      editor.handleInput("\x1b[A"); // third
-      editor.handleInput("\x1b[A"); // second
-      editor.handleInput("\x1b[A"); // first
+      // start of draft
+      editor.handleInput("\x1b[A");
+      // third
+      editor.handleInput("\x1b[A");
+      // second
+      editor.handleInput("\x1b[A");
+      // first
+      editor.handleInput("\x1b[A");
 
       // Navigate back
-      editor.handleInput("\x1b[B"); // second
+      // second
+      editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "second");
 
-      editor.handleInput("\x1b[B"); // third
+      // third
+      editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "third");
 
-      editor.handleInput("\x1b[B"); // draft
+      // draft
+      editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "draft");
     });
 
@@ -134,8 +150,10 @@ describe("Editor component", () => {
 
       editor.addToHistory("old prompt");
 
-      editor.handleInput("\x1b[A"); // Up - shows "old prompt"
-      editor.handleInput("x"); // Type a character - exits history mode
+      // Up - shows "old prompt"
+      editor.handleInput("\x1b[A");
+      // Type a character - exits history mode
+      editor.handleInput("x");
 
       assert.strictEqual(editor.getText(), "xold prompt");
     });
@@ -146,8 +164,10 @@ describe("Editor component", () => {
       editor.addToHistory("first");
       editor.addToHistory("second");
 
-      editor.handleInput("\x1b[A"); // Up - shows "second"
-      editor.setText(""); // External clear
+      // Up - shows "second"
+      editor.handleInput("\x1b[A");
+      // External clear
+      editor.setText("");
 
       // Up should start fresh from most recent
       editor.handleInput("\x1b[A");
@@ -176,10 +196,12 @@ describe("Editor component", () => {
       editor.addToHistory("same");
       editor.addToHistory("same");
 
-      editor.handleInput("\x1b[A"); // "same"
+      // "same"
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "same");
 
-      editor.handleInput("\x1b[A"); // stays at "same" (only one entry)
+      // stays at "same" (only one entry)
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "same");
     });
 
@@ -188,15 +210,19 @@ describe("Editor component", () => {
 
       editor.addToHistory("first");
       editor.addToHistory("second");
-      editor.addToHistory("first"); // Not consecutive, should be added
+      // Not consecutive, should be added
+      editor.addToHistory("first");
 
-      editor.handleInput("\x1b[A"); // "first"
+      // "first"
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "first");
 
-      editor.handleInput("\x1b[A"); // "second"
+      // "second"
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "second");
 
-      editor.handleInput("\x1b[A"); // "first" (older one)
+      // "first" (older one)
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "first");
     });
 
@@ -207,7 +233,8 @@ describe("Editor component", () => {
       editor.setText("line1\nline2");
 
       // Cursor is at end of line2, Up should move to line1
-      editor.handleInput("\x1b[A"); // Up - cursor movement
+      // Up - cursor movement
+      editor.handleInput("\x1b[A");
 
       // Insert character to verify cursor position
       editor.handleInput("X");
@@ -243,11 +270,13 @@ describe("Editor component", () => {
       editor.addToHistory("older entry");
       editor.addToHistory("line1\nline2\nline3");
 
-      editor.handleInput("\x1b[A"); // Up - shows multi-line entry at start
+      // Up - shows multi-line entry at start
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      editor.handleInput("\x1b[A"); // Up again - immediately navigates to older entry
+      // Up again - immediately navigates to older entry
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "older entry");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
     });
@@ -259,15 +288,20 @@ describe("Editor component", () => {
       editor.addToHistory("line1\nline2\nline3");
       editor.addToHistory("newer entry");
 
-      editor.handleInput("\x1b[A"); // newer entry
-      editor.handleInput("\x1b[A"); // multi-line entry
-      editor.handleInput("\x1b[A"); // older entry
+      // newer entry
+      editor.handleInput("\x1b[A");
+      // multi-line entry
+      editor.handleInput("\x1b[A");
+      // older entry
+      editor.handleInput("\x1b[A");
 
-      editor.handleInput("\x1b[B"); // Down - shows multi-line entry at end
+      // Down - shows multi-line entry at end
+      editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 5 });
 
-      editor.handleInput("\x1b[B"); // Down again - immediately navigates to newer entry
+      // Down again - immediately navigates to newer entry
+      editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "newer entry");
     });
 
@@ -276,14 +310,17 @@ describe("Editor component", () => {
 
       editor.addToHistory("line1\nline2\nline3");
 
-      editor.handleInput("\x1b[A"); // Up - shows entry at start
+      // Up - shows entry at start
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      editor.handleInput("\x1b[B"); // Down - cursor moves to line2
+      // Down - cursor moves to line2
+      editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
       assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 0 });
 
-      editor.handleInput("\x1b[A"); // Up - cursor moves back to line1
+      // Up - cursor moves back to line1
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
     });
@@ -301,7 +338,8 @@ describe("Editor component", () => {
 
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
 
-      editor.handleInput("\x1b[D"); // Left
+      // Left
+      editor.handleInput("\x1b[D");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 2 });
     });
 
@@ -429,7 +467,8 @@ describe("Editor component", () => {
       editor.handleInput("ü");
 
       // Delete the last character (ü)
-      editor.handleInput("\x7f"); // Backspace
+      // Backspace
+      editor.handleInput("\x7f");
 
       const text = editor.getText();
       assert.strictEqual(text, "äö");
@@ -442,7 +481,8 @@ describe("Editor component", () => {
       editor.handleInput("👍");
 
       // Delete the last emoji (👍) - single backspace deletes whole grapheme cluster
-      editor.handleInput("\x7f"); // Backspace
+      // Backspace
+      editor.handleInput("\x7f");
 
       const text = editor.getText();
       assert.strictEqual(text, "😀");
@@ -456,8 +496,10 @@ describe("Editor component", () => {
       editor.handleInput("ü");
 
       // Move cursor left twice
-      editor.handleInput("\x1b[D"); // Left arrow
-      editor.handleInput("\x1b[D"); // Left arrow
+      // Left arrow
+      editor.handleInput("\x1b[D");
+      // Left arrow
+      editor.handleInput("\x1b[D");
 
       // Insert 'x' in the middle
       editor.handleInput("x");
@@ -474,7 +516,8 @@ describe("Editor component", () => {
       editor.handleInput("🎉");
 
       // Move cursor left over last emoji (🎉) - single arrow moves over whole grapheme
-      editor.handleInput("\x1b[D"); // Left arrow
+      // Left arrow
+      editor.handleInput("\x1b[D");
 
       // Move cursor left over second emoji (👍)
       editor.handleInput("\x1b[D");
@@ -492,7 +535,8 @@ describe("Editor component", () => {
       editor.handleInput("ä");
       editor.handleInput("ö");
       editor.handleInput("ü");
-      editor.handleInput("\n"); // new line
+      // new line
+      editor.handleInput("\n");
       editor.handleInput("Ä");
       editor.handleInput("Ö");
       editor.handleInput("Ü");
@@ -516,8 +560,10 @@ describe("Editor component", () => {
 
       editor.handleInput("a");
       editor.handleInput("b");
-      editor.handleInput("\x01"); // Ctrl+A (move to start)
-      editor.handleInput("x"); // Insert at start
+      // Ctrl+A (move to start)
+      editor.handleInput("\x01");
+      // Insert at start
+      editor.handleInput("x");
 
       const text = editor.getText();
       assert.strictEqual(text, "xab");
@@ -528,7 +574,8 @@ describe("Editor component", () => {
 
       // Basic word deletion
       editor.setText("foo bar baz");
-      editor.handleInput("\x17"); // Ctrl+W
+      // Ctrl+W
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "foo bar ");
 
       // Trailing whitespace
@@ -569,7 +616,8 @@ describe("Editor component", () => {
 
       // Alt+Backspace
       editor.setText("foo bar");
-      editor.handleInput("\x1b\x7f"); // Alt+Backspace (legacy)
+      // Alt+Backspace (legacy)
+      editor.handleInput("\x1b\x7f");
       assert.strictEqual(editor.getText(), "foo ");
     });
 
@@ -580,50 +628,72 @@ describe("Editor component", () => {
       // Cursor at end
 
       // Move left over baz
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 }); // after '...'
+      // Ctrl+Left
+      editor.handleInput("\x1b[1;5D");
+      // after '...'
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 });
 
       // Move left over punctuation
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 }); // after 'bar'
+      // Ctrl+Left
+      editor.handleInput("\x1b[1;5D");
+      // after 'bar'
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
 
       // Move left over bar
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 }); // after 'foo '
+      // Ctrl+Left
+      editor.handleInput("\x1b[1;5D");
+      // after 'foo '
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 });
 
       // Move right over bar
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 }); // at end of 'bar'
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // at end of 'bar'
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
 
       // Move right over punctuation run
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 }); // after '...'
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // after '...'
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 });
 
       // Move right skips space and lands after baz
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 14 }); // end of line
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // end of line
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 14 });
 
       // Test forward from start with leading whitespace
       editor.setText("   foo bar");
-      editor.handleInput("\x01"); // Ctrl+A to go to start
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 }); // after 'foo'
+      // Ctrl+A to go to start
+      editor.handleInput("\x01");
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // after 'foo'
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 });
 
       // ASCII punctuation inside Intl word-like segments preserves old boundaries
       editor.setText("foo.bar baz");
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left over baz
+      // Ctrl+Left over baz
+      editor.handleInput("\x1b[1;5D");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left over bar
+      // Ctrl+Left over bar
+      editor.handleInput("\x1b[1;5D");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 });
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left over .
+      // Ctrl+Left over .
+      editor.handleInput("\x1b[1;5D");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
 
-      editor.handleInput("\x01"); // Ctrl+A
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right over foo
+      // Ctrl+A
+      editor.handleInput("\x01");
+      // Ctrl+Right over foo
+      editor.handleInput("\x1b[1;5C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right over .
+      // Ctrl+Right over .
+      editor.handleInput("\x1b[1;5C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 });
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right over bar
+      // Ctrl+Right over bar
+      editor.handleInput("\x1b[1;5C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
     });
 
@@ -635,28 +705,40 @@ describe("Editor component", () => {
       // Cursor at end (col 5)
 
       // Move left over 世界
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 }); // after ，
+      // Ctrl+Left
+      editor.handleInput("\x1b[1;5D");
+      // after ，
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
 
       // Move left over ，
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 2 }); // after 你好
+      // Ctrl+Left
+      editor.handleInput("\x1b[1;5D");
+      // after 你好
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 2 });
 
       // Move left over 你好
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 }); // start
+      // Ctrl+Left
+      editor.handleInput("\x1b[1;5D");
+      // start
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
       // Move right over 你好
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 2 }); // after 你好
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // after 你好
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 2 });
 
       // Move right over ，
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 }); // after ，
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // after ，
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
 
       // Move right over 世界
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 }); // end
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // end
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
     });
 
     it("handles mixed CJK and ASCII word movement", () => {
@@ -667,40 +749,60 @@ describe("Editor component", () => {
       // Cursor at end (col 15)
 
       // Move left over 世界
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 13 }); // after 'world'
+      // Ctrl+Left
+      editor.handleInput("\x1b[1;5D");
+      // after 'world'
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 13 });
 
       // Move left over world
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 }); // after ，
+      // Ctrl+Left
+      editor.handleInput("\x1b[1;5D");
+      // after ，
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
 
       // Move left over ，
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 }); // after 你好
+      // Ctrl+Left
+      editor.handleInput("\x1b[1;5D");
+      // after 你好
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
 
       // Move left over 你好
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 }); // after 'hello'
+      // Ctrl+Left
+      editor.handleInput("\x1b[1;5D");
+      // after 'hello'
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
 
       // Move left over hello
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 }); // start
+      // Ctrl+Left
+      editor.handleInput("\x1b[1;5D");
+      // start
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
       // Forward from start
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 }); // after 'hello'
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // after 'hello'
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
 
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 }); // after 你好
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // after 你好
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
 
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 }); // after ，
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // after ，
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
 
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 13 }); // after 'world'
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // after 'world'
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 13 });
 
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 15 }); // end
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // end
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 15 });
     });
   });
 
@@ -738,8 +840,8 @@ describe("Editor component", () => {
       const topBorder = lines[0]!;
       const bottomBorder = lines.at(-1)!;
 
-      assert.match(stripVTControlCharacters(topBorder), /^─── ↑/);
-      assert.match(stripVTControlCharacters(bottomBorder), /^─── ↓/);
+      assert.match(stripVTControlCharacters(topBorder), /^─── ↑/u);
+      assert.match(stripVTControlCharacters(bottomBorder), /^─── ↓/u);
       assert.strictEqual(topBorder, borderColor(stripVTControlCharacters(topBorder)));
       assert.strictEqual(bottomBorder, borderColor(stripVTControlCharacters(bottomBorder)));
       for (const line of lines) {
@@ -803,7 +905,8 @@ describe("Editor component", () => {
 
     it("wraps CJK characters correctly (each is 2 columns wide)", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
-      const width = 10 + 1; // +1 col reserved for cursor
+      // +1 col reserved for cursor
+      const width = 10 + 1;
 
       // Each CJK char is 2 columns. "日本語テスト" = 6 chars = 12 columns
       editor.setText("日本語テスト");
@@ -817,13 +920,16 @@ describe("Editor component", () => {
       // Verify content split correctly
       const contentLines = lines.slice(1, -1).map((l) => stripTerminalSequences(l).trim());
       assert.strictEqual(contentLines.length, 2);
-      assert.strictEqual(contentLines[0], "日本語テス"); // 5 chars = 10 columns
-      assert.strictEqual(contentLines[1], "ト"); // 1 char = 2 columns (+ padding)
+      // 5 chars = 10 columns
+      assert.strictEqual(contentLines[0], "日本語テス");
+      // 1 char = 2 columns (+ padding)
+      assert.strictEqual(contentLines[1], "ト");
     });
 
     it("handles mixed ASCII and wide characters in wrapping", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
-      const width = 15 + 1; // +1 col reserved for cursor
+      // +1 col reserved for cursor
+      const width = 15 + 1;
 
       // "Test ✅ OK 日本" = 4 + 1 + 2 + 1 + 2 + 1 + 4 = 15 columns (fits in width-1=15)
       editor.setText("Test ✅ OK 日本");
@@ -917,7 +1023,7 @@ describe("Editor component", () => {
         // Words at end of line should be complete (no partial words)
         const lastChar = line.trimEnd().slice(-1);
         assert.ok(
-          lastChar === "" || /[\w.,!?;:]/.test(lastChar),
+          lastChar === "" || /[\w.,!?;:]/u.test(lastChar),
           `Line ends unexpectedly with: "${lastChar}"`,
         );
       }
@@ -940,7 +1046,7 @@ describe("Editor component", () => {
         // The line should either be all padding or start with a word character
         if (trimmedStart.length > 0) {
           assert.ok(
-            !/^\s+\S/.test(line.trimEnd()),
+            !/^\s+\S/u.test(line.trimEnd()),
             `Line ${i} starts with unexpected whitespace before content`,
           );
         }
@@ -986,7 +1092,8 @@ describe("Editor component", () => {
 
     it("handles single word that fits exactly", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
-      const width = 10 + 1; // +1 col reserved for cursor
+      // +1 col reserved for cursor
+      const width = 10 + 1;
 
       editor.setText("1234567890");
       const lines = editor.render(width);
@@ -1114,7 +1221,8 @@ describe("Editor component", () => {
 
     it("splits oversized atomic segment across multiple chunks", () => {
       // Simulate a paste marker wider than maxWidth by passing pre-segmented data
-      const marker = "[paste #1 +20 lines]"; // 21 chars
+      // 21 chars
+      const marker = "[paste #1 +20 lines]";
       const line = `A${marker}B`;
       const segments: Intl.SegmentData[] = [
         { segment: "A", index: 0, input: line },
@@ -1138,7 +1246,8 @@ describe("Editor component", () => {
     });
 
     it("splits oversized atomic segment at start of line", () => {
-      const marker = "[paste #1 +20 lines]"; // 21 chars
+      // 21 chars
+      const marker = "[paste #1 +20 lines]";
       const line = `${marker}B`;
       const segments: Intl.SegmentData[] = [
         { segment: marker, index: 0, input: line },
@@ -1158,7 +1267,8 @@ describe("Editor component", () => {
     });
 
     it("splits oversized atomic segment at end of line", () => {
-      const marker = "[paste #1 +20 lines]"; // 21 chars
+      // 21 chars
+      const marker = "[paste #1 +20 lines]";
       const line = `A${marker}`;
       const segments: Intl.SegmentData[] = [
         { segment: "A", index: 0, input: line },
@@ -1177,8 +1287,10 @@ describe("Editor component", () => {
     });
 
     it("splits consecutive oversized atomic segments", () => {
-      const m1 = "[paste #1 +20 lines]"; // 21 chars
-      const m2 = "[paste #2 +30 lines]"; // 21 chars
+      // 21 chars
+      const m1 = "[paste #1 +20 lines]";
+      // 21 chars
+      const m2 = "[paste #2 +30 lines]";
       const line = `${m1}${m2}`;
       const segments: Intl.SegmentData[] = [
         { segment: m1, index: 0, input: line },
@@ -1199,7 +1311,8 @@ describe("Editor component", () => {
     });
 
     it("wraps normally after oversized atomic segment", () => {
-      const marker = "[paste #1 +20 lines]"; // 21 chars
+      // 21 chars
+      const marker = "[paste #1 +20 lines]";
       const line = `${marker} hello world`;
       const segments: Intl.SegmentData[] = [
         { segment: marker, index: 0, input: line },
@@ -1240,12 +1353,15 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("foo bar baz");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "baz"
+      // Ctrl+W - deletes "baz"
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "foo bar ");
 
       // Move to beginning and yank
-      editor.handleInput("\x01"); // Ctrl+A
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+A
+      editor.handleInput("\x01");
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "bazfoo bar ");
     });
 
@@ -1254,18 +1370,23 @@ describe("Editor component", () => {
 
       editor.setText("hello world");
       // Move cursor to middle
-      editor.handleInput("\x01"); // Ctrl+A (start)
-      editor.handleInput("\x1b[C"); // Right 5 times
+      // Ctrl+A (start)
+      editor.handleInput("\x01");
+      // Right 5 times
       editor.handleInput("\x1b[C");
       editor.handleInput("\x1b[C");
       editor.handleInput("\x1b[C");
       editor.handleInput("\x1b[C");
-      editor.handleInput("\x1b[C"); // After "hello "
+      editor.handleInput("\x1b[C");
+      // After "hello "
+      editor.handleInput("\x1b[C");
 
-      editor.handleInput("\x15"); // Ctrl+U - deletes "hello "
+      // Ctrl+U - deletes "hello "
+      editor.handleInput("\x15");
       assert.strictEqual(editor.getText(), "world");
 
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "hello world");
     });
 
@@ -1273,12 +1394,15 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A (start)
-      editor.handleInput("\x0b"); // Ctrl+K - deletes "hello world"
+      // Ctrl+A (start)
+      editor.handleInput("\x01");
+      // Ctrl+K - deletes "hello world"
+      editor.handleInput("\x0b");
 
       assert.strictEqual(editor.getText(), "");
 
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "hello world");
     });
 
@@ -1286,7 +1410,8 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("test");
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "test");
     });
 
@@ -1295,25 +1420,32 @@ describe("Editor component", () => {
 
       // Create kill ring with multiple entries
       editor.setText("first");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "first"
+      // Ctrl+W - deletes "first"
+      editor.handleInput("\x17");
       editor.setText("second");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "second"
+      // Ctrl+W - deletes "second"
+      editor.handleInput("\x17");
       editor.setText("third");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "third"
+      // Ctrl+W - deletes "third"
+      editor.handleInput("\x17");
 
       // Kill ring now has: [first, second, third]
       assert.strictEqual(editor.getText(), "");
 
-      editor.handleInput("\x19"); // Ctrl+Y - yanks "third" (most recent)
+      // Ctrl+Y - yanks "third" (most recent)
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "third");
 
-      editor.handleInput("\x1by"); // Alt+Y - cycles to "second"
+      // Alt+Y - cycles to "second"
+      editor.handleInput("\x1by");
       assert.strictEqual(editor.getText(), "second");
 
-      editor.handleInput("\x1by"); // Alt+Y - cycles to "first"
+      // Alt+Y - cycles to "first"
+      editor.handleInput("\x1by");
       assert.strictEqual(editor.getText(), "first");
 
-      editor.handleInput("\x1by"); // Alt+Y - cycles back to "third"
+      // Alt+Y - cycles back to "third"
+      editor.handleInput("\x1by");
       assert.strictEqual(editor.getText(), "third");
     });
 
@@ -1321,7 +1453,8 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("test");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "test"
+      // Ctrl+W - deletes "test"
+      editor.handleInput("\x17");
       editor.setText("other");
 
       // Type something to break the yank chain
@@ -1329,7 +1462,8 @@ describe("Editor component", () => {
       assert.strictEqual(editor.getText(), "otherx");
 
       // Alt+Y should do nothing
-      editor.handleInput("\x1by"); // Alt+Y
+      // Alt+Y
+      editor.handleInput("\x1by");
       assert.strictEqual(editor.getText(), "otherx");
     });
 
@@ -1337,12 +1471,15 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("only");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "only"
+      // Ctrl+W - deletes "only"
+      editor.handleInput("\x17");
 
-      editor.handleInput("\x19"); // Ctrl+Y - yanks "only"
+      // Ctrl+Y - yanks "only"
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "only");
 
-      editor.handleInput("\x1by"); // Alt+Y - should do nothing (only 1 entry)
+      // Alt+Y - should do nothing (only 1 entry)
+      editor.handleInput("\x1by");
       assert.strictEqual(editor.getText(), "only");
     });
 
@@ -1350,14 +1487,18 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("one two three");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "three"
-      editor.handleInput("\x17"); // Ctrl+W - deletes "two " (prepended)
-      editor.handleInput("\x17"); // Ctrl+W - deletes "one " (prepended)
+      // Ctrl+W - deletes "three"
+      editor.handleInput("\x17");
+      // Ctrl+W - deletes "two " (prepended)
+      editor.handleInput("\x17");
+      // Ctrl+W - deletes "one " (prepended)
+      editor.handleInput("\x17");
 
       assert.strictEqual(editor.getText(), "");
 
       // Should be one combined entry
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "one two three");
     });
 
@@ -1369,27 +1510,33 @@ describe("Editor component", () => {
       // Cursor is at end of line3 (line 2, col 5)
 
       // Delete "line3"
-      editor.handleInput("\x15"); // Ctrl+U
+      // Ctrl+U
+      editor.handleInput("\x15");
       assert.strictEqual(editor.getText(), "line1\nline2\n");
 
       // Delete newline (at start of empty line 2, merges with line1)
-      editor.handleInput("\x15"); // Ctrl+U
+      // Ctrl+U
+      editor.handleInput("\x15");
       assert.strictEqual(editor.getText(), "line1\nline2");
 
       // Delete "line2"
-      editor.handleInput("\x15"); // Ctrl+U
+      // Ctrl+U
+      editor.handleInput("\x15");
       assert.strictEqual(editor.getText(), "line1\n");
 
       // Delete newline
-      editor.handleInput("\x15"); // Ctrl+U
+      // Ctrl+U
+      editor.handleInput("\x15");
       assert.strictEqual(editor.getText(), "line1");
 
       // Delete "line1"
-      editor.handleInput("\x15"); // Ctrl+U
+      // Ctrl+U
+      editor.handleInput("\x15");
       assert.strictEqual(editor.getText(), "");
 
       // All deletions accumulated into one entry: "line1\nline2\nline3"
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
     });
 
@@ -1398,14 +1545,19 @@ describe("Editor component", () => {
 
       editor.setText("prefix|suffix");
       // Position cursor at |
-      editor.handleInput("\x01"); // Ctrl+A
-      for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C"); // Move right 6 times
+      // Ctrl+A
+      editor.handleInput("\x01");
+      // Move right 6 times
+      for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C");
 
-      editor.handleInput("\x0b"); // Ctrl+K - deletes "suffix" (forward)
-      editor.handleInput("\x0b"); // Ctrl+K - deletes "|" (forward, appended)
+      // Ctrl+K - deletes "suffix" (forward)
+      editor.handleInput("\x0b");
+      // Ctrl+K - deletes "|" (forward, appended)
+      editor.handleInput("\x0b");
       assert.strictEqual(editor.getText(), "prefix");
 
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "prefix|suffix");
     });
 
@@ -1414,21 +1566,26 @@ describe("Editor component", () => {
 
       // Delete "baz", then type "x" to break accumulation, then delete "x"
       editor.setText("foo bar baz");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "baz"
+      // Ctrl+W - deletes "baz"
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "foo bar ");
 
-      editor.handleInput("x"); // Typing breaks accumulation
+      // Typing breaks accumulation
+      editor.handleInput("x");
       assert.strictEqual(editor.getText(), "foo bar x");
 
-      editor.handleInput("\x17"); // Ctrl+W - deletes "x" (separate entry, not accumulated)
+      // Ctrl+W - deletes "x" (separate entry, not accumulated)
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "foo bar ");
 
       // Yank most recent - should be "x", not "xbaz"
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "foo bar x");
 
       // Cycle to previous - should be "baz" (separate entry)
-      editor.handleInput("\x1by"); // Alt+Y
+      // Alt+Y
+      editor.handleInput("\x1by");
       assert.strictEqual(editor.getText(), "foo bar baz");
     });
 
@@ -1436,18 +1593,23 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("first");
-      editor.handleInput("\x17"); // Ctrl+W
+      // Ctrl+W
+      editor.handleInput("\x17");
       editor.setText("second");
-      editor.handleInput("\x17"); // Ctrl+W
+      // Ctrl+W
+      editor.handleInput("\x17");
       editor.setText("");
 
-      editor.handleInput("\x19"); // Ctrl+Y - yanks "second"
+      // Ctrl+Y - yanks "second"
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "second");
 
-      editor.handleInput("x"); // Type breaks yank chain
+      // Type breaks yank chain
+      editor.handleInput("x");
       assert.strictEqual(editor.getText(), "secondx");
 
-      editor.handleInput("\x1by"); // Alt+Y - should do nothing
+      // Alt+Y - should do nothing
+      editor.handleInput("\x1by");
       assert.strictEqual(editor.getText(), "secondx");
     });
 
@@ -1455,17 +1617,22 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("first");
-      editor.handleInput("\x17"); // deletes "first"
+      // deletes "first"
+      editor.handleInput("\x17");
       editor.setText("second");
-      editor.handleInput("\x17"); // deletes "second"
+      // deletes "second"
+      editor.handleInput("\x17");
       editor.setText("third");
-      editor.handleInput("\x17"); // deletes "third"
+      // deletes "third"
+      editor.handleInput("\x17");
       editor.setText("");
 
       // Ring: [first, second, third]
 
-      editor.handleInput("\x19"); // Ctrl+Y - yanks "third"
-      editor.handleInput("\x1by"); // Alt+Y - cycles to "second", ring rotates
+      // Ctrl+Y - yanks "third"
+      editor.handleInput("\x19");
+      // Alt+Y - cycles to "second", ring rotates
+      editor.handleInput("\x1by");
 
       // Now ring is: [third, first, second]
       assert.strictEqual(editor.getText(), "second");
@@ -1475,7 +1642,8 @@ describe("Editor component", () => {
       editor.setText("");
 
       // New yank should get "second" (now at end after rotation)
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "second");
     });
 
@@ -1484,23 +1652,29 @@ describe("Editor component", () => {
 
       // "1\n2\n3" with cursor at end, delete everything with Ctrl+W
       editor.setText("1\n2\n3");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "3"
+      // Ctrl+W - deletes "3"
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "1\n2\n");
 
-      editor.handleInput("\x17"); // Ctrl+W - deletes newline (merge with prev line)
+      // Ctrl+W - deletes newline (merge with prev line)
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "1\n2");
 
-      editor.handleInput("\x17"); // Ctrl+W - deletes "2"
+      // Ctrl+W - deletes "2"
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "1\n");
 
-      editor.handleInput("\x17"); // Ctrl+W - deletes newline
+      // Ctrl+W - deletes newline
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "1");
 
-      editor.handleInput("\x17"); // Ctrl+W - deletes "1"
+      // Ctrl+W - deletes "1"
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "");
 
       // All deletions should have accumulated into one entry
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "1\n2\n3");
     });
 
@@ -1515,19 +1689,24 @@ describe("Editor component", () => {
       editor.handleInput("c");
       editor.handleInput("d");
       // Move to end of first line
-      editor.handleInput("\x1b[A"); // Up arrow
-      editor.handleInput("\x05"); // Ctrl+E - end of line
+      // Up arrow
+      editor.handleInput("\x1b[A");
+      // Ctrl+E - end of line
+      editor.handleInput("\x05");
 
       // Now at end of "ab", Ctrl+K should delete newline (merge with "cd")
-      editor.handleInput("\x0b"); // Ctrl+K - deletes newline
+      // Ctrl+K - deletes newline
+      editor.handleInput("\x0b");
       assert.strictEqual(editor.getText(), "abcd");
 
       // Continue deleting
-      editor.handleInput("\x0b"); // Ctrl+K - deletes "cd"
+      // Ctrl+K - deletes "cd"
+      editor.handleInput("\x0b");
       assert.strictEqual(editor.getText(), "ab");
 
       // Both deletions should accumulate
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "ab\ncd");
     });
 
@@ -1535,14 +1714,17 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("word");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "word"
+      // Ctrl+W - deletes "word"
+      editor.handleInput("\x17");
       editor.setText("hello world");
 
       // Move to middle (after "hello ")
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C");
 
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "hello wordworld");
     });
 
@@ -1551,23 +1733,29 @@ describe("Editor component", () => {
 
       // Create two kill ring entries
       editor.setText("FIRST");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "FIRST"
+      // Ctrl+W - deletes "FIRST"
+      editor.handleInput("\x17");
       editor.setText("SECOND");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "SECOND"
+      // Ctrl+W - deletes "SECOND"
+      editor.handleInput("\x17");
 
       // Ring: ["FIRST", "SECOND"]
 
       // Set up "hello world" and position cursor after "hello "
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A - go to start of line
-      for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C"); // Move right 6
+      // Ctrl+A - go to start of line
+      editor.handleInput("\x01");
+      // Move right 6
+      for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C");
 
       // Yank "SECOND" in the middle
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "hello SECONDworld");
 
       // Yank-pop replaces "SECOND" with "FIRST"
-      editor.handleInput("\x1by"); // Alt+Y
+      // Alt+Y
+      editor.handleInput("\x1by");
       assert.strictEqual(editor.getText(), "hello FIRSTworld");
     });
 
@@ -1576,26 +1764,33 @@ describe("Editor component", () => {
 
       // Create single-line entry
       editor.setText("SINGLE");
-      editor.handleInput("\x17"); // Ctrl+W - deletes "SINGLE"
+      // Ctrl+W - deletes "SINGLE"
+      editor.handleInput("\x17");
 
       // Create multiline entry via consecutive Ctrl+U
       editor.setText("A\nB");
-      editor.handleInput("\x15"); // Ctrl+U - deletes "B"
-      editor.handleInput("\x15"); // Ctrl+U - deletes newline
-      editor.handleInput("\x15"); // Ctrl+U - deletes "A"
+      // Ctrl+U - deletes "B"
+      editor.handleInput("\x15");
+      // Ctrl+U - deletes newline
+      editor.handleInput("\x15");
+      // Ctrl+U - deletes "A"
+      editor.handleInput("\x15");
       // Ring: ["SINGLE", "A\nB"]
 
       // Insert in middle of "hello world"
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C");
 
       // Yank multiline "A\nB"
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "hello A\nBworld");
 
       // Yank-pop replaces with "SINGLE"
-      editor.handleInput("\x1by"); // Alt+Y
+      // Alt+Y
+      editor.handleInput("\x1by");
       assert.strictEqual(editor.getText(), "hello SINGLEworld");
     });
 
@@ -1603,16 +1798,20 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world test");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
 
-      editor.handleInput("\x1bd"); // Alt+D - deletes "hello"
+      // Alt+D - deletes "hello"
+      editor.handleInput("\x1bd");
       assert.strictEqual(editor.getText(), " world test");
 
-      editor.handleInput("\x1bd"); // Alt+D - deletes " world" (skips whitespace, then word)
+      // Alt+D - deletes " world" (skips whitespace, then word)
+      editor.handleInput("\x1bd");
       assert.strictEqual(editor.getText(), " test");
 
       // Yank should get accumulated text
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "hello world test");
     });
 
@@ -1621,13 +1820,17 @@ describe("Editor component", () => {
 
       editor.setText("line1\nline2");
       // Move to start of document, then to end of first line
-      editor.handleInput("\x1b[A"); // Up arrow - go to first line
-      editor.handleInput("\x05"); // Ctrl+E - end of line
+      // Up arrow - go to first line
+      editor.handleInput("\x1b[A");
+      // Ctrl+E - end of line
+      editor.handleInput("\x05");
 
-      editor.handleInput("\x1bd"); // Alt+D - deletes newline (merges lines)
+      // Alt+D - deletes newline (merges lines)
+      editor.handleInput("\x1bd");
       assert.strictEqual(editor.getText(), "line1line2");
 
-      editor.handleInput("\x19"); // Ctrl+Y
+      // Ctrl+Y
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "line1\nline2");
     });
   });
@@ -1636,7 +1839,8 @@ describe("Editor component", () => {
     it("does nothing when undo stack is empty", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
     });
 
@@ -1657,11 +1861,13 @@ describe("Editor component", () => {
       assert.strictEqual(editor.getText(), "hello world");
 
       // Undo removes " world" (space captured state before it, so we restore to "hello")
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello");
 
       // Undo removes "hello"
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
     });
 
@@ -1677,13 +1883,16 @@ describe("Editor component", () => {
       editor.handleInput(" ");
       assert.strictEqual(editor.getText(), "hello  ");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo) - removes second " "
+      // Ctrl+- (undo) - removes second " "
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello ");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo) - removes first " "
+      // Ctrl+- (undo) - removes first " "
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo) - removes "hello"
+      // Ctrl+- (undo) - removes "hello"
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
     });
 
@@ -1703,13 +1912,16 @@ describe("Editor component", () => {
       editor.handleInput("d");
       assert.strictEqual(editor.getText(), "hello\nworld");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello\n");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
     });
 
@@ -1721,10 +1933,12 @@ describe("Editor component", () => {
       editor.handleInput("l");
       editor.handleInput("l");
       editor.handleInput("o");
-      editor.handleInput("\x7f"); // Backspace
+      // Backspace
+      editor.handleInput("\x7f");
       assert.strictEqual(editor.getText(), "hell");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello");
     });
 
@@ -1736,12 +1950,16 @@ describe("Editor component", () => {
       editor.handleInput("l");
       editor.handleInput("l");
       editor.handleInput("o");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
-      editor.handleInput("\x1b[C"); // Right arrow
-      editor.handleInput("\x1b[3~"); // Delete key
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
+      // Right arrow
+      editor.handleInput("\x1b[C");
+      // Delete key
+      editor.handleInput("\x1b[3~");
       assert.strictEqual(editor.getText(), "hllo");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello");
     });
 
@@ -1761,10 +1979,12 @@ describe("Editor component", () => {
       editor.handleInput("d");
       assert.strictEqual(editor.getText(), "hello world");
 
-      editor.handleInput("\x17"); // Ctrl+W
+      // Ctrl+W
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "hello ");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello world");
     });
 
@@ -1782,13 +2002,17 @@ describe("Editor component", () => {
       editor.handleInput("r");
       editor.handleInput("l");
       editor.handleInput("d");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
-      for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C"); // Move right 6 times
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
+      // Move right 6 times
+      for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C");
 
-      editor.handleInput("\x0b"); // Ctrl+K
+      // Ctrl+K
+      editor.handleInput("\x0b");
       assert.strictEqual(editor.getText(), "hello ");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello world");
 
       editor.handleInput("|");
@@ -1809,13 +2033,17 @@ describe("Editor component", () => {
       editor.handleInput("r");
       editor.handleInput("l");
       editor.handleInput("d");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
-      for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C"); // Move right 6 times
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
+      // Move right 6 times
+      for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C");
 
-      editor.handleInput("\x15"); // Ctrl+U
+      // Ctrl+U
+      editor.handleInput("\x15");
       assert.strictEqual(editor.getText(), "world");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello world");
     });
 
@@ -1828,11 +2056,14 @@ describe("Editor component", () => {
       editor.handleInput("l");
       editor.handleInput("o");
       editor.handleInput(" ");
-      editor.handleInput("\x17"); // Ctrl+W - delete "hello "
-      editor.handleInput("\x19"); // Ctrl+Y - yank
+      // Ctrl+W - delete "hello "
+      editor.handleInput("\x17");
+      // Ctrl+Y - yank
+      editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "hello ");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
     });
 
@@ -1840,15 +2071,18 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
-      for (let i = 0; i < 5; i++) editor.handleInput("\x1b[C"); // Move right 5 (after "hello", before space)
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
+      // Move right 5 (after "hello", before space)
+      for (let i = 0; i < 5; i++) editor.handleInput("\x1b[C");
 
       // Simulate bracketed paste of "beep boop"
       editor.handleInput("\x1b[200~beep boop\x1b[201~");
       assert.strictEqual(editor.getText(), "hellobeep boop world");
 
       // Single undo should restore entire pre-paste state
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello world");
 
       editor.handleInput("|");
@@ -1889,15 +2123,18 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
-      for (let i = 0; i < 5; i++) editor.handleInput("\x1b[C"); // Move right 5 (after "hello", before space)
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
+      // Move right 5 (after "hello", before space)
+      for (let i = 0; i < 5; i++) editor.handleInput("\x1b[C");
 
       // Simulate bracketed paste of multi-line text
       editor.handleInput("\x1b[200~line1\nline2\nline3\x1b[201~");
       assert.strictEqual(editor.getText(), "helloline1\nline2\nline3 world");
 
       // Single undo should restore entire pre-paste state
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello world");
 
       editor.handleInput("|");
@@ -1908,15 +2145,18 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
-      for (let i = 0; i < 5; i++) editor.handleInput("\x1b[C"); // Move right 5 (after "hello", before space)
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
+      // Move right 5 (after "hello", before space)
+      for (let i = 0; i < 5; i++) editor.handleInput("\x1b[C");
 
       // Programmatic insertion (e.g., clipboard image path)
       editor.insertTextAtCursor("/tmp/image.png");
       assert.strictEqual(editor.getText(), "hello/tmp/image.png world");
 
       // Single undo should restore entire pre-insert state
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello world");
 
       editor.handleInput("|");
@@ -1927,8 +2167,10 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
-      for (let i = 0; i < 5; i++) editor.handleInput("\x1b[C"); // Move right 5 (after "hello", before space)
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
+      // Move right 5 (after "hello", before space)
+      for (let i = 0; i < 5; i++) editor.handleInput("\x1b[C");
 
       // Insert multiline text
       editor.insertTextAtCursor("line1\nline2\nline3");
@@ -1937,10 +2179,12 @@ describe("Editor component", () => {
       // Cursor should be at end of inserted text (after "line3", before " world")
       const cursor = editor.getCursor();
       assert.strictEqual(cursor.line, 2);
-      assert.strictEqual(cursor.col, 5); // "line3".length
+      // "line3".length
+      assert.strictEqual(cursor.col, 5);
 
       // Single undo should restore entire pre-insert state
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello world");
     });
 
@@ -1953,7 +2197,8 @@ describe("Editor component", () => {
       editor.insertTextAtCursor("a\r\nb\r\nc");
       assert.strictEqual(editor.getText(), "a\nb\nc");
 
-      editor.handleInput("\x1b[45;5u"); // Undo
+      // Undo
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
 
       // Insert text with CR only
@@ -1980,7 +2225,8 @@ describe("Editor component", () => {
       editor.setText("");
       assert.strictEqual(editor.getText(), "");
 
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello world");
     });
 
@@ -1996,13 +2242,15 @@ describe("Editor component", () => {
       editor.handleInput("l");
       editor.handleInput("l");
       editor.handleInput("o");
-      editor.handleInput("\r"); // Enter - submit
+      // Enter - submit
+      editor.handleInput("\r");
 
       assert.strictEqual(submitted, "hello");
       assert.strictEqual(editor.getText(), "");
 
       // Undo should do nothing - stack was cleared
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
     });
 
@@ -2022,19 +2270,23 @@ describe("Editor component", () => {
       assert.strictEqual(editor.getText(), "world");
 
       // Ctrl+W - delete word
-      editor.handleInput("\x17"); // Ctrl+W
+      // Ctrl+W
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "");
 
       // Press Up - enter history browsing, shows "hello"
-      editor.handleInput("\x1b[A"); // Up arrow
+      // Up arrow
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "hello");
 
       // Undo should restore to "" (state before entering history browsing)
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
 
       // Undo again should restore to "world" (state before Ctrl+W)
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "world");
     });
 
@@ -2057,23 +2309,29 @@ describe("Editor component", () => {
       assert.strictEqual(editor.getText(), "current");
 
       // Clear editor
-      editor.handleInput("\x17"); // Ctrl+W
+      // Ctrl+W
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "");
 
       // Navigate through history multiple times
-      editor.handleInput("\x1b[A"); // Up - "third"
+      // Up - "third"
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "third");
-      editor.handleInput("\x1b[A"); // Up - "second"
+      // Up - "second"
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "second");
-      editor.handleInput("\x1b[A"); // Up - "first"
+      // Up - "first"
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "first");
 
       // Undo should go back to "" (state before we started browsing), not intermediate states
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
 
       // Another undo goes back to "current"
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "current");
     });
 
@@ -2103,7 +2361,8 @@ describe("Editor component", () => {
       assert.strictEqual(editor.getText(), "hello lolworld");
 
       // Undo should restore to "hello world" (before inserting "lol")
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello world");
 
       editor.handleInput("|");
@@ -2121,13 +2380,17 @@ describe("Editor component", () => {
       assert.strictEqual(editor.getText(), "hello");
 
       // Delete word on empty - multiple times (should be no-ops)
-      editor.handleInput("\x17"); // Ctrl+W - deletes "hello"
+      // Ctrl+W - deletes "hello"
+      editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "");
-      editor.handleInput("\x17"); // Ctrl+W - no-op (nothing to delete)
-      editor.handleInput("\x17"); // Ctrl+W - no-op
+      // Ctrl+W - no-op (nothing to delete)
+      editor.handleInput("\x17");
+      // Ctrl+W - no-op
+      editor.handleInput("\x17");
 
       // Single undo should restore "hello"
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello");
     });
 
@@ -2164,7 +2427,8 @@ describe("Editor component", () => {
       assert.strictEqual(editor.isShowingAutocomplete(), false);
 
       // Undo should restore to "di"
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "di");
     });
   });
@@ -2423,7 +2687,8 @@ describe("Editor component", () => {
       assert.strictEqual(editor.isShowingAutocomplete(), false);
 
       // Undo should restore to "Work"
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "Work");
     });
 
@@ -2762,7 +3027,8 @@ describe("Editor component", () => {
               { value: "/model", label: "model", description: "Change model" },
               { value: "/help", label: "help", description: "Show help" },
             ];
-            const query = prefix.slice(1); // Remove leading /
+            // Remove leading /
+            const query = prefix.slice(1);
             const filtered = commands.filter((c) => c.value.startsWith(query));
             if (filtered.length > 0) {
               return { items: filtered, prefix };
@@ -2782,7 +3048,8 @@ describe("Editor component", () => {
       assert.strictEqual(editor.isShowingAutocomplete(), true);
 
       // Backspace to delete "/" - should hide autocomplete completely
-      editor.handleInput("\x7f"); // Backspace
+      // Backspace
+      editor.handleInput("\x7f");
       await flushAutocomplete();
       assert.strictEqual(editor.getText(), "");
       assert.strictEqual(editor.isShowingAutocomplete(), false);
@@ -2798,7 +3065,7 @@ describe("Editor component", () => {
           const beforeCursor = text.slice(0, cursorCol);
 
           // Check if we're in argument completion context: "/argtest <prefix>"
-          const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/);
+          const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/u);
           if (argtestMatch) {
             const argumentText = argtestMatch[1]!;
             const allArguments = [
@@ -2854,7 +3121,7 @@ describe("Editor component", () => {
           const beforeCursor = text.slice(0, cursorCol);
 
           // Check if we're in argument completion context
-          const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/);
+          const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/u);
           if (argtestMatch) {
             const argumentText = argtestMatch[1]!;
             const allArguments = [
@@ -2904,7 +3171,7 @@ describe("Editor component", () => {
           const text = lines[0] || "";
           const beforeCursor = text.slice(0, cursorCol);
 
-          const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/);
+          const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/u);
           if (argtestMatch) {
             const argumentText = argtestMatch[1]!;
             // Return all items - provider does not filter
@@ -2953,7 +3220,7 @@ describe("Editor component", () => {
           const text = lines[0] || "";
           const beforeCursor = text.slice(0, cursorCol);
 
-          const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/);
+          const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/u);
           if (argtestMatch) {
             const argumentText = argtestMatch[1]!;
             const allArguments = [
@@ -3001,7 +3268,7 @@ describe("Editor component", () => {
 
           // Check if we're in /model argument completion context
           // Use [^ ]+ to match any non-space characters (including hyphens)
-          const modelMatch = beforeCursor.match(/^\/model\s+(\S+)$/);
+          const modelMatch = beforeCursor.match(/^\/model\s+(\S+)$/u);
           if (modelMatch) {
             const modelText = modelMatch[1]!;
             const allModels = [
@@ -3133,28 +3400,36 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      editor.handleInput("\x1d"); // Ctrl+] (legacy sequence for ctrl+])
-      editor.handleInput("o"); // Jump to first 'o'
+      // Ctrl+] (legacy sequence for ctrl+])
+      editor.handleInput("\x1d");
+      // Jump to first 'o'
+      editor.handleInput("o");
 
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 }); // 'o' in "hello"
+      // 'o' in "hello"
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 });
     });
 
     it("jumps forward to next occurrence after cursor", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
       // Move cursor to the 'o' in "hello" (col 4)
       for (let i = 0; i < 4; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 });
 
-      editor.handleInput("\x1d"); // Ctrl+]
-      editor.handleInput("o"); // Jump to next 'o' (in "world")
+      // Ctrl+]
+      editor.handleInput("\x1d");
+      // Jump to next 'o' (in "world")
+      editor.handleInput("o");
 
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 }); // 'o' in "world"
+      // 'o' in "world"
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
     });
 
     it("jumps forward across multiple lines", () => {
@@ -3162,13 +3437,18 @@ describe("Editor component", () => {
 
       editor.setText("abc\ndef\nghi");
       // Cursor is at end (line 2, col 3). Move to line 0 via up arrows, then Ctrl+A
-      editor.handleInput("\x1b[A"); // Up
-      editor.handleInput("\x1b[A"); // Up - now on line 0
-      editor.handleInput("\x01"); // Ctrl+A - go to start of line
+      // Up
+      editor.handleInput("\x1b[A");
+      // Up - now on line 0
+      editor.handleInput("\x1b[A");
+      // Ctrl+A - go to start of line
+      editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      editor.handleInput("\x1d"); // Ctrl+]
-      editor.handleInput("g"); // Jump to 'g' on line 3
+      // Ctrl+]
+      editor.handleInput("\x1d");
+      // Jump to 'g' on line 3
+      editor.handleInput("g");
 
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 0 });
     });
@@ -3180,10 +3460,13 @@ describe("Editor component", () => {
       // Cursor at end (col 11)
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 });
 
-      editor.handleInput("\x1b\x1d"); // Ctrl+Alt+] (ESC followed by Ctrl+])
-      editor.handleInput("o"); // Jump to last 'o' before cursor
+      // Ctrl+Alt+] (ESC followed by Ctrl+])
+      editor.handleInput("\x1b\x1d");
+      // Jump to last 'o' before cursor
+      editor.handleInput("o");
 
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 }); // 'o' in "world"
+      // 'o' in "world"
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
     });
 
     it("jumps backward across multiple lines", () => {
@@ -3193,8 +3476,10 @@ describe("Editor component", () => {
       // Cursor at end of line 3
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 3 });
 
-      editor.handleInput("\x1b\x1d"); // Ctrl+Alt+]
-      editor.handleInput("a"); // Jump to 'a' on line 1
+      // Ctrl+Alt+]
+      editor.handleInput("\x1b\x1d");
+      // Jump to 'a' on line 1
+      editor.handleInput("a");
 
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
     });
@@ -3203,13 +3488,17 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      editor.handleInput("\x1d"); // Ctrl+]
-      editor.handleInput("z"); // 'z' doesn't exist
+      // Ctrl+]
+      editor.handleInput("\x1d");
+      // 'z' doesn't exist
+      editor.handleInput("z");
 
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 }); // Cursor unchanged
+      // Cursor unchanged
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
     });
 
     it("does nothing when character is not found (backward)", () => {
@@ -3219,41 +3508,52 @@ describe("Editor component", () => {
       // Cursor at end
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 });
 
-      editor.handleInput("\x1b\x1d"); // Ctrl+Alt+]
-      editor.handleInput("z"); // 'z' doesn't exist
+      // Ctrl+Alt+]
+      editor.handleInput("\x1b\x1d");
+      // 'z' doesn't exist
+      editor.handleInput("z");
 
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 }); // Cursor unchanged
+      // Cursor unchanged
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 });
     });
 
     it("is case-sensitive", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("Hello World");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
       // Search for lowercase 'h' - should not find it (only 'H' exists)
-      editor.handleInput("\x1d"); // Ctrl+]
+      // Ctrl+]
+      editor.handleInput("\x1d");
       editor.handleInput("h");
 
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 }); // Cursor unchanged
+      // Cursor unchanged
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
       // Search for uppercase 'W' - should find it
-      editor.handleInput("\x1d"); // Ctrl+]
+      // Ctrl+]
+      editor.handleInput("\x1d");
       editor.handleInput("W");
 
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 }); // 'W' in "World"
+      // 'W' in "World"
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 });
     });
 
     it("cancels jump mode when Ctrl+] is pressed again", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      editor.handleInput("\x1d"); // Ctrl+] - enter jump mode
-      editor.handleInput("\x1d"); // Ctrl+] again - cancel
+      // Ctrl+] - enter jump mode
+      editor.handleInput("\x1d");
+      // Ctrl+] again - cancel
+      editor.handleInput("\x1d");
 
       // Type 'o' normally - should insert, not jump
       editor.handleInput("o");
@@ -3264,11 +3564,14 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      editor.handleInput("\x1d"); // Ctrl+] - enter jump mode
-      editor.handleInput("\x1b"); // Escape - cancel jump mode
+      // Ctrl+] - enter jump mode
+      editor.handleInput("\x1d");
+      // Escape - cancel jump mode
+      editor.handleInput("\x1b");
 
       // Cursor should be unchanged (Escape itself doesn't move cursor in editor)
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
@@ -3285,8 +3588,10 @@ describe("Editor component", () => {
       // Cursor at end
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 });
 
-      editor.handleInput("\x1b\x1d"); // Ctrl+Alt+] - enter backward jump mode
-      editor.handleInput("\x1b\x1d"); // Ctrl+Alt+] again - cancel
+      // Ctrl+Alt+] - enter backward jump mode
+      editor.handleInput("\x1b\x1d");
+      // Ctrl+Alt+] again - cancel
+      editor.handleInput("\x1b\x1d");
 
       // Type 'o' normally - should insert, not jump
       editor.handleInput("o");
@@ -3297,17 +3602,20 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("foo(bar) = baz;");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
       // Jump to '('
-      editor.handleInput("\x1d"); // Ctrl+]
+      // Ctrl+]
+      editor.handleInput("\x1d");
       editor.handleInput("(");
 
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
 
       // Jump to '='
-      editor.handleInput("\x1d"); // Ctrl+]
+      // Ctrl+]
+      editor.handleInput("\x1d");
       editor.handleInput("=");
 
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 9 });
@@ -3319,24 +3627,28 @@ describe("Editor component", () => {
       editor.setText("");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      editor.handleInput("\x1d"); // Ctrl+]
+      // Ctrl+]
+      editor.handleInput("\x1d");
       editor.handleInput("x");
 
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 }); // Cursor unchanged
+      // Cursor unchanged
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
     });
 
     it("resets lastAction when jumping", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      editor.handleInput("\x01"); // Ctrl+A - go to start
+      // Ctrl+A - go to start
+      editor.handleInput("\x01");
 
       // Type to set lastAction to "type-word"
       editor.handleInput("x");
       assert.strictEqual(editor.getText(), "xhello world");
 
       // Jump forward
-      editor.handleInput("\x1d"); // Ctrl+]
+      // Ctrl+]
+      editor.handleInput("\x1d");
       editor.handleInput("o");
 
       // Type more - should start a new undo unit (lastAction was reset)
@@ -3344,7 +3656,8 @@ describe("Editor component", () => {
       assert.strictEqual(editor.getText(), "xhellYo world");
 
       // Undo should only undo "Y", not "x" as well
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "xhello world");
     });
   });
@@ -3357,7 +3670,8 @@ describe("Editor component", () => {
       // Go to target line
       for (let i = 0; i < line; i++) editor.handleInput("\x1b[B");
       // Go to target col
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < col; i++) editor.handleInput("\x1b[C");
     }
 
@@ -3370,17 +3684,22 @@ describe("Editor component", () => {
       editor.setText("2222222222x222\n\n1111111111_111111111111");
 
       // Position cursor on _ (line 2, col 10)
-      assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 23 }); // At end
-      editor.handleInput("\x01"); // Ctrl+A - go to start of line
-      for (let i = 0; i < 10; i++) editor.handleInput("\x1b[C"); // Move right to col 10
+      // At end
+      assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 23 });
+      // Ctrl+A - go to start of line
+      editor.handleInput("\x01");
+      // Move right to col 10
+      for (let i = 0; i < 10; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 10 });
 
       // Press Up - should move to empty line (col clamped to 0)
-      editor.handleInput("\x1b[A"); // Up arrow
+      // Up arrow
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 0 });
 
       // Press Up again - should move to line 0 at col 10 (on 'x')
-      editor.handleInput("\x1b[A"); // Up arrow
+      // Up arrow
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 });
     });
 
@@ -3390,18 +3709,23 @@ describe("Editor component", () => {
       editor.setText("1111111111_111\n\n2222222222x222222222222");
 
       // Position cursor on _ (line 0, col 10)
-      editor.handleInput("\x1b[A"); // Up to line 1
-      editor.handleInput("\x1b[A"); // Up to line 0
-      editor.handleInput("\x01"); // Ctrl+A
+      // Up to line 1
+      editor.handleInput("\x1b[A");
+      // Up to line 0
+      editor.handleInput("\x1b[A");
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 10; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 });
 
       // Press Down - should move to empty line (col clamped to 0)
-      editor.handleInput("\x1b[B"); // Down arrow
+      // Down arrow
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 0 });
 
       // Press Down again - should move to line 2 at col 10 (on 'x')
-      editor.handleInput("\x1b[B"); // Down arrow
+      // Down arrow
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 10 });
     });
 
@@ -3411,22 +3735,28 @@ describe("Editor component", () => {
       editor.setText("1234567890\n\n1234567890");
 
       // Start at line 2, col 5
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 5; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 5 });
 
       // Move up through empty line
-      editor.handleInput("\x1b[A"); // Up - line 1, col 0
-      editor.handleInput("\x1b[A"); // Up - line 0, col 5 (sticky)
+      // Up - line 1, col 0
+      editor.handleInput("\x1b[A");
+      // Up - line 0, col 5 (sticky)
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
 
       // Move left - resets sticky column
-      editor.handleInput("\x1b[D"); // Left
+      // Left
+      editor.handleInput("\x1b[D");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 });
 
       // Move down twice
-      editor.handleInput("\x1b[B"); // Down - line 1, col 0
-      editor.handleInput("\x1b[B"); // Down - line 2, col 4 (new sticky from col 4)
+      // Down - line 1, col 0
+      editor.handleInput("\x1b[B");
+      // Down - line 2, col 4 (new sticky from col 4)
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 4 });
     });
 
@@ -3436,24 +3766,32 @@ describe("Editor component", () => {
       editor.setText("1234567890\n\n1234567890");
 
       // Start at line 0, col 5
-      editor.handleInput("\x1b[A"); // Up to line 1
-      editor.handleInput("\x1b[A"); // Up to line 0
-      editor.handleInput("\x01"); // Ctrl+A
+      // Up to line 1
+      editor.handleInput("\x1b[A");
+      // Up to line 0
+      editor.handleInput("\x1b[A");
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 5; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
 
       // Move down through empty line
-      editor.handleInput("\x1b[B"); // Down - line 1, col 0
-      editor.handleInput("\x1b[B"); // Down - line 2, col 5 (sticky)
+      // Down - line 1, col 0
+      editor.handleInput("\x1b[B");
+      // Down - line 2, col 5 (sticky)
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 5 });
 
       // Move right - resets sticky column
-      editor.handleInput("\x1b[C"); // Right
+      // Right
+      editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 6 });
 
       // Move up twice
-      editor.handleInput("\x1b[A"); // Up - line 1, col 0
-      editor.handleInput("\x1b[A"); // Up - line 0, col 6 (new sticky from col 6)
+      // Up - line 1, col 0
+      editor.handleInput("\x1b[A");
+      // Up - line 0, col 6 (new sticky from col 6)
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 });
     });
 
@@ -3463,12 +3801,15 @@ describe("Editor component", () => {
       editor.setText("1234567890\n\n1234567890");
 
       // Start at line 2, col 8
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 8; i++) editor.handleInput("\x1b[C");
 
       // Move up through empty line
-      editor.handleInput("\x1b[A"); // Up
-      editor.handleInput("\x1b[A"); // Up - line 0, col 8
+      // Up
+      editor.handleInput("\x1b[A");
+      // Up - line 0, col 8
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
 
       // Type a character - resets sticky column
@@ -3476,8 +3817,10 @@ describe("Editor component", () => {
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 9 });
 
       // Move down twice
-      editor.handleInput("\x1b[B"); // Down - line 1, col 0
-      editor.handleInput("\x1b[B"); // Down - line 2, col 9 (new sticky from col 9)
+      // Down - line 1, col 0
+      editor.handleInput("\x1b[B");
+      // Down - line 2, col 9 (new sticky from col 9)
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 9 });
     });
 
@@ -3487,21 +3830,27 @@ describe("Editor component", () => {
       editor.setText("1234567890\n\n1234567890");
 
       // Start at line 2, col 8
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 8; i++) editor.handleInput("\x1b[C");
 
       // Move up through empty line
-      editor.handleInput("\x1b[A"); // Up
-      editor.handleInput("\x1b[A"); // Up - line 0, col 8
+      // Up
+      editor.handleInput("\x1b[A");
+      // Up - line 0, col 8
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
 
       // Backspace - resets sticky column
-      editor.handleInput("\x7f"); // Backspace
+      // Backspace
+      editor.handleInput("\x7f");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
 
       // Move down twice
-      editor.handleInput("\x1b[B"); // Down - line 1, col 0
-      editor.handleInput("\x1b[B"); // Down - line 2, col 7 (new sticky from col 7)
+      // Down - line 1, col 0
+      editor.handleInput("\x1b[B");
+      // Down - line 2, col 7 (new sticky from col 7)
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 7 });
     });
 
@@ -3511,18 +3860,22 @@ describe("Editor component", () => {
       editor.setText("1234567890\n\n1234567890");
 
       // Start at line 2, col 8
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 8; i++) editor.handleInput("\x1b[C");
 
       // Move up - establishes sticky col 8
-      editor.handleInput("\x1b[A"); // Up - line 1, col 0
+      // Up - line 1, col 0
+      editor.handleInput("\x1b[A");
 
       // Ctrl+A - resets sticky column to 0
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 0 });
 
       // Move up
-      editor.handleInput("\x1b[A"); // Up - line 0, col 0 (new sticky from col 0)
+      // Up - line 0, col 0 (new sticky from col 0)
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
     });
 
@@ -3532,21 +3885,27 @@ describe("Editor component", () => {
       editor.setText("12345\n\n1234567890");
 
       // Start at line 2, col 3
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 3; i++) editor.handleInput("\x1b[C");
 
       // Move up through empty line - establishes sticky col 3
-      editor.handleInput("\x1b[A"); // Up - line 1, col 0
-      editor.handleInput("\x1b[A"); // Up - line 0, col 3
+      // Up - line 1, col 0
+      editor.handleInput("\x1b[A");
+      // Up - line 0, col 3
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
 
       // Ctrl+E - resets sticky column to end
-      editor.handleInput("\x05"); // Ctrl+E
+      // Ctrl+E
+      editor.handleInput("\x05");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
 
       // Move down twice
-      editor.handleInput("\x1b[B"); // Down - line 1, col 0
-      editor.handleInput("\x1b[B"); // Down - line 2, col 5 (new sticky from col 5)
+      // Down - line 1, col 0
+      editor.handleInput("\x1b[B");
+      // Down - line 2, col 5 (new sticky from col 5)
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 5 });
     });
 
@@ -3559,17 +3918,23 @@ describe("Editor component", () => {
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 11 });
 
       // Move up through empty line - establishes sticky col 11
-      editor.handleInput("\x1b[A"); // Up - line 1, col 0
-      editor.handleInput("\x1b[A"); // Up - line 0, col 11
+      // Up - line 1, col 0
+      editor.handleInput("\x1b[A");
+      // Up - line 0, col 11
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 });
 
       // Ctrl+Left - word movement resets sticky column
-      editor.handleInput("\x1b[1;5D"); // Ctrl+Left
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 }); // Before "world"
+      // Ctrl+Left
+      editor.handleInput("\x1b[1;5D");
+      // Before "world"
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 });
 
       // Move down twice
-      editor.handleInput("\x1b[B"); // Down - line 1, col 0
-      editor.handleInput("\x1b[B"); // Down - line 2, col 6 (new sticky from col 6)
+      // Down - line 1, col 0
+      editor.handleInput("\x1b[B");
+      // Down - line 2, col 6 (new sticky from col 6)
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 6 });
     });
 
@@ -3579,23 +3944,32 @@ describe("Editor component", () => {
       editor.setText("hello world\n\nhello world");
 
       // Start at line 0, col 0
-      editor.handleInput("\x1b[A"); // Up
-      editor.handleInput("\x1b[A"); // Up
-      editor.handleInput("\x01"); // Ctrl+A
+      // Up
+      editor.handleInput("\x1b[A");
+      // Up
+      editor.handleInput("\x1b[A");
+      // Ctrl+A
+      editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
       // Move down through empty line - establishes sticky col 0
-      editor.handleInput("\x1b[B"); // Down - line 1, col 0
-      editor.handleInput("\x1b[B"); // Down - line 2, col 0
+      // Down - line 1, col 0
+      editor.handleInput("\x1b[B");
+      // Down - line 2, col 0
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 0 });
 
       // Ctrl+Right - word movement resets sticky column
-      editor.handleInput("\x1b[1;5C"); // Ctrl+Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 5 }); // After "hello"
+      // Ctrl+Right
+      editor.handleInput("\x1b[1;5C");
+      // After "hello"
+      assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 5 });
 
       // Move up twice
-      editor.handleInput("\x1b[A"); // Up - line 1, col 0
-      editor.handleInput("\x1b[A"); // Up - line 0, col 5 (new sticky from col 5)
+      // Up - line 1, col 0
+      editor.handleInput("\x1b[A");
+      // Up - line 0, col 5 (new sticky from col 5)
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
     });
 
@@ -3605,15 +3979,20 @@ describe("Editor component", () => {
       editor.setText("1234567890\n\n1234567890");
 
       // Go to line 0, col 8
-      editor.handleInput("\x1b[A"); // Up to line 1
-      editor.handleInput("\x1b[A"); // Up to line 0
-      editor.handleInput("\x01"); // Ctrl+A
+      // Up to line 1
+      editor.handleInput("\x1b[A");
+      // Up to line 0
+      editor.handleInput("\x1b[A");
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 8; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
 
       // Move down through empty line - establishes sticky col 8
-      editor.handleInput("\x1b[B"); // Down - line 1, col 0
-      editor.handleInput("\x1b[B"); // Down - line 2, col 8 (sticky)
+      // Down - line 1, col 0
+      editor.handleInput("\x1b[B");
+      // Down - line 2, col 8 (sticky)
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 8 });
 
       // Type something to create undo state - this clears sticky and sets col to 9
@@ -3622,18 +4001,23 @@ describe("Editor component", () => {
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 9 });
 
       // Move up - establishes new sticky col 9
-      editor.handleInput("\x1b[A"); // Up - line 1, col 0
-      editor.handleInput("\x1b[A"); // Up - line 0, col 9
+      // Up - line 1, col 0
+      editor.handleInput("\x1b[A");
+      // Up - line 0, col 9
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 9 });
 
       // Undo - resets sticky column and restores cursor to line 2, col 8
-      editor.handleInput("\x1b[45;5u"); // Ctrl+- (undo)
+      // Ctrl+- (undo)
+      editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "1234567890\n\n1234567890");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 8 });
 
       // Move up - should capture new sticky from restored col 8, not old col 9
-      editor.handleInput("\x1b[A"); // Up - line 1, col 0
-      editor.handleInput("\x1b[A"); // Up - line 0, col 8 (new sticky from restored position)
+      // Up - line 1, col 0
+      editor.handleInput("\x1b[A");
+      // Up - line 0, col 8 (new sticky from restored position)
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
     });
 
@@ -3643,46 +4027,60 @@ describe("Editor component", () => {
       editor.setText("1234567890\nab\ncd\nef\n1234567890");
 
       // Start at line 4, col 7
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 7; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 4, col: 7 });
 
       // Move up multiple times through short lines
-      editor.handleInput("\x1b[A"); // Up - line 3, col 2 (clamped)
-      editor.handleInput("\x1b[A"); // Up - line 2, col 2 (clamped)
-      editor.handleInput("\x1b[A"); // Up - line 1, col 2 (clamped)
-      editor.handleInput("\x1b[A"); // Up - line 0, col 7 (restored)
+      // Up - line 3, col 2 (clamped)
+      editor.handleInput("\x1b[A");
+      // Up - line 2, col 2 (clamped)
+      editor.handleInput("\x1b[A");
+      // Up - line 1, col 2 (clamped)
+      editor.handleInput("\x1b[A");
+      // Up - line 0, col 7 (restored)
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
 
       // Move down multiple times - sticky should still be 7
-      editor.handleInput("\x1b[B"); // Down - line 1, col 2
-      editor.handleInput("\x1b[B"); // Down - line 2, col 2
-      editor.handleInput("\x1b[B"); // Down - line 3, col 2
-      editor.handleInput("\x1b[B"); // Down - line 4, col 7 (restored)
+      // Down - line 1, col 2
+      editor.handleInput("\x1b[B");
+      // Down - line 2, col 2
+      editor.handleInput("\x1b[B");
+      // Down - line 3, col 2
+      editor.handleInput("\x1b[B");
+      // Down - line 4, col 7 (restored)
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 4, col: 7 });
     });
 
     it("moves correctly through wrapped visual lines without getting stuck", () => {
-      const tui = createTestTUI(15, 24); // Narrow terminal
+      // Narrow terminal
+      const tui = createTestTUI(15, 24);
       const editor = new Editor(tui, defaultEditorTheme);
 
       // Line 0: short
       // Line 1: 30 chars = wraps to 3 visual lines at width 10 (after padding)
       editor.setText("short\n123456789012345678901234567890");
-      editor.render(15); // This gives 14 layout width
+      // This gives 14 layout width
+      editor.render(15);
 
       // Position at end of line 1 (col 30)
       assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 30 });
 
       // Move up repeatedly - should traverse all visual lines of the wrapped text
       // and eventually reach line 0
-      editor.handleInput("\x1b[A"); // Up - to previous visual line within line 1
+      // Up - to previous visual line within line 1
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getCursor().line, 1);
 
-      editor.handleInput("\x1b[A"); // Up - another visual line
+      // Up - another visual line
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getCursor().line, 1);
 
-      editor.handleInput("\x1b[A"); // Up - should reach line 0
+      // Up - should reach line 0
+      editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getCursor().line, 0);
     });
 
@@ -3692,17 +4090,22 @@ describe("Editor component", () => {
       editor.setText("1234567890\n\n1234567890");
 
       // Establish sticky column
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 8; i++) editor.handleInput("\x1b[C");
-      editor.handleInput("\x1b[A"); // Up
+      // Up
+      editor.handleInput("\x1b[A");
 
       // setText should reset sticky column
       editor.setText("abcdefghij\n\nabcdefghij");
-      assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 10 }); // At end
+      // At end
+      assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 10 });
 
       // Move up - should capture new sticky from current position (10)
-      editor.handleInput("\x1b[A"); // Up - line 1, col 0
-      editor.handleInput("\x1b[A"); // Up - line 0, col 10
+      // Up - line 1, col 0
+      editor.handleInput("\x1b[A");
+      // Up - line 0, col 10
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 });
     });
 
@@ -3715,23 +4118,32 @@ describe("Editor component", () => {
       editor.setText("111111111x1111111111\n\n333333333_");
 
       // Go to line 0, press Ctrl+E (end of line) - col 20
-      editor.handleInput("\x1b[A"); // Up to line 1
-      editor.handleInput("\x1b[A"); // Up to line 0
-      editor.handleInput("\x05"); // Ctrl+E - move to end of line
+      // Up to line 1
+      editor.handleInput("\x1b[A");
+      // Up to line 0
+      editor.handleInput("\x1b[A");
+      // Ctrl+E - move to end of line
+      editor.handleInput("\x05");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 20 });
 
       // Move down to line 2 - cursor clamped to col 10 (end of line)
-      editor.handleInput("\x1b[B"); // Down to line 1, col 0
-      editor.handleInput("\x1b[B"); // Down to line 2, col 10 (clamped)
+      // Down to line 1, col 0
+      editor.handleInput("\x1b[B");
+      // Down to line 2, col 10 (clamped)
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 10 });
 
       // Press Right at end of prompt - nothing visible happens, but sets preferredVisualCol to 10
-      editor.handleInput("\x1b[C"); // Right - can't move, but sets preferredVisualCol
-      assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 10 }); // Still at same position
+      // Right - can't move, but sets preferredVisualCol
+      editor.handleInput("\x1b[C");
+      // Still at same position
+      assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 10 });
 
       // Move up twice to line 0 - should use preferredVisualCol (10) to land on 'x'
-      editor.handleInput("\x1b[A"); // Up to line 1, col 0
-      editor.handleInput("\x1b[A"); // Up to line 0, col 10 (on 'x')
+      // Up to line 1, col 0
+      editor.handleInput("\x1b[A");
+      // Up to line 0, col 10 (on 'x')
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 });
     });
 
@@ -3743,20 +4155,26 @@ describe("Editor component", () => {
       editor.setText("12345678901234567890\n\n12345678901234567890");
 
       // Start at line 2, col 15
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 15; i++) editor.handleInput("\x1b[C");
 
       // Move up through empty line - establishes sticky col 15
-      editor.handleInput("\x1b[A"); // Up
-      editor.handleInput("\x1b[A"); // Up - line 0, col 15
+      // Up
+      editor.handleInput("\x1b[A");
+      // Up - line 0, col 15
+      editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 15 });
 
       // Render with narrower width to simulate resize
-      editor.render(12); // Width 12
+      // Width 12
+      editor.render(12);
 
       // Move down - sticky should be clamped to new width
-      editor.handleInput("\x1b[B"); // Down - line 1
-      editor.handleInput("\x1b[B"); // Down - line 2, col should be clamped
+      // Down - line 1
+      editor.handleInput("\x1b[B");
+      // Down - line 2, col should be clamped
+      editor.handleInput("\x1b[B");
       assert.equal(editor.getCursor().col, 4);
     });
 
@@ -3769,12 +4187,14 @@ describe("Editor component", () => {
       editor.setText("short\n12345678901234567890");
 
       // Go to line 1, col 15
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 15; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 15 });
 
       // Move up to establish sticky col 15
-      editor.handleInput("\x1b[A"); // Up to line 0
+      // Up to line 0
+      editor.handleInput("\x1b[A");
       // Line 0 has only 5 chars, so cursor at col 5
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
 
@@ -3783,18 +4203,22 @@ describe("Editor component", () => {
 
       // Move down - preferredVisualCol was 15, but width is 10
       // Should land on line 1, clamped to width (visual col 9, which is logical col 9)
-      editor.handleInput("\x1b[B"); // Down to line 1
+      // Down to line 1
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 8 });
 
       // Move up
-      editor.handleInput("\x1b[A"); // Up - should go to line 0
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 }); // Line 0 only has 5 chars
+      // Up - should go to line 0
+      editor.handleInput("\x1b[A");
+      // Line 0 only has 5 chars
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
 
       // Restore the original width
       editor.render(80);
 
       // Move down - preferredVisualCol was kept at 15
-      editor.handleInput("\x1b[B"); // Down to line 1
+      // Down to line 1
+      editor.handleInput("\x1b[B");
       assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 15 });
     });
 
@@ -3854,7 +4278,8 @@ describe("Editor component", () => {
   describe("Paste marker atomic behavior", () => {
     /** Helper: simulate a large paste that creates a marker */
     function pasteWithMarker(editor: Editor): string {
-      const bigContent = "line\n".repeat(20).trimEnd(); // 20 lines
+      // 20 lines
+      const bigContent = "line\n".repeat(20).trimEnd();
       editor.handleInput(`\x1b[200~${bigContent}\x1b[201~`);
       // The editor replaces large pastes with a marker like "[paste #1 +20 lines]"
       return editor.getText();
@@ -3868,7 +4293,7 @@ describe("Editor component", () => {
     it("creates a paste marker for large pastes", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
       const text = pasteWithMarker(editor);
-      assert.match(text, /\[paste #\d+ \+\d+ lines\]/);
+      assert.match(text, /\[paste #\d+ \+\d+ lines\]/u);
     });
 
     it("treats paste marker as single unit for right arrow", () => {
@@ -3879,7 +4304,8 @@ describe("Editor component", () => {
       // Text: "A[paste #1 +20 lines]B", cursor at end
 
       // Go to start
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
       // Right arrow: should move past "A"
@@ -3888,7 +4314,7 @@ describe("Editor component", () => {
 
       // Right arrow: should skip the entire marker
       editor.handleInput("\x1b[C");
-      const marker = editor.getText().match(/\[paste #\d+ \+\d+ lines\]/)![0];
+      const marker = editor.getText().match(/\[paste #\d+ \+\d+ lines\]/u)![0];
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 + marker.length });
 
       // Right arrow: should move past "B"
@@ -3906,7 +4332,7 @@ describe("Editor component", () => {
       // Left arrow: past "B"
       editor.handleInput("\x1b[D");
       const text = editor.getText();
-      const marker = text.match(/\[paste #\d+ \+\d+ lines\]/)![0];
+      const marker = text.match(/\[paste #\d+ \+\d+ lines\]/u)![0];
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 + marker.length });
 
       // Left arrow: skip the entire marker
@@ -3925,13 +4351,16 @@ describe("Editor component", () => {
       editor.handleInput("B");
 
       const text = editor.getText();
-      const marker = text.match(/\[paste #\d+ \+\d+ lines\]/)![0];
+      const marker = text.match(/\[paste #\d+ \+\d+ lines\]/u)![0];
 
       // Position cursor right after the marker (before "B")
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
       // Move past "A" and the marker
-      editor.handleInput("\x1b[C"); // past "A"
-      editor.handleInput("\x1b[C"); // past marker
+      // past "A"
+      editor.handleInput("\x1b[C");
+      // past marker
+      editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 + marker.length });
 
       // Backspace: should delete the entire marker at once
@@ -3947,11 +4376,14 @@ describe("Editor component", () => {
       editor.handleInput("B");
 
       // Position cursor on "A" (col 0) then move right once to be just before marker
-      editor.handleInput("\x01"); // Ctrl+A
-      editor.handleInput("\x1b[C"); // past "A", now at col 1 (start of marker)
+      // Ctrl+A
+      editor.handleInput("\x01");
+      // past "A", now at col 1 (start of marker)
+      editor.handleInput("\x1b[C");
 
       // Forward delete: should delete the entire marker at once
-      editor.handleInput("\x1b[3~"); // Delete key
+      // Delete key
+      editor.handleInput("\x1b[3~");
       assert.strictEqual(editor.getText(), "AB");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 });
     });
@@ -3966,10 +4398,11 @@ describe("Editor component", () => {
       // Text: "X [paste #1 +20 lines] Y"
 
       const text = editor.getText();
-      const marker = text.match(/\[paste #\d+ \+\d+ lines\]/)![0];
+      const marker = text.match(/\[paste #\d+ \+\d+ lines\]/u)![0];
 
       // Go to start
-      editor.handleInput("\x01"); // Ctrl+A
+      // Ctrl+A
+      editor.handleInput("\x01");
 
       // Ctrl+Right: skip "X"
       editor.handleInput("\x1b[1;5C");
@@ -3990,8 +4423,10 @@ describe("Editor component", () => {
 
       // Position after marker
       editor.handleInput("\x01");
-      editor.handleInput("\x1b[C"); // past A
-      editor.handleInput("\x1b[C"); // past marker
+      // past A
+      editor.handleInput("\x1b[C");
+      // past marker
+      editor.handleInput("\x1b[C");
 
       // Delete marker
       editor.handleInput("\x7f");
@@ -4011,8 +4446,10 @@ describe("Editor component", () => {
 
       const paste = bigPaste("alpha");
       editor.handleInput(`\x1b[200~${paste}\x1b[201~`);
-      editor.handleInput("\x7f"); // delete the marker
-      editor.handleInput("\x1b[45;5u"); // undo: restores marker text and registry
+      // delete the marker
+      editor.handleInput("\x7f");
+      // undo: restores marker text and registry
+      editor.handleInput("\x1b[45;5u");
       editor.handleInput("\r");
       assert.strictEqual(submitted, paste);
     });
@@ -4026,12 +4463,18 @@ describe("Editor component", () => {
 
       const pasteA = bigPaste("alpha");
       const pasteB = bigPaste("beta");
-      editor.handleInput(`\x1b[200~${pasteA}\x1b[201~`); // #1 = A
-      editor.handleInput(`\x1b[200~${pasteB}\x1b[201~`); // #2 = B, cursor at end
-      editor.handleInput("\x01"); // Ctrl+A
-      editor.handleInput("\x1b[C"); // right over marker #1
-      editor.handleInput("\x7f"); // delete marker #1, renumbers #2 -> #1
-      editor.handleInput("\x1b[45;5u"); // undo
+      // #1 = A
+      editor.handleInput(`\x1b[200~${pasteA}\x1b[201~`);
+      // #2 = B, cursor at end
+      editor.handleInput(`\x1b[200~${pasteB}\x1b[201~`);
+      // Ctrl+A
+      editor.handleInput("\x01");
+      // right over marker #1
+      editor.handleInput("\x1b[C");
+      // delete marker #1, renumbers #2 -> #1
+      editor.handleInput("\x7f");
+      // undo
+      editor.handleInput("\x1b[45;5u");
       editor.handleInput("\r");
       assert.strictEqual(submitted, pasteA + pasteB);
     });
@@ -4046,13 +4489,20 @@ describe("Editor component", () => {
       const pasteA = bigPaste("alpha");
       const pasteB = bigPaste("beta");
       const pasteC = bigPaste("gamma");
-      editor.handleInput(`\x1b[200~${pasteA}\x1b[201~`); // #1 = A
-      editor.handleInput("\x01"); // Ctrl+A
-      editor.handleInput(`\x1b[200~${pasteB}\x1b[201~`); // #2 = B, text: [#2][#1]
-      editor.handleInput("\x01"); // Ctrl+A
-      editor.handleInput(`\x1b[200~${pasteC}\x1b[201~`); // #3 = C, text: [#3][#2][#1]
-      editor.handleInput("\x05"); // Ctrl+E
-      editor.handleInput("\x7f"); // delete marker #1, renumber #3 -> #2 and #2 -> #1
+      // #1 = A
+      editor.handleInput(`\x1b[200~${pasteA}\x1b[201~`);
+      // Ctrl+A
+      editor.handleInput("\x01");
+      // #2 = B, text: [#2][#1]
+      editor.handleInput(`\x1b[200~${pasteB}\x1b[201~`);
+      // Ctrl+A
+      editor.handleInput("\x01");
+      // #3 = C, text: [#3][#2][#1]
+      editor.handleInput(`\x1b[200~${pasteC}\x1b[201~`);
+      // Ctrl+E
+      editor.handleInput("\x05");
+      // delete marker #1, renumber #3 -> #2 and #2 -> #1
+      editor.handleInput("\x7f");
       editor.handleInput("\r");
       assert.strictEqual(submitted, pasteC + pasteB);
     });
@@ -4067,7 +4517,8 @@ describe("Editor component", () => {
       const paste = bigPaste("alpha");
       editor.handleInput(`\x1b[200~${paste}\x1b[201~`);
       editor.setText("replacement");
-      editor.handleInput("\x1b[45;5u"); // undo
+      // undo
+      editor.handleInput("\x1b[45;5u");
       editor.handleInput("\r");
       assert.strictEqual(submitted, paste);
     });
@@ -4079,7 +4530,7 @@ describe("Editor component", () => {
       pasteWithMarker(editor);
 
       const text = editor.getText();
-      const markers = [...text.matchAll(/\[paste #\d+ \+\d+ lines\]/g)];
+      const markers = [...text.matchAll(/\[paste #\d+ \+\d+ lines\]/gu)];
       assert.strictEqual(markers.length, 2);
 
       // Go to start
@@ -4111,9 +4562,12 @@ describe("Editor component", () => {
 
       // No paste with ID 99 exists, so the marker is NOT treated atomically.
       // Right arrow should move one grapheme at a time.
-      editor.handleInput("\x01"); // Ctrl+A
-      editor.handleInput("\x1b[C"); // Right
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 }); // Just past "["
+      // Ctrl+A
+      editor.handleInput("\x01");
+      // Right
+      editor.handleInput("\x1b[C");
+      // Just past "["
+      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 });
     });
 
     it("does not crash when paste marker is wider than terminal width", () => {
@@ -4124,7 +4578,7 @@ describe("Editor component", () => {
       editor.handleInput(`\x1b[200~${bigContent}\x1b[201~`);
 
       const text = editor.getText();
-      const marker = text.match(/\[paste #\d+ \+\d+ lines\]/);
+      const marker = text.match(/\[paste #\d+ \+\d+ lines\]/u);
       assert.ok(marker, "paste marker should be created");
       assert.ok(visibleWidth(marker[0]) > 8, "marker should be wider than render width");
 
@@ -4157,11 +4611,16 @@ describe("Editor component", () => {
       for (let i = 0; i < 4; i++) editor.handleInput("b");
 
       // Move cursor left to land on the paste marker
-      editor.handleInput("\x1b[D"); // past last 'b'
-      editor.handleInput("\x1b[D"); // past last 'b'
-      editor.handleInput("\x1b[D"); // past last 'b'
-      editor.handleInput("\x1b[D"); // past last 'b'
-      editor.handleInput("\x1b[D"); // now on the paste marker
+      // past last 'b'
+      editor.handleInput("\x1b[D");
+      // past last 'b'
+      editor.handleInput("\x1b[D");
+      // past last 'b'
+      editor.handleInput("\x1b[D");
+      // past last 'b'
+      editor.handleInput("\x1b[D");
+      // now on the paste marker
+      editor.handleInput("\x1b[D");
 
       // Render at width 54 - should not throw
       const renderWidth = 54;
@@ -4221,7 +4680,7 @@ describe("Editor component", () => {
 
       editor.handleInput(`\x1b[200~${pastedText}\x1b[201~`);
 
-      assert.match(editor.getText(), /\[paste #\d+ \+\d+ lines\]/);
+      assert.match(editor.getText(), /\[paste #\d+ \+\d+ lines\]/u);
       assert.strictEqual(editor.getExpandedText(), pastedText);
     });
 
@@ -4237,17 +4696,21 @@ describe("Editor component", () => {
       editor.render(80);
 
       const text = editor.getText();
-      assert.match(text, /\[paste #\d+ \d+ chars\]/);
+      assert.match(text, /\[paste #\d+ \d+ chars\]/u);
       // Line 0: "12345678901234567890"
       // Line 1: "" (empty)
       // Line 2: "hello [paste #1 2000 chars]"
       //         marker starts at col 6
 
       // Navigate to line 0, col 10
-      editor.handleInput("\x1b[A"); // Up to line 1
-      editor.handleInput("\x1b[A"); // Up to line 0
-      editor.handleInput("\x01"); // Ctrl+A (start of line)
-      for (let i = 0; i < 10; i++) editor.handleInput("\x1b[C"); // Right 10
+      // Up to line 1
+      editor.handleInput("\x1b[A");
+      // Up to line 0
+      editor.handleInput("\x1b[A");
+      // Ctrl+A (start of line)
+      editor.handleInput("\x01");
+      // Right 10
+      for (let i = 0; i < 10; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 });
 
       // Down to empty line
@@ -4280,8 +4743,10 @@ describe("Editor component", () => {
       editor.render(30);
 
       // Navigate to line 0, col 10
-      for (let i = 0; i < 4; i++) editor.handleInput("\x1b[A"); // Up to line 0
-      editor.handleInput("\x01"); // Ctrl+A
+      // Up to line 0
+      for (let i = 0; i < 4; i++) editor.handleInput("\x1b[A");
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 10; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 });
 
@@ -4329,19 +4794,24 @@ describe("Editor component", () => {
       editor.render(20);
 
       const text = editor.getText();
-      const markerMatch = text.match(/\[paste #\d+ \+\d+ lines]/);
+      const markerMatch = text.match(/\[paste #\d+ \+\d+ lines\]/u);
       assert.ok(markerMatch, "paste marker should be created");
-      const markerLen = markerMatch[0].length; // 21
+      // 21
+      const markerLen = markerMatch[0].length;
       assert.ok(markerLen > 20, "marker should be wider than terminal");
       const markerStart = 8;
-      const markerEnd = markerStart + markerLen; // 29
+      // 29
+      const markerEnd = markerStart + markerLen;
 
       // Navigate to line 0, col 6 (on "g"). Preferred col 6 is past the
       // marker tail on VL3, so the cursor should land on content ("i" at
       // col 29) without snapping back.
-      editor.handleInput("\x1b[A"); // Up to line 0
-      editor.handleInput("\x01"); // Ctrl+A (start of line)
-      for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C"); // Right to col 6
+      // Up to line 0
+      editor.handleInput("\x1b[A");
+      // Ctrl+A (start of line)
+      editor.handleInput("\x01");
+      // Right to col 6
+      for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 });
 
       // Down: cursor lands on paste marker start
@@ -4352,7 +4822,8 @@ describe("Editor component", () => {
       // past the marker. Cursor stays on line 0.
       editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getCursor().line, 0);
-      assert.strictEqual(editor.getCursor().col, markerEnd); // col 29 = "i"
+      // col 29 = "i"
+      assert.strictEqual(editor.getCursor().col, markerEnd);
 
       // Up: back to paste marker
       editor.handleInput("\x1b[A");
@@ -4384,8 +4855,10 @@ describe("Editor component", () => {
       editor.render(20);
 
       // Navigate to line 0, col 3 (on "d")
-      editor.handleInput("\x1b[A"); // Up to line 0
-      editor.handleInput("\x01"); // Ctrl+A
+      // Up to line 0
+      editor.handleInput("\x1b[A");
+      // Ctrl+A
+      editor.handleInput("\x01");
       for (let i = 0; i < 3; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
 
@@ -4399,7 +4872,8 @@ describe("Editor component", () => {
 
       // Round-trip back
       editor.handleInput("\x1b[A");
-      assert.strictEqual(editor.getCursor().col, 8); // marker
+      // marker
+      assert.strictEqual(editor.getCursor().col, 8);
       editor.handleInput("\x1b[A");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
     });

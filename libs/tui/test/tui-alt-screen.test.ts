@@ -492,7 +492,7 @@ describe("TuiAltScreen", () => {
     await terminal.waitForRender();
     assert.strictEqual(scrollView.isScrollbarVisible, true);
     assert.strictEqual(scrollView.isScrollbarActive, true);
-    assert.ok(terminal.getViewport().some((line) => /[│█]/.test(line)));
+    assert.ok(terminal.getViewport().some((line) => /[│█]/u.test(line)));
 
     terminal.sendInput("\x1b[<35;9;3M");
     await new Promise((resolve) => setTimeout(resolve, 40));
@@ -681,10 +681,10 @@ describe("TuiAltScreen", () => {
 
     assert.strictEqual(lines.length, 3);
     assert.ok(lines.every((line) => visibleWidth(line) === 48));
-    assert.match(lines[0] ?? "", /^┌─+┐$/);
-    assert.match(lines[1] ?? "", /^│ Find in transcript +│$/);
+    assert.match(lines[0] ?? "", /^┌─+┐$/u);
+    assert.match(lines[1] ?? "", /^│ Find in transcript +│$/u);
     assert.ok(rendered[1]?.includes("\x1b[2m"));
-    assert.match(lines[2] ?? "", /^└─+ ↑ Shift\+Enter · ↓ Enter ─┘$/);
+    assert.match(lines[2] ?? "", /^└─+ ↑ Shift\+Enter · ↓ Enter ─┘$/u);
     const controls = lines[2] ?? "";
     assert.strictEqual(component.getNavigationDirectionAt(2, controls.indexOf("↑")), -1);
     assert.strictEqual(

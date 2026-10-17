@@ -6,8 +6,10 @@ import { applyBackgroundToLine, flattenLines, visibleWidth, wrapTextWithAnsi } f
  */
 export class Text implements Component {
   private text: string;
-  private paddingX: number; // Left/right padding
-  private paddingY: number; // Top/bottom padding
+  // Left/right padding
+  private paddingX: number;
+  // Top/bottom padding
+  private paddingY: number;
   private customBgFn?: ((text: string) => string) | undefined;
 
   // Cache for rendered output
@@ -68,7 +70,7 @@ export class Text implements Component {
     }
 
     // Replace tabs with 3 spaces
-    const normalizedText = this.text.replace(/\t/g, "   ");
+    const normalizedText = this.text.replace(/\t/gu, "   ");
 
     // Reduce margins when necessary so content and padding fit within the available width.
     const paddingX = Math.min(this.paddingX, Math.max(0, Math.floor((width - 1) / 2)));

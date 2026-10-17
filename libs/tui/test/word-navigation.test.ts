@@ -132,7 +132,8 @@ describe("atomic segments", () => {
   // substring to its pre-split segments.
   const segmentMap = new Map<string, Intl.SegmentData[]>([
     [
-      text, // full text (not used but for clarity)
+      // full text (not used but for clarity)
+      text,
       [
         { segment: "hello", index: 0, input: text, isWordLike: true },
         { segment: " ", index: 5, input: text, isWordLike: false },

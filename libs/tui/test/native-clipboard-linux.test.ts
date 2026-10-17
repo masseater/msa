@@ -113,8 +113,10 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
       ...flags,
       "-shared",
       "-fPIC",
-      "-nostdlib", // Match the prebuild's unversioned system-library imports.
-      ...(process.arch === "arm64" ? ["-mno-outline-atomics"] : []), // Inline the fixture's allocation counters.
+      // Match the prebuild's unversioned system-library imports.
+      "-nostdlib",
+      // Inline the fixture's allocation counters.
+      ...(process.arch === "arm64" ? ["-mno-outline-atomics"] : []),
       "-Wl,-z,nodelete",
       join(fixtures, "clipboard-worker-test.c"),
       "-ldl",
@@ -152,7 +154,8 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
       const server = createServer((socket) => {
         connections++;
         sockets.add(socket);
-        socket.on("data", () => {}); // Accept setup bytes without replying.
+        // Accept setup bytes without replying.
+        socket.on("data", () => {});
         // libxcb owns setup blocking; release it after checking the JS timer.
         const timer = setTimeout(() => socket.destroy(), 300);
         t.after(() => clearTimeout(timer));
@@ -246,7 +249,7 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
       if (mode === "disconnect") child.kill("SIGKILL");
       const failure = await result;
       assert.equal(failure.ok, false);
-      assert.match(failure.error ?? "", /X11 clipboard/);
+      assert.match(failure.error ?? "", /X11 clipboard/u);
       assert.ok(
         performance.now() - started < 3500,
         "The transfer must share the 2-second deadline",
@@ -268,7 +271,7 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
       const started = performance.now();
       const result = await readClipboard(content === "text" ? "getText" : "getImage", env);
       assert.equal(result.ok, false);
-      assert.match(result.error ?? "", /X11 clipboard/);
+      assert.match(result.error ?? "", /X11 clipboard/u);
       assert.ok(performance.now() - started < 3500);
     });
   }

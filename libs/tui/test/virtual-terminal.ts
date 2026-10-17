@@ -93,7 +93,8 @@ export class VirtualTerminal implements Terminal {
   }
 
   clearScreen(): void {
-    this.xterm.write("\x1b[2J\x1b[H"); // Clear screen and move to home (1,1)
+    // Clear screen and move to home (1,1)
+    this.xterm.write("\x1b[2J\x1b[H");
   }
 
   setTitle(title: string): void {

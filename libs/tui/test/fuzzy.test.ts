@@ -18,7 +18,8 @@ describe("fuzzyMatch", () => {
   it("exact match has good score", () => {
     const result = fuzzyMatch("test", "test");
     assert.strictEqual(result.matches, true);
-    assert.ok(result.score < 0); // Should be negative due to consecutive bonuses
+    // Should be negative due to consecutive bonuses
+    assert.ok(result.score < 0);
   });
 
   it("characters must appear in order", () => {

@@ -302,7 +302,8 @@ const MODIFIERS = {
   super: 8,
 } as const;
 
-const LOCK_MASK = 64 + 128; // Caps Lock + Num Lock
+// Caps Lock + Num Lock
+const LOCK_MASK = 64 + 128;
 
 const CODEPOINTS = {
   escape: 27,
@@ -310,7 +311,8 @@ const CODEPOINTS = {
   enter: 13,
   space: 32,
   backspace: 127,
-  kpEnter: 57414, // Numpad Enter (Kitty protocol)
+  // Numpad Enter (Kitty protocol)
+  kpEnter: 57414,
 } as const;
 
 const ARROW_CODEPOINTS = {
@@ -330,23 +332,40 @@ const FUNCTIONAL_CODEPOINTS = {
 } as const;
 
 const KITTY_FUNCTIONAL_KEY_EQUIVALENTS = new Map<number, number>([
-  [57399, 48], // KP_0 -> 0
-  [57400, 49], // KP_1 -> 1
-  [57401, 50], // KP_2 -> 2
-  [57402, 51], // KP_3 -> 3
-  [57403, 52], // KP_4 -> 4
-  [57404, 53], // KP_5 -> 5
-  [57405, 54], // KP_6 -> 6
-  [57406, 55], // KP_7 -> 7
-  [57407, 56], // KP_8 -> 8
-  [57408, 57], // KP_9 -> 9
-  [57409, 46], // KP_DECIMAL -> .
-  [57410, 47], // KP_DIVIDE -> /
-  [57411, 42], // KP_MULTIPLY -> *
-  [57412, 45], // KP_SUBTRACT -> -
-  [57413, 43], // KP_ADD -> +
-  [57415, 61], // KP_EQUAL -> =
-  [57416, 44], // KP_SEPARATOR -> ,
+  // KP_0 -> 0
+  [57399, 48],
+  // KP_1 -> 1
+  [57400, 49],
+  // KP_2 -> 2
+  [57401, 50],
+  // KP_3 -> 3
+  [57402, 51],
+  // KP_4 -> 4
+  [57403, 52],
+  // KP_5 -> 5
+  [57404, 53],
+  // KP_6 -> 6
+  [57405, 54],
+  // KP_7 -> 7
+  [57406, 55],
+  // KP_8 -> 8
+  [57407, 56],
+  // KP_9 -> 9
+  [57408, 57],
+  // KP_DECIMAL -> .
+  [57409, 46],
+  // KP_DIVIDE -> /
+  [57410, 47],
+  // KP_MULTIPLY -> *
+  [57411, 42],
+  // KP_SUBTRACT -> -
+  [57412, 45],
+  // KP_ADD -> +
+  [57413, 43],
+  // KP_EQUAL -> =
+  [57415, 61],
+  // KP_SEPARATOR -> ,
+  [57416, 44],
   [57417, ARROW_CODEPOINTS.left],
   [57418, ARROW_CODEPOINTS.right],
   [57419, ARROW_CODEPOINTS.up],
@@ -528,8 +547,10 @@ export type KeyEventType = "press" | "repeat" | "release";
 
 interface ParsedKittySequence {
   codepoint: number;
-  shiftedKey?: number | undefined; // Shifted version of the key (when shift is pressed)
-  baseLayoutKey?: number | undefined; // Key in standard PC-101 layout (for non-Latin layouts)
+  // Shifted version of the key (when shift is pressed)
+  shiftedKey?: number | undefined;
+  // Key in standard PC-101 layout (for non-Latin layouts)
+  baseLayoutKey?: number | undefined;
   modifier: number;
   eventType: KeyEventType;
 }
@@ -614,7 +635,7 @@ function parseKittySequence(data: string): ParsedKittySequence | null {
   //
   // With flag 2, event type is appended after modifier colon: 1=press, 2=repeat, 3=release
   // With flag 4, alternate keys are appended after codepoint with colons
-  const csiUMatch = data.match(/^\x1b\[(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?u$/);
+  const csiUMatch = data.match(/^\x1b\[(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?u$/u);
   if (csiUMatch) {
     const codepoint = parseInt(csiUMatch[1]!, 10);
     const shiftedKey =
@@ -626,7 +647,7 @@ function parseKittySequence(data: string): ParsedKittySequence | null {
   }
 
   // Arrow keys with modifier: \x1b[1;<mod>A/B/C/D or \x1b[1;<mod>:<event>A/B/C/D
-  const arrowMatch = data.match(/^\x1b\[1;(\d+)(?::(\d+))?([ABCD])$/);
+  const arrowMatch = data.match(/^\x1b\[1;(\d+)(?::(\d+))?([ABCD])$/u);
   if (arrowMatch) {
     const modValue = parseInt(arrowMatch[1]!, 10);
     const eventType = parseEventType(arrowMatch[2]);
@@ -635,7 +656,7 @@ function parseKittySequence(data: string): ParsedKittySequence | null {
   }
 
   // Functional keys: \x1b[<num>~ or \x1b[<num>;<mod>~ or \x1b[<num>;<mod>:<event>~
-  const funcMatch = data.match(/^\x1b\[(\d+)(?:;(\d+))?(?::(\d+))?~$/);
+  const funcMatch = data.match(/^\x1b\[(\d+)(?:;(\d+))?(?::(\d+))?~$/u);
   if (funcMatch) {
     const keyNum = parseInt(funcMatch[1]!, 10);
     const modValue = funcMatch[2] ? parseInt(funcMatch[2], 10) : 1;
@@ -655,7 +676,7 @@ function parseKittySequence(data: string): ParsedKittySequence | null {
   }
 
   // Home/End with modifier: \x1b[1;<mod>H/F or \x1b[1;<mod>:<event>H/F
-  const homeEndMatch = data.match(/^\x1b\[1;(\d+)(?::(\d+))?([HF])$/);
+  const homeEndMatch = data.match(/^\x1b\[1;(\d+)(?::(\d+))?([HF])$/u);
   if (homeEndMatch) {
     const modValue = parseInt(homeEndMatch[1]!, 10);
     const eventType = parseEventType(homeEndMatch[2]);
@@ -721,7 +742,8 @@ function matchesKittySequence(
   // if the base layout key were always considered.
   if (parsed.baseLayoutKey !== undefined && parsed.baseLayoutKey === expectedCodepoint) {
     const cp = normalizedCodepoint;
-    const isLatinLetter = cp >= 97 && cp <= 122; // a-z
+    // a-z
+    const isLatinLetter = cp >= 97 && cp <= 122;
     const isKnownSymbol = SYMBOL_KEYS.has(String.fromCharCode(cp));
     if (!isLatinLetter && !isKnownSymbol) return true;
   }
@@ -730,7 +752,7 @@ function matchesKittySequence(
 }
 
 function parseModifyOtherKeysSequence(data: string): ParsedModifyOtherKeysSequence | null {
-  const match = data.match(/^\x1b\[27;(\d+);(\d+)~$/);
+  const match = data.match(/^\x1b\[27;(\d+);(\d+)~$/u);
   if (!match) return null;
   const modValue = parseInt(match[1]!, 10);
   const codepoint = parseInt(match[2]!, 10);
@@ -803,7 +825,8 @@ function rawCtrlChar(key: string): string | null {
   }
   // Handle - as _ (same physical key on US keyboards)
   if (char === "-") {
-    return String.fromCharCode(31); // Same as Ctrl+_
+    // Same as Ctrl+_
+    return String.fromCharCode(31);
   }
   return null;
 }
@@ -989,7 +1012,8 @@ export function matchesKey(data: string, keyId: KeyId): boolean {
         return (
           data === "\r" ||
           (!_kittyProtocolActive && data === "\n") ||
-          data === "\x1bOM" || // SS3 M (numpad enter in some terminals)
+          // SS3 M (numpad enter in some terminals)
+          data === "\x1bOM" ||
           matchesKittySequence(data, CODEPOINTS.enter, 0) ||
           matchesKittySequence(data, CODEPOINTS.kpEnter, 0)
         );
@@ -1299,8 +1323,10 @@ function formatParsedKey(
   // the codepoint is authoritative regardless of physical key position.
   // This prevents remapped layouts (Dvorak, Colemak, xremap, etc.) from
   // reporting the wrong key name based on the QWERTY physical position.
-  const isLatinLetter = identityCodepoint >= 97 && identityCodepoint <= 122; // a-z
-  const isDigit = identityCodepoint >= 48 && identityCodepoint <= 57; // 0-9
+  // a-z
+  const isLatinLetter = identityCodepoint >= 97 && identityCodepoint <= 122;
+  // 0-9
+  const isDigit = identityCodepoint >= 48 && identityCodepoint <= 57;
   const isKnownSymbol = SYMBOL_KEYS.has(String.fromCharCode(identityCodepoint));
   const effectiveCodepoint =
     isLatinLetter || isDigit || isKnownSymbol
@@ -1435,7 +1461,7 @@ export function parseKey(data: string): string | undefined {
 // Kitty CSI-u Printable Decoding
 // =============================================================================
 
-const KITTY_CSI_U_REGEX = /^\x1b\[(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?u$/;
+const KITTY_CSI_U_REGEX = /^\x1b\[(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?u$/u;
 const KITTY_PRINTABLE_ALLOWED_MODIFIERS = MODIFIERS.shift | LOCK_MASK;
 
 /**

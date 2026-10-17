@@ -33,11 +33,11 @@ class KeyLogger implements Component {
       .map((c) => c.charCodeAt(0))
       .join(", ");
     const repr = data
-      .replace(/\x1b/g, "\\x1b")
-      .replace(/\r/g, "\\r")
-      .replace(/\n/g, "\\n")
-      .replace(/\t/g, "\\t")
-      .replace(/\x7f/g, "\\x7f");
+      .replace(/\x1b/gu, "\\x1b")
+      .replace(/\r/gu, "\\r")
+      .replace(/\n/gu, "\\n")
+      .replace(/\t/gu, "\\t")
+      .replace(/\x7f/gu, "\\x7f");
 
     const logLine = `Hex: ${hex.padEnd(20)} | Chars: [${charCodes.padEnd(15)}] | Repr: "${repr}"`;
 

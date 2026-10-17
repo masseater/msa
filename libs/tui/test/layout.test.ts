@@ -275,7 +275,7 @@ describe("viewport layout", () => {
     followedContent.setText(`${sourceLines.join("\n")}\nabcde9`);
     const growthFrame = renderLayoutFrame(followed, 6, 4, () => {});
     assert.strictEqual(followed.scrollTop, 5);
-    assert.ok(growthFrame.lines.every((line) => !/[│┃]/.test(stripTerminalSequences(line))));
+    assert.ok(growthFrame.lines.every((line) => !/[│┃]/u.test(stripTerminalSequences(line))));
 
     const fittingContent = new Text("1\n2", 0, 0);
     const automatic = new ScrollView(fittingContent, { scrollbar: "auto", scrollbarThumbStyle });
@@ -283,7 +283,7 @@ describe("viewport layout", () => {
     automatic.scrollBy(1);
     assert.ok(
       renderLayoutFrame(automatic, 6, 4, () => {}).lines.every(
-        (line) => !/[│┃]/.test(stripTerminalSequences(line)),
+        (line) => !/[│┃]/u.test(stripTerminalSequences(line)),
       ),
     );
 

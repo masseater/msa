@@ -199,7 +199,8 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
       const crashLine =
         "Output: " +
         iterm2Sequence +
-        base64Char.repeat(3040) + // ~304,000 chars
+        // ~304,000 chars
+        base64Char.repeat(3040) +
         " end of output";
 
       // Verify line is very long

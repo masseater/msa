@@ -28,18 +28,18 @@ export type KeyboardProtocolNegotiationSequence =
 export function parseKeyboardProtocolNegotiationSequence(
   sequence: string,
 ): KeyboardProtocolNegotiationSequence | undefined {
-  const kittyFlags = sequence.match(/^\x1b\[\?(\d+)u$/);
+  const kittyFlags = sequence.match(/^\x1b\[\?(\d+)u$/u);
   if (kittyFlags) {
     return { type: "kitty-flags", flags: Number.parseInt(kittyFlags[1]!, 10) };
   }
-  if (/^\x1b\[\?[\d;]*c$/.test(sequence)) {
+  if (/^\x1b\[\?[\d;]*c$/u.test(sequence)) {
     return { type: "device-attributes" };
   }
   return undefined;
 }
 
 function isKeyboardProtocolNegotiationSequencePrefix(sequence: string): boolean {
-  return sequence === "\x1b[" || /^\x1b\[\?[\d;]*$/.test(sequence);
+  return sequence === "\x1b[" || /^\x1b\[\?[\d;]*$/u.test(sequence);
 }
 
 export function isAppleTerminalSession(): boolean {
@@ -107,19 +107,26 @@ export interface Terminal {
   get kittyProtocolActive(): boolean;
 
   // Cursor positioning (relative to current position)
-  moveBy(lines: number): void; // Move cursor up (negative) or down (positive) by N lines
+  // Move cursor up (negative) or down (positive) by N lines
+  moveBy(lines: number): void;
 
   // Cursor visibility
-  hideCursor(): void; // Hide the cursor
-  showCursor(): void; // Show the cursor
+  // Hide the cursor
+  hideCursor(): void;
+  // Show the cursor
+  showCursor(): void;
 
   // Clear operations
-  clearLine(): void; // Clear current line
-  clearFromCursor(): void; // Clear from cursor to end of screen
-  clearScreen(): void; // Clear entire screen and move cursor to (0,0)
+  // Clear current line
+  clearLine(): void;
+  // Clear from cursor to end of screen
+  clearFromCursor(): void;
+  // Clear entire screen and move cursor to (0,0)
+  clearScreen(): void;
 
   // Title operations
-  setTitle(title: string): void; // Set terminal window title
+  // Set terminal window title
+  setTitle(title: string): void;
 
   // Progress indicator (OSC 9;4)
   setProgress(active: boolean): void;
@@ -253,7 +260,8 @@ export class ProcessTerminal implements Terminal {
       const negotiation = this.readKeyboardProtocolNegotiationSequence(sequence);
       if (negotiation === "pending") {
         this.scheduleKeyboardProtocolNegotiationBufferFlush();
-        return; // Wait briefly for the rest of a split Kitty response.
+        // Wait briefly for the rest of a split Kitty response.
+        return;
       }
       if (negotiation && this.handleKeyboardProtocolNegotiationSequence(negotiation.parsed)) {
         return;
@@ -574,7 +582,8 @@ export class ProcessTerminal implements Terminal {
   }
 
   clearScreen(): void {
-    process.stdout.write("\x1b[2J\x1b[H"); // Clear screen and move to home (1,1)
+    // Clear screen and move to home (1,1)
+    process.stdout.write("\x1b[2J\x1b[H");
   }
 
   setTitle(title: string): void {

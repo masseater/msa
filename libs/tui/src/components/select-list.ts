@@ -6,7 +6,7 @@ const DEFAULT_PRIMARY_COLUMN_WIDTH = 32;
 const PRIMARY_COLUMN_GAP = 2;
 const MIN_DESCRIPTION_WIDTH = 10;
 
-const normalizeToSingleLine = (text: string): string => text.replace(/[\r\n]+/g, " ").trim();
+const normalizeToSingleLine = (text: string): string => text.replace(/[\r\n]+/gu, " ").trim();
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(value, max));
 
@@ -226,7 +226,8 @@ export class SelectList implements Component {
       const truncatedValueWidth = visibleWidth(truncatedValue);
       const spacing = " ".repeat(Math.max(1, effectivePrimaryColumnWidth - truncatedValueWidth));
       const descriptionStart = prefixWidth + truncatedValueWidth + spacing.length;
-      const remainingWidth = width - descriptionStart - 2; // -2 for safety
+      // -2 for safety
+      const remainingWidth = width - descriptionStart - 2;
 
       if (remainingWidth > MIN_DESCRIPTION_WIDTH) {
         const truncatedDesc = truncateToWidth(descriptionSingleLine, remainingWidth, "");

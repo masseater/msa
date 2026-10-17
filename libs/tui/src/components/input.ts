@@ -37,7 +37,8 @@ export interface InputOptions {
  */
 export class Input implements Component, Focusable {
   private value: string = "";
-  private cursor: number = 0; // Cursor position in the value
+  // Cursor position in the value
+  private cursor: number = 0;
   private readonly prompt: string;
   private readonly placeholder: string;
   private readonly placeholderStyle: (text: string) => string;
@@ -103,7 +104,8 @@ export class Input implements Component, Focusable {
         this.isInPaste = false;
 
         // Handle any remaining input after the paste marker
-        const remaining = this.pasteBuffer.substring(endIndex + 6); // 6 = length of \x1b[201~
+        // 6 = length of \x1b[201~
+        const remaining = this.pasteBuffer.substring(endIndex + 6);
         this.pasteBuffer = "";
         if (remaining) {
           this.handleInput(remaining);
@@ -414,10 +416,10 @@ export class Input implements Component, Focusable {
 
     // Clean the pasted text - remove newlines and carriage returns
     const cleanText = pastedText
-      .replace(/\r\n/g, "")
-      .replace(/\r/g, "")
-      .replace(/\n/g, "")
-      .replace(/\t/g, "    ");
+      .replace(/\r\n/gu, "")
+      .replace(/\r/gu, "")
+      .replace(/\n/gu, "")
+      .replace(/\t/gu, "    ");
 
     // Insert at cursor position
     this.value = this.value.slice(0, this.cursor) + cleanText + this.value.slice(this.cursor);
@@ -498,7 +500,8 @@ export class Input implements Component, Focusable {
     const cursorGrapheme = graphemes[0];
 
     const beforeCursor = visibleText.slice(0, cursorDisplay);
-    const atCursor = cursorGrapheme?.segment ?? " "; // Character at cursor, or space if at end
+    // Character at cursor, or space if at end
+    const atCursor = cursorGrapheme?.segment ?? " ";
     const afterCursor = visibleText.slice(cursorDisplay + atCursor.length);
 
     // Hardware cursor marker (zero-width, emitted before fake cursor for IME positioning)

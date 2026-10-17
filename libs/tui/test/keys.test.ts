@@ -149,7 +149,8 @@ describe("matchesKey", () => {
       setKittyProtocolActive(true);
       // Format with shifted key: CSI codepoint:shifted:base;modifier u
       // Latin 'c' with shifted 'C' (67) and base 'c' (99)
-      const shiftedKey = "\x1b[99:67:99;2u"; // shift modifier = 1, +1 = 2
+      // shift modifier = 1, +1 = 2
+      const shiftedKey = "\x1b[99:67:99;2u";
       assert.strictEqual(matchesKey(shiftedKey, "shift+c"), true);
       setKittyProtocolActive(false);
     });

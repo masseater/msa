@@ -14,7 +14,7 @@ const resolveFdPath = (): string | null => {
     return null;
   }
 
-  const firstLine = result.stdout.split(/\r?\n/).find(Boolean);
+  const firstLine = result.stdout.split(/\r?\n/u).find(Boolean);
   return firstLine ? firstLine.trim() : null;
 };
 
@@ -65,7 +65,8 @@ describe("CombinedAutocompleteProvider", () => {
       const provider = new CombinedAutocompleteProvider([], "/tmp");
       const lines = ["hey /"];
       const cursorLine = 0;
-      const cursorCol = 5; // After the "/"
+      // After the "/"
+      const cursorCol = 5;
 
       const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
 
@@ -79,7 +80,8 @@ describe("CombinedAutocompleteProvider", () => {
       const provider = new CombinedAutocompleteProvider([], "/tmp");
       const lines = ["/A"];
       const cursorLine = 0;
-      const cursorCol = 2; // After the "A"
+      // After the "A"
+      const cursorCol = 2;
 
       const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
 
@@ -95,7 +97,8 @@ describe("CombinedAutocompleteProvider", () => {
       const provider = new CombinedAutocompleteProvider([], "/tmp");
       const lines = ["/model"];
       const cursorLine = 0;
-      const cursorCol = 6; // After "model"
+      // After "model"
+      const cursorCol = 6;
 
       const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
 
@@ -107,7 +110,8 @@ describe("CombinedAutocompleteProvider", () => {
       const provider = new CombinedAutocompleteProvider([], "/tmp");
       const lines = ["/command /"];
       const cursorLine = 0;
-      const cursorCol = 10; // After the second "/"
+      // After the second "/"
+      const cursorCol = 10;
 
       const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
 

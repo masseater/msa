@@ -87,14 +87,15 @@ export function oklchColor(l: number, c: number, h: number): OklchColorValue {
   return Object.freeze({ kind: "oklch", l, c, h: ((h % 360) + 360) % 360 });
 }
 
-const NUMBER_PATTERN = String.raw`[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?`;
+const NUMBER_PATTERN = String.raw`[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?`;
+const DEGREE_PATTERN = "[Dd][Ee][Gg]";
 const OKLCH_PATTERN = new RegExp(
-  `^oklch\\(\\s*(${NUMBER_PATTERN})(%)?\\s+(${NUMBER_PATTERN})\\s+(${NUMBER_PATTERN})(?:deg)?\\s*\\)$`,
-  "i",
+  `^[Oo][Kk][Ll][Cc][Hh]\\(\\s*(${NUMBER_PATTERN})(%)?\\s+(${NUMBER_PATTERN})\\s+(${NUMBER_PATTERN})(?:${DEGREE_PATTERN})?\\s*\\)$`,
+  "u",
 );
 const OKHSL_PATTERN = new RegExp(
-  `^okhsl\\(\\s*(${NUMBER_PATTERN})(?:deg)?\\s+(${NUMBER_PATTERN})(%)?\\s+(${NUMBER_PATTERN})(%)?\\s*\\)$`,
-  "i",
+  `^[Oo][Kk][Hh][Ss][Ll]\\(\\s*(${NUMBER_PATTERN})(?:${DEGREE_PATTERN})?\\s+(${NUMBER_PATTERN})(%)?\\s+(${NUMBER_PATTERN})(%)?\\s*\\)$`,
+  "u",
 );
 
 /**
@@ -121,7 +122,7 @@ export function colorToOkhsl(color: Color): OkhslChannels {
 export function parseColor(value: string | number): Color {
   if (typeof value === "number") return indexedColor(value);
 
-  const hex = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(value)?.[1];
+  const hex = /^#([\da-f]{3}|[\da-f]{6})$/iu.exec(value)?.[1];
   if (hex !== undefined) {
     const digits = hex.length === 3 ? [...hex].map((digit) => digit + digit).join("") : hex;
     return rgbColor(

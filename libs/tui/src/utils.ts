@@ -27,12 +27,18 @@ export function getWordSegmenter(): Intl.Segmenter {
 function couldBeEmoji(segment: string): boolean {
   const cp = segment.codePointAt(0)!;
   return (
-    (cp >= 0x1f000 && cp <= 0x1fbff) || // Emoji and Pictograph
-    (cp >= 0x2300 && cp <= 0x23ff) || // Misc technical
-    (cp >= 0x2600 && cp <= 0x27bf) || // Misc symbols, dingbats
-    (cp >= 0x2b50 && cp <= 0x2b55) || // Specific stars/circles
-    segment.includes("\uFE0F") || // Contains VS16 (emoji presentation selector)
-    segment.length > 2 // Multi-codepoint sequences (ZWJ, skin tones, etc.)
+    // Emoji and Pictograph
+    (cp >= 0x1f000 && cp <= 0x1fbff) ||
+    // Misc technical
+    (cp >= 0x2300 && cp <= 0x23ff) ||
+    // Misc symbols, dingbats
+    (cp >= 0x2600 && cp <= 0x27bf) ||
+    // Specific stars/circles
+    (cp >= 0x2b50 && cp <= 0x2b55) ||
+    // Contains VS16 (emoji presentation selector)
+    segment.includes("\uFE0F") ||
+    // Multi-codepoint sequences (ZWJ, skin tones, etc.)
+    segment.length > 2
   );
 }
 
@@ -274,7 +280,7 @@ export function visibleWidth(str: string): number {
   // Normalize: tabs to 3 spaces, strip ANSI escape codes
   let clean = str;
   if (str.includes("\t")) {
-    clean = clean.replace(/\t/g, "   ");
+    clean = clean.replace(/\t/gu, "   ");
   }
   let escapeIndex = clean.indexOf("\x1b");
   if (escapeIndex !== -1) {
@@ -369,7 +375,7 @@ export function getOsc8LinkAtColumn(line: string, column: number): string | unde
   while (i < line.length) {
     const ansi = extractAnsiCode(line, i);
     if (ansi) {
-      const hyperlink = /^\x1b\]8;[^;]*;([^\x07\x1b]*)(?:\x07|\x1b\\)$/.exec(ansi.code);
+      const hyperlink = /^\x1b\]8;[^;]*;([^\x07\x1b]*)(?:\x07|\x1b\\)$/u.exec(ansi.code);
       if (hyperlink) activeUrl = hyperlink[1] || undefined;
       i += ansi.length;
       continue;
@@ -394,8 +400,8 @@ export function getOsc8LinkAtColumn(line: string, column: number): string | unde
  * expanded to the fixed width used by layout so terminal tab stops cannot wrap
  * a logical line, while tabs inside terminal string sequences stay untouched.
  */
-const THAI_LAO_AM_REGEX = /[\u0e33\u0eb3]/;
-const THAI_LAO_AM_GLOBAL_REGEX = /[\u0e33\u0eb3]/g;
+const THAI_LAO_AM_REGEX = /[\u0e33\u0eb3]/u;
+const THAI_LAO_AM_GLOBAL_REGEX = /[\u0e33\u0eb3]/gu;
 
 export function normalizeTerminalOutput(str: string): string {
   let normalized = str;
@@ -558,8 +564,10 @@ class AnsiCodeTracker {
   private inverse = false;
   private hidden = false;
   private strikethrough = false;
-  private fgColor: string | null = null; // Stores the full code like "31" or "38;5;240"
-  private bgColor: string | null = null; // Stores the full code like "41" or "48;5;240"
+  // Stores the full code like "31" or "38;5;240"
+  private fgColor: string | null = null;
+  // Stores the full code like "41" or "48;5;240"
+  private bgColor: string | null = null;
   private activeHyperlink: ActiveHyperlink | null = null;
 
   process(ansiCode: string): void {
@@ -578,7 +586,7 @@ class AnsiCodeTracker {
     }
 
     // Extract the parameters between \x1b[ and m
-    const params = ansiCode.match(/\x1b\[([\d;]*)m/)?.[1];
+    const params = ansiCode.match(/\x1b\[([\d;]*)m/u)?.[1];
     if (params === undefined) return;
 
     if (params === "" || params === "0") {
@@ -653,7 +661,8 @@ class AnsiCodeTracker {
           break;
         case 21:
           this.bold = false;
-          break; // Some terminals
+          // Some terminals
+          break;
         case 22:
           this.bold = false;
           this.dim = false;
@@ -678,10 +687,12 @@ class AnsiCodeTracker {
           break;
         case 39:
           this.fgColor = null;
-          break; // Default fg
+          // Default fg
+          break;
         case 49:
           this.bgColor = null;
-          break; // Default bg
+          // Default bg
+          break;
         default:
           // Standard foreground colors 30-37, 90-97
           if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) {
@@ -766,10 +777,12 @@ class AnsiCodeTracker {
   getLineEndReset(): string {
     let result = "";
     if (this.underline) {
-      result += "\x1b[24m"; // Underline off only
+      // Underline off only
+      result += "\x1b[24m";
     }
     if (this.activeHyperlink) {
-      result += formatOsc8Close(this.activeHyperlink.terminator); // Re-opened at line start via getActiveCodes()
+      // Re-opened at line start via getActiveCodes()
+      result += formatOsc8Close(this.activeHyperlink.terminator);
     }
     return result;
   }
@@ -806,7 +819,8 @@ function* graphemeSegments(text: string): Generator<string> {
 function splitIntoTokensWithAnsi(text: string): string[] {
   const tokens: string[] = [];
   let current = "";
-  let pendingAnsi = ""; // ANSI codes waiting to be attached to next visible content
+  // ANSI codes waiting to be attached to next visible content
+  let pendingAnsi = "";
   let currentKind: "space" | "word" | null = null;
   let i = 0;
 
@@ -911,7 +925,7 @@ export function wrapTextWithAnsi(text: string, width: number): string[] {
 
   // Handle newlines by processing each line separately
   // Track ANSI state across lines so styles carry over after literal newlines
-  const inputLines = text.split(/\r\n|\r|\n/);
+  const inputLines = text.split(/\r\n|\r|\n/u);
   const result: string[] = [];
   const tracker = new AnsiCodeTracker();
 
@@ -1010,13 +1024,13 @@ function wrapSingleLine(line: string, width: number): string[] {
   return wrapped.length > 0 ? wrapped.map((wrappedLine) => wrappedLine.trimEnd()) : [""];
 }
 
-export const PUNCTUATION_REGEX = /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/;
+export const PUNCTUATION_REGEX = /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/u;
 
 /**
  * Check if a character is whitespace.
  */
 export function isWhitespaceChar(char: string): boolean {
-  return /\s/.test(char);
+  return /\s/u.test(char);
 }
 
 /**

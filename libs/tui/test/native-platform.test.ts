@@ -86,7 +86,8 @@ test(
     Object.defineProperty(process, "platform", { value: "linux" });
     delete process.env["DISPLAY"];
     process.env["WAYLAND_DISPLAY"] = "wayland-0";
-    assert.equal(getNativeClipboard(), undefined); // Wayland paste uses wl-paste.
+    // Wayland paste uses wl-paste.
+    assert.equal(getNativeClipboard(), undefined);
     let available = false;
     const helper = {
       getText: t.mock.fn(async () => (available ? "X11" : undefined)),

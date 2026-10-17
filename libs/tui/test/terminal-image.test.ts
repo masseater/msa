@@ -129,14 +129,16 @@ describe("isImageLine", () => {
     it("should detect image sequences in very long lines (304k+ chars)", () => {
       // This simulates the crash scenario: a line with 304,401 chars
       // containing image escape sequences somewhere
-      const base64Char = "A".repeat(100); // 100 chars of base64-like data
+      // 100 chars of base64-like data
+      const base64Char = "A".repeat(100);
       const imageSequence = "\x1b]1337;File=size=800,600;inline=1:";
 
       // Build a long line with image sequence
       const longLine =
         "Text prefix " +
         imageSequence +
-        base64Char.repeat(3000) + // ~300,000 chars
+        // ~300,000 chars
+        base64Char.repeat(3000) +
         " suffix";
 
       assert.strictEqual(longLine.length > 300000, true);
@@ -875,7 +877,7 @@ describe("imageFallback", () => {
         "file URL should target absolute path",
       );
       // Visible text must use ~/... not the expanded home path.
-      const visible = result.replace(/\x1b\]8;;.*?\x1b\\/g, "");
+      const visible = result.replace(/\x1b\]8;;.*?\x1b\\/gu, "");
       assert.strictEqual(visible, "[Image: ~/.msa/agent/shot.png [image/png] 10x10]");
     } finally {
       resetCapabilitiesCache();
@@ -949,10 +951,10 @@ describe("Image transcoding", () => {
 
   it("renders a text fallback until a working transcoder is registered", () => {
     const image = new Image(jpeg, "image/jpeg", { fallbackColor: (value) => value });
-    assert.match(image.render(80)[0] ?? "", /^\[Image: \[image\/jpeg\]/);
+    assert.match(image.render(80)[0] ?? "", /^\[Image: \[image\/jpeg\]/u);
     setImageTranscoder(() => null);
     image.invalidate();
-    assert.match(image.render(80)[0] ?? "", /^\[Image: \[image\/jpeg\]/);
+    assert.match(image.render(80)[0] ?? "", /^\[Image: \[image\/jpeg\]/u);
     setImageTranscoder(transcode);
     image.invalidate();
     assert.ok(image.render(80)[0]?.includes("\x1b_G"));
@@ -962,10 +964,13 @@ describe("Image transcoding", () => {
     setImageTranscoder(transcode);
     const image = new Image(jpeg, "image/jpeg", { fallbackColor: (value) => value });
     image.render(80);
-    render(jpeg, "image/jpeg"); // New instance hits the shared cache.
-    for (let i = 0; i < 40; i++) render(`other-${i}`, "image/jpeg"); // Evicts the shared entry.
+    // New instance hits the shared cache.
+    render(jpeg, "image/jpeg");
+    // Evicts the shared entry.
+    for (let i = 0; i < 40; i++) render(`other-${i}`, "image/jpeg");
     image.invalidate();
-    image.render(40); // Instance keeps its own PNG.
+    // Instance keeps its own PNG.
+    image.render(40);
     assert.strictEqual(calls.filter((data) => data === jpeg).length, 1);
   });
 

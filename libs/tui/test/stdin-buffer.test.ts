@@ -144,7 +144,8 @@ describe("StdinBuffer", () => {
       // host sees Escape (interrupt) instead of Alt+Enter. This locks in the
       // behavior so the configurable timeout in ProcessTerminal stays honest.
       processInput("\x1b");
-      await wait(20); // buffer timeout is 10ms in beforeEach
+      // buffer timeout is 10ms in beforeEach
+      await wait(20);
       processInput("\r");
 
       assert.deepStrictEqual(emittedSequences, ["\x1b", "\r"]);
@@ -159,7 +160,8 @@ describe("StdinBuffer", () => {
       });
 
       processInput("\x1b");
-      await wait(20); // > 10ms default escapeTimeout, < 100ms configured escapeTimeout
+      // > 10ms default escapeTimeout, < 100ms configured escapeTimeout
+      await wait(20);
       processInput("\r");
 
       assert.deepStrictEqual(emittedSequences, ["\x1b\r"]);
@@ -197,10 +199,12 @@ describe("StdinBuffer", () => {
 
   describe("Terminal Reply Strings", () => {
     const replies = [
-      { header: "\x1b]4;1;", reply: "\x1b]4;1;rgb:eaea/6c6c/6d6d\x07" }, // Ghostty's Ayu Light palette color 1.
+      // Ghostty's Ayu Light palette color 1.
+      { header: "\x1b]4;1;", reply: "\x1b]4;1;rgb:eaea/6c6c/6d6d\x07" },
       { header: "\x1b]10;", reply: "\x1b]10;rgb:ffff/ffff/ffff\x1b\\" },
       { header: "\x1b]11;", reply: "\x1b]11;rgb:0000/0000/0000\x07" },
-      { header: "\x1b]4;1;", reply: "\x1b]4;1;rgb:6464/6464/4d4d\x07" }, // Another reported color-reply tail.
+      // Another reported color-reply tail.
+      { header: "\x1b]4;1;", reply: "\x1b]4;1;rgb:6464/6464/4d4d\x07" },
       { header: "\x1bP>|", reply: "\x1bP>|Ghostty 1.3.1\x1b\\" },
       { header: "\x1b_Gi=1;", reply: "\x1b_Gi=1;OK\x1b\\" },
       { header: "\x1b]7501;?", reply: "\x1b]7501;?\x1b\\" },
@@ -604,7 +608,8 @@ describe("StdinBuffer", () => {
       processInput(pasteStart + content + pasteEnd);
 
       assert.deepStrictEqual(emittedPaste, ["hello world"]);
-      assert.deepStrictEqual(emittedSequences, []); // No data events during paste
+      // No data events during paste
+      assert.deepStrictEqual(emittedSequences, []);
     });
 
     it("should handle paste arriving in chunks", () => {

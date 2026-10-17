@@ -218,8 +218,8 @@ describe("wrapTextWithAnsi with OSC 8 hyperlinks", () => {
       // If the line has visible content it must begin with the OSC 8 re-open
       // OR it is the line where the close appeared with no following content.
       const stripped = line
-        .replace(/\x1b\]8;;[^\x1b\x07]*\x1b\\/g, "")
-        .replace(/\x1b\[[0-9;]*m/g, "");
+        .replace(/\x1b\]8;;[^\x1b\x07]*\x1b\\/gu, "")
+        .replace(/\x1b\[[0-9;]*m/gu, "");
       if (stripped.trim().length > 0) {
         assert.ok(
           line.startsWith(`\x1b]8;;${url}\x1b\\`) || line.includes(`\x1b]8;;${url}\x1b\\`),
@@ -281,8 +281,8 @@ describe("wrapTextWithAnsi with OSC 8 hyperlinks", () => {
     assert.strictEqual(lines.length, 1);
     const [line] = lines;
     assert.ok(line !== undefined);
-    const openCount = (line.match(/\x1b\]8;;https:[^\x1b]+\x1b\\/g) ?? []).length;
-    const closeCount = (line.match(/\x1b\]8;;\x1b\\/g) ?? []).length;
+    const openCount = (line.match(/\x1b\]8;;https:[^\x1b]+\x1b\\/gu) ?? []).length;
+    const closeCount = (line.match(/\x1b\]8;;\x1b\\/gu) ?? []).length;
     assert.strictEqual(openCount, 1);
     assert.strictEqual(closeCount, 1);
   });

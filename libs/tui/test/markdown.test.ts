@@ -25,7 +25,7 @@ function getCell(terminal: VirtualTerminal, row: number, col: number) {
 }
 
 function stripAnsi(line: string): string {
-  return line.replace(/\x1b\[[0-9;]*m/g, "");
+  return line.replace(/\x1b\[[0-9;]*m/gu, "");
 }
 
 describe("Markdown component", () => {
@@ -85,7 +85,7 @@ describe("Markdown component", () => {
       assert.ok(lines.length > 0);
 
       // Strip ANSI codes for checking
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
       // Check structure
       assert.ok(plainLines.some((line) => line.includes("- Item 1")));
@@ -106,7 +106,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
       // Check proper indentation
       assert.ok(plainLines.some((line) => line.includes("- Level 1")));
@@ -127,7 +127,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
       assert.ok(plainLines.some((line) => line.includes("1. First")));
       assert.ok(plainLines.some((line) => line.includes("    1. Nested first")));
@@ -184,7 +184,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
       assert.ok(plainLines.some((line) => line.includes("1. Ordered item")));
       assert.ok(plainLines.some((line) => line.includes("    - Unordered nested")));
@@ -253,10 +253,10 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trim());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trim());
 
       // Find all lines that start with a number and period
-      const numberedLines = plainLines.filter((line) => /^\d+\./.test(line));
+      const numberedLines = plainLines.filter((line) => /^\d+\./u.test(line));
 
       // Should have 3 numbered items
       assert.strictEqual(
@@ -385,7 +385,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
       // Check table structure
       assert.ok(plainLines.some((line) => line.includes("Name")));
@@ -409,7 +409,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const dividerLines = plainLines.filter((line) => line.includes("┼"));
 
       assert.strictEqual(dividerLines.length, 2, "Expected header + row divider");
@@ -428,7 +428,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(32);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const dataLine = plainLines.find((line) => line.includes(longestWord));
       assert.ok(dataLine, "Expected data row containing longest word");
 
@@ -455,7 +455,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
       // Check headers
       assert.ok(plainLines.some((line) => line.includes("Left")));
@@ -481,7 +481,7 @@ describe("Markdown component", () => {
       // Should render without errors
       assert.ok(lines.length > 0);
 
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       assert.ok(plainLines.some((line) => line.includes("Very long column header")));
       assert.ok(plainLines.some((line) => line.includes("This is a much longer cell content")));
     });
@@ -499,7 +499,7 @@ describe("Markdown component", () => {
 
       // Render at narrow width that forces wrapping
       const lines = markdown.render(50);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       // All lines should fit within width
       for (const line of plainLines) {
@@ -649,7 +649,7 @@ describe("Markdown component", () => {
 
       // Render at width that forces the cell to wrap
       const lines = markdown.render(25);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       // Should have multiple data rows due to wrapping
       const dataRows = plainLines.filter((line) => line.startsWith("│") && !line.includes("─"));
@@ -678,7 +678,7 @@ describe("Markdown component", () => {
       const width = 30;
       const lines = markdown.render(width);
       resetCapabilitiesCache();
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       for (const line of plainLines) {
         assert.ok(
@@ -697,7 +697,7 @@ describe("Markdown component", () => {
 
       // Strip box drawing characters + whitespace so we can assert the URL is preserved
       // even if it was split across multiple wrapped lines.
-      const extracted = plainLines.join("").replace(/[│├┤─\s]/g, "");
+      const extracted = plainLines.join("").replace(/[│├┤─\s]/gu, "");
       assert.ok(extracted.includes("prefix"), "Should preserve 'prefix'");
       assert.ok(extracted.includes(url), "Should preserve URL");
     });
@@ -717,7 +717,7 @@ describe("Markdown component", () => {
       const joinedOutput = lines.join("\n");
       assert.ok(joinedOutput.includes("\x1b[33m"), "Inline code should be styled (yellow)");
 
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
       for (const line of plainLines) {
         assert.ok(
           line.length <= width,
@@ -744,7 +744,7 @@ describe("Markdown component", () => {
 
       // Very narrow width
       const lines = markdown.render(15);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       // Should not crash and should produce output
       assert.ok(lines.length > 0, "Should produce output");
@@ -767,7 +767,7 @@ describe("Markdown component", () => {
 
       // Wide width where table fits naturally
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       // Should have proper table structure
       const headerLine = plainLines.find((line) => line.includes("A") && line.includes("B"));
@@ -786,14 +786,15 @@ describe("Markdown component", () => {
         `| Column One | Column Two |
 | --- | --- |
 | Data 1 | Data 2 |`,
-        2, // paddingX = 2
+        // paddingX = 2
+        2,
         0,
         defaultMarkdownTheme,
       );
 
       // Width 40 with paddingX=2 means contentWidth=36
       const lines = markdown.render(40);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       // All lines should respect width
       for (const line of plainLines) {
@@ -816,7 +817,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       assert.notStrictEqual(
         plainLines.at(-1),
@@ -844,7 +845,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
       // Check heading
       assert.ok(plainLines.some((line) => line.includes("Test Document")));
@@ -1219,7 +1220,7 @@ again, hello world`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       const closingBackticksIndex = plainLines.indexOf("```");
       assert.ok(closingBackticksIndex !== -1, "Should have closing backticks");
@@ -1262,7 +1263,7 @@ more text`,
       for (const text of cases) {
         const markdown = new Markdown(text, 0, 0, defaultMarkdownTheme);
         const lines = markdown.render(80);
-        const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+        const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
         assert.deepStrictEqual(
           plainLines,
@@ -1281,7 +1282,7 @@ more text`,
       for (const text of cases) {
         const markdown = new Markdown(text, 0, 0, defaultMarkdownTheme);
         const lines = markdown.render(80);
-        const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+        const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
         assert.notStrictEqual(
           plainLines.at(-1),
@@ -1306,7 +1307,7 @@ again, hello world`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       const dividerIndex = plainLines.findIndex((line) => line.includes("─"));
       assert.ok(dividerIndex !== -1, "Should have divider");
@@ -1324,7 +1325,7 @@ again, hello world`,
     it("should not add a trailing blank line when divider is the last rendered block", () => {
       const markdown = new Markdown("---", 0, 0, defaultMarkdownTheme);
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       assert.notStrictEqual(
         plainLines.at(-1),
@@ -1346,7 +1347,7 @@ This is a paragraph`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       const headingIndex = plainLines.findIndex((line) => line.includes("Hello"));
       assert.ok(headingIndex !== -1, "Should have heading");
@@ -1364,7 +1365,7 @@ This is a paragraph`,
     it("should not add a trailing blank line when heading is the last rendered block", () => {
       const markdown = new Markdown("# Hello", 0, 0, defaultMarkdownTheme);
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       assert.notStrictEqual(
         plainLines.at(-1),
@@ -1388,7 +1389,7 @@ again, hello world`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       const quoteIndex = plainLines.findIndex((line) => line.includes("This is a quote"));
       assert.ok(quoteIndex !== -1, "Should have blockquote");
@@ -1406,7 +1407,7 @@ again, hello world`,
     it("should not add a trailing blank line when blockquote is the last rendered block", () => {
       const markdown = new Markdown("> This is a quote", 0, 0, defaultMarkdownTheme);
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       assert.notStrictEqual(
         plainLines.at(-1),
@@ -1426,14 +1427,15 @@ bar`,
         0,
         defaultMarkdownTheme,
         {
-          color: (text) => chalk.magenta(text), // This should NOT be applied to blockquotes
+          // This should NOT be applied to blockquotes
+          color: (text) => chalk.magenta(text),
         },
       );
 
       const lines = markdown.render(80);
 
       // Both lines should have the quote border
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const quotedLines = plainLines.filter((line) => line.startsWith("│ "));
       assert.strictEqual(
         quotedLines.length,
@@ -1470,14 +1472,15 @@ bar`,
         0,
         defaultMarkdownTheme,
         {
-          color: (text) => chalk.cyan(text), // This should NOT be applied to blockquotes
+          // This should NOT be applied to blockquotes
+          color: (text) => chalk.cyan(text),
         },
       );
 
       const lines = markdown.render(80);
 
       // Both lines should have the quote border
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const quotedLines = plainLines.filter((line) => line.startsWith("│ "));
       assert.strictEqual(
         quotedLines.length,
@@ -1506,7 +1509,7 @@ bar`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const quotedLines = plainLines.filter((line) => line.startsWith("│ "));
 
       assert.ok(
@@ -1526,7 +1529,7 @@ bar`,
 
       // Render at narrow width to force wrapping
       const lines = markdown.render(30);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       // Filter to non-empty lines (exclude trailing blank line after blockquote)
       const contentLines = plainLines.filter((line) => line.length > 0);
@@ -1556,13 +1559,14 @@ bar`,
         0,
         defaultMarkdownTheme,
         {
-          color: (text) => chalk.yellow(text), // This should NOT be applied to blockquotes
+          // This should NOT be applied to blockquotes
+          color: (text) => chalk.yellow(text),
           italic: true,
         },
       );
 
       const lines = markdown.render(25);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
       // Filter to non-empty lines
       const contentLines = plainLines.filter((line) => line.length > 0);
@@ -1584,7 +1588,7 @@ bar`,
       const markdown = new Markdown("> Quote with **bold** and `code`", 0, 0, defaultMarkdownTheme);
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
       // Should have the quote border
       assert.ok(
@@ -1686,7 +1690,7 @@ bar`,
 
       const renderedLine = markdown.render(80)[0];
       assert.ok(renderedLine, "Should render heading line");
-      const contentWidth = renderedLine.replace(/\x1b\[[0-9;]*m/g, "").trimEnd().length;
+      const contentWidth = renderedLine.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd().length;
       assert.ok(contentWidth > 0, "Should have visible heading content");
 
       for (let col = contentWidth; col < 80; col++) {
@@ -1732,7 +1736,7 @@ bar`,
 
       const lines = markdown.render(80);
       const joinedOutput = lines.join("\n");
-      const joinedPlain = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "")).join(" ");
+      const joinedPlain = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "")).join(" ");
 
       assert.ok(joinedOutput.includes("\x1b[9m"), "Should apply strikethrough styling");
       assert.ok(joinedPlain.includes("strikethrough"), "Should include struck text content");
@@ -1744,7 +1748,7 @@ bar`,
 
       const lines = markdown.render(80);
       const joinedOutput = lines.join("\n");
-      const joinedPlain = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "")).join(" ");
+      const joinedPlain = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "")).join(" ");
 
       assert.ok(
         joinedPlain.includes("~strikethrough~"),
@@ -1773,7 +1777,7 @@ bar`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const joinedPlain = plainLines.join(" ");
 
       // Should contain the email once, not duplicated with mailto:
@@ -1794,11 +1798,11 @@ bar`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const joinedPlain = plainLines.join(" ");
 
       // URL should appear only once
-      const urlCount = (joinedPlain.match(/https:\/\/example\.com/g) || []).length;
+      const urlCount = (joinedPlain.match(/https:\/\/example\.com/gu) || []).length;
       assert.strictEqual(urlCount, 1, "URL should appear exactly once");
     });
 
@@ -1812,7 +1816,7 @@ bar`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const joinedPlain = plainLines.join(" ");
 
       assert.ok(joinedPlain.includes("click here"), "Should contain link text");
@@ -1829,7 +1833,7 @@ bar`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const joinedPlain = plainLines.join(" ");
 
       assert.ok(joinedPlain.includes("Email me"), "Should contain link text");
@@ -1860,12 +1864,12 @@ bar`,
       assert.ok(joined.includes("\x1b]8;;\x1b\\"), "Should contain OSC 8 close sequence");
       // Visible text is present
       const plainLines = lines.map((line) =>
-        line.replace(/\x1b[^a-zA-Z]*[a-zA-Z]|\x1b\].*?\x1b\\/g, ""),
+        line.replace(/\x1b[^a-zA-Z]*[a-zA-Z]|\x1b\].*?\x1b\\/gu, ""),
       );
       assert.ok(plainLines.join("").includes("click here"), "Should contain link text");
       // URL is NOT printed inline as plain text
       const rawPlain = lines.map((line) =>
-        line.replace(/\x1b\]8;;[^\x1b]*\x1b\\/g, "").replace(/\x1b\[[0-9;]*m/g, ""),
+        line.replace(/\x1b\]8;;[^\x1b]*\x1b\\/gu, "").replace(/\x1b\[[0-9;]*m/gu, ""),
       );
       assert.ok(
         !rawPlain.join("").includes("(https://example.com)"),
@@ -1910,7 +1914,7 @@ bar`,
       );
       // URL should not also appear as raw parenthetical text
       const rawPlain = lines.map((line) =>
-        line.replace(/\x1b\]8;;[^\x1b]*\x1b\\/g, "").replace(/\x1b\[[0-9;]*m/g, ""),
+        line.replace(/\x1b\]8;;[^\x1b]*\x1b\\/gu, "").replace(/\x1b\[[0-9;]*m/gu, ""),
       );
       assert.ok(
         !rawPlain.join("").includes("(https://example.com)"),
@@ -1931,7 +1935,7 @@ bar`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const joinedPlain = plainLines.join(" ");
 
       // The content inside the tags should be visible
@@ -1950,7 +1954,7 @@ bar`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, ""));
+      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const joinedPlain = plainLines.join("\n");
 
       // HTML in code blocks should be visible

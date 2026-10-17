@@ -29,10 +29,10 @@ const graphemeSegmenter = getGraphemeSegmenter();
 const wordSegmenter = getWordSegmenter();
 
 /** Regex matching paste markers like `[paste #1 +123 lines]` or `[paste #2 1234 chars]`. */
-const PASTE_MARKER_REGEX = /\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]/g;
+const PASTE_MARKER_REGEX = /\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]/gu;
 
 /** Non-global version for single-segment testing. */
-const PASTE_MARKER_SINGLE = /^\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]$/;
+const PASTE_MARKER_SINGLE = /^\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]$/u;
 
 /** Check if a segment is a paste marker (i.e. was merged by segmentWithMarkers). */
 function isPasteMarker(segment: string): boolean {
@@ -277,7 +277,7 @@ const unquotedAutocompleteSuffixRegex = new RegExp(
 const autocompleteTokenStartSource = `${autocompleteBoundaryRegex.source}[([{<\`]*`;
 
 function escapeCharacterClass(value: string): string {
-  return value.replace(/[\\^$.*+?()[\]{}|-]/g, "\\$&");
+  return value.replace(/[\\^$.*+?()[\]{}|-]/gu, "\\$&");
 }
 
 function buildTriggerPattern(triggerCharacters: string[]): RegExp {
@@ -365,7 +365,8 @@ export class Editor implements Component, Focusable {
 
   // Prompt history for up/down navigation
   private history: string[] = [];
-  private historyIndex: number = -1; // -1 = not browsing, 0 = most recent, 1 = older, etc.
+  // -1 = not browsing, 0 = most recent, 1 = older, etc.
+  private historyIndex: number = -1;
   private historyDraft: EditorState | null = null;
 
   // Kill ring for Emacs-style kill/yank operations
@@ -486,7 +487,8 @@ export class Editor implements Component, Focusable {
     this.lastAction = null;
     if (this.history.length === 0) return;
 
-    const newIndex = this.historyIndex - direction; // Up(-1) increases index, Down(1) decreases
+    // Up(-1) increases index, Down(1) decreases
+    const newIndex = this.historyIndex - direction;
     if (newIndex < -1 || newIndex >= this.history.length) return;
 
     // Capture state when first entering history browsing mode
@@ -1134,7 +1136,7 @@ export class Editor implements Component, Focusable {
   private expandPasteMarkers(text: string): string {
     let result = text;
     for (const [pasteId, pasteContent] of this.pastes) {
-      const markerRegex = new RegExp(`\\[paste #${pasteId}( (\\+\\d+ lines|\\d+ chars))?\\]`, "g");
+      const markerRegex = new RegExp(`\\[paste #${pasteId}( (\\+\\d+ lines|\\d+ chars))?\\]`, "gu");
       result = result.replace(markerRegex, () => pasteContent);
     }
     return result;
@@ -1190,7 +1192,7 @@ export class Editor implements Component, Focusable {
    * - Expand tabs to 4 spaces
    */
   private normalizeText(text: string): string {
-    return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\t/g, "    ");
+    return text.replace(/\r\n/gu, "\n").replace(/\r/gu, "\n").replace(/\t/gu, "    ");
   }
 
   /**
@@ -1284,7 +1286,7 @@ export class Editor implements Component, Focusable {
         }
       }
       // Also auto-trigger when typing letters in a slash command or symbol completion context
-      else if (/[a-zA-Z0-9.\-_]/.test(char) || cjkBreakRegex.test(char)) {
+      else if (/[a-zA-Z0-9.\-_]/u.test(char) || cjkBreakRegex.test(char)) {
         const currentLine = this.state.lines[this.state.cursorLine] || "";
         const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
         // Check if we're in a slash command (with or without space for arguments)
@@ -1313,7 +1315,7 @@ export class Editor implements Component, Focusable {
     // (ESC [ <codepoint> ; 5 u). Decode those back to their literal byte so the
     // per-char filter below preserves newlines instead of stripping ESC and
     // leaking the printable tail (e.g. "[106;5u") into the editor.
-    const decodedText = pastedText.replace(/\x1b\[(\d+);5u/g, (match, code) => {
+    const decodedText = pastedText.replace(/\x1b\[(\d+);5u/gu, (match, code) => {
       const cp = Number(code);
       if (cp >= 97 && cp <= 122) return String.fromCharCode(cp - 96);
       if (cp >= 65 && cp <= 90) return String.fromCharCode(cp - 64);
@@ -1331,11 +1333,11 @@ export class Editor implements Component, Focusable {
 
     // If pasting a file path (starts with /, ~, or .) and the character before
     // the cursor is a word character, prepend a space for better readability
-    if (/^[/~.]/.test(filteredText)) {
+    if (/^[/~.]/u.test(filteredText)) {
       const currentLine = this.state.lines[this.state.cursorLine] || "";
       const charBeforeCursor =
         this.state.cursorCol > 0 ? currentLine[this.state.cursorCol - 1] : "";
-      if (charBeforeCursor && /\w/.test(charBeforeCursor)) {
+      if (charBeforeCursor && /\w/u.test(charBeforeCursor)) {
         filteredText = ` ${filteredText}`;
       }
     }
@@ -1653,9 +1655,12 @@ export class Editor implements Component, Focusable {
     sourceMaxVisualCol: number,
     targetMaxVisualCol: number,
   ): number {
-    const hasPreferred = this.preferredVisualCol !== null; // P
-    const cursorInMiddle = currentVisualCol < sourceMaxVisualCol; // S
-    const targetTooShort = targetMaxVisualCol < currentVisualCol; // T
+    // P
+    const hasPreferred = this.preferredVisualCol !== null;
+    // S
+    const cursorInMiddle = currentVisualCol < sourceMaxVisualCol;
+    // T
+    const targetTooShort = targetMaxVisualCol < currentVisualCol;
 
     if (!hasPreferred || cursorInMiddle) {
       if (targetTooShort) {
@@ -1669,7 +1674,8 @@ export class Editor implements Component, Focusable {
       return currentVisualCol;
     }
 
-    const targetCantFitPreferred = targetMaxVisualCol < this.preferredVisualCol!; // U
+    // U
+    const targetCantFitPreferred = targetMaxVisualCol < this.preferredVisualCol!;
     if (targetTooShort || targetCantFitPreferred) {
       // Cases 4 and 5
       return targetMaxVisualCol;
@@ -2312,7 +2318,8 @@ export class Editor implements Component, Focusable {
     for (let i = 0; i < items.length; i++) {
       const value = items[i]!.value;
       if (value === prefix) {
-        return i; // Exact match always wins
+        // Exact match always wins
+        return i;
       }
       if (firstPrefixIndex === -1 && value.startsWith(prefix)) {
         firstPrefixIndex = i;

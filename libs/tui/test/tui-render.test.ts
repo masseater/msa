@@ -162,7 +162,7 @@ describe("TUI debug logging", () => {
 
         assert.match(
           readFileSync(join(logDir, "msa-tui-debug.log"), "utf-8"),
-          /fullRender: first render/,
+          /fullRender: first render/u,
         );
         tui.stop();
       });
@@ -265,7 +265,7 @@ describe("TUI crash dump without configured log directory", () => {
           return true;
         },
       );
-      assert.match(readFileSync(crashLogPath, "utf-8"), /Terminal width: 40/);
+      assert.match(readFileSync(crashLogPath, "utf-8"), /Terminal width: 40/u);
     } finally {
       restoreTmpdirEnv();
       rmSync(crashDir, { recursive: true, force: true });
@@ -640,7 +640,8 @@ describe("TUI content shrinkage", () => {
   it("clears empty rows when content shrinks significantly", async () => {
     const terminal = new VirtualTerminal(40, 10);
     const tui: TUI = new TuiMainScreen(terminal);
-    tui.setClearOnShrink(true); // Explicitly enable (may be disabled via env var)
+    // Explicitly enable (may be disabled via env var)
+    tui.setClearOnShrink(true);
     const component = new TestComponent();
     tui.addChild(component);
 
@@ -672,7 +673,8 @@ describe("TUI content shrinkage", () => {
   it("handles shrink to single line", async () => {
     const terminal = new VirtualTerminal(40, 10);
     const tui: TUI = new TuiMainScreen(terminal);
-    tui.setClearOnShrink(true); // Explicitly enable (may be disabled via env var)
+    // Explicitly enable (may be disabled via env var)
+    tui.setClearOnShrink(true);
     const component = new TestComponent();
     tui.addChild(component);
 
@@ -695,7 +697,8 @@ describe("TUI content shrinkage", () => {
   it("handles shrink to empty", async () => {
     const terminal = new VirtualTerminal(40, 10);
     const tui: TUI = new TuiMainScreen(terminal);
-    tui.setClearOnShrink(true); // Explicitly enable (may be disabled via env var)
+    // Explicitly enable (may be disabled via env var)
+    tui.setClearOnShrink(true);
     const component = new TestComponent();
     tui.addChild(component);
 

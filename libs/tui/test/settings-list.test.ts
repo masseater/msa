@@ -35,7 +35,7 @@ describe("SettingsList", () => {
     for (const character of "TUI mode") list.handleInput(character);
 
     assert.deepStrictEqual(changes, []);
-    assert.match(list.render(80)[0] ?? "", /TUI mode/);
+    assert.match(list.render(80)[0] ?? "", /TUI mode/u);
 
     list.handleInput("\r");
     assert.deepStrictEqual(changes, [{ id: "tui-mode", value: "fullscreen" }]);

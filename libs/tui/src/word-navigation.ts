@@ -53,7 +53,7 @@ export function findWordBackward(
   } else if (last.isWordLike) {
     // Skip inside one word-like segment, preserving ASCII punctuation boundaries.
     const segment = last.segment;
-    const matches = [...segment.matchAll(new RegExp(PUNCTUATION_REGEX, "g"))];
+    const matches = [...segment.matchAll(new RegExp(PUNCTUATION_REGEX, "gu"))];
     if (matches.length <= 0) {
       newCursor -= segment.length;
     } else {
