@@ -1,15 +1,13 @@
 import { homedir } from "node:os";
 
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { Console, Crypto, Data, Effect, FileSystem, Layer, Path } from "effect";
-import { Hex } from "effect/encoding";
+import { Console, Data, Effect, FileSystem, Layer, Path } from "effect";
 
 import { captureProcess, processRunnerLayer, runInherit } from "./capture-process.ts";
 import { Workspace, workspaceLayer } from "./coding-agent-package.ts";
 import { archiveFileNameFor, hostPlatformName, RELEASE_PLATFORMS } from "./release-platforms.ts";
 
 const DEFAULT_OUT_DIR = [".artifacts", "binaries"];
-const SHA256SUMS_FILE = "SHA256SUMS";
 
 class LocalInstallError extends Data.TaggedError("LocalInstallError")<{
   readonly message: string;
@@ -41,9 +39,7 @@ const makeContext = () =>
       fs,
       path,
       repoRoot,
-      archiveName,
       archivePath,
-      sumsPath: path.join(outDir, SHA256SUMS_FILE),
       installDir: path.join(homedir(), ".local", "share", "msa"),
       linkPath: path.join(homedir(), ".local", "bin", "msa"),
       executable: platform.executable,
@@ -53,35 +49,6 @@ const makeContext = () =>
   });
 
 type Context = Effect.Success<ReturnType<typeof makeContext>>;
-
-const checksumFor = (sums: string, fileName: string) =>
-  sums
-    .split("\n")
-    .map((line) => line.trim().split(/\s+/u))
-    .find((entry) => entry[1] === fileName)?.[0];
-
-const verifyChecksum = (context: Context) =>
-  Effect.gen(function* () {
-    // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
-    const crypto = yield* Crypto.Crypto;
-    const digest = Hex.encode(
-      yield* crypto.digest("SHA-256", yield* context.fs.readFile(context.archivePath)),
-    );
-    const expected = checksumFor(
-      yield* context.fs.readFileString(context.sumsPath),
-      context.archiveName,
-    );
-    if (expected === undefined) {
-      return yield* new LocalInstallError({
-        message: `${SHA256SUMS_FILE} has no entry for ${context.archiveName}`,
-      });
-    }
-    if (expected.toLowerCase() !== digest.toLowerCase()) {
-      return yield* new LocalInstallError({
-        message: `${context.archiveName} checksum mismatch: ${digest} != ${expected}`,
-      });
-    }
-  });
 
 const install = (context: Context) =>
   Effect.gen(function* () {
@@ -131,7 +98,6 @@ const program = Effect.gen(function* () {
     command: "vp",
     cwd: context.repoRoot,
   });
-  yield* verifyChecksum(context);
   yield* install(context);
   yield* verifyInstall(context);
 });
