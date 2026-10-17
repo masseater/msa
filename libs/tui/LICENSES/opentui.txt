@@ -1,7 +1,7 @@
 The following files of @msa/tui contain code derived from OpenTUI
 (https://github.com/anomalyco/opentui):
 
-- src/stdin-buffer.ts: buffering of partial escape sequences from stdin.
+- src/stdin-buffer.ts, src/stdin-sequences.ts: buffering of partial escape sequences from stdin.
 - src/keys.ts, src/key-ids.ts, src/key-matchers.ts, src/key-control-matchers.ts,
   src/key-protocols.ts, src/key-sequences.ts: keyboard input parsing written with reference to
   packages/core/src/lib/parse.keypress.ts

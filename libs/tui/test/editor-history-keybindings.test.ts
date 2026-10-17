@@ -2,7 +2,8 @@ import assert from "node:assert";
 import { afterEach, describe, it } from "node:test";
 
 import { Editor } from "../src/components/editor.ts";
-import { KeybindingsManager, setKeybindings, TUI_KEYBINDINGS } from "../src/keybindings.ts";
+import { TUI_KEYBINDINGS } from "../src/keybinding-definitions.ts";
+import { KeybindingsManager, setKeybindings } from "../src/keybindings.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";

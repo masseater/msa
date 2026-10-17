@@ -6,15 +6,14 @@ export {
   CombinedAutocompleteProvider,
   type SlashCommand,
 } from "./autocomplete.ts";
+export { backgroundAnsi, foregroundAnsi, styleText, styleTextWithAnsi } from "./color-ansi.ts";
 export {
-  backgroundAnsi,
   type Color,
   type ColorMixSpace,
   colorToHex,
   colorToOkhsl,
   colorToOklch,
   colorToRgb,
-  foregroundAnsi,
   type IndexedColor,
   indexedColor,
   mixColors,
@@ -26,8 +25,6 @@ export {
   parseColor,
   type RgbColorValue,
   rgbColor,
-  styleText,
-  styleTextWithAnsi,
   type TerminalColorMode,
   type TextAttributes,
   type TextStyle,
@@ -83,16 +80,18 @@ export {
 export type { EditorComponent } from "./editor-component.ts";
 export { type FuzzyMatch, fuzzyFilter, fuzzyMatch } from "./fuzzy.ts";
 export {
-  getKeybindings,
   type Keybinding,
-  type KeybindingConflict,
   type KeybindingDefinition,
   type KeybindingDefinitions,
   type Keybindings,
   type KeybindingsConfig,
+  TUI_KEYBINDINGS,
+} from "./keybinding-definitions.ts";
+export {
+  getKeybindings,
+  type KeybindingConflict,
   KeybindingsManager,
   setKeybindings,
-  TUI_KEYBINDINGS,
 } from "./keybindings.ts";
 export {
   decodeKittyPrintable,
