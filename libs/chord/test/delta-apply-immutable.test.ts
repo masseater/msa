@@ -272,9 +272,7 @@ describe("immutable application complexity", () => {
     const rootArray = freezeDeep([1, 2]);
     expect(applyImmutable(rootArray, [["p", [], 2, 0, [3]]])).toEqual([1, 2, 3]);
     expect(rootArray).toEqual([1, 2]);
-    // An appended item that is itself an array stays one element.
     expect(applyImmutable(rootArray, [["p", [], 2, 0, [[3, 4]]]])).toEqual([1, 2, [3, 4]]);
-    // Invalid paths fail with the general path's errors.
     const invalid: [Op, typeof PathError | typeof UnsafePathError][] = [
       [["p", ["values", "missing"], 0, 0, []], PathError],
       [["p", ["missing"], 0, 0, []], PathError],
@@ -289,7 +287,6 @@ describe("immutable application complexity", () => {
     const document = freezeDeep({ values: [] as JsonValue[], list: [[1]], text: "a" });
     for (const [op, error] of invalid)
       expect(() => applyImmutable(document, [op]), JSON.stringify(op)).toThrow(error);
-    // An insert that is not at the end takes the general path.
     expect(applyImmutable(rootArray, [["p", [], 1, 0, [9]]])).toEqual([1, 9, 2]);
   });
 

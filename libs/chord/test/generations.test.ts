@@ -1,6 +1,3 @@
-// Old code generations and disposed objects must be collectable. A "generation" is the code of one facet module
-// evaluation: here a facet built by a function call, whose factory closes over a per-generation sentinel registered in a
-// FinalizationRegistry. A generation is alive while anything Chord keeps references its code.
 import assert from "node:assert/strict";
 import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
@@ -13,7 +10,6 @@ import { createHost, defineRegistry, type Facet, local, method } from "../src/in
 setFlagsFromString("--expose-gc");
 const gc = runInNewContext("gc") as () => void;
 
-/** Tracks which sentinels are still reachable. */
 function tracker() {
   const alive = new Set<number>();
   const registry = new FinalizationRegistry<number>((id) => alive.delete(id));
@@ -24,10 +20,6 @@ function tracker() {
       registry.register(value, id);
       return value;
     },
-    /**
-     * Collects garbage until only `expected` is alive, at most `timeout` ms (finalizers run some time after a
-     * collection), and returns what is alive then.
-     */
     async collect(expected: readonly number[], timeout = 5000): Promise<number[]> {
       const sorted = () => [...alive].sort((a, b) => a - b);
       const deadline = Date.now() + timeout;
@@ -87,7 +79,6 @@ describe("generation GC", () => {
             Store,
             (_input, _principal, self) => {
               const count = self.state("count", Type.Number(), 0);
-              // Kept across reloads (same version): adopts each new declaration's close.
               self.resource("conn", {
                 version: 1,
                 open: () => ({ open: true }),
@@ -164,11 +155,9 @@ describe("generation GC", () => {
     });
     const host = createHost({ self: { kind: "host" }, onError: () => {} });
     host.serve(Item, (input) => {
-      // The normalized input is held by the object: it stands for the object.
       const { id } = objects.track(input.id, input);
       return { id: () => id };
     });
-    // In a function of its own, so no reference outlives the iteration in this frame.
     const use = async (id: number): Promise<void> => {
       const ref = host.hold(Item, { id });
       assert.equal(await ref.id(), id);

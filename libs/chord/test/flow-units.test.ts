@@ -1,5 +1,3 @@
-// Entry 8: flow control with units. First units pass the window, so a get never waits behind other streams; waiting
-// ops are capped per link; relays ask downstream for a reset when they drop ops.
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
@@ -38,7 +36,6 @@ const Blob = remote("t.e8-blob", {
   },
 });
 
-/** About `kib` KiB of lines. */
 const lines = (kib: number, tag: string) =>
   Array.from({ length: kib }, (_, i) => `${tag}${i}:${"x".repeat(1000)}`);
 
@@ -86,7 +83,6 @@ describe("flow control with units", () => {
     const bigs = ["a", "b", "c"].map((name) => host.hold(Blob, { name }));
     await Promise.all(bigs.map((big) => big.ready));
     link.paused = true;
-    // Changes to every large stream now wait for acknowledgements that do not come.
     for (const big of bigs) for (let i = 0; i < 50; i++) await big.push(`${i}:${"y".repeat(2000)}`);
     const small = host.hold(Blob, { name: "small" });
     await small.ready;
@@ -117,7 +113,6 @@ describe("flow control with units", () => {
     const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
     serveBlob(server, () => 1);
     const [down, up] = memoryLinkPair();
-    // A link without sizes: what Node's IPC channel is.
     const unsized: Link = {
       get closed() {
         return down.closed;
@@ -239,7 +234,6 @@ describe("relay topology", () => {
 
   it("each origin hold is one downstream hold; nothing is left after release, close or revoke", async () => {
     const c = cluster();
-    // Two tabs of one guest (two connections, one principal) and another guest.
     const one = c.browser({ guest: "g" });
     const two = c.browser({ guest: "g" });
     const three = c.browser({ guest: "h" });

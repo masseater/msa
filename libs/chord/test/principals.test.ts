@@ -1,22 +1,32 @@
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
-import { describe, it } from "vite-plus/test";
+import { describe, expectTypeOf, it } from "vite-plus/test";
 
 import {
+  type ConnectOptions,
   type Ctx,
   createHost,
   defineFacet,
   type FacetApi,
+  type GetOptions,
   type Host,
+  type HostOptions,
   hostNamed,
   local,
   memoryLinkPair,
   method,
+  type PrincipalMatch,
   remote,
+  type Route,
 } from "../src/index.ts";
 
-/** An app's principals: what TypeScript narrows on. */
+type KeysOf<U> = U extends (...args: never[]) => unknown
+  ? never
+  : U extends object
+    ? keyof U
+    : never;
+
 type Principal =
   | { readonly kind: "owner" }
   | { readonly kind: "guest"; readonly id: string }
@@ -39,7 +49,6 @@ describe("principals", () => {
       const plain: FacetApi = api;
       void plain;
       api.serve(Who, (_input, principal, self) => {
-        // Narrowing on `kind` needs no cast.
         const created = principal.kind === "guest" ? `guest ${principal.id}` : principal.kind;
         self.task(async (ctx) => {
           const kind: Principal["kind"] = ctx.principal.kind;
@@ -54,17 +63,19 @@ describe("principals", () => {
       await host.root((ctx) => guest.who(ctx), { principal: { kind: "guest", id: "g1" } }),
       "guest g1, called by host",
     );
-    // A typed host, facet API and context are usable where Chord's untyped ones are expected.
     const untyped: Host = host;
     void untyped;
     await host.root(async (ctx) => {
       const plain: Ctx = ctx;
       void plain;
     });
-    // @ts-expect-error: not a principal of this app
-    host.hold(Who, {}, { principal: { kind: "stranger" } });
-    // @ts-expect-error: a pattern names fields of the app's principals
-    void host.invalidatePrincipal({ kind: "guest", name: "g1" }).catch(() => {});
+    expectTypeOf<{ principal: { kind: "stranger" } }>().not.toExtend<GetOptions<Principal>>();
+    Reflect.apply(host.hold, host, [Who, {}, { principal: { kind: "stranger" } }]);
+    expectTypeOf<"id">().toExtend<KeysOf<PrincipalMatch<Principal>>>();
+    expectTypeOf<"name">().not.toExtend<KeysOf<PrincipalMatch<Principal>>>();
+    void Promise.resolve(
+      Reflect.apply(host.invalidatePrincipal, host, [{ kind: "guest", name: "g1" }]),
+    ).catch(() => {});
     await host.close();
   });
 
@@ -79,7 +90,6 @@ describe("principals", () => {
     const equal = host.hold(Who, {}, { principal: { kind: "host" } });
     await Promise.all([own.ready, equal.ready]);
     assert.equal(created, 1);
-    // Never disposed as a matching principal: it is the host's own.
     await host.invalidatePrincipal({ kind: "host" });
     assert.equal(own.status, "live");
     await host.close();
@@ -126,15 +136,16 @@ describe("principals", () => {
   });
 
   it("refuses a host, a parent link or a route without its principal", () => {
-    // @ts-expect-error: `self` is required
-    assert.throws(() => createHost({ name: "x" }), /needs `self`/);
+    expectTypeOf<{ name: "x" }>().not.toExtend<HostOptions>();
+    assert.throws(() => Reflect.apply(createHost, undefined, [{ name: "x" }]), /needs `self`/);
     const host = createHost({ self: "host" });
     const [, up] = memoryLinkPair();
-    // @ts-expect-error: `principal` is required
-    assert.throws(() => host.connect(up, {}), /connect needs `principal`/);
+    expectTypeOf<Record<never, never>>().not.toExtend<ConnectOptions>();
+    assert.throws(() => Reflect.apply(host.connect, host, [up, {}]), /connect needs `principal`/);
+    expectTypeOf<Omit<Route, "principal">>().not.toExtend<Route>();
     assert.throws(
-      // @ts-expect-error: `principal` is required
-      () => host.route("w:", { authorize: () => true, resolve: async () => up }),
+      () =>
+        Reflect.apply(host.route, host, ["w:", { authorize: () => true, resolve: async () => up }]),
       /needs `principal`/,
     );
   });

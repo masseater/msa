@@ -1,4 +1,3 @@
-// Regression tests for Astra's phase 1b review (findings #1-#11) and the shared-worker test gap.
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
@@ -36,7 +35,6 @@ function latch() {
   return { promise, open };
 }
 
-/** A link that logs what it sends and can drop a frame by closing instead. */
 class WatchedLink implements Link {
   readonly inner: Link;
   readonly sent: Frame[] = [];
@@ -82,7 +80,6 @@ const Counter = remote("t.counter", {
   },
 });
 
-/** A server routing `session:*` to workers it spawns once per name; the server→worker link is watched. */
 function cluster() {
   const log: string[] = [];
   const principals: unknown[] = [];
@@ -190,7 +187,6 @@ describe("links review: identity and stamping", () => {
     raw.receive(() => {});
     raw.send({ t: "hello", name: "session:S9", kind: "host", codeVersion: 1 });
     await until(() => raw.closed);
-    // A host link must have a name and its hello must match it.
     assert.throws(
       () => c.server.accept(memoryLinkPair()[0], { principal: {}, kind: "host" }),
       /needs its name/,
@@ -229,7 +225,6 @@ describe("links review: identity and stamping", () => {
       await go.promise;
     });
     await until(() => rootId !== "");
-    // A client forging the worker root's end must not release its lease.
     const [clientDown, raw] = memoryLinkPair();
     server.accept(clientDown, { principal: { guest: "g" } });
     raw.receive(() => {});
@@ -548,7 +543,6 @@ describe("links review: cross-host reload", () => {
     const { server, worker, modules, link, connect } = setup();
     await tick();
     modules.set("greeter", greeterFacet("v2"));
-    // The commit frame is lost: the link dies right after the child voted.
     link.closeOn = (frame) => frame.t === "commit";
     await server.reload([], { remote: { "session:": ["greeter"] } });
     await until(() => !internals(worker).reloading);
@@ -584,8 +578,6 @@ describe("links review: cross-host reload", () => {
         }),
     });
     server.install(echoFacet(1));
-    // Keeps the Echo object the bounced call reaches (it acts as the worker's principal) alive, so the reload gate
-    // must decide about the bounced root's lease.
     const echo = server.hold(Echo, {}, { principal: { worker: "w" } });
     await echo.ready;
     worker.serve(Bouncer, () => ({

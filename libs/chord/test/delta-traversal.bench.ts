@@ -1,4 +1,3 @@
-/** Cold/full traversal complements the hot-access and replication benchmarks. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -15,8 +14,6 @@ type Mode = "raw" | "proxy" | "delta";
 const MiB = 1024 * 1024;
 async function gc(): Promise<void> {
   if (!global.gc) throw new Error("run with --expose-gc");
-  // WeakRef targets survive their current job. Allow both target collection
-  // and finalizer cleanup in subsequent jobs before sampling retained memory.
   for (let i = 0; i < 4; i++) {
     await setImmediate();
     global.gc();
@@ -67,7 +64,6 @@ function setup(mode: Mode, input: Drawing): { state: Drawing; finish(): void } {
   }
   return { state: mode === "proxy" ? membrane(input) : input, finish() {} };
 }
-// Keep temporary raw inputs out of the measuring frame.
 function prepare(mode: Mode, strokes: number, points: number) {
   return setup(mode, fixture(strokes, points));
 }

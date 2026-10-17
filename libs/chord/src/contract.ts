@@ -7,7 +7,6 @@ import type { Ctx, Exposed, Readable, RefBase, StateSource } from "./types.ts";
 
 const MEMBER = Symbol("chord.member");
 
-/** A method's arguments and result; `undefined`: it takes no arguments, or returns nothing (void). */
 export interface MethodSpec<
   A extends TSchema | undefined = TSchema | undefined,
   R extends TSchema | undefined = TSchema | undefined,
@@ -20,15 +19,9 @@ export interface MethodSpec<
 export interface OpaqueSpec<T = unknown> {
   readonly [MEMBER]: "opaque";
   readonly id: string;
-  /** Type carrier only; never set. */
   readonly type?: T;
 }
 
-/**
- * A method. `method()`: no arguments (called as `ref.name(ctx)`, implemented as `(ctx) => …`) and no result.
- * `method(args)`: no result, the handler returns nothing (void). `method(args, result)`, or `method(undefined, result)`
- * for a method without arguments that returns something.
- */
 export function method(): MethodSpec<undefined, undefined>;
 export function method<A extends TSchema>(args: A): MethodSpec<A, undefined>;
 export function method<A extends TSchema | undefined, R extends TSchema>(
@@ -39,7 +32,6 @@ export function method(args?: TSchema, result?: TSchema): MethodSpec {
   return { [MEMBER]: "method", args, result };
 }
 
-/** A native in-process object identified by `name@version` (local contracts only). */
 export const opaque = <T = unknown>(id: string): OpaqueSpec<T> => {
   if (!/^[^@\s]+@\d+$/.test(id)) throw new TypeError(`opaque id must be name@version: ${id}`);
   return { [MEMBER]: "opaque", id };
@@ -50,30 +42,22 @@ export interface VariantDef {
   readonly methods?: Readonly<Record<string, MethodSpec>>;
 }
 
-/** Where objects of a remote type live: one named host. */
 export interface HostNamed {
   readonly name: string;
 }
 
-/** Where objects of a remote type live: the host `prefix` + the input's string field `key` (`session:` + `session`). */
 export interface HostFamily<K extends string = string> {
   readonly prefix: string;
   readonly key: K;
 }
 
-/** A remote type's placement: data only, so a description carries it and every host can check it. */
 export type Placement = HostNamed | HostFamily;
 
-/** Objects of the type live on the host named `name` (`hostNamed("server")`). */
 export function hostNamed(name: string): HostNamed {
   if (typeof name !== "string" || name === "") throw new TypeError("hostNamed needs a host name");
   return { name };
 }
 
-/**
- * Objects of the type live on `prefix` + the value of the input's string field `key`: `hostFamily("session:",
- * "session")` puts `{ session: "S1", … }` on `session:S1`. The field is required and must be a non-empty string.
- */
 export function hostFamily<const K extends string>(prefix: string, key: K): HostFamily<K> {
   if (typeof prefix !== "string" || prefix === "")
     throw new TypeError("hostFamily needs a host-name prefix");
@@ -82,12 +66,9 @@ export function hostFamily<const K extends string>(prefix: string, key: K): Host
   return { prefix, key };
 }
 
-/** Required string fields of `I`: what a `hostFamily` may name. */
 type StringKeys<I> = { [K in keyof I]-?: I[K] extends string ? K : never }[keyof I] & string;
-/** The placements a remote type with input `I` may have. */
 export type PlacementFor<I> = HostNamed | HostFamily<StringKeys<I>>;
 
-/** The host an object of `placement` with this (normalized) input lives on. Throws `invalid/placement`. */
 export function resolveHost(typeName: string, placement: Placement, input: unknown): string {
   if ("name" in placement) return placement.name;
   const value =
@@ -99,7 +80,6 @@ export function resolveHost(typeName: string, placement: Placement, input: unkno
   return placement.prefix + value;
 }
 
-/** Whether the host named `hostName` may serve a type of `placement`. */
 export const placedOn = (placement: Placement, hostName: string): boolean =>
   "name" in placement
     ? placement.name === hostName
@@ -111,12 +91,10 @@ export const placementText = (placement: Placement): string =>
 export interface RemoteDef {
   readonly version: number;
   readonly input: TSchema;
-  /** Where its objects live: `hostNamed(…)` or `hostFamily(…)`. Part of the contract (and its fingerprint). */
   readonly host: Placement;
   readonly variants: Readonly<Record<string, VariantDef>>;
 }
 
-/** A local member: a method, an opaque native object, or a state member described by its schema. */
 export type LocalMember = MethodSpec | OpaqueSpec | TSchema;
 
 export interface LocalDef {
@@ -125,12 +103,9 @@ export interface LocalDef {
   readonly members?: Readonly<Record<string, LocalMember>>;
 }
 
-// A description travels as a reference's contract token (wire.ts), so it is declared once, as the schema that validates it.
-// `TSchema` is an empty interface: any object is one, which is all a peer's schema is checked for here.
 const SchemaObject = Type.Unsafe<TSchema>(Type.Object({}));
 
 const MemberDescriptionSchema = Type.Union([
-  // Absent `args`: the method takes none. Absent `result`: it returns nothing.
   Type.Object({
     kind: Type.Literal("method"),
     args: Type.Optional(SchemaObject),
@@ -141,7 +116,6 @@ const MemberDescriptionSchema = Type.Union([
 ]);
 export type MemberDescription = Static<typeof MemberDescriptionSchema>;
 
-/** Local contracts have one unnamed variant. */
 export const LOCAL_VARIANT = "";
 
 const PlacementSchema = Type.Union([
@@ -157,7 +131,6 @@ export const DescriptionSchema = Type.Object({
   scope: Type.Union([Type.Literal("remote"), Type.Literal("local")]),
   version: Type.Integer(),
   input: SchemaObject,
-  /** Remote types only (required there): where their objects live. */
   host: Type.Optional(PlacementSchema),
   variants: Type.Record(Type.String(), Type.Record(Type.String(), MemberDescriptionSchema)),
 });
@@ -183,7 +156,6 @@ export interface LocalContract<D extends LocalDef = LocalDef> extends ContractBa
 
 export type AnyContract = RemoteContract | LocalContract;
 
-/** Names a reference uses itself; members may not use them. */
 export const RESERVED_MEMBERS: ReadonlySet<string> = new Set([
   "variant",
   "status",
@@ -238,7 +210,6 @@ export function remote<const D extends RemoteDef>(
   const placement = def.host as Placement | undefined;
   if (placement === undefined || !Value.Check(PlacementSchema, placement))
     throw new TypeError(`remote contract ${name} needs \`host\`: hostNamed(…) or hostFamily(…)`);
-  // A JSON copy: the description travels, and a placement object may carry nothing else.
   const host: Placement =
     "name" in placement
       ? { name: placement.name }
@@ -298,10 +269,6 @@ export function local<const D extends LocalDef>(name: string, def: D): LocalCont
   });
 }
 
-/**
- * A consumer token received over a link (only its description travels). Has no `def`, so it is only good for binding
- * and validation, never for TypeScript types.
- */
 export function contractFromDescription(description: Description): AnyContract {
   const { name, scope, version, input, host } = description;
   if (
@@ -324,7 +291,6 @@ export function contractFromDescription(description: Description): AnyContract {
     : { ...base, scope, def: { version, input } };
 }
 
-/** Returns why `provider` does not cover `consumer`, or undefined when it does. */
 export function coverage(provider: Description, consumer: Description): string | undefined {
   if (provider.name !== consumer.name || provider.scope !== consumer.scope) return "different type";
   if (!samePlacement(provider, consumer)) return "host";
@@ -337,7 +303,6 @@ export function coverage(provider: Description, consumer: Description): string |
       if (offered === undefined || offered.kind !== wanted.kind)
         return `${kind}.${name} missing or of another kind`;
       if (offered.kind === "method" && wanted.kind === "method") {
-        // Both take arguments or neither does; a consumer that expects no result accepts any.
         if ((wanted.args === undefined) !== (offered.args === undefined))
           return `${kind}.${name} arguments`;
         if (
@@ -370,18 +335,15 @@ const samePlacement = (a: Description, b: Description): boolean =>
 const placementOf = (description: Description): string =>
   description.host === undefined ? "(local)" : placementText(description.host);
 
-/** Maps the provider's current implementation to the view a consumer of an older contract version expects. */
 export type Adapter = (current: Record<string, unknown>) => Record<string, unknown>;
 export type Accepts = Readonly<Record<number, Adapter>>;
 
-/** How a consumer token binds to a provider: directly or through an `accepts` adapter. Throws contract_mismatch. */
 export function bind(
   provider: AnyContract,
   accepts: Accepts | undefined,
   consumer: AnyContract,
 ): Adapter | undefined {
   if (provider.fingerprint === consumer.fingerprint) return undefined;
-  // A moved type is another type for its consumers: no adapter reaches across hosts.
   if (!samePlacement(provider.description, consumer.description)) {
     throw new ChordError(
       "contract_mismatch",
@@ -406,8 +368,6 @@ export function bind(
   return adapter;
 }
 
-// ─── Static types ────────────────────────────────────────────────────────────
-
 type Empty = Record<never, never>;
 type StateOf<V> = V extends { readonly state: infer S extends Readonly<Record<string, TSchema>> }
   ? S
@@ -419,12 +379,9 @@ type MethodsOf<V> = V extends {
   ? M
   : Empty;
 
-/** What a handler returns: the result's value, or nothing for a void method. */
 type Returned<R> = [R] extends [TSchema] ? Static<R> | Promise<Static<R>> : void | Promise<void>;
-/** What a call resolves to. */
 type Resolved<R> = [R] extends [TSchema] ? Static<R> : undefined;
 
-/** A method's handler; `P` is the app's principal type (`ctx.principal`). */
 export type MethodImplementation<M, P = unknown> =
   M extends MethodSpec<infer A, infer R>
     ? [A] extends [TSchema]
@@ -438,7 +395,6 @@ export type Call<M> =
       : (ctx?: Ctx) => Promise<Resolved<R>>
     : never;
 
-/** Whether `contract`'s method `name` takes no arguments (it is called as `ref.name(ctx)`). */
 export function takesNoArgs(contract: AnyContract, name: string): boolean {
   for (const members of Object.values(contract.description.variants)) {
     const member = members[name];
@@ -452,10 +408,6 @@ type VariantImplementation<K, V, P> = { readonly variant: K } & {
 } & {
   readonly [M in keyof MethodsOf<V>]: MethodImplementation<MethodsOf<V>[M], P>;
 };
-/**
- * A reference in one variant: its state members are plain readables (a reference you hold has its state) and its
- * methods calls. `variant` discriminates the union `Ref` is for a multi-variant type.
- */
 type VariantRef<C extends AnyContract, K, V> = RefBase<C> & { readonly variant: K } & {
   readonly [S in keyof StateOf<V>]: Readable<StaticOf<StateOf<V>[S]>>;
 } & {
@@ -486,7 +438,6 @@ export type InputOf<C> = C extends { readonly def: { readonly input: infer I ext
   ? Static<I>
   : never;
 
-/** What a factory returns for contract C; its methods' `ctx.principal` is `P`. */
 export type ImplementationOf<C, P = unknown> =
   C extends RemoteContract<infer D>
     ? {
@@ -498,11 +449,6 @@ export type ImplementationOf<C, P = unknown> =
         } & Record<string, unknown>
       : never;
 
-/**
- * What `get` returns for contract C. A remote type's reference is a union discriminated by `variant`: another variant's
- * members are reachable only after narrowing (`if (ref.variant === "editor") ref.add(…)`). A local type's reference has
- * its members.
- */
 export type Ref<C extends AnyContract = AnyContract> =
   C extends RemoteContract<infer D>
     ? { [K in keyof D["variants"]]: VariantRef<C, K, D["variants"][K]> }[keyof D["variants"]]

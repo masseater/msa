@@ -208,7 +208,6 @@ describe("delta tracker transactional overlay lifecycle", () => {
     const prepared = change.prepare();
     const operations = prepared.ops;
     tracker.adopt(prepared);
-    // Matches services/state.ts: adopt first, then inspect ops and publish prepared.value.
     expect(prepared.ops).toBe(operations);
     const published = prepared.ops.length === 0 ? undefined : prepared.value;
     expect(operations).toHaveLength(2);
@@ -220,7 +219,6 @@ describe("delta tracker transactional overlay lifecycle", () => {
     next.state.value = 2;
     const nextPrepared = next.prepare();
     tracker.adopt(nextPrepared);
-    // Retained immutable publications remain at their original revision.
     expect(published).not.toBe(tracker.value);
     expect(prepared.value).toEqual({ value: 1, nested: { count: 1 } });
     expect(tracker.value).toEqual({ value: 2, nested: { count: 1 } });
@@ -299,8 +297,6 @@ describe("delta tracker transactional overlay lifecycle", () => {
       expect(change.state.trackerInherited).toBeUndefined();
       const prepared = change.prepare();
       expect(prepared.value.value).toBeUndefined();
-      // Plain committed values expose inherited properties through ordinary
-      // JavaScript reads; strict-JSON membership remains own-properties only.
       expect(prepared.value.trackerInherited).toBe(7);
       tracker.adopt(prepared);
       expect(Object.keys(tracker.value)).toEqual([]);
@@ -994,10 +990,10 @@ describe("delta tracker piece arrays", () => {
   it("emits removals from the end backwards, then inserts, when kept elements keep their order", () => {
     const tracker = track({ values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] });
     const values = settle(tracker, (draft) => {
-      draft.values.shift(); // gap before the first kept element
-      draft.values.splice(1, 2, 20); // gap between kept elements, with an insert
-      draft.values.splice(5, 1); // another gap
-      draft.values.pop(); // gap after the last kept element
+      draft.values.shift();
+      draft.values.splice(1, 2, 20);
+      draft.values.splice(5, 1);
+      draft.values.pop();
       draft.values.push(30);
     });
     expect(values.values).toEqual([1, 20, 4, 5, 6, 8, 30]);

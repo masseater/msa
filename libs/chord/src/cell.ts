@@ -18,12 +18,10 @@ export interface SourceOptions {
   readonly report: (error: unknown) => void;
 }
 
-/** Checks that `ctx` may write an object's cells now; throws otherwise. */
 export type WriteGuard = (ctx: Ctx) => void;
 
 let sequence = 0;
 
-/** Fans out values and delta events; listener errors are reported, not thrown to the writer. */
 class Fanout<T> {
   readonly #values = new Set<(value: T) => void>();
   readonly #events = new Set<(event: StateEvent<T>) => void>();
@@ -45,10 +43,6 @@ class Fanout<T> {
     return () => this.#events.delete(listener);
   }
 
-  /**
-   * Queues delivery to the listeners subscribed now. A listener that subscribes later already got this revision in
-   * its snapshot; one that unsubscribes before delivery is skipped.
-   */
   emit(event: StateEvent<T>): void {
     const events = [...this.#events];
     const values = [...this.#values];
@@ -68,36 +62,27 @@ class Fanout<T> {
   }
 }
 
-/**
- * Whether a state source has its value (entry 8): a remote reference's member before its first snapshot has none, and
- * neither has anything derived from or forwarding it. Sources without this symbol always have their value.
- */
 export const HYDRATION: unique symbol = Symbol("chord.hydration");
 
 export interface Hydration {
   readonly hydrated: boolean;
-  /** Resolves once hydrated; rejects if the source ends first. */
   whenHydrated(): Promise<void>;
 }
 
-/** The hydration of a readable, or undefined for a source that always has its value. */
 export function hydrationOf(value: unknown): Hydration | undefined {
   if (value === null || typeof value !== "object") return undefined;
   return (value as { readonly [HYDRATION]?: Hydration })[HYDRATION];
 }
 
-/** The hydrations of `sources` that are not hydrated yet. */
 export const unhydrated = (sources: Iterable<unknown>): Hydration[] =>
   [...sources]
     .map(hydrationOf)
     .filter((hydration): hydration is Hydration => hydration?.hydrated === false);
 
-/** An object-owned state source (cell or derivation). Writes recompute dependents atomically. */
 export abstract class Source<T> implements Readable<T> {
   readonly key: string;
   readonly seq = ++sequence;
   readonly dependents = new Set<Derived<unknown>>();
-  /** Schemas of remote state members currently exposing this source (checked per write in dev mode). */
   schemas: readonly TSchema[] = [];
   protected readonly options: SourceOptions;
   protected readonly fanout: Fanout<T>;
@@ -118,7 +103,6 @@ export abstract class Source<T> implements Readable<T> {
     return this.fanout.events(listener, this.value);
   }
 
-  /** Per-write validation, dev mode only. */
   validate(value: unknown): void {
     if (!this.options.dev) return;
     for (const schema of this.ownSchemas())
@@ -131,7 +115,6 @@ export abstract class Source<T> implements Readable<T> {
   }
 }
 
-/** The tracker tracks containers, so a cell tracks `{ v: value }` and strips the box from published ops. */
 interface Box<T> {
   v: T;
 }
@@ -149,7 +132,6 @@ function unbox(ops: readonly Op[], value: unknown): Op[] {
         result.push(["m", path, op[2]]);
         break;
       default:
-        // s/d/a/t on the value itself replace it.
         if (path.length === 0) return [["r", value as JsonValue]];
         if (op[0] === "d") result.push(["d", path as [string | number, ...(string | number)[]]]);
         else result.push([op[0], path as [string | number, ...(string | number)[]], op[2]] as Op);
@@ -158,19 +140,12 @@ function unbox(ops: readonly Op[], value: unknown): Op[] {
   return result;
 }
 
-/** A state cell holding any JSON value, validated against its schema at creation and (dev mode) on writes. */
 export class Cell<T> extends Source<T> {
-  /** Replaced at a reload commit that changes the schema (state-version bump). */
   schema: TSchema;
   #tracker: Tracker<Box<T>>;
   readonly #guard: WriteGuard;
-  /** False until `initialize` for a cell declared with `init`: reads and writes throw `not_ready`. */
   #initialized: boolean;
 
-  /**
-   * `initial` is always validated against `schema`; ownership moves to the cell. Without `initial`, the cell has no
-   * value until `initialize` (a cell declared with `init`, filled before its object goes live).
-   */
   constructor(
     key: string,
     schema: TSchema,
@@ -187,7 +162,6 @@ export class Cell<T> extends Source<T> {
     this.#initialized = initial !== undefined;
   }
 
-  /** Sets the first value of a cell declared with `init` (validated; ownership moves to the cell). Publishes nothing. */
   initialize(value: T): void {
     if (this.#initialized) throw new Error(`state ${this.key} is already initialized`);
     assertValid("state", `initial value of state ${this.key}`, this.schema, value);
@@ -204,10 +178,6 @@ export class Cell<T> extends Source<T> {
     return this.#tracker.value.v;
   }
 
-  /**
-   * Mutates a draft (only mutated paths are published), or returns a new value (`n => n + 1`). A returned value is
-   * always validated against the schema. The draft is unusable after `fn` returns.
-   */
   change(ctx: Ctx, fn: (draft: Draft<T>) => T): void;
   change(ctx: Ctx, fn: (draft: Draft<T>) => void): void;
   change(ctx: Ctx, fn: (draft: Draft<T>) => unknown): void {
@@ -232,13 +202,6 @@ export class Cell<T> extends Source<T> {
     this.#publish(prepared, "ops");
   }
 
-  /**
-   * Replaces the whole value. Ownership of `value` moves to the cell: never mutate it afterwards.
-   *
-   * Subscribers get a structural diff (`diffRevisions`) when `diff` is true, or by default when the new value shares
-   * containers with the old one (a new immutable revision of the same state, e.g. mirrored from another store);
-   * otherwise a single `r` op. The resulting value is the same either way; only the ops differ.
-   */
   replace(ctx: Ctx, value: T, options: { readonly diff?: boolean } = {}): void {
     this.#guard(ctx);
     if (!this.#initialized) throw notReady(`state ${this.key} (its init has not run)`);
@@ -248,16 +211,11 @@ export class Cell<T> extends Source<T> {
     this.#publish(this.#tracker.prepareReplace({ v: value }), "ops", true, ops);
   }
 
-  /**
-   * Installs a migrated value and its schema (reload commit). The caller validated the value and the derivations
-   * over it against every schema that will apply, so nothing is checked here. Subscribers receive a reset.
-   */
   reset(value: T, schema: TSchema): void {
     this.schema = schema;
     this.#publish(this.#tracker.prepareReplace({ v: value }), "reset", false);
   }
 
-  /** Adopts this revision and every derived one, then queues all notifications (cell first, then derivations). */
   #publish(
     prepared: ReturnType<Tracker<Box<T>>["prepareReplace"]>,
     type: "ops" | "reset",
@@ -286,7 +244,6 @@ export class Cell<T> extends Source<T> {
   }
 }
 
-/** True if `b` reuses at least one container of `a` at the same key: a new revision of the same state. */
 function sharesStructure(a: unknown, b: unknown): boolean {
   if (a === null || b === null || typeof a !== "object" || typeof b !== "object" || a === b)
     return false;
@@ -302,7 +259,6 @@ function sharesStructure(a: unknown, b: unknown): boolean {
   return false;
 }
 
-/** Recomputes every transitive dependent of `changed` against candidate values and validates them. */
 function computeDependents(
   changed: Source<unknown>,
   value: unknown,
@@ -341,10 +297,6 @@ const isReadable = (value: unknown): value is Readable<unknown> =>
   typeof (value as Readable<unknown>).subscribe === "function" &&
   "value" in value;
 
-/**
- * A synchronous derivation. Sources are object cells/derivations (recomputed atomically with the write) or other
- * readables such as reference state members (recomputed when they publish). Subscribers receive diffs.
- */
 export class Derived<T> extends Source<T> {
   readonly sources: readonly Readable<unknown>[];
   readonly #fn: (...values: never[]) => unknown;
@@ -370,7 +322,6 @@ export class Derived<T> extends Source<T> {
     return this.#value;
   }
 
-  /** Hydrated once every source is (a derivation over a remote member waits for its snapshot). */
   get [HYDRATION](): Hydration | undefined {
     const pending = unhydrated(this.sources);
     if (pending.length === 0) return undefined;
@@ -381,10 +332,6 @@ export class Derived<T> extends Source<T> {
     };
   }
 
-  /**
-   * Computes the first value (or takes it from `precomputed`, a reload's validated dry run) and starts following
-   * the sources (at install, never inside a factory).
-   */
   attach(precomputed?: ReadonlyMap<unknown, unknown>): void {
     this.#value = precomputed?.has(this)
       ? (precomputed.get(this) as T)
@@ -408,7 +355,6 @@ export class Derived<T> extends Source<T> {
     return result as T;
   }
 
-  /** Recomputes and republishes, including dependents. Errors are reported (the source write already happened). */
   refresh(): void {
     try {
       const next = this.compute((source) => source.value);
@@ -436,6 +382,5 @@ export class Derived<T> extends Source<T> {
 export const isSource = (value: unknown): value is Cell<unknown> | Derived<unknown> =>
   value instanceof Source;
 
-/** Thrown by placeholders used before activation finished. */
 export const notReady = (what: string): ChordError =>
   new ChordError("not_ready", `${what} is not ready`);

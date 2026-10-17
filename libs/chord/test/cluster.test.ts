@@ -49,7 +49,6 @@ const GreeterV2 = remote("t.greeter", {
   variants: { main: { methods: { hello: method(Type.String(), Type.String()) } } },
 });
 
-/** The server's own greeter: the greeter facet serves this one on the server, `Greeter` on session hosts. */
 const ServerGreeter = remote("t.server-greeter", {
   version: 1,
   input: Type.Object({}),
@@ -95,8 +94,6 @@ function greeterFacet(
   };
 }
 
-/** Server + worker over a memory link; the worker loads facets by name from `modules`. */
-/** `link`, except that frames `drop` selects are never sent (a frame lost when its link dies). */
 function dropping(link: Link, drop: (frame: Frame) => boolean): Link {
   return {
     get closed() {
@@ -150,14 +147,12 @@ describe("cross-host reload", () => {
     greeter.onShape((shape) => shapes.push(shape.contract));
     modules.set("greeter", greeterFacet("v2"));
     const report = await server.reload([], { remote: { "session:": ["greeter"] } });
-    // No waiting: the commit frame precedes this call on the FIFO link, so the worker has committed when it arrives.
     assert.equal(await greeter.greet("b"), "v2 b");
     assert.equal(server.codeVersion, report.codeVersion);
     assert.equal(worker.codeVersion, report.codeVersion);
     go.open();
     assert.equal(await pinned, "v1 p");
     assert.equal(shapes.length, 1, "one shape push at the commit");
-    // The server retires the old code version once its last old root ended, then tells the worker.
     for (let i = 0; i < 20 && worker.previousCodeVersion !== undefined; i++) await tick();
     assert.equal(server.previousCodeVersion, undefined);
     assert.equal(worker.previousCodeVersion, undefined);
@@ -223,7 +218,6 @@ describe("cross-host reload", () => {
     assert.equal(local.status, "gone");
     assert.equal(child.status, "gone");
 
-    // A child starting with the old set must remove it without trying to import its removed module.
     const cold = createHost({
       self: { kind: "host" },
       name: "session:cold",
@@ -242,7 +236,6 @@ describe("cross-host reload", () => {
     for (let i = 0; i < 20 && old.status !== "gone"; i++) await tick();
     assert.equal(old.status, "gone");
     assert.equal(cold.codeVersion, server.codeVersion);
-    // Close this loader-less child before the addition; it tested only the removal reconciliation.
     await cold.close();
     modules.set("greeter", greeterFacet("v2"));
     await server.reload([greeterFacet("v2")], { remote: { "session:": ["greeter"] } });
@@ -273,7 +266,6 @@ describe("cross-host reload", () => {
 
   it("browsers are not participants: they see shape and reset pushes, or upgrade_required", async () => {
     const { server, modules, down: workerLink } = setup();
-    // The route resolves to the already connected worker.
     server.route("session:", {
       authorize: () => true,
       resolve: async () => workerLink,
@@ -361,7 +353,6 @@ describe("cross-host reload", () => {
     });
     onTestFinished(() => server.close());
     const reloading = server.reload(["server-plugin"], { remote: { "session:": ["greeter"] } });
-    // The worker connects while the reload loads its modules: it announces the server's current code version.
     const [down, up] = memoryLinkPair();
     server.accept(down, { principal: { worker: "w" }, kind: "host", name: "session:S1" });
     const worker = createHost({
@@ -390,7 +381,6 @@ describe("cross-host reload", () => {
     assert.equal(await greeter.greet("a"), "v1 a");
     const first = server.codeVersion;
     const go = latch();
-    // A server root of the first code version that calls the worker only after the next two reloads started.
     const pinned = server.root(async (ctx) => {
       await go.promise;
       return greeter.greet("p", ctx);
@@ -401,7 +391,6 @@ describe("cross-host reload", () => {
     const second = server.reload([], { remote: { "session:": [] }, retireDeadline: 2000 });
     await tick();
     await tick();
-    // The server still waits for its root, so the worker must not have retired that code version.
     assert.equal(worker.previousCodeVersion, first);
     go.open();
     assert.equal(await pinned, "v1 p");
@@ -431,10 +420,8 @@ describe("cross-host reload", () => {
     worker.install(modules.get("greeter")!);
     for (let i = 0; i < 50 && worker.codeVersion !== server.codeVersion; i++) await tick();
     assert.equal(worker.codeVersion, server.codeVersion);
-    // Without the parent's retire watermark it would keep code version 1 until the parent's next retirement.
     for (let i = 0; i < 20 && worker.previousCodeVersion !== undefined; i++) await tick();
     assert.equal(worker.previousCodeVersion, undefined);
-    // And the next cluster reload does not wait for a retirement the parent will never announce.
     const started = Date.now();
     await server.reload([], { remote: { "session:": ["greeter"] }, retireDeadline: 10_000 });
     assert.ok(Date.now() - started < 2000);
@@ -456,7 +443,6 @@ describe("cross-host reload", () => {
     onTestFinished(() => server.close());
     server.install({ name: "server-plugin", setup: () => {} });
     await server.reload(["server-plugin"], { remote: { "session:": ["greeter"] } });
-    // The worker connects behind: its reconciliation to code version 2 waits in the worker's module loading.
     const workerLoading = latch();
     let blockWorker = true;
     const [down, up] = memoryLinkPair();
@@ -474,7 +460,6 @@ describe("cross-host reload", () => {
     onTestFinished(() => worker.close());
     worker.install(modules.get("greeter")!);
     await tick();
-    // A reload starts before the reconciliation committed; the worker is not one of its participants.
     blockServer = true;
     modules.set("greeter", greeterFacet("v2"));
     const reloading = server.reload(["server-plugin"], { remote: { "session:": ["greeter"] } });
@@ -520,7 +505,6 @@ describe("cross-host reload", () => {
       onError: () => {},
     });
     onTestFinished(() => worker.close());
-    // While the server's reload still loads its modules, a worker root (code version 1) calls the server.
     const answer = await worker.root(async (ctx) => (await ctx.get(Ping, {})).ping(ctx));
     assert.equal(answer, "pong");
     loading.open();
@@ -535,7 +519,6 @@ describe("cross-host reload", () => {
     const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
     onTestFinished(() => server.close());
     const [down, up] = memoryLinkPair();
-    // The `retire` frame is lost: the worker keeps code version 1, not permitted to retire it.
     server.accept(
       dropping(down, (frame) => frame.t === "retire"),
       { principal: { worker: "w" }, kind: "host", name: "session:S1" },
@@ -556,7 +539,6 @@ describe("cross-host reload", () => {
     assert.equal(worker.previousCodeVersion, 1);
     up.close("gone");
     await tick();
-    // The server moves on while the worker is away, then the worker reconnects behind it.
     modules.set("greeter", greeterFacet("v3"));
     await server.reload([{ name: "server-plugin", setup: () => {} }]);
     const [down2, up2] = memoryLinkPair();
@@ -595,7 +577,6 @@ describe("cross-host reload", () => {
         await never.promise;
       },
     }));
-    // Records the cancel the server sends down: the guarantee is that it leaves before the old resources close.
     const watched = dropping(down, (frame) => {
       if (frame.t === "cancel") log.push("cancel sent");
       return false;
@@ -633,7 +614,6 @@ describe("cross-host reload", () => {
       onError: () => {},
     });
     onTestFinished(() => browser.close());
-    // The relayed call's root runs on the server's code version 1.
     const call = browser.hold(Slow, {}).wait();
     call.catch(() => {});
     for (let i = 0; i < 50 && log.length === 0 && !worker.codeVersion; i++) await tick();

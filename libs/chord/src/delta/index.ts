@@ -4,31 +4,12 @@ export type { JsonValue } from "../json.ts";
 
 const isObj = (value: unknown): value is object => value !== null && typeof value === "object";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// chord/delta — immutable revision tracking and operations over plain JSON.
-//
-// Depends on nothing else in the harness. Session storage, the runtime and the
-// facet host consume it; keep the arrows pointing that way.
-// ─────────────────────────────────────────────────────────────────────────────
-
 export type Seg = string | number;
 export type Path = readonly Seg[];
 export type NonEmptyPath = readonly [Seg, ...Seg[]];
 
-/** A path inline, or an id assigned by the encoder on second use. */
 export type PathRef<P extends Path = Path> = P | number;
 
-/**
- * Tuples are the form — in memory, on the wire, on disk.
- *
- * `r` is the ONLY op that replaces a whole value. `s`/`d`/`a`/`t` cannot target
- * the root: the type forbids it. `p` and `m` may, because a tracked value can
- * itself be an array. Operation shape is not canonical: an array may be emptied by either
- * a replacement or a root splice.
- *
- * `Op` knows nothing about the path dictionary. Interning, id references and
- * omitted paths live in `WireOp` and exist only between `encode` and `decode`.
- */
 export type Op =
   | readonly ["r", JsonValue]
   | readonly ["s", NonEmptyPath, JsonValue]
@@ -36,19 +17,8 @@ export type Op =
   | readonly ["a", NonEmptyPath, string]
   | readonly ["t", NonEmptyPath, number]
   | readonly ["p", Path, number, number, JsonValue[]]
-  /** Reorder an array in place: `new[i] = old[permutation[i]]`. */
   | readonly ["m", Path, number[]];
 
-/**
- * What crosses a boundary. Adds two compressions and nothing else:
- *
- *   ["#", id, path]    defines an id, emitted on a path's SECOND use
- *   a numeric PathRef  references a previously defined id
- *   a shortened tuple  reuses the previous op's path; arity disambiguates
- *
- * ["r", value] carries no path, so it encodes to itself — which is why isBase
- * works unchanged on either vocabulary.
- */
 export type WireOp =
   | readonly ["r", JsonValue]
   | readonly ["s", PathRef<NonEmptyPath>, JsonValue]
@@ -65,38 +35,15 @@ export type WireOp =
   | readonly ["m", number[]]
   | readonly ["#", number, Path];
 
-// ─── Classification ──────────────────────────────────────────────────────────
-
 export const isReplace = (op: Op | WireOp): boolean => op[0] === "r";
 
-/**
- * A batch begins with a replacement. Flush guarantees `r` is at index 0 or absent,
- * so this is exact rather than a heuristic.
- */
 export const isBase = (ops: readonly (Op | WireOp)[]): boolean =>
   ops.length > 0 && ops[0]![0] === "r";
 
-// ─── Overlap ─────────────────────────────────────────────────────────────────
-
-/**
- * Longest suffix of `a` that is a prefix of `b`. Probes with indexOf and verifies
- * exact substring equality, so the hot loops are native. A hand-written KMP is
- * asymptotically equivalent and much slower in practice.
- *
- * Always correct: the returned n satisfies a.slice(a.length - n) === b.slice(0, n).
- */
 export function overlap(a: string, b: string, scan: number, probe = 64, maxCandidates = 8): number {
   if (a.length === 0 || b.length === 0 || scan === 0) return 0;
   const tail = a.length > scan ? a.slice(a.length - scan) : a;
 
-  // A probe of length h can only find overlaps of at least h — the head must
-  // actually occur in `a`. So try a long head first (few candidates, and it
-  // catches the large overlaps a rolling window produces), then fall back to one
-  // character, which finds any overlap at the cost of more candidates.
-  //
-  // Candidates are bounded because repetitive output — a build log, or any run of
-  // one character — makes a long head match at thousands of positions. Giving up
-  // returns 0, which emits a set: larger, never wrong.
   for (const h of [Math.min(probe, b.length), 1]) {
     const head = b.slice(0, h);
     let tried = 0;
@@ -110,25 +57,10 @@ export function overlap(a: string, b: string, scan: number, probe = 64, maxCandi
   return 0;
 }
 
-// ─── Immutable revision tracking ─────────────────────────────────────────────
-
 export { diffRevisions } from "./diff.ts";
 export type { Draft } from "./draft.ts";
 export { type Change, type Prepared, type Tracker, track } from "./tracker.ts";
 
-// ─── Path safety ─────────────────────────────────────────────────────────────
-
-/**
- * Segments that reach the prototype chain.
- *
- * `JSON.parse` is safe on its own — it makes `__proto__` an own property. What is
- * not safe is `parent[key] = value`, which is exactly what an applier does, and
- * paths are data: `["s", ["__proto__", "isAdmin"], true]` pollutes
- * `Object.prototype` for the whole process.
- *
- * Ops arrive from a facet, a plugin compartment, or a tool whose details may echo
- * model output, so none of it is trusted input.
- */
 export const RESERVED_SEGMENTS: ReadonlySet<string> = new Set([
   "__proto__",
   "constructor",
@@ -136,8 +68,6 @@ export const RESERVED_SEGMENTS: ReadonlySet<string> = new Set([
 ]);
 
 export class UnsafePathError extends Error {
-  // Not a parameter property: Node's --experimental-strip-types rejects those,
-  // and these files are meant to run under it directly.
   readonly segment: Seg;
   constructor(segment: Seg) {
     super(`unsafe path segment: ${String(segment)}`);
@@ -146,14 +76,6 @@ export class UnsafePathError extends Error {
   }
 }
 
-/**
- * Verb, arity and payload shape for a **decoded** op: paths inline, no `#`, no
- * short forms. `apply` uses this.
- *
- * Validating `Op` against the wire grammar would be laxer than the type: a
- * two-element `["s", value]` would pass, and `apply` would then read the value as
- * a path. Each vocabulary gets the validator that matches it.
- */
 export function assertValidOp(op: unknown): asserts op is Op {
   if (!Array.isArray(op) || op.length === 0) throw new TypeError("op is not a tuple");
   switch (op[0]) {
@@ -189,7 +111,6 @@ export function assertValidOp(op: unknown): asserts op is Op {
       assertPathArg(op[1]);
       assertPermutation(op[2]);
       return;
-    // Silently skipping an unknown verb is how a newer producer's op vanishes.
     default:
       throw new TypeError(`unknown op verb: ${String(op[0])}`);
   }
@@ -212,7 +133,6 @@ function assertPermutation(value: unknown): asserts value is number[] {
   }
 }
 
-/** The same, for the wire grammar: ids and short forms are legal here. */
 export function assertValidWireOp(op: unknown): asserts op is WireOp {
   if (!Array.isArray(op) || op.length === 0) throw new TypeError("op is not a tuple");
   const [verb] = op as unknown[];
@@ -221,8 +141,6 @@ export function assertValidWireOp(op: unknown): asserts op is WireOp {
       if (!Number.isInteger(r) || r < 0) throw new TypeError("bad path id");
       return;
     }
-    // A string is not a path. Unchecked, `"a".slice(0, -1)` is `""`, so it
-    // resolves to the ROOT and writes there — a path that is not a path, accepted.
     if (!Array.isArray(r)) throw new TypeError("path is not an array");
     assertSafePath(r as Path);
   };
@@ -281,7 +199,6 @@ export function assertValidWireOp(op: unknown): asserts op is WireOp {
       assertSafePath(op[2] as Path);
       return;
     }
-    // Silently skipping an unknown verb is how a newer producer's op vanishes.
     default:
       throw new TypeError(`unknown op verb: ${String(verb)}`);
   }
@@ -297,26 +214,9 @@ export function assertSafePath(path: Path): void {
   }
 }
 
-/**
- * An index may address an existing element or append exactly one past the end.
- *
- * This is not an arbitrary cap — it is what keeps the value a `JsonValue`. A
- * sparse array does not survive a JSON round trip: holes serialise to `null` and
- * return as real properties, so `arr[7] = x` on a length-3 array already produces
- * state a replica cannot match. Rejecting the write is more honest than silently
- * diverging.
- *
- * It also removes the denial of service it would otherwise permit:
- * `["s", ["xs", 4294967290], 1]` allocates a 4.29-billion-entry array from one op.
- * Growth stays possible and stays proportional — the tracker already emits
- * `arr.length = n` as a splice of explicit nulls, whose op size grows with the
- * gap, so a large growth costs a large op rather than a small one.
- */
 function assertIndexInRange(parent: readonly unknown[], index: number): void {
   if (index > parent.length) throw new UnsafePathError(index);
 }
-
-// ─── Applier ─────────────────────────────────────────────────────────────────
 
 export class PathError extends Error {
   readonly path: Path | number;
@@ -327,13 +227,6 @@ export class PathError extends Error {
   }
 }
 
-/**
- * Apply ops to a plain mutable value. Returns the value, because `r` replaces it
- * outright and cannot be done in place.
- *
- * Takes decoded ops. Path ids and omitted paths are a wire concern — run
- * `decode` first if the ops came from a boundary.
- */
 export function apply<T>(target: T | undefined, ops: readonly Op[]): T {
   return applyOps(target, ops);
 }
@@ -344,13 +237,6 @@ function applyOps<T>(target: T | undefined, ops: readonly Op[]): T {
   for (const op of ops) {
     assertValidOp(op);
     if (op[0] === "r") {
-      // Adopted, not copied. The consumer owns the batch it was handed.
-      //
-      // Fanning one batch out to several consumers in-process therefore makes
-      // their replicas alias each other. That is an ownership rule, not a
-      // defect: copy the batch at the fan-out point, or let each consumer
-      // decode its own. A batch that crosses a real boundary is already
-      // distinct, because serialisation produces fresh objects.
       root = op[1];
       continue;
     }
@@ -376,15 +262,12 @@ function applyOps<T>(target: T | undefined, ops: readonly Op[]): T {
       continue;
     }
 
-    // s/d/a/t can never target the root — the type forbids it.
     const parent = resolve(root, path.slice(0, -1)) as Record<Seg, JsonValue>;
     const key = path[path.length - 1]!;
     if (Array.isArray(parent)) {
       if (typeof key !== "number") throw new UnsafePathError(key);
       assertIndexInRange(parent, key);
     }
-    // defineProperty rather than assignment: a setter inherited from the prototype
-    // chain would otherwise run on write.
     const write = (value: JsonValue) => {
       Object.defineProperty(parent, key, {
         value,
@@ -421,17 +304,10 @@ function applyOps<T>(target: T | undefined, ops: readonly Op[]): T {
   return root as unknown as T;
 }
 
-/** Apply one decoded operation batch without mutating the previous immutable value. */
 export function applyImmutable<T>(target: T | undefined, ops: readonly Op[]): T {
   return applyImmutableBatches(target, [ops]);
 }
 
-/**
- * Apply decoded operation batches as one final-result-only replay.
- *
- * Containers copied for an earlier batch may be mutated while applying a later
- * batch, so this deliberately exposes no intermediate revisions.
- */
 export function applyImmutableBatches<T>(
   target: T | undefined,
   batches: Iterable<readonly Op[]>,
@@ -463,11 +339,6 @@ export function applyImmutableBatches<T>(
   return root as unknown as T;
 }
 
-/**
- * An append to an array not yet copied in this replay, built as one copy with the items (`concat`) instead of a copy that
- * the insert then grows, which copies it again. `undefined` for any other splice and for any path that is not a plain
- * walk over own properties, which takes the general path and so fails with its errors.
- */
 function appendCopy(
   root: JsonValue,
   op: Extract<Op, { 0: "p" }>,
@@ -552,8 +423,6 @@ function resolveValue(root: JsonValue, path: Path): JsonValue {
   for (const seg of path) {
     if (!isObj(node)) throw new PathError(path);
     if (Array.isArray(node) && typeof seg !== "number") throw new UnsafePathError(seg);
-    // Own properties only: an inherited getter must not run, and a walk must not
-    // escape the value into the prototype chain.
     if (!Object.hasOwn(node, seg as PropertyKey)) throw new PathError(path);
     node = (node as Record<Seg, JsonValue>)[seg]!;
   }
@@ -566,51 +435,25 @@ function resolve(root: JsonValue, path: Path): JsonValue {
   return node;
 }
 
-// ─── Codec ───────────────────────────────────────────────────────────────────
-//
-// Path interning and arity omission live between the tracker and a boundary;
-// `Op` and `apply` know nothing about them.
-//
-// Consecutive batches of one encoder may be concatenated into one batch (links
-// coalesce waiting state this way): only path ids span batches, and every batch
-// starts with an explicit path.
-//
-// ONE PAIR PER INDEPENDENT STATE STREAM. Every decoder must observe exactly the
-// batches encoded by its matching encoder, beginning with that state's base.
-// Sharing a transport connection does not make separately hydrated states one
-// stream.
-
 const pathKey = (path: Path): string => JSON.stringify(path);
 
 export interface Encoder {
   encode(ops: readonly Op[]): WireOp[];
 }
 
-/**
- * Intern on SECOND use. A definition costs more than the path it replaces, so
- * interning on first use loses on the many paths written exactly once.
- */
 export function encoder(): Encoder {
   const seen = new Set<string>();
   const ids = new Map<string, number>();
   let nextId = 0;
-  let previous: string | undefined; // last path in THIS batch
+  let previous: string | undefined;
 
   return {
     encode(ops) {
-      // Arity omission is scoped to a batch. Letting it span batches would make
-      // a batch's first op depend on the previous batch's last one, so a reader
-      // that skips or reorders a batch decodes into the wrong path. Ids are the
-      // only cross-batch state, and the dictionary makes those explicit.
       previous = undefined;
       const out: WireOp[] = [];
       for (const op of ops) {
         if (op[0] === "r") {
           out.push(op);
-          // A base batch is a RECOVERY POINT: a reader replays from the last one
-          // with a fresh decoder. So everything after it must be self-contained.
-          // Keeping ids across a replacement emits references to definitions the
-          // reader never saw — recovery fails with an unresolvable path id.
           seen.clear();
           ids.clear();
           nextId = 0;
@@ -620,7 +463,6 @@ export function encoder(): Encoder {
         const path = op[1];
         const key = pathKey(path);
 
-        // Same path as the previous op: drop the ref entirely.
         if (key === previous) {
           switch (op[0]) {
             case "s":
@@ -652,10 +494,10 @@ export function encoder(): Encoder {
         } else if (seen.has(key)) {
           const id = nextId++;
           ids.set(key, id);
-          out.push(["#", id, path]); // second use: define, then reference
+          out.push(["#", id, path]);
           ref = id;
         } else {
-          seen.add(key); // first use: inline
+          seen.add(key);
         }
 
         switch (op[0]) {
@@ -686,7 +528,6 @@ export function encoder(): Encoder {
 }
 
 export interface Decoder {
-  /** Ops as received: each is validated (`assertValidWireOp`) before use. */
   decode(wire: readonly unknown[]): Op[];
 }
 
@@ -695,7 +536,7 @@ export function decoder(): Decoder {
 
   return {
     decode(wire) {
-      let previous: Path | undefined; // scoped to the batch, as in encode
+      let previous: Path | undefined;
       const out: Op[] = [];
       for (const op of wire) {
         assertValidWireOp(op);
@@ -711,7 +552,6 @@ export function decoder(): Decoder {
           continue;
         }
 
-        // Arity tells us whether a ref is present: the short forms omit it.
         const short =
           (op[0] === "d" && op.length === 1) ||
           (op[0] !== "d" && op[0] !== "p" && op.length === 2) ||

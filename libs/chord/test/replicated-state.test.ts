@@ -278,7 +278,6 @@ describe("authoritative replicated state sources", () => {
     const source = new TestSource<SourceValue>(Object.freeze({ value: 0 }));
     const state = replicatedState(source);
     const next = Object.freeze({ value: 1 });
-    // Deliberately not the operation that produces `next`: Chord must publish the source value as is.
     const ops = Object.freeze([["s", ["value"], 7] as const]);
     let publishedValue: SourceValue | undefined;
     state.subscribe((value, _context, delivery) => {

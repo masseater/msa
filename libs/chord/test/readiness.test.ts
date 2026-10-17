@@ -20,7 +20,6 @@ const unexpectedError = (error: unknown) => assert.fail(String(error));
 const Eager = local("ready.eager", { version: 1, input: Type.Object({}) });
 const Lazy = local("ready.lazy", { version: 1, input: Type.Object({}) });
 
-// Startup must not report ready while an eager object has failed.
 describe("host: eager readiness", () => {
   for (const operation of ["install", "load"] as const) {
     it(`${operation} awaits resource activation and registration, leaving lazy objects lazy`, async () => {
@@ -258,7 +257,6 @@ describe("host: eager readiness", () => {
           await tick();
           assert.equal(settled, false);
           assert.equal(reported, false);
-          // Control-ready announcement allows the parent to accept the queued upstream holds.
           server.accept(parent, { kind: "host", name: "worker", principal: { host: "worker" } });
           await ready;
           assert.equal(reported, true);

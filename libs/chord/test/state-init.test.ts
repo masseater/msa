@@ -72,7 +72,6 @@ describe("state init", () => {
     const ref = host.hold(Notes, {});
     const seen: unknown[] = [];
     ref.notes.subscribe((value) => seen.push(value));
-    // A call made while init runs waits until the object is live, then reads the loaded value.
     const has = host.root((ctx) => ref.has("a", ctx));
     await until(() => log.includes("init"));
     assert.equal(ref.status, "loading");
@@ -81,7 +80,6 @@ describe("state init", () => {
     assert.equal(ref.count.value, 2);
     await until(() => log.length === 4);
     assert.deepEqual(log, ["open", "init", "listener a,b", "task a,b"]);
-    // Before live, a reference's member has no value (undefined); its first value is the loaded one.
     assert.deepEqual(
       seen.filter((value) => value !== undefined),
       [["a", "b"]],
@@ -207,7 +205,6 @@ describe("state init", () => {
       await host.reload([facet({ inits, extra: () => ["x", "y"] })]);
       assert.deepEqual(inits, ["notes", "more"]);
       assert.deepEqual(ref.notes.value, ["loaded", "written"]);
-      // The new derivation counts the kept cell and the added one: 2 + 0 + 2.
       assert.equal(ref.count.value, 4);
     });
 

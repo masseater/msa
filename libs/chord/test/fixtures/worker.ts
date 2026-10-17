@@ -1,4 +1,3 @@
-// Child host for manager tests. FIXTURE_MODE: normal | ignore-shutdown | fatal.
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 
@@ -12,7 +11,6 @@ if (mode === "fatal") {
   control.fatal(new Error("fixture refuses to start"));
   setTimeout(() => process.exit(1), 200);
 } else {
-  // Before anything that owns data: the kernel lock (if the manager configured one).
   await control.lock().catch(() => {
     setTimeout(() => process.exit(1), 200);
     return new Promise<never>(() => {});

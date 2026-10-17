@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
-import { describe, it } from "vite-plus/test";
+import { describe, expectTypeOf, it } from "vite-plus/test";
 
 import {
   type Ctx,
@@ -17,6 +17,7 @@ import {
   opaque,
   type Ref,
   remote,
+  type ServeOptionsFor,
 } from "../src/index.ts";
 
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -175,7 +176,6 @@ describe("host: activation and lifetime", () => {
       return {};
     });
     const parent = host.hold(Parent, {});
-    // A plain error from a dependency surfaces as `unavailable`, with the original as cause.
     await assert.rejects(
       parent.ready,
       (error) => isChordError(error, "unavailable") && /boom/.test(error.message),
@@ -387,7 +387,6 @@ describe("host: declarations and methods", () => {
     await host.root((ctx) => host.hold(Doubled, {}).set(5, ctx));
     await until(() => seen.length === 2);
     assert.deepEqual(seen, [2, 10]);
-    // The reload makes a new derivation: the listener subscribes again and gets its current value once.
     await host.reload([facet("v2")]);
     await until(() => seen.length === 3);
     await tick();
@@ -411,28 +410,18 @@ describe("host: lifetime", () => {
       variants: { main: {} },
     });
     const Keyed = local("t.keyed", { version: 1, input: Type.Object({ id: Type.String() }) });
-    // Each refused call is also a type error; the runtime check is the backstop for untyped callers.
-    const refused: [() => void, RegExp][] = [
-      [
-        // @ts-expect-error: a remote type is never of lifetime "host"
-        () => host.serve(Remote, () => ({ variant: "main" }), { lifetime: "host" }),
-        /needs a local type/,
-      ],
-      // @ts-expect-error: the one object has the empty input, and `id` is required
-      [() => host.serve(Keyed, () => ({}), { lifetime: "host" }), /input that accepts \{\}/],
-      [
-        // @ts-expect-error: an object of lifetime "host" does not linger
-        () => host.serve(Store, () => ({ seen: null }), { lifetime: "host", linger: 10 }),
-        /does not linger/,
-      ],
-      [
-        // @ts-expect-error: no such lifetime
-        () => host.serve(Store, () => ({ seen: null }), { lifetime: "forever" }),
-        /unknown lifetime/,
-      ],
+    expectTypeOf<{ lifetime: "host" }>().not.toExtend<ServeOptionsFor<typeof Remote>>();
+    expectTypeOf<{ lifetime: "host" }>().not.toExtend<ServeOptionsFor<typeof Keyed>>();
+    expectTypeOf<{ lifetime: "host"; linger: 10 }>().not.toExtend<ServeOptionsFor<typeof Store>>();
+    expectTypeOf<{ lifetime: "forever" }>().not.toExtend<ServeOptionsFor<typeof Store>>();
+    const refused: [readonly unknown[], RegExp][] = [
+      [[Remote, () => ({ variant: "main" }), { lifetime: "host" }], /needs a local type/],
+      [[Keyed, () => ({}), { lifetime: "host" }], /input that accepts \{\}/],
+      [[Store, () => ({ seen: null }), { lifetime: "host", linger: 10 }], /does not linger/],
+      [[Store, () => ({ seen: null }), { lifetime: "forever" }], /unknown lifetime/],
     ];
-    for (const [serve, error] of refused) assert.throws(serve, error);
-    // Allowed: a local type whose input has only optional fields, and any type with the default lifetime.
+    for (const [args, error] of refused)
+      assert.throws(() => Reflect.apply(host.serve, host, args), error);
     const Optional = local("t.optional", {
       version: 1,
       input: Type.Object({ id: Type.Optional(Type.String()) }),
@@ -468,7 +457,6 @@ describe("host: lifetime", () => {
       () => host.hold(Store, { scope: "other" }),
       (error) => isChordError(error, "invalid"),
     );
-    // References do not change its lifetime: released by everyone else, it stays until the host closes.
     guest.release();
     defaults.release();
     await tick();
@@ -526,9 +514,10 @@ describe("host: principals, variants and disposal", () => {
     assert.equal(principals.length, 2);
     assert.equal(viewer.variant, "viewer");
     assert.deepEqual(viewer.shape?.members, ["view"]);
-    // @ts-expect-error A viewer has no edit: TypeScript refuses it, and so does the provider at runtime.
-    await assert.rejects(viewer.edit({ text: "x" }), (error) =>
-      isChordError(error, "not_in_variant"),
+    expectTypeOf(viewer).not.toHaveProperty("edit");
+    await assert.rejects(
+      Reflect.apply(Reflect.get(viewer, "edit"), viewer, [{ text: "x" }]),
+      (error) => isChordError(error, "not_in_variant"),
     );
     assert.ok(editor.variant === "editor");
     assert.deepEqual(await editor.edit({ text: "x" }), { ok: true });
@@ -600,7 +589,6 @@ describe("host: principals, variants and disposal", () => {
     assert.ok(editor.variant === "editor");
     await editor.edit({ text: "hi" });
     assert.deepEqual(shapes, ["editor"]);
-    // Listeners added while loading get their snapshot once the reference is live.
     assert.deepEqual(events, [
       ["snap", { text: "" }],
       ["ops", [["r", { text: "hi" }]]],

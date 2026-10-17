@@ -19,7 +19,6 @@ import { fromWireError, type RootRef, type WireError } from "./wire.ts";
 
 const noop = (): void => {};
 
-/** One state frame for a member, as the binding receives it (payload unpacked). */
 export interface StateIn {
   readonly as: "snap" | "reset" | "ops" | "error";
   readonly value?: unknown;
@@ -27,9 +26,7 @@ export interface StateIn {
   readonly error?: WireError;
 }
 
-/** What a binding needs from the link it is bound to (implemented by Connection). */
 export interface RemoteChannel {
-  /** Sends a hold for `binding`; `again`: the binding already has values (a re-hold), its unit is not urgent. */
   hold(binding: RemoteBinding, again: boolean): number;
   release(id: number): void;
   call(
@@ -39,11 +36,9 @@ export interface RemoteChannel {
     root: RootRef | undefined,
     signal: AbortSignal,
   ): Promise<unknown>;
-  /** Starts (`sub`) or stops (`unsub`) the state of a hold. */
   wantState(hold: number, wanted: boolean): void;
 }
 
-/** What a binding needs from its host. */
 export interface RemoteHost {
   readonly inFactory: number;
   report(error: unknown): void;
@@ -51,9 +46,7 @@ export interface RemoteHost {
     fn: (ctx: Ctx) => T | Promise<T>,
     options?: { signal?: AbortSignal | undefined },
   ): Promise<T>;
-  /** The binding has no views left: the host lingers it or closes it. */
   bindingIdle(binding: RemoteBinding): void;
-  /** The binding ended or was closed: the host forgets it. */
   forgetBinding(binding: RemoteBinding): void;
 }
 
@@ -70,54 +63,33 @@ function deferred(): { promise: Promise<void> } & Settle {
   return { promise, resolve, reject };
 }
 
-/** A member's value with the decoder of its current stream. */
 interface MemberState {
   value: unknown;
   decoder: Decoder;
 }
 
-/**
- * One hold per host and key (type, normalized input, principal key, contract fingerprint), shared by every reference to
- * it: one hold over the link, one stream per state member, calls over the same hold. References are views onto it.
- *
- * A hold implies the state of its variant (unless no view wants state): the provider answers with a unit, the shape
- * followed by a snapshot of each state member the binding lacks. A shape is applied only once all of its snapshots are
- * here, so a live binding always has every state member of its variant. After the first hydration the values stay
- * readable while the binding re-holds (link loss): status `loading`, last values kept.
- */
 export class RemoteBinding {
   readonly host: RemoteHost;
   readonly key: string;
   readonly contract: AnyContract;
   readonly at: string;
   readonly input: unknown;
-  /** Forwarded principal (omitted for the host's own principal). */
   readonly principal: unknown | undefined;
-  /** `ended`: gone with `error`, or closed (no views, no linger). */
   status: "loading" | "live" | "ended" = "loading";
   error: unknown;
-  /** The applied shape (kept while re-holding). */
   shape: Shape | undefined;
-  /** Every state member of the applied shape has a value (stays true while re-holding). */
   hydrated = false;
-  /** The current hold; undefined while resolving the route or after a link loss. */
   hold: { readonly channel: RemoteChannel; readonly id: number } | undefined;
-  /** What the provider was told: state for this hold (`state: false` / `sub` / `unsub`). */
   stateOn = false;
   readonly views = new Set<RemoteRef>();
   readonly members = new Map<string, MemberState>();
-  /** Lingering since (no views): set by the host. */
   lingerTimer: ReturnType<typeof setTimeout> | undefined;
   readonly #listeners = new Map<string, Set<ViewReadable>>();
-  /** A shape waiting for its snapshots. */
   #pending:
     | { shape: Shape; readonly missing: Set<string>; readonly values: Map<string, MemberState> }
     | undefined;
-  /** Resolved while a shape is applied for the current hold (calls wait for it). */
   #live = deferred();
-  /** A shape was applied once (a re-hold says `again`). */
   #applied = false;
-  /** Waiting for the first hydration (`whenHydrated`). */
   readonly #hydrationWaiters = new Set<Settle>();
 
   constructor(
@@ -142,24 +114,19 @@ export class RemoteBinding {
     return this.status === "ended";
   }
 
-  /** Views that want state. */
   get stateViews(): number {
     let count = 0;
     for (const view of this.views) if (view.wantsState) count++;
     return count;
   }
 
-  /** Whether the next hold should carry state: some view wants it, or nobody is left (lingering keeps it). */
   get wantsState(): boolean {
     return this.views.size === 0 ? this.stateOn : this.stateViews > 0;
   }
 
-  /** Whether a re-hold is `again` (the binding already has a shape). */
   get applied(): boolean {
     return this.#applied;
   }
-
-  // ─── views ───
 
   addView(view: RemoteRef): void {
     this.views.add(view);
@@ -182,7 +149,6 @@ export class RemoteBinding {
     this.#syncState();
   }
 
-  /** Tells the provider to start or stop state when the views' wish changed. */
   #syncState(): void {
     if (this.ended || this.views.size === 0) return;
     const wanted = this.stateViews > 0;
@@ -210,7 +176,6 @@ export class RemoteBinding {
     this.#listeners.get(name)?.delete(readable);
   }
 
-  /** Whether `name` is a state member of the applied variant (as the consumer's contract describes it). */
   inVariant(name: string): boolean {
     const variant = this.shape?.variant;
     return (
@@ -218,7 +183,6 @@ export class RemoteBinding {
     );
   }
 
-  /** The members' value as views read it: throws `not_ready` before the first hydration, `not_in_variant` outside it. */
   read(name: string): unknown {
     if (this.status === "ended") throw this.terminalError();
     if (!this.hydrated)
@@ -231,7 +195,6 @@ export class RemoteBinding {
     return this.members.get(name)?.value;
   }
 
-  /** Resolves once the binding has its state (rejects if it ends first). */
   whenHydrated(): Promise<void> {
     if (this.hydrated) return Promise.resolve();
     if (this.ended) return Promise.reject(this.terminalError());
@@ -255,19 +218,15 @@ export class RemoteBinding {
     return this.error ?? new ChordError("released", `reference ${this.key} released`);
   }
 
-  // ─── driven by the host and the link ───
-
   bound(channel: RemoteChannel, id: number): void {
     this.hold = { channel, id };
     this.stateOn = this.wantsState;
   }
 
-  /** A unit begins: `listed` are the members whose snapshots follow. */
   shaped(shape: Shape, listed: readonly string[]): void {
     if (this.ended) return;
     const previous = this.#pending;
     const missing = new Set<string>(listed);
-    // A newer shape before the older one's snapshots (relays may reorder them): wait for both.
     if (previous !== undefined) for (const name of previous.missing) missing.add(name);
     const wanted = new Set(this.#stateMembers(shape));
     for (const name of [...missing]) if (!wanted.has(name) || !this.stateOn) missing.delete(name);
@@ -275,12 +234,10 @@ export class RemoteBinding {
     if (missing.size === 0) this.#apply();
   }
 
-  /** A state frame for member `name` of the current hold. */
   state(name: string, frame: StateIn): void {
     if (this.ended) return;
     if (frame.as === "error") {
       const error = fromWireError(frame.error!);
-      // Before the first hydration nobody could read anything: the binding fails instead of waiting forever.
       if (!this.hydrated && this.stateOn) {
         this.gone(error);
         this.close();
@@ -309,7 +266,6 @@ export class RemoteBinding {
     this.#deliver(name, { type: "reset", value: fresh.value });
   }
 
-  /** The provider ended the object (or refused the hold): every view is gone. */
   gone(error: unknown): void {
     if (this.ended) return;
     this.status = "ended";
@@ -323,7 +279,6 @@ export class RemoteBinding {
     this.host.forgetBinding(this);
   }
 
-  /** The link went down but may come back (upstream reconnect): keep the values, wait for the re-hold. */
   detached(): void {
     if (this.ended) return;
     this.hold = undefined;
@@ -335,7 +290,6 @@ export class RemoteBinding {
     for (const view of this.views) view.update();
   }
 
-  /** No views and no linger: releases the hold and forgets the binding. */
   close(): void {
     if (this.lingerTimer !== undefined) clearTimeout(this.lingerTimer);
     this.lingerTimer = undefined;
@@ -353,7 +307,6 @@ export class RemoteBinding {
     this.host.forgetBinding(this);
   }
 
-  /** Calls `name` over the current hold, waiting for it while the binding (re)holds. */
   async call(name: string, args: unknown, ctx: Ctx): Promise<unknown> {
     for (;;) {
       if (this.ended) throw this.terminalError();
@@ -370,7 +323,6 @@ export class RemoteBinding {
           `${this.key}: ${name} is not a method of variant ${variant}`,
         );
       }
-      // Send only what the consumer's own schema knows (the additive rule's premise; see ObjectImpl.call).
       const sent =
         description.args === undefined
           ? undefined
@@ -392,7 +344,6 @@ export class RemoteBinding {
     return shape.members.filter((name) => members[name]?.kind === "state");
   }
 
-  /** Applies the pending shape with its snapshots: members outside the variant go, new values are announced. */
   #apply(): void {
     const pending = this.#pending;
     if (pending === undefined) return;
@@ -420,16 +371,11 @@ export class RemoteBinding {
   }
 }
 
-/**
- * A state member of a remote reference: the binding's value. Reading throws `not_ready` before the first hydration and
- * `not_in_variant` outside the variant. A listener added before the hydration gets its snapshot then.
- */
 class ViewReadable implements Readable<unknown> {
   readonly view: RemoteRef;
   readonly #name: string;
   readonly #values = new Set<(value: unknown) => void>();
   readonly #events = new Set<(event: StateEvent<unknown>) => void>();
-  /** Event listeners that have not had their snapshot yet. */
   readonly #unseen = new Set<(event: StateEvent<unknown>) => void>();
 
   constructor(view: RemoteRef, name: string) {
@@ -442,7 +388,6 @@ class ViewReadable implements Readable<unknown> {
     return this.view.binding.read(this.#name);
   }
 
-  /** Not hydrated before the binding's first snapshots (a local object forwarding this member waits for them). */
   get [HYDRATION](): Hydration | undefined {
     const binding = this.view.binding;
     if (binding.hydrated) return undefined;
@@ -508,15 +453,10 @@ class ViewReadable implements Readable<unknown> {
   }
 }
 
-/**
- * A reference to an object on another host: a view onto the host's shared binding for its key. Each view has its own
- * owner, status, observers and `release`; ending by the provider and re-holding belong to the binding.
- */
 export class RemoteRef implements RefCore {
   readonly object = undefined;
   readonly binding: RemoteBinding;
   readonly owner: RefOwner;
-  /** False: a method-only view (`state: false`), ready once live. */
   readonly wantsState: boolean;
   readonly proxy: object;
   readonly ready: Promise<void>;
@@ -594,9 +534,6 @@ export class RemoteRef implements RefCore {
     this.binding.removeView(this);
   }
 
-  // ─── driven by the binding ───
-
-  /** Follows the binding: live once it has a shape (and, for a state view, its state) over a current hold. */
   update(): void {
     if (this.ended) return;
     const binding = this.binding;
@@ -643,8 +580,6 @@ export class RemoteRef implements RefCore {
     );
   }
 
-  // ─── members ───
-
   member(name: string): unknown {
     const description = Object.values(this.contract.description.variants)
       .map((members) => members[name])
@@ -666,13 +601,10 @@ export class RemoteRef implements RefCore {
     if (caller === undefined) {
       const noArgs = takesNoArgs(this.contract, name);
       caller = (...given) => {
-        // A method without arguments is called as `ref.name(ctx)`.
         const [args, ctx] = (noArgs ? [undefined, given[0]] : given) as [unknown, Ctx | undefined];
         const host = this.binding.host;
         if (host.inFactory > 0)
           throw new ChordError("not_ready", `${this.address}.${name} called inside a factory`);
-        // The same checks as a local reference's caller (RefImpl.caller and ObjectImpl.call): a ctx from another host
-        // or one not made by Chord would carry a root this host does not own over its link.
         if (ctx !== undefined && !(ctx instanceof CtxImpl)) {
           return Promise.reject(invalid("foreign_ctx", "ctx must come from a Chord host"));
         }

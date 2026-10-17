@@ -1,4 +1,3 @@
-// Runs the node loader outside vitest: its module runner bypasses the Node resolve hooks the loader installs.
 import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -8,13 +7,10 @@ import { Type } from "typebox";
 import { createHost, local, method } from "../../src/index.ts";
 import { nodeLoader } from "../../src/loader.ts";
 
-// Plugin modules live under the package so bare imports (typebox) resolve; removed afterwards.
 const dir = fileURLToPath(new URL(`../.tmp-plugins-${process.pid}/`, import.meta.url));
-// Separate from `dir`, which becomes a reload root once its facet loads.
 const plugins = fileURLToPath(new URL(`../.tmp-plugins-${process.pid}-order/`, import.meta.url));
 const chord = new URL("../../src/index.ts", import.meta.url).href;
 
-// The test's own copy of the plugin's contract: binding is by description, not object identity.
 const Hello = local("t.hello", {
   version: 1,
   input: Type.Object({}),
@@ -54,7 +50,6 @@ try {
   assert.equal(await ref.greet("x"), "v2 x");
   await host.close();
 
-  // A facet listed first that imports a later facet's directory shares that facet's copy of the module.
   const Shared = local("t.shared", {
     version: 1,
     input: Type.Object({}),

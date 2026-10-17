@@ -21,7 +21,7 @@ type Status = "open" | "prepared" | "consumed" | "aborted" | "stale";
 type StatusCell = { value: Status };
 
 type InsertSource = { refs: StoredRef[] };
-type ParentKind = 0 | 1 | 2; // object, base-array entry, inserted-array entry
+type ParentKind = 0 | 1 | 2;
 
 type BasePiece = { kind: "base"; start: number; length: number; step: 1 | -1 };
 type InsertPiece = {
@@ -298,8 +298,6 @@ class TrackerImpl<T extends object> implements Tracker<T> {
       context.status.value = "stale";
       throw new Error("Prepared change is stale");
     }
-    // Materialization happened during prepare. Adoption is an infallible pointer
-    // swap so storage failure can discard the candidate without touching authority.
     this.#value = prepared.value;
     context.status.value = "consumed";
     this.#revision += 1;
@@ -334,9 +332,6 @@ class TrackerImpl<T extends object> implements Tracker<T> {
       if (context === undefined || context === winner) continue;
       if (context.status.value === "open" || context.status.value === "prepared")
         context.status.value = "stale";
-      // Adoption must not walk every node touched by a competing draft. Drop the
-      // context's strong overlay references in O(1); externally retained proxies
-      // still see the stale status and are reclaimed with their holders.
       releaseOverlayReferences(context);
     }
     this.#contexts.clear();
@@ -348,7 +343,6 @@ class TrackerImpl<T extends object> implements Tracker<T> {
   }
 }
 
-/** Take immutable ownership of an alias-free strict-JSON root in O(1). */
 export function track<T extends object>(initial: T): Tracker<T> {
   return new TrackerImpl(initial);
 }
@@ -356,9 +350,6 @@ export function track<T extends object>(initial: T): Tracker<T> {
 function materializePrepared<T extends object>(context: OverlayContext): PreparedImpl<T> {
   const operations = ensureOperations(context);
   const base = context.baseValue as T;
-  // Operation payloads are already detached from the mutable overlay. The
-  // resulting revision and public batch intentionally share those payloads under
-  // the trusted immutable-transfer contract.
   const value =
     operations.length === 0
       ? base
@@ -373,7 +364,6 @@ function materializePrepared<T extends object>(context: OverlayContext): Prepare
 
 function materializeOperations<T extends object>(base: T, operations: readonly Op[]): T {
   for (const operation of operations) {
-    // Native splice/permutation remains faster for large structural batches.
     if (operation[0] === "p" || operation[0] === "m") return applyImmutable(base, operations);
   }
   return applyImmutableTrusted(base, operations);
@@ -1832,8 +1822,6 @@ function emitSimpleObjectOperations(context: OverlayContext): Op[] | undefined {
     nodes.push(node);
     if (nodes.length > MAX_SIMPLE_OBJECT_NODES) return undefined;
   }
-  // Stable insertion sort avoids comparator/bucket allocations for the usual
-  // handful of dirty object nodes.
   for (let index = 1; index < nodes.length; index++) {
     const node = nodes[index]!;
     const depth = node.preparedPath!.length;
@@ -2010,8 +1998,6 @@ function emitObjectWrite(
 }
 
 function emitObjectOperations(node: OverlayNode, path: Path, operations: Op[]): boolean {
-  // Immutable replay must encode delete-and-readd explicitly so string-key
-  // insertion order matches the draft.
   if (node.readded !== undefined) {
     for (const key of node.readded) {
       if (Object.hasOwn(nodeBase(node), key))
@@ -2056,12 +2042,7 @@ function buildArrayPlan(node: OverlayNode): ArrayPlan {
   return overlay.plan;
 }
 
-/**
- * The plan when the retained base elements keep their order, the common case of inserts and removals: computed from the
- * pieces alone, so appending to a long array costs no walk over its elements. `undefined` when base elements moved.
- */
 function orderedArrayPlan(baseLength: number, pieces: readonly Piece[]): ArrayPlan | undefined {
-  // Retained base ranges in piece order, `[first, last]` each; ordered means strictly ascending without overlap.
   const ranges: number[] = [];
   for (const piece of pieces) {
     if (piece.kind !== "base" || piece.length === 0) continue;
@@ -2069,7 +2050,6 @@ function orderedArrayPlan(baseLength: number, pieces: readonly Piece[]): ArrayPl
     if (ranges.length > 0 && piece.start <= ranges[ranges.length - 1]!) return undefined;
     ranges.push(piece.start, piece.start + piece.length - 1);
   }
-  // Unretained runs from the end backwards, as `start, length` pairs: after the last range, between ranges, before the first.
   const removeRuns: number[] = [];
   let end = baseLength;
   for (let index = ranges.length - 2; index >= -2; index -= 2) {
@@ -2080,7 +2060,6 @@ function orderedArrayPlan(baseLength: number, pieces: readonly Piece[]): ArrayPl
   return { removeRuns, permutation: undefined, insertRuns: insertRunsOf(pieces) };
 }
 
-/** The plan from a walk over every base element, for pieces that moved base elements. */
 function elementArrayPlan(baseLength: number, pieces: readonly Piece[]): ArrayPlan {
   const retained = new Uint8Array(baseLength);
   const targetBase: number[] = [];
@@ -2114,7 +2093,6 @@ function elementArrayPlan(baseLength: number, pieces: readonly Piece[]): ArrayPl
   return { removeRuns, permutation, insertRuns: insertRunsOf(pieces) };
 }
 
-/** Runs of consecutive insert pieces as `logical index, first piece, end piece` triples. */
 function insertRunsOf(pieces: readonly Piece[]): number[] {
   const insertRuns: number[] = [];
   let logicalIndex = 0;
@@ -2222,8 +2200,6 @@ function emitChangedValue(
   if (!isContainer(after) && before === after) return false;
   if (isContainer(before) && isContainer(after) && equalTrustedJson(before, after)) return false;
   if (typeof before === "string" && typeof after === "string") {
-    // Slice/equality stays on V8's rope fast path; startsWith scans the entire
-    // accumulated prefix on every append.
     if (after.length > before.length && after.slice(0, before.length) === before) {
       operations.push(["a", path, after.slice(before.length)]);
       return true;

@@ -27,7 +27,6 @@ function bufferTail(content: string, maxBytes: number): string {
   return bytes.subarray(start).toString("utf8");
 }
 
-/** A single line longer than the byte limit is cut like Buffer's tail slice on a character boundary. */
 function assertMatchesBufferTail(input: string, maxByteValues?: readonly number[]): void {
   const totalBytes = Buffer.byteLength(input, "utf8");
   const values = maxByteValues ?? Array.from({ length: totalBytes + 5 }, (_, maxBytes) => maxBytes);
@@ -96,7 +95,6 @@ describe("tool output bounds", () => {
       droppedLines: 1,
     });
     expect(bound("a\nb\nc", tail(2))).toEqual({ kept: "b\nc", droppedBytes: 2, droppedLines: 1 });
-    // Blank lines are lines.
     expect(bound("a\nb\nc\n\n", tail(3))).toEqual({
       kept: "b\nc\n\n",
       droppedBytes: 2,
@@ -118,7 +116,6 @@ describe("tool output bounds", () => {
   });
 
   it("cuts a single line longer than the byte limit on a character boundary", () => {
-    // "é" is two bytes; five bytes hold two whole characters.
     expect(bound("ééé\n", head(10, 5))).toEqual({ kept: "éé", droppedBytes: 3, droppedLines: 0 });
     expect(bound("x\néééé", tail(10, 5))).toEqual({ kept: "éé", droppedBytes: 6, droppedLines: 1 });
   });
@@ -205,7 +202,6 @@ describe("OutputBuffer", () => {
     buffer.push(bom.subarray(0, 1));
     buffer.push(Uint8Array.of(0xbb, 0xbf, 0x61));
     buffer.push("b");
-    // A U+FEFF after a string chunk is text.
     buffer.push(Uint8Array.of(...bom, 0x63));
     buffer.end();
     expect(buffer.snapshot().text).toBe("ab\ufeffc");
@@ -285,7 +281,6 @@ describe("Progress", () => {
     progress.mark();
     await vi.advanceTimersByTimeAsync(0);
     expect(commits).toEqual([0]);
-    // 50 KiB buys 500 ms; changes meanwhile coalesce into one commit.
     size = 10;
     progress.mark();
     progress.mark();
@@ -293,7 +288,6 @@ describe("Progress", () => {
     expect(commits).toEqual([0]);
     await vi.advanceTimersByTimeAsync(1);
     expect(commits).toEqual([0, 500]);
-    // A small commit still waits the minimum 100 ms.
     progress.mark();
     await vi.advanceTimersByTimeAsync(99);
     expect(commits).toEqual([0, 500]);

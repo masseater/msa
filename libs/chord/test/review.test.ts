@@ -1,4 +1,3 @@
-// Regression tests for Sol's phase 1a review (findings #1-#11) and the requested race tests.
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
@@ -148,7 +147,6 @@ describe("review: reload commit", () => {
     });
     const ref = host.hold(Item, { id: "a" });
     await ref.ready;
-    // Everything fallible runs in prepare now, so break an install step directly (white box).
     const objects = (host as unknown as { objects: Map<string, { startTasks(): void }> }).objects;
     for (const object of objects.values()) {
       object.startTasks = () => {
@@ -346,7 +344,6 @@ describe("review: leases, invocations, activation", () => {
         open: () => void log.push("open"),
         close: () => void log.push("close"),
       });
-      // A readable delivers its current value as the listener starts: release the only hold right then.
       self.on("drop", count, () => ref?.release());
       return { count };
     });
@@ -501,7 +498,6 @@ describe("review: prepare isolation and contracts", () => {
       host.install(facet(1));
       const ref = host.hold(Db, {});
       await ref.ready;
-      // The failing close aborts the reload at the gate; the old resource must not stay closed.
       await assert.rejects(host.reload([facet(2)]), /close fails/);
       if (reopen === "works") {
         assert.deepEqual(log, ["open 1", "close 1", "open 1"]);
@@ -530,7 +526,6 @@ describe("review: prepare isolation and contracts", () => {
         api.serve(Item, (_input, _principal, self) => {
           if (withDecls) {
             self.get(Dep, {});
-            // Slow close: releasing the hold first would let the dependency close before it finishes.
             self.resource("own", {
               version: 1,
               open: () => {},
@@ -589,7 +584,6 @@ describe("review: prepare isolation and contracts", () => {
       );
       assert.equal(fits(sub, sup), false, `fits(${JSON.stringify(sub)}, ${JSON.stringify(sup)})`);
     }
-    // Additive changes still fit.
     assert.ok(
       fits(
         Type.Object({ a: Type.String() }),
@@ -686,7 +680,6 @@ describe("review: ctx races", () => {
     assert.ok(foreign);
   });
 
-  // #10959
   it("a remote reference refuses a foreign ctx and a ctx not made by Chord, without calling", async () => {
     const RemoteTarget = remote("t.remote-target", {
       version: 1,

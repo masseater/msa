@@ -1,9 +1,7 @@
-// Entry 8: one shared binding per host and key; a hold implies the state of its variant (units: shape, then
-// snapshots); method-only references; origins of client holds; protocol version 4.
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
-import { describe, it } from "vite-plus/test";
+import { describe, expectTypeOf, it } from "vite-plus/test";
 
 import { HostImpl } from "../src/host.ts";
 import {
@@ -63,7 +61,6 @@ function serveNotes(host: Host): void {
   });
 }
 
-/** A server serving `Notes`, and a browser whose end of the link counts what crosses it. */
 function setup(
   options: {
     readonly window?: number;
@@ -163,7 +160,6 @@ describe("shared bindings: linger", () => {
     first.release();
     await sleep(10);
     assert.equal(link.count("sent", "release"), 0, "not released before the linger");
-    // A hook mounting and unmounting: no frames either way.
     for (let i = 0; i < 3; i++) {
       const again = await browser.get(Notes, {});
       assert.deepEqual(again.notes.value, []);
@@ -227,7 +223,6 @@ describe("shared bindings: identity", () => {
       },
       { accepts: { 1: (current) => current } },
     );
-    // A worker holds the server's objects; the principals it forwards key its bindings.
     const [down, up] = memoryLinkPair();
     server.accept(down, { principal: { worker: "w" }, kind: "host", name: "session:w" });
     const link = new CountingLink(up);
@@ -246,7 +241,6 @@ describe("shared bindings: identity", () => {
       worker.hold(NotesV2, {}),
     ];
     await Promise.all(refs.map((ref) => ref.ready));
-    // host (shared by two inputs), user a grant 1 (shared by two key orders), user a grant 2, the v2 contract.
     assert.equal(link.count("sent", "hold"), 4);
     await worker.close();
     await server.close();
@@ -272,7 +266,6 @@ describe("hydration over a link", () => {
       if (variant === "bare") return { variant: "bare", ping: () => "pong" };
       if (variant === "broken") {
         const source = self.state("source", Type.String(), "not a number");
-        // A derivation exposed under a number schema: its snapshot fails validation.
         return { variant: "broken", n: self.derive([source], (text) => text as unknown as number) };
       }
       const none = self.state("none", Type.Null(), null);
@@ -306,9 +299,9 @@ describe("hydration over a link", () => {
     const bare = await browser.get(Matrix, { variant: "bare" });
     assert.ok(bare.variant === "bare");
     assert.equal(await bare.ping(), "pong");
+    expectTypeOf(bare).not.toHaveProperty("none");
     assert.throws(
-      // @ts-expect-error `none` is not a member of the bare variant (a narrowed reference does not show it).
-      () => bare.none.value,
+      () => Reflect.get(Reflect.get(bare, "none"), "value"),
       (error) => isChordError(error, "not_in_variant"),
     );
     const broken = browser.hold(Matrix, { variant: "broken" });
@@ -441,7 +434,6 @@ describe("origins of client holds", () => {
     assert.notEqual(relayed[0]!.origin, relayed[1]!.origin, "two tabs, two origins");
     assert.equal(holds.filter((frame) => frame.origin === undefined).length, 1);
 
-    // Disconnect is departure: the worker loses that origin at once; a reconnect holds under a new id.
     const before = new Set(c.origins());
     one.up.close();
     await until(() => c.origins().filter((origin) => origin !== undefined).length === 1);

@@ -34,14 +34,12 @@ const counterVariants = {
     },
   },
 };
-/** A counter on the server. */
 const Counter = remote("t.counter", {
   version: 1,
   input: Type.Object({ name: Type.String() }),
   host: hostNamed("server"),
   variants: counterVariants,
 });
-/** A counter on a session host (`session:` + its `session` field). */
 const SessionCounter = remote("t.session-counter", {
   version: 1,
   input: Type.Object({ session: Type.String(), name: Type.String() }),
@@ -49,8 +47,6 @@ const SessionCounter = remote("t.session-counter", {
   variants: counterVariants,
 });
 
-/** Serves Counter and records the principal of every object it creates. */
-/** Serves the counter of the host's kind (`Counter` on the server, `SessionCounter` elsewhere). */
 function serveCounter(host: Host, principals: unknown[] = []) {
   const counter = (principal: unknown, self: Self) => {
     principals.push(principal);
@@ -72,7 +68,6 @@ function serveCounter(host: Host, principals: unknown[] = []) {
   else host.serve(SessionCounter, (_input, principal, self) => counter(principal, self));
 }
 
-/** A server and a worker connected by a memory link; the server accepts the worker as `{ worker: name }`. */
 function serverWithWorker(workerName = "session:S1") {
   const errors: unknown[] = [];
   const server = createHost({
@@ -118,7 +113,6 @@ describe("links: calls and state across hosts", () => {
     await counter.add(1);
     await tick();
     assert.deepEqual(counter.count.value, { n: 2 });
-    // Listeners added before the hydration get the snapshot then (not `undefined` first).
     assert.deepEqual(
       events.map((event) => event.type),
       ["snap", "ops", "ops"],
@@ -133,7 +127,6 @@ describe("links: calls and state across hosts", () => {
     await tick();
     const counter = server.hold(SessionCounter, { session: "w1", name: "x" });
     assert.equal(await counter.add(5), 5);
-    // The parent's own requests act as the principal the child gave `connect`.
     assert.deepEqual(principals, [{ kind: "server" }]);
   });
 
@@ -159,7 +152,6 @@ interface Cluster {
   allow: (principal: unknown, host: string) => boolean;
 }
 
-/** Server routing `session:*` to workers it spawns on demand (memory links); browsers connect as clients. */
 function cluster(options: { pingInterval?: number; pingTimeout?: number } = {}): Cluster {
   const log: string[] = [];
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
@@ -272,7 +264,6 @@ describe("links: relay, stamping, lifetime", () => {
     const result = frames.find((frame) => frame.t === "result");
     assert.deepEqual(result?.t === "result" ? result.value : undefined, guest);
 
-    // A child host cannot forward principals upward either: the server stamps it.
     const { server, down: _down, up } = serverWithWorker("w9");
     serveCounter(server);
     const childFrames: Frame[] = [];
@@ -308,14 +299,12 @@ describe("links: relay, stamping, lifetime", () => {
           onError: () => {},
         });
         serveCounter(worker);
-        // The first worker dies before the server wraps its link.
         if (attempt === 1) down.close("worker exited");
         return down;
       },
     });
     const first = server.hold(SessionCounter, { session: "S1", name: "a" });
     await assert.rejects(first.add(1), (error: Error) => /closed/.test(error.message));
-    // The next call resolves the route again and reaches the new worker.
     const second = server.hold(SessionCounter, { session: "S1", name: "a" });
     assert.equal(await second.add(2), 2);
     assert.equal(attempt, 2);
@@ -398,7 +387,6 @@ describe("links: relay, stamping, lifetime", () => {
     const counter = browser.host.hold(SessionCounter, { session: "S1", name: "a" });
     await counter.add(1);
     await c.server.invalidatePrincipal({ guest: "g1" });
-    // The relay under the old principal is closed at once; the worker disposes its object after.
     for (let i = 0; i < 20 && counter.status !== "gone"; i++) await tick();
     assert.equal(counter.status, "gone");
     for (let i = 0; i < 20 && !c.log.includes("close a"); i++) await tick();
@@ -421,9 +409,7 @@ describe("links: relay, stamping, lifetime", () => {
     browser.reconnect();
     assert.equal(await counter.add(1), 1);
     await tick();
-    // The old hold was released with the link, so the worker made a fresh object; the reset carries its value.
     assert.deepEqual(counter.count.value, { n: 1 });
-    // The first hydration is the listener's snapshot; the re-hold's snapshot is a reset.
     assert.equal(events[0], "snap");
     assert.ok(events.includes("reset"));
   });
@@ -441,7 +427,6 @@ const Big = remote("t.big", {
   },
 });
 
-/** About 160,000 characters of JSON: above PACK_THRESHOLD. */
 const large = (tag: string) =>
   Array.from({ length: 40 }, (_, i) => `${tag}${i}:${"x".repeat(4000)}`);
 
@@ -550,7 +535,6 @@ describe("links: protocol version", () => {
       principal: { kind: "server" },
       onProtocolMismatch: client.onProtocolMismatch,
     });
-    // A newer server: its hello announces the next version, and it closes the link the same way Chord does.
     down.send({
       t: "hello",
       protocol: PROTOCOL_VERSION + 1,
@@ -562,7 +546,6 @@ describe("links: protocol version", () => {
     assert.deepEqual(client.seen, [{ local: PROTOCOL_VERSION, peer: PROTOCOL_VERSION + 1 }]);
     assert.equal(up.closed, true);
 
-    // Told by the peer (it noticed first): the close reason carries its version.
     const told = mismatches();
     const [down2, up2] = memoryLinkPair();
     const other = createHost({
@@ -655,7 +638,6 @@ describe("links: packed payloads", () => {
     assert(snap?.t === "state" && snap.value instanceof Packed);
     assert.deepEqual(unpack(snap.value), large("s"));
 
-    // A relay forwards the packed bytes as they are.
     const [c, d] = memoryLinkPair();
     const forwarded: Frame[] = [];
     d.receive((frame) => forwarded.push(frame));
@@ -669,7 +651,6 @@ describe("links: packed payloads", () => {
 
 describe("links: IPC", () => {
   it("a write that fails after the peer process exited (EPIPE) ends the link instead of raising an unhandled error", async () => {
-    // Node reports such a failure asynchronously: to the send callback, or else as an `error` event nobody handles.
     const sent: unknown[] = [];
     const channel: IpcChannel = {
       connected: true,

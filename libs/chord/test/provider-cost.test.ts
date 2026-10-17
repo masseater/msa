@@ -1,5 +1,3 @@
-// Entry 8: what a change costs the provider. The diff is computed once per change; each feed (one per connection and
-// member) encodes it with its own stateful encoder and its link serializes it.
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
@@ -57,7 +55,6 @@ describe("provider cost", () => {
     const K = 4;
     const clients = Array.from({ length: K }, (_, i) => {
       const [down, up] = memoryLinkPair();
-      // One principal: every client reaches the same object.
       server.accept(down, { principal: { user: "u" } });
       const link = new CountingLink(up);
       const host = createHost({

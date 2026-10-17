@@ -11,15 +11,6 @@ import {
 } from "./reload.ts";
 import { type Frame, toWireError } from "./wire.ts";
 
-// Cross-host reload, coordinated by the server (the host without a parent):
-//   server: prepare itself and send `prepare` to every synced child host; collect votes
-//   all ok: the server installs its new code version, sends `commit` to every child, and only then starts what may make
-// new-code-version calls (tasks, listener and registry callbacks). Links are FIFO, so a child commits before it
-//           can receive any frame of a root started in the new code version.
-//   any failure or missed vote deadline: `abort` everywhere; each host rolls back to where it was.
-// Clients (browsers) are not participants: they see shape/reset pushes, or `upgrade_required`.
-// A child that connects behind the server's code version is fenced and reconciled with the same protocol.
-
 let reloadSeq = 0;
 
 const modulesFor = (remote: ReloadOptions["remote"], hostName: string | undefined): string[] => {
@@ -31,7 +22,6 @@ const modulesFor = (remote: ReloadOptions["remote"], hostName: string | undefine
   return [...(best?.[1] ?? [])];
 };
 
-/** A vote, or its rejection after `deadline` milliseconds. */
 function awaitVote(connection: Connection, id: number, deadline: number): Promise<unknown> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const vote = new Promise<unknown>((resolve, reject) => {
@@ -53,9 +43,6 @@ export async function runClusterReload(
   plugins: readonly PluginRef[],
   options: ReloadOptions,
 ): Promise<ReloadReport> {
-  // Participants are the children in step now. Fenced children (behind, being reconciled) reconcile to the new code
-  // version afterwards; a child whose hello arrives while the reload runs is synced or reconciled once it ends
-  // (`HostImpl.peerHello`).
   const synced = [...host.connections].filter(
     (connection) =>
       connection.role === "downstream" &&
@@ -66,8 +53,6 @@ export async function runClusterReload(
   const codeVersion = host.peekNextCodeVersion();
   const reload = await beginReload(host, plugins, options, codeVersion);
   try {
-    // Retire first: its `retire` frames reach every child before `prepare` (FIFO), so a child never retires a code
-    // version this host still runs roots of.
     await reload.waitForRetirement();
     const participants = synced.filter((connection) => connection.open);
     const id = ++reloadSeq;
@@ -136,17 +121,9 @@ export async function runClusterReload(
   }
 }
 
-/**
- * Brings a child that connected behind this host's code version up to it: a reload of the child's modules (the ones
- * cluster reloads gave its name) to this host's current code version, prepared, voted and committed like a cluster
- * reload. Until then the child is fenced: nothing is routed to it. The child's old code is never relabeled as a newer
- * code version.
- */
 export async function reconcileChild(host: HostImpl, connection: Connection): Promise<void> {
   for (;;) {
     if (!connection.open) return;
-    // Not during a reload of this host: the child is not one of its participants, so whatever it would be synced to
-    // now may be superseded by that reload's commit. Recheck once it ended.
     if (host.reloading) {
       await host.whenReloadEnded();
       continue;
@@ -157,7 +134,6 @@ export async function reconcileChild(host: HostImpl, connection: Connection): Pr
       host.announceRetired(connection);
       return;
     }
-    // Before `prepare`: the child's prepare first retires its previous code version, which waits for this permission.
     host.announceRetired(connection);
     const id = ++reloadSeq;
     const vote = awaitVote(connection, id, 30_000);
@@ -170,7 +146,6 @@ export async function reconcileChild(host: HostImpl, connection: Connection): Pr
     });
     await vote;
     if (host.current.id !== codeVersion) {
-      // This host moved on meanwhile: abort and try again with the newer code version.
       connection.send({ t: "abort", reload: id });
       continue;
     }
@@ -179,7 +154,6 @@ export async function reconcileChild(host: HostImpl, connection: Connection): Pr
   }
 }
 
-/** One prepare the child received, registered before its first await so an abort or disconnect is never lost. */
 interface ChildOperation {
   readonly id: number;
   reload: Reload | undefined;
@@ -187,11 +161,6 @@ interface ChildOperation {
   cancelled: boolean;
 }
 
-/**
- * The child side: prepare and vote, then wait for the server's commit or abort. An abort or a lost parent link can
- * arrive at any point: while loading modules, while preparing (pending opens close themselves when they complete),
- * or after the vote. The operation is unwound once its pending work settles, and the reload slot is freed.
- */
 export class ChildReloads {
   readonly #host: HostImpl;
   #operation: ChildOperation | undefined;
@@ -237,7 +206,6 @@ export class ChildReloads {
     }
   }
 
-  /** The parent link died: nobody will commit, so roll back (now, or once pending work settles). */
   parentLost(): void {
     if (this.#operation !== undefined) this.#cancel(this.#operation);
   }
@@ -245,7 +213,6 @@ export class ChildReloads {
   #cancel(operation: ChildOperation): void {
     operation.cancelled = true;
     if (operation.state !== "prepared") {
-      // Loading or preparing: make prepare fail now; #run unwinds when it settles.
       operation.reload?.rollback().catch((error: unknown) => this.#host.report(error));
       return;
     }

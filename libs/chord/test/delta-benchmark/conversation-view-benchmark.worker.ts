@@ -13,8 +13,6 @@ import {
   track,
 } from "../../src/delta/index.ts";
 
-// Provisional Pico5 benchmark schemas. They intentionally model architecture and
-// workload shape, not a committed public API or persisted wire format.
 const PROVISIONAL_SCHEMA = "pico5.conversation-view.provisional.v0";
 const MiB = 1024 * 1024;
 const MOUNTED_KEYS = ["config", "inbox", "turn", "preferences", "live"] as const;
@@ -941,8 +939,6 @@ function isResetJump(frame: DeltaFrame, previousSequence: number): boolean {
 }
 
 async function forwardOpsOnly(frame: DeltaFrame): Promise<void> {
-  // Models WatchHandle.start's serialized async listener. It forwards operations
-  // only; it intentionally does not construct or update a consumer-side replica.
   await Promise.resolve();
   deliveryFrameReferences += 1;
   deliveryOperationReferences += frame.ops.length;
@@ -1054,7 +1050,6 @@ async function commit(index: number): Promise<void> {
 
   const projectApplyStart = performance.now();
   if (aggregateFrame !== undefined) {
-    // Immutable application may safely share public placements with the projection.
     applyProjectedBatch(aggregateFrame.ops);
   }
   phaseSamples.projectApply.push(performance.now() - projectApplyStart);

@@ -75,7 +75,6 @@ describe("state cells", () => {
     ref.list.events((event) => events.push(event));
     ref.labels.events((event) => labels.push(event));
     await ref.push({ id: 1, label: "a" });
-    // Subscribed while loading: the snapshot once live, then exact ops.
     assert.deepEqual(events[0], { type: "snap", value: { items: [], count: 0 } });
     const ops =
       events[1]?.type === "ops" ? events[1].ops.map((op) => JSON.stringify(op)).sort() : [];
@@ -134,7 +133,6 @@ describe("state cells", () => {
       const list = self.state("list", Type.Array(Type.Number()), []);
       return {
         put: (ctx: Ctx) => {
-          // The classic slip: an expression-bodied arrow returns push()'s length.
           list.change(ctx, (draft) => draft.push(1) as never);
         },
       };
@@ -239,7 +237,6 @@ describe("state cells", () => {
     host.serve(Echo, (_input, _principal, self) => {
       const nState = self.state("n", Type.Number(), 0);
       const d = self.derive([nState], (n) => n * 2);
-      // Subscribed first: re-enters the write while revision 1 is being published.
       self.on("bump", nState, (n, ctx) => {
         if (n === 1) nState.replace(ctx, 2);
       });

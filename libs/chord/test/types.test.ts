@@ -1,5 +1,3 @@
-// Entry 8: reference types. State members are plain values (a reference you hold has its state); a remote reference is a
-// union discriminated by `variant`, so another variant's members are reachable only after narrowing. Checked by tsc.
 import { Type } from "typebox";
 import { describe, expectTypeOf, it } from "vite-plus/test";
 
@@ -40,8 +38,7 @@ describe("reference types", () => {
     const check = async (host: Host, ctx: Ctx) => {
       const doc = await host.get(Doc, {});
       expectTypeOf(doc.text).toEqualTypeOf<Readable<string>>();
-      // @ts-expect-error `edit` exists only in the editor variant.
-      void doc.edit;
+      expectTypeOf(doc).not.toHaveProperty("edit");
       if (doc.variant === "editor") expectTypeOf(doc.edit).toBeFunction();
       const single = await ctx.get(Single, {});
       expectTypeOf(single.n.value).toEqualTypeOf<number>();

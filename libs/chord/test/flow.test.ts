@@ -1,5 +1,3 @@
-// Link flow control: state waits while the peer's acknowledgements lag a window behind, coalesced per subscription;
-// everything else is sent at once.
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
@@ -25,7 +23,6 @@ async function until(check: () => boolean, attempts = 200): Promise<void> {
   assert.ok(check(), "condition not reached");
 }
 
-/** A client's end of a link that can hold back its acknowledgements, and records what it receives. */
 class AckGate implements Link {
   readonly inner: Link;
   readonly received: Frame[] = [];
@@ -63,7 +60,6 @@ class AckGate implements Link {
   }
 }
 
-/** A counter on the server, or (`t.flow-worker-counter`) on the worker host `w`. */
 const counterOn = (name: string, host: string) =>
   remote(name, {
     version: 1,
@@ -106,7 +102,6 @@ function serveCounter(host: Host, type = Counter): void {
   });
 }
 
-/** A client of `server` (accepted with `window`) whose acknowledgements can be held back. */
 function client(server: Host, window: number) {
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { user: "u" }, window });
@@ -137,7 +132,6 @@ describe("link flow control", () => {
     gate.paused = true;
     const results: number[] = [];
     for (let i = 0; i < 40; i++) results.push((await counter.add(1)) as number);
-    // Every call was answered, though most state is still waiting for an acknowledgement.
     assert.equal(results.at(-1), 40);
     assert.ok((values.at(-1) as { n: number }).n < 40, "state waits behind the window");
     const before = stateFrames(gate.received).length;
@@ -237,7 +231,6 @@ describe("link flow control", () => {
 
     gate.paused = true;
     for (let i = 0; i < 100; i++) await counter.add(1);
-    // An overflow drops the waiting ops and asks the worker for a reset (which then waits in the slot).
     assert.ok(resyncs() >= 1, "the overflowing stream was resynced downstream");
     assert.ok(!toWorker.some((frame) => frame.t === "sub" || frame.t === "unsub"));
     gate.release();

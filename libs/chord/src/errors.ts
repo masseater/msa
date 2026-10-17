@@ -1,4 +1,3 @@
-/** Error codes callers see (guide table). A refused or aborted reload keeps the code of its cause. */
 export const CHORD_ERROR_CODES = [
   "aborted",
   "contract_mismatch",
@@ -15,10 +14,6 @@ export const CHORD_ERROR_CODES = [
 ] as const;
 export type ChordErrorCode = (typeof CHORD_ERROR_CODES)[number];
 
-/**
- * Finer cause inside a code, for logs and tests: e.g. `invalid` + `args`, `result`, `state`, `input`, `implementation`,
- * `duplicate`, `cycle`, `read_only`, `not_host_lifetime`, `registry_conflict`; `unavailable` + `unknown_type`.
- */
 export type ChordErrorReason = string;
 
 const RETRYABLE: ReadonlySet<ChordErrorCode> = new Set(["superseded", "upgrade_conflict"]);
@@ -47,14 +42,12 @@ export class ChordError extends Error {
 export const isChordError = (error: unknown, code?: ChordErrorCode): error is ChordError =>
   error instanceof ChordError && (code === undefined || error.code === code);
 
-/** For factories and methods refusing a principal: `throw forbidden()`. */
 export const forbidden = (message = "forbidden"): ChordError =>
   new ChordError("forbidden", message);
 
 export const invalid = (reason: ChordErrorReason, message: string, details?: unknown): ChordError =>
   new ChordError("invalid", message, { reason, details });
 
-/** Keeps a ChordError's code; anything else becomes `unavailable` with the original as cause. */
 export const asChordError = (error: unknown, context: string): ChordError =>
   error instanceof ChordError
     ? error
@@ -66,7 +59,6 @@ export const asChordError = (error: unknown, context: string): ChordError =>
         },
       );
 
-/** Runs every step, then throws one error, or an AggregateError when several failed. */
 export async function runAll(steps: readonly (() => unknown)[], message: string): Promise<void> {
   const errors: unknown[] = [];
   for (const step of steps) {

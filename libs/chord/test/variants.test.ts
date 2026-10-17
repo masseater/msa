@@ -1,5 +1,3 @@
-// Entry 8: a binding applies a shape only once its new state members have snapshots; members outside the variant
-// throw `not_in_variant`; a re-hold after a link loss keeps the last values readable and sends one fresh unit.
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
@@ -35,7 +33,6 @@ const Doc = remote("t.e8-doc", {
   },
 });
 
-/** The server's facet: `Doc` in variant `variant` (the cells survive reloads by name). */
 function docFacet(variant: "a" | "b" | "c"): Facet {
   return {
     name: "doc",
@@ -53,7 +50,6 @@ function docFacet(variant: "a" | "b" | "c"): Facet {
   };
 }
 
-/** A reference whose variant changes under the test: its members, typed loosely (TypeScript narrows only once). */
 type View = {
   readonly variant: string | undefined;
   readonly x: Readable<number>;
@@ -88,7 +84,6 @@ describe("variants", () => {
       () => view(doc).y.value,
       (error) => isChordError(error, "not_in_variant"),
     );
-    // Every shape the reference shows is readable in full, at the moment it is shown.
     const failures: unknown[] = [];
     doc.onShape((shape) => {
       for (const name of ["x", "y"]) {
@@ -144,7 +139,6 @@ describe("re-hold after a link loss", () => {
     await until(() => view(doc).x.value === 2);
     up.close();
     await until(() => doc.status === "loading");
-    // The last values stay readable while the binding re-holds.
     assert.equal(view(doc).x.value, 2);
     const joining = browser.hold(Doc, {});
     assert.equal(joining.status, "loading");
@@ -166,7 +160,6 @@ describe("re-hold after a link loss", () => {
     assert.equal(link.count("sent", "hold"), 1, "one hold for both references");
     const snaps = stateFrames(link.received).filter((frame) => frame.as === "snap");
     assert.deepEqual(snaps.map((frame) => frame.m).sort(), ["x", "y"], "one snapshot per member");
-    // The old hold was released with the link: the server made a fresh object (its cells start over).
     assert.equal(view(doc).x.value, 1);
     await browser.close();
     await server.close();

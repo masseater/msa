@@ -8,7 +8,6 @@ export type JsonValue =
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
 
-/** Strict-JSON representation of an application data type. Unknown payloads become JsonValue. */
 export type JsonRepresentation<T> =
   IsAny<T> extends true
     ? JsonValue
@@ -30,11 +29,9 @@ const DATA_DESCRIPTOR: PropertyDescriptor = {
 };
 
 export type CopyJsonOptions = {
-  /** Omit undefined object properties while preserving strict array semantics. */
   readonly omitUndefinedProperties?: boolean;
 };
 
-/** Copy a value into an alias-free strict-JSON tree owned by the caller. */
 export function copyJson(value: unknown, options?: CopyJsonOptions): JsonValue {
   return copy(value, undefined, options?.omitUndefinedProperties === true);
 }
@@ -56,7 +53,6 @@ function copy(
   active.add(value);
   try {
     if (Array.isArray(value)) {
-      // Indices plus `length` only: extra, symbol, and missing keys all change the count.
       if (
         Object.getPrototypeOf(value) !== Array.prototype ||
         Reflect.ownKeys(value).length !== value.length + 1
@@ -100,7 +96,6 @@ function defineData(target: object, key: PropertyKey, value: JsonValue): void {
   DATA_DESCRIPTOR.value = undefined;
 }
 
-/** Return whether a value is finite strict JSON with plain objects and no cycles. */
 export function isJsonValue(value: unknown): value is JsonValue {
   return check(value, new Set<object>());
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
-import { Type } from "typebox";
-import { describe, it } from "vite-plus/test";
+import { type Static, Type } from "typebox";
+import { describe, expectTypeOf, it } from "vite-plus/test";
 
 import {
   bind,
@@ -15,13 +15,13 @@ import {
   type Link,
   memoryLinkPair,
   method,
+  type PlacementFor,
   PROTOCOL_VERSION,
   remote,
 } from "../src/index.ts";
 
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-/** Lives on `session:` + its input's `session`. */
 const Note = remote("t.note", {
   version: 1,
   input: Type.Object({ session: Type.String(), id: Type.String() }),
@@ -29,7 +29,6 @@ const Note = remote("t.note", {
   variants: { main: { methods: { where: method(undefined, Type.String()) } } },
 });
 
-/** Lives on `server`. */
 const Catalog = remote("t.catalog", {
   version: 1,
   input: Type.Object({}),
@@ -37,7 +36,6 @@ const Catalog = remote("t.catalog", {
   variants: { main: { methods: { where: method(undefined, Type.String()) } } },
 });
 
-/** A server with two session hosts as children; every host serves what it may and reports its name. */
 function cluster() {
   const server = createHost({ name: "server", self: "host", onError: () => {} });
   server.serve(Catalog, () => ({ variant: "main", where: () => "server" }));
@@ -63,7 +61,6 @@ function cluster() {
     for (const host of children.values()) await host.close();
     await server.close();
   };
-  // Relays need a route (where authorization lives); it finds the connected child.
   server.route("session:", {
     authorize: () => true,
     resolve: async (name) => links.get(name)!,
@@ -78,7 +75,6 @@ describe("placement", () => {
     await tick();
     assert.equal(await server.hold(Note, { session: "S1", id: "a" }).where(), "session:S1 a");
     assert.equal(await server.hold(Note, { session: "S2", id: "b" }).where(), "session:S2 b");
-    // From a session host: its own notes locally, the other session's through the server, the catalog upstream.
     assert.equal(await s1.hold(Note, { session: "S1", id: "c" }).where(), "session:S1 c");
     assert.equal(await s1.hold(Catalog, {}).where(), "server");
     await close();
@@ -131,16 +127,13 @@ describe("placement", () => {
         await tick();
       return frames.find((frame) => frame.t === "shape" || frame.t === "gone");
     };
-    // A client picks session:S2 for a note of S1: the relay refuses, nothing reaches S2.
     const relayed = await holds("session:S2", { session: "S1", id: "x" });
     assert.equal(relayed?.t, "gone");
     assert.match(
       relayed?.t === "gone" ? relayed.error.message : "",
       /placement|does not live on session:S2/,
     );
-    // The right target is served.
     assert.equal((await holds("session:S1", { session: "S1", id: "x" }))?.t, "shape");
-    // Addressed to the server itself, a note is refused by the server's own contract check.
     const direct = await holds("server", { session: "S1", id: "x" });
     assert.equal(direct?.t, "gone");
     await close();
@@ -156,7 +149,6 @@ describe("placement", () => {
     const { server, s1, close } = cluster();
     s1.serve(Doc, () => ({ variant: "main", where: () => "session:S1" }));
     await tick();
-    // An untyped caller leaves the field out: the default places it.
     assert.equal(await server.hold(Doc, {} as never).where(), "session:S1");
     assert.throws(
       () => server.hold(Note, { session: "", id: "x" }),
@@ -191,12 +183,10 @@ describe("placement", () => {
     });
     await host.install(facet(1, "server"));
     await host.get(at("server"), {});
-    // Same version, other placement: a forgotten bump.
     await assert.rejects(
       host.reload([facet(1, "session:S1")]),
       /declared for session:S1|without a version bump/,
     );
-    // A new version that `accepts` version 1 but lives elsewhere: no adapter makes version 1 consumers bind.
     const moved = remote("t.moved", {
       version: 2,
       input: Type.Object({}),
@@ -219,14 +209,29 @@ describe("placement", () => {
     });
     const variants = { main: {} };
     remote("t.ok", { version: 1, input, host: hostFamily("session:", "session"), variants });
-    // @ts-expect-error: no such field
-    remote("t.typo", { version: 1, input, host: hostFamily("session:", "sesion"), variants });
-    // @ts-expect-error: not a string
-    remote("t.number", { version: 1, input, host: hostFamily("session:", "count"), variants });
-    // @ts-expect-error: optional
-    remote("t.optional", { version: 1, input, host: hostFamily("session:", "note"), variants });
-    // @ts-expect-error: a remote contract says where it lives
-    assert.throws(() => remote("t.nowhere", { version: 1, input, variants }), /needs `host`/);
+    type Allowed = PlacementFor<Static<typeof input>>;
+    expectTypeOf(hostFamily("session:", "session")).toExtend<Allowed>();
+    expectTypeOf(hostFamily("session:", "sesion")).not.toExtend<Allowed>();
+    expectTypeOf(hostFamily("session:", "count")).not.toExtend<Allowed>();
+    expectTypeOf(hostFamily("session:", "note")).not.toExtend<Allowed>();
+    expectTypeOf<{
+      version: 1;
+      input: typeof input;
+      variants: typeof variants;
+    }>().not.toExtend<Parameters<typeof remote>[1]>();
+    for (const [name, key] of [
+      ["t.typo", "sesion"],
+      ["t.number", "count"],
+      ["t.optional", "note"],
+    ] as const)
+      Reflect.apply(remote, undefined, [
+        name,
+        { version: 1, input, host: hostFamily("session:", key), variants },
+      ]);
+    assert.throws(
+      () => Reflect.apply(remote, undefined, ["t.nowhere", { version: 1, input, variants }]),
+      /needs `host`/,
+    );
     assert.throws(() => hostFamily("", "session"), /prefix/);
   });
 });

@@ -1,4 +1,3 @@
-// Regression tests for resolved application requests (#1-#10), numbered as in their test names.
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
@@ -65,7 +64,6 @@ describe("application requests", () => {
         },
       };
     });
-    // No derivation, no cast: the reference member is the implementation member.
     server.serve(Chat, (_input, _principal, self) => {
       const conv = self.get(Conv, {});
       return { variant: "viewer", view: conv.view };
@@ -79,7 +77,6 @@ describe("application requests", () => {
     assert.deepEqual(chat.view.value, { text: "hi" });
     assert.deepEqual(values.at(-1), { text: "hi" });
 
-    // Across a link: the snapshot and its ops reach a browser.
     const [down, up] = memoryLinkPair();
     server.accept(down, { principal: { guest: "g" } });
     const browser = createHost({
@@ -126,7 +123,6 @@ describe("application requests", () => {
     await sleep(5);
     const api = captured[0]!;
     assert.equal(api.name, "worker");
-    // A callback outside Chord (a Durable tool, say) starts its own root.
     assert.equal(await api.root(async (ctx) => (await ctx.get(Reader, {})).read(ctx)), "v1");
     await host.reload([facet("v2")]);
     await sleep(5);
@@ -140,7 +136,6 @@ describe("application requests", () => {
       input: Type.Object({}),
       members: { seen: Type.Array(Type.String()) },
     });
-    // A source that accepts one subscriber at a time (like a Durable watch).
     let subscribers = 0;
     let emit = (_event: string) => {};
     const single = {
@@ -159,7 +154,6 @@ describe("application requests", () => {
         api.serve(Watcher, (_input, _principal, self) => {
           const seen = self.state("seen", Type.Array(Type.String()), []);
           const watchResource = self.resource("watch", { version: 1, open: () => single });
-          // A new adapter object per call, and a new arrow per factory run.
           self.on(
             "events",
             watchResource,
@@ -238,13 +232,10 @@ describe("application requests", () => {
     const opsOf = (event: StateEvent<unknown> | undefined) =>
       event?.type === "ops" ? event.ops : [];
     const current = ref.doc.value as { entries: string[]; status: string };
-    // A new revision reusing `entries`: a diff.
     await ref.set({ entries: current.entries, status: "running" });
     assert.deepEqual(opsOf(events.at(-1)), [["s", ["status"], "running"]]);
-    // Unrelated containers: one replacement op.
     await ref.set({ entries: ["a", "b", "c"], status: "running" });
     assert.equal(opsOf(events.at(-1))[0]?.[0], "r");
-    // Forced either way.
     lastOptions = { diff: true };
     await ref.set({ entries: ["a", "b", "c", "d"], status: "running" });
     assert.notEqual(opsOf(events.at(-1))[0]?.[0], "r");
@@ -281,7 +272,6 @@ describe("application requests", () => {
       onError: () => {},
     });
     const go = latch();
-    // A worker root of code version 1 (an eager object's listener, say) calls the server after connecting.
     const call = worker.root(async (ctx) => {
       await go.promise;
       return (await ctx.get(Echo, {})).codeVersion(ctx);
@@ -292,7 +282,6 @@ describe("application requests", () => {
     go.open();
     assert.equal(await call, 2);
     await until(() => worker.codeVersion === 2);
-    // Unknown code versions from in-step peers stay superseded.
     await assert.rejects(
       server.root(() => 0, { codeVersion: 1 }),
       (error) => isChordError(error, "superseded"),
@@ -487,7 +476,6 @@ describe("application requests", () => {
       upstream: { link: up, principal: { kind: "server" } },
       onError: (error) => log.push(`error: ${String(error)}`),
     });
-    // Eager: activated (and registered with the host) before the object that holds it.
     worker.serve(
       Proc,
       (_input, _principal, self) => {

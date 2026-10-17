@@ -1,4 +1,3 @@
-// Host manager (Node only): runs a child host process and keeps at most one instance of it alive.
 import { type ChildProcess, fork } from "node:child_process";
 import { createHash } from "node:crypto";
 import { unlinkSync } from "node:fs";
@@ -10,7 +9,6 @@ import { join } from "node:path";
 import { ChordError } from "./errors.ts";
 import { type IpcChannel, type IpcLink, ipcLink } from "./link.ts";
 
-/** Control messages share the IPC channel with chord frames: `{ chord2control: message }`. */
 export type ControlMessage =
   | { readonly type: "init"; readonly value: unknown }
   | { readonly type: "ready" }
@@ -24,13 +22,10 @@ export type ControlMessage =
     };
 
 export interface Liveness {
-  /** Started but not ready yet. */
   readonly booting: boolean;
   readonly activeCalls: number;
-  /** Viewers the child reports (it counts heartbeating subscribers). */
   readonly viewers: number;
   readonly durableTasks: number;
-  /** Milliseconds since the child last reported work (calls, viewers or tasks), or since it became ready. */
   readonly idleFor: number;
 }
 
@@ -39,13 +34,11 @@ export interface Exit {
   readonly signal: string | null;
 }
 
-/** A running child: its link (for `host.accept`) and its exit. */
 export interface Instance {
   readonly pid: number;
   readonly link: IpcLink;
   readonly exited: Promise<Exit>;
   send(message: ControlMessage): void;
-  /** Kills the child and everything it spawned. */
   killTree(): void;
   onControl(listener: (message: ControlMessage) => void): void;
 }
@@ -55,31 +48,16 @@ export interface Driver {
 }
 
 export interface ForkDriverOptions {
-  /** The child's entry module. */
   readonly entry: string;
   readonly args?: readonly string[];
   readonly env?: Readonly<Record<string, string>>;
-  /** Node flags for the child, e.g. `["--import", sourceResolver]` (default: none). */
   readonly execArgv?: readonly string[];
-  /** Sent to the child as its first control message (`childControl().init`). */
   readonly init?: unknown;
-  /**
-   * A lock name: one live process per name, across managers and processes. The child acquires it as a kernel lock
-   * (`childControl().lock()`, before opening its storage); a second child fails to start with `unavailable/locked`.
-   */
   readonly lock?: string | undefined;
-  /** Optional stdout/stderr tap. Streams are still mirrored to the parent's standard output. */
   readonly onOutput?: (stream: "stdout" | "stderr", chunk: Uint8Array) => void;
-  /** Optional application metadata tap; control messages and chord frames keep their normal handling. */
   readonly onMessage?: (message: unknown) => void;
 }
 
-/**
- * A process lock owned by the kernel for the holder's lifetime: an abstract socket (Linux, Android) or a named pipe
- * (Windows) vanishes with its process, so there is no stale state to take over and no race between two would-be
- * owners. Other platforms need a socket file, removed on exit; a leftover one nobody accepts on is taken over.
- * The child acquires it (before opening storage), so the lock follows the process that owns the data.
- */
 export async function processLock(name: string): Promise<() => Promise<void>> {
   const key = createHash("sha256").update(name).digest("hex").slice(0, 32);
   const file =
@@ -114,9 +92,7 @@ export async function processLock(name: string): Promise<() => Promise<void>> {
   const removeFile = (): void => {
     try {
       unlinkSync(address);
-    } catch {
-      // Already gone.
-    }
+    } catch {}
   };
   if (file) process.once("exit", removeFile);
   return () =>
@@ -126,14 +102,8 @@ export async function processLock(name: string): Promise<() => Promise<void>> {
     });
 }
 
-/** sun_path references 104 bytes on macOS and the BSDs, including the terminating NUL. */
 const MAX_SOCKET_PATH_BYTES = 103;
 
-/**
- * The lock socket's path: in the temporary directory, or, when that path does not fit in sun_path (a deep TMPDIR,
- * such as a test runner's below macOS's per-user one), in a private per-user directory under /tmp. Other users must
- * not be able to create or remove sockets there, so the directory has to be ours and closed to everyone else.
- */
 async function lockSocketPath(file: string): Promise<string> {
   const preferred = join(tmpdir(), file);
   if (Buffer.byteLength(preferred) <= MAX_SOCKET_PATH_BYTES) return preferred;
@@ -165,18 +135,15 @@ function accepting(address: string): Promise<boolean> {
 
 const LOCK_ENV = "CHORD2_LOCK";
 
-/** A control message to a peer process that is gone: dropped (its exit or `disconnect` is reported separately). */
 const ignoreSendError = (): void => {};
 
 export function forkDriver(options: ForkDriverOptions): Driver {
   return {
     spawn() {
-      // A lock this process inherited (e.g. as a child host itself) is not the child's: it gets only its own.
       const env: NodeJS.ProcessEnv = { ...process.env };
       delete env[LOCK_ENV];
       Object.assign(env, options.env);
       if (options.lock !== undefined) env[LOCK_ENV] = options.lock;
-      // Detached: the child leads a process group, so the whole tree can be killed.
       const child: ChildProcess = fork(options.entry, [...(options.args ?? [])], {
         env,
         execArgv: [...(options.execArgv ?? [])],
@@ -200,13 +167,10 @@ export function forkDriver(options: ForkDriverOptions): Driver {
       const killGroup = (): void => {
         try {
           process.kill(-pid, "SIGKILL");
-        } catch {
-          // No group left.
-        }
+        } catch {}
       };
       const exited = new Promise<Exit>((resolve) => {
         child.once("exit", (code, signal) => {
-          // However the leader ended (graceful, crash, kill), nothing it spawned outlives it.
           killGroup();
           resolve({ code, signal });
         });
@@ -218,7 +182,6 @@ export function forkDriver(options: ForkDriverOptions): Driver {
         if (control !== undefined) for (const listener of listeners) listener(control);
       });
       const send = (message: ControlMessage): void => {
-        // A child that exited before the channel reported it fails the write (EPIPE): its exit is what counts.
         if (child.connected) child.send({ chord2control: message }, ignoreSendError);
       };
       if (options.init !== undefined) send({ type: "init", value: options.init });
@@ -242,14 +205,10 @@ export function forkDriver(options: ForkDriverOptions): Driver {
 
 export interface HostManagerOptions {
   readonly driver: Driver;
-  /** Evaluated every `checkInterval` while running; `false` stops the child. */
   readonly keepAlive?: (liveness: Liveness) => boolean;
   readonly checkInterval?: number;
-  /** Milliseconds a child may take to shut down before its process tree is killed (default 5000). */
   readonly grace?: number;
-  /** Milliseconds to wait for `ready` (default 30000). */
   readonly readyTimeout?: number;
-  /** The child exited on its own (crash, fatal) or after a stop. */
   readonly onExit?: (exit: Exit) => void;
 }
 
@@ -257,11 +216,8 @@ export interface HostManager {
   readonly status: "stopped" | "starting" | "running" | "stopping";
   readonly instance: Instance | undefined;
   readonly liveness: Liveness;
-  /** Starts the child (or returns the running one) once it reported ready. Serialized with stop/replace. */
   start(): Promise<Instance>;
-  /** Asks the child to shut down, then kills its process tree after the grace period. */
   stop(): Promise<void>;
-  /** Stop, wait for the exit, start. */
   replace(): Promise<Instance>;
 }
 
@@ -270,7 +226,6 @@ export function createHostManager(options: HostManagerOptions): HostManager {
   let instance: Instance | undefined;
   let queue: Promise<unknown> = Promise.resolve();
   let report = { activeCalls: 0, viewers: 0, durableTasks: 0 };
-  /** When the child last became idle; undefined while it reports work. */
   let idleSince: number | undefined;
   let booting = false;
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -368,7 +323,6 @@ export function createHostManager(options: HostManagerOptions): HostManager {
             viewers: message.viewers ?? 0,
             durableTasks: message.durableTasks ?? 0,
           };
-          // The idle clock starts at the busy → idle transition, not at the last busy report.
           if (report.activeCalls + report.viewers + report.durableTasks > 0) idleSince = undefined;
           else idleSince ??= Date.now();
         }
@@ -411,13 +365,8 @@ export function createHostManager(options: HostManagerOptions): HostManager {
   };
 }
 
-/** The child side of the control channel (call in the child's entry). */
 export function childControl(channel: NodeJS.Process = process): {
   readonly init: Promise<unknown>;
-  /**
-   * Acquires the manager's lock (if one was configured) as a kernel lock held for this process's lifetime. Call it
-   * before opening storage. Fails with `unavailable/locked`, also reported to the manager as a fatal start error.
-   */
   lock(): Promise<void>;
   ready(): void;
   fatal(error: unknown): void;
@@ -425,7 +374,6 @@ export function childControl(channel: NodeJS.Process = process): {
   onShutdown(handler: () => void | Promise<void>): void;
 } {
   const send = (message: ControlMessage): void => {
-    // A parent that is gone fails the write (EPIPE); the `disconnect` that follows is how a child notices.
     if (channel.connected)
       channel.send?.({ chord2control: message }, undefined, undefined, ignoreSendError);
   };

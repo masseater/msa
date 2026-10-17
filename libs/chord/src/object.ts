@@ -43,38 +43,20 @@ import type { Ctx, Exposed, GetOptions, Readable, RefStatus, Shape, StateEvent }
 
 const noop = (): void => {};
 
-// ─── Services ────────────────────────────────────────────────────────────────
-
-/**
- * `serve` options. `lifetime` says how long objects of the type live. `"referenced"` (default): created at the first
- * `get` of an address, disposed after the last reference is released (plus `linger`). `"host"`: one object, created when
- * its facet loads (loading waits until it is live) and kept until the host closes or a reload removes its facet. Only
- * local types whose input accepts `{}` may have it (`ServeOptionsFor` checks that at compile time, `serve` again at
- * runtime); every `get` reaches that one object, created for the host principal. Only such objects may register into
- * registries.
- */
 export type ServeOptions = ReferencedServeOptions | HostServeOptions;
 
 export interface ReferencedServeOptions {
   readonly lifetime?: "referenced";
-  /** Milliseconds an object stays alive after its last reference is released. */
   readonly linger?: number;
-  /** Adapters for consumers built against older contract versions. */
   readonly accepts?: Accepts;
 }
 
 export interface HostServeOptions {
   readonly lifetime: "host";
-  /** An object of lifetime `"host"` lives as long as the host: it does not linger. */
   readonly linger?: undefined;
-  /** Adapters for consumers built against older contract versions. */
   readonly accepts?: Accepts;
 }
 
-/**
- * The options `serve` accepts for `C`: `lifetime: "host"` only for a local type whose input has no required fields
- * (the type's one object has the empty input).
- */
 export type ServeOptionsFor<C extends AnyContract> = C extends LocalContract
   ? Record<never, never> extends InputOf<C>
     ? ServeOptions
@@ -83,7 +65,6 @@ export type ServeOptionsFor<C extends AnyContract> = C extends LocalContract
 
 export type Lifetime = "referenced" | "host";
 
-/** A type's factory. `P` is the app's principal type: `principal` is the caller the object is created for. */
 export type Factory<C extends AnyContract, P = unknown> = (
   input: InputOf<C>,
   principal: P,
@@ -113,10 +94,8 @@ export const makeService = <C extends AnyContract>(
   };
 };
 
-/** Whether objects of `service` have `lifetime: "host"`. */
 export const hostLifetime = (service: Service): boolean => service.options.lifetime === "host";
 
-/** Refuses lifetimes the type cannot have, when it is served. */
 function checkLifetime(contract: AnyContract, options: ServeOptions): void {
   const lifetime = options.lifetime ?? "referenced";
   if (lifetime !== "referenced" && lifetime !== "host")
@@ -139,59 +118,24 @@ function checkLifetime(contract: AnyContract, options: ServeOptions): void {
   }
 }
 
-// ─── Declarations ────────────────────────────────────────────────────────────
-
-/** Options of `self.state`. */
 export interface StateOptions<T> {
-  /** The meaning of the cell's value (default 1). A reload that raises it runs `migrate`. */
   readonly version?: number;
-  /**
-   * Maps the value of an older version (`from`) to this version's, at the reload that raised the version. The cell
-   * may be several versions behind. Without it, the value is kept and must fit the new schema.
-   */
   readonly migrate?: (old: unknown, from: number) => T;
 }
 
-/**
- * A cell's first value from its source: `init` runs after the object's resources are open and its references are live,
- * before the object goes live, so no call, listener or subscriber sees a value that is not from the source. It runs in
- * a root of its own (acting as the host principal) and may be async; the inits of one object run in parallel. Its
- * value is validated against the schema; a throw or an invalid value fails the activation.
- */
 export interface StateInit<T, P = unknown> {
   readonly init: (ctx: Ctx<P>) => T | Promise<T>;
 }
 
-/** What a factory declares through. `P` is the app's principal type (`ctx.principal` of its listeners and tasks). */
 export interface Self<P = unknown> {
-  /**
-   * A state cell named `name`: its schema (required: there is no TypeScript at runtime) and its initial value
-   * (validated), or `{ init }` to read the first value from its source before the object goes live. The name identifies
-   * the cell across reloads: a reload keeps the cell and its value (`initial` is ignored, `init` does not run), migrates
-   * it when its version rises, and refuses a schema change without a version bump. A cell a reload adds runs its `init`
-   * while the reload prepares.
-   */
   state<S extends TSchema>(
     name: string,
     schema: S,
     initial: Static<S> | StateInit<Static<S>, P>,
     options?: StateOptions<Static<S>>,
   ): Cell<Static<S>>;
-  /** An object-owned reference, identified by its address. */
   get<C extends AnyContract>(type: C, input: InputOf<C>, options?: GetOptions<P>): Ref<C>;
-  /**
-   * A resource named `name`: opened before the object goes live, closed after it is disposed. A reload keeps it unless
-   * its `version`, `deps` or `exclusive` changed.
-   */
   resource<T>(name: string, declaration: ResourceDeclaration<T>): Resource<T>;
-  /**
-   * Reacts to `source` once the object is live: a readable (cell, derivation, reference state member) delivers its
-   * current value, then every new value; an event source (or a resource whose value is one) delivers its events.
-   * With `select`, subscribes to `select(value)` instead (the opened value for a resource). Each event runs `handler`
-   * in a fresh root. The name keeps the subscription across reloads while its source and `select` are unchanged; a
-   * listener on state whose source the reload replaced (a derivation is new at every reload) subscribes again and
-   * gets the current value again, so a handler of state must reconcile, not count.
-   */
   on<S>(
     name: string,
     source: S,
@@ -203,23 +147,15 @@ export interface Self<P = unknown> {
     select: (value: ValueOf<S>) => Subscribable<E>,
     handler: (event: E, ctx: Ctx<P>) => void | Promise<void>,
   ): void;
-  /** Long-running work of the live object (a code holder: its calls start fresh roots), restarted at every reload. */
   task(fn: (ctx: Ctx<P>) => Promise<void>): void;
-  /** A synchronous projection of readables, recomputed when they change; a new one at every reload. */
   derive<const S extends Sources, T>(
     sources: S,
     fn: (...values: SourceValues<S>) => T,
   ): Readable<T>;
-  /** Objects of lifetime `"host"` only. Keys are the registry's own keys. */
   register<V>(registry: Registry<V>, entries: Readonly<Record<string, V>>): void;
-  /**
-   * A member backed by one of this object's resources, for local contracts: references read the resource's value once
-   * the object is live (`undefined` before). Typically an `opaque` member: `{ harness: self.expose(durable) }`.
-   */
   expose<T>(resource: Resource<T>): Exposed<T>;
 }
 
-/** Runtime form of `Exposed<T>`. */
 class ExposedImpl {
   readonly resource: ResourceImpl;
   constructor(resource: ResourceImpl) {
@@ -229,10 +165,8 @@ class ExposedImpl {
 
 export class ResourceImpl<T = unknown> implements Resource<T> {
   readonly key: string;
-  /** The declaration of the factory run whose code is current: a kept resource adopts the new one at commit. */
   spec: ResourceDeclaration<T>;
   readonly deps: readonly (RefCore | ResourceImpl)[];
-  /** `unavailable`: a close/reopen failed during a reload rollback; the value is gone for good. */
   state: "closed" | "opening" | "open" | "unavailable" = "closed";
   #value: T | undefined;
 
@@ -257,10 +191,6 @@ export class ResourceImpl<T = unknown> implements Resource<T> {
     return this.spec.exclusive === true;
   }
 
-  /**
-   * Opens the resource. An open that completes after `signal` aborted (rollback, abandonment) closes the value it
-   * produced at once: nobody owns it any more.
-   */
   async open(signal: AbortSignal, order: ResourceImpl[]): Promise<void> {
     if (this.state !== "closed") return;
     this.state = "opening";
@@ -296,19 +226,11 @@ export class ResourceImpl<T = unknown> implements Resource<T> {
     this.#value = undefined;
   }
 
-  /**
-   * A reload kept this resource (same version, deps and exclusivity): its later `close` is the new declaration's, and
-   * the old declaration (with the old code it closes over) is no longer referenced.
-   */
   adopt(spec: ResourceDeclaration<T>): void {
     this.spec = spec;
   }
 }
 
-/**
- * What `self.resources` returns: the resource, except that `.value` throws `not_ready` while any factory runs, even
- * if the resource is open (a reload's prepare rerun must not touch the native resource the old code uses).
- */
 class ResourceFacade<T> implements Resource<T> {
   readonly #resource: ResourceImpl<T>;
   readonly #host: HostCore;
@@ -339,7 +261,6 @@ const resourceOf = (value: unknown): ResourceImpl | undefined =>
 
 type TaskFn = (ctx: Ctx) => Promise<void>;
 
-/** Everything one factory run declared, by kind and key. */
 export class Decls {
   readonly cells = new Map<string, Cell<unknown>>();
   readonly cellSchemas = new Map<string, TSchema>();
@@ -347,19 +268,15 @@ export class Decls {
   readonly cellMigrations = new Map<string, (old: unknown, from: number) => unknown>();
   readonly refs = new Map<string, RefCore>();
   readonly resources = new Map<string, ResourceImpl>();
-  /** Resources this run kept from the previous one, with this run's declarations (adopted at commit). */
   readonly adopted = new Map<ResourceImpl, ResourceDeclaration<unknown>>();
   readonly listeners = new Map<string, ListenerDecl>();
-  /** By position (`#0`, `#1`, …): tasks have no names. */
   readonly tasks = new Map<string, TaskFn>();
-  /** By position: derivations have no names and are new at every run. */
   readonly derives = new Map<string, Derived<unknown>>();
   readonly registrations = new Map<string, Registration>();
 }
 
 type InitFn = (ctx: Ctx) => unknown;
 
-/** One factory run: its implementation, declarations and the objects it created (not reused from the previous run). */
 export interface Run {
   readonly implementation: Record<string, unknown>;
   readonly decls: Decls;
@@ -367,7 +284,6 @@ export interface Run {
     readonly refs: RefCore[];
     readonly resources: ResourceImpl[];
     readonly derives: Derived<unknown>[];
-    /** Cells this run created with `init`, which fills them before they are used. */
     readonly inits: (readonly [Cell<unknown>, InitFn])[];
   };
 }
@@ -384,14 +300,11 @@ export interface Installed {
   readonly decls: Decls;
 }
 
-// ─── Host interface the runtime pieces use ───────────────────────────────────
-
 export interface HostCore {
   readonly name: string;
   readonly dev: boolean;
   readonly principal: unknown;
   inFactory: number;
-  /** Set when a commit failed midway: the host admits no more work (terminal). */
   readonly failed: unknown;
   report(error: unknown): void;
   currentCodeVersion(): number;
@@ -414,21 +327,12 @@ export interface HostCore {
   ): Promise<T>;
   touch(rootId: string, object: ObjectImpl): void;
   forget(object: ObjectImpl): void;
-  /** The object finished its disposal. */
   disposed(object: ObjectImpl): void;
-  /** Milliseconds a reload waits for aborted tasks to finish before starting their replacements. */
   readonly taskStopDeadline: number;
-  /**
-   * Milliseconds an activation or a reload's prepare waits for its references to be ready and hydrated before it fails
-   * (`unavailable/ready_timeout`; a reference cycle across hosts never resolves).
-   */
   readonly readyTimeout: number;
   checkRegistrations(object: ObjectImpl, decls: Decls): void;
-  /** Rebuilds the current registry tables from live objects (plus `including`, which is finishing activation). */
   registriesChanged(including?: ObjectImpl): void;
 }
-
-// ─── Contexts ────────────────────────────────────────────────────────────────
 
 export class CtxImpl implements Ctx {
   readonly host: HostCore;
@@ -436,20 +340,16 @@ export class CtxImpl implements Ctx {
   readonly rootId: string;
   readonly codeVersion: number;
   readonly principal: unknown;
-  /** Code holders (tasks): every call they make starts a fresh root. */
   readonly holder: boolean;
   readonly #refs: RefCore[] = [];
   readonly #release: () => void;
-  /** Aborted when the ctx closes: awaited `get`s give up. */
   readonly #closing = new AbortController();
   #closed = false;
 
-  /** True after the call or root that received this ctx settled: it may no longer start work. */
   get closed(): boolean {
     return this.#closed;
   }
 
-  /** Throws unless this ctx may start work on `host` (the called reference's host) now: not expired, aborted or foreign. */
   check(host: HostCore | RemoteHost): void {
     if (this.host !== host) throw invalid("foreign_ctx", "ctx belongs to another host");
     if (this.#closed)
@@ -458,14 +358,12 @@ export class CtxImpl implements Ctx {
       });
     if (this.signal.aborted) {
       const reason: unknown = this.signal.reason;
-      // A forced retirement aborted the root: its code version is gone, so the next call is `superseded` (retryable).
       if (reason instanceof ChordError && reason.code === "superseded")
         throw new ChordError("superseded", reason.message, { cause: reason });
       throw new ChordError("aborted", "ctx aborted", { cause: reason });
     }
   }
 
-  /** `signals`: the ctx is aborted with the first of them; it stops following them when it closes. */
   constructor(
     host: HostCore,
     fields: {
@@ -498,10 +396,6 @@ export class CtxImpl implements Ctx {
     return ref.proxy as Ref<C>;
   }
 
-  /**
-   * A context for a call into `object`: same root and code version, its own call-owned references, aborted on forced
-   * disposal. Code inside an object acts as the host principal.
-   */
   child(object: ObjectImpl): CtxImpl {
     return new CtxImpl(this.host, {
       signals: [this.signal, object.callAbort.signal],
@@ -521,11 +415,6 @@ export class CtxImpl implements Ctx {
   }
 }
 
-/**
- * A signal aborted with the first of `sources` to abort, until `release()`. Not `AbortSignal.any`: Node keeps a
- * dependant of a long-lived source (an object's or a code version's) reachable while it has abort listeners, so every
- * call or task context would keep its listeners, and the code they close over, alive as long as the source.
- */
 export function linkedSignal(sources: readonly AbortSignal[]): {
   readonly signal: AbortSignal;
   release(): void;
@@ -551,11 +440,6 @@ export function linkedSignal(sources: readonly AbortSignal[]): {
   return { signal: controller.signal, release };
 }
 
-/**
- * Waits until `ref` is ready, at most `ms` and until a signal aborts; on failure the reference is released (only it: a
- * binding other references share stays) and the error is rethrown: the activation error, `aborted`, or
- * `unavailable/ready_timeout`.
- */
 export async function awaitReady(
   ref: RefCore,
   signals: readonly AbortSignal[],
@@ -601,12 +485,8 @@ export async function raceSignal<T>(promise: Promise<T>, signal: AbortSignal): P
   }
 }
 
-// ─── References ─────────────────────────────────────────────────────────────────
-
-/** Who a reference belongs to. `connection`: a peer host over a link; `client`: a browser (not a reload participant). */
 export type RefOwner = "object" | "call" | "host" | "external" | "connection" | "client";
 
-/** A claim on an object: a local `RefImpl`, or a `RemoteRef` on another host (no object here). */
 export interface RefCore {
   readonly address: string;
   readonly contract: AnyContract;
@@ -631,7 +511,6 @@ export const REF_BASE: ReadonlySet<PropertyKey> = new Set([
 
 export type StatusListener = (status: RefStatus, error: unknown) => void;
 
-/** Queues a status notification (after the change that caused it is complete, like every publication). */
 export function notifyStatus(
   listeners: ReadonlySet<StatusListener>,
   status: RefStatus,
@@ -651,27 +530,18 @@ export function notifyStatus(
   });
 }
 
-/** Proxy → reference, for `deps: [ref]` and links. */
 export const refsByProxy = new WeakMap<object, RefCore>();
 export const refOf = (value: unknown): RefCore | undefined =>
   value !== null && typeof value === "object" ? refsByProxy.get(value) : undefined;
 
-/**
- * A reference's state member: a stable readable that follows whatever source the current implementation exposes under
- * that name. Reading throws `not_ready` until the reference is live, `not_in_variant` while the variant lacks the
- * member. A listener added before the member is readable gets its snapshot then. Rebinding (reload, variant) delivers a
- * reset. Upstream is subscribed only while someone listens.
- */
 class MemberReadable implements Readable<unknown> {
   readonly #ref: RefImpl;
   readonly #name: string;
   readonly #values = new Set<(value: unknown) => void>();
   readonly #events = new Set<(event: StateEvent<unknown>) => void>();
-  /** Event listeners that have not had their snapshot yet (added while the member was not readable). */
   readonly #unseen = new Set<(event: StateEvent<unknown>) => void>();
   #source: Readable<unknown> | undefined;
   #upstream = noop;
-  /** The value listeners last saw; a first upstream snapshot equal to it is not re-announced. */
   #seen: { readonly value: unknown } | undefined;
 
   constructor(ref: RefImpl, name: string) {
@@ -695,7 +565,6 @@ class MemberReadable implements Readable<unknown> {
     return source.value;
   }
 
-  /** Not hydrated while the reference is not live, or while its source (a forwarded remote member) is not. */
   get [HYDRATION](): Hydration | undefined {
     const ref = this.#ref;
     if (ref.status === "live") return hydrationOf(this.#current());
@@ -734,7 +603,6 @@ class MemberReadable implements Readable<unknown> {
     };
   }
 
-  /** (Re)subscribes upstream to the current source; a changed source is announced as a reset. */
   bind(): void {
     const source = this.#values.size + this.#events.size > 0 ? this.#current() : undefined;
     if (source === this.#source) return;
@@ -761,7 +629,6 @@ class MemberReadable implements Readable<unknown> {
       const values = [...this.#values];
       const unseen = new Set(this.#unseen);
       this.#unseen.clear();
-      // Queued: a rebind during a commit must not run observers before the commit completes.
       enqueue(() => {
         for (const listener of events) {
           if (!this.#events.has(listener)) continue;
@@ -787,11 +654,9 @@ class MemberReadable implements Readable<unknown> {
     const view = this.#ref.currentView();
     if (view === undefined || !this.#ref.inVariant(view, this.#name)) return undefined;
     const value = view[this.#name];
-    // Cells and derivations, or any readable an `accepts` adapter maps them to.
     return isSource(value) || isReadableLike(value) ? (value as Readable<unknown>) : undefined;
   }
 
-  /** The current source if its value can be read now (live, in the variant, hydrated). */
   #readable(): Readable<unknown> | undefined {
     const source = this.#current();
     return source === undefined || hydrationOf(source)?.hydrated === false ? undefined : source;
@@ -811,7 +676,6 @@ class MemberReadable implements Readable<unknown> {
   }
 }
 
-/** One reference on an object. Exposed through a Proxy so members bind late to the current implementation. */
 export class RefImpl {
   readonly object: ObjectImpl;
   readonly contract: AnyContract;
@@ -822,10 +686,8 @@ export class RefImpl {
   status: RefStatus;
   error: unknown;
   readonly shapeListeners = new Set<(shape: Shape) => void>();
-  /** Internal: notified when the reference becomes gone (links forward it). */
   readonly goneListeners = new Set<(error: unknown) => void>();
   readonly readables = new Map<string, MemberReadable>();
-  /** Weak: a retired code version's service (and the factory code it holds) must not be kept alive by its consumers. */
   readonly bindings = new WeakMap<Service, Adapter | undefined>();
   readonly views = new WeakMap<Record<string, unknown>, Record<string, unknown>>();
   readonly callers = new Map<string, (...given: unknown[]) => Promise<unknown>>();
@@ -899,8 +761,6 @@ export class RefImpl {
     this.object.release(this);
   }
 
-  // ─── internal ───
-
   live(): void {
     if (this.status !== "loading") return;
     this.status = "live";
@@ -939,7 +799,6 @@ export class RefImpl {
       : new ChordError("released", `reference ${this.address} released`);
   }
 
-  /** The implementation as this consumer sees it (through an accepts adapter when bound to another version). */
   viewOf(installed: Installed): Record<string, unknown> {
     let adapter = this.bindings.get(installed.service);
     if (!this.bindings.has(installed.service)) {
@@ -961,7 +820,6 @@ export class RefImpl {
     return installed === undefined ? undefined : this.#safeView(installed);
   }
 
-  /** The view, or undefined when this consumer no longer binds (reported; calls reject with the bind error). */
   #safeView(installed: Installed): Record<string, unknown> | undefined {
     try {
       return this.viewOf(installed);
@@ -979,7 +837,6 @@ export class RefImpl {
     return undefined;
   }
 
-  /** Remote consumers see only the members their contract lists for the current variant. */
   inVariant(view: Record<string, unknown>, name: string): boolean {
     return this.contract.scope !== "remote" || this.describe(variantOf(view), name) !== undefined;
   }
@@ -1011,7 +868,6 @@ export class RefImpl {
     if (caller === undefined) {
       const noArgs = takesNoArgs(this.contract, name);
       caller = (...given) => {
-        // A method without arguments is called as `ref.name(ctx)`.
         const [args, ctx] = (noArgs ? [undefined, given[0]] : given) as [unknown, Ctx | undefined];
         if (this.object.host.inFactory > 0) {
           throw new ChordError("not_ready", `${this.address}.${name} called inside a factory`);
@@ -1020,7 +876,6 @@ export class RefImpl {
           return Promise.reject(invalid("foreign_ctx", "ctx must come from a Chord host"));
         }
         if (ctx === undefined || ctx.holder) {
-          // A code holder (task) starts a fresh root per call, cancelled with the holder.
           try {
             ctx?.check(this.object.host);
           } catch (error) {
@@ -1048,8 +903,6 @@ export class RefImpl {
 export const variantOf = (implementation: Record<string, unknown>): string | undefined =>
   typeof implementation["variant"] === "string" ? implementation["variant"] : undefined;
 
-// ─── Objects ─────────────────────────────────────────────────────────────────
-
 export type ObjectStatus = "activating" | "live" | "failed" | "disposing" | "disposed";
 
 interface Gate {
@@ -1059,21 +912,14 @@ interface Gate {
 }
 
 interface Subscription {
-  /** What the listener was declared on: the resource (not its facade), or the source itself. */
   readonly origin: unknown;
   readonly select: ListenerDecl["select"];
   unsubscribe: () => void;
 }
 
-/**
- * Two `select` functions are the same if they are identical or have the same source text: an inline arrow is a new
- * object on every factory run, but its code is what matters. (A select whose implementation depends on captured values
- * that change between runs is not detected; such a listener keeps its old subscription until its source changes.)
- */
 const sameSelect = (a: ListenerDecl["select"], b: ListenerDecl["select"]): boolean =>
   a === b || (a !== undefined && b !== undefined && String(a) === String(b));
 
-/** Listener subscriptions made ahead of a commit: `activate` switches over, `discard` drops them. */
 export interface StagedListeners {
   activate(): void;
   discard(): void;
@@ -1089,7 +935,6 @@ export interface ObjectIdentity {
   readonly typeName: string;
   readonly input: unknown;
   readonly principal: unknown;
-  /** The one object of a `lifetime: "host"` type. */
   readonly hostLifetime: boolean;
 }
 
@@ -1099,15 +944,12 @@ export class ObjectImpl {
   readonly typeName: string;
   readonly input: unknown;
   readonly principal: unknown;
-  /** The one object of a `lifetime: "host"` type: only such objects may register. */
   readonly hostLifetime: boolean;
   status: ObjectStatus = "activating";
   ready: Promise<void> = Promise.resolve();
   service: Service | undefined;
-  /** Calls carrying an older code version are rejected upgrade_conflict (state bump or exclusive resource replaced). */
   minCodeVersion = 0;
   decls = new Decls();
-  /** Declarations of a factory run that has not been installed yet (activation or reload candidate). */
   readonly pending = new Set<Decls>();
   readonly implementations = new Map<number, Installed>();
   readonly refs = new Set<RefImpl>();
@@ -1116,14 +958,11 @@ export class ObjectImpl {
   readonly callAbort = new AbortController();
   readonly activationAbort = new AbortController();
   gate: Gate | undefined;
-  /** Served only by a running reload's pending code version: listeners, tasks and registrations start at its commit. */
   deferredRuntime = false;
   readonly #subscriptions = new Map<string, Subscription>();
   readonly #invocations = new Set<Promise<unknown>>();
   #tasks = new Map<string, RunningTask>();
-  /** Aborted task runs that have not finished yet. */
   readonly #stopped = new Set<Promise<void>>();
-  /** Bumped by every start and stop of the tasks: a delayed start that is no longer the latest is dropped. */
   #taskRuns = 0;
   #linger: ReturnType<typeof setTimeout> | undefined;
   #disposal: Promise<void> | undefined;
@@ -1146,7 +985,6 @@ export class ObjectImpl {
       (cause: unknown) => {
         if (this.status === "activating") this.status = "failed";
         this.host.forget(this);
-        // A ChordError (forbidden, a dependency's error, ...) keeps its code; anything else is `unavailable`.
         const error = asChordError(cause, `activating ${this.address}`);
         for (const ref of this.refs) ref.gone(error);
         throw error;
@@ -1155,11 +993,6 @@ export class ObjectImpl {
     this.ready.catch(noop);
   }
 
-  /**
-   * Activation as one transaction: factory, opens, then a synchronous finalization (registry check and publication,
-   * implementations, runtime). Every failure, including one during finalization or a release while listeners start,
-   * unwinds everything this activation did.
-   */
   async #activate(after: Promise<void> | undefined): Promise<void> {
     await after?.catch(noop);
     const signal = this.activationAbort.signal;
@@ -1200,18 +1033,14 @@ export class ObjectImpl {
       }
       for (const derived of run.created.derives) derived.attach();
       this.refreshSchemas();
-      // Served only by a running reload's pending code version: new code must not run (listeners, tasks,
-      // registrations) before that reload commits.
       this.deferredRuntime = !this.implementations.has(this.host.currentCodeVersion());
       if (!this.deferredRuntime) {
         if (run.decls.registrations.size > 0) this.host.registriesChanged(this);
         this.startRuntime();
       }
-      // A listener starting up may have released the last reference synchronously: no resurrection.
       if (signal.aborted) throw abandoned();
       this.status = "live";
     } catch (error) {
-      // Invocations started during finalization (listener roots) end before their resources close.
       this.callAbort.abort(error);
       this.stopListeners();
       this.stopTasks();
@@ -1227,10 +1056,6 @@ export class ObjectImpl {
     }
   }
 
-  /**
-   * Runs the factory synchronously. With `previous`, runs in recording mode for a reload prepare. The run's
-   * declarations stay in `pending` (visible to the cycle check) until the caller installs or discards them.
-   */
   run(service: Service, previous: Decls | undefined): Run {
     const self = new SelfImpl(this, previous);
     const discard = (run: Run): void => {
@@ -1260,7 +1085,6 @@ export class ObjectImpl {
     return run;
   }
 
-  /** Opens resources (dependencies first) and waits for references; settles all before failing. */
   async open(
     resources: readonly ResourceImpl[],
     refs: readonly RefCore[],
@@ -1294,10 +1118,6 @@ export class ObjectImpl {
     if (failure !== undefined) throw failure.reason;
   }
 
-  /**
-   * Waits until the state sources a run exposes or derives from have their values: a local object goes live only with
-   * its state, also where it forwards or derives from a remote reference's member.
-   */
   async waitHydrated(run: Run): Promise<void> {
     const exposed = Object.entries(run.implementation ?? {});
     const pending = unhydrated([...run.created.derives, ...exposed.map(([, value]) => value)]);
@@ -1315,7 +1135,6 @@ export class ObjectImpl {
     );
   }
 
-  /** `work` within the host's `readyTimeout`; a timeout names what is still awaited. */
   async withinReadyTimeout<T>(work: Promise<T>, waiting: () => readonly string[]): Promise<T> {
     const ms = this.host.readyTimeout;
     if (!Number.isFinite(ms)) return work;
@@ -1341,10 +1160,6 @@ export class ObjectImpl {
     }
   }
 
-  /**
-   * Fills the cells `run` created with `init`, each in a root of its own, in parallel; settles all before failing. Runs
-   * after the run's resources are open and its references live, before anything reads the cells.
-   */
   async initCells(run: Run, signal: AbortSignal): Promise<void> {
     if (run.created.inits.length === 0) return;
     const results = await Promise.allSettled(
@@ -1357,7 +1172,6 @@ export class ObjectImpl {
     if (failure !== undefined) throw failure.reason;
   }
 
-  /** Undoes the objects a run created: closes its resources (reverse order) and releases its references. */
   async unwind(run: Run): Promise<void> {
     for (const derived of run.created.derives) derived.detach();
     const resources = [...run.created.resources].sort(
@@ -1379,7 +1193,6 @@ export class ObjectImpl {
     );
   }
 
-  /** Every state source exposed as a remote state member gets that member's schema (checked per write in dev mode). */
   refreshSchemas(): void {
     const schemas = new Map<Readable<unknown>, TSchema[]>();
     for (const installed of this.implementations.values()) {
@@ -1399,14 +1212,10 @@ export class ObjectImpl {
     return result;
   }
 
-  // ─── runtime: listeners and tasks of the current declarations ───
-
-  /** The resource a listener is declared on, or its source itself. */
   #origin(decl: ListenerDecl): unknown {
     return resourceOf(decl.source) ?? decl.source;
   }
 
-  /** Resolves a listener's subscribable: `select(resource value)`, `select(source)` or the source itself. */
   #listenSource(key: string, decl: ListenerDecl): Subscribable<unknown> {
     const resource = resourceOf(decl.source);
     const value = resource === undefined ? decl.source : resource.value;
@@ -1418,12 +1227,6 @@ export class ObjectImpl {
     return source;
   }
 
-  /**
-   * Subscribes the listeners of `decls` without delivering: events are buffered until `activate`. A listener declared
-   * on the same resource (or source) with the same `select` keeps its subscription without calling `select` again
-   * (only its function is swapped, by name), so sources that accept a single subscriber survive reloads. Throws, with
-   * nothing left subscribed, if any source fails.
-   */
   stageListeners(decls: Decls): StagedListeners {
     type Fresh = Subscription & { buffer: unknown[] | undefined; subscribe?: () => void };
     const fresh = new Map<string, Fresh>();
@@ -1448,8 +1251,6 @@ export class ObjectImpl {
           buffer: [],
         };
         fresh.set(key, entry);
-        // State (a readable) is subscribed when the listener activates: it delivers the value current then, not one
-        // of the candidate before the commit (a new derivation computes its value at the commit).
         if (isSource(source) || isReadableLike(source)) {
           entry.buffer = undefined;
           entry.subscribe = () => {
@@ -1492,11 +1293,6 @@ export class ObjectImpl {
     this.startTasks();
   }
 
-  /**
-   * Starts the tasks of the current declarations. Runs aborted by `stopTasks` (a reload, a gate) may still be finishing:
-   * their replacements start once they all finished, or after `taskStopDeadline` (reported), so the old and the new run
-   * of a task never work side by side. A later start or stop, or the object leaving `live`, cancels a delayed start.
-   */
   startTasks(): void {
     const run = ++this.#taskRuns;
     const start = (): void => {
@@ -1557,10 +1353,6 @@ export class ObjectImpl {
     this.#tasks.set(key, { controller, done });
   }
 
-  /**
-   * Aborts running tasks (and cancels a delayed start). Their completion is awaited by the next `startTasks` and at
-   * disposal; each leaves `#stopped` when it finishes.
-   */
   stopTasks(): void {
     this.#taskRuns++;
     for (const task of this.#tasks.values()) {
@@ -1572,11 +1364,6 @@ export class ObjectImpl {
     this.#tasks.clear();
   }
 
-  /**
-   * Delivers one listener event, in publication order. The invocation is a root that references a lease on this object
-   * (a reload gate waits for it like for any other root that touched the object), counts as an invocation (disposal
-   * waits for it) and is cancelled by forced disposal.
-   */
   #deliver(key: string, event: unknown): void {
     enqueue(() => {
       if (this.gate !== undefined) {
@@ -1600,16 +1387,12 @@ export class ObjectImpl {
     });
   }
 
-  /** Opens the object's gate and replays queued listener events through the current listeners. */
   openGate(): void {
     const gate = this.gate;
     this.gate = undefined;
     for (const { key, event } of gate?.queue ?? []) this.#deliver(key, event);
   }
 
-  // ─── calls ───
-
-  /** Admission for a call or write carrying `ctx`. */
   admit(ctx: Ctx): void {
     if (this.host.failed !== undefined) {
       throw new ChordError("unavailable", `${this.host.name} failed and admits no work`, {
@@ -1629,7 +1412,6 @@ export class ObjectImpl {
     }
   }
 
-  /** Records that the root of `ctx` touched this object (a reload gate grandfathers it). */
   lease(ctx: Ctx): void {
     if (this.leases.has(ctx.rootId)) return;
     this.leases.set(ctx.rootId, ctx.codeVersion);
@@ -1681,13 +1463,10 @@ export class ObjectImpl {
       : wanted;
     const method = schema?.kind === "method" ? schema : undefined;
     const validated = ref.contract.scope === "remote" ? method : undefined;
-    // No arguments: the handler takes only ctx. No result (void): the caller gets undefined, whatever it returned.
     const takesArgs = method === undefined || method.args !== undefined;
     const returns = method === undefined || method.result !== undefined;
     let input: unknown;
     if (takesArgs) {
-      // The additive rule assumes a consumer sends only what its own schema knows, and a provider sees only what its
-      // schema knows: strip with both before validating.
       const own =
         ref.contract.scope === "remote" && wanted?.kind === "method" ? wanted.args : undefined;
       const sent = own === undefined ? args : Value.Clean(own, Value.Clone(args));
@@ -1713,7 +1492,6 @@ export class ObjectImpl {
     return result;
   }
 
-  /** Runs an invocation (method or listener) that keeps the object alive until it settles. */
   #invoke<T>(fn: () => T | Promise<T>): Promise<T> {
     const invocation = (async () => fn())();
     this.#invocations.add(invocation);
@@ -1731,8 +1509,6 @@ export class ObjectImpl {
     if (gate?.grandfathered.delete(rootId) && gate.grandfathered.size === 0) gate.drained();
   }
 
-  // ─── lifetime ───
-
   addRef(ref: RefImpl): void {
     this.refs.add(ref);
     if (this.#linger !== undefined) clearTimeout(this.#linger);
@@ -1743,7 +1519,6 @@ export class ObjectImpl {
     if (this.refs.delete(ref)) this.#maybeIdle();
   }
 
-  /** No references and no invocations: dispose (after `linger` for a live object). */
   #maybeIdle(): void {
     if (this.refs.size > 0 || this.#invocations.size > 0 || this.#linger !== undefined) return;
     if (this.status === "activating") {
@@ -1769,10 +1544,6 @@ export class ObjectImpl {
     disposal.catch((error: unknown) => this.host.report(error));
   }
 
-  /**
-   * Disposes the object. Forced: references become gone at once (new calls are rejected) and running invocations are
-   * cancelled. Either way, resources close only after every invocation settled.
-   */
   dispose(forced: boolean, reason?: unknown): Promise<void> {
     this.#disposal ??= this.#dispose(forced, reason);
     return this.#disposal;
@@ -1828,7 +1599,6 @@ const isReadableLike = (value: unknown): boolean =>
   typeof (value as Readable<unknown>).events === "function" &&
   typeof (value as Readable<unknown>).subscribe === "function";
 
-/** The remote state-member schemas an implementation exposes, by source. */
 export function memberSchemas(
   service: Service,
   implementation: Record<string, unknown>,
@@ -1875,8 +1645,6 @@ function validateImplementation(service: Service, implementation: Record<string,
   }
 }
 
-// ─── The factory's `self` ────────────────────────────────────────────────────
-
 class SelfImpl implements Self {
   readonly #object: ObjectImpl;
   readonly #previous: Decls | undefined;
@@ -1896,7 +1664,6 @@ class SelfImpl implements Self {
     };
   }
 
-  /** Refuses a second declaration of `name` of one kind in this run (TypeScript cannot see string names). */
   #unique(map: ReadonlyMap<string, unknown>, kind: string, name: string): void {
     if (typeof name !== "string" || name === "") throw new TypeError(`${kind} needs a name`);
     if (map.has(name))
@@ -1914,7 +1681,6 @@ class SelfImpl implements Self {
     if (!Number.isInteger(version) || version < 1)
       throw new TypeError(`state ${name}: version must be a positive integer`);
     const host = this.#object.host;
-    // A JSON value never holds a function: an object with a function `init` is the initializer, not a value.
     const init = isStateInit(initial) ? initial.init : undefined;
     let cell = this.#previous?.cells.get(name);
     if (cell === undefined) {
@@ -1939,8 +1705,6 @@ class SelfImpl implements Self {
 
   get<C extends AnyContract>(type: C, input: InputOf<C>, options?: GetOptions): Ref<C> {
     const host = this.#object.host;
-    // A prepare rerun (recording mode) binds new references against the reload's pending contracts: a breaking provider
-    // change and its updated consumer reload together.
     const candidate = this.#previous !== undefined;
     const address = host.addressOf(type, input, options?.principal ?? host.principal, candidate);
     const declared = this.#decls.refs.get(address);

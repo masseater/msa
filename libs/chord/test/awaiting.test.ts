@@ -1,5 +1,3 @@
-// Entry 8: awaited gets. `host.get` and `ctx.get` resolve once the reference is ready; abort, the ctx closing and the
-// host's `readyTimeout` reject them and release only that reference.
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
@@ -29,7 +27,6 @@ const Slow = remote("t.e8-slow", {
   variants: { main: { state: { n: Type.Number() } } },
 });
 
-/** A server whose `Slow` object goes live when `open()` is called; a browser whose link counts frames. */
 function setup(readyTimeout?: number) {
   let open = () => {};
   const opened = new Promise<void>((resolve) => {

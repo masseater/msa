@@ -1,11 +1,8 @@
-/** Typed identity for one value carried by a {@link Context}. */
 export interface ContextKey<T> {
   readonly token: symbol;
-  /** Type-only marker that prevents keys with different value types from being interchangeable. */
   readonly valueType?: (value: T) => T;
 }
 
-/** Immutable invocation-scoped values passed explicitly through operations. */
 export interface Context {
   readonly abortSignal: AbortSignal | undefined;
   value<T>(key: ContextKey<T>): T | undefined;
@@ -71,27 +68,20 @@ export function createContextKey<T>(description: string): ContextKey<T> {
   return Object.freeze({ token: Symbol(description) });
 }
 
-/** Derive a context containing one additional or replaced value. */
 export function withContextValue<T>(key: ContextKey<T>, value: T, parent: Context): Context {
   return new ContextValue(parent, key, value);
 }
 
-/**
- * Derive a context cancelled by either the parent signal or the supplied signal.
- * The parent context remains unchanged.
- */
 export function withAbortSignal(signal: AbortSignal, context: Context): Context {
   const parentSignal = context.abortSignal;
   const combined = parentSignal === undefined ? signal : AbortSignal.any([parentSignal, signal]);
   return withContextValue(ABORT_SIGNAL_CONTEXT_KEY, combined, context);
 }
 
-/** Derive a context retaining all values except caller cancellation. Intended for mandatory cleanup only. */
 export function withoutAbortSignal(context: Context): Context {
   return withContextValue(ABORT_SIGNAL_CONTEXT_KEY, undefined, context);
 }
 
-/** Derive an independently cancellable child context. */
 export function withCancel(context: Context): {
   readonly context: Context;
   readonly cancel: (reason?: unknown) => void;
@@ -103,10 +93,6 @@ export function withCancel(context: Context): {
   };
 }
 
-/**
- * Observe a promise until it settles or the invocation is cancelled.
- * Cancellation rejects only this waiter; it does not cancel the underlying promise.
- */
 export function awaitWithContext<T>(promise: Promise<T>, context: Context): Promise<T> {
   const signal = context.abortSignal;
   if (signal === undefined) return promise;

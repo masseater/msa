@@ -152,7 +152,6 @@ describe("reload", () => {
     const codeVersion = host.codeVersion;
     await assert.rejects(
       host.reload([failing]),
-      // A plain error from the new factory surfaces as `unavailable`; the message says the reload aborted.
       (error) =>
         isChordError(error, "unavailable") && /reload aborted.*b fails/.test(error.message),
     );
@@ -188,7 +187,6 @@ describe("reload", () => {
     const events: StateEvent<unknown>[] = [];
     ref.count.events((event) => events.push(event));
     const go = latch();
-    // Started before the reload, never touched the object: rejected after the commit.
     const late = host.root(async (ctx) => {
       await go.promise;
       return ref.greet("late", ctx);
@@ -415,7 +413,6 @@ describe("reload", () => {
               await new Promise<void>((resolve) =>
                 ctx.signal.addEventListener("abort", () => resolve()),
               );
-              // Still open: the abort comes first, then the grace, then the close.
               log.push(`aborted, conn ${conn.value.version}`);
               return name;
             },
@@ -428,7 +425,6 @@ describe("reload", () => {
     const old = host.root((ctx) => ref.greet("wait", ctx));
     await tick();
     await host.reload([facet(2)]);
-    // A root of the code version that becomes the previous one: forced retirement of the older one leaves it alone.
     const current = host.root((ctx) => ref.greet("hold", ctx));
     await tick();
     await host.reload([facet(3)], { retireDeadline: 20 });
@@ -487,7 +483,7 @@ describe("reload", () => {
         api.serve(Greeter, (_input, _principal, self) => {
           self.task(async () => {
             log.push(`start ${label}`);
-            if (label === "a") await stuck.promise; // ignores ctx.signal
+            if (label === "a") await stuck.promise;
           });
           const count = self.state("count", CountV1, { n: 0 });
           return { count, greet: (name: string) => name };
@@ -659,7 +655,6 @@ describe("reload", () => {
     emit(1);
     await tick();
     assert.deepEqual(ref.sum.value, { v: 11 });
-    // The replacement starts once the aborted run finished.
     assert.deepEqual(log, ["start 1", "stop 1", "start 10"]);
   });
 
@@ -769,7 +764,6 @@ describe("reload", () => {
     await grandfathered;
     await reload;
     assert.equal(await host.hold(Greeter, { id: "late" }).greet("l"), "hi l");
-    // The previous code version is still retained (pinned root), but the gated object dropped its old implementation.
     assert.notEqual(host.previousCodeVersion, undefined);
     later.open();
     await assert.rejects(pinned, (error) => isChordError(error, "upgrade_conflict"));

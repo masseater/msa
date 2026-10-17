@@ -1,5 +1,3 @@
-// Entry 8: a local object goes live only with its state, also where it forwards or derives from a remote reference's
-// member; activation waits at most `readyTimeout` (a cycle across hosts fails with a hint instead of hanging).
 import assert from "node:assert/strict";
 
 import { Type } from "typebox";
@@ -19,7 +17,6 @@ import {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Lives on the worker `w`; its value is set by `set`. */
 const Source = remote("t.e8-source", {
   version: 1,
   input: Type.Object({}),
@@ -27,7 +24,6 @@ const Source = remote("t.e8-source", {
   variants: { main: { state: { v: Type.String() }, methods: { set: method(Type.String()) } } },
 });
 
-/** Lives on the server; forwards (and derives from) the worker's `Source`. */
 const Forward = remote("t.e8-forward", {
   version: 1,
   input: Type.Object({ how: Type.String() }),
@@ -48,7 +44,6 @@ function serveSource(host: Host): void {
   });
 }
 
-/** A server with a worker child `w` (accepted after `delay` ms, as p2's server admits a worker after it is ready). */
 function cluster(options: { readonly delay?: number; readonly readyTimeout?: number } = {}) {
   const server = createHost({
     self: { kind: "host" },
@@ -86,7 +81,6 @@ describe("local hydration", () => {
   it("an object that forwards and derives from a remote member goes live with its value", async () => {
     const c = cluster();
     serveSource(c.worker);
-    // Held outside the factory (no `self.get`): activation still waits for its snapshot.
     const held = c.server.hold(Source, {});
     c.server.serve(Forward, ({ how }, _principal, self) => {
       const source = how === "declared" ? self.get(Source, {}) : held;

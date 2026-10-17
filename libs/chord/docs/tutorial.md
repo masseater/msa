@@ -406,9 +406,11 @@ assert.ok(owner.variant === "editor"); // narrows the reference to the editor va
 assert.equal(guest.variant, "viewer");
 await host.root((ctx) => owner.add({ text: "Buy milk" }, ctx), { principal: "owner" });
 assert.deepEqual(guest.rows.value, [{ text: "Buy milk", done: false }]);
-// @ts-expect-error A viewer has no add: TypeScript refuses it, and so does the provider.
-await assert.rejects(guest.add({ text: "Not allowed" }), (error) =>
-  isChordError(error, "not_in_variant"),
+// A viewer has no add: TypeScript refuses it, and so does the provider.
+expectTypeOf(guest).not.toHaveProperty("add");
+await assert.rejects(
+  Reflect.apply(Reflect.get(guest, "add"), guest, [{ text: "Not allowed" }]),
+  (error) => isChordError(error, "not_in_variant"),
 );
 await assert.rejects(owner.add({ text: " " }), (error) => isChordError(error, "invalid"));
 ```
@@ -918,10 +920,9 @@ tutorial's source-matching check, not by the application.
 
 ```ts
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 
 import { type Static, Type } from "typebox";
-import { it, onTestFinished } from "vite-plus/test";
+import { expectTypeOf, it, onTestFinished } from "vite-plus/test";
 
 import {
   type Ctx,

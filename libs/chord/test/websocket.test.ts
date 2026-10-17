@@ -80,7 +80,6 @@ describe("WebSocket links", () => {
       assert.deepEqual(seen.at(-1), ["hello"]);
       await browser.close();
 
-      // WebSocket peers are always clients: one announcing itself as a host is cut off.
       const impostor = createHost({
         self: { kind: "host" },
         name: "session:S1",
@@ -102,7 +101,6 @@ describe("WebSocket links", () => {
 
       const refused = open("bad");
       const denied = refused.hold(Board, {});
-      // The server closes unauthenticated sockets; calls wait for a reconnect until their ctx gives up.
       await assert.rejects(
         refused.root((ctx) => denied.add("x", ctx), { signal: AbortSignal.timeout(100) }),
         (error) => isChordError(error, "aborted"),
@@ -149,7 +147,6 @@ describe("WebSocket links: packed payloads", () => {
         await new Promise((r) => setTimeout(r, 5));
       assert.deepEqual(board.notes.value, notes);
       assert(binary.length >= 2, "the result and the snapshot came as binary messages");
-      // A text-only transport (the TUI launcher) turns a packed message back into its text frame.
       const frames = binary.map(
         (message) => JSON.parse(inflateMessage(message)) as Record<string, unknown>,
       );
@@ -167,7 +164,6 @@ describe("WebSocket links: packed payloads", () => {
       );
       await browser.close();
 
-      // A client's binary message is a protocol error: the server closes the socket.
       const raw = new WebSocket(url);
       raw.binaryType = "arraybuffer";
       await new Promise<void>((resolve) => raw.addEventListener("open", () => resolve()));

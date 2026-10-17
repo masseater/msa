@@ -4,8 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Provisional Pico5 benchmark schemas. Results are architecture experiments,
-// not compatibility commitments for public or persisted ConversationView data.
 const PROVISIONAL_SCHEMA = "pico5.conversation-view.provisional.v0";
 
 type Mode = "tracker";

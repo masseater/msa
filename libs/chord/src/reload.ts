@@ -21,17 +21,11 @@ import { assertValid, deepEqual } from "./schema.ts";
 import type { Readable } from "./types.ts";
 
 export interface ReloadOptions {
-  /** Facet names to remove. */
   readonly remove?: readonly string[];
-  /** Milliseconds the gate waits for grandfathered roots (default 5000). Missed: the reload aborts. */
   readonly gateDeadline?: number;
-  /** Milliseconds to wait for the previous code version to retire first (default 5000). Missed: it is retired anyway. */
   readonly retireDeadline?: number;
-  /** Server: facet modules for child hosts by host-name prefix (longest wins). Every connected host participates. */
   readonly remote?: Readonly<Record<string, readonly string[]>>;
-  /** Server: facet names to remove on child hosts, by the same host-name prefix rules. */
   readonly remoteRemove?: Readonly<Record<string, readonly string[]>>;
-  /** Server: milliseconds to wait for every child's vote (default: gate + retire deadlines + 5000). */
   readonly voteDeadline?: number;
 }
 
@@ -40,14 +34,8 @@ export interface ReloadReport {
   readonly previous: number;
   readonly changed: readonly string[];
   readonly removed: readonly string[];
-  /** Addresses of objects whose new factory was installed. */
   readonly prepared: readonly string[];
-  /** Addresses of objects that went through the gate. */
   readonly gated: readonly string[];
-  /**
-   * Cluster reloads: what each participating child host prepared, by host name (its vote; the child commits it after
-   * the server). Absent for local reloads.
-   */
   readonly children?: Readonly<Record<string, ReloadReport>>;
 }
 
@@ -55,24 +43,14 @@ interface Candidate {
   readonly object: ObjectImpl;
   readonly service: Service;
   readonly run: Run;
-  /** Why the object needs the gate (empty: compatible). */
   readonly reasons: string[];
-  /** New exclusive resources and their new dependents, opened at the gate. */
   readonly atGate: ResourceImpl[];
-  /** Old exclusive resources closed at the gate. */
   readonly replaced: ResourceImpl[];
   readonly migrated: Map<Cell<unknown>, unknown>;
-  /** Values of the run's derivations over the candidate (migrated) values, validated. */
   derived: Map<unknown, unknown>;
-  /** Listener subscriptions made at the end of prepare, activated by the commit. */
   staged: StagedListeners | undefined;
 }
 
-/**
- * Computes the new derivation functions over the candidate values and validates every prospective value (migrated
- * cells and derivations) against every schema that will apply after the commit: the cell's new schema and the new
- * implementation's remote state-member schemas. A failure fails prepare; the commit then installs without re-checking.
- */
 function dryRun(candidate: Candidate): void {
   const { run, migrated, service, object } = candidate;
   const exposed = memberSchemas(service, run.implementation);
@@ -93,10 +71,6 @@ function dryRun(candidate: Candidate): void {
   candidate.derived = values;
 }
 
-/**
- * A source's value for a dry run. A reference to a provider this reload upgrades too reads nothing before the commit
- * (its new contract does not bind the old code): the dry run computes without it, the commit with the real value.
- */
 function candidateValue(source: Readable<unknown>): unknown {
   try {
     return source.value;
@@ -106,7 +80,6 @@ function candidateValue(source: Readable<unknown>): unknown {
   }
 }
 
-/** A reload error keeps the underlying code (`contract_mismatch`, `invalid`, ...) and says it aborted the reload. */
 export function reloadError(error: unknown): ChordError {
   const cause = asChordError(error, "reload");
   if (/^reload aborted/.test(cause.message.replace(/^[^:]*: /, ""))) return cause;
@@ -117,7 +90,6 @@ export function reloadError(error: unknown): ChordError {
   });
 }
 
-/** Serialized: a second reload while one runs is rejected. */
 export async function runReload(
   host: HostImpl,
   plugins: readonly PluginRef[],
@@ -132,7 +104,6 @@ export async function runReload(
   }
 }
 
-/** Takes the host's reload slot and loads the plugin modules. Pair with `endReload`. */
 export async function beginReload(
   host: HostImpl,
   plugins: readonly PluginRef[],
@@ -157,10 +128,8 @@ export function endReload(host: HostImpl): void {
   host.reloadEnded();
 }
 
-/** Most milliseconds a forced retirement waits for aborted roots to settle before it closes what they used. */
 const ABORTED_ROOTS_GRACE = 1000;
 
-/** Resolves true once `ready()` holds (checked whenever retirement-relevant state changes), false after `ms`. */
 function until(host: HostImpl, ready: () => boolean, ms: number): Promise<boolean> {
   if (ready()) return Promise.resolve(true);
   return new Promise<boolean>((resolve) => {
@@ -177,12 +146,10 @@ function until(host: HostImpl, ready: () => boolean, ms: number): Promise<boolea
   });
 }
 
-/** One reload on one host: `prepare` (load, prepare, gate), then `commit` or `rollback`. */
 export class Reload {
   readonly host: HostImpl;
   readonly facets: readonly Facet[];
   readonly options: ReloadOptions;
-  /** Code version id to commit (issued by the coordinating server); a local reload allocates one. */
   readonly codeVersion: number | undefined;
   readonly candidates = new Map<ObjectImpl, Candidate>();
   readonly abort = new AbortController();
@@ -193,9 +160,7 @@ export class Reload {
   tables = new Map<string, RegistryTable<unknown>>();
   gated: Candidate[] = [];
   rolledBack = false;
-  /** Objects of types this reload adds, with their staged listeners: their runtime starts at commit. */
   readonly deferred = new Map<ObjectImpl, StagedListeners>();
-  /** This reload's run of each facet it loads (`FacetApi.signal`): installed at commit, aborted at rollback. */
   readonly facetRuns = new Map<string, AbortController>();
 
   constructor(
@@ -210,15 +175,12 @@ export class Reload {
     this.codeVersion = codeVersion;
   }
 
-  /** Everything up to the commit. On failure the host is rolled back and the underlying error is thrown. */
   async prepare(): Promise<void> {
     try {
       await this.waitForRetirement();
       this.load();
       this.checkProviders();
       await this.prepareAll();
-      // From here new objects of changed types are rejected (upgrade_conflict, retryable) until commit or abort,
-      // so the candidate set is final once the activations already in flight have been prepared.
       this.host.gating = this.changed;
       await this.withDeadline(this.prepareAll(), "activations in flight did not finish");
       this.checkRefs();
@@ -232,7 +194,6 @@ export class Reload {
     }
   }
 
-  /** What a successful prepare will commit (a child sends it with its vote). */
   summary(): ReloadReport {
     const live = [...this.candidates.values()].filter(({ object }) => object.status === "live");
     return {
@@ -245,16 +206,11 @@ export class Reload {
     };
   }
 
-  /** After every await of prepare: a rollback meanwhile (abort from the coordinator) ends it. */
   #alive(): void {
     if (this.rolledBack)
       throw new ChordError("aborted", "reload aborted while preparing", { reason: "aborted" });
   }
 
-  /**
-   * Subscribes every new listener now, buffering its events, so a failing source fails prepare instead of leaving a
-   * half-installed code version. Objects running only the new code (types this reload adds) are staged too.
-   */
   #stage(): void {
     for (const candidate of this.candidates.values()) {
       if (candidate.object.status === "live")
@@ -266,12 +222,6 @@ export class Reload {
     }
   }
 
-  /**
-   * Retires the previous code version before loading the next one (a host keeps two). Waits until its roots ended and,
-   * on a child host, its parent retired it too (`retire` frame), at most `retireDeadline`. Past the deadline it is
-   * retired anyway: its remaining roots are aborted first and get a short grace to stop, so they see cancellation
-   * before the resources only that code version used are closed; their next call is `superseded`.
-   */
   async waitForRetirement(): Promise<void> {
     const host = this.host;
     const previous = host.previous;
@@ -289,7 +239,6 @@ export class Reload {
     if (!gone()) host.retire();
   }
 
-  /** Builds the candidate service table: unchanged services plus everything the given facets serve. */
   load(): void {
     const replaced = new Set([
       ...this.facets.map((facet) => facet.name),
@@ -342,7 +291,6 @@ export class Reload {
     }
   }
 
-  /** Same contract version must cover the old description (forgotten bump); facets' `uses` must bind. */
   checkProviders(): void {
     for (const name of this.changed) {
       const next = this.services.get(name)!.contract;
@@ -368,10 +316,6 @@ export class Reload {
     }
   }
 
-  /**
-   * Prepares every live object of a changed type, including objects that activate meanwhile, to a fixpoint. Objects
-   * already running the new code (types this reload adds) are skipped.
-   */
   async prepareAll(): Promise<void> {
     for (;;) {
       const todo = [...this.host.objects.values()].filter(
@@ -393,7 +337,6 @@ export class Reload {
     }
   }
 
-  /** Runs the new factory in recording mode and opens what can be opened without the gate. */
   async prepareObject(object: ObjectImpl): Promise<void> {
     const service = this.services.get(object.typeName)!;
     const run = object.run(service, object.decls);
@@ -409,7 +352,6 @@ export class Reload {
       staged: undefined,
     };
     this.candidates.set(object, candidate);
-    // Each cell carries its own version: a raised one gates and migrates, a schema change without one is refused.
     for (const [name, cell] of run.decls.cells) {
       if (object.decls.cells.get(name) !== cell) continue;
       const from = object.decls.cellVersions.get(name) ?? 1;
@@ -444,18 +386,12 @@ export class Reload {
       this.abort.signal,
     );
     await object.waitHydrated(run);
-    // Cells this reload adds read their first value once the new resources are open (gated objects: at the gate);
-    // the derivations over them are checked after.
     if (candidate.reasons.length === 0) {
       await object.initCells(run, this.abort.signal);
       dryRun(candidate);
     }
   }
 
-  /**
-   * Every reference that survives into the new code version must bind to the new provider. Browser references don't block a
-   * reload: after the commit they get `upgrade_required` instead.
-   */
   checkRefs(): void {
     const dropped = new Set<unknown>();
     for (const { object, run } of this.candidates.values()) {
@@ -466,7 +402,6 @@ export class Reload {
       const service = this.services.get(object.typeName);
       if (service === undefined || !this.changed.has(object.typeName)) continue;
       for (const ref of object.refs) {
-        // The host's bootstrap reference follows this provider at commit; it is not an old-code consumer.
         if (ref === this.host.hostObjects.get(object.typeName)) continue;
         if (!dropped.has(ref) && ref.owner !== "client")
           bind(service.contract, service.options.accepts, ref.contract);
@@ -481,10 +416,6 @@ export class Reload {
       .map(([object, decls]) => [object, this.candidates.get(object)?.run.decls ?? decls]);
   }
 
-  /**
-   * Admission cut, wait for grandfathered roots (deadline), replace exclusive resources, migrate into private
-   * copies. Old tasks of gated objects are stopped at the cut; listener events are queued until commit or abort.
-   */
   async gate(): Promise<void> {
     this.gated = [...this.candidates.values()].filter(
       (candidate) => candidate.reasons.length > 0 && candidate.object.status === "live",
@@ -521,7 +452,6 @@ export class Reload {
     for (const candidate of this.gated) {
       const { object } = candidate;
       for (const old of candidate.replaced) {
-        // Owned by the rollback before closing: a failing close must still be restored.
         this.closed.push([object, old]);
         await old.close(object.openOrder);
       }
@@ -564,7 +494,6 @@ export class Reload {
       object.pending.delete(run.decls);
       await object.unwind(run).catch(report);
     }
-    // Replaced exclusive resources are restored; one that cannot be is marked unavailable, never silently closed.
     for (const [object, resource] of this.closed) {
       if (resource.state !== "closed") continue;
       await resource
@@ -587,7 +516,6 @@ export class Reload {
       object.openGate();
       object.startTasks();
     }
-    // Objects of types this reload would have added lose their code.
     const reason = new ChordError("gone", "reload aborted; type not served");
     for (const object of [...this.host.objects.values()]) {
       if (!this.host.current.services.has(object.typeName))
@@ -597,19 +525,10 @@ export class Reload {
     this.host.gating = undefined;
   }
 
-  /**
-   * Publishes the new code version in one synchronous step. Everything fallible ran in prepare (factories, opens,
-   * migration and derivation checks against the prospective schemas, listener subscriptions), so this only installs.
-   * Observers (state, shapes, registries, listener roots) are notified after the whole step. If an install still
-   * throws, the code version is half-published: the host fails terminally and admits no more work.
-   */
   commit(beforeStart?: () => void): ReloadReport {
     try {
       return holdPublications(() => {
         const report = this.#publish();
-        // Installed, not yet started: the coordinator queues its commit frames here, so nothing this code version
-        // starts (tasks, host object activations, then the held listener/registry/state notifications) can reach a child
-        // first.
         beforeStart?.();
         for (const start of this.#starts.splice(0)) start();
         return report;
@@ -620,7 +539,6 @@ export class Reload {
     }
   }
 
-  /** Work that may start new-code-version roots, run after installation (and after the coordinator's commit frames). */
   readonly #starts: (() => void)[] = [];
 
   #publish(): ReloadReport {
@@ -651,7 +569,6 @@ export class Reload {
       object.pending.delete(run.decls);
       object.unwind(run).catch((error: unknown) => host.report(error));
     }
-    // Objects of types this reload adds start their runtime now.
     for (const [object, staged] of this.deferred) {
       if (object.status !== "live") {
         staged.discard();
@@ -670,7 +587,6 @@ export class Reload {
     for (const name of this.removed) host.hostObjects.delete(name);
     for (const facet of this.facets) host.facets.set(facet.name, facet);
     for (const name of this.options.remove ?? []) host.facets.delete(name);
-    // The replaced and removed runs' signals abort after the install, like other observers.
     for (const [name, run] of this.facetRuns)
       this.#starts.push(() => host.facetRunChanged(name, run));
     for (const name of this.options.remove ?? [])
@@ -684,7 +600,6 @@ export class Reload {
       ) {
         this.#starts.push(() => host.startHostObject(service));
       }
-      // A type whose lifetime became "referenced" lives on only while someone else references its object.
       const pinned = host.hostObjects.get(name);
       if (!hostLifetime(service) && pinned !== undefined) {
         host.hostObjects.delete(name);
@@ -707,13 +622,11 @@ export class Reload {
     object.pending.delete(run.decls);
     object.stopTasks();
     if (gated) {
-      // Old derivations would compute over migrated values; the old implementation can no longer run anyway.
       const kept = new Set(run.decls.derives.values());
       for (const derived of object.decls.derives.values()) if (!kept.has(derived)) derived.detach();
     }
     object.decls = run.decls;
     object.service = service;
-    // Kept resources close with the new code's `close`; replaced ones keep their own (closed at retirement).
     for (const [resource, declaration] of run.decls.adopted) resource.adopt(declaration);
     object.implementations.set(codeVersion, {
       codeVersion,
@@ -722,12 +635,10 @@ export class Reload {
       decls: run.decls,
     });
     if (gated) {
-      // Old code can never run over migrated state: drop the previous implementation now, not at retirement.
       object.minCodeVersion = codeVersion;
       for (const old of [...object.implementations.keys()])
         if (old !== codeVersion) this.host.retireImplementation(object, old);
     }
-    // Schemas first, then the values validated against them in prepare.
     object.refreshSchemas();
     for (const [name, cell] of run.decls.cells) {
       const schema = run.decls.cellSchemas.get(name)!;
@@ -743,13 +654,11 @@ export class Reload {
     const pinned = this.host.hostObjects.get(object.typeName);
     if (pinned?.object === object && pinned.contract.fingerprint !== service.contract.fingerprint) {
       const replacement = new RefImpl(object, service.contract, "host");
-      // Acquire first: releasing the only reference must not dispose/reopen the surviving host object.
       object.addRef(replacement);
       this.host.hostObjects.set(object.typeName, replacement);
       pinned.release();
     }
     for (const ref of [...object.refs]) {
-      // Browser references whose contract no longer binds are told to reload their code (they never block a reload).
       if (ref.owner === "client") {
         try {
           bind(service.contract, service.options.accepts, ref.contract);

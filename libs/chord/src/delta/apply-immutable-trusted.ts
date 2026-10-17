@@ -11,7 +11,6 @@ const DATA_DESCRIPTOR: PropertyDescriptor = {
   configurable: true,
 };
 
-/** Apply self-produced trusted operations while copying each touched container once. */
 export function applyImmutableTrusted<T>(target: T, operations: readonly Op[]): T {
   let root = target as unknown as JsonValue;
   const owned = new WeakSet<object>();

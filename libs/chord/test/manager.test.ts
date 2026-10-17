@@ -32,7 +32,6 @@ const driver = (env: Record<string, string> = {}, lock?: string): Driver =>
   forkDriver({ entry, env: { HOST_NAME: "w1", ...env }, init: { greeting: "hi" }, lock });
 
 describe("processLock", () => {
-  // A socket path over 104 bytes failed with EINVAL on macOS when TMPDIR was deep (./test.sh below macOS's TMPDIR).
   it("admits one holder when the temporary directory is too deep for a socket path", async () => {
     const deep = join(scratch("deep"), "a".repeat(60), "b".repeat(60));
     mkdirSync(deep, { recursive: true });
@@ -58,7 +57,6 @@ describe("processLock", () => {
 });
 
 describe("host manager (real child processes)", () => {
-  // A child host that forks its own children used to pass its CHORD2_LOCK on, so they failed with "locked".
   it("a child without a lock does not inherit the parent's lock", async () => {
     const name = `chord2-test-${process.pid}-inherited`;
     const release = await processLock(name);
@@ -97,7 +95,6 @@ describe("host manager (real child processes)", () => {
     const base = driver({}, lock);
     const watched: Driver = {
       spawn() {
-        // Exit before replace: the previous child is gone when the next one spawns.
         for (const pid of pids) assert.ok(!alive(pid), `pid ${pid} still alive`);
         const instance = base.spawn();
         pids.push(instance.pid);
@@ -107,7 +104,6 @@ describe("host manager (real child processes)", () => {
     const first = createHostManager({ driver: watched });
     const second = createHostManager({ driver: driver({}, lock) });
     const a = await first.start();
-    // Both managers race for the same lock; only the kernel decides, so the second child cannot start.
     await assert.rejects(
       second.start(),
       (error) => isChordError(error, "unavailable") && error.reason === "locked",
