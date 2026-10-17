@@ -62,5 +62,23 @@ const jsonlFiles = (options: { readonly directory: string; readonly host: HostSh
     [...names.filter((name) => name.endsWith(".jsonl"))].sort(),
   );
 
+const jsonlFilesRecursive = (options: {
+  readonly directory: string;
+  readonly host: HostShape;
+}): Effect.Effect<ReadonlyArray<string>> =>
+  Effect.gen(function* () {
+    const { directory, host } = options;
+    const names = yield* host.readDirectory(directory);
+    const found = yield* Effect.forEach([...names].sort(), (name) =>
+      Effect.gen(function* () {
+        const path = host.join(directory, name);
+        const info = yield* host.stat(path);
+        if (info.isDirectory) return yield* jsonlFilesRecursive({ directory: path, host });
+        return info.isFile && name.endsWith(".jsonl") ? [path] : [];
+      }),
+    );
+    return found.flat();
+  });
+
 export type { Cost, SessionEntry, Usage };
-export { defaultSessionsBase, encodeSessionDir, jsonlFiles, sessionEntries };
+export { defaultSessionsBase, encodeSessionDir, jsonlFiles, jsonlFilesRecursive, sessionEntries };

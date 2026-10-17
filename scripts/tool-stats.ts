@@ -5,6 +5,7 @@ import { Console, Data, DateTime, Effect, Predicate, Result, Schema, Stream } fr
 import { openBrowser } from "../apps/coding-agent/src/utils/open-browser.ts";
 import { Host, runScript } from "./host.ts";
 import type { HostShape } from "./host.ts";
+import { jsonlFilesRecursive } from "./sessions.ts";
 import { renderReport } from "./tool-stats-report.ts";
 import type { HistogramRow } from "./tool-stats-report.ts";
 
@@ -99,24 +100,6 @@ const parseArgs = (host: HostShape) =>
       }
     }
     return { output, sessionsDir };
-  });
-
-const jsonlFilesRecursive = (options: {
-  readonly directory: string;
-  readonly host: HostShape;
-}): Effect.Effect<ReadonlyArray<string>> =>
-  Effect.gen(function* () {
-    const { directory, host } = options;
-    const names = yield* host.readDirectory(directory);
-    const found = yield* Effect.forEach([...names].sort(), (name) =>
-      Effect.gen(function* () {
-        const path = host.join(directory, name);
-        const info = yield* host.stat(path);
-        if (info.isDirectory) return yield* jsonlFilesRecursive({ directory: path, host });
-        return info.isFile && name.endsWith(".jsonl") ? [path] : [];
-      }),
-    );
-    return found.flat();
   });
 
 const getStats = <T>(map: Map<string, T>, key: string, create: () => T): T => {
