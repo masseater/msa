@@ -75,7 +75,7 @@ First line of the file. Metadata only, not part of the tree (no `id`/`parentId`)
 }
 ```
 
-For sessions with a parent (created via `/fork`, `/clone`, or `newSession({ parentSession })`):
+For sessions with a parent (created via `/fork`, `/branch`, or `newSession({ parentSession })`):
 
 ```json
 {
@@ -212,7 +212,7 @@ Targets may be user, assistant, tool-result, or custom-message entries. `replace
 
 ### BranchSummaryEntry
 
-Created when switching branches via `/tree` with an LLM generated summary of the left branch up to the common ancestor. Captures context from the abandoned path.
+Created when switching branches via `/rewind` with an LLM generated summary of the left branch up to the common ancestor. Captures context from the abandoned path.
 
 ```json
 {
@@ -293,7 +293,7 @@ Set `label` to `undefined` to clear a label.
 
 ### SessionInfoEntry
 
-Session metadata (e.g., user-defined display name). Set via `/name`, `--name` / `-n`, or `msa.setSessionName()` in extensions.
+Session metadata (e.g., user-defined display name). Set via `/rename`, `--name` / `-n`, or `msa.setSessionName()` in extensions.
 
 ```json
 {

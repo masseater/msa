@@ -223,7 +223,7 @@ describe("AgentSession prompt characterization", () => {
     });
   });
 
-  it("expands skill commands before sending the prompt", async () => {
+  it("expands skill commands before sending the prompt, over a prompt template of the same name", async () => {
     const tempDir = join(
       tmpdir(),
       `msa-skill-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -233,8 +233,20 @@ describe("AgentSession prompt characterization", () => {
     const skillPath = join(tempDir, "test-skill.md");
     writeFileSync(skillPath, "# Test Skill\n\nUse the skill body.");
 
+    const template: PromptTemplate = {
+      name: "test",
+      description: "Template that the skill of the same name hides",
+      content: "Template body",
+      filePath: "/virtual/test.md",
+      sourceInfo: createSyntheticSourceInfo("/virtual/test.md", {
+        source: "local",
+        scope: "temporary",
+        origin: "top-level",
+      }),
+    };
     const resourceLoader = {
       ...createTestResourceLoader(),
+      getPrompts: () => ({ prompts: [template], diagnostics: [] }),
       getSkills: () => ({
         skills: [
           {
@@ -266,10 +278,11 @@ describe("AgentSession prompt characterization", () => {
       },
     ]);
 
-    await harness.session.prompt("/skill:test explain this");
+    await harness.session.prompt("/test explain this");
 
     expect(expandedPrompt).toContain('<skill name="test" location="');
     expect(expandedPrompt).toContain("Use the skill body.");
+    expect(expandedPrompt).not.toContain("Template body");
     expect(expandedPrompt).toContain("explain this");
   });
 

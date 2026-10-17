@@ -19,7 +19,7 @@ msa has two summarization mechanisms:
 | Mechanism            | Trigger                                  | Purpose                                   |
 | -------------------- | ---------------------------------------- | ----------------------------------------- |
 | Compaction           | Context exceeds threshold, or `/compact` | Summarize old messages to free up context |
-| Branch summarization | `/tree` navigation                       | Preserve context when switching branches  |
+| Branch summarization | `/rewind` navigation                     | Preserve context when switching branches  |
 
 Both use closely related structured formats and track file operations cumulatively. Summarization requests disable prompt-cache writes because these one-off prompts are unlikely to be reused.
 
@@ -173,7 +173,7 @@ See [`prepareCompaction()`](https://github.com/masseater/msa/blob/main/apps/codi
 
 ### When It Triggers
 
-When you use `/tree` to navigate to a different branch, msa offers to summarize the work you're leaving. This injects context from the left branch into the new branch.
+When you use `/rewind` to navigate to a different branch, msa offers to summarize the work you're leaving. This injects context from the left branch into the new branch.
 
 ### How It Works
 
@@ -394,7 +394,7 @@ msa.on("session_compact_failed", async (event, ctx) => {
 
 ### session_before_tree
 
-Fired before `/tree` navigation. Always fires regardless of whether user chose to summarize. Can cancel navigation or provide custom summary.
+Fired before `/rewind` navigation. Always fires regardless of whether user chose to summarize. Can cancel navigation or provide custom summary.
 
 ```typescript
 msa.on("session_before_tree", async (event, ctx) => {

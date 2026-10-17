@@ -572,7 +572,7 @@ export class SettingsSelectorComponent extends Container {
       {
         id: "tree-filter-mode",
         label: "Tree filter mode",
-        description: "Default filter when opening /tree",
+        description: "Default filter when opening /rewind",
         currentValue: config.treeFilterMode,
         values: ["default", "no-tools", "user-only", "labeled-only", "all"],
       },
@@ -780,7 +780,7 @@ export class SettingsSelectorComponent extends Container {
     items.splice(blockImagesIndex + 1, 0, {
       id: "skill-commands",
       label: "Skill commands",
-      description: "Register skills as /skill:name commands",
+      description: "Register skills as /name commands",
       currentValue: config.enableSkillCommands ? "true" : "false",
       values: ["true", "false"],
     });

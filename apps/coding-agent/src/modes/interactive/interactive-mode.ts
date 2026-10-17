@@ -122,7 +122,15 @@ import {
   type UsageEntry,
 } from "../../core/session-manager.ts";
 import type { FullscreenExitOutput, TuiMode } from "../../core/settings-manager.ts";
-import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
+import {
+  BUILTIN_SLASH_COMMANDS,
+  canonicalizeBuiltinSlashCommand,
+  formatHelpMarkdown,
+  INIT_PROMPT,
+  isBuiltinSlashCommandName,
+  slashCommandName,
+  withSkillCommands,
+} from "../../core/slash-commands.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
 import { withBuiltInRenderers } from "../../core/tools/renderers/index.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
@@ -659,10 +667,9 @@ export class InteractiveMode {
   private getBuiltInCommandConflictDiagnostics(
     extensionRunner: ExtensionRunner,
   ): ResourceDiagnostic[] {
-    const builtinNames = new Set(BUILTIN_SLASH_COMMANDS.map((command) => command.name));
     return extensionRunner
       .getRegisteredCommands()
-      .filter((command) => builtinNames.has(command.name))
+      .filter((command) => isBuiltinSlashCommandName(command.name))
       .map((command) => ({
         type: "warning" as const,
         message:
@@ -677,7 +684,9 @@ export class InteractiveMode {
     // Define commands for autocomplete
     const slashCommands: SlashCommand[] = BUILTIN_SLASH_COMMANDS.map((command) => ({
       name: command.name,
-      description: command.description,
+      description: command.aliases
+        ? `${command.description} (${command.aliases.map((alias) => `/${alias}`).join(", ")})`
+        : command.description,
       ...(command.argumentHint && { argumentHint: command.argumentHint }),
     }));
 
@@ -757,10 +766,9 @@ export class InteractiveMode {
     }));
 
     // Convert extension commands to SlashCommand format
-    const builtinCommandNames = new Set(slashCommands.map((c) => c.name));
     const extensionCommands: SlashCommand[] = this.session.extensionRunner
       .getRegisteredCommands()
-      .filter((cmd) => !builtinCommandNames.has(cmd.name))
+      .filter((cmd) => !isBuiltinSlashCommandName(cmd.name))
       .map((cmd) => ({
         name: cmd.invocationName,
         description: this.prefixAutocompleteDescription(cmd.description, cmd.sourceInfo),
@@ -772,17 +780,19 @@ export class InteractiveMode {
     const skillCommandList: SlashCommand[] = [];
     if (this.settingsManager.getEnableSkillCommands()) {
       for (const skill of this.session.resourceLoader.getSkills().skills) {
-        const commandName = `skill:${skill.name}`;
-        this.skillCommands.set(commandName, skill.filePath);
+        this.skillCommands.set(skill.name, skill.filePath);
         skillCommandList.push({
-          name: commandName,
+          name: skill.name,
           description: this.prefixAutocompleteDescription(skill.description, skill.sourceInfo),
         });
       }
     }
 
     return new CombinedAutocompleteProvider(
-      [...slashCommands, ...templateCommands, ...extensionCommands, ...skillCommandList],
+      withSkillCommands(
+        [...slashCommands, ...templateCommands, ...extensionCommands],
+        skillCommandList,
+      ),
       this.sessionManager.getCwd(),
       this.fdPath,
     );
@@ -823,7 +833,7 @@ export class InteractiveMode {
     if (this.settingsManager.getCollapseChangelog()) {
       const versionMatch = this.changelogMarkdown.match(/##\s+\[?(\d+\.\d+\.\d+)\]?/);
       const latestVersion = versionMatch ? versionMatch[1] : this.version;
-      const condensedText = `Updated to v${latestVersion}. Use ${theme.bold("/changelog")} to view full changelog.`;
+      const condensedText = `Updated to v${latestVersion}. Use ${theme.bold("/release-notes")} to view full changelog.`;
       this.chatContainer.addChild(new Text(condensedText, 1, 0));
     } else {
       this.chatContainer.addChild(
@@ -2237,7 +2247,7 @@ export class InteractiveMode {
         this.isBashMode = false;
         this.updateEditorBorderColor();
       } else if (!this.editor.getText().trim()) {
-        // Double-escape with empty editor triggers /tree, /fork, or nothing based on setting
+        // Double-escape with empty editor triggers /rewind, /fork, or nothing based on setting
         const action = this.settingsManager.getDoubleEscapeAction();
         if (action !== "none") {
           const now = Date.now();
@@ -2358,161 +2368,176 @@ export class InteractiveMode {
     this.showStatus("Startup is still in progress");
   }
 
+  /** Runs a built-in command typed by its own name. Returns false for any other text. */
+  private async handleBuiltinCommand(text: string): Promise<boolean> {
+    if (text === "/help") {
+      this.handleHelpCommand();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/config") {
+      this.showSettingsSelector();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/scoped-models") {
+      this.editor.setText("");
+      await this.showModelsSelector();
+      return true;
+    }
+    if (text === "/model" || text.startsWith("/model ")) {
+      const searchTerm = text.startsWith("/model ") ? text.slice(7).trim() : undefined;
+      this.editor.setText("");
+      await this.handleModelCommand(searchTerm);
+      return true;
+    }
+    if (text === "/effort" || text.startsWith("/effort ")) {
+      const searchTerm = text.startsWith("/effort ") ? text.slice(8).trim() : undefined;
+      this.editor.setText("");
+      this.handleThinkingCommand(searchTerm);
+      return true;
+    }
+    if (text === "/export" || text.startsWith("/export ")) {
+      await this.handleExportCommand(text);
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/import" || text.startsWith("/import ")) {
+      await this.handleImportCommand(text);
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/share") {
+      await this.handleShareCommand();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/bug" || text.startsWith("/bug ")) {
+      const hint = text.slice("/bug".length).trim();
+      this.editor.setText("");
+      await this.handleBugCommand(hint ? hint : undefined);
+      return true;
+    }
+    if (text === "/copy") {
+      await this.handleCopyCommand();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/rename" || text.startsWith("/rename ")) {
+      this.handleNameCommand(text);
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/status") {
+      this.handleSessionCommand();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/release-notes") {
+      this.handleChangelogCommand();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/keybindings") {
+      this.handleHotkeysCommand();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/fork") {
+      this.showUserMessageSelector();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/branch") {
+      this.editor.setText("");
+      await this.handleCloneCommand();
+      return true;
+    }
+    if (text === "/rewind") {
+      this.showTreeSelector();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/trust") {
+      this.showTrustSelector();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/login" || text.startsWith("/login ")) {
+      const providerRef = text.startsWith("/login ") ? text.slice(7).trim() : undefined;
+      this.editor.setText("");
+      await this.loginFlow.login(providerRef);
+      return true;
+    }
+    if (text === "/logout") {
+      void this.loginFlow.logout();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/clear") {
+      this.editor.setText("");
+      await this.handleClearCommand();
+      return true;
+    }
+    if (text === "/compact" || text.startsWith("/compact ")) {
+      const customInstructions = text.startsWith("/compact ") ? text.slice(9).trim() : undefined;
+      this.editor.setText("");
+      await this.handleCompactCommand(customInstructions);
+      return true;
+    }
+    if (text === "/reload") {
+      this.editor.setText("");
+      await this.handleReloadCommand();
+      return true;
+    }
+    if (text === "/debug") {
+      this.handleDebugCommand();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/arminsayshi") {
+      this.handleArminSaysHi();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/dementedelves") {
+      this.handleDementedDelves();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/resume") {
+      this.showSessionSelector();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/sessions") {
+      this.showSessionsView();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/memory") {
+      this.showMemoryView();
+      this.editor.setText("");
+      return true;
+    }
+    if (text === "/exit") {
+      this.editor.setText("");
+      await this.shutdown();
+      return true;
+    }
+    return false;
+  }
+
   private setupEditorSubmitHandler(): void {
     this.defaultEditor.onSubmit = async (text: string) => {
       text = text.trim();
       if (!text) return;
 
-      // Handle commands
-      if (text === "/settings") {
-        this.showSettingsSelector();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/scoped-models") {
-        this.editor.setText("");
-        await this.showModelsSelector();
-        return;
-      }
-      if (text === "/model" || text.startsWith("/model ")) {
-        const searchTerm = text.startsWith("/model ") ? text.slice(7).trim() : undefined;
-        this.editor.setText("");
-        await this.handleModelCommand(searchTerm);
-        return;
-      }
-      if (text === "/thinking" || text.startsWith("/thinking ")) {
-        const searchTerm = text.startsWith("/thinking ") ? text.slice(10).trim() : undefined;
-        this.editor.setText("");
-        this.handleThinkingCommand(searchTerm);
-        return;
-      }
-      if (text === "/export" || text.startsWith("/export ")) {
-        await this.handleExportCommand(text);
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/import" || text.startsWith("/import ")) {
-        await this.handleImportCommand(text);
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/share") {
-        await this.handleShareCommand();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/bug" || text.startsWith("/bug ")) {
-        const hint = text.slice("/bug".length).trim();
-        this.editor.setText("");
-        await this.handleBugCommand(hint ? hint : undefined);
-        return;
-      }
-      if (text === "/copy") {
-        await this.handleCopyCommand();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/name" || text.startsWith("/name ")) {
-        this.handleNameCommand(text);
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/session") {
-        this.handleSessionCommand();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/changelog") {
-        this.handleChangelogCommand();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/hotkeys") {
-        this.handleHotkeysCommand();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/fork") {
-        this.showUserMessageSelector();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/clone") {
-        this.editor.setText("");
-        await this.handleCloneCommand();
-        return;
-      }
-      if (text === "/tree") {
-        this.showTreeSelector();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/trust") {
-        this.showTrustSelector();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/login" || text.startsWith("/login ")) {
-        const providerRef = text.startsWith("/login ") ? text.slice(7).trim() : undefined;
-        this.editor.setText("");
-        await this.loginFlow.login(providerRef);
-        return;
-      }
-      if (text === "/logout") {
-        void this.loginFlow.logout();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/new") {
-        this.editor.setText("");
-        await this.handleClearCommand();
-        return;
-      }
-      if (text === "/compact" || text.startsWith("/compact ")) {
-        const customInstructions = text.startsWith("/compact ") ? text.slice(9).trim() : undefined;
-        this.editor.setText("");
-        await this.handleCompactCommand(customInstructions);
-        return;
-      }
-      if (text === "/reload") {
-        this.editor.setText("");
-        await this.handleReloadCommand();
-        return;
-      }
-      if (text === "/debug") {
-        this.handleDebugCommand();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/arminsayshi") {
-        this.handleArminSaysHi();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/dementedelves") {
-        this.handleDementedDelves();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/resume") {
-        this.showSessionSelector();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/sessions") {
-        this.showSessionsView();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/memory") {
-        this.showMemoryView();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/quit") {
-        this.editor.setText("");
-        await this.shutdown();
-        return;
+      // A skill takes its exact name from a built-in command; the command keeps its aliases.
+      if (text.startsWith("/") && !this.isSkillCommand(text)) {
+        text = canonicalizeBuiltinSlashCommand(text);
+        if (text === "/init") text = INIT_PROMPT;
+        else if (await this.handleBuiltinCommand(text)) return;
       }
 
       // Handle bash command (! for normal, !! for excluded from context)
@@ -5414,7 +5439,7 @@ export class InteractiveMode {
   }
 
   private handleNameCommand(text: string): void {
-    const name = text.replace(/^\/name\s*/, "").trim();
+    const name = text.replace(/^\/rename\s*/, "").trim();
     if (!name) {
       const currentName = this.sessionManager.getSessionName();
       if (currentName) {
@@ -5423,7 +5448,7 @@ export class InteractiveMode {
           new ThemedText(() => theme.fg("dim", `Session name: ${currentName}`), 1, 0),
         );
       } else {
-        this.showWarning("Usage: /name <name>");
+        this.showWarning("Usage: /rename <name>");
       }
       this.ui.requestRender();
       return;
@@ -5485,6 +5510,27 @@ export class InteractiveMode {
     this.chatContainer.addChild(new Markdown(markdown, 1, 1, this.getMarkdownThemeWithSettings()));
     this.chatContainer.addChild(new DynamicBorder());
     this.ui.requestRender();
+  }
+
+  private handleHelpCommand(): void {
+    const commands = [
+      ...this.session.extensionRunner
+        .getRegisteredCommands()
+        .filter((command) => !isBuiltinSlashCommandName(command.name))
+        .map((command) => ({ name: command.invocationName, description: command.description })),
+      ...this.session.promptTemplates,
+    ];
+    const skills = this.settingsManager.getEnableSkillCommands()
+      ? this.session.resourceLoader.getSkills().skills
+      : [];
+    this.addMarkdownPanel("Commands", formatHelpMarkdown(withSkillCommands(commands, skills)));
+  }
+
+  /** Whether `text` starts with `/name` for a skill registered as a command. */
+  private isSkillCommand(text: string): boolean {
+    if (!this.settingsManager.getEnableSkillCommands()) return false;
+    const name = slashCommandName(text);
+    return this.session.resourceLoader.getSkills().skills.some((skill) => skill.name === name);
   }
 
   private handleHotkeysCommand(): void {
