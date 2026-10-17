@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -18,9 +19,9 @@ import {
 } from "../src/core/memory/memory.ts";
 import {
   cosineSimilarity,
-  keywordScore,
   MemoryStore,
-  queryTerms,
+  reciprocalRankFusion,
+  segmentWords,
 } from "../src/core/memory/store.ts";
 import { createMemoryToolDefinition } from "../src/core/tools/memory.ts";
 import { wrapToolDefinition } from "../src/core/tools/tool-definition-wrapper.ts";
@@ -100,20 +101,22 @@ function embeddingSettings(baseUrl: string): ResolvedMemorySettings["embedding"]
   };
 }
 
-describe("queryTerms and keywordScore", () => {
-  it("splits words and adds CJK bigrams", () => {
-    expect(queryTerms("pnpm over npm")).toEqual(["pnpm", "over", "npm"]);
-    expect(queryTerms("埋め込みの計算方法")).toEqual(
-      expect.arrayContaining(["埋め込みの計算方法", "埋め", "計算", "方法"]),
-    );
+describe("segmentWords", () => {
+  it("splits English and Japanese into lowercased words without punctuation", () => {
+    expect(segmentWords("Prefer pnpm over npm.")).toEqual(["prefer", "pnpm", "over", "npm"]);
+    expect(segmentWords("記憶の保存先は？")).toEqual(expect.arrayContaining(["記憶", "保存"]));
   });
+});
 
-  it("scores partial Japanese matches above unrelated text", () => {
-    expect(
-      keywordScore("埋め込みはローカルの bge-m3 で計算する", "埋め込みの計算方法"),
-    ).toBeGreaterThan(0.3);
-    expect(keywordScore("リリース手順は Homebrew に配信する", "埋め込みの計算方法")).toBe(0);
-    expect(keywordScore("The release goes to the Homebrew tap", "homebrew tap")).toBe(1);
+describe("reciprocalRankFusion", () => {
+  it("adds 1 / (60 + rank) from every ranking", () => {
+    const fused = reciprocalRankFusion([
+      ["a", "b"],
+      ["b", "c"],
+    ]);
+    expect(fused.get("a")).toBeCloseTo(1 / 61);
+    expect(fused.get("b")).toBeCloseTo(1 / 62 + 1 / 61);
+    expect(fused.get("c")).toBeCloseTo(1 / 62);
   });
 });
 
@@ -250,7 +253,86 @@ describe("MemoryStore", () => {
     }
   });
 
-  it("boosts memories that were recalled before", () => {
+  it("matches Japanese by shared words and gates on the share of query words", () => {
+    const store = new MemoryStore(":memory:");
+    try {
+      const embedding = store.save({
+        content: "埋め込みはローカルの bge-m3 で計算する",
+        kind: "fact",
+        scope: "project",
+        project: "p",
+      });
+      store.save({
+        content: "リリース手順は Homebrew に配信する",
+        kind: "fact",
+        scope: "project",
+        project: "p",
+      });
+      const hits = store.search({
+        text: "埋め込みの計算方法",
+        project: "p",
+        limit: 5,
+        minScore: 0.5,
+      });
+      expect(hits.map((hit) => hit.record.id)).toEqual([embedding.record.id]);
+      expect(hits[0]!.keyword).toBeGreaterThanOrEqual(0.5);
+      expect(hits[0]!.vector).toBeUndefined();
+    } finally {
+      store.close();
+    }
+  });
+
+  it("ranks a memory both retrievers return above one only the vector retriever returns", () => {
+    const store = new MemoryStore(":memory:");
+    try {
+      const vectorOnly = store.save({
+        content: "alpha",
+        kind: "fact",
+        scope: "project",
+        project: "p",
+        embedding: vector([1, 0]),
+      });
+      const both = store.save({
+        content: "homebrew tap",
+        kind: "fact",
+        scope: "project",
+        project: "p",
+        embedding: vector([0.8, 0.6]),
+      });
+      const hits = store.search({
+        text: "homebrew",
+        embedding: vector([1, 0]),
+        project: "p",
+        limit: 5,
+        minScore: 0.5,
+      });
+      expect(hits.map((hit) => hit.record.id)).toEqual([both.record.id, vectorOnly.record.id]);
+      expect(hits[0]!.score).toBeCloseTo(1 / 62 + 1 / 61);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("indexes memories saved before the full-text index existed", () => {
+    const database = join(tempDir(), "memory.db");
+    new MemoryStore(database).close();
+    const legacy = new DatabaseSync(database);
+    legacy.exec("DROP TABLE memories_fts");
+    legacy.exec(
+      `INSERT INTO memories (id, content, kind, scope, project, created_at, updated_at)
+       VALUES ('mem_old', 'legacy memory about homebrew', 'fact', 'global', NULL, 1, 1)`,
+    );
+    legacy.close();
+    const store = new MemoryStore(database);
+    try {
+      const hits = store.search({ text: "homebrew", limit: 5, minScore: 0.5 });
+      expect(hits.map((hit) => hit.record.id)).toEqual(["mem_old"]);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("counts recalls of a memory in its own scope", () => {
     const store = new MemoryStore(":memory:");
     try {
       const used = store.save({

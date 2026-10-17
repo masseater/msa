@@ -146,13 +146,20 @@ export function formatMemoryList(records: readonly MemoryRecord[], now = Date.no
   ].join("\n");
 }
 
+/** What made a memory match: its embedding similarity and the share of query words it holds. */
+function formatSignals(scored: MemoryScore): string {
+  const signals = [`keywords ${Math.round(scored.keyword * 100)}%`];
+  if (scored.vector !== undefined) signals.unshift(`similarity ${scored.vector.toFixed(2)}`);
+  return signals.join(", ");
+}
+
 export function formatSearchResults(scores: readonly MemoryScore[], now = Date.now()): string {
   if (scores.length === 0) return "No matching memories.";
   return [
     `${scores.length} ${scores.length === 1 ? "match" : "matches"}:`,
     ...scores.map(
       (scored) =>
-        `- ${scored.record.id} [${scored.record.kind} · ${scopeLabel(scored.record)}] score ${scored.score.toFixed(2)}: ${truncate(scored.record.content, 200)} (${formatAge(scored.record.updatedAt, now)})`,
+        `- ${scored.record.id} [${scored.record.kind} · ${scopeLabel(scored.record)}] ${formatSignals(scored)}: ${truncate(scored.record.content, 200)} (${formatAge(scored.record.updatedAt, now)})`,
     ),
   ].join("\n");
 }
