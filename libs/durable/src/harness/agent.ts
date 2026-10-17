@@ -1,4 +1,5 @@
-import { copyJson, type Draft } from "@msa/chord";
+import type { Draft } from "@msa/chord";
+import { copyJson } from "@msa/chord/json";
 
 import { defineDoc } from "../documents.ts";
 import { documentRetention } from "../session/session.ts";

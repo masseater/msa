@@ -38,6 +38,16 @@
       "types": "./dist/context/index.d.ts",
       "import": "./dist/context/index.js"
     },
+    "./json": {
+      "source": "./src/json.ts",
+      "types": "./dist/json.d.ts",
+      "import": "./dist/json.js"
+    },
+    "./state": {
+      "source": "./src/state.ts",
+      "types": "./dist/state.d.ts",
+      "import": "./dist/state.js"
+    },
     "./output": {
       "source": "./src/output.ts",
       "types": "./dist/output.d.ts",
@@ -52,6 +62,21 @@
       "source": "./src/delta/index.ts",
       "types": "./dist/delta/index.d.ts",
       "import": "./dist/delta/index.js"
+    },
+    "./delta/apply": {
+      "source": "./src/delta/apply.ts",
+      "types": "./dist/delta/apply.d.ts",
+      "import": "./dist/delta/apply.js"
+    },
+    "./delta/overlap": {
+      "source": "./src/delta/overlap.ts",
+      "types": "./dist/delta/overlap.d.ts",
+      "import": "./dist/delta/overlap.js"
+    },
+    "./delta/tracker": {
+      "source": "./src/delta/tracker.ts",
+      "types": "./dist/delta/tracker.d.ts",
+      "import": "./dist/delta/tracker.js"
     },
     "./node": {
       "source": "./src/node.ts",

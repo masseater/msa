@@ -1,6 +1,7 @@
 import type { Models } from "@msa/ai";
-import { type Context, copyJson, type JsonValue } from "@msa/chord";
+import type { Context, JsonValue } from "@msa/chord";
 import { awaitWithContext, withAbortSignal } from "@msa/chord/context";
+import { copyJson } from "@msa/chord/json";
 
 import type { ExecutionEnv } from "../env/index.ts";
 import { errorMessage } from "../errors.ts";

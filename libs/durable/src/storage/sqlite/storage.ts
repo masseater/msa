@@ -1,5 +1,6 @@
 import type { Context, JsonValue } from "@msa/chord";
-import { apply, type Op } from "@msa/chord/delta";
+import type { Op } from "@msa/chord/delta";
+import { apply } from "@msa/chord/delta/apply";
 
 import { StorageRequestError } from "../../errors.ts";
 import { idFromNumber, seqFromNumber } from "../../ids.ts";

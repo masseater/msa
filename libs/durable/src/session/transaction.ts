@@ -1,5 +1,7 @@
-import { type Context, copyJson, type Draft, type JsonValue } from "@msa/chord";
-import { type Change, type Op, type Prepared, type Tracker, track } from "@msa/chord/delta";
+import type { Context, Draft, JsonValue } from "@msa/chord";
+import type { Change, Op, Prepared, Tracker } from "@msa/chord/delta";
+import { track } from "@msa/chord/delta/tracker";
+import { copyJson } from "@msa/chord/json";
 
 import {
   type AnyDocDefinition,

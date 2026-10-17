@@ -1,14 +1,9 @@
 import type { ImageContent, TextContent, ToolCall, ToolResultMessage } from "@msa/ai";
 import { validateToolArguments } from "@msa/ai/utils/validation";
-import {
-  type Context,
-  copyJson,
-  type Draft,
-  type JsonRepresentation,
-  type JsonValue,
-} from "@msa/chord";
+import type { Context, Draft, JsonRepresentation, JsonValue } from "@msa/chord";
 import { awaitWithContext } from "@msa/chord/context";
-import { overlap } from "@msa/chord/delta";
+import { overlap } from "@msa/chord/delta/overlap";
+import { copyJson } from "@msa/chord/json";
 import { boundOutput, OutputBuffer, type OutputLimits } from "@msa/chord/output";
 import { PROGRESS_BYTES_PER_SECOND, Progress } from "@msa/chord/progress";
 import { Compile } from "typebox/compile";

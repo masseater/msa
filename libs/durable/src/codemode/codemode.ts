@@ -35,7 +35,8 @@ import type { TextContent } from "@msa/ai";
  * or when the script diverges: it makes another call, or calls in another order, than the journal says. Each ends the
  * call with an error result.
  */
-import { type Context, copyJson, type JsonValue } from "@msa/chord";
+import type { Context, JsonValue } from "@msa/chord";
+import { copyJson } from "@msa/chord/json";
 import {
   type CodemodeHostCall,
   type CodemodeOutcome,

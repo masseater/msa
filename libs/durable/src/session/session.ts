@@ -1,6 +1,8 @@
-import { type Context, type JsonValue, replicatedState } from "@msa/chord";
+import type { Context, JsonValue } from "@msa/chord";
 import { awaitWithContext, BACKGROUND_CONTEXT, withoutAbortSignal } from "@msa/chord/context";
-import { type Op, track } from "@msa/chord/delta";
+import type { Op } from "@msa/chord/delta";
+import { track } from "@msa/chord/delta/tracker";
+import { replicatedState } from "@msa/chord/state";
 
 import {
   type AnyDocToken,

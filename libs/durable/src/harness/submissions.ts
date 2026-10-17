@@ -1,4 +1,5 @@
-import { type Context, copyJson, type JsonRepresentation } from "@msa/chord";
+import type { Context, JsonRepresentation } from "@msa/chord";
+import { copyJson } from "@msa/chord/json";
 
 import { ConversationBusy } from "../errors.ts";
 import type { SessionImpl } from "../session/session.ts";

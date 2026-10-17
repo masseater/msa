@@ -11,7 +11,8 @@ import type {
 import { isContextOverflow } from "@msa/ai/utils/overflow";
 import { isRetryableAssistantError, retryDelayMs } from "@msa/ai/utils/retry";
 import { getCurrentTools } from "@msa/ai/utils/transcript";
-import { type Context, copyJson, type Draft, type JsonValue } from "@msa/chord";
+import type { Context, Draft, JsonValue } from "@msa/chord";
+import { copyJson } from "@msa/chord/json";
 
 import { AssistantEntry, ResetEntry, SystemEntry, UserEntry } from "../entries.ts";
 import type { ExecutionEnv } from "../env/index.ts";

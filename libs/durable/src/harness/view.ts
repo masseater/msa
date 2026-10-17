@@ -1,11 +1,8 @@
-import {
-  type AttachedReplicatedState,
-  type Context,
-  type JsonValue,
-  replicatedState,
-} from "@msa/chord";
+import type { AttachedReplicatedState, Context, JsonValue } from "@msa/chord";
 import { withoutAbortSignal } from "@msa/chord/context";
-import { applyImmutable, type NonEmptyPath, type Op, type Path } from "@msa/chord/delta";
+import type { NonEmptyPath, Op, Path } from "@msa/chord/delta";
+import { applyImmutable } from "@msa/chord/delta/apply";
+import { replicatedState } from "@msa/chord/state";
 
 import { CommittedStateSource, CommittedWatch } from "../session/observation.ts";
 import { contained, type SessionImpl } from "../session/session.ts";
