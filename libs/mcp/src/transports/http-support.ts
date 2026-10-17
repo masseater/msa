@@ -62,28 +62,21 @@ export function isRetryable(failure: unknown): boolean {
   return typeof code === "string" && (code.startsWith("E") || code.startsWith("UND_ERR"));
 }
 
-const unrefTimer = (ms: number, onTimeout: () => void): (() => void) => {
-  const timer = setTimeout(onTimeout, ms);
-  timer.unref?.();
-  return () => clearTimeout(timer);
-};
-
-const sleepFor = (ms: number, signal: AbortSignal): Effect.Effect<boolean> =>
+const abortedBy = (signal: AbortSignal): Effect.Effect<boolean> =>
   Effect.callback<boolean>((resume) => {
-    if (signal.aborted) {
-      resume(Effect.succeed(false));
-      return;
-    }
     const onAbort = () => {
-      cancel();
       resume(Effect.succeed(false));
     };
-    const cancel = unrefTimer(ms, () => {
-      signal.removeEventListener("abort", onAbort);
-      resume(Effect.succeed(true));
-    });
     signal.addEventListener("abort", onAbort, { once: true });
+    return Effect.sync(() => {
+      signal.removeEventListener("abort", onAbort);
+    });
   });
+
+const sleepFor = (ms: number, signal: AbortSignal): Effect.Effect<boolean> =>
+  signal.aborted
+    ? Effect.succeed(false)
+    : Effect.race(Effect.as(Effect.sleep(ms), true), abortedBy(signal));
 
 export const sleepUnlessAborted: {
   (signal: AbortSignal): (ms: number) => Effect.Effect<boolean>;
