@@ -46,7 +46,9 @@ describe("fuzzyMatch", () => {
     assert.strictEqual(scattered.matches, true);
     assert.ok(consecutive.score < scattered.score);
   });
+});
 
+describe("fuzzyMatch", () => {
   it("word boundary matches score better", () => {
     const atBoundary = fuzzyMatch("fb", "foo-bar");
     const notAtBoundary = fuzzyMatch("fb", "afbx");
@@ -104,7 +106,9 @@ describe("fuzzyFilter", () => {
     assert.ok(result.map((r) => r.name).includes("foo"));
     assert.ok(result.map((r) => r.name).includes("foobar"));
   });
+});
 
+describe("fuzzyFilter", () => {
   it("matches slash-separated provider/model queries against reordered text", () => {
     const item = { id: "gpt-5.5", provider: "openai-codex" };
     const result = fuzzyFilter(

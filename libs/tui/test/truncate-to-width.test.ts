@@ -46,7 +46,9 @@ describe("truncateToWidth", () => {
     assert.strictEqual(truncateToWidth("a", 2, "🙂"), "a");
     assert.strictEqual(truncateToWidth("界", 2, "🙂"), "界");
   });
+});
 
+describe("truncateToWidth", () => {
   it("pads truncated output to requested width", () => {
     const truncated = truncateToWidth("🙂界🙂界🙂界", 8, "…", true);
     assert.strictEqual(visibleWidth(truncated), 8);
@@ -97,7 +99,9 @@ describe("visibleWidth", () => {
     assert.strictEqual(visibleWidth("が"), 2);
     assert.strictEqual(visibleWidth("か\u3099"), 2);
   });
+});
 
+describe("visibleWidth", () => {
   it("counts Myanmar marks that terminals allocate cells for", () => {
     assert.strictEqual(visibleWidth("ကာ"), 2);
     assert.strictEqual(visibleWidth("ကေ"), 2);

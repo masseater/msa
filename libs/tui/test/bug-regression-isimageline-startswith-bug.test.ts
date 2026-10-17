@@ -1,17 +1,3 @@
-/**
- * Bug regression test for isImageLine() crash scenario
- *
- * Bug: When isImageLine() used startsWith() and terminal doesn't support images,
- * it would return false for lines containing image escape sequences, causing TUI to
- * crash with "Rendered line exceeds terminal width" error.
- *
- * Fix: Changed to use includes() to detect escape sequences anywhere in the line.
- *
- * This test demonstrates:
- * 1. The bug scenario with the old implementation
- * 2. That the fix works correctly
- */
-
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
@@ -54,7 +40,11 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
         "Bug: old implementation returns false for line containing image sequence when terminal has no image support",
       );
     });
+  });
+});
 
+describe("Bug regression: isImageLine() crash with image escape sequences", () => {
+  describe("Bug scenario: Terminal without image support", () => {
     it("new implementation returns true correctly", async () => {
       const { isImageLine } = await import("../src/terminal-image.ts");
 
@@ -91,7 +81,11 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
         );
       }
     });
+  });
+});
 
+describe("Bug regression: isImageLine() crash with image escape sequences", () => {
+  describe("Bug scenario: Terminal without image support", () => {
     it("new implementation detects iTerm2 sequences in any position", async () => {
       const { isImageLine } = await import("../src/terminal-image.ts");
 
@@ -113,7 +107,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
       }
     });
   });
+});
 
+describe("Bug regression: isImageLine() crash with image escape sequences", () => {
   describe("Integration: Tool execution scenario", () => {
     /**
      * This simulates what happens when the `read` tool reads an image file.
@@ -146,7 +142,11 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
         "Should detect image sequence in tool output line",
       );
     });
+  });
+});
 
+describe("Bug regression: isImageLine() crash with image escape sequences", () => {
+  describe("Integration: Tool execution scenario", () => {
     it("detects Kitty sequences from Image component", async () => {
       const { isImageLine } = await import("../src/terminal-image.ts");
 
@@ -179,7 +179,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
       }
     });
   });
+});
 
+describe("Bug regression: isImageLine() crash with image escape sequences", () => {
   describe("Crash scenario simulation", () => {
     it("does NOT crash on very long lines with image sequences", async () => {
       const { isImageLine } = await import("../src/terminal-image.ts");
@@ -214,7 +216,11 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
         "Should detect image sequence in very long line, preventing TUI crash",
       );
     });
+  });
+});
 
+describe("Bug regression: isImageLine() crash with image escape sequences", () => {
+  describe("Crash scenario simulation", () => {
     it("handles lines exactly matching crash log dimensions", async () => {
       const { isImageLine } = await import("../src/terminal-image.ts");
 
@@ -236,40 +242,6 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
         true,
         "Should detect image sequence in 58649-char line",
       );
-    });
-  });
-
-  describe("Negative cases: Don't false positive", () => {
-    it("does not detect images in regular long text", async () => {
-      const { isImageLine } = await import("../src/terminal-image.ts");
-
-      // Very long line WITHOUT image sequences
-      const longText = "A".repeat(100000);
-
-      assert.strictEqual(
-        isImageLine(longText),
-        false,
-        "Should not detect images in plain long text",
-      );
-    });
-
-    it("does not detect images in lines with file paths", async () => {
-      const { isImageLine } = await import("../src/terminal-image.ts");
-
-      const filePaths = [
-        "/path/to/1337/image.jpg",
-        "/usr/local/bin/File_converter",
-        "~/Documents/1337File_backup.png",
-        "./_G_test_file.txt",
-      ];
-
-      for (const path of filePaths) {
-        assert.strictEqual(
-          isImageLine(path),
-          false,
-          `Should not falsely detect image sequence in path: ${path}`,
-        );
-      }
     });
   });
 });

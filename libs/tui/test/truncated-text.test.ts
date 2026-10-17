@@ -36,7 +36,9 @@ describe("TruncatedText component", () => {
       assert.strictEqual(visibleWidth(line), 40);
     }
   });
+});
 
+describe("TruncatedText component", () => {
   it("truncates long text and pads to width", () => {
     const longText =
       "This is a very long piece of text that will definitely exceed the available width";
@@ -70,7 +72,9 @@ describe("TruncatedText component", () => {
     // Should preserve the color codes
     assert.ok(line.includes("\x1b["));
   });
+});
 
+describe("TruncatedText component", () => {
   it("truncates styled text and adds reset code before ellipsis", () => {
     const longStyledText = chalk.red("This is a very long red text that will be truncated");
     const text = new TruncatedText(longStyledText, 1, 0);
@@ -112,7 +116,9 @@ describe("TruncatedText component", () => {
     assert.ok(line !== undefined);
     assert.strictEqual(visibleWidth(line), 30);
   });
+});
 
+describe("TruncatedText component", () => {
   it("stops at newline and only shows first line", () => {
     const multilineText = "First line\nSecond line\nThird line";
     const text = new TruncatedText(multilineText, 1, 0);

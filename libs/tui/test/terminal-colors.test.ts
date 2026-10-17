@@ -97,6 +97,24 @@ const wait = (ms: number) =>
     setTimeout(resolve, ms);
   });
 
+const PALETTE_REPLIES = Array.from({ length: 16 }, (_, index) => `\x1b]4;${index};#000000\x07`);
+
+const DA1 = "\x1b[?62;22c";
+
+const BLACK = { r: 0, g: 0, b: 0 };
+
+const WHITE = { r: 255, g: 255, b: 255 };
+
+function setup(): { terminal: TestTerminal; tui: TUI; component: InputRecorder } {
+  const terminal = new TestTerminal();
+  const tui: TUI = new TuiMainScreen(terminal);
+  const component = new InputRecorder();
+  tui.addChild(component);
+  tui.setFocus(component);
+  tui.start();
+  return { terminal, tui, component };
+}
+
 describe("parseTerminalColorSchemeReport", () => {
   it("parses color scheme reports", () => {
     assert.strictEqual(parseTerminalColorSchemeReport("\x1b[?997;1n"), "dark");
@@ -133,21 +151,6 @@ describe("parseOscColorResponse", () => {
   });
 });
 
-const PALETTE_REPLIES = Array.from({ length: 16 }, (_, index) => `\x1b]4;${index};#000000\x07`);
-const DA1 = "\x1b[?62;22c";
-const BLACK = { r: 0, g: 0, b: 0 };
-const WHITE = { r: 255, g: 255, b: 255 };
-
-function setup(): { terminal: TestTerminal; tui: TUI; component: InputRecorder } {
-  const terminal = new TestTerminal();
-  const tui: TUI = new TuiMainScreen(terminal);
-  const component = new InputRecorder();
-  tui.addChild(component);
-  tui.setFocus(component);
-  tui.start();
-  return { terminal, tui, component };
-}
-
 describe("TUI.queryTerminalColors", () => {
   it("queries all colors in one write and consumes the replies", async () => {
     const { terminal, tui, component } = setup();
@@ -175,7 +178,9 @@ describe("TUI.queryTerminalColors", () => {
       tui.stop();
     }
   });
+});
 
+describe("TUI.queryTerminalColors", () => {
   it("consumes delayed Ghostty color fragments without typing their tail or opening the editor", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const { terminal, tui, component } = setup();
@@ -202,7 +207,9 @@ describe("TUI.queryTerminalColors", () => {
       tui.stop();
     }
   });
+});
 
+describe("TUI.queryTerminalColors", () => {
   it("resolves on DA1 with the replies that arrived, in query order", async () => {
     const { terminal, tui } = setup();
     try {
@@ -228,7 +235,9 @@ describe("TUI.queryTerminalColors", () => {
       tui.stop();
     }
   });
+});
 
+describe("TUI.queryTerminalColors", () => {
   it("reports late replies after a timeout and consumes them until DA1", async () => {
     const { terminal, tui, component } = setup();
     try {

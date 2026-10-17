@@ -3,6 +3,63 @@ import { describe, it } from "node:test";
 
 import { findWordBackward, findWordForward } from "../src/word-navigation.ts";
 
+const marker = "[paste #1 +5 lines]";
+
+const text = `hello ${marker} world`;
+
+const isAtomic = (s: string) => s === marker;
+
+// The functions slice text before calling segment(), so we map each expected
+// substring to its pre-split segments.
+const segmentMap = new Map<string, Intl.SegmentData[]>([
+  [
+    // full text (not used but for clarity)
+    text,
+    [
+      { segment: "hello", index: 0, input: text, isWordLike: true },
+      { segment: " ", index: 5, input: text, isWordLike: false },
+      { segment: marker, index: 6, input: text, isWordLike: true },
+      { segment: " ", index: 25, input: text, isWordLike: false },
+      { segment: "world", index: 26, input: text, isWordLike: true },
+    ],
+  ],
+  [
+    // backward from end: slice(0, 31) = full text
+    text.slice(0, text.length),
+    [
+      { segment: "hello", index: 0, input: text, isWordLike: true },
+      { segment: " ", index: 5, input: text, isWordLike: false },
+      { segment: marker, index: 6, input: text, isWordLike: true },
+      { segment: " ", index: 25, input: text, isWordLike: false },
+      { segment: "world", index: 26, input: text, isWordLike: true },
+    ],
+  ],
+  [
+    // backward from 26: slice(0, 26) = "hello [paste #1 +5 lines] "
+    text.slice(0, 26),
+    [
+      { segment: "hello", index: 0, input: text, isWordLike: true },
+      { segment: " ", index: 5, input: text, isWordLike: false },
+      { segment: marker, index: 6, input: text, isWordLike: true },
+      { segment: " ", index: 25, input: text, isWordLike: false },
+    ],
+  ],
+  [
+    // forward from 6: slice(6) = "[paste #1 +5 lines] world"
+    text.slice(6),
+    [
+      { segment: marker, index: 0, input: text, isWordLike: true },
+      { segment: " ", index: 19, input: text, isWordLike: false },
+      { segment: "world", index: 20, input: text, isWordLike: true },
+    ],
+  ],
+]);
+
+const opts = {
+  segment: (input: string) => segmentMap.get(input) ?? [],
+  isAtomicSegment: isAtomic,
+};
+
 describe("findWordBackward", () => {
   it("basic words: hello world", () => {
     const text = "hello world";
@@ -47,7 +104,9 @@ describe("findWordBackward", () => {
     assert.strictEqual(findWordBackward(text, 9), 2);
     assert.strictEqual(findWordBackward(text, 2), 0);
   });
+});
 
+describe("findWordBackward", () => {
   it("punctuation run: foo...bar", () => {
     const text = "foo...bar";
     assert.strictEqual(findWordBackward(text, 9), 6);
@@ -104,7 +163,9 @@ describe("findWordForward", () => {
     }
     assert.strictEqual(pos, text.length);
   });
+});
 
+describe("findWordForward", () => {
   it("whitespace at boundaries", () => {
     const text = "  hello  ";
     assert.strictEqual(findWordForward(text, 0), 7);
@@ -124,61 +185,6 @@ describe("findWordForward", () => {
 });
 
 describe("atomic segments", () => {
-  const marker = "[paste #1 +5 lines]";
-  const text = `hello ${marker} world`;
-  const isAtomic = (s: string) => s === marker;
-
-  // The functions slice text before calling segment(), so we map each expected
-  // substring to its pre-split segments.
-  const segmentMap = new Map<string, Intl.SegmentData[]>([
-    [
-      // full text (not used but for clarity)
-      text,
-      [
-        { segment: "hello", index: 0, input: text, isWordLike: true },
-        { segment: " ", index: 5, input: text, isWordLike: false },
-        { segment: marker, index: 6, input: text, isWordLike: true },
-        { segment: " ", index: 25, input: text, isWordLike: false },
-        { segment: "world", index: 26, input: text, isWordLike: true },
-      ],
-    ],
-    [
-      // backward from end: slice(0, 31) = full text
-      text.slice(0, text.length),
-      [
-        { segment: "hello", index: 0, input: text, isWordLike: true },
-        { segment: " ", index: 5, input: text, isWordLike: false },
-        { segment: marker, index: 6, input: text, isWordLike: true },
-        { segment: " ", index: 25, input: text, isWordLike: false },
-        { segment: "world", index: 26, input: text, isWordLike: true },
-      ],
-    ],
-    [
-      // backward from 26: slice(0, 26) = "hello [paste #1 +5 lines] "
-      text.slice(0, 26),
-      [
-        { segment: "hello", index: 0, input: text, isWordLike: true },
-        { segment: " ", index: 5, input: text, isWordLike: false },
-        { segment: marker, index: 6, input: text, isWordLike: true },
-        { segment: " ", index: 25, input: text, isWordLike: false },
-      ],
-    ],
-    [
-      // forward from 6: slice(6) = "[paste #1 +5 lines] world"
-      text.slice(6),
-      [
-        { segment: marker, index: 0, input: text, isWordLike: true },
-        { segment: " ", index: 19, input: text, isWordLike: false },
-        { segment: "world", index: 20, input: text, isWordLike: true },
-      ],
-    ],
-  ]);
-
-  const opts = {
-    segment: (input: string) => segmentMap.get(input) ?? [],
-    isAtomicSegment: isAtomic,
-  };
-
   it("backward skips word then stops before atomic marker", () => {
     assert.strictEqual(findWordBackward(text, text.length, opts), 26);
   });

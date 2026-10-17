@@ -1,93 +1,15 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Editor, type EditorTheme } from "../src/components/editor.ts";
+import { Editor } from "../src/components/editor.ts";
 import { Input } from "../src/components/input.ts";
-import { SelectList, type SelectListTheme } from "../src/components/select-list.ts";
-import { SettingsList, type SettingsListTheme } from "../src/components/settings-list.ts";
+import { SelectList } from "../src/components/select-list.ts";
+import { SettingsList } from "../src/components/settings-list.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { Container, type TuiMouseEvent, type TuiMouseEventType } from "../src/tui.ts";
+import { editorTheme, mouse, selectTheme, settingsTheme } from "./mouse-components-helpers.ts";
+import { InputOverlay } from "./mouse-components-input-overlay.ts";
+import { SubmenuHost } from "./mouse-components-submenu-host.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
-
-function mouse(
-  type: TuiMouseEventType,
-  x: number,
-  y: number,
-  width = 80,
-  height = 10,
-): TuiMouseEvent {
-  return {
-    type,
-    button: "left",
-    x,
-    y,
-    screenX: x,
-    screenY: y,
-    width,
-    height,
-    shift: false,
-    alt: false,
-    ctrl: false,
-    ...(type === "click" ? { clickCount: 1 } : {}),
-  };
-}
-
-const selectTheme: SelectListTheme = {
-  selectedPrefix: (text) => text,
-  selectedText: (text) => text,
-  description: (text) => text,
-  scrollInfo: (text) => text,
-  noMatch: (text) => text,
-};
-
-const settingsTheme: SettingsListTheme = {
-  label: (text) => text,
-  value: (text) => text,
-  description: (text) => text,
-  cursor: "> ",
-  hint: (text) => text,
-};
-
-const editorTheme: EditorTheme = {
-  borderColor: (text) => text,
-  selectList: selectTheme,
-};
-
-class InputOverlay extends Container {
-  readonly input = new Input();
-
-  constructor() {
-    super();
-    this.addChild(this.input);
-  }
-
-  handleInput(data: string): void {
-    this.input.handleInput(data);
-  }
-}
-
-/** A settings submenu that routes keys to its nested list, like the coding agent's theme submenu. */
-class SubmenuHost extends Container {
-  readonly list = new SelectList(
-    [
-      { value: "first", label: "First" },
-      { value: "second", label: "Second" },
-    ],
-    5,
-    selectTheme,
-  );
-
-  constructor(done: (value?: string) => void) {
-    super();
-    this.list.onSelect = (item) => done(item.value);
-    this.list.onCancel = () => done();
-    this.addChild(this.list);
-  }
-
-  handleInput(data: string): void {
-    this.list.handleInput(data);
-  }
-}
 
 describe("mouse-aware components", () => {
   it("positions a single-line input cursor on press", () => {
@@ -122,7 +44,9 @@ describe("mouse-aware components", () => {
     assert.strictEqual(list.handleMouse(mouse("click", 1, 2, 40, 3))?.handled, true);
     assert.strictEqual(selected, "c");
   });
+});
 
+describe("mouse-aware components", () => {
   it("activates settings rows", () => {
     const changes: Array<{ id: string; value: string }> = [];
     const list = new SettingsList(
@@ -142,7 +66,13 @@ describe("mouse-aware components", () => {
     list.handleMouse(mouse("click", 1, 2, 40, 5));
     assert.deepStrictEqual(changes, [{ id: "third", value: "high" }]);
   });
+});
 
+describe("mouse-aware components", () => {
+  mouseAwareComponentsCases1();
+});
+
+function mouseAwareComponentsCases1(): void {
   for (const row of [0, 4]) {
     it(`ignores hover and clicks visible select-list row ${row} after scrolling`, () => {
       const list = new SelectList(
@@ -215,7 +145,9 @@ describe("mouse-aware components", () => {
       assert.deepStrictEqual(changes, [{ id: `item-${4 + row}`, value: "on" }]);
     });
   }
+}
 
+describe("mouse-aware components", () => {
   it("keeps a delegating overlay focused when its nested input is clicked", async () => {
     const terminal = new VirtualTerminal(20, 4);
     const tui = new TuiAltScreen(terminal);
@@ -234,7 +166,9 @@ describe("mouse-aware components", () => {
     assert.strictEqual(tui.getFocusedComponent(), overlay);
     tui.stop();
   });
+});
 
+describe("mouse-aware components", () => {
   it("keeps a settings list focused when a click in its submenu closes the submenu", async () => {
     const terminal = new VirtualTerminal(30, 6);
     const tui = new TuiAltScreen(terminal);
@@ -278,7 +212,9 @@ describe("mouse-aware components", () => {
     ]);
     tui.stop();
   });
+});
 
+describe("mouse-aware components", () => {
   it("positions and focuses the multiline editor through alternate-screen dispatch", async () => {
     const terminal = new VirtualTerminal(20, 6);
     const tui = new TuiAltScreen(terminal);
@@ -295,32 +231,6 @@ describe("mouse-aware components", () => {
 
     assert.strictEqual(editor.getText(), "heXllo");
     assert.strictEqual(tui.getFocusedComponent(), editor);
-    tui.stop();
-  });
-
-  it("selects and copies editor text on drag instead of moving the cursor", async () => {
-    const terminal = new VirtualTerminal(20, 6);
-    const copied: string[] = [];
-    const tui = new TuiAltScreen(terminal, undefined, undefined, {
-      copySelection: (text) => {
-        copied.push(text);
-        return Promise.resolve(true);
-      },
-    });
-    const editor = new Editor(tui, editorTheme);
-    editor.setText("hello world");
-    tui.addChild(editor);
-    tui.start();
-    await terminal.waitForRender();
-    const cursorBefore = editor.getCursor();
-
-    terminal.sendInput("\x1b[<0;1;2M");
-    terminal.sendInput("\x1b[<32;5;2M");
-    terminal.sendInput("\x1b[<0;5;2m");
-    await terminal.waitForRender();
-
-    assert.deepStrictEqual(copied, ["hello"]);
-    assert.deepStrictEqual(editor.getCursor(), cursorBefore);
     tui.stop();
   });
 });

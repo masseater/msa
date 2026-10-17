@@ -78,7 +78,9 @@ describe("tab width accounting", () => {
       );
     }
   });
+});
 
+describe("tab width accounting", () => {
   it("keeps tab-containing overlays on one physical terminal row", async () => {
     const terminal = new CapturingVirtualTerminal(16, 3);
     const tui: TUI = new TuiMainScreen(terminal);

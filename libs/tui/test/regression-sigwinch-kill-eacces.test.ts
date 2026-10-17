@@ -3,10 +3,15 @@ import { after, describe, it } from "node:test";
 
 import { refreshTerminalDimensions } from "../src/terminal.ts";
 
-describe("refreshTerminalDimensions", () => {
-  const originalKill = process.kill;
-  const originalPlatform = process.platform;
+const originalKill = process.kill;
 
+const originalPlatform = process.platform;
+
+describe("refreshTerminalDimensions", () => {
+  after(() => {
+    process.kill = originalKill;
+    Object.defineProperty(process, "platform", { value: originalPlatform });
+  });
   it("does not throw when kill(2) returns EACCES for self-signal", () => {
     Object.defineProperty(process, "platform", { value: "linux" });
     process.kill = ((): typeof process.kill => {
@@ -39,7 +44,13 @@ describe("refreshTerminalDimensions", () => {
 
     assert.strictEqual(killCalled, false, "kill should not be called on win32");
   });
+});
 
+describe("refreshTerminalDimensions", () => {
+  after(() => {
+    process.kill = originalKill;
+    Object.defineProperty(process, "platform", { value: originalPlatform });
+  });
   it("preserves other error codes", () => {
     Object.defineProperty(process, "platform", { value: "linux" });
     process.kill = ((): typeof process.kill => {
@@ -54,10 +65,5 @@ describe("refreshTerminalDimensions", () => {
     assert.doesNotThrow(() => {
       refreshTerminalDimensions();
     });
-  });
-
-  after(() => {
-    process.kill = originalKill;
-    Object.defineProperty(process, "platform", { value: originalPlatform });
   });
 });
