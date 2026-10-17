@@ -41,6 +41,7 @@ release. Add a tool name to select part of the graph. For example, run
 ## 機能の置き場所
 
 - msa の機能は本体（`apps/coding-agent/src/core` など）に実装する。拡張機能（extensions）は msa の外の機能を簡易に取り込むための仕組みで、msa 自身の機能をそこに置かない。
+- 機能はコマンドラインやツールだけで終わらせず、人間が使う画面（TUI）も作る。状態をひと目で見られ、キー操作で覗く・指示する・止められるようにする。
 
 ## 環境変数
 
