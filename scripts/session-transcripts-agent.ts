@@ -39,41 +39,56 @@ const flushText = (buffer: Ref.Ref<string>) =>
     yield* Ref.set(buffer, "");
   });
 
+type ToolArgs = NonNullable<AgentEvent["args"]>;
+
+const nonZeroPart = (name: string, value: number | undefined): string =>
+  value === undefined || value === 0 ? "" : ` ${name}=${value}`;
+
+const ARG_DESCRIBERS: ReadonlyMap<string, (args: ToolArgs) => string> = new Map([
+  [
+    "read",
+    (args: ToolArgs) =>
+      `${args.path ?? ""}${nonZeroPart("offset", args.offset)}${nonZeroPart("limit", args.limit)}`,
+  ],
+  ["write", (args: ToolArgs) => args.path ?? ""],
+]);
+
 const describeArgs = (event: AgentEvent): string => {
-  const args = event.args;
-  if (args === undefined) return "";
-  if (event.toolName === "read") {
-    const parts = [args.path ?? ""];
-    if (args.offset !== undefined && args.offset !== 0) parts.push(` offset=${args.offset}`);
-    if (args.limit !== undefined && args.limit !== 0) parts.push(` limit=${args.limit}`);
-    return parts.join("");
-  }
-  return event.toolName === "write" ? (args.path ?? "") : "";
+  const describe = ARG_DESCRIBERS.get(event.toolName ?? "");
+  return event.args === undefined || describe === undefined ? "" : describe(event.args);
 };
 
-const handleEvent = (event: AgentEvent, buffer: Ref.Ref<string>) =>
-  Effect.gen(function* () {
-    const delta = event.assistantMessageEvent?.delta;
-    if (
-      event.type === "message_update" &&
-      event.assistantMessageEvent?.type === "text_delta" &&
-      delta !== undefined &&
-      delta !== ""
-    ) {
-      yield* Ref.update(buffer, (text) => text + delta);
-      return;
-    }
-    const toolName = event.toolName;
-    if (event.type === "tool_execution_start" && toolName !== undefined && toolName !== "") {
-      yield* flushText(buffer);
-      yield* Console.log(styleText("cyan", `  [${toolName}] ${describeArgs(event)}`));
-      return;
-    }
-    if (event.type === "turn_end") {
-      yield* flushText(buffer);
-      yield* Ref.set(buffer, "");
-    }
-  });
+const nonEmpty = (value: string | undefined): string | undefined =>
+  value === "" ? undefined : value;
+
+const isTextDelta = (event: AgentEvent): boolean =>
+  event.type === "message_update" && event.assistantMessageEvent?.type === "text_delta";
+
+const textDeltaOf = (event: AgentEvent): string | undefined =>
+  isTextDelta(event) ? nonEmpty(event.assistantMessageEvent?.delta) : undefined;
+
+const startedToolOf = (event: AgentEvent): string | undefined =>
+  event.type === "tool_execution_start" ? nonEmpty(event.toolName) : undefined;
+
+const announceTool = (options: {
+  readonly buffer: Ref.Ref<string>;
+  readonly event: AgentEvent;
+  readonly toolName: string;
+}) =>
+  Effect.andThen(
+    flushText(options.buffer),
+    Console.log(styleText("cyan", `  [${options.toolName}] ${describeArgs(options.event)}`)),
+  );
+
+const endTurn = (buffer: Ref.Ref<string>) => Effect.andThen(flushText(buffer), Ref.set(buffer, ""));
+
+const handleEvent = (event: AgentEvent, buffer: Ref.Ref<string>): Effect.Effect<void> => {
+  const delta = textDeltaOf(event);
+  if (delta !== undefined) return Ref.update(buffer, (text) => text + delta);
+  const toolName = startedToolOf(event);
+  if (toolName !== undefined) return announceTool({ buffer, event, toolName });
+  return event.type === "turn_end" ? endTurn(buffer) : Effect.void;
+};
 
 const runSubagent = (options: {
   readonly cwd: string;
