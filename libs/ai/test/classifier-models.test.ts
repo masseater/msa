@@ -147,7 +147,7 @@ describe("Models with classifier models", () => {
   ])("routes %s Jev (%s) to its TypeSafe-compatible endpoint", async (provider, id, url) => {
     const models = builtinModels();
     const jev = models.getModelOfType("classifier", provider, id);
-    if (!jev) throw new Error(`missing ${provider} Jev model`);
+    if (jev === undefined) throw new Error(`missing ${provider} Jev model`);
     expect(jev).toMatchObject({ api: "typesafe-system-one", contextWindow: 32000 });
     expect(models.getModel(provider, id)).toBeUndefined();
 
@@ -218,7 +218,7 @@ describe("Models with classifier models", () => {
   it("routes OpenAI GPT-6 Luna through the Decisions API with images", async () => {
     const models = builtinModels();
     const luna = models.getModelOfType("classifier", "openai", "gpt-6-luna");
-    if (!luna) throw new Error("missing OpenAI Decisions model");
+    if (luna === undefined) throw new Error("missing OpenAI Decisions model");
     expect(luna).toMatchObject({
       api: "openai-decisions",
       input: ["text", "image"],

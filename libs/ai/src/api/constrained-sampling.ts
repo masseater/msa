@@ -70,7 +70,7 @@ function makeJsonSchemaNodeStrict(
       throw new UnsupportedStrictJsonSchemaError(`${key} schemas are unsupported`);
     }
   }
-  if (isUnsupportedKeyword) {
+  if (isUnsupportedKeyword !== undefined) {
     for (const [key, value] of Object.entries(schema)) {
       if (isUnsupportedKeyword(key, value)) {
         throw new UnsupportedStrictJsonSchemaError(
@@ -233,7 +233,7 @@ function inferGrammarInputProperty(tool: Tool): string {
   }
 
   const inputProperty = schema.required[0];
-  if (!schema.properties?.[inputProperty]) {
+  if (schema.properties?.[inputProperty] === undefined) {
     throw new Error(
       `grammar constrained sampling requires a properties entry for ${inputProperty}`,
     );
@@ -250,7 +250,7 @@ export function resolveJsonSchemaStrictSampling(
   isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
 ): boolean | undefined {
   const config = tool.constrainedSampling;
-  if (!config || config.type !== "json_schema") return undefined;
+  if (config === undefined || config === false || config.type !== "json_schema") return undefined;
 
   if (supportsStrictMode) {
     try {
@@ -278,7 +278,7 @@ export function resolveGrammarConstrainedSampling(
   supportsOpenAIGrammarTools: boolean,
 ): GrammarConstrainedSampling | undefined {
   const config = tool.constrainedSampling;
-  if (!config || config.type !== "grammar") {
+  if (config === undefined || config === false || config.type !== "grammar") {
     return undefined;
   }
 
@@ -318,7 +318,7 @@ export function createGrammarToolInputProperties(
   const properties = new Map<string, string>();
   for (const tool of tools ?? []) {
     const grammar = resolveGrammarConstrainedSampling(tool, supportsOpenAIGrammarTools);
-    if (grammar) {
+    if (grammar !== undefined) {
       properties.set(tool.name, grammar.inputProperty);
     }
   }

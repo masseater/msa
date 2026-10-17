@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -67,7 +65,7 @@ export function hydrateModelCatalog(
       writeFileSync(join(stagedData, name), content);
     writeFileSync(join(stagedData, MODEL_DATA_MANIFEST_FILE), `${JSON.stringify(manifest)}\n`);
     validateModelDataDirectory(structure, stagedData);
-    if (options.validateOnly) return;
+    if (options.validateOnly === true) return;
     const dataDir = join(providersDir, "data");
     rmSync(dataDir, { recursive: true, force: true });
     renameSync(stagedData, dataDir);
@@ -77,7 +75,11 @@ export function hydrateModelCatalog(
 }
 
 const [, scriptPath, catalogPath, ...extraArgs] = process.argv;
-if (scriptPath && import.meta.url === pathToFileURL(resolve(scriptPath)).href) {
+if (
+  scriptPath !== undefined &&
+  scriptPath !== "" &&
+  import.meta.url === pathToFileURL(resolve(scriptPath)).href
+) {
   if (catalogPath === undefined || extraArgs.length > 0)
     throw new Error("Usage: node hydrate-model-catalog.ts <models.all.json>");
   hydrateModelCatalog(join(dirname(fileURLToPath(import.meta.url)), ".."), resolve(catalogPath));

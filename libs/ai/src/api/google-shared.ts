@@ -120,7 +120,7 @@ export function retainThoughtSignature(
 const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/u;
 
 function isValidThoughtSignature(signature: string | undefined): boolean {
-  if (!signature) return false;
+  if (signature === undefined || signature === "") return false;
   if (signature.length % 4 !== 0) return false;
   return base64SignaturePattern.test(signature);
 }
@@ -203,7 +203,11 @@ export function convertMessages<T extends GoogleApiType>(
             isSameProviderAndModel,
             block.textSignature,
           );
-          if ((!block.text || block.text.trim() === "") && !thoughtSignature) continue;
+          if (
+            (block.text === "" || block.text.trim() === "") &&
+            (thoughtSignature === undefined || thoughtSignature === "")
+          )
+            continue;
           parts.push({
             text: sanitizeSurrogates(block.text),
             ...(thoughtSignature && { thoughtSignature }),
@@ -214,14 +218,18 @@ export function convertMessages<T extends GoogleApiType>(
               isSameProviderAndModel,
               block.thinkingSignature,
             );
-            if ((!block.thinking || block.thinking.trim() === "") && !thoughtSignature) continue;
+            if (
+              (block.thinking === "" || block.thinking.trim() === "") &&
+              (thoughtSignature === undefined || thoughtSignature === "")
+            )
+              continue;
             parts.push({
               thought: true,
               text: sanitizeSurrogates(block.thinking),
               ...(thoughtSignature && { thoughtSignature }),
             });
           } else {
-            if (!block.thinking || block.thinking.trim() === "") continue;
+            if (block.thinking === "" || block.thinking.trim() === "") continue;
             parts.push({
               text: sanitizeSurrogates(block.thinking),
             });
@@ -284,7 +292,10 @@ export function convertMessages<T extends GoogleApiType>(
       };
 
       const lastContent = contents[contents.length - 1];
-      if (lastContent?.role === "user" && lastContent.parts?.some((p) => p.functionResponse)) {
+      if (
+        lastContent?.role === "user" &&
+        lastContent.parts?.some((p) => p.functionResponse) === true
+      ) {
         lastContent.parts.push(functionResponsePart);
       } else {
         contents.push({
@@ -384,7 +395,7 @@ export function resolveGoogleFunctionCallingMode(
   if (useStrictMode) {
     return FunctionCallingConfigMode.VALIDATED;
   }
-  return toolChoice ? mapToolChoice(toolChoice) : undefined;
+  return toolChoice !== undefined && toolChoice !== "" ? mapToolChoice(toolChoice) : undefined;
 }
 
 export function mapStopReason(reason: FinishReason): StopReason {

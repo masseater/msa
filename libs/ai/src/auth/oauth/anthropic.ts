@@ -22,7 +22,7 @@ function parseAuthorizationInput(input: string): {
   state?: string | undefined;
 } {
   const value = input.trim();
-  if (!value) return {};
+  if (value === "") return {};
 
   try {
     const url = new URL(value);
@@ -56,13 +56,14 @@ function formatErrorDetails(error: unknown): string {
       errno?: number | string;
       cause?: unknown;
     };
-    if (errorWithCode.code) details.push(`code=${errorWithCode.code}`);
+    if (errorWithCode.code !== undefined && errorWithCode.code !== "")
+      details.push(`code=${errorWithCode.code}`);
     if (typeof errorWithCode.errno !== "undefined")
       details.push(`errno=${String(errorWithCode.errno)}`);
     if (typeof error.cause !== "undefined") {
       details.push(`cause=${formatErrorDetails(error.cause)}`);
     }
-    if (error.stack) {
+    if (error.stack !== undefined && error.stack !== "") {
       details.push(`stack=${error.stack}`);
     }
     return details.join("; ");
@@ -193,12 +194,13 @@ async function loginAnthropic(interaction: ProviderAuthInteraction): Promise<OAu
       code = result.value;
     } else {
       const parsed = parseAuthorizationInput(result.input);
-      if (parsed.state && parsed.state !== verifier) throw new Error("OAuth state mismatch");
+      if (parsed.state !== undefined && parsed.state !== "" && parsed.state !== verifier)
+        throw new Error("OAuth state mismatch");
       code = parsed.code;
       state = parsed.state ?? verifier;
     }
 
-    if (!code) throw new Error("Missing authorization code");
+    if (code === undefined || code === "") throw new Error("Missing authorization code");
     interaction.notify({
       type: "progress",
       message: "Exchanging authorization code for tokens...",
@@ -237,8 +239,10 @@ async function loginAnthropicCopyCode(
     signal: interaction.signal,
   });
   const parsed = parseAuthorizationInput(input);
-  if (parsed.state && parsed.state !== verifier) throw new Error("OAuth state mismatch");
-  if (!parsed.code) throw new Error("Missing authorization code");
+  if (parsed.state !== undefined && parsed.state !== "" && parsed.state !== verifier)
+    throw new Error("OAuth state mismatch");
+  if (parsed.code === undefined || parsed.code === "")
+    throw new Error("Missing authorization code");
   interaction.notify({ type: "progress", message: "Exchanging authorization code for tokens..." });
   return await exchangeAuthorizationCode(
     parsed.code,

@@ -50,14 +50,14 @@ import { transformMessages } from "./transform-messages.ts";
 
 function encodeTextSignatureV1(id: string, phase?: TextSignatureV1["phase"]): string {
   const payload: TextSignatureV1 = { v: 1, id };
-  if (phase) payload.phase = phase;
+  if (phase !== undefined) payload.phase = phase;
   return JSON.stringify(payload);
 }
 
 function parseTextSignature(
   signature: string | undefined,
 ): { id: string; phase?: TextSignatureV1["phase"] } | undefined {
-  if (!signature) return undefined;
+  if (signature === undefined || signature === "") return undefined;
   if (signature.startsWith("{")) {
     try {
       const parsed = JSON.parse(signature) as Partial<TextSignatureV1>;
@@ -187,7 +187,7 @@ export function convertResponsesMessages<TApi extends Api>(
   const appendSystemToolAdditions = (message: SystemMessage, seed: string): void => {
     const tools = transcriptTools.anchorsAdditions ? (message.toolsAdded ?? []) : [];
     if (tools.length === 0) return;
-    if (options?.supportsAdditionalTools) {
+    if (options?.supportsAdditionalTools === true) {
       messages.push({
         type: "additional_tools",
         role: "developer",
@@ -195,7 +195,7 @@ export function convertResponsesMessages<TApi extends Api>(
       } satisfies ResponseInputItem);
       return;
     }
-    if (!options?.supportsToolSearch) return;
+    if (options?.supportsToolSearch !== true) return;
     const names = tools.map((tool) => tool.name);
     const callId = `pi_tool_load_${shortHash(`${seed}:${names.join(",")}`)}`;
     messages.push({
@@ -277,7 +277,7 @@ export function convertResponsesMessages<TApi extends Api>(
 
       for (const block of msg.content) {
         if (block.type === "thinking") {
-          if (block.thinkingSignature) {
+          if (block.thinkingSignature !== undefined && block.thinkingSignature !== "") {
             const reasoningItem = JSON.parse(block.thinkingSignature) as ResponseReasoningItem;
             output.push(reasoningItem);
           }
@@ -288,7 +288,7 @@ export function convertResponsesMessages<TApi extends Api>(
             textBlockIndex === 0 ? `msg_pi_${msgIndex}` : `msg_pi_${msgIndex}_${textBlockIndex}`;
           textBlockIndex++;
           let msgId = parsedSignature?.id;
-          if (!msgId) {
+          if (msgId === undefined || msgId === "") {
             msgId = fallbackMessageId;
           } else if (msgId.length > 64) {
             msgId = `msg_${shortHash(msgId)}`;
@@ -310,7 +310,7 @@ export function convertResponsesMessages<TApi extends Api>(
           let itemId: string | undefined = itemIdRaw;
 
           const itemIdPrefix = customInputProperty === undefined ? "fc_" : "ctc_";
-          if (isDifferentModel || !itemId?.startsWith(itemIdPrefix)) {
+          if (isDifferentModel || itemId?.startsWith(itemIdPrefix) !== true) {
             itemId = undefined;
           }
 
@@ -354,7 +354,7 @@ export function convertResponsesMessages<TApi extends Api>(
       const [callId = ""] = msg.toolCallId.split("|");
       const output = convertToolResultOutput(model, msg.content);
 
-      if (options?.grammarToolInputProperties?.has(msg.toolName)) {
+      if (options?.grammarToolInputProperties?.has(msg.toolName) === true) {
         messages.push({
           type: "custom_tool_call_output",
           call_id: callId,
@@ -386,7 +386,7 @@ export function convertResponsesTools(
 
   return tools.map((tool) => {
     const grammar = resolveGrammarConstrainedSampling(tool, supportsOpenAIGrammarTools);
-    if (grammar) {
+    if (grammar !== undefined) {
       return {
         type: "custom",
         name: tool.name,
@@ -396,7 +396,7 @@ export function convertResponsesTools(
           syntax: grammar.format,
           definition: grammar.definition,
         },
-        ...(options?.toolSearchResult ? { defer_loading: true } : {}),
+        ...(options?.toolSearchResult === true ? { defer_loading: true } : {}),
       } satisfies OpenAITool;
     }
 
@@ -409,7 +409,7 @@ export function convertResponsesTools(
       name: tool.name,
       description: tool.description,
       parameters: getJsonSchemaToolParameters(tool, strict === true) as Record<string, unknown>,
-      ...(options?.toolSearchResult ? { defer_loading: true } : {}),
+      ...(options?.toolSearchResult === true ? { defer_loading: true } : {}),
     };
     if (supportsStrictMode) {
       functionTool.strict = strict;
@@ -439,7 +439,7 @@ function appendCustomToolCallInput(
   close: boolean,
 ): string | undefined {
   const customInput = block.customInput;
-  if (!customInput) return undefined;
+  if (customInput === undefined) return undefined;
   const delta = appendGrammarToolInputJsonDelta(
     customInput.jsonBuffer,
     customInput.property,
@@ -572,12 +572,23 @@ export async function processResponsesStream<TApi extends Api>(
   };
   const backfillReasoningSignatures = (responseOutput: ResponseOutputItem[]): void => {
     for (const item of responseOutput) {
-      if (item.type !== "reasoning" || !item.encrypted_content) continue;
+      if (
+        item.type !== "reasoning" ||
+        item.encrypted_content === undefined ||
+        item.encrypted_content === null ||
+        item.encrypted_content === ""
+      )
+        continue;
       const block = reasoningBlocksById.get(item.id);
-      if (!block?.thinkingSignature) continue;
+      if (block?.thinkingSignature === undefined || block?.thinkingSignature === "") continue;
 
       const storedItem = JSON.parse(block.thinkingSignature) as ResponseReasoningItem;
-      if (storedItem.encrypted_content) continue;
+      if (
+        storedItem.encrypted_content !== undefined &&
+        storedItem.encrypted_content !== null &&
+        storedItem.encrypted_content !== ""
+      )
+        continue;
       block.thinkingSignature = JSON.stringify({
         ...storedItem,
         encrypted_content: item.encrypted_content,
@@ -592,10 +603,10 @@ export async function processResponsesStream<TApi extends Api>(
   ): void => {
     sawTerminalResponseEvent = true;
     backfillReasoningSignatures(response.output ?? []);
-    if (response?.id) {
+    if (response?.id !== "") {
       output.responseId = response.id;
     }
-    if (response?.usage) {
+    if (response?.usage !== undefined) {
       const inputDetails = response.usage.input_tokens_details as
         | { cached_tokens?: number; cache_write_tokens?: number }
         | undefined;
@@ -612,10 +623,11 @@ export async function processResponsesStream<TApi extends Api>(
       };
     }
     calculateCost(model, output.usage);
-    if (options?.applyServiceTierPricing) {
-      const serviceTier = options.resolveServiceTier
-        ? options.resolveServiceTier(response?.service_tier, options.serviceTier)
-        : (response?.service_tier ?? options.serviceTier);
+    if (options?.applyServiceTierPricing !== undefined) {
+      const serviceTier =
+        options.resolveServiceTier === undefined
+          ? (response?.service_tier ?? options.serviceTier)
+          : options.resolveServiceTier(response?.service_tier, options.serviceTier);
       options.applyServiceTierPricing(output.usage, serviceTier);
     }
     const status = response?.status;
@@ -625,7 +637,10 @@ export async function processResponsesStream<TApi extends Api>(
       | undefined;
     const incompleteReason =
       typeof incompleteDetails?.reason === "string" ? incompleteDetails.reason : undefined;
-    output.rawStopReason = incompleteReason ? `${status}.${incompleteReason}` : status;
+    output.rawStopReason =
+      incompleteReason !== undefined && incompleteReason !== ""
+        ? `${status}.${incompleteReason}`
+        : status;
     const mappedStop = mapStopReason(status, incompleteReason);
     output.stopReason = mappedStop.stopReason;
     if (mappedStop.errorMessage === undefined) delete output.errorMessage;
@@ -643,7 +658,7 @@ export async function processResponsesStream<TApi extends Api>(
       createSlot(event.output_index, event.item);
     } else if (event.type === "response.reasoning_summary_text.delta") {
       const slot = getSlot(event.output_index, "thinking");
-      if (!slot) continue;
+      if (slot === undefined) continue;
       slot.block.thinking += event.delta;
       stream.push({
         type: "thinking_delta",
@@ -653,7 +668,7 @@ export async function processResponsesStream<TApi extends Api>(
       });
     } else if (event.type === "response.reasoning_summary_part.done") {
       const slot = getSlot(event.output_index, "thinking");
-      if (!slot) continue;
+      if (slot === undefined) continue;
       slot.block.thinking += "\n\n";
       stream.push({
         type: "thinking_delta",
@@ -663,7 +678,7 @@ export async function processResponsesStream<TApi extends Api>(
       });
     } else if (event.type === "response.reasoning_text.delta") {
       const slot = getSlot(event.output_index, "thinking");
-      if (!slot) continue;
+      if (slot === undefined) continue;
       slot.block.thinking += event.delta;
       stream.push({
         type: "thinking_delta",
@@ -673,7 +688,7 @@ export async function processResponsesStream<TApi extends Api>(
       });
     } else if (event.type === "response.output_text.delta") {
       const slot = getSlot(event.output_index, "text");
-      if (!slot) continue;
+      if (slot === undefined) continue;
       slot.block.text += event.delta;
       stream.push({
         type: "text_delta",
@@ -683,7 +698,7 @@ export async function processResponsesStream<TApi extends Api>(
       });
     } else if (event.type === "response.refusal.delta") {
       const slot = getSlot(event.output_index, "text");
-      if (!slot) continue;
+      if (slot === undefined) continue;
       slot.block.text += event.delta;
       stream.push({
         type: "text_delta",
@@ -693,13 +708,13 @@ export async function processResponsesStream<TApi extends Api>(
       });
     } else if (event.type === "response.function_call_arguments.delta") {
       const slot = getSlot(event.output_index, "toolCall");
-      if (!slot || slot.block.partialJson === undefined) continue;
+      if (slot === undefined || slot.block.partialJson === undefined) continue;
       slot.block.partialJson += event.delta;
       slot.block.arguments = parseStreamingJson(slot.block.partialJson);
       pushToolCallDelta(slot, event.delta);
     } else if (event.type === "response.function_call_arguments.done") {
       const slot = getSlot(event.output_index, "toolCall");
-      if (!slot || slot.block.partialJson === undefined) continue;
+      if (slot === undefined || slot.block.partialJson === undefined) continue;
       const previousPartialJson = slot.block.partialJson;
       slot.block.partialJson = event.arguments;
       slot.block.arguments = parseStreamingJson(slot.block.partialJson);
@@ -710,7 +725,7 @@ export async function processResponsesStream<TApi extends Api>(
       }
     } else if (event.type === "response.custom_tool_call_input.delta") {
       const slot = getSlot(event.output_index, "toolCall");
-      if (!slot || !slot.block.customInput) continue;
+      if (slot === undefined || slot.block.customInput === undefined) continue;
       pushToolCallDelta(
         slot,
         appendCustomToolCallInput(
@@ -721,7 +736,7 @@ export async function processResponsesStream<TApi extends Api>(
       );
     } else if (event.type === "response.custom_tool_call_input.done") {
       const slot = getSlot(event.output_index, "toolCall");
-      if (!slot || !slot.block.customInput) continue;
+      if (slot === undefined || slot.block.customInput === undefined) continue;
       pushToolCallDelta(slot, appendCustomToolCallInput(slot.block, event.input, true));
     } else if (event.type === "response.output_item.done") {
       const item = event.item;
@@ -770,7 +785,7 @@ export async function processResponsesStream<TApi extends Api>(
       } else if (
         item.type === "custom_tool_call" &&
         slot?.type === "toolCall" &&
-        slot.block.customInput
+        slot.block.customInput !== undefined
       ) {
         pushToolCallDelta(
           slot,
@@ -798,11 +813,12 @@ export async function processResponsesStream<TApi extends Api>(
       output.rawStopReason = event.response?.status;
       const error = event.response?.error;
       const details = event.response?.incomplete_details;
-      const msg = error
-        ? `${error.code || "unknown"}: ${error.message || "no message"}`
-        : details?.reason
-          ? `incomplete: ${details.reason}`
-          : "Unknown error (no error details in response)";
+      const msg =
+        error !== null
+          ? `${error.code || "unknown"}: ${error.message || "no message"}`
+          : details?.reason === undefined
+            ? "Unknown error (no error details in response)"
+            : `incomplete: ${details.reason}`;
       throw new Error(msg);
     }
   }
@@ -826,7 +842,7 @@ function mapStopReason(
   status: OpenAI.Responses.ResponseStatus | undefined,
   incompleteReason?: string,
 ): { stopReason: StopReason; errorMessage?: string } {
-  if (!status) return { stopReason: "stop" };
+  if (status === undefined) return { stopReason: "stop" };
   switch (status) {
     case "completed":
       return { stopReason: "stop" };
@@ -836,9 +852,10 @@ function mapStopReason(
       }
       return {
         stopReason: "error",
-        errorMessage: incompleteReason
-          ? `Response incomplete: ${incompleteReason}`
-          : "Response incomplete without a provider reason",
+        errorMessage:
+          incompleteReason !== undefined && incompleteReason !== ""
+            ? `Response incomplete: ${incompleteReason}`
+            : "Response incomplete without a provider reason",
       };
     case "failed":
     case "cancelled":

@@ -14,250 +14,257 @@ const testTool: Tool<typeof testToolSchema> = {
   parameters: testToolSchema,
 };
 
-describe.skipIf(!process.env["OPENAI_API_KEY"] || !process.env["ANTHROPIC_API_KEY"])(
-  "OpenAI Responses reasoning replay e2e",
-  () => {
-    it("skips reasoning-only history after an aborted turn", { retry: 2 }, async () => {
-      const model = getModel("openai", "gpt-5-mini");
+describe.skipIf(
+  process.env["OPENAI_API_KEY"] === undefined ||
+    process.env["OPENAI_API_KEY"] === "" ||
+    process.env["ANTHROPIC_API_KEY"] === undefined ||
+    process.env["ANTHROPIC_API_KEY"] === "",
+)("OpenAI Responses reasoning replay e2e", () => {
+  it("skips reasoning-only history after an aborted turn", { retry: 2 }, async () => {
+    const model = getModel("openai", "gpt-5-mini");
 
-      const apiKey = getEnvApiKey("openai");
-      if (!apiKey) {
-        throw new Error("Missing OPENAI_API_KEY");
-      }
+    const apiKey = getEnvApiKey("openai");
+    if (apiKey === undefined || apiKey === "") {
+      throw new Error("Missing OPENAI_API_KEY");
+    }
 
-      const userMessage: Message = {
-        role: "user",
-        content: "Use the double_number tool to double 21.",
-        timestamp: Date.now(),
-      };
+    const userMessage: Message = {
+      role: "user",
+      content: "Use the double_number tool to double 21.",
+      timestamp: Date.now(),
+    };
 
-      const assistantResponse = await complete(
-        model,
-        {
-          systemPrompt: "You are a helpful assistant. Use the tool.",
-          messages: [userMessage],
-          tools: [testTool],
-        },
-        {
-          apiKey,
-          reasoningEffort: "high",
-        },
-      );
-
-      const thinkingBlock = assistantResponse.content.find(
-        (block) => block.type === "thinking" && block.thinkingSignature,
-      );
-      if (!thinkingBlock || thinkingBlock.type !== "thinking") {
-        throw new Error("Missing thinking signature from OpenAI Responses");
-      }
-
-      const corruptedAssistant: AssistantMessage = {
-        ...assistantResponse,
-        content: [thinkingBlock],
-        stopReason: "aborted",
-      };
-
-      const followUp: Message = {
-        role: "user",
-        content: "Say hello to confirm you can continue.",
-        timestamp: Date.now(),
-      };
-
-      const context: Context = {
-        systemPrompt: "You are a helpful assistant.",
-        messages: [userMessage, corruptedAssistant, followUp],
+    const assistantResponse = await complete(
+      model,
+      {
+        systemPrompt: "You are a helpful assistant. Use the tool.",
+        messages: [userMessage],
         tools: [testTool],
-      };
-
-      const response = await complete(model, context, {
+      },
+      {
         apiKey,
         reasoningEffort: "high",
-      });
+      },
+    );
 
-      expect(response.stopReason, `Error: ${response.errorMessage}`).not.toBe("error");
-      expect(response.errorMessage).toBeFalsy();
-      expect(response.content.length).toBeGreaterThan(0);
+    const thinkingBlock = assistantResponse.content.find(
+      (block) => block.type === "thinking" && block.thinkingSignature,
+    );
+    if (thinkingBlock === undefined || thinkingBlock.type !== "thinking") {
+      throw new Error("Missing thinking signature from OpenAI Responses");
+    }
+
+    const corruptedAssistant: AssistantMessage = {
+      ...assistantResponse,
+      content: [thinkingBlock],
+      stopReason: "aborted",
+    };
+
+    const followUp: Message = {
+      role: "user",
+      content: "Say hello to confirm you can continue.",
+      timestamp: Date.now(),
+    };
+
+    const context: Context = {
+      systemPrompt: "You are a helpful assistant.",
+      messages: [userMessage, corruptedAssistant, followUp],
+      tools: [testTool],
+    };
+
+    const response = await complete(model, context, {
+      apiKey,
+      reasoningEffort: "high",
     });
 
-    it("handles same-provider different-model handoff with tool calls", { retry: 2 }, async () => {
-      const modelA = getModel("openai", "gpt-5-mini");
-      const modelB = getModel("openai", "gpt-5.5");
+    expect(response.stopReason, `Error: ${response.errorMessage}`).not.toBe("error");
+    expect(response.errorMessage).toBeFalsy();
+    expect(response.content.length).toBeGreaterThan(0);
+  });
 
-      const apiKey = getEnvApiKey("openai");
-      if (!apiKey) {
-        throw new Error("Missing OPENAI_API_KEY");
-      }
+  it("handles same-provider different-model handoff with tool calls", { retry: 2 }, async () => {
+    const modelA = getModel("openai", "gpt-5-mini");
+    const modelB = getModel("openai", "gpt-5.5");
 
-      const userMessage: Message = {
-        role: "user",
-        content: "Use the double_number tool to double 21.",
-        timestamp: Date.now(),
-      };
+    const apiKey = getEnvApiKey("openai");
+    if (apiKey === undefined || apiKey === "") {
+      throw new Error("Missing OPENAI_API_KEY");
+    }
 
-      const assistantResponse = await complete(
-        modelA,
-        {
-          systemPrompt: "You are a helpful assistant. Always use the tool when asked.",
-          messages: [userMessage],
-          tools: [testTool],
-        },
-        {
-          apiKey,
-          reasoningEffort: "high",
-        },
-      );
+    const userMessage: Message = {
+      role: "user",
+      content: "Use the double_number tool to double 21.",
+      timestamp: Date.now(),
+    };
 
-      const toolCallBlock = assistantResponse.content.find((block) => block.type === "toolCall") as
-        | ToolCall
-        | undefined;
-
-      if (!toolCallBlock) {
-        throw new Error("Missing tool call from OpenAI Responses - model did not use the tool");
-      }
-
-      const toolResult: Message = {
-        role: "toolResult",
-        toolCallId: toolCallBlock.id,
-        toolName: toolCallBlock.name,
-        content: [{ type: "text", text: "42" }],
-        isError: false,
-        timestamp: Date.now(),
-      };
-
-      const followUp: Message = {
-        role: "user",
-        content: "What was the result? Answer with just the number.",
-        timestamp: Date.now(),
-      };
-
-      const context: Context = {
-        systemPrompt: "You are a helpful assistant. Answer concisely.",
-        messages: [userMessage, assistantResponse, toolResult, followUp],
+    const assistantResponse = await complete(
+      modelA,
+      {
+        systemPrompt: "You are a helpful assistant. Always use the tool when asked.",
+        messages: [userMessage],
         tools: [testTool],
-      };
-
-      let capturedPayload: any = null;
-      const response = await complete(modelB, context, {
+      },
+      {
         apiKey,
         reasoningEffort: "high",
-        onPayload: (payload) => {
-          capturedPayload = payload;
-        },
-      });
+      },
+    );
 
-      expect(response.stopReason, `Error: ${response.errorMessage}`).not.toBe("error");
-      expect(response.errorMessage).toBeFalsy();
-      expect(response.content.length).toBeGreaterThan(0);
+    const toolCallBlock = assistantResponse.content.find((block) => block.type === "toolCall") as
+      | ToolCall
+      | undefined;
 
-      const input = capturedPayload?.input as any[];
-      const functionCalls = input?.filter((item: any) => item.type === "function_call") || [];
-      const reasoningItems = input?.filter((item: any) => item.type === "reasoning") || [];
+    if (toolCallBlock === undefined) {
+      throw new Error("Missing tool call from OpenAI Responses - model did not use the tool");
+    }
 
-      console.log("Payload sent to API:");
-      console.log("- function_calls:", functionCalls.length);
-      console.log("- reasoning items:", reasoningItems.length);
-      console.log("- full input:", JSON.stringify(input, null, 2));
+    const toolResult: Message = {
+      role: "toolResult",
+      toolCallId: toolCallBlock.id,
+      toolName: toolCallBlock.name,
+      content: [{ type: "text", text: "42" }],
+      isError: false,
+      timestamp: Date.now(),
+    };
 
-      const responseText = response.content
-        .filter((b) => b.type === "text")
-        .map((b) => (b as any).text)
-        .join("");
-      expect(responseText).toContain("42");
+    const followUp: Message = {
+      role: "user",
+      content: "What was the result? Answer with just the number.",
+      timestamp: Date.now(),
+    };
+
+    const context: Context = {
+      systemPrompt: "You are a helpful assistant. Answer concisely.",
+      messages: [userMessage, assistantResponse, toolResult, followUp],
+      tools: [testTool],
+    };
+
+    let capturedPayload: any = null;
+    const response = await complete(modelB, context, {
+      apiKey,
+      reasoningEffort: "high",
+      onPayload: (payload) => {
+        capturedPayload = payload;
+      },
     });
 
-    it("handles cross-provider handoff from Anthropic to OpenAI Codex", { retry: 2 }, async () => {
-      const anthropicModel = getModel("anthropic", "claude-sonnet-4-5");
-      const codexModel = getModel("openai", "gpt-5.5");
+    expect(response.stopReason, `Error: ${response.errorMessage}`).not.toBe("error");
+    expect(response.errorMessage).toBeFalsy();
+    expect(response.content.length).toBeGreaterThan(0);
 
-      const anthropicApiKey = getEnvApiKey("anthropic");
-      const openaiApiKey = getEnvApiKey("openai");
-      if (!anthropicApiKey || !openaiApiKey) {
-        throw new Error("Missing API keys");
-      }
+    const input = capturedPayload?.input as any[];
+    const functionCalls = input?.filter((item: any) => item.type === "function_call") || [];
+    const reasoningItems = input?.filter((item: any) => item.type === "reasoning") || [];
 
-      const userMessage: Message = {
-        role: "user",
-        content: "Use the double_number tool to double 21.",
-        timestamp: Date.now(),
-      };
+    console.log("Payload sent to API:");
+    console.log("- function_calls:", functionCalls.length);
+    console.log("- reasoning items:", reasoningItems.length);
+    console.log("- full input:", JSON.stringify(input, null, 2));
 
-      const assistantResponse = await complete(
-        anthropicModel,
-        {
-          systemPrompt: "You are a helpful assistant. Always use the tool when asked.",
-          messages: [userMessage],
-          tools: [testTool],
-        },
-        {
-          apiKey: anthropicApiKey,
-          thinkingEnabled: true,
-          thinkingBudgetTokens: 5000,
-        },
-      );
+    const responseText = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b as any).text)
+      .join("");
+    expect(responseText).toContain("42");
+  });
 
-      const toolCallBlock = assistantResponse.content.find((block) => block.type === "toolCall") as
-        | ToolCall
-        | undefined;
+  it("handles cross-provider handoff from Anthropic to OpenAI Codex", { retry: 2 }, async () => {
+    const anthropicModel = getModel("anthropic", "claude-sonnet-4-5");
+    const codexModel = getModel("openai", "gpt-5.5");
 
-      if (!toolCallBlock) {
-        throw new Error("Missing tool call from Anthropic - model did not use the tool");
-      }
+    const anthropicApiKey = getEnvApiKey("anthropic");
+    const openaiApiKey = getEnvApiKey("openai");
+    if (
+      anthropicApiKey === undefined ||
+      anthropicApiKey === "" ||
+      openaiApiKey === undefined ||
+      openaiApiKey === ""
+    ) {
+      throw new Error("Missing API keys");
+    }
 
-      console.log("Anthropic tool call ID:", toolCallBlock.id);
+    const userMessage: Message = {
+      role: "user",
+      content: "Use the double_number tool to double 21.",
+      timestamp: Date.now(),
+    };
 
-      const toolResult: Message = {
-        role: "toolResult",
-        toolCallId: toolCallBlock.id,
-        toolName: toolCallBlock.name,
-        content: [{ type: "text", text: "42" }],
-        isError: false,
-        timestamp: Date.now(),
-      };
-
-      const followUp: Message = {
-        role: "user",
-        content: "What was the result? Answer with just the number.",
-        timestamp: Date.now(),
-      };
-
-      const context: Context = {
-        systemPrompt: "You are a helpful assistant. Answer concisely.",
-        messages: [userMessage, assistantResponse, toolResult, followUp],
+    const assistantResponse = await complete(
+      anthropicModel,
+      {
+        systemPrompt: "You are a helpful assistant. Always use the tool when asked.",
+        messages: [userMessage],
         tools: [testTool],
-      };
+      },
+      {
+        apiKey: anthropicApiKey,
+        thinkingEnabled: true,
+        thinkingBudgetTokens: 5000,
+      },
+    );
 
-      let capturedPayload: any = null;
-      const response = await complete(codexModel, context, {
-        apiKey: openaiApiKey,
-        reasoningEffort: "high",
-        onPayload: (payload) => {
-          capturedPayload = payload;
-        },
-      });
+    const toolCallBlock = assistantResponse.content.find((block) => block.type === "toolCall") as
+      | ToolCall
+      | undefined;
 
-      const input = capturedPayload?.input as any[];
-      const functionCalls = input?.filter((item: any) => item.type === "function_call") || [];
-      const reasoningItems = input?.filter((item: any) => item.type === "reasoning") || [];
+    if (toolCallBlock === undefined) {
+      throw new Error("Missing tool call from Anthropic - model did not use the tool");
+    }
 
-      console.log("Payload sent to Codex:");
-      console.log("- function_calls:", functionCalls.length);
-      console.log("- reasoning items:", reasoningItems.length);
-      if (functionCalls.length > 0) {
-        console.log(
-          "- function_call IDs:",
-          functionCalls.map((fc: any) => fc.id),
-        );
-      }
+    console.log("Anthropic tool call ID:", toolCallBlock.id);
 
-      expect(response.stopReason, `Error: ${response.errorMessage}`).not.toBe("error");
-      expect(response.errorMessage).toBeFalsy();
-      expect(response.content.length).toBeGreaterThan(0);
+    const toolResult: Message = {
+      role: "toolResult",
+      toolCallId: toolCallBlock.id,
+      toolName: toolCallBlock.name,
+      content: [{ type: "text", text: "42" }],
+      isError: false,
+      timestamp: Date.now(),
+    };
 
-      const responseText = response.content
-        .filter((b) => b.type === "text")
-        .map((b) => (b as any).text)
-        .join("");
-      expect(responseText).toContain("42");
+    const followUp: Message = {
+      role: "user",
+      content: "What was the result? Answer with just the number.",
+      timestamp: Date.now(),
+    };
+
+    const context: Context = {
+      systemPrompt: "You are a helpful assistant. Answer concisely.",
+      messages: [userMessage, assistantResponse, toolResult, followUp],
+      tools: [testTool],
+    };
+
+    let capturedPayload: any = null;
+    const response = await complete(codexModel, context, {
+      apiKey: openaiApiKey,
+      reasoningEffort: "high",
+      onPayload: (payload) => {
+        capturedPayload = payload;
+      },
     });
-  },
-);
+
+    const input = capturedPayload?.input as any[];
+    const functionCalls = input?.filter((item: any) => item.type === "function_call") || [];
+    const reasoningItems = input?.filter((item: any) => item.type === "reasoning") || [];
+
+    console.log("Payload sent to Codex:");
+    console.log("- function_calls:", functionCalls.length);
+    console.log("- reasoning items:", reasoningItems.length);
+    if (functionCalls.length > 0) {
+      console.log(
+        "- function_call IDs:",
+        functionCalls.map((fc: any) => fc.id),
+      );
+    }
+
+    expect(response.stopReason, `Error: ${response.errorMessage}`).not.toBe("error");
+    expect(response.errorMessage).toBeFalsy();
+    expect(response.content.length).toBeGreaterThan(0);
+
+    const responseText = response.content
+      .filter((b) => b.type === "text")
+      .map((b) => (b as any).text)
+      .join("");
+    expect(responseText).toContain("42");
+  });
+});

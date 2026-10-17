@@ -259,15 +259,15 @@ function withUsageEstimate(
   let cacheWrite = 0;
   const sessionId = options?.sessionId;
 
-  if (sessionId && options?.cacheRetention !== "none") {
+  if (sessionId !== undefined && sessionId !== "" && options?.cacheRetention !== "none") {
     const previousPrompt = promptCache.get(sessionId);
-    if (previousPrompt) {
+    if (previousPrompt === undefined) {
+      cacheWrite = promptTokens;
+    } else {
       const cachedChars = commonPromptPrefixLength(previousPrompt, prompt);
       cacheRead = Math.ceil(cachedChars / 4);
       cacheWrite = Math.ceil((promptLength - cachedChars) / 4);
       input = Math.max(0, promptTokens - cacheRead);
-    } else {
-      cacheWrite = promptTokens;
     }
     promptCache.set(sessionId, prompt);
   }
@@ -361,7 +361,12 @@ function createAbortedMessage(partial: AssistantMessage): AssistantMessage {
 }
 
 function scheduleChunk(chunk: string, tokensPerSecond: number | undefined): Promise<void> {
-  if (!tokensPerSecond || tokensPerSecond <= 0) {
+  if (
+    tokensPerSecond === undefined ||
+    tokensPerSecond === 0 ||
+    Number.isNaN(tokensPerSecond) ||
+    tokensPerSecond <= 0
+  ) {
     return new Promise((resolve) => {
       queueMicrotask(resolve);
     });
@@ -381,7 +386,7 @@ async function streamWithDeltas(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   const partial: AssistantMessage = { ...message, content: [], stopReason: "pending" };
-  if (signal?.aborted) {
+  if (signal?.aborted === true) {
     const aborted = createAbortedMessage(partial);
     stream.push({ type: "error", reason: "aborted", error: aborted });
     stream.end(aborted);
@@ -391,7 +396,7 @@ async function streamWithDeltas(
   stream.push({ type: "start", partial: { ...partial } });
 
   for (const [index, block] of message.content.entries()) {
-    if (signal?.aborted) {
+    if (signal?.aborted ?? false) {
       const aborted = createAbortedMessage(partial);
       stream.push({ type: "error", reason: "aborted", error: aborted });
       stream.end(aborted);
@@ -403,7 +408,7 @@ async function streamWithDeltas(
       stream.push({ type: "thinking_start", contentIndex: index, partial: { ...partial } });
       for (const chunk of splitStringByTokenSize(block.thinking, minTokenSize, maxTokenSize)) {
         await scheduleChunk(chunk, tokensPerSecond);
-        if (signal?.aborted) {
+        if (signal?.aborted ?? false) {
           const aborted = createAbortedMessage(partial);
           stream.push({ type: "error", reason: "aborted", error: aborted });
           stream.end(aborted);
@@ -431,7 +436,7 @@ async function streamWithDeltas(
       stream.push({ type: "text_start", contentIndex: index, partial: { ...partial } });
       for (const chunk of splitStringByTokenSize(block.text, minTokenSize, maxTokenSize)) {
         await scheduleChunk(chunk, tokensPerSecond);
-        if (signal?.aborted) {
+        if (signal?.aborted ?? false) {
           const aborted = createAbortedMessage(partial);
           stream.push({ type: "error", reason: "aborted", error: aborted });
           stream.end(aborted);
@@ -465,7 +470,7 @@ async function streamWithDeltas(
       maxTokenSize,
     )) {
       await scheduleChunk(chunk, tokensPerSecond);
-      if (signal?.aborted) {
+      if (signal?.aborted ?? false) {
         const aborted = createAbortedMessage(partial);
         stream.push({ type: "error", reason: "aborted", error: aborted });
         stream.end(aborted);
@@ -529,19 +534,20 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
     }
   >();
 
-  const modelDefinitions = options.models?.length
-    ? options.models
-    : [
-        {
-          id: DEFAULT_MODEL_ID,
-          name: DEFAULT_MODEL_NAME,
-          reasoning: false,
-          input: ["text", "image"] as ("text" | "image")[],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 128000,
-          maxTokens: 16384,
-        },
-      ];
+  const modelDefinitions =
+    options.models?.length !== undefined && options.models?.length > 0
+      ? options.models
+      : [
+          {
+            id: DEFAULT_MODEL_ID,
+            name: DEFAULT_MODEL_NAME,
+            reasoning: false,
+            input: ["text", "image"] as ("text" | "image")[],
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 128000,
+            maxTokens: 16384,
+          },
+        ];
   const models = modelDefinitions.map((definition) => ({
     id: definition.id,
     name: definition.name ?? definition.id,
@@ -584,7 +590,7 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
     queueMicrotask(async () => {
       try {
         await streamOptions?.onResponse?.({ status: 200, headers: {} }, requestModel);
-        if (!step) {
+        if (step === undefined) {
           let message = createErrorMessage(
             new Error("No more faux responses queued"),
             api,
@@ -597,7 +603,7 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
           return;
         }
 
-        if (streamOptions?.deferred) {
+        if (streamOptions?.deferred !== undefined && streamOptions?.deferred !== false) {
           const handle: DeferredHandle = {
             provider: requestModel.provider,
             modelId: requestModel.id,
@@ -665,7 +671,7 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
         await fetchOptions?.onResponse?.({ status: 200, headers: {} }, requestModel);
         const entry = deferredResponses.get(handle.id);
         if (
-          !entry ||
+          entry === undefined ||
           entry.handle.provider !== handle.provider ||
           entry.handle.modelId !== handle.modelId ||
           entry.handle.api !== handle.api
@@ -687,7 +693,7 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
           return;
         }
 
-        if (!entry.final) {
+        if (entry.final === undefined) {
           const {
             deferred: _deferred,
             signal: _submissionSignal,
@@ -730,14 +736,14 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
   ): Promise<void> => {
     state.cancelledDeferred.push(structuredClone(handle));
     const entry = deferredResponses.get(handle.id);
-    if (entry) entry.cancelled = true;
+    if (entry !== undefined) entry.cancelled = true;
     await cancelOptions?.onResponse?.({ status: 200, headers: {} }, requestModel);
   };
 
   function getModel(): Model<string>;
   function getModel(requestedModelId: string): Model<string> | undefined;
   function getModel(requestedModelId?: string): Model<string> | undefined {
-    if (!requestedModelId) {
+    if (requestedModelId === undefined || requestedModelId === "") {
       return models[0];
     }
     return models.find((candidate) => candidate.id === requestedModelId);

@@ -196,7 +196,8 @@ describe("OAuth callback server", () => {
     });
     try {
       const address = blocker.address();
-      if (!address || typeof address === "string") throw new Error("blocker did not bind to TCP");
+      if (address === null || address === "" || typeof address === "string")
+        throw new Error("blocker did not bind to TCP");
       await expect(start<string>({ port: address.port })).rejects.toMatchObject({
         code: "EADDRINUSE",
       });

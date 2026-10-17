@@ -84,7 +84,7 @@ describe("OAuth device-code polling", () => {
       poll: () => {
         pollTimes.push(Date.now());
         const result = results.shift();
-        if (!result) return Promise.reject(new Error("Unexpected extra poll"));
+        if (result === undefined) return Promise.reject(new Error("Unexpected extra poll"));
         return Promise.resolve(result);
       },
       signal: neverAbortedSignal,
@@ -117,7 +117,7 @@ describe("OAuth device-code polling", () => {
       poll: () => {
         pollTimes.push(Date.now());
         const result = results.shift();
-        if (!result) return Promise.reject(new Error("Unexpected extra poll"));
+        if (result === undefined) return Promise.reject(new Error("Unexpected extra poll"));
         return Promise.resolve(result);
       },
       signal: neverAbortedSignal,

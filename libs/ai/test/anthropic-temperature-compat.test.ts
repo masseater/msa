@@ -60,7 +60,7 @@ async function capturePayload(
 
   await s.result();
 
-  if (!capturedPayload) {
+  if (capturedPayload === undefined) {
     throw new Error("Expected payload to be captured before request failure");
   }
 

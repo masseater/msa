@@ -85,19 +85,20 @@ export function lazyApi(
       lazyStream(model, async () => (await load()).streamSimple(model, context, options)),
   };
 
-  if (capabilities?.fetchDeferred) {
+  if (capabilities?.fetchDeferred === true) {
     api.fetchDeferred = (model, handle, options) =>
       lazyStream(model, async () => {
         const implementation = await load();
-        if (!implementation.fetchDeferred)
+        if (implementation.fetchDeferred === undefined)
           throw new Error("API does not support deferred responses");
         return implementation.fetchDeferred(model, handle, options);
       });
   }
-  if (capabilities?.cancelDeferred) {
+  if (capabilities?.cancelDeferred === true) {
     api.cancelDeferred = async (model, handle, options) => {
       const implementation = await load();
-      if (!implementation.cancelDeferred) throw new Error("API cannot cancel deferred responses");
+      if (implementation.cancelDeferred === undefined)
+        throw new Error("API cannot cancel deferred responses");
       await implementation.cancelDeferred(model, handle, options);
     };
   }

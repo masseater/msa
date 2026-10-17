@@ -34,7 +34,7 @@ vi.mock("openai", () => {
       create: (params: CapturedAzureResponsesPayload) => {
         azureMock.lastParams = params;
         const events = azureMock.streamEvents;
-        if (!events) throw new Error("mock create");
+        if (events === undefined) throw new Error("mock create");
         return {
           withResponse: () =>
             Promise.resolve({
@@ -110,7 +110,7 @@ async function captureClientBaseUrl(baseUrl: string): Promise<string> {
   }).result();
   expect(azureMock.constructorCalls).toHaveLength(1);
   const [call] = azureMock.constructorCalls;
-  if (!call) throw new Error("Expected an AzureOpenAI constructor call");
+  if (call === undefined) throw new Error("Expected an AzureOpenAI constructor call");
   return call.baseURL;
 }
 
@@ -125,7 +125,7 @@ async function captureClientHeaders(
   }).result();
   expect(azureMock.constructorCalls).toHaveLength(1);
   const [call] = azureMock.constructorCalls;
-  if (!call) throw new Error("Expected an AzureOpenAI constructor call");
+  if (call === undefined) throw new Error("Expected an AzureOpenAI constructor call");
   return call.defaultHeaders ?? {};
 }
 

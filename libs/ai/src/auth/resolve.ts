@@ -44,11 +44,10 @@ async function resolveProviderAuthWithSignal(
   signal: AbortSignal,
 ): Promise<AuthResult | undefined> {
   signal.throwIfAborted();
-  const requestAuthContext = overrides?.env
-    ? overlayEnvAuthContext(authContext, overrides.env)
-    : authContext;
+  const requestAuthContext =
+    overrides?.env === undefined ? authContext : overlayEnvAuthContext(authContext, overrides.env);
 
-  if (overrides?.apiKey !== undefined && provider.auth.apiKey) {
+  if (overrides?.apiKey !== undefined && provider.auth.apiKey !== undefined) {
     return resolveApiKey(
       requestAuthContext,
       provider.auth.apiKey,
@@ -63,8 +62,8 @@ async function resolveProviderAuthWithSignal(
   }
 
   const stored = await readCredential(credentials, provider.id, signal);
-  if (stored) {
-    if (stored.type === "oauth" && provider.auth.oauth) {
+  if (stored !== undefined) {
+    if (stored.type === "oauth" && provider.auth.oauth !== undefined) {
       return resolveStoredOAuth(
         credentials,
         provider.id,
@@ -74,10 +73,11 @@ async function resolveProviderAuthWithSignal(
         overrides?.minOAuthValidityMs,
       );
     }
-    if (stored.type === "api_key" && provider.auth.apiKey) {
-      const credential = overrides?.env
-        ? { ...stored, env: { ...stored.env, ...overrides.env } }
-        : stored;
+    if (stored.type === "api_key" && provider.auth.apiKey !== undefined) {
+      const credential =
+        overrides?.env === undefined
+          ? stored
+          : { ...stored, env: { ...stored.env, ...overrides.env } };
       return resolveApiKey(
         requestAuthContext,
         provider.auth.apiKey,
@@ -89,9 +89,9 @@ async function resolveProviderAuthWithSignal(
     return undefined;
   }
 
-  return provider.auth.apiKey
-    ? resolveApiKey(requestAuthContext, provider.auth.apiKey, provider.id, undefined, signal)
-    : undefined;
+  return provider.auth.apiKey === undefined
+    ? undefined
+    : resolveApiKey(requestAuthContext, provider.auth.apiKey, provider.id, undefined, signal);
 }
 
 function overlayEnvAuthContext(base: AuthContext, env: ProviderEnv): AuthContext {
@@ -170,7 +170,7 @@ async function resolveStoredOAuth(
       expiresSoon,
       signal,
     );
-    if (!post) return undefined;
+    if (post === undefined) return undefined;
     credential = post;
     if (minOAuthValidityMs !== undefined && expiresSoon(credential)) {
       throw new ModelsError(

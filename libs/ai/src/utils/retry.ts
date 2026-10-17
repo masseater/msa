@@ -121,7 +121,7 @@ class RetrySleepAbortError extends Error {
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
+    if (signal?.aborted === true) {
       reject(new RetrySleepAbortError());
       return;
     }
@@ -143,7 +143,7 @@ export async function retryAssistantCall(
   signal: AbortSignal | undefined,
   callbacks?: RetryCallbacks,
 ): Promise<AssistantMessage> {
-  const maxAttempts = policy?.enabled ? policy.maxRetries : 0;
+  const maxAttempts = policy?.enabled === true ? policy.maxRetries : 0;
 
   let attempt = 0;
   let lastRetry: { attempt: number; errorMessage: string } | undefined;
@@ -151,17 +151,17 @@ export async function retryAssistantCall(
     const response = await produce();
 
     if (response.stopReason === "aborted") {
-      if (lastRetry) await callbacks?.onRetryFinished?.(false, lastRetry.attempt);
+      if (lastRetry !== undefined) await callbacks?.onRetryFinished?.(false, lastRetry.attempt);
       return response;
     }
 
     if (response.stopReason !== "error") {
-      if (lastRetry) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);
+      if (lastRetry !== undefined) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);
       return response;
     }
 
     if (attempt >= maxAttempts || !isRetryableAssistantError(response)) {
-      if (lastRetry)
+      if (lastRetry !== undefined)
         await callbacks?.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);
       return response;
     }
@@ -186,7 +186,12 @@ export async function retryAssistantCall(
 }
 
 export function isRetryableAssistantError(message: AssistantMessage): boolean {
-  if (message.stopReason !== "error" || !message.errorMessage) return false;
+  if (
+    message.stopReason !== "error" ||
+    message.errorMessage === undefined ||
+    message.errorMessage === ""
+  )
+    return false;
   const errorMessage = message.errorMessage;
   if (NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(errorMessage)) return false;
   return RETRYABLE_PROVIDER_ERROR_PATTERN.test(errorMessage);

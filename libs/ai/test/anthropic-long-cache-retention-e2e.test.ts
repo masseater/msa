@@ -120,7 +120,7 @@ describe("Anthropic Messages long cache retention E2E", () => {
     for (const testCase of probeCases) {
       const model = withLongCacheRetention(testCase.model);
 
-      it.skipIf(!testCase.apiKey)(
+      it.skipIf(testCase.apiKey === undefined || testCase.apiKey === "")(
         `${testCase.name} accepts long cache retention`,
         { retry: 2 },
         async () => {

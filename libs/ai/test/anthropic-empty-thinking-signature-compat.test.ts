@@ -78,7 +78,7 @@ async function capturePayload(
     },
   });
   await stream.result();
-  if (!capturedPayload) throw new Error("Expected payload capture before request");
+  if (capturedPayload === undefined) throw new Error("Expected payload capture before request");
   return capturedPayload;
 }
 

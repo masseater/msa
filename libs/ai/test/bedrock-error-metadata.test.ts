@@ -16,7 +16,8 @@ vi.mock("@aws-sdk/client-bedrock-runtime", () => {
 
     send(): Promise<unknown> {
       const outcome = bedrockMock.send;
-      if (!outcome) return Promise.reject(new Error("test did not configure a send outcome"));
+      if (outcome === undefined)
+        return Promise.reject(new Error("test did not configure a send outcome"));
       return outcome.kind === "reject"
         ? Promise.reject(outcome.error)
         : Promise.resolve(outcome.response);

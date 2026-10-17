@@ -40,7 +40,9 @@ function createTool(
     name: "lookup",
     description: "Look up a value",
     parameters,
-    ...(constrainedSampling ? { constrainedSampling } : {}),
+    ...(constrainedSampling !== undefined && constrainedSampling !== false
+      ? { constrainedSampling }
+      : {}),
   };
 }
 
@@ -70,7 +72,7 @@ async function captureFirstTool(
   await stream.result();
 
   const firstTool = payload?.tools?.[0];
-  if (!firstTool) {
+  if (firstTool === undefined) {
     throw new Error("Expected a tool in the captured Anthropic payload");
   }
   return firstTool;

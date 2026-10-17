@@ -14,7 +14,7 @@ vi.mock("@aws-sdk/client-bedrock-runtime", () => {
 
   class BedrockRuntimeClient {
     send(): Promise<unknown> {
-      if (bedrockMock.streamEvents) {
+      if (bedrockMock.streamEvents !== undefined) {
         const events = bedrockMock.streamEvents;
         return Promise.resolve({
           $metadata: { httpStatusCode: 200 },
@@ -117,7 +117,7 @@ async function capturePayload(context: Context): Promise<BedrockRequestPayload> 
   for await (const event of s) {
     if (event.type === "error") break;
   }
-  if (!capturedPayload) {
+  if (capturedPayload === undefined) {
     throw new Error("Expected Bedrock payload to be captured before request abort");
   }
   return capturedPayload;

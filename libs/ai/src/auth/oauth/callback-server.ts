@@ -34,7 +34,7 @@ export async function startOAuthCallbackServer<T>(
   options: OAuthCallbackServerOptions<T>,
 ): Promise<OAuthCallbackServer<T>> {
   const { providerName, signal } = options;
-  if (signal?.aborted) throw new Error("Login cancelled");
+  if (signal?.aborted === true) throw new Error("Login cancelled");
 
   let resolveWait: (value: T | undefined) => void = () => {};
   let rejectWait: (error: Error) => void = () => {};
@@ -51,7 +51,7 @@ export async function startOAuthCallbackServer<T>(
   const finish = (result: { value: T | undefined } | { error: Error }): void => {
     if (settled) return;
     settled = true;
-    if (timer) clearTimeout(timer);
+    if (timer !== undefined) clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
     if ("error" in result) rejectWait(result.error);
     else resolveWait(result.value);
@@ -73,7 +73,7 @@ export async function startOAuthCallbackServer<T>(
         return;
       }
       const error = url.searchParams.get("error");
-      if (error) {
+      if (error !== null && error !== "") {
         const description = url.searchParams.get("error_description") ?? error;
         sendPage(
           response,
@@ -84,7 +84,7 @@ export async function startOAuthCallbackServer<T>(
         return;
       }
       const code = url.searchParams.get("code");
-      if (!code) {
+      if (code === null || code === "") {
         sendPage(response, 400, oauthErrorHtml("Missing authorization code."));
         return;
       }
@@ -113,7 +113,7 @@ export async function startOAuthCallbackServer<T>(
     });
   });
   const address = server.address();
-  if (!address || typeof address === "string") {
+  if (address === null || address === "" || typeof address === "string") {
     server.close();
     throw new Error("OAuth callback server did not bind to TCP");
   }
@@ -160,10 +160,10 @@ export async function waitForCallbackOrManualInput<T>(
     });
   try {
     const value = await callback?.wait();
-    if (manualError) throw manualError;
+    if (manualError !== undefined) throw manualError;
     if (value !== undefined) return { type: "callback", value };
     const input = await manual;
-    if (manualError) throw manualError;
+    if (manualError !== undefined) throw manualError;
     return { type: "manual", input: input ?? "" };
   } finally {
     manualAbort.abort();

@@ -62,7 +62,7 @@ const bedrockAuth: ApiKeyAuth = {
       signal.throwIfAborted();
       return value;
     };
-    if (credential?.key) {
+    if (credential?.key !== undefined && credential?.key !== "") {
       return { auth: { apiKey: credential.key }, env: credential.env, source: "stored credential" };
     }
     if (await env("AWS_BEARER_TOKEN_BEDROCK"))
@@ -71,7 +71,10 @@ const bedrockAuth: ApiKeyAuth = {
       return {
         auth: {},
         env: credential?.env,
-        source: credential?.env?.["AWS_PROFILE"] ? "stored credential" : "AWS_PROFILE",
+        source:
+          credential?.env?.["AWS_PROFILE"] !== undefined && credential?.env?.["AWS_PROFILE"] !== ""
+            ? "stored credential"
+            : "AWS_PROFILE",
       };
     }
     if ((await env("AWS_ACCESS_KEY_ID")) && (await env("AWS_SECRET_ACCESS_KEY"))) {

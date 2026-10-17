@@ -67,18 +67,17 @@ async function handleImageInput<TApi extends string>(
 }
 
 describe("Images E2E Tests", () => {
-  describe.skipIf(!process.env["OPENROUTER_API_KEY"])(
-    "OpenRouter Images Provider (google/gemini-2.5-flash-image)",
-    () => {
-      const model = getImageModel("openrouter", "google/gemini-2.5-flash-image");
+  describe.skipIf(
+    process.env["OPENROUTER_API_KEY"] === undefined || process.env["OPENROUTER_API_KEY"] === "",
+  )("OpenRouter Images Provider (google/gemini-2.5-flash-image)", () => {
+    const model = getImageModel("openrouter", "google/gemini-2.5-flash-image");
 
-      it("should generate a basic image", { retry: 3 }, async () => {
-        await basicImageGeneration(model);
-      });
+    it("should generate a basic image", { retry: 3 }, async () => {
+      await basicImageGeneration(model);
+    });
 
-      it("should handle image input", { retry: 3 }, async () => {
-        await handleImageInput(model);
-      });
-    },
-  );
+    it("should handle image input", { retry: 3 }, async () => {
+      await handleImageInput(model);
+    });
+  });
 });

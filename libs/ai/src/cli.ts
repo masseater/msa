@@ -45,18 +45,18 @@ async function answerPrompt(
     const choice =
       Number.parseInt(await prompt(rl, `Enter number (1-${authPrompt.options.length}): `), 10) - 1;
     const selected = authPrompt.options[choice];
-    if (!selected) throw new Error("Invalid selection");
+    if (selected === undefined) throw new Error("Invalid selection");
     return selected.id;
   }
   return prompt(
     rl,
-    `${authPrompt.message}${authPrompt.placeholder ? ` (${authPrompt.placeholder})` : ""}: `,
+    `${authPrompt.message}${authPrompt.placeholder !== undefined && authPrompt.placeholder !== "" ? ` (${authPrompt.placeholder})` : ""}: `,
   );
 }
 
 async function login(providerId: string): Promise<void> {
   const provider = PROVIDERS.find((entry) => entry.id === providerId);
-  if (!provider) throw new Error(`Unknown provider: ${providerId}`);
+  if (provider === undefined) throw new Error(`Unknown provider: ${providerId}`);
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     const credential = await provider.auth.oauth.login(
@@ -67,7 +67,8 @@ async function login(providerId: string): Promise<void> {
           switch (event.type) {
             case "auth_url":
               console.log(`\nOpen this URL in your browser:\n${event.url}`);
-              if (event.instructions) console.log(event.instructions);
+              if (event.instructions !== undefined && event.instructions !== "")
+                console.log(event.instructions);
               break;
             case "device_code":
               console.log(`\nOpen this URL in your browser:\n${event.verificationUri}`);
@@ -94,7 +95,13 @@ async function login(providerId: string): Promise<void> {
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0];
-  if (!command || command === "help" || command === "--help" || command === "-h") {
+  if (
+    command === undefined ||
+    command === "" ||
+    command === "help" ||
+    command === "--help" ||
+    command === "-h"
+  ) {
     const providerList = PROVIDERS.map(
       (provider) => `  ${provider.id.padEnd(20)} ${provider.name}`,
     ).join("\n");
@@ -109,7 +116,7 @@ async function main(): Promise<void> {
   }
   if (command === "login") {
     let providerId = args[1];
-    if (!providerId) {
+    if (providerId === undefined || providerId === "") {
       const rl = createInterface({ input: process.stdin, output: process.stdout });
       try {
         for (const [index, provider] of PROVIDERS.entries()) {
@@ -122,7 +129,11 @@ async function main(): Promise<void> {
         rl.close();
       }
     }
-    if (!providerId || !PROVIDERS.some((provider) => provider.id === providerId)) {
+    if (
+      providerId === undefined ||
+      providerId === "" ||
+      !PROVIDERS.some((provider) => provider.id === providerId)
+    ) {
       throw new Error(`Unknown provider: ${providerId ?? ""}`);
     }
     await login(providerId);

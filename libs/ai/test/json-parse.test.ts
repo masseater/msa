@@ -25,7 +25,6 @@ describe("parseStreamingJson", () => {
   });
 });
 
-// #10897
 describe("parseToolCallArguments", () => {
   it("parses complete JSON and repairs invalid escapes", () => {
     expect(parseToolCallArguments(String.raw`{"kind":"seek","note":"\url"}`)).toEqual({

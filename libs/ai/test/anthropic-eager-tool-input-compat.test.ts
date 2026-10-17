@@ -92,11 +92,11 @@ async function captureAnthropicRequest(
     }
   } finally {
     await new Promise<void>((resolve, reject) => {
-      server.close((error) => (error ? reject(error) : resolve()));
+      server.close((error) => (error === undefined ? resolve() : reject(error)));
     });
   }
 
-  if (!capturedRequest) {
+  if (capturedRequest === undefined) {
     throw new Error("Anthropic request was not captured");
   }
   return capturedRequest;

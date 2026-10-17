@@ -80,7 +80,7 @@ export function transformMessages<TApi extends Api>(
 
     if (msg.role === "toolResult") {
       const normalizedId = toolCallIdMap.get(msg.toolCallId);
-      if (normalizedId && normalizedId !== msg.toolCallId) {
+      if (normalizedId !== undefined && normalizedId !== "" && normalizedId !== msg.toolCallId) {
         return Object.assign({}, msg, { toolCallId: normalizedId });
       }
       return msg;
@@ -95,11 +95,16 @@ export function transformMessages<TApi extends Api>(
 
       const transformedContent = assistantMsg.content.flatMap((block) => {
         if (block.type === "thinking") {
-          if (block.redacted) {
+          if (block.redacted === true) {
             return isSameModel ? block : [];
           }
-          if (isSameModel && block.thinkingSignature) return block;
-          if (!block.thinking || block.thinking.trim() === "") return [];
+          if (
+            isSameModel &&
+            block.thinkingSignature !== undefined &&
+            block.thinkingSignature !== ""
+          )
+            return block;
+          if (block.thinking === "" || block.thinking.trim() === "") return [];
           if (isSameModel) return block;
           return {
             type: "text" as const,
@@ -119,12 +124,16 @@ export function transformMessages<TApi extends Api>(
           const toolCall = block as ToolCall;
           let normalizedToolCall: ToolCall = toolCall;
 
-          if (!isSameModel && toolCall.thoughtSignature) {
+          if (
+            !isSameModel &&
+            toolCall.thoughtSignature !== undefined &&
+            toolCall.thoughtSignature !== ""
+          ) {
             normalizedToolCall = { ...toolCall };
             delete (normalizedToolCall as { thoughtSignature?: string }).thoughtSignature;
           }
 
-          if (!isSameModel && normalizeToolCallId) {
+          if (!isSameModel && normalizeToolCallId !== undefined) {
             const normalizedId = normalizeToolCallId(toolCall.id, model, assistantMsg);
             if (normalizedId !== toolCall.id) {
               toolCallIdMap.set(toolCall.id, normalizedId);

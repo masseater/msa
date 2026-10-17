@@ -20,7 +20,12 @@ const echoTool: Tool<typeof echoToolSchema> = {
 };
 
 describe("Tool Call ID Normalization - Live Handoff", () => {
-  it.skipIf(!openaiKey || !openrouterKey)(
+  it.skipIf(
+    openaiKey === undefined ||
+      openaiKey === "" ||
+      openrouterKey === undefined ||
+      openrouterKey === "",
+  )(
     "openai -> openrouter should normalize pipe-separated IDs",
     async () => {
       const openaiModel = getModel("openai", "gpt-5.5");
@@ -88,7 +93,9 @@ describe("Tool Call ID Normalization - Live Handoff", () => {
     60000,
   );
 
-  it.skipIf(!openaiKey || !codexToken)(
+  it.skipIf(
+    openaiKey === undefined || openaiKey === "" || codexToken === undefined || codexToken === "",
+  )(
     "openai -> openai-codex should normalize pipe-separated IDs",
     async () => {
       const openaiModel = getModel("openai", "gpt-5.5");
@@ -204,7 +211,7 @@ describe("Tool Call ID Normalization - Prefilled Context", () => {
     return [userMessage, assistantMessage, toolResult, followUpUser];
   }
 
-  it.skipIf(!openrouterKey)(
+  it.skipIf(openrouterKey === undefined || openrouterKey === "")(
     "openrouter should handle prefilled context with long pipe-separated IDs",
     async () => {
       const model = getModel("openrouter", "openai/gpt-5.5");
@@ -221,7 +228,7 @@ describe("Tool Call ID Normalization - Prefilled Context", () => {
       );
 
       expect(response.stopReason, `OpenRouter error: ${response.errorMessage}`).not.toBe("error");
-      if (response.errorMessage) {
+      if (response.errorMessage !== undefined && response.errorMessage !== "") {
         expect(response.errorMessage).not.toContain("call_id");
         expect(response.errorMessage).not.toContain("too long");
       }
@@ -229,7 +236,7 @@ describe("Tool Call ID Normalization - Prefilled Context", () => {
     30000,
   );
 
-  it.skipIf(!codexToken)(
+  it.skipIf(codexToken === undefined || codexToken === "")(
     "openai-codex should handle prefilled context with long pipe-separated IDs",
     async () => {
       const model = getModel("openai-codex", "gpt-5.5");
@@ -246,7 +253,7 @@ describe("Tool Call ID Normalization - Prefilled Context", () => {
       );
 
       expect(response.stopReason, `Codex error: ${response.errorMessage}`).not.toBe("error");
-      if (response.errorMessage) {
+      if (response.errorMessage !== undefined && response.errorMessage !== "") {
         expect(response.errorMessage).not.toContain("id");
         expect(response.errorMessage).not.toContain("additional characters");
       }

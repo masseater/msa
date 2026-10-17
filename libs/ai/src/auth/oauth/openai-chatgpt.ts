@@ -49,12 +49,12 @@ function randomValue(): string {
 
 function authorizationResultFromCallback(url: URL, expectedState: string): AuthorizationResult {
   const code = url.searchParams.get("code");
-  if (!code) throw new Error("Missing authorization code");
+  if (code === null || code === "") throw new Error("Missing authorization code");
   const state = url.searchParams.get("state");
-  if (!state) throw new Error("Missing OAuth state");
+  if (state === null || state === "") throw new Error("Missing OAuth state");
   if (state !== expectedState) throw new Error("OAuth state mismatch");
   const clientId = url.searchParams.get("client_id")?.trim();
-  if (!clientId)
+  if (clientId === undefined || clientId === "")
     throw new Error("OpenAI OAuth registration callback did not contain an issued client ID");
   return { code, clientId };
 }
@@ -74,7 +74,7 @@ function authorizationResultFromManualInput(
     throw new Error(`The pasted callback URL must start with ${REDIRECT_URI}`);
   }
   const error = url.searchParams.get("error");
-  if (error) throw new Error(`ChatGPT authorization failed: ${error}`);
+  if (error !== null && error !== "") throw new Error(`ChatGPT authorization failed: ${error}`);
   return authorizationResultFromCallback(url, expectedState);
 }
 
@@ -101,7 +101,7 @@ function startCallbackServer(expectedState: string): Promise<CallbackServer> {
         }
 
         const error = url.searchParams.get("error");
-        if (error) {
+        if (error !== null && error !== "") {
           sendHtml(response, 400, oauthErrorHtml("ChatGPT was not connected.", `Error: ${error}`));
           rejectResult(new Error(`ChatGPT authorization failed: ${error}`));
           return;
@@ -240,7 +240,7 @@ async function refreshAccessToken(
 }
 
 function agentHostId(deviceId: string | undefined): string {
-  if (!deviceId || !UUID_PATTERN.test(deviceId)) {
+  if (deviceId === undefined || deviceId === "" || !UUID_PATTERN.test(deviceId)) {
     throw new Error("Sign in with ChatGPT requires a device ID (UUID) for this installation");
   }
   return `urn:uuid:${deviceId.toLowerCase()}`;

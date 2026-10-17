@@ -18,7 +18,7 @@ interface CapturedResponsesPayload {
 }
 
 function getHeader(headers: CapturedHeaders, name: string): string | null {
-  if (!headers) return null;
+  if (headers === undefined) return null;
   if (headers instanceof Headers) return headers.get(name);
 
   const lowerName = name.toLowerCase();

@@ -107,10 +107,10 @@ function testProvider(input: {
       apiKey: {
         name: "Test key",
         resolve: async ({ ctx, credential }) => {
-          if (!input.envVar) return { auth: {} };
+          if (input.envVar === undefined || input.envVar === "") return { auth: {} };
           const key = credential?.key ?? (await ctx.env(input.envVar));
-          return key
-            ? { auth: { apiKey: key }, source: credential ? "stored" : input.envVar }
+          return key !== undefined && key !== ""
+            ? { auth: { apiKey: key }, source: credential === undefined ? input.envVar : "stored" }
             : undefined;
         },
       },
@@ -434,7 +434,7 @@ describe("Models with image models", () => {
     expect(image?.api).toBe("openrouter-images");
 
     const [firstImage] = images;
-    if (!firstImage) throw new Error("Expected an OpenRouter image model");
+    if (firstImage === undefined) throw new Error("Expected an OpenRouter image model");
     expect((await models.getAuth(firstImage))?.auth.apiKey).toBe("or-key");
     expect((await models.getAuth(chat!))?.auth.apiKey).toBe("or-key");
     expect(provider.generateImages).toBeDefined();

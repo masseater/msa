@@ -55,7 +55,7 @@ export const generateImages: ImagesFunction<ImagesOptions> = async (
 
   try {
     const apiKey = options?.apiKey;
-    if (!apiKey) {
+    if (apiKey === undefined || apiKey === "") {
       throw new Error(`No API key for provider: ${model.provider}`);
     }
     const client = createClient(model, apiKey, options?.headers, options?.fetch);
@@ -65,7 +65,7 @@ export const generateImages: ImagesFunction<ImagesOptions> = async (
       params = nextParams as typeof params;
     }
     const requestOptions = {
-      ...(options?.signal ? { signal: options.signal } : {}),
+      ...(options?.signal === undefined ? {} : { signal: options.signal }),
       ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
       maxRetries: 0,
     };
@@ -87,12 +87,12 @@ export const generateImages: ImagesFunction<ImagesOptions> = async (
 
     const imageResponse = response as OpenRouterImageGenerationResponse;
     output.responseId = imageResponse.id;
-    if (imageResponse.usage) {
+    if (imageResponse.usage !== undefined) {
       output.usage = parseUsage(imageResponse.usage, model);
     }
 
     const choice = imageResponse.choices[0];
-    if (choice) {
+    if (choice !== undefined) {
       const content = choice.message.content;
       if (typeof content === "string" && content.length > 0) {
         output.output.push({ type: "text", text: content } satisfies TextContent);
@@ -101,7 +101,7 @@ export const generateImages: ImagesFunction<ImagesOptions> = async (
       for (const image of choice.message.images ?? []) {
         const imageUrl =
           typeof image.image_url === "string" ? image.image_url : image.image_url?.url;
-        if (!imageUrl?.startsWith("data:")) continue;
+        if (imageUrl?.startsWith("data:") !== true) continue;
         const [, mimeType, data] = imageUrl.match(/^data:([^;]+);base64,(.+)$/u) ?? [];
         if (mimeType === undefined || data === undefined) continue;
         output.output.push({
@@ -114,7 +114,7 @@ export const generateImages: ImagesFunction<ImagesOptions> = async (
 
     return output;
   } catch (error) {
-    output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+    output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
     output.errorMessage = formatProviderError(normalizeProviderError(error));
     return output;
   }

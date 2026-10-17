@@ -12,12 +12,18 @@ export interface AzureEndpointOptions extends StreamOptions {
 
 function parseDeploymentNameMap(value: string | undefined): Map<string, string> {
   const map = new Map<string, string>();
-  if (!value) return map;
+  if (value === undefined || value === "") return map;
   for (const entry of value.split(",")) {
     const trimmed = entry.trim();
-    if (!trimmed) continue;
+    if (trimmed === "") continue;
     const [modelId, deploymentName] = trimmed.split("=", 2);
-    if (!modelId || !deploymentName) continue;
+    if (
+      modelId === undefined ||
+      modelId === "" ||
+      deploymentName === undefined ||
+      deploymentName === ""
+    )
+      continue;
     map.set(modelId.trim(), deploymentName.trim());
   }
   return map;
@@ -27,7 +33,7 @@ export function resolveDeploymentName(
   model: Pick<Model<Api>, "id">,
   options?: AzureEndpointOptions,
 ): string {
-  if (options?.azureDeploymentName) {
+  if (options?.azureDeploymentName !== undefined && options?.azureDeploymentName !== "") {
     return options.azureDeploymentName;
   }
   const mappedDeployment = parseDeploymentNameMap(
@@ -82,15 +88,19 @@ export function resolveAzureBaseUrl(
 
   let resolvedBaseUrl = baseUrl;
 
-  if (!resolvedBaseUrl && resourceName) {
+  if (
+    (resolvedBaseUrl === undefined || resolvedBaseUrl === "") &&
+    resourceName !== undefined &&
+    resourceName !== ""
+  ) {
     resolvedBaseUrl = buildDefaultBaseUrl(resourceName);
   }
 
-  if (!resolvedBaseUrl && model.baseUrl) {
+  if ((resolvedBaseUrl === undefined || resolvedBaseUrl === "") && model.baseUrl !== "") {
     resolvedBaseUrl = model.baseUrl;
   }
 
-  if (!resolvedBaseUrl) {
+  if (resolvedBaseUrl === undefined || resolvedBaseUrl === "") {
     throw new Error(
       "Azure OpenAI base URL is required. Set AZURE_OPENAI_BASE_URL or AZURE_OPENAI_RESOURCE_NAME, or pass azureBaseUrl, azureResourceName, or model.baseUrl.",
     );

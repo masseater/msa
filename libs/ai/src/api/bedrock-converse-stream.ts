@@ -167,11 +167,11 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
 
     if (typeof process !== "undefined" && (process.versions?.node || process.versions?.["bun"])) {
       const arnRegion = model.id.match(/^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9-]+):/u)?.[1];
-      if (arnRegion) {
+      if (arnRegion !== undefined && arnRegion !== "") {
         config.region = arnRegion;
-      } else if (configuredRegion) {
+      } else if (configuredRegion !== undefined && configuredRegion !== "") {
         config.region = configuredRegion;
-      } else if (endpointRegion && useExplicitEndpoint) {
+      } else if (endpointRegion !== undefined && endpointRegion !== "" && useExplicitEndpoint) {
         config.region = endpointRegion;
       } else if (!hasAmbientConfiguredProfile) {
         config.region = "us-east-1";
@@ -185,12 +185,16 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
       }
 
       const credentials = getConfiguredBedrockCredentials(options.env);
-      if (!skipAuth && credentials && !optionsProfile) {
+      if (
+        !skipAuth &&
+        credentials !== undefined &&
+        (optionsProfile === undefined || optionsProfile === "")
+      ) {
         config.credentials = credentials;
       }
 
       const proxyUrl = resolveHttpProxyUrlForTarget(model.baseUrl, options.env);
-      if (proxyUrl) {
+      if (proxyUrl !== undefined) {
         config.requestHandler = new NodeHttpHandler({
           httpAgent: new HttpProxyAgent(proxyUrl),
           httpsAgent: new HttpsProxyAgent(proxyUrl) as unknown as HttpsAgent,
@@ -201,7 +205,9 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
     } else {
       config.region =
         configuredRegion ||
-        (endpointRegion && useExplicitEndpoint ? endpointRegion : undefined) ||
+        (endpointRegion !== undefined && endpointRegion !== "" && useExplicitEndpoint
+          ? endpointRegion
+          : undefined) ||
         "us-east-1";
     }
 
@@ -216,22 +222,21 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
       const supportsStrictMode = model.compat?.supportsStrictMode ?? false;
       const client = new BedrockRuntimeClient(config);
       let observedRawResponse = false;
-      if (options.onResponse) {
+      if (options.onResponse !== undefined) {
         addResponseHeadersMiddleware(client, options.onResponse, model, () => {
           observedRawResponse = true;
         });
       }
       const customHeaders = providerHeadersToRecord(options.headers);
-      if (customHeaders) {
+      if (customHeaders !== undefined) {
         addCustomHeadersMiddleware(client, customHeaders);
       }
       const cacheRetention = resolveCacheRetention(options.cacheRetention, options.env);
       const inferenceMaxTokens =
         options.maxTokens ?? (isAnthropicClaudeModel(model) ? model.maxTokens : undefined);
       const initialSystemMessage = getInitialSystemMessage(normalizedContext.messages);
-      const initialSystemPrompt = initialSystemMessage
-        ? getSystemMessageText(initialSystemMessage)
-        : undefined;
+      const initialSystemPrompt =
+        initialSystemMessage === undefined ? undefined : getSystemMessageText(initialSystemMessage);
       let commandInput = {
         modelId: model.id,
         messages: convertMessages(normalizedContext, model, cacheRetention, options.env),
@@ -261,7 +266,7 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
       responseRequestId = normalizeDiagnosticValue(response.$metadata.requestId);
       if (!observedRawResponse && response.$metadata.httpStatusCode !== undefined) {
         const responseHeaders: Record<string, string> = {};
-        if (response.$metadata.requestId) {
+        if (response.$metadata.requestId !== undefined && response.$metadata.requestId !== "") {
           responseHeaders["x-amzn-requestid"] = response.$metadata.requestId;
         }
         await options?.onResponse?.(
@@ -272,42 +277,42 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
 
       for await (const item of response.stream!) {
         await options.onProviderStreamEvent?.(item, model);
-        if (item.messageStart) {
+        if (item.messageStart !== undefined) {
           if (item.messageStart.role !== ConversationRole.ASSISTANT) {
             throw new Error(
               "Unexpected assistant message start but got user message start instead",
             );
           }
           events.push({ type: "start", partial: output });
-        } else if (item.contentBlockStart) {
+        } else if (item.contentBlockStart !== undefined) {
           handleContentBlockStart(item.contentBlockStart, blocks, output, events);
-        } else if (item.contentBlockDelta) {
+        } else if (item.contentBlockDelta !== undefined) {
           handleContentBlockDelta(item.contentBlockDelta, blocks, output, events);
-        } else if (item.contentBlockStop) {
+        } else if (item.contentBlockStop !== undefined) {
           handleContentBlockStop(item.contentBlockStop, blocks, output, events);
-        } else if (item.messageStop) {
+        } else if (item.messageStop !== undefined) {
           output.rawStopReason = item.messageStop.stopReason;
           const { stopReason, errorMessage } = mapStopReason(item.messageStop.stopReason);
           output.stopReason = stopReason;
-          if (errorMessage) {
+          if (errorMessage !== undefined && errorMessage !== "") {
             output.errorMessage = errorMessage;
           }
-        } else if (item.metadata) {
+        } else if (item.metadata !== undefined) {
           handleMetadata(item.metadata, model, output);
-        } else if (item.internalServerException) {
+        } else if (item.internalServerException !== undefined) {
           throw item.internalServerException;
-        } else if (item.modelStreamErrorException) {
+        } else if (item.modelStreamErrorException !== undefined) {
           throw item.modelStreamErrorException;
-        } else if (item.validationException) {
+        } else if (item.validationException !== undefined) {
           throw item.validationException;
-        } else if (item.throttlingException) {
+        } else if (item.throttlingException !== undefined) {
           throw item.throttlingException;
-        } else if (item.serviceUnavailableException) {
+        } else if (item.serviceUnavailableException !== undefined) {
           throw item.serviceUnavailableException;
         }
       }
 
-      if (options.signal?.aborted) {
+      if (options.signal?.aborted === true) {
         throw new Error("Request was aborted");
       }
 
@@ -325,7 +330,7 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
       for (const block of output.content) {
         finalizeStreamingBlock(block as Block);
       }
-      output.stopReason = options.signal?.aborted ? "aborted" : "error";
+      output.stopReason = options.signal?.aborted === true ? "aborted" : "error";
       output.errorMessage = formatBedrockError(error);
       if (output.stopReason === "error") {
         appendBedrockFailureDiagnostic(output, error, responseRequestId);
@@ -441,7 +446,7 @@ function isSmithyHttpResponse(response: unknown): response is HttpResponse {
   const candidate = response as Partial<HttpResponse>;
   return (
     typeof candidate.statusCode === "number" &&
-    !!candidate.headers &&
+    candidate.headers !== undefined &&
     typeof candidate.headers === "object"
   );
 }
@@ -460,7 +465,7 @@ function addResponseHeadersMiddleware(
   const middleware: DeserializeMiddleware<object, MetadataBearer> = (next) => async (args) => {
     const result = await next(args);
     const providerResponse = toProviderResponse(result.response);
-    if (providerResponse) {
+    if (providerResponse !== undefined) {
       onObserved();
       await onResponse(providerResponse, model);
     }
@@ -478,7 +483,7 @@ export const streamSimple: StreamFunction<"bedrock-converse-stream", SimpleStrea
     ...buildBaseOptions(model, context, options, undefined),
     toolChoice: options?.toolChoice,
   } satisfies BedrockOptions;
-  if (!options?.reasoning) {
+  if (options?.reasoning === undefined) {
     return stream(model, context, { ...base, reasoning: undefined } satisfies BedrockOptions);
   }
 
@@ -530,7 +535,7 @@ function handleContentBlockStart(
   const index = event.contentBlockIndex!;
   const start = event.start;
 
-  if (start?.toolUse) {
+  if (start?.toolUse !== undefined) {
     const block: Block = {
       type: "toolCall",
       id: start.toolUse.toolUseId || "",
@@ -556,7 +561,7 @@ function handleContentBlockDelta(
   let block = blocks[index];
 
   if (delta?.text !== undefined) {
-    if (!block) {
+    if (block === undefined) {
       const newBlock: Block = { type: "text", text: "", index: contentBlockIndex };
       output.content.push(newBlock);
       index = blocks.length - 1;
@@ -567,7 +572,7 @@ function handleContentBlockDelta(
       block.text += delta.text;
       events.push({ type: "text_delta", contentIndex: index, delta: delta.text, partial: output });
     }
-  } else if (delta?.toolUse && block?.type === "toolCall") {
+  } else if (delta?.toolUse !== undefined && block?.type === "toolCall") {
     block.partialJson = (block.partialJson || "") + (delta.toolUse.input || "");
     block.arguments = parseStreamingJson(block.partialJson);
     events.push({
@@ -576,11 +581,11 @@ function handleContentBlockDelta(
       delta: delta.toolUse.input || "",
       partial: output,
     });
-  } else if (delta?.reasoningContent) {
+  } else if (delta?.reasoningContent !== undefined) {
     let thinkingBlock = block;
     let thinkingIndex = index;
 
-    if (!thinkingBlock) {
+    if (thinkingBlock === undefined) {
       const newBlock: Block = {
         type: "thinking",
         thinking: "",
@@ -594,7 +599,7 @@ function handleContentBlockDelta(
     }
 
     if (thinkingBlock?.type === "thinking") {
-      if (delta.reasoningContent.text) {
+      if (delta.reasoningContent.text !== undefined && delta.reasoningContent.text !== "") {
         thinkingBlock.thinking += delta.reasoningContent.text;
         events.push({
           type: "thinking_delta",
@@ -603,12 +608,19 @@ function handleContentBlockDelta(
           partial: output,
         });
       }
-      if (delta.reasoningContent.signature && !thinkingBlock.redacted) {
+      if (
+        delta.reasoningContent.signature !== undefined &&
+        delta.reasoningContent.signature !== "" &&
+        thinkingBlock.redacted !== true
+      ) {
         thinkingBlock.thinkingSignature =
           (thinkingBlock.thinkingSignature || "") + delta.reasoningContent.signature;
       }
-      if (delta.reasoningContent.redactedContent?.length) {
-        if (!thinkingBlock.redacted) {
+      if (
+        delta.reasoningContent.redactedContent?.length !== undefined &&
+        delta.reasoningContent.redactedContent?.length > 0
+      ) {
+        if (thinkingBlock.redacted !== true) {
           thinkingBlock.redacted = true;
           thinkingBlock.thinkingSignature = "";
           thinkingBlock.thinking += REDACTED_THINKING_PLACEHOLDER;
@@ -627,7 +639,7 @@ function handleContentBlockDelta(
 }
 
 function flushRedactedContent(block: Block): void {
-  if (block.type !== "thinking" || !block.redactedChunks) return;
+  if (block.type !== "thinking" || block.redactedChunks === undefined) return;
   block.thinkingSignature = bytesToBase64(block.redactedChunks);
   delete block.redactedChunks;
 }
@@ -643,7 +655,7 @@ function handleMetadata(
   model: Model<"bedrock-converse-stream">,
   output: AssistantMessage,
 ): void {
-  if (event.usage) {
+  if (event.usage !== undefined) {
     output.usage.input = event.usage.inputTokens || 0;
     output.usage.output = event.usage.outputTokens || 0;
     output.usage.cacheRead = event.usage.cacheReadInputTokens || 0;
@@ -665,7 +677,7 @@ function handleContentBlockStop(
 ): void {
   const index = blocks.findIndex((b) => b.index === event.contentBlockIndex);
   const block = blocks[index];
-  if (!block) return;
+  if (block === undefined) return;
   delete (block as Block).index;
 
   switch (block.type) {
@@ -690,7 +702,7 @@ function handleContentBlockStop(
 }
 
 function getModelMatchCandidates(modelId: string, modelName?: string): string[] {
-  const values = modelName ? [modelId, modelName] : [modelId];
+  const values = modelName !== undefined && modelName !== "" ? [modelId, modelName] : [modelId];
   return values.flatMap((value) => {
     const lower = value.toLowerCase();
     return [lower, lower.replace(/[\s_.:]+/gu, "-")];
@@ -744,7 +756,7 @@ function mapThinkingLevelToEffort(
 ): "low" | "medium" | "high" | "xhigh" | "max" {
   if (level === "xhigh" && supportsNativeXhighEffort(model)) return "xhigh";
 
-  const mapped = level ? model.thinkingLevelMap?.[level] : undefined;
+  const mapped = level === undefined ? undefined : model.thinkingLevelMap?.[level];
   if (typeof mapped === "string") return mapped as "low" | "medium" | "high" | "xhigh" | "max";
 
   switch (level) {
@@ -761,7 +773,7 @@ function mapThinkingLevelToEffort(
 }
 
 function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEnv): CacheRetention {
-  if (cacheRetention) {
+  if (cacheRetention !== undefined) {
     return cacheRetention;
   }
   if (getProviderEnvValue("MSA_CACHE_RETENTION", env) === "long") {
@@ -819,7 +831,7 @@ function buildSystemPrompt(
   cacheRetention: CacheRetention,
   env?: ProviderEnv,
 ): SystemContentBlock[] | undefined {
-  if (!systemPrompt) return undefined;
+  if (systemPrompt === undefined || systemPrompt === "") return undefined;
 
   const blocks: SystemContentBlock[] = [{ text: sanitizeSurrogates(systemPrompt) }];
 
@@ -872,7 +884,7 @@ function convertToolResultContent(
       result.push({ image: createImageBlock(c.mimeType, c.data) });
     } else {
       const textBlock = createNonBlankTextBlock(c.text);
-      if (textBlock) result.push(textBlock);
+      if (textBlock !== undefined) result.push(textBlock);
     }
   }
   if (result.length === 0) result.push({ text: EMPTY_TEXT_PLACEHOLDER });
@@ -906,7 +918,7 @@ function convertMessages(
             switch (c.type) {
               case "text": {
                 const textBlock = createNonBlankTextBlock(c.text);
-                if (textBlock) content.push(textBlock);
+                if (textBlock !== undefined) content.push(textBlock);
                 break;
               }
               case "image":
@@ -930,7 +942,7 @@ function convertMessages(
           switch (c.type) {
             case "text": {
               const textBlock = createNonBlankTextBlock(c.text);
-              if (!textBlock) continue;
+              if (textBlock === undefined) continue;
               contentBlocks.push(textBlock);
               break;
             }
@@ -944,9 +956,9 @@ function convertMessages(
               });
               break;
             case "thinking": {
-              if (c.redacted) {
+              if (c.redacted === true) {
                 const redactedContent = decodeRedactedContent(c.thinkingSignature);
-                if (redactedContent?.length) {
+                if (redactedContent?.length !== undefined && redactedContent?.length > 0) {
                   contentBlocks.push({ reasoningContent: { redactedContent } });
                 }
                 continue;
@@ -954,7 +966,11 @@ function convertMessages(
               const thinking = sanitizeSurrogates(c.thinking);
               if (thinking.trim().length === 0) continue;
               if (supportsThinkingSignature(model)) {
-                if (!c.thinkingSignature || c.thinkingSignature.trim().length === 0) {
+                if (
+                  c.thinkingSignature === undefined ||
+                  c.thinkingSignature === "" ||
+                  c.thinkingSignature.trim().length === 0
+                ) {
                   contentBlocks.push({ text: thinking });
                 } else {
                   contentBlocks.push({
@@ -1024,7 +1040,7 @@ function convertMessages(
 
   if (cacheRetention !== "none" && supportsPromptCaching(model, env) && result.length > 0) {
     const lastMessage = result.at(-1);
-    if (lastMessage?.role === ConversationRole.USER && lastMessage.content) {
+    if (lastMessage?.role === ConversationRole.USER && lastMessage.content !== undefined) {
       (lastMessage.content as ContentBlock[]).push({
         cachePoint: {
           type: CachePointType.DEFAULT,
@@ -1042,7 +1058,7 @@ function convertToolConfig(
   toolChoice: BedrockOptions["toolChoice"],
   supportsStrictMode: boolean,
 ): ToolConfiguration | undefined {
-  if (!tools?.length) return undefined;
+  if (tools?.length === undefined || tools?.length === 0) return undefined;
   if (toolChoice === "none") return undefined;
 
   const bedrockTools: BedrockTool[] = tools.map((tool) => {
@@ -1088,7 +1104,7 @@ function mapStopReason(reason: string | undefined): {
     case BedrockStopReason.TOOL_USE:
       return { stopReason: "toolUse" };
     default:
-      return reason
+      return reason !== undefined && reason !== ""
         ? { stopReason: "error", errorMessage: `Provider stopped with: ${reason}` }
         : { stopReason: "error" };
   }
@@ -1108,19 +1124,24 @@ function getConfiguredBedrockCredentials(
 ): BedrockRuntimeClientConfig["credentials"] | undefined {
   const accessKeyId = getProviderEnvValue("AWS_ACCESS_KEY_ID", env);
   const secretAccessKey = getProviderEnvValue("AWS_SECRET_ACCESS_KEY", env);
-  if (!accessKeyId || !secretAccessKey) {
+  if (
+    accessKeyId === undefined ||
+    accessKeyId === "" ||
+    secretAccessKey === undefined ||
+    secretAccessKey === ""
+  ) {
     return undefined;
   }
   const sessionToken = getProviderEnvValue("AWS_SESSION_TOKEN", env);
   return {
     accessKeyId,
     secretAccessKey,
-    ...(sessionToken ? { sessionToken } : {}),
+    ...(sessionToken !== undefined && sessionToken !== "" ? { sessionToken } : {}),
   };
 }
 
 function getStandardBedrockEndpointRegion(baseUrl: string | undefined): string | undefined {
-  if (!baseUrl) {
+  if (baseUrl === undefined || baseUrl === "") {
     return undefined;
   }
 
@@ -1141,11 +1162,13 @@ function shouldUseExplicitBedrockEndpoint(
   hasAmbientConfiguredProfile: boolean,
 ): boolean {
   const endpointRegion = getStandardBedrockEndpointRegion(baseUrl);
-  if (!endpointRegion) {
+  if (endpointRegion === undefined || endpointRegion === "") {
     return true;
   }
 
-  return !configuredRegion && !hasAmbientConfiguredProfile;
+  return (
+    (configuredRegion === undefined || configuredRegion === "") && !hasAmbientConfiguredProfile
+  );
 }
 
 function isGovCloudBedrockTarget(
@@ -1153,7 +1176,7 @@ function isGovCloudBedrockTarget(
   options: BedrockOptions,
 ): boolean {
   const region = getConfiguredBedrockRegion(options);
-  if (region?.toLowerCase().startsWith("us-gov-")) {
+  if (region?.toLowerCase().startsWith("us-gov-") === true) {
     return true;
   }
 
@@ -1165,7 +1188,7 @@ function buildAdditionalModelRequestFields(
   model: Model<"bedrock-converse-stream">,
   options: BedrockOptions,
 ): Record<string, any> | undefined {
-  if (!options.reasoning || !model.reasoning) {
+  if (options.reasoning === undefined || !model.reasoning) {
     return undefined;
   }
 
@@ -1289,7 +1312,7 @@ function base64ToBytes(data: string): Uint8Array {
 }
 
 function decodeRedactedContent(signature: string | undefined): Uint8Array | undefined {
-  if (!signature) return undefined;
+  if (signature === undefined || signature === "") return undefined;
   try {
     return base64ToBytes(signature);
   } catch {

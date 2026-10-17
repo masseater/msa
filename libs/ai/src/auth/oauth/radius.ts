@@ -59,11 +59,12 @@ class OAuthResponseError extends Error {
     description: string | undefined,
     message: string,
   ) {
-    const detail = oauthError
-      ? description
-        ? `${oauthError}: ${description}`
-        : oauthError
-      : description || String(status);
+    const detail =
+      oauthError !== undefined && oauthError !== ""
+        ? description !== undefined && description !== ""
+          ? `${oauthError}: ${description}`
+          : oauthError
+        : description || String(status);
     super(`${message}: ${detail}`);
     this.status = status;
     this.oauthError = oauthError;
@@ -78,7 +79,7 @@ async function readOAuthResponseError(
   let oauthError: string | undefined;
   let description: string | undefined;
 
-  if (text) {
+  if (text !== "") {
     try {
       const data = JSON.parse(text) as { error?: unknown; error_description?: unknown };
       oauthError = typeof data.error === "string" ? data.error : undefined;
@@ -182,7 +183,7 @@ async function loginWithBrowser(
 
   try {
     const credential = await callback.wait();
-    if (!credential) throw new Error("OAuth callback did not complete.");
+    if (credential === undefined) throw new Error("OAuth callback did not complete.");
     return credential;
   } finally {
     callback.close();
@@ -213,7 +214,17 @@ async function requestDeviceAuthorization(
   }
 
   const data = (await response.json()) as Partial<DeviceAuthorizationResponse>;
-  if (!data.device_code || !data.user_code || !data.verification_uri || !data.expires_in) {
+  if (
+    data.device_code === undefined ||
+    data.device_code === "" ||
+    data.user_code === undefined ||
+    data.user_code === "" ||
+    data.verification_uri === undefined ||
+    data.verification_uri === "" ||
+    data.expires_in === undefined ||
+    data.expires_in === 0 ||
+    Number.isNaN(data.expires_in)
+  ) {
     throw new Error("Radius OAuth device authorization response is missing required fields");
   }
 

@@ -173,7 +173,7 @@ describe("Qwen Token Plan models", () => {
     async ({ provider, modelId }) => {
       const model = getModels(provider).find((candidate) => candidate.id === modelId);
       expect(model).toBeDefined();
-      if (!model) throw new Error(`Missing model: ${provider}/${modelId}`);
+      if (model === undefined) throw new Error(`Missing model: ${provider}/${modelId}`);
 
       let payload: unknown;
       await streamSimple(
@@ -206,7 +206,7 @@ describe("Qwen Token Plan models", () => {
     ({ provider, modelId }) => {
       const model = getModels(provider).find((candidate) => candidate.id === modelId);
       expect(model).toBeDefined();
-      if (!model) throw new Error(`Missing model: ${provider}/${modelId}`);
+      if (model === undefined) throw new Error(`Missing model: ${provider}/${modelId}`);
 
       expect(model.thinkingLevelMap).toMatchObject({
         minimal: null,
@@ -224,7 +224,7 @@ describe("Qwen Token Plan models", () => {
     ({ provider, modelId }) => {
       const model = getModels(provider).find((candidate) => candidate.id === modelId);
       expect(model).toBeDefined();
-      if (!model) throw new Error(`Missing model: ${provider}/${modelId}`);
+      if (model === undefined) throw new Error(`Missing model: ${provider}/${modelId}`);
 
       expect(model.thinkingLevelMap).toMatchObject({
         minimal: null,
@@ -250,7 +250,7 @@ describe("Qwen Token Plan models", () => {
     async ({ provider, modelId }) => {
       const model = getModels(provider).find((candidate) => candidate.id === modelId);
       expect(model).toBeDefined();
-      if (!model) throw new Error(`Missing model: ${provider}/${modelId}`);
+      if (model === undefined) throw new Error(`Missing model: ${provider}/${modelId}`);
 
       let payload: unknown;
       await streamSimple(
@@ -282,7 +282,7 @@ describe("Qwen Token Plan models", () => {
     async ({ provider, modelId }) => {
       const model = getModels(provider).find((candidate) => candidate.id === modelId);
       expect(model).toBeDefined();
-      if (!model) throw new Error(`Missing model: ${provider}/${modelId}`);
+      if (model === undefined) throw new Error(`Missing model: ${provider}/${modelId}`);
 
       let payload: unknown;
       await streamSimple(

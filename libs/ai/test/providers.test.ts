@@ -354,7 +354,7 @@ describe("builtin providers", () => {
     const models = createModels({ authContext: fakeAuthContext({ AWS_PROFILE: "dev" }) });
     models.setProvider(amazonBedrockProvider());
     const model = models.getModels("amazon-bedrock")[0];
-    if (!model) throw new Error("Expected a model");
+    if (model === undefined) throw new Error("Expected a model");
 
     const result = await models.getAuth(model.provider);
     expect(result?.auth).toEqual({});
@@ -371,7 +371,7 @@ describe("builtin providers", () => {
     });
     missingAccount.setProvider(cloudflareWorkersAIProvider());
     const model = missingAccount.getModels("cloudflare-workers-ai")[0];
-    if (!model) throw new Error("Expected a model");
+    if (model === undefined) throw new Error("Expected a model");
     expect(await missingAccount.getAuth(model.provider)).toBeUndefined();
 
     const configured = createModels({
@@ -395,7 +395,7 @@ describe("builtin providers", () => {
     });
     missingGateway.setProvider(cloudflareAIGatewayProvider());
     const model = missingGateway.getModels("cloudflare-ai-gateway")[0];
-    if (!model) throw new Error("Expected a model");
+    if (model === undefined) throw new Error("Expected a model");
     expect(await missingGateway.getAuth(model.provider)).toBeUndefined();
 
     const configured = createModels({
@@ -474,7 +474,7 @@ describe("builtin providers", () => {
     });
     configured.setProvider(googleVertexProvider());
     const model = configured.getModels("google-vertex")[0];
-    if (!model) throw new Error("Expected a model");
+    if (model === undefined) throw new Error("Expected a model");
 
     const result = await configured.getAuth(model.provider);
     expect(result?.auth).toEqual({});
@@ -796,7 +796,7 @@ describe("fauxProvider", () => {
 
     const model = models.getModels(faux.provider.id)[0];
 
-    if (!model) throw new Error("Expected a model");
+    if (model === undefined) throw new Error("Expected a model");
     const result = await models.completeSimple(model, context);
     expect(result.stopReason).toBe("stop");
     expect(result.content).toEqual([{ type: "text", text: "hello from faux" }]);
@@ -823,7 +823,8 @@ describe("fauxProvider", () => {
       id: expect.any(String),
       pollAfterMs: 25,
     });
-    if (!deferred.deferred) throw new Error("Faux response did not include a deferred handle");
+    if (deferred.deferred === undefined)
+      throw new Error("Faux response did not include a deferred handle");
 
     const pending = await models.fetchDeferred(model, deferred.deferred);
     expect(pending.stopReason).toBe("deferred");
@@ -847,13 +848,13 @@ describe("fauxProvider", () => {
     const model = faux.getModel();
 
     const failedSubmission = await models.completeSimple(model, context, { deferred: true });
-    if (!failedSubmission.deferred)
+    if (failedSubmission.deferred === undefined)
       throw new Error("Faux response did not include a deferred handle");
     const failed = await models.fetchDeferred(model, failedSubmission.deferred);
     expect(failed).toMatchObject({ stopReason: "error", errorMessage: "deferred failed" });
 
     const cancelledSubmission = await models.completeSimple(model, context, { deferred: true });
-    if (!cancelledSubmission.deferred)
+    if (cancelledSubmission.deferred === undefined)
       throw new Error("Faux response did not include a deferred handle");
     await models.cancelDeferred(model, cancelledSubmission.deferred);
     expect(faux.state.cancelledDeferred).toEqual([cancelledSubmission.deferred]);

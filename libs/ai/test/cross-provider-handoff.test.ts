@@ -141,7 +141,7 @@ interface CachedContext {
 
 async function getApiKey(provider: string): Promise<string | undefined> {
   const oauthKey = await resolveApiKey(provider);
-  if (oauthKey) return oauthKey;
+  if (oauthKey !== undefined && oauthKey !== "") return oauthKey;
   return getEnvApiKey(provider);
 }
 
@@ -154,15 +154,19 @@ function hasApiKey(pair: ProviderModelPair): boolean {
   }
   if (pair.provider === "cloudflare-ai-gateway") {
     if (!hasCloudflareAiGatewayCredentials()) return false;
-    return pair.upstreamApiKeyEnv ? !!process.env[pair.upstreamApiKeyEnv] : true;
+    return pair.upstreamApiKeyEnv !== undefined && pair.upstreamApiKeyEnv !== ""
+      ? !!process.env[pair.upstreamApiKeyEnv]
+      : true;
   }
   return !!getEnvApiKey(pair.provider);
 }
 
 function getHeaders(pair: ProviderModelPair): Record<string, string> | undefined {
-  if (!pair.upstreamApiKeyEnv) return undefined;
+  if (pair.upstreamApiKeyEnv === undefined || pair.upstreamApiKeyEnv === "") return undefined;
   const upstreamApiKey = process.env[pair.upstreamApiKeyEnv];
-  return upstreamApiKey ? { Authorization: `Bearer ${upstreamApiKey}` } : undefined;
+  return upstreamApiKey !== undefined && upstreamApiKey !== ""
+    ? { Authorization: `Bearer ${upstreamApiKey}` }
+    : undefined;
 }
 
 function hasAnyApiKey(): boolean {
@@ -194,12 +198,13 @@ async function generateContext(
     pair.provider,
     pair.model,
   );
-  if (!baseModel) {
+  if (baseModel === undefined) {
     console.log(`  Model not found: ${pair.provider}/${pair.model}`);
     return null;
   }
 
-  const model: Model<Api> = pair.apiOverride ? { ...baseModel, api: pair.apiOverride } : baseModel;
+  const model: Model<Api> =
+    pair.apiOverride === undefined ? baseModel : { ...baseModel, api: pair.apiOverride };
 
   const userMessage: Message = {
     role: "user",
@@ -252,7 +257,7 @@ async function generateContext(
   }
 
   const toolCall = assistantResponse.content.find((c) => c.type === "toolCall");
-  if (!toolCall || toolCall.type !== "toolCall") {
+  if (toolCall === undefined || toolCall.type !== "toolCall") {
     console.log(`  No tool call in response (stopReason: ${assistantResponse.stopReason})`);
     return {
       messages: [userMessage, assistantResponse],
@@ -331,7 +336,7 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
 
     for (const pair of PROVIDER_MODEL_PAIRS) {
       const apiKey = await getApiKey(pair.provider);
-      if (!apiKey || !hasApiKey(pair)) {
+      if (apiKey === undefined || apiKey === "" || !hasApiKey(pair)) {
         console.log(`[${pair.label}] Skipping - no auth for ${pair.provider}`);
         continue;
       }
@@ -339,7 +344,7 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
       console.log(`[${pair.label}] Generating fixture...`);
       const result = await generateContext(pair, apiKey);
 
-      if (!result || result.messages.length < 4) {
+      if (result === null || result.messages.length < 4) {
         console.log(`[${pair.label}] Failed to generate fixture, skipping`);
         continue;
       }
@@ -381,7 +386,7 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
 
       for (const targetPair of availablePairs) {
         const apiKey = await getApiKey(targetPair.provider);
-        if (!apiKey || !hasApiKey(targetPair)) {
+        if (apiKey === undefined || apiKey === "" || !hasApiKey(targetPair)) {
           console.log(`[Target: ${targetPair.label}] Skipping - no auth`);
           continue;
         }
@@ -411,14 +416,15 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
           targetPair.provider,
           targetPair.model,
         );
-        if (!baseModel) {
+        if (baseModel === undefined) {
           console.log(`[Target: ${targetPair.label}] Model not found`);
           continue;
         }
 
-        const model: Model<Api> = targetPair.apiOverride
-          ? { ...baseModel, api: targetPair.apiOverride }
-          : baseModel;
+        const model: Model<Api> =
+          targetPair.apiOverride === undefined
+            ? baseModel
+            : { ...baseModel, api: targetPair.apiOverride };
         const supportsReasoning = model.reasoning === true;
         const headers = getHeaders(targetPair);
 

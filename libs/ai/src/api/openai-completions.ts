@@ -70,7 +70,7 @@ import {
 import { transformMessages } from "./transform-messages.ts";
 
 function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean {
-  if (!headers) return false;
+  if (headers === undefined) return false;
   const expected = name.toLowerCase();
   for (const [key, value] of Object.entries(headers)) {
     if (key.toLowerCase() === expected && value !== null && value.trim().length > 0) return true;
@@ -83,7 +83,7 @@ function getClientApiKey(
   apiKey: string | undefined,
   headers: ProviderHeaders | undefined,
 ): string {
-  if (apiKey) return apiKey;
+  if (apiKey !== undefined && apiKey !== "") return apiKey;
   if (hasHeader(headers, "authorization") || hasHeader(headers, "cf-aig-authorization"))
     return "unused";
   throw new Error(`No API key for provider: ${provider}`);
@@ -227,7 +227,7 @@ type OpenAIReasoningDetail =
 function parseOpenAIReasoningDetails(
   signature: string | undefined,
 ): OpenAIReasoningDetail[] | undefined {
-  if (!signature) return undefined;
+  if (signature === undefined || signature === "") return undefined;
   try {
     const parsed = JSON.parse(signature) as unknown;
     return Array.isArray(parsed) && parsed.length > 0 && parsed.every(isOpenAIReasoningDetail)
@@ -241,7 +241,7 @@ function parseOpenAIReasoningDetails(
 function parseLegacyEncryptedReasoningDetail(
   signature: string | undefined,
 ): OpenAIEncryptedReasoningDetail | undefined {
-  if (!signature) return undefined;
+  if (signature === undefined || signature === "") return undefined;
   try {
     const parsed = JSON.parse(signature) as unknown;
     return isOpenAIReasoningDetail(parsed) &&
@@ -264,7 +264,7 @@ function fillMissingCommonReasoningDetailFields(
     if (source.id === undefined) delete target.id;
     else target.id = source.id;
   }
-  if (!target.format) {
+  if (target.format === undefined || target.format === "") {
     if (source.format === undefined) delete target.format;
     else target.format = source.format;
   }
@@ -281,7 +281,11 @@ function appendOpenAIReasoningDetail(
   const lastDetail = details[details.length - 1];
   if (detail.type === "reasoning.text" && lastDetail?.type === "reasoning.text") {
     lastDetail.text += detail.text;
-    if (!lastDetail.signature) {
+    if (
+      lastDetail.signature === undefined ||
+      lastDetail.signature === null ||
+      lastDetail.signature === ""
+    ) {
       if (detail.signature === undefined) delete lastDetail.signature;
       else lastDetail.signature = detail.signature;
     }
@@ -324,7 +328,7 @@ type ChatCompletionToolWithCacheControl = OpenAI.Chat.Completions.ChatCompletion
 };
 
 function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEnv): CacheRetention {
-  if (cacheRetention) {
+  if (cacheRetention !== undefined) {
     return cacheRetention;
   }
   if (getProviderEnvValue("MSA_CACHE_RETENTION", env) === "long") {
@@ -400,7 +404,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
         params = nextParams as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
       }
       const requestOptions = {
-        ...(options?.signal ? { signal: options.signal } : {}),
+        ...(options?.signal === undefined ? {} : { signal: options.signal }),
         ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
         maxRetries: 0,
       };
@@ -456,7 +460,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
         close: boolean,
       ): string | undefined => {
         const customInput = block.customInput;
-        if (!customInput) return undefined;
+        if (customInput === undefined) return undefined;
         const delta = appendGrammarToolInputJsonDelta(
           customInput.jsonBuffer,
           customInput.property,
@@ -487,7 +491,9 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
             partial: output,
           });
         } else if (block.type === "toolCall") {
-          if (block.customInput) {
+          if (block.customInput === undefined) {
+            Object.assign(block, parseToolCallArguments(block.partialArgs));
+          } else {
             const delta = appendCustomToolCallInput(block, getCustomToolCallInput(block), true);
             if (delta !== undefined) {
               events.push({
@@ -497,8 +503,6 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
                 partial: output,
               });
             }
-          } else {
-            Object.assign(block, parseToolCallArguments(block.partialArgs));
           }
           delete block.partialArgs;
           delete block.customInput;
@@ -512,7 +516,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
         }
       };
       const ensureTextBlock = () => {
-        if (!textBlock) {
+        if (textBlock === null) {
           textBlock = { type: "text", text: "" };
           blocks.push(textBlock);
           events.push({
@@ -524,7 +528,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
         return textBlock;
       };
       const ensureThinkingBlock = (thinkingSignature: string) => {
-        if (!thinkingBlock) {
+        if (thinkingBlock === null) {
           thinkingBlock = {
             type: "thinking",
             thinking: "",
@@ -543,12 +547,12 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
         const streamIndex = typeof toolCall.index === "number" ? toolCall.index : undefined;
         const name = toolCall.function?.name ?? toolCall.custom?.name ?? "";
         let block = streamIndex === undefined ? undefined : toolCallBlocksByIndex.get(streamIndex);
-        if (!block && toolCall.id) {
+        if (block === undefined && toolCall.id !== undefined && toolCall.id !== "") {
           block = toolCallBlocksById.get(toolCall.id);
         }
-        if (!block) {
+        if (block === undefined) {
           const customInputProperty =
-            toolCall.custom && !toolCall.function
+            toolCall.custom !== undefined && toolCall.function === undefined
               ? (grammarToolInputProperties.get(name) ?? "input")
               : undefined;
           const hasCustomInput = customInputProperty !== undefined;
@@ -569,7 +573,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
           if (streamIndex !== undefined) {
             toolCallBlocksByIndex.set(streamIndex, block);
           }
-          if (toolCall.id) {
+          if (toolCall.id !== undefined && toolCall.id !== "") {
             toolCallBlocksById.set(toolCall.id, block);
           }
           blocks.push(block);
@@ -583,13 +587,17 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
           block.streamIndex = streamIndex;
           toolCallBlocksByIndex.set(streamIndex, block);
         }
-        if (toolCall.id) {
+        if (toolCall.id !== undefined && toolCall.id !== "") {
           toolCallBlocksById.set(toolCall.id, block);
         }
-        if (!block.name && name) {
+        if (block.name === "" && name !== "") {
           block.name = name;
         }
-        if (toolCall.custom && !toolCall.function && !block.customInput) {
+        if (
+          toolCall.custom !== undefined &&
+          toolCall.function === undefined &&
+          block.customInput === undefined
+        ) {
           const customInputProperty = grammarToolInputProperties.get(block.name) ?? "input";
           block.arguments = { [customInputProperty]: "" };
           block.customInput = {
@@ -609,22 +617,25 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
         if (typeof chunk.model === "string" && chunk.model.length > 0 && chunk.model !== model.id) {
           output.responseModel ||= chunk.model;
         }
-        if (chunk.usage) {
+        if (chunk.usage !== undefined && chunk.usage !== null) {
           output.usage = parseChunkUsage(chunk.usage, model);
         }
 
         const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined;
-        if (!choice) continue;
+        if (choice === undefined) continue;
 
-        if (!chunk.usage && (choice as any).usage) {
+        if ((chunk.usage === undefined || chunk.usage === null) && (choice as any).usage) {
           output.usage = parseChunkUsage((choice as any).usage, model);
         }
 
-        if (choice.finish_reason) {
+        if (choice.finish_reason !== null) {
           output.rawStopReason = choice.finish_reason;
           const finishReasonResult = mapStopReason(choice.finish_reason);
           output.stopReason = finishReasonResult.stopReason;
-          if (finishReasonResult.errorMessage) {
+          if (
+            finishReasonResult.errorMessage !== undefined &&
+            finishReasonResult.errorMessage !== ""
+          ) {
             output.errorMessage = finishReasonResult.errorMessage;
           }
           hasFinishReason = true;
@@ -642,7 +653,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
             }
           }
 
-          if (foundReasoningField) {
+          if (foundReasoningField !== null && foundReasoningField !== "") {
             const delta = deltaFields[foundReasoningField];
             if (typeof delta === "string" && delta.length > 0) {
               const thinkingSignature =
@@ -686,24 +697,27 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
             });
           }
 
-          if (choice?.delta?.tool_calls) {
+          if (choice?.delta?.tool_calls !== undefined) {
             for (const toolCall of choice.delta.tool_calls as StreamingToolCallDelta[]) {
               const block = ensureToolCallBlock(toolCall);
-              if (!block.id && toolCall.id) {
+              if (block.id === "" && toolCall.id !== undefined && toolCall.id !== "") {
                 block.id = toolCall.id;
                 toolCallBlocksById.set(toolCall.id, block);
               }
               const name = toolCall.function?.name ?? toolCall.custom?.name;
-              if (!block.name && name) {
+              if (block.name === "" && name !== undefined && name !== "") {
                 block.name = name;
               }
 
               let delta = "";
-              if (toolCall.function?.arguments) {
+              if (
+                toolCall.function?.arguments !== undefined &&
+                toolCall.function?.arguments !== ""
+              ) {
                 delta = toolCall.function.arguments;
                 block.partialArgs = (block.partialArgs ?? "") + toolCall.function.arguments;
                 block.arguments = parseStreamingJson(block.partialArgs);
-              } else if (toolCall.custom?.input) {
+              } else if (toolCall.custom?.input !== undefined && toolCall.custom?.input !== "") {
                 const nextInput = getCustomToolCallInput(block) + toolCall.custom.input;
                 delta = appendCustomToolCallInput(block, nextInput, false) ?? "";
               }
@@ -721,7 +735,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
       for (const block of blocks) {
         finishBlock(block);
       }
-      if (options?.signal?.aborted) {
+      if (options?.signal?.aborted === true) {
         throw new Error("Request was aborted");
       }
 
@@ -752,7 +766,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
         delete (block as { customInput?: unknown }).customInput;
         delete (block as { streamIndex?: number }).streamIndex;
       }
-      output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
       output.errorMessage = formatProviderError(normalizeProviderError(error));
       const rawMetadata = (error as any)?.error?.metadata?.raw;
       if (rawMetadata && !output.errorMessage.includes(String(rawMetadata))) {
@@ -777,9 +791,8 @@ export const streamSimple: StreamFunction<"openai-completions", SimpleStreamOpti
     ...buildBaseOptions(model, context, options, options?.apiKey),
     toolChoice: options?.toolChoice,
   } satisfies OpenAICompletionsOptions;
-  const clampedReasoning = options?.reasoning
-    ? clampThinkingLevel(model, options.reasoning)
-    : undefined;
+  const clampedReasoning =
+    options?.reasoning === undefined ? undefined : clampThinkingLevel(model, options.reasoning);
   const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
 
   return stream(model, context, {
@@ -799,7 +812,7 @@ function createClient(
 ) {
   const headers: ProviderHeaders = { "User-Agent": getMsaUserAgent(), ...model.headers };
 
-  if (sessionId && compat.sendSessionAffinityHeaders) {
+  if (sessionId !== undefined && sessionId !== "" && compat.sendSessionAffinityHeaders) {
     if (compat.sessionAffinityFormat === "openrouter") {
       headers["x-session-id"] = sessionId;
     } else {
@@ -811,7 +824,7 @@ function createClient(
     }
   }
 
-  if (optionsHeaders) {
+  if (optionsHeaders !== undefined) {
     Object.assign(headers, optionsHeaders);
   }
 
@@ -867,7 +880,11 @@ function buildParams(
     params.store = false;
   }
 
-  if (options?.maxTokens) {
+  if (
+    options?.maxTokens !== undefined &&
+    options?.maxTokens !== 0 &&
+    !Number.isNaN(options?.maxTokens)
+  ) {
     if (compat.maxTokensField === "max_tokens") {
       (params as { max_tokens?: number }).max_tokens = options.maxTokens;
     } else {
@@ -888,11 +905,11 @@ function buildParams(
     params.tools = [];
   }
 
-  if (cacheControl) {
+  if (cacheControl !== undefined) {
     applyAnthropicCacheControl(messages, params.tools, cacheControl);
   }
 
-  if (options?.toolChoice) {
+  if (options?.toolChoice !== undefined) {
     params.tool_choice = options.toolChoice;
   }
 
@@ -908,10 +925,11 @@ function buildParams(
       thinking?: { type: "enabled" | "disabled"; clear_thinking?: boolean };
       reasoning_effort?: string;
     };
-    zaiParams.thinking = options?.reasoningEffort
-      ? { type: "enabled", clear_thinking: false }
-      : { type: "disabled" };
-    if (options?.reasoningEffort && compat.supportsReasoningEffort) {
+    zaiParams.thinking =
+      options?.reasoningEffort === undefined
+        ? { type: "disabled" }
+        : { type: "enabled", clear_thinking: false };
+    if (options?.reasoningEffort !== undefined && compat.supportsReasoningEffort) {
       const mappedEffort = model.thinkingLevelMap?.[options.reasoningEffort];
       const effort = mappedEffort === undefined ? options.reasoningEffort : mappedEffort;
       if (typeof effort === "string") {
@@ -919,8 +937,8 @@ function buildParams(
       }
     }
   } else if (compat.thinkingFormat === "qwen" && model.reasoning) {
-    (params as any).enable_thinking = !!options?.reasoningEffort;
-    if (options?.reasoningEffort && compat.supportsReasoningEffort) {
+    (params as any).enable_thinking = options?.reasoningEffort !== undefined;
+    if (options?.reasoningEffort !== undefined && compat.supportsReasoningEffort) {
       const effort = model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort;
       if (typeof effort === "string") {
         (params as any).reasoning_effort = effort;
@@ -928,7 +946,7 @@ function buildParams(
     }
   } else if (compat.thinkingFormat === "qwen-chat-template" && model.reasoning) {
     (params as any).chat_template_kwargs = {
-      enable_thinking: !!options?.reasoningEffort,
+      enable_thinking: options?.reasoningEffort !== undefined,
       preserve_thinking: true,
     };
   } else if (compat.thinkingFormat === "chat-template" && model.reasoning) {
@@ -938,7 +956,7 @@ function buildParams(
       compat.chatTemplateKwargs,
       thinkingBudget,
     );
-    if (chatTemplateKwargs) {
+    if (chatTemplateKwargs !== undefined) {
       (params as any).chat_template_kwargs = chatTemplateKwargs;
     }
   } else if (compat.thinkingFormat === "baseten" && model.reasoning) {
@@ -952,39 +970,44 @@ function buildParams(
       compat.chatTemplateArgs,
       thinkingBudget,
     );
-    if (chatTemplateArgs) {
+    if (chatTemplateArgs !== undefined) {
       basetenParams.chat_template_args = chatTemplateArgs;
     }
     if (compat.supportsReasoningEffort) {
       const requestedEffort = options?.reasoningEffort;
-      const mappedEffort = requestedEffort
-        ? model.thinkingLevelMap?.[requestedEffort]
-        : model.thinkingLevelMap?.off;
+      const mappedEffort =
+        requestedEffort === undefined
+          ? model.thinkingLevelMap?.off
+          : model.thinkingLevelMap?.[requestedEffort];
       const effort = mappedEffort === undefined ? requestedEffort : mappedEffort;
       if (typeof effort === "string") {
         basetenParams.reasoning_effort = effort;
       }
     }
   } else if (compat.thinkingFormat === "deepseek" && model.reasoning) {
-    if (options?.reasoningEffort) {
+    if (options?.reasoningEffort !== undefined) {
       (params as any).thinking = { type: "enabled" };
     } else if (model.thinkingLevelMap?.off !== null) {
       (params as any).thinking = { type: "disabled" };
     }
-    if (options?.reasoningEffort && compat.supportsReasoningEffort) {
+    if (options?.reasoningEffort !== undefined && compat.supportsReasoningEffort) {
       (params as any).reasoning_effort =
         model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort;
     }
   } else if (compat.thinkingFormat === "openrouter" && model.reasoning) {
     const openRouterParams = params as typeof params & { reasoning?: { effort?: string } };
-    if (options?.reasoningEffort) {
+    if (options?.reasoningEffort !== undefined) {
       openRouterParams.reasoning = {
         effort: model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort,
       };
     } else if (model.thinkingLevelMap?.off !== null) {
       openRouterParams.reasoning = { effort: model.thinkingLevelMap?.off ?? "none" };
     }
-  } else if (compat.thinkingFormat === "ant-ling" && model.reasoning && options?.reasoningEffort) {
+  } else if (
+    compat.thinkingFormat === "ant-ling" &&
+    model.reasoning &&
+    options?.reasoningEffort !== undefined
+  ) {
     const effort = model.thinkingLevelMap?.[options.reasoningEffort];
     if (typeof effort === "string") {
       (params as typeof params & { reasoning?: { effort: string } }).reasoning = { effort };
@@ -994,43 +1017,51 @@ function buildParams(
       reasoning?: { enabled: boolean };
       reasoning_effort?: string;
     };
-    togetherParams.reasoning = { enabled: !!options?.reasoningEffort };
-    if (options?.reasoningEffort && compat.supportsReasoningEffort) {
+    togetherParams.reasoning = { enabled: options?.reasoningEffort !== undefined };
+    if (options?.reasoningEffort !== undefined && compat.supportsReasoningEffort) {
       togetherParams.reasoning_effort =
         model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort;
     }
   } else if (compat.thinkingFormat === "string-thinking" && model.reasoning) {
     const stringThinkingParams = params as typeof params & { thinking?: string };
-    if (options?.reasoningEffort) {
+    if (options?.reasoningEffort !== undefined) {
       stringThinkingParams.thinking =
         model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort;
     } else if (model.thinkingLevelMap?.off !== null) {
       stringThinkingParams.thinking = model.thinkingLevelMap?.off ?? "none";
     }
-  } else if (options?.reasoningEffort && model.reasoning && compat.supportsReasoningEffort) {
+  } else if (
+    options?.reasoningEffort !== undefined &&
+    model.reasoning &&
+    compat.supportsReasoningEffort
+  ) {
     (params as any).reasoning_effort =
       model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort;
-  } else if (!options?.reasoningEffort && model.reasoning && compat.supportsReasoningEffort) {
+  } else if (
+    options?.reasoningEffort === undefined &&
+    model.reasoning &&
+    compat.supportsReasoningEffort
+  ) {
     const offValue = model.thinkingLevelMap?.off;
     if (typeof offValue === "string") {
       (params as any).reasoning_effort = offValue;
     }
   }
 
-  if (thinkingTokenBudgetField && thinkingBudget !== undefined) {
+  if (thinkingTokenBudgetField !== undefined && thinkingBudget !== undefined) {
     Object.assign(params, { [thinkingTokenBudgetField]: thinkingBudget });
   }
 
-  if (model.compat?.openRouterRouting) {
+  if (model.compat?.openRouterRouting !== undefined) {
     (params as any).provider = model.compat.openRouterRouting;
   }
 
-  if (model.compat?.vercelGatewayRouting) {
+  if (model.compat?.vercelGatewayRouting !== undefined) {
     const routing = model.compat.vercelGatewayRouting;
-    if (routing.only || routing.order) {
+    if (routing.only !== undefined || routing.order !== undefined) {
       const gatewayOptions: Record<string, string[]> = {};
-      if (routing.only) gatewayOptions["only"] = routing.only;
-      if (routing.order) gatewayOptions["order"] = routing.order;
+      if (routing.only !== undefined) gatewayOptions["only"] = routing.only;
+      if (routing.order !== undefined) gatewayOptions["order"] = routing.order;
       (params as any).providerOptions = { gateway: gatewayOptions };
     }
   }
@@ -1040,7 +1071,7 @@ function buildParams(
     options?.reasoningEffort ?? "off",
     options?.samplingParams,
   );
-  if (samplingParams) {
+  if (samplingParams !== undefined) {
     Object.assign(params, samplingParams);
   }
 
@@ -1053,8 +1084,8 @@ function resolveThinkingTokenBudgetField(
     "thinkingTokenBudgetField" | "supportsThinkingTokenBudget"
   >,
 ): ThinkingTokenBudgetField | undefined {
-  if (compat.thinkingTokenBudgetField) return compat.thinkingTokenBudgetField;
-  if (compat.supportsThinkingTokenBudget) return "thinking_token_budget";
+  if (compat.thinkingTokenBudgetField !== undefined) return compat.thinkingTokenBudgetField;
+  if (compat.supportsThinkingTokenBudget === true) return "thinking_token_budget";
   return undefined;
 }
 
@@ -1063,7 +1094,7 @@ function resolveClampedThinkingBudget(
   options: OpenAICompletionsOptions | undefined,
   params: { max_tokens?: number | null; max_completion_tokens?: number | null },
 ): number | undefined {
-  if (!options?.reasoningEffort || !model.reasoning) return undefined;
+  if (options?.reasoningEffort === undefined || !model.reasoning) return undefined;
   const ceiling = params.max_tokens ?? params.max_completion_tokens ?? model.maxTokens;
   const budget = clampThinkingBudgetToAnswerRoom(
     thinkingBudgetForLevel(options.reasoningEffort, options.thinkingBudgets),
@@ -1101,19 +1132,20 @@ function resolveChatTemplateKwargValue(
   }
 
   const reasoningEffort = options?.reasoningEffort;
-  if (!reasoningEffort && value.omitWhenOff) {
+  if (reasoningEffort === undefined && value.omitWhenOff === true) {
     return undefined;
   }
   if (value.$var === "thinking.enabled") {
-    return !!reasoningEffort;
+    return reasoningEffort !== undefined;
   }
   if (value.$var === "thinking.budget") {
     return thinkingBudget;
   }
 
-  const mappedValue = reasoningEffort
-    ? model.thinkingLevelMap?.[reasoningEffort]
-    : model.thinkingLevelMap?.off;
+  const mappedValue =
+    reasoningEffort === undefined
+      ? model.thinkingLevelMap?.off
+      : model.thinkingLevelMap?.[reasoningEffort];
   return mappedValue === undefined
     ? reasoningEffort
     : typeof mappedValue === "string"
@@ -1130,7 +1162,7 @@ function getCompatCacheControl(
   }
 
   const ttl = cacheRetention === "long" && compat.supportsLongCacheRetention ? "1h" : undefined;
-  return { type: "ephemeral", ...(ttl ? { ttl } : {}) };
+  return { type: "ephemeral", ...(ttl === undefined ? {} : { ttl }) };
 }
 
 function applyAnthropicCacheControl(
@@ -1172,7 +1204,7 @@ function addCacheControlToLastTool(
   tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined,
   cacheControl: OpenAICompatCacheControl,
 ): void {
-  if (!tools || tools.length === 0) {
+  if (tools === undefined || tools.length === 0) {
     return;
   }
 
@@ -1379,12 +1411,16 @@ export function convertMessages(
             assistantMsg.content = assistantText;
           }
 
-          if (!preservedReasoningDetails) {
+          if (preservedReasoningDetails === undefined) {
             let signature = firstThinkingBlock.thinkingSignature;
             if (model.provider === "opencode-go" && signature === "reasoning") {
               signature = "reasoning_content";
             }
-            if (signature && isOpenAICompletionsReasoningField(signature)) {
+            if (
+              signature !== undefined &&
+              signature !== "" &&
+              isOpenAICompletionsReasoningField(signature)
+            ) {
               assistantMsg[signature] = nonEmptyThinkingBlocks
                 .map((block) => block.thinking)
                 .join("\n");
@@ -1420,7 +1456,7 @@ export function convertMessages(
           };
         });
       }
-      if (preservedReasoningDetails) {
+      if (preservedReasoningDetails !== undefined) {
         assistantMsg.reasoning_details = preservedReasoningDetails;
       }
       if (
@@ -1435,7 +1471,7 @@ export function convertMessages(
         content !== null &&
         content !== undefined &&
         (typeof content === "string" ? content.length > 0 : content.length > 0);
-      if (!hasContent && !assistantMsg.tool_calls) {
+      if (!hasContent && assistantMsg.tool_calls === undefined) {
         continue;
       }
       params.push(assistantMsg);
@@ -1465,7 +1501,7 @@ export function convertMessages(
           content: sanitizeSurrogates(toolResultText),
           tool_call_id: toolMsg.toolCallId,
         };
-        if (compat.requiresToolResultName && toolMsg.toolName) {
+        if (compat.requiresToolResultName && toolMsg.toolName !== "") {
           (toolResultMsg as any).name = toolMsg.toolName;
         }
         params.push(toolResultMsg);
@@ -1524,7 +1560,7 @@ function convertTools(
 ): OpenAI.Chat.Completions.ChatCompletionTool[] {
   return tools.map((tool) => {
     const grammar = resolveGrammarConstrainedSampling(tool, compat.supportsOpenAIGrammarTools);
-    if (grammar) {
+    if (grammar !== undefined) {
       return {
         type: "custom",
         custom: {
@@ -1726,7 +1762,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 
 function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletionsCompat {
   const detected = detectCompat(model);
-  if (!model.compat) return detected;
+  if (model.compat === undefined) return detected;
 
   return {
     supportsStore: model.compat.supportsStore ?? detected.supportsStore,

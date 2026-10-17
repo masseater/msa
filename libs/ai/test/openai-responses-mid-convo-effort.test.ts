@@ -103,7 +103,7 @@ async function runOpenAI(
       fetch: fetchMock as typeof globalThis.fetch,
     },
   ).result();
-  if (!payload) throw new Error("Request payload was not captured");
+  if (payload === undefined) throw new Error("Request payload was not captured");
   expect(message.stopReason).not.toBe("error");
   return { payload, message };
 }

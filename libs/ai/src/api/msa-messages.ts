@@ -106,7 +106,7 @@ function parseMsaMessagesErrorBody(body: string): MsaMessagesErrorBody | undefin
   try {
     const parsed = JSON.parse(body) as MsaMessagesErrorBody | null;
     const error = parsed?.error;
-    return parsed && typeof error === "object" && error !== null && !Array.isArray(error)
+    return parsed !== null && typeof error === "object" && error !== null && !Array.isArray(error)
       ? parsed
       : undefined;
   } catch {
@@ -128,7 +128,7 @@ function formatMsaMessagesResponseError(
     typeof errorBody?.error?.message === "string" ? errorBody.error.message : undefined;
   const code = typeof errorBody?.error?.code === "string" ? errorBody.error.code : undefined;
   const suffix = message ?? body;
-  const codeSuffix = code ? ` (${code})` : "";
+  const codeSuffix = code !== undefined && code !== "" ? ` (${code})` : "";
   return `${response.status} ${response.statusText}: ${suffix}${codeSuffix}`;
 }
 
@@ -151,7 +151,7 @@ function createMsaMessagesResponseError(
       status: response.status,
       statusText: response.statusText,
       ...(errorBody?.error === undefined ? {} : { error: errorBody.error as JsonValue }),
-      ...(errorBody ? {} : { body: truncateDiagnosticString(body) }),
+      ...(errorBody === undefined ? { body: truncateDiagnosticString(body) } : {}),
       timestampMs: Date.now(),
     },
   );
@@ -172,7 +172,7 @@ function appendRewriteDiagnostic(
   message: AssistantMessage,
   rewrite: MsaMessagesRewriteImpact | undefined,
 ): void {
-  if (!rewrite) {
+  if (rewrite === undefined) {
     return;
   }
   appendAssistantMessageDiagnostic(message, {
@@ -294,7 +294,7 @@ async function* readMsaMessagesEvents(
       let split = buffer.indexOf("\n\n");
       while (split !== -1) {
         const event = parseMsaMessagesEvent(buffer.slice(0, split));
-        if (event) {
+        if (event !== undefined) {
           yield event;
         }
         buffer = buffer.slice(split + 2);
@@ -306,9 +306,9 @@ async function* readMsaMessagesEvents(
       }
     }
 
-    if (buffer.trim()) {
+    if (buffer.trim() !== "") {
       const event = parseMsaMessagesEvent(buffer);
-      if (event) {
+      if (event !== undefined) {
         yield event;
       }
     }
@@ -324,7 +324,9 @@ function parseMsaMessagesEvent(raw: string): MsaMessagesEvent | undefined {
     ?.slice(5)
     .trim();
 
-  return data && data !== "[DONE]" ? (JSON.parse(data) as MsaMessagesEvent) : undefined;
+  return data !== undefined && data !== "" && data !== "[DONE]"
+    ? (JSON.parse(data) as MsaMessagesEvent)
+    : undefined;
 }
 
 function createErrorEvent(
@@ -363,7 +365,7 @@ function resolveCacheRetention(
   cacheRetention?: CacheRetention,
   env?: ProviderEnv,
 ): CacheRetention | undefined {
-  if (cacheRetention) {
+  if (cacheRetention !== undefined) {
     return cacheRetention;
   }
   return getProviderEnvValue("MSA_CACHE_RETENTION", env) === "long" ? "long" : undefined;
@@ -380,12 +382,12 @@ export const stream: StreamFunction<"msa-messages", MsaMessagesOptions> = (
   void (async () => {
     try {
       const apiKey = options?.apiKey;
-      if (!apiKey) {
+      if (apiKey === undefined || apiKey === "") {
         throw new Error(`No API key provided for provider "${model.provider}"`);
       }
 
       const url = new URL(`${model.baseUrl.replace(/\/+$/u, "")}/messages`);
-      if (options?.debug) {
+      if (options?.debug === true) {
         url.searchParams.set("debug", "1");
       }
 
@@ -427,7 +429,7 @@ export const stream: StreamFunction<"msa-messages", MsaMessagesOptions> = (
         const body = await response.text();
         throw createMsaMessagesResponseError(model, url, response, body);
       }
-      if (!response.body) {
+      if (response.body === null) {
         throw new Error(`${model.provider} response has no body`);
       }
 

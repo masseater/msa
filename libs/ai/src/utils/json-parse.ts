@@ -112,7 +112,7 @@ export function parseToolCallArguments(
 export function parseStreamingJson<T = Record<string, unknown>>(
   partialJson: string | undefined,
 ): T {
-  if (!partialJson || partialJson.trim() === "") {
+  if (partialJson === undefined || partialJson === "" || partialJson.trim() === "") {
     return {} as T;
   }
 

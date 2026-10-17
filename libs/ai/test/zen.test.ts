@@ -4,7 +4,9 @@ import { complete } from "../src/compat.ts";
 import { MODELS } from "../src/models.generated.ts";
 import type { Model } from "../src/types.ts";
 
-describe.skipIf(!process.env["OPENCODE_API_KEY"])("OpenCode Models Smoke Test", () => {
+describe.skipIf(
+  process.env["OPENCODE_API_KEY"] === undefined || process.env["OPENCODE_API_KEY"] === "",
+)("OpenCode Models Smoke Test", () => {
   const providers = [
     { key: "opencode", label: "OpenCode Zen" },
     { key: "opencode-go", label: "OpenCode Go" },

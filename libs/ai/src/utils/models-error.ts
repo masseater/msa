@@ -21,6 +21,6 @@ export class ModelsError extends Error {
 function withCauseDetail(message: string, cause: unknown): string {
   if (cause === undefined || cause === null) return message;
   const detail = formatThrownValue(cause).trim();
-  if (!detail || message.includes(detail)) return message;
+  if (detail === "" || message.includes(detail)) return message;
   return `${message}: ${detail}`;
 }

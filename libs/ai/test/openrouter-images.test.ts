@@ -16,7 +16,7 @@ vi.mock("openai", () => {
           mockState.lastParams = params;
           mockState.lastRequestOptions = requestOptions;
           const signal = (requestOptions as { signal?: AbortSignal } | undefined)?.signal;
-          if (signal?.aborted) {
+          if (signal?.aborted === true) {
             const error = new Error("Request aborted");
             return {
               withResponse: () => {

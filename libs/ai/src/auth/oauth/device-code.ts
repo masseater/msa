@@ -60,7 +60,7 @@ export async function pollOAuthDeviceCodeFlow<T>(
   );
 
   let slowDownResponses = 0;
-  if (options.waitBeforeFirstPoll) {
+  if (options.waitBeforeFirstPoll === true) {
     const remainingMs = deadline - Date.now();
     if (remainingMs > 0) {
       await abortableSleep(Math.min(intervalMs, remainingMs), options.signal, CANCEL_MESSAGE);

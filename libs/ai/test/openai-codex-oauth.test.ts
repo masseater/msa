@@ -120,7 +120,7 @@ describe("OpenAI Codex OAuth", () => {
           user_code: "ABCD-1234",
         });
         const response = pollResponses.shift();
-        if (!response) {
+        if (response === undefined) {
           return Promise.reject(new Error("Unexpected extra device auth poll"));
         }
         return Promise.resolve(response);
@@ -409,7 +409,7 @@ describe("OpenAI Codex OAuth", () => {
         if (url === "https://auth.openai.com/api/accounts/deviceauth/token") {
           pollTimes.push(Date.now());
           const response = pollResponses.shift();
-          if (!response) {
+          if (response === undefined) {
             return Promise.reject(new Error("Unexpected extra device auth poll"));
           }
           return Promise.resolve(response);

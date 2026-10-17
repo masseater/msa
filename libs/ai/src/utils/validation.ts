@@ -133,9 +133,9 @@ function coercePrimitiveByType(value: unknown, type: string): unknown {
 
 function applySchemaObjectCoercion(value: Record<string, unknown>, schema: JsonSchemaObject): void {
   const properties = schema.properties;
-  const definedKeys = new Set<string>(properties ? Object.keys(properties) : []);
+  const definedKeys = new Set<string>(properties === undefined ? [] : Object.keys(properties));
 
-  if (properties) {
+  if (properties !== undefined) {
     for (const [key, propertySchema] of Object.entries(properties)) {
       if (!(key in value)) {
         continue;
@@ -144,7 +144,11 @@ function applySchemaObjectCoercion(value: Record<string, unknown>, schema: JsonS
     }
   }
 
-  if (schema.additionalProperties && typeof schema.additionalProperties === "object") {
+  if (
+    schema.additionalProperties !== undefined &&
+    schema.additionalProperties !== false &&
+    typeof schema.additionalProperties === "object"
+  ) {
     for (const [key, propertyValue] of Object.entries(value)) {
       if (definedKeys.has(key)) {
         continue;
@@ -158,7 +162,7 @@ function applySchemaArrayCoercion(value: unknown[], schema: JsonSchemaObject): v
   if (Array.isArray(schema.items)) {
     for (let index = 0; index < value.length; index++) {
       const itemSchema = schema.items[index];
-      if (!itemSchema) {
+      if (itemSchema === undefined) {
         continue;
       }
       value[index] = coerceWithJsonSchema(value[index], itemSchema);
@@ -166,7 +170,7 @@ function applySchemaArrayCoercion(value: unknown[], schema: JsonSchemaObject): v
     return;
   }
 
-  if (schema.items && typeof schema.items === "object") {
+  if (schema.items !== undefined && typeof schema.items === "object") {
     for (let index = 0; index < value.length; index++) {
       value[index] = coerceWithJsonSchema(value[index], schema.items);
     }
@@ -176,7 +180,7 @@ function applySchemaArrayCoercion(value: unknown[], schema: JsonSchemaObject): v
 function coerceWithUnionSchema(value: unknown, schemas: JsonSchemaObject[]): unknown {
   for (const schema of schemas) {
     const validator = getSubSchemaValidator(schema);
-    if (validator?.Check(value)) {
+    if (validator?.Check(value) === true) {
       return value;
     }
   }
@@ -185,7 +189,7 @@ function coerceWithUnionSchema(value: unknown, schemas: JsonSchemaObject[]): unk
     const candidate = structuredClone(value);
     const coerced = coerceWithJsonSchema(candidate, schema);
     const validator = getSubSchemaValidator(schema);
-    if (validator?.Check(coerced)) {
+    if (validator?.Check(coerced) === true) {
       return coerced;
     }
   }
@@ -244,14 +248,14 @@ function normalizeOptionalNulls(value: unknown, schema: JsonSchemaObject): void 
     if (Array.isArray(schema.items)) {
       for (let index = 0; index < value.length; index++) {
         const itemSchema = schema.items[index];
-        if (itemSchema) normalizeOptionalNulls(value[index], itemSchema);
+        if (itemSchema !== undefined) normalizeOptionalNulls(value[index], itemSchema);
       }
-    } else if (schema.items) {
+    } else if (schema.items !== undefined) {
       for (const item of value) normalizeOptionalNulls(item, schema.items);
     }
     return;
   }
-  if (typeof value !== "object" || value === null || !schema.properties) return;
+  if (typeof value !== "object" || value === null || schema.properties === undefined) return;
 
   const object = value as Record<string, unknown>;
   const required = new Set(schema.required ?? []);
@@ -273,7 +277,7 @@ function normalizeOptionalNulls(value: unknown, schema: JsonSchemaObject): void 
 function getValidator(schema: Tool["parameters"]): ReturnType<typeof Compile> {
   const key = schema as object;
   const cached = validatorCache.get(key);
-  if (cached) {
+  if (cached !== undefined) {
     return cached;
   }
   const validator = Compile(schema);
@@ -286,9 +290,9 @@ function formatValidationPath(error: TLocalizedValidationError): string {
     const requiredProperties = (error.params as { requiredProperties?: string[] })
       .requiredProperties;
     const requiredProperty = requiredProperties?.[0];
-    if (requiredProperty) {
+    if (requiredProperty !== undefined && requiredProperty !== "") {
       const basePath = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
-      return basePath ? `${basePath}.${requiredProperty}` : requiredProperty;
+      return basePath === "" ? requiredProperty : `${basePath}.${requiredProperty}`;
     }
   }
   const path = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
@@ -297,14 +301,14 @@ function formatValidationPath(error: TLocalizedValidationError): string {
 
 export function validateToolCall(tools: Tool[], toolCall: ToolCall): any {
   const tool = tools.find((t) => t.name === toolCall.name);
-  if (!tool) {
+  if (tool === undefined) {
     throw new Error(`Tool "${toolCall.name}" not found`);
   }
   return validateToolArguments(tool, toolCall);
 }
 
 export function validateToolArguments(tool: Tool, toolCall: ToolCall): any {
-  if (toolCall.argumentsError) {
+  if (toolCall.argumentsError !== undefined && toolCall.argumentsError !== "") {
     throw new Error(`Invalid arguments for tool "${toolCall.name}": ${toolCall.argumentsError}`);
   }
   const args = structuredClone(toolCall.arguments);

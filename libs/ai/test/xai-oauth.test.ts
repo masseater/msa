@@ -109,7 +109,7 @@ describe("xAI OAuth device flow", () => {
         expect(form.get("client_id")).toBe("b1a00492-073a-47ea-816f-4c329264a828");
         expect(form.get("device_code")).toBe("device-code");
         const reply = tokenReplies.shift();
-        if (!reply) return Promise.reject(new Error("Unexpected token poll"));
+        if (reply === undefined) return Promise.reject(new Error("Unexpected token poll"));
         return Promise.resolve(reply);
       }
 

@@ -100,25 +100,35 @@ async function replayedThinkingTokens<TApi extends Api>(
 }
 
 describe("replayed Claude thinking stays in context", () => {
-  it.skipIf(!anthropicKey)("anthropic keeps it (control)", { timeout: 180000 }, async () => {
-    const model = getModel("anthropic", "claude-opus-5-5");
-    const { reply, result } = await thinkingTurn(model, anthropicKey!);
-    expect(reply.providerThinkingLevel).toBe("high");
-    const added = await replayedThinkingTokens(model, anthropicKey!, reply, result);
-    expect(added).toBeGreaterThan(0.5 * reply.usage.output);
-  });
+  it.skipIf(anthropicKey === undefined || anthropicKey === "")(
+    "anthropic keeps it (control)",
+    { timeout: 180000 },
+    async () => {
+      const model = getModel("anthropic", "claude-opus-5-5");
+      const { reply, result } = await thinkingTurn(model, anthropicKey!);
+      expect(reply.providerThinkingLevel).toBe("high");
+      const added = await replayedThinkingTokens(model, anthropicKey!, reply, result);
+      expect(added).toBeGreaterThan(0.5 * reply.usage.output);
+    },
+  );
 
-  it.skipIf(!radiusKey)("radius keeps it", { timeout: 180000 }, async () => {
-    const model = getModel("radius", "claude-opus-5-5");
-    const { reply, result } = await thinkingTurn(model, radiusKey!);
-    expect
-      .soft(reply.providerThinkingLevel, "radius done event omits providerThinkingLevel")
-      .toBe("high");
-    const added = await replayedThinkingTokens(model, radiusKey!, reply, result);
-    expect(added, "radius dropped the replayed thinking").toBeGreaterThan(0.5 * reply.usage.output);
-  });
+  it.skipIf(radiusKey === undefined || radiusKey === "")(
+    "radius keeps it",
+    { timeout: 180000 },
+    async () => {
+      const model = getModel("radius", "claude-opus-5-5");
+      const { reply, result } = await thinkingTurn(model, radiusKey!);
+      expect
+        .soft(reply.providerThinkingLevel, "radius done event omits providerThinkingLevel")
+        .toBe("high");
+      const added = await replayedThinkingTokens(model, radiusKey!, reply, result);
+      expect(added, "radius dropped the replayed thinking").toBeGreaterThan(
+        0.5 * reply.usage.output,
+      );
+    },
+  );
 
-  it.skipIf(!radiusKey)(
+  it.skipIf(radiusKey === undefined || radiusKey === "")(
     "radius keeps it when the client supplies the level",
     { timeout: 180000 },
     async () => {

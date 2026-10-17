@@ -36,7 +36,7 @@ async function capturePayload(model: Model<"openai-completions">, reasoning?: "l
       throw new Error("payload captured");
     },
   }).result();
-  if (!payload) throw new Error("OpenRouter payload was not captured");
+  if (payload === undefined) throw new Error("OpenRouter payload was not captured");
   return payload;
 }
 

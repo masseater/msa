@@ -80,7 +80,7 @@ async function capturePayload(
     }),
   }).result();
 
-  if (!capturedPayload) {
+  if (capturedPayload === undefined) {
     throw new Error("Expected payload to be captured before request failure");
   }
 
@@ -100,7 +100,7 @@ async function captureSimplePayload(
     }),
   }).result();
 
-  if (!capturedPayload) {
+  if (capturedPayload === undefined) {
     throw new Error("Expected payload to be captured before request failure");
   }
 

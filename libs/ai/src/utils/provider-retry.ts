@@ -54,14 +54,14 @@ function getRetryDelayMs(
   maxRetryDelayMs: number | undefined,
 ): number {
   const retryAfterMs = error.headers?.get("retry-after-ms");
-  if (retryAfterMs) {
+  if (retryAfterMs !== undefined && retryAfterMs !== null && retryAfterMs !== "") {
     const value = Number.parseFloat(retryAfterMs);
     if (Number.isFinite(value))
       return validateServerRetryDelayMs(value, maxRetryDelayMs, error.message);
   }
 
   const retryAfter = error.headers?.get("retry-after");
-  if (retryAfter) {
+  if (retryAfter !== undefined && retryAfter !== null && retryAfter !== "") {
     const seconds = Number.parseFloat(retryAfter);
     const delayMs = Number.isNaN(seconds) ? Date.parse(retryAfter) - Date.now() : seconds * 1000;
     if (Number.isFinite(delayMs))
@@ -80,7 +80,7 @@ function createAbortError(): Error {
 
 function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
+    if (signal?.aborted === true) {
       reject(createAbortError());
       return;
     }
@@ -111,10 +111,10 @@ export async function retryProviderRequest<T>(
     try {
       return await request();
     } catch (error) {
-      if (options.signal?.aborted) throw createAbortError();
+      if (options.signal?.aborted === true) throw createAbortError();
       if (retriesRemaining <= 0 || !isProviderError(error) || !isRetryableProviderError(error))
         throw error;
-      if (error.status !== undefined && options.noRetryStatuses?.includes(error.status))
+      if (error.status !== undefined && options.noRetryStatuses?.includes(error.status) === true)
         throw error;
 
       const retryIndex = maxRetries - retriesRemaining;

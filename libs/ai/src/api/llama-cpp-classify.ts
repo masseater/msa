@@ -97,8 +97,8 @@ function renderTask(question: ClassifierQuestion, labels: readonly string[] | un
   const head = `Question: ${question.instructions}`;
   if (question.type === "choice") {
     const lines = Object.entries(question.criteria).map(([key, description], index) => {
-      const option = `${key}${description ? `: ${description}` : ""}`;
-      return labels ? `${labels[index]}. ${option}` : `- ${option}`;
+      const option = `${key}${description === "" ? "" : `: ${description}`}`;
+      return labels === undefined ? `- ${option}` : `${labels[index]}. ${option}`;
     });
     return `${head}\n\nOptions:\n${lines.join("\n")}`;
   }
@@ -107,8 +107,8 @@ function renderTask(question: ClassifierQuestion, labels: readonly string[] | un
     return `${head}\n\nLevels:\n${lines.join("\n")}`;
   }
   const meanings = [
-    question.criteria.true ? `Yes means: ${question.criteria.true}` : "",
-    question.criteria.false ? `No means: ${question.criteria.false}` : "",
+    question.criteria.true === "" ? "" : `Yes means: ${question.criteria.true}`,
+    question.criteria.false === "" ? "" : `No means: ${question.criteria.false}`,
   ].filter(Boolean);
   return meanings.length > 0 ? `${head}\n\n${meanings.join("\n")}` : head;
 }
@@ -130,7 +130,7 @@ function renderOverview(context: ClassifierContext): string {
 
 export function renderQuestion(context: ClassifierContext, id: string): LabeledQuestion {
   const question = context.questions[id];
-  if (!question) throw new Error(`Unknown question: ${id}`);
+  if (question === undefined) throw new Error(`Unknown question: ${id}`);
   const { labels, keys } = questionLabels(question);
   const state = renderState(context.state);
   const final = `${renderTask(question, labels)}\n\n${answerInstruction(question)}`;
@@ -199,7 +199,9 @@ async function post(
     providerHeadersToRecord(
       {
         "content-type": "application/json",
-        ...(options?.apiKey ? { authorization: `Bearer ${options.apiKey}` } : {}),
+        ...(options?.apiKey !== undefined && options?.apiKey !== ""
+          ? { authorization: `Bearer ${options.apiKey}` }
+          : {}),
       },
       model.headers,
       options?.headers,
@@ -209,7 +211,7 @@ async function post(
       const timeoutSignal =
         options?.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs);
       const signal =
-        options?.signal && timeoutSignal
+        options?.signal !== undefined && timeoutSignal !== undefined
           ? AbortSignal.any([options.signal, timeoutSignal])
           : (options?.signal ?? timeoutSignal);
       try {
@@ -222,7 +224,7 @@ async function post(
         if (!next.ok) throw httpError(next, await next.text());
         return { response: next, json: (await next.json()) as unknown };
       } catch (error) {
-        if (timeoutSignal?.aborted && !options?.signal?.aborted)
+        if (timeoutSignal?.aborted === true && options?.signal?.aborted !== true)
           throw timeoutError(options!.timeoutMs!);
         throw error;
       }
@@ -288,7 +290,7 @@ async function labelTokens(request: RequestContext, labels: readonly string[]): 
     labels.map((label) => {
       const key = `${request.root}\u0000${request.model.id}\u0000${label}`;
       let pending = labelTokenCache.get(key);
-      if (!pending) {
+      if (pending === undefined) {
         pending = resolveLabelToken(request, label);
         labelTokenCache.set(key, pending);
         pending.catch(() => labelTokenCache.delete(key));
@@ -413,7 +415,7 @@ export const classify: ClassifierFunction<ClassifierOptions> = async (model, con
   try {
     if (model.api !== "llama-cpp-classify")
       throw new Error(`Unsupported classifier API: ${model.api}`);
-    if (context.images?.length)
+    if (context.images?.length !== undefined && context.images?.length > 0)
       throw new Error(`${LABEL} classification does not support image input`);
     const temperature = options?.temperature ?? 1;
     if (!(temperature > 0) || !Number.isFinite(temperature)) {
@@ -429,7 +431,7 @@ export const classify: ClassifierFunction<ClassifierOptions> = async (model, con
     return output;
   } catch (error) {
     output.answers = {};
-    output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+    output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
     output.errorMessage = formatProviderError(normalizeProviderError(error), `${LABEL} error`);
     return output;
   }

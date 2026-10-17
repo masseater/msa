@@ -91,7 +91,7 @@ function readJsonObject(
 function readProviderStructure(path: string, providerId: string): Record<string, string> {
   const errors: string[] = [];
   const groups = readJsonObject(path, `${providerId}.json`, errors);
-  if (!groups) throw new Error(errors.join("\n"));
+  if (groups === undefined) throw new Error(errors.join("\n"));
 
   const models = new Map<string, string>();
   for (const [api, value] of Object.entries(groups)) {
@@ -292,15 +292,15 @@ export function validateModelDataDirectory(structure: ModelDataStructure, dataDi
     errors.push("model data generation stamp does not match the generated catalog");
   }
   const manifestFiles = isRecord(manifest?.["files"]) ? manifest["files"] : undefined;
-  if (manifestFiles) {
+  if (manifestFiles === undefined) {
+    errors.push("model data manifest has no file hashes");
+  } else {
     const manifestFileNames = Object.keys(manifestFiles).sort();
     if (!sameStrings(expectedFiles, manifestFileNames)) {
       errors.push(
         `manifest file hashes do not match provider data files (${describeSetDifference(expectedFiles, manifestFileNames)})`,
       );
     }
-  } else {
-    errors.push("model data manifest has no file hashes");
   }
 
   for (const [providerId, expectedModels] of Object.entries(structure)) {
@@ -308,11 +308,11 @@ export function validateModelDataDirectory(structure: ModelDataStructure, dataDi
     const path = join(dataDir, filename);
     if (!existsSync(path)) continue;
     const content = readFileSync(path, "utf8");
-    if (manifestFiles && manifestFiles[filename] !== sha256(content)) {
+    if (manifestFiles !== undefined && manifestFiles[filename] !== sha256(content)) {
       errors.push(`${filename} does not match its manifest hash`);
     }
     const groups = readJsonObject(path, filename, errors);
-    if (!groups) continue;
+    if (groups === undefined) continue;
 
     const actualModels = new Map<string, string>();
     for (const [api, value] of Object.entries(groups)) {

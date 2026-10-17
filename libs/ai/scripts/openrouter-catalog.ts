@@ -36,9 +36,9 @@ export function buildOpenRouterCatalog(
   const chat: OpenRouterCatalog["chat"] = [];
 
   for (const model of listed) {
-    if (!model.supported_parameters?.includes("tools")) continue;
+    if (model.supported_parameters?.includes("tools") !== true) continue;
     const input: ("text" | "image")[] = ["text"];
-    if (model.architecture?.modality?.includes("image")) {
+    if (model.architecture?.modality?.includes("image") === true) {
       input.push("image");
     }
 
@@ -82,7 +82,7 @@ export function buildOpenRouterCatalog(
   const classifiers: OpenRouterCatalog["classifiers"] = [];
   for (const model of decisionListed) {
     if (classifiers.some((entry) => entry.id === model.id)) continue;
-    if (!model.architecture?.output_modalities?.includes("decisions")) continue;
+    if (model.architecture?.output_modalities?.includes("decisions") !== true) continue;
     const input = modalities(model.architecture.input_modalities);
     classifiers.push({
       type: "classifier",

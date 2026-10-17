@@ -133,7 +133,7 @@ describe("Anthropic Messages eager tool input streaming E2E", () => {
 
   describe("generated compatibility settings", () => {
     for (const testCase of generatedCompatCases) {
-      it.skipIf(!testCase.apiKey)(
+      it.skipIf(testCase.apiKey === undefined || testCase.apiKey === "")(
         `${testCase.name} accepts configured tool streaming`,
         { retry: 2 },
         async () => {
@@ -147,7 +147,7 @@ describe("Anthropic Messages eager tool input streaming E2E", () => {
     for (const testCase of forcedEagerProbeCases) {
       const model = withEagerToolInputStreaming(testCase.model);
 
-      it.skipIf(!testCase.apiKey)(
+      it.skipIf(testCase.apiKey === undefined || testCase.apiKey === "")(
         `${testCase.name} accepts forced eager_input_streaming`,
         { retry: 2 },
         async () => {

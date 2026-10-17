@@ -33,7 +33,9 @@ export function resolveSamplingParams(
 ): SamplingParams | undefined {
   const effectiveThinkingLevel = clampThinkingLevel(model, thinkingLevel);
   const thinkingLevelParams = model.samplingParamsByThinkingLevel?.[effectiveThinkingLevel];
-  return model.samplingParams || thinkingLevelParams || requestParams
+  return model.samplingParams !== undefined ||
+    thinkingLevelParams !== undefined ||
+    requestParams !== undefined
     ? { ...model.samplingParams, ...thinkingLevelParams, ...requestParams }
     : undefined;
 }

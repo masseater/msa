@@ -23,7 +23,7 @@ export async function personalizeOpenRouterCatalog(
 ): Promise<readonly AnyModel[]> {
   const key =
     context.credential?.type === "oauth" ? context.credential.access : context.credential?.key;
-  if (!key) return catalog;
+  if (key === undefined || key === "") return catalog;
   const response = await fetch(
     `${(context.baseUrl ?? OPENROUTER_BASE_URL).replace(/\/+$/u, "")}/models/user`,
     {
@@ -54,14 +54,14 @@ export async function personalizeOpenRouterCatalog(
   return catalog.flatMap((model): AnyModel[] => {
     if (!isModelType(model, "chat")) return [model];
     const entry = allowed.get(model.id);
-    if (!entry) return [];
+    if (entry === undefined) return [];
     return [
       {
         ...model,
         contextWindow:
           entry.top_provider?.context_length || entry.context_length || model.contextWindow,
         maxTokens: entry.top_provider?.max_completion_tokens || model.maxTokens,
-        cost: entry.pricing ? openRouterCost(entry.pricing) : model.cost,
+        cost: entry.pricing === undefined ? model.cost : openRouterCost(entry.pricing),
       },
     ];
   });

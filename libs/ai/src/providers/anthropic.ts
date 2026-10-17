@@ -27,7 +27,7 @@ function anthropicApiKeyAuth(): ApiKeyAuth {
     },
     resolve: async ({ ctx, credential, signal }) => {
       signal.throwIfAborted();
-      if (credential?.key) {
+      if (credential?.key !== undefined && credential?.key !== "") {
         return {
           auth: { apiKey: credential.key },
           env: credential.env,
@@ -37,7 +37,7 @@ function anthropicApiKeyAuth(): ApiKeyAuth {
 
       const authToken = await ctx.env(ANTHROPIC_AUTH_TOKEN_ENV);
       signal.throwIfAborted();
-      if (authToken) {
+      if (authToken !== undefined && authToken !== "") {
         return {
           auth: { headers: { Authorization: `Bearer ${authToken}` } },
           source: ANTHROPIC_AUTH_TOKEN_ENV,
@@ -47,7 +47,7 @@ function anthropicApiKeyAuth(): ApiKeyAuth {
       for (const envVar of [ANTHROPIC_OAUTH_TOKEN_ENV, ANTHROPIC_API_KEY_ENV]) {
         const apiKey = await ctx.env(envVar);
         signal.throwIfAborted();
-        if (apiKey) return { auth: { apiKey }, source: envVar };
+        if (apiKey !== undefined && apiKey !== "") return { auth: { apiKey }, source: envVar };
       }
 
       const federation: ProviderEnv = {};
@@ -58,13 +58,13 @@ function anthropicApiKeyAuth(): ApiKeyAuth {
       ]) {
         const value = await ctx.env(envVar);
         signal.throwIfAborted();
-        if (!value) return undefined;
+        if (value === undefined || value === "") return undefined;
         federation[envVar] = value;
       }
       for (const envVar of [ANTHROPIC_SERVICE_ACCOUNT_ID_ENV, ANTHROPIC_WORKSPACE_ID_ENV]) {
         const value = await ctx.env(envVar);
         signal.throwIfAborted();
-        if (value) federation[envVar] = value;
+        if (value !== undefined && value !== "") federation[envVar] = value;
       }
       return { auth: {}, env: federation, source: "workload identity federation" };
     },

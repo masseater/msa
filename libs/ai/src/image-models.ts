@@ -43,7 +43,7 @@ export function getImageModels<TProvider extends BuiltinImageProvider>(
   provider: TProvider,
 ): BuiltinImageModel<TProvider, ImageModelIds<TProvider>>[] {
   const models = imageModelsByProvider.get(provider);
-  return models
-    ? (Array.from(models.values()) as BuiltinImageModel<TProvider, ImageModelIds<TProvider>>[])
-    : [];
+  return models === undefined
+    ? []
+    : (Array.from(models.values()) as BuiltinImageModel<TProvider, ImageModelIds<TProvider>>[]);
 }

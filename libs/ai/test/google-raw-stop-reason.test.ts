@@ -17,7 +17,7 @@ vi.mock("@google/genai", () => {
 
     models = {
       generateContentStream: async function* () {
-        if (googleGenAiMock.streamChunks) {
+        if (googleGenAiMock.streamChunks !== undefined) {
           yield* googleGenAiMock.streamChunks;
           return;
         }

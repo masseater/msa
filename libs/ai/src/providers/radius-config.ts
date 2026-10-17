@@ -79,7 +79,7 @@ export function getRadiusModels(
   credential: OAuthCredential | undefined,
 ): Model<"msa-messages">[] {
   const config = getRadiusCredentialConfig(credential);
-  return config ? getRadiusModelsFromConfig(providerId, config) : [];
+  return config === undefined ? [] : getRadiusModelsFromConfig(providerId, config);
 }
 
 function truncateHttpBody(body: string): string {
@@ -93,7 +93,7 @@ export async function loadRadiusGatewayConfig(
   signal?: AbortSignal,
 ): Promise<RadiusGatewayConfig> {
   const headers: Record<string, string> = { accept: "application/json" };
-  if (apiKey) headers["authorization"] = `Bearer ${apiKey}`;
+  if (apiKey !== undefined && apiKey !== "") headers["authorization"] = `Bearer ${apiKey}`;
   const response = await fetch(new URL("/v1/config", gateway), {
     headers,
     signal: signal ?? null,
@@ -104,6 +104,6 @@ export async function loadRadiusGatewayConfig(
     );
   }
   const config = sanitizeRadiusGatewayConfig(await response.json());
-  if (!config) throw new Error(`Invalid Radius config from ${gateway}`);
+  if (config === undefined) throw new Error(`Invalid Radius config from ${gateway}`);
   return config;
 }

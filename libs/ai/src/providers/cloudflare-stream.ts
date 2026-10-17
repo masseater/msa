@@ -7,7 +7,7 @@ export function resolveCloudflareModel<TModel extends { baseUrl: string }>(
   model: TModel,
   env: ProviderEnv | undefined,
 ): TModel {
-  if (!env) return model;
+  if (env === undefined) return model;
   const baseUrl = model.baseUrl
     .replaceAll(
       `{${CLOUDFLARE_ACCOUNT_ID}}`,

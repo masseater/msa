@@ -29,8 +29,8 @@ interface DecisionQuestion {
 
 function predicateInstructions(question: Extract<ClassifierQuestion, { type: "bool" }>): string {
   const meanings = [
-    question.criteria.true ? `True means: ${question.criteria.true}` : "",
-    question.criteria.false ? `False means: ${question.criteria.false}` : "",
+    question.criteria.true === "" ? "" : `True means: ${question.criteria.true}`,
+    question.criteria.false === "" ? "" : `False means: ${question.criteria.false}`,
   ].filter(Boolean);
   return meanings.length > 0
     ? `${question.instructions}\n\n${meanings.join("\n")}`
@@ -44,7 +44,7 @@ function wireQuestion(name: string, question: ClassifierQuestion): DecisionQuest
       name,
       instructions: question.instructions,
       choices: Object.entries(question.criteria).map(([value, description]) =>
-        description ? { value, description } : { value },
+        description === "" ? { value } : { value, description },
       ),
     };
   }
@@ -141,7 +141,7 @@ function parseAnswers(
   return Object.fromEntries(
     Object.entries(context.questions).map(([id, question]) => {
       const answer = byName.get(id);
-      if (!answer) throw new Error(`${LABEL} did not return an answer for ${id}`);
+      if (answer === undefined) throw new Error(`${LABEL} did not return an answer for ${id}`);
       return [id, parseAnswer(id, question, answer)];
     }),
   );
@@ -185,12 +185,12 @@ export const classify: ClassifierFunction<ClassifierOptions> = async (model, con
     );
     if (!isRecord(body)) throw new Error(`${LABEL} returned an unexpected response`);
     const usage = parseClassifierUsage(body["usage"], model);
-    if (usage) output.usage = usage;
+    if (usage !== undefined) output.usage = usage;
     output.answers = parseAnswers(body["answers"], context);
     return output;
   } catch (error) {
     output.answers = {};
-    output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+    output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
     output.errorMessage = errorMessage(error);
     return output;
   }

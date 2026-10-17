@@ -71,7 +71,7 @@ import {
 import { transformMessages } from "./transform-messages.ts";
 
 function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEnv): CacheRetention {
-  if (cacheRetention) {
+  if (cacheRetention !== undefined) {
     return cacheRetention;
   }
   if (getProviderEnvValue("MSA_CACHE_RETENTION", env) === "long") {
@@ -123,10 +123,10 @@ const ccToolLookup = new Map(claudeCodeTools.map((t) => [t.toLowerCase(), t]));
 
 const toClaudeCodeName = (name: string) => ccToolLookup.get(name.toLowerCase()) ?? name;
 const fromClaudeCodeName = (name: string, tools?: Tool[]) => {
-  if (tools && tools.length > 0) {
+  if (tools !== undefined && tools.length > 0) {
     const lowerName = name.toLowerCase();
     const matchedTool = tools.find((tool) => tool.name.toLowerCase() === lowerName);
-    if (matchedTool) return matchedTool.name;
+    if (matchedTool !== undefined) return matchedTool.name;
   }
   return name;
 };
@@ -229,7 +229,7 @@ export interface AnthropicOptions extends StreamOptions {
 function mergeHeaders(...headerSources: (ProviderHeaders | undefined)[]): ProviderHeaders {
   const merged: ProviderHeaders = {};
   for (const headers of headerSources) {
-    if (headers) {
+    if (headers !== undefined) {
       Object.assign(merged, headers);
     }
   }
@@ -241,7 +241,7 @@ function mergeClientHeaders(...headerSources: (ProviderHeaders | undefined)[]): 
 }
 
 function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean {
-  if (!headers) return false;
+  if (headers === undefined) return false;
   const expected = name.toLowerCase();
   for (const [key, value] of Object.entries(headers)) {
     if (key.toLowerCase() === expected && value !== null && value.trim().length > 0) return true;
@@ -251,7 +251,7 @@ function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean 
 
 function hasRequestAuth(apiKey: string | undefined, headers: ProviderHeaders | undefined): boolean {
   return (
-    !!apiKey ||
+    (apiKey !== undefined && apiKey !== "") ||
     hasHeader(headers, "authorization") ||
     hasHeader(headers, "x-api-key") ||
     hasHeader(headers, "cf-aig-authorization")
@@ -284,7 +284,15 @@ function getAnthropicFederation(
   const federationRuleId = getProviderEnvValue(ANTHROPIC_FEDERATION_RULE_ID_ENV, env);
   const organizationId = getProviderEnvValue(ANTHROPIC_ORGANIZATION_ID_ENV, env);
   const identityTokenFile = getProviderEnvValue(ANTHROPIC_IDENTITY_TOKEN_FILE_ENV, env);
-  if (!federationRuleId || !organizationId || !identityTokenFile) return undefined;
+  if (
+    federationRuleId === undefined ||
+    federationRuleId === "" ||
+    organizationId === undefined ||
+    organizationId === "" ||
+    identityTokenFile === undefined ||
+    identityTokenFile === ""
+  )
+    return undefined;
   return {
     organization_id: organizationId,
     workspace_id: getProviderEnvValue(ANTHROPIC_WORKSPACE_ID_ENV, env),
@@ -323,7 +331,7 @@ const ANTHROPIC_MESSAGE_EVENTS: ReadonlySet<string> = new Set([
 ]);
 
 function flushSseEvent(state: SseDecoderState): ServerSentEvent | null {
-  if (!state.event && state.data.length === 0) {
+  if ((state.event === null || state.event === "") && state.data.length === 0) {
     return null;
   }
 
@@ -404,7 +412,7 @@ async function* iterateSseMessages(
 
   try {
     while (true) {
-      if (signal?.aborted) {
+      if (signal?.aborted === true) {
         throw new Error("Request was aborted");
       }
 
@@ -415,10 +423,10 @@ async function* iterateSseMessages(
 
       buffer += decoder.decode(value, { stream: true });
       let consumed = consumeLine(buffer);
-      while (consumed) {
+      while (consumed !== null) {
         buffer = consumed.rest;
         const event = decodeSseLine(consumed.line, state);
-        if (event) {
+        if (event !== null) {
           yield event;
         }
         consumed = consumeLine(buffer);
@@ -427,10 +435,10 @@ async function* iterateSseMessages(
 
     buffer += decoder.decode();
     let consumed = consumeLine(buffer);
-    while (consumed) {
+    while (consumed !== null) {
       buffer = consumed.rest;
       const event = decodeSseLine(consumed.line, state);
-      if (event) {
+      if (event !== null) {
         yield event;
       }
       consumed = consumeLine(buffer);
@@ -438,13 +446,13 @@ async function* iterateSseMessages(
 
     if (buffer.length > 0) {
       const event = decodeSseLine(buffer, state);
-      if (event) {
+      if (event !== null) {
         yield event;
       }
     }
 
     const trailingEvent = flushSseEvent(state);
-    if (trailingEvent) {
+    if (trailingEvent !== null) {
       yield trailingEvent;
     }
   } finally {
@@ -456,7 +464,7 @@ async function* iterateAnthropicEvents(
   response: Response,
   signal?: AbortSignal,
 ): AsyncGenerator<RawMessageStreamEvent> {
-  if (!response.body) {
+  if (response.body === null) {
     throw new Error("Attempted to iterate over an Anthropic response with no body");
   }
 
@@ -531,13 +539,10 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
       let usageModel = model;
       let inputTransformations: BetaInputTransformation[] | undefined;
 
-      if (options?.client) {
-        client = options.client;
-        isOAuth = false;
-      } else {
+      if (options?.client === undefined) {
         const apiKey = options?.apiKey;
         const federation = getAnthropicFederation(model, apiKey, options?.headers, options?.env);
-        if (!federation) assertRequestAuth(model.provider, apiKey, options?.headers);
+        if (federation === undefined) assertRequestAuth(model.provider, apiKey, options?.headers);
 
         const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
         const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
@@ -552,9 +557,12 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
         );
         client = created.client;
         isOAuth = created.isOAuthToken;
+      } else {
+        client = options.client;
+        isOAuth = false;
       }
       const requestOptions = {
-        ...(options?.signal ? { signal: options.signal } : {}),
+        ...(options?.signal === undefined ? {} : { signal: options.signal }),
         ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
         maxRetries: 0,
       };
@@ -569,7 +577,8 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
           options,
           disablePreferredStrictTools,
         );
-        if (built.providerThinkingLevel) output.providerThinkingLevel = built.providerThinkingLevel;
+        if (built.providerThinkingLevel !== undefined)
+          output.providerThinkingLevel = built.providerThinkingLevel;
         let params = built.params;
         const nextParams = await options?.onPayload?.(params, model);
         if (nextParams !== undefined) {
@@ -587,7 +596,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
           break;
         } catch (error) {
           if (
-            options?.signal?.aborted ||
+            options?.signal?.aborted === true ||
             disablePreferredStrictTools ||
             !built.hasPreferredStrictTools ||
             !(error instanceof APIError) ||
@@ -636,7 +645,10 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
                   (fallback) =>
                     fallback.provider === model.provider && fallback.model === responseModel,
                 )?.cost;
-          usageModel = fallbackCost ? { ...model, id: responseModel, cost: fallbackCost } : model;
+          usageModel =
+            fallbackCost === undefined
+              ? model
+              : { ...model, id: responseModel, cost: fallbackCost };
           output.usage.input = event.message.usage.input_tokens || 0;
           output.usage.output = event.message.usage.output_tokens || 0;
           output.usage.cacheRead = event.message.usage.cache_read_input_tokens || 0;
@@ -717,7 +729,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
           if (event.delta.type === "text_delta") {
             const index = blocks.findIndex((b) => b.index === event.index);
             const block = blocks[index];
-            if (block && block.type === "text") {
+            if (block !== undefined && block.type === "text") {
               block.text += event.delta.text;
               events.push({
                 type: "text_delta",
@@ -729,7 +741,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
           } else if (event.delta.type === "thinking_delta") {
             const index = blocks.findIndex((b) => b.index === event.index);
             const block = blocks[index];
-            if (block && block.type === "thinking") {
+            if (block !== undefined && block.type === "thinking") {
               block.thinking += event.delta.thinking;
               events.push({
                 type: "thinking_delta",
@@ -741,7 +753,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
           } else if (event.delta.type === "input_json_delta") {
             const index = blocks.findIndex((b) => b.index === event.index);
             const block = blocks[index];
-            if (block && block.type === "toolCall") {
+            if (block !== undefined && block.type === "toolCall") {
               block.partialJson += event.delta.partial_json;
               block.arguments = parseStreamingJson(block.partialJson);
               events.push({
@@ -754,7 +766,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
           } else if (event.delta.type === "signature_delta") {
             const index = blocks.findIndex((b) => b.index === event.index);
             const block = blocks[index];
-            if (block && block.type === "thinking") {
+            if (block !== undefined && block.type === "thinking") {
               block.thinkingSignature = block.thinkingSignature || "";
               block.thinkingSignature += event.delta.signature;
             }
@@ -762,7 +774,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
         } else if (event.type === "content_block_stop") {
           const index = blocks.findIndex((b) => b.index === event.index);
           const block = blocks[index];
-          if (block) {
+          if (block !== undefined) {
             delete (block as any).index;
             if (block.type === "text") {
               events.push({
@@ -792,14 +804,17 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
         } else if (event.type === "message_delta") {
           const transformations = event.input_transformations;
           if (Array.isArray(transformations)) inputTransformations = transformations;
-          if (event.delta.stop_reason) {
+          if (event.delta.stop_reason !== null) {
             output.rawStopReason = event.delta.stop_reason;
             const stopReasonResult = mapStopReason(
               event.delta.stop_reason,
               event.delta.stop_details,
             );
             output.stopReason = stopReasonResult.stopReason;
-            if (stopReasonResult.errorMessage) {
+            if (
+              stopReasonResult.errorMessage !== undefined &&
+              stopReasonResult.errorMessage !== ""
+            ) {
               output.errorMessage = stopReasonResult.errorMessage;
             }
           }
@@ -847,7 +862,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
         }
       }
 
-      if (options?.signal?.aborted) {
+      if (options?.signal?.aborted === true) {
         throw new Error("Request was aborted");
       }
 
@@ -857,7 +872,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
       if (output.stopReason === "aborted" || output.stopReason === "error") {
         throw new Error(output.errorMessage || "An unknown error occurred");
       }
-      if (inputTransformations && inputTransformations.length > 0) {
+      if (inputTransformations !== undefined && inputTransformations.length > 0) {
         appendAssistantMessageDiagnostic(output, {
           type: "anthropic_input_transformations",
           timestamp: Date.now(),
@@ -878,7 +893,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
         delete (block as { index?: number }).index;
         delete (block as { partialJson?: string }).partialJson;
       }
-      output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
       output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
       events.push({ type: "error", reason: output.stopReason, error: output });
       events.end();
@@ -892,7 +907,7 @@ function mapThinkingLevelToEffort(
   model: Model<"anthropic-messages">,
   level: SimpleStreamOptions["reasoning"],
 ): AnthropicEffort {
-  const mapped = level ? model.thinkingLevelMap?.[level] : undefined;
+  const mapped = level === undefined ? undefined : model.thinkingLevelMap?.[level];
   if (typeof mapped === "string") return mapped as AnthropicEffort;
 
   switch (level) {
@@ -913,7 +928,9 @@ export const streamSimple: StreamFunction<"anthropic-messages", SimpleStreamOpti
   context: TranscriptContext,
   options?: SimpleStreamOptions,
 ): AssistantMessageEventStream => {
-  if (!getAnthropicFederation(model, options?.apiKey, options?.headers, options?.env)) {
+  if (
+    getAnthropicFederation(model, options?.apiKey, options?.headers, options?.env) === undefined
+  ) {
     assertRequestAuth(model.provider, options?.apiKey, options?.headers);
   }
 
@@ -921,7 +938,7 @@ export const streamSimple: StreamFunction<"anthropic-messages", SimpleStreamOpti
     ...buildBaseOptions(model, context, options, options?.apiKey),
     toolChoice: options?.toolChoice,
   } satisfies AnthropicOptions;
-  if (!options?.reasoning) {
+  if (options?.reasoning === undefined) {
     return stream(model, context, {
       ...base,
       thinkingEnabled: false,
@@ -966,7 +983,7 @@ function createClient(
   sessionId?: string,
   federation?: AnthropicFederationConfig,
 ): { client: Anthropic; isOAuthToken: boolean } {
-  if (apiKey && isOAuthToken(apiKey)) {
+  if (apiKey !== undefined && apiKey !== "" && isOAuthToken(apiKey)) {
     const client = new MsaAnthropic({
       apiKey: null,
       authToken: apiKey,
@@ -990,7 +1007,7 @@ function createClient(
 
   const compat = getAnthropicCompat(model);
   const sessionAffinityHeaders: ProviderHeaders = {};
-  if (sessionId && compat.sendSessionAffinityHeaders) {
+  if (sessionId !== undefined && sessionId !== "" && compat.sendSessionAffinityHeaders) {
     const header =
       compat.sessionAffinityFormat === "openrouter" ? "x-session-id" : "x-session-affinity";
     sessionAffinityHeaders[header] = sessionId;
@@ -1004,7 +1021,7 @@ function createClient(
     model.headers,
     optionsHeaders,
   );
-  if (federation) {
+  if (federation !== undefined) {
     const key = JSON.stringify([model.baseUrl, federation]);
     if (federationClient?.key !== key || federationClient.fetch !== fetch) {
       const client = new MsaAnthropic({
@@ -1091,11 +1108,11 @@ function buildParams(
   const { cacheControl } = getCacheControl(model, options?.cacheRetention, options?.env);
   const compat = getAnthropicCompat(model);
   const initialSystemMessage = getInitialSystemMessage(context.messages);
-  const initialSystemText = initialSystemMessage ? getSystemMessageText(initialSystemMessage) : "";
+  const initialSystemText =
+    initialSystemMessage === undefined ? "" : getSystemMessageText(initialSystemMessage);
   const transformedMessages = transformMessages(context.messages, model, normalizeToolCallId);
-  const conversationMessages = initialSystemMessage
-    ? transformedMessages.slice(1)
-    : transformedMessages;
+  const conversationMessages =
+    initialSystemMessage === undefined ? transformedMessages : transformedMessages.slice(1);
   let hasPreferredStrictTools = false;
   const convertToolDefinitions = (
     tools: Tool[],
@@ -1157,29 +1174,29 @@ function buildParams(
       {
         type: "text",
         text: "You are Claude Code, Anthropic's official CLI for Claude.",
-        ...(cacheControl ? { cache_control: cacheControl } : {}),
+        ...(cacheControl === undefined ? {} : { cache_control: cacheControl }),
       },
     ];
-    if (initialSystemText) {
+    if (initialSystemText !== "") {
       params.system.push({
         type: "text",
         text: sanitizeSurrogates(initialSystemText),
-        ...(cacheControl ? { cache_control: cacheControl } : {}),
+        ...(cacheControl === undefined ? {} : { cache_control: cacheControl }),
       });
     }
-  } else if (initialSystemText) {
+  } else if (initialSystemText !== "") {
     params.system = [
       {
         type: "text",
         text: sanitizeSurrogates(initialSystemText),
-        ...(cacheControl ? { cache_control: cacheControl } : {}),
+        ...(cacheControl === undefined ? {} : { cache_control: cacheControl }),
       },
     ];
   }
 
   if (
     options?.temperature !== undefined &&
-    !options?.thinkingEnabled &&
+    options?.thinkingEnabled !== true &&
     model.compat?.supportsMidConvoEffort !== true &&
     compat.supportsTemperature
   ) {
@@ -1208,11 +1225,11 @@ function buildParams(
       block_binding: { prefix_mismatch_behavior: "drop_block" },
     };
     params.output_config = { effort: "high" };
-  } else if (model.reasoning && options?.thinkingEnabled) {
+  } else if (model.reasoning && options?.thinkingEnabled === true) {
     const display: AnthropicThinkingDisplay = options.thinkingDisplay ?? "summarized";
     if (model.compat?.forceAdaptiveThinking === true) {
       params.thinking = { type: "adaptive", display };
-      if (options.effort) {
+      if (options.effort !== undefined) {
         params.output_config = { effort: options.effort };
       }
     } else {
@@ -1224,14 +1241,14 @@ function buildParams(
     }
   }
 
-  if (options?.metadata) {
+  if (options?.metadata !== undefined) {
     const userId = options.metadata["user_id"];
     if (typeof userId === "string") {
       params.metadata = { user_id: userId };
     }
   }
 
-  if (options?.toolChoice) {
+  if (options?.toolChoice !== undefined) {
     if (typeof options.toolChoice === "string") {
       params.tool_choice = { type: options.toolChoice };
     } else {
@@ -1240,7 +1257,7 @@ function buildParams(
   }
 
   const allowedFallbackModels = model.compat?.allowedFallbackModels;
-  if (allowedFallbackModels && allowedFallbackModels.length > 0) {
+  if (allowedFallbackModels !== undefined && allowedFallbackModels.length > 0) {
     params.fallbacks = allowedFallbackModels.map((fallback) => ({ model: fallback.model }));
   }
 
@@ -1303,7 +1320,7 @@ function convertMessages(
       const text = renderSystemMessageUpdate(msg);
       const blocks: ContentBlockParam[] = [];
       if (text.length > 0) blocks.push({ type: "text", text: sanitizeSurrogates(text) });
-      if (convertToolDefinitions) {
+      if (convertToolDefinitions !== undefined) {
         const added = msg.toolsAdded ?? [];
         const redefined = new Set(added.map((tool) => tool.name));
         for (const tool of msg.toolsRemoved ?? []) {
@@ -1370,7 +1387,7 @@ function convertMessages(
             text: sanitizeSurrogates(block.text),
           });
         } else if (block.type === "thinking") {
-          if (block.redacted) {
+          if (block.redacted === true) {
             blocks.push({
               type: "redacted_thinking",
               data: block.thinkingSignature!,
@@ -1378,7 +1395,10 @@ function convertMessages(
             continue;
           }
           const thinkingSignature = block.thinkingSignature;
-          const hasThinkingSignature = !!thinkingSignature && thinkingSignature.trim().length > 0;
+          const hasThinkingSignature =
+            thinkingSignature !== undefined &&
+            thinkingSignature !== "" &&
+            thinkingSignature.trim().length > 0;
           if (block.thinking.trim().length === 0 && !hasThinkingSignature) continue;
           if (hasThinkingSignature) {
             blocks.push({
@@ -1443,13 +1463,13 @@ function convertMessages(
 
   flushPendingSystemMessages();
 
-  if (cacheControl && params.length > 0) {
+  if (cacheControl !== undefined && params.length > 0) {
     const lastMessage = params.at(-1);
     if (lastMessage?.role === "user" || lastMessage?.role === "system") {
       if (Array.isArray(lastMessage.content)) {
         const lastBlock = lastMessage.content[lastMessage.content.length - 1];
         if (
-          lastBlock &&
+          lastBlock !== undefined &&
           (lastBlock.type === "text" ||
             lastBlock.type === "image" ||
             lastBlock.type === "tool_result" ||
@@ -1557,7 +1577,8 @@ function convertTools(
     const config = tool.constrainedSampling;
     const strict =
       disablePreferredStrictTools &&
-      config &&
+      config !== undefined &&
+      config !== false &&
       config.type === "json_schema" &&
       config.strict === "prefer"
         ? undefined
@@ -1587,7 +1608,9 @@ function convertTools(
       ...(supportsEagerToolInputStreaming ? { eager_input_streaming: true } : {}),
       ...(strict === true ? { strict: true } : {}),
       input_schema: inputSchema,
-      ...(cacheControl && index === tools.length - 1 ? { cache_control: cacheControl } : {}),
+      ...(cacheControl !== undefined && index === tools.length - 1
+        ? { cache_control: cacheControl }
+        : {}),
     };
   });
 }

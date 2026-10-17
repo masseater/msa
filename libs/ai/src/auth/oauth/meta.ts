@@ -33,13 +33,13 @@ async function readJson(response: Response): Promise<Record<string, unknown> | n
 function errorDetail(json: Record<string, unknown> | null): string {
   for (const key of ["error_description", "detail", "message", "error"]) {
     const value = json?.[key];
-    if (typeof value === "string" && value.trim()) return `: ${value.trim()}`;
+    if (typeof value === "string" && value.trim() !== "") return `: ${value.trim()}`;
   }
   return "";
 }
 
 function trustedHttpUrl(value: unknown): string | null {
-  if (typeof value !== "string" || !value) return null;
+  if (typeof value !== "string" || value === "") return null;
   try {
     const url = new URL(value);
     if (url.protocol !== "https:" && url.protocol !== "http:") return null;
@@ -76,10 +76,11 @@ async function startDeviceAuthorization(signal: AbortSignal): Promise<DeviceAuth
     trustedHttpUrl(json?.["verification_uri"]);
   if (
     typeof deviceCode !== "string" ||
-    !deviceCode ||
+    deviceCode === "" ||
     typeof userCode !== "string" ||
-    !userCode ||
-    !verificationUri
+    userCode === "" ||
+    verificationUri === null ||
+    verificationUri === ""
   ) {
     throw new Error(`Invalid Meta device authorization response: ${JSON.stringify(json)}`);
   }
@@ -113,7 +114,11 @@ function pollForIdentityToken(device: DeviceAuthorization, signal: AbortSignal):
         signal: requestSignal(signal),
       });
       const json = await readJson(response);
-      if (response.ok && typeof json?.["access_token"] === "string" && json["access_token"]) {
+      if (
+        response.ok &&
+        typeof json?.["access_token"] === "string" &&
+        json["access_token"] !== ""
+      ) {
         return { status: "complete", value: json["access_token"] };
       }
       switch (json?.["error"]) {
@@ -160,10 +165,10 @@ async function mintApiKey(identityToken: string, signal: AbortSignal): Promise<O
     throw new Error(`Meta API key mint failed with status ${response.status}${errorDetail(json)}`);
   }
   const apiKey = json?.["api_key"];
-  if (typeof apiKey !== "string" || !apiKey) {
+  if (typeof apiKey !== "string" || apiKey === "") {
     const actionUrl = trustedHttpUrl(json?.["action_url"]);
     throw new Error(
-      `Meta did not issue an API key.${actionUrl ? ` Complete setup at ${actionUrl}` : ""}`,
+      `Meta did not issue an API key.${actionUrl !== null && actionUrl !== "" ? ` Complete setup at ${actionUrl}` : ""}`,
     );
   }
   return {

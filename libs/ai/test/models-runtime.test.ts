@@ -107,8 +107,11 @@ function envKeyAuth(key: string | undefined): ApiKeyAuth {
     name: "Test API key",
     resolve: ({ credential }) => {
       const resolved = credential?.key ?? key;
-      if (!resolved) return Promise.resolve(undefined);
-      return Promise.resolve({ auth: { apiKey: resolved }, source: credential ? "stored" : "env" });
+      if (resolved === undefined || resolved === "") return Promise.resolve(undefined);
+      return Promise.resolve({
+        auth: { apiKey: resolved },
+        source: credential === undefined ? "env" : "stored",
+      });
     },
   };
 }
@@ -216,7 +219,7 @@ describe("Models runtime", () => {
     const found = models.getModel("p2", "m3");
     expect(found && hasApi(found, "openai-completions")).toBe(false);
     expect(found && hasApi(found, "test-api")).toBe(true);
-    if (found && hasApi(found, "test-api")) {
+    if (found !== undefined && hasApi(found, "test-api")) {
       const _typed: Model<"test-api"> = found;
       expect(_typed.id).toBe("m3");
     }
@@ -420,7 +423,7 @@ describe("Models runtime", () => {
         id: "dynamic",
         auth: { apiKey: envKeyAuth(undefined) },
         models: [],
-        fetchModels: fetchModels ? () => fetchModels() : undefined,
+        fetchModels: fetchModels === undefined ? undefined : () => fetchModels(),
         api: {
           stream: () => new AssistantMessageEventStream(),
           streamSimple: () => new AssistantMessageEventStream(),
@@ -1257,7 +1260,13 @@ describe("Models runtime", () => {
       name: "Scoped",
       resolve: async ({ credential, ctx }) => {
         const account = credential?.env?.["ACCOUNT_ID"] ?? (await ctx.env("ACCOUNT_ID"));
-        if (!credential?.key || !account) return undefined;
+        if (
+          credential?.key === undefined ||
+          credential?.key === "" ||
+          account === undefined ||
+          account === ""
+        )
+          return undefined;
         return {
           auth: { apiKey: credential.key, baseUrl: `https://example.test/${account}` },
           env: { ACCOUNT_ID: account },

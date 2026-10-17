@@ -40,10 +40,15 @@ async function startServer(
       requests.push({
         url: request.url ?? "",
         headers: request.headers,
-        body: raw ? JSON.parse(raw) : undefined,
+        body: raw === "" ? undefined : JSON.parse(raw),
       });
 
-      if (options.status && options.status !== 200) {
+      if (
+        options.status !== undefined &&
+        options.status !== 0 &&
+        !Number.isNaN(options.status) &&
+        options.status !== 200
+      ) {
         response.statusCode = options.status;
         response.setHeader("content-type", "application/json");
         response.end(options.rawBody ?? "{}");

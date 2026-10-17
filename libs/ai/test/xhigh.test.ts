@@ -15,7 +15,9 @@ function makeContext(): Context {
   };
 }
 
-describe.skipIf(!process.env["OPENAI_API_KEY"])("xhigh reasoning", () => {
+describe.skipIf(
+  process.env["OPENAI_API_KEY"] === undefined || process.env["OPENAI_API_KEY"] === "",
+)("xhigh reasoning", () => {
   describe("gpt 5.5 (supports xhigh)", () => {
     it("should work with openai-responses", async () => {
       const model = getModel("openai", "gpt-5.5");

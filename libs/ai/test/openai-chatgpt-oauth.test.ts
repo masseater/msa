@@ -51,14 +51,14 @@ function loginInteraction(options?: {
     prompt: (prompt) => {
       if (prompt.type !== "manual_code")
         return Promise.reject(new Error(`Unexpected prompt: ${prompt.type}`));
-      if (!authorizeUrl)
+      if (authorizeUrl === undefined)
         return Promise.reject(
           new Error("Authorization URL was not emitted before the callback prompt"),
         );
       const callback = new URL(authorizeUrl.searchParams.get("redirect_uri") ?? "");
       callback.searchParams.set("code", "authorization-code");
       callback.searchParams.set("state", authorizeUrl.searchParams.get("state") ?? "");
-      if (options?.callbackClientId)
+      if (options?.callbackClientId !== undefined && options?.callbackClientId !== "")
         callback.searchParams.set("client_id", options.callbackClientId);
       return Promise.resolve(callback.toString());
     },

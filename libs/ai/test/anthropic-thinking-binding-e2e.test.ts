@@ -18,7 +18,7 @@ function strictBinding(payload: unknown): unknown {
       block_binding?: { prefix_mismatch_behavior?: "drop_block" | "error" };
     };
   };
-  if (params.thinking?.block_binding) {
+  if (params.thinking?.block_binding !== undefined) {
     params.thinking.block_binding.prefix_mismatch_behavior = "error";
   }
   return params;

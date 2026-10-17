@@ -49,7 +49,7 @@ describe("createAiBindingFetch", () => {
     });
 
     const [request] = requests;
-    if (!request) throw new Error("Expected a binding request");
+    if (request === undefined) throw new Error("Expected a binding request");
     expect(request.url).toBe(`${BINDING_PREFIX}/anthropic/v1/messages?beta=true`);
     expect(request.method).toBe("POST");
     expect(Object.fromEntries(request.headers)).toEqual({
@@ -100,7 +100,7 @@ describe("createAiBindingFetch", () => {
     expect(result.stopReason).toBe("error");
     expect(requests).toHaveLength(1);
     const [request] = requests;
-    if (!request) throw new Error("Expected a binding request");
+    if (request === undefined) throw new Error("Expected a binding request");
     expect(request.url).toBe(`${BINDING_PREFIX}/openai/chat/completions`);
     const headerNames = Object.keys(Object.fromEntries(request.headers));
     expect(headerNames).not.toContain("authorization");

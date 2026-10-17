@@ -7,7 +7,7 @@ import { resolveApiKey } from "./oauth.ts";
 const codexToken = await resolveApiKey("openai-codex");
 
 describe("openai-codex cache affinity e2e", () => {
-  it.skipIf(!codexToken)(
+  it.skipIf(codexToken === undefined || codexToken === "")(
     "handles SSE requests with aligned cache-affinity identifiers",
     async () => {
       const model = getModel("openai-codex", "gpt-5.5");

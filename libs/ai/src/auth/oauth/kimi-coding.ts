@@ -50,7 +50,7 @@ async function readJson(response: Response): Promise<Record<string, unknown> | n
 }
 
 function trustedHttpUrl(value: unknown): string | null {
-  if (typeof value !== "string" || !value) return null;
+  if (typeof value !== "string" || value === "") return null;
   try {
     const url = new URL(value);
     if (url.protocol !== "https:" && url.protocol !== "http:") return null;
@@ -77,7 +77,7 @@ async function startDeviceAuthorization(
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(
-      `Kimi Code device authorization failed with status ${response.status}${text ? `: ${text}` : ""}`,
+      `Kimi Code device authorization failed with status ${response.status}${text === "" ? "" : `: ${text}`}`,
     );
   }
 
@@ -124,9 +124,9 @@ function parseTokenResponse(
   const expiresIn = json?.["expires_in"];
   if (
     typeof accessToken !== "string" ||
-    !accessToken ||
+    accessToken === "" ||
     typeof refreshValue !== "string" ||
-    !refreshValue ||
+    refreshValue === "" ||
     typeof expiresIn !== "number" ||
     !Number.isFinite(expiresIn) ||
     expiresIn <= 0
@@ -171,7 +171,7 @@ function pollForToken(
         const text = await response.text().catch(() => "");
         return {
           status: "failed",
-          message: `Kimi Code device token request failed with status ${response.status}${text ? `: ${text}` : ""}`,
+          message: `Kimi Code device token request failed with status ${response.status}${text === "" ? "" : `: ${text}`}`,
         };
       }
 
@@ -275,7 +275,7 @@ async function refreshToken(
 
     const text = JSON.stringify(json);
     throw new Error(
-      `Kimi Code token refresh failed with status ${response.status}${text ? `: ${text}` : ""}`,
+      `Kimi Code token refresh failed with status ${response.status}${text === "" ? "" : `: ${text}`}`,
     );
   }
 

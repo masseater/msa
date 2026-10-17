@@ -40,22 +40,22 @@ let cachedVertexAdcCredentialsExists: boolean | null = null;
 
 function hasVertexAdcCredentials(env?: ProviderEnv): boolean {
   const explicitCredentialsPath = env?.["GOOGLE_APPLICATION_CREDENTIALS"];
-  if (explicitCredentialsPath) {
-    return _existsSync ? _existsSync(explicitCredentialsPath) : false;
+  if (explicitCredentialsPath !== undefined && explicitCredentialsPath !== "") {
+    return _existsSync === null ? false : _existsSync(explicitCredentialsPath);
   }
 
   if (cachedVertexAdcCredentialsExists === null) {
-    if (!_existsSync || !_homedir || !_join) {
+    if (_existsSync === null || _homedir === null || _join === null) {
       const isNode =
         typeof process !== "undefined" && (process.versions?.node || process.versions?.["bun"]);
-      if (!isNode) {
+      if (isNode === undefined || isNode === false || isNode === "") {
         cachedVertexAdcCredentialsExists = false;
       }
       return false;
     }
 
     const gacPath = getProviderEnvValue("GOOGLE_APPLICATION_CREDENTIALS", env);
-    if (gacPath) {
+    if (gacPath !== undefined && gacPath !== "") {
       cachedVertexAdcCredentialsExists = _existsSync(gacPath);
     } else {
       cachedVertexAdcCredentialsExists = _existsSync(
@@ -113,14 +113,14 @@ function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
   };
 
   const envVar = envMap[provider];
-  return envVar ? [envVar] : undefined;
+  return envVar !== undefined && envVar !== "" ? [envVar] : undefined;
 }
 
 export function findEnvKeys(provider: KnownProvider, env?: ProviderEnv): string[] | undefined;
 export function findEnvKeys(provider: string, env?: ProviderEnv): string[] | undefined;
 export function findEnvKeys(provider: string, env?: ProviderEnv): string[] | undefined {
   const envVars = getApiKeyEnvVars(provider);
-  if (!envVars) return undefined;
+  if (envVars === undefined) return undefined;
 
   const found = envVars.filter((envVar) => !!getProviderEnvValue(envVar, env));
   return found.length > 0 ? found : undefined;
@@ -130,12 +130,12 @@ export function getEnvApiKey(provider: KnownProvider, env?: ProviderEnv): string
 export function getEnvApiKey(provider: string, env?: ProviderEnv): string | undefined;
 export function getEnvApiKey(provider: string, env?: ProviderEnv): string | undefined {
   const envKeys = findEnvKeys(provider, env);
-  if (envKeys?.[0]) {
+  if (envKeys?.[0] !== undefined && envKeys?.[0] !== "") {
     const apiKeyEnv =
       provider === "anthropic"
         ? envKeys.find((key) => key !== ANTHROPIC_AUTH_TOKEN_ENV)
         : envKeys[0];
-    if (apiKeyEnv) return getProviderEnvValue(apiKeyEnv, env);
+    if (apiKeyEnv !== undefined && apiKeyEnv !== "") return getProviderEnvValue(apiKeyEnv, env);
   }
 
   if (provider === "google-vertex") {

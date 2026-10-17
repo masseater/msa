@@ -18,7 +18,10 @@ function renderPage(options: {
   const title = escapeHtml(options.title);
   const heading = escapeHtml(options.heading);
   const message = escapeHtml(options.message);
-  const details = options.details ? escapeHtml(options.details) : undefined;
+  const details =
+    options.details !== undefined && options.details !== ""
+      ? escapeHtml(options.details)
+      : undefined;
 
   return `<!doctype html>
 <html lang="en">
@@ -90,7 +93,7 @@ function renderPage(options: {
     <div class="logo">${LOGO_SVG}</div>
     <h1>${heading}</h1>
     <p>${message}</p>
-    ${details ? `<div class="details">${details}</div>` : ""}
+    ${details !== undefined && details !== "" ? `<div class="details">${details}</div>` : ""}
   </main>
 </body>
 </html>`;

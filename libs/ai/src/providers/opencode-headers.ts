@@ -10,7 +10,12 @@ function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean 
 function withSessionHeader<TOptions extends StreamOptions>(
   options: TOptions | undefined,
 ): TOptions | undefined {
-  if (!options?.sessionId || hasHeader(options.headers, OPENCODE_SESSION_HEADER)) return options;
+  if (
+    options?.sessionId === undefined ||
+    options?.sessionId === "" ||
+    hasHeader(options.headers, OPENCODE_SESSION_HEADER)
+  )
+    return options;
   return {
     ...options,
     headers: { ...options.headers, [OPENCODE_SESSION_HEADER]: options.sessionId },

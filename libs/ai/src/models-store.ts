@@ -34,7 +34,7 @@ export class InMemoryModelsStore implements ModelsStore {
     try {
       options?.signal?.throwIfAborted();
       const entry = this.entries.get(providerId);
-      return Promise.resolve(entry ? structuredClone(entry) : undefined);
+      return Promise.resolve(entry === undefined ? undefined : structuredClone(entry));
     } catch (error) {
       return Promise.reject(error);
     }

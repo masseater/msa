@@ -15,7 +15,7 @@ vi.mock("@aws-sdk/client-bedrock-runtime", () => {
     }
 
     send(): Promise<unknown> {
-      if (bedrockMock.streamEvents) {
+      if (bedrockMock.streamEvents !== undefined) {
         const events = bedrockMock.streamEvents;
         return Promise.resolve({
           $metadata: { httpStatusCode: 200 },
@@ -117,7 +117,7 @@ describe("Bedrock constrained sampling", () => {
     expect(toolConfig.tools[0]?.toolSpec.strict).toBe(true);
 
     const [lookupTool] = context.tools ?? [];
-    if (!lookupTool) throw new Error("Expected the lookup tool");
+    if (lookupTool === undefined) throw new Error("Expected the lookup tool");
     lookupTool.constrainedSampling = { type: "json_schema", strict: "prefer" };
     const novaPayload = await capturePayload(context, novaModel);
     const novaToolConfig = (

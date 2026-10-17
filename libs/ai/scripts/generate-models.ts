@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import {
   existsSync,
   mkdirSync,
@@ -98,14 +96,16 @@ function readGeneratorOptions(args: string[]): {
     }
     if (arg === "--json-output") {
       const value = args[++index];
-      if (!value) throw new Error("--json-output requires a directory");
+      if (value === undefined || value === "")
+        throw new Error("--json-output requires a directory");
       jsonOutputDir = resolve(value);
       continue;
     }
     throw new Error(`Unknown argument: ${arg}`);
   }
 
-  if (jsonOnly && !jsonOutputDir) throw new Error("--json-only requires --json-output");
+  if (jsonOnly && (jsonOutputDir === undefined || jsonOutputDir === ""))
+    throw new Error("--json-only requires --json-output");
   if (dataOnly && (jsonOnly || jsonOutputDir))
     throw new Error("--data-only cannot be combined with JSON catalog output");
   return { strict, dataOnly, jsonOnly, jsonOutputDir, pretty };
@@ -540,9 +540,9 @@ function supportsDirectReasoningEffort(model: Model<Api>): boolean {
 
 function applyModelsDevReasoningOptionMetadata(model: Model<Api>): void {
   const reasoningOptions = modelsDevReasoningOptions.get(getModelKey(model));
-  if (!reasoningOptions || !supportsDirectReasoningEffort(model)) return;
+  if (reasoningOptions === undefined || !supportsDirectReasoningEffort(model)) return;
   const thinkingLevelMap = getEffortThinkingLevelMap(reasoningOptions);
-  if (thinkingLevelMap) mergeThinkingLevelMap(model, thinkingLevelMap);
+  if (thinkingLevelMap !== undefined) mergeThinkingLevelMap(model, thinkingLevelMap);
 }
 
 function getTogetherCompat(modelId: string, reasoning: boolean): OpenAICompletionsCompat {
@@ -802,7 +802,7 @@ function detectOpenAICompletionsCompat(
     supportsOpenAIGrammarTools: false,
     supportsMidConvoSystemMessages: false,
     supportsMidConvoToolAdditions: false,
-    ...(cacheControlFormat ? { cacheControlFormat } : {}),
+    ...(cacheControlFormat === undefined ? {} : { cacheControlFormat }),
     sendSessionAffinityHeaders: isOpenRouter,
     supportsLongCacheRetention: !(
       isTogether ||
@@ -852,10 +852,10 @@ function applyOpenAICompletionsCompatMetadata(model: Model<Api>): void {
 function applyAnthropicMessagesCompatMetadata(model: Model<Api>): void {
   if (model.api !== "anthropic-messages") return;
   const compat = getAnthropicMessagesCompat(model.provider, model.id);
-  if (compat) {
+  if (compat !== undefined) {
     mergeAnthropicMessagesCompat(model, compat);
     if (
-      compat.supportsMidConvoEffort &&
+      compat.supportsMidConvoEffort === true &&
       !supportsAnthropicDisabledThinkingWithMidConvoEffort(model.id)
     ) {
       mergeThinkingLevelMap(model, { off: null });
@@ -879,16 +879,17 @@ function applyAnthropicAllowedFallbackModelMetadata(
   const modelsById = new Map(models.map((model) => [model.id, model]));
   for (const [modelId, fallbackModelIds] of Object.entries(ANTHROPIC_ALLOWED_FALLBACK_MODELS)) {
     const model = modelsById.get(modelId);
-    if (!model) continue;
+    if (model === undefined) continue;
 
-    const compatibleFallbackModelIds = model.compat?.supportsMidConvoEffort
-      ? fallbackModelIds.filter(supportsAnthropicMidConvoEffort)
-      : fallbackModelIds;
+    const compatibleFallbackModelIds =
+      model.compat?.supportsMidConvoEffort === true
+        ? fallbackModelIds.filter(supportsAnthropicMidConvoEffort)
+        : fallbackModelIds;
     const allowedFallbackModels = compatibleFallbackModelIds.flatMap((fallbackModelId) => {
       const fallbackModel = modelsById.get(fallbackModelId);
-      return fallbackModel
-        ? [{ provider: fallbackModel.provider, model: fallbackModel.id, cost: fallbackModel.cost }]
-        : [];
+      return fallbackModel === undefined
+        ? []
+        : [{ provider: fallbackModel.provider, model: fallbackModel.id, cost: fallbackModel.cost }];
     });
     if (allowedFallbackModels.length > 0) {
       mergeAnthropicMessagesCompat(model, { allowedFallbackModels });
@@ -930,7 +931,7 @@ function applyOpenAIGrammarToolCompatMetadata(model: Model<Api>): void {
   )
     return;
   const match = /^gpt-(\d+)/u.exec(model.id);
-  if (!match || Number(match[1]) < 5) return;
+  if (match === null || Number(match[1]) < 5) return;
   model.compat = {
     ...(model.compat as OpenAIResponsesCompat | undefined),
     supportsOpenAIGrammarTools: true,
@@ -1061,7 +1062,7 @@ function getGoogleThinkingLevelMap(
   reasoningOptions: readonly ModelsDevReasoningOption[],
 ): NonNullable<Model<Api>["thinkingLevelMap"]> | undefined {
   const effortMap = getEffortThinkingLevelMap(reasoningOptions);
-  if (effortMap) return effortMap;
+  if (effortMap !== undefined) return effortMap;
   if (isGemma4Model(modelId)) {
     return { off: null, minimal: "MINIMAL", low: null, medium: null, high: "HIGH" };
   }
@@ -1191,17 +1192,20 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
   if (model.provider === "fireworks") {
     if (
       model.api === "anthropic-messages" &&
-      (model.compat as AnthropicMessagesCompat | undefined)?.forceAdaptiveThinking
+      (model.compat as AnthropicMessagesCompat | undefined)?.forceAdaptiveThinking === true
     ) {
-      if (model.id === "accounts/fireworks/models/qwen3p8-max" && !model.thinkingLevelMap) {
+      if (
+        model.id === "accounts/fireworks/models/qwen3p8-max" &&
+        model.thinkingLevelMap === undefined
+      ) {
         const thinkingLevelMap = getEffortThinkingLevelMap([
           { type: "effort", values: ["low", "medium", "xhigh"] },
         ]);
-        if (thinkingLevelMap) model.thinkingLevelMap = thinkingLevelMap;
+        if (thinkingLevelMap !== undefined) model.thinkingLevelMap = thinkingLevelMap;
       }
       const reasoningOptions = modelsDevReasoningOptions.get(getModelKey(model));
       if (
-        reasoningOptions?.some((option) => option.type === "toggle") ||
+        reasoningOptions?.some((option) => option.type === "toggle") === true ||
         model.id === "accounts/fireworks/models/qwen3p8-2p4t-a95b"
       ) {
         mergeThinkingLevelMap(model, { off: "none" });
@@ -1300,7 +1304,7 @@ function getModelsDevCost(cost: ModelsDevModel["cost"]): ModelCost {
     ];
   });
 
-  return tiers && tiers.length > 0 ? { ...base, tiers } : base;
+  return tiers !== undefined && tiers.length > 0 ? { ...base, tiers } : base;
 }
 
 async function fetchNvidiaNimModelIds(): Promise<Map<string, string>> {
@@ -1468,7 +1472,7 @@ function processZaiModels(data: ModelsDevCatalog): Model<Api>[] {
 
       const thinkingLevelMap = getEffortThinkingLevelMap(m.reasoning_options ?? []);
       const isGlm52 = modelId === "glm-5.2" || modelId === "glm-5.2-highspeed";
-      if (thinkingLevelMap && isGlm52) {
+      if (thinkingLevelMap !== undefined && isGlm52) {
         thinkingLevelMap.off = "none";
       }
       const supportsReasoningEffort = thinkingLevelMap !== undefined;
@@ -1481,8 +1485,8 @@ function processZaiModels(data: ModelsDevCatalog): Model<Api>[] {
         provider,
         baseUrl,
         reasoning: m.reasoning === true,
-        ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
-        input: supportsImage ? ["text", "image"] : ["text"],
+        ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
+        input: supportsImage === true ? ["text", "image"] : ["text"],
         cost: getModelsDevCost(referenceCost),
         compat: {
           supportsDeveloperRole: false,
@@ -1501,7 +1505,7 @@ function processZaiModels(data: ModelsDevCatalog): Model<Api>[] {
 }
 
 function processBasetenModels(provider: ModelsDevProvider | undefined): Model<Api>[] {
-  if (!provider?.models) return [];
+  if (provider?.models === undefined) return [];
 
   const baseUrl = "https://inference.baseten.co/v1";
   const baseCompat: OpenAICompletionsCompat = {
@@ -1579,8 +1583,8 @@ function processBasetenModels(provider: ModelsDevProvider | undefined): Model<Ap
       provider: "baseten",
       baseUrl,
       reasoning,
-      ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
-      input: supportsImageInput ? ["text", "image"] : ["text"],
+      ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
+      input: supportsImageInput === true ? ["text", "image"] : ["text"],
       cost: getModelsDevCost(model.cost),
       compat,
       contextWindow: model.limit?.context || 4096,
@@ -1594,7 +1598,7 @@ function processBasetenModels(provider: ModelsDevProvider | undefined): Model<Ap
 function processGoogleModels(data: ModelsDevCatalog): Model<Api>[] {
   const models: Model<Api>[] = [];
   const googleModels = data["google"]?.models;
-  if (googleModels) {
+  if (googleModels !== undefined) {
     for (const [modelId, model] of Object.entries(googleModels)) {
       if (model.tool_call !== true) continue;
       const source =
@@ -1612,8 +1616,8 @@ function processGoogleModels(data: ModelsDevCatalog): Model<Api>[] {
         provider: "google",
         baseUrl: "https://generativelanguage.googleapis.com/v1beta",
         reasoning: source.reasoning === true,
-        ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
-        input: source.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+        ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
+        input: source.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
         cost: getModelsDevCost(source.cost),
         contextWindow: source.limit?.context || 4096,
         maxTokens: source.limit?.output || 4096,
@@ -1622,7 +1626,7 @@ function processGoogleModels(data: ModelsDevCatalog): Model<Api>[] {
   }
 
   const vertexModels = data["google-vertex"]?.models;
-  if (vertexModels) {
+  if (vertexModels !== undefined) {
     for (const [modelId, model] of Object.entries(vertexModels)) {
       if (model.tool_call !== true || !modelId.startsWith("gemini-")) continue;
       if (modelId === "gemini-3.1-flash-lite-preview") continue;
@@ -1642,8 +1646,8 @@ function processGoogleModels(data: ModelsDevCatalog): Model<Api>[] {
         provider: "google-vertex",
         baseUrl: VERTEX_BASE_URL,
         reasoning: source.reasoning === true,
-        ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
-        input: source.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+        ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
+        input: source.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
         cost: {
           input: source.cost?.input || 0,
           output: source.cost?.output || 0,
@@ -1660,7 +1664,7 @@ function processGoogleModels(data: ModelsDevCatalog): Model<Api>[] {
 }
 
 function processFireworksModels(provider: ModelsDevProvider | undefined): Model<Api>[] {
-  if (!provider?.models) return [];
+  if (provider?.models === undefined) return [];
 
   const anthropicCompat: AnthropicMessagesCompat = {
     allowEmptySignature: true,
@@ -1685,9 +1689,8 @@ function processFireworksModels(provider: ModelsDevProvider | undefined): Model<
   for (const [modelId, model] of Object.entries(provider.models)) {
     if (model.tool_call !== true) continue;
 
-    const input: ("text" | "image")[] = model.modalities?.input?.includes("image")
-      ? ["text", "image"]
-      : ["text"];
+    const input: ("text" | "image")[] =
+      model.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"];
     const common = {
       id: modelId,
       name: model.name || modelId,
@@ -1720,7 +1723,7 @@ function processFireworksModels(provider: ModelsDevProvider | undefined): Model<
         baseUrl: "https://api.fireworks.ai/inference",
         compat: {
           ...anthropicCompat,
-          ...(model.reasoning_options?.some((option) => option.type === "effort") ||
+          ...(model.reasoning_options?.some((option) => option.type === "effort") === true ||
           FIREWORKS_ADAPTIVE_THINKING_FALLBACK_MODELS.has(modelId)
             ? { forceAdaptiveThinking: true }
             : {}),
@@ -1750,7 +1753,9 @@ function createKimiCodingModels(
     const isK3Style = KIMI_CODING_K3_STYLE_MODEL_IDS.has(modelId);
     const impliedCost = KIMI_CODING_IMPLIED_COSTS[modelId];
     const effortLevels =
-      isK3Style && m.reasoning_options ? getEffortThinkingLevelMap(m.reasoning_options) : undefined;
+      isK3Style && m.reasoning_options !== undefined
+        ? getEffortThinkingLevelMap(m.reasoning_options)
+        : undefined;
 
     models.push({
       id: modelId,
@@ -1764,7 +1769,7 @@ function createKimiCodingModels(
         ...(isK3Style ? { supportsMidConvoToolAdditions: true } : {}),
       },
       reasoning: m.reasoning === true,
-      input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+      input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
       cost: {
         input: m.cost?.input || impliedCost?.input || 0,
         output: m.cost?.output || impliedCost?.output || 0,
@@ -1787,11 +1792,12 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     const data = (await response.json()) as ModelsDevCatalog;
 
     const models: Model<any>[] = [];
-    const nvidiaNimModelIds = data["nvidia"]?.models
-      ? await fetchNvidiaNimModelIds()
-      : new Map<string, string>();
+    const nvidiaNimModelIds =
+      data["nvidia"]?.models === undefined
+        ? new Map<string, string>()
+        : await fetchNvidiaNimModelIds();
 
-    if (data["amazon-bedrock"]?.models) {
+    if (data["amazon-bedrock"]?.models !== undefined) {
       for (const [modelId, model] of Object.entries(data["amazon-bedrock"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -1814,10 +1820,9 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: "amazon-bedrock" as const,
           baseUrl: getBedrockBaseUrl(id),
           reasoning: m.reasoning === true,
-          input: (m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"]) as (
-            | "text"
-            | "image"
-          )[],
+          input: (m.modalities?.input?.includes("image") === true
+            ? ["text", "image"]
+            : ["text"]) as ("text" | "image")[],
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
@@ -1827,7 +1832,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    if (data["anthropic"]?.models) {
+    if (data["anthropic"]?.models !== undefined) {
       for (const [modelId, model] of Object.entries(data["anthropic"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -1839,7 +1844,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: "anthropic",
           baseUrl: "https://api.anthropic.com",
           reasoning: m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
@@ -1850,7 +1855,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
     models.push(...processGoogleModels(data));
 
-    if (data["openai"]?.models) {
+    if (data["openai"]?.models !== undefined) {
       for (const [modelId, model] of Object.entries(data["openai"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -1863,7 +1868,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: "openai",
           baseUrl: "https://api.openai.com/v1",
           reasoning: m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
@@ -1872,7 +1877,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    if (data["groq"]?.models) {
+    if (data["groq"]?.models !== undefined) {
       for (const [modelId, model] of Object.entries(data["groq"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -1884,7 +1889,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: "groq",
           baseUrl: "https://api.groq.com/openai/v1",
           reasoning: m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
@@ -1893,7 +1898,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    if (data["cerebras"]?.models) {
+    if (data["cerebras"]?.models !== undefined) {
       for (const [modelId, model] of Object.entries(data["cerebras"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -1905,7 +1910,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: "cerebras",
           baseUrl: "https://api.cerebras.ai/v1",
           reasoning: m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
@@ -1914,7 +1919,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    if (data["cloudflare-workers-ai"]?.models) {
+    if (data["cloudflare-workers-ai"]?.models !== undefined) {
       for (const [modelId, model] of Object.entries(data["cloudflare-workers-ai"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -1926,7 +1931,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: "cloudflare-workers-ai",
           baseUrl: CLOUDFLARE_WORKERS_AI_BASE_URL,
           reasoning: m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
@@ -1937,7 +1942,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     }
 
     const cloudflareAIGatewayModelIds = new Set<string>();
-    if (data["cloudflare-ai-gateway"]?.models) {
+    if (data["cloudflare-ai-gateway"]?.models !== undefined) {
       for (const [prefixedId, model] of Object.entries(data["cloudflare-ai-gateway"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -1979,17 +1984,17 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: "cloudflare-ai-gateway",
           baseUrl,
           reasoning: m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
-          ...(compat ? { compat } : {}),
+          ...(compat === undefined ? {} : { compat }),
         });
         recordModelsDevReasoningOptions("cloudflare-ai-gateway", id, m);
       }
     }
 
-    if (data["cloudflare-workers-ai"]?.models) {
+    if (data["cloudflare-workers-ai"]?.models !== undefined) {
       for (const [modelId, model] of Object.entries(data["cloudflare-workers-ai"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -2005,7 +2010,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: "cloudflare-ai-gateway",
           baseUrl: CLOUDFLARE_AI_GATEWAY_COMPAT_BASE_URL,
           reasoning: m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
@@ -2015,7 +2020,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    if (data["xai"]?.models) {
+    if (data["xai"]?.models !== undefined) {
       for (const [modelId, model] of Object.entries(data["xai"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -2028,7 +2033,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           baseUrl: "https://api.x.ai/v1",
           compat: { ...XAI_RESPONSES_COMPAT },
           reasoning: m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
@@ -2037,7 +2042,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    if (data["meta"]?.models) {
+    if (data["meta"]?.models !== undefined) {
       for (const [modelId, model] of Object.entries(data["meta"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -2049,7 +2054,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: "meta",
           baseUrl: "https://api.meta.ai/v1",
           reasoning: m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
@@ -2060,7 +2065,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
     models.push(...processZaiModels(data));
 
-    if (data["mistral"]?.models) {
+    if (data["mistral"]?.models !== undefined) {
       for (const [modelId, model] of Object.entries(data["mistral"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -2074,12 +2079,16 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: "mistral",
           baseUrl: "https://api.mistral.ai",
           reasoning: m.reasoning === true,
-          ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: {
             input: m.cost?.input || 0,
             output: m.cost?.output || 0,
-            cacheRead: m.cost?.cache_read ?? (m.cost?.input ? roundCost(m.cost.input * 0.1) : 0),
+            cacheRead:
+              m.cost?.cache_read ??
+              (m.cost?.input !== undefined && m.cost?.input !== 0 && !Number.isNaN(m.cost?.input)
+                ? roundCost(m.cost.input * 0.1)
+                : 0),
             cacheWrite: m.cost?.cache_write || 0,
           },
           contextWindow: m.limit?.context || 4096,
@@ -2088,7 +2097,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    if (data["huggingface"]?.models) {
+    if (data["huggingface"]?.models !== undefined) {
       for (const [modelId, model] of Object.entries(data["huggingface"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -2100,7 +2109,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: "huggingface",
           baseUrl: "https://router.huggingface.co/v1",
           reasoning: m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           compat: {
             supportsDeveloperRole: false,
@@ -2114,16 +2123,16 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
     models.push(...processFireworksModels(data["fireworks-ai"]));
 
-    if (data["nvidia"]?.models) {
+    if (data["nvidia"]?.models !== undefined) {
       for (const [modelId, model] of Object.entries(data["nvidia"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
-        if (!m.modalities?.input?.includes("text")) continue;
-        if (!m.modalities?.output?.includes("text")) continue;
+        if (m.modalities?.input?.includes("text") !== true) continue;
+        if (m.modalities?.output?.includes("text") !== true) continue;
 
         const liveModelId =
           nvidiaNimModelIds.get(modelId) ?? nvidiaNimModelIds.get(normalizeNvidiaModelId(modelId));
-        if (!liveModelId) continue;
+        if (liveModelId === undefined || liveModelId === "") continue;
         if (NVIDIA_NIM_UNSUPPORTED_MODELS.has(liveModelId)) continue;
 
         models.push({
@@ -2145,7 +2154,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     }
 
     const togetherProvider = data["together"] ?? data["togetherai"] ?? data["together-ai"];
-    if (togetherProvider?.models) {
+    if (togetherProvider?.models !== undefined) {
       for (const [modelId, model] of Object.entries(togetherProvider.models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
@@ -2160,8 +2169,8 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: "together",
           baseUrl: TOGETHER_BASE_URL,
           reasoning,
-          ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           compat: getTogetherCompat(modelId, reasoning),
           contextWindow: m.limit?.context || 4096,
@@ -2180,7 +2189,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
     for (const variant of opencodeVariants) {
       const variantData = data[variant.key];
-      if (!variantData?.models) continue;
+      if (variantData?.models === undefined) continue;
 
       for (const [modelId, model] of Object.entries(variantData.models)) {
         const m = model as ModelsDevModel;
@@ -2258,10 +2267,10 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider: variant.provider,
           baseUrl,
           reasoning: m.reasoning === true,
-          ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
-          ...(compat ? { compat } : {}),
+          ...(compat === undefined ? {} : { compat }),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
         });
@@ -2275,7 +2284,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     ] as const;
 
     for (const { key, provider, baseUrl } of minimaxVariants) {
-      if (data[key]?.models) {
+      if (data[key]?.models !== undefined) {
         for (const [modelId, model] of Object.entries(data[key].models)) {
           const m = model as ModelsDevModel;
           if (m.tool_call !== true) continue;
@@ -2287,7 +2296,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
             provider,
             baseUrl,
             reasoning: m.reasoning === true,
-            input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+            input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
             cost: getModelsDevCost(m.cost),
             contextWindow: m.limit?.context || 4096,
             maxTokens: m.limit?.output || 4096,
@@ -2297,7 +2306,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    if (data["kimi-code-plan-global"]?.models) {
+    if (data["kimi-code-plan-global"]?.models !== undefined) {
       models.push(
         ...createKimiCodingModels(
           data["kimi-code-plan-global"].models as Record<string, ModelsDevModel>,
@@ -2313,7 +2322,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       key: "moonshotai" | "moonshotai-cn",
     ): Record<string, ModelsDevModel> => {
       const providerModels = data[key]?.models as Record<string, ModelsDevModel> | undefined;
-      return providerModels ? { ...providerModels } : {};
+      return providerModels === undefined ? {} : { ...providerModels };
     };
     const moonshotModels = {
       moonshotai: getMoonshotProviderModels("moonshotai"),
@@ -2333,7 +2342,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           provider,
           baseUrl,
           reasoning: isKimiK3 || m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: isKimiK3
             ? { ...KIMI_K3_COST }
             : {
@@ -2385,7 +2394,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
     for (const { source, provider, baseUrl } of xiaomiVariants) {
       const providerModels = data[source]?.models;
-      if (!providerModels) continue;
+      if (providerModels === undefined) continue;
 
       for (const [modelId, model] of Object.entries(providerModels)) {
         const m = model as ModelsDevModel;
@@ -2401,7 +2410,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           compat: xiaomiCompat,
           reasoning: m.reasoning === true,
           ...(m.reasoning === true ? { thinkingLevelMap: xiaomiThinkingLevelMap } : {}),
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
@@ -2438,13 +2447,13 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
     for (const { source, provider, baseUrl, modelIds } of qwenTokenPlanVariants) {
       const providerModels = data[source]?.models;
-      const emittedModelIds = modelIds ? new Set<string>() : undefined;
+      const emittedModelIds = modelIds === undefined ? undefined : new Set<string>();
 
       for (const [modelId, model] of Object.entries(providerModels ?? {})) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
         if (QWEN_TOKEN_PLAN_EXCLUDED_MODEL_IDS.has(modelId)) continue;
-        if (modelIds && !modelIds.has(modelId)) continue;
+        if (modelIds !== undefined && !modelIds.has(modelId)) continue;
         const thinkingLevelMap =
           getEffortThinkingLevelMap(m.reasoning_options ?? []) ??
           (QWEN_TOKEN_PLAN_REASONING_EFFORT_FALLBACK_MODEL_IDS.has(modelId)
@@ -2457,12 +2466,13 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
           api: "openai-completions",
           provider,
           baseUrl,
-          compat: thinkingLevelMap
-            ? qwenTokenPlanCompat
-            : { ...qwenTokenPlanCompat, supportsReasoningEffort: false },
-          ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
+          compat:
+            thinkingLevelMap === undefined
+              ? { ...qwenTokenPlanCompat, supportsReasoningEffort: false }
+              : qwenTokenPlanCompat,
+          ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
           reasoning: m.reasoning === true,
-          input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+          input: m.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
           cost: getModelsDevCost(m.cost),
           contextWindow: m.limit?.context || 4096,
           maxTokens: m.limit?.output || 4096,
@@ -2470,7 +2480,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
         emittedModelIds?.add(modelId);
       }
 
-      if (modelIds && emittedModelIds && generatorOptions.strict) {
+      if (modelIds !== undefined && emittedModelIds !== undefined && generatorOptions.strict) {
         assertExactModelIds(provider, modelIds, emittedModelIds);
       }
     }
@@ -2491,7 +2501,7 @@ async function loadModelsDevClassifierModels(): Promise<ClassifierModel<"typesaf
     if (!response.ok) throw new Error(`models.dev classifier API returned ${response.status}`);
     const data = (await response.json()) as Record<string, ModelsDevMetadata>;
     const metadata = data["typesafe/jev-latest"];
-    if (!metadata || metadata.type !== "decision") {
+    if (metadata === undefined || metadata.type !== "decision") {
       throw new Error("models.dev did not return decision model typesafe/jev-latest");
     }
     return [
@@ -2502,7 +2512,8 @@ async function loadModelsDevClassifierModels(): Promise<ClassifierModel<"typesaf
         api: "typesafe-system-one",
         provider: "typesafe",
         baseUrl: "https://api.typesafe.ai/v1/",
-        input: metadata.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+        input:
+          metadata.modalities?.input?.includes("image") === true ? ["text", "image"] : ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: metadata.limit?.context || 64000,
       },
@@ -2670,7 +2681,7 @@ async function generateModels() {
     }
     if (candidate.provider === "cloudflare-ai-gateway") {
       const standardCost = OPENAI_STANDARD_COSTS_BY_ID[candidate.id];
-      if (standardCost) candidate.cost = withOpenAiLongContextPricing(standardCost);
+      if (standardCost !== undefined) candidate.cost = withOpenAiLongContextPricing(standardCost);
     }
     if (candidate.provider === "openai" && candidate.id === "gpt-5-pro") {
       candidate.maxTokens = 128000;
@@ -3253,7 +3264,7 @@ async function generateModels() {
     ? readModelDataProviderIds(packageRoot)
     : sortedProviderIds;
   const missingProviderIds = generatedDataProviderIds.filter(
-    (providerId) => !jsonAllProviders[providerId],
+    (providerId) => jsonAllProviders[providerId] === undefined,
   );
   if (missingProviderIds.length > 0) {
     throw new Error(`Cannot hydrate missing providers: ${missingProviderIds.join(", ")}`);
@@ -3400,7 +3411,7 @@ async function generateModels() {
     }
   }
 
-  if (generatorOptions.jsonOutputDir) {
+  if (generatorOptions.jsonOutputDir !== undefined && generatorOptions.jsonOutputDir !== "") {
     const providerOutputDir = join(generatorOptions.jsonOutputDir, "providers");
     rmSync(generatorOptions.jsonOutputDir, { recursive: true, force: true });
     mkdirSync(providerOutputDir, { recursive: true });

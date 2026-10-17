@@ -422,7 +422,7 @@ describe("openai-codex streaming", () => {
       }
 
       const signal = init?.signal;
-      if (!signal) {
+      if (signal === undefined || signal === null) {
         throw new Error("Expected SSE fetch to receive an abort signal");
       }
 
@@ -1462,7 +1462,12 @@ describe("openai-codex streaming", () => {
         _url: string,
         protocols?: string | string[] | { headers?: Record<string, string> },
       ) {
-        if (protocols && typeof protocols === "object" && !Array.isArray(protocols)) {
+        if (
+          protocols !== undefined &&
+          protocols !== "" &&
+          typeof protocols === "object" &&
+          !Array.isArray(protocols)
+        ) {
           capturedWebSocketHeaders = protocols.headers;
         }
         queueMicrotask(() => this.dispatch("open", {}));
@@ -1470,7 +1475,7 @@ describe("openai-codex streaming", () => {
 
       addEventListener(type: string, listener: (event: unknown) => void): void {
         let listeners = this.listeners.get(type);
-        if (!listeners) {
+        if (listeners === undefined) {
           listeners = new Set();
           this.listeners.set(type, listeners);
         }
@@ -1599,7 +1604,10 @@ describe("openai-codex streaming", () => {
         protocols?: string | string[] | { headers?: Record<string, string> },
       ) {
         const headers =
-          protocols && typeof protocols === "object" && !Array.isArray(protocols)
+          protocols !== undefined &&
+          protocols !== "" &&
+          typeof protocols === "object" &&
+          !Array.isArray(protocols)
             ? protocols.headers
             : undefined;
         connectedHeaders.push(headers ?? {});
@@ -1608,7 +1616,7 @@ describe("openai-codex streaming", () => {
 
       addEventListener(type: string, listener: (event: unknown) => void): void {
         let listeners = this.listeners.get(type);
-        if (!listeners) {
+        if (listeners === undefined) {
           listeners = new Set();
           this.listeners.set(type, listeners);
         }
@@ -1708,7 +1716,7 @@ describe("openai-codex streaming", () => {
 
       addEventListener(type: string, listener: (event: unknown) => void): void {
         let listeners = this.listeners.get(type);
-        if (!listeners) {
+        if (listeners === undefined) {
           listeners = new Set();
           this.listeners.set(type, listeners);
         }
@@ -1817,7 +1825,7 @@ describe("openai-codex streaming", () => {
 
       addEventListener(type: string, listener: (event: unknown) => void): void {
         let listeners = this.listeners.get(type);
-        if (!listeners) {
+        if (listeners === undefined) {
           listeners = new Set();
           this.listeners.set(type, listeners);
         }
@@ -1978,7 +1986,7 @@ describe("openai-codex streaming", () => {
 
       addEventListener(type: string, listener: (event: unknown) => void): void {
         let listeners = this.listeners.get(type);
-        if (!listeners) {
+        if (listeners === undefined) {
           listeners = new Set();
           this.listeners.set(type, listeners);
         }
@@ -2067,7 +2075,7 @@ describe("openai-codex streaming", () => {
 
       addEventListener(type: string, listener: (event: unknown) => void): void {
         let listeners = this.listeners.get(type);
-        if (!listeners) {
+        if (listeners === undefined) {
           listeners = new Set();
           this.listeners.set(type, listeners);
         }
@@ -2164,7 +2172,7 @@ describe("openai-codex streaming", () => {
 
       addEventListener(type: string, listener: (event: unknown) => void): void {
         let listeners = this.listeners.get(type);
-        if (!listeners) {
+        if (listeners === undefined) {
           listeners = new Set();
           this.listeners.set(type, listeners);
         }
@@ -2269,7 +2277,7 @@ describe("openai-codex streaming", () => {
 
       addEventListener(type: string, listener: (event: unknown) => void): void {
         let listeners = this.listeners.get(type);
-        if (!listeners) {
+        if (listeners === undefined) {
           listeners = new Set();
           this.listeners.set(type, listeners);
         }
@@ -2479,7 +2487,7 @@ describe("openai-codex streaming", () => {
 
         addEventListener(type: string, listener: (event: unknown) => void): void {
           let listeners = this.listeners.get(type);
-          if (!listeners) {
+          if (listeners === undefined) {
             listeners = new Set();
             this.listeners.set(type, listeners);
           }

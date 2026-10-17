@@ -16,7 +16,7 @@ type JsonObject = Record<string, unknown>;
 
 function parseAuthorizationInput(input: string): string | undefined {
   const value = input.trim();
-  if (!value) return undefined;
+  if (value === "") return undefined;
 
   try {
     return new URL(value).searchParams.get("code") ?? undefined;
@@ -83,7 +83,7 @@ async function exchangeAuthorizationCode(
   if (!response.ok) {
     const detail = errorDetail(body);
     throw new Error(
-      `OpenRouter OAuth key exchange failed (HTTP ${response.status})${detail ? `: ${detail}` : ""}`,
+      `OpenRouter OAuth key exchange failed (HTTP ${response.status})${detail !== undefined && detail !== "" ? `: ${detail}` : ""}`,
     );
   }
 
@@ -137,7 +137,7 @@ async function loginOpenRouter(interaction: ProviderAuthInteraction): Promise<OA
     });
     if (result.type === "callback") return result.value;
     const code = parseAuthorizationInput(result.input);
-    if (!code) throw new Error("Missing authorization code");
+    if (code === undefined || code === "") throw new Error("Missing authorization code");
     interaction.notify({
       type: "progress",
       message: "Exchanging authorization code for an API key...",

@@ -11,9 +11,9 @@ const MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 let server: Server | undefined;
 
 afterEach(async () => {
-  if (!server) return;
+  if (server === undefined) return;
   await new Promise<void>((resolve, reject) => {
-    server?.close((error) => (error ? reject(error) : resolve()));
+    server?.close((error) => (error === undefined ? resolve() : reject(error)));
   });
   server = undefined;
 });
@@ -33,7 +33,8 @@ async function startBedrockResponseServer(): Promise<string> {
     server?.listen(0, "127.0.0.1", resolve);
   });
   const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Expected TCP test server address");
+  if (address === null || address === "" || typeof address === "string")
+    throw new Error("Expected TCP test server address");
   return `http://127.0.0.1:${address.port}`;
 }
 

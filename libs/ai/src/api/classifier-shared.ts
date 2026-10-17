@@ -65,7 +65,8 @@ export async function postClassifierRequest(
   options: ClassifierOptions | undefined,
   noRetryStatuses?: readonly number[],
 ): Promise<unknown> {
-  if (!options?.apiKey) throw new Error(`No API key for provider: ${model.provider}`);
+  if (options?.apiKey === undefined || options?.apiKey === "")
+    throw new Error(`No API key for provider: ${model.provider}`);
   const apiKey = options.apiKey;
   let payload = body;
   const transformed = await options.onPayload?.(payload, model);
@@ -76,7 +77,7 @@ export async function postClassifierRequest(
       const timeoutSignal =
         options.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs);
       const signal =
-        options.signal && timeoutSignal
+        options.signal !== undefined && timeoutSignal !== undefined
           ? AbortSignal.any([options.signal, timeoutSignal])
           : (options.signal ?? timeoutSignal);
       try {
@@ -89,7 +90,7 @@ export async function postClassifierRequest(
         if (!next.ok) throw httpError(label, next, await next.text());
         return { response: next, json: (await next.json()) as unknown };
       } catch (error) {
-        if (timeoutSignal?.aborted && !options.signal?.aborted)
+        if (timeoutSignal?.aborted === true && options.signal?.aborted !== true)
           throw timeoutError(options.timeoutMs!);
         throw error;
       }

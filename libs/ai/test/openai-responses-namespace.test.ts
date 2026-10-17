@@ -110,7 +110,7 @@ async function* createCustomToolCallEvents(): AsyncIterable<ResponseStreamEvent>
 
 function getToolCall(output: AssistantMessage): ToolCall {
   const block = output.content[0];
-  if (!block || block.type !== "toolCall") throw new Error("Expected toolCall block");
+  if (block === undefined || block.type !== "toolCall") throw new Error("Expected toolCall block");
   return block;
 }
 

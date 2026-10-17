@@ -317,11 +317,11 @@ async function captureAnthropicRequest(
     }
   } finally {
     await new Promise<void>((resolve, reject) => {
-      server.close((error) => (error ? reject(error) : resolve()));
+      server.close((error) => (error === undefined ? resolve() : reject(error)));
     });
   }
 
-  if (!capturedRequest) {
+  if (capturedRequest === undefined) {
     throw new Error("Anthropic request was not captured");
   }
   return capturedRequest;
@@ -398,7 +398,7 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
 
     const tools = getTools(request.body);
     const lastTool = tools.at(-1);
-    if (!lastTool) throw new Error("Expected a tool definition");
+    if (lastTool === undefined) throw new Error("Expected a tool definition");
     expect(lastTool["cache_control"]).toBeUndefined();
   });
 
@@ -418,7 +418,7 @@ describe("Anthropic-compatible session affinity and tool compat", () => {
 
     const tools = getTools(request.body);
     const lastTool = tools.at(-1);
-    if (!lastTool) throw new Error("Expected a tool definition");
+    if (lastTool === undefined) throw new Error("Expected a tool definition");
     expect(lastTool["cache_control"]).toBeDefined();
     expect((lastTool["cache_control"] as { type: string }).type).toBe("ephemeral");
   });

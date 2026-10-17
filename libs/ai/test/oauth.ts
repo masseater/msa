@@ -45,7 +45,7 @@ export async function resolveApiKey(provider: string): Promise<string | undefine
   const storage = loadAuthStorage();
   const entry = storage[provider];
 
-  if (!entry) return undefined;
+  if (entry === undefined) return undefined;
 
   if (entry.type === "api_key") {
     return entry.key;
@@ -53,7 +53,7 @@ export async function resolveApiKey(provider: string): Promise<string | undefine
 
   if (entry.type === "oauth") {
     const oauth = builtinProviders().find((candidate) => candidate.id === provider)?.auth.oauth;
-    if (!oauth) return undefined;
+    if (oauth === undefined) return undefined;
     let credential = entry;
     try {
       if (Date.now() >= credential.expires) {

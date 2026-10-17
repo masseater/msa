@@ -165,7 +165,8 @@ describe("openai-completions reasoning_details streaming", () => {
       (block) => block.type !== "thinking",
     );
     const toolCall = assistantMessage.content.find((block) => block.type === "toolCall");
-    if (!toolCall || toolCall.type !== "toolCall") throw new Error("Expected tool call");
+    if (toolCall === undefined || toolCall.type !== "toolCall")
+      throw new Error("Expected tool call");
     toolCall.thoughtSignature = JSON.stringify(reasoningDetail);
 
     await runOpenAICompletionsStream([assistantMessage]);

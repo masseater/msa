@@ -34,7 +34,7 @@ function makeModel(
     provider: "mistral",
     baseUrl: "http://127.0.0.1:9",
     reasoning,
-    ...(thinkingLevelMap ? { thinkingLevelMap } : {}),
+    ...(thinkingLevelMap === undefined ? {} : { thinkingLevelMap }),
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
@@ -64,7 +64,7 @@ async function capturePayload(
 
   await stream.result();
 
-  if (!capturedPayload) {
+  if (capturedPayload === undefined) {
     throw new Error("Expected payload to be captured before request failure");
   }
 

@@ -115,7 +115,8 @@ export async function classifySystemOne(
 
   try {
     if (model.api !== transport.api) throw new Error(`Unsupported classifier API: ${model.api}`);
-    if (context.images?.length) throw new Error(`${transport.label} does not support image input`);
+    if (context.images?.length !== undefined && context.images?.length > 0)
+      throw new Error(`${transport.label} does not support image input`);
     const body = await postClassifierRequest(
       transport.label,
       transport.url(model),
@@ -125,11 +126,11 @@ export async function classifySystemOne(
     );
     const result = transport.output(body);
     const usage = parseClassifierUsage(result["usage"], model);
-    if (usage) output.usage = usage;
+    if (usage !== undefined) output.usage = usage;
     output.answers = parseAnswers(transport.label, result["answers"], context);
     return output;
   } catch (error) {
-    output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+    output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
     output.errorMessage = formatProviderError(
       normalizeProviderError(error),
       `${transport.label} error`,

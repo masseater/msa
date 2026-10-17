@@ -92,10 +92,18 @@ describe("google-shared convertMessages — Gemini 3 unsigned tool calls", () =>
     const contents = convertMessages(model, normalizeContext(context));
     const functionCallIds = contents
       .flatMap((content) => content.parts ?? [])
-      .flatMap((part) => (part.functionCall?.id ? [part.functionCall.id] : []));
+      .flatMap((part) =>
+        part.functionCall?.id !== undefined && part.functionCall?.id !== ""
+          ? [part.functionCall.id]
+          : [],
+      );
     const functionResponseIds = contents
       .flatMap((content) => content.parts ?? [])
-      .flatMap((part) => (part.functionResponse?.id ? [part.functionResponse.id] : []));
+      .flatMap((part) =>
+        part.functionResponse?.id !== undefined && part.functionResponse?.id !== ""
+          ? [part.functionResponse.id]
+          : [],
+      );
 
     expect(functionCallIds).toEqual(["call_1", "call_2"]);
     expect(functionResponseIds).toEqual(["call_1", "call_2"]);

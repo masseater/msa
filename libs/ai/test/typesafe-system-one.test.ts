@@ -172,7 +172,7 @@ describe("TypeSafe System One", () => {
 
     expect(requests[0]).toMatchObject({ authorization: "Bearer request", "x-source": "request" });
     const [firstRequest] = requests;
-    if (!firstRequest) throw new Error("Expected a classify request");
+    if (firstRequest === undefined) throw new Error("Expected a classify request");
     expect(
       Object.keys(firstRequest).filter((name) => name.toLowerCase() === "authorization"),
     ).toHaveLength(1);
@@ -209,7 +209,8 @@ describe("TypeSafe System One", () => {
       maxRetries: 0,
       fetch: (_input, init) => {
         const signal = init?.signal;
-        if (!signal) return Promise.reject(new Error("missing request signal"));
+        if (signal === undefined || signal === null)
+          return Promise.reject(new Error("missing request signal"));
         return Promise.resolve(
           new Promise<Response>((_resolve, reject) => {
             signal.addEventListener("abort", () => reject(signal.reason), { once: true });

@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -94,7 +92,7 @@ function parseArgs(argv: string[]): Args {
 }
 
 function required(value: string | undefined, flag: string): string {
-  if (!value) throw new Error(`Missing value for ${flag}`);
+  if (value === undefined || value === "") throw new Error(`Missing value for ${flag}`);
   return value;
 }
 
@@ -184,13 +182,13 @@ function percentile(values: number[], p: number): number {
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const model = getModel("openai-codex", "gpt-5.5") as Model<"openai-codex-responses"> | undefined;
-  if (!model) throw new Error("Model openai-codex/gpt-5.5 not found");
+  if (model === undefined) throw new Error("Model openai-codex/gpt-5.5 not found");
   const modelWithMaxTokens = { ...model, maxTokens: args.maxTokens };
   const modelRuntime = await ModelRuntime.create();
   const apiKey =
     (await modelRuntime.getAuth("openai-codex"))?.auth.apiKey ??
     (await modelRuntime.getAuth("openai"))?.auth.apiKey;
-  if (!apiKey) {
+  if (apiKey === undefined || apiKey === "") {
     throw new Error("No OpenAI Codex API key found in coding-agent auth storage.");
   }
   const context = normalizeContext({
@@ -269,9 +267,10 @@ async function main(): Promise<void> {
     const elapsedMs = Date.now() - started;
     elapsed.push(elapsedMs);
     const afterStats = getOpenAICodexWebSocketDebugStats(args.sessionId);
-    const statLine = afterStats
-      ? `ws requests ${afterStats.requests - (beforeStats?.requests ?? 0)} | new/reused ${afterStats.connectionsCreated - (beforeStats?.connectionsCreated ?? 0)}/${afterStats.connectionsReused - (beforeStats?.connectionsReused ?? 0)} | cached ${afterStats.cachedContextRequests - (beforeStats?.cachedContextRequests ?? 0)} | store ${afterStats.storeTrueRequests - (beforeStats?.storeTrueRequests ?? 0)} | full/delta ${afterStats.fullContextRequests - (beforeStats?.fullContextRequests ?? 0)}/${afterStats.deltaRequests - (beforeStats?.deltaRequests ?? 0)}`
-      : "ws none";
+    const statLine =
+      afterStats === undefined
+        ? "ws none"
+        : `ws requests ${afterStats.requests - (beforeStats?.requests ?? 0)} | new/reused ${afterStats.connectionsCreated - (beforeStats?.connectionsCreated ?? 0)}/${afterStats.connectionsReused - (beforeStats?.connectionsReused ?? 0)} | cached ${afterStats.cachedContextRequests - (beforeStats?.cachedContextRequests ?? 0)} | store ${afterStats.storeTrueRequests - (beforeStats?.storeTrueRequests ?? 0)} | full/delta ${afterStats.fullContextRequests - (beforeStats?.fullContextRequests ?? 0)}/${afterStats.deltaRequests - (beforeStats?.deltaRequests ?? 0)}`;
     console.log(
       [
         `turn ${String(turn).padStart(2, "0")} agg`,
@@ -304,10 +303,10 @@ async function main(): Promise<void> {
     [
       "transport summary",
       `requested ${args.transport}`,
-      `observed ${stats && stats.requests > 0 ? "websocket" : "sse/no-websocket"}`,
-      `storeTrue ${stats ? `${stats.storeTrueRequests}/${stats.requests}` : "0/0"}`,
-      `full/delta ${stats ? `${stats.fullContextRequests}/${stats.deltaRequests}` : "0/0"}`,
-      `connections created/reused ${stats ? `${stats.connectionsCreated}/${stats.connectionsReused}` : "0/0"}`,
+      `observed ${stats !== undefined && stats.requests > 0 ? "websocket" : "sse/no-websocket"}`,
+      `storeTrue ${stats === undefined ? "0/0" : `${stats.storeTrueRequests}/${stats.requests}`}`,
+      `full/delta ${stats === undefined ? "0/0" : `${stats.fullContextRequests}/${stats.deltaRequests}`}`,
+      `connections created/reused ${stats === undefined ? "0/0" : `${stats.connectionsCreated}/${stats.connectionsReused}`}`,
       `lastPreviousResponseId ${stats?.lastPreviousResponseId ?? "n/a"}`,
     ].join(" | "),
   );

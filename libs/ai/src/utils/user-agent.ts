@@ -14,7 +14,7 @@ function loadNodeOs(): typeof NodeOs | null {
 const nodeOs = loadNodeOs();
 
 export function getMsaUserAgent(): string {
-  return nodeOs
-    ? `pi (${nodeOs.platform()} ${nodeOs.release()}; ${nodeOs.arch()})`
-    : "pi (browser)";
+  return nodeOs === null
+    ? "pi (browser)"
+    : `pi (${nodeOs.platform()} ${nodeOs.release()}; ${nodeOs.arch()})`;
 }

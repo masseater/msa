@@ -3,7 +3,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { complete, getModel } from "../src/compat.ts";
 import type { Context } from "../src/types.ts";
 
-describe.skipIf(!process.env["OPENAI_API_KEY"])("openai responses cache affinity e2e", () => {
+describe.skipIf(
+  process.env["OPENAI_API_KEY"] === undefined || process.env["OPENAI_API_KEY"] === "",
+)("openai responses cache affinity e2e", () => {
   it(
     "handles direct OpenAI Responses requests with aligned cache-affinity identifiers",
     { retry: 2 },

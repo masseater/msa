@@ -35,7 +35,7 @@ vi.mock("openai", () => {
           };
           promise.withResponse = () => {
             const error = mockState.requestErrors.shift();
-            if (error) return Promise.reject(error);
+            if (error !== undefined) return Promise.reject(error);
             return Promise.resolve({
               data: stream,
               response: { status: 200, headers: new Headers() },

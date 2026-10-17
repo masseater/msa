@@ -73,7 +73,7 @@ describe("Anthropic OAuth", () => {
         const url = new URL(authUrl);
         const state = url.searchParams.get("state");
         const redirectUri = url.searchParams.get("redirect_uri");
-        if (!state || !redirectUri)
+        if (state === null || state === "" || redirectUri === null || redirectUri === "")
           return Promise.reject(new Error("Missing OAuth state or redirect_uri in auth URL"));
         return Promise.resolve(`${redirectUri}?code=manual-code&state=${state}`);
       },

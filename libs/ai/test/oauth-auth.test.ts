@@ -136,7 +136,7 @@ describe("OAuth through Models.getAuth (lazy load chain)", () => {
 
     const model = models.getModels("anthropic")[0];
 
-    if (!model) throw new Error("Expected a model");
+    if (model === undefined) throw new Error("Expected a model");
     const result = await models.getAuth(model.provider);
     expect(result?.auth.apiKey).toBe("oauth-access-token");
     expect(result?.source).toBe("OAuth");

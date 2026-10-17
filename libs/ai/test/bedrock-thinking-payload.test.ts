@@ -63,7 +63,7 @@ async function capturePayload(
     }
   }
 
-  if (!capturedPayload) {
+  if (capturedPayload === undefined) {
     throw new Error("Expected Bedrock payload to be captured before request abort");
   }
 

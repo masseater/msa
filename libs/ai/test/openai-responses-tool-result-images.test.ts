@@ -66,7 +66,7 @@ async function verifyToolResultImagesStayInFunctionCallOutput<TApi extends Api>(
 
   const toolCall = firstResponse.content.find((block) => block.type === "toolCall");
   expect(toolCall).toBeTruthy();
-  if (!toolCall || toolCall.type !== "toolCall") {
+  if (toolCall === undefined || toolCall.type !== "toolCall") {
     throw new Error("Expected tool call");
   }
 
@@ -108,7 +108,7 @@ async function verifyToolResultImagesStayInFunctionCallOutput<TApi extends Api>(
   const functionCallOutput = responseInput[functionCallOutputIndex] as
     | FunctionCallOutputItem
     | undefined;
-  if (!functionCallOutput) {
+  if (functionCallOutput === undefined) {
     throw new Error("Expected function_call_output item");
   }
 
@@ -127,7 +127,7 @@ async function verifyToolResultImagesStayInFunctionCallOutput<TApi extends Api>(
 
   expect(textItem).toBeTruthy();
   expect(imageItem).toBeTruthy();
-  if (!textItem || !imageItem) {
+  if (textItem === undefined || imageItem === undefined) {
     throw new Error("Expected both input_text and input_image in function_call_output");
   }
 
@@ -149,7 +149,9 @@ async function verifyToolResultImagesStayInFunctionCallOutput<TApi extends Api>(
 }
 
 describe("Responses API tool result images", () => {
-  describe.skipIf(!process.env["OPENAI_API_KEY"])("OpenAI Responses Provider (gpt-5-mini)", () => {
+  describe.skipIf(
+    process.env["OPENAI_API_KEY"] === undefined || process.env["OPENAI_API_KEY"] === "",
+  )("OpenAI Responses Provider (gpt-5-mini)", () => {
     const model = getModel("openai", "gpt-5-mini");
 
     it(
@@ -166,7 +168,10 @@ describe("Responses API tool result images", () => {
     () => {
       const model = getModel("azure", "gpt-4o-mini");
       const azureDeploymentName = resolveAzureDeploymentName(model.id);
-      const azureOptions = azureDeploymentName ? { azureDeploymentName } : {};
+      const azureOptions =
+        azureDeploymentName !== undefined && azureDeploymentName !== ""
+          ? { azureDeploymentName }
+          : {};
 
       it(
         "should send tool result images in function_call_output",
@@ -181,7 +186,7 @@ describe("Responses API tool result images", () => {
   describe("OpenAI Codex Responses Provider (gpt-5.5)", () => {
     const model = getModel("openai-codex", "gpt-5.5");
 
-    it.skipIf(!openaiCodexToken)(
+    it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
       "should send tool result images in function_call_output",
       { retry: 3, timeout: 30000 },
       async () => {

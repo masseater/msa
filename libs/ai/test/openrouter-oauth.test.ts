@@ -52,7 +52,8 @@ describe("OpenRouter OAuth", () => {
     const imageModel = models.getModelsOfType("image", "openrouter")[0];
     expect(chatModel).toBeDefined();
     expect(imageModel).toBeDefined();
-    if (!chatModel || !imageModel) throw new Error("Expected OpenRouter chat and image models");
+    if (chatModel === undefined || imageModel === undefined)
+      throw new Error("Expected OpenRouter chat and image models");
 
     expect((await models.getAuth(chatModel))?.auth.apiKey).toBe("sk-or-stored");
     expect((await models.getAuth(imageModel))?.auth.apiKey).toBe("sk-or-stored");
@@ -169,7 +170,7 @@ describe("OpenRouter OAuth", () => {
     });
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    if (!callbackUrl) throw new Error("OpenRouter did not provide a callback URL");
+    if (callbackUrl === undefined) throw new Error("OpenRouter did not provide a callback URL");
     expect((await nativeFetch(callbackUrl)).status).toBe(409);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     completeExchange(jsonResponse({ key: "sk-or-test" }));

@@ -98,7 +98,7 @@ async function capturePayload(
     { apiKey: "test-key", ...options },
   ).result();
 
-  if (!mockState.lastParams) {
+  if (mockState.lastParams === undefined) {
     throw new Error("Expected payload to be captured");
   }
 
@@ -123,7 +123,7 @@ function expectAnthropicCacheMarkers(params: CapturedParams): void {
   expect(params.tools?.[0]?.cache_control).toEqual({ type: "ephemeral" });
 
   const lastMessage = params.messages.at(-1);
-  if (!lastMessage) throw new Error("Expected a request message");
+  if (lastMessage === undefined) throw new Error("Expected a request message");
   expect(lastMessage.role).toBe("user");
   expect(Array.isArray(lastMessage.content)).toBe(true);
   expect((lastMessage.content as TextPart[])[0]?.cache_control).toEqual({ type: "ephemeral" });
@@ -204,7 +204,7 @@ describe("openai-completions cacheControlFormat", () => {
     expect(userMessage?.content).toBe("Read the file");
 
     const toolMessage = params.messages.at(-1);
-    if (!toolMessage) throw new Error("Expected a request message");
+    if (toolMessage === undefined) throw new Error("Expected a request message");
     expect(toolMessage.role).toBe("tool");
     expect(Array.isArray(toolMessage.content)).toBe(true);
     expect((toolMessage.content as TextPart[])[0]?.cache_control).toEqual({ type: "ephemeral" });

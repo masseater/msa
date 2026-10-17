@@ -141,7 +141,7 @@ export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
 
     try {
       const apiKey = options?.apiKey;
-      if (!apiKey) {
+      if (apiKey === undefined || apiKey === "") {
         throw new Error(`No API key for provider: ${model.provider}`);
       }
 
@@ -159,7 +159,7 @@ export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
       events.push({ type: "start", partial: output });
       await consumeChatStream(model, output, events, mistralStream, options?.onProviderStreamEvent);
 
-      if (options?.signal?.aborted) {
+      if (options?.signal?.aborted === true) {
         throw new Error("Request was aborted");
       }
 
@@ -176,7 +176,7 @@ export const stream: StreamFunction<"mistral-conversations", MistralOptions> = (
       for (const block of output.content) {
         delete (block as { partialArgs?: string }).partialArgs;
       }
-      output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
       output.errorMessage = formatMistralError(error);
       events.push({ type: "error", reason: output.stopReason, error: output });
       events.end();
@@ -192,7 +192,7 @@ export const streamSimple: StreamFunction<"mistral-conversations", SimpleStreamO
   options?: SimpleStreamOptions,
 ): AssistantMessageEventStream => {
   const apiKey = options?.apiKey;
-  if (!apiKey) {
+  if (apiKey === undefined || apiKey === "") {
     throw new Error(`No API key for provider: ${model.provider}`);
   }
 
@@ -200,20 +200,23 @@ export const streamSimple: StreamFunction<"mistral-conversations", SimpleStreamO
     ...buildBaseOptions(model, context, options, apiKey),
     toolChoice: options?.toolChoice,
   } satisfies MistralOptions;
-  const clampedReasoning = options?.reasoning
-    ? clampThinkingLevel(model, options.reasoning)
-    : undefined;
+  const clampedReasoning =
+    options?.reasoning === undefined ? undefined : clampThinkingLevel(model, options.reasoning);
   const reasoning = clampedReasoning === "off" ? undefined : clampedReasoning;
   const effortMap = model.reasoning ? model.thinkingLevelMap : undefined;
-  const reasoningEffort = effortMap
-    ? reasoning
-      ? (effortMap[reasoning] ?? "high")
-      : (effortMap.off ?? undefined)
-    : undefined;
+  const reasoningEffort =
+    effortMap !== undefined
+      ? reasoning === undefined
+        ? (effortMap.off ?? undefined)
+        : (effortMap[reasoning] ?? "high")
+      : undefined;
 
   return stream(model, context, {
     ...base,
-    promptMode: model.reasoning && !effortMap && reasoning ? "reasoning" : undefined,
+    promptMode:
+      model.reasoning && effortMap === undefined && reasoning !== undefined
+        ? "reasoning"
+        : undefined,
     reasoningEffort: reasoningEffort as MistralReasoningEffort | undefined,
   } satisfies MistralOptions);
 };
@@ -244,13 +247,13 @@ function createMistralToolCallIdNormalizer(): (id: string) => string {
 
   return (id: string): string => {
     const existing = idMap.get(id);
-    if (existing) return existing;
+    if (existing !== undefined && existing !== "") return existing;
 
     let attempt = 0;
     while (true) {
       const candidate = deriveMistralToolCallId(id, attempt);
       const owner = reverseMap.get(candidate);
-      if (!owner || owner === id) {
+      if (owner === undefined || owner === "" || owner === id) {
         idMap.set(id, candidate);
         reverseMap.set(candidate, id);
         return candidate;
@@ -275,7 +278,7 @@ function formatMistralError(error: unknown): string {
     const httpError = error as Error & { statusCode?: unknown; body?: unknown };
     const statusCode = typeof httpError.statusCode === "number" ? httpError.statusCode : undefined;
     const bodyText = typeof httpError.body === "string" ? httpError.body.trim() : undefined;
-    if (statusCode !== undefined && bodyText) {
+    if (statusCode !== undefined && bodyText !== undefined && bodyText !== "") {
       return `Mistral API error (${statusCode}): ${truncateErrorText(bodyText, MAX_MISTRAL_ERROR_BODY_CHARS)}`;
     }
     if (statusCode !== undefined) return `Mistral API error (${statusCode}): ${error.message}`;
@@ -320,7 +323,7 @@ async function requestMistralStream(
       signal: combinedSignal.signal ?? null,
     });
   } catch (error) {
-    if (headerTimeoutSignal.aborted && !options?.signal?.aborted) {
+    if (headerTimeoutSignal.aborted && options?.signal?.aborted !== true) {
       throw new Error(`Mistral response headers timed out after ${timeoutMs}ms`, { cause: error });
     }
     throw error;
@@ -337,7 +340,7 @@ async function requestMistralStream(
     const body = await response.text();
     throw new MistralHttpError(response.status, body, response.statusText);
   }
-  if (!response.body) {
+  if (response.body === null) {
     throw new Error("Mistral response has no body");
   }
 
@@ -384,7 +387,7 @@ function applyMistralHeaderOverrides(
   headers: Headers,
   overrides?: Record<string, string | null>,
 ): void {
-  if (!overrides) return;
+  if (overrides === undefined) return;
   for (const [name, value] of Object.entries(overrides)) {
     if (value === null) headers.delete(name);
     else headers.set(name, value);
@@ -395,7 +398,9 @@ function hasMistralHeaderOverride(
   overrides: Record<string, string | null> | undefined,
   target: string,
 ): boolean {
-  return !!overrides && Object.keys(overrides).some((name) => name.toLowerCase() === target);
+  return (
+    overrides !== undefined && Object.keys(overrides).some((name) => name.toLowerCase() === target)
+  );
 }
 
 function toMistralWirePayload(payload: MistralChatPayload): Record<string, unknown> {
@@ -489,26 +494,26 @@ async function* readMistralEvents(
 
   try {
     while (true) {
-      if (signal?.aborted) throw signal.reason;
+      signal?.throwIfAborted();
       const { done, value } = await reader.read();
-      if (signal?.aborted) throw signal.reason;
+      signal?.throwIfAborted();
       buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
 
       let boundary = findMistralEventBoundary(buffer);
-      while (boundary) {
+      while (boundary !== undefined) {
         const event = parseMistralEvent(buffer.slice(0, boundary.index));
         buffer = buffer.slice(boundary.index + boundary.length);
         if (event === MISTRAL_STREAM_DONE) return;
-        if (event) yield event;
+        if (event !== undefined) yield event;
         boundary = findMistralEventBoundary(buffer);
       }
 
       if (done) break;
     }
 
-    if (buffer.trim()) {
+    if (buffer.trim() !== "") {
       const event = parseMistralEvent(buffer);
-      if (event !== MISTRAL_STREAM_DONE && event) yield event;
+      if (event !== MISTRAL_STREAM_DONE && event !== undefined) yield event;
     }
   } finally {
     signal?.removeEventListener("abort", onAbort);
@@ -535,7 +540,7 @@ function parseMistralEvent(
     .map((line) => line.slice(5).trimStart())
     .join("\n")
     .trim();
-  if (!data) return undefined;
+  if (data === "") return undefined;
   if (data === "[DONE]") return MISTRAL_STREAM_DONE;
 
   const parsed: unknown = JSON.parse(data);
@@ -561,9 +566,9 @@ function buildChatPayload(
   if (currentTools.length > 0) payload.tools = toFunctionTools(currentTools);
   if (options?.temperature !== undefined) payload.temperature = options.temperature;
   if (options?.maxTokens !== undefined) payload.maxTokens = options.maxTokens;
-  if (options?.toolChoice) payload.toolChoice = mapToolChoice(options.toolChoice);
-  if (options?.promptMode) payload.promptMode = options.promptMode;
-  if (options?.reasoningEffort) payload.reasoningEffort = options.reasoningEffort;
+  if (options?.toolChoice !== undefined) payload.toolChoice = mapToolChoice(options.toolChoice);
+  if (options?.promptMode !== undefined) payload.promptMode = options.promptMode;
+  if (options?.reasoningEffort !== undefined) payload.reasoningEffort = options.reasoningEffort;
   if (shouldUsePromptCaching(options)) payload.promptCacheKey = options.sessionId;
 
   return payload;
@@ -572,7 +577,11 @@ function buildChatPayload(
 function shouldUsePromptCaching(
   options?: MistralOptions,
 ): options is MistralOptions & { sessionId: string } {
-  return options?.cacheRetention !== "none" && !!options?.sessionId;
+  return (
+    options?.cacheRetention !== "none" &&
+    options?.sessionId !== undefined &&
+    options?.sessionId !== ""
+  );
 }
 
 function getMistralCachedPromptTokens(usage: unknown, promptTokens: number): number {
@@ -610,7 +619,7 @@ async function consumeChatStream(
   const toolBlocksByKey = new Map<string | number, number>();
 
   const finishCurrentBlock = (block?: typeof currentBlock) => {
-    if (!block) return;
+    if (block === undefined || block === null) return;
     if (block.type === "text") {
       events.push({
         type: "text_end",
@@ -635,7 +644,7 @@ async function consumeChatStream(
     await onProviderStreamEvent?.(chunk, model);
     output.responseId ||= chunk.id;
 
-    if (chunk.usage) {
+    if (chunk.usage !== undefined) {
       const promptTokens = chunk.usage.prompt_tokens || 0;
       const cachedPromptTokens = getMistralCachedPromptTokens(chunk.usage, promptTokens);
 
@@ -650,13 +659,17 @@ async function consumeChatStream(
     }
 
     const choice = chunk.choices[0];
-    if (!choice) continue;
+    if (choice === undefined) continue;
 
-    if (choice.finish_reason) {
+    if (
+      choice.finish_reason !== undefined &&
+      choice.finish_reason !== null &&
+      choice.finish_reason !== ""
+    ) {
       output.rawStopReason = choice.finish_reason;
       const stopReasonResult = mapChatStopReason(choice.finish_reason);
       output.stopReason = stopReasonResult.stopReason;
-      if (stopReasonResult.errorMessage) {
+      if (stopReasonResult.errorMessage !== undefined && stopReasonResult.errorMessage !== "") {
         output.errorMessage = stopReasonResult.errorMessage;
       }
     }
@@ -667,8 +680,8 @@ async function consumeChatStream(
       for (const item of contentItems) {
         if (typeof item === "string") {
           const textDelta = sanitizeSurrogates(item);
-          if (!textDelta) continue;
-          if (!currentBlock || currentBlock.type !== "text") {
+          if (textDelta === "") continue;
+          if (currentBlock === null || currentBlock.type !== "text") {
             finishCurrentBlock(currentBlock);
             currentBlock = { type: "text", text: "" };
             output.content.push(currentBlock);
@@ -690,8 +703,8 @@ async function consumeChatStream(
             .filter((text) => text.length > 0)
             .join("");
           const thinkingDelta = sanitizeSurrogates(deltaText);
-          if (!thinkingDelta) continue;
-          if (!currentBlock || currentBlock.type !== "thinking") {
+          if (thinkingDelta === "") continue;
+          if (currentBlock === null || currentBlock.type !== "thinking") {
             finishCurrentBlock(currentBlock);
             currentBlock = { type: "thinking", thinking: "" };
             output.content.push(currentBlock);
@@ -709,8 +722,8 @@ async function consumeChatStream(
 
         if (item.type === "text") {
           const textDelta = sanitizeSurrogates(item.text ?? "");
-          if (!textDelta) continue;
-          if (!currentBlock || currentBlock.type !== "text") {
+          if (textDelta === "") continue;
+          if (currentBlock === null || currentBlock.type !== "text") {
             finishCurrentBlock(currentBlock);
             currentBlock = { type: "text", text: "" };
             output.content.push(currentBlock);
@@ -729,12 +742,12 @@ async function consumeChatStream(
 
     const toolCalls = delta.tool_calls || [];
     for (const toolCall of toolCalls) {
-      if (currentBlock) {
+      if (currentBlock !== null) {
         finishCurrentBlock(currentBlock);
         currentBlock = null;
       }
       const callId =
-        toolCall.id && toolCall.id !== "null"
+        toolCall.id !== undefined && toolCall.id !== "" && toolCall.id !== "null"
           ? toolCall.id
           : deriveMistralToolCallId(`toolcall:${toolCall.index ?? 0}`, 0);
       const key = toolCall.index ?? callId;
@@ -748,7 +761,7 @@ async function consumeChatStream(
         }
       }
 
-      if (!block) {
+      if (block === undefined) {
         block = {
           type: "toolCall",
           id: callId,

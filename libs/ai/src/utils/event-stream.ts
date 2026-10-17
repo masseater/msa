@@ -48,10 +48,10 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
     }
 
     const waiter = this.waiting.dequeue();
-    if (waiter) {
-      waiter({ value: event, done: false });
-    } else {
+    if (waiter === undefined) {
       this.queue.enqueue(event);
+    } else {
+      waiter({ value: event, done: false });
     }
   }
 
@@ -76,7 +76,7 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
         const result = await new Promise<IteratorResult<T>>((resolve) => {
           this.waiting.enqueue(resolve);
         });
-        if (result.done) return;
+        if (result.done === true) return;
         yield result.value;
       }
     }

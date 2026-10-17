@@ -86,7 +86,7 @@ async function capture(
     },
   });
   const message = await result.result();
-  if (!payload) throw new Error("Expected payload capture");
+  if (payload === undefined) throw new Error("Expected payload capture");
   return { payload, message };
 }
 

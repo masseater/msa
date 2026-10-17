@@ -1,18 +1,25 @@
 function parseDeploymentNameMap(value: string | undefined): Map<string, string> {
   const map = new Map<string, string>();
-  if (!value) return map;
+  if (value === undefined || value === "") return map;
   for (const entry of value.split(",")) {
     const trimmed = entry.trim();
-    if (!trimmed) continue;
+    if (trimmed === "") continue;
     const [modelId, deploymentName] = trimmed.split("=", 2);
-    if (!modelId || !deploymentName) continue;
+    if (
+      modelId === undefined ||
+      modelId === "" ||
+      deploymentName === undefined ||
+      deploymentName === ""
+    )
+      continue;
     map.set(modelId.trim(), deploymentName.trim());
   }
   return map;
 }
 
 export function hasAzureOpenAICredentials(): boolean {
-  const hasKey = !!process.env["AZURE_OPENAI_API_KEY"];
+  const hasKey =
+    process.env["AZURE_OPENAI_API_KEY"] !== undefined && process.env["AZURE_OPENAI_API_KEY"] !== "";
   const hasBaseUrl = !!(
     process.env["AZURE_OPENAI_BASE_URL"] || process.env["AZURE_OPENAI_RESOURCE_NAME"]
   );
@@ -21,6 +28,6 @@ export function hasAzureOpenAICredentials(): boolean {
 
 export function resolveAzureDeploymentName(modelId: string): string | undefined {
   const mapValue = process.env["AZURE_OPENAI_DEPLOYMENT_NAME_MAP"];
-  if (!mapValue) return undefined;
+  if (mapValue === undefined || mapValue === "") return undefined;
   return parseDeploymentNameMap(mapValue).get(modelId);
 }

@@ -103,7 +103,7 @@ function requestFailure(action: string, response: OAuthHttpResponse): Error {
       : undefined;
   const detail = [error, description].filter(Boolean).join(": ");
   return new Error(
-    `xAI OAuth ${action} failed (HTTP ${response.status})${detail ? `: ${detail}` : ""}`,
+    `xAI OAuth ${action} failed (HTTP ${response.status})${detail === "" ? "" : `: ${detail}`}`,
   );
 }
 
@@ -134,7 +134,9 @@ function credentialsFromTokenResponse(
 ): OAuthCredential {
   const access = requiredString(body, "access_token");
   const refresh =
-    body["refresh_token"] === undefined && previousRefreshToken
+    body["refresh_token"] === undefined &&
+    previousRefreshToken !== undefined &&
+    previousRefreshToken !== ""
       ? previousRefreshToken
       : requiredString(body, "refresh_token");
   const expiresInSeconds =

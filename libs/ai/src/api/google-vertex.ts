@@ -97,19 +97,20 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
     };
 
     try {
-      if (options?.fetch && options.fetch !== globalThis.fetch) {
+      if (options?.fetch !== undefined && options.fetch !== globalThis.fetch) {
         throw new Error("Custom fetch is not supported by the Google Vertex adapter");
       }
       const apiKey = resolveApiKey(options);
-      const client = apiKey
-        ? createClientWithApiKey(model, apiKey, options?.headers)
-        : createClient(
-            model,
-            resolveProject(options),
-            resolveLocation(options),
-            options?.headers,
-            options?.env,
-          );
+      const client =
+        apiKey !== undefined && apiKey !== ""
+          ? createClientWithApiKey(model, apiKey, options?.headers)
+          : createClient(
+              model,
+              resolveProject(options),
+              resolveLocation(options),
+              options?.headers,
+              options?.env,
+            );
       let params = buildParams(model, normalizedContext, options);
       const nextParams = await options?.onPayload?.(params, model);
       if (nextParams !== undefined) {
@@ -128,16 +129,16 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
         await options?.onProviderStreamEvent?.(chunk, model);
         output.responseId ||= chunk.responseId;
         const candidate = chunk.candidates?.[0];
-        if (candidate?.content?.parts) {
+        if (candidate?.content?.parts !== undefined) {
           for (const part of candidate.content.parts) {
             if (part.text !== undefined) {
               const isThinking = isThinkingPart(part);
               if (
-                !currentBlock ||
+                currentBlock === null ||
                 (isThinking && currentBlock.type !== "thinking") ||
                 (!isThinking && currentBlock.type !== "text")
               ) {
-                if (currentBlock) {
+                if (currentBlock !== null) {
                   if (currentBlock.type === "text") {
                     events.push({
                       type: "text_end",
@@ -195,8 +196,8 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
               }
             }
 
-            if (part.functionCall) {
-              if (currentBlock) {
+            if (part.functionCall !== undefined) {
+              if (currentBlock !== null) {
                 if (currentBlock.type === "text") {
                   events.push({
                     type: "text_end",
@@ -217,7 +218,8 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
 
               const providedId = part.functionCall.id;
               const needsNewId =
-                !providedId ||
+                providedId === undefined ||
+                providedId === "" ||
                 output.content.some((b) => b.type === "toolCall" && b.id === providedId);
               const toolCallId = needsNewId
                 ? `${part.functionCall.name}_${Date.now()}_${++toolCallCounter}`
@@ -249,7 +251,7 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
           }
         }
 
-        if (candidate?.finishReason) {
+        if (candidate?.finishReason !== undefined) {
           output.rawStopReason = candidate.finishReason;
           output.stopReason = mapStopReason(candidate.finishReason);
           if (output.content.some((b) => b.type === "toolCall") && output.stopReason === "stop") {
@@ -257,7 +259,7 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
           }
         }
 
-        if (chunk.usageMetadata) {
+        if (chunk.usageMetadata !== undefined) {
           output.usage = {
             input:
               (chunk.usageMetadata.promptTokenCount || 0) -
@@ -281,7 +283,7 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
         }
       }
 
-      if (currentBlock) {
+      if (currentBlock !== null) {
         if (currentBlock.type === "text") {
           events.push({
             type: "text_end",
@@ -299,7 +301,7 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
         }
       }
 
-      if (options?.signal?.aborted) {
+      if (options?.signal?.aborted === true) {
         throw new Error("Request was aborted");
       }
 
@@ -307,9 +309,10 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
         throw new Error("Google Vertex stream ended without a finish reason");
       }
       if (output.stopReason === "aborted" || output.stopReason === "error") {
-        const errorMessage = output.rawStopReason
-          ? `Provider stopped with: ${output.rawStopReason}`
-          : "An unknown error occurred";
+        const errorMessage =
+          output.rawStopReason !== undefined && output.rawStopReason !== ""
+            ? `Provider stopped with: ${output.rawStopReason}`
+            : "An unknown error occurred";
         throw new Error(errorMessage);
       }
 
@@ -321,7 +324,7 @@ export const stream: StreamFunction<"google-vertex", GoogleVertexOptions> = (
           delete (block as { index?: number }).index;
         }
       }
-      output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
       output.errorMessage = formatProviderError(normalizeProviderError(error));
       events.push({ type: "error", reason: output.stopReason, error: output });
       events.end();
@@ -340,7 +343,7 @@ export const streamSimple: StreamFunction<"google-vertex", SimpleStreamOptions> 
     ...buildBaseOptions(model, context, options, undefined),
     toolChoice: options?.toolChoice,
   } satisfies GoogleVertexOptions;
-  if (!options?.reasoning) {
+  if (options?.reasoning === undefined) {
     return stream(model, context, {
       ...base,
       thinking: { enabled: false },
@@ -389,7 +392,7 @@ function createClient(
     project,
     location,
     apiVersion: API_VERSION,
-    ...(googleAuthOptions ? { googleAuthOptions } : {}),
+    ...(googleAuthOptions === undefined ? {} : { googleAuthOptions }),
     ...(httpOptions === undefined ? {} : { httpOptions }),
   });
 }
@@ -414,7 +417,7 @@ function buildHttpOptions(
 ): HttpOptions | undefined {
   const httpOptions: HttpOptions = {};
   const baseUrl = resolveCustomBaseUrl(model.baseUrl);
-  if (baseUrl) {
+  if (baseUrl !== undefined && baseUrl !== "") {
     httpOptions.baseUrl = baseUrl;
     httpOptions.baseUrlResourceScope = ResourceScope.COLLECTION;
     if (baseUrlIncludesApiVersion(baseUrl)) {
@@ -427,7 +430,7 @@ function buildHttpOptions(
     ...model.headers,
     ...optionsHeaders,
   });
-  if (headers) {
+  if (headers !== undefined) {
     httpOptions.headers = headers;
   }
 
@@ -436,7 +439,7 @@ function buildHttpOptions(
 
 function resolveCustomBaseUrl(baseUrl: string): string | undefined {
   const trimmed = baseUrl.trim();
-  if (!trimmed || trimmed.includes("{location}")) {
+  if (trimmed === "" || trimmed.includes("{location}")) {
     return undefined;
   }
   return trimmed;
@@ -453,12 +456,17 @@ function baseUrlIncludesApiVersion(baseUrl: string): boolean {
 
 function buildGoogleAuthOptions(env?: ProviderEnv): { keyFilename: string } | undefined {
   const keyFilename = getProviderEnvValue("GOOGLE_APPLICATION_CREDENTIALS", env);
-  return keyFilename ? { keyFilename } : undefined;
+  return keyFilename !== undefined && keyFilename !== "" ? { keyFilename } : undefined;
 }
 
 function resolveApiKey(options?: GoogleVertexOptions): string | undefined {
   const apiKey = options?.apiKey?.trim();
-  if (!apiKey || apiKey === GCP_VERTEX_CREDENTIALS_MARKER || isPlaceholderApiKey(apiKey)) {
+  if (
+    apiKey === undefined ||
+    apiKey === "" ||
+    apiKey === GCP_VERTEX_CREDENTIALS_MARKER ||
+    isPlaceholderApiKey(apiKey)
+  ) {
     return undefined;
   }
   return apiKey;
@@ -473,7 +481,7 @@ function resolveProject(options?: GoogleVertexOptions): string {
     options?.project ||
     getProviderEnvValue("GOOGLE_CLOUD_PROJECT", options?.env) ||
     getProviderEnvValue("GCLOUD_PROJECT", options?.env);
-  if (!project) {
+  if (project === undefined || project === "") {
     throw new Error(
       "Vertex AI requires a project ID. Set GOOGLE_CLOUD_PROJECT/GCLOUD_PROJECT or pass project in options.",
     );
@@ -483,7 +491,7 @@ function resolveProject(options?: GoogleVertexOptions): string {
 
 function resolveLocation(options?: GoogleVertexOptions): string {
   const location = options?.location || getProviderEnvValue("GOOGLE_CLOUD_LOCATION", options?.env);
-  if (!location) {
+  if (location === undefined || location === "") {
     throw new Error(
       "Vertex AI requires a location. Set GOOGLE_CLOUD_LOCATION or pass location in options.",
     );
@@ -513,7 +521,8 @@ function buildParams(
     currentTools.length > 0
       ? resolveGoogleFunctionCallingMode(currentTools, options.toolChoice, supportsStrictMode)
       : undefined;
-  const systemInstruction = initialSystemMessage ? getSystemMessageText(initialSystemMessage) : "";
+  const systemInstruction =
+    initialSystemMessage === undefined ? "" : getSystemMessageText(initialSystemMessage);
   const tools = convertTools(currentTools, false, supportsStrictMode);
   const config: GenerateContentConfig = {
     ...(Object.keys(generationConfig).length > 0 && generationConfig),
@@ -524,7 +533,7 @@ function buildParams(
     }),
   };
 
-  if (options.thinking?.enabled && model.reasoning) {
+  if (options.thinking?.enabled === true && model.reasoning) {
     const thinkingConfig: ThinkingConfig = { includeThoughts: true };
     if (options.thinking.level !== undefined) {
       thinkingConfig.thinkingLevel = toGoogleSdkThinkingLevel(options.thinking.level);
@@ -532,11 +541,11 @@ function buildParams(
       thinkingConfig.thinkingBudget = options.thinking.budgetTokens;
     }
     config.thinkingConfig = thinkingConfig;
-  } else if (model.reasoning && options.thinking && !options.thinking.enabled) {
+  } else if (model.reasoning && options.thinking !== undefined && !options.thinking.enabled) {
     config.thinkingConfig = getDisabledGoogleThinkingConfig(model);
   }
 
-  if (options.signal) {
+  if (options.signal !== undefined) {
     if (options.signal.aborted) {
       throw new Error("Request aborted");
     }

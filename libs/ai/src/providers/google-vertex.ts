@@ -61,7 +61,9 @@ const vertexAuth: ApiKeyAuth = {
       env: {
         GOOGLE_CLOUD_PROJECT: project,
         GOOGLE_CLOUD_LOCATION: location,
-        ...(credentialsPath ? { GOOGLE_APPLICATION_CREDENTIALS: credentialsPath } : {}),
+        ...(credentialsPath !== undefined && credentialsPath !== ""
+          ? { GOOGLE_APPLICATION_CREDENTIALS: credentialsPath }
+          : {}),
       },
     };
   },
@@ -73,10 +75,13 @@ const vertexAuth: ApiKeyAuth = {
       return value;
     };
     const key = credential?.key ?? (await env("GOOGLE_CLOUD_API_KEY"));
-    if (key)
+    if (key !== undefined && key !== "")
       return {
         auth: { apiKey: key },
-        source: credential?.key ? "stored credential" : "GOOGLE_CLOUD_API_KEY",
+        source:
+          credential?.key !== undefined && credential?.key !== ""
+            ? "stored credential"
+            : "GOOGLE_CLOUD_API_KEY",
       };
 
     const adcPath =
@@ -91,11 +96,18 @@ const vertexAuth: ApiKeyAuth = {
       (await env("GCLOUD_PROJECT"));
     const location =
       credential?.env?.["GOOGLE_CLOUD_LOCATION"] ?? (await env("GOOGLE_CLOUD_LOCATION"));
-    if (hasCredentials && project && location) {
+    if (
+      hasCredentials &&
+      project !== undefined &&
+      project !== "" &&
+      location !== undefined &&
+      location !== ""
+    ) {
       return {
         auth: {},
         env: credential?.env,
-        source: credential ? "stored credential" : "gcloud application default credentials",
+        source:
+          credential === undefined ? "gcloud application default credentials" : "stored credential",
       };
     }
     return undefined;

@@ -40,7 +40,7 @@ function stripBrackets(host: string): string {
 
 function parseNoProxyEntry(entry: string): { host: string; port: number } | undefined {
   const trimmed = entry.trim().toLowerCase();
-  if (!trimmed) return undefined;
+  if (trimmed === "") return undefined;
 
   if (trimmed.startsWith("[")) {
     const closingBracket = trimmed.indexOf("]");
@@ -73,7 +73,7 @@ function parseNoProxyEntry(entry: string): { host: string; port: number } | unde
 
 function shouldProxyHostname(hostname: string, port: number, env?: ProviderEnv): boolean {
   const noProxy = getProxyEnv("no_proxy", env).toLowerCase();
-  if (!noProxy) {
+  if (noProxy === "") {
     return true;
   }
   if (noProxy === "*") {
@@ -84,11 +84,11 @@ function shouldProxyHostname(hostname: string, port: number, env?: ProviderEnv):
 
   return noProxy.split(/[,\s]/u).every((entry) => {
     const parsed = parseNoProxyEntry(entry);
-    if (!parsed) {
+    if (parsed === undefined) {
       return true;
     }
 
-    if (parsed.port && parsed.port !== port) {
+    if (parsed.port !== 0 && !Number.isNaN(parsed.port) && parsed.port !== port) {
       return true;
     }
 
@@ -99,7 +99,7 @@ function shouldProxyHostname(hostname: string, port: number, env?: ProviderEnv):
       domain = domain.slice(1);
     }
 
-    if (!domain) {
+    if (domain === "") {
       return true;
     }
 
@@ -117,7 +117,7 @@ function shouldProxyHostname(hostname: string, port: number, env?: ProviderEnv):
 
 function getProxyForUrl(targetUrl: string | URL, env?: ProviderEnv): string {
   const parsedUrl = parseProxyTargetUrl(targetUrl);
-  if (!parsedUrl?.protocol || !parsedUrl.host) {
+  if (parsedUrl?.protocol === undefined || parsedUrl?.protocol === "" || parsedUrl.host === "") {
     return "";
   }
 
@@ -129,7 +129,7 @@ function getProxyForUrl(targetUrl: string | URL, env?: ProviderEnv): string {
   }
 
   let proxy = getProxyEnv(`${protocol}_proxy`, env) || getProxyEnv("all_proxy", env);
-  if (proxy && !proxy.includes("://")) {
+  if (proxy !== "" && !proxy.includes("://")) {
     proxy = `${protocol}://${proxy}`;
   }
   return proxy;
@@ -143,7 +143,7 @@ export function resolveHttpProxyUrlForTarget(
   env?: ProviderEnv,
 ): URL | undefined {
   const proxy = getProxyForUrl(targetUrl, env);
-  if (!proxy) {
+  if (proxy === "") {
     return undefined;
   }
 

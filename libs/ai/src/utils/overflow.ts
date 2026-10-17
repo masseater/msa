@@ -36,7 +36,11 @@ const NON_OVERFLOW_PATTERNS = [
 ];
 
 export function isContextOverflow(message: AssistantMessage, contextWindow?: number): boolean {
-  if (message.stopReason === "error" && message.errorMessage) {
+  if (
+    message.stopReason === "error" &&
+    message.errorMessage !== undefined &&
+    message.errorMessage !== ""
+  ) {
     const isNonOverflow = NON_OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!));
     if (!isNonOverflow) {
       if (OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!))) {
@@ -51,14 +55,25 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
     }
   }
 
-  if (contextWindow && message.stopReason === "stop") {
+  if (
+    contextWindow !== undefined &&
+    contextWindow !== 0 &&
+    !Number.isNaN(contextWindow) &&
+    message.stopReason === "stop"
+  ) {
     const inputTokens = message.usage.input + message.usage.cacheRead;
     if (inputTokens > contextWindow) {
       return true;
     }
   }
 
-  if (contextWindow && message.stopReason === "length" && message.usage.output === 0) {
+  if (
+    contextWindow !== undefined &&
+    contextWindow !== 0 &&
+    !Number.isNaN(contextWindow) &&
+    message.stopReason === "length" &&
+    message.usage.output === 0
+  ) {
     const inputTokens = message.usage.input + message.usage.cacheRead;
     if (inputTokens >= contextWindow * 0.99) {
       return true;

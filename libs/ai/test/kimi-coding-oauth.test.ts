@@ -86,7 +86,8 @@ describe("Kimi Code OAuth", () => {
           expect(params.get("client_id")).toBe(CLIENT_ID);
           expect(params.get("device_code")).toBe("device-code-123");
           const response = pollResponses.shift();
-          if (!response) return Promise.reject(new Error("Unexpected extra token poll"));
+          if (response === undefined)
+            return Promise.reject(new Error("Unexpected extra token poll"));
           return Promise.resolve(response);
         }
         return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));

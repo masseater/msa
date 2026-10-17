@@ -52,7 +52,11 @@ export function assertClassifierInputSupported(
   model: ClassifierModel<ClassifierApi>,
   context: ClassifierContext,
 ): void {
-  if (context.images?.length && !model.input.includes("image")) {
+  if (
+    context.images?.length !== undefined &&
+    context.images?.length > 0 &&
+    !model.input.includes("image")
+  ) {
     throw new ModelsError(
       "provider",
       `Model ${model.provider}/${model.id} does not accept image input`,

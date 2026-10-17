@@ -62,7 +62,7 @@ function setup() {
   const models = createModels();
   models.setProvider(cloudflareWorkersAIProvider());
   const jev = models.getModelOfType("classifier", "cloudflare-workers-ai", "typesafe/jev");
-  if (!jev) throw new Error("missing Cloudflare Jev model");
+  if (jev === undefined) throw new Error("missing Cloudflare Jev model");
   return { models, jev };
 }
 
@@ -112,7 +112,7 @@ describe("Cloudflare Workers AI System One", () => {
   ])("runs %s through /ai/run and parses its direct output", async (id, inputPrice) => {
     const { models } = setup();
     const clef = models.getModelOfType("classifier", "cloudflare-workers-ai", id);
-    if (!clef) throw new Error(`missing Cloudflare ${id} model`);
+    if (clef === undefined) throw new Error(`missing Cloudflare ${id} model`);
     const fetch = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
       const payload = JSON.parse(String(init?.body)) as {
         model: string;

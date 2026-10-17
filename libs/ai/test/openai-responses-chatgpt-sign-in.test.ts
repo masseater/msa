@@ -38,7 +38,7 @@ async function capturePayload(
     },
     fetch: () => Promise.resolve(new Response(null, { status: 500 })),
   }).result();
-  if (!payload) throw new Error("Request payload was not captured");
+  if (payload === undefined) throw new Error("Request payload was not captured");
   return payload;
 }
 

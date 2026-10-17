@@ -106,7 +106,7 @@ export function estimateContextTokens(
 ): ContextUsageEstimate {
   const messages = "messages" in context ? context.messages : context;
   const usageInfo = getLastAssistantUsageInfo(messages);
-  if (usageInfo) {
+  if (usageInfo !== undefined) {
     const usageTokens = calculateContextTokens(usageInfo.usage);
     let trailingTokens = 0;
     for (const message of messages.slice(usageInfo.index + 1)) {
@@ -126,6 +126,6 @@ export function estimateContextTokens(
 }
 
 function estimateToolsTokens(tools: readonly unknown[] | undefined): number {
-  if (!tools || tools.length === 0) return 0;
+  if (tools === undefined || tools.length === 0) return 0;
   return estimateTextTokens(safeJsonStringify(tools));
 }

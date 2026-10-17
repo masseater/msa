@@ -32,7 +32,7 @@ function tool(name: string, strict?: "prefer" | "require"): Tool {
     name,
     description: "Look up a value",
     parameters: Type.Object({ value: Type.String(), optional: Type.Optional(Type.Number()) }),
-    ...(strict ? { constrainedSampling: { type: "json_schema", strict } } : {}),
+    ...(strict === undefined ? {} : { constrainedSampling: { type: "json_schema", strict } }),
   };
 }
 
@@ -180,7 +180,8 @@ describe("Anthropic preferred strict tool fallback", () => {
       ),
     );
     const [firstAdditions, secondAdditions] = additions;
-    if (!firstAdditions || !secondAdditions) throw new Error("Expected two tool additions");
+    if (firstAdditions === undefined || secondAdditions === undefined)
+      throw new Error("Expected two tool additions");
     expect(firstAdditions.map((definition) => definition.strict)).toEqual([true, true]);
     expect(secondAdditions.map((definition) => definition.strict)).toEqual([undefined, true]);
     expect(secondAdditions[0]?.input_schema.required).toEqual(["value"]);
@@ -235,7 +236,7 @@ describe("Anthropic preferred strict tool fallback", () => {
     expect(result.errorMessage).toContain("Required grammar is still too large");
     expect(payloads).toHaveLength(2);
     const retriedPayload = payloads[1];
-    if (!retriedPayload) throw new Error("Expected a retried payload");
+    if (retriedPayload === undefined) throw new Error("Expected a retried payload");
     expect((retriedPayload.tools as BetaTool[])[1]?.strict).toBe(true);
   });
 

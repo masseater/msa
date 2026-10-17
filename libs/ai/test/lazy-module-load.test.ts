@@ -57,7 +57,7 @@ function runProbe(action: string): ProbeResult {
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
   const lastLine = stdoutLines.at(-1);
-  if (!lastLine) {
+  if (lastLine === undefined || lastLine === "") {
     throw new Error(`Probe produced no output\nSTDERR:\n${result.stderr}`);
   }
 

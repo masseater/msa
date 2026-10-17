@@ -11,7 +11,7 @@ export function envApiKeyAuth(name: string, envVars: readonly string[]): ApiKeyA
     },
     resolve: async ({ ctx, credential, signal }) => {
       signal.throwIfAborted();
-      if (credential?.key) {
+      if (credential?.key !== undefined && credential?.key !== "") {
         return {
           auth: { apiKey: credential.key },
           env: credential.env,
@@ -21,7 +21,7 @@ export function envApiKeyAuth(name: string, envVars: readonly string[]): ApiKeyA
       for (const envVar of envVars) {
         const value = await ctx.env(envVar);
         signal.throwIfAborted();
-        if (value) return { auth: { apiKey: value }, source: envVar };
+        if (value !== undefined && value !== "") return { auth: { apiKey: value }, source: envVar };
       }
       return undefined;
     },

@@ -13,11 +13,12 @@ async function resolveValue(
   credential: ApiKeyCredential | undefined,
   signal: AbortSignal,
 ): Promise<string | undefined> {
-  const fromCredential = credential
-    ? name === CLOUDFLARE_API_KEY
-      ? credential.key
-      : credential.env?.[name]
-    : undefined;
+  const fromCredential =
+    credential === undefined
+      ? undefined
+      : name === CLOUDFLARE_API_KEY
+        ? credential.key
+        : credential.env?.[name];
   if (fromCredential !== undefined) return fromCredential;
   signal.throwIfAborted();
   const value = await ctx.env(name);
@@ -38,15 +39,22 @@ async function resolveCloudflareEnv(
       ? await resolveValue(CLOUDFLARE_GATEWAY_ID, ctx, credential, signal)
       : undefined;
 
-  if (!apiKey || !accountId || (kind === "ai-gateway" && !gatewayId)) return undefined;
+  if (
+    apiKey === undefined ||
+    apiKey === "" ||
+    accountId === undefined ||
+    accountId === "" ||
+    (kind === "ai-gateway" && (gatewayId === undefined || gatewayId === ""))
+  )
+    return undefined;
 
   return {
     apiKey,
     env: {
       CLOUDFLARE_ACCOUNT_ID: accountId,
-      ...(gatewayId ? { CLOUDFLARE_GATEWAY_ID: gatewayId } : {}),
+      ...(gatewayId !== undefined && gatewayId !== "" ? { CLOUDFLARE_GATEWAY_ID: gatewayId } : {}),
     },
-    source: credential ? "stored credential" : CLOUDFLARE_API_KEY,
+    source: credential === undefined ? CLOUDFLARE_API_KEY : "stored credential",
   };
 }
 
@@ -63,7 +71,7 @@ export function cloudflareWorkersAIAuth(): ApiKeyAuth {
     },
     resolve: async ({ ctx, credential, signal }) => {
       const resolved = await resolveCloudflareEnv("workers-ai", ctx, credential, signal);
-      if (!resolved) return undefined;
+      if (resolved === undefined) return undefined;
       return {
         auth: { apiKey: resolved.apiKey },
         env: resolved.env,
@@ -94,7 +102,7 @@ export function cloudflareAIGatewayAuth(): ApiKeyAuth {
     },
     resolve: async ({ ctx, credential, signal }) => {
       const resolved = await resolveCloudflareEnv("ai-gateway", ctx, credential, signal);
-      if (!resolved) return undefined;
+      if (resolved === undefined) return undefined;
       return {
         auth: {
           headers: {

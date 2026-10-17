@@ -11,11 +11,14 @@ export interface OpenRouterReasoningMetadata {
 export function getOpenRouterThinkingLevelMap(
   reasoning: OpenRouterReasoningMetadata | undefined,
 ): ThinkingLevelMap | undefined {
-  if (!reasoning) return undefined;
-  if (!reasoning.supported_efforts?.length)
+  if (reasoning === undefined) return undefined;
+  if (
+    reasoning.supported_efforts?.length === undefined ||
+    reasoning.supported_efforts?.length === 0
+  )
     return reasoning.mandatory === true ? { off: null } : undefined;
 
   const map = getEffortThinkingLevelMap([{ type: "effort", values: reasoning.supported_efforts }]);
-  if (!map) return reasoning.mandatory === true ? { off: null } : undefined;
+  if (map === undefined) return reasoning.mandatory === true ? { off: null } : undefined;
   return { ...map, off: reasoning.mandatory === true ? null : "none" };
 }

@@ -53,7 +53,9 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
   });
 
   describe("Anthropic Provider", () => {
-    it.skipIf(!process.env["ANTHROPIC_API_KEY"])(
+    it.skipIf(
+      process.env["ANTHROPIC_API_KEY"] === undefined || process.env["ANTHROPIC_API_KEY"] === "",
+    )(
       "should use default cache TTL (no ttl field) when MSA_CACHE_RETENTION is not set",
       async () => {
         const model = getModel("anthropic", "claude-haiku-4-5");
@@ -74,27 +76,26 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       },
     );
 
-    it.skipIf(!process.env["ANTHROPIC_API_KEY"])(
-      "should use 1h cache TTL when MSA_CACHE_RETENTION=long",
-      async () => {
-        process.env["MSA_CACHE_RETENTION"] = "long";
-        const model = getModel("anthropic", "claude-haiku-4-5");
-        let capturedPayload: any = null;
+    it.skipIf(
+      process.env["ANTHROPIC_API_KEY"] === undefined || process.env["ANTHROPIC_API_KEY"] === "",
+    )("should use 1h cache TTL when MSA_CACHE_RETENTION=long", async () => {
+      process.env["MSA_CACHE_RETENTION"] = "long";
+      const model = getModel("anthropic", "claude-haiku-4-5");
+      let capturedPayload: any = null;
 
-        const s = stream(model, context, {
-          onPayload: stopAfterPayload((payload) => {
-            capturedPayload = payload;
-          }),
-        });
+      const s = stream(model, context, {
+        onPayload: stopAfterPayload((payload) => {
+          capturedPayload = payload;
+        }),
+      });
 
-        for await (const _ of s) {
-        }
+      for await (const _ of s) {
+      }
 
-        expect(capturedPayload).not.toBeNull();
-        expect(capturedPayload.system).toBeDefined();
-        expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
-      },
-    );
+      expect(capturedPayload).not.toBeNull();
+      expect(capturedPayload.system).toBeDefined();
+      expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
+    });
 
     it("should add ttl for non-api.anthropic.com baseUrl by default", async () => {
       process.env["MSA_CACHE_RETENTION"] = "long";
@@ -232,7 +233,7 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       expect(getModel("openai", modelId).promptCache).toBeUndefined();
     });
 
-    it.skipIf(!process.env["OPENAI_API_KEY"])(
+    it.skipIf(process.env["OPENAI_API_KEY"] === undefined || process.env["OPENAI_API_KEY"] === "")(
       "should not set prompt_cache_retention when MSA_CACHE_RETENTION is not set",
       async () => {
         const model = getModel("openai", "gpt-4o-mini");
@@ -252,7 +253,7 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
       },
     );
 
-    it.skipIf(!process.env["OPENAI_API_KEY"])(
+    it.skipIf(process.env["OPENAI_API_KEY"] === undefined || process.env["OPENAI_API_KEY"] === "")(
       "should set prompt_cache_retention to 24h when MSA_CACHE_RETENTION=long",
       async () => {
         process.env["MSA_CACHE_RETENTION"] = "long";

@@ -88,11 +88,11 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
     };
 
     try {
-      if (options?.fetch && options.fetch !== globalThis.fetch) {
+      if (options?.fetch !== undefined && options.fetch !== globalThis.fetch) {
         throw new Error("Custom fetch is not supported by the Google Generative AI adapter");
       }
       const apiKey = options?.apiKey;
-      if (!apiKey) {
+      if (apiKey === undefined || apiKey === "") {
         throw new Error(`No API key for provider: ${model.provider}`);
       }
       const client = createClient(model, apiKey, options?.headers);
@@ -114,16 +114,16 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
         await options?.onProviderStreamEvent?.(chunk, model);
         output.responseId ||= chunk.responseId;
         const candidate = chunk.candidates?.[0];
-        if (candidate?.content?.parts) {
+        if (candidate?.content?.parts !== undefined) {
           for (const part of candidate.content.parts) {
             if (part.text !== undefined) {
               const isThinking = isThinkingPart(part);
               if (
-                !currentBlock ||
+                currentBlock === null ||
                 (isThinking && currentBlock.type !== "thinking") ||
                 (!isThinking && currentBlock.type !== "text")
               ) {
-                if (currentBlock) {
+                if (currentBlock !== null) {
                   if (currentBlock.type === "text") {
                     events.push({
                       type: "text_end",
@@ -181,8 +181,8 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
               }
             }
 
-            if (part.functionCall) {
-              if (currentBlock) {
+            if (part.functionCall !== undefined) {
+              if (currentBlock !== null) {
                 if (currentBlock.type === "text") {
                   events.push({
                     type: "text_end",
@@ -203,7 +203,8 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
 
               const providedId = part.functionCall.id;
               const needsNewId =
-                !providedId ||
+                providedId === undefined ||
+                providedId === "" ||
                 output.content.some((b) => b.type === "toolCall" && b.id === providedId);
               const toolCallId = needsNewId
                 ? `${part.functionCall.name}_${Date.now()}_${++toolCallCounter}`
@@ -235,7 +236,7 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
           }
         }
 
-        if (candidate?.finishReason) {
+        if (candidate?.finishReason !== undefined) {
           output.rawStopReason = candidate.finishReason;
           output.stopReason = mapStopReason(candidate.finishReason);
           if (output.content.some((b) => b.type === "toolCall") && output.stopReason === "stop") {
@@ -243,7 +244,7 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
           }
         }
 
-        if (chunk.usageMetadata) {
+        if (chunk.usageMetadata !== undefined) {
           output.usage = {
             input:
               (chunk.usageMetadata.promptTokenCount || 0) -
@@ -267,7 +268,7 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
         }
       }
 
-      if (currentBlock) {
+      if (currentBlock !== null) {
         if (currentBlock.type === "text") {
           events.push({
             type: "text_end",
@@ -285,7 +286,7 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
         }
       }
 
-      if (options?.signal?.aborted) {
+      if (options?.signal?.aborted === true) {
         throw new Error("Request was aborted");
       }
 
@@ -293,9 +294,10 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
         throw new Error("Google stream ended without a finish reason");
       }
       if (output.stopReason === "aborted" || output.stopReason === "error") {
-        const errorMessage = output.rawStopReason
-          ? `Provider stopped with: ${output.rawStopReason}`
-          : "An unknown error occurred";
+        const errorMessage =
+          output.rawStopReason !== undefined && output.rawStopReason !== ""
+            ? `Provider stopped with: ${output.rawStopReason}`
+            : "An unknown error occurred";
         throw new Error(errorMessage);
       }
 
@@ -307,7 +309,7 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
           delete (block as { index?: number }).index;
         }
       }
-      output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
       output.errorMessage = formatProviderError(normalizeProviderError(error));
       events.push({ type: "error", reason: output.stopReason, error: output });
       events.end();
@@ -323,7 +325,7 @@ export const streamSimple: StreamFunction<"google-generative-ai", SimpleStreamOp
   options?: SimpleStreamOptions,
 ): AssistantMessageEventStream => {
   const apiKey = options?.apiKey;
-  if (!apiKey) {
+  if (apiKey === undefined || apiKey === "") {
     throw new Error(`No API key for provider: ${model.provider}`);
   }
 
@@ -331,7 +333,7 @@ export const streamSimple: StreamFunction<"google-generative-ai", SimpleStreamOp
     ...buildBaseOptions(model, context, options, apiKey),
     toolChoice: options?.toolChoice,
   } satisfies GoogleOptions;
-  if (!options?.reasoning) {
+  if (options?.reasoning === undefined) {
     return stream(model, context, {
       ...base,
       thinking: { enabled: false },
@@ -373,7 +375,7 @@ function createClient(
 ): GoogleGenAI {
   const httpOptions: { baseUrl?: string; apiVersion?: string; headers?: Record<string, string> } =
     {};
-  if (model.baseUrl) {
+  if (model.baseUrl !== "") {
     httpOptions.baseUrl = model.baseUrl;
     httpOptions.apiVersion = "";
   }
@@ -382,7 +384,7 @@ function createClient(
     ...model.headers,
     ...optionsHeaders,
   });
-  if (headers) {
+  if (headers !== undefined) {
     httpOptions.headers = headers;
   }
 
@@ -414,7 +416,8 @@ function buildParams(
     currentTools.length > 0
       ? resolveGoogleFunctionCallingMode(currentTools, options.toolChoice, supportsStrictMode)
       : undefined;
-  const systemInstruction = initialSystemMessage ? getSystemMessageText(initialSystemMessage) : "";
+  const systemInstruction =
+    initialSystemMessage === undefined ? "" : getSystemMessageText(initialSystemMessage);
   const tools = convertTools(currentTools, false, supportsStrictMode);
   const config: GenerateContentConfig = {
     ...(Object.keys(generationConfig).length > 0 && generationConfig),
@@ -425,7 +428,7 @@ function buildParams(
     }),
   };
 
-  if (options.thinking?.enabled && model.reasoning) {
+  if (options.thinking?.enabled === true && model.reasoning) {
     const thinkingConfig: ThinkingConfig = { includeThoughts: true };
     if (options.thinking.level !== undefined) {
       thinkingConfig.thinkingLevel = toGoogleSdkThinkingLevel(options.thinking.level);
@@ -433,11 +436,11 @@ function buildParams(
       thinkingConfig.thinkingBudget = options.thinking.budgetTokens;
     }
     config.thinkingConfig = thinkingConfig;
-  } else if (model.reasoning && options.thinking && !options.thinking.enabled) {
+  } else if (model.reasoning && options.thinking !== undefined && !options.thinking.enabled) {
     config.thinkingConfig = getDisabledGoogleThinkingConfig(model);
   }
 
-  if (options.signal) {
+  if (options.signal !== undefined) {
     if (options.signal.aborted) {
       throw new Error("Request aborted");
     }

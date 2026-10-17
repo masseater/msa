@@ -27,7 +27,8 @@ export function createInitialSystemMessage(
 
 export function normalizeContext(context: Context): TranscriptContext {
   const initialMessage = createInitialSystemMessage(context.systemPrompt, context.tools);
-  const messages = initialMessage ? [initialMessage, ...context.messages] : context.messages;
+  const messages =
+    initialMessage === undefined ? context.messages : [initialMessage, ...context.messages];
   return { messages } as TranscriptContext;
 }
 
@@ -39,11 +40,11 @@ function isSystemMessage(message: { role: string }): message is SystemMessage {
 
 export function getInitialSystemMessage(messages: TranscriptMessages): SystemMessage | undefined {
   const first = messages[0];
-  return first && isSystemMessage(first) ? first : undefined;
+  return first !== undefined && isSystemMessage(first) ? first : undefined;
 }
 
 export function withoutInitialSystemMessage(messages: Message[]): Message[] {
-  return getInitialSystemMessage(messages) ? messages.slice(1) : messages;
+  return getInitialSystemMessage(messages) === undefined ? messages : messages.slice(1);
 }
 
 export function getCurrentTools(messages: TranscriptMessages): Tool[] {
@@ -83,20 +84,20 @@ export function getCurrentSystemMessage(messages: TranscriptMessages): SystemMes
 
 export function getCurrentSystemPrompt(messages: TranscriptMessages): string {
   const message = getCurrentSystemMessage(messages);
-  return message ? getSystemMessageText(message) : "";
+  return message === undefined ? "" : getSystemMessageText(message);
 }
 
 export function collapseSystemMessages(context: TranscriptContext): TranscriptContext {
   const head = getCurrentSystemMessage(context.messages);
   const messages = context.messages.filter((message) => message.role !== "system");
-  return { messages: head ? [head, ...messages] : messages } as TranscriptContext;
+  return { messages: head === undefined ? messages : [head, ...messages] } as TranscriptContext;
 }
 
 export function resolveTranscript(
   context: TranscriptContext,
   supportsMidConvoSystemMessages: boolean | undefined,
 ): TranscriptContext {
-  return supportsMidConvoSystemMessages ? context : collapseSystemMessages(context);
+  return supportsMidConvoSystemMessages === true ? context : collapseSystemMessages(context);
 }
 
 export function toToolDeclaration(tool: Tool): Tool {

@@ -82,7 +82,7 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
 
     try {
       const apiKey = options?.apiKey;
-      if (!apiKey) {
+      if (apiKey === undefined || apiKey === "") {
         throw new Error(`No API key for provider: ${model.provider}`);
       }
       const client = createClient(model, apiKey, options);
@@ -102,7 +102,7 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
         params = nextParams as ResponseCreateParamsStreaming;
       }
       const requestOptions = {
-        ...(options?.signal ? { signal: options.signal } : {}),
+        ...(options?.signal === undefined ? {} : { signal: options.signal }),
         ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
         maxRetries: 0,
       };
@@ -125,7 +125,7 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
         grammarToolInputProperties,
       });
 
-      if (options?.signal?.aborted) {
+      if (options?.signal?.aborted === true) {
         throw new Error("Request was aborted");
       }
 
@@ -144,7 +144,7 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
         delete (block as { partialJson?: string }).partialJson;
         delete (block as { customInput?: unknown }).customInput;
       }
-      output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
       output.errorMessage = formatAzureOpenAIError(error);
       events.push({ type: "error", reason: output.stopReason, error: output });
       events.end();
@@ -160,7 +160,7 @@ export const streamSimple: StreamFunction<"azure-openai-responses", SimpleStream
   options?: SimpleStreamOptions,
 ): AssistantMessageEventStream => {
   const apiKey = options?.apiKey;
-  if (!apiKey) {
+  if (apiKey === undefined || apiKey === "") {
     throw new Error(`No API key for provider: ${model.provider}`);
   }
 
@@ -168,9 +168,8 @@ export const streamSimple: StreamFunction<"azure-openai-responses", SimpleStream
     ...buildBaseOptions(model, context, options, apiKey),
     toolChoice: options?.toolChoice,
   } satisfies AzureOpenAIResponsesOptions;
-  const clampedReasoning = options?.reasoning
-    ? clampThinkingLevel(model, options.reasoning)
-    : undefined;
+  const clampedReasoning =
+    options?.reasoning === undefined ? undefined : clampThinkingLevel(model, options.reasoning);
   const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
 
   return stream(model, context, {
@@ -186,7 +185,7 @@ function createClient(
 ) {
   const headers = { "User-Agent": getMsaUserAgent(), ...model.headers };
 
-  if (options?.headers) {
+  if (options?.headers !== undefined) {
     Object.assign(headers, options.headers);
   }
 
@@ -238,7 +237,11 @@ function buildParams(
     store: false,
   };
 
-  if (options?.maxTokens) {
+  if (
+    options?.maxTokens !== undefined &&
+    options?.maxTokens !== 0 &&
+    !Number.isNaN(options?.maxTokens)
+  ) {
     params.max_output_tokens = Math.max(options.maxTokens, OPENAI_RESPONSES_MIN_OUTPUT_TOKENS);
   }
 
@@ -257,12 +260,16 @@ function buildParams(
   }
 
   const reasoningEffort =
-    options?.reasoningEffort ?? (options?.reasoningSummary ? "medium" : undefined);
+    options?.reasoningEffort ??
+    (options?.reasoningSummary !== undefined && options?.reasoningSummary !== null
+      ? "medium"
+      : undefined);
   if (model.reasoning) {
-    if (reasoningEffort) {
-      const effort = options?.reasoningEffort
-        ? (model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort)
-        : reasoningEffort;
+    if (reasoningEffort !== undefined) {
+      const effort =
+        options?.reasoningEffort === undefined
+          ? reasoningEffort
+          : (model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort);
       params.reasoning = {
         effort: effort as ReasoningEffort,
         summary: options?.reasoningSummary || "auto",
@@ -280,7 +287,7 @@ function buildParams(
     reasoningEffort ?? "off",
     options?.samplingParams,
   );
-  if (samplingParams) {
+  if (samplingParams !== undefined) {
     Object.assign(params, samplingParams);
   }
 

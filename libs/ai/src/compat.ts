@@ -196,7 +196,7 @@ const builtinApiProviderInstances = new Map<Api, ReturnType<typeof getApiProvide
 
 export function registerBuiltInApiProviders(): void {
   for (const [api, streams] of BUILTIN_APIS) {
-    if (!getApiProvider(api)) {
+    if (getApiProvider(api) === undefined) {
       registerApiProvider({ api, stream: streams.stream, streamSimple: streams.streamSimple });
     }
     builtinApiProviderInstances.set(api, getApiProvider(api));
@@ -224,7 +224,7 @@ function withEnvApiKey<TOptions extends StreamOptions>(
 ): TOptions | undefined {
   if (hasExplicitApiKey(options?.apiKey)) return options;
   const apiKey = getEnvApiKey(model.provider, options?.env);
-  if (!apiKey || apiKey === AMBIENT_AUTH_MARKER) return options;
+  if (apiKey === undefined || apiKey === "" || apiKey === AMBIENT_AUTH_MARKER) return options;
   return { ...options, apiKey } as TOptions;
 }
 
@@ -238,14 +238,14 @@ function hasResolvedCloudflareAuth(options: StreamOptions | undefined): boolean 
 function getBuiltinProviderForModel(model: Model<Api>) {
   if (getApiProvider(model.api) !== builtinApiProviderInstances.get(model.api)) return undefined;
   const provider = compatModels.getProvider(model.provider);
-  return provider?.getModels().some((candidate) => candidate.api === model.api)
+  return provider?.getModels().some((candidate) => candidate.api === model.api) === true
     ? provider
     : undefined;
 }
 
 function resolveApiProvider(api: Api) {
   const provider = getApiProvider(api);
-  if (!provider) {
+  if (provider === undefined) {
     throw new Error(`No API provider registered for api: ${api}`);
   }
   return provider;
@@ -258,7 +258,7 @@ export function stream<TApi extends Api>(
 ): AssistantMessageEventStream {
   const transcript = normalizeContext(context);
   const builtinProvider = getBuiltinProviderForModel(model);
-  if (builtinProvider) {
+  if (builtinProvider !== undefined) {
     if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
       return compatModels.stream(
         model,
@@ -295,7 +295,7 @@ export function streamSimple<TApi extends Api>(
 ): AssistantMessageEventStream {
   const transcript = normalizeContext(context);
   const builtinProvider = getBuiltinProviderForModel(model);
-  if (builtinProvider) {
+  if (builtinProvider !== undefined) {
     if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
       return compatModels.streamSimple(model, transcript, options);
     }

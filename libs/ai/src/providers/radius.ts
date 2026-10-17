@@ -39,7 +39,7 @@ export function radiusProvider(options: RadiusProviderOptions = {}): Provider<"m
     getModels: () => dynamicModels ?? baselineModels,
     refreshModels: async (context) => {
       const stored = context.stored;
-      if (stored) {
+      if (stored !== undefined) {
         const restored = stored.models.filter(
           (model) => model.provider === id,
         ) as Model<"msa-messages">[];
@@ -54,7 +54,7 @@ export function radiusProvider(options: RadiusProviderOptions = {}): Provider<"m
         }
       }
 
-      if (!stored && context.credential?.type === "oauth") {
+      if (stored === undefined && context.credential?.type === "oauth") {
         const legacy = getRadiusModels(id, context.credential);
         if (legacy.length > 0) {
           if (

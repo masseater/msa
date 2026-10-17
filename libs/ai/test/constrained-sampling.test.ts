@@ -309,7 +309,7 @@ describe("constrained tool sampling", () => {
 
     const call = messages.find((item) => "type" in item && item.type === "custom_tool_call");
     expect(call).toMatchObject({ type: "custom_tool_call", call_id: "call_1", input: "abc" });
-    expect(call && "id" in call ? call.id : undefined).toBeUndefined();
+    expect(call !== undefined && "id" in call ? call.id : undefined).toBeUndefined();
   });
 
   it("keeps grammar input JSON deltas append-only", () => {

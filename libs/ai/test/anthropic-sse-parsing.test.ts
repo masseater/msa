@@ -330,7 +330,8 @@ describe("Anthropic raw SSE parsing", () => {
     const events = minimalAnthropicEvents.map((event) => ({ ...event }));
     const messageStart = events[0];
     const messageDelta = events[4];
-    if (!messageStart || !messageDelta) throw new Error("Expected minimal Anthropic events");
+    if (messageStart === undefined || messageDelta === undefined)
+      throw new Error("Expected minimal Anthropic events");
     messageStart.data = JSON.stringify({
       type: "message_start",
       message: {

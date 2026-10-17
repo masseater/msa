@@ -58,7 +58,7 @@ type JwtPayload = {
 };
 
 function createState(): string {
-  if (!_randomBytes) {
+  if (_randomBytes === null) {
     throw new Error("OpenAI Codex OAuth is only available in Node.js environments");
   }
   return _randomBytes(16).toString("hex");
@@ -69,7 +69,7 @@ function parseAuthorizationInput(input: string): {
   state?: string | undefined;
 } {
   const value = input.trim();
-  if (!value) return {};
+  if (value === "") return {};
 
   try {
     const url = new URL(value);
@@ -111,7 +111,7 @@ async function fetchWithLoginCancellation(input: string, init: RequestInit): Pro
   try {
     return await fetch(input, init);
   } catch (error) {
-    if (init.signal?.aborted) {
+    if (init.signal?.aborted === true) {
       throw new Error("Login cancelled", { cause: error });
     }
     throw error;
@@ -135,7 +135,13 @@ async function readTokenResponse(
     refresh_token?: string;
     expires_in?: number;
   } | null;
-  if (!json?.access_token || !json.refresh_token || typeof json.expires_in !== "number") {
+  if (
+    json?.access_token === undefined ||
+    json?.access_token === "" ||
+    json.refresh_token === undefined ||
+    json.refresh_token === "" ||
+    typeof json.expires_in !== "number"
+  ) {
     throw new Error(
       `OpenAI Codex token ${operation} response missing fields: ${JSON.stringify(json)}`,
     );
@@ -206,7 +212,7 @@ async function startOpenAICodexDeviceAuth(signal: AbortSignal): Promise<DeviceAu
     }
     const responseBody = await response.text().catch(() => "");
     throw new Error(
-      `OpenAI Codex device code request failed with status ${response.status}${responseBody ? `: ${responseBody}` : ""}`,
+      `OpenAI Codex device code request failed with status ${response.status}${responseBody === "" ? "" : `: ${responseBody}`}`,
     );
   }
 
@@ -219,8 +225,10 @@ async function startOpenAICodexDeviceAuth(signal: AbortSignal): Promise<DeviceAu
   const intervalSeconds =
     typeof json?.interval === "string" ? Number(json.interval.trim()) : json?.interval;
   if (
-    !json?.device_auth_id ||
-    !json.user_code ||
+    json?.device_auth_id === undefined ||
+    json?.device_auth_id === "" ||
+    json.user_code === undefined ||
+    json.user_code === "" ||
     typeof intervalSeconds !== "number" ||
     !Number.isFinite(intervalSeconds) ||
     intervalSeconds < 0
@@ -257,7 +265,12 @@ function pollOpenAICodexDeviceAuth(
       if (response.ok) {
         const rawJson = await response.json();
         const json = rawJson as { authorization_code?: string; code_verifier?: string } | null;
-        if (!json?.authorization_code || !json.code_verifier) {
+        if (
+          json?.authorization_code === undefined ||
+          json?.authorization_code === "" ||
+          json.code_verifier === undefined ||
+          json.code_verifier === ""
+        ) {
           return {
             status: "failed",
             message: `Invalid OpenAI Codex device auth token response: ${JSON.stringify(json)}`,
@@ -290,7 +303,7 @@ function pollOpenAICodexDeviceAuth(
 
       return {
         status: "failed",
-        message: `OpenAI Codex device auth failed with status ${response.status}${responseBody ? `: ${responseBody}` : ""}`,
+        message: `OpenAI Codex device auth failed with status ${response.status}${responseBody === "" ? "" : `: ${responseBody}`}`,
       };
     },
   });
@@ -326,7 +339,7 @@ function getAccountId(accessToken: string): string | null {
 
 function credentialsFromToken(token: OAuthToken): OAuthCredential {
   const accountId = getAccountId(token.access);
-  if (!accountId) {
+  if (accountId === null || accountId === "") {
     throw new Error("Failed to extract accountId from token");
   }
 
@@ -400,11 +413,12 @@ async function loginOpenAICodex(
       code = result.value;
     } else {
       const parsed = parseAuthorizationInput(result.input);
-      if (parsed.state && parsed.state !== state) throw new Error("State mismatch");
+      if (parsed.state !== undefined && parsed.state !== "" && parsed.state !== state)
+        throw new Error("State mismatch");
       code = parsed.code;
     }
 
-    if (!code) throw new Error("Missing authorization code");
+    if (code === undefined || code === "") throw new Error("Missing authorization code");
     return await exchangeAuthorizationCodeForCredentials(
       code,
       verifier,

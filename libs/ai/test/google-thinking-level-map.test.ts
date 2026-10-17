@@ -63,7 +63,7 @@ async function captureGooglePayload(
   }).result();
 
   expect(result.errorMessage).toContain("payload captured");
-  if (!payload) throw new Error("Google payload was not captured");
+  if (payload === undefined) throw new Error("Google payload was not captured");
   return payload;
 }
 
@@ -84,7 +84,7 @@ async function captureVertexPayload(
   }).result();
 
   expect(result.errorMessage).toContain("payload captured");
-  if (!payload) throw new Error("Vertex payload was not captured");
+  if (payload === undefined) throw new Error("Vertex payload was not captured");
   return payload;
 }
 

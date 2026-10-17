@@ -52,7 +52,7 @@ function isChatGPTSignIn(model: Model<"openai-responses">, apiKey: string | unde
 }
 
 function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean {
-  if (!headers) return false;
+  if (headers === undefined) return false;
   const expected = name.toLowerCase();
   for (const [key, value] of Object.entries(headers)) {
     if (key.toLowerCase() === expected && value !== null && value.trim().length > 0) return true;
@@ -65,7 +65,7 @@ function getClientApiKey(
   apiKey: string | undefined,
   headers: ProviderHeaders | undefined,
 ): string {
-  if (apiKey) return apiKey;
+  if (apiKey !== undefined && apiKey !== "") return apiKey;
   if (hasHeader(headers, "authorization") || hasHeader(headers, "cf-aig-authorization"))
     return "unused";
   throw new Error(`No API key for provider: ${provider}`);
@@ -80,7 +80,7 @@ function detectSessionAffinityFormat(
 }
 
 function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEnv): CacheRetention {
-  if (cacheRetention) {
+  if (cacheRetention !== undefined) {
     return cacheRetention;
   }
   if (getProviderEnvValue("MSA_CACHE_RETENTION", env) === "long") {
@@ -113,7 +113,7 @@ function getConfigurationUpdateEffort(
 ): string | undefined {
   if (
     !compat.supportsMidConvoEffort ||
-    !options?.reasoningEffort ||
+    options?.reasoningEffort === undefined ||
     isChatGPTSignIn(model, options.apiKey)
   ) {
     return undefined;
@@ -206,7 +206,7 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
         params = nextParams as ResponseCreateParamsStreaming;
       }
       const requestOptions = {
-        ...(options?.signal ? { signal: options.signal } : {}),
+        ...(options?.signal === undefined ? {} : { signal: options.signal }),
         ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
         maxRetries: 0,
       };
@@ -232,7 +232,7 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
           applyServiceTierPricing(usage, serviceTier, model),
       });
 
-      if (options?.signal?.aborted) {
+      if (options?.signal?.aborted === true) {
         throw new Error("Request was aborted");
       }
 
@@ -251,7 +251,7 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
         delete (block as { partialJson?: string }).partialJson;
         delete (block as { customInput?: unknown }).customInput;
       }
-      output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
       const errorMessage = formatProviderError(
         normalizeProviderError(error),
         `${model.provider === "openai" ? "OpenAI" : model.provider} API error`,
@@ -278,9 +278,8 @@ export const streamSimple: StreamFunction<"openai-responses", SimpleStreamOption
     ...buildBaseOptions(model, context, options, options?.apiKey),
     toolChoice: options?.toolChoice,
   } satisfies OpenAIResponsesOptions;
-  const clampedReasoning = options?.reasoning
-    ? clampThinkingLevel(model, options.reasoning)
-    : undefined;
+  const clampedReasoning =
+    options?.reasoning === undefined ? undefined : clampThinkingLevel(model, options.reasoning);
   const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
 
   return stream(model, context, {
@@ -299,7 +298,7 @@ function createClient(
   const compat = getCompat(model);
   const headers: ProviderHeaders = { "User-Agent": getMsaUserAgent(), ...model.headers };
 
-  if (sessionId) {
+  if (sessionId !== undefined && sessionId !== "") {
     if (compat.sessionAffinityFormat === "openrouter") {
       headers["x-session-id"] = sessionId;
     } else {
@@ -310,7 +309,7 @@ function createClient(
     }
   }
 
-  if (optionsHeaders) {
+  if (optionsHeaders !== undefined) {
     Object.assign(headers, optionsHeaders);
   }
 
@@ -367,7 +366,13 @@ function buildParams(
     store: false,
   };
 
-  if (options?.maxTokens && compat.supportsMaxOutputTokens && !omitUnsupportedFields) {
+  if (
+    options?.maxTokens !== undefined &&
+    options?.maxTokens !== 0 &&
+    !Number.isNaN(options?.maxTokens) &&
+    compat.supportsMaxOutputTokens &&
+    !omitUnsupportedFields
+  ) {
     params.max_output_tokens = Math.max(options.maxTokens, OPENAI_RESPONSES_MIN_OUTPUT_TOKENS);
   }
 
@@ -391,12 +396,16 @@ function buildParams(
   }
 
   const reasoningEffort =
-    options?.reasoningEffort ?? (options?.reasoningSummary ? "medium" : undefined);
+    options?.reasoningEffort ??
+    (options?.reasoningSummary !== undefined && options?.reasoningSummary !== null
+      ? "medium"
+      : undefined);
   if (model.reasoning) {
-    if (reasoningEffort) {
-      const requestedEffort = options?.reasoningEffort
-        ? (model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort)
-        : reasoningEffort;
+    if (reasoningEffort !== undefined) {
+      const requestedEffort =
+        options?.reasoningEffort === undefined
+          ? reasoningEffort
+          : (model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort);
       const effort =
         configurationUpdateEffort === undefined
           ? requestedEffort
@@ -419,7 +428,7 @@ function buildParams(
     reasoningEffort ?? "off",
     options?.samplingParams,
   );
-  if (samplingParams) {
+  if (samplingParams !== undefined) {
     Object.assign(params, samplingParams);
   }
 

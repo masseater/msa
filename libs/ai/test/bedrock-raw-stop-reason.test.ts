@@ -17,7 +17,7 @@ vi.mock("@aws-sdk/client-bedrock-runtime", () => {
       return Promise.resolve({
         $metadata: { httpStatusCode: 200, requestId: "request-id" },
         stream: (async function* () {
-          if (bedrockMock.streamEvents) {
+          if (bedrockMock.streamEvents !== undefined) {
             yield* bedrockMock.streamEvents;
             return;
           }

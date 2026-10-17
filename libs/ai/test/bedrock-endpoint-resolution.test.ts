@@ -91,7 +91,7 @@ async function captureClientConfig(
   await streamBedrock(model, context, { cacheRetention: "none", ...options }).result();
   expect(bedrockMock.constructorCalls).toHaveLength(1);
   const [config] = bedrockMock.constructorCalls;
-  if (!config) throw new Error("Expected a BedrockRuntimeClient constructor call");
+  if (config === undefined) throw new Error("Expected a BedrockRuntimeClient constructor call");
   return config;
 }
 
