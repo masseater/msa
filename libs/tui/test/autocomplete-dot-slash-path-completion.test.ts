@@ -68,6 +68,38 @@ describe("CombinedAutocompleteProvider", () => {
   });
 });
 
+const assertQuotedBoundary = (
+  provider: CombinedAutocompleteProvider,
+  directory: string,
+  separator: string,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const quoted = `查看，"${directory}/说"后文`;
+    const cursorCol = quoted.indexOf('"后文');
+    const result = yield* Effect.promise(() =>
+      getSuggestions(provider, [quoted], 0, cursorCol, true),
+    );
+    assert.ok(result);
+    assert.strictEqual(result.prefix, `"${directory}/说`);
+    assert.deepStrictEqual(
+      result.items.map((item) => item.value),
+      [`"${directory}/说明.md"`],
+    );
+    const applied = provider.applyCompletion(
+      [quoted],
+      0,
+      cursorCol,
+      result.items[0]!,
+      result.prefix,
+    );
+    assert.strictEqual(applied.lines[0], `查看，"${directory}/说明.md"后文`);
+    const missing = `查看，"不存在${separator}归档/说`;
+    assert.strictEqual(
+      yield* Effect.promise(() => getSuggestions(provider, [missing], 0, missing.length, true)),
+      null,
+    );
+  });
+
 function dotSlashPathCompletionCases4(): void {
   const ws = useTempDirectory("msa-autocomplete-");
   test("treats unquoted separators as boundaries even when a matching literal path exists", () =>
@@ -90,32 +122,7 @@ function dotSlashPathCompletionCases4(): void {
               ["归档/说明.md"],
             );
           }
-          const quoted = `查看，"${directory}/说"后文`;
-          const cursorCol = quoted.indexOf('"后文');
-          const result = yield* Effect.promise(() =>
-            getSuggestions(provider, [quoted], 0, cursorCol, true),
-          );
-          assert.ok(result);
-          assert.strictEqual(result.prefix, `"${directory}/说`);
-          assert.deepStrictEqual(
-            result.items.map((item) => item.value),
-            [`"${directory}/说明.md"`],
-          );
-          const applied = provider.applyCompletion(
-            [quoted],
-            0,
-            cursorCol,
-            result.items[0]!,
-            result.prefix,
-          );
-          assert.strictEqual(applied.lines[0], `查看，"${directory}/说明.md"后文`);
-          const missing = `查看，"不存在${separator}归档/说`;
-          assert.strictEqual(
-            yield* Effect.promise(() =>
-              getSuggestions(provider, [missing], 0, missing.length, true),
-            ),
-            null,
-          );
+          yield* assertQuotedBoundary(provider, directory, separator);
         }
       }),
     ));

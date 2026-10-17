@@ -3,10 +3,7 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { Input } from "../src/components/input.ts";
-import { SelectList } from "../src/components/select-list.ts";
-import { SettingsList } from "../src/components/settings-list.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
+import { Input, SelectList, SettingsList, TuiAltScreen } from "../src/index.ts";
 import { mouseAwareComponentsCases1 } from "./mouse-components-cases-helpers.ts";
 import { mouse, selectTheme, settingsTheme } from "./mouse-components-helpers.ts";
 import { InputOverlay } from "./mouse-components-input-overlay.ts";

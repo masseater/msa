@@ -8,10 +8,13 @@ import {
   stripHyperlinkSequences,
   stripStyleSequences,
 } from "../src/ansi-sequences.ts";
-import { Markdown } from "../src/components/markdown.ts";
-import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { TUI } from "../src/tui.ts";
+import {
+  Markdown,
+  resetCapabilitiesCache,
+  setCapabilities,
+  type TUI,
+  TuiMainScreen,
+} from "../src/index.ts";
 import { getCell } from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";

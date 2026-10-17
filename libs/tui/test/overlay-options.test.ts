@@ -3,8 +3,7 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { TUI } from "../src/tui.ts";
+import { type TUI, TuiMainScreen } from "../src/index.ts";
 import { EmptyContent } from "./overlay-options-empty-content.ts";
 import { renderAndFlush } from "./overlay-options-helpers.ts";
 import { HyperlinkContent } from "./overlay-options-hyperlink-content.ts";

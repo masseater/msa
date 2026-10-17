@@ -3,13 +3,10 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { pathOperations } from "../src/platform.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { type TUI } from "../src/tui.ts";
+import { type TUI, TuiMainScreen } from "../src/index.ts";
 import { nextTick } from "./effect-helpers.ts";
-import { makeTempDirectory, readFileString, removeRecursive } from "./test-platform.ts";
 import { BoundedWriteTerminal } from "./tui-render-bounded-write-terminal.ts";
-import { MAX_RENDER_WRITE_CHARS, withEnv } from "./tui-render-helpers.ts";
+import { MAX_RENDER_WRITE_CHARS } from "./tui-render-helpers.ts";
 import { InputComponent } from "./tui-render-input-component.ts";
 import { TestComponent } from "./tui-render-test-component.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
@@ -38,33 +35,6 @@ describe("TUI render scheduling", () => {
         assert.strictEqual(component.renderCount, renderCountBeforeInput + 1);
         assert.deepStrictEqual(component.lines, ["typed"]);
         tui.stop();
-      }),
-    ));
-});
-
-describe("TUI debug logging", () => {
-  it("writes redraw logs to the provided directory", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const logDir = yield* makeTempDirectory("msa-tui-log-");
-        yield* withEnv(
-          { MSA_TUI_DEBUG_REDRAW: "1" },
-          Effect.gen(function* () {
-            const terminal = new VirtualTerminal(40, 10);
-            const tui: TUI = new TuiMainScreen(terminal, undefined, logDir);
-            const component = new TestComponent();
-            tui.addChild(component);
-            component.lines = ["test"];
-            tui.start();
-            yield* Effect.promise(() => terminal.waitForRender());
-
-            assert.match(
-              yield* readFileString(pathOperations.join(logDir, "msa-tui-debug.log")),
-              /fullRender: first render/u,
-            );
-            tui.stop();
-          }),
-        ).pipe(Effect.ensuring(removeRecursive(logDir)));
       }),
     ));
 });

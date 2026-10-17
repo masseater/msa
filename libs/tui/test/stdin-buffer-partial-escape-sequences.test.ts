@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it, type TestContext } from "node:test";
 
 import { Effect } from "effect";
 
@@ -187,11 +187,54 @@ describe("StdinBuffer", () => {
   });
 });
 
+const ambiguousLegacyInputs = [
+  "\x1b]a",
+  "\x1b]1",
+  "\x1b]10",
+  "\x1b]0;title",
+  "\x1b]4;",
+  "\x1b]4;a;",
+  "\x1bPa",
+  "\x1bP>",
+  "\x1b_a",
+  "\x1b_G",
+  "\x1b_Gi=1",
+];
+
 describe("StdinBuffer", () => {
   describe("Terminal Reply Strings", () => {
     terminalReplyStringsCases1();
   });
 });
+
+function recoverLegacyAltInput(t: TestContext, ambiguous: string): void {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const legacyBuffer = new StdinBuffer();
+  const sequences: string[] = [];
+  legacyBuffer.on("data", (sequence) => sequences.push(sequence));
+  try {
+    legacyBuffer.process(ambiguous);
+    t.mock.timers.tick(20);
+    legacyBuffer.process("x\r\x03\x04");
+    t.mock.timers.tick(49);
+    assert.deepStrictEqual(sequences, []);
+    t.mock.timers.tick(1);
+    assert.deepStrictEqual(sequences, [
+      ambiguous.slice(0, 2),
+      ...ambiguous.slice(2),
+      "x",
+      "\r",
+      "\x03",
+      "\x04",
+    ]);
+    assert.strictEqual(legacyBuffer.getBuffer(), "");
+
+    legacyBuffer.process("y\r\x03\x04");
+    assert.deepStrictEqual(sequences.slice(-4), ["y", "\r", "\x03", "\x04"]);
+  } finally {
+    legacyBuffer.destroy();
+  }
+}
 
 function terminalReplyStringsCases1(): void {
   let buffer: StdinBuffer;
@@ -205,46 +248,9 @@ function terminalReplyStringsCases1(): void {
     });
   });
   afterEach(() => buffer.destroy());
-  for (const ambiguous of [
-    "\x1b]a",
-    "\x1b]1",
-    "\x1b]10",
-    "\x1b]0;title",
-    "\x1b]4;",
-    "\x1b]4;a;",
-    "\x1bPa",
-    "\x1bP>",
-    "\x1b_a",
-    "\x1b_G",
-    "\x1b_Gi=1",
-  ]) {
+  for (const ambiguous of ambiguousLegacyInputs) {
     it(`recovers batched legacy Alt input ${JSON.stringify(ambiguous)} within the sequence timeout`, (t) => {
-      t.mock.timers.enable({ apis: ["setTimeout"] });
-      const legacyBuffer = new StdinBuffer();
-      const sequences: string[] = [];
-      legacyBuffer.on("data", (sequence) => sequences.push(sequence));
-      try {
-        legacyBuffer.process(ambiguous);
-        t.mock.timers.tick(20);
-        legacyBuffer.process("x\r\x03\x04");
-        t.mock.timers.tick(49);
-        assert.deepStrictEqual(sequences, []);
-        t.mock.timers.tick(1);
-        assert.deepStrictEqual(sequences, [
-          ambiguous.slice(0, 2),
-          ...ambiguous.slice(2),
-          "x",
-          "\r",
-          "\x03",
-          "\x04",
-        ]);
-        assert.strictEqual(legacyBuffer.getBuffer(), "");
-
-        legacyBuffer.process("y\r\x03\x04");
-        assert.deepStrictEqual(sequences.slice(-4), ["y", "\r", "\x03", "\x04"]);
-      } finally {
-        legacyBuffer.destroy();
-      }
+      recoverLegacyAltInput(t, ambiguous);
     });
   }
 }
