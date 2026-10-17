@@ -84,14 +84,13 @@ const jsonlFilesRecursive = (options: {
 }): Effect.Effect<ReadonlyArray<string>> =>
   Effect.gen(function* () {
     const { directory, host } = options;
-    const names = yield* host.readDirectory(directory);
-    const found = yield* Effect.forEach([...names].sort(), (name) =>
-      Effect.gen(function* () {
-        const path = host.join(directory, name);
-        const info = yield* host.stat(path);
-        if (info.isDirectory) return yield* jsonlFilesRecursive({ directory: path, host });
-        return info.isFile && name.endsWith(".jsonl") ? [path] : [];
-      }),
+    const names = yield* host.readDirectory(directory, { recursive: true });
+    const paths = [...names]
+      .filter((name) => name.endsWith(".jsonl"))
+      .sort()
+      .map((name) => host.join(directory, name));
+    const found = yield* Effect.forEach(paths, (path) =>
+      Effect.map(host.stat(path), (info) => (info.isFile ? [path] : [])),
     );
     return found.flat();
   });
