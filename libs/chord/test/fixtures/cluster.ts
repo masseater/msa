@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 import { Type } from "typebox";
 
 import {
@@ -47,10 +48,9 @@ export const ServerGreeter = remote("t.server-greeter", {
   },
 });
 
-export function greeterFacet(
-  greeting: string,
-  options: { fail?: boolean; stateVersion?: number } = {},
-): Facet {
+type GreeterOptions = { fail?: boolean; stateVersion?: number };
+
+function greeterFacetImpl(greeting: string, options: GreeterOptions = {}): Facet {
   return {
     name: "greeter",
     setup: (api) => {
@@ -80,7 +80,7 @@ export function greeterFacet(
   };
 }
 
-export function dropping(link: Link, drop: (frame: Frame) => boolean): Link {
+function droppingImpl(link: Link, drop: (frame: Frame) => boolean): Link {
   return {
     get closed() {
       return link.closed;
@@ -116,3 +116,13 @@ export function setup() {
   worker.install(modules.get("greeter")!);
   return { server, worker, modules, down };
 }
+
+export const greeterFacet: {
+  (options?: GreeterOptions): (greeting: string) => Facet;
+  (greeting: string, options?: GreeterOptions): Facet;
+} = dual((args: IArguments) => typeof args[0] === "string", greeterFacetImpl);
+
+export const dropping: {
+  (drop: (frame: Frame) => boolean): (link: Link) => Link;
+  (link: Link, drop: (frame: Frame) => boolean): Link;
+} = dual(2, droppingImpl);

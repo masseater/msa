@@ -13,8 +13,7 @@ import {
 import { CountingLink } from "./counting.ts";
 import { pollUntil } from "./timing.ts";
 
-export const until = (check: () => boolean, attempts = 200) =>
-  pollUntil(check, attempts, Effect.sleep(2));
+export const until = pollUntil(200, Effect.sleep(2));
 
 export const NoteSchema = Type.Array(Type.String());
 

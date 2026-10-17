@@ -1,12 +1,13 @@
 import { isProxy } from "node:util/types";
 
+import { dual } from "effect/Function";
 import { expect } from "vite-plus/test";
 
 import { apply, type Draft, type Op, track } from "../../src/delta/index.ts";
 
 export const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-export function replay<T>(base: T, operations: readonly Op[]): T {
+function replayImpl<T>(base: T, operations: readonly Op[]): T {
   return apply(clone(base), clone(operations));
 }
 
@@ -28,7 +29,7 @@ export function expectAliasFree(value: unknown): void {
   visit(value, "$root");
 }
 
-export function settle<T extends object>(
+function settleImpl<T extends object>(
   tracker: ReturnType<typeof track<T>>,
   mutate: (draft: Draft<T>) => void,
 ): T {
@@ -39,7 +40,7 @@ export function settle<T extends object>(
   const prepared = change.prepare();
   const candidate = clone(prepared.value);
   expect(isProxy(prepared.value)).toBe(false);
-  expect(replay(base, prepared.ops)).toEqual(candidate);
+  expect(replayImpl(base, prepared.ops)).toEqual(candidate);
   expect(baseRoot).toEqual(base);
   tracker.adopt(prepared);
   expect(baseRoot).toEqual(base);
@@ -47,3 +48,15 @@ export function settle<T extends object>(
   expect(tracker.value).toEqual(candidate);
   return candidate;
 }
+
+export const replay: {
+  (operations: readonly Op[]): <T>(base: T) => T;
+  <T>(base: T, operations: readonly Op[]): T;
+} = dual(2, replayImpl);
+
+export const settle: {
+  <T extends object>(
+    mutate: (draft: Draft<T>) => void,
+  ): (tracker: ReturnType<typeof track<T>>) => T;
+  <T extends object>(tracker: ReturnType<typeof track<T>>, mutate: (draft: Draft<T>) => void): T;
+} = dual(2, settleImpl);

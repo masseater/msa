@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 import { Type } from "typebox";
 
 import { HostImpl } from "../../src/host.ts";
@@ -14,8 +15,7 @@ import {
 import { CountingLink } from "./counting.ts";
 import { pollUntil } from "./timing.ts";
 
-export const until = (check: () => boolean, attempts = 400) =>
-  pollUntil(check, attempts, Effect.sleep(2));
+export const until = pollUntil(400, Effect.sleep(2));
 
 export const Blob = remote("t.e8-blob", {
   version: 1,
@@ -29,10 +29,10 @@ export const Blob = remote("t.e8-blob", {
   },
 });
 
-export const lines = (kib: number, tag: string) =>
+const linesImpl = (kib: number, tag: string): string[] =>
   Array.from({ length: kib }, (_, i) => `${tag}${i}:${"x".repeat(1000)}`);
 
-export function serveBlob(host: Host, size: (name: string) => number): void {
+function serveBlobImpl(host: Host, size: (name: string) => number): void {
   host.serve(Blob, ({ name }, _principal, self) => {
     const state = self.state("lines", Type.Array(Type.String()), lines(size(name), name));
     return {
@@ -48,7 +48,7 @@ export function serveBlob(host: Host, size: (name: string) => number): void {
   });
 }
 
-export function client(server: Host, window: number, pendingCap?: number) {
+function clientImpl(server: Host, window: number, pendingCap?: number) {
   const [down, up] = memoryLinkPair();
   server.accept(down, {
     principal: { user: "u" },
@@ -67,3 +67,20 @@ export function client(server: Host, window: number, pendingCap?: number) {
     [...(server as HostImpl).connections].find((candidate) => candidate.role === "downstream")!;
   return { host, link, connection };
 }
+
+export const lines: {
+  (tag: string): (kib: number) => string[];
+  (kib: number, tag: string): string[];
+} = dual(2, linesImpl);
+
+export const serveBlob: {
+  (size: (name: string) => number): (host: Host) => void;
+  (host: Host, size: (name: string) => number): void;
+} = dual(2, serveBlobImpl);
+
+type Client = ReturnType<typeof clientImpl>;
+
+export const client: {
+  (window: number, pendingCap?: number): (server: Host) => Client;
+  (server: Host, window: number, pendingCap?: number): Client;
+} = dual((args: IArguments) => typeof args[0] === "object", clientImpl);

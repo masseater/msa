@@ -67,14 +67,11 @@ export function greeterFacet(spec: GreeterSpec): Facet {
   };
 }
 
-export function until(check: () => Promise<boolean>, attempts = 200): Promise<void> {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      for (let attempt = 0; attempt < attempts; attempt++) {
-        if (yield* Effect.promise(() => check())) return;
-        yield* tick;
-      }
-      throw new Error("condition not reached");
-    }),
-  );
-}
+export const until = (check: () => Promise<boolean>): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      if (yield* Effect.promise(() => check())) return;
+      yield* tick;
+    }
+    throw new Error("condition not reached");
+  });

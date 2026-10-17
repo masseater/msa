@@ -14,29 +14,37 @@ const removesControlCharactersButKeepsTabs = (): void => {
 };
 
 const keepsOutputWithinTheLimitsUnchanged = (): void => {
-  expect(bound("a\nb\n", head(2))).toEqual({ kept: "a\nb\n", droppedBytes: 0, droppedLines: 0 });
-  expect(bound("a\nb", tail(2))).toEqual({ kept: "a\nb", droppedBytes: 0, droppedLines: 0 });
-  expect(bound("", tail(2))).toEqual({ kept: "", droppedBytes: 0, droppedLines: 0 });
+  expect(bound("a\nb\n", head(2, 1000))).toEqual({
+    kept: "a\nb\n",
+    droppedBytes: 0,
+    droppedLines: 0,
+  });
+  expect(bound("a\nb", tail(2, 1000))).toEqual({ kept: "a\nb", droppedBytes: 0, droppedLines: 0 });
+  expect(bound("", tail(2, 1000))).toEqual({ kept: "", droppedBytes: 0, droppedLines: 0 });
 };
 
 const keepsNothingWithAZeroLimit = (): void => {
   expect(bound("ab\ncd\n", head(10, 0))).toEqual({ kept: "", droppedBytes: 6, droppedLines: 2 });
-  expect(bound("ab\ncd\n", tail(0))).toEqual({ kept: "", droppedBytes: 6, droppedLines: 2 });
+  expect(bound("ab\ncd\n", tail(0, 1000))).toEqual({ kept: "", droppedBytes: 6, droppedLines: 2 });
 };
 
 const keepsExactSlicesOfWholeLines = (): void => {
-  expect(bound("a\nb\nc\n", head(2))).toEqual({
+  expect(bound("a\nb\nc\n", head(2, 1000))).toEqual({
     kept: "a\nb\n",
     droppedBytes: 2,
     droppedLines: 1,
   });
-  expect(bound("a\nb\nc\n", tail(2))).toEqual({
+  expect(bound("a\nb\nc\n", tail(2, 1000))).toEqual({
     kept: "b\nc\n",
     droppedBytes: 2,
     droppedLines: 1,
   });
-  expect(bound("a\nb\nc", tail(2))).toEqual({ kept: "b\nc", droppedBytes: 2, droppedLines: 1 });
-  expect(bound("a\nb\nc\n\n", tail(3))).toEqual({
+  expect(bound("a\nb\nc", tail(2, 1000))).toEqual({
+    kept: "b\nc",
+    droppedBytes: 2,
+    droppedLines: 1,
+  });
+  expect(bound("a\nb\nc\n\n", tail(3, 1000))).toEqual({
     kept: "b\nc\n\n",
     droppedBytes: 2,
     droppedLines: 1,
@@ -148,7 +156,7 @@ describe("tool output bounds", () => {
 });
 
 const keepsExactTotalsAcrossChunksAnd = (): void => {
-  const buffer = new OutputBuffer(tail(2));
+  const buffer = new OutputBuffer(tail(2, 1000));
   const bytes = new TextEncoder().encode("😀\n");
   buffer.push("a\nb\n");
   buffer.push(bytes.subarray(0, 2));
@@ -157,7 +165,7 @@ const keepsExactTotalsAcrossChunksAnd = (): void => {
 };
 
 const sanitizesTheRetainedTextButCounts = (): void => {
-  const buffer = new OutputBuffer(tail(1));
+  const buffer = new OutputBuffer(tail(1, 1000));
   buffer.push("a\u0007\n");
   expect(buffer.snapshot()).toEqual({ text: "a\n", droppedBytes: 0, droppedLines: 0 });
   buffer.push("b\u001b\n");
@@ -166,7 +174,7 @@ const sanitizesTheRetainedTextButCounts = (): void => {
 
 const dropsAByteOrderMarkOnly = (): void => {
   const bom = Uint8Array.of(0xef, 0xbb, 0xbf);
-  const buffer = new OutputBuffer(tail(10));
+  const buffer = new OutputBuffer(tail(10, 1000));
   buffer.push(bom.subarray(0, 1));
   buffer.push(Uint8Array.of(0xbb, 0xbf, 0x61));
   buffer.push("b");
@@ -176,7 +184,7 @@ const dropsAByteOrderMarkOnly = (): void => {
 };
 
 const flushesAnIncompleteCharacterBeforeA = (): void => {
-  const buffer = new OutputBuffer(tail(10));
+  const buffer = new OutputBuffer(tail(10, 1000));
   const euro = new TextEncoder().encode("€");
   buffer.push(euro.subarray(0, 1));
   buffer.push("x");
@@ -205,7 +213,7 @@ const matchesBoundingTheWholeStreamWhen = (): void => {
 };
 
 const stopsStoringHeadOutputOnceThe = (): void => {
-  const buffer = new OutputBuffer(head(2));
+  const buffer = new OutputBuffer(head(2, 1000));
   for (let index = 0; index < 1000; index++) buffer.push(`line ${index}\n`);
   expect(buffer.storedBytes).toBeLessThan(20);
   expect(buffer.snapshot()).toEqual({

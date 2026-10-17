@@ -120,12 +120,10 @@ const theGateRejectsNewObjectsOf = Effect.gen(function* () {
   );
   yield* tick;
   const reload = host.reload([greeterFacet({ greeting: "hi", state: { version: 2 } })]);
-  yield* Effect.promise(() =>
-    until(() =>
-      ref.greet("probe").then(
-        () => false,
-        (error: unknown) => isChordError(error, "upgrade_conflict"),
-      ),
+  yield* until(() =>
+    ref.greet("probe").then(
+      () => false,
+      (error: unknown) => isChordError(error, "upgrade_conflict"),
     ),
   );
   assert.throws(

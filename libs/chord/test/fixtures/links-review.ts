@@ -15,8 +15,7 @@ import {
 } from "../../src/index.ts";
 import { latch, pollUntil } from "./timing.ts";
 
-export const until = (check: () => boolean, attempts = 100) =>
-  pollUntil(check, attempts, Effect.sleep(2));
+export const until = pollUntil(100, Effect.sleep(2));
 
 export class WatchedLink implements Link {
   readonly inner: Link;

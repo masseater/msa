@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 import { Type } from "typebox";
 
 import {
@@ -37,7 +38,7 @@ export const SessionCounter = remote("t.session-counter", {
   variants: counterVariants,
 });
 
-export function serveCounter(host: Host, principals: unknown[] = []) {
+function serveCounterImpl(host: Host, principals: unknown[] = []): void {
   const counter = (principal: unknown, self: Self) => {
     principals.push(principal);
     const count = self.state("count", Type.Object({ n: Type.Number() }), { n: 0 });
@@ -178,3 +179,11 @@ export const Big = remote("t.big", {
 
 export const large = (tag: string) =>
   Array.from({ length: 40 }, (_, i) => `${tag}${i}:${"x".repeat(4000)}`);
+
+export const serveCounter: {
+  (principals?: unknown[]): (host: Host) => void;
+  (host: Host, principals?: unknown[]): void;
+} = dual(
+  (args: IArguments) => typeof (args[0] as { serve?: unknown } | undefined)?.serve === "function",
+  serveCounterImpl,
+);

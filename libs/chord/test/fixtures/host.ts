@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 import { Type } from "typebox";
 
 import { createHost, type Host, local, method } from "../../src/index.ts";
@@ -18,7 +19,7 @@ export const Counter = local("t.counter", {
   },
 });
 
-export function serveCounter(host: Host, log: string[] = [], options: { linger?: number } = {}) {
+function serveCounterImpl(host: Host, log: string[] = [], options: { linger?: number } = {}) {
   host.serve(
     Counter,
     ({ name }, _principal, self) => {
@@ -51,3 +52,11 @@ export function serveCounter(host: Host, log: string[] = [], options: { linger?:
     options,
   );
 }
+
+const isHost = (value: unknown): value is Host =>
+  typeof (value as { serve?: unknown } | undefined)?.serve === "function";
+
+export const serveCounter: {
+  (log?: string[], options?: { linger?: number }): (host: Host) => void;
+  (host: Host, log?: string[], options?: { linger?: number }): void;
+} = dual((args: IArguments) => isHost(args[0]), serveCounterImpl);

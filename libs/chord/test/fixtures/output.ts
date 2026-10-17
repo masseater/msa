@@ -1,18 +1,20 @@
+import { dual } from "effect/Function";
+
 import { boundOutput, type OutputLimits } from "../../src/output.ts";
 
-export const head = (maxLines: number, maxBytes = 1000): OutputLimits => ({
+const headImpl = (maxLines: number, maxBytes: number): OutputLimits => ({
   maxBytes,
   maxLines,
   retain: "head",
 });
 
-export const tail = (maxLines: number, maxBytes = 1000): OutputLimits => ({
+const tailImpl = (maxLines: number, maxBytes: number): OutputLimits => ({
   maxBytes,
   maxLines,
   retain: "tail",
 });
 
-export function bufferTail(content: string, maxBytes: number): string {
+function bufferTailImpl(content: string, maxBytes: number): string {
   const bytes = Buffer.from(content, "utf8");
   if (bytes.length <= maxBytes) return content;
   let start = bytes.length - maxBytes;
@@ -20,12 +22,12 @@ export function bufferTail(content: string, maxBytes: number): string {
   return bytes.subarray(start).toString("utf8");
 }
 
-export function assertMatchesBufferTail(input: string, maxByteValues?: readonly number[]): void {
+function assertMatchesBufferTailImpl(input: string, maxByteValues?: readonly number[]): void {
   const totalBytes = Buffer.byteLength(input, "utf8");
   const values = maxByteValues ?? Array.from({ length: totalBytes + 5 }, (_, maxBytes) => maxBytes);
   for (const maxBytes of values) {
     const kept = boundOutput(input, { maxBytes, maxLines: 10, retain: "tail" }).text;
-    const expected = bufferTail(input, maxBytes);
+    const expected = bufferTailImpl(input, maxBytes);
     if (kept !== expected) {
       throw new Error(
         `tail mismatch input=${JSON.stringify(input)} maxBytes=${maxBytes} expected=${JSON.stringify(expected)} actual=${JSON.stringify(kept)}`,
@@ -55,7 +57,34 @@ export function sampledByteLimits(input: string): number[] {
   return [...new Set(candidates.filter((value) => value >= 0))].sort((a, b) => a - b);
 }
 
-export function bound(text: string, limits: OutputLimits) {
+function boundImpl(text: string, limits: OutputLimits) {
   const { text: kept, droppedBytes, droppedLines } = boundOutput(text, limits);
   return { kept, droppedBytes, droppedLines };
 }
+
+export const head: {
+  (maxBytes: number): (maxLines: number) => OutputLimits;
+  (maxLines: number, maxBytes: number): OutputLimits;
+} = dual(2, headImpl);
+
+export const tail: {
+  (maxBytes: number): (maxLines: number) => OutputLimits;
+  (maxLines: number, maxBytes: number): OutputLimits;
+} = dual(2, tailImpl);
+
+export const bufferTail: {
+  (maxBytes: number): (content: string) => string;
+  (content: string, maxBytes: number): string;
+} = dual(2, bufferTailImpl);
+
+export const assertMatchesBufferTail: {
+  (maxByteValues?: readonly number[]): (input: string) => void;
+  (input: string, maxByteValues?: readonly number[]): void;
+} = dual((args: IArguments) => typeof args[0] === "string", assertMatchesBufferTailImpl);
+
+type Bounded = ReturnType<typeof boundImpl>;
+
+export const bound: {
+  (limits: OutputLimits): (text: string) => Bounded;
+  (text: string, limits: OutputLimits): Bounded;
+} = dual(2, boundImpl);
