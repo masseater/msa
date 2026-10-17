@@ -1,9 +1,11 @@
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { dual } from "effect/Function";
 
+import { pathOperations } from "./platform.ts";
+
+const { dirname, join } = pathOperations;
 const moduleRequire = createRequire(import.meta.url);
 const TUI_PACKAGE_NAME = "@msa/tui";
 

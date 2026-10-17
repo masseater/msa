@@ -1,6 +1,5 @@
 import { execSync } from "node:child_process";
 import { homedir } from "node:os";
-import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { Effect, Random } from "effect";
@@ -8,6 +7,7 @@ import { dual } from "effect/Function";
 
 import type { TerminalColorMode } from "./colors.ts";
 import { isEnvSet, readEnv } from "./env.ts";
+import { pathOperations } from "./platform.ts";
 
 export type ImageProtocol = "kitty" | "iterm2" | null;
 
@@ -820,7 +820,7 @@ export const imageFallback: {
     const parts: string[] = [];
     if (filename !== undefined && filename !== "") {
       const display = shortenImagePath(filename);
-      if (getCapabilities().hyperlinks && isAbsolute(filename)) {
+      if (getCapabilities().hyperlinks && pathOperations.isAbsolute(filename)) {
         parts.push(hyperlink(display, pathToFileURL(filename).href));
       } else {
         parts.push(display);

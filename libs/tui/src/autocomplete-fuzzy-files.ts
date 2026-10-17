@@ -1,12 +1,12 @@
-import { statSync } from "fs";
-import { basename, join } from "path";
-
 import { Effect } from "effect";
 
 import { type FdEntry, walkDirectoryWithFd } from "./autocomplete-fd.ts";
 import { expandHomePath } from "./autocomplete-files.ts";
 import { buildCompletionValue, toDisplayPath } from "./autocomplete-prefix.ts";
 import type { AutocompleteItem } from "./autocomplete-types.ts";
+import { pathOperations, Platform } from "./platform.ts";
+
+const { basename, join } = pathOperations;
 
 export interface FuzzyFileQuery {
   basePath: string;
@@ -26,11 +26,14 @@ interface ScoredEntry extends FdEntry {
   score: number;
 }
 
-function resolveScopedFuzzyQuery(basePath: string, rawQuery: string): ScopedFuzzyQuery | null {
+function resolveScopedFuzzyQuery(
+  basePath: string,
+  rawQuery: string,
+): Effect.Effect<ScopedFuzzyQuery | null, never, Platform> {
   const normalizedQuery = toDisplayPath(rawQuery);
   const slashIndex = normalizedQuery.lastIndexOf("/");
   if (slashIndex === -1) {
-    return null;
+    return Effect.succeed(null);
   }
 
   const displayBase = normalizedQuery.slice(0, slashIndex + 1);
@@ -45,15 +48,9 @@ function resolveScopedFuzzyQuery(basePath: string, rawQuery: string): ScopedFuzz
     baseDir = join(basePath, displayBase);
   }
 
-  try {
-    if (!statSync(baseDir).isDirectory()) {
-      return null;
-    }
-  } catch {
-    return null;
-  }
-
-  return { baseDir, query, displayBase };
+  return Platform.use((platform) => platform.isDirectory(baseDir)).pipe(
+    Effect.map((isDirectory) => (isDirectory ? { baseDir, query, displayBase } : null)),
+  );
 }
 
 function scopedPathForDisplay(displayBase: string, relativePath: string): string {
@@ -140,7 +137,7 @@ function toSuggestion(
 }
 
 const searchFuzzyFiles = Effect.fnUntraced(function* (input: FuzzyFileQuery, fdPath: string) {
-  const scopedQuery = resolveScopedFuzzyQuery(input.basePath, input.query);
+  const scopedQuery = yield* resolveScopedFuzzyQuery(input.basePath, input.query);
   const baseDir = scopedQuery?.baseDir ?? input.basePath;
   const query = scopedQuery?.query ?? input.query;
   const walk = { baseDir, fdPath, query, maxResults: 100, signal: input.signal };
@@ -156,7 +153,9 @@ const searchFuzzyFiles = Effect.fnUntraced(function* (input: FuzzyFileQuery, fdP
   );
 });
 
-export function getFuzzyFileSuggestions(input: FuzzyFileQuery): Effect.Effect<AutocompleteItem[]> {
+export function getFuzzyFileSuggestions(
+  input: FuzzyFileQuery,
+): Effect.Effect<AutocompleteItem[], never, Platform> {
   const { fdPath } = input;
   if (fdPath === null || fdPath === "" || input.signal.aborted) {
     return Effect.succeed([]);
