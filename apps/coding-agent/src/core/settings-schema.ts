@@ -237,12 +237,6 @@ const MarkdownSettingsSchema = Type.Object({
   ),
 });
 
-const WarningSettingsSchema = Type.Object({
-  anthropicExtraUsage: Type.Optional(
-    Type.Boolean({ default: SETTINGS_DEFAULTS.warnings.anthropicExtraUsage }),
-  ),
-});
-
 function codemodeMode(options?: TSchemaOptions) {
   return Type.Union([Type.Literal("on"), Type.Literal("only")], options);
 }
@@ -540,7 +534,6 @@ export const SettingsSchema = Type.Object(
       Type.Boolean({ description: "Show the terminal cursor while still positioning it for IME." }),
     ),
     markdown: Type.Optional(MarkdownSettingsSchema),
-    warnings: Type.Optional(WarningSettingsSchema),
     codemode: Type.Optional(CodemodeSettingsSchema),
     sessionDir: Type.Optional(
       Type.String({
@@ -629,7 +622,6 @@ export interface MemorySettings extends Static<typeof MemorySettingsSchema> {}
 export interface ThinkingBudgetsSettings extends Static<typeof ThinkingBudgetsSettingsSchema> {}
 export type MermaidRenderingMode = NonNullable<Static<typeof MarkdownSettingsSchema>["mermaid"]>;
 export interface MarkdownSettings extends Static<typeof MarkdownSettingsSchema> {}
-export interface WarningSettings extends Static<typeof WarningSettingsSchema> {}
 export type CodemodeMode = Static<typeof CodemodeModeSchema>;
 export interface CodemodeSettings extends Static<typeof CodemodeSettingsSchema> {}
 export type DefaultProjectTrust = NonNullable<SettingsInput["defaultProjectTrust"]>;
