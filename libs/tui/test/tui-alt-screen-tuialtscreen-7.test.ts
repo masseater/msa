@@ -5,6 +5,7 @@ import { Effect } from "effect";
 
 import { Text } from "../src/components/text.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
+import { someWriteSince, writesSince } from "./tui-alt-screen-helpers.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
 
 describe("TuiAltScreen", () => {
@@ -63,11 +64,7 @@ describe("TuiAltScreen", () => {
         terminal.sendInput("\x1b[<0;3;1M");
         yield* Effect.promise(() => terminal.waitForRender());
 
-        assert.ok(
-          terminal.events.some(
-            (event) => event.type === "write" && event.data.includes("foo\x1b[27m"),
-          ),
-        );
+        assert.ok(someWriteSince(terminal, 0, "foo\x1b[27m"));
         tui.stop();
       }),
     ));
@@ -123,11 +120,7 @@ describe("TuiAltScreen", () => {
         terminal.sendInput("\x1b[<32;4;1M");
         yield* Effect.promise(() => terminal.waitForRender());
 
-        assert.ok(
-          terminal.events.some(
-            (event) => event.type === "write" && event.data.includes("foo  \x1b[27m"),
-          ),
-        );
+        assert.ok(someWriteSince(terminal, 0, "foo  \x1b[27m"));
         tui.stop();
       }),
     ));
@@ -225,18 +218,10 @@ function tuialtscreenCases8(): void {
         terminal.sendInput("\x1b[<0;4;2m");
         yield* Effect.promise(() => terminal.waitForRender());
         assert.strictEqual(clipboardWriteCount(), 0);
-        assert.ok(
-          terminal.events.some(
-            (event) => event.type === "write" && event.data.includes("\x1b[?1004h"),
-          ),
-        );
+        assert.ok(someWriteSince(terminal, 0, "\x1b[?1004h"));
 
         tui.stop();
-        assert.ok(
-          terminal.events.some(
-            (event) => event.type === "write" && event.data.includes("\x1b[?1004l"),
-          ),
-        );
+        assert.ok(someWriteSince(terminal, 0, "\x1b[?1004l"));
       }),
     ));
 }
@@ -258,11 +243,7 @@ describe("TuiAltScreen", () => {
         terminal.sendInput("\x1b[O");
         terminal.sendInput("\x1b[I");
         yield* Effect.promise(() => terminal.waitForRender());
-        const focusLossWrites = terminal.events
-          .slice(focusLossEventCount)
-          .filter((event): event is { type: "write"; data: string } => event.type === "write")
-          .map((event) => event.data)
-          .join("");
+        const focusLossWrites = writesSince(terminal, focusLossEventCount);
         assert.ok(focusLossWrites.includes("alpha"));
         assert.ok(focusLossWrites.includes("beta"));
         assert.ok(!focusLossWrites.includes("\x1b[7m"));

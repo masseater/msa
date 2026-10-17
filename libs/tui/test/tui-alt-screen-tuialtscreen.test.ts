@@ -5,6 +5,7 @@ import { Effect } from "effect";
 
 import { overrideEnv } from "../src/env.ts";
 import { HStack, ScrollView, SelectList, Text, TuiAltScreen } from "../src/index.ts";
+import { trimmedViewport } from "./tui-alt-screen-helpers.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
@@ -24,7 +25,9 @@ describe("TuiAltScreen", () => {
     assert.strictEqual(invalidated, true);
     tui.stop();
   });
+});
 
+describe("TuiAltScreen", () => {
   it("routes wheel input to the scroll view under the pointer", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -50,10 +53,12 @@ describe("TuiAltScreen", () => {
         yield* Effect.promise(() => terminal.waitForRender());
         assert.strictEqual(left.scrollTop, 3);
         assert.strictEqual(right.scrollTop, 2);
-        assert.deepStrictEqual(
-          terminal.getViewport().map((line) => line.trimEnd()),
-          ["a4        b3", "a5        b4", "a6        b5", "a7        b6"],
-        );
+        assert.deepStrictEqual(trimmedViewport(terminal), [
+          "a4        b3",
+          "a5        b4",
+          "a6        b5",
+          "a7        b6",
+        ]);
         tui.stop();
       }),
     ));

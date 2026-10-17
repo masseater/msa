@@ -3,17 +3,9 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import {
-  deleteKittyImage,
-  encodeKitty,
-  Image,
-  resetCapabilitiesCache,
-  setCapabilities,
-  setCellDimensions,
-  type TUI,
-  TuiMainScreen,
-} from "../src/index.ts";
+import { deleteKittyImage, encodeKitty, type TUI, TuiMainScreen } from "../src/index.ts";
 import { withEnv } from "./tui-render-helpers.ts";
+import { withKittyCells, renderKittyTestImage } from "./tui-render-kitty-helpers.ts";
 import { LoggingVirtualTerminal } from "./tui-render-logging-virtual-terminal.ts";
 import { TestComponent } from "./tui-render-test-component.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
@@ -25,10 +17,8 @@ describe("TUI Kitty image cleanup", () => {
 function tuiKittyImageCleanupCases2(): void {
   it("reserves Kitty image rows before drawing during full redraw fallbacks", () =>
     Effect.runPromise(
-      Effect.gen(function* () {
-        setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-        setCellDimensions({ widthPx: 10, heightPx: 10 });
-        yield* Effect.gen(function* () {
+      withKittyCells(
+        Effect.gen(function* () {
           const terminal = new LoggingVirtualTerminal(40, 5);
           const tui: TUI = new TuiMainScreen(terminal);
           const component = new TestComponent();
@@ -40,16 +30,7 @@ function tuiKittyImageCleanupCases2(): void {
           const redrawsBeforeImage = tui.fullRedraws;
           terminal.clearWrites();
 
-          const image = new Image(
-            "AAAA",
-            "image/png",
-            { fallbackColor: (value) => value },
-            { maxWidthCells: 3 },
-            { widthPx: 30, heightPx: 30 },
-          );
-          const imageLines = image.render(40);
-          const imageSequence = imageLines[0];
-          assert.ok(imageSequence !== undefined);
+          const { imageLines, imageSequence } = renderKittyTestImage(3);
           component.lines = ["l0", "l1", "l2", "l3", "l4", ...imageLines, "after"];
           tui.requestRender();
           yield* Effect.promise(() => terminal.waitForRender());
@@ -69,25 +50,16 @@ function tuiKittyImageCleanupCases2(): void {
           );
 
           tui.stop();
-        }).pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              resetCapabilitiesCache();
-              setCellDimensions({ widthPx: 9, heightPx: 18 });
-            }),
-          ),
-        );
-      }),
+        }),
+      ),
     ));
 }
 
 describe("TUI Kitty image cleanup", () => {
   it("does not use cursor-up placement for Kitty images taller than the viewport", () =>
     Effect.runPromise(
-      Effect.gen(function* () {
-        setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-        setCellDimensions({ widthPx: 10, heightPx: 10 });
-        yield* Effect.gen(function* () {
+      withKittyCells(
+        Effect.gen(function* () {
           const terminal = new LoggingVirtualTerminal(40, 5);
           const tui: TUI = new TuiMainScreen(terminal);
           const component = new TestComponent();
@@ -98,16 +70,7 @@ describe("TUI Kitty image cleanup", () => {
           yield* Effect.promise(() => terminal.waitForRender());
           terminal.clearWrites();
 
-          const image = new Image(
-            "AAAA",
-            "image/png",
-            { fallbackColor: (value) => value },
-            { maxWidthCells: 6 },
-            { widthPx: 60, heightPx: 60 },
-          );
-          const imageLines = image.render(40);
-          const imageSequence = imageLines[0];
-          assert.ok(imageSequence !== undefined);
+          const { imageLines, imageSequence } = renderKittyTestImage(6);
           assert.ok(
             imageLines.length > terminal.rows,
             "test image should exceed the viewport height",
@@ -125,15 +88,8 @@ describe("TUI Kitty image cleanup", () => {
           );
 
           tui.stop();
-        }).pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              resetCapabilitiesCache();
-              setCellDimensions({ widthPx: 9, heightPx: 18 });
-            }),
-          ),
-        );
-      }),
+        }),
+      ),
     ));
 });
 

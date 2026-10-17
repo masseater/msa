@@ -12,6 +12,7 @@ import {
   setCapabilities,
 } from "../src/terminal-image.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
+import { someWriteSince, writesSince } from "./tui-alt-screen-helpers.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
 import {
   tuialtscreenCases6,
@@ -48,11 +49,7 @@ describe("TuiAltScreen", () => {
           coveredLine = "changed";
           tui.requestRender();
           yield* Effect.promise(() => terminal.waitForRender());
-          const redrawWrites = terminal.events
-            .slice(eventCount)
-            .filter((event): event is { type: "write"; data: string } => event.type === "write")
-            .map((event) => event.data)
-            .join("");
+          const redrawWrites = writesSince(terminal, eventCount);
           const placementIndex = redrawWrites.indexOf("\x1b_Ga=p,q=2");
           assert.ok(redrawWrites.includes("\x1b_Ga=d,d=a,q=2\x1b\\"));
           assert.ok(placementIndex > redrawWrites.indexOf("changed"));
@@ -101,22 +98,14 @@ describe("TuiAltScreen", () => {
           );
           tui.start();
           yield* Effect.promise(() => terminal.waitForRender());
-          assert.ok(
-            terminal.events.some(
-              (event) => event.type === "write" && event.data.includes("\x1b_Ga=T"),
-            ),
-          );
+          assert.ok(someWriteSince(terminal, 0, "\x1b_Ga=T"));
 
           const eventCount = terminal.events.length;
           tui.scrollBy(1);
           yield* Effect.promise(() => terminal.waitForRender());
           tui.scrollBy(-1);
           yield* Effect.promise(() => terminal.waitForRender());
-          const reentryWrites = terminal.events
-            .slice(eventCount)
-            .filter((event): event is { type: "write"; data: string } => event.type === "write")
-            .map((event) => event.data)
-            .join("");
+          const reentryWrites = writesSince(terminal, eventCount);
           assert.ok(reentryWrites.includes("\x1b_Ga=p,q=2"));
           assert.ok(!reentryWrites.includes("\x1b_Ga=T"));
           assert.ok(!reentryWrites.includes(`\x1b_Ga=d,d=I,i=${imageId},q=2\x1b\\`));

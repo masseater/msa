@@ -3,15 +3,9 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import {
-  Image,
-  resetCapabilitiesCache,
-  setCapabilities,
-  setCellDimensions,
-  type TUI,
-  TuiMainScreen,
-} from "../src/index.ts";
+import { Image, type TUI, TuiMainScreen } from "../src/index.ts";
 import { tuiKittyImageCleanupCases1 } from "./tui-render-cases-helpers.ts";
+import { withKittyCells } from "./tui-render-kitty-helpers.ts";
 import { LoggingVirtualTerminal } from "./tui-render-logging-virtual-terminal.ts";
 import { TestComponent } from "./tui-render-test-component.ts";
 
@@ -22,10 +16,8 @@ describe("TUI Kitty image cleanup", () => {
 describe("TUI Kitty image cleanup", () => {
   it("falls back to full redraw when Kitty image pre-clear would scroll", () =>
     Effect.runPromise(
-      Effect.gen(function* () {
-        setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-        setCellDimensions({ widthPx: 10, heightPx: 10 });
-        yield* Effect.gen(function* () {
+      withKittyCells(
+        Effect.gen(function* () {
           const terminal = new LoggingVirtualTerminal(40, 2);
           const tui: TUI = new TuiMainScreen(terminal);
           const component = new TestComponent();
@@ -58,14 +50,7 @@ describe("TUI Kitty image cleanup", () => {
           );
 
           tui.stop();
-        }).pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              resetCapabilitiesCache();
-              setCellDimensions({ widthPx: 9, heightPx: 18 });
-            }),
-          ),
-        );
-      }),
+        }),
+      ),
     ));
 });

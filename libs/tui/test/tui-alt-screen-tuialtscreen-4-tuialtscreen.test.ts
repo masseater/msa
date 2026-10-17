@@ -4,21 +4,17 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { Image } from "../src/components/image.ts";
-import {
-  encodeKitty,
-  registerKittyImageMetadata,
-  resetCapabilitiesCache,
-  setCapabilities,
-} from "../src/terminal-image.ts";
+import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
+import { someWriteSince, withCapabilities } from "./tui-alt-screen-helpers.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
 
 describe("TuiAltScreen", () => {
   it("does not emit Kitty graphics commands or OSC 133 zones in iTerm2", () =>
     Effect.runPromise(
-      Effect.gen(function* () {
-        setCapabilities({ images: "iterm2", trueColor: true, hyperlinks: true });
-        yield* Effect.gen(function* () {
+      withCapabilities(
+        { images: "iterm2", trueColor: true, hyperlinks: true },
+        Effect.gen(function* () {
           const terminal = new RecordingTerminal(20, 3);
           const tui = new TuiAltScreen(terminal);
           tui.addChild({
@@ -52,28 +48,18 @@ describe("TuiAltScreen", () => {
               (event) => event.type !== "write" || !event.data.includes("\x1b]1337;File="),
             ),
           );
-          assert.ok(
-            terminal.events.some(
-              (event) => event.type === "write" && event.data.includes("[Image:"),
-            ),
-          );
-        }).pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              resetCapabilitiesCache();
-            }),
-          ),
-        );
-      }),
+          assert.ok(someWriteSince(terminal, 0, "[Image:"));
+        }),
+      ),
     ));
 });
 
 describe("TuiAltScreen", () => {
   it("clears stale iTerm2 image placements when they leave the viewport", () =>
     Effect.runPromise(
-      Effect.gen(function* () {
-        setCapabilities({ images: "iterm2", trueColor: true, hyperlinks: true });
-        yield* Effect.gen(function* () {
+      withCapabilities(
+        { images: "iterm2", trueColor: true, hyperlinks: true },
+        Effect.gen(function* () {
           const terminal = new RecordingTerminal(20, 3);
           const tui = new TuiAltScreen(terminal);
           const imageLine = "\x1b]1337;File=inline=1;width=2;height=auto:AAAA\x07";
@@ -95,14 +81,8 @@ describe("TuiAltScreen", () => {
               .some((event) => event.type === "write" && event.data.includes("\x1b[2J")),
           );
           tui.stop();
-        }).pipe(
-          Effect.ensuring(
-            Effect.sync(() => {
-              resetCapabilitiesCache();
-            }),
-          ),
-        );
-      }),
+        }),
+      ),
     ));
 });
 
