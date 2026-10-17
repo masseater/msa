@@ -7,17 +7,18 @@ export {
 } from "./runner.ts";
 export {
   STORAGE_MEMORY_SCALES,
-  STORAGE_READ_BENCHMARKS,
-  STORAGE_WRITE_BENCHMARKS,
   type StorageBenchmarkDataset,
   type StorageBenchmarkScale,
-  type StorageReadBenchmark,
-  type StorageWriteBenchmark,
-  seedStorageBenchmark,
-  seedStorageWriteBenchmark,
   storageBenchmarkPrimaryRecordCount,
   TIMING_SCALE,
 } from "./storage-benchmark.ts";
+export {
+  STORAGE_READ_BENCHMARKS,
+  STORAGE_WRITE_BENCHMARKS,
+  type StorageReadBenchmark,
+  type StorageWriteBenchmark,
+} from "./storage-benchmark-runs.ts";
+export { seedStorageBenchmark, seedStorageWriteBenchmark } from "./storage-benchmark-seed.ts";
 export { createStorageConformance } from "./storage-conformance.ts";
 export type {
   EnvConformanceAssertions,
