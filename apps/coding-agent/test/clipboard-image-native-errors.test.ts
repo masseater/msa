@@ -28,6 +28,7 @@ test("native image errors abort paste without reading text or changing the edito
     editor: { insertTextAtCursor: vi.fn() },
     showError: vi.fn(),
     ui: { requestRender: vi.fn() },
+    settingsManager: { getClipboardImageCommand: () => undefined },
   };
   const prototype = InteractiveMode.prototype as unknown as {
     handleClipboardPaste(this: typeof context): Promise<void>;

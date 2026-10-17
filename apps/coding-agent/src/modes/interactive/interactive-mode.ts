@@ -142,7 +142,12 @@ import {
   normalizeChangelogLinks,
   parseChangelog,
 } from "../../utils/changelog.ts";
-import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
+import {
+  type ClipboardImage,
+  extensionForImageMimeType,
+  readClipboardImage,
+  readClipboardImageFromCommand,
+} from "../../utils/clipboard-image.ts";
 import {
   copyToClipboard,
   readClipboardFilePaths,
@@ -2321,6 +2326,16 @@ export class InteractiveMode {
 
   private async handleClipboardPaste(): Promise<void> {
     try {
+      const imageCommand = this.settingsManager.getClipboardImageCommand();
+      if (imageCommand) {
+        this.showStatus("Reading clipboard image…");
+        const image = await readClipboardImageFromCommand(imageCommand);
+        if (image) this.insertClipboardImage(image);
+        else if (image === null) this.showStatus("No image in the clipboard");
+        else this.showError("clipboardImageCommand failed or printed no image");
+        return;
+      }
+
       const filePaths = await readClipboardFilePaths();
       if (filePaths) {
         if (filePaths.some((filePath) => /\p{Cc}/u.test(filePath))) {
@@ -2342,14 +2357,7 @@ export class InteractiveMode {
 
       const image = await readClipboardImage();
       if (image) {
-        const tmpDir = os.tmpdir();
-        const ext = extensionForImageMimeType(image.mimeType) ?? "png";
-        const fileName = `msa-clipboard-${crypto.randomUUID()}.${ext}`;
-        const filePath = path.join(tmpDir, fileName);
-        fs.writeFileSync(filePath, Buffer.from(image.bytes));
-
-        this.editor.insertTextAtCursor?.(filePath);
-        this.ui.requestRender();
+        this.insertClipboardImage(image);
         return;
       }
 
@@ -2361,6 +2369,14 @@ export class InteractiveMode {
     } catch (error) {
       this.showError(`Failed to paste from clipboard: ${toErrorMessage(error)}`);
     }
+  }
+
+  private insertClipboardImage(image: ClipboardImage): void {
+    const ext = extensionForImageMimeType(image.mimeType) ?? "png";
+    const filePath = path.join(os.tmpdir(), `msa-clipboard-${crypto.randomUUID()}.${ext}`);
+    fs.writeFileSync(filePath, Buffer.from(image.bytes));
+    this.editor.insertTextAtCursor?.(filePath);
+    this.ui.requestRender();
   }
 
   private handleStartupSubmit(text: string): void {

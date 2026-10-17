@@ -19,6 +19,7 @@ const SUPPORTED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "im
 
 const DEFAULT_LIST_TIMEOUT_MS = 1000;
 const DEFAULT_POWERSHELL_TIMEOUT_MS = 5000;
+const IMAGE_COMMAND_TIMEOUT_MS = 20_000;
 
 export function isWaylandSession(env: NodeJS.ProcessEnv = process.env): boolean {
   return Boolean(env["WAYLAND_DISPLAY"]) || env["XDG_SESSION_TYPE"] === "wayland";
@@ -214,6 +215,31 @@ async function readClipboardImageViaNativeClipboard(): Promise<ClipboardImage | 
   return { bytes, mimeType: detectSupportedImageMimeType(bytes) ?? "application/octet-stream" };
 }
 
+/**
+ * Read the clipboard image from the user's `clipboardImageCommand`. Undefined means the command
+ * failed; null means it printed nothing.
+ */
+export async function readClipboardImageFromCommand(
+  command: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<ClipboardImage | null | undefined> {
+  const bytes =
+    platform === "win32"
+      ? await runClipboardCommand("cmd.exe", ["/d", "/s", "/c", command], {
+          timeoutMs: IMAGE_COMMAND_TIMEOUT_MS,
+        })
+      : await runClipboardCommand("/bin/sh", ["-c", command], {
+          timeoutMs: IMAGE_COMMAND_TIMEOUT_MS,
+        });
+  if (bytes === undefined) return undefined;
+  if (bytes.length === 0) return null;
+  const image = await toSupportedImage({
+    bytes: new Uint8Array(bytes),
+    mimeType: detectSupportedImageMimeType(bytes) ?? "application/octet-stream",
+  });
+  return image ?? undefined;
+}
+
 export async function readClipboardImage(options?: {
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
@@ -240,11 +266,11 @@ export async function readClipboardImage(options?: {
     image = await readClipboardImageViaNativeClipboard();
   }
 
-  if (!image) {
-    return null;
-  }
+  return image ? toSupportedImage(image) : null;
+}
 
-  // Convert unsupported formats (e.g., Windows DIB data wrapped as BMP) to PNG
+/** Convert unsupported formats (e.g., Windows DIB data wrapped as BMP) to PNG. */
+async function toSupportedImage(image: ClipboardImage): Promise<ClipboardImage | null> {
   if (!isSupportedImageMimeType(image.mimeType)) {
     const pngBytes = await convertToPng(image.bytes);
     if (!pngBytes) {
