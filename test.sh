@@ -80,5 +80,13 @@ for name in CI GITHUB_ACTIONS; do
 	[[ -z "$value" ]] || test_env+=("$name=$value")
 done
 
+# Root ignores file modes, so tests of permission errors cannot fail as they should.
+# Dropping the override capabilities makes root obey the modes of the files it owns.
+runner=()
+if [[ "$(id -u)" == 0 ]] && command -v setpriv >/dev/null 2>&1; then
+	caps="-dac_override,-dac_read_search"
+	runner=(setpriv "--inh-caps=$caps" "--bounding-set=$caps" --)
+fi
+
 echo "Running tests without API keys in isolated home: $test_root/home"
-env -i "${test_env[@]}" vp run test
+${runner[@]+"${runner[@]}"} env -i "${test_env[@]}" vp run test
