@@ -149,7 +149,7 @@ export function createOrchestratorToolDefinitions(
       parameters: idSchema,
       run: async ({ id }) => {
         const node = await orchestrator.stop(id);
-        return `${node.id} is ${node.status === "running" ? "stopping" : node.status}.`;
+        return `${node.id} is ${node.status}.`;
       },
     }),
   };

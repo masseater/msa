@@ -31,7 +31,7 @@ export interface CreateWorkerOptions {
   model: Model<any>;
   thinkingLevel: ThinkingLevel;
   /** Reopen this transcript instead of starting a new one. */
-  sessionFile?: string;
+  sessionFile?: string | undefined;
 }
 
 export interface OrchestratorDefaults {
@@ -85,7 +85,7 @@ const REPORT_LIMIT = 4000;
 function lastAssistant(messages: readonly AgentMessage[]): AssistantMessage | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
-    if (message.role === "assistant") return message as AssistantMessage;
+    if (message?.role === "assistant") return message as AssistantMessage;
   }
   return undefined;
 }
@@ -156,7 +156,9 @@ function taskPrompt(
 export class Orchestrator {
   private graph: Promise<SessionGraph> | undefined;
   private readonly workers = new Map<string, WorkerSession>();
-  private readonly stopping = new Set<string>();
+  /** The current run of each running session. A run that is not current ended without effect. */
+  private readonly runs = new Map<string, number>();
+  private runCount = 0;
   private queue: Promise<unknown> = Promise.resolve();
 
   private readonly options: OrchestratorOptions;
@@ -265,7 +267,7 @@ export class Orchestrator {
       const graph = await this.connect();
       const node = await this.node(graph, id);
       const worker = this.workers.get(id);
-      if (node.status === "running" && worker?.isStreaming) {
+      if (this.runs.has(id) && worker?.isStreaming) {
         await worker.steer(message);
         return node;
       }
@@ -276,15 +278,21 @@ export class Orchestrator {
       if (nodes.some((other) => other.kind === "review" && other.status === "running")) {
         throw new Error("A review is running alone; wait for its report.");
       }
-      if (node.kind === "task") {
-        const review = nodes.find((other) => other.kind === "review" && other.round === node.round);
-        if (review && review.status !== "queued") {
-          throw new Error(
-            `Round ${node.round} has been reviewed. Start a new session (it joins the next round) instead of reopening ${id}.`,
-          );
-        }
+      const review =
+        node.kind === "task"
+          ? nodes.find((other) => other.kind === "review" && other.round === node.round)
+          : undefined;
+      if (review && review.status !== "queued" && review.status !== "stopped") {
+        throw new Error(
+          `Round ${node.round} has been reviewed. Start a new session (it joins the next round) instead of reopening ${id}.`,
+        );
       }
       await this.run(graph, node, message);
+      if (review) {
+        // A review that never ran, because every task of its round stopped, closes the round again.
+        if (review.status === "stopped") await graph.update(review.id, { status: "queued" });
+        await this.relinkReview(graph, review.id, node.round);
+      }
       return this.node(graph, id);
     });
   }
@@ -308,12 +316,13 @@ export class Orchestrator {
     return this.exclusive(async () => {
       const graph = await this.connect();
       const node = await this.node(graph, id);
-      if (node.status === "running") {
-        this.stopping.add(id);
-        await this.workers.get(id)?.abort();
-        return node;
-      }
-      if (node.status === "queued") {
+      if (node.status === "running" || node.status === "queued") {
+        // An aborted prompt can take a while to return, for example from a retry backoff.
+        this.runs.delete(id);
+        void this.workers
+          .get(id)
+          ?.abort()
+          .catch(() => undefined);
         await graph.update(id, { status: "stopped" });
         if (node.kind === "task") await this.relinkReviewOfRound(graph, node.round);
         await this.schedule(graph);
@@ -324,8 +333,8 @@ export class Orchestrator {
 
   /** Aborts running sessions and releases the graph connection. */
   async dispose(): Promise<void> {
-    for (const [id, worker] of this.workers) {
-      this.stopping.add(id);
+    this.runs.clear();
+    for (const worker of this.workers.values()) {
       await worker.abort();
       worker.dispose();
     }
@@ -387,21 +396,23 @@ export class Orchestrator {
     }
     await graph.update(node.id, { status: "running", sessionFile: worker.sessionFile });
     const session = worker;
+    const run = ++this.runCount;
+    this.runs.set(node.id, run);
     void session.prompt(text).then(
-      () => this.settle(node.id, session, undefined),
-      (error: unknown) => this.settle(node.id, session, error),
+      () => this.settle(node.id, run, session, undefined),
+      (error: unknown) => this.settle(node.id, run, session, error),
     );
   }
 
-  private settle(id: string, worker: WorkerSession, error: unknown): Promise<void> {
+  private settle(id: string, run: number, worker: WorkerSession, error: unknown): Promise<void> {
     return this.exclusive(async () => {
+      if (this.runs.get(id) !== run) return;
+      this.runs.delete(id);
       const graph = await this.connect();
       const last = lastAssistant(worker.messages);
       let status: SessionStatus = "completed";
       let report = assistantText(last);
-      if (this.stopping.delete(id)) {
-        status = "stopped";
-      } else if (error !== undefined) {
+      if (error !== undefined) {
         status = "failed";
         report = toErrorMessage(error);
       } else if (last?.stopReason === "error" || last?.stopReason === "aborted") {
@@ -410,9 +421,6 @@ export class Orchestrator {
       }
       await graph.update(id, { status, report });
       const node = await this.node(graph, id);
-      if (node.kind === "task" && status === "stopped") {
-        await this.relinkReviewOfRound(graph, node.round);
-      }
       const started = await this.schedule(graph);
       const nodes = await graph.list(this.options.project);
       const waiting = nodes.filter(

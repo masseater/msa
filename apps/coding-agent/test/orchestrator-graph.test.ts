@@ -12,14 +12,14 @@ const runPrefix = `test-${randomUUID()}`;
 const graphs: Array<[string, () => Promise<SessionGraph>]> = [
   ["memory", async () => new MemorySessionGraph()],
 ];
-if (process.env.NEO4J_PASSWORD) graphs.push(["neo4j", () => Neo4jSessionGraph.connect()]);
+if (process.env["NEO4J_PASSWORD"]) graphs.push(["neo4j", () => Neo4jSessionGraph.connect()]);
 
 afterAll(async () => {
-  const password = process.env.NEO4J_PASSWORD;
+  const password = process.env["NEO4J_PASSWORD"];
   if (!password) return;
   const driver = neo4j.driver(
-    process.env.NEO4J_URI ?? "bolt://localhost:7687",
-    neo4j.auth.basic(process.env.NEO4J_USERNAME ?? "neo4j", password),
+    process.env["NEO4J_URI"] ?? "bolt://localhost:7687",
+    neo4j.auth.basic(process.env["NEO4J_USERNAME"] ?? "neo4j", password),
   );
   await driver.executeQuery(
     "MATCH (s:MsaSession) WHERE s.project STARTS WITH $prefix DETACH DELETE s",

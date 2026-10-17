@@ -27,9 +27,11 @@ export interface SessionNodeWithDependencies extends SessionNode {
   dependsOn: string[];
 }
 
-export type SessionNodePatch = Partial<
-  Pick<SessionNode, "status" | "model" | "thinkingLevel" | "sessionFile" | "report">
->;
+export type SessionNodePatch = {
+  [K in "status" | "model" | "thinkingLevel" | "sessionFile" | "report"]?:
+    | SessionNode[K]
+    | undefined;
+};
 
 /** Storage of the sessions an orchestrator started and the `DEPENDS_ON` edges between them. */
 export interface SessionGraph {

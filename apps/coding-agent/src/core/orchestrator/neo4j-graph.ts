@@ -57,15 +57,15 @@ export class Neo4jSessionGraph implements SessionGraph {
 
   /** Connects with `NEO4J_URI`, `NEO4J_USERNAME`, and `NEO4J_PASSWORD`. */
   static async connect(env: NodeJS.ProcessEnv = process.env): Promise<Neo4jSessionGraph> {
-    const password = env.NEO4J_PASSWORD;
+    const password = env["NEO4J_PASSWORD"];
     if (!password) {
       throw new Error(
         "NEO4J_PASSWORD is not set. The orchestrator keeps session dependencies in Neo4j (NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD).",
       );
     }
     const driver = neo4j.driver(
-      env.NEO4J_URI ?? DEFAULT_URI,
-      neo4j.auth.basic(env.NEO4J_USERNAME ?? DEFAULT_USERNAME, password),
+      env["NEO4J_URI"] ?? DEFAULT_URI,
+      neo4j.auth.basic(env["NEO4J_USERNAME"] ?? DEFAULT_USERNAME, password),
       { disableLosslessIntegers: true },
     );
     try {
