@@ -199,7 +199,7 @@ export default function promptUrlWidgetExtension(msa: ExtensionAPI) {
     });
   };
 
-  const applySessionName = (ctx: ExtensionContext, match: PromptMatch, metadata?: GhMetadata) => {
+  const applySessionName = (match: PromptMatch, metadata?: GhMetadata) => {
     const label = getPromptLabel(match.kind);
     const displayTarget = metadata?.displayUrl ?? match.target;
     const trimmedTitle = metadata?.title?.trim();
@@ -224,10 +224,10 @@ export default function promptUrlWidgetExtension(msa: ExtensionAPI) {
 
   const updatePromptContext = (ctx: ExtensionContext, match: PromptMatch) => {
     setWidget(ctx, match);
-    applySessionName(ctx, match);
+    applySessionName(match);
     void fetchGhMetadata(msa, match.kind, match.target, ctx.cwd).then((meta) => {
       setWidget(ctx, match, meta);
-      applySessionName(ctx, match, meta);
+      applySessionName(match, meta);
     });
   };
 
