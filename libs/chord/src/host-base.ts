@@ -7,6 +7,7 @@ import type { CodeVersionState, Facet, HostOptions } from "./host-types.ts";
 import type { ObjectImpl } from "./object.ts";
 import { canonicalJson } from "./schema.ts";
 import type { Service } from "./service.ts";
+import { HostTimers } from "./timers.ts";
 import type { Ctx } from "./types.ts";
 
 const randomTag = (): string => Effect.runSync(Random.next).toString(36).slice(2, 8);
@@ -36,6 +37,7 @@ export abstract class HostBase implements HostCore {
   reloading = false;
   readonly taskStopDeadline: number;
   readonly readyTimeout: number;
+  readonly timers = new HostTimers();
   protected readonly options: HostOptions;
   readonly #principalKey: (principal: unknown) => string;
   readonly #selfKey: string;

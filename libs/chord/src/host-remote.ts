@@ -7,7 +7,6 @@ import { ChordError, invalid } from "./errors.ts";
 import { HostObjects } from "./host-objects.ts";
 import type { Route } from "./host-types.ts";
 import { RemoteBinding, RemoteRef } from "./remote-ref.ts";
-import { unrefTimeout } from "./signal.ts";
 import type { GetOptions } from "./types.ts";
 
 export abstract class HostRemote extends HostObjects {
@@ -28,7 +27,7 @@ export abstract class HostRemote extends HostObjects {
       binding.close();
       return;
     }
-    binding.lingerTimer = unrefTimeout(() => binding.close(), ms);
+    binding.lingerTimer = this.timers.after(ms, () => binding.close());
     this.#lingering.set(binding.key, binding);
     for (const oldest of this.#lingering.values()) {
       if (this.#lingering.size <= cap) break;

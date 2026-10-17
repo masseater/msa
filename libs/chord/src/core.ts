@@ -6,6 +6,7 @@ import type { Decls } from "./decls.ts";
 import type { ObjectImpl } from "./object.ts";
 import { enqueue } from "./publish.ts";
 import type { Service } from "./service.ts";
+import type { HostTimers } from "./timers.ts";
 import type { Ctx, GetOptions, RefStatus } from "./types.ts";
 
 export type RefOwner = "object" | "call" | "host" | "external" | "connection" | "client";
@@ -50,6 +51,7 @@ export interface HostCore {
   disposed(object: ObjectImpl): void;
   readonly taskStopDeadline: number;
   readonly readyTimeout: number;
+  readonly timers: HostTimers;
   checkRegistrations(object: ObjectImpl, decls: Decls): void;
   registriesChanged(including?: ObjectImpl): void;
 }

@@ -45,6 +45,7 @@ export class HostImpl extends HostLinks implements Host {
               for (const connection of [...this.connections]) connection.link.close("host closed");
             }),
           ),
+          Effect.ensuring(this.timers.close()),
         );
       }),
     );

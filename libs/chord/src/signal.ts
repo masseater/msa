@@ -1,4 +1,4 @@
-import { Cause, Effect } from "effect";
+import { Cause, Duration, Effect } from "effect";
 import { dual } from "effect/Function";
 
 import type { RefCore } from "./core.ts";
@@ -48,77 +48,38 @@ export const raceSignal: {
   ),
 );
 
-export const unrefTimeout: {
-  (ms: number): (fire: () => void) => () => void;
-  (fire: () => void, ms: number): () => void;
-} = dual(2, (fire: () => void, ms: number): (() => void) => {
-  const timer = setTimeout(fire, ms);
-  (timer as { unref?: () => void }).unref?.();
-  return () => clearTimeout(timer);
-});
-
-export const unrefInterval: {
-  (ms: number): (tick: () => void) => () => void;
-  (tick: () => void, ms: number): () => void;
-} = dual(2, (tick: () => void, ms: number): (() => void) => {
-  const timer = setInterval(tick, ms);
-  (timer as { unref?: () => void }).unref?.();
-  return () => clearInterval(timer);
-});
-
-interface ReadyWait {
-  readonly linked: ReturnType<typeof linkedSignal>;
-  readonly timeout: AbortSignal;
-  readonly stop: () => void;
-}
-
-function startReadyWait(ref: RefCore, signals: readonly AbortSignal[], ms: number): ReadyWait {
-  const timeout = new AbortController();
-  const cancel = Number.isFinite(ms)
-    ? unrefTimeout(
-        () =>
-          timeout.abort(
-            new ChordError("unavailable", `${ref.address} was not ready after ${ms} ms`, {
-              reason: "ready_timeout",
-            }),
-          ),
-        ms,
+const readyTimeout = (ref: RefCore, ms: number): Effect.Effect<never> =>
+  Number.isFinite(ms)
+    ? Effect.flatMap(Effect.sleep(Duration.millis(ms)), () =>
+        Effect.die(
+          new ChordError("unavailable", `${ref.address} was not ready after ${ms} ms`, {
+            reason: "ready_timeout",
+          }),
+        ),
       )
-    : undefined;
-  const linked = linkedSignal([...signals, timeout.signal]);
-  return {
-    linked,
-    timeout: timeout.signal,
-    stop: () => {
-      cancel?.();
-      linked.release();
-    },
-  };
-}
+    : Effect.never;
 
 export const awaitReady: {
   (signals: readonly AbortSignal[], ms: number): (ref: RefCore) => Effect.Effect<void>;
   (ref: RefCore, signals: readonly AbortSignal[], ms: number): Effect.Effect<void>;
 } = dual(3, (ref: RefCore, signals: readonly AbortSignal[], ms: number): Effect.Effect<void> =>
   Effect.acquireUseRelease(
-    Effect.sync(() => startReadyWait(ref, signals, ms)),
-    (wait) =>
-      raceSignal(
-        Effect.promise(() => ref.ready),
-        wait.linked.signal,
+    Effect.sync(() => linkedSignal(signals)),
+    (linked) =>
+      Effect.raceFirst(
+        raceSignal(
+          Effect.promise(() => ref.ready),
+          linked.signal,
+        ),
+        readyTimeout(ref, ms),
       ).pipe(
         Effect.catchCause((cause) =>
           Effect.suspend(() => {
             ref.release();
-            const reason: unknown = wait.linked.signal.reason;
-            return Effect.die(
-              reason instanceof ChordError && reason.reason === "ready_timeout"
-                ? reason
-                : Cause.squash(cause),
-            );
+            return Effect.die(Cause.squash(cause));
           }),
         ),
       ),
-    (wait) => Effect.sync(wait.stop),
+    (linked) => Effect.sync(linked.release),
   ),
 );

@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from "effect";
+import { Cause, Duration, Effect, Exit } from "effect";
 
 import { hydrationOf, unhydrated } from "./cell.ts";
 import type { RefCore } from "./core.ts";
@@ -8,7 +8,6 @@ import type { ObjectImpl } from "./object.ts";
 import { ResourceImpl } from "./resource.ts";
 import { SelfImpl } from "./self.ts";
 import { type Service, validateImplementation } from "./service.ts";
-import { unrefTimeout } from "./signal.ts";
 
 const settleAll = (effects: readonly Effect.Effect<unknown>[]): Effect.Effect<void> =>
   Effect.gen(function* () {
@@ -64,33 +63,19 @@ export class ObjectActivation {
   withinReadyTimeout<T>(work: Promise<T>, waiting: () => readonly string[]): Effect.Effect<T> {
     const object = this.#object;
     const ms = object.host.readyTimeout;
-    if (!Number.isFinite(ms)) return Effect.promise(() => work);
-    return Effect.callback<T>((resume) => {
-      const cancel = unrefTimeout(() => {
-        const list = waiting();
-        resume(
-          Effect.die(
-            new ChordError(
-              "unavailable",
-              `${object.address} was not ready after ${ms} ms${list.length === 0 ? "" : `, waiting on ${list.join(", ")}`} (a reference cycle across hosts?)`,
-              { reason: "ready_timeout" },
-            ),
-          ),
-        );
-      }, ms);
-      work.then(
-        (value) => {
-          cancel();
-          resume(Effect.succeed(value));
-          return undefined;
-        },
-        (error: unknown) => {
-          cancel();
-          resume(Effect.die(error));
-        },
+    const settled = Effect.promise(() => work);
+    if (!Number.isFinite(ms)) return settled;
+    const timedOut = Effect.flatMap(Effect.sleep(Duration.millis(ms)), () => {
+      const list = waiting();
+      return Effect.die(
+        new ChordError(
+          "unavailable",
+          `${object.address} was not ready after ${ms} ms${list.length === 0 ? "" : `, waiting on ${list.join(", ")}`} (a reference cycle across hosts?)`,
+          { reason: "ready_timeout" },
+        ),
       );
-      return Effect.sync(cancel);
     });
+    return Effect.raceFirst(settled, timedOut);
   }
 
   open(

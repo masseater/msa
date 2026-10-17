@@ -15,7 +15,7 @@ import { ChordError } from "./errors.ts";
 import type { HostLinks } from "./host-links.ts";
 import type { RemoteBinding, RemoteCall, RemoteChannel } from "./remote.ts";
 import { ServedHolds } from "./served.ts";
-import { unrefInterval } from "./signal.ts";
+import type { HostTimers } from "./timers.ts";
 import { type Frame, isFrame, PROTOCOL_VERSION } from "./wire.ts";
 
 export type { AcceptOptions, LinkOptions, Peer, RelayRef } from "./connection-types.ts";
@@ -87,13 +87,17 @@ export class Connection implements RemoteChannel {
 
   #startPinger(interval: number, timeout: number): void {
     let n = 0;
-    this.#stopPinger = unrefInterval(() => {
+    this.#stopPinger = this.host.timers.every(interval, () => {
       if (now() - this.#lastSeen > timeout) this.link.close("ping timeout");
       else {
         n += 1;
         this.send({ t: "ping", n });
       }
-    }, interval);
+    });
+  }
+
+  get timers(): HostTimers {
+    return this.host.timers;
   }
 
   get open(): boolean {

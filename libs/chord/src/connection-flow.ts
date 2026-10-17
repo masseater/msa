@@ -1,6 +1,6 @@
 import type { LinkOptions, Overflow, StateFrame } from "./connection-types.ts";
 import type { Link } from "./link.ts";
-import { unrefTimeout } from "./signal.ts";
+import type { HostTimers } from "./timers.ts";
 import type { Frame } from "./wire.ts";
 
 const DEFAULT_WINDOW = 256 * 1024;
@@ -27,6 +27,7 @@ const unitKey = (hold: number): string => `u${hold}`;
 export interface FlowOwner {
   readonly link: Link;
   readonly open: boolean;
+  readonly timers: HostTimers;
   violation(reason: string): void;
 }
 
@@ -219,10 +220,10 @@ export class ConnectionFlow {
 
   scheduleAck(): void {
     if (this.#peerAcks !== true || this.#ackTimer !== undefined || !this.#owner.open) return;
-    this.#ackTimer = unrefTimeout(() => {
+    this.#ackTimer = this.#owner.timers.after(0, () => {
       this.#ackTimer = undefined;
       this.#owner.link.send({ t: "ack", n: this.#received });
-    }, 0);
+    });
   }
 
   close(): void {

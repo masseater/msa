@@ -8,7 +8,6 @@ import { ObjectLifecycle } from "./lifecycle.ts";
 import { ObjectListeners } from "./object-listeners.ts";
 import { ObjectTasks } from "./object-tasks.ts";
 import type { RefImpl } from "./ref.ts";
-import { unrefTimeout } from "./signal.ts";
 
 const noop = (): void => {};
 
@@ -116,12 +115,12 @@ export class ObjectImpl {
       this.#background(this.dispose(false));
       return;
     }
-    this.#linger = unrefTimeout(() => {
+    this.#linger = this.host.timers.after(linger, () => {
       this.#linger = undefined;
       if (this.refs.size === 0 && this.invocations.size === 0 && this.status === "live") {
         this.#background(this.dispose(false));
       }
-    }, linger);
+    });
   }
 
   #background(disposal: Promise<void>): void {
