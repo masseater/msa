@@ -58,5 +58,3 @@ export function registerBuiltInImagesApiProviders(): void {
     generateImages: generateImagesOpenRouter,
   });
 }
-
-registerBuiltInImagesApiProviders();

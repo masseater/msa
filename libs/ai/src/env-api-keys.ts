@@ -11,18 +11,17 @@ let nodeJoin: typeof import("node:path").join | null = null;
 type DynamicImport = (specifier: string) => Promise<unknown>;
 
 const dynamicImport: DynamicImport = (specifier) => import(specifier);
-const nodeSpecifier = (name: string): string => ["node", name].join(":");
 
 if (isNodeRuntime()) {
-  void dynamicImport(nodeSpecifier("fs")).then((m) => {
+  void dynamicImport("node:fs").then((m) => {
     nodeExistsSync = (m as typeof import("node:fs")).existsSync;
     return nodeExistsSync;
   });
-  void dynamicImport(nodeSpecifier("os")).then((m) => {
+  void dynamicImport("node:os").then((m) => {
     nodeHomedir = (m as typeof import("node:os")).homedir;
     return nodeHomedir;
   });
-  void dynamicImport(nodeSpecifier("path")).then((m) => {
+  void dynamicImport("node:path").then((m) => {
     nodeJoin = (m as typeof import("node:path")).join;
     return nodeJoin;
   });

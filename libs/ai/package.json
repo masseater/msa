@@ -29,8 +29,7 @@
   "type": "module",
   "sideEffects": [
     "./dist/compat.js",
-    "./dist/images.js",
-    "./dist/providers/images/register-builtins.js"
+    "./dist/images.js"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
