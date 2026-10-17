@@ -5,8 +5,12 @@ import { dual } from "effect/Function";
 
 import { causeMessage } from "./bridge.ts";
 import { DEFAULT_INTERRUPT_BUDGET, inlineLauncher } from "./inline.ts";
-import type { VmChannel } from "./launcher.ts";
-import type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./protocol.ts";
+import {
+  type HostToWorkerMessage,
+  type VmChannel,
+  type VmStartData,
+  type WorkerToHostMessage,
+} from "./launcher.ts";
 import type {
   CodemodeRemoteExchange,
   CodemodeRemoteMessage,

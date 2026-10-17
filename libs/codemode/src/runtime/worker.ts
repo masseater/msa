@@ -3,10 +3,14 @@ import { parentPort, workerData } from "node:worker_threads";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 
-import { LaunchError } from "./errors/launch-error.ts";
-import { isHostToWorkerMessage, type WorkerData, type WorkerToHostMessage } from "./protocol.ts";
+import {
+  LaunchError,
+  isHostToWorkerMessage,
+  type WorkerData,
+  type WorkerToHostMessage,
+} from "./launcher.ts";
+import { startVm } from "./vm-session.ts";
 import { crashMessage } from "./vm-wasi.ts";
-import { startVm } from "./vm.ts";
 
 function post(message: WorkerToHostMessage): void {
   parentPort?.postMessage(message);

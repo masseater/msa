@@ -1,9 +1,15 @@
+import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import { errorMessage, parseJson, stringifyJson } from "./bridge.ts";
-import { ToolCallError } from "./errors/tool-call-error.ts";
 import type { CallMessage, ExecutionOptions } from "./launcher.ts";
+
+export class ToolCallError extends Data.TaggedError("ToolCallError")<{ readonly message: string }> {
+  constructor(message: string) {
+    super({ message });
+  }
+}
 
 const toCallError = (error: unknown) => new ToolCallError(errorMessage(error));
 

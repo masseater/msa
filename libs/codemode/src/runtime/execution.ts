@@ -1,6 +1,7 @@
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
+import { dual } from "effect/Function";
 
 import type {
   CodemodeCall,
@@ -12,6 +13,7 @@ import type {
   CodemodeStoreWrites,
 } from "../types.ts";
 import {
+  BridgeError,
   causeMessage,
   errorMessage,
   parseBridgeJson,
@@ -19,19 +21,26 @@ import {
   parseStoreWrites,
   stringifyJson,
 } from "./bridge.ts";
-import { BridgeError } from "./errors/bridge-error.ts";
 import {
+  isWorkerToHostMessage,
+  startData,
   type CallMessage,
   type Control,
   type DoneMessage,
   type ExecutionOptions,
-  startData,
+  type HostToWorkerMessage,
   type VmChannel,
   type VmEvents,
 } from "./launcher.ts";
-import { type HostToWorkerMessage, isWorkerToHostMessage } from "./protocol.ts";
-import { schedule } from "./timer.ts";
 import { invokeTool } from "./tool-call.ts";
+
+export const schedule: {
+  (task: () => void): (millis: number) => () => void;
+  (millis: number, task: () => void): () => void;
+} = dual(2, (millis: number, task: () => void): (() => void) => {
+  const fiber = Effect.runFork(Effect.sleep(millis).pipe(Effect.andThen(Effect.sync(task))));
+  return () => fiber.interruptUnsafe();
+});
 
 interface PendingCall {
   record: CodemodeCall | undefined;

@@ -1,5 +1,4 @@
-import type { VmEvents } from "./launcher.ts";
-import type { VmStartData, WorkerToHostMessage } from "./protocol.ts";
+import { type VmEvents, type VmStartData, type WorkerToHostMessage } from "./launcher.ts";
 
 export class InlineRun {
   stopped = false;

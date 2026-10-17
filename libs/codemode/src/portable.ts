@@ -11,7 +11,7 @@ export {
   MAX_STORE_TOTAL_CHARS,
   MAX_STORE_VALUE_CHARS,
 } from "./runtime/prelude-source.ts";
-export type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./runtime/protocol.ts";
+export type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./runtime/launcher.ts";
 export {
   type CodemodeRemote,
   type CodemodeRemoteExchange,

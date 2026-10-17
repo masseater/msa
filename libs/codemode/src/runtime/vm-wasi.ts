@@ -1,6 +1,6 @@
 import type { JSException } from "quickjs-wasi";
 
-import type { WorkerToHostMessage } from "./protocol.ts";
+import type { VmStartData, WorkerToHostMessage } from "./launcher.ts";
 
 export interface VirtualClock {
   creating: boolean;
@@ -8,6 +8,16 @@ export interface VirtualClock {
   now: number;
   seed: number;
 }
+
+export const virtualClock = (data: VmStartData): VirtualClock | undefined =>
+  data.deterministic === undefined
+    ? undefined
+    : {
+        creating: true,
+        startedAt: data.deterministic.startedAt,
+        now: data.deterministic.startedAt,
+        seed: data.deterministic.seed >>> 0,
+      };
 
 type WasmMemory = { readonly buffer: ArrayBufferLike };
 

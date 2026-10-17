@@ -2,8 +2,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 
-import type { VmEvents } from "./launcher.ts";
-import { isWorkerToHostMessage } from "./protocol.ts";
+import { isWorkerToHostMessage, type VmEvents } from "./launcher.ts";
 import type {
   CodemodeRemoteExchange,
   CodemodeRemoteMessage,

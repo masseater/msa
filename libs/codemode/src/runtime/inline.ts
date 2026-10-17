@@ -3,11 +3,10 @@ import * as Effect from "effect/Effect";
 import type { CodemodeSandboxBaseOptions } from "../types.ts";
 import type { CodemodeWasmModule } from "../wasm.ts";
 import { errorMessage } from "./bridge.ts";
-import { LaunchError } from "./errors/launch-error.ts";
 import { InlineRun } from "./inline-run.ts";
-import type { VmLauncher } from "./launcher.ts";
+import { LaunchError, type VmLauncher } from "./launcher.ts";
 import { CodemodeSandboxBase } from "./sandbox-base.ts";
-import { startVm } from "./vm.ts";
+import { startVm } from "./vm-session.ts";
 
 export const DEFAULT_INTERRUPT_BUDGET = 100_000;
 

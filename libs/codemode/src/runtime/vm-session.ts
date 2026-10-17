@@ -1,8 +1,24 @@
-import { JSException, type JSValueHandle, type QuickJS } from "quickjs-wasi";
+import * as Effect from "effect/Effect";
+import { Intrinsics, JSException, MAX_STACK_SIZE, QuickJS, type JSValueHandle } from "quickjs-wasi";
 
+import type { CodemodeWasmModule } from "../wasm.ts";
+import { errorMessage } from "./bridge.ts";
+import {
+  LaunchError,
+  type HostToWorkerMessage,
+  type VmStartData,
+  type WorkerToHostMessage,
+} from "./launcher.ts";
 import { PRELUDE_SOURCE } from "./prelude-source.ts";
-import type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./protocol.ts";
-import { crashMessage, describeException, fnv1a, type VirtualClock } from "./vm-wasi.ts";
+import {
+  crashMessage,
+  deterministicWasi,
+  describeException,
+  discardOutput,
+  fnv1a,
+  type VirtualClock,
+  virtualClock,
+} from "./vm-wasi.ts";
 
 export interface VmSession {
   deliver(message: HostToWorkerMessage): void;
@@ -233,3 +249,47 @@ export class VmController implements VmSession {
     });
   }
 }
+
+export interface StartVmOptions {
+  data: VmStartData;
+  wasm: CodemodeWasmModule;
+  maxStackSize?: number;
+  interruptBudget?: number;
+  post(message: WorkerToHostMessage): void;
+  shouldInterrupt(): boolean;
+}
+
+const createVm = (options: StartVmOptions, clock: VirtualClock | undefined, maxStackSize: number) =>
+  Effect.tryPromise({
+    try: () =>
+      QuickJS.create({
+        wasm: options.wasm,
+        memoryLimit: options.data.memoryLimitBytes,
+        maxStackSize,
+        interruptHandler: options.shouldInterrupt,
+        wasi: clock === undefined ? discardOutput : deterministicWasi(clock),
+        ...(clock === undefined
+          ? {}
+          : { timezoneOffset: 0, intrinsics: Intrinsics.ALL & ~Intrinsics.WEAK_REF }),
+      }),
+    catch: (cause) => new LaunchError({ message: errorMessage(cause), cause }),
+  });
+
+export const startVm = Effect.fn("startVm")(function* (options: StartVmOptions) {
+  const maxStackSize = options.maxStackSize ?? MAX_STACK_SIZE;
+  const clock = virtualClock(options.data);
+  const vm = yield* createVm(options, clock, maxStackSize);
+  if (clock !== undefined) clock.creating = false;
+  const controller = new VmController(
+    vm,
+    {
+      data: options.data,
+      maxStackSize,
+      interruptBudget: options.interruptBudget,
+      post: options.post,
+      shouldInterrupt: options.shouldInterrupt,
+    },
+    clock,
+  );
+  return controller.boot();
+});

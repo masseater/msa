@@ -1,6 +1,6 @@
 import type { CodemodeError } from "../types.ts";
 import type { CodemodeWasmModule } from "../wasm.ts";
-import type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./protocol.ts";
+import type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./launcher.ts";
 
 export interface CodemodeRemoteRequest {
   data: VmStartData;

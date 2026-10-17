@@ -5,10 +5,14 @@ import * as Effect from "effect/Effect";
 import type { CodemodeSandboxOptions } from "../types.ts";
 import { loadQuickJSWasm } from "../wasm.ts";
 import { errorMessage } from "./bridge.ts";
-import { LaunchError } from "./errors/launch-error.ts";
 import { loadWasm } from "./inline.ts";
-import type { VmChannel, VmEvents, VmLauncher } from "./launcher.ts";
-import type { WorkerData } from "./protocol.ts";
+import {
+  LaunchError,
+  type VmChannel,
+  type VmEvents,
+  type VmLauncher,
+  type WorkerData,
+} from "./launcher.ts";
 import { CodemodeSandboxBase } from "./sandbox-base.ts";
 
 function defaultWorkerUrl(): URL {

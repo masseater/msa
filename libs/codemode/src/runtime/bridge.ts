@@ -1,11 +1,17 @@
 import * as Cause from "effect/Cause";
+import * as Data from "effect/Data";
 import { dual } from "effect/Function";
 
 import type { CodemodeError, CodemodeStoreWrites } from "../types.ts";
-import { BridgeError } from "./errors/bridge-error.ts";
 
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+export class BridgeError extends Data.TaggedError("BridgeError")<{ readonly message: string }> {
+  constructor(message: string) {
+    super({ message });
+  }
 }
 
 export function causeMessage(cause: Cause.Cause<unknown>): string {

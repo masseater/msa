@@ -2,10 +2,8 @@ import * as Effect from "effect/Effect";
 
 import type { CodemodeSandboxBaseOptions } from "../types.ts";
 import { errorMessage } from "./bridge.ts";
-import { LaunchError } from "./errors/launch-error.ts";
 import { RemoteSandboxError } from "./errors/remote-sandbox-error.ts";
-import type { VmEvents, VmLauncher } from "./launcher.ts";
-import type { VmStartData } from "./protocol.ts";
+import { LaunchError, type VmEvents, type VmLauncher, type VmStartData } from "./launcher.ts";
 import { RemoteLink } from "./remote-link.ts";
 import type { CodemodeRemote, CodemodeRemoteRequest } from "./remote-types.ts";
 import { CodemodeSandboxBase } from "./sandbox-base.ts";
