@@ -31,12 +31,11 @@ import type {
 } from "@msa/ai/compat";
 
 import type { ExtensionAPI } from "../../core/extensions/types.ts";
-import { findExecutableOnPath } from "../../utils/shell.ts";
 import {
   accountEnv,
   blockIfUnusable,
   blockOf,
-  clearBlocks,
+  claudeExecutable,
   loadAccounts,
   type Account,
 } from "./claude-accounts.ts";
@@ -94,15 +93,6 @@ const loadSdk = (() => {
   };
 })();
 type Sdk = Awaited<ReturnType<typeof loadSdk>>;
-
-/**
- * The user's installed `claude`. msa ships as a bundle or a compiled binary,
- * where the SDK cannot find the Claude Code binary it carries; without `claude`
- * on PATH the SDK's own lookup is the only option left.
- */
-function claudeExecutable(): string | undefined {
-  return findExecutableOnPath("claude") ?? undefined;
-}
 
 function hash(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -648,23 +638,6 @@ function registerProvider(msa: ExtensionAPI, id: string, name: string, account?:
   });
 }
 
-function describeAccounts(): string {
-  return loadAccounts()
-    .map((account) => {
-      const auth = account.configDir
-        ? `configDir ${account.configDir}`
-        : account.tokenCommand
-          ? "tokenCommand"
-          : "msa environment";
-      const block = blockOf(account);
-      const state = block
-        ? `blocked until ${new Date(block.until).toLocaleString()} (${block.reason})`
-        : "available";
-      return `${account.name}  ${auth}  ${state}${account.auto === false ? "  (not in rotation)" : ""}`;
-    })
-    .join("\n");
-}
-
 /**
  * `claude-code` runs under the first available account and moves on when one is
  * blocked; `claude-code-<account>` stays on that account.
@@ -682,11 +655,4 @@ export function registerClaudeCode(msa: ExtensionAPI): void {
       );
     }
   }
-  msa.registerCommand("claude-accounts", {
-    description: "Show Claude Code accounts; `clear` forgets usage-limit blocks",
-    handler: async (args, ctx) => {
-      if (args.trim() === "clear") clearBlocks();
-      ctx.ui.notify(describeAccounts(), "info");
-    },
-  });
 }

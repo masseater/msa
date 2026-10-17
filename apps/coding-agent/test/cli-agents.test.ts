@@ -1,4 +1,12 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -9,11 +17,17 @@ import { ENV_AGENT_DIR } from "../src/config.ts";
 import type { ExtensionAPI, ProviderConfig } from "../src/core/extensions/types.ts";
 import {
   accountEnv,
+  addAccount,
+  authStatus,
   blockIfUnusable,
   blockOf,
   clearBlocks,
   loadAccounts,
+  loginAccount,
   parseReset,
+  preferAccount,
+  removeAccount,
+  setAutoRotation,
 } from "../src/extensions/cli-agents/claude-accounts.ts";
 import { registerOpenCode } from "../src/extensions/cli-agents/opencode.ts";
 
@@ -99,6 +113,100 @@ describe("Claude Code accounts", () => {
     const error = await accountEnv(account).catch((caught: Error) => caught.message);
     expect(error).toMatch(/^tokenCommand .*: nope$/);
     expect(blockIfUnusable(account, String(error), false)).toBe(true);
+  });
+});
+
+describe("managing Claude Code accounts", () => {
+  const managed = (name: string) => join(dir, "claude-accounts", name);
+
+  it("keeps the implicit default account when the first account is added", () => {
+    addAccount("work");
+    expect(loadAccounts()).toEqual([
+      { name: "default" },
+      { name: "work", configDir: managed("work") },
+    ]);
+  });
+
+  it("adds a tokenCommand account and rejects bad or duplicate names", () => {
+    addAccount("token", "op read op://vault/claude");
+    expect(loadAccounts().at(-1)).toEqual({
+      name: "token",
+      tokenCommand: "op read op://vault/claude",
+    });
+    expect(() => addAccount("token")).toThrow(/already exists/);
+    expect(() => addAccount("Bad Name")).toThrow(/must be lowercase/);
+  });
+
+  it("reorders, toggles rotation and removes accounts, keeping ~ as written", () => {
+    writeAccounts([{ name: "main", configDir: "~/claude-main" }, { name: "sub" }]);
+    preferAccount("sub");
+    setAutoRotation("main", false);
+    const file = JSON.parse(readFileSync(join(dir, "claude-code-accounts.json"), "utf8"));
+    expect(file.accounts).toEqual([
+      { name: "sub" },
+      { name: "main", configDir: "~/claude-main", auto: false },
+    ]);
+    setAutoRotation("main", true);
+    expect(loadAccounts()[1]?.auto).toBeUndefined();
+    removeAccount("sub");
+    expect(loadAccounts().map((account) => account.name)).toEqual(["main"]);
+    expect(() => removeAccount("main")).toThrow(/must remain/);
+    expect(() => preferAccount("nope")).toThrow(/No Claude account/);
+  });
+
+  it("deletes the config dir msa made for a removed account", () => {
+    const account = addAccount("work");
+    mkdirSync(account.configDir!, { recursive: true });
+    blockIfUnusable(account, "You've hit your limit", true);
+    removeAccount("work");
+    expect(existsSync(managed("work"))).toBe(false);
+    expect(blockOf(account)).toBeUndefined();
+  });
+
+  function fakeClaude(script: string): void {
+    const bin = join(dir, "bin");
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(join(bin, "claude"), `#!/bin/sh\n${script}\n`);
+    chmodSync(join(bin, "claude"), 0o755);
+    process.env["PATH"] = `${bin}:${process.env["PATH"]}`;
+  }
+
+  it("signs an account in with the code the user pastes", async () => {
+    fakeClaude(
+      [
+        `if [ "$1 $2" = "auth status" ]; then`,
+        `  if [ -f "$CLAUDE_CONFIG_DIR/token" ]; then echo '{"loggedIn":true,"email":"a@example.com"}'; else echo '{"loggedIn":false}'; exit 1; fi`,
+        `  exit 0`,
+        `fi`,
+        `echo "Opening browser to sign in…"`,
+        `echo "If the browser didn't open, visit: https://claude.com/oauth?x=1"`,
+        `printf "Paste code here if prompted > "`,
+        `read code`,
+        `printf %s "$code" > "$CLAUDE_CONFIG_DIR/token"`,
+      ].join("\n"),
+    );
+    const account = addAccount("work");
+    expect(await authStatus(account)).toEqual({ loggedIn: false });
+    blockIfUnusable(account, "Not logged in · Please run /login", false);
+    let shown = "";
+    await loginAccount(account, {
+      askCode: async (url) => {
+        shown = url;
+        return "the-code";
+      },
+    });
+    expect(shown).toBe("https://claude.com/oauth?x=1");
+    expect(readFileSync(join(managed("work"), "token"), "utf8")).toBe("the-code");
+    expect(await authStatus(account)).toEqual({ loggedIn: true, email: "a@example.com" });
+    expect(blockOf(account)).toBeUndefined();
+  });
+
+  it("cancels the login when the user gives no code", async () => {
+    fakeClaude(`echo "visit: https://claude.com/oauth"\nread code\nexit 1`);
+    const account = addAccount("work");
+    await expect(loginAccount(account, { askCode: async () => undefined })).rejects.toThrow(
+      /cancelled/,
+    );
   });
 });
 
