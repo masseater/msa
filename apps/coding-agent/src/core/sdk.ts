@@ -516,6 +516,11 @@ export async function createAgentSession(
         ? async (worker) => {
             const workerResourceLoader = resourceLoader.fork();
             await workerResourceLoader.reload();
+            // Extension flags from the orchestrator's command line apply to its workers too.
+            const workerFlagValues = workerResourceLoader.getExtensions().runtime.flagValues;
+            for (const [name, value] of session.extensionRunner.getFlagValues()) {
+              workerFlagValues.set(name, value);
+            }
             const workerTools = options.tools?.filter(
               (entry) => !isOrchestratorTool(entry.replace(/^[+-]/, "")),
             );
@@ -525,6 +530,7 @@ export async function createAgentSession(
               modelRuntime,
               settingsManager,
               resourceLoader: workerResourceLoader,
+              ...(options.customTools ? { customTools: options.customTools } : {}),
               model: worker.model,
               thinkingLevel: worker.thinkingLevel,
               // An emptied allowlist still means no tools; emptied +/- entries mean the defaults.
