@@ -11,7 +11,7 @@ import {
 } from "../terminal-image-size.ts";
 import { imageFallback, renderImage, type RenderedImage } from "../terminal-image.ts";
 import { truncateToWidth } from "../text-truncate.ts";
-import type { Component } from "../tui.ts";
+import type { Component } from "../tui-component.ts";
 
 export type ImageTranscoder = (base64Data: string, mimeType: string) => string | null;
 

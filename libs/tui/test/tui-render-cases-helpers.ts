@@ -3,8 +3,8 @@ import { it } from "node:test";
 
 import { Effect } from "effect";
 
+import { type TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { type TUI } from "../src/tui.ts";
 import { withKittyCells, renderKittyTestImage } from "./tui-render-kitty-helpers.ts";
 import { LoggingVirtualTerminal } from "./tui-render-logging-virtual-terminal.ts";
 import { TestComponent } from "./tui-render-test-component.ts";

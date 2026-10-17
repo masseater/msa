@@ -1,5 +1,5 @@
 import { type CancelDelay, runEvery } from "../delay.ts";
-import type { TUI } from "../tui.ts";
+import type { TUI } from "../tui-interface.ts";
 import { Text } from "./text.ts";
 
 export interface LoaderIndicatorOptions {

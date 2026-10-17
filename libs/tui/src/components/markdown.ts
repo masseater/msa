@@ -2,7 +2,7 @@ import type { Token } from "marked";
 
 import { isImageLine } from "../terminal-image-kitty.ts";
 import { applyBackgroundToLine, wrapTextWithAnsi } from "../text-wrap.ts";
-import type { Component } from "../tui.ts";
+import type { Component } from "../tui-component.ts";
 import { flattenLines, visibleWidth } from "../utils.ts";
 import { MarkdownTokenRenderer } from "./markdown-token-renderer.ts";
 import { markdownParser, trimPartialClosingFences } from "./markdown-tokenizer.ts";

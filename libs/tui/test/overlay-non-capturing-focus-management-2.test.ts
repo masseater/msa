@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { Container } from "../src/tui.ts";
+import { Container } from "../src/tui-component.ts";
 import { FocusableOverlay } from "./overlay-non-capturing-focusable-overlay.ts";
 import { renderAndFlush, withOverlayTui } from "./overlay-non-capturing-helpers.ts";
 

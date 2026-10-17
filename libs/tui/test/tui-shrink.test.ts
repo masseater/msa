@@ -3,8 +3,9 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
+import type { Component } from "../src/tui-component.ts";
+import type { TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { Component, TUI } from "../src/tui.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 class Lines implements Component {

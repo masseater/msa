@@ -1,5 +1,5 @@
 import { SelectList } from "../src/components/select-list.ts";
-import { Container } from "../src/tui.ts";
+import { Container } from "../src/tui-component.ts";
 import { selectTheme } from "./mouse-components-helpers.ts";
 
 export class SubmenuHost extends Container {

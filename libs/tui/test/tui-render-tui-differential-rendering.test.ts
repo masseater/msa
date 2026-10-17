@@ -3,8 +3,8 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
+import { type TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { type TUI } from "../src/tui.ts";
 import { TestComponent } from "./tui-render-test-component.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 

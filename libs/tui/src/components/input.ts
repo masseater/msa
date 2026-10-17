@@ -11,7 +11,7 @@ import {
   renderFakeCursor,
   type TuiMouseEvent,
   type TuiMouseEventResult,
-} from "../tui.ts";
+} from "../tui-component.ts";
 import { getGraphemeSegmenter, visibleWidth } from "../utils.ts";
 import { InputTextField } from "./input-text-field.ts";
 

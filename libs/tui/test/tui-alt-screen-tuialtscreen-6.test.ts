@@ -6,7 +6,7 @@ import { Effect } from "effect";
 import { Text } from "../src/components/text.ts";
 import { hyperlink } from "../src/terminal-image.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { renderFakeCursor } from "../src/tui.ts";
+import { renderFakeCursor } from "../src/tui-component.ts";
 import { toJson } from "./effect-helpers.ts";
 import { someWriteSince, viewportHas } from "./tui-alt-screen-helpers.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";

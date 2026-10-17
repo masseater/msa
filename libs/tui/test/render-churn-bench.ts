@@ -7,7 +7,7 @@ import { ScrollView } from "../src/components/scroll-view.ts";
 import { Text } from "../src/components/text.ts";
 import { VStack } from "../src/components/v-stack.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { type Component, Container, CURSOR_MARKER } from "../src/tui.ts";
+import { type Component, Container, CURSOR_MARKER } from "../src/tui-component.ts";
 import { COLUMNS, NullTerminal, ROWS } from "./render-churn-null-terminal.ts";
 
 const WARMUP_FRAMES = 20;

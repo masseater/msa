@@ -3,8 +3,8 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
+import type { TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { TUI } from "../src/tui.ts";
 import { getCellItalic, renderAndFlush } from "./tui-overlay-style-leak-helpers.ts";
 import { StaticLines } from "./tui-overlay-style-leak-static-lines.ts";
 import { StaticOverlay } from "./tui-overlay-style-leak-static-overlay.ts";

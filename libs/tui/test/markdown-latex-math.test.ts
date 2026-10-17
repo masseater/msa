@@ -5,8 +5,8 @@ import { Effect } from "effect";
 
 import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
+import type { Component } from "../src/tui-component.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { Component, TUI } from "../src/tui.ts";
 import { chalk, getCell, stripAnsi } from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
@@ -184,7 +184,7 @@ function preStyledTextThinkingCases4(): void {
         );
 
         const terminal = new VirtualTerminal(80, 6);
-        const tui: TUI = new TuiMainScreen(terminal);
+        const tui = new TuiMainScreen(terminal);
         const component = new MarkdownWithInput(markdown);
         tui.addChild(component);
         tui.start();

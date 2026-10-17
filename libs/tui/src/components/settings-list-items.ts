@@ -1,4 +1,4 @@
-import type { Component } from "../tui.ts";
+import type { Component } from "../tui-component.ts";
 
 export interface SettingItem {
   id: string;

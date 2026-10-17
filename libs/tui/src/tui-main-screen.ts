@@ -1,5 +1,6 @@
 import { isEnvSet, readEnv } from "./env.ts";
 import { isImageLine } from "./terminal-image-kitty.ts";
+import { type TUI, type TuiStopOptions } from "./tui-interface.ts";
 import {
   appendChangedLines,
   appendFullRenderLines,
@@ -30,7 +31,7 @@ import {
   writeCrashLog,
   writeRenderDebugLog,
 } from "./tui-main-screen-support.ts";
-import { type TUI, TuiBase, type TuiStopOptions } from "./tui.ts";
+import { TuiBase } from "./tui.ts";
 
 function isTermuxSession(): boolean {
   return isEnvSet("TERMUX_VERSION");

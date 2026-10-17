@@ -3,8 +3,8 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
+import type { TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { TUI } from "../src/tui.ts";
 import { CursorTrackingTerminal } from "./overlay-options-cursor-tracking-terminal.ts";
 import { EmptyContent } from "./overlay-options-empty-content.ts";
 import { renderAndFlush } from "./overlay-options-helpers.ts";

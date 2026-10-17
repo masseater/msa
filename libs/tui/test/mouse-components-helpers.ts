@@ -3,7 +3,7 @@ import { dual } from "effect/Function";
 import { type EditorTheme } from "../src/components/editor.ts";
 import { type SelectListTheme } from "../src/components/select-list.ts";
 import { type SettingsListTheme } from "../src/components/settings-list.ts";
-import { type TuiMouseEvent, type TuiMouseEventType } from "../src/tui.ts";
+import { type TuiMouseEvent, type TuiMouseEventType } from "../src/tui-component.ts";
 
 export const mouse: {
   (type: TuiMouseEventType, x: number, y: number, width?: number, height?: number): TuiMouseEvent;

@@ -1,4 +1,4 @@
-import { compositeTuiLine } from "../tui.ts";
+import { compositeTuiLine } from "../tui-component.ts";
 import { visibleWidth } from "../utils.ts";
 import {
   allocateStackSizes,

@@ -3,7 +3,7 @@ import {
   dispatchMouseEvent,
   type TuiMouseDispatchResult,
   type TuiMouseEvent,
-} from "../tui.ts";
+} from "../tui-component.ts";
 import { flattenLines, visibleWidth } from "../utils.ts";
 
 type RenderCache = {
