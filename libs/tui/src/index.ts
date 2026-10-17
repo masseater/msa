@@ -160,26 +160,30 @@ export {
   compositeTuiLine,
   type Focusable,
   isFocusable,
-  isViewportTUI,
-  type OverlayAnchor,
-  type OverlayBounds,
-  type OverlayHandle,
-  type OverlayMargin,
-  type OverlayOptions,
-  type OverlayUnfocusOptions,
   renderFakeCursor,
-  type SizeValue,
-  type TUI,
-  type TuiInputListener,
-  type TuiInputListenerResult,
-  type TuiMode,
   type TuiMouseButton,
   type TuiMouseEvent,
   type TuiMouseEventResult,
   type TuiMouseEventType,
+} from "./tui-component.ts";
+export {
+  isViewportTUI,
+  type OverlayBounds,
+  type OverlayHandle,
+  type OverlayUnfocusOptions,
+  type TUI,
+  type TuiInputListener,
+  type TuiInputListenerResult,
+  type TuiMode,
   type TuiStopOptions,
   type ViewportTUI,
-} from "./tui.ts";
+} from "./tui-interface.ts";
+export {
+  type OverlayAnchor,
+  type OverlayMargin,
+  type OverlayOptions,
+  type SizeValue,
+} from "./tui-overlay-layout.ts";
 export { TuiAltScreen, type TuiAltScreenOptions } from "./tui-alt-screen.ts";
 export { TuiMainScreen, type TuiMainScreenRenderState } from "./tui-main-screen.ts";
 export { getOsc8LinkAtColumn, sliceByColumn } from "./text-slice.ts";

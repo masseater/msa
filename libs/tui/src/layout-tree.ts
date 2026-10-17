@@ -9,7 +9,7 @@ import {
   type StackLayoutNode,
 } from "./layout-node.ts";
 import type { LayoutBox, LayoutRect } from "./layout.ts";
-import { type Component, CURSOR_MARKER } from "./tui.ts";
+import { type Component, CURSOR_MARKER } from "./tui-component.ts";
 import { visibleWidth } from "./utils.ts";
 
 export interface LayoutContext {

@@ -6,7 +6,7 @@ import {
   type StackLayoutEntry,
   type StackLayoutNode,
 } from "../layout-node.ts";
-import { type Component, Container } from "../tui.ts";
+import { type Component, Container } from "../tui-component.ts";
 
 export interface StackEntryOptions {
   basis?: number | "auto";

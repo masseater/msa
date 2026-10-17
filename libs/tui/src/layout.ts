@@ -6,7 +6,7 @@ import type { ScrollView } from "./components/scroll-view.ts";
 import { type LayoutContext, layoutComponent } from "./layout-tree.ts";
 import { cropKittyImageLine, getKittyImageMetadata, isImageLine } from "./terminal-image-kitty.ts";
 import { getGraphemeCellRange, sliceByColumn } from "./text-slice.ts";
-import { type Component, compositeTuiLine } from "./tui.ts";
+import { type Component, compositeTuiLine } from "./tui-component.ts";
 import { extractAnsiCode, visibleWidth } from "./utils.ts";
 
 export interface LayoutRect {

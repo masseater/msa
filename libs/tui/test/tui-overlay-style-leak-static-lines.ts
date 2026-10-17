@@ -1,4 +1,4 @@
-import type { Component } from "../src/tui.ts";
+import type { Component } from "../src/tui-component.ts";
 
 export class StaticLines implements Component {
   private readonly lines: string[];

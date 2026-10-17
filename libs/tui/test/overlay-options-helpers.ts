@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import type { TUI } from "../src/tui.ts";
+import type { TUI } from "../src/tui-interface.ts";
 import { nextTick } from "./effect-helpers.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 

@@ -1,8 +1,9 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
+import { type Component } from "../src/tui-component.ts";
+import { type TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { type Component, type TUI } from "../src/tui.ts";
 import { nextTick } from "./effect-helpers.ts";
 import { EmptyContent } from "./overlay-non-capturing-empty-content.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";

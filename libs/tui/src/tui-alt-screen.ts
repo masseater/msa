@@ -50,17 +50,19 @@ import {
   CURSOR_MARKER,
   compositeTuiLine,
   dispatchMouseEvent,
-  type OverlayHandle,
   retargetMouseEvent,
-  TuiBase,
   type TuiMouseButton,
   type TuiMouseDispatchResult,
   type TuiMouseDispatchTarget,
   type TuiMouseEvent,
+} from "./tui-component.ts";
+import {
+  type OverlayHandle,
   type TuiStopOptions,
   VIEWPORT_TUI,
   type ViewportTUI,
-} from "./tui.ts";
+} from "./tui-interface.ts";
+import { TuiBase } from "./tui.ts";
 import {
   extractAnsiCode,
   getWordSegmenter,

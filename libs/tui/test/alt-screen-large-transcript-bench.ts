@@ -8,7 +8,7 @@ import { Text } from "../src/components/text.ts";
 import { VStack } from "../src/components/v-stack.ts";
 import type { Terminal } from "../src/terminal-protocol.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { Container } from "../src/tui.ts";
+import { Container } from "../src/tui-component.ts";
 
 const COLUMNS = 80;
 const ROWS = 50;

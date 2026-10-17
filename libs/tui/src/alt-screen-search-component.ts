@@ -1,7 +1,7 @@
 import { Input } from "./components/input.ts";
 import { getKeybindings } from "./keybindings.ts";
 import { truncateToWidth } from "./text-truncate.ts";
-import type { Component, Focusable } from "./tui.ts";
+import type { Component, Focusable } from "./tui-component.ts";
 import { visibleWidth } from "./utils.ts";
 
 const OUTER_GAP_WIDTH = 1;

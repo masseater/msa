@@ -1,8 +1,9 @@
 import { Effect } from "effect";
 
 import { ProcessTerminal } from "../src/terminal.ts";
+import type { Component } from "../src/tui-component.ts";
+import type { TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { Component, TUI } from "../src/tui.ts";
 
 class Lines implements Component {
   private lines: string[] = [];

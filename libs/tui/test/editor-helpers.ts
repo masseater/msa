@@ -2,8 +2,8 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import { Editor } from "../src/components/editor.ts";
+import { type TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { type TUI } from "../src/tui.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 export function createTestTUI(cols = 80): TUI {

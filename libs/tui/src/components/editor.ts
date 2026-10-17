@@ -19,10 +19,10 @@ import {
   CURSOR_MARKER,
   type Focusable,
   renderFakeCursor,
-  type TUI,
   type TuiMouseEvent,
   type TuiMouseEventResult,
-} from "../tui.ts";
+} from "../tui-component.ts";
+import { type TUI } from "../tui-interface.ts";
 import { UndoStack } from "../undo-stack.ts";
 import { getGraphemeSegmenter, getWordSegmenter, visibleWidth } from "../utils.ts";
 import { findWordBackward, findWordForward } from "../word-navigation.ts";

@@ -1,4 +1,4 @@
-import type { Component, Focusable } from "../src/tui.ts";
+import type { Component, Focusable } from "../src/tui-component.ts";
 
 export class FocusableOverlay implements Component, Focusable {
   focused = false;

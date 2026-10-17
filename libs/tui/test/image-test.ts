@@ -6,8 +6,8 @@ import { Text } from "../src/components/text.ts";
 import { getCapabilities } from "../src/terminal-capabilities.ts";
 import { getImageDimensions } from "../src/terminal-image-size.ts";
 import { ProcessTerminal } from "../src/terminal.ts";
+import type { TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { TUI } from "../src/tui.ts";
 import { readFileBytes } from "./test-platform.ts";
 
 const testImagePath = process.argv[2] || "/tmp/test-image.png";

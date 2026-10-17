@@ -5,8 +5,9 @@ import { Effect } from "effect";
 
 import { Input } from "../src/components/input.ts";
 import { sliceByColumn } from "../src/text-slice.ts";
+import { CURSOR_MARKER, renderFakeCursor } from "../src/tui-component.ts";
+import { type TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { CURSOR_MARKER, renderFakeCursor, type TUI } from "../src/tui.ts";
 import { LoggingVirtualTerminal } from "./tui-render-logging-virtual-terminal.ts";
 import { TestComponent } from "./tui-render-test-component.ts";
 

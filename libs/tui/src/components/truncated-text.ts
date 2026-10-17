@@ -1,5 +1,5 @@
 import { truncateToWidth } from "../text-truncate.ts";
-import type { Component } from "../tui.ts";
+import type { Component } from "../tui-component.ts";
 import { visibleWidth } from "../utils.ts";
 
 export class TruncatedText implements Component {

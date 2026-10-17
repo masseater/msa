@@ -4,8 +4,8 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import { Markdown, type MarkdownTheme } from "../src/components/markdown.ts";
+import type { TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { TUI } from "../src/tui.ts";
 import { toJson } from "./effect-helpers.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
