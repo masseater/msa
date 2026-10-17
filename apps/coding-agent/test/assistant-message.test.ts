@@ -35,6 +35,57 @@ function createAssistantMessage(
 }
 
 describe("AssistantMessageComponent", () => {
+  test("hands its thinking to another component, which follows later updates", () => {
+    initTheme("dark");
+    const toolCall = {
+      type: "toolCall" as const,
+      id: "tool-1",
+      name: "read",
+      arguments: { path: "file.txt" },
+    };
+    const message = createAssistantMessage(
+      [
+        { type: "thinking", thinking: "first idea" },
+        { type: "text", text: "reading it" },
+        toolCall,
+      ],
+      { stopReason: "toolUse" },
+    );
+    const component = new AssistantMessageComponent(message, true);
+
+    const thinking = component.takeThinking();
+    expect(thinking).toBeDefined();
+    expect(component.takeThinking()).toBeUndefined();
+    const text = stripAnsi(component.render(60).join("\n"));
+    expect(text).toContain("reading it");
+    expect(text).not.toContain("Thinking...");
+    expect(stripAnsi(thinking!.render(60).join("\n"))).toContain("Thinking...");
+    expect(thinking!.hasVisibleText()).toBe(false);
+
+    thinking!.setHideThinkingBlock(false);
+    component.updateContent(
+      createAssistantMessage(
+        [
+          { type: "thinking", thinking: "second idea" },
+          { type: "text", text: "reading it" },
+          toolCall,
+        ],
+        { stopReason: "length" },
+      ),
+    );
+    const thought = stripAnsi(thinking!.render(60).join("\n"));
+    expect(thought).toContain("second idea");
+    expect(thought).not.toContain("truncated");
+  });
+
+  test("keeps thinking that has no text beside it", () => {
+    initTheme("dark");
+    const component = new AssistantMessageComponent(
+      createAssistantMessage([{ type: "thinking", thinking: "idea" }]),
+    );
+    expect(component.takeThinking()).toBeUndefined();
+  });
+
   test("adds OSC 133 zone markers to assistant messages without tool calls", () => {
     initTheme("dark");
 
