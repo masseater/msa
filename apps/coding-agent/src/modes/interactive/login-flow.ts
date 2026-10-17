@@ -118,7 +118,6 @@ export interface LoginFlowHost {
   showError(message: string): void;
   /** Refreshes the UI that depends on which providers have credentials. */
   refreshAuthState(): void;
-  maybeWarnAboutAnthropicSubscriptionAuth(model?: Model<any>): Promise<void>;
   reload(): Promise<void>;
 }
 
@@ -633,13 +632,10 @@ export class LoginFlow {
         host.showStatus(
           `${actionLabel}. Selected ${selectedModel.id}. Credentials saved to ${getAuthPath()}`,
         );
-        void host.maybeWarnAboutAnthropicSubscriptionAuth(selectedModel);
       } else {
         host.showStatus(`${actionLabel}. Credentials saved to ${getAuthPath()}`);
         if (selectionError) {
           host.showError(selectionError);
-        } else {
-          void host.maybeWarnAboutAnthropicSubscriptionAuth();
         }
       }
     };
