@@ -63,6 +63,7 @@ import type { InlineExtension } from "./core/extensions/types.ts";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.ts";
 import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
+import { ORCHESTRATOR_TOOL_NAMES } from "./core/orchestrator/tools.ts";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import type { CreateAgentSessionOptions } from "./core/sdk.ts";
@@ -74,7 +75,7 @@ import {
 } from "./core/session-cwd.ts";
 import { assertValidSessionId, SessionManager } from "./core/session-manager.ts";
 import { collectSettingsDiagnostics, deduplicateDiagnostics } from "./core/settings-diagnostics.ts";
-import { SettingsManager } from "./core/settings-manager.ts";
+import { isToolModifier, SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
 import { builtInExtensions } from "./extensions/index.ts";
@@ -609,6 +610,15 @@ function buildSessionOptions(
   if (parsed.tools) {
     options.tools = [...parsed.tools];
   }
+  if (parsed.orchestrator) {
+    const tools = options.tools ?? [];
+    options.tools = [
+      ...tools,
+      ...(tools.length === 0 || tools.every(isToolModifier)
+        ? ORCHESTRATOR_TOOL_NAMES.map((name) => `+${name}`)
+        : ORCHESTRATOR_TOOL_NAMES),
+    ];
+  }
   if (parsed.excludeTools) {
     options.excludeTools = [...parsed.excludeTools];
   }
@@ -931,6 +941,7 @@ export async function main(args: string[], options?: MainOptions) {
       excludeTools: sessionOptions.excludeTools,
       noTools: sessionOptions.noTools,
       customTools: sessionOptions.customTools,
+      orchestrator: true,
     });
     const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
     if (created.session.model && cliThinkingOverride) {

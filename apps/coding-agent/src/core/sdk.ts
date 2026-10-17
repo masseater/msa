@@ -110,6 +110,11 @@ export interface CreateAgentSessionOptions {
   settingsManager?: SettingsManager;
   /** Session start event metadata for extension runtime startup. */
   sessionStartEvent?: SessionStartEvent;
+  /**
+   * Register the orchestrator tools (`start_session` and the rest). They start inactive; activate
+   * them with `tools` or the `defaultTools` setting.
+   */
+  orchestrator?: boolean;
 }
 
 /** Result from createAgentSession */
@@ -503,6 +508,22 @@ export async function createAgentSession(
     excludedToolNames,
     extensionRunnerRef,
     sessionStartEvent: options.sessionStartEvent,
+    createWorkerSession: options.orchestrator
+      ? async (worker) => {
+          const { session: workerSession } = await createAgentSession({
+            cwd: worker.cwd,
+            agentDir,
+            modelRuntime,
+            model: worker.model,
+            thinkingLevel: worker.thinkingLevel,
+            sessionManager: worker.sessionFile
+              ? SessionManager.open(worker.sessionFile)
+              : SessionManager.create(worker.cwd, getDefaultSessionDir(worker.cwd, agentDir)),
+          });
+          await workerSession.bindExtensions({ mode: "print" });
+          return workerSession;
+        }
+      : undefined,
   });
 
   const extensionsResult = resourceLoader.getExtensions();
