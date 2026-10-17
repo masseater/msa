@@ -8,7 +8,7 @@ Memory is separate from context files and compaction: those keep one conversatio
 
 - Every user prompt first searches memory and adds a `<memory>` block with the best matches to that run. The block is stored with the session (hidden from the transcript view), so later turns keep the recalled context without searching again.
 - The `memory` tool is active by default next to `read`, `bash`, `edit`, and `write`.
-- When memories were used, their use count rises so they rank higher later.
+- When memories were used, their use count rises, and memories used more often win ties later.
 
 ## Scopes
 
@@ -19,7 +19,7 @@ Each memory is either `project` or `global`.
 
 ## Embeddings
 
-Search combines an embedding similarity score with a keyword score that handles Japanese text as character bigrams, and a memory is recalled when the better of the two reaches `memory.recall.minScore`. Embeddings come from an OpenAI-compatible `/embeddings` endpoint; the default is a local [Ollama](https://ollama.com) endpoint running [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2).
+Search runs two retrievers and merges their rankings with [Reciprocal Rank Fusion](https://doi.org/10.1145/1571941.1572114) (k = 60): embedding similarity, and SQLite [FTS5](https://www.sqlite.org/fts5.html) full-text search ranked by bm25. Text is split into words with `Intl.Segmenter` before indexing, so Japanese matches by word. The embedding retriever keeps memories whose similarity reaches `memory.recall.minScore`, and the full-text retriever keeps memories holding at least that share of the query's words. Embeddings come from an OpenAI-compatible `/embeddings` endpoint; the default is a local [Ollama](https://ollama.com) endpoint running [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2).
 
 ```sh
 ollama pull embeddinggemma-2
@@ -29,7 +29,7 @@ EmbeddingGemma is trained with task prefixes: queries are embedded as `task: sea
 
 Any endpoint with the OpenAI embeddings shape works, including LM Studio, llama.cpp, and hosted APIs. Without a reachable endpoint, memories are still saved and searched by keyword, and msa retries embedding after a short cooldown.
 
-Similarity ranges differ between models, so `memory.recall.minScore` is tuned for the default model: EmbeddingGemma 2 puts relevant memories around 0.75 or higher, while `bge-m3` tops out lower and wants roughly 0.5.
+Similarity ranges differ between models, and Google publishes no recommended threshold for EmbeddingGemma, so `memory.recall.minScore` is measured for the default model: EmbeddingGemma 2 puts relevant memories around 0.75 or higher, while `bge-m3` tops out lower and wants roughly 0.5.
 
 Changing the embedding model changes the vector width. When a session starts, msa re-embeds up to 25 memories that carry no vector or one from another model in the background; until a memory is re-embedded it keeps working through keyword search.
 
@@ -101,6 +101,6 @@ With `memory.enabled: false` the tool is not registered, no recall runs, and `/m
 
 ## Storage
 
-Memories live in one SQLite file (`memory.db`). Each row holds the text, kind (`fact`, `preference`, `decision`, `note`), scope, project, timestamps, use count, and its embedding. Saving the same text twice in the same scope refreshes the existing memory instead of adding a duplicate.
+Memories live in one SQLite file (`memory.db`). Each row holds the text, kind (`fact`, `preference`, `decision`, `note`), scope, project, timestamps, use count, and its embedding; an FTS5 table next to it holds the full-text index, built for existing memories the first time a new msa opens the file. Saving the same text twice in the same scope refreshes the existing memory instead of adding a duplicate.
 
 Delete the file to start over. To move memories between machines, copy the file.

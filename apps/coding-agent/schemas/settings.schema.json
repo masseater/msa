@@ -568,7 +568,7 @@
             },
             "minScore": {
               "type": "number",
-              "description": "Minimum relevance (0-1) for a memory to be recalled: the better of the embedding similarity and the share of query terms found. Embedding models differ in their score range, so tune this with the model.",
+              "description": "Minimum relevance (0-1) for a memory to be recalled: its embedding similarity, or the share of query words it holds. Embedding models differ in their score range, so tune this with the model.",
               "default": 0.72
             }
           }

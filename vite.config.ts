@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { presets as effectPresets } from "@effect/tsgo/oxlint-presets";
 import { defineConfig } from "vite-plus";
 
-import { generated, restrictedImports } from "./lint.config.ts";
+import { generated, restrictedImports, strictCategoryRules } from "./lint.config.ts";
 
 type Rules = Readonly<Record<string, "error">>;
 
@@ -171,6 +171,12 @@ export default defineConfig({
             "error",
             { allow: ["oxlint-disable", "eslint-disable"] },
           ],
+          "eslint/no-control-regex": "error",
+          "eslint/no-shadow": "error",
+          "eslint/no-underscore-dangle": "error",
+          "eslint/no-unmodified-loop-condition": "error",
+          "promise/always-return": "error",
+          ...asErrors(strictCategoryRules),
           ...effectRules,
         },
       },
@@ -189,6 +195,7 @@ export default defineConfig({
         dependsOn: [
           "engine-checks",
           "workspace-layout",
+          "fence-check",
           "syncpack",
           "actions-lint",
           "mcp-conformance",
@@ -200,6 +207,10 @@ export default defineConfig({
       "engine-checks": {
         command:
           "node scripts/check-ts-relative-imports.mjs && node scripts/check-entry-graphs.mjs && node scripts/check-browser-smoke.mjs",
+      },
+      "fence-check": {
+        command: "node tools/fence-counts.ts",
+        dependsOn: ["build"],
       },
       "workspace-layout": "node tools/workspace-layout.ts",
       "actions-lint": {
@@ -255,7 +266,7 @@ export default defineConfig({
       "test-all": {
         command: "bash test.sh",
         cache: false,
-        dependsOn: ["build", "daemon-build", "engine-checks"],
+        dependsOn: ["build", "daemon-build", "engine-checks", "fence-check"],
       },
     },
   },
