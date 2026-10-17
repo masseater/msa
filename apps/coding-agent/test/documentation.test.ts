@@ -129,6 +129,31 @@ function markdownLinks(markdown: string): string[] {
   return links;
 }
 
+function headingSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replaceAll(/[^\p{Letter}\p{Number}\s_-]/gu, "")
+    .trim()
+    .replaceAll(/\s+/gu, "-");
+}
+
+function markdownAnchors(markdown: string): Set<string> {
+  const anchors = new Set<string>();
+  walkTokens(lexer(markdown), (token: Token) => {
+    if (token.type === "heading") anchors.add(headingSlug((token as Tokens.Heading).text));
+  });
+  for (const match of markdown.matchAll(/<a\s+id="([^"]+)"/gu)) {
+    const id = match[1];
+    if (id !== undefined) anchors.add(id);
+  }
+  return anchors;
+}
+
+function fragmentOf(href: string): string {
+  const hash = href.indexOf("#");
+  return hash === -1 ? "" : decodeURIComponent(href.slice(hash + 1));
+}
+
 function isFile(path: string): boolean {
   return existsSync(path) && statSync(path).isFile();
 }
@@ -172,12 +197,21 @@ describe("coding-agent documentation", () => {
         if (/^[a-z][a-z\d+.-]*:/i.test(href) || href.startsWith("//") || href.startsWith("/"))
           continue;
         const linkedPath = href.split(/[?#]/, 1)[0] ?? "";
+        const fragment = fragmentOf(href);
+        if (linkedPath === "" && fragment !== "") {
+          if (!markdownAnchors(readFileSync(resolve(docsRoot, source), "utf8")).has(fragment))
+            brokenLinks.push(`${source} -> ${href}`);
+          continue;
+        }
         if (!linkedPath.endsWith(".md")) continue;
 
         const target = resolve(docsRoot, dirname(source), linkedPath);
         if (!isFile(target)) {
           brokenLinks.push(`${source} -> ${href}`);
           continue;
+        }
+        if (fragment !== "" && !markdownAnchors(readFileSync(target, "utf8")).has(fragment)) {
+          brokenLinks.push(`${source} -> ${href}`);
         }
 
         const relativePath = relative(docsRoot, target);

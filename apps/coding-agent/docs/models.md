@@ -30,7 +30,7 @@ Run `/model` to search available models. The picker shows models whose providers
 
 Run `/effort` to select the thinking level for the current model. Press `Ctrl+S` there to save the startup level. msa limits the choices to levels supported by the selected model.
 
-`Ctrl+P` cycles through available models. Use `/scoped-models` to control that cycle and save the selection, or configure model patterns through [Settings](settings.md#model-cycling).
+`Ctrl+P` cycles through available models. Use `/scoped-models` to control that cycle and save the selection, or configure model patterns through [Settings](settings.md#model-and-thinking).
 
 A session records model and thinking-level changes. Resuming the session restores them without changing defaults for new sessions.
 
@@ -86,8 +86,6 @@ Use `inputLimits.images.resize` to control how msa encodes new image attachments
 ```
 
 `maxBytes` limits the base64-encoded payload. Omitted resize fields use conservative defaults of 2000 by 2000 pixels, 4.5 MiB encoded, and JPEG quality 80. Images are encoded once; changing models does not rewrite historical images. The catalog can also describe hard request limits with `inputLimits.maxRequestBytes`, `images.maxPerMessage`, and `images.maxPerRequest`, but msa does not yet rewrite or reject history based on them.
-
-<a id="prompt-cache-lifetimes"></a>
 
 Use `promptCache` to declare the provider's best-effort cache lifetime in seconds for the `short` or `long` retention tier:
 

@@ -21,8 +21,6 @@ This uses the working directory, discovered resources, stored settings, and conf
 
 The [complete minimal example](../examples/sdk/01-minimal.ts) also streams text events. All [SDK examples](../examples/sdk/) are typechecked with the repository.
 
-<a id="session-management"></a>
-
 ## Session lifecycle
 
 `createAgentSession()` creates an `AgentSession`. The session owns one conversation, its model and tools, queued messages, compaction state, and extension runtime.
@@ -30,8 +28,6 @@ The [complete minimal example](../examples/sdk/01-minimal.ts) also streams text 
 Read current state through `session.messages`, `session.model`, `session.thinkingLevel`, `session.systemPrompt`, and `session.getActiveToolNames()`.
 
 `session.systemPrompt` is read-only and returns the current effective system prompt, including changes that have not yet been sent to the model. Tool changes are declared to the model before the next request.
-
-<a id="sessionmanager-api"></a>
 
 ### Session storage
 
@@ -107,11 +103,7 @@ Each boundary can be supplied explicitly:
 
 Use `DefaultResourceLoader` when you want standard discovery with selected overrides. Supply a custom `ResourceLoader` when the host owns resource storage and discovery completely.
 
-<a id="inlineextension"></a>
-
 Inline extension factories can be supplied through `DefaultResourceLoader`. Give one an `InlineExtension` name only when it needs a stable name in diagnostics and startup output. A named inline extension with `replaceable: true` is left out when another extension registers a tool, command, or flag with a name it registers during loading, instead of both loading with a conflict. The CLI's built-in codemode, tool search, and MCP extensions are replaceable. A named entry with `builtin: true` is not an inline extension: it supplies the code of the `builtin:<name>` extension, which loads like a configured extension file. It loads by default, is listed in `msa config`, and is disabled by `-builtin:<name>` in the `extensions` setting or by `noExtensions`; `additionalExtensionPaths: ["builtin:<name>"]` loads it explicitly. It loads after project trust is resolved, so it cannot handle `project_trust`. The CLI's built-in extensions use it.
-
-<a id="codemode-mcp"></a>
 
 The CLI loads `codemode`, `tool_search`, and MCP as built-in extensions. SDK sessions do not; add `createCodemodeExtension()`, `createToolSearchExtension()`, and `createMcpExtension()` to the `extensionFactories` of `DefaultResourceLoader`. `codemode` and `tool_search` are registered inactive: enable them through the `defaultTools` setting (`["+codemode", "+tool_search"]` keeps the other default tools), or let the MCP extension activate them: `codemode` for servers with `codemode` exposure, `tool_search` for servers with `deferred` exposure. The MCP extension connects its servers on `session_start`, so call `session.bindExtensions()`. See [Codemode and MCP](../examples/sdk/14-codemode-mcp.ts).
 
@@ -135,8 +127,6 @@ See the focused examples for [models](../examples/sdk/02-custom-model.ts), [tool
 | [Full control](../examples/sdk/12-full-control.ts)         | Replace default discovery and state services          |
 | [Session runtime](../examples/sdk/13-session-runtime.ts)   | Replace the active session safely                     |
 | [Codemode and MCP](../examples/sdk/14-codemode-mcp.ts)     | Add the `codemode`, `tool_search`, and MCP extensions |
-
-<a id="exports"></a>
 
 ## Resources
 

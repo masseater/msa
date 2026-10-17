@@ -22,8 +22,6 @@ Whichever option you choose, only provide the files and services required for th
 
 For setup instructions and the limitations of each isolation method, see [Run msa in an isolated environment](containerization.md).
 
-<a id="project-trust"></a>
-
 ## Understand project trust
 
 Project trust controls whether msa loads most settings and resources supplied by a working folder. It prevents a folder from silently loading executable extensions before you approve it.

@@ -52,8 +52,6 @@ Arguments after the command are appended to the loaded instructions as a user re
 
 Set `disable-model-invocation: true` in frontmatter when a skill should be available only through its explicit command. The `enableSkillCommands` [setting](settings.md) controls whether skill commands appear in interactive command discovery; manually entered `/name` commands still work. A skill takes its name from a built-in command, an extension command, or a prompt template of the same name, as in Claude Code; the built-in command keeps its aliases.
 
-<a id="choose-where-it-loads"></a>
-
 ## Add it to msa
 
 Place the skill in your user or project skills directory. Directories containing `SKILL.md` are discovered recursively.

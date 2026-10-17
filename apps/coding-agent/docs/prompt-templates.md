@@ -23,8 +23,6 @@ The filename becomes the command name, so this template is available as `/review
 
 Run `/reload` after adding or changing a template in an active session.
 
-<a id="invoke-a-template"></a>
-
 ## Use a template
 
 Type the template command in the editor:
@@ -48,8 +46,6 @@ Templates support these substitutions:
 | `${@:N:L}`           | `L` arguments starting at position `N` |
 
 Arguments follow shell-like quoting, so `/review "API compatibility"` supplies one argument containing a space.
-
-<a id="choose-where-it-loads"></a>
 
 ## Add it to msa
 
