@@ -31,7 +31,8 @@
  * Termination: the client cannot interrupt a remote VM that is computing. When the client finishes
  * first (deadline, abort, `close()`), it answers every pending and later `exchange` with
  * `{ type: "stop" }`, and the remote stops the VM at that point. A script that computes without
- * calling a tool runs until its interrupt budget is used up. The remote reports that as a
+ * calling a tool runs until its interrupt budget is used up, or, where the remote's clock runs
+ * while it computes, until `timeoutMs` has passed on that clock. The remote reports that as a
  * `failure` message, which the client turns into the same `kind: "timeout"` error an in-thread
  * VM produces.
  *
@@ -288,8 +289,9 @@ function remoteLauncher(
  * Runs each execution's VM on a remote, usually a Cloudflare Durable Object deployed with
  * `CodemodeSandboxDurableObject`, while tools run here. Same API and results as
  * `CodemodeSandbox`, so it can replace it. Differences: a script that computes without calling a
- * tool is limited by the remote's interrupt budget rather than `timeoutMs`, and after a deadline or
- * abort the remote VM keeps computing until it next calls a tool or uses up that budget.
+ * tool is limited by the remote's interrupt budget rather than `timeoutMs` where the remote's clock
+ * is frozen while it computes (Workers), and after an abort the remote VM keeps computing until it
+ * next calls a tool, uses up that budget, or reaches `timeoutMs`.
  */
 export class RemoteCodemodeSandbox extends CodemodeSandboxBase {
   constructor(options: RemoteCodemodeSandboxOptions) {

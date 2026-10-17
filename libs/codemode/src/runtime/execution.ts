@@ -252,6 +252,7 @@ class Execution {
       })),
       memoryLimitBytes: options.memoryLimitBytes,
       store: options.store,
+      ...(Number.isFinite(options.timeoutMs) ? { timeoutMs: options.timeoutMs } : {}),
       ...(options.deterministic ? { deterministic: options.deterministic } : {}),
     };
     const events: VmEvents = {

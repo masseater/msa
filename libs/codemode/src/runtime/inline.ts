@@ -8,10 +8,13 @@
  * worker thread, `while (true) {}` is stopped by the host's 200 ms timer; on the calling thread
  * that timer never gets a chance to run.
  *
- * Solution: an interrupt budget. QuickJS polls its interrupt handler periodically while a script
- * runs; this launcher counts the polls across the whole execution and interrupts the script once
- * the count passes the budget. The execution then fails with `kind: "timeout"`. The deadline and
- * abort signal still work whenever the script waits on a tool, since the event loop runs then.
+ * Solution: QuickJS polls its interrupt handler periodically while a script runs, and the launcher
+ * decides there. It interrupts the script once the execution's `timeoutMs` has passed on the
+ * thread's own clock, so where the clock runs (Node, Bun) a script stops on time however much CPU
+ * the thread gets. Where the clock is frozen (Workers), it counts the polls across the whole
+ * execution instead and interrupts the script once the count passes the interrupt budget. Either
+ * way the execution fails with `kind: "timeout"`. The abort signal still works whenever the script
+ * waits on a tool, since the event loop runs then.
  *
  * The rate of polls depends on the code and the machine. Measured with a tight loop: about 50,000
  * per second of CPU on an Apple M-series laptop and about 10,000 per second on Cloudflare Durable
@@ -65,17 +68,23 @@ export function inlineLauncher(
     } catch (error) {
       throw new Error(`Failed to load QuickJS: ${errorMessage(error)}`);
     }
+    const deadline = data.timeoutMs === undefined ? undefined : performance.now() + data.timeoutMs;
     let stopped = false;
     let settled = false;
     let polls = 0;
     let exhausted = false;
+    let timedOut = false;
     const session = await startVm({
       data,
       wasm: module,
       maxStackSize: INLINE_MAX_STACK_SIZE,
       interruptBudget,
       shouldInterrupt: () => {
-        if (stopped || settled || exhausted) return true;
+        if (stopped || settled || exhausted || timedOut) return true;
+        if (deadline !== undefined && performance.now() >= deadline) {
+          timedOut = true;
+          return true;
+        }
         if (++polls <= interruptBudget) return false;
         exhausted = true;
         return true;
@@ -88,10 +97,12 @@ export function inlineLauncher(
         queueMicrotask(() => {
           if (stopped) return;
           // The interrupt surfaces as a crash or a failed done; report what caused it instead.
-          if (exhausted && (message.type === "done" || message.type === "crash")) {
+          if ((exhausted || timedOut) && (message.type === "done" || message.type === "crash")) {
             events.failure({
               kind: "timeout",
-              message: `Execution exceeded its interrupt budget of ${interruptBudget}`,
+              message: timedOut
+                ? `Execution timed out after ${data.timeoutMs} ms`
+                : `Execution exceeded its interrupt budget of ${interruptBudget}`,
             });
             return;
           }
