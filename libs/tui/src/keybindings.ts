@@ -308,7 +308,7 @@ export function setKeybindings(keybindings: KeybindingsManager): void {
 }
 
 export function getKeybindings(): KeybindingsManager {
-  if (!globalKeybindings) {
+  if (globalKeybindings === null) {
     globalKeybindings = new KeybindingsManager(TUI_KEYBINDINGS);
   }
   return globalKeybindings;

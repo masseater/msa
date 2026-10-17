@@ -195,7 +195,7 @@ function tablesCases3(): void {
       assert.strictEqual(getCell(terminal, row, separatorCol).getFgColor(), quoteColor);
       assert.strictEqual(getCell(terminal, row, plainCol).getFgColor(), quoteColor);
 
-      const finalRow = viewport.findIndex((line) => line.includes("five six"));
+      const finalRow = viewport.findIndex((viewportLine) => viewportLine.includes("five six"));
       assert.notStrictEqual(
         finalRow,
         -1,

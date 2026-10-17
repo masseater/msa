@@ -98,7 +98,7 @@ export class ScrollView extends Container {
   private markScrollbarActivity(): void {
     if (this.scrollbar !== "auto" || this.contentHeight <= this.currentViewportHeight) return;
     this.transientScrollbarVisible = true;
-    if (this.scrollbarHideTimer) {
+    if (this.scrollbarHideTimer !== undefined) {
       clearTimeout(this.scrollbarHideTimer);
       this.scrollbarHideTimer = undefined;
     }
@@ -113,7 +113,7 @@ export class ScrollView extends Container {
 
   private hideTransientScrollbar(): void {
     this.transientScrollbarVisible = false;
-    if (!this.scrollbarHideTimer) return;
+    if (this.scrollbarHideTimer === undefined) return;
     clearTimeout(this.scrollbarHideTimer);
     this.scrollbarHideTimer = undefined;
   }

@@ -34,8 +34,14 @@ describe("Markdown component", () => {
       assert.ok(fooLine?.includes("\x1b[3m"), `Foo line should have italic: ${fooLine}`);
       assert.ok(barLine?.includes("\x1b[3m"), `bar line should have italic: ${barLine}`);
 
-      assert.ok(!fooLine?.includes("\x1b[36m"), `Foo line should NOT have cyan color: ${fooLine}`);
-      assert.ok(!barLine?.includes("\x1b[36m"), `bar line should NOT have cyan color: ${barLine}`);
+      assert.ok(
+        fooLine?.includes("\x1b[36m") !== true,
+        `Foo line should NOT have cyan color: ${fooLine}`,
+      );
+      assert.ok(
+        barLine?.includes("\x1b[36m") !== true,
+        `bar line should NOT have cyan color: ${barLine}`,
+      );
     });
   });
 });

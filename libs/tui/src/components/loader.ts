@@ -45,7 +45,7 @@ export class Loader extends Text {
   }
 
   stop(): void {
-    if (this.intervalId) {
+    if (this.intervalId !== null) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
@@ -65,7 +65,7 @@ export class Loader extends Text {
     this.renderIndicatorVerbatim = indicator !== undefined;
     this.frames = indicator?.frames === undefined ? [...DEFAULT_FRAMES] : [...indicator.frames];
     this.intervalMs =
-      indicator?.intervalMs && indicator.intervalMs > 0
+      indicator?.intervalMs !== undefined && indicator.intervalMs > 0
         ? indicator.intervalMs
         : DEFAULT_INTERVAL_MS;
     this.currentFrame = 0;
@@ -92,7 +92,7 @@ export class Loader extends Text {
     const renderedFrame = this.getRenderedIndicator();
     const indicator = renderedFrame.length > 0 ? `${renderedFrame} ` : "";
     this.setText(`${indicator}${this.messageColorFn(this.message)}`);
-    if (this.ui) {
+    if (this.ui !== null) {
       this.ui.requestRender();
     }
   }

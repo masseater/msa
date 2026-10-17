@@ -102,7 +102,7 @@ for (let index = 0; index < COMPONENT_COUNT; index++) {
   chat.addChild(markdown);
   if (index === COMPONENT_COUNT - 1) streamingMarkdown = markdown;
 }
-if (!streamingMarkdown)
+if (streamingMarkdown === undefined)
   throw new Error("Benchmark requires at least one assistant Markdown component");
 
 const document = new Container();

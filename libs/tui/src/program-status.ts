@@ -31,11 +31,11 @@ function truncateUtf8(text: string, maxBytes: number): string {
 export function formatProgramStatus(status: ProgramStatus): string {
   const pairs = [`state=${status.state}`];
   if (status.app !== undefined && APP_PATTERN.test(status.app)) pairs.push(`app=${status.app}`);
-  if (status.state === "blocked" && status.kind) pairs.push(`kind=${status.kind}`);
+  if (status.state === "blocked" && status.kind !== undefined) pairs.push(`kind=${status.kind}`);
   const message = truncateUtf8(
     (status.message ?? "").replace(CONTROL_CHARACTERS, " ").trim(),
     MAX_MESSAGE_BYTES,
   );
-  if (message) pairs.push(`msg=${Buffer.from(message, "utf8").toString("base64")}`);
+  if (message !== "") pairs.push(`msg=${Buffer.from(message, "utf8").toString("base64")}`);
   return `\x1b]7501;${pairs.join(":")}\x1b\\`;
 }

@@ -22,7 +22,7 @@ export function setImageTranscoder(transcoder: ImageTranscoder | undefined): voi
 }
 
 function toPng(base64Data: string, mimeType: string): string | null {
-  if (!imageTranscoder) return null;
+  if (imageTranscoder === undefined) return null;
   const cached = pngCache.get(base64Data);
   const png = cached === undefined ? imageTranscoder(base64Data, mimeType) : cached;
   pngCache.delete(base64Data);
@@ -80,7 +80,7 @@ export class Image implements Component {
   }
 
   render(width: number): string[] {
-    if (this.cachedLines && this.cachedWidth === width) {
+    if (this.cachedLines !== undefined && this.cachedWidth === width) {
       return this.cachedLines;
     }
 
@@ -98,11 +98,11 @@ export class Image implements Component {
     if (caps.images === "kitty" && this.mimeType !== "image/png") {
       this.pngData ??= toPng(this.base64Data, this.mimeType) ?? undefined;
       data = this.pngData ?? null;
-      if (data) dimensions = getPngDimensions(data) ?? dimensions;
+      if (data !== null && data !== "") dimensions = getPngDimensions(data) ?? dimensions;
     }
     let lines: string[];
 
-    if (caps.images && data) {
+    if (caps.images !== null && data !== null && data !== "") {
       if (caps.images === "kitty" && this.imageId === undefined) {
         this.imageId = allocateImageId();
       }
@@ -113,8 +113,11 @@ export class Image implements Component {
         moveCursor: false,
       });
 
-      if (result) {
-        if (result.imageId) {
+      if (result === null) {
+        const fallback = imageFallback(this.mimeType, this.dimensions, this.options.filename);
+        lines = [truncateToWidth(this.theme.fallbackColor(fallback), width)];
+      } else {
+        if (result.imageId !== undefined && result.imageId !== 0) {
           this.imageId = result.imageId;
         }
 
@@ -133,9 +136,6 @@ export class Image implements Component {
           const moveUp = rowOffset > 0 ? `\x1b[${rowOffset}A` : "";
           lines.push(moveUp + result.sequence);
         }
-      } else {
-        const fallback = imageFallback(this.mimeType, this.dimensions, this.options.filename);
-        lines = [truncateToWidth(this.theme.fallbackColor(fallback), width)];
       }
     } else {
       const fallback = imageFallback(this.mimeType, this.dimensions, this.options.filename);

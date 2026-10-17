@@ -41,7 +41,7 @@ describe("CombinedAutocompleteProvider", () => {
 
       const values = result?.items.map((item) => item.value);
       assert.ok(values?.includes("@libs/tui/src/autocomplete.ts"));
-      assert.ok(!values?.includes("@libs/ai/src/autocomplete.ts"));
+      assert.ok(values?.includes("@libs/ai/src/autocomplete.ts") !== true);
     });
   });
 });
@@ -75,7 +75,7 @@ describe("CombinedAutocompleteProvider", () => {
 
       const values = result?.items.map((item) => item.value);
       assert.ok(values?.includes("@src/components/Button.tsx"));
-      assert.ok(!values?.includes("@src/utils/helpers.ts"));
+      assert.ok(values?.includes("@src/utils/helpers.ts") !== true);
     });
   });
 });
@@ -111,7 +111,7 @@ describe("CombinedAutocompleteProvider", () => {
       const values = result?.items.map((item) => item.value);
       assert.ok(values?.includes("@../outside/nested/alpha.ts"));
       assert.ok(values?.includes("@../outside/nested/deeper/also-alpha.ts"));
-      assert.ok(!values?.includes("@../outside/nested/deeper/zzz.ts"));
+      assert.ok(values?.includes("@../outside/nested/deeper/zzz.ts") !== true);
     });
   });
 });

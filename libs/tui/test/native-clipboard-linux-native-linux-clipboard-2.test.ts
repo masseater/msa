@@ -52,7 +52,7 @@ function nativeLinuxClipboardCases8(): void {
     ]);
   });
   after(() => {
-    if (directory) rmSync(directory, { recursive: true, force: true });
+    if (directory !== "") rmSync(directory, { recursive: true, force: true });
   });
   ["text", "image"].forEach((content) => {
     it(`frees partially received X11 ${content} after invalid metadata`, async (t) => {

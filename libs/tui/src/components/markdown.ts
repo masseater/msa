@@ -11,7 +11,7 @@ class StrictStrikethroughTokenizer extends Tokenizer {
   override del(src: string): Tokens.Del | undefined {
     const match = STRICT_STRIKETHROUGH_REGEX.exec(src);
     const text = match?.[2];
-    if (!match || text === undefined) {
+    if (match === null || text === undefined) {
       return undefined;
     }
 
@@ -91,7 +91,7 @@ function tokenizeInlineLatex(source: string): LatexToken | undefined {
   }
 
   const text = source.slice(opening.length, closingIndex);
-  if (!text || text.includes("\n")) {
+  if (text === "" || text.includes("\n")) {
     return undefined;
   }
 
@@ -101,12 +101,12 @@ function tokenizeInlineLatex(source: string): LatexToken | undefined {
 
 function tokenizeBlockLatex(source: string): LatexToken | undefined {
   const dollarMatch = /^ {0,3}\$\$[ \t]*(?:\n)?([\s\S]*?)\$\$[ \t]*(?:\n|$)/u.exec(source);
-  if (dollarMatch?.[1]) {
+  if (dollarMatch?.[1] !== undefined && dollarMatch?.[1] !== "") {
     return { type: "latexBlock", raw: dollarMatch[0], text: dollarMatch[1].trim() };
   }
 
   const bracketMatch = /^ {0,3}\\\[[ \t]*(?:\n)?([\s\S]*?)\\\][ \t]*(?:\n|$)/u.exec(source);
-  if (bracketMatch?.[1]) {
+  if (bracketMatch?.[1] !== undefined && bracketMatch?.[1] !== "") {
     return { type: "latexBlock", raw: bracketMatch[0], text: bracketMatch[1].trim() };
   }
 
@@ -115,7 +115,11 @@ function tokenizeBlockLatex(source: string): LatexToken | undefined {
     return { type: "latexBlock", raw: pendingBracket[0], text: pendingBracket[1], pending: true };
   }
   const pendingDollar = /^ {0,3}\$\$[ \t]*(?:\n)?([\s\S]*)$/u.exec(source);
-  if (pendingDollar?.[1] && looksLikePendingDollarMath(pendingDollar[1])) {
+  if (
+    pendingDollar?.[1] !== undefined &&
+    pendingDollar?.[1] !== "" &&
+    looksLikePendingDollarMath(pendingDollar[1])
+  ) {
     return { type: "latexBlock", raw: pendingDollar[0], text: pendingDollar[1], pending: true };
   }
   return undefined;
@@ -127,7 +131,7 @@ const LATEX_MARKDOWN_EXTENSIONS: readonly TokenizerExtension[] = [
     level: "block",
     start(source) {
       const match = /(?:^|\n) {0,3}(?:\$\$|\\\[)/u.exec(source);
-      return match ? match.index + (match[0].startsWith("\n") ? 1 : 0) : undefined;
+      return match === null ? undefined : match.index + (match[0].startsWith("\n") ? 1 : 0);
     },
     tokenizer: tokenizeBlockLatex,
   },
@@ -161,8 +165,10 @@ function trimPartialClosingFences(tokens: readonly Token[]): void {
   const marker = /^(`{3,}|~{3,})/u.exec(token.raw)?.[1];
   const lastLine = token.raw.split("\n").pop();
   if (
-    !marker ||
-    !lastLine ||
+    marker === undefined ||
+    marker === "" ||
+    lastLine === undefined ||
+    lastLine === "" ||
     lastLine.length >= marker.length ||
     lastLine !== marker[0]?.repeat(lastLine.length)
   ) {
@@ -245,7 +251,7 @@ export class Markdown implements Component {
     this.paddingY = paddingY;
     this.theme = theme;
     this.defaultTextStyle = defaultTextStyle;
-    this.options = options ? { ...options } : {};
+    this.options = options === undefined ? {} : { ...options };
   }
 
   setText(text: string): void {
@@ -260,14 +266,18 @@ export class Markdown implements Component {
   }
 
   render(width: number): string[] {
-    if (this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {
+    if (
+      this.cachedLines !== undefined &&
+      this.cachedText === this.text &&
+      this.cachedWidth === width
+    ) {
       return this.cachedLines;
     }
 
     const contentWidth = Math.max(1, width - this.paddingX * 2);
     const text = this.options.transform?.(this.text, contentWidth) ?? this.text;
 
-    if (!text || text.trim() === "") {
+    if (text === "" || text.trim() === "") {
       const result: string[] = [];
       this.cachedText = this.text;
       this.cachedWidth = width;
@@ -279,7 +289,7 @@ export class Markdown implements Component {
 
     const cached = this.cachedTokens?.deref();
     let tokens = cached?.source === normalizedText ? cached.tokens : undefined;
-    if (!tokens) {
+    if (tokens === undefined) {
       tokens = markdownParser.lexer(normalizedText);
       trimPartialClosingFences(tokens);
       this.cachedTokens = new WeakRef({ source: normalizedText, tokens });
@@ -319,19 +329,19 @@ export class Markdown implements Component {
 
       const lineWithMargins = leftMargin + line + rightMargin;
 
-      if (bgFn) {
-        contentLines.push(applyBackgroundToLine(lineWithMargins, width, bgFn));
-      } else {
+      if (bgFn === undefined) {
         const visibleLen = visibleWidth(lineWithMargins);
         const paddingNeeded = Math.max(0, width - visibleLen);
         contentLines.push(lineWithMargins + " ".repeat(paddingNeeded));
+      } else {
+        contentLines.push(applyBackgroundToLine(lineWithMargins, width, bgFn));
       }
     }
 
     const emptyLine = " ".repeat(width);
     const emptyLines: string[] = [];
     for (let i = 0; i < this.paddingY; i++) {
-      const line = bgFn ? applyBackgroundToLine(emptyLine, width, bgFn) : emptyLine;
+      const line = bgFn === undefined ? emptyLine : applyBackgroundToLine(emptyLine, width, bgFn);
       emptyLines.push(line);
     }
 
@@ -346,26 +356,26 @@ export class Markdown implements Component {
   }
 
   private applyDefaultStyle(text: string): string {
-    if (!this.defaultTextStyle) {
+    if (this.defaultTextStyle === undefined) {
       return text;
     }
 
     let styled = text;
 
-    if (this.defaultTextStyle.color) {
+    if (this.defaultTextStyle.color !== undefined) {
       styled = this.defaultTextStyle.color(styled);
     }
 
-    if (this.defaultTextStyle.bold) {
+    if (this.defaultTextStyle.bold === true) {
       styled = this.theme.bold(styled);
     }
-    if (this.defaultTextStyle.italic) {
+    if (this.defaultTextStyle.italic === true) {
       styled = this.theme.italic(styled);
     }
-    if (this.defaultTextStyle.strikethrough) {
+    if (this.defaultTextStyle.strikethrough === true) {
       styled = this.theme.strikethrough(styled);
     }
-    if (this.defaultTextStyle.underline) {
+    if (this.defaultTextStyle.underline === true) {
       styled = this.theme.underline(styled);
     }
 
@@ -373,7 +383,7 @@ export class Markdown implements Component {
   }
 
   private getDefaultStylePrefix(): string {
-    if (!this.defaultTextStyle) {
+    if (this.defaultTextStyle === undefined) {
       return "";
     }
 
@@ -384,20 +394,20 @@ export class Markdown implements Component {
     const sentinel = "\u0000";
     let styled = sentinel;
 
-    if (this.defaultTextStyle.color) {
+    if (this.defaultTextStyle.color !== undefined) {
       styled = this.defaultTextStyle.color(styled);
     }
 
-    if (this.defaultTextStyle.bold) {
+    if (this.defaultTextStyle.bold === true) {
       styled = this.theme.bold(styled);
     }
-    if (this.defaultTextStyle.italic) {
+    if (this.defaultTextStyle.italic === true) {
       styled = this.theme.italic(styled);
     }
-    if (this.defaultTextStyle.strikethrough) {
+    if (this.defaultTextStyle.strikethrough === true) {
       styled = this.theme.strikethrough(styled);
     }
-    if (this.defaultTextStyle.underline) {
+    if (this.defaultTextStyle.underline === true) {
       styled = this.theme.underline(styled);
     }
 
@@ -450,7 +460,7 @@ export class Markdown implements Component {
         const styledHeading =
           headingLevel >= 3 ? headingStyleFn(headingPrefix) + headingText : headingText;
         lines.push(styledHeading);
-        if (nextTokenType && nextTokenType !== "space") {
+        if (nextTokenType !== undefined && nextTokenType !== "" && nextTokenType !== "space") {
           lines.push("");
         }
         break;
@@ -459,7 +469,12 @@ export class Markdown implements Component {
       case "paragraph": {
         const paragraphText = this.renderInlineTokens(token.tokens || [], styleContext);
         lines.push(paragraphText);
-        if (nextTokenType && nextTokenType !== "list" && nextTokenType !== "space") {
+        if (
+          nextTokenType !== undefined &&
+          nextTokenType !== "" &&
+          nextTokenType !== "list" &&
+          nextTokenType !== "space"
+        ) {
           lines.push("");
         }
         break;
@@ -472,13 +487,13 @@ export class Markdown implements Component {
       case "latexBlock": {
         const latexToken = token as LatexToken;
         const rendered =
-          !latexToken.pending && this.options.renderLatex !== false
+          latexToken.pending !== true && this.options.renderLatex !== false
             ? (renderLatex(latexToken.text, { display: true }) ?? latexToken.raw.trim())
             : latexToken.raw.trim();
         for (const line of rendered.split("\n")) {
           lines.push(this.applyDefaultStyle(line));
         }
-        if (nextTokenType && nextTokenType !== "space") {
+        if (nextTokenType !== undefined && nextTokenType !== "" && nextTokenType !== "space") {
           lines.push("");
         }
         break;
@@ -487,19 +502,19 @@ export class Markdown implements Component {
       case "code": {
         const indent = this.theme.codeBlockIndent ?? "  ";
         lines.push(this.theme.codeBlockBorder(`\`\`\`${token.lang || ""}`));
-        if (this.theme.highlightCode) {
-          const highlightedLines = this.theme.highlightCode(token.text, token.lang);
-          for (const hlLine of highlightedLines) {
-            lines.push(`${indent}${hlLine}`);
-          }
-        } else {
+        if (this.theme.highlightCode === undefined) {
           const codeLines = token.text.split("\n");
           for (const codeLine of codeLines) {
             lines.push(`${indent}${this.theme.codeBlock(codeLine)}`);
           }
+        } else {
+          const highlightedLines = this.theme.highlightCode(token.text, token.lang);
+          for (const hlLine of highlightedLines) {
+            lines.push(`${indent}${hlLine}`);
+          }
         }
         lines.push(this.theme.codeBlockBorder("```"));
-        if (nextTokenType && nextTokenType !== "space") {
+        if (nextTokenType !== undefined && nextTokenType !== "" && nextTokenType !== "space") {
           lines.push("");
         }
         break;
@@ -526,7 +541,7 @@ export class Markdown implements Component {
         const quoteStyle = (text: string) => this.theme.quote(this.theme.italic(text));
         const quoteStylePrefix = this.getStylePrefix(quoteStyle);
         const applyQuoteStyle = (line: string): string => {
-          if (!quoteStylePrefix) {
+          if (quoteStylePrefix === "") {
             return quoteStyle(line);
           }
           const lineWithReappliedStyle = line.replace(/\x1b\[0m/gu, `\x1b[0m${quoteStylePrefix}`);
@@ -567,7 +582,7 @@ export class Markdown implements Component {
             lines.push(this.theme.quoteBorder("│ ") + wrappedLine);
           }
         }
-        if (nextTokenType && nextTokenType !== "space") {
+        if (nextTokenType !== undefined && nextTokenType !== "" && nextTokenType !== "space") {
           lines.push("");
         }
         break;
@@ -575,7 +590,7 @@ export class Markdown implements Component {
 
       case "hr":
         lines.push(this.theme.hr("─".repeat(Math.min(width, 80))));
-        if (nextTokenType && nextTokenType !== "space") {
+        if (nextTokenType !== undefined && nextTokenType !== "" && nextTokenType !== "space") {
           lines.push("");
         }
         break;
@@ -613,7 +628,7 @@ export class Markdown implements Component {
         case "latex": {
           const latexToken = token as LatexToken;
           const rendered =
-            !latexToken.pending && this.options.renderLatex !== false
+            latexToken.pending !== true && this.options.renderLatex !== false
               ? (renderLatex(latexToken.text) ?? latexToken.raw)
               : latexToken.raw;
           result += applyTextWithNewlines(rendered);
@@ -622,12 +637,12 @@ export class Markdown implements Component {
 
         case "escape":
           result += applyTextWithNewlines(
-            this.options.preserveBackslashEscapes ? token.raw : token.text,
+            this.options.preserveBackslashEscapes === true ? token.raw : token.text,
           );
           break;
 
         case "text":
-          if (token.tokens && token.tokens.length > 0) {
+          if (token.tokens !== undefined && token.tokens.length > 0) {
             result += this.renderInlineTokens(token.tokens, resolvedStyleContext);
           } else {
             result += applyTextWithNewlines(token.text);
@@ -660,9 +675,8 @@ export class Markdown implements Component {
           if (getCapabilities().hyperlinks) {
             result += hyperlink(styledLink, token.href) + stylePrefix;
           } else {
-            const hrefForComparison = token.href.startsWith("mailto:")
-              ? token.href.slice(7)
-              : token.href;
+            const hrefForComparison =
+              token.href.startsWith("mailto:") === true ? token.href.slice(7) : token.href;
             if (token.text === token.href || token.text === hrefForComparison) {
               result += styledLink + stylePrefix;
             } else {
@@ -695,8 +709,10 @@ export class Markdown implements Component {
       }
     }
 
-    while (stylePrefix && result.endsWith(stylePrefix)) {
-      result = result.slice(0, -stylePrefix.length);
+    if (stylePrefix !== "") {
+      while (result.endsWith(stylePrefix)) {
+        result = result.slice(0, -stylePrefix.length);
+      }
     }
 
     return result;
@@ -704,12 +720,12 @@ export class Markdown implements Component {
 
   private getOrderedListMarker(item: Tokens.ListItem): string | undefined {
     const match = /^(?: {0,3})(\d{1,9}[.)])[ \t]+/u.exec(item.raw);
-    return match ? `${match[1]} ` : undefined;
+    return match === null ? undefined : `${match[1]} `;
   }
 
   private getUnorderedListMarker(item: Tokens.ListItem): string | undefined {
     const match = /^(?: {0,3})([-+*])(?:[ \t]+|(?=\r?\n|$))/u.exec(item.raw);
-    return match ? `${match[1]} ` : undefined;
+    return match === null ? undefined : `${match[1]} `;
   }
 
   private renderList(
@@ -725,13 +741,13 @@ export class Markdown implements Component {
     for (const [i, item] of token.items.entries()) {
       const isLastItem = i === token.items.length - 1;
       const bullet = token.ordered
-        ? this.options.preserveOrderedListMarkers
+        ? this.options.preserveOrderedListMarkers === true
           ? (this.getOrderedListMarker(item) ?? `${startNumber + i}. `)
           : `${startNumber + i}. `
-        : this.options.preserveOrderedListMarkers
+        : this.options.preserveOrderedListMarkers === true
           ? (this.getUnorderedListMarker(item) ?? "- ")
           : "- ";
-      const taskMarker = item.task ? `[${item.checked ? "x" : " "}] ` : "";
+      const taskMarker = item.task ? `[${item.checked === true ? "x" : " "}] ` : "";
       const marker = bullet + taskMarker;
       const firstPrefix = indent + this.theme.listBullet(marker);
       const continuationPrefix = indent + " ".repeat(visibleWidth(marker));
@@ -803,8 +819,8 @@ export class Markdown implements Component {
     const borderOverhead = 3 * numCols + 1;
     const availableForCells = availableWidth - borderOverhead;
     if (availableForCells < numCols) {
-      const fallbackLines = token.raw ? wrapTextWithAnsi(token.raw, availableWidth) : [];
-      if (nextTokenType && nextTokenType !== "space") {
+      const fallbackLines = token.raw === "" ? [] : wrapTextWithAnsi(token.raw, availableWidth);
+      if (nextTokenType !== undefined && nextTokenType !== "" && nextTokenType !== "space") {
         fallbackLines.push("");
       }
       return fallbackLines;
@@ -865,9 +881,10 @@ export class Markdown implements Component {
     if (totalNaturalWidth <= availableWidth) {
       columnWidths = minColumns.map((column) => Math.max(column.natural, column.min));
     } else {
-      const totalGrowPotential = minColumns.reduce((total, column) => {
-        return total + Math.max(0, column.natural - column.min);
-      }, 0);
+      const totalGrowPotential = minColumns.reduce(
+        (total, column) => total + Math.max(0, column.natural - column.min),
+        0,
+      );
       const extraWidth = Math.max(0, availableForCells - minCellsWidth);
       const sized = minColumns.map((column) => {
         const minWidthDelta = Math.max(0, column.natural - column.min);
@@ -948,7 +965,7 @@ export class Markdown implements Component {
     const bottomBorderCells = columnWidths.map((w) => "─".repeat(w));
     lines.push(`└─${bottomBorderCells.join("─┴─")}─┘`);
 
-    if (nextTokenType && nextTokenType !== "space") {
+    if (nextTokenType !== undefined && nextTokenType !== "" && nextTokenType !== "space") {
       lines.push("");
     }
     return lines;

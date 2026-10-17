@@ -749,19 +749,20 @@ function renderLayout(source: string, nodes: readonly LayoutNode[]): Layout {
     for (const match of sourceLine.matchAll(LAYOUT_MARKER_PATTERN)) {
       const index = match.index;
       const node = nodes[Number(match[1])];
-      if (!node) {
+      if (node === undefined) {
         continue;
       }
       if (index > position) {
         const sliced = sourceLine.slice(position, index);
-        const trimmed = (previousNode ? sliced.trimStart() : sliced).trimEnd();
+        const trimmed = (previousNode === undefined ? sliced : sliced.trimStart()).trimEnd();
         const preserveLeadingSpace = previousNode?.type === "matrix" && /^\s/u.test(sliced);
         const preserveTrailingSpace = node.type === "matrix" && /\s$/u.test(sliced);
-        const text = trimmed
-          ? `${preserveLeadingSpace ? " " : ""}${trimmed}${preserveTrailingSpace ? " " : ""}`
-          : preserveLeadingSpace || preserveTrailingSpace
-            ? " "
-            : "";
+        const text =
+          trimmed === ""
+            ? preserveLeadingSpace || preserveTrailingSpace
+              ? " "
+              : ""
+            : `${preserveLeadingSpace ? " " : ""}${trimmed}${preserveTrailingSpace ? " " : ""}`;
         layouts.push({ lines: [text], width: visibleWidth(text), baseline: 0 });
       }
       if (node.type === "fraction") {
@@ -823,7 +824,7 @@ function renderLayout(source: string, nodes: readonly LayoutNode[]): Layout {
     }
     if (position < sourceLine.length) {
       const sliced = sourceLine.slice(position);
-      const trimmed = previousNode ? sliced.trimStart() : sliced;
+      const trimmed = previousNode === undefined ? sliced : sliced.trimStart();
       const text = previousNode?.type === "matrix" && /^\s/u.test(sliced) ? ` ${trimmed}` : trimmed;
       layouts.push({ lines: [text], width: visibleWidth(text), baseline: 0 });
     }
@@ -867,7 +868,7 @@ class LatexParser {
     let result = "";
     while (this.position < this.source.length) {
       const character = this.source.charAt(this.position);
-      if (endCharacter && character === endCharacter) {
+      if (endCharacter !== undefined && endCharacter !== "" && character === endCharacter) {
         this.position++;
         return result;
       }
@@ -932,7 +933,7 @@ class LatexParser {
 
       if (character === ".") {
         const marker = TRAILING_LAYOUT_MARKER_PATTERN.exec(result);
-        const node = marker ? this.layoutNodes[Number(marker[1])] : undefined;
+        const node = marker === null ? undefined : this.layoutNodes[Number(marker[1])];
         if (node?.type === "matrix") {
           const lastLine = node.lines.length - 1;
           node.lines[lastLine] = `${node.lines[lastLine] ?? ""}${character}`;
@@ -945,7 +946,7 @@ class LatexParser {
       this.position++;
     }
 
-    if (endCharacter) {
+    if (endCharacter !== undefined && endCharacter !== "") {
       this.supported = false;
     }
     return result;
@@ -1220,7 +1221,7 @@ class LatexParser {
       modifierPosition++;
     }
     const modifier = /^\\(limits|nolimits)(?![A-Za-z])/u.exec(this.source.slice(modifierPosition));
-    if (modifier) {
+    if (modifier !== null) {
       useDisplayLimits = modifier[1] === "limits";
       this.position = modifierPosition + modifier[0].length;
     }
@@ -1350,7 +1351,7 @@ class LatexParser {
 
   private parseEnvironment(): string {
     const environment = this.readRawGroup();
-    if (!environment) {
+    if (environment === undefined || environment === "") {
       return "";
     }
     const endMarker = `\\end{${environment}}`;
@@ -1434,7 +1435,7 @@ class LatexParser {
     const contents = rows.map((row) => {
       const value = (row[0] ?? "").replace(/,\s*$/u, "");
       const condition = row[1] ?? "";
-      if (!condition) {
+      if (condition === "") {
         return value;
       }
       const leadingWord = /^\w*/u.exec(condition)?.[0].toLowerCase() ?? "";
@@ -1487,7 +1488,7 @@ class LatexParser {
         Vmatrix: ["║", "║", "║", "║", "║", "║"],
       };
       const delimiter = delimiters[environment];
-      if (!delimiter) {
+      if (delimiter === undefined) {
         this.supported = false;
         return rows.join("\n");
       }

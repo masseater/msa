@@ -93,7 +93,7 @@ function truncateFragmentToWidth(text: string, maxWidth: number): { text: string
 
   while (i < text.length) {
     const ansi = extractAnsiCode(text, i);
-    if (ansi) {
+    if (ansi !== null) {
       pendingAnsi += ansi.code;
       i += ansi.length;
       continue;
@@ -103,7 +103,7 @@ function truncateFragmentToWidth(text: string, maxWidth: number): { text: string
       if (width + 3 > maxWidth) {
         break;
       }
-      if (pendingAnsi) {
+      if (pendingAnsi !== "") {
         result += pendingAnsi;
         pendingAnsi = "";
       }
@@ -116,7 +116,7 @@ function truncateFragmentToWidth(text: string, maxWidth: number): { text: string
     let end = i;
     while (end < text.length && text[end] !== "\t") {
       const nextAnsi = extractAnsiCode(text, end);
-      if (nextAnsi) {
+      if (nextAnsi !== null) {
         break;
       }
       end++;
@@ -127,7 +127,7 @@ function truncateFragmentToWidth(text: string, maxWidth: number): { text: string
       if (width + w > maxWidth) {
         return { text: result, width };
       }
-      if (pendingAnsi) {
+      if (pendingAnsi !== "") {
         result += pendingAnsi;
         pendingAnsi = "";
       }
@@ -274,7 +274,7 @@ export function stripTerminalSequences(str: string): string {
   let i = 0;
   while (i < str.length) {
     const ansi = extractAnsiCode(str, i);
-    if (ansi) {
+    if (ansi !== null) {
       i += ansi.length;
       continue;
     }
@@ -294,12 +294,12 @@ export function getGraphemeCellRange(line: string, column: number): GraphemeCell
   let i = 0;
   while (i < line.length) {
     const ansi = extractAnsiCode(line, i);
-    if (ansi) {
+    if (ansi !== null) {
       i += ansi.length;
       continue;
     }
     let textEnd = i;
-    while (textEnd < line.length && !extractAnsiCode(line, textEnd)) textEnd++;
+    while (textEnd < line.length && extractAnsiCode(line, textEnd) === null) textEnd++;
     for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
       const width = graphemeWidth(segment);
       if (width > 0 && column >= currentCol && column < currentCol + width) {
@@ -318,14 +318,14 @@ export function getOsc8LinkAtColumn(line: string, column: number): string | unde
   let i = 0;
   while (i < line.length) {
     const ansi = extractAnsiCode(line, i);
-    if (ansi) {
+    if (ansi !== null) {
       const hyperlink = /^\x1b\]8;[^;]*;([^\x07\x1b]*)(?:\x07|\x1b\\)$/u.exec(ansi.code);
-      if (hyperlink) activeUrl = hyperlink[1] || undefined;
+      if (hyperlink !== null) activeUrl = hyperlink[1] || undefined;
       i += ansi.length;
       continue;
     }
     let textEnd = i;
-    while (textEnd < line.length && !extractAnsiCode(line, textEnd)) textEnd++;
+    while (textEnd < line.length && extractAnsiCode(line, textEnd) === null) textEnd++;
     for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
       const width = segment === "\t" ? 3 : graphemeWidth(segment);
       if (column >= currentCol && column < currentCol + width) return activeUrl;
@@ -352,7 +352,7 @@ export function normalizeTerminalOutput(str: string): string {
   let i = 0;
   while (i < normalized.length) {
     const ansi = extractAnsiCode(normalized, i);
-    if (ansi) {
+    if (ansi !== null) {
       result += ansi.code;
       i += ansi.length;
       continue;
@@ -437,7 +437,7 @@ function parseOsc8Hyperlink(ansiCode: string): ActiveHyperlink | null | undefine
 
   const params = body.slice(0, separatorIndex);
   const url = body.slice(separatorIndex + 1);
-  if (!url) {
+  if (url === "") {
     return null;
   }
   return { params, url, terminator };
@@ -460,17 +460,17 @@ function getActiveOsc8Close(prefix: string): string {
   let i = 0;
   while (i < prefix.length) {
     const ansi = extractAnsiCode(prefix, i);
-    if (ansi) {
+    if (ansi === null) {
+      i++;
+    } else {
       const hyperlink = parseOsc8Hyperlink(ansi.code);
       if (hyperlink !== undefined) {
         activeHyperlink = hyperlink;
       }
       i += ansi.length;
-    } else {
-      i++;
     }
   }
-  return activeHyperlink ? formatOsc8Close(activeHyperlink.terminator) : "";
+  return activeHyperlink === null ? "" : formatOsc8Close(activeHyperlink.terminator);
 }
 
 class AnsiCodeTracker {
@@ -633,18 +633,18 @@ class AnsiCodeTracker {
     if (this.inverse) codes.push("7");
     if (this.hidden) codes.push("8");
     if (this.strikethrough) codes.push("9");
-    if (this.fgColor) codes.push(this.fgColor);
-    if (this.bgColor) codes.push(this.bgColor);
+    if (this.fgColor !== null && this.fgColor !== "") codes.push(this.fgColor);
+    if (this.bgColor !== null && this.bgColor !== "") codes.push(this.bgColor);
 
     let result = codes.length > 0 ? `\x1b[${codes.join(";")}m` : "";
-    if (this.activeHyperlink) {
+    if (this.activeHyperlink !== null) {
       result += formatOsc8Hyperlink(this.activeHyperlink);
     }
     return result;
   }
 
   getActiveBackgroundCode(): string {
-    return this.bgColor ? `\x1b[${this.bgColor}m` : "";
+    return this.bgColor !== null && this.bgColor !== "" ? `\x1b[${this.bgColor}m` : "";
   }
 
   hasActiveCodes(): boolean {
@@ -668,7 +668,7 @@ class AnsiCodeTracker {
     if (this.underline) {
       result += "\x1b[24m";
     }
-    if (this.activeHyperlink) {
+    if (this.activeHyperlink !== null) {
       result += formatOsc8Close(this.activeHyperlink.terminator);
     }
     return result;
@@ -707,7 +707,7 @@ function splitIntoTokensWithAnsi(text: string): string[] {
   let i = 0;
 
   const flushCurrent = (): void => {
-    if (!current) {
+    if (current === "") {
       return;
     }
     tokens.push(current);
@@ -717,7 +717,7 @@ function splitIntoTokensWithAnsi(text: string): string[] {
 
   while (i < text.length) {
     const ansiResult = extractAnsiCode(text, i);
-    if (ansiResult) {
+    if (ansiResult !== null) {
       pendingAnsi += ansiResult.code;
       i += ansiResult.length;
       continue;
@@ -742,11 +742,11 @@ function splitIntoTokensWithAnsi(text: string): string[] {
       }
 
       const segmentKind = segmentIsSpace ? "space" : "word";
-      if (current && currentKind !== segmentKind) {
+      if (current !== "" && currentKind !== segmentKind) {
         flushCurrent();
       }
 
-      if (pendingAnsi) {
+      if (pendingAnsi !== "") {
         current += pendingAnsi;
         pendingAnsi = "";
       }
@@ -758,8 +758,8 @@ function splitIntoTokensWithAnsi(text: string): string[] {
     i = end;
   }
 
-  if (pendingAnsi) {
-    if (current) {
+  if (pendingAnsi !== "") {
+    if (current !== "") {
       current += pendingAnsi;
     } else if (tokens.length > 0) {
       tokens[tokens.length - 1] += pendingAnsi;
@@ -768,7 +768,7 @@ function splitIntoTokensWithAnsi(text: string): string[] {
     }
   }
 
-  if (current) {
+  if (current !== "") {
     tokens.push(current);
   }
 
@@ -780,7 +780,7 @@ export function flattenLines(lines: readonly string[]): void {
 }
 
 export function wrapTextWithAnsi(text: string, width: number): string[] {
-  if (!text) {
+  if (text === "") {
     return [""];
   }
 
@@ -801,7 +801,7 @@ export function wrapTextWithAnsi(text: string, width: number): string[] {
 }
 
 function wrapSingleLine(line: string, width: number): string[] {
-  if (!line) {
+  if (line === "") {
     return [""];
   }
 
@@ -822,9 +822,9 @@ function wrapSingleLine(line: string, width: number): string[] {
     const isWhitespace = token.trim() === "";
 
     if (tokenVisibleLength > width && !isWhitespace) {
-      if (currentLine) {
+      if (currentLine !== "") {
         const lineEndReset = tracker.getLineEndReset();
-        if (lineEndReset) {
+        if (lineEndReset !== "") {
           currentLine += lineEndReset;
         }
         wrapped.push(currentLine);
@@ -844,7 +844,7 @@ function wrapSingleLine(line: string, width: number): string[] {
     if (totalNeeded > width && currentVisibleLength > 0) {
       let lineToWrap = currentLine.trimEnd();
       const lineEndReset = tracker.getLineEndReset();
-      if (lineEndReset) {
+      if (lineEndReset !== "") {
         lineToWrap += lineEndReset;
       }
       wrapped.push(lineToWrap);
@@ -863,7 +863,7 @@ function wrapSingleLine(line: string, width: number): string[] {
     updateTrackerFromText(token, tracker);
   }
 
-  if (currentLine) {
+  if (currentLine !== "") {
     wrapped.push(currentLine);
   }
 
@@ -890,14 +890,11 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
 
   while (i < word.length) {
     const ansiResult = extractAnsiCode(word, i);
-    if (ansiResult) {
-      segments.push({ type: "ansi", value: ansiResult.code });
-      i += ansiResult.length;
-    } else {
+    if (ansiResult === null) {
       let end = i;
       while (end < word.length) {
         const nextAnsi = extractAnsiCode(word, end);
-        if (nextAnsi) break;
+        if (nextAnsi !== null) break;
         end++;
       }
       const textPortion = word.slice(i, end);
@@ -905,6 +902,9 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
         segments.push({ type: "grapheme", value: seg.segment });
       }
       i = end;
+    } else {
+      segments.push({ type: "ansi", value: ansiResult.code });
+      i += ansiResult.length;
     }
   }
 
@@ -916,13 +916,13 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
     }
 
     const grapheme = seg.value;
-    if (!grapheme) continue;
+    if (grapheme === "") continue;
 
     const clusterWidth = visibleWidth(grapheme);
 
     if (currentWidth + clusterWidth > width) {
       const lineEndReset = tracker.getLineEndReset();
-      if (lineEndReset) {
+      if (lineEndReset !== "") {
         currentLine += lineEndReset;
       }
       lines.push(currentLine);
@@ -934,7 +934,7 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
     currentWidth += clusterWidth;
   }
 
-  if (currentLine) {
+  if (currentLine !== "") {
     lines.push(currentLine);
   }
 
@@ -1035,7 +1035,7 @@ export function truncateToWidth(
     let i = 0;
     while (i < text.length) {
       const ansi = extractAnsiCode(text, i);
-      if (ansi) {
+      if (ansi !== null) {
         pendingAnsi += ansi.code;
         i += ansi.length;
         continue;
@@ -1043,7 +1043,7 @@ export function truncateToWidth(
 
       if (text[i] === "\t") {
         if (keepContiguousPrefix && keptWidth + 3 <= targetWidth) {
-          if (pendingAnsi) {
+          if (pendingAnsi !== "") {
             result += pendingAnsi;
             pendingAnsi = "";
           }
@@ -1065,7 +1065,7 @@ export function truncateToWidth(
       let end = i;
       while (end < text.length && text[end] !== "\t") {
         const nextAnsi = extractAnsiCode(text, end);
-        if (nextAnsi) {
+        if (nextAnsi !== null) {
           break;
         }
         end++;
@@ -1074,7 +1074,7 @@ export function truncateToWidth(
       for (const { segment } of graphemeSegmenter.segment(text.slice(i, end))) {
         const width = graphemeWidth(segment);
         if (keepContiguousPrefix && keptWidth + width <= targetWidth) {
-          if (pendingAnsi) {
+          if (pendingAnsi !== "") {
             result += pendingAnsi;
             pendingAnsi = "";
           }
@@ -1131,7 +1131,7 @@ export function sliceWithWidth(
 
   while (i < line.length) {
     const ansi = extractAnsiCode(line, i);
-    if (ansi) {
+    if (ansi !== null) {
       if (currentCol >= startCol && currentCol < endCol) {
         result += pendingAnsi + ansi.code;
         pendingAnsi = "";
@@ -1141,14 +1141,14 @@ export function sliceWithWidth(
     }
 
     let textEnd = i;
-    while (textEnd < line.length && !extractAnsiCode(line, textEnd)) textEnd++;
+    while (textEnd < line.length && extractAnsiCode(line, textEnd) === null) textEnd++;
 
     for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
       const w = graphemeWidth(segment);
       const inRange = currentCol >= startCol && currentCol < endCol;
       const fits = !strict || currentCol + w <= endCol;
       if (inRange && fits) {
-        if (pendingAnsi) {
+        if (pendingAnsi !== "") {
           result += pendingAnsi;
           pendingAnsi = "";
         }
@@ -1187,7 +1187,7 @@ export function extractSegments(
 
   while (i < line.length) {
     const ansi = extractAnsiCode(line, i);
-    if (ansi) {
+    if (ansi !== null) {
       pooledStyleTracker.process(ansi.code);
       if (currentCol < beforeEnd) {
         pendingAnsiBefore += ansi.code;
@@ -1203,13 +1203,13 @@ export function extractSegments(
     }
 
     let textEnd = i;
-    while (textEnd < line.length && !extractAnsiCode(line, textEnd)) textEnd++;
+    while (textEnd < line.length && extractAnsiCode(line, textEnd) === null) textEnd++;
 
     for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
       const w = graphemeWidth(segment);
 
       if (currentCol < beforeEnd && currentCol + w <= beforeEnd) {
-        if (pendingAnsiBefore) {
+        if (pendingAnsiBefore !== "") {
           before += pendingAnsiBefore;
           pendingAnsiBefore = "";
         }

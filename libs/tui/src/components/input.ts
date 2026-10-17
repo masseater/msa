@@ -87,7 +87,7 @@ export class Input implements Component, Focusable {
 
         const remaining = this.pasteBuffer.substring(endIndex + 6);
         this.pasteBuffer = "";
-        if (remaining) {
+        if (remaining !== "") {
           this.handleInput(remaining);
         }
       }
@@ -97,7 +97,7 @@ export class Input implements Component, Focusable {
     const kb = getKeybindings();
 
     if (kb.matches(data, "tui.select.cancel")) {
-      if (this.onEscape) this.onEscape();
+      if (this.onEscape !== undefined) this.onEscape();
       return;
     }
 
@@ -107,7 +107,7 @@ export class Input implements Component, Focusable {
     }
 
     if (kb.matches(data, "tui.input.submit") || data === "\n") {
-      if (this.onSubmit) this.onSubmit(this.value);
+      if (this.onSubmit !== undefined) this.onSubmit(this.value);
       return;
     }
 
@@ -156,7 +156,7 @@ export class Input implements Component, Focusable {
         const beforeCursor = this.value.slice(0, this.cursor);
         const graphemes = [...segmenter.segment(beforeCursor)];
         const lastGrapheme = graphemes[graphemes.length - 1];
-        this.cursor -= lastGrapheme ? lastGrapheme.segment.length : 1;
+        this.cursor -= lastGrapheme === undefined ? 1 : lastGrapheme.segment.length;
       }
       return;
     }
@@ -167,7 +167,7 @@ export class Input implements Component, Focusable {
         const afterCursor = this.value.slice(this.cursor);
         const graphemes = [...segmenter.segment(afterCursor)];
         const firstGrapheme = graphemes[0];
-        this.cursor += firstGrapheme ? firstGrapheme.segment.length : 1;
+        this.cursor += firstGrapheme === undefined ? 1 : firstGrapheme.segment.length;
       }
       return;
     }
@@ -244,7 +244,7 @@ export class Input implements Component, Focusable {
       const beforeCursor = this.value.slice(0, this.cursor);
       const graphemes = [...segmenter.segment(beforeCursor)];
       const lastGrapheme = graphemes[graphemes.length - 1];
-      const graphemeLength = lastGrapheme ? lastGrapheme.segment.length : 1;
+      const graphemeLength = lastGrapheme === undefined ? 1 : lastGrapheme.segment.length;
       this.value =
         this.value.slice(0, this.cursor - graphemeLength) + this.value.slice(this.cursor);
       this.cursor -= graphemeLength;
@@ -258,7 +258,7 @@ export class Input implements Component, Focusable {
       const afterCursor = this.value.slice(this.cursor);
       const graphemes = [...segmenter.segment(afterCursor)];
       const firstGrapheme = graphemes[0];
-      const graphemeLength = firstGrapheme ? firstGrapheme.segment.length : 1;
+      const graphemeLength = firstGrapheme === undefined ? 1 : firstGrapheme.segment.length;
       this.value =
         this.value.slice(0, this.cursor) + this.value.slice(this.cursor + graphemeLength);
     }
@@ -324,7 +324,7 @@ export class Input implements Component, Focusable {
 
   private yank(): void {
     const text = this.killRing.peek();
-    if (!text) return;
+    if (text === undefined || text === "") return;
 
     this.pushUndo();
 
@@ -355,7 +355,7 @@ export class Input implements Component, Focusable {
 
   private undo(): void {
     const snapshot = this.undoStack.pop();
-    if (!snapshot) return;
+    if (snapshot === undefined) return;
     this.value = snapshot.value;
     this.cursor = snapshot.cursor;
     this.lastAction = null;
@@ -396,7 +396,7 @@ export class Input implements Component, Focusable {
       return [truncateToWidth(this.prompt, width, "")];
     }
 
-    if (this.value.length === 0 && this.placeholder) {
+    if (this.value.length === 0 && this.placeholder !== "") {
       const placeholder = truncateToWidth(this.placeholder, availableWidth, "");
       const graphemes = [...segmenter.segment(placeholder)];
       const atCursor = graphemes[0]?.segment ?? " ";

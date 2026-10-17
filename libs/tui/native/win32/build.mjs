@@ -45,12 +45,12 @@ process.on("SIGINT", () => {
 
 function commandExists(command) {
   const result = spawnSync(command, ["--version"], { stdio: "ignore" });
-  return !result.error || result.error.code !== "ENOENT";
+  return result.error === undefined || result.error.code !== "ENOENT";
 }
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, { stdio: "inherit", ...options });
-  if (result.error) throw result.error;
+  if (result.error !== undefined) throw result.error;
   if (result.status !== 0)
     throw new Error(`${command} failed with exit code ${result.status ?? 1}`);
 }
@@ -66,14 +66,14 @@ function msvcHostArch() {
 function findVisualStudioDevCmd() {
   const candidates = [];
   const programFilesX86 = process.env["ProgramFiles(x86)"];
-  if (programFilesX86) {
+  if (programFilesX86 !== undefined && programFilesX86 !== "") {
     const vswhere = path.join(
       programFilesX86,
       "Microsoft Visual Studio",
       "Installer",
       "vswhere.exe",
     );
-    if (existsSync(vswhere)) {
+    if (existsSync(vswhere) === true) {
       const result = spawnSync(
         vswhere,
         [
@@ -89,14 +89,14 @@ function findVisualStudioDevCmd() {
       );
       for (const line of result.stdout.split(/\r?\n/u)) {
         const installationPath = line.trim();
-        if (installationPath)
+        if (installationPath !== "")
           candidates.push(path.join(installationPath, "Common7", "Tools", "VsDevCmd.bat"));
       }
     }
   }
 
   for (const base of [process.env.ProgramFiles, programFilesX86]) {
-    if (!base) continue;
+    if (base === undefined || base === "") continue;
     for (const edition of ["BuildTools", "Community", "Professional", "Enterprise"]) {
       candidates.push(
         path.join(
@@ -132,13 +132,15 @@ function canUseMsvc(vsDevCmd) {
     cwd: probeDir,
     stdio: "ignore",
   });
-  return !result.error && result.status === 0;
+  return result.error === undefined && result.status === 0;
 }
 
 function resolveMingwCompiler(target) {
   const envCompiler = process.env[target.envCompiler];
-  if (envCompiler) return { command: envCompiler, useTargetFlag: false };
-  if (process.env.CC) return { command: process.env.CC, useTargetFlag: true };
+  if (envCompiler !== undefined && envCompiler !== "")
+    return { command: envCompiler, useTargetFlag: false };
+  if (process.env.CC !== undefined && process.env.CC !== "")
+    return { command: process.env.CC, useTargetFlag: true };
   for (const command of target.prefixedCompilers) {
     if (commandExists(command)) return { command, useTargetFlag: false };
   }
@@ -196,7 +198,7 @@ function buildWithMsvc(target, vsDevCmd) {
 
 function buildWithMingw(target) {
   const compiler = resolveMingwCompiler(target);
-  if (!compiler) {
+  if (compiler === undefined) {
     throw new Error(
       `No Windows cross-compiler found for ${target.arch}. Install Microsoft C++ Build Tools on Windows, or set ${target.envCompiler} to a MinGW-compatible compiler.`,
     );
@@ -228,7 +230,7 @@ function buildWithMingw(target) {
   installOutput(temporaryOutput, target);
 }
 
-if (process.argv.includes("--help") || process.argv.includes("-h")) {
+if (process.argv.includes("--help") === true || process.argv.includes("-h") === true) {
   console.log(`Usage: npm --prefix libs/tui run build:native:win32
 
 Builds win32-x64 and win32-arm64 native prebuilds.
@@ -242,17 +244,23 @@ Environment:
 }
 
 const requestedToolchain = process.env.MSA_TUI_WIN32_TOOLCHAIN;
-if (requestedToolchain && requestedToolchain !== "msvc" && requestedToolchain !== "mingw") {
+if (
+  requestedToolchain !== undefined &&
+  requestedToolchain !== "" &&
+  requestedToolchain !== "msvc" &&
+  requestedToolchain !== "mingw"
+) {
   throw new Error("MSA_TUI_WIN32_TOOLCHAIN must be either 'msvc' or 'mingw'");
 }
 
 const vsDevCmd = findVisualStudioDevCmd();
-const hasMsvc = vsDevCmd ? canUseMsvc(vsDevCmd) : false;
+const hasMsvc = vsDevCmd !== undefined && vsDevCmd !== "" ? canUseMsvc(vsDevCmd) : false;
 const toolchain =
-  requestedToolchain ?? (process.platform === "win32" && vsDevCmd ? "msvc" : "mingw");
+  requestedToolchain ??
+  (process.platform === "win32" && vsDevCmd !== undefined && vsDevCmd !== "" ? "msvc" : "mingw");
 
 if (toolchain === "msvc") {
-  if (!vsDevCmd || !hasMsvc) {
+  if (vsDevCmd === undefined || vsDevCmd === "" || !hasMsvc) {
     throw new Error(
       "Microsoft C++ Build Tools not found. Install the Visual Studio C++ workload or set MSA_TUI_WIN32_TOOLCHAIN=mingw.",
     );

@@ -122,14 +122,17 @@ export function parseColor(value: string | number): Color {
 
   const [, oklchL, oklchLPercent, oklchC, oklchH] = OKLCH_PATTERN.exec(value) ?? [];
   if (oklchL !== undefined && oklchC !== undefined && oklchH !== undefined) {
-    const lightness = Number.parseFloat(oklchL) / (oklchLPercent ? 100 : 1);
+    const lightness =
+      Number.parseFloat(oklchL) / (oklchLPercent !== undefined && oklchLPercent !== "" ? 100 : 1);
     return oklchColor(lightness, Number.parseFloat(oklchC), Number.parseFloat(oklchH));
   }
 
   const [, okhslH, okhslS, okhslSPercent, okhslL, okhslLPercent] = OKHSL_PATTERN.exec(value) ?? [];
   if (okhslH !== undefined && okhslS !== undefined && okhslL !== undefined) {
-    const saturation = Number.parseFloat(okhslS) / (okhslSPercent ? 100 : 1);
-    const lightness = Number.parseFloat(okhslL) / (okhslLPercent ? 100 : 1);
+    const saturation =
+      Number.parseFloat(okhslS) / (okhslSPercent !== undefined && okhslSPercent !== "" ? 100 : 1);
+    const lightness =
+      Number.parseFloat(okhslL) / (okhslLPercent !== undefined && okhslLPercent !== "" ? 100 : 1);
     return okhslColor(Number.parseFloat(okhslH), saturation, lightness);
   }
 
@@ -339,30 +342,30 @@ export function styleTextWithAnsi(
 ): string {
   let prefix = "";
   let suffix = "";
-  if (fgAnsi) {
+  if (fgAnsi !== undefined && fgAnsi !== "") {
     prefix += fgAnsi;
     suffix = "\x1b[39m";
   }
-  if (bgAnsi) {
+  if (bgAnsi !== undefined && bgAnsi !== "") {
     prefix += bgAnsi;
     suffix = `\x1b[49m${suffix}`;
   }
-  if (options.bold) prefix += "\x1b[1m";
-  if (options.dim) prefix += "\x1b[2m";
-  if (options.bold || options.dim) suffix = `\x1b[22m${suffix}`;
-  if (options.italic) {
+  if (options.bold === true) prefix += "\x1b[1m";
+  if (options.dim === true) prefix += "\x1b[2m";
+  if (options.bold === true || options.dim === true) suffix = `\x1b[22m${suffix}`;
+  if (options.italic === true) {
     prefix += "\x1b[3m";
     suffix = `\x1b[23m${suffix}`;
   }
-  if (options.underline) {
+  if (options.underline === true) {
     prefix += "\x1b[4m";
     suffix = `\x1b[24m${suffix}`;
   }
-  if (options.inverse) {
+  if (options.inverse === true) {
     prefix += "\x1b[7m";
     suffix = `\x1b[27m${suffix}`;
   }
-  if (options.strikethrough) {
+  if (options.strikethrough === true) {
     prefix += "\x1b[9m";
     suffix = `\x1b[29m${suffix}`;
   }

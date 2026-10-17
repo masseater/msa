@@ -90,7 +90,7 @@ export class VirtualTerminal implements Terminal {
   setProgramStatus(): void {}
 
   sendInput(data: string): void {
-    if (this.inputHandler) {
+    if (this.inputHandler !== undefined) {
       this.inputHandler(data);
     }
   }
@@ -99,7 +99,7 @@ export class VirtualTerminal implements Terminal {
     this._columns = columns;
     this._rows = rows;
     this.xterm.resize(columns, rows);
-    if (this.resizeHandler) {
+    if (this.resizeHandler !== undefined) {
       this.resizeHandler();
     }
   }
@@ -121,10 +121,10 @@ export class VirtualTerminal implements Terminal {
 
     for (let i = 0; i < this.xterm.rows; i++) {
       const line = buffer.getLine(buffer.viewportY + i);
-      if (line) {
-        lines.push(line.translateToString(true));
-      } else {
+      if (line === undefined) {
         lines.push("");
+      } else {
+        lines.push(line.translateToString(true));
       }
     }
 
@@ -137,10 +137,10 @@ export class VirtualTerminal implements Terminal {
 
     for (let i = 0; i < buffer.length; i++) {
       const line = buffer.getLine(i);
-      if (line) {
-        lines.push(line.translateToString(true));
-      } else {
+      if (line === undefined) {
         lines.push("");
+      } else {
+        lines.push(line.translateToString(true));
       }
     }
 

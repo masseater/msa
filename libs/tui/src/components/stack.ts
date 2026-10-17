@@ -119,12 +119,12 @@ function distribute(
       });
     if (candidates.length === 0) return;
 
-    const totalWeight = candidates.reduce((sum, { entry, index }) => {
-      return (
+    const totalWeight = candidates.reduce(
+      (sum, { entry, index }) =>
         sum +
-        (mode === "grow" ? (entry.grow ?? 0) : (entry.shrink ?? 1) * Math.max(1, sizes[index]!))
-      );
-    }, 0);
+        (mode === "grow" ? (entry.grow ?? 0) : (entry.shrink ?? 1) * Math.max(1, sizes[index]!)),
+      0,
+    );
     let distributed = 0;
     for (const { entry, index } of candidates) {
       if (remaining <= 0) break;

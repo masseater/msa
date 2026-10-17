@@ -65,7 +65,7 @@ export class Box implements Component {
   private matchCache(width: number, childLines: string[], bgSample: string | undefined): boolean {
     const cache = this.cache;
     return (
-      !!cache &&
+      cache !== undefined &&
       cache.width === width &&
       cache.bgSample === bgSample &&
       cache.childLines.length === childLines.length &&
@@ -132,7 +132,7 @@ export class Box implements Component {
       return [];
     }
 
-    const bgSample = this.bgFn ? this.bgFn("test") : undefined;
+    const bgSample = this.bgFn === undefined ? undefined : this.bgFn("test");
 
     if (this.matchCache(width, childLines, bgSample)) {
       return this.cache!.lines;
@@ -162,6 +162,6 @@ export class Box implements Component {
     const visLen = visibleWidth(line);
     const padNeeded = Math.max(0, width - visLen);
     const padded = line + " ".repeat(padNeeded);
-    return this.bgFn ? this.bgFn(padded) : padded;
+    return this.bgFn === undefined ? padded : this.bgFn(padded);
   }
 }

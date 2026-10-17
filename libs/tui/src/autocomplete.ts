@@ -26,7 +26,7 @@ function buildFdPathQuery(query: string): string {
 
   const hasTrailingSeparator = normalized.endsWith("/");
   const trimmed = normalized.replace(/^\/+|\/+$/gu, "");
-  if (!trimmed) {
+  if (trimmed === "") {
     return normalized;
   }
 
@@ -62,7 +62,7 @@ function stripLeadingWrappers(token: string): string {
   let result = token;
   while (result.length > 0) {
     const closer = PATH_WRAPPERS[result[0]!];
-    if (!closer || result.includes(closer, 1)) {
+    if (closer === undefined || closer === "" || result.includes(closer, 1)) {
       break;
     }
     result = result.slice(1);
@@ -88,7 +88,7 @@ function findUnclosedQuoteStart(text: string): number | null {
 
 function isTokenStart(text: string, index: number): boolean {
   let start = index;
-  while (start > 0 && PATH_WRAPPERS[text[start - 1]!]) {
+  while (start > 0 && PATH_WRAPPERS[text[start - 1]!] !== undefined) {
     start -= 1;
   }
   return PATH_DELIMITERS.has(text[start - 1] ?? "") || tokenStartRegex.test(text.slice(0, start));
@@ -182,7 +182,7 @@ async function walkDirectoryWithFd(
     args.push("--full-path");
   }
 
-  if (query) {
+  if (query !== "") {
     args.push(buildFdPathQuery(query));
   }
 
@@ -220,7 +220,7 @@ async function walkDirectoryWithFd(
       finish([]);
     });
     child.on("close", (code) => {
-      if (signal.aborted || code !== 0 || !stdout) {
+      if (signal.aborted || code !== 0 || stdout === "") {
         finish([]);
         return;
       }
@@ -321,7 +321,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
     const textBeforeCursor = currentLine.slice(0, cursorCol);
 
     const atPrefix = this.extractAtPrefix(textBeforeCursor);
-    if (atPrefix) {
+    if (atPrefix !== null && atPrefix !== "") {
       const { rawPrefix, isQuotedPrefix } = parsePathPrefix(atPrefix);
       const suggestions = await this.getFuzzyFileSuggestions(rawPrefix, {
         isQuotedPrefix,
@@ -336,16 +336,18 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
     }
 
     const commandText = textBeforeCursor.trimStart();
-    if (!options.force && commandText.startsWith("/")) {
+    if (options.force !== true && commandText.startsWith("/")) {
       const spaceIndex = commandText.indexOf(" ");
 
       if (spaceIndex === -1) {
         const prefix = commandText.slice(1);
         const commandItems = this.commands.map((cmd) => {
           const name = "name" in cmd ? cmd.name : cmd.value;
-          const hint = "argumentHint" in cmd && cmd.argumentHint ? cmd.argumentHint : undefined;
+          const hint =
+            "argumentHint" in cmd && cmd.argumentHint !== "" ? cmd.argumentHint : undefined;
           const desc = cmd.description ?? "";
-          const fullDesc = hint ? (desc ? `${hint} — ${desc}` : hint) : desc;
+          const fullDesc =
+            hint !== undefined && hint !== "" ? (desc === "" ? hint : `${hint} — ${desc}`) : desc;
           return {
             name,
             label: name,
@@ -366,7 +368,8 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
         );
         const filtered = [...bareNameMatches, ...fullNameOnlyMatches].map((item) => {
           const suggestion: AutocompleteItem = { value: item.name, label: item.label };
-          if (item.description) suggestion.description = item.description;
+          if (item.description !== undefined && item.description !== "")
+            suggestion.description = item.description;
           return suggestion;
         });
 
@@ -385,7 +388,11 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
         const name = "name" in cmd ? cmd.name : cmd.value;
         return name === commandName;
       });
-      if (!command || !("getArgumentCompletions" in command) || !command.getArgumentCompletions) {
+      if (
+        command === undefined ||
+        !("getArgumentCompletions" in command) ||
+        command.getArgumentCompletions === undefined
+      ) {
         return null;
       }
 
@@ -500,7 +507,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 
   private extractAtPrefix(text: string): string | null {
     const quotedPrefix = extractQuotedPrefix(text);
-    if (quotedPrefix?.startsWith('@"')) {
+    if (quotedPrefix?.startsWith('@"') === true) {
       return quotedPrefix;
     }
 
@@ -518,7 +525,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 
   private extractPathPrefix(text: string, forceExtract: boolean = false): string | null {
     const quotedPrefix = extractQuotedPrefix(text);
-    if (quotedPrefix) {
+    if (quotedPrefix !== null && quotedPrefix !== "") {
       return quotedPrefix;
     }
 
@@ -735,7 +742,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
     query: string,
     signal: AbortSignal,
   ): Promise<Array<{ path: string; isDirectory: boolean }>> {
-    if (!this.fdPath || signal.aborted) {
+    if (this.fdPath === null || this.fdPath === "" || signal.aborted) {
       return [];
     }
 
@@ -746,7 +753,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
     query: string,
     options: { isQuotedPrefix: boolean; signal: AbortSignal },
   ): Promise<AutocompleteItem[]> {
-    if (!this.fdPath || options.signal.aborted) {
+    if (this.fdPath === null || this.fdPath === "" || options.signal.aborted) {
       return [];
     }
 
@@ -779,7 +786,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
         .map((entry) => ({
           path: entry.path,
           isDirectory: entry.isDirectory,
-          score: fdQuery ? this.scoreEntry(entry.path, fdQuery, entry.isDirectory) : 1,
+          score: fdQuery === "" ? 1 : this.scoreEntry(entry.path, fdQuery, entry.isDirectory),
         }))
         .filter((entry) => entry.score > 0);
 
@@ -802,9 +809,10 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
       const suggestions: AutocompleteItem[] = [];
       for (const { path: entryPath, isDirectory } of topEntries) {
         const pathWithoutSlash = isDirectory ? entryPath.slice(0, -1) : entryPath;
-        const displayPath = scopedQuery
-          ? this.scopedPathForDisplay(scopedQuery.displayBase, pathWithoutSlash)
-          : pathWithoutSlash;
+        const displayPath =
+          scopedQuery === null
+            ? pathWithoutSlash
+            : this.scopedPathForDisplay(scopedQuery.displayBase, pathWithoutSlash);
         const entryName = basename(pathWithoutSlash);
         const completionPath = isDirectory ? `${displayPath}/` : displayPath;
         const value = buildCompletionValue(completionPath, {

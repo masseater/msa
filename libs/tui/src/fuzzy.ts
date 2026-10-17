@@ -65,13 +65,14 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatch {
 
   const alphaNumericMatch = queryLower.match(/^(?<letters>[a-z]+)(?<digits>[0-9]+)$/u);
   const numericAlphaMatch = queryLower.match(/^(?<digits>[0-9]+)(?<letters>[a-z]+)$/u);
-  const swappedQuery = alphaNumericMatch
-    ? `${alphaNumericMatch.groups?.["digits"] ?? ""}${alphaNumericMatch.groups?.["letters"] ?? ""}`
-    : numericAlphaMatch
-      ? `${numericAlphaMatch.groups?.["letters"] ?? ""}${numericAlphaMatch.groups?.["digits"] ?? ""}`
-      : "";
+  const swappedQuery =
+    alphaNumericMatch === null
+      ? numericAlphaMatch === null
+        ? ""
+        : `${numericAlphaMatch.groups?.["letters"] ?? ""}${numericAlphaMatch.groups?.["digits"] ?? ""}`
+      : `${alphaNumericMatch.groups?.["digits"] ?? ""}${alphaNumericMatch.groups?.["letters"] ?? ""}`;
 
-  if (!swappedQuery) {
+  if (swappedQuery === "") {
     return primaryMatch;
   }
 
@@ -84,7 +85,7 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatch {
 }
 
 export function fuzzyFilter<T>(items: T[], query: string, getText: (item: T) => string): T[] {
-  if (!query.trim()) {
+  if (query.trim() === "") {
     return items;
   }
 

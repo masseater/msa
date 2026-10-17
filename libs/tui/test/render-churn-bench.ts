@@ -29,7 +29,11 @@ class EditorSim implements Component {
   }
 
   render(width: number): string[] {
-    if (this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {
+    if (
+      this.cachedLines !== undefined &&
+      this.cachedText === this.text &&
+      this.cachedWidth === width
+    ) {
       return this.cachedLines;
     }
     const border = `\x1b[90m${"─".repeat(Math.max(1, width - 2))}\x1b[39m`;

@@ -64,18 +64,18 @@ export function dispatchMouseEvent(
   event: TuiMouseEvent,
 ): TuiMouseDispatchResult | undefined {
   const result = component.handleMouse?.(event);
-  if (!result) return undefined;
+  if (result === undefined) return undefined;
   if ("target" in result) {
     const forwarded = result as TuiMouseDispatchResult;
-    return forwarded.focus && component.handleInput
+    return forwarded.focus === true && component.handleInput !== undefined
       ? { ...forwarded, focusTarget: component }
       : forwarded;
   }
-  if (!result.handled && !result.capture && !result.focus) return undefined;
+  if (result.handled !== true && result.capture !== true && result.focus !== true) return undefined;
   return {
     ...result,
     handled: true,
-    ...(result.focus ? { focusTarget: component } : {}),
+    ...(result.focus === true ? { focusTarget: component } : {}),
     target: {
       component,
       originX: event.screenX - event.x,
@@ -256,7 +256,7 @@ export class Container implements Component {
           y: event.y - childY,
           height: childHeight,
         });
-        if (result?.focus && (this as Component).handleInput)
+        if (result?.focus === true && (this as Component).handleInput !== undefined)
           return { ...result, focusTarget: this };
         return result;
       }
@@ -454,16 +454,16 @@ export abstract class TuiBase extends Container implements TUI {
   }): void {
     const previousFocus = this.focusedComponent;
     let nextFocus = component;
-    const previousFocusedOverlay = previousFocus
-      ? this.overlayStack.find(
-          (entry) => entry.component === previousFocus && this.isOverlayVisible(entry),
-        )
-      : undefined;
-    const nextFocusIsOverlay = nextFocus
-      ? this.overlayStack.some((entry) => entry.component === nextFocus)
-      : false;
+    const previousFocusedOverlay =
+      previousFocus === null
+        ? undefined
+        : this.overlayStack.find(
+            (entry) => entry.component === previousFocus && this.isOverlayVisible(entry),
+          );
+    const nextFocusIsOverlay =
+      nextFocus === null ? false : this.overlayStack.some((entry) => entry.component === nextFocus);
     const restoreState = this.getVisibleOverlayFocusRestore();
-    if (nextFocus && !nextFocusIsOverlay) {
+    if (nextFocus !== null && !nextFocusIsOverlay) {
       if (restoreState.status === "blocked" && restoreState.blockedBy === previousFocus) {
         if (
           restoreState.resume.status === "focus-target" ||
@@ -479,7 +479,7 @@ export abstract class TuiBase extends Container implements TUI {
           };
         }
       } else if (
-        previousFocusedOverlay &&
+        previousFocusedOverlay !== undefined &&
         restoreState.status !== "inactive" &&
         restoreState.overlay === previousFocusedOverlay &&
         !this.isOverlayFocusAncestor(previousFocusedOverlay, nextFocus)
@@ -509,12 +509,13 @@ export abstract class TuiBase extends Container implements TUI {
       nextFocus.focused = true;
     }
 
-    const focusedOverlay = nextFocus
-      ? this.overlayStack.find(
-          (entry) => entry.component === nextFocus && this.isOverlayVisible(entry),
-        )
-      : undefined;
-    if (focusedOverlay) {
+    const focusedOverlay =
+      nextFocus === null
+        ? undefined
+        : this.overlayStack.find(
+            (entry) => entry.component === nextFocus && this.isOverlayVisible(entry),
+          );
+    if (focusedOverlay !== undefined) {
       this.overlayFocusRestore = { status: "eligible", overlay: focusedOverlay };
     }
   }
@@ -555,7 +556,7 @@ export abstract class TuiBase extends Container implements TUI {
   private isOverlayFocusAncestor(entry: OverlayStackEntry, component: Component): boolean {
     const visited = new Set<Component>();
     let current = entry.preFocus;
-    while (current && !visited.has(current)) {
+    while (current !== null && !visited.has(current)) {
       visited.add(current);
       if (current === component) return true;
       current = this.findOverlayPreFocus(current);
@@ -598,7 +599,7 @@ export abstract class TuiBase extends Container implements TUI {
       focusOrder: ++this.focusOrderCounter,
     };
     this.overlayStack.push(entry);
-    if (!options?.nonCapturing && this.isOverlayVisible(entry)) {
+    if (options?.nonCapturing !== true && this.isOverlayVisible(entry)) {
       this.setFocus(component);
     }
     this.hideTerminalCursor();
@@ -617,7 +618,11 @@ export abstract class TuiBase extends Container implements TUI {
       unfocus: (unfocusOptions) => this.unfocusOverlayEntry(entry, unfocusOptions),
       isFocused: () => this.focusedComponent === component,
       getBounds: () => {
-        if (!this.overlayStack.includes(entry) || !this.isOverlayVisible(entry) || !entry.bounds)
+        if (
+          !this.overlayStack.includes(entry) ||
+          !this.isOverlayVisible(entry) ||
+          entry.bounds === undefined
+        )
           return undefined;
         return { ...entry.bounds };
       },
@@ -647,7 +652,7 @@ export abstract class TuiBase extends Container implements TUI {
         const topVisible = this.getTopmostVisibleOverlay();
         this.setFocus(topVisible?.component ?? entry.preFocus);
       }
-    } else if (!entry.options?.nonCapturing && this.isOverlayVisible(entry)) {
+    } else if (entry.options?.nonCapturing !== true && this.isOverlayVisible(entry)) {
       entry.focusOrder = ++this.focusOrderCounter;
       this.setFocus(entry.component);
     }
@@ -667,32 +672,32 @@ export abstract class TuiBase extends Container implements TUI {
       restoreState.overlay === entry &&
       this.focusedComponent === restoreState.blockedBy
     ) {
-      if (unfocusOptions) {
+      if (unfocusOptions === undefined) {
+        this.clearOverlayFocusRestore();
+      } else {
         this.overlayFocusRestore = {
           status: "blocked",
           overlay: entry,
           blockedBy: restoreState.blockedBy,
           resume: { status: "focus-target", target: unfocusOptions.target },
         };
-      } else {
-        this.clearOverlayFocusRestore();
       }
       this.requestRender();
       return;
     }
     this.clearOverlayFocusRestoreFor(entry);
-    if (isFocused || unfocusOptions) {
+    if (isFocused || unfocusOptions !== undefined) {
       const topVisible = this.getTopmostVisibleOverlay();
       const fallbackTarget =
-        topVisible && topVisible !== entry ? topVisible.component : entry.preFocus;
-      this.setFocus(unfocusOptions ? unfocusOptions.target : fallbackTarget);
+        topVisible !== undefined && topVisible !== entry ? topVisible.component : entry.preFocus;
+      this.setFocus(unfocusOptions === undefined ? fallbackTarget : unfocusOptions.target);
     }
     this.requestRender();
   }
 
   hideOverlay(): void {
     const overlay = this.overlayStack[this.overlayStack.length - 1];
-    if (!overlay) return;
+    if (overlay === undefined) return;
     this.clearOverlayFocusRestoreFor(overlay);
     this.retargetOverlayPreFocus(overlay);
     this.overlayStack.pop();
@@ -749,19 +754,20 @@ export abstract class TuiBase extends Container implements TUI {
         width: layout.width,
         height: layout.height,
       });
-      return result
-        ? {
+      return result === undefined
+        ? { hit: true }
+        : {
             hit: true,
-            result: result.focus ? { ...result, focusTarget: layout.entry.component } : result,
-          }
-        : { hit: true };
+            result:
+              result.focus === true ? { ...result, focusTarget: layout.entry.component } : result,
+          };
     }
     return { hit: false };
   }
 
   private isOverlayVisible(entry: OverlayStackEntry): boolean {
     if (entry.hidden) return false;
-    if (entry.options?.visible) {
+    if (entry.options?.visible !== undefined) {
       return entry.options.visible(this.terminal.columns, this.terminal.rows);
     }
     return true;
@@ -770,8 +776,8 @@ export abstract class TuiBase extends Container implements TUI {
   private getTopmostVisibleOverlay(): OverlayStackEntry | undefined {
     let topmost: OverlayStackEntry | undefined;
     for (const overlay of this.overlayStack) {
-      if (overlay.options?.nonCapturing || !this.isOverlayVisible(overlay)) continue;
-      if (!topmost || overlay.focusOrder > topmost.focusOrder) {
+      if (overlay.options?.nonCapturing === true || !this.isOverlayVisible(overlay)) continue;
+      if (topmost === undefined || overlay.focusOrder > topmost.focusOrder) {
         topmost = overlay;
       }
     }
@@ -828,7 +834,7 @@ export abstract class TuiBase extends Container implements TUI {
   }
 
   private queryCellSize(): void {
-    if (!getCapabilities().images) {
+    if (getCapabilities().images === null) {
       return;
     }
     this.terminal.write("\x1b[16t");
@@ -881,13 +887,13 @@ export abstract class TuiBase extends Container implements TUI {
   }
 
   private cancelRenderTimer(): void {
-    if (!this.renderTimer) return;
+    if (this.renderTimer === undefined) return;
     clearTimeout(this.renderTimer);
     this.renderTimer = undefined;
   }
 
   private scheduleRender(): void {
-    if (this.stopped || this.renderTimer || !this.renderRequested) {
+    if (this.stopped || this.renderTimer !== undefined || !this.renderRequested) {
       return;
     }
     const elapsed = performance.now() - this.lastRenderAt;
@@ -918,7 +924,7 @@ export abstract class TuiBase extends Container implements TUI {
       let current = data;
       for (const listener of this.inputListeners) {
         const result = listener(current);
-        if (result?.consume) {
+        if (result?.consume === true) {
           return;
         }
         if (result?.data !== undefined) {
@@ -935,21 +941,21 @@ export abstract class TuiBase extends Container implements TUI {
       return;
     }
 
-    if (matchesKey(data, "shift+ctrl+d") && this.onDebug) {
+    if (matchesKey(data, "shift+ctrl+d") && this.onDebug !== undefined) {
       this.onDebug();
       return;
     }
 
     const focusedOverlay = this.overlayStack.find((o) => o.component === this.focusedComponent);
-    if (focusedOverlay && !this.isOverlayVisible(focusedOverlay)) {
+    if (focusedOverlay !== undefined && !this.isOverlayVisible(focusedOverlay)) {
       const topVisible = this.getTopmostVisibleOverlay();
-      if (topVisible) {
-        this.setFocus(topVisible.component);
-      } else {
+      if (topVisible === undefined) {
         this.setFocusInternal({
           component: focusedOverlay.preFocus,
           overlayFocusRestore: "preserve",
         });
+      } else {
+        this.setFocus(topVisible.component);
       }
     }
 
@@ -971,8 +977,8 @@ export abstract class TuiBase extends Container implements TUI {
       }
     }
 
-    if (this.focusedComponent?.handleInput) {
-      if (isKeyRelease(data) && !this.focusedComponent.wantsKeyRelease) {
+    if (this.focusedComponent?.handleInput !== undefined) {
+      if (isKeyRelease(data) && this.focusedComponent.wantsKeyRelease !== true) {
         return;
       }
       this.focusedComponent.handleInput(data);
@@ -982,7 +988,7 @@ export abstract class TuiBase extends Container implements TUI {
 
   private consumeTerminalColorResponse(data: string): boolean {
     const query = this.pendingTerminalColorQueries[0];
-    if (!query) {
+    if (query === undefined) {
       return false;
     }
     if (DEVICE_ATTRIBUTES_RESPONSE_PATTERN.test(data)) {
@@ -992,12 +998,12 @@ export abstract class TuiBase extends Container implements TUI {
     }
 
     const response = parseOscColorResponse(data);
-    if (!response) {
+    if (response === undefined) {
       return false;
     }
     const { target, rgb } = response;
     const key = String(target);
-    if (!query.deliver || query.replied.has(key)) {
+    if (query.deliver === undefined || query.replied.has(key)) {
       return true;
     }
     query.replied.add(key);
@@ -1030,7 +1036,7 @@ export abstract class TuiBase extends Container implements TUI {
 
   private consumeTerminalColorSchemeReport(data: string): boolean {
     const scheme = parseTerminalColorSchemeReport(data);
-    if (!scheme) {
+    if (scheme === undefined) {
       return false;
     }
 

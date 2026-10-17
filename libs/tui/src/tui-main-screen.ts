@@ -51,7 +51,7 @@ class BoundedTerminalWriter {
   }
 
   flush(): void {
-    if (!this.buffer) return;
+    if (this.buffer === "") return;
     this.write(this.buffer);
     this.writtenChars += this.buffer.length;
     this.buffer = "";
@@ -154,7 +154,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
   }
 
   protected override beforeTerminalStop(options: TuiStopOptions): void {
-    if (options.preserveScreen || this.previousLines.length === 0) return;
+    if (options.preserveScreen === true || this.previousLines.length === 0) return;
     this.terminal.write(" ");
     const targetRow = this.previousLines.length;
     const lineDiff = targetRow - this.hardwareCursorRow;
@@ -598,7 +598,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
     cursorPos: { row: number; col: number } | null,
     totalLines: number,
   ): void {
-    if (!cursorPos || totalLines <= 0) {
+    if (cursorPos === null || totalLines <= 0) {
       this.terminal.hideCursor();
       return;
     }
@@ -615,7 +615,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
     }
     buffer += `\x1b[${targetCol + 1}G`;
 
-    if (buffer) {
+    if (buffer !== "") {
       this.terminal.write(buffer);
     }
 

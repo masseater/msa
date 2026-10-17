@@ -32,15 +32,13 @@ function focusManagementCases1(): void {
 
       const overlayPromise = new Promise<void>((resolve) => {
         doneFn = () => {
-          if (!timerHandle) throw new Error("timerHandle was not initialized");
+          if (timerHandle === null) throw new Error("timerHandle was not initialized");
           timerHandle.hide();
           tui.hideOverlay();
           resolve();
         };
         timerHandle = tui.showOverlay(timer, { nonCapturing: true });
-        Promise.resolve(controller).then((c) => {
-          tui.showOverlay(c);
-        });
+        Promise.resolve(controller).then((c) => tui.showOverlay(c));
       });
 
       await Promise.resolve();
