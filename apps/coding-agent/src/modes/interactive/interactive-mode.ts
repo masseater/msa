@@ -2873,6 +2873,8 @@ export class InteractiveMode {
         if (this.streamingComponent) {
           this.chatContainer.removeChild(this.streamingComponent);
           this.toolGroup?.items.removeChild(this.streamingComponent);
+          const thinking = this.streamingComponent.takenThinking;
+          if (thinking) this.toolGroup?.items.removeChild(thinking);
           this.streamingComponent = undefined;
           this.streamingMessage = undefined;
         }
@@ -3182,8 +3184,9 @@ export class InteractiveMode {
   }
 
   /**
-   * Add a tool call to the group of tool calls just before it, or start a group. Assistant
-   * messages that only think, between or right before the calls, go into the group with them.
+   * Add a tool call to the group of tool calls just before it, or start a group. Thinking between
+   * or right before the calls goes into the group with them; a message that also shows text keeps
+   * the text in the chat.
    */
   private addToolExecution(component: ToolExecutionComponent): void {
     const children = this.chatContainer.children;
@@ -3199,6 +3202,10 @@ export class InteractiveMode {
       group.setExpanded(this.toolOutputExpanded);
       const last = children.at(-1);
       folded = isFoldable(last) && last ? [last] : [];
+      if (last instanceof AssistantMessageComponent) {
+        const thinking = last.takeThinking();
+        if (thinking) folded.push(thinking);
+      }
       this.toolGroup = group;
     }
     for (const child of folded) this.chatContainer.removeChild(child);

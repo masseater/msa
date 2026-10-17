@@ -2,6 +2,7 @@ import type { TUI, TuiMouseEvent } from "@msa/tui";
 import { beforeAll, describe, expect, test } from "vite-plus/test";
 
 import { createReadToolDefinition } from "../src/core/tools/read.ts";
+import { AssistantMessageComponent } from "../src/modes/interactive/components/assistant-message.ts";
 import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
 import { ToolGroupComponent } from "../src/modes/interactive/components/tool-group.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
@@ -68,5 +69,43 @@ describe("ToolGroupComponent", () => {
 
     expect(group.handleMouse(click(2, listed.length))?.handled).toBe(true);
     expect(group.render(width).length).toBeGreaterThan(listed.length);
+  });
+
+  test("folds thinking in with the calls, even beside a single call", () => {
+    const thinking = new AssistantMessageComponent(
+      {
+        role: "assistant",
+        content: [{ type: "thinking", thinking: "idea" }],
+        api: "openai-responses",
+        provider: "openai",
+        model: "gpt-4o-mini",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "toolUse",
+        timestamp: 0,
+      },
+      true,
+    );
+    const group = new ToolGroupComponent(1);
+    group.items.addChild(thinking);
+    group.items.addChild(readCall("a", "a.txt"));
+
+    const collapsed = group.render(width).map(stripAnsi);
+    expect(collapsed).toEqual(["", " Thought, read 1 file ›"]);
+
+    expect(group.handleMouse(click(1, collapsed.length))?.handled).toBe(true);
+    expect(group.render(width).map((line) => stripAnsi(line).trimEnd())).toEqual([
+      "",
+      " Thought, read 1 file ⌄",
+      "",
+      " Thinking...",
+      " read a.txt ›",
+    ]);
   });
 });

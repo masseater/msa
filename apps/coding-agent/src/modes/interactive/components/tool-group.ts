@@ -10,6 +10,7 @@ import {
 
 import { stripAnsi } from "../../../utils/ansi.ts";
 import { theme } from "../theme/theme.ts";
+import { AssistantMessageComponent } from "./assistant-message.ts";
 import { type ToolCallSummary, ToolExecutionComponent } from "./tool-execution.ts";
 
 const FILE_VERBS: Record<string, string> = { read: "read", edit: "edited", write: "wrote" };
@@ -29,7 +30,7 @@ function countDiffLines(diff: string): { added: number; removed: number } {
   return { added, removed };
 }
 
-function summarize(calls: readonly ToolCallSummary[]): string {
+function summarize(calls: readonly ToolCallSummary[], thought: boolean): string {
   const files = new Map<string, Set<string>>();
   const counts = new Map<string, number>();
   let added = 0;
@@ -60,7 +61,7 @@ function summarize(calls: readonly ToolCallSummary[]): string {
     }
   }
 
-  const parts: string[] = [];
+  const parts: string[] = thought ? ["thought"] : [];
   for (const [verb, paths] of files) parts.push(`${verb} ${plural(paths.size, "file")}`);
   for (const [key, count] of counts) {
     if (key === "bash") parts.push(`ran ${plural(count, "command")}`);
@@ -176,13 +177,19 @@ export class ToolGroupComponent extends Container {
   private header(width: number): string {
     const pad = " ".repeat(this.outputPad);
     const marker = theme.fg("muted", this.expanded ? " ⌄" : " ›");
-    const summary = summarize(this.tools().map((tool) => tool.getCallSummary()));
+    const thought = this.items.children.some(
+      (item) => item instanceof AssistantMessageComponent && item.hasThinking(),
+    );
+    const summary = summarize(
+      this.tools().map((tool) => tool.getCallSummary()),
+      thought,
+    );
     return truncateToWidth(`${pad}${summary}${marker}`, width, "...");
   }
 
   override render(width: number): string[] {
-    // A single call has nothing to fold, so it shows as itself.
-    if (this.tools().length <= 1) {
+    // A single call with no thinking has nothing to fold, so it shows as itself.
+    if (this.items.children.length <= 1) {
       this.children = [this.items];
     } else {
       this.body.children = this.expanded
