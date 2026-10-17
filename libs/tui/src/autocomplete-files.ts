@@ -1,9 +1,13 @@
-import { type Dirent, readdirSync, statSync } from "fs";
-import { homedir } from "os";
-import { basename, dirname, join } from "path";
+import { type Dirent, readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+
+import { Effect } from "effect";
 
 import { buildCompletionValue, parsePathPrefix, toDisplayPath } from "./autocomplete-prefix.ts";
 import type { AutocompleteItem } from "./autocomplete-types.ts";
+import { pathOperations } from "./platform.ts";
+
+const { basename, dirname, join } = pathOperations;
 
 export interface FileSuggestionContext {
   basePath: string;
@@ -56,16 +60,6 @@ function resolveSearchLocation(context: {
   };
 }
 
-function isDirectoryEntry(searchDir: string, entry: Dirent): boolean {
-  if (entry.isDirectory()) return true;
-  if (!entry.isSymbolicLink()) return false;
-  try {
-    return statSync(join(searchDir, entry.name)).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
 function nestedRelativePath(displayPrefix: string, name: string): string {
   if (displayPrefix.startsWith("~/")) {
     const dir = dirname(displayPrefix.slice(2));
@@ -99,6 +93,16 @@ function compareDirectoriesFirst(a: AutocompleteItem, b: AutocompleteItem): numb
   return a.label.localeCompare(b.label);
 }
 
+function isDirectoryEntry(searchDir: string, entry: Dirent): boolean {
+  if (entry.isDirectory()) return true;
+  if (!entry.isSymbolicLink()) return false;
+  try {
+    return statSync(join(searchDir, entry.name)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 function listFileSuggestions(context: FileSuggestionContext): AutocompleteItem[] {
   const { rawPrefix, isAtPrefix, isQuotedPrefix } = parsePathPrefix(context.prefix);
   const { searchDir, searchPrefix } = resolveSearchLocation({
@@ -127,10 +131,10 @@ function listFileSuggestions(context: FileSuggestionContext): AutocompleteItem[]
   return suggestions.sort(compareDirectoriesFirst);
 }
 
-export function getFileSuggestions(context: FileSuggestionContext): AutocompleteItem[] {
-  try {
-    return listFileSuggestions(context);
-  } catch {
-    return [];
-  }
+export function getFileSuggestions(
+  context: FileSuggestionContext,
+): Effect.Effect<AutocompleteItem[]> {
+  return Effect.sync(() => listFileSuggestions(context)).pipe(
+    Effect.catchDefect(() => Effect.succeed([])),
+  );
 }

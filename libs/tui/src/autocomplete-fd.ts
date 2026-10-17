@@ -1,8 +1,7 @@
-import { spawn } from "child_process";
-
 import { Effect } from "effect";
 
 import { toDisplayPath } from "./autocomplete-prefix.ts";
+import { Platform } from "./platform.ts";
 
 export interface FdEntry {
   path: string;
@@ -108,48 +107,30 @@ function parseFdOutput(stdout: string): FdEntry[] {
   return results;
 }
 
-export function walkDirectoryWithFd(options: FdWalkOptions): Effect.Effect<FdEntry[]> {
+const waitForAbort = (signal: AbortSignal): Effect.Effect<FdEntry[]> =>
+  Effect.callback<FdEntry[]>((resume) => {
+    const onAbort = (): void => {
+      resume(Effect.succeed([]));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    return Effect.sync(() => {
+      signal.removeEventListener("abort", onAbort);
+    });
+  });
+
+export function walkDirectoryWithFd(
+  options: FdWalkOptions,
+): Effect.Effect<FdEntry[], never, Platform> {
   const args = buildFdArgs(options);
   const { signal } = options;
-  return Effect.callback<FdEntry[]>((resume) => {
-    if (signal.aborted) {
-      resume(Effect.succeed([]));
-      return;
-    }
-
-    const child = spawn(options.fdPath, args, {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let resolved = false;
-
-    const onAbort = (): void => {
-      if (child.exitCode === null) {
-        child.kill("SIGKILL");
-      }
-    };
-
-    const finish = (results: FdEntry[]): void => {
-      if (resolved) return;
-      resolved = true;
-      signal.removeEventListener("abort", onAbort);
-      resume(Effect.succeed(results));
-    };
-
-    signal.addEventListener("abort", onAbort, { once: true });
-    child.stdout.setEncoding("utf-8");
-    child.stdout.on("data", (chunk: string) => {
-      stdout += chunk;
-    });
-    child.on("error", () => {
-      finish([]);
-    });
-    child.on("close", (code) => {
-      if (signal.aborted || code !== 0 || stdout === "") {
-        finish([]);
-        return;
-      }
-      finish(parseFdOutput(stdout));
-    });
+  return Effect.suspend(() => {
+    if (signal.aborted) return Effect.succeed([]);
+    return Platform.use((platform) => platform.runCommand({ file: options.fdPath, args })).pipe(
+      Effect.map(({ exitCode, stdout }) =>
+        signal.aborted || exitCode !== 0 || stdout === "" ? [] : parseFdOutput(stdout),
+      ),
+      Effect.orElseSucceed((): FdEntry[] => []),
+      Effect.raceFirst(waitForAbort(signal)),
+    );
   });
 }

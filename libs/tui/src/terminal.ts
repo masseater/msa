@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as path from "node:path";
 
 import { Clock, DateTime, Effect } from "effect";
 import { dual } from "effect/Function";
@@ -9,6 +8,7 @@ import { readEnv } from "./env.ts";
 import { setKittyProtocolActive } from "./keys.ts";
 import { isNativeModifierPressed } from "./native-modifiers.ts";
 import { getNativePlatformHelper } from "./native-platform.ts";
+import { pathOperations } from "./platform.ts";
 import {
   formatProgramStatus,
   isProgramStatusReply,
@@ -152,7 +152,7 @@ export class ProcessTerminal implements Terminal {
         );
         const pad = (value: number): string => String(value).padStart(2, "0");
         const ts = `${now.year}-${pad(now.month)}-${pad(now.day)}_${pad(now.hour)}-${pad(now.minute)}-${pad(now.second)}`;
-        return path.join(env, `tui-${ts}-${process.pid}.log`);
+        return pathOperations.join(env, `tui-${ts}-${process.pid}.log`);
       }
     } catch {}
     return env;

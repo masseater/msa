@@ -19,6 +19,7 @@ import type {
   AutocompleteProvider,
   AutocompleteSuggestions,
 } from "./autocomplete-types.ts";
+import { type Platform, platformRuntime } from "./platform.ts";
 
 export type {
   AutocompleteItem,
@@ -44,7 +45,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
     cursorCol: number,
     options: { signal: AbortSignal; force?: boolean },
   ): Promise<AutocompleteSuggestions | null> {
-    return Effect.runPromise(
+    return platformRuntime.runPromise(
       Effect.suspend(() =>
         this.suggestionsFor((lines[cursorLine] ?? "").slice(0, cursorCol), options),
       ),
@@ -75,7 +76,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
   private suggestionsFor(
     textBeforeCursor: string,
     options: { signal: AbortSignal; force?: boolean },
-  ): Effect.Effect<AutocompleteSuggestions | null> {
+  ): Effect.Effect<AutocompleteSuggestions | null, never, Platform> {
     const atPrefix = extractAtPrefix(textBeforeCursor);
     if (atPrefix !== null && atPrefix !== "") {
       return this.atPrefixSuggestions(atPrefix, options.signal);
@@ -88,13 +89,13 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
         : Effect.succeed(getCommandNameSuggestions({ commands: this.commands, commandText }));
     }
 
-    return Effect.sync(() => this.pathSuggestions(textBeforeCursor, options.force ?? false));
+    return this.pathSuggestions(textBeforeCursor, options.force ?? false);
   }
 
   private atPrefixSuggestions(
     atPrefix: string,
     signal: AbortSignal,
-  ): Effect.Effect<AutocompleteSuggestions | null> {
+  ): Effect.Effect<AutocompleteSuggestions | null, never, Platform> {
     const { rawPrefix, isQuotedPrefix } = parsePathPrefix(atPrefix);
     return getFuzzyFileSuggestions({
       basePath: this.basePath,
@@ -112,20 +113,18 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
   private pathSuggestions(
     textBeforeCursor: string,
     force: boolean,
-  ): AutocompleteSuggestions | null {
+  ): Effect.Effect<AutocompleteSuggestions | null, never, Platform> {
     const pathMatch = force
       ? extractForcedPathPrefix(textBeforeCursor)
       : extractPathPrefix(textBeforeCursor);
     if (pathMatch === null) {
-      return null;
+      return Effect.succeed(null);
     }
 
-    const suggestions = getFileSuggestions({ basePath: this.basePath, prefix: pathMatch });
-    if (suggestions.length === 0) return null;
-
-    return {
-      items: suggestions,
-      prefix: pathMatch,
-    };
+    return getFileSuggestions({ basePath: this.basePath, prefix: pathMatch }).pipe(
+      Effect.map((suggestions) =>
+        suggestions.length === 0 ? null : { items: suggestions, prefix: pathMatch },
+      ),
+    );
   }
 }

@@ -1,10 +1,10 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
-import * as path from "node:path";
 
 import { Clock, DateTime, Effect, Random } from "effect";
 
 import { isEnvSet, readEnv } from "./env.ts";
+import { pathOperations } from "./platform.ts";
 import { deleteKittyImage, isImageLine } from "./terminal-image.ts";
 import { type TUI, TuiBase, type TuiStopOptions } from "./tui.ts";
 import { visibleWidth } from "./utils.ts";
@@ -316,9 +316,9 @@ export class TuiMainScreen extends TuiBase implements TUI {
       readEnv("MSA_TUI_DEBUG_REDRAW") === "1" ? this.logDirectory : undefined;
     const logRedraw = (reason: string): void => {
       if (redrawLogDirectory === undefined) return;
-      const logPath = path.join(redrawLogDirectory, "msa-tui-debug.log");
+      const logPath = pathOperations.join(redrawLogDirectory, "msa-tui-debug.log");
       const msg = `[${DateTime.formatIso(Effect.runSync(DateTime.now))}] fullRender: ${reason} (prev=${this.previousLines.length}, new=${newLines.length}, height=${height})\n`;
-      fs.mkdirSync(path.dirname(logPath), { recursive: true });
+      fs.mkdirSync(pathOperations.dirname(logPath), { recursive: true });
       fs.appendFileSync(logPath, msg);
     };
 
@@ -505,7 +505,10 @@ export class TuiMainScreen extends TuiBase implements TUI {
 
       output.append("\x1b[2K");
       if (!isImage && visibleWidth(line) > width) {
-        const crashLogPath = path.join(this.logDirectory ?? os.tmpdir(), "msa-tui-crash.log");
+        const crashLogPath = pathOperations.join(
+          this.logDirectory ?? os.tmpdir(),
+          "msa-tui-crash.log",
+        );
         const crashData = [
           `Crash at ${DateTime.formatIso(Effect.runSync(DateTime.now))}`,
           `Terminal width: ${width}`,
@@ -515,7 +518,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
           ...newLines.map((l, idx) => `[${idx}] (w=${visibleWidth(l)}) ${l}`),
           "",
         ].join("\n");
-        fs.mkdirSync(path.dirname(crashLogPath), { recursive: true });
+        fs.mkdirSync(pathOperations.dirname(crashLogPath), { recursive: true });
         fs.writeFileSync(crashLogPath, crashData);
 
         this.stop();
@@ -553,7 +556,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
     if (readEnv("MSA_TUI_DEBUG") === "1") {
       const debugDir = "/tmp/tui";
       fs.mkdirSync(debugDir, { recursive: true });
-      const debugPath = path.join(
+      const debugPath = pathOperations.join(
         debugDir,
         `render-${Effect.runSync(Clock.currentTimeMillis)}-${Effect.runSync(Random.next).toString(36).slice(2)}.log`,
       );

@@ -1,8 +1,8 @@
 import { createRequire } from "node:module";
-import * as path from "node:path";
 
 import { isEnvSet } from "./env.ts";
 import { getNativeModuleCandidates } from "./native-module-path.ts";
+import { pathOperations } from "./platform.ts";
 
 const cjsRequire = createRequire(import.meta.url);
 
@@ -25,7 +25,7 @@ const helpers = new Map<string, NativePlatformHelper | undefined>();
 function loadNativePlatformHelper(platform: string, suffix = ""): NativePlatformHelper | undefined {
   const arch = process.arch;
   if (arch !== "x64" && arch !== "arm64") return undefined;
-  const nativePath = path.join(
+  const nativePath = pathOperations.join(
     "native",
     platform,
     "prebuilds",
