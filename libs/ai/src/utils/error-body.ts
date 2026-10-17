@@ -1,3 +1,4 @@
+import { Function } from "effect";
 export const MAX_PROVIDER_ERROR_BODY_CHARS = 4000;
 
 export interface NormalizedProviderError {
@@ -87,10 +88,13 @@ export function formatProviderError(norm: NormalizedProviderError, prefix?: stri
     : `${prefix} (${norm.status}): ${norm.body}`;
 }
 
-export function truncateErrorText(text: string, maxChars: number): string {
+export const truncateErrorText: {
+  (maxChars: number): (text: string) => string;
+  (text: string, maxChars: number): string;
+} = Function.dual(2, function (text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars)}... [truncated ${text.length - maxChars} chars]`;
-}
+});
 
 export function safeJsonStringify(value: unknown): string {
   try {

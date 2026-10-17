@@ -1,4 +1,4 @@
-import { Data } from "effect";
+import { Data, Function } from "effect";
 
 import type { Tool } from "../types.ts";
 import { toErrorMessage } from "../utils/errors.ts";
@@ -164,14 +164,14 @@ export function makeStrictJsonSchema(
   return cloned;
 }
 
-export function getJsonSchemaToolParameters(
-  tool: Tool,
-  strict: boolean | undefined,
-): Tool["parameters"] {
+export const getJsonSchemaToolParameters: {
+  (strict: boolean | undefined): (tool: Tool) => Tool["parameters"];
+  (tool: Tool, strict: boolean | undefined): Tool["parameters"];
+} = Function.dual(2, function (tool: Tool, strict: boolean | undefined): Tool["parameters"] {
   return (
     strict === true ? makeStrictJsonSchema(tool.parameters) : tool.parameters
   ) as Tool["parameters"];
-}
+});
 
 export interface GrammarConstrainedSampling {
   format: "lark" | "regex";
@@ -185,53 +185,72 @@ export interface GrammarToolInputJsonBuffer {
   closed: boolean;
 }
 
-export function getGrammarToolInput(
-  toolName: string,
-  arguments_: Record<string, unknown>,
-  inputProperty: string,
-): string {
-  const input = arguments_[inputProperty];
-  if (typeof input !== "string") {
-    throw new Error(
-      `Grammar tool call "${toolName}" requires argument "${inputProperty}" to be a string.`,
-    );
-  }
-  return input;
-}
+export const getGrammarToolInput: {
+  (arguments_: Record<string, unknown>, inputProperty: string): (toolName: string) => string;
+  (toolName: string, arguments_: Record<string, unknown>, inputProperty: string): string;
+} = Function.dual(
+  3,
+  function (toolName: string, arguments_: Record<string, unknown>, inputProperty: string): string {
+    const input = arguments_[inputProperty];
+    if (typeof input !== "string") {
+      throw new Error(
+        `Grammar tool call "${toolName}" requires argument "${inputProperty}" to be a string.`,
+      );
+    }
+    return input;
+  },
+);
 
-export function appendGrammarToolInputJsonDelta(
-  buffer: GrammarToolInputJsonBuffer,
-  inputProperty: string,
-  nextInput: string,
-  close: boolean,
-): string | undefined {
-  if (buffer.closed) {
-    if (close && nextInput === buffer.input) return undefined;
-    throw new Error(
-      `grammar tool input for property "${inputProperty}" changed after it was closed`,
-    );
-  }
-  if (!nextInput.startsWith(buffer.input)) {
-    throw new Error(`grammar tool input for property "${inputProperty}" changed non-monotonically`);
-  }
+export const appendGrammarToolInputJsonDelta: {
+  (
+    inputProperty: string,
+    nextInput: string,
+    close: boolean,
+  ): (buffer: GrammarToolInputJsonBuffer) => string | undefined;
+  (
+    buffer: GrammarToolInputJsonBuffer,
+    inputProperty: string,
+    nextInput: string,
+    close: boolean,
+  ): string | undefined;
+} = Function.dual(
+  4,
+  function (
+    buffer: GrammarToolInputJsonBuffer,
+    inputProperty: string,
+    nextInput: string,
+    close: boolean,
+  ): string | undefined {
+    if (buffer.closed) {
+      if (close && nextInput === buffer.input) return undefined;
+      throw new Error(
+        `grammar tool input for property "${inputProperty}" changed after it was closed`,
+      );
+    }
+    if (!nextInput.startsWith(buffer.input)) {
+      throw new Error(
+        `grammar tool input for property "${inputProperty}" changed non-monotonically`,
+      );
+    }
 
-  const inputDelta = nextInput.slice(buffer.input.length);
-  if (!close && inputDelta.length === 0) return undefined;
+    const inputDelta = nextInput.slice(buffer.input.length);
+    if (!close && inputDelta.length === 0) return undefined;
 
-  let delta = "";
-  if (!buffer.started) {
-    delta += `{${JSON.stringify(inputProperty)}:"`;
-    buffer.started = true;
-  }
-  delta += JSON.stringify(inputDelta).slice(1, -1);
-  buffer.input = nextInput;
+    let delta = "";
+    if (!buffer.started) {
+      delta += `{${JSON.stringify(inputProperty)}:"`;
+      buffer.started = true;
+    }
+    delta += JSON.stringify(inputDelta).slice(1, -1);
+    buffer.input = nextInput;
 
-  if (close) {
-    delta += '"}';
-    buffer.closed = true;
-  }
-  return delta;
-}
+    if (close) {
+      delta += '"}';
+      buffer.closed = true;
+    }
+    return delta;
+  },
+);
 
 function inferGrammarInputProperty(tool: Tool): string {
   const schema = tool.parameters as JsonSchemaObject;
@@ -287,10 +306,12 @@ export function resolveJsonSchemaStrictSampling(
   return undefined;
 }
 
-export function resolveGrammarConstrainedSampling(
-  tool: Tool,
-  supportsOpenAIGrammarTools: boolean,
-): GrammarConstrainedSampling | undefined {
+export const resolveGrammarConstrainedSampling: {
+  (supportsOpenAIGrammarTools: boolean): (tool: Tool) => GrammarConstrainedSampling | undefined;
+  (tool: Tool, supportsOpenAIGrammarTools: boolean): GrammarConstrainedSampling | undefined;
+} = Function.dual(2, function (tool: Tool, supportsOpenAIGrammarTools: boolean):
+  | GrammarConstrainedSampling
+  | undefined {
   const config = tool.constrainedSampling;
   if (config === undefined || config === false || config.type !== "grammar") {
     return undefined;
@@ -323,18 +344,24 @@ export function resolveGrammarConstrainedSampling(
       cause: error,
     });
   }
-}
+});
 
-export function createGrammarToolInputProperties(
-  tools: Tool[] | undefined,
-  supportsOpenAIGrammarTools: boolean,
-): ReadonlyMap<string, string> {
-  const properties = new Map<string, string>();
-  for (const tool of tools ?? []) {
-    const grammar = resolveGrammarConstrainedSampling(tool, supportsOpenAIGrammarTools);
-    if (grammar !== undefined) {
-      properties.set(tool.name, grammar.inputProperty);
+export const createGrammarToolInputProperties: {
+  (supportsOpenAIGrammarTools: boolean): (tools: Tool[] | undefined) => ReadonlyMap<string, string>;
+  (tools: Tool[] | undefined, supportsOpenAIGrammarTools: boolean): ReadonlyMap<string, string>;
+} = Function.dual(
+  2,
+  function (
+    tools: Tool[] | undefined,
+    supportsOpenAIGrammarTools: boolean,
+  ): ReadonlyMap<string, string> {
+    const properties = new Map<string, string>();
+    for (const tool of tools ?? []) {
+      const grammar = resolveGrammarConstrainedSampling(tool, supportsOpenAIGrammarTools);
+      if (grammar !== undefined) {
+        properties.set(tool.name, grammar.inputProperty);
+      }
     }
-  }
-  return properties;
-}
+    return properties;
+  },
+);

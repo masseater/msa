@@ -6,7 +6,7 @@ import {
   type Part,
   type ThinkingConfig,
 } from "@google/genai";
-import { Effect } from "effect";
+import { Effect, Function } from "effect";
 
 import { clampThinkingLevel } from "../models.ts";
 import type {
@@ -46,10 +46,12 @@ const GOOGLE_SDK_THINKING_LEVEL_MAP: Record<GoogleApiThinkingLevel, GoogleSdkThi
   HIGH: GoogleSdkThinkingLevel.HIGH,
 };
 
-export function resolveGoogleThinkingLevel<T extends GoogleApiType>(
-  model: Model<T>,
-  level: ThinkingLevel,
-): ResolvedGoogleThinkingLevel {
+export const resolveGoogleThinkingLevel: {
+  <T extends GoogleApiType>(level: ThinkingLevel): (model: Model<T>) => ResolvedGoogleThinkingLevel;
+  <T extends GoogleApiType>(model: Model<T>, level: ThinkingLevel): ResolvedGoogleThinkingLevel;
+} = Function.dual(2, function <
+  T extends GoogleApiType,
+>(model: Model<T>, level: ThinkingLevel): ResolvedGoogleThinkingLevel {
   const mapped = model.thinkingLevelMap?.[level];
   const resolvedLevel = typeof mapped === "string" ? mapped.toLowerCase() : level;
   switch (resolvedLevel) {
@@ -63,7 +65,7 @@ export function resolveGoogleThinkingLevel<T extends GoogleApiType>(
         `Unsupported Google thinking level mapping for ${model.provider}/${model.id}: ${level} -> ${String(mapped)}`,
       );
   }
-}
+});
 
 export function usesGoogleThinkingLevel<T extends GoogleApiType>(model: Model<T>): boolean {
   const id = model.id.toLowerCase();
@@ -110,13 +112,15 @@ export function isThinkingPart(part: Pick<Part, "thought" | "thoughtSignature">)
   return part.thought === true;
 }
 
-export function retainThoughtSignature(
-  existing: string | undefined,
-  incoming: string | undefined,
-): string | undefined {
+export const retainThoughtSignature: {
+  (incoming: string | undefined): (existing: string | undefined) => string | undefined;
+  (existing: string | undefined, incoming: string | undefined): string | undefined;
+} = Function.dual(2, function (existing: string | undefined, incoming: string | undefined):
+  | string
+  | undefined {
   if (typeof incoming === "string" && incoming.length > 0) return incoming;
   return existing;
-}
+});
 
 const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/u;
 
@@ -156,10 +160,12 @@ function supportsMultimodalFunctionResponse(modelId: string): boolean {
   return true;
 }
 
-export function convertMessages<T extends GoogleApiType>(
-  model: Model<T>,
-  context: TranscriptContext,
-): Content[] {
+export const convertMessages: {
+  <T extends GoogleApiType>(context: TranscriptContext): (model: Model<T>) => Content[];
+  <T extends GoogleApiType>(model: Model<T>, context: TranscriptContext): Content[];
+} = Function.dual(2, function <
+  T extends GoogleApiType,
+>(model: Model<T>, context: TranscriptContext): Content[] {
   const conversation = withoutInitialSystemMessage(collapseSystemMessages(context).messages);
   const contents: Content[] = [];
   const normalizeToolCallId = (id: string): string => {
@@ -315,7 +321,7 @@ export function convertMessages<T extends GoogleApiType>(
   }
 
   return contents;
-}
+});
 
 const JSON_SCHEMA_META_DECLARATIONS = new Set([
   "$schema",
@@ -382,22 +388,35 @@ export function mapToolChoice(choice: string): FunctionCallingConfigMode {
   }
 }
 
-export function resolveGoogleFunctionCallingMode(
-  tools: Tool[],
-  toolChoice: string | undefined,
-  supportsStrictMode: boolean,
-): FunctionCallingConfigMode | undefined {
-  const useStrictMode = tools.some(
-    (tool) => resolveJsonSchemaStrictSampling(tool, supportsStrictMode) === true,
-  );
-  if (toolChoice === "none" || toolChoice === "any") {
-    return mapToolChoice(toolChoice);
-  }
-  if (useStrictMode) {
-    return FunctionCallingConfigMode.VALIDATED;
-  }
-  return toolChoice !== undefined && toolChoice !== "" ? mapToolChoice(toolChoice) : undefined;
-}
+export const resolveGoogleFunctionCallingMode: {
+  (
+    toolChoice: string | undefined,
+    supportsStrictMode: boolean,
+  ): (tools: Tool[]) => FunctionCallingConfigMode | undefined;
+  (
+    tools: Tool[],
+    toolChoice: string | undefined,
+    supportsStrictMode: boolean,
+  ): FunctionCallingConfigMode | undefined;
+} = Function.dual(
+  3,
+  function (
+    tools: Tool[],
+    toolChoice: string | undefined,
+    supportsStrictMode: boolean,
+  ): FunctionCallingConfigMode | undefined {
+    const useStrictMode = tools.some(
+      (tool) => resolveJsonSchemaStrictSampling(tool, supportsStrictMode) === true,
+    );
+    if (toolChoice === "none" || toolChoice === "any") {
+      return mapToolChoice(toolChoice);
+    }
+    if (useStrictMode) {
+      return FunctionCallingConfigMode.VALIDATED;
+    }
+    return toolChoice !== undefined && toolChoice !== "" ? mapToolChoice(toolChoice) : undefined;
+  },
+);
 
 export function mapStopReason(reason: FinishReason): StopReason {
   switch (reason) {

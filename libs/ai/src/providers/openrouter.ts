@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Function } from "effect";
 
 import { anthropicMessagesApi } from "../api/anthropic-messages.lazy.ts";
 import { openAICompletionsApi } from "../api/openai-completions.lazy.ts";
@@ -55,12 +55,18 @@ const personalizeCatalog = Effect.fn("personalizeCatalog")(function* (
   return restrictCatalog(catalog, entries);
 });
 
-export function personalizeOpenRouterCatalog(
-  catalog: readonly AnyModel[],
-  context: RefreshModelsContext,
-): Promise<readonly AnyModel[]> {
-  return Effect.runPromise(personalizeCatalog(catalog, context));
-}
+export const personalizeOpenRouterCatalog: {
+  (context: RefreshModelsContext): (catalog: readonly AnyModel[]) => Promise<readonly AnyModel[]>;
+  (catalog: readonly AnyModel[], context: RefreshModelsContext): Promise<readonly AnyModel[]>;
+} = Function.dual(
+  2,
+  function (
+    catalog: readonly AnyModel[],
+    context: RefreshModelsContext,
+  ): Promise<readonly AnyModel[]> {
+    return Effect.runPromise(personalizeCatalog(catalog, context));
+  },
+);
 
 function restrictCatalog(
   catalog: readonly AnyModel[],

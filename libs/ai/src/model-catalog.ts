@@ -1,3 +1,5 @@
+import { Function } from "effect";
+
 import type {
   Api,
   ClassifierApi,
@@ -63,23 +65,47 @@ function flattenModelCatalog(groups: ModelGroups, type: ModelType): Record<strin
   );
 }
 
-export function flattenChatModelCatalog<
+export const flattenChatModelCatalog: {
+  <const TProvider extends ProviderId, const TGroups extends ModelGroups>(
+    groups: TGroups,
+  ): (_provider: TProvider) => ChatModelCatalog<TGroups, TProvider>;
+  <const TProvider extends ProviderId, const TGroups extends ModelGroups>(
+    _provider: TProvider,
+    groups: TGroups,
+  ): ChatModelCatalog<TGroups, TProvider>;
+} = Function.dual(2, function <
   const TProvider extends ProviderId,
   const TGroups extends ModelGroups,
 >(_provider: TProvider, groups: TGroups): ChatModelCatalog<TGroups, TProvider> {
   return flattenModelCatalog(groups, "chat") as ChatModelCatalog<TGroups, TProvider>;
-}
+});
 
-export function flattenImageModelCatalog<
+export const flattenImageModelCatalog: {
+  <const TProvider extends ProviderId, const TGroups extends ModelGroups>(
+    groups: TGroups,
+  ): (_provider: TProvider) => ImageModelCatalog<TGroups, TProvider>;
+  <const TProvider extends ProviderId, const TGroups extends ModelGroups>(
+    _provider: TProvider,
+    groups: TGroups,
+  ): ImageModelCatalog<TGroups, TProvider>;
+} = Function.dual(2, function <
   const TProvider extends ProviderId,
   const TGroups extends ModelGroups,
 >(_provider: TProvider, groups: TGroups): ImageModelCatalog<TGroups, TProvider> {
   return flattenModelCatalog(groups, "image") as ImageModelCatalog<TGroups, TProvider>;
-}
+});
 
-export function flattenClassifierModelCatalog<
+export const flattenClassifierModelCatalog: {
+  <const TProvider extends ProviderId, const TGroups extends ModelGroups>(
+    groups: TGroups,
+  ): (_provider: TProvider) => ClassifierModelCatalog<TGroups, TProvider>;
+  <const TProvider extends ProviderId, const TGroups extends ModelGroups>(
+    _provider: TProvider,
+    groups: TGroups,
+  ): ClassifierModelCatalog<TGroups, TProvider>;
+} = Function.dual(2, function <
   const TProvider extends ProviderId,
   const TGroups extends ModelGroups,
 >(_provider: TProvider, groups: TGroups): ClassifierModelCatalog<TGroups, TProvider> {
   return flattenModelCatalog(groups, "classifier") as ClassifierModelCatalog<TGroups, TProvider>;
-}
+});

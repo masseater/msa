@@ -1,12 +1,16 @@
+import { Function } from "effect";
+
 import type { ProviderClassifier, ProviderEnv, ProviderStreams } from "../types.ts";
 
 const CLOUDFLARE_ACCOUNT_ID = "CLOUDFLARE_ACCOUNT_ID";
 const CLOUDFLARE_GATEWAY_ID = "CLOUDFLARE_GATEWAY_ID";
 
-export function resolveCloudflareModel<TModel extends { baseUrl: string }>(
-  model: TModel,
-  env: ProviderEnv | undefined,
-): TModel {
+export const resolveCloudflareModel: {
+  <TModel extends { baseUrl: string }>(env: ProviderEnv | undefined): (model: TModel) => TModel;
+  <TModel extends { baseUrl: string }>(model: TModel, env: ProviderEnv | undefined): TModel;
+} = Function.dual(2, function <
+  TModel extends { baseUrl: string },
+>(model: TModel, env: ProviderEnv | undefined): TModel {
   if (env === undefined) return model;
   const baseUrl = model.baseUrl
     .replaceAll(
@@ -18,7 +22,7 @@ export function resolveCloudflareModel<TModel extends { baseUrl: string }>(
       env[CLOUDFLARE_GATEWAY_ID] ?? `{${CLOUDFLARE_GATEWAY_ID}}`,
     );
   return baseUrl === model.baseUrl ? model : { ...model, baseUrl };
-}
+});
 
 export function cloudflareStreams(streams: ProviderStreams): ProviderStreams {
   return {

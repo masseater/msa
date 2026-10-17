@@ -1,3 +1,5 @@
+import { Function } from "effect";
+
 import type {
   Context,
   Message,
@@ -10,10 +12,12 @@ import { contentText, getSystemMessageText } from "./text.ts";
 
 export type { TranscriptContext } from "../types.ts";
 
-export function createInitialSystemMessage(
-  systemPrompt: string | undefined,
-  tools: Tool[] | undefined,
-): SystemMessage | undefined {
+export const createInitialSystemMessage: {
+  (tools: Tool[] | undefined): (systemPrompt: string | undefined) => SystemMessage | undefined;
+  (systemPrompt: string | undefined, tools: Tool[] | undefined): SystemMessage | undefined;
+} = Function.dual(2, function (systemPrompt: string | undefined, tools: Tool[] | undefined):
+  | SystemMessage
+  | undefined {
   const hasSystemPrompt = systemPrompt !== undefined && systemPrompt.length > 0;
   const hasTools = tools !== undefined && tools.length > 0;
   if (!hasSystemPrompt && !hasTools) return undefined;
@@ -23,7 +27,7 @@ export function createInitialSystemMessage(
     ...(hasTools ? { toolsAdded: tools } : {}),
     timestamp: 0,
   };
-}
+});
 
 export function normalizeContext(context: Context): TranscriptContext {
   const initialMessage = createInitialSystemMessage(context.systemPrompt, context.tools);
@@ -93,12 +97,23 @@ export function collapseSystemMessages(context: TranscriptContext): TranscriptCo
   return { messages: head === undefined ? messages : [head, ...messages] } as TranscriptContext;
 }
 
-export function resolveTranscript(
-  context: TranscriptContext,
-  supportsMidConvoSystemMessages: boolean | undefined,
-): TranscriptContext {
-  return supportsMidConvoSystemMessages === true ? context : collapseSystemMessages(context);
-}
+export const resolveTranscript: {
+  (
+    supportsMidConvoSystemMessages: boolean | undefined,
+  ): (context: TranscriptContext) => TranscriptContext;
+  (
+    context: TranscriptContext,
+    supportsMidConvoSystemMessages: boolean | undefined,
+  ): TranscriptContext;
+} = Function.dual(
+  2,
+  function (
+    context: TranscriptContext,
+    supportsMidConvoSystemMessages: boolean | undefined,
+  ): TranscriptContext {
+    return supportsMidConvoSystemMessages === true ? context : collapseSystemMessages(context);
+  },
+);
 
 export function toToolDeclaration(tool: Tool): Tool {
   return {
@@ -111,36 +126,42 @@ export function toToolDeclaration(tool: Tool): Tool {
   };
 }
 
-export function declarationsEqual(left: Tool, right: Tool): boolean {
+export const declarationsEqual: {
+  (right: Tool): (left: Tool) => boolean;
+  (left: Tool, right: Tool): boolean;
+} = Function.dual(2, function (left: Tool, right: Tool): boolean {
   return JSON.stringify(toToolDeclaration(left)) === JSON.stringify(toToolDeclaration(right));
-}
+});
 
 export interface ToolStateChanges {
   toolsAdded: Tool[];
   toolsRemoved: ToolReference[];
 }
 
-export function getToolStateChanges(
-  previous: readonly Tool[],
-  current: readonly Tool[],
-): ToolStateChanges {
-  const previousTools = new Map(previous.map((tool) => [tool.name, tool]));
-  const currentTools = new Map(current.map((tool) => [tool.name, tool]));
-  return {
-    toolsAdded: current
-      .filter((tool) => {
-        const previousTool = previousTools.get(tool.name);
-        return previousTool === undefined || !declarationsEqual(previousTool, tool);
-      })
-      .map(toToolDeclaration),
-    toolsRemoved: previous
-      .filter((tool) => {
-        const currentTool = currentTools.get(tool.name);
-        return currentTool === undefined || !declarationsEqual(tool, currentTool);
-      })
-      .map((tool) => ({ name: tool.name })),
-  };
-}
+export const getToolStateChanges: {
+  (current: readonly Tool[]): (previous: readonly Tool[]) => ToolStateChanges;
+  (previous: readonly Tool[], current: readonly Tool[]): ToolStateChanges;
+} = Function.dual(
+  2,
+  function (previous: readonly Tool[], current: readonly Tool[]): ToolStateChanges {
+    const previousTools = new Map(previous.map((tool) => [tool.name, tool]));
+    const currentTools = new Map(current.map((tool) => [tool.name, tool]));
+    return {
+      toolsAdded: current
+        .filter((tool) => {
+          const previousTool = previousTools.get(tool.name);
+          return previousTool === undefined || !declarationsEqual(previousTool, tool);
+        })
+        .map(toToolDeclaration),
+      toolsRemoved: previous
+        .filter((tool) => {
+          const currentTool = currentTools.get(tool.name);
+          return currentTool === undefined || !declarationsEqual(tool, currentTool);
+        })
+        .map((tool) => ({ name: tool.name })),
+    };
+  },
+);
 
 export function getDeclaredTools(messages: TranscriptMessages): Tool[] {
   const definitions = new Map<string, Tool>();
@@ -182,15 +203,18 @@ export interface TranscriptTools {
   anchorsAdditions: boolean;
 }
 
-export function resolveTranscriptTools(
-  messages: TranscriptMessages,
-  supportsToolAdditions: boolean,
-): TranscriptTools {
-  const anchorsAdditions = supportsToolAdditions && !hasNonAdditiveToolChanges(messages);
-  return {
-    requestTools: anchorsAdditions
-      ? (getInitialSystemMessage(messages)?.toolsAdded ?? [])
-      : getCurrentTools(messages),
-    anchorsAdditions,
-  };
-}
+export const resolveTranscriptTools: {
+  (supportsToolAdditions: boolean): (messages: TranscriptMessages) => TranscriptTools;
+  (messages: TranscriptMessages, supportsToolAdditions: boolean): TranscriptTools;
+} = Function.dual(
+  2,
+  function (messages: TranscriptMessages, supportsToolAdditions: boolean): TranscriptTools {
+    const anchorsAdditions = supportsToolAdditions && !hasNonAdditiveToolChanges(messages);
+    return {
+      requestTools: anchorsAdditions
+        ? (getInitialSystemMessage(messages)?.toolsAdded ?? [])
+        : getCurrentTools(messages),
+      anchorsAdditions,
+    };
+  },
+);

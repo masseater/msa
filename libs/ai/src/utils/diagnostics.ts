@@ -1,4 +1,4 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Function } from "effect";
 
 import type { JsonObject } from "../types.ts";
 
@@ -46,8 +46,16 @@ export function createAssistantMessageDiagnostic(
   };
 }
 
-export function appendAssistantMessageDiagnostic<
+export const appendAssistantMessageDiagnostic: {
+  <T extends { diagnostics?: AssistantMessageDiagnostic[] }>(
+    diagnostic: AssistantMessageDiagnostic,
+  ): (message: T) => void;
+  <T extends { diagnostics?: AssistantMessageDiagnostic[] }>(
+    message: T,
+    diagnostic: AssistantMessageDiagnostic,
+  ): void;
+} = Function.dual(2, function <
   T extends { diagnostics?: AssistantMessageDiagnostic[] },
 >(message: T, diagnostic: AssistantMessageDiagnostic): void {
   message.diagnostics = [...(message.diagnostics ?? []), diagnostic];
-}
+});

@@ -1,4 +1,4 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Function } from "effect";
 
 import type {
   ClassifierAnswer,
@@ -125,34 +125,49 @@ const requestSystemOne = Effect.fn("requestSystemOne")(function* (
   return output;
 });
 
-export function classifySystemOne(
-  transport: SystemOneTransport,
-  model: ClassifierModel<ClassifierApi>,
-  context: ClassifierContext,
-  options: ClassifierOptions | undefined,
-): Promise<ClassifierResult> {
-  return Effect.runPromise(
-    Effect.gen(function* () {
-      const output: ClassifierResult = {
-        api: model.api,
-        provider: model.provider,
-        model: model.id,
-        answers: {},
-        stopReason: "stop",
-        timestamp: yield* Clock.currentTimeMillis,
-      };
-      return yield* requestSystemOne(transport, model, context, options, output).pipe(
-        Effect.catchDefect((error) =>
-          Effect.sync((): ClassifierResult => {
-            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-            output.errorMessage = formatProviderError(
-              normalizeProviderError(error),
-              `${transport.label} error`,
-            );
-            return output;
-          }),
-        ),
-      );
-    }),
-  );
-}
+export const classifySystemOne: {
+  (
+    model: ClassifierModel<ClassifierApi>,
+    context: ClassifierContext,
+    options: ClassifierOptions | undefined,
+  ): (transport: SystemOneTransport) => Promise<ClassifierResult>;
+  (
+    transport: SystemOneTransport,
+    model: ClassifierModel<ClassifierApi>,
+    context: ClassifierContext,
+    options: ClassifierOptions | undefined,
+  ): Promise<ClassifierResult>;
+} = Function.dual(
+  4,
+  function (
+    transport: SystemOneTransport,
+    model: ClassifierModel<ClassifierApi>,
+    context: ClassifierContext,
+    options: ClassifierOptions | undefined,
+  ): Promise<ClassifierResult> {
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const output: ClassifierResult = {
+          api: model.api,
+          provider: model.provider,
+          model: model.id,
+          answers: {},
+          stopReason: "stop",
+          timestamp: yield* Clock.currentTimeMillis,
+        };
+        return yield* requestSystemOne(transport, model, context, options, output).pipe(
+          Effect.catchDefect((error) =>
+            Effect.sync((): ClassifierResult => {
+              output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+              output.errorMessage = formatProviderError(
+                normalizeProviderError(error),
+                `${transport.label} error`,
+              );
+              return output;
+            }),
+          ),
+        );
+      }),
+    );
+  },
+);

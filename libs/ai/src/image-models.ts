@@ -1,3 +1,5 @@
+import { Function } from "effect";
+
 import { IMAGE_MODELS } from "./models.generated.ts";
 import type { ImageApi, ImageModel } from "./types.ts";
 
@@ -25,7 +27,15 @@ for (const [provider, models] of Object.entries(IMAGE_MODELS)) {
   if (imageModels.size > 0) imageModelsByProvider.set(provider, imageModels);
 }
 
-export function getImageModel<
+export const getImageModel: {
+  <TProvider extends BuiltinImageProvider, TModelId extends ImageModelIds<TProvider>>(
+    modelId: TModelId,
+  ): (provider: TProvider) => BuiltinImageModel<TProvider, TModelId>;
+  <TProvider extends BuiltinImageProvider, TModelId extends ImageModelIds<TProvider>>(
+    provider: TProvider,
+    modelId: TModelId,
+  ): BuiltinImageModel<TProvider, TModelId>;
+} = Function.dual(2, function <
   TProvider extends BuiltinImageProvider,
   TModelId extends ImageModelIds<TProvider>,
 >(provider: TProvider, modelId: TModelId): BuiltinImageModel<TProvider, TModelId> {
@@ -33,7 +43,7 @@ export function getImageModel<
     TProvider,
     TModelId
   >;
-}
+});
 
 export function getImageProviders(): BuiltinImageProvider[] {
   return Array.from(imageModelsByProvider.keys()) as BuiltinImageProvider[];

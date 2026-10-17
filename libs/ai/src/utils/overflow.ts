@@ -1,3 +1,5 @@
+import { Function } from "effect";
+
 import type { AssistantMessage } from "../types.ts";
 
 const OVERFLOW_PATTERNS = [
@@ -83,13 +85,16 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
   return false;
 }
 
-export function isRecoverableLength(message: AssistantMessage, desiredMaxOutput: number): boolean {
+export const isRecoverableLength: {
+  (desiredMaxOutput: number): (message: AssistantMessage) => boolean;
+  (message: AssistantMessage, desiredMaxOutput: number): boolean;
+} = Function.dual(2, function (message: AssistantMessage, desiredMaxOutput: number): boolean {
   return (
     message.stopReason === "length" &&
     desiredMaxOutput > 0 &&
     message.usage.output < desiredMaxOutput
   );
-}
+});
 
 export function getOverflowPatterns(): RegExp[] {
   return [...OVERFLOW_PATTERNS];

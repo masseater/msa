@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Function } from "effect";
 
 import { calculateCost } from "../models.ts";
 import type {
@@ -39,12 +39,15 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function requiredNumber(label: string, value: unknown, field: string): number {
+export const requiredNumber: {
+  (value: unknown, field: string): (label: string) => number;
+  (label: string, value: unknown, field: string): number;
+} = Function.dual(3, function (label: string, value: unknown, field: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new Error(`${label} returned an invalid ${field}`);
   }
   return value;
-}
+});
 
 function requestHeaders(
   model: ClassifierModel<ClassifierApi>,
@@ -148,10 +151,12 @@ function tokenCount(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-export function parseClassifierUsage(
-  value: unknown,
-  model: ClassifierModel<ClassifierApi>,
-): Usage | undefined {
+export const parseClassifierUsage: {
+  (model: ClassifierModel<ClassifierApi>): (value: unknown) => Usage | undefined;
+  (value: unknown, model: ClassifierModel<ClassifierApi>): Usage | undefined;
+} = Function.dual(2, function (value: unknown, model: ClassifierModel<ClassifierApi>):
+  | Usage
+  | undefined {
   if (
     !isRecord(value) ||
     (value["input_tokens"] === undefined && value["output_tokens"] === undefined)
@@ -169,4 +174,4 @@ export function parseClassifierUsage(
   };
   calculateCost(model, usage);
   return usage;
-}
+});

@@ -1,3 +1,4 @@
+import { Function } from "effect";
 import { Compile } from "typebox/compile";
 import type { TLocalizedValidationError } from "typebox/error";
 import { Value } from "typebox/value";
@@ -299,15 +300,21 @@ function formatValidationPath(error: TLocalizedValidationError): string {
   return path || "root";
 }
 
-export function validateToolCall(tools: Tool[], toolCall: ToolCall): any {
+export const validateToolCall: {
+  (toolCall: ToolCall): (tools: Tool[]) => any;
+  (tools: Tool[], toolCall: ToolCall): any;
+} = Function.dual(2, function (tools: Tool[], toolCall: ToolCall): any {
   const tool = tools.find((t) => t.name === toolCall.name);
   if (tool === undefined) {
     throw new Error(`Tool "${toolCall.name}" not found`);
   }
   return validateToolArguments(tool, toolCall);
-}
+});
 
-export function validateToolArguments(tool: Tool, toolCall: ToolCall): any {
+export const validateToolArguments: {
+  (toolCall: ToolCall): (tool: Tool) => any;
+  (tool: Tool, toolCall: ToolCall): any;
+} = Function.dual(2, function (tool: Tool, toolCall: ToolCall): any {
   if (toolCall.argumentsError !== undefined && toolCall.argumentsError !== "") {
     throw new Error(`Invalid arguments for tool "${toolCall.name}": ${toolCall.argumentsError}`);
   }
@@ -348,4 +355,4 @@ export function validateToolArguments(tool: Tool, toolCall: ToolCall): any {
   const errorMessage = `Validation failed for tool "${toolCall.name}":\n${errors}\n\nReceived arguments:\n${JSON.stringify(toolCall.arguments, null, 2)}`;
 
   throw new Error(errorMessage);
-}
+});

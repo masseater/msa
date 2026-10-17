@@ -1,4 +1,4 @@
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Function } from "effect";
 
 import type {
   ClassifierAnswer,
@@ -131,22 +131,28 @@ function renderOverview(context: ClassifierContext): string {
   return [intro, ...questions.map((question) => renderTask(question, undefined))].join("\n\n");
 }
 
-export function renderQuestion(context: ClassifierContext, id: string): LabeledQuestion {
+export const renderQuestion: {
+  (id: string): (context: ClassifierContext) => LabeledQuestion;
+  (context: ClassifierContext, id: string): LabeledQuestion;
+} = Function.dual(2, function (context: ClassifierContext, id: string): LabeledQuestion {
   const question = context.questions[id];
   if (question === undefined) throw new Error(`Unknown question: ${id}`);
   const { labels, keys } = questionLabels(question);
   const state = renderState(context.state);
   const final = `${renderTask(question, labels)}\n\n${answerInstruction(question)}`;
   return { content: [state, renderOverview(context), state, final].join("\n\n"), labels, keys };
-}
+});
 
-export function labelProbabilities(logprobs: readonly number[], temperature: number): number[] {
+export const labelProbabilities: {
+  (temperature: number): (logprobs: readonly number[]) => number[];
+  (logprobs: readonly number[], temperature: number): number[];
+} = Function.dual(2, function (logprobs: readonly number[], temperature: number): number[] {
   const scaled = logprobs.map((logprob) => logprob / temperature);
   const max = Math.max(...scaled);
   const weights = scaled.map((value) => Math.exp(value - max));
   const total = weights.reduce((sum, weight) => sum + weight, 0);
   return weights.map((weight) => weight / total);
-}
+});
 
 export function peakConfidence(probabilities: readonly number[]): number {
   const n = probabilities.length;
@@ -154,30 +160,43 @@ export function peakConfidence(probabilities: readonly number[]): number {
   return Math.min(1, Math.max(0, (n * peak - 1) / (n - 1)));
 }
 
-export function answerFromProbabilities(
-  question: ClassifierQuestion,
-  keys: readonly string[],
-  probabilities: readonly number[],
-): ClassifierAnswer {
-  if (question.type === "bool") {
-    return { type: "bool", probability: probabilities[keys.indexOf("true")]! };
-  }
-  const confidence = peakConfidence(probabilities);
-  if (question.type === "score") {
-    const score = probabilities.reduce((sum, probability, index) => sum + index * probability, 0);
-    return { type: "score", score, confidence };
-  }
-  let best = 0;
-  for (let index = 1; index < probabilities.length; index++) {
-    if (probabilities[index]! > probabilities[best]!) best = index;
-  }
-  return {
-    type: "choice",
-    choice: keys[best]!,
-    probabilities: Object.fromEntries(keys.map((key, index) => [key, probabilities[index]!])),
-    confidence,
-  };
-}
+export const answerFromProbabilities: {
+  (
+    keys: readonly string[],
+    probabilities: readonly number[],
+  ): (question: ClassifierQuestion) => ClassifierAnswer;
+  (
+    question: ClassifierQuestion,
+    keys: readonly string[],
+    probabilities: readonly number[],
+  ): ClassifierAnswer;
+} = Function.dual(
+  3,
+  function (
+    question: ClassifierQuestion,
+    keys: readonly string[],
+    probabilities: readonly number[],
+  ): ClassifierAnswer {
+    if (question.type === "bool") {
+      return { type: "bool", probability: probabilities[keys.indexOf("true")]! };
+    }
+    const confidence = peakConfidence(probabilities);
+    if (question.type === "score") {
+      const score = probabilities.reduce((sum, probability, index) => sum + index * probability, 0);
+      return { type: "score", score, confidence };
+    }
+    let best = 0;
+    for (let index = 1; index < probabilities.length; index++) {
+      if (probabilities[index]! > probabilities[best]!) best = index;
+    }
+    return {
+      type: "choice",
+      choice: keys[best]!,
+      probabilities: Object.fromEntries(keys.map((key, index) => [key, probabilities[index]!])),
+      confidence,
+    };
+  },
+);
 
 interface RequestContext {
   model: ClassifierModel<ClassifierApi>;

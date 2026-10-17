@@ -1,3 +1,5 @@
+import { Function } from "effect";
+
 import { clampThinkingLevel } from "../models.ts";
 import type {
   Api,
@@ -15,16 +17,18 @@ import { estimateContextTokens } from "../utils/estimate.ts";
 const CONTEXT_SAFETY_TOKENS = 4096;
 const MIN_MAX_TOKENS = 1;
 
-export function clampMaxTokensToContext(
-  model: Model<Api>,
-  context: TranscriptContext,
-  maxTokens: number,
-): number {
-  if (model.contextWindow <= 0) return Math.max(MIN_MAX_TOKENS, maxTokens);
-  const available =
-    model.contextWindow - estimateContextTokens(context).tokens - CONTEXT_SAFETY_TOKENS;
-  return Math.min(maxTokens, Math.max(MIN_MAX_TOKENS, available));
-}
+export const clampMaxTokensToContext: {
+  (context: TranscriptContext, maxTokens: number): (model: Model<Api>) => number;
+  (model: Model<Api>, context: TranscriptContext, maxTokens: number): number;
+} = Function.dual(
+  3,
+  function (model: Model<Api>, context: TranscriptContext, maxTokens: number): number {
+    if (model.contextWindow <= 0) return Math.max(MIN_MAX_TOKENS, maxTokens);
+    const available =
+      model.contextWindow - estimateContextTokens(context).tokens - CONTEXT_SAFETY_TOKENS;
+    return Math.min(maxTokens, Math.max(MIN_MAX_TOKENS, available));
+  },
+);
 
 export function resolveSamplingParams(
   model: Model<Api>,
@@ -99,9 +103,12 @@ export function thinkingBudgetForLevel(
   return budgets[level]!;
 }
 
-export function clampThinkingBudgetToAnswerRoom(thinkingBudget: number, ceiling: number): number {
+export const clampThinkingBudgetToAnswerRoom: {
+  (ceiling: number): (thinkingBudget: number) => number;
+  (thinkingBudget: number, ceiling: number): number;
+} = Function.dual(2, function (thinkingBudget: number, ceiling: number): number {
   return Math.min(thinkingBudget, Math.max(0, ceiling - MIN_ANSWER_TOKENS));
-}
+});
 
 export function adjustMaxTokensForThinking(
   baseMaxTokens: number | undefined,
