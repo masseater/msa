@@ -15,12 +15,8 @@ import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([
-  resolveApiKey("anthropic"),
-  resolveApiKey("github-copilot"),
-  resolveApiKey("openai-codex"),
-]);
-const [anthropicOAuthToken, githubCopilotToken, openaiCodexToken] = oauthTokens;
+const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
+const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
 
 /**
  * Test that tool results containing only images work correctly across all providers.
@@ -546,44 +542,6 @@ describe("Tool Results with Images", () => {
       { retry: 3, timeout: 30000 },
       async () => {
         await handleToolWithTextAndImageResult(model, { apiKey: anthropicOAuthToken });
-      },
-    );
-  });
-
-  describe("GitHub Copilot Provider", () => {
-    it.skipIf(!githubCopilotToken)(
-      "claude-haiku-4.5 - should handle tool result with only image",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-haiku-4.5");
-        await handleToolWithImageResult(llm, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)(
-      "claude-haiku-4.5 - should handle tool result with text and image",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-haiku-4.5");
-        await handleToolWithTextAndImageResult(llm, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)(
-      "claude-sonnet-4 - should handle tool result with only image",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-sonnet-4.6");
-        await handleToolWithImageResult(llm, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)(
-      "claude-sonnet-4 - should handle tool result with text and image",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-sonnet-4.6");
-        await handleToolWithTextAndImageResult(llm, { apiKey: githubCopilotToken });
       },
     );
   });

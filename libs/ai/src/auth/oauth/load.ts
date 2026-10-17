@@ -17,7 +17,6 @@ type OAuthFlowLoaders = {
   anthropic: () => OAuthAuth | Promise<OAuthAuth>;
   openaiCodex: () => OAuthAuth | Promise<OAuthAuth>;
   openaiChatGPT: () => OAuthAuth | Promise<OAuthAuth>;
-  githubCopilot: () => OAuthAuth | Promise<OAuthAuth>;
   openrouter: () => OAuthAuth | Promise<OAuthAuth>;
   kimiCoding: () => OAuthAuth | Promise<OAuthAuth>;
   meta: () => OAuthAuth | Promise<OAuthAuth>;
@@ -48,12 +47,6 @@ export const loadOpenAIChatGPTOAuth = async (): Promise<OAuthAuth> => {
   if (bundledLoaders) return bundledLoaders.openaiChatGPT();
   return ((await importOAuthModule("./openai-chatgpt.ts")) as { openaiChatGPTOAuth: OAuthAuth })
     .openaiChatGPTOAuth;
-};
-
-export const loadGitHubCopilotOAuth = async (): Promise<OAuthAuth> => {
-  if (bundledLoaders) return bundledLoaders.githubCopilot();
-  return ((await importOAuthModule("./github-copilot.ts")) as { githubCopilotOAuth: OAuthAuth })
-    .githubCopilotOAuth;
 };
 
 export const loadOpenRouterOAuth = async (): Promise<OAuthAuth> => {

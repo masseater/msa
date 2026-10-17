@@ -3,10 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { type BuiltinProvider, complete, getModels, getProviders } from "../src/compat.ts";
 import { getEnvApiKey } from "../src/env-api-keys.ts";
-import type { Api, KnownProvider, Model, ProviderStreamOptions, Tool } from "../src/types.ts";
-import { resolveApiKey } from "./oauth.ts";
-
-const githubCopilotToken = await resolveApiKey("github-copilot");
+import type { Api, Model, ProviderStreamOptions, Tool } from "../src/types.ts";
 
 const echoToolSchema = Type.Object({
   value: Type.String({ description: "The value to echo" }),
@@ -25,13 +22,6 @@ interface AnthropicEagerE2ECase {
   apiKey: string | undefined;
 }
 
-function getE2EApiKey(provider: KnownProvider): string | undefined {
-  if (provider === "github-copilot") {
-    return githubCopilotToken;
-  }
-  return getEnvApiKey(provider);
-}
-
 function getAnthropicMessagesModels(provider: BuiltinProvider): Model<"anthropic-messages">[] {
   const models = getModels(provider) as Model<Api>[];
   return models.filter(
@@ -44,7 +34,7 @@ const anthropicMessagesCases: AnthropicEagerE2ECase[] = getProviders().flatMap((
     name: `${provider}/${model.id}`,
     provider,
     model,
-    apiKey: getE2EApiKey(provider),
+    apiKey: getEnvApiKey(provider),
   })),
 );
 

@@ -403,7 +403,7 @@ ${chalk.bold("Examples:")}
   ${APP_NAME} --models claude-sonnet,claude-haiku,gpt-4o
 
   # Limit to a specific provider with glob pattern
-  ${APP_NAME} --models "github-copilot/*"
+  ${APP_NAME} --models "openai/*"
 
   # Cycle models with fixed thinking levels
   ${APP_NAME} --models sonnet:high,haiku:low

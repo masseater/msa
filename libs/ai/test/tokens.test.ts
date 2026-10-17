@@ -14,12 +14,8 @@ import {
 import { resolveApiKey } from "./oauth.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
-const oauthTokens = await Promise.all([
-  resolveApiKey("anthropic"),
-  resolveApiKey("github-copilot"),
-  resolveApiKey("openai-codex"),
-]);
-const [anthropicOAuthToken, githubCopilotToken, openaiCodexToken] = oauthTokens;
+const oauthTokens = await Promise.all([resolveApiKey("anthropic"), resolveApiKey("openai-codex")]);
+const [anthropicOAuthToken, openaiCodexToken] = oauthTokens;
 
 async function testTokensOnAbort<TApi extends Api>(
   llm: Model<TApi>,
@@ -82,7 +78,7 @@ async function testTokensOnAbort<TApi extends Api>(
     expect(msg.usage.input).toBeGreaterThan(0);
     expect(msg.usage.output).toBeGreaterThan(0);
 
-    // Some providers (Copilot) have zero cost rates
+    // Some providers have zero cost rates
     if (llm.cost.input > 0) {
       expect(msg.usage.cost.input).toBeGreaterThan(0);
       expect(msg.usage.cost.total).toBeGreaterThan(0);
@@ -453,26 +449,6 @@ describe("Token Statistics on Abort", () => {
       { retry: 3, timeout: 30000 },
       async () => {
         await testTokensOnAbort(llm, { apiKey: anthropicOAuthToken });
-      },
-    );
-  });
-
-  describe("GitHub Copilot Provider", () => {
-    it.skipIf(!githubCopilotToken)(
-      "claude-haiku-4.5 - should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-haiku-4.5");
-        await testTokensOnAbort(llm, { apiKey: githubCopilotToken });
-      },
-    );
-
-    it.skipIf(!githubCopilotToken)(
-      "claude-sonnet-4 - should include token stats when aborted mid-stream",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("github-copilot", "claude-sonnet-4.6");
-        await testTokensOnAbort(llm, { apiKey: githubCopilotToken });
       },
     );
   });

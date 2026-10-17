@@ -30,7 +30,6 @@ if [[ "$NO_ENV" == "true" ]]; then
   unset MINIMAX_CN_API_KEY
   unset AI_GATEWAY_API_KEY
   unset OPENCODE_API_KEY
-  unset COPILOT_GITHUB_TOKEN
   unset GH_TOKEN
   unset GITHUB_TOKEN
   unset HF_TOKEN
