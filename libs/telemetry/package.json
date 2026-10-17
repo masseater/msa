@@ -1,6 +1,6 @@
 {
   "name": "@msa/telemetry",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Vendor-neutral telemetry contracts and typed schema utilities for msa",
   "keywords": [
     "observability",
