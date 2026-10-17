@@ -37,7 +37,7 @@ describe("#8935 parallel preflight abort", () => {
       extensionFactories: [
         (msa) => {
           msa.on("tool_call", async (event, ctx) => {
-            const value = "value" in event.input ? String(event.input.value) : "";
+            const value = "value" in event.input ? String(event.input["value"]) : "";
             preflights.push(value);
             if (value === "second") ctx.abort();
           });

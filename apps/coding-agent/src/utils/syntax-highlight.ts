@@ -138,7 +138,7 @@ function getActiveFormatter(
       return formatter;
     }
   }
-  return theme.default;
+  return theme["default"];
 }
 
 function isSpanOpenTagStart(html: string, index: number): boolean {

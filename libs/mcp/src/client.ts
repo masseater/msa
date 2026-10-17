@@ -77,12 +77,12 @@ interface PendingRequest {
 function validateInitializeResult(value: unknown): InitializeResult {
   if (
     !isObject(value) ||
-    typeof value.protocolVersion !== "string" ||
-    !isObject(value.capabilities) ||
-    !isObject(value.serverInfo) ||
-    typeof value.serverInfo.name !== "string" ||
-    typeof value.serverInfo.version !== "string" ||
-    (value.instructions !== undefined && typeof value.instructions !== "string")
+    typeof value["protocolVersion"] !== "string" ||
+    !isObject(value["capabilities"]) ||
+    !isObject(value["serverInfo"]) ||
+    typeof value["serverInfo"]["name"] !== "string" ||
+    typeof value["serverInfo"]["version"] !== "string" ||
+    (value["instructions"] !== undefined && typeof value["instructions"] !== "string")
   ) {
     throw new McpError(JSON_RPC_ERROR_CODES.invalidRequest, "Invalid MCP initialize result");
   }
@@ -107,28 +107,28 @@ function validateListPage(
   }
   // Some servers end pagination with `null` or `""` instead of omitting the cursor.
   const nextCursor =
-    value.nextCursor === null || value.nextCursor === "" ? undefined : value.nextCursor;
+    value["nextCursor"] === null || value["nextCursor"] === "" ? undefined : value["nextCursor"];
   if (nextCursor !== undefined && typeof nextCursor !== "string")
     throw invalid(`Invalid MCP ${method} cursor`);
   return { items, ...(nextCursor === undefined ? {} : { nextCursor }) };
 }
 
 const isTool = (tool: Record<string, unknown>) =>
-  typeof tool.name === "string" && isObject(tool.inputSchema);
+  typeof tool["name"] === "string" && isObject(tool["inputSchema"]);
 // `name` is required by the spec, but some servers omit it; the URI stands in.
 const isResource = (resource: Record<string, unknown>) =>
-  typeof resource.uri === "string" &&
-  (resource.name === undefined || typeof resource.name === "string");
+  typeof resource["uri"] === "string" &&
+  (resource["name"] === undefined || typeof resource["name"] === "string");
 const isResourceTemplate = (template: Record<string, unknown>) =>
-  typeof template.uriTemplate === "string" &&
-  (template.name === undefined || typeof template.name === "string");
+  typeof template["uriTemplate"] === "string" &&
+  (template["name"] === undefined || typeof template["name"] === "string");
 
 function toResource(item: Record<string, unknown>): Resource {
-  return { ...item, name: item.name ?? item.uri } as Resource;
+  return { ...item, name: item["name"] ?? item["uri"] } as Resource;
 }
 
 function toResourceTemplate(item: Record<string, unknown>): ResourceTemplate {
-  return { ...item, name: item.name ?? item.uriTemplate } as ResourceTemplate;
+  return { ...item, name: item["name"] ?? item["uriTemplate"] } as ResourceTemplate;
 }
 
 function pageCursor(page: { nextCursor?: string }): { nextCursor?: string } {
@@ -136,13 +136,13 @@ function pageCursor(page: { nextCursor?: string }): { nextCursor?: string } {
 }
 
 function validateReadResourceResult(value: unknown): ReadResourceResult {
-  if (!isObject(value) || !Array.isArray(value.contents))
+  if (!isObject(value) || !Array.isArray(value["contents"]))
     throw invalid("Invalid MCP resources/read result");
-  for (const contents of value.contents) {
+  for (const contents of value["contents"]) {
     if (
       !isObject(contents) ||
-      typeof contents.uri !== "string" ||
-      (typeof contents.text !== "string" && typeof contents.blob !== "string")
+      typeof contents["uri"] !== "string" ||
+      (typeof contents["text"] !== "string" && typeof contents["blob"] !== "string")
     ) {
       throw invalid("Invalid contents in MCP resources/read result");
     }
@@ -155,10 +155,10 @@ function validateReadResourceResult(value: unknown): ReadResourceResult {
  * `structuredContent` may be any JSON value, as MCP 2026-07-28 allows.
  */
 function validateCallToolResult(value: unknown): CallToolResult {
-  if (!isObject(value) || (value.content !== undefined && !Array.isArray(value.content))) {
+  if (!isObject(value) || (value["content"] !== undefined && !Array.isArray(value["content"]))) {
     throw new McpError(JSON_RPC_ERROR_CODES.invalidRequest, "Invalid MCP tools/call result");
   }
-  return (value.content === undefined
+  return (value["content"] === undefined
     ? { ...value, content: [] }
     : value) as unknown as CallToolResult;
 }
@@ -426,7 +426,10 @@ export class McpClient {
     const requestParams =
       progressToken === undefined
         ? params
-        : { ...params, _meta: { ...(isObject(params?._meta) ? params._meta : {}), progressToken } };
+        : {
+            ...params,
+            _meta: { ...(isObject(params?.["_meta"]) ? params["_meta"] : {}), progressToken },
+          };
     const message: JsonRpcRequest = {
       jsonrpc: "2.0",
       id,
@@ -565,11 +568,11 @@ export class McpClient {
   private handleProgress(params: unknown): void {
     if (
       !isObject(params) ||
-      !isJsonRpcId(params.progressToken) ||
-      typeof params.progress !== "number"
+      !isJsonRpcId(params["progressToken"]) ||
+      typeof params["progress"] !== "number"
     )
       return;
-    const requestId = this.progressRequests.get(params.progressToken);
+    const requestId = this.progressRequests.get(params["progressToken"]);
     const entry = requestId === undefined ? undefined : this.pending.get(requestId);
     if (requestId === undefined || !entry) return;
     this.armTimeout(requestId, entry);
@@ -581,8 +584,8 @@ export class McpClient {
   }
 
   private handleCancelled(params: unknown): void {
-    if (isObject(params) && isJsonRpcId(params.requestId))
-      this.incoming.get(params.requestId)?.abort(params.reason);
+    if (isObject(params) && isJsonRpcId(params["requestId"]))
+      this.incoming.get(params["requestId"])?.abort(params["reason"]);
   }
 
   private armTimeout(id: JsonRpcId, entry: PendingRequest): void {

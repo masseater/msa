@@ -247,7 +247,7 @@ async function getShellConfig(
   }
   if (process.platform === "win32") {
     const candidates: string[] = [];
-    const programFiles = process.env.ProgramFiles;
+    const programFiles = process.env["ProgramFiles"];
     if (programFiles) candidates.push(`${programFiles}\\Git\\bin\\bash.exe`);
     const programFilesX86 = process.env["ProgramFiles(x86)"];
     if (programFilesX86) candidates.push(`${programFilesX86}\\Git\\bin\\bash.exe`);
@@ -299,7 +299,7 @@ function killProcessTree(pid: number): void {
   if (process.platform === "win32") {
     try {
       const child = spawn(
-        join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe"),
+        join(process.env["SystemRoot"] ?? "C:\\Windows", "System32", "taskkill.exe"),
         ["/F", "/T", "/PID", String(pid)],
         {
           stdio: "ignore",

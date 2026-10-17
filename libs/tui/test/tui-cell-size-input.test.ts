@@ -25,24 +25,24 @@ class InputRecorder implements Component {
 }
 
 function withImageTerminal<T>(fn: () => T): T {
-  const prevTermProgram = process.env.TERM_PROGRAM;
-  const prevTerm = process.env.TERM;
-  const prevGhosttyResourcesDir = process.env.GHOSTTY_RESOURCES_DIR;
+  const prevTermProgram = process.env["TERM_PROGRAM"];
+  const prevTerm = process.env["TERM"];
+  const prevGhosttyResourcesDir = process.env["GHOSTTY_RESOURCES_DIR"];
 
-  process.env.TERM_PROGRAM = "ghostty";
-  delete process.env.TERM;
-  delete process.env.GHOSTTY_RESOURCES_DIR;
+  process.env["TERM_PROGRAM"] = "ghostty";
+  delete process.env["TERM"];
+  delete process.env["GHOSTTY_RESOURCES_DIR"];
   resetCapabilitiesCache();
 
   try {
     return fn();
   } finally {
-    if (prevTermProgram === undefined) delete process.env.TERM_PROGRAM;
-    else process.env.TERM_PROGRAM = prevTermProgram;
-    if (prevTerm === undefined) delete process.env.TERM;
-    else process.env.TERM = prevTerm;
-    if (prevGhosttyResourcesDir === undefined) delete process.env.GHOSTTY_RESOURCES_DIR;
-    else process.env.GHOSTTY_RESOURCES_DIR = prevGhosttyResourcesDir;
+    if (prevTermProgram === undefined) delete process.env["TERM_PROGRAM"];
+    else process.env["TERM_PROGRAM"] = prevTermProgram;
+    if (prevTerm === undefined) delete process.env["TERM"];
+    else process.env["TERM"] = prevTerm;
+    if (prevGhosttyResourcesDir === undefined) delete process.env["GHOSTTY_RESOURCES_DIR"];
+    else process.env["GHOSTTY_RESOURCES_DIR"] = prevGhosttyResourcesDir;
     resetCapabilitiesCache();
   }
 }

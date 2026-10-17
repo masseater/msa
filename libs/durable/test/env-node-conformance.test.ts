@@ -11,7 +11,7 @@ import { NodeExecutionEnv } from "../src/env/node.ts";
 import { registerEnvConformance } from "../src/testing/index.ts";
 
 const windows = process.platform === "win32";
-const gitBash = join(process.env.ProgramFiles ?? "C:\\Program Files", "Git", "bin", "bash.exe");
+const gitBash = join(process.env["ProgramFiles"] ?? "C:\\Program Files", "Git", "bin", "bash.exe");
 const context = BACKGROUND_CONTEXT;
 
 /**

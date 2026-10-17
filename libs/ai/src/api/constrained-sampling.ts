@@ -44,7 +44,7 @@ function isStructuredSchema(schema: unknown): boolean {
     types.includes("object") ||
     types.includes("array") ||
     schema.properties !== undefined ||
-    schema.items !== undefined
+    schema["items"] !== undefined
   );
 }
 
@@ -52,9 +52,11 @@ function schemaAllowsNull(schema: unknown): boolean {
   if (!isJsonSchemaObject(schema)) return false;
   if (schema.type === "null" || (Array.isArray(schema.type) && schema.type.includes("null")))
     return true;
-  if (schema.const === null || (Array.isArray(schema.enum) && schema.enum.includes(null)))
+  if (schema["const"] === null || (Array.isArray(schema["enum"]) && schema["enum"].includes(null)))
     return true;
-  return Array.isArray(schema.anyOf) && schema.anyOf.some((variant) => schemaAllowsNull(variant));
+  return (
+    Array.isArray(schema["anyOf"]) && schema["anyOf"].some((variant) => schemaAllowsNull(variant))
+  );
 }
 
 function makeJsonSchemaNodeStrict(
@@ -79,11 +81,11 @@ function makeJsonSchemaNodeStrict(
     }
   }
 
-  if (schema.anyOf !== undefined) {
-    if (!Array.isArray(schema.anyOf) || schema.anyOf.length === 0) {
+  if (schema["anyOf"] !== undefined) {
+    if (!Array.isArray(schema["anyOf"]) || schema["anyOf"].length === 0) {
       throw new UnsupportedStrictJsonSchemaError("anyOf must contain at least one schema");
     }
-    for (const variant of schema.anyOf) {
+    for (const variant of schema["anyOf"]) {
       if (isStructuredSchema(variant)) {
         throw new UnsupportedStrictJsonSchemaError("object and array unions are unsupported");
       }
@@ -91,11 +93,11 @@ function makeJsonSchemaNodeStrict(
     }
   }
 
-  if (schema.items !== undefined) {
-    if (Array.isArray(schema.items)) {
+  if (schema["items"] !== undefined) {
+    if (Array.isArray(schema["items"])) {
       throw new UnsupportedStrictJsonSchemaError("tuple schemas are unsupported");
     }
-    makeJsonSchemaNodeStrict(schema.items, isUnsupportedKeyword);
+    makeJsonSchemaNodeStrict(schema["items"], isUnsupportedKeyword);
   }
 
   const isObjectSchema = schema.type === "object";
@@ -103,7 +105,7 @@ function makeJsonSchemaNodeStrict(
     throw new UnsupportedStrictJsonSchemaError("properties require type object");
   }
   if (!isObjectSchema) return;
-  if (schema.additionalProperties !== undefined && schema.additionalProperties !== false) {
+  if (schema["additionalProperties"] !== undefined && schema["additionalProperties"] !== false) {
     throw new UnsupportedStrictJsonSchemaError(
       "schema-valued or true additionalProperties is unsupported",
     );
@@ -131,7 +133,7 @@ function makeJsonSchemaNodeStrict(
     }
   }
   schema.required = propertyNames;
-  schema.additionalProperties = false;
+  schema["additionalProperties"] = false;
 }
 
 /** Convert a tool schema to the strict subset expected by provider constrained sampling. */

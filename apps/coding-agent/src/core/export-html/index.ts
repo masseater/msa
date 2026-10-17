@@ -122,7 +122,7 @@ function generateThemeVars(themeName?: string): string {
 
   // Use explicit theme export colors if available, otherwise derive from userMessageBg
   const themeExport = getThemeExportColors(themeName);
-  const userMessageBg = colors.userMessageBg || "#343541";
+  const userMessageBg = colors["userMessageBg"] || "#343541";
   const derivedColors = deriveExportColors(userMessageBg);
 
   lines.push(`--exportPageBg: ${themeExport.pageBg ?? derivedColors.pageBg};`);
@@ -156,7 +156,7 @@ function generateHtml(sessionData: SessionData, themeName?: string): string {
   const themeVars = generateThemeVars(themeName);
   const colors = getResolvedThemeColors(themeName);
   const themeExport = getThemeExportColors(themeName);
-  const derivedExportColors = deriveExportColors(colors.userMessageBg || "#343541");
+  const derivedExportColors = deriveExportColors(colors["userMessageBg"] || "#343541");
   const bodyBg = themeExport.pageBg ?? derivedExportColors.pageBg;
   const containerBg = themeExport.cardBg ?? derivedExportColors.cardBg;
   const infoBg = themeExport.infoBg ?? derivedExportColors.infoBg;

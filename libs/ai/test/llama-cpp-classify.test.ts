@@ -54,18 +54,18 @@ function fakeServer(options: FakeServerOptions = {}) {
     requests.push({ url, body, headers: new Headers(init?.headers) });
     const path = new URL(url).pathname;
     if (path === "/tokenize") {
-      const content = String(body.content);
+      const content = String(body["content"]);
       return Response.json({ tokens: (options.tokenize ?? charTokens)(content) });
     }
     if (path === "/apply-template") {
-      const messages = body.messages as Array<{ role: string; content: string }>;
+      const messages = body["messages"] as Array<{ role: string; content: string }>;
       const prompt =
         options.template?.(messages) ??
         `${messages.map((message) => `<|${message.role}|>\n${message.content}\n`).join("")}<|assistant|>\n`;
       return Response.json({ prompt });
     }
     if (path === "/completion") {
-      const next = options.next?.(String(body.prompt), Number(body.n_probs)) ?? {
+      const next = options.next?.(String(body["prompt"]), Number(body["n_probs"])) ?? {
         A: -0.1,
         B: -2.5,
       };
@@ -137,18 +137,18 @@ describe("llama.cpp classifier", () => {
     expect(result.errorMessage).toBeUndefined();
     expect(result.stopReason).toBe("stop");
     const choice = labelProbabilities([-1.5, -0.3, -3], 1);
-    expect(result.answers.team).toEqual({
+    expect(result.answers["team"]).toEqual({
       type: "choice",
       choice: "technical",
       probabilities: { billing: choice[0], technical: choice[1], sales: choice[2] },
       confidence: peakConfidence(choice),
     });
-    expect(result.answers.urgent).toEqual({
+    expect(result.answers["urgent"]).toEqual({
       type: "bool",
       probability: labelProbabilities([-0.05, -3], 1)[0],
     });
     const levels = labelProbabilities([-4, -1.8, -0.2], 1);
-    expect(result.answers.severity).toEqual({
+    expect(result.answers["severity"]).toEqual({
       type: "score",
       score: levels[1]! + 2 * levels[2]!,
       confidence: peakConfidence(levels),
@@ -157,7 +157,7 @@ describe("llama.cpp classifier", () => {
     const root = classifierModel.baseUrl.replace(/\/v1$/u, "");
     for (const request of server.requests) {
       expect(request.url.startsWith(`${root}/`)).toBe(true);
-      expect(request.body.model).toBe("qwen");
+      expect(request.body["model"]).toBe("qwen");
       expect(request.headers.get("authorization")).toBe("Bearer local");
     }
     const completion = server.requests.find((request) => request.url.endsWith("/completion"));
@@ -168,7 +168,7 @@ describe("llama.cpp classifier", () => {
       cache_prompt: true,
     });
     const template = server.requests.find((request) => request.url.endsWith("/apply-template"));
-    expect(template?.body.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(template?.body["chat_template_kwargs"]).toEqual({ enable_thinking: false });
   });
 
   it("repeats the state around all questions and ends with this question's labels", () => {
@@ -247,7 +247,7 @@ describe("llama.cpp classifier", () => {
     );
 
     const expected = labelProbabilities([-0.1 / 2, -2.5 / 2], 1);
-    expect(result.answers.pick).toMatchObject({
+    expect(result.answers["pick"]).toMatchObject({
       probabilities: { a: expected[0], b: expected[1] },
     });
     expect(labelProbabilities([-0.1, -2.5], 2)).toEqual(expected);
@@ -296,7 +296,7 @@ describe("llama.cpp classifier", () => {
     );
 
     const completion = server.requests.find((request) => request.url.endsWith("/completion"));
-    expect(completion?.body.prompt).toBe("<|assistant|>\n<think></think>");
+    expect(completion?.body["prompt"]).toBe("<|assistant|>\n<think></think>");
   });
 
   it("reads labels in reply position and rejects labels that are not one token", async () => {
@@ -399,7 +399,7 @@ describe("llama.cpp classifier", () => {
     expect(payloads[0]).toMatchObject({ n_predict: 1 });
     expect(statuses).toEqual([200]);
     expect(
-      server.requests.find((request) => request.url.endsWith("/completion"))?.body.id_slot,
+      server.requests.find((request) => request.url.endsWith("/completion"))?.body["id_slot"],
     ).toBe(1);
   });
 
@@ -457,5 +457,5 @@ describe("llama.cpp classifier", () => {
 function completionDepths(requests: RecordedRequest[]): number[] {
   return requests
     .filter((request) => request.url.endsWith("/completion"))
-    .map((request) => Number(request.body.n_probs));
+    .map((request) => Number(request.body["n_probs"]));
 }

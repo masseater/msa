@@ -373,13 +373,13 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     this.clearComponentMouseGesture();
     this.lastComponentClick = undefined;
     this.resetRenderState();
-    const term = process.env.TERM?.toLowerCase() ?? "";
+    const term = process.env["TERM"]?.toLowerCase() ?? "";
     // Multiplexers can lag when every pointer movement is forwarded. Button-motion
     // tracking preserves clicks, wheel events, selections, and scrollbar dragging.
     const mouseSequence =
-      process.env.TMUX !== undefined ||
-      process.env.ZELLIJ !== undefined ||
-      process.env.STY !== undefined ||
+      process.env["TMUX"] !== undefined ||
+      process.env["ZELLIJ"] !== undefined ||
+      process.env["STY"] !== undefined ||
       term.startsWith("tmux") ||
       term.startsWith("screen")
         ? ENABLE_BUTTON_MOTION_MOUSE
@@ -1075,7 +1075,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     if (
       !this.onRightClickPaste ||
       process.platform !== "win32" ||
-      process.env.TERM_PROGRAM?.toLowerCase() === "vscode" ||
+      process.env["TERM_PROGRAM"]?.toLowerCase() === "vscode" ||
       event.release ||
       event.button !== 2
     ) {
@@ -1826,7 +1826,8 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
         changedRows[row] && (isImageLine(line) || isImageLine(this.previousScreen[row] ?? "")),
     );
     const isWezTerm =
-      Boolean(process.env.WEZTERM_PANE) || process.env.TERM_PROGRAM?.toLowerCase() === "wezterm";
+      Boolean(process.env["WEZTERM_PANE"]) ||
+      process.env["TERM_PROGRAM"]?.toLowerCase() === "wezterm";
     const imageCellsNeedRedraw =
       !imageAnchorsNeedRedraw &&
       isWezTerm &&

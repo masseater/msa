@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
  * inside a sandbox where Bun's `process.env` is empty.
  */
 export function restoreSandboxEnv(): void {
-  if (!process.versions?.bun) return;
+  if (!process.versions?.["bun"]) return;
 
   // If process.env already has entries, nothing to fix.
   if (Object.keys(process.env).length > 0) return;

@@ -89,13 +89,13 @@ function parseEvalCli(
     if (!provider || !model)
       throw new Error("CLI model selection requires both --provider and --model.");
   } else {
-    provider = environment.MSA_PROVIDER?.trim() || undefined;
-    model = environment.MSA_MODEL?.trim() || undefined;
+    provider = environment["MSA_PROVIDER"]?.trim() || undefined;
+    model = environment["MSA_MODEL"]?.trim() || undefined;
     if (Boolean(provider) !== Boolean(model))
       throw new Error("Set both MSA_PROVIDER and MSA_MODEL, or neither.");
   }
 
-  const configuredRuns = (runsText ?? environment.MSA_EVAL_RUNS_PER_VARIANT)?.trim();
+  const configuredRuns = (runsText ?? environment["MSA_EVAL_RUNS_PER_VARIANT"])?.trim();
   const runsPerVariant = configuredRuns ? Number(configuredRuns) : 1;
   if (!Number.isSafeInteger(runsPerVariant) || runsPerVariant < 1) {
     throw new Error("Runs per variant must be a positive integer.");

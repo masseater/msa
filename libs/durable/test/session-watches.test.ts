@@ -441,7 +441,7 @@ describe("Session document watches", () => {
       version: 2,
       scope: "session",
       initial: () => ({ value: 0, migrated: false }),
-      migrate: (value) => ({ value: value.value as number, migrated: true }),
+      migrate: (value) => ({ value: value["value"] as number, migrated: true }),
     });
     const { session, storage } = openTestSession();
     await session.commit((tx) => tx.doc(Old).then(() => undefined), context);

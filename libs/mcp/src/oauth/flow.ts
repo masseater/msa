@@ -264,11 +264,11 @@ async function tokenRequest(
     value = JSON.parse(text);
   } catch {}
   // Servers may report OAuth errors with any status, so check the body before the status.
-  if (isObject(value) && typeof value.error === "string") {
+  if (isObject(value) && typeof value["error"] === "string") {
     throw new OAuthError(
-      value.error,
-      typeof value.error_description === "string" ? value.error_description : value.error,
-      typeof value.error_uri === "string" ? value.error_uri : undefined,
+      value["error"],
+      typeof value["error_description"] === "string" ? value["error_description"] : value["error"],
+      typeof value["error_uri"] === "string" ? value["error_uri"] : undefined,
     );
   }
   if (!response.ok) throw new OAuthError("server_error", `HTTP ${response.status}: ${text}`);

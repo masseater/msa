@@ -115,7 +115,7 @@ describe("Anthropic workload identity federation", () => {
       ...federationEnv,
       ANTHROPIC_WORKSPACE_ID: "wrkspc_test",
     });
-    expect(result?.env?.ANTHROPIC_WORKSPACE_ID).toBe("wrkspc_test");
+    expect(result?.env?.["ANTHROPIC_WORKSPACE_ID"]).toBe("wrkspc_test");
   });
 
   it("is not configured when a federation variable is missing", async () => {
@@ -132,7 +132,7 @@ describe("Anthropic workload identity federation", () => {
     });
 
     await streamAnthropic(anthropicModel, context, { env: partial }).result();
-    expect(mockState.constructorOpts?.config).toEqual({
+    expect(mockState.constructorOpts?.["config"]).toEqual({
       ...expectedConfig,
       authentication: { ...expectedConfig.authentication, service_account_id: undefined },
     });
@@ -152,12 +152,12 @@ describe("Anthropic workload identity federation", () => {
   it("hands the SDK a federation config instead of a key", async () => {
     await streamAnthropic(anthropicModel, context, { env: federationEnv }).result();
 
-    expect(mockState.constructorOpts?.apiKey).toBeNull();
-    expect(mockState.constructorOpts?.authToken).toBeNull();
-    expect(mockState.constructorOpts?.config).toEqual(expectedConfig);
-    const headers = mockState.constructorOpts?.defaultHeaders as Record<string, string | null>;
-    expect(headers.Authorization).toBeUndefined();
-    expect(mockState.createParams?.betas ?? []).not.toContain("oauth-2025-04-20");
+    expect(mockState.constructorOpts?.["apiKey"]).toBeNull();
+    expect(mockState.constructorOpts?.["authToken"]).toBeNull();
+    expect(mockState.constructorOpts?.["config"]).toEqual(expectedConfig);
+    const headers = mockState.constructorOpts?.["defaultHeaders"] as Record<string, string | null>;
+    expect(headers["Authorization"]).toBeUndefined();
+    expect(mockState.createParams?.["betas"] ?? []).not.toContain("oauth-2025-04-20");
   });
 
   it("threads authContext federation variables through Models", async () => {
@@ -171,8 +171,8 @@ describe("Anthropic workload identity federation", () => {
 
     await models.streamSimple(anthropicModel, context).result();
 
-    expect(mockState.constructorOpts?.apiKey).toBeNull();
-    expect(mockState.constructorOpts?.config).toEqual(expectedConfig);
+    expect(mockState.constructorOpts?.["apiKey"]).toBeNull();
+    expect(mockState.constructorOpts?.["config"]).toEqual(expectedConfig);
   });
 
   it("lets an explicit API key win over federation env", async () => {
@@ -181,8 +181,8 @@ describe("Anthropic workload identity federation", () => {
       env: federationEnv,
     }).result();
 
-    expect(mockState.constructorOpts?.apiKey).toBe("explicit-key");
-    expect(mockState.constructorOpts?.config).toBeUndefined();
+    expect(mockState.constructorOpts?.["apiKey"]).toBe("explicit-key");
+    expect(mockState.constructorOpts?.["config"]).toBeUndefined();
   });
 
   it("does not federate other anthropic-messages providers", async () => {

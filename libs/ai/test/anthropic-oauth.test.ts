@@ -48,9 +48,9 @@ describe("Anthropic OAuth", () => {
       expect(getUrl(input)).toBe("https://platform.claude.com/v1/oauth/token");
       expect(init?.method).toBe("POST");
       const body = getJsonBody(init);
-      expect(body.grant_type).toBe("authorization_code");
-      expect(body.code).toBe("manual-code");
-      expect(body.redirect_uri).toBe("http://localhost:53692/callback");
+      expect(body["grant_type"]).toBe("authorization_code");
+      expect(body["code"]).toBe("manual-code");
+      expect(body["redirect_uri"]).toBe("http://localhost:53692/callback");
       return jsonResponse({
         access_token: "access-token",
         refresh_token: "refresh-token",
@@ -90,10 +90,10 @@ describe("Anthropic OAuth", () => {
     const fetchMock = vi.fn(async (input: unknown, init?: RequestInit): Promise<Response> => {
       expect(getUrl(input)).toBe("https://platform.claude.com/v1/oauth/token");
       const body = getJsonBody(init);
-      expect(body.grant_type).toBe("authorization_code");
-      expect(body.code).toBe("copied-code");
-      expect(body.state).toBe(new URL(authUrl).searchParams.get("state"));
-      expect(body.redirect_uri).toBe("https://platform.claude.com/oauth/code/callback");
+      expect(body["grant_type"]).toBe("authorization_code");
+      expect(body["code"]).toBe("copied-code");
+      expect(body["state"]).toBe(new URL(authUrl).searchParams.get("state"));
+      expect(body["redirect_uri"]).toBe("https://platform.claude.com/oauth/code/callback");
       return jsonResponse({
         access_token: "access-token",
         refresh_token: "refresh-token",
@@ -152,9 +152,9 @@ describe("Anthropic OAuth", () => {
       expect(getUrl(input)).toBe("https://platform.claude.com/v1/oauth/token");
       expect(init?.method).toBe("POST");
       const body = getJsonBody(init);
-      expect(body.grant_type).toBe("refresh_token");
-      expect(body.client_id).toBeTruthy();
-      expect(body.refresh_token).toBe("refresh-token");
+      expect(body["grant_type"]).toBe("refresh_token");
+      expect(body["client_id"]).toBeTruthy();
+      expect(body["refresh_token"]).toBe("refresh-token");
       expect(body).not.toHaveProperty("scope");
       return jsonResponse({
         access_token: "new-access-token",
@@ -264,8 +264,8 @@ async function loginThroughBrowserCallback() {
       if (getUrl(input) !== "https://platform.claude.com/v1/oauth/token")
         return nativeFetch(input as string, init);
       const body = getJsonBody(init);
-      exchangedCode = body.code;
-      exchangedRedirectUri = body.redirect_uri;
+      exchangedCode = body["code"];
+      exchangedRedirectUri = body["redirect_uri"];
       return jsonResponse({ access_token: "access", refresh_token: "refresh", expires_in: 3600 });
     }),
   );

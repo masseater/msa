@@ -21,7 +21,7 @@ const NETWORK_TIMEOUT_MS = 10_000;
 const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 function isOfflineModeEnabled(): boolean {
-  const value = process.env.MSA_OFFLINE;
+  const value = process.env["MSA_OFFLINE"];
   if (!value) return false;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
@@ -218,7 +218,7 @@ function extractTarGzArchive(archivePath: string, extractDir: string, assetName:
 }
 
 function getWindowsTarCommand(): string {
-  const systemRoot = process.env.SystemRoot ?? process.env.WINDIR;
+  const systemRoot = process.env["SystemRoot"] ?? process.env["WINDIR"];
   if (systemRoot) {
     const systemTar = join(systemRoot, "System32", "tar.exe");
     if (existsSync(systemTar)) {

@@ -65,7 +65,7 @@ describe("Node SEA extension loading", () => {
     // proves the compiled-binary branch took precedence over the source branch.
     expect(options.tryNative).toBe(false);
     expect(options.alias).toBeUndefined();
-    expect(options.virtualModules?.typebox).toBeDefined();
+    expect(options.virtualModules?.["typebox"]).toBeDefined();
     expect(options.virtualModules?.["@msa/coding-agent"]).toBeDefined();
   });
 });

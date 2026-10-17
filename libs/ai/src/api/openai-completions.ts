@@ -131,9 +131,11 @@ function isReasoningDetailObject(detail: unknown): detail is Record<string, unkn
 
 function hasValidCommonReasoningDetailFields(candidate: Record<string, unknown>): boolean {
   return (
-    (candidate.id === undefined || candidate.id === null || typeof candidate.id === "string") &&
-    (candidate.format === undefined || typeof candidate.format === "string") &&
-    (candidate.index === undefined || typeof candidate.index === "number")
+    (candidate["id"] === undefined ||
+      candidate["id"] === null ||
+      typeof candidate["id"] === "string") &&
+    (candidate["format"] === undefined || typeof candidate["format"] === "string") &&
+    (candidate["index"] === undefined || typeof candidate["index"] === "number")
   );
 }
 
@@ -141,17 +143,17 @@ function isOpenAIReasoningDetail(detail: unknown): detail is OpenAIReasoningDeta
   if (!isReasoningDetailObject(detail) || !hasValidCommonReasoningDetailFields(detail)) {
     return false;
   }
-  switch (detail.type) {
+  switch (detail["type"]) {
     case "reasoning.summary":
-      return typeof detail.summary === "string";
+      return typeof detail["summary"] === "string";
     case "reasoning.encrypted":
-      return typeof detail.data === "string";
+      return typeof detail["data"] === "string";
     case "reasoning.text":
       return (
-        typeof detail.text === "string" &&
-        (detail.signature === undefined ||
-          detail.signature === null ||
-          typeof detail.signature === "string")
+        typeof detail["text"] === "string" &&
+        (detail["signature"] === undefined ||
+          detail["signature"] === null ||
+          typeof detail["signature"] === "string")
       );
     default:
       return false;
@@ -819,7 +821,7 @@ function createClient(
       headers["x-session-id"] = sessionId;
     } else {
       if (compat.sessionAffinityFormat === "openai") {
-        headers.session_id = sessionId;
+        headers["session_id"] = sessionId;
       }
       headers["x-client-request-id"] = sessionId;
       headers["x-session-affinity"] = sessionId;
@@ -1053,8 +1055,8 @@ function buildParams(
     const routing = model.compat.vercelGatewayRouting;
     if (routing.only || routing.order) {
       const gatewayOptions: Record<string, string[]> = {};
-      if (routing.only) gatewayOptions.only = routing.only;
-      if (routing.order) gatewayOptions.order = routing.order;
+      if (routing.only) gatewayOptions["only"] = routing.only;
+      if (routing.order) gatewayOptions["order"] = routing.order;
       (params as any).providerOptions = { gateway: gatewayOptions };
     }
   }

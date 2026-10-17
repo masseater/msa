@@ -91,10 +91,10 @@ async function startDeviceAuthorization(
   }
 
   const json = await readJson(response);
-  const deviceCode = json?.device_code;
-  const userCode = json?.user_code;
-  const verificationUri = json?.verification_uri;
-  const verificationUriComplete = json?.verification_uri_complete;
+  const deviceCode = json?.["device_code"];
+  const userCode = json?.["user_code"];
+  const verificationUri = json?.["verification_uri"];
+  const verificationUriComplete = json?.["verification_uri_complete"];
   if (
     typeof deviceCode !== "string" ||
     typeof userCode !== "string" ||
@@ -106,8 +106,8 @@ async function startDeviceAuthorization(
     throw new Error(`Invalid Kimi Code device authorization response: ${JSON.stringify(json)}`);
   }
 
-  const interval = json?.interval;
-  const expiresIn = json?.expires_in;
+  const interval = json?.["interval"];
+  const expiresIn = json?.["expires_in"];
   return {
     deviceCode,
     userCode,
@@ -128,9 +128,9 @@ function parseTokenResponse(
   json: Record<string, unknown> | null,
   operation: string,
 ): TokenResponse {
-  const accessToken = json?.access_token;
-  const refreshValue = json?.refresh_token;
-  const expiresIn = json?.expires_in;
+  const accessToken = json?.["access_token"];
+  const refreshValue = json?.["refresh_token"];
+  const expiresIn = json?.["expires_in"];
   if (
     typeof accessToken !== "string" ||
     !accessToken ||
@@ -185,7 +185,7 @@ async function pollForToken(
       }
 
       const json = await readJson(response);
-      if (response.ok && typeof json?.access_token === "string") {
+      if (response.ok && typeof json?.["access_token"] === "string") {
         try {
           return { status: "complete", value: parseTokenResponse(json, "poll") };
         } catch (error) {
@@ -196,14 +196,14 @@ async function pollForToken(
         }
       }
 
-      const error = json?.error;
+      const error = json?.["error"];
       const description =
-        typeof json?.error_description === "string" ? `: ${json.error_description}` : "";
+        typeof json?.["error_description"] === "string" ? `: ${json["error_description"]}` : "";
       if (error === "authorization_pending") {
         return { status: "pending" };
       }
       if (error === "slow_down") {
-        const interval = json?.interval;
+        const interval = json?.["interval"];
         return {
           status: "slow_down",
           intervalSeconds: typeof interval === "number" && interval > 0 ? interval : undefined,
@@ -270,9 +270,9 @@ async function refreshToken(
     }
 
     // Unauthorized: the stored credential is dead; Models clears it and prompts re-login.
-    if (response.status === 401 || response.status === 403 || json?.error === "invalid_grant") {
+    if (response.status === 401 || response.status === 403 || json?.["error"] === "invalid_grant") {
       const description =
-        typeof json?.error_description === "string" ? `: ${json.error_description}` : "";
+        typeof json?.["error_description"] === "string" ? `: ${json["error_description"]}` : "";
       throw new Error(
         `Kimi Code token refresh unauthorized (status ${response.status})${description}`,
       );

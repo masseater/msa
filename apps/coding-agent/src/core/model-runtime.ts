@@ -262,7 +262,7 @@ export class ModelRuntime implements Models {
       modelsPath,
       modelsStore,
       providers,
-      process.env.MSA_OFFLINE === undefined,
+      process.env["MSA_OFFLINE"] === undefined,
     );
     runtime.configureRadiusProviders();
     runtime.rebuildProviders();

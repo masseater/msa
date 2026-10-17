@@ -329,8 +329,8 @@ export async function convertMcpResult(
 function toParameters(schema: Record<string, unknown>): TSchema {
   return {
     ...schema,
-    type: schema.type ?? "object",
-    ...(schema.properties === undefined ? { properties: {} } : {}),
+    type: schema["type"] ?? "object",
+    ...(schema["properties"] === undefined ? { properties: {} } : {}),
   } as unknown as TSchema;
 }
 

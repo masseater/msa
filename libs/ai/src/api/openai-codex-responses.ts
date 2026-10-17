@@ -221,7 +221,7 @@ type ProcessWithBuiltinModule = typeof process & {
 };
 
 function loadNodeZlib(): typeof NodeZlib | null {
-  if (typeof process === "undefined" || !(process.versions?.node || process.versions?.bun)) {
+  if (typeof process === "undefined" || !(process.versions?.node || process.versions?.["bun"])) {
     return null;
   }
   return (process as ProcessWithBuiltinModule).getBuiltinModule?.("node:zlib") ?? null;
@@ -789,21 +789,21 @@ function extractCodexEventError(event: Record<string, unknown>): {
   message?: string;
 } {
   const nested =
-    event.error && typeof event.error === "object"
-      ? (event.error as Record<string, unknown>)
+    event["error"] && typeof event["error"] === "object"
+      ? (event["error"] as Record<string, unknown>)
       : undefined;
   return {
     code:
-      typeof event.code === "string"
-        ? event.code
-        : typeof nested?.code === "string"
-          ? nested.code
+      typeof event["code"] === "string"
+        ? event["code"]
+        : typeof nested?.["code"] === "string"
+          ? nested["code"]
           : undefined,
     message:
-      typeof event.message === "string"
-        ? event.message
-        : typeof nested?.message === "string"
-          ? nested.message
+      typeof event["message"] === "string"
+        ? event["message"]
+        : typeof nested?.["message"] === "string"
+          ? nested["message"]
           : undefined,
   };
 }
@@ -821,7 +821,7 @@ async function* mapCodexEvents(
       // Keep callback failures out of Codex's WebSocket retry and SSE fallback path.
       throw new ProviderStreamEventCallbackError(error);
     }
-    const type = typeof event.type === "string" ? event.type : undefined;
+    const type = typeof event["type"] === "string" ? event["type"] : undefined;
     if (!type) continue;
 
     if (type === "error") {
@@ -1080,7 +1080,7 @@ async function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketCons
 
   // bun doesn't respect http proxy envs, ref: https://github.com/oven-sh/bun/issues/15489
   // TODO: remove this when bun supports proxy envs in websocket.
-  if (typeof process !== "undefined" && process.versions?.bun) {
+  if (typeof process !== "undefined" && process.versions?.["bun"]) {
     const WebSocketWithProxy = class extends WebSocket {
       constructor(url: string | URL, options?: string | string[] | Record<string, unknown>) {
         let _opts: Record<string, unknown> = {};
@@ -1418,7 +1418,7 @@ async function* parseWebSocket(
         text = await decodeWebSocketData((event as { data?: unknown }).data);
         if (!text) return;
         const parsed = JSON.parse(text) as Record<string, unknown>;
-        const type = typeof parsed.type === "string" ? parsed.type : "";
+        const type = typeof parsed["type"] === "string" ? parsed["type"] : "";
         if (
           type === "response.completed" ||
           type === "response.done" ||

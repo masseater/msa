@@ -97,12 +97,12 @@ function choiceProbabilities(value: unknown, id: string): Record<string, number>
   if (!Array.isArray(value)) throw new Error(`${LABEL} returned invalid probabilities for ${id}`);
   return Object.fromEntries(
     value.map((entry) => {
-      if (!isRecord(entry) || typeof entry.value !== "string") {
+      if (!isRecord(entry) || typeof entry["value"] !== "string") {
         throw new Error(`${LABEL} returned invalid probabilities for ${id}`);
       }
       return [
-        entry.value,
-        requiredNumber(LABEL, entry.probability, `probability for ${id}.${entry.value}`),
+        entry["value"],
+        requiredNumber(LABEL, entry["probability"], `probability for ${id}.${entry["value"]}`),
       ];
     }),
   );
@@ -113,32 +113,32 @@ function parseAnswer(
   question: ClassifierQuestion,
   answer: Record<string, unknown>,
 ): ClassifierAnswer {
-  if (answer.type === "refusal") throw new Error(`${LABEL} refused to answer ${id}`);
+  if (answer["type"] === "refusal") throw new Error(`${LABEL} refused to answer ${id}`);
   if (question.type === "choice") {
-    if (answer.type !== "choice" || typeof answer.choice !== "string") {
+    if (answer["type"] !== "choice" || typeof answer["choice"] !== "string") {
       throw new Error(`${LABEL} did not return a choice answer for ${id}`);
     }
     return {
       type: "choice",
-      choice: answer.choice,
-      probabilities: choiceProbabilities(answer.probabilities, id),
-      confidence: requiredNumber(LABEL, answer.confidence, `confidence for ${id}`),
+      choice: answer["choice"],
+      probabilities: choiceProbabilities(answer["probabilities"], id),
+      confidence: requiredNumber(LABEL, answer["confidence"], `confidence for ${id}`),
     };
   }
   if (question.type === "score") {
-    if (answer.type !== "score")
+    if (answer["type"] !== "score")
       throw new Error(`${LABEL} did not return a score answer for ${id}`);
     return {
       type: "score",
-      score: requiredNumber(LABEL, answer.score, `score for ${id}`),
-      confidence: requiredNumber(LABEL, answer.confidence, `confidence for ${id}`),
+      score: requiredNumber(LABEL, answer["score"], `score for ${id}`),
+      confidence: requiredNumber(LABEL, answer["confidence"], `confidence for ${id}`),
     };
   }
-  if (answer.type !== "predicate")
+  if (answer["type"] !== "predicate")
     throw new Error(`${LABEL} did not return a predicate answer for ${id}`);
   return {
     type: "bool",
-    probability: requiredNumber(LABEL, answer.probability, `probability for ${id}`),
+    probability: requiredNumber(LABEL, answer["probability"], `probability for ${id}`),
   };
 }
 
@@ -149,7 +149,7 @@ function parseAnswers(
   if (!Array.isArray(value)) throw new Error(`${LABEL} returned an unexpected response`);
   const byName = new Map<string, Record<string, unknown>>();
   for (const answer of value) {
-    if (isRecord(answer) && typeof answer.name === "string") byName.set(answer.name, answer);
+    if (isRecord(answer) && typeof answer["name"] === "string") byName.set(answer["name"], answer);
   }
   return Object.fromEntries(
     Object.entries(context.questions).map(([id, question]) => {
@@ -204,9 +204,9 @@ export const classify: ClassifierFunction<ClassifierOptions> = async (model, con
     );
     if (!isRecord(body)) throw new Error(`${LABEL} returned an unexpected response`);
     // Set before parsing answers: a request with malformed or refused answers was still billed.
-    const usage = parseClassifierUsage(body.usage, model);
+    const usage = parseClassifierUsage(body["usage"], model);
     if (usage) output.usage = usage;
-    output.answers = parseAnswers(body.answers, context);
+    output.answers = parseAnswers(body["answers"], context);
     return output;
   } catch (error) {
     output.answers = {};

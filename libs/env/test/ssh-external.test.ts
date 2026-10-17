@@ -24,7 +24,7 @@ import { daemon } from "./daemon.ts";
  * The conformance suite over a real SSH server on this machine, configured by CI: `MSA_ENV_SSH_HOST`, `MSA_ENV_SSH_USER`
  * `MSA_ENV_SSH_KEY` and `MSA_ENV_SSH_PROGRAM`. On Windows this covers deployment and the daemon's launch through the server's default shell.
  */
-const host = process.env.MSA_ENV_SSH_HOST;
+const host = process.env["MSA_ENV_SSH_HOST"];
 const root = mkdtempSync(join(tmpdir(), "msa-env-ssh-external-"));
 let connected: Promise<{ connection: Connection; remote: RemotePlatform }> | undefined;
 
@@ -32,16 +32,18 @@ async function connect(): Promise<{ connection: Connection; remote: RemotePlatfo
   connected ??= (async () => {
     const target: SshTarget = {
       host: host!,
-      ...(process.env.MSA_ENV_SSH_USER === undefined ? {} : { user: process.env.MSA_ENV_SSH_USER }),
-      ...(process.env.MSA_ENV_SSH_PORT === undefined
+      ...(process.env["MSA_ENV_SSH_USER"] === undefined
         ? {}
-        : { port: Number(process.env.MSA_ENV_SSH_PORT) }),
-      ...(process.env.MSA_ENV_SSH_KEY === undefined
+        : { user: process.env["MSA_ENV_SSH_USER"] }),
+      ...(process.env["MSA_ENV_SSH_PORT"] === undefined
         ? {}
-        : { identityFile: process.env.MSA_ENV_SSH_KEY }),
-      ...(process.env.MSA_ENV_SSH_PROGRAM === undefined
+        : { port: Number(process.env["MSA_ENV_SSH_PORT"]) }),
+      ...(process.env["MSA_ENV_SSH_KEY"] === undefined
         ? {}
-        : { ssh: process.env.MSA_ENV_SSH_PROGRAM }),
+        : { identityFile: process.env["MSA_ENV_SSH_KEY"] }),
+      ...(process.env["MSA_ENV_SSH_PROGRAM"] === undefined
+        ? {}
+        : { ssh: process.env["MSA_ENV_SSH_PROGRAM"] }),
       knownHostsFile: join(root, "known_hosts"),
       hostKeyAlias: "msa-env-external",
     };
@@ -72,14 +74,14 @@ afterAll(async () => {
 });
 
 const windows = process.platform === "win32";
-const gitBash = join(process.env.ProgramFiles ?? "C:\\Program Files", "Git", "bin", "bash.exe");
+const gitBash = join(process.env["ProgramFiles"] ?? "C:\\Program Files", "Git", "bin", "bash.exe");
 
 describe.skipIf(host === undefined)("SSH to this machine's server", () => {
   it("reaches the remote system through its default shell", async () => {
     const { connection, remote } = await connect();
     const info = await connection.info();
     expect(nodePlatform(info).platform).toBe(process.platform);
-    if (windows) expect(remote.shell).toBe(process.env.MSA_ENV_SSH_SHELL ?? "cmd");
+    if (windows) expect(remote.shell).toBe(process.env["MSA_ENV_SSH_SHELL"] ?? "cmd");
   }, 120_000);
 });
 

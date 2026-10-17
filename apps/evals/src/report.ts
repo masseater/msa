@@ -187,12 +187,18 @@ export async function readTaskObservation(
     metrics = {
       inputTokens: optionalMetric(run.usage.inputTokens, "inputTokens"),
       outputTokens: optionalMetric(run.usage.outputTokens, "outputTokens"),
-      cacheReadTokens: optionalMetric(run.usage.metadata?.cacheReadTokens, "cacheReadTokens"),
-      cacheWriteTokens: optionalMetric(run.usage.metadata?.cacheWriteTokens, "cacheWriteTokens"),
+      cacheReadTokens: optionalMetric(run.usage.metadata?.["cacheReadTokens"], "cacheReadTokens"),
+      cacheWriteTokens: optionalMetric(
+        run.usage.metadata?.["cacheWriteTokens"],
+        "cacheWriteTokens",
+      ),
       totalTokens: optionalMetric(run.usage.totalTokens, "totalTokens"),
       toolCalls: optionalMetric(run.usage.toolCalls, "toolCalls"),
       totalMs: optionalMetric(run.timings?.totalMs, "totalMs"),
-      estimatedCostUsd: optionalMetric(run.usage.metadata?.estimatedCostUsd, "estimatedCostUsd"),
+      estimatedCostUsd: optionalMetric(
+        run.usage.metadata?.["estimatedCostUsd"],
+        "estimatedCostUsd",
+      ),
     };
   } catch {
     return { ...identity, outcome: "errored" };

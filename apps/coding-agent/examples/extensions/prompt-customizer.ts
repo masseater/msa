@@ -41,9 +41,9 @@ export default function promptCustomizer(msa: ExtensionAPI) {
   msa.on("before_agent_start", (event) => {
     const guidance = buildToolGuidance(event.systemPromptOptions);
     if (guidance) {
-      event.systemPromptOptions.sections.tool_guidance = guidance;
+      event.systemPromptOptions.sections["tool_guidance"] = guidance;
     } else {
-      delete event.systemPromptOptions.sections.tool_guidance;
+      delete event.systemPromptOptions.sections["tool_guidance"];
     }
   });
 }

@@ -17,7 +17,7 @@ interface ResizeImageWorkerRequest {
 function isResizeImageWorkerRequest(value: unknown): value is ResizeImageWorkerRequest {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
-  return record.inputBytes instanceof Uint8Array && typeof record.mimeType === "string";
+  return record["inputBytes"] instanceof Uint8Array && typeof record["mimeType"] === "string";
 }
 
 const port = parentPort;

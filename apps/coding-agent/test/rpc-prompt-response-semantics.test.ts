@@ -76,7 +76,8 @@ function parseOutputLines(outputLines: string[]): ParsedOutputLine[] {
 
 function getPromptResponses(outputLines: string[], id: string): ParsedOutputLine[] {
   return parseOutputLines(outputLines).filter(
-    (record) => record.id === id && record.type === "response" && record.command === "prompt",
+    (record) =>
+      record["id"] === id && record["type"] === "response" && record["command"] === "prompt",
   );
 }
 
@@ -283,7 +284,7 @@ describe("RPC prompt response semantics", () => {
         });
       }
       expect(
-        parseOutputLines(rpcIo.outputLines).filter((line) => line.type === "agent_start"),
+        parseOutputLines(rpcIo.outputLines).filter((line) => line["type"] === "agent_start"),
       ).toHaveLength(0);
     } finally {
       await cleanup();
@@ -371,7 +372,7 @@ describe("RPC prompt response semantics", () => {
         await vi.waitFor(() => {
           expect(
             parseOutputLines(rpcIo.outputLines).filter(
-              (line) => line.type === "response" && line.id === "A",
+              (line) => line["type"] === "response" && line["id"] === "A",
             ),
           ).toHaveLength(1);
         });
@@ -470,7 +471,7 @@ describe("RPC prompt response semantics", () => {
 
       await sleep(600);
       expect(
-        parseOutputLines(rpcIo.outputLines).filter((record) => record.type === "agent_start"),
+        parseOutputLines(rpcIo.outputLines).filter((record) => record["type"] === "agent_start"),
       ).toHaveLength(1);
     } finally {
       await cleanup();

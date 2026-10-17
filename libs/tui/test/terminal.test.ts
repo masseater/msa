@@ -240,14 +240,14 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
     const clear = "\x1b]7501;state=clear\x1b\\";
 
     function withOverride(value: string | undefined, fn: () => void): void {
-      const previous = process.env.MSA_PROGRAM_STATUS;
-      if (value === undefined) delete process.env.MSA_PROGRAM_STATUS;
-      else process.env.MSA_PROGRAM_STATUS = value;
+      const previous = process.env["MSA_PROGRAM_STATUS"];
+      if (value === undefined) delete process.env["MSA_PROGRAM_STATUS"];
+      else process.env["MSA_PROGRAM_STATUS"] = value;
       try {
         fn();
       } finally {
-        if (previous === undefined) delete process.env.MSA_PROGRAM_STATUS;
-        else process.env.MSA_PROGRAM_STATUS = previous;
+        if (previous === undefined) delete process.env["MSA_PROGRAM_STATUS"];
+        else process.env["MSA_PROGRAM_STATUS"] = previous;
       }
     }
 
@@ -404,14 +404,14 @@ describe("ProcessTerminal dimensions", () => {
   it("falls back to COLUMNS and LINES before default dimensions", () => {
     const previousColumnsDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "columns");
     const previousRowsDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "rows");
-    const previousColumns = process.env.COLUMNS;
-    const previousLines = process.env.LINES;
+    const previousColumns = process.env["COLUMNS"];
+    const previousLines = process.env["LINES"];
 
     try {
       Object.defineProperty(process.stdout, "columns", { value: undefined, configurable: true });
       Object.defineProperty(process.stdout, "rows", { value: undefined, configurable: true });
-      process.env.COLUMNS = "123";
-      process.env.LINES = "45";
+      process.env["COLUMNS"] = "123";
+      process.env["LINES"] = "45";
 
       const terminal = new ProcessTerminal();
 
@@ -429,14 +429,14 @@ describe("ProcessTerminal dimensions", () => {
         Reflect.deleteProperty(process.stdout, "rows");
       }
       if (previousColumns === undefined) {
-        delete process.env.COLUMNS;
+        delete process.env["COLUMNS"];
       } else {
-        process.env.COLUMNS = previousColumns;
+        process.env["COLUMNS"] = previousColumns;
       }
       if (previousLines === undefined) {
-        delete process.env.LINES;
+        delete process.env["LINES"];
       } else {
-        process.env.LINES = previousLines;
+        process.env["LINES"] = previousLines;
       }
     }
   });

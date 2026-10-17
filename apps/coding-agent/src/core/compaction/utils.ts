@@ -50,7 +50,7 @@ function addFileOp(
   args: Record<string, unknown> | undefined,
   fileOps: FileOperations,
 ): void {
-  const path = typeof args?.path === "string" ? args.path : undefined;
+  const path = typeof args?.["path"] === "string" ? args["path"] : undefined;
   if (!path) return;
   switch (toolName) {
     case "read":

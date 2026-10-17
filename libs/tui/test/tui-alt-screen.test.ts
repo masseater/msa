@@ -399,7 +399,7 @@ describe("TuiAltScreen", () => {
     const previousEnvironment = new Map(environmentKeys.map((key) => [key, process.env[key]]));
     try {
       for (const key of environmentKeys) delete process.env[key];
-      process.env.TERM = "xterm-256color";
+      process.env["TERM"] = "xterm-256color";
       const directTerminal = new RecordingTerminal();
       const directTui = new TuiAltScreen(directTerminal);
       directTui.start();
@@ -443,7 +443,7 @@ describe("TuiAltScreen", () => {
 
   it("invokes the right-click paste handler only on Windows outside VS Code", () => {
     const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
-    const termProgram = process.env.TERM_PROGRAM;
+    const termProgram = process.env["TERM_PROGRAM"];
     assert.ok(platformDescriptor);
     const terminal = new VirtualTerminal();
     let pasteCount = 0;
@@ -454,25 +454,25 @@ describe("TuiAltScreen", () => {
     });
     try {
       Object.defineProperty(process, "platform", { configurable: true, value: "win32" });
-      delete process.env.TERM_PROGRAM;
+      delete process.env["TERM_PROGRAM"];
       tui.start();
       terminal.sendInput("\x1b[<2;1;1M");
       terminal.sendInput("\x1b[<2;1;1m");
       assert.strictEqual(pasteCount, 1);
 
-      process.env.TERM_PROGRAM = "vscode";
+      process.env["TERM_PROGRAM"] = "vscode";
       terminal.sendInput("\x1b[<2;1;1M");
       assert.strictEqual(pasteCount, 1);
 
       Object.defineProperty(process, "platform", { configurable: true, value: "linux" });
-      delete process.env.TERM_PROGRAM;
+      delete process.env["TERM_PROGRAM"];
       terminal.sendInput("\x1b[<2;1;1M");
       assert.strictEqual(pasteCount, 1);
     } finally {
       tui.stop();
       Object.defineProperty(process, "platform", platformDescriptor);
-      if (termProgram === undefined) delete process.env.TERM_PROGRAM;
-      else process.env.TERM_PROGRAM = termProgram;
+      if (termProgram === undefined) delete process.env["TERM_PROGRAM"];
+      else process.env["TERM_PROGRAM"] = termProgram;
     }
   });
 
@@ -1149,9 +1149,9 @@ describe("TuiAltScreen", () => {
 
   it("redraws WezTerm Kitty images after writes to covered rows", async () => {
     // Regression test for #10319: a scrollbar update below an unchanged image anchor erased its cells.
-    const weztermPane = process.env.WEZTERM_PANE;
+    const weztermPane = process.env["WEZTERM_PANE"];
     let tui: TuiAltScreen | undefined;
-    process.env.WEZTERM_PANE = "1";
+    process.env["WEZTERM_PANE"] = "1";
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     try {
       const terminal = new RecordingTerminal(20, 4);
@@ -1183,8 +1183,8 @@ describe("TuiAltScreen", () => {
     } finally {
       tui?.stop();
       resetCapabilitiesCache();
-      if (weztermPane === undefined) delete process.env.WEZTERM_PANE;
-      else process.env.WEZTERM_PANE = weztermPane;
+      if (weztermPane === undefined) delete process.env["WEZTERM_PANE"];
+      else process.env["WEZTERM_PANE"] = weztermPane;
     }
   });
 

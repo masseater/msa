@@ -43,7 +43,7 @@ function isKeyboardProtocolNegotiationSequencePrefix(sequence: string): boolean 
 }
 
 export function isAppleTerminalSession(): boolean {
-  return process.platform === "darwin" && process.env.TERM_PROGRAM === "Apple_Terminal";
+  return process.platform === "darwin" && process.env["TERM_PROGRAM"] === "Apple_Terminal";
 }
 
 /**
@@ -140,11 +140,11 @@ const DEFAULT_SSH_ESCAPE_TIMEOUT_MS = 100;
  * another byte, so high-latency transports need a longer reassembly window.
  */
 export function resolveEscapeTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
-  const configured = Number(env.MSA_TUI_ESC_TIMEOUT);
+  const configured = Number(env["MSA_TUI_ESC_TIMEOUT"]);
   if (Number.isFinite(configured) && configured > 0) {
     return configured;
   }
-  if (env.SSH_CONNECTION || env.SSH_TTY) {
+  if (env["SSH_CONNECTION"] || env["SSH_TTY"]) {
     return DEFAULT_SSH_ESCAPE_TIMEOUT_MS;
   }
   return DEFAULT_ESCAPE_TIMEOUT_MS;
@@ -174,7 +174,7 @@ export class ProcessTerminal implements Terminal {
   /** The support query was sent and its DA1 sentinel has not arrived yet. */
   private programStatusQueryPending = false;
   private writeLogPath = (() => {
-    const env = process.env.MSA_TUI_WRITE_LOG || "";
+    const env = process.env["MSA_TUI_WRITE_LOG"] || "";
     if (!env) return "";
     try {
       if (fs.statSync(env).isDirectory()) {
@@ -297,7 +297,7 @@ export class ProcessTerminal implements Terminal {
     this.keyboardProtocolPushed = true;
     this.pendingKeyboardProtocolDeviceAttributes += 1;
     this.clearKeyboardProtocolNegotiationBuffer();
-    const programStatusOverride = process.env.MSA_PROGRAM_STATUS;
+    const programStatusOverride = process.env["MSA_PROGRAM_STATUS"];
     this.programStatusSupported = programStatusOverride === "1";
     this.programStatusQueryPending = programStatusOverride !== "1" && programStatusOverride !== "0";
     const programStatusQuery = this.programStatusQueryPending ? PROGRAM_STATUS_QUERY : "";
@@ -539,11 +539,11 @@ export class ProcessTerminal implements Terminal {
   }
 
   get columns(): number {
-    return process.stdout.columns || Number(process.env.COLUMNS) || 80;
+    return process.stdout.columns || Number(process.env["COLUMNS"]) || 80;
   }
 
   get rows(): number {
-    return process.stdout.rows || Number(process.env.LINES) || 24;
+    return process.stdout.rows || Number(process.env["LINES"]) || 24;
   }
 
   moveBy(lines: number): void {

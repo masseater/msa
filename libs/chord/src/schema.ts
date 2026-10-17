@@ -66,17 +66,17 @@ export function canonicalIdentity(schema: TSchema, value: unknown): string {
 
 function stripDefaults(schema: Schema, value: unknown): unknown {
   if (Array.isArray(value)) {
-    const items = schema.items;
+    const items = schema["items"];
     if (Array.isArray(items))
       return value.map((item, index) => stripDefaults(asSchema(items[index]), item));
     return value.map((item) => stripDefaults(asSchema(items), item));
   }
   if (value === null || typeof value !== "object") return value;
-  const properties = asSchema(schema.properties);
+  const properties = asSchema(schema["properties"]);
   const result: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
     const property = asSchema(properties[key]);
-    if ("default" in property && deepEqual(property.default, item)) continue;
+    if ("default" in property && deepEqual(property["default"], item)) continue;
     result[key] = stripDefaults(property, item);
   }
   return result;
@@ -100,10 +100,10 @@ const CONSTRAINTS = [
 ] as const;
 
 const typesOf = (schema: Schema): string[] | undefined =>
-  typeof schema.type === "string"
-    ? [schema.type]
-    : Array.isArray(schema.type)
-      ? (schema.type as string[])
+  typeof schema["type"] === "string"
+    ? [schema["type"]]
+    : Array.isArray(schema["type"])
+      ? (schema["type"] as string[])
       : undefined;
 
 /** Keywords `fits` reasons about. Any other validation keyword in the provider's schema forces exact equality. */
@@ -152,16 +152,17 @@ export function fits(subSchema: unknown, supSchema: unknown): boolean {
   if (Object.keys(sup).length === 0) return true;
   if (deepEqual(sub, sup)) return true;
   if (Object.keys(sup).some((key) => !KNOWN.has(key))) return false;
-  if (sup.additionalProperties !== undefined && typeof sup.additionalProperties !== "boolean")
+  if (sup["additionalProperties"] !== undefined && typeof sup["additionalProperties"] !== "boolean")
     return false;
-  if (Array.isArray(sub.anyOf)) return sub.anyOf.every((branch) => fits(branch, sup));
-  if (Array.isArray(sup.anyOf)) return sup.anyOf.some((branch) => fits(sub, branch));
-  if ("const" in sup) return "const" in sub && deepEqual(sub.const, sup.const);
-  if (Array.isArray(sup.enum)) {
-    const values = "const" in sub ? [sub.const] : Array.isArray(sub.enum) ? sub.enum : undefined;
+  if (Array.isArray(sub["anyOf"])) return sub["anyOf"].every((branch) => fits(branch, sup));
+  if (Array.isArray(sup["anyOf"])) return sup["anyOf"].some((branch) => fits(sub, branch));
+  if ("const" in sup) return "const" in sub && deepEqual(sub["const"], sup["const"]);
+  if (Array.isArray(sup["enum"])) {
+    const values =
+      "const" in sub ? [sub["const"]] : Array.isArray(sub["enum"]) ? sub["enum"] : undefined;
     return (
       values?.every((item) =>
-        (sup.enum as unknown[]).some((allowed) => deepEqual(allowed, item)),
+        (sup["enum"] as unknown[]).some((allowed) => deepEqual(allowed, item)),
       ) ?? false
     );
   }
@@ -176,7 +177,7 @@ export function fits(subSchema: unknown, supSchema: unknown): boolean {
   ) {
     return false;
   }
-  if ("const" in sub || Array.isArray(sub.enum)) return true;
+  if ("const" in sub || Array.isArray(sub["enum"])) return true;
   if (subTypes.includes("object") && !objectFits(sub, sup)) return false;
   if (subTypes.includes("array") && !arrayFits(sub, sup)) return false;
   if (subTypes.includes("function")) return functionFits(sub, sup);
@@ -184,33 +185,34 @@ export function fits(subSchema: unknown, supSchema: unknown): boolean {
 }
 
 function objectFits(sub: Schema, sup: Schema): boolean {
-  const subProperties = asSchema(sub.properties);
-  const supProperties = asSchema(sup.properties);
-  const subRequired = new Set((sub.required as string[] | undefined) ?? []);
-  for (const key of (sup.required as string[] | undefined) ?? [])
+  const subProperties = asSchema(sub["properties"]);
+  const supProperties = asSchema(sup["properties"]);
+  const subRequired = new Set((sub["required"] as string[] | undefined) ?? []);
+  for (const key of (sup["required"] as string[] | undefined) ?? [])
     if (!subRequired.has(key)) return false;
   for (const [key, property] of Object.entries(supProperties)) {
     if (key in subProperties) {
       if (!fits(subProperties[key], property)) return false;
     } else if (
-      typeof sub.additionalProperties === "object" &&
-      !fits(sub.additionalProperties, property)
+      typeof sub["additionalProperties"] === "object" &&
+      !fits(sub["additionalProperties"], property)
     ) {
       // The consumer may send this name with any value its `additionalProperties` allows. Open consumer objects
       // are fine: unknown names are stripped with the consumer's own schema before the call (`RecordImpl.call`).
       return false;
     }
   }
-  if (sup.additionalProperties === false) {
-    if (sub.additionalProperties !== false) return false;
+  if (sup["additionalProperties"] === false) {
+    if (sub["additionalProperties"] !== false) return false;
     if (Object.keys(subProperties).some((key) => !(key in supProperties))) return false;
   }
-  const supPatterns = asSchema(sup.patternProperties);
+  const supPatterns = asSchema(sup["patternProperties"]);
   if (Object.keys(supPatterns).length > 0) {
     // Every value the consumer may put under a matching name must fit, and the consumer must not allow arbitrary
     // extra names (it would then allow any value under a matching one).
-    const subPatterns = asSchema(sub.patternProperties);
-    if (sub.additionalProperties !== false && Object.keys(subPatterns).length === 0) return false;
+    const subPatterns = asSchema(sub["patternProperties"]);
+    if (sub["additionalProperties"] !== false && Object.keys(subPatterns).length === 0)
+      return false;
     for (const [pattern, property] of Object.entries(supPatterns)) {
       const matcher = new RegExp(pattern, "u");
       for (const [key, subProperty] of Object.entries(subProperties)) {
@@ -230,20 +232,20 @@ function objectFits(sub: Schema, sup: Schema): boolean {
 }
 
 function arrayFits(sub: Schema, sup: Schema): boolean {
-  if (Array.isArray(sup.items)) {
-    if (!Array.isArray(sub.items) || sub.items.length !== sup.items.length) return false;
-    return sub.items.every((item, index) => fits(item, (sup.items as unknown[])[index]));
+  if (Array.isArray(sup["items"])) {
+    if (!Array.isArray(sub["items"]) || sub["items"].length !== sup["items"].length) return false;
+    return sub["items"].every((item, index) => fits(item, (sup["items"] as unknown[])[index]));
   }
-  if (Array.isArray(sub.items)) return sub.items.every((item) => fits(item, sup.items));
-  return fits(sub.items, sup.items);
+  if (Array.isArray(sub["items"])) return sub["items"].every((item) => fits(item, sup["items"]));
+  return fits(sub["items"], sup["items"]);
 }
 
 function functionFits(sub: Schema, sup: Schema): boolean {
-  const subParameters = (sub.parameters as unknown[] | undefined) ?? [];
-  const supParameters = (sup.parameters as unknown[] | undefined) ?? [];
+  const subParameters = (sub["parameters"] as unknown[] | undefined) ?? [];
+  const supParameters = (sup["parameters"] as unknown[] | undefined) ?? [];
   // A function accepting fewer parameters is fine; each shared parameter is contravariant.
   if (subParameters.length > supParameters.length) return false;
   if (!subParameters.every((parameter, index) => fits(supParameters[index], parameter)))
     return false;
-  return fits(sub.returnType, sup.returnType);
+  return fits(sub["returnType"], sup["returnType"]);
 }

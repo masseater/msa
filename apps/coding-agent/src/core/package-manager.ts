@@ -62,7 +62,7 @@ const UPDATE_CHECK_CONCURRENCY = 4;
 const GIT_UPDATE_CONCURRENCY = 4;
 
 function isOfflineModeEnabled(): boolean {
-  const value = process.env.MSA_OFFLINE;
+  const value = process.env["MSA_OFFLINE"];
   if (!value) return false;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
@@ -235,7 +235,7 @@ function toPosixPath(p: string): string {
 }
 
 function getHomeDir(): string {
-  return process.env.HOME || homedir();
+  return process.env["HOME"] || homedir();
 }
 
 export function getExtensionTempFolder(agentDir: string): string {

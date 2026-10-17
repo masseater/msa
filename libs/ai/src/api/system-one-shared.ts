@@ -55,37 +55,37 @@ function parseAnswers(
     const answer = value[id];
     if (!isRecord(answer)) throw new Error(`${label} did not return an answer for ${id}`);
     if (question.type === "choice") {
-      if (answer.type !== "choice" || typeof answer.choice !== "string") {
+      if (answer["type"] !== "choice" || typeof answer["choice"] !== "string") {
         throw new Error(`${label} did not return a choice answer for ${id}`);
       }
       answers.push([
         id,
         {
           type: "choice",
-          choice: answer.choice,
-          probabilities: probabilities(label, answer.probabilities, id),
-          confidence: requiredNumber(label, answer.confidence, `confidence for ${id}`),
+          choice: answer["choice"],
+          probabilities: probabilities(label, answer["probabilities"], id),
+          confidence: requiredNumber(label, answer["confidence"], `confidence for ${id}`),
         },
       ]);
     } else if (question.type === "score") {
-      if (answer.type !== "score")
+      if (answer["type"] !== "score")
         throw new Error(`${label} did not return a score answer for ${id}`);
       answers.push([
         id,
         {
           type: "score",
-          score: requiredNumber(label, answer.score, `score for ${id}`),
-          confidence: requiredNumber(label, answer.confidence, `confidence for ${id}`),
+          score: requiredNumber(label, answer["score"], `score for ${id}`),
+          confidence: requiredNumber(label, answer["confidence"], `confidence for ${id}`),
         },
       ]);
     } else {
-      if (answer.type !== "noul")
+      if (answer["type"] !== "noul")
         throw new Error(`${label} did not return a bool answer for ${id}`);
       answers.push([
         id,
         {
           type: "bool",
-          probability: requiredNumber(label, answer.noul, `probability for ${id}`),
+          probability: requiredNumber(label, answer["noul"], `probability for ${id}`),
         },
       ]);
     }
@@ -134,9 +134,9 @@ export async function classifySystemOne(
     );
     const result = transport.output(body);
     // Set before parsing answers: a request with malformed answers was still billed.
-    const usage = parseClassifierUsage(result.usage, model);
+    const usage = parseClassifierUsage(result["usage"], model);
     if (usage) output.usage = usage;
-    output.answers = parseAnswers(transport.label, result.answers, context);
+    output.answers = parseAnswers(transport.label, result["answers"], context);
     return output;
   } catch (error) {
     output.stopReason = options?.signal?.aborted ? "aborted" : "error";

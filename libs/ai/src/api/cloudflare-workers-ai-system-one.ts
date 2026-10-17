@@ -8,7 +8,7 @@ function cloudflareErrorMessage(errors: unknown): string {
   if (Array.isArray(errors)) {
     const messages = errors
       .map((error) =>
-        isRecord(error) && typeof error.message === "string" ? error.message : undefined,
+        isRecord(error) && typeof error["message"] === "string" ? error["message"] : undefined,
       )
       .filter((message): message is string => message !== undefined);
     if (messages.length > 0) return `${LABEL} error: ${messages.join("; ")}`;
@@ -33,15 +33,15 @@ const transport: SystemOneTransport = {
   payload: (model, request) => ({ model: model.id, input: request }),
   output: (body) => {
     if (!isRecord(body)) throw new Error(`${LABEL} returned an unexpected response`);
-    if (body.success === false) throw new Error(cloudflareErrorMessage(body.errors));
-    const result = body.result;
+    if (body["success"] === false) throw new Error(cloudflareErrorMessage(body["errors"]));
+    const result = body["result"];
     if (!isRecord(result)) throw new Error(`${LABEL} returned an unexpected response`);
     if ("answers" in result) return result;
-    if (result.state !== "Completed") {
-      throw new Error(`${LABEL} run did not complete (state: ${String(result.state)})`);
+    if (result["state"] !== "Completed") {
+      throw new Error(`${LABEL} run did not complete (state: ${String(result["state"])})`);
     }
-    if (!isRecord(result.result)) throw new Error(`${LABEL} returned an unexpected response`);
-    return result.result;
+    if (!isRecord(result["result"])) throw new Error(`${LABEL} returned an unexpected response`);
+    return result["result"];
   },
 };
 

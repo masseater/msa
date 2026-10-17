@@ -160,7 +160,7 @@ export function isDisplayOnly(entry: EntryDraft): boolean {
 
 /** Whether a reset (`head: "self"` write) is queued; entries appended before it leave the active range when it lands. */
 export function hasQueuedReset(items: readonly InboxItem[]): boolean {
-  return items.some((item) => item.mode === "write" && item.entry.head === "self");
+  return items.some((item) => item.mode === "write" && item.entry["head"] === "self");
 }
 
 /** Whether a head write targets an entry before the active range, so placing it would bring back cut history. */

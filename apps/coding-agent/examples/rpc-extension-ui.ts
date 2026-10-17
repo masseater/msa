@@ -539,31 +539,31 @@ async function main() {
       return;
     }
 
-    if (data.type === "response" && !data.success) {
-      outputLog.append(`${RED}[error]${RESET} ${data.command}: ${data.error}`);
+    if (data["type"] === "response" && !data["success"]) {
+      outputLog.append(`${RED}[error]${RESET} ${data["command"]}: ${data["error"]}`);
       tui.requestRender();
       return;
     }
 
-    if (data.type === "agent_start") {
+    if (data["type"] === "agent_start") {
       showLoading();
       return;
     }
 
-    if (data.type === "extension_ui_request") {
+    if (data["type"] === "extension_ui_request") {
       handleExtensionUI(data as unknown as ExtensionUIRequest);
       return;
     }
 
-    if (data.type === "message_update") {
-      const evt = data.assistantMessageEvent as Record<string, unknown> | undefined;
-      if (evt?.type === "text_delta") {
+    if (data["type"] === "message_update") {
+      const evt = data["assistantMessageEvent"] as Record<string, unknown> | undefined;
+      if (evt?.["type"] === "text_delta") {
         if (!hasTextOutput) {
           hasTextOutput = true;
           outputLog.append("");
           outputLog.append(`${BLUE}${BOLD}Agent:${RESET}`);
         }
-        const delta = evt.delta as string;
+        const delta = evt["delta"] as string;
         const parts = delta.split("\n");
         for (let i = 0; i < parts.length; i++) {
           if (i > 0) outputLog.append("");
@@ -574,20 +574,20 @@ async function main() {
       return;
     }
 
-    if (data.type === "tool_execution_start") {
-      outputLog.append(`${DIM}[tool: ${data.toolName}]${RESET}`);
+    if (data["type"] === "tool_execution_start") {
+      outputLog.append(`${DIM}[tool: ${data["toolName"]}]${RESET}`);
       tui.requestRender();
       return;
     }
 
-    if (data.type === "tool_execution_end") {
-      const result = JSON.stringify(data.result).slice(0, 120);
+    if (data["type"] === "tool_execution_end") {
+      const result = JSON.stringify(data["result"]).slice(0, 120);
       outputLog.append(`${DIM}[result: ${result}...]${RESET}`);
       tui.requestRender();
       return;
     }
 
-    if (data.type === "agent_settled") {
+    if (data["type"] === "agent_settled") {
       isStreaming = false;
       hideLoading();
       outputLog.append("");

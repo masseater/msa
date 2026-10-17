@@ -997,19 +997,19 @@ class TreeList implements Component {
   private formatToolCall(name: string, args: Record<string, unknown>): string {
     switch (name) {
       case "read": {
-        const path = shortenPath(String(args.path || args.file_path || ""));
-        return `[read: ${path}${formatReadLineRange(args.offset, args.limit)}]`;
+        const path = shortenPath(String(args["path"] || args["file_path"] || ""));
+        return `[read: ${path}${formatReadLineRange(args["offset"], args["limit"])}]`;
       }
       case "write": {
-        const path = shortenPath(String(args.path || args.file_path || ""));
+        const path = shortenPath(String(args["path"] || args["file_path"] || ""));
         return `[write: ${path}]`;
       }
       case "edit": {
-        const path = shortenPath(String(args.path || args.file_path || ""));
+        const path = shortenPath(String(args["path"] || args["file_path"] || ""));
         return `[edit: ${path}]`;
       }
       case "bash": {
-        const rawCmd = String(args.command || "");
+        const rawCmd = String(args["command"] || "");
         const cmd = rawCmd
           .replace(/[\n\t]/g, " ")
           .trim()
@@ -1017,17 +1017,17 @@ class TreeList implements Component {
         return `[bash: ${cmd}${rawCmd.length > 50 ? "..." : ""}]`;
       }
       case "grep": {
-        const pattern = String(args.pattern || "");
-        const path = shortenPath(String(args.path || "."));
+        const pattern = String(args["pattern"] || "");
+        const path = shortenPath(String(args["path"] || "."));
         return `[grep: /${pattern}/ in ${path}]`;
       }
       case "find": {
-        const pattern = String(args.pattern || "");
-        const path = shortenPath(String(args.path || "."));
+        const pattern = String(args["pattern"] || "");
+        const path = shortenPath(String(args["path"] || "."));
         return `[find: ${pattern} in ${path}]`;
       }
       case "ls": {
-        const path = shortenPath(String(args.path || "."));
+        const path = shortenPath(String(args["path"] || "."));
         return `[ls: ${path}]`;
       }
       default: {

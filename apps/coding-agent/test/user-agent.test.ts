@@ -4,8 +4,8 @@ import { getMsaUserAgent } from "../src/utils/user-agent.ts";
 
 describe("getMsaUserAgent", () => {
   it("formats the user agent expected by pi.dev", () => {
-    const runtime = process.versions.bun
-      ? `bun/${process.versions.bun}`
+    const runtime = process.versions["bun"]
+      ? `bun/${process.versions["bun"]}`
       : `node/${process.version}`;
     const userAgent = getMsaUserAgent("1.2.3");
 

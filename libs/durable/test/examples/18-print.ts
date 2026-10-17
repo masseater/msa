@@ -24,7 +24,7 @@ const prompt = process.argv[2] ?? "What is in this directory?";
 
 const models = createModels();
 let model = { provider: "openai", modelId: "gpt-6-sol" };
-if (process.env.OPENAI_API_KEY !== undefined) {
+if (process.env["OPENAI_API_KEY"] !== undefined) {
   models.setProvider(openaiProvider());
 } else {
   const faux = fauxProvider();

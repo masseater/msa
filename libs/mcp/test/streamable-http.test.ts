@@ -56,7 +56,7 @@ async function protocolHandler(
     response.end();
     return;
   }
-  if (message.method === "initialize") {
+  if (message["method"] === "initialize") {
     response.writeHead(200, {
       "content-type": "application/json",
       "mcp-session-id": "session-1",
@@ -64,7 +64,7 @@ async function protocolHandler(
     response.end(
       JSON.stringify({
         jsonrpc: "2.0",
-        id: message.id,
+        id: message["id"],
         result: {
           protocolVersion: LATEST_PROTOCOL_VERSION,
           capabilities: { tools: {} },
@@ -74,12 +74,12 @@ async function protocolHandler(
     );
     return;
   }
-  if (message.method === "tools/list") {
+  if (message["method"] === "tools/list") {
     response.setHeader("content-type", "application/json");
     response.end(
       JSON.stringify({
         jsonrpc: "2.0",
-        id: message.id,
+        id: message["id"],
         result: { tools: [{ name: "echo", inputSchema: { type: "object" } }] },
       }),
     );
@@ -88,7 +88,7 @@ async function protocolHandler(
   response.writeHead(200, { "content-type": "text/event-stream" });
   response.write("id: tool-result\n");
   response.end(
-    `data: ${JSON.stringify({ jsonrpc: "2.0", id: message.id, result: { content: [{ type: "text", text: "hello" }] } })}\n\n`,
+    `data: ${JSON.stringify({ jsonrpc: "2.0", id: message["id"], result: { content: [{ type: "text", text: "hello" }] } })}\n\n`,
   );
 }
 
@@ -139,7 +139,7 @@ describe("StreamableHttpTransport", () => {
     });
     await client.close();
 
-    const listRequest = requests.find((entry) => entry.message?.method === "tools/list");
+    const listRequest = requests.find((entry) => entry.message?.["method"] === "tools/list");
     expect(listRequest?.headers["mcp-session-id"]).toBe("session-1");
     expect(listRequest?.headers["mcp-protocol-version"]).toBe(LATEST_PROTOCOL_VERSION);
     expect(requests.some((entry) => entry.method === "GET")).toBe(true);
@@ -171,7 +171,7 @@ describe("StreamableHttpTransport", () => {
     const { url } = await startServer(async (request, response, requests) => {
       if (request.method !== "POST") return protocolHandler(request, response, requests);
       const message = JSON.parse(await readBody(request)) as Record<string, unknown>;
-      const name = (message.params as { name?: string } | undefined)?.name;
+      const name = (message["params"] as { name?: string } | undefined)?.name;
       if (name === "broken") {
         response.writeHead(200, { "content-type": "text/event-stream" });
         response.end("data: not json\n\n");
@@ -198,7 +198,7 @@ describe("StreamableHttpTransport", () => {
     const { url, requests } = await startServer(async (request, response, requests) => {
       if (request.method === "POST") {
         const message = JSON.parse(await readBody(request)) as Record<string, unknown>;
-        order.push(String(message.method));
+        order.push(String(message["method"]));
         return protocolHandler(request, response, requests, message);
       }
       order.push(request.method ?? "");
@@ -226,7 +226,7 @@ describe("StreamableHttpTransport", () => {
       }
       if (request.method !== "POST") return protocolHandler(request, response, requests);
       const message = JSON.parse(await readBody(request)) as Record<string, unknown>;
-      if (message.method !== "tools/call")
+      if (message["method"] !== "tools/call")
         return protocolHandler(request, response, requests, message);
       // Priming event (ID, no data) and a retry hint, then the server drops the stream.
       response.writeHead(200, { "content-type": "text/event-stream" });
@@ -246,7 +246,7 @@ describe("StreamableHttpTransport", () => {
     const { url } = await startServer(async (request, response, requests) => {
       if (request.method !== "POST") return protocolHandler(request, response, requests);
       const message = JSON.parse(await readBody(request)) as Record<string, unknown>;
-      if (message.method !== "tools/call")
+      if (message["method"] !== "tools/call")
         return protocolHandler(request, response, requests, message);
       response.writeHead(200, { "content-type": "text/event-stream" });
       response.end(": nothing here\n\n");
@@ -291,7 +291,7 @@ describe("StreamableHttpTransport", () => {
     const { url } = await startServer(async (request, response, requests) => {
       if (request.method !== "POST") return protocolHandler(request, response, requests);
       const message = JSON.parse(await readBody(request)) as Record<string, unknown>;
-      if (message.method !== "tools/call")
+      if (message["method"] !== "tools/call")
         return protocolHandler(request, response, requests, message);
       response.statusCode = 202;
       response.end();
@@ -324,7 +324,7 @@ describe("StreamableHttpTransport", () => {
         response.writeHead(401, { "www-authenticate": "Bearer" }).end();
         return;
       }
-      if (message.method === "tools/call" && request.headers.authorization === "Bearer new") {
+      if (message["method"] === "tools/call" && request.headers.authorization === "Bearer new") {
         response
           .writeHead(403, {
             "www-authenticate": 'Bearer error="insufficient_scope", scope="admin"',
@@ -364,11 +364,12 @@ describe("StreamableHttpTransport", () => {
     const { url } = await startServer(async (request, response, requests) => {
       if (request.method !== "POST") return protocolHandler(request, response, requests);
       const message = JSON.parse(await readBody(request)) as Record<string, unknown>;
-      if (message.method === "tools/call" && request.headers.authorization === "Bearer old") {
+      if (message["method"] === "tools/call" && request.headers.authorization === "Bearer old") {
         response.writeHead(401, { "www-authenticate": "Bearer" }).end();
         return;
       }
-      if (message.method === "tools/call") executed.push((message.params as { name: string }).name);
+      if (message["method"] === "tools/call")
+        executed.push((message["params"] as { name: string }).name);
       return protocolHandler(request, response, requests, message);
     });
     let releaseRefresh = () => {};

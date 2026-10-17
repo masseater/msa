@@ -46,13 +46,13 @@ async function readToken(path: string): Promise<string | undefined> {
 export async function findHuggingFaceToken(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<string | undefined> {
-  const fromEnvironment = env.HF_TOKEN?.trim();
+  const fromEnvironment = env["HF_TOKEN"]?.trim();
   if (fromEnvironment) return fromEnvironment;
 
   const paths = [
-    env.HF_TOKEN_PATH,
-    env.HF_HOME ? join(env.HF_HOME, "token") : undefined,
-    env.XDG_CACHE_HOME ? join(env.XDG_CACHE_HOME, "huggingface", "token") : undefined,
+    env["HF_TOKEN_PATH"],
+    env["HF_HOME"] ? join(env["HF_HOME"], "token") : undefined,
+    env["XDG_CACHE_HOME"] ? join(env["XDG_CACHE_HOME"], "huggingface", "token") : undefined,
     join(homedir(), ".cache", "huggingface", "token"),
   ].filter((path): path is string => Boolean(path));
   for (const path of new Set(paths)) {

@@ -428,19 +428,19 @@ function toMistralWirePayload(payload: MistralChatPayload): Record<string, unkno
   ] as const) {
     remapMistralProperty(wirePayload, source, target);
   }
-  wirePayload.messages = payload.messages.map((message) => toMistralWireMessage(message));
+  wirePayload["messages"] = payload.messages.map((message) => toMistralWireMessage(message));
 
-  const responseFormat = wirePayload.response_format;
+  const responseFormat = wirePayload["response_format"];
   if (isMistralRecord(responseFormat)) {
     const wireResponseFormat = { ...responseFormat };
     remapMistralProperty(wireResponseFormat, "jsonSchema", "json_schema");
-    const jsonSchema = wireResponseFormat.json_schema;
+    const jsonSchema = wireResponseFormat["json_schema"];
     if (isMistralRecord(jsonSchema)) {
       const wireJsonSchema = { ...jsonSchema };
       remapMistralProperty(wireJsonSchema, "schemaDefinition", "schema");
-      wireResponseFormat.json_schema = wireJsonSchema;
+      wireResponseFormat["json_schema"] = wireJsonSchema;
     }
-    wirePayload.response_format = wireResponseFormat;
+    wirePayload["response_format"] = wireResponseFormat;
   }
 
   return wirePayload;
@@ -451,7 +451,7 @@ function toMistralWireMessage(message: MistralChatMessage): Record<string, unkno
   remapMistralProperty(wireMessage, "toolCalls", "tool_calls");
   remapMistralProperty(wireMessage, "toolCallId", "tool_call_id");
   if (Array.isArray(message.content)) {
-    wireMessage.content = message.content.map((chunk) => toMistralWireContentChunk(chunk));
+    wireMessage["content"] = message.content.map((chunk) => toMistralWireContentChunk(chunk));
   }
   return wireMessage;
 }
@@ -551,7 +551,7 @@ function parseMistralEvent(
   if (data === "[DONE]") return MISTRAL_STREAM_DONE;
 
   const parsed: unknown = JSON.parse(data);
-  if (!isMistralRecord(parsed) || !Array.isArray(parsed.choices)) {
+  if (!isMistralRecord(parsed) || !Array.isArray(parsed["choices"])) {
     throw new Error("Invalid Mistral streaming event");
   }
   return { data: parsed as MistralCompletionEvent["data"] };

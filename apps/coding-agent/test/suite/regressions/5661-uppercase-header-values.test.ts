@@ -79,7 +79,7 @@ describe("regression #5661: uppercase models.json header values", () => {
       providers: Record<string, { apiKey?: string; headers?: Record<string, string> }>;
     };
     expect(migrated.providers["my-provider"]?.apiKey).toBe("CUSTOM_API_KEY");
-    expect(migrated.providers["my-provider"]?.headers?.Authorization).toBe("BEARER");
+    expect(migrated.providers["my-provider"]?.headers?.["Authorization"]).toBe("BEARER");
 
     const registry = await createModelRegistry(
       AuthStorage.create(join(harness.tempDir, "auth.json")),

@@ -1551,7 +1551,7 @@ function processZaiModels(data: ModelsDevCatalog): Model<Api>[] {
         thinkingLevelMap.off = "none";
       }
       const supportsReasoningEffort = thinkingLevelMap !== undefined;
-      const referenceCost = data.zai?.models?.[modelId]?.cost ?? m.cost;
+      const referenceCost = data["zai"]?.models?.[modelId]?.cost ?? m.cost;
 
       models.push({
         id: modelId,
@@ -1676,7 +1676,7 @@ function processBasetenModels(provider: ModelsDevProvider | undefined): Model<Ap
 
 function processGoogleModels(data: ModelsDevCatalog): Model<Api>[] {
   const models: Model<Api>[] = [];
-  const googleModels = data.google?.models;
+  const googleModels = data["google"]?.models;
   if (googleModels) {
     for (const [modelId, model] of Object.entries(googleModels)) {
       if (model.tool_call !== true) continue;
@@ -1891,7 +1891,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     const data = (await response.json()) as ModelsDevCatalog;
 
     const models: Model<any>[] = [];
-    const nvidiaNimModelIds = data.nvidia?.models
+    const nvidiaNimModelIds = data["nvidia"]?.models
       ? await fetchNvidiaNimModelIds()
       : new Map<string, string>();
 
@@ -1936,8 +1936,8 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     }
 
     // Process Anthropic models
-    if (data.anthropic?.models) {
-      for (const [modelId, model] of Object.entries(data.anthropic.models)) {
+    if (data["anthropic"]?.models) {
+      for (const [modelId, model] of Object.entries(data["anthropic"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
 
@@ -1960,8 +1960,8 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     models.push(...processGoogleModels(data));
 
     // Process OpenAI models
-    if (data.openai?.models) {
-      for (const [modelId, model] of Object.entries(data.openai.models)) {
+    if (data["openai"]?.models) {
+      for (const [modelId, model] of Object.entries(data["openai"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
         // models.dev lists this alias, but it is not accepted by OpenAI APIs.
@@ -1984,8 +1984,8 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     }
 
     // Process Groq models
-    if (data.groq?.models) {
-      for (const [modelId, model] of Object.entries(data.groq.models)) {
+    if (data["groq"]?.models) {
+      for (const [modelId, model] of Object.entries(data["groq"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
 
@@ -2006,8 +2006,8 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     }
 
     // Process Cerebras models
-    if (data.cerebras?.models) {
-      for (const [modelId, model] of Object.entries(data.cerebras.models)) {
+    if (data["cerebras"]?.models) {
+      for (const [modelId, model] of Object.entries(data["cerebras"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
 
@@ -2140,8 +2140,8 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     }
 
     // Process xAi models
-    if (data.xai?.models) {
-      for (const [modelId, model] of Object.entries(data.xai.models)) {
+    if (data["xai"]?.models) {
+      for (const [modelId, model] of Object.entries(data["xai"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
 
@@ -2163,8 +2163,8 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     }
 
     // Process Meta models
-    if (data.meta?.models) {
-      for (const [modelId, model] of Object.entries(data.meta.models)) {
+    if (data["meta"]?.models) {
+      for (const [modelId, model] of Object.entries(data["meta"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
 
@@ -2187,8 +2187,8 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     models.push(...processZaiModels(data));
 
     // Process Mistral models
-    if (data.mistral?.models) {
-      for (const [modelId, model] of Object.entries(data.mistral.models)) {
+    if (data["mistral"]?.models) {
+      for (const [modelId, model] of Object.entries(data["mistral"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
 
@@ -2218,8 +2218,8 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     }
 
     // Process Hugging Face models
-    if (data.huggingface?.models) {
-      for (const [modelId, model] of Object.entries(data.huggingface.models)) {
+    if (data["huggingface"]?.models) {
+      for (const [modelId, model] of Object.entries(data["huggingface"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
 
@@ -2245,8 +2245,8 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     models.push(...processFireworksModels(data["fireworks-ai"]));
 
     // Process NVIDIA NIM models
-    if (data.nvidia?.models) {
-      for (const [modelId, model] of Object.entries(data.nvidia.models)) {
+    if (data["nvidia"]?.models) {
+      for (const [modelId, model] of Object.entries(data["nvidia"].models)) {
         const m = model as ModelsDevModel;
         if (m.tool_call !== true) continue;
         if (!m.modalities?.input?.includes("text")) continue;
@@ -2276,7 +2276,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
     }
 
     // Process Together AI models
-    const togetherProvider = data.together ?? data.togetherai ?? data["together-ai"];
+    const togetherProvider = data["together"] ?? data["togetherai"] ?? data["together-ai"];
     if (togetherProvider?.models) {
       for (const [modelId, model] of Object.entries(togetherProvider.models)) {
         const m = model as ModelsDevModel;
@@ -2303,7 +2303,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
       }
     }
 
-    models.push(...processBasetenModels(data.baseten));
+    models.push(...processBasetenModels(data["baseten"]));
 
     // Process OpenCode models (Zen and Go)
     // API mapping based on provider.npm field:

@@ -101,7 +101,7 @@ async function captureAnthropicRequest(
 }
 
 function getFirstTool(body: Record<string, unknown>): Record<string, unknown> {
-  const tools = body.tools;
+  const tools = body["tools"];
   if (!Array.isArray(tools) || typeof tools[0] !== "object" || tools[0] === null) {
     throw new Error("Expected first tool in request body");
   }
@@ -112,7 +112,7 @@ describe("Anthropic eager tool input streaming compatibility", () => {
   it("sends per-tool eager_input_streaming by default", async () => {
     const request = await captureAnthropicRequest(undefined, createContext());
 
-    expect(getFirstTool(request.body).eager_input_streaming).toBe(true);
+    expect(getFirstTool(request.body)["eager_input_streaming"]).toBe(true);
     expect(request.headers["anthropic-beta"]).toBeUndefined();
   });
 
@@ -122,7 +122,7 @@ describe("Anthropic eager tool input streaming compatibility", () => {
       createContext(),
     );
 
-    expect(getFirstTool(request.body).eager_input_streaming).toBeUndefined();
+    expect(getFirstTool(request.body)["eager_input_streaming"]).toBeUndefined();
     expect(request.headers["anthropic-beta"]).toBe("fine-grained-tool-streaming-2025-05-14");
   });
 
@@ -132,7 +132,7 @@ describe("Anthropic eager tool input streaming compatibility", () => {
       createContext([]),
     );
 
-    expect(request.body.tools).toBeUndefined();
+    expect(request.body["tools"]).toBeUndefined();
     expect(request.headers["anthropic-beta"]).toBeUndefined();
   });
 });

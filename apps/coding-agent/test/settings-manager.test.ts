@@ -465,15 +465,15 @@ describe("SettingsManager", () => {
   });
 
   describe("externalEditor", () => {
-    const originalVisual = process.env.VISUAL;
-    const originalEditor = process.env.EDITOR;
+    const originalVisual = process.env["VISUAL"];
+    const originalEditor = process.env["EDITOR"];
     const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
 
     function setEditorEnv(visual?: string, editor?: string): void {
-      if (visual === undefined) delete process.env.VISUAL;
-      else process.env.VISUAL = visual;
-      if (editor === undefined) delete process.env.EDITOR;
-      else process.env.EDITOR = editor;
+      if (visual === undefined) delete process.env["VISUAL"];
+      else process.env["VISUAL"] = visual;
+      if (editor === undefined) delete process.env["EDITOR"];
+      else process.env["EDITOR"] = editor;
     }
 
     afterEach(() => {

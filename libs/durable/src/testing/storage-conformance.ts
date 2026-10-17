@@ -261,8 +261,8 @@ export function createStorageConformance(
           context,
         );
 
-        (Reflect.get(data, "__proto__") as Record<string, JsonValue>).polluted = true;
-        (Reflect.get(data, "constructor") as Record<string, JsonValue>).label = "mutated";
+        (Reflect.get(data, "__proto__") as Record<string, JsonValue>)["polluted"] = true;
+        (Reflect.get(data, "constructor") as Record<string, JsonValue>)["label"] = "mutated";
         const firstRead = (await storage.entry(entryId, context))!.entry.data as Record<
           string,
           JsonValue
@@ -274,7 +274,7 @@ export function createStorageConformance(
         expect(Reflect.get(firstRead, "toString")).toBe("value");
         expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
 
-        (Reflect.get(firstRead, "__proto__") as Record<string, JsonValue>).polluted = true;
+        (Reflect.get(firstRead, "__proto__") as Record<string, JsonValue>)["polluted"] = true;
         const secondRead = (await storage.entry(entryId, context))!.entry.data as Record<
           string,
           JsonValue
@@ -1012,7 +1012,7 @@ export function createStorageConformance(
           context,
         );
 
-        (initial.items as string[]).push("caller mutation");
+        (initial["items"] as string[]).push("caller mutation");
         appended.push("caller mutation");
         expect(await storage.document(firstId, createdAt, context)).toMatchObject({
           version: 1,
@@ -1022,7 +1022,7 @@ export function createStorageConformance(
         const changed = (await storage.document(firstId, changedAt, context))!;
         expect(changed.value).toEqual({ items: ["a", "b"], nested: { count: 2 } });
         expect(changed.deltasSinceBase).toBe(1);
-        (changed.value.items as string[]).push("read mutation");
+        (changed.value["items"] as string[]).push("read mutation");
         expect((await storage.document(firstId, "current", context))?.value).toEqual({
           items: ["a", "b"],
           nested: { count: 2 },
@@ -1226,7 +1226,7 @@ export function createStorageConformance(
         );
         const read = (await storage.document(id, "current", context))!;
         expect(read.value).toEqual(current);
-        (read.value.rows as Array<{ value: number }>)[0]!.value = -1_000;
+        (read.value["rows"] as Array<{ value: number }>)[0]!.value = -1_000;
         expect((await storage.document(id, "current", context))?.value).toEqual(current);
       },
     ),

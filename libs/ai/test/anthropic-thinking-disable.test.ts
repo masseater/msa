@@ -167,7 +167,7 @@ describe("Anthropic thinking disable payload", () => {
   });
 });
 
-describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic thinking disable E2E", () => {
+describe.skipIf(!process.env["ANTHROPIC_API_KEY"])("Anthropic thinking disable E2E", () => {
   it("disables thinking for Claude reasoning models", { retry: 2, timeout: 30000 }, async () => {
     const result = await runWithoutReasoning(getModel("anthropic", "claude-sonnet-4-5"));
 

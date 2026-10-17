@@ -14,7 +14,7 @@ const testTool: Tool<typeof testToolSchema> = {
   parameters: testToolSchema,
 };
 
-describe.skipIf(!process.env.OPENAI_API_KEY || !process.env.ANTHROPIC_API_KEY)(
+describe.skipIf(!process.env["OPENAI_API_KEY"] || !process.env["ANTHROPIC_API_KEY"])(
   "OpenAI Responses reasoning replay e2e",
   () => {
     it("skips reasoning-only history after an aborted turn", { retry: 2 }, async () => {

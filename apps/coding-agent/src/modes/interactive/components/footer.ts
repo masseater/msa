@@ -182,7 +182,7 @@ export class FooterComponent implements Component {
     // Replace home directory with ~
     let pwd = formatCwdForFooter(
       this.session.sessionManager.getCwd(),
-      process.env.HOME || process.env.USERPROFILE,
+      process.env["HOME"] || process.env["USERPROFILE"],
     );
 
     // Add git branch if available

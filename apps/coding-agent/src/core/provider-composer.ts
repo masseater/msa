@@ -557,7 +557,7 @@ function composeOAuthAuth(
     ...oauth,
     toAuth: async (credential) => {
       const auth = await oauth.toAuth(credential);
-      const env = credential.env;
+      const env = credential["env"];
       const headers = resolveHeadersOrThrow(
         rawHeaders,
         `provider "${providerId}"`,

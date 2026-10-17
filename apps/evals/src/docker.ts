@@ -75,8 +75,8 @@ function environment(name: string, value: string): string[] {
 
 export function requireEvalAuthFile(provider: string): string {
   const path = join(
-    process.env.MSA_CODING_AGENT_DIR
-      ? resolve(process.env.MSA_CODING_AGENT_DIR)
+    process.env["MSA_CODING_AGENT_DIR"]
+      ? resolve(process.env["MSA_CODING_AGENT_DIR"])
       : join(homedir(), ".msa", "agent"),
     "auth.json",
   );

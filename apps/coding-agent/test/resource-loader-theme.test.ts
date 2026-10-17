@@ -39,7 +39,7 @@ describe("DefaultResourceLoader theme color mode", () => {
       ),
     ) as TestThemeJson;
     themeJson.name = "capability-test";
-    themeJson.colors.userMessageBg = "#3c3544";
+    themeJson.colors["userMessageBg"] = "#3c3544";
     themePath = join(tempDir, "capability-test.json");
     writeFileSync(themePath, JSON.stringify(themeJson));
   });

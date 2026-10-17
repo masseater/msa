@@ -262,7 +262,7 @@ describe("nested tool calls", () => {
     addHooks(setup.registry, ToolTask, {
       beforeTool: (hookCall) => {
         parents.push(hookCall.parent);
-        return hookCall.parent !== undefined && hookCall.arguments.text === "secret"
+        return hookCall.parent !== undefined && hookCall.arguments["text"] === "secret"
           ? { block: "no secrets" }
           : undefined;
       },

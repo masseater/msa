@@ -43,10 +43,10 @@ function asCalculatorArguments(args: ToolCall["arguments"]): CalculatorArguments
   }
 
   const value = args as Record<string, unknown>;
-  const operation = value.operation;
+  const operation = value["operation"];
   if (
-    typeof value.a !== "number" ||
-    typeof value.b !== "number" ||
+    typeof value["a"] !== "number" ||
+    typeof value["b"] !== "number" ||
     (operation !== "add" &&
       operation !== "subtract" &&
       operation !== "multiply" &&
@@ -55,7 +55,7 @@ function asCalculatorArguments(args: ToolCall["arguments"]): CalculatorArguments
     throw new Error("Invalid calculator arguments");
   }
 
-  return { a: value.a, b: value.b, operation };
+  return { a: value["a"], b: value["b"], operation };
 }
 
 function evaluateCalculatorCall(toolCall: ToolCall): number {

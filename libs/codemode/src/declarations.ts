@@ -184,8 +184,8 @@ function toType(schema: CodemodeJsonSchema, context: SchemaContext): string {
   if (schema === true) return "unknown";
   if (schema === false) return "never";
   if (typeof schema !== "object" || schema === null || Array.isArray(schema)) return "unknown";
-  if (typeof schema.$ref === "string") {
-    const ref = schema.$ref;
+  if (typeof schema["$ref"] === "string") {
+    const ref = schema["$ref"];
     if (context.resolving.has(ref) || context.expansions >= MAX_REF_EXPANSIONS) return "unknown";
     const target = resolveRef(ref, context.root);
     if (target === undefined) return "unknown";
@@ -198,19 +198,19 @@ function toType(schema: CodemodeJsonSchema, context: SchemaContext): string {
     }
   }
 
-  if ("const" in schema) return JSON.stringify(schema.const) ?? "unknown";
-  if (Array.isArray(schema.enum))
-    return union(schema.enum.map((value) => JSON.stringify(value) ?? "unknown"));
+  if ("const" in schema) return JSON.stringify(schema["const"]) ?? "unknown";
+  if (Array.isArray(schema["enum"]))
+    return union(schema["enum"].map((value) => JSON.stringify(value) ?? "unknown"));
 
-  const variants = Array.isArray(schema.anyOf)
-    ? schema.anyOf
-    : Array.isArray(schema.oneOf)
-      ? schema.oneOf
+  const variants = Array.isArray(schema["anyOf"])
+    ? schema["anyOf"]
+    : Array.isArray(schema["oneOf"])
+      ? schema["oneOf"]
       : undefined;
   if (variants)
     return union(variants.map((variant) => toType(variant as CodemodeJsonSchema, context)));
-  if (Array.isArray(schema.allOf)) {
-    const parts = schema.allOf
+  if (Array.isArray(schema["allOf"])) {
+    const parts = schema["allOf"]
       .map((part) => toType(part as CodemodeJsonSchema, context))
       .filter((part) => part !== "unknown");
     return parts.length === 0
@@ -218,7 +218,7 @@ function toType(schema: CodemodeJsonSchema, context: SchemaContext): string {
       : parts.map((part) => (part.includes(" | ") ? `(${part})` : part)).join(" & ");
   }
 
-  const type = schema.type;
+  const type = schema["type"];
   if (Array.isArray(type))
     return union(type.map((entry) => toType({ ...schema, type: entry }, context)));
   switch (type) {
@@ -247,13 +247,13 @@ function toType(schema: CodemodeJsonSchema, context: SchemaContext): string {
 }
 
 function arrayType(schema: Record<string, unknown>, context: SchemaContext): string {
-  if (schema.items !== undefined && !Array.isArray(schema.items)) {
-    return `Array<${toType(schema.items as CodemodeJsonSchema, context)}>`;
+  if (schema["items"] !== undefined && !Array.isArray(schema["items"])) {
+    return `Array<${toType(schema["items"] as CodemodeJsonSchema, context)}>`;
   }
-  const tuple = Array.isArray(schema.prefixItems)
-    ? schema.prefixItems
-    : Array.isArray(schema.items)
-      ? schema.items
+  const tuple = Array.isArray(schema["prefixItems"])
+    ? schema["prefixItems"]
+    : Array.isArray(schema["items"])
+      ? schema["items"]
       : [];
   if (tuple.length > 0)
     return `[${tuple.map((item) => toType(item as CodemodeJsonSchema, context)).join(", ")}]`;
@@ -274,7 +274,7 @@ function constraintTags(schema: unknown): string {
   const property = schema as Record<string, unknown>;
   // Optional fields such as Pydantic's `int | None` keep their constraints in the non-null branch.
   // The branch's constraints apply together with the property's, so both are read.
-  const variants = Array.isArray(property.anyOf) ? property.anyOf : property.oneOf;
+  const variants = Array.isArray(property["anyOf"]) ? property["anyOf"] : property["oneOf"];
   const nonNull: unknown[] = Array.isArray(variants)
     ? variants.filter((variant) => (variant as { type?: unknown } | null)?.type !== "null")
     : [];
@@ -286,18 +286,18 @@ function constraintTags(schema: unknown): string {
   // Draft-04 and OpenAPI 3.0 make `minimum`/`maximum` exclusive with a boolean `exclusiveMinimum`/`exclusiveMaximum`.
   const schemas = branches.map((candidate): Record<string, unknown> => ({
     ...candidate,
-    ...(candidate.exclusiveMinimum === true
-      ? { minimum: undefined, exclusiveMinimum: candidate.minimum }
+    ...(candidate["exclusiveMinimum"] === true
+      ? { minimum: undefined, exclusiveMinimum: candidate["minimum"] }
       : {}),
-    ...(candidate.exclusiveMaximum === true
-      ? { maximum: undefined, exclusiveMaximum: candidate.maximum }
+    ...(candidate["exclusiveMaximum"] === true
+      ? { maximum: undefined, exclusiveMaximum: candidate["maximum"] }
       : {}),
   }));
 
   const tags: string[] = [];
   const isInteger = (type: unknown) =>
     type === "integer" || (Array.isArray(type) && type.includes("integer"));
-  if (schemas.some((normalized) => isInteger(normalized.type))) tags.push("@integer");
+  if (schemas.some((normalized) => isInteger(normalized["type"]))) tags.push("@integer");
   for (const keyword of TAG_KEYWORDS) {
     const values = schemas.map((normalized) => normalized[keyword]);
     if (LOWER_BOUNDS.has(keyword) || UPPER_BOUNDS.has(keyword)) {
@@ -312,12 +312,12 @@ function constraintTags(schema: unknown): string {
       if (typeof value === "number" || typeof value === "string") tags.push(`@${keyword} ${value}`);
     }
   }
-  if (schemas.some((normalized) => normalized.uniqueItems === true)) tags.push("@uniqueItems");
+  if (schemas.some((normalized) => normalized["uniqueItems"] === true)) tags.push("@uniqueItems");
   // Annotations, unlike constraints, come from the property itself.
-  if (property.default !== undefined && property.default !== null) {
-    tags.push(`@default ${JSON.stringify(property.default)}`);
+  if (property["default"] !== undefined && property["default"] !== null) {
+    tags.push(`@default ${JSON.stringify(property["default"])}`);
   }
-  if (property.deprecated === true) tags.push("@deprecated");
+  if (property["deprecated"] === true) tags.push("@deprecated");
   return tags
     .filter((tag) => tag.length <= MAX_TAG_CHARS)
     .map((tag) =>
@@ -331,18 +331,18 @@ function constraintTags(schema: unknown): string {
 
 function objectType(schema: Record<string, unknown>, context: SchemaContext): string {
   const properties =
-    typeof schema.properties === "object" &&
-    schema.properties !== null &&
-    !Array.isArray(schema.properties)
-      ? (schema.properties as Record<string, unknown>)
+    typeof schema["properties"] === "object" &&
+    schema["properties"] !== null &&
+    !Array.isArray(schema["properties"])
+      ? (schema["properties"] as Record<string, unknown>)
       : {};
-  const required = new Set(Array.isArray(schema.required) ? schema.required : []);
+  const required = new Set(Array.isArray(schema["required"]) ? schema["required"] : []);
   const names = Object.keys(properties).sort();
   const members = names.map((name) => {
     const optional = required.has(name) ? "" : "?";
     return `${propertyKey(name)}${optional}: ${toType(properties[name] as CodemodeJsonSchema, context)};`;
   });
-  const additional = schema.additionalProperties;
+  const additional = schema["additionalProperties"];
   if (additional !== undefined && additional !== false) {
     const type =
       additional === true ? "unknown" : toType(additional as CodemodeJsonSchema, context);

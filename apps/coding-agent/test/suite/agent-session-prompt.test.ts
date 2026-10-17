@@ -621,7 +621,7 @@ describe("AgentSession prompt characterization", () => {
           (msa) => {
             msa.on("before_agent_start", (event) => {
               events.push(event);
-              event.systemPromptOptions.sections.extension_rules = "Answer in one word.";
+              event.systemPromptOptions.sections["extension_rules"] = "Answer in one word.";
             });
           },
         ],

@@ -29,9 +29,10 @@ export function formatMcpLogMessage(
   now: Date = new Date(),
 ): string {
   const message = isRecord(params) ? params : { data: params };
-  const level = typeof message.level === "string" ? message.level : "info";
-  const logger = typeof message.logger === "string" && message.logger ? ` ${message.logger}:` : "";
-  const text = formatData(message.data).replace(/\r?\n/g, "\n    ");
+  const level = typeof message["level"] === "string" ? message["level"] : "info";
+  const logger =
+    typeof message["logger"] === "string" && message["logger"] ? ` ${message["logger"]}:` : "";
+  const text = formatData(message["data"]).replace(/\r?\n/g, "\n    ");
   return `${now.toISOString()} [${server}] ${level}${logger} ${text}\n`;
 }
 

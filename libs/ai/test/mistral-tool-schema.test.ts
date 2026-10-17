@@ -52,12 +52,12 @@ describe("Mistral tool schema serialization", () => {
     const payloadParameters = capturedPayload?.tools?.[0]?.function.parameters;
     expect(payloadParameters).toBeDefined();
     expect(Object.getOwnPropertySymbols(payloadParameters ?? {})).toHaveLength(0);
-    const properties = payloadParameters?.properties;
+    const properties = payloadParameters?.["properties"];
     expect(properties).toBeTruthy();
     expect(
       Object.getOwnPropertySymbols((properties as Record<string, unknown>) ?? {}),
     ).toHaveLength(0);
-    const nested = (properties as Record<string, unknown> | undefined)?.nested;
+    const nested = (properties as Record<string, unknown> | undefined)?.["nested"];
     expect(nested).toBeTruthy();
     expect(Object.getOwnPropertySymbols((nested as Record<string, unknown>) ?? {})).toHaveLength(0);
     expect(response.stopReason).toBe("error");

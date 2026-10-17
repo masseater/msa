@@ -30,13 +30,13 @@ describe("restoreSandboxEnv", () => {
     Object.defineProperty(process, "versions", {
       value: { bun: "1.2.0", node: "20.0.0" },
     });
-    process.env.RESTORE_SANDBOX_ENV_TEST = "1";
+    process.env["RESTORE_SANDBOX_ENV_TEST"] = "1";
     const envBefore = { ...process.env };
 
     restoreSandboxEnv();
 
     expect(process.env).toEqual(envBefore);
-    delete process.env.RESTORE_SANDBOX_ENV_TEST;
+    delete process.env["RESTORE_SANDBOX_ENV_TEST"];
 
     if (originalVersions) {
       Object.defineProperty(process, "versions", originalVersions);
@@ -60,8 +60,8 @@ describe("restoreSandboxEnv", () => {
     restoreSandboxEnv();
 
     expect(readFileSync).toHaveBeenCalledWith("/proc/self/environ", "utf-8");
-    expect(process.env.FOO).toBe("bar");
-    expect(process.env.BAZ).toBe("qux");
+    expect(process.env["FOO"]).toBe("bar");
+    expect(process.env["BAZ"]).toBe("qux");
 
     // Restore.
     for (const key of Object.keys(process.env)) {

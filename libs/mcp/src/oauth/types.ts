@@ -142,43 +142,46 @@ export function parseProtectedResourceMetadata(value: unknown): OAuthProtectedRe
   const input = object(value, "OAuth protected resource metadata");
   return compact({
     ...input,
-    resource: safeUrl(input.resource, "OAuth protected resource metadata resource"),
+    resource: safeUrl(input["resource"], "OAuth protected resource metadata resource"),
     authorization_servers: optionalStrings(
-      input.authorization_servers,
+      input["authorization_servers"],
       "authorization_servers",
     )?.map((url) => safeUrl(url, "authorization server URL")),
-    scopes_supported: optionalStrings(input.scopes_supported, "scopes_supported"),
+    scopes_supported: optionalStrings(input["scopes_supported"], "scopes_supported"),
   });
 }
 
 export function parseAuthorizationServerMetadata(value: unknown): AuthorizationServerMetadata {
   const input = object(value, "authorization server metadata");
-  const responseTypes = optionalStrings(input.response_types_supported, "response_types_supported");
+  const responseTypes = optionalStrings(
+    input["response_types_supported"],
+    "response_types_supported",
+  );
   if (!responseTypes) throw new Error("Invalid response_types_supported");
   return compact({
     ...input,
-    issuer: safeUrl(input.issuer, "authorization server issuer"),
-    authorization_endpoint: safeUrl(input.authorization_endpoint, "authorization endpoint"),
-    token_endpoint: safeUrl(input.token_endpoint, "token endpoint"),
-    registration_endpoint: optionalUrl(input.registration_endpoint, "registration endpoint"),
-    scopes_supported: optionalStrings(input.scopes_supported, "scopes_supported"),
+    issuer: safeUrl(input["issuer"], "authorization server issuer"),
+    authorization_endpoint: safeUrl(input["authorization_endpoint"], "authorization endpoint"),
+    token_endpoint: safeUrl(input["token_endpoint"], "token endpoint"),
+    registration_endpoint: optionalUrl(input["registration_endpoint"], "registration endpoint"),
+    scopes_supported: optionalStrings(input["scopes_supported"], "scopes_supported"),
     response_types_supported: responseTypes,
-    grant_types_supported: optionalStrings(input.grant_types_supported, "grant_types_supported"),
+    grant_types_supported: optionalStrings(input["grant_types_supported"], "grant_types_supported"),
     token_endpoint_auth_methods_supported: optionalStrings(
-      input.token_endpoint_auth_methods_supported,
+      input["token_endpoint_auth_methods_supported"],
       "token_endpoint_auth_methods_supported",
     ),
     code_challenge_methods_supported: optionalStrings(
-      input.code_challenge_methods_supported,
+      input["code_challenge_methods_supported"],
       "code_challenge_methods_supported",
     ),
     client_id_metadata_document_supported:
-      typeof input.client_id_metadata_document_supported === "boolean"
-        ? input.client_id_metadata_document_supported
+      typeof input["client_id_metadata_document_supported"] === "boolean"
+        ? input["client_id_metadata_document_supported"]
         : undefined,
     authorization_response_iss_parameter_supported:
-      typeof input.authorization_response_iss_parameter_supported === "boolean"
-        ? input.authorization_response_iss_parameter_supported
+      typeof input["authorization_response_iss_parameter_supported"] === "boolean"
+        ? input["authorization_response_iss_parameter_supported"]
         : undefined,
   });
 }
@@ -186,15 +189,15 @@ export function parseAuthorizationServerMetadata(value: unknown): AuthorizationS
 export function parseOAuthTokens(value: unknown): OAuthTokens {
   const input = object(value, "OAuth token response");
   // `Number(null)` is 0, which would mark the token as expired at once.
-  const expires = absent(input.expires_in) ? undefined : Number(input.expires_in);
+  const expires = absent(input["expires_in"]) ? undefined : Number(input["expires_in"]);
   if (expires !== undefined && !Number.isFinite(expires)) throw new Error("Invalid expires_in");
   return compact({
-    access_token: requiredString(input.access_token, "access_token"),
-    token_type: requiredString(input.token_type, "token_type"),
+    access_token: requiredString(input["access_token"], "access_token"),
+    token_type: requiredString(input["token_type"], "token_type"),
     expires_in: expires,
-    scope: optionalString(input.scope, "scope"),
-    refresh_token: optionalString(input.refresh_token, "refresh_token"),
-    id_token: optionalString(input.id_token, "id_token"),
+    scope: optionalString(input["scope"], "scope"),
+    refresh_token: optionalString(input["refresh_token"], "refresh_token"),
+    id_token: optionalString(input["id_token"], "id_token"),
   });
 }
 
@@ -202,14 +205,14 @@ export function parseClientInformation(value: unknown): OAuthClientInformationFu
   const input = object(value, "OAuth client registration response");
   return compact({
     ...(input as unknown as OAuthClientMetadata),
-    client_id: requiredString(input.client_id, "client_id"),
-    client_secret: optionalString(input.client_secret, "client_secret"),
+    client_id: requiredString(input["client_id"], "client_id"),
+    client_secret: optionalString(input["client_secret"], "client_secret"),
     client_id_issued_at:
-      typeof input.client_id_issued_at === "number" ? input.client_id_issued_at : undefined,
+      typeof input["client_id_issued_at"] === "number" ? input["client_id_issued_at"] : undefined,
     client_secret_expires_at:
-      typeof input.client_secret_expires_at === "number"
-        ? input.client_secret_expires_at
+      typeof input["client_secret_expires_at"] === "number"
+        ? input["client_secret_expires_at"]
         : undefined,
-    redirect_uris: optionalStrings(input.redirect_uris, "redirect_uris") ?? [],
+    redirect_uris: optionalStrings(input["redirect_uris"], "redirect_uris") ?? [],
   });
 }

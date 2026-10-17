@@ -80,17 +80,23 @@ export function createAcmeServer(mode: ServerMode): AcmeServer {
       return rejectRequest(response, 400, "Invalid JSON");
     }
     if (!isRecord(payload)) return rejectRequest(response, 422, "Expected a JSON object");
-    const messages = Array.isArray(payload.messages) ? payload.messages : [];
+    const messages = Array.isArray(payload["messages"]) ? payload["messages"] : [];
     const userMessage = messages.find(
-      (message): message is Record<string, unknown> => isRecord(message) && message.role === "user",
+      (message): message is Record<string, unknown> =>
+        isRecord(message) && message["role"] === "user",
     );
-    const prompt = typeof userMessage?.content === "string" ? userMessage.content : undefined;
+    const prompt =
+      typeof userMessage?.["content"] === "string" ? userMessage["content"] : undefined;
 
     if (mode === "stream") {
       if (request.headers["x-acme-key"] !== "resolved-stream-key") {
         return rejectRequest(response, 401, "Invalid Acme Stream credential");
       }
-      if (payload.model !== STREAM_MODEL_ID || prompt === undefined || payload.stream !== true) {
+      if (
+        payload["model"] !== STREAM_MODEL_ID ||
+        prompt === undefined ||
+        payload["stream"] !== true
+      ) {
         return rejectRequest(response, 422, "Invalid Acme Stream request");
       }
       receivedValidRequest = prompt === STREAM_PROBE_PROMPT;
@@ -105,7 +111,11 @@ export function createAcmeServer(mode: ServerMode): AcmeServer {
     if (request.headers.authorization !== "Bearer resolved-acme-key") {
       return rejectRequest(response, 401, "Invalid Acme credential");
     }
-    if (payload.model !== OPENAI_MODEL_ID || prompt === undefined || payload.stream !== true) {
+    if (
+      payload["model"] !== OPENAI_MODEL_ID ||
+      prompt === undefined ||
+      payload["stream"] !== true
+    ) {
       return rejectRequest(response, 422, "Invalid OpenAI-compatible request");
     }
     receivedValidRequest = prompt === OPENAI_PROBE_PROMPT;

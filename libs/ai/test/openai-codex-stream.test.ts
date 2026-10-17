@@ -16,14 +16,14 @@ import {
 import type { Api, Context, Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
-const originalAgentDir = process.env.MSA_CODING_AGENT_DIR;
+const originalAgentDir = process.env["MSA_CODING_AGENT_DIR"];
 
 afterEach(() => {
   vi.unstubAllGlobals();
   if (originalAgentDir === undefined) {
-    delete process.env.MSA_CODING_AGENT_DIR;
+    delete process.env["MSA_CODING_AGENT_DIR"];
   } else {
-    process.env.MSA_CODING_AGENT_DIR = originalAgentDir;
+    process.env["MSA_CODING_AGENT_DIR"] = originalAgentDir;
   }
   closeOpenAICodexWebSocketSessions();
   resetOpenAICodexWebSocketDebugStats();
@@ -107,7 +107,7 @@ function buildSSEPayload({
 describe("openai-codex streaming", () => {
   it("streams SSE responses and forwards raw provider events", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "pi-codex-stream-"));
-    process.env.MSA_CODING_AGENT_DIR = tempDir;
+    process.env["MSA_CODING_AGENT_DIR"] = tempDir;
 
     const payload = Buffer.from(
       JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "acc_test" } }),
@@ -274,7 +274,7 @@ describe("openai-codex streaming", () => {
 
   it("completes after response.completed even when the SSE body stays open", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "pi-codex-stream-"));
-    process.env.MSA_CODING_AGENT_DIR = tempDir;
+    process.env["MSA_CODING_AGENT_DIR"] = tempDir;
     const token = mockToken();
     const encoder = new TextEncoder();
     const sse = buildSSEPayload({ status: "completed", includeDone: true, endTurn: false });
@@ -335,7 +335,7 @@ describe("openai-codex streaming", () => {
 
   it("maps response.incomplete to stopReason length even when the SSE body stays open", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "pi-codex-stream-"));
-    process.env.MSA_CODING_AGENT_DIR = tempDir;
+    process.env["MSA_CODING_AGENT_DIR"] = tempDir;
     const token = mockToken();
     const encoder = new TextEncoder();
     const sse = buildSSEPayload({ status: "incomplete" });
@@ -570,7 +570,7 @@ describe("openai-codex streaming", () => {
 
   it("sets session-id/x-client-request-id headers and prompt_cache_key when sessionId is provided", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "pi-codex-stream-"));
-    process.env.MSA_CODING_AGENT_DIR = tempDir;
+    process.env["MSA_CODING_AGENT_DIR"] = tempDir;
 
     const payload = Buffer.from(
       JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "acc_test" } }),
@@ -641,7 +641,7 @@ describe("openai-codex streaming", () => {
 
         // Verify sessionId is set in request body as prompt_cache_key
         const body = decodeCodexRequestBody(init?.body);
-        expect(body?.prompt_cache_key).toBe(sessionId);
+        expect(body?.["prompt_cache_key"]).toBe(sessionId);
 
         return new Response(stream, {
           status: 200,
@@ -879,7 +879,7 @@ describe("openai-codex streaming", () => {
 
   it("preserves gpt-5.5 xhigh reasoning effort from simple options", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "pi-codex-stream-"));
-    process.env.MSA_CODING_AGENT_DIR = tempDir;
+    process.env["MSA_CODING_AGENT_DIR"] = tempDir;
     const token = mockToken();
     const sse = buildSSEPayload({ status: "completed" });
     const encoder = new TextEncoder();
@@ -901,7 +901,7 @@ describe("openai-codex streaming", () => {
       }
       if (url === "https://chatgpt.com/backend-api/codex/responses") {
         const body = decodeCodexRequestBody(init?.body);
-        requestedReasoning = body?.reasoning;
+        requestedReasoning = body?.["reasoning"];
         return new Response(stream, {
           status: 200,
           headers: { "content-type": "text/event-stream" },
@@ -947,7 +947,7 @@ describe("openai-codex streaming", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_input: string | URL, init?: RequestInit) => {
-        requestedToolChoice = decodeCodexRequestBody(init?.body)?.tool_choice;
+        requestedToolChoice = decodeCodexRequestBody(init?.body)?.["tool_choice"];
         return new Response(
           new ReadableStream<Uint8Array>({
             start(controller) {
@@ -1072,7 +1072,7 @@ describe("openai-codex streaming", () => {
     "clamps %s minimal reasoning effort to low",
     async (modelId) => {
       const tempDir = mkdtempSync(join(tmpdir(), "pi-codex-stream-"));
-      process.env.MSA_CODING_AGENT_DIR = tempDir;
+      process.env["MSA_CODING_AGENT_DIR"] = tempDir;
 
       const payload = Buffer.from(
         JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "acc_test" } }),
@@ -1136,7 +1136,7 @@ describe("openai-codex streaming", () => {
         }
         if (url === "https://chatgpt.com/backend-api/codex/responses") {
           const body = decodeCodexRequestBody(init?.body);
-          requestedReasoning = body?.reasoning;
+          requestedReasoning = body?.["reasoning"];
 
           return new Response(stream, {
             status: 200,
@@ -1186,7 +1186,7 @@ describe("openai-codex streaming", () => {
     "uses the client-sent %s service tier for %s when Codex echoes default",
     async (modelId, serviceTier, multiplier) => {
       const tempDir = mkdtempSync(join(tmpdir(), "pi-codex-stream-"));
-      process.env.MSA_CODING_AGENT_DIR = tempDir;
+      process.env["MSA_CODING_AGENT_DIR"] = tempDir;
       const token = mockToken();
       const sse = `${[
         `data: ${JSON.stringify({
@@ -1284,7 +1284,7 @@ describe("openai-codex streaming", () => {
 
   it("does not set session-id/x-client-request-id headers when sessionId is not provided", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "pi-codex-stream-"));
-    process.env.MSA_CODING_AGENT_DIR = tempDir;
+    process.env["MSA_CODING_AGENT_DIR"] = tempDir;
 
     const payload = Buffer.from(
       JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "acc_test" } }),
@@ -1518,7 +1518,7 @@ describe("openai-codex streaming", () => {
     ]);
     expect(providerEventModels).toEqual([model, model, model, model, model]);
     expect(capturedWebSocketHeaders?.["session-id"]).toBe("session-auto");
-    expect(capturedWebSocketHeaders?.session_id).toBeUndefined();
+    expect(capturedWebSocketHeaders?.["session_id"]).toBeUndefined();
     expect(capturedWebSocketHeaders?.["x-client-request-id"]).toBe("session-auto");
     expect(global.fetch).not.toHaveBeenCalled();
     expect(getOpenAICodexWebSocketDebugStats("session-auto")).toMatchObject({
@@ -1624,7 +1624,7 @@ describe("openai-codex streaming", () => {
       "account-a",
       "account-b",
     ]);
-    expect(connectedHeaders.map((headers) => headers.authorization)).toEqual([
+    expect(connectedHeaders.map((headers) => headers["authorization"])).toEqual([
       `Bearer ${mockToken("account-a")}`,
       `Bearer ${mockToken("account-b")}`,
     ]);

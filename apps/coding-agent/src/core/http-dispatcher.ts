@@ -46,8 +46,8 @@ export function formatHttpIdleTimeoutMs(timeoutMs: number): string {
 export function applyHttpProxySettings(httpProxy: string | undefined): void {
   const proxy = httpProxy?.trim();
   if (!proxy) return;
-  process.env.HTTP_PROXY ??= proxy;
-  process.env.HTTPS_PROXY ??= proxy;
+  process.env["HTTP_PROXY"] ??= proxy;
+  process.env["HTTPS_PROXY"] ??= proxy;
 }
 
 const ignoreUndiciDispatcherError = (_error: unknown): void => {};

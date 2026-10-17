@@ -103,10 +103,10 @@ async function postForm(
 }
 
 function requestFailure(action: string, response: OAuthHttpResponse): Error {
-  const error = typeof response.body.error === "string" ? response.body.error : undefined;
+  const error = typeof response.body["error"] === "string" ? response.body["error"] : undefined;
   const description =
-    typeof response.body.error_description === "string"
-      ? response.body.error_description
+    typeof response.body["error_description"] === "string"
+      ? response.body["error_description"]
       : undefined;
   const detail = [error, description].filter(Boolean).join(": ");
   return new Error(
@@ -117,14 +117,15 @@ function requestFailure(action: string, response: OAuthHttpResponse): Error {
 function parseDeviceCode(body: JsonObject): XaiDeviceCode {
   // RFC 8628 allows interval 0 (no minimum wait); fall back to the poller's
   // default instead of failing on non-positive or malformed values.
-  const interval = body.interval;
+  const interval = body["interval"];
   const intervalSeconds =
     typeof interval === "number" && Number.isFinite(interval) && interval > 0
       ? interval
       : undefined;
   const verificationUriComplete =
-    typeof body.verification_uri_complete === "string" && body.verification_uri_complete.length > 0
-      ? validateVerificationUri(body.verification_uri_complete)
+    typeof body["verification_uri_complete"] === "string" &&
+    body["verification_uri_complete"].length > 0
+      ? validateVerificationUri(body["verification_uri_complete"])
       : undefined;
   return {
     deviceCode: requiredString(body, "device_code"),
@@ -143,11 +144,11 @@ function credentialsFromTokenResponse(
   const access = requiredString(body, "access_token");
   // xAI may omit refresh_token on refresh when the token is not rotated.
   const refresh =
-    body.refresh_token === undefined && previousRefreshToken
+    body["refresh_token"] === undefined && previousRefreshToken
       ? previousRefreshToken
       : requiredString(body, "refresh_token");
   const expiresInSeconds =
-    body.expires_in === undefined
+    body["expires_in"] === undefined
       ? DEFAULT_TOKEN_LIFETIME_SECONDS
       : positiveNumber(body, "expires_in");
   return {
@@ -195,12 +196,12 @@ async function pollForTokens(device: XaiDeviceCode, signal: AbortSignal): Promis
         return { status: "complete", value: credentialsFromTokenResponse(response.body) };
       }
 
-      const error = response.body.error;
+      const error = response.body["error"];
       if (error === "authorization_pending") {
         return { status: "pending" };
       }
       if (error === "slow_down") {
-        const interval = response.body.interval;
+        const interval = response.body["interval"];
         return {
           status: "slow_down",
           intervalSeconds: typeof interval === "number" ? interval : undefined,

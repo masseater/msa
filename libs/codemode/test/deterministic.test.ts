@@ -100,10 +100,10 @@ function start(
   return { run, calls, idles, events, fingerprint: () => fingerprint };
 }
 
-const savedTimezone = process.env.TZ;
+const savedTimezone = process.env["TZ"];
 afterEach(() => {
-  if (savedTimezone === undefined) delete process.env.TZ;
-  else process.env.TZ = savedTimezone;
+  if (savedTimezone === undefined) delete process.env["TZ"];
+  else process.env["TZ"] = savedTimezone;
 });
 
 for (const [backend, create] of Object.entries(BACKENDS)) {
@@ -149,7 +149,7 @@ for (const [backend, create] of Object.entries(BACKENDS)) {
     });
 
     it("runs in UTC whatever the host's timezone, and without WeakRef or FinalizationRegistry", async () => {
-      process.env.TZ = "Asia/Kolkata";
+      process.env["TZ"] = "Asia/Kolkata";
       const code =
         "return [new Date(0).getHours(), new Date(0).getTimezoneOffset(), typeof WeakRef, typeof FinalizationRegistry]";
       const sandbox = create();

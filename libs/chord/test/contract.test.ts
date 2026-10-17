@@ -123,7 +123,7 @@ describe("contracts", () => {
     const of = (members: Parameters<typeof local>[1]["members"]) =>
       local("t.methods", { version: 1, input: Type.Object({}), members }).description;
     const none = of({ m: method() });
-    assert.deepEqual(none.variants[""]?.m, { kind: "method" });
+    assert.deepEqual(none.variants[""]?.["m"], { kind: "method" });
     const withArgs = of({ m: method(Type.String()) });
     const withResult = of({ m: method(undefined, Type.Number()) });
     assert.equal(coverage(none, none), undefined);
@@ -157,7 +157,7 @@ describe("contracts", () => {
     );
     const adapter = (current: Record<string, unknown>) => ({
       variant: "viewer",
-      view: current.body,
+      view: current["body"],
     });
     assert.equal(bind(v2, { 1: adapter }, chatV1), adapter);
   });

@@ -97,8 +97,8 @@ async function choosePlanningModel(request: JevRequest, ctx: ExtensionContext): 
     },
     { signal: request.signal },
   );
-  const answer = result.stopReason === "stop" ? result.answers.complexity : undefined;
-  return answer?.type === "choice" && (answer.probabilities.complex ?? 0) >= 0.5 ? SOL : TERRA;
+  const answer = result.stopReason === "stop" ? result.answers["complexity"] : undefined;
+  return answer?.type === "choice" && (answer.probabilities["complex"] ?? 0) >= 0.5 ? SOL : TERRA;
 }
 
 export default function (msa: ExtensionAPI) {

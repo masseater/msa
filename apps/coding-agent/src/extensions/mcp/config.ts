@@ -77,7 +77,9 @@ const OVERRIDE_KEYS = ["enabled", "exposure", "toolExposure"];
 
 /** Whether an entry overrides a server defined elsewhere instead of defining one. */
 function isOverride(value: Record<string, unknown>): boolean {
-  return value.command === undefined && value.url === undefined && value.type === undefined;
+  return (
+    value["command"] === undefined && value["url"] === undefined && value["type"] === undefined
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -100,15 +102,18 @@ function readConfigFile(path: string, scope: "global" | "project", state: McpCon
     errors.push(`${path}: ${toErrorMessage(error)}`);
     return;
   }
-  if (!isRecord(parsed) || (parsed.mcpServers !== undefined && !isRecord(parsed.mcpServers))) {
+  if (
+    !isRecord(parsed) ||
+    (parsed["mcpServers"] !== undefined && !isRecord(parsed["mcpServers"]))
+  ) {
     errors.push(`${path}: expected an object with an "mcpServers" object`);
     return;
   }
-  if (typeof parsed.autoEnableCodemode === "boolean")
-    state.autoEnableCodemode = parsed.autoEnableCodemode;
-  else if (parsed.autoEnableCodemode !== undefined)
+  if (typeof parsed["autoEnableCodemode"] === "boolean")
+    state.autoEnableCodemode = parsed["autoEnableCodemode"];
+  else if (parsed["autoEnableCodemode"] !== undefined)
     errors.push(`${path}: autoEnableCodemode must be a boolean`);
-  for (const [name, value] of Object.entries(parsed.mcpServers ?? {})) {
+  for (const [name, value] of Object.entries(parsed["mcpServers"] ?? {})) {
     if (scope === "project" && isRecord(value) && isOverride(value)) {
       const base = servers.get(name);
       const extra = Object.keys(value).filter((key) => !OVERRIDE_KEYS.includes(key));
@@ -194,17 +199,17 @@ export function updateMcpServerConfig(
     let server = servers?.[name];
     if (server === undefined && options.override) {
       server = {};
-      parsed.mcpServers = { ...servers, [name]: server };
+      parsed["mcpServers"] = { ...servers, [name]: server };
     }
     if (!isRecord(server)) throw new Error(`${path} does not define MCP server "${name}"`);
     const keepDefaults = isOverride(server);
     if (patch.enabled !== undefined) {
-      if (patch.enabled && !keepDefaults) delete server.enabled;
-      else server.enabled = patch.enabled;
+      if (patch.enabled && !keepDefaults) delete server["enabled"];
+      else server["enabled"] = patch.enabled;
     }
     if (patch.exposure !== undefined) {
-      if (patch.exposure === "codemode" && !keepDefaults) delete server.exposure;
-      else server.exposure = patch.exposure;
+      if (patch.exposure === "codemode" && !keepDefaults) delete server["exposure"];
+      else server["exposure"] = patch.exposure;
     }
     return true;
   });
@@ -220,7 +225,7 @@ export function addMcpServerConfig(path: string, name: string, config: McpServer
     const target = servers ?? {};
     replaced = target[name] !== undefined;
     target[name] = config;
-    parsed.mcpServers = target;
+    parsed["mcpServers"] = target;
     return true;
   });
   return replaced;
@@ -249,10 +254,13 @@ function editMcpServers(
 ): void {
   const text = existsSync(path) ? readFileSync(path, "utf8") : undefined;
   const parsed: unknown = text === undefined ? {} : JSON.parse(text);
-  if (!isRecord(parsed) || (parsed.mcpServers !== undefined && !isRecord(parsed.mcpServers))) {
+  if (
+    !isRecord(parsed) ||
+    (parsed["mcpServers"] !== undefined && !isRecord(parsed["mcpServers"]))
+  ) {
     throw new Error(`${path}: expected an object with an "mcpServers" object`);
   }
-  const servers = isRecord(parsed.mcpServers) ? parsed.mcpServers : undefined;
+  const servers = isRecord(parsed["mcpServers"]) ? parsed["mcpServers"] : undefined;
   if (!edit(servers, parsed)) return;
   const indent = (text && /^([ \t]+)\S/m.exec(text)?.[1]) || "  ";
   mkdirSync(dirname(path), { recursive: true });

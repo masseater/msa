@@ -93,26 +93,29 @@ export function isJsonRpcId(value: unknown): value is JsonRpcId {
 export function isJsonRpcRequest(message: unknown): message is JsonRpcRequest {
   return (
     isObject(message) &&
-    message.jsonrpc === "2.0" &&
-    isJsonRpcId(message.id) &&
-    typeof message.method === "string"
+    message["jsonrpc"] === "2.0" &&
+    isJsonRpcId(message["id"]) &&
+    typeof message["method"] === "string"
   );
 }
 
 export function isJsonRpcNotification(message: unknown): message is JsonRpcNotification {
   return (
     isObject(message) &&
-    message.jsonrpc === "2.0" &&
+    message["jsonrpc"] === "2.0" &&
     !("id" in message) &&
-    typeof message.method === "string"
+    typeof message["method"] === "string"
   );
 }
 
 export function isJsonRpcResponse(message: unknown): message is JsonRpcResponse {
-  if (!isObject(message) || message.jsonrpc !== "2.0" || !isJsonRpcId(message.id)) return false;
+  if (!isObject(message) || message["jsonrpc"] !== "2.0" || !isJsonRpcId(message["id"]))
+    return false;
   if ("result" in message) return !("error" in message);
-  if (!("error" in message) || !isObject(message.error)) return false;
-  return typeof message.error.code === "number" && typeof message.error.message === "string";
+  if (!("error" in message) || !isObject(message["error"])) return false;
+  return (
+    typeof message["error"]["code"] === "number" && typeof message["error"]["message"] === "string"
+  );
 }
 
 export function parseJsonRpcMessage(value: unknown): JsonRpcMessage {

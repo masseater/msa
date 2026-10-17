@@ -6,7 +6,7 @@ import { resolve } from "node:path";
  * ../daemon.
  */
 export const daemon =
-  process.env.MSA_ENV_DAEMON ??
+  process.env["MSA_ENV_DAEMON"] ??
   resolve(
     import.meta.dirname,
     `../daemon/target/debug/msa-env${process.platform === "win32" ? ".exe" : ""}`,

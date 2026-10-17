@@ -62,16 +62,18 @@ function requireDocumentationPath(value: unknown, location: string): string {
 function readNavigationItem(rawItem: unknown, location: string): NavigationItem {
   const item = requireObject(rawItem, location);
   requireFields(item, ["title", "path", "items"], location);
-  const title = requireNonemptyString(item.title, `${location}.title`);
+  const title = requireNonemptyString(item["title"], `${location}.title`);
   const path =
-    item.path === undefined ? undefined : requireDocumentationPath(item.path, `${location}.path`);
+    item["path"] === undefined
+      ? undefined
+      : requireDocumentationPath(item["path"], `${location}.path`);
 
   let items: NavigationItem[] | undefined;
-  if (item.items !== undefined) {
-    if (!Array.isArray(item.items)) throw new Error(`${location}.items must be an array`);
-    if (item.items.length === 0)
+  if (item["items"] !== undefined) {
+    if (!Array.isArray(item["items"])) throw new Error(`${location}.items must be an array`);
+    if (item["items"].length === 0)
       throw new Error(`${location}.items must contain at least one item`);
-    items = item.items.map((child, index) =>
+    items = item["items"].map((child, index) =>
       readNavigationItem(child, `${location}.items[${index}]`),
     );
   }
@@ -87,20 +89,20 @@ function readNavigation(): NavigationGroup[] {
     "Documentation catalog",
   );
   requireFields(catalog, ["navigation", "redirects"], "Documentation catalog");
-  if (!Array.isArray(catalog.navigation))
+  if (!Array.isArray(catalog["navigation"]))
     throw new Error("Documentation catalog navigation must be an array");
 
-  return catalog.navigation.map((rawGroup, groupIndex) => {
+  return catalog["navigation"].map((rawGroup, groupIndex) => {
     const location = `Documentation catalog navigation[${groupIndex}]`;
     const group = requireObject(rawGroup, location);
     requireFields(group, ["title", "items"], location);
-    const title = requireNonemptyString(group.title, `${location}.title`);
-    if (!Array.isArray(group.items)) throw new Error(`${location}.items must be an array`);
-    if (group.items.length === 0)
+    const title = requireNonemptyString(group["title"], `${location}.title`);
+    if (!Array.isArray(group["items"])) throw new Error(`${location}.items must be an array`);
+    if (group["items"].length === 0)
       throw new Error(`${location}.items must contain at least one item`);
     return {
       title,
-      items: group.items.map((item, itemIndex) =>
+      items: group["items"].map((item, itemIndex) =>
         readNavigationItem(item, `${location}.items[${itemIndex}]`),
       ),
     };

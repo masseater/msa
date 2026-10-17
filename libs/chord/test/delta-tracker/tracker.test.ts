@@ -305,7 +305,7 @@ describe("delta tracker transactional overlay lifecycle", () => {
       tracker.adopt(prepared);
       expect(Object.keys(tracker.value)).toEqual([]);
     } finally {
-      delete (Object.prototype as Record<string, unknown>).trackerInherited;
+      delete (Object.prototype as Record<string, unknown>)["trackerInherited"];
     }
   });
 
@@ -509,8 +509,8 @@ describe("delta tracker policy view", () => {
     const change = tracker.beginChange();
     delete change.state.object["2"];
     change.state.object["2"] = "two";
-    delete change.state.object.first;
-    change.state.object.first = "a";
+    delete change.state.object["first"];
+    change.state.object["first"] = "a";
     change.state.object["3"] = "three";
     change.state.object["0"] = "zero";
     expect(Object.keys(change.state.object)).toEqual(["0", "1", "2", "3", "second", "first"]);
@@ -522,7 +522,7 @@ describe("delta tracker policy view", () => {
 
   it("orders integer-like keys on null-prototype objects", () => {
     const object = Object.create(null) as Record<string, string>;
-    object.label = "x";
+    object["label"] = "x";
     const tracker = track({ object });
     const base = clone(tracker.value);
     const change = tracker.beginChange();
@@ -821,7 +821,7 @@ describe("delta tracker by-value placements", () => {
     expect(change.state).toEqual(initial);
     change.state.optional = undefined;
     const dictionary = Object.create(null) as Record<string, JsonValue>;
-    dictionary.valid = true;
+    dictionary["valid"] = true;
     change.state.payload = dictionary;
     change.state.values.push({ valid: true });
     const prepared = change.prepare();
@@ -1536,11 +1536,11 @@ describe("delta tracker security and storage-style cloning", () => {
     });
     try {
       settle(tracker, (draft) => {
-        draft.trap = 1;
+        draft["trap"] = 1;
       });
       expect(tracker.value).toEqual({ trap: 1 });
     } finally {
-      delete (Object.prototype as Record<string, unknown>).trap;
+      delete (Object.prototype as Record<string, unknown>)["trap"];
     }
   });
 
@@ -1555,7 +1555,7 @@ describe("delta tracker security and storage-style cloning", () => {
     expect(prepared.value.safe.__proto__.value).toBe(2);
     expect(replay(tracker.value, prepared.ops)).toEqual(prepared.value);
     tracker.adopt(prepared);
-    expect(({} as Record<string, unknown>).value).toBeUndefined();
+    expect(({} as Record<string, unknown>)["value"]).toBeUndefined();
   });
 
   it("supports a MemoryStorage-style recursive clone of Prepared.value", () => {

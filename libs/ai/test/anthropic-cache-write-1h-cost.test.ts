@@ -24,7 +24,7 @@ function eventsWithCacheCreation(
     cache_read_input_tokens: 0,
     cache_creation_input_tokens: 1_000_000,
   };
-  if (cacheCreation) startUsage.cache_creation = cacheCreation;
+  if (cacheCreation) startUsage["cache_creation"] = cacheCreation;
   return [
     {
       event: "message_start",

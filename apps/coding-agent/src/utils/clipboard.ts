@@ -17,7 +17,10 @@ const MAX_OSC52_ENCODED_LENGTH = 100_000;
  */
 function isRemoteSession(env: NodeJS.ProcessEnv): boolean {
   return Boolean(
-    env.SSH_CONNECTION || env.SSH_CLIENT || env.MOSH_CONNECTION || env.MSA_CLIPBOARD_OSC52 === "1",
+    env["SSH_CONNECTION"] ||
+    env["SSH_CLIENT"] ||
+    env["MOSH_CONNECTION"] ||
+    env["MSA_CLIPBOARD_OSC52"] === "1",
   );
 }
 
@@ -63,11 +66,11 @@ async function copyViaWindowsClipboard(text: string): Promise<boolean> {
 export async function readClipboardText(): Promise<string | null> {
   const commands: [string, string[]][] = [];
   // Termux reports platform "android", not "linux" (#10391).
-  if (process.env.TERMUX_VERSION) commands.push(["termux-clipboard-get", []]);
+  if (process.env["TERMUX_VERSION"]) commands.push(["termux-clipboard-get", []]);
   if (platform() === "linux") {
-    if (process.env.WAYLAND_DISPLAY)
+    if (process.env["WAYLAND_DISPLAY"])
       commands.push(["wl-paste", ["--no-newline", "--type", "text"]]);
-    if (process.env.DISPLAY) {
+    if (process.env["DISPLAY"]) {
       commands.push(
         ["xclip", ["-selection", "clipboard", "-out"]],
         ["xsel", ["--clipboard", "--output"]],
@@ -113,9 +116,9 @@ export async function copyToClipboard(text: string): Promise<void> {
     if (p === "darwin") commands.push(["pbcopy", []]);
     else if (p === "win32") commands.push(["clip", []]);
     else {
-      if (env.TERMUX_VERSION) commands.push(["termux-clipboard-set", []]);
-      if (env.WAYLAND_DISPLAY) commands.push(["wl-copy", []]);
-      if (env.DISPLAY) {
+      if (env["TERMUX_VERSION"]) commands.push(["termux-clipboard-set", []]);
+      if (env["WAYLAND_DISPLAY"]) commands.push(["wl-copy", []]);
+      if (env["DISPLAY"]) {
         commands.push(["xclip", ["-selection", "clipboard"]], ["xsel", ["--clipboard", "--input"]]);
       }
     }
@@ -131,13 +134,14 @@ export async function copyToClipboard(text: string): Promise<void> {
   let osc52Emitted = false;
   if (!copied && p === "linux" && isWSL(env)) {
     // Windows Terminal supports OSC 52; prefer it over the slower PowerShell round trip.
-    if (env.WT_SESSION) osc52Emitted = emitOsc52(text);
+    if (env["WT_SESSION"]) osc52Emitted = emitOsc52(text);
     copied = osc52Emitted || (await copyViaWindowsClipboard(text));
   }
   // OSC 52 cannot be verified, so a desktop session with a display reports the failure
   // instead (#9618). Without a display the terminal is the only clipboard route (containers,
   // WSL without WSLg), and remote sessions always emit it to reach the client clipboard.
-  const headless = p === "linux" && !env.DISPLAY && !env.WAYLAND_DISPLAY && !env.TERMUX_VERSION;
+  const headless =
+    p === "linux" && !env["DISPLAY"] && !env["WAYLAND_DISPLAY"] && !env["TERMUX_VERSION"];
   let oversized = false;
   if (!osc52Emitted && (isRemoteSession(env) || (!copied && headless))) {
     if (emitOsc52(text)) copied = true;
@@ -145,16 +149,16 @@ export async function copyToClipboard(text: string): Promise<void> {
   }
   if (copied) return;
   if (oversized) throw new Error("Clipboard unavailable: text exceeds the OSC 52 size limit");
-  if (env.TERMUX_VERSION) {
+  if (env["TERMUX_VERSION"]) {
     throw new Error("Clipboard unavailable: install the Termux:API app and `termux-api` package");
   }
   if (p === "linux") {
-    if (env.WAYLAND_DISPLAY) {
+    if (env["WAYLAND_DISPLAY"]) {
       throw new Error(
         "Clipboard unavailable: install `wl-clipboard` (`wl-copy`) or check Wayland access",
       );
     }
-    if (env.DISPLAY) {
+    if (env["DISPLAY"]) {
       throw new Error("Clipboard unavailable: install `xclip` or `xsel`, or check X11 access");
     }
   }

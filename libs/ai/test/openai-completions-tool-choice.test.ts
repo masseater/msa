@@ -228,7 +228,7 @@ describe("openai-completions tool_choice", () => {
     };
     const tool = params.tools?.[0]?.function;
     expect(tool).toBeTruthy();
-    expect(tool?.strict).toBeUndefined();
+    expect(tool?.["strict"]).toBeUndefined();
     expect("strict" in (tool ?? {})).toBe(false);
   });
 
@@ -534,7 +534,7 @@ describe("openai-completions tool_choice", () => {
       messages?: Array<Record<string, unknown>>;
       thinking?: unknown;
     };
-    const replayedAssistant = params.messages?.find((message) => message.role === "assistant");
+    const replayedAssistant = params.messages?.find((message) => message["role"] === "assistant");
     expect(replayedAssistant).toMatchObject({ reasoning_content: "prior reasoning" });
     expect(params.thinking).toEqual({ type: "enabled", clear_thinking: false });
   });
@@ -1344,7 +1344,7 @@ describe("openai-completions tool_choice", () => {
       thinking?: { type?: string };
       reasoning_effort?: string;
     };
-    const replayedAssistant = params.messages?.find((message) => message.role === "assistant");
+    const replayedAssistant = params.messages?.find((message) => message["role"] === "assistant");
     expect(replayedAssistant).toMatchObject({ role: "assistant", reasoning_content: "" });
     expect(params.thinking).toEqual({ type: "enabled" });
     expect(params.reasoning_effort).toBeUndefined();

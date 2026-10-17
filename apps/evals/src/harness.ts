@@ -538,7 +538,7 @@ export function createMsaCodingAgentHarness<TOutput extends JsonValue>(
 export const DOCUMENTATION_EVAL_TOOLS = ["read", "write", "edit", "grep", "find", "ls"] as const;
 
 export function resolveDocumentationVariant(
-  value: string | undefined = process.env.MSA_EVAL_VARIANT,
+  value: string | undefined = process.env["MSA_EVAL_VARIANT"],
 ): DocumentationVariant {
   if (value === "without_docs" || value === "with_docs") return value;
   throw new TypeError('MSA_EVAL_VARIANT must be "without_docs" or "with_docs".');
@@ -580,7 +580,7 @@ export function createMsaDocumentationEvalHarness(
 export function createMsaDocumentationEvalHarness<TOutput extends JsonValue>(
   options: DocumentationHarnessOptions | DocumentationHarnessWithOutput<TOutput> = {},
 ) {
-  if (process.env.MSA_EVAL_CONTAINER !== "1" || !resolveSandboxIdentity()) {
+  if (process.env["MSA_EVAL_CONTAINER"] !== "1" || !resolveSandboxIdentity()) {
     throw new Error("Documentation evals must run in the isolated container sandbox.");
   }
   const variant = resolveDocumentationVariant();

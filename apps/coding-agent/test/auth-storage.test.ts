@@ -38,15 +38,15 @@ describe("AuthStorage", () => {
   }
 
   test("reads and resolves stored API-key credentials", async () => {
-    const original = process.env.TEST_AUTH_STORAGE_KEY;
-    process.env.TEST_AUTH_STORAGE_KEY = "environment-key";
+    const original = process.env["TEST_AUTH_STORAGE_KEY"];
+    process.env["TEST_AUTH_STORAGE_KEY"] = "environment-key";
     try {
       writeAuthJson({ anthropic: { type: "api_key", key: "$TEST_AUTH_STORAGE_KEY" } });
       const storage = AuthStorage.create(authJsonPath);
       expect(await storage.read("anthropic")).toEqual({ type: "api_key", key: "environment-key" });
     } finally {
-      if (original === undefined) delete process.env.TEST_AUTH_STORAGE_KEY;
-      else process.env.TEST_AUTH_STORAGE_KEY = original;
+      if (original === undefined) delete process.env["TEST_AUTH_STORAGE_KEY"];
+      else process.env["TEST_AUTH_STORAGE_KEY"] = original;
     }
   });
 

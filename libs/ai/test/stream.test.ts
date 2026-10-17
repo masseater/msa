@@ -391,7 +391,7 @@ async function multiTurn<TApi extends Api>(model: Model<TApi>, options?: StreamO
 }
 
 describe("Generate E2E Tests", () => {
-  describe.skipIf(!process.env.GEMINI_API_KEY)("Gemini Provider (gemini-2.5-flash)", () => {
+  describe.skipIf(!process.env["GEMINI_API_KEY"])("Gemini Provider (gemini-2.5-flash)", () => {
     const llm = getModel("google", "gemini-2.5-flash");
 
     it("should complete basic text generation", { retry: 3 }, async () => {
@@ -420,9 +420,9 @@ describe("Generate E2E Tests", () => {
   });
 
   describe("Google Vertex Provider (gemini-3-flash-preview)", () => {
-    const vertexProject = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
-    const vertexLocation = process.env.GOOGLE_CLOUD_LOCATION;
-    const vertexApiKey = process.env.GOOGLE_CLOUD_API_KEY;
+    const vertexProject = process.env["GOOGLE_CLOUD_PROJECT"] || process.env["GCLOUD_PROJECT"];
+    const vertexLocation = process.env["GOOGLE_CLOUD_LOCATION"];
+    const vertexApiKey = process.env["GOOGLE_CLOUD_API_KEY"];
     const isVertexConfigured = Boolean(vertexProject && vertexLocation);
     const vertexOptions = { project: vertexProject, location: vertexLocation } as const;
     const llm = getModel("google-vertex", "gemini-3-flash-preview");
@@ -476,32 +476,35 @@ describe("Generate E2E Tests", () => {
     });
   });
 
-  describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider (gpt-4o-mini)", () => {
-    const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
-    void _compat;
-    const llm: Model<"openai-completions"> = {
-      ...baseModel,
-      api: "openai-completions",
-    };
+  describe.skipIf(!process.env["OPENAI_API_KEY"])(
+    "OpenAI Completions Provider (gpt-4o-mini)",
+    () => {
+      const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
+      void _compat;
+      const llm: Model<"openai-completions"> = {
+        ...baseModel,
+        api: "openai-completions",
+      };
 
-    it("should complete basic text generation", { retry: 3 }, async () => {
-      await basicTextGeneration(llm);
-    });
+      it("should complete basic text generation", { retry: 3 }, async () => {
+        await basicTextGeneration(llm);
+      });
 
-    it("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(llm);
-    });
+      it("should handle tool calling", { retry: 3 }, async () => {
+        await handleToolCall(llm);
+      });
 
-    it("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(llm);
-    });
+      it("should handle streaming", { retry: 3 }, async () => {
+        await handleStreaming(llm);
+      });
 
-    it("should handle image input", { retry: 3 }, async () => {
-      await handleImage(llm);
-    });
-  });
+      it("should handle image input", { retry: 3 }, async () => {
+        await handleImage(llm);
+      });
+    },
+  );
 
-  describe.skipIf(!process.env.DEEPSEEK_API_KEY)(
+  describe.skipIf(!process.env["DEEPSEEK_API_KEY"])(
     "DeepSeek Provider (deepseek-flash via OpenAI Completions)",
     () => {
       const llm = getModel("deepseek", "deepseek-flash");
@@ -528,7 +531,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Responses Provider (gpt-5.4)", () => {
+  describe.skipIf(!process.env["OPENAI_API_KEY"])("OpenAI Responses Provider (gpt-5.4)", () => {
     const llm = getModel("openai", "gpt-5.4");
 
     it("should complete basic text generation", { retry: 3 }, async () => {
@@ -556,25 +559,28 @@ describe("Generate E2E Tests", () => {
     });
   });
 
-  describe.skipIf(!process.env.ANTHROPIC_API_KEY)("Anthropic Provider (claude-haiku-4-5)", () => {
-    const model = getModel("anthropic", "claude-haiku-4-5");
+  describe.skipIf(!process.env["ANTHROPIC_API_KEY"])(
+    "Anthropic Provider (claude-haiku-4-5)",
+    () => {
+      const model = getModel("anthropic", "claude-haiku-4-5");
 
-    it("should complete basic text generation", { retry: 3 }, async () => {
-      await basicTextGeneration(model, { thinkingEnabled: true });
-    });
+      it("should complete basic text generation", { retry: 3 }, async () => {
+        await basicTextGeneration(model, { thinkingEnabled: true });
+      });
 
-    it("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(model);
-    });
+      it("should handle tool calling", { retry: 3 }, async () => {
+        await handleToolCall(model);
+      });
 
-    it("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(model);
-    });
+      it("should handle streaming", { retry: 3 }, async () => {
+        await handleStreaming(model);
+      });
 
-    it("should handle image input", { retry: 3 }, async () => {
-      await handleImage(model);
-    });
-  });
+      it("should handle image input", { retry: 3 }, async () => {
+        await handleImage(model);
+      });
+    },
+  );
 
   describe.skipIf(!hasAzureOpenAICredentials())(
     "Azure OpenAI Responses Provider (gpt-4o-mini)",
@@ -601,31 +607,34 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.XAI_API_KEY)("xAI Provider (grok-4.7 via OpenAI Responses)", () => {
-    const llm = getModel("xai", "grok-4.7");
+  describe.skipIf(!process.env["XAI_API_KEY"])(
+    "xAI Provider (grok-4.7 via OpenAI Responses)",
+    () => {
+      const llm = getModel("xai", "grok-4.7");
 
-    it("should complete basic text generation", { retry: 3 }, async () => {
-      await basicTextGeneration(llm);
-    });
+      it("should complete basic text generation", { retry: 3 }, async () => {
+        await basicTextGeneration(llm);
+      });
 
-    it("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(llm);
-    });
+      it("should handle tool calling", { retry: 3 }, async () => {
+        await handleToolCall(llm);
+      });
 
-    it("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(llm);
-    });
+      it("should handle streaming", { retry: 3 }, async () => {
+        await handleStreaming(llm);
+      });
 
-    it("should handle thinking mode", { retry: 3 }, async () => {
-      await handleThinking(llm, { reasoningEffort: "medium" });
-    });
+      it("should handle thinking mode", { retry: 3 }, async () => {
+        await handleThinking(llm, { reasoningEffort: "medium" });
+      });
 
-    it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-      await multiTurn(llm, { reasoningEffort: "medium" });
-    });
-  });
+      it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
+        await multiTurn(llm, { reasoningEffort: "medium" });
+      });
+    },
+  );
 
-  describe.skipIf(!process.env.GROQ_API_KEY)(
+  describe.skipIf(!process.env["GROQ_API_KEY"])(
     "Groq Provider (gpt-oss-20b via OpenAI Completions)",
     () => {
       const llm = getModel("groq", "openai/gpt-oss-20b");
@@ -652,7 +661,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.CEREBRAS_API_KEY)(
+  describe.skipIf(!process.env["CEREBRAS_API_KEY"])(
     "Cerebras Provider (gpt-oss-120b via OpenAI Completions)",
     () => {
       const llm = getModel("cerebras", "gpt-oss-120b");
@@ -733,11 +742,11 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!hasCloudflareAiGatewayCredentials() || !process.env.OPENAI_API_KEY)(
+  describe.skipIf(!hasCloudflareAiGatewayCredentials() || !process.env["OPENAI_API_KEY"])(
     "Cloudflare AI Gateway → OpenAI BYOK (gpt-5.1 via /openai responses)",
     () => {
       const llm = getModel("cloudflare-ai-gateway", "gpt-5.1");
-      const options = { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } };
+      const options = { headers: { Authorization: `Bearer ${process.env["OPENAI_API_KEY"]}` } };
       const thinkingOptions = {
         ...options,
         thinkingEnabled: true,
@@ -766,11 +775,11 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!hasCloudflareAiGatewayCredentials() || !process.env.ANTHROPIC_API_KEY)(
+  describe.skipIf(!hasCloudflareAiGatewayCredentials() || !process.env["ANTHROPIC_API_KEY"])(
     "Cloudflare AI Gateway → Anthropic BYOK (claude-sonnet-4-5 via /anthropic messages)",
     () => {
       const llm = getModel("cloudflare-ai-gateway", "claude-sonnet-4-5");
-      const options = { headers: { Authorization: `Bearer ${process.env.ANTHROPIC_API_KEY}` } };
+      const options = { headers: { Authorization: `Bearer ${process.env["ANTHROPIC_API_KEY"]}` } };
       const thinkingOptions = {
         ...options,
         thinkingEnabled: true,
@@ -799,7 +808,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.HF_TOKEN)(
+  describe.skipIf(!process.env["HF_TOKEN"])(
     "Hugging Face Provider (Kimi-K2.5 via OpenAI Completions)",
     () => {
       const llm = getModel("huggingface", "moonshotai/Kimi-K2.5");
@@ -826,7 +835,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.TOGETHER_API_KEY)(
+  describe.skipIf(!process.env["TOGETHER_API_KEY"])(
     "Together AI Provider (Kimi-K3 via OpenAI Completions)",
     () => {
       const llm = getModel("together", "moonshotai/Kimi-K3");
@@ -857,7 +866,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.BASETEN_API_KEY)(
+  describe.skipIf(!process.env["BASETEN_API_KEY"])(
     "Baseten Provider (GLM 5.2 via OpenAI Completions)",
     () => {
       const llm = getModel("baseten", "zai-org/GLM-5.2");
@@ -885,7 +894,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.NVIDIA_API_KEY)(
+  describe.skipIf(!process.env["NVIDIA_API_KEY"])(
     "NVIDIA NIM Provider (Nemotron 3 Ultra via OpenAI Completions)",
     () => {
       const llm = getModel("nvidia", "nvidia/nemotron-3-ultra-550b-a55b");
@@ -912,7 +921,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.OPENROUTER_API_KEY)(
+  describe.skipIf(!process.env["OPENROUTER_API_KEY"])(
     "OpenRouter Provider (glm-4.5v via OpenAI Completions)",
     () => {
       const llm = getModel("openrouter", "z-ai/glm-4.5v");
@@ -943,7 +952,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.AI_GATEWAY_API_KEY)(
+  describe.skipIf(!process.env["AI_GATEWAY_API_KEY"])(
     "Vercel AI Gateway Provider (google/gemini-2.5-flash via Anthropic Messages)",
     () => {
       const llm = getModel("vercel-ai-gateway", "google/gemini-2.5-flash");
@@ -970,7 +979,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.AI_GATEWAY_API_KEY)(
+  describe.skipIf(!process.env["AI_GATEWAY_API_KEY"])(
     "Vercel AI Gateway Provider (anthropic/claude-opus-4.5 via Anthropic Messages)",
     () => {
       const llm = getModel("vercel-ai-gateway", "anthropic/claude-opus-4.5");
@@ -997,7 +1006,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.AI_GATEWAY_API_KEY)(
+  describe.skipIf(!process.env["AI_GATEWAY_API_KEY"])(
     "Vercel AI Gateway Provider (openai/gpt-5.1-codex-max via Anthropic Messages)",
     () => {
       const llm = getModel("vercel-ai-gateway", "openai/gpt-5.1-codex-max");
@@ -1024,61 +1033,67 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.ZAI_API_KEY)("zAI Provider (glm-5.2 via OpenAI Completions)", () => {
-    const llm = getModel("zai", "glm-5.2");
+  describe.skipIf(!process.env["ZAI_API_KEY"])(
+    "zAI Provider (glm-5.2 via OpenAI Completions)",
+    () => {
+      const llm = getModel("zai", "glm-5.2");
 
-    it("should complete basic text generation", { retry: 3 }, async () => {
-      await basicTextGeneration(llm);
-    });
+      it("should complete basic text generation", { retry: 3 }, async () => {
+        await basicTextGeneration(llm);
+      });
 
-    it("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(llm);
-    });
+      it("should handle tool calling", { retry: 3 }, async () => {
+        await handleToolCall(llm);
+      });
 
-    it("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(llm);
-    });
+      it("should handle streaming", { retry: 3 }, async () => {
+        await handleStreaming(llm);
+      });
 
-    it("should handle thinking mode", { retry: 3 }, async () => {
-      await handleThinking(llm, { reasoningEffort: "medium" });
-    });
+      it("should handle thinking mode", { retry: 3 }, async () => {
+        await handleThinking(llm, { reasoningEffort: "medium" });
+      });
 
-    it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-      await multiTurn(llm, { reasoningEffort: "medium" });
-    });
+      it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
+        await multiTurn(llm, { reasoningEffort: "medium" });
+      });
 
-    it("should handle image input", { retry: 3 }, async () => {
-      await handleImage(llm);
-    });
-  });
+      it("should handle image input", { retry: 3 }, async () => {
+        await handleImage(llm);
+      });
+    },
+  );
 
-  describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral Provider (devstral-medium-latest)", () => {
-    const llm = getModel("mistral", "devstral-medium-latest");
+  describe.skipIf(!process.env["MISTRAL_API_KEY"])(
+    "Mistral Provider (devstral-medium-latest)",
+    () => {
+      const llm = getModel("mistral", "devstral-medium-latest");
 
-    it("should complete basic text generation", { retry: 3 }, async () => {
-      await basicTextGeneration(llm);
-    });
+      it("should complete basic text generation", { retry: 3 }, async () => {
+        await basicTextGeneration(llm);
+      });
 
-    it("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(llm);
-    });
+      it("should handle tool calling", { retry: 3 }, async () => {
+        await handleToolCall(llm);
+      });
 
-    it("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(llm);
-    });
+      it("should handle streaming", { retry: 3 }, async () => {
+        await handleStreaming(llm);
+      });
 
-    it("should handle thinking mode", { retry: 3 }, async () => {
-      const llm = getModel("mistral", "mistral-small-2603");
-      await handleThinking(llm, { reasoningEffort: "high" });
-    });
+      it("should handle thinking mode", { retry: 3 }, async () => {
+        const llm = getModel("mistral", "mistral-small-2603");
+        await handleThinking(llm, { reasoningEffort: "high" });
+      });
 
-    it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-      const llm = getModel("mistral", "mistral-small-2603");
-      await multiTurn(llm, { reasoningEffort: "high" });
-    });
-  });
+      it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
+        const llm = getModel("mistral", "mistral-small-2603");
+        await multiTurn(llm, { reasoningEffort: "high" });
+      });
+    },
+  );
 
-  describe.skipIf(!process.env.MISTRAL_API_KEY)(
+  describe.skipIf(!process.env["MISTRAL_API_KEY"])(
     "Mistral Provider (pixtral-12b with image support)",
     () => {
       const llm = getModel("mistral", "pixtral-12b");
@@ -1101,7 +1116,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.MINIMAX_API_KEY)(
+  describe.skipIf(!process.env["MINIMAX_API_KEY"])(
     "MiniMax Provider (MiniMax-M2.7 via Anthropic Messages)",
     () => {
       const llm = getModel("minimax", "MiniMax-M2.7");
@@ -1128,7 +1143,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.KIMI_API_KEY)(
+  describe.skipIf(!process.env["KIMI_API_KEY"])(
     "Kimi For Coding Provider (kimi-for-coding via OpenAI Completions)",
     () => {
       const llm = getModel("kimi-coding", "kimi-for-coding");
@@ -1155,7 +1170,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.META_API_KEY)(
+  describe.skipIf(!process.env["META_API_KEY"])(
     "Meta Provider (muse-spark-1.3 via OpenAI Responses)",
     () => {
       const llm = getModel("meta", "muse-spark-1.3");
@@ -1182,7 +1197,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.XIAOMI_API_KEY)(
+  describe.skipIf(!process.env["XIAOMI_API_KEY"])(
     "Xiaomi MiMo (API billing) Provider (Xiaomi MiMo-V2.6-Pro via Anthropic Messages)",
     () => {
       const llm = getModel("xiaomi", "mimo-v2.6-pro");
@@ -1213,7 +1228,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.XIAOMI_TOKEN_PLAN_CN_API_KEY)(
+  describe.skipIf(!process.env["XIAOMI_TOKEN_PLAN_CN_API_KEY"])(
     "Xiaomi MiMo Token Plan Provider (Xiaomi MiMo-V2.6-Pro via Anthropic Messages, CN region)",
     () => {
       const llm = getModel("xiaomi-token-plan-cn", "mimo-v2.6-pro");
@@ -1244,7 +1259,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.XIAOMI_TOKEN_PLAN_AMS_API_KEY)(
+  describe.skipIf(!process.env["XIAOMI_TOKEN_PLAN_AMS_API_KEY"])(
     "Xiaomi MiMo Token Plan Provider (Xiaomi MiMo-V2.6-Pro via Anthropic Messages, AMS region)",
     () => {
       const llm = getModel("xiaomi-token-plan-ams", "mimo-v2.6-pro");
@@ -1275,7 +1290,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.XIAOMI_TOKEN_PLAN_SGP_API_KEY)(
+  describe.skipIf(!process.env["XIAOMI_TOKEN_PLAN_SGP_API_KEY"])(
     "Xiaomi MiMo Token Plan Provider (Xiaomi MiMo-V2.6-Pro via Anthropic Messages, SGP region)",
     () => {
       const llm = getModel("xiaomi-token-plan-sgp", "mimo-v2.6-pro");
@@ -1306,7 +1321,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.QWEN_TOKEN_PLAN_API_KEY)(
+  describe.skipIf(!process.env["QWEN_TOKEN_PLAN_API_KEY"])(
     "Qwen Token Plan Provider (Qwen3.7-Max, international)",
     () => {
       const llm = getModel("qwen-token-plan", "qwen3.7-max");
@@ -1337,7 +1352,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.QWEN_TOKEN_PLAN_API_KEY)(
+  describe.skipIf(!process.env["QWEN_TOKEN_PLAN_API_KEY"])(
     "Qwen Token Plan Individual Provider (Qwen3.8-Max, international)",
     () => {
       const llm = getModel("qwen-token-plan-individual", "qwen3.8-max");
@@ -1368,7 +1383,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.QWEN_TOKEN_PLAN_CN_API_KEY)(
+  describe.skipIf(!process.env["QWEN_TOKEN_PLAN_CN_API_KEY"])(
     "Qwen Token Plan Provider (Qwen3.7-Max, CN region)",
     () => {
       const llm = getModel("qwen-token-plan-cn", "qwen3.7-max");
@@ -1399,7 +1414,7 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!process.env.ANT_LING_API_KEY)(
+  describe.skipIf(!process.env["ANT_LING_API_KEY"])(
     "Ant Ling Provider (Ling 2.6 Flash via OpenAI Completions)",
     () => {
       const llm = getModel("ant-ling", "Ling-2.6-flash");
@@ -1747,7 +1762,7 @@ describe("Generate E2E Tests", () => {
 
   // Check if ollama is installed and local LLM tests are enabled
   let ollamaInstalled = false;
-  if (!process.env.MSA_NO_LOCAL_LLM) {
+  if (!process.env["MSA_NO_LOCAL_LLM"]) {
     try {
       execSync("which ollama", { stdio: "ignore" });
       ollamaInstalled = true;

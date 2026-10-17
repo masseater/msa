@@ -207,7 +207,7 @@ describe("MCP OAuth", () => {
         return;
       }
       const result =
-        message.method === "initialize"
+        message["method"] === "initialize"
           ? {
               protocolVersion: "2025-06-18",
               capabilities: { tools: {} },
@@ -215,7 +215,7 @@ describe("MCP OAuth", () => {
             }
           : { tools: [{ name: "issues", inputSchema: { type: "object" } }] };
       response.setHeader("content-type", "application/json");
-      response.end(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }));
+      response.end(JSON.stringify({ jsonrpc: "2.0", id: message["id"], result }));
     });
 
     const callback = await OAuthCallbackServer.listen();
@@ -445,7 +445,7 @@ describe("MCP OAuth", () => {
     await register(["com.example.app:/callback"]);
     await register(["https://app.example/callback"]);
     await register(["http://localhost/callback"], "web");
-    expect(bodies.map((body) => body.application_type)).toEqual([
+    expect(bodies.map((body) => body["application_type"])).toEqual([
       "native",
       "native",
       "native",

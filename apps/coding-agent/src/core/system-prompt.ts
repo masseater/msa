@@ -159,18 +159,20 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
   const declaredTools = selectedTools.filter((name) => !hiddenTools.includes(name));
   const promptSections: Record<string, string> = {};
   if (customPrompt) {
-    promptSections.preamble = customPrompt;
+    promptSections["preamble"] = customPrompt;
   } else {
-    promptSections.preamble =
+    promptSections["preamble"] =
       "You are an expert coding assistant operating inside msa, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
     const visibleTools = declaredTools.filter((name) => !!toolSnippets[name]);
     const tools =
       visibleTools.length > 0
         ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n")
         : "(none)";
-    promptSections.tools = `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
-    promptSections.rules = buildRules(declaredTools, toolGuidelines, promptGuidelines);
-    promptSections.docs = `msa documentation (read only when the user asks about msa itself, its SDK, extensions, themes, skills, or TUI):
+    promptSections["tools"] =
+      `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
+    promptSections["rules"] = buildRules(declaredTools, toolGuidelines, promptGuidelines);
+    promptSections["docs"] =
+      `msa documentation (read only when the user asks about msa itself, its SDK, extensions, themes, skills, or TUI):
 - Main documentation: ${getReadmePath()}
 - Additional docs: ${getDocsPath()}
 - Examples: ${getExamplesPath()} (extensions, custom tools, SDK)
@@ -180,8 +182,9 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 - Always read msa .md files completely and follow links to related docs (e.g., tui.md for TUI API details)`;
   }
 
-  if (appendSystemPrompt) promptSections.addendum = appendSystemPrompt;
-  if (contextFiles.length > 0) promptSections.project_context = renderProjectContext(contextFiles);
+  if (appendSystemPrompt) promptSections["addendum"] = appendSystemPrompt;
+  if (contextFiles.length > 0)
+    promptSections["project_context"] = renderProjectContext(contextFiles);
   // A hidden reader is still reachable through another tool, so skills stay but the hint names no tool.
   const readers = ["read", "bash"] as const;
   const skillFileReadTool =
@@ -189,14 +192,14 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
     (readers.some((tool) => selectedTools.includes(tool)) ? "indirect" : undefined);
   if (skillFileReadTool && skills.length > 0) {
     const skillsPrompt = formatSkillsForPrompt(skills, skillFileReadTool).trim();
-    if (skillsPrompt) promptSections.skills = skillsPrompt;
+    if (skillsPrompt) promptSections["skills"] = skillsPrompt;
   }
-  promptSections.cwd = cwd.replace(/\\/g, "/");
+  promptSections["cwd"] = cwd.replace(/\\/g, "/");
   for (const [name, content] of Object.entries(customSections)) {
     if (content) promptSections[name] = content;
   }
 
-  const sections: SystemPromptSections = { preamble: promptSections.preamble };
+  const sections: SystemPromptSections = { preamble: promptSections["preamble"] };
   for (const [name, content] of Object.entries(promptSections)) {
     if (name !== "preamble") sections[name] = `<${name}>\n${content}\n</${name}>`;
   }

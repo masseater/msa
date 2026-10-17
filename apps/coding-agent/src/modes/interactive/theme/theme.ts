@@ -644,7 +644,7 @@ export function resolveThemeSetting(
 export function detectColorFgBgTheme(
   env: NodeJS.ProcessEnv = process.env,
 ): TerminalTheme | undefined {
-  const bg = env.COLORFGBG?.split(";").at(-1)?.trim();
+  const bg = env["COLORFGBG"]?.split(";").at(-1)?.trim();
   if (!bg || !/^\d{1,2}$/.test(bg)) return undefined;
   const index = Number(bg);
   if (index > 15) return undefined;

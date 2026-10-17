@@ -93,7 +93,7 @@ export async function loadRadiusGatewayConfig(
   signal?: AbortSignal,
 ): Promise<RadiusGatewayConfig> {
   const headers: Record<string, string> = { accept: "application/json" };
-  if (apiKey) headers.authorization = `Bearer ${apiKey}`;
+  if (apiKey) headers["authorization"] = `Bearer ${apiKey}`;
   const response = await fetch(new URL("/v1/config", gateway), { headers, signal });
   if (!response.ok) {
     throw new Error(

@@ -170,7 +170,7 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
     // over ambient AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY. The SDK default
     // chain already prefers a configured profile over env keys, but only when
     // `credentials` is not set on the client config. See #6957.
-    const optionsProfile = options.profile || options.env?.AWS_PROFILE;
+    const optionsProfile = options.profile || options.env?.["AWS_PROFILE"];
     const config: BedrockRuntimeClientConfig = {
       profile: optionsProfile || getProviderEnvValue("AWS_PROFILE", options.env),
     };
@@ -200,7 +200,7 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
     const useBearerToken = bearerToken !== undefined && !skipAuth;
 
     // in Node.js/Bun environment only
-    if (typeof process !== "undefined" && (process.versions?.node || process.versions?.bun)) {
+    if (typeof process !== "undefined" && (process.versions?.node || process.versions?.["bun"])) {
       // Region resolution: ARN-embedded > explicit option > env vars > SDK default chain.
       // When the model ID is an inference profile ARN, extract the region from it.
       // This avoids conflicts with AWS_REGION set for other services.
@@ -466,13 +466,13 @@ function appendBedrockFailureDiagnostic(
   const metadata = (error as SdkErrorMetadata)?.$metadata;
   const details: JsonObject = {};
 
-  if (typeof metadata?.httpStatusCode === "number") details.status = metadata.httpStatusCode;
+  if (typeof metadata?.httpStatusCode === "number") details["status"] = metadata.httpStatusCode;
 
   const errorCode = extractBedrockErrorCode(error);
-  if (errorCode !== undefined) details.errorCode = errorCode;
+  if (errorCode !== undefined) details["errorCode"] = errorCode;
 
   const requestId = normalizeDiagnosticValue(metadata?.requestId) ?? fallbackRequestId;
-  if (requestId !== undefined) details.requestId = requestId;
+  if (requestId !== undefined) details["requestId"] = requestId;
 
   if (Object.keys(details).length === 0) return;
 
@@ -1396,7 +1396,7 @@ function buildAdditionalModelRequestFields(
         })();
 
     if (!supportsAdaptiveThinking(model.id, model.name) && (options.interleavedThinking ?? true)) {
-      result.anthropic_beta = ["interleaved-thinking-2025-05-14"];
+      result["anthropic_beta"] = ["interleaved-thinking-2025-05-14"];
     }
 
     return result;

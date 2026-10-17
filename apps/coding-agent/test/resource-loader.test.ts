@@ -230,7 +230,7 @@ Project skill`,
       mkdirSync(join(cwd, ".msa", "themes"), { recursive: true });
       writeFileSync(userThemePath, JSON.stringify(baseTheme, null, 2));
       if (baseTheme.vars) {
-        baseTheme.vars.accent = "#ff00ff";
+        baseTheme.vars["accent"] = "#ff00ff";
       }
       writeFileSync(projectThemePath, JSON.stringify(baseTheme, null, 2));
 

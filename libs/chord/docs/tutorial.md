@@ -785,7 +785,7 @@ await host.reload([
         },
         {
           accepts: {
-            1: (current) => ({ ...current, label: current.heading }),
+            1: (current) => ({ ...current, label: current["heading"] }),
           },
         },
       ),

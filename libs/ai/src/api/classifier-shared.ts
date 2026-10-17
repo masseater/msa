@@ -126,10 +126,13 @@ export function parseClassifierUsage(
   value: unknown,
   model: ClassifierModel<ClassifierApi>,
 ): Usage | undefined {
-  if (!isRecord(value) || (value.input_tokens === undefined && value.output_tokens === undefined))
+  if (
+    !isRecord(value) ||
+    (value["input_tokens"] === undefined && value["output_tokens"] === undefined)
+  )
     return undefined;
-  const input = tokenCount(value.input_tokens);
-  const output = tokenCount(value.output_tokens);
+  const input = tokenCount(value["input_tokens"]);
+  const output = tokenCount(value["output_tokens"]);
   const usage: Usage = {
     input,
     output,

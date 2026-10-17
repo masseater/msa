@@ -155,12 +155,14 @@ describe("WebSocket links: packed payloads", () => {
       );
       assert(
         frames.some(
-          (frame) => frame.t === "result" && JSON.stringify(frame.value) === JSON.stringify(notes),
+          (frame) =>
+            frame["t"] === "result" && JSON.stringify(frame["value"]) === JSON.stringify(notes),
         ),
       );
       assert(
         frames.some(
-          (frame) => frame.t === "state" && JSON.stringify(frame.value) === JSON.stringify(notes),
+          (frame) =>
+            frame["t"] === "state" && JSON.stringify(frame["value"]) === JSON.stringify(notes),
         ),
       );
       await browser.close();

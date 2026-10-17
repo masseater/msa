@@ -18,7 +18,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Initialize dark theme with full color support
-process.env.COLORTERM = "truecolor";
+process.env["COLORTERM"] = "truecolor";
 initTheme("dark");
 
 // Load the real fixture that caused the bug

@@ -71,7 +71,7 @@ function errorMessage(error: unknown): string {
 }
 
 function readContext(): Record<string, unknown> {
-  const raw = process.env.MCP_CONFORMANCE_CONTEXT;
+  const raw = process.env["MCP_CONFORMANCE_CONTEXT"];
   if (!raw) return {};
   const parsed: unknown = JSON.parse(raw);
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
@@ -126,11 +126,12 @@ function simulatedBrowser(): McpSignInPrompt {
 async function run(serverUrl: string, scenario: string): Promise<void> {
   const context = readContext();
   const config: McpHttpServerConfig = { url: serverUrl, timeout: REQUEST_TIMEOUT_SECONDS };
-  if (typeof context.client_id === "string") {
+  if (typeof context["client_id"] === "string") {
     // Pre-registered clients are configured in `mcp.json`.
     config.oauth = {
-      clientId: context.client_id,
-      clientSecret: typeof context.client_secret === "string" ? context.client_secret : undefined,
+      clientId: context["client_id"],
+      clientSecret:
+        typeof context["client_secret"] === "string" ? context["client_secret"] : undefined,
     };
   }
   const entry: McpServerEntry = { name: "conformance", config, source: "conformance" };
@@ -188,8 +189,8 @@ async function run(serverUrl: string, scenario: string): Promise<void> {
 
 async function main(): Promise<number> {
   const serverUrl = process.argv.at(-1);
-  const scenario = process.env.MCP_CONFORMANCE_SCENARIO;
-  const reportPath = process.env.MSA_MCP_CONFORMANCE_REPORT;
+  const scenario = process.env["MCP_CONFORMANCE_SCENARIO"];
+  const reportPath = process.env["MSA_MCP_CONFORMANCE_REPORT"];
   let report: { success: boolean; error?: string };
   if (!serverUrl || !scenario || process.argv.length < 3) {
     report = {

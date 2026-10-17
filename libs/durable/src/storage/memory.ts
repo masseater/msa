@@ -123,7 +123,7 @@ const freeze = <T>(value: T): T => {
 const cursorId = <I extends Id<string>>(
   cursor: Readonly<Record<string, JsonValue>> | undefined,
 ): I | undefined => {
-  const after = cursor?.after;
+  const after = cursor?.["after"];
   if (after === undefined) return undefined;
   if (typeof after !== "number" || !Number.isSafeInteger(after))
     throw new StorageRequestError("Invalid storage cursor");

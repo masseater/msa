@@ -210,13 +210,17 @@ describe("AgentSession MCP OAuth", () => {
     const { harness, server, notifications } = await setup("follow", { clientName: "Claude Code" });
     await harness.session.prompt("/mcp login issues");
     expect(notifications.at(-1)).toBe('Signed in to MCP server "issues" (1 tools).');
-    expect(server.registrations.map((metadata) => metadata.client_name)).toEqual(["Claude Code"]);
+    expect(server.registrations.map((metadata) => metadata["client_name"])).toEqual([
+      "Claude Code",
+    ]);
 
     const fallback = await setup("follow");
     await fallback.harness.session.prompt("/mcp login issues");
-    expect(fallback.server.registrations.map((metadata) => metadata.client_name)).toEqual(["msa"]);
+    expect(fallback.server.registrations.map((metadata) => metadata["client_name"])).toEqual([
+      "msa",
+    ]);
     // OpenID Connect servers reject the loopback redirect URI of a `web` client (#10493).
-    expect(fallback.server.registrations.map((metadata) => metadata.application_type)).toEqual([
+    expect(fallback.server.registrations.map((metadata) => metadata["application_type"])).toEqual([
       "native",
     ]);
   });

@@ -232,7 +232,7 @@ async function refreshAccessToken(
   credential: OAuthCredential,
   signal: AbortSignal,
 ): Promise<OAuthCredential> {
-  const clientId = credential.clientId;
+  const clientId = credential["clientId"];
   if (typeof clientId !== "string" || clientId.trim().length === 0) {
     throw new Error(
       "Stored OpenAI OAuth credential does not contain an issued client ID; reconnect ChatGPT",

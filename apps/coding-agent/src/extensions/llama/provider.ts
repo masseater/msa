@@ -25,7 +25,7 @@ import {
 export const LLAMA_PROVIDER_ID = "llama.cpp";
 export const DEFAULT_LLAMA_SERVER_URL = "http://127.0.0.1:8080";
 function credentialServerUrl(credential: ApiKeyCredential | undefined): string | undefined {
-  const value = credential?.env?.LLAMA_BASE_URL;
+  const value = credential?.env?.["LLAMA_BASE_URL"];
   return typeof value === "string" && value.trim() ? normalizeLlamaServerUrl(value) : undefined;
 }
 
@@ -213,10 +213,10 @@ export function createLlamaProvider(): LlamaProviderController {
           const enteredUrl = await interaction.prompt({
             type: "text",
             message: "llama.cpp server URL",
-            placeholder: process.env.LLAMA_BASE_URL ?? DEFAULT_LLAMA_SERVER_URL,
+            placeholder: process.env["LLAMA_BASE_URL"] ?? DEFAULT_LLAMA_SERVER_URL,
           });
           const serverUrl = normalizeLlamaServerUrl(
-            enteredUrl.trim() || process.env.LLAMA_BASE_URL || DEFAULT_LLAMA_SERVER_URL,
+            enteredUrl.trim() || process.env["LLAMA_BASE_URL"] || DEFAULT_LLAMA_SERVER_URL,
           );
           const apiKey = (
             await interaction.prompt({

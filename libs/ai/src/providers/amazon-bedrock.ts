@@ -72,11 +72,11 @@ const bedrockAuth: ApiKeyAuth = {
     }
     if (await env("AWS_BEARER_TOKEN_BEDROCK"))
       return { auth: {}, source: "AWS_BEARER_TOKEN_BEDROCK" };
-    if (credential?.env?.AWS_PROFILE ?? (await env("AWS_PROFILE"))) {
+    if (credential?.env?.["AWS_PROFILE"] ?? (await env("AWS_PROFILE"))) {
       return {
         auth: {},
         env: credential?.env,
-        source: credential?.env?.AWS_PROFILE ? "stored credential" : "AWS_PROFILE",
+        source: credential?.env?.["AWS_PROFILE"] ? "stored credential" : "AWS_PROFILE",
       };
     }
     if ((await env("AWS_ACCESS_KEY_ID")) && (await env("AWS_SECRET_ACCESS_KEY"))) {

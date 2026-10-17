@@ -134,48 +134,48 @@ const parseJson = (text: string, description: string): unknown => {
 };
 
 const validateMainOperation = (value: unknown, description: string): MainOperation => {
-  if (!isObject(value) || typeof value.type !== "string") {
+  if (!isObject(value) || typeof value["type"] !== "string") {
     throw new JsonlCorruptionError(`Invalid write in ${description}`);
   }
-  switch (value.type) {
+  switch (value["type"]) {
     case "conversation":
     case "entry":
     case "submission":
-      if (!isObject(value.value) || !isSafeInteger(value.value.id)) {
-        throw new JsonlCorruptionError(`Invalid ${value.type} write in ${description}`);
+      if (!isObject(value["value"]) || !isSafeInteger(value["value"]["id"])) {
+        throw new JsonlCorruptionError(`Invalid ${value["type"]} write in ${description}`);
       }
       return value as MainOperation;
     case "task":
       if (
-        !isObject(value.value) ||
-        !isSafeInteger(value.value.id) ||
-        !isObject(value.value.state) ||
-        value.value.state.status !== "terminal"
+        !isObject(value["value"]) ||
+        !isSafeInteger(value["value"]["id"]) ||
+        !isObject(value["value"]["state"]) ||
+        value["value"]["state"]["status"] !== "terminal"
       ) {
         throw new JsonlCorruptionError(`Invalid terminal task write in ${description}`);
       }
       return value as MainOperation;
     case "document.retire":
-      if (!isSafeInteger(value.id))
+      if (!isSafeInteger(value["id"]))
         throw new JsonlCorruptionError(`Invalid document retirement in ${description}`);
       return value as MainOperation;
     case "task.sidecar":
-      if (!isSafeInteger(value.id) || !isSafeInteger(value.ordinal) || value.ordinal < 0) {
+      if (!isSafeInteger(value["id"]) || !isSafeInteger(value["ordinal"]) || value["ordinal"] < 0) {
         throw new JsonlCorruptionError(`Invalid task sidecar write in ${description}`);
       }
       return value as MainOperation;
     case "document.create":
       if (
-        !isObject(value.record) ||
-        !isSafeInteger(value.record.id) ||
-        !isSafeInteger(value.ordinal) ||
-        value.ordinal < 0
+        !isObject(value["record"]) ||
+        !isSafeInteger(value["record"]["id"]) ||
+        !isSafeInteger(value["ordinal"]) ||
+        value["ordinal"] < 0
       ) {
         throw new JsonlCorruptionError(`Invalid document creation in ${description}`);
       }
       return value as MainOperation;
     case "document.change":
-      if (!isSafeInteger(value.id) || !isSafeInteger(value.ordinal) || value.ordinal < 0) {
+      if (!isSafeInteger(value["id"]) || !isSafeInteger(value["ordinal"]) || value["ordinal"] < 0) {
         throw new JsonlCorruptionError(`Invalid document change in ${description}`);
       }
       return value as MainOperation;
@@ -189,28 +189,28 @@ const parseMainMarker = (text: string, line: number): MainMarker => {
   const value = parseJson(text, description);
   if (
     !isObject(value) ||
-    value.format !== FORMAT_VERSION ||
-    value.type !== "commit" ||
-    !isSafeInteger(value.seq) ||
-    value.seq < 1 ||
-    !Array.isArray(value.writes)
+    value["format"] !== FORMAT_VERSION ||
+    value["type"] !== "commit" ||
+    !isSafeInteger(value["seq"]) ||
+    value["seq"] < 1 ||
+    !Array.isArray(value["writes"])
   ) {
     throw new JsonlCorruptionError(`Invalid commit marker in ${description}`);
   }
   return {
     format: FORMAT_VERSION,
     type: "commit",
-    seq: seqFromNumber(value.seq),
-    writes: value.writes.map((write) => validateMainOperation(write, description)),
+    seq: seqFromNumber(value["seq"]),
+    writes: value["writes"].map((write) => validateMainOperation(write, description)),
   };
 };
 
 const validateDocumentContent = (value: unknown, description: string): DocumentContent => {
-  if (!isObject(value) || !isSafeInteger(value.version) || value.version < 1) {
+  if (!isObject(value) || !isSafeInteger(value["version"]) || value["version"] < 1) {
     throw new JsonlCorruptionError(`Invalid document content in ${description}`);
   }
-  if (value.kind === "base" && isObject(value.value)) return value as DocumentContent;
-  if (value.kind === "delta" && Array.isArray(value.ops)) return value as DocumentContent;
+  if (value["kind"] === "base" && isObject(value["value"])) return value as DocumentContent;
+  if (value["kind"] === "delta" && Array.isArray(value["ops"])) return value as DocumentContent;
   throw new JsonlCorruptionError(`Invalid document content in ${description}`);
 };
 
@@ -219,31 +219,31 @@ const parseSidecarRecord = (text: string, file: string, line: number): SidecarRe
   const value = parseJson(text, description);
   if (
     !isObject(value) ||
-    value.format !== FORMAT_VERSION ||
-    value.type !== "record" ||
-    !isSafeInteger(value.seq) ||
-    value.seq < 1 ||
-    !isSafeInteger(value.ordinal) ||
-    value.ordinal < 0 ||
-    !isObject(value.payload) ||
-    typeof value.payload.type !== "string"
+    value["format"] !== FORMAT_VERSION ||
+    value["type"] !== "record" ||
+    !isSafeInteger(value["seq"]) ||
+    value["seq"] < 1 ||
+    !isSafeInteger(value["ordinal"]) ||
+    value["ordinal"] < 0 ||
+    !isObject(value["payload"]) ||
+    typeof value["payload"]["type"] !== "string"
   ) {
     throw new JsonlCorruptionError(`Invalid sidecar record in ${description}`);
   }
-  if (value.payload.type === "task") {
+  if (value["payload"]["type"] === "task") {
     if (
-      !isObject(value.payload.value) ||
-      !isSafeInteger(value.payload.value.id) ||
-      !isObject(value.payload.value.state) ||
-      value.payload.value.state.status === "terminal"
+      !isObject(value["payload"]["value"]) ||
+      !isSafeInteger(value["payload"]["value"]["id"]) ||
+      !isObject(value["payload"]["value"]["state"]) ||
+      value["payload"]["value"]["state"]["status"] === "terminal"
     ) {
       throw new JsonlCorruptionError(`Invalid live task record in ${description}`);
     }
-  } else if (value.payload.type === "document") {
-    if (!isSafeInteger(value.payload.id)) {
+  } else if (value["payload"]["type"] === "document") {
+    if (!isSafeInteger(value["payload"]["id"])) {
       throw new JsonlCorruptionError(`Invalid document record in ${description}`);
     }
-    validateDocumentContent(value.payload.content, description);
+    validateDocumentContent(value["payload"]["content"], description);
   } else {
     throw new JsonlCorruptionError(`Unknown sidecar record type in ${description}`);
   }

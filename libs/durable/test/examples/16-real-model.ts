@@ -22,7 +22,7 @@ const context = BACKGROUND_CONTEXT;
 // OPENAI_API_KEY from the environment. While the answer streams, generation
 // commits throttled partials to the conversation's msa.live document. Watching
 // that document streams the answer; the watch sees only committed values.
-if (process.env.OPENAI_API_KEY === undefined) {
+if (process.env["OPENAI_API_KEY"] === undefined) {
   console.log("skipped: OPENAI_API_KEY is not set");
 } else {
   const models = createModels();

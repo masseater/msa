@@ -25,7 +25,7 @@ import { createCodingTools } from "../src/index.ts";
 import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
 import { createTestResourceLoader } from "./utilities.ts";
 
-const API_KEY = process.env.ANTHROPIC_OAUTH_TOKEN || process.env.ANTHROPIC_API_KEY;
+const API_KEY = process.env["ANTHROPIC_OAUTH_TOKEN"] || process.env["ANTHROPIC_API_KEY"];
 
 describe.skipIf(!API_KEY)("Compaction extensions", () => {
   let session: AgentSession;

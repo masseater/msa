@@ -40,7 +40,7 @@ async function configuredClient(ctx: ExtensionCommandContext): Promise<LlamaClie
     ctx.ui.notify(`Configure llama.cpp with /login ${LLAMA_PROVIDER_ID}`, "warning");
     return undefined;
   }
-  const configuredUrl = result.env?.LLAMA_BASE_URL;
+  const configuredUrl = result.env?.["LLAMA_BASE_URL"];
   const serverUrl = normalizeLlamaServerUrl(
     typeof configuredUrl === "string" && configuredUrl
       ? configuredUrl

@@ -75,7 +75,7 @@ describe("JSONL share export", () => {
         .map((line) => JSON.parse(line) as Record<string, unknown>);
       expect(
         normalRecords.some(
-          (record) => record.type === "custom" && record.customType === "msa.share",
+          (record) => record["type"] === "custom" && record["customType"] === "msa.share",
         ),
       ).toBe(false);
 
@@ -86,12 +86,12 @@ describe("JSONL share export", () => {
         .split("\n")
         .map((line) => JSON.parse(line) as Record<string, unknown>);
       const conversationRecords = records.slice(1, -1);
-      expect(conversationRecords.map((record) => record.id)).toEqual(originalEntryIds);
-      expect(conversationRecords.map((record) => record.parentId)).toEqual([
+      expect(conversationRecords.map((record) => record["id"])).toEqual(originalEntryIds);
+      expect(conversationRecords.map((record) => record["parentId"])).toEqual([
         null,
         ...originalEntryIds.slice(0, -1),
       ]);
-      expect(conversationRecords.slice(-3).map((record) => record.id)).toEqual([
+      expect(conversationRecords.slice(-3).map((record) => record["id"])).toEqual([
         userId,
         assistantId,
         resultId,

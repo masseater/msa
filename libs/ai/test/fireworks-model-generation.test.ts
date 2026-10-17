@@ -143,8 +143,8 @@ describe("Fireworks model generation", () => {
         },
       },
     ).result();
-    expect(payload?.thinking).toEqual({ type: "adaptive", display: "summarized" });
-    expect(payload?.output_config).toEqual({ effort: "max" });
+    expect(payload?.["thinking"]).toEqual({ type: "adaptive", display: "summarized" });
+    expect(payload?.["output_config"]).toEqual({ effort: "max" });
   });
 
   it("does not infer adaptive thinking from toggle, budget, or missing metadata", () => {

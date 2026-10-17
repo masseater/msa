@@ -234,21 +234,21 @@ export class ReadOnlyAuthStorage implements CredentialStore {
         throw new Error(`Invalid auth.json credential for provider "${providerId}"`);
       }
       const value = credential as Record<string, unknown>;
-      if (value.type === "api_key") {
-        const validKey = value.key === undefined || typeof value.key === "string";
+      if (value["type"] === "api_key") {
+        const validKey = value["key"] === undefined || typeof value["key"] === "string";
         const validEnv =
-          value.env === undefined ||
-          (typeof value.env === "object" &&
-            value.env !== null &&
-            !Array.isArray(value.env) &&
-            Object.values(value.env).every((entry) => typeof entry === "string"));
+          value["env"] === undefined ||
+          (typeof value["env"] === "object" &&
+            value["env"] !== null &&
+            !Array.isArray(value["env"]) &&
+            Object.values(value["env"]).every((entry) => typeof entry === "string"));
         if (validKey && validEnv) continue;
       } else if (
-        value.type === "oauth" &&
-        typeof value.access === "string" &&
-        typeof value.refresh === "string" &&
-        typeof value.expires === "number" &&
-        Number.isFinite(value.expires)
+        value["type"] === "oauth" &&
+        typeof value["access"] === "string" &&
+        typeof value["refresh"] === "string" &&
+        typeof value["expires"] === "number" &&
+        Number.isFinite(value["expires"])
       ) {
         continue;
       }

@@ -17,12 +17,12 @@ const STREAM_API_KEY = "resolved-stream-key";
 const server = createAcmeServer("stream");
 
 beforeAll(() => {
-  process.env.ACME_STREAM_API_KEY = STREAM_API_KEY;
+  process.env["ACME_STREAM_API_KEY"] = STREAM_API_KEY;
   return server.start();
 });
 beforeEach(() => server.reset());
 afterAll(() => {
-  delete process.env.ACME_STREAM_API_KEY;
+  delete process.env["ACME_STREAM_API_KEY"];
   return server.stop();
 });
 

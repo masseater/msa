@@ -71,17 +71,17 @@ function probeTmuxHyperlinks(): boolean {
 function detectCapabilitiesFromEnvironment(
   tmuxForwardsHyperlink: () => boolean,
 ): TerminalCapabilities {
-  const termProgram = process.env.TERM_PROGRAM?.toLowerCase() || "";
-  const terminalEmulator = process.env.TERMINAL_EMULATOR?.toLowerCase() || "";
-  const term = process.env.TERM?.toLowerCase() || "";
-  const colorTerm = process.env.COLORTERM?.toLowerCase() || "";
+  const termProgram = process.env["TERM_PROGRAM"]?.toLowerCase() || "";
+  const terminalEmulator = process.env["TERMINAL_EMULATOR"]?.toLowerCase() || "";
+  const term = process.env["TERM"]?.toLowerCase() || "";
+  const colorTerm = process.env["COLORTERM"]?.toLowerCase() || "";
   const hasTrueColorHint =
     colorTerm === "truecolor" || colorTerm === "24bit" || term.endsWith("-direct");
   const isWindowsConsole = process.platform === "win32";
 
   // Emit OSC 8 hyperlinks only when tmux confirms it forwards.
   // Image protocols are unreliable under tmux, so leave `images: null`.
-  if (process.env.TMUX || term.startsWith("tmux")) {
+  if (process.env["TMUX"] || term.startsWith("tmux")) {
     return { images: null, trueColor: hasTrueColorHint, hyperlinks: tmuxForwardsHyperlink() };
   }
 
@@ -96,32 +96,36 @@ function detectCapabilitiesFromEnvironment(
     return { images: "kitty", trueColor: hasTrueColorHint, hyperlinks: true };
   }
 
-  if (process.env.KITTY_WINDOW_ID || termProgram === "kitty") {
+  if (process.env["KITTY_WINDOW_ID"] || termProgram === "kitty") {
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
-  if (termProgram === "ghostty" || term.includes("ghostty") || process.env.GHOSTTY_RESOURCES_DIR) {
+  if (
+    termProgram === "ghostty" ||
+    term.includes("ghostty") ||
+    process.env["GHOSTTY_RESOURCES_DIR"]
+  ) {
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
-  if (process.env.WEZTERM_PANE || termProgram === "wezterm") {
+  if (process.env["WEZTERM_PANE"] || termProgram === "wezterm") {
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
   // Warp supports the Kitty graphics protocol and OSC 8 hyperlinks.
   if (
     termProgram === "warpterminal" ||
-    process.env.WARP_SESSION_ID ||
-    process.env.WARP_TERMINAL_SESSION_UUID
+    process.env["WARP_SESSION_ID"] ||
+    process.env["WARP_TERMINAL_SESSION_UUID"]
   ) {
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
-  if (process.env.ITERM_SESSION_ID || termProgram === "iterm.app") {
+  if (process.env["ITERM_SESSION_ID"] || termProgram === "iterm.app") {
     return { images: "iterm2", trueColor: true, hyperlinks: true };
   }
 
-  if (process.env.WT_SESSION) {
+  if (process.env["WT_SESSION"]) {
     return { images: null, trueColor: true, hyperlinks: true };
   }
 
@@ -154,18 +158,18 @@ function parseBooleanCapabilityOverride(value: string | undefined): boolean | un
 export function detectCapabilities(
   tmuxForwardsHyperlink: () => boolean = probeTmuxHyperlinks,
 ): TerminalCapabilities {
-  const hyperlinks = parseBooleanCapabilityOverride(process.env.MSA_HYPERLINKS);
+  const hyperlinks = parseBooleanCapabilityOverride(process.env["MSA_HYPERLINKS"]);
   const detected = detectCapabilitiesFromEnvironment(
     hyperlinks === undefined ? tmuxForwardsHyperlink : () => hyperlinks,
   );
-  const imageProtocol = process.env.MSA_IMAGE_PROTOCOL?.toLowerCase();
+  const imageProtocol = process.env["MSA_IMAGE_PROTOCOL"]?.toLowerCase();
   const images =
     imageProtocol === "kitty" || imageProtocol === "iterm2"
       ? imageProtocol
       : imageProtocol === "none" || imageProtocol === "0"
         ? null
         : undefined;
-  const trueColor = parseBooleanCapabilityOverride(process.env.MSA_TRUE_COLOR);
+  const trueColor = parseBooleanCapabilityOverride(process.env["MSA_TRUE_COLOR"]);
   return {
     ...detected,
     ...(images !== undefined ? { images } : {}),

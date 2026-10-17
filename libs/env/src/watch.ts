@@ -99,17 +99,17 @@ export class RemoteWatcher implements FileWatcher {
         {
           signal: controller.signal,
           onEvent: (event) => {
-            if (event.kind === "ready") {
+            if (event["kind"] === "ready") {
               ready = true;
-              this.#mode = event.mode === "polling" ? "polling" : "native";
+              this.#mode = event["mode"] === "polling" ? "polling" : "native";
               resolve();
-            } else if (event.kind === "change") {
-              if (event.mode === "polling") this.#mode = "polling";
-              if (event.overflow === true) this.#deliver({ overflow: true });
-              else this.#deliver({ paths: event.paths as string[] });
-            } else if (event.kind === "error") {
-              const code = event.code === "permission_denied" ? "permission_denied" : "invalid";
-              this.#deliver({ error: new FileError(code, String(event.message)) });
+            } else if (event["kind"] === "change") {
+              if (event["mode"] === "polling") this.#mode = "polling";
+              if (event["overflow"] === true) this.#deliver({ overflow: true });
+              else this.#deliver({ paths: event["paths"] as string[] });
+            } else if (event["kind"] === "error") {
+              const code = event["code"] === "permission_denied" ? "permission_denied" : "invalid";
+              this.#deliver({ error: new FileError(code, String(event["message"])) });
               this.#closed = true;
             }
           },

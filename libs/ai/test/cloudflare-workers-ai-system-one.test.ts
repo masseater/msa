@@ -89,8 +89,8 @@ describe("Cloudflare Workers AI System One", () => {
       };
       expect(payload.model).toBe("typesafe/jev");
       expect(payload.input.state).toEqual(context.state);
-      expect(payload.input.questions.is_urgent?.type).toBe("noul");
-      expect(payload.input.questions.department?.type).toBe("choice");
+      expect(payload.input.questions["is_urgent"]?.type).toBe("noul");
+      expect(payload.input.questions["department"]?.type).toBe("choice");
       expect(new Headers(init?.headers).get("authorization")).toBe("Bearer cf-key");
       return Response.json(restResponse("Completed"));
     });
@@ -101,8 +101,8 @@ describe("Cloudflare Workers AI System One", () => {
       "https://api.cloudflare.com/client/v4/accounts/account-id/ai/run",
     );
     expect(result.stopReason).toBe("stop");
-    expect(result.answers.is_urgent).toEqual({ type: "bool", probability: 0.95 });
-    expect(result.answers.department).toMatchObject({
+    expect(result.answers["is_urgent"]).toEqual({ type: "bool", probability: 0.95 });
+    expect(result.answers["department"]).toMatchObject({
       type: "choice",
       choice: "billing",
       confidence: 0.8,
@@ -124,7 +124,7 @@ describe("Cloudflare Workers AI System One", () => {
       };
       expect(payload.model).toBe(id);
       expect(payload.input.state).toEqual(context.state);
-      expect(payload.input.questions.is_urgent?.type).toBe("noul");
+      expect(payload.input.questions["is_urgent"]?.type).toBe("noul");
       return Response.json({ result: clefOutput, success: true, errors: [], messages: [] });
     });
 
@@ -134,8 +134,8 @@ describe("Cloudflare Workers AI System One", () => {
       "https://api.cloudflare.com/client/v4/accounts/account-id/ai/run",
     );
     expect(result.stopReason).toBe("stop");
-    expect(result.answers.is_urgent).toEqual({ type: "bool", probability: 0.9912 });
-    expect(result.answers.department).toMatchObject({
+    expect(result.answers["is_urgent"]).toEqual({ type: "bool", probability: 0.9912 });
+    expect(result.answers["department"]).toMatchObject({
       type: "choice",
       choice: "technical",
       confidence: 0.4538,

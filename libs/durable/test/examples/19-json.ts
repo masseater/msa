@@ -56,7 +56,7 @@ const print = (value: unknown): void => void process.stdout.write(`${JSON.string
 
 const models = createModels();
 let model = { provider: "openai", modelId: "gpt-6-sol" };
-if (process.env.OPENAI_API_KEY !== undefined) {
+if (process.env["OPENAI_API_KEY"] !== undefined) {
   models.setProvider(openaiProvider());
 } else {
   const faux = fauxProvider({ tokensPerSecond: 200 });

@@ -361,7 +361,7 @@ function add(
     const headers = parsePairs("header", lists.get("header"), error);
     if (!headers) return 1;
     const bearer = value("bearer-token-env-var");
-    if (bearer !== undefined) headers.Authorization = `Bearer \${${bearer}}`;
+    if (bearer !== undefined) headers["Authorization"] = `Bearer \${${bearer}}`;
     const port = value("oauth-callback-port");
     const oauth = {
       ...(value("oauth-client-id") === undefined ? {} : { clientId: value("oauth-client-id") }),
@@ -389,9 +389,9 @@ function add(
       ...(value("cwd") === undefined ? {} : { cwd: value("cwd") }),
     };
   }
-  if (exposure !== undefined) config.exposure = exposure;
+  if (exposure !== undefined) config["exposure"] = exposure;
   const description = value("description");
-  if (description !== undefined) config.description = description;
+  if (description !== undefined) config["description"] = description;
   const validated = validateMcpServerConfig(name, config);
   if (typeof validated === "string") {
     error(validated);

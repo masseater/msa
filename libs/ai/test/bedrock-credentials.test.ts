@@ -75,13 +75,13 @@ describe("bedrock credential priority", () => {
 
     let config = await captureClientConfig(model, { profile: "explicit-profile" });
 
-    expect(config.profile).toBe("explicit-profile");
-    expect(config.credentials).toBeUndefined();
+    expect(config["profile"]).toBe("explicit-profile");
+    expect(config["credentials"]).toBeUndefined();
 
     config = await captureClientConfig(model, { env: { AWS_PROFILE: "scoped-profile" } });
 
-    expect(config.profile).toBe("scoped-profile");
-    expect(config.credentials).toBeUndefined();
+    expect(config["profile"]).toBe("scoped-profile");
+    expect(config["credentials"]).toBeUndefined();
   });
 
   it("uses ambient AWS access keys when no profile is configured", async () => {
@@ -91,8 +91,8 @@ describe("bedrock credential priority", () => {
 
     const config = await captureClientConfig(model);
 
-    expect(config.profile).toBeUndefined();
-    expect(config.credentials).toEqual({
+    expect(config["profile"]).toBeUndefined();
+    expect(config["credentials"]).toEqual({
       accessKeyId: "AKIAEXAMPLE",
       secretAccessKey: "secretexample",
     });
@@ -106,8 +106,8 @@ describe("bedrock credential priority", () => {
 
     const config = await captureClientConfig(model);
 
-    expect(config.profile).toBe("ambient-profile");
-    expect(config.credentials).toEqual({
+    expect(config["profile"]).toBe("ambient-profile");
+    expect(config["credentials"]).toEqual({
       accessKeyId: "AKIAEXAMPLE",
       secretAccessKey: "secretexample",
     });

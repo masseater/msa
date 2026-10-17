@@ -137,7 +137,8 @@ function loadTemplateFromFile(
   const name = basename(filePath).replace(/\.md$/, "");
 
   // Get description from frontmatter or first non-empty line
-  let description = typeof frontmatter.description === "string" ? frontmatter.description : "";
+  let description =
+    typeof frontmatter["description"] === "string" ? frontmatter["description"] : "";
   if (!description) {
     const firstLine = body.split("\n").find((line) => line.trim());
     if (firstLine) {

@@ -1199,7 +1199,7 @@ describe("Pico JsonlStorage publication and recovery", () => {
     const record = JSON.parse((await readFile(path, "utf8")).trim()) as {
       payload: { content: Record<string, unknown> };
     };
-    delete record.payload.content.value;
+    delete record.payload.content["value"];
     await writeFile(path, `${JSON.stringify(record)}\n`);
 
     await expect(

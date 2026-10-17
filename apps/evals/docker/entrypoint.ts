@@ -14,7 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const variant = process.env.MSA_EVAL_VARIANT;
+const variant = process.env["MSA_EVAL_VARIANT"];
 
 function parseId(name: string): number {
   const value = Number(process.env[name]);
@@ -136,10 +136,10 @@ const authSource = "/run/msa-eval-secrets/auth.json";
 if (existsSync(authSource)) copyFileSync(authSource, join(agentDir, "auth.json"));
 chownTree(agentDir, sandboxUid, sandboxGid);
 chownTree("/artifacts", sandboxUid, sandboxGid);
-process.env.HOME = "/tmp/msa-eval-bootstrap";
-process.env.USERPROFILE = process.env.HOME;
-process.env.MSA_CODING_AGENT_DIR = agentDir;
-process.env.MSA_EVAL_CONTAINER = "1";
+process.env["HOME"] = "/tmp/msa-eval-bootstrap";
+process.env["USERPROFILE"] = process.env["HOME"];
+process.env["MSA_CODING_AGENT_DIR"] = agentDir;
+process.env["MSA_EVAL_CONTAINER"] = "1";
 process.umask(0o022);
 
 const require = createRequire(import.meta.url);
@@ -181,8 +181,8 @@ const result = spawnSync(process.execPath, commandArgs, {
 });
 if (result.error) throw result.error;
 
-const artifactUid = process.env.MSA_EVAL_ARTIFACT_UID;
-const artifactGid = process.env.MSA_EVAL_ARTIFACT_GID;
+const artifactUid = process.env["MSA_EVAL_ARTIFACT_UID"];
+const artifactGid = process.env["MSA_EVAL_ARTIFACT_GID"];
 if (artifactUid !== undefined && artifactGid !== undefined) {
   chownTree("/artifacts", parseId("MSA_EVAL_ARTIFACT_UID"), parseId("MSA_EVAL_ARTIFACT_GID"));
 }

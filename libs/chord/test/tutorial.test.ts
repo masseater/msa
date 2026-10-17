@@ -480,7 +480,7 @@ it("09: compatible reload, migration and an old-contract adapter", { timeout: 50
           },
           {
             accepts: {
-              1: (current) => ({ ...current, label: current.heading }),
+              1: (current) => ({ ...current, label: current["heading"] }),
             },
           },
         ),

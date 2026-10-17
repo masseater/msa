@@ -65,19 +65,19 @@ vi.mock("openai", () => {
 });
 
 describe("openai-completions prompt caching", () => {
-  const originalEnv = process.env.MSA_CACHE_RETENTION;
+  const originalEnv = process.env["MSA_CACHE_RETENTION"];
 
   beforeEach(() => {
     mockState.lastParams = undefined;
     mockState.lastClientOptions = undefined;
-    delete process.env.MSA_CACHE_RETENTION;
+    delete process.env["MSA_CACHE_RETENTION"];
   });
 
   afterEach(() => {
     if (originalEnv === undefined) {
-      delete process.env.MSA_CACHE_RETENTION;
+      delete process.env["MSA_CACHE_RETENTION"];
     } else {
-      process.env.MSA_CACHE_RETENTION = originalEnv;
+      process.env["MSA_CACHE_RETENTION"] = originalEnv;
     }
   });
 
@@ -158,7 +158,7 @@ describe("openai-completions prompt caching", () => {
   });
 
   it("uses MSA_CACHE_RETENTION for direct OpenAI requests", async () => {
-    process.env.MSA_CACHE_RETENTION = "long";
+    process.env["MSA_CACHE_RETENTION"] = "long";
     const { payload } = await captureRequest({ sessionId: "session-env" });
 
     expect(payload?.prompt_cache_key).toBe("session-env");
@@ -172,7 +172,7 @@ describe("openai-completions prompt caching", () => {
     });
     const { headers } = await captureRequest({ sessionId: "session-affinity" }, model);
 
-    expect(headers.session_id).toBe("session-affinity");
+    expect(headers["session_id"]).toBe("session-affinity");
     expect(headers["x-client-request-id"]).toBe("session-affinity");
     expect(headers["x-session-affinity"]).toBe("session-affinity");
   });
@@ -203,7 +203,7 @@ describe("openai-completions prompt caching", () => {
 
     expect(payload?.session_id).toBeUndefined();
     expect(payload?.prompt_cache_key).toBe("session-nosession");
-    expect(headers.session_id).toBeUndefined();
+    expect(headers["session_id"]).toBeUndefined();
     expect(headers["x-client-request-id"]).toBe("session-nosession");
     expect(headers["x-session-affinity"]).toBe("session-nosession");
     expect(headers["x-session-id"]).toBeUndefined();
@@ -219,7 +219,7 @@ describe("openai-completions prompt caching", () => {
     expect(payload?.session_id).toBeUndefined();
     expect(payload?.prompt_cache_key).toBeUndefined();
     expect(headers["x-session-id"]).toBe("session-proxy");
-    expect(headers.session_id).toBeUndefined();
+    expect(headers["session_id"]).toBeUndefined();
     expect(headers["x-client-request-id"]).toBeUndefined();
     expect(headers["x-session-affinity"]).toBeUndefined();
   });
@@ -231,7 +231,7 @@ describe("openai-completions prompt caching", () => {
     expect(payload?.session_id).toBeUndefined();
     expect(payload?.prompt_cache_key).toBeUndefined();
     expect(headers["x-session-id"]).toBe("session-openrouter");
-    expect(headers.session_id).toBeUndefined();
+    expect(headers["session_id"]).toBeUndefined();
     expect(headers["x-client-request-id"]).toBeUndefined();
     expect(headers["x-session-affinity"]).toBeUndefined();
   });
@@ -259,7 +259,7 @@ describe("openai-completions prompt caching", () => {
       model,
     );
 
-    expect(headers.session_id).toBeUndefined();
+    expect(headers["session_id"]).toBeUndefined();
     expect(headers["x-client-request-id"]).toBeUndefined();
     expect(headers["x-session-affinity"]).toBeUndefined();
   });
@@ -281,7 +281,7 @@ describe("openai-completions prompt caching", () => {
       model,
     );
 
-    expect(headers.session_id).toBe("override-session");
+    expect(headers["session_id"]).toBe("override-session");
     expect(headers["x-client-request-id"]).toBe("override-request");
     expect(headers["x-session-affinity"]).toBe("override-affinity");
   });

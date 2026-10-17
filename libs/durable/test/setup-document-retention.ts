@@ -3,5 +3,5 @@
 // (`npm run test:evicting`).
 import { setDefaultDocumentRetention } from "../src/session/session.ts";
 
-const forced = process.env.MSA_DURABLE_DOCUMENT_RETENTION_MS;
+const forced = process.env["MSA_DURABLE_DOCUMENT_RETENTION_MS"];
 if (forced !== undefined) setDefaultDocumentRetention(Number(forced));

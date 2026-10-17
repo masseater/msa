@@ -835,7 +835,7 @@ describe("codemode models", () => {
             maxActive = Math.max(maxActive, active);
             await new Promise((resolve) => setTimeout(resolve, 10));
             active--;
-            const text = context.state.text;
+            const text = context.state["text"];
             observed.push({ baseUrl: model.baseUrl, apiKey: options?.apiKey, text });
             if (text === "explode") {
               return {

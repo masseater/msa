@@ -42,7 +42,7 @@ describe("theme picker", () => {
       name: "bar",
     };
 
-    const themePath = join(process.env.MSA_CODING_AGENT_DIR!, "themes", "foo.json");
+    const themePath = join(process.env["MSA_CODING_AGENT_DIR"]!, "themes", "foo.json");
     writeFileSync(themePath, JSON.stringify(customTheme, null, 2));
 
     expect(getAvailableThemes()).toContain("bar");

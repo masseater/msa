@@ -40,18 +40,18 @@ describe("google-shared convertTools", () => {
     const decl = result?.[0]?.functionDeclarations?.[0];
 
     expect(decl).toBeDefined();
-    expect(decl?.parameters).toEqual({
+    expect(decl?.["parameters"]).toEqual({
       type: "object",
       properties: {
         command: { type: "string" },
       },
       required: ["command"],
     });
-    expect(decl?.parameters).not.toHaveProperty("$schema");
-    expect(decl?.parameters).not.toHaveProperty("$id");
-    expect(decl?.parameters).not.toHaveProperty("$comment");
-    expect(decl?.parameters).not.toHaveProperty("$defs");
-    expect(decl?.parameters).not.toHaveProperty("definitions");
+    expect(decl?.["parameters"]).not.toHaveProperty("$schema");
+    expect(decl?.["parameters"]).not.toHaveProperty("$id");
+    expect(decl?.["parameters"]).not.toHaveProperty("$comment");
+    expect(decl?.["parameters"]).not.toHaveProperty("$defs");
+    expect(decl?.["parameters"]).not.toHaveProperty("definitions");
   });
 
   it("recursively strips nested JSON Schema meta keys", () => {
@@ -73,7 +73,7 @@ describe("google-shared convertTools", () => {
     const decl = result?.[0]?.functionDeclarations?.[0];
 
     expect(decl).toBeDefined();
-    expect(decl?.parameters).toEqual({
+    expect(decl?.["parameters"]).toEqual({
       type: "object",
       properties: {
         deep: {
@@ -101,7 +101,7 @@ describe("google-shared convertTools", () => {
     const decl = result?.[0]?.functionDeclarations?.[0];
 
     expect(decl).toBeDefined();
-    expect(decl?.parameters).toEqual({
+    expect(decl?.["parameters"]).toEqual({
       type: "object",
       properties: {
         refProp: {
@@ -151,7 +151,7 @@ describe("google-shared convertTools", () => {
     const decl = result?.[0]?.functionDeclarations?.[0];
 
     expect(decl).toBeDefined();
-    expect(decl?.parametersJsonSchema).toEqual({
+    expect(decl?.["parametersJsonSchema"]).toEqual({
       $schema: "http://json-schema.org/draft-07/schema#",
       type: "object",
       properties: {
@@ -176,7 +176,7 @@ describe("google-shared convertTools", () => {
     const decl = result?.[0]?.functionDeclarations?.[0];
 
     expect(decl).toBeDefined();
-    expect(decl?.parameters).toEqual({
+    expect(decl?.["parameters"]).toEqual({
       type: "object",
       properties: {
         path: { type: "string" },

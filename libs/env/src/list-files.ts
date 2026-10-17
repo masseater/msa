@@ -68,7 +68,7 @@ export async function listFilesOver(
       if (kind !== undefined) entries.push({ path: bytes.toString("utf8", start + 1, end), kind });
       start = end + 1;
     }
-    return ok({ entries, truncated: json.truncated === true });
+    return ok({ entries, truncated: json["truncated"] === true });
   } catch (error) {
     return err(toFileError(error, path));
   }

@@ -33,7 +33,7 @@ const Work = defineTask<null, { phase: "work" }, null>({
   phases: {
     work: async (_task, runtime, ctx) =>
       runtime.commit(async (tx) => {
-        (await tx.doc(UsageDoc, runtime.conversationId)).tools.bench = { input: 1 } as never;
+        (await tx.doc(UsageDoc, runtime.conversationId)).tools["bench"] = { input: 1 } as never;
         return { status: "terminal", outcome: { status: "completed", result: null } };
       }, ctx),
   },

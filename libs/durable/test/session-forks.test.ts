@@ -269,7 +269,7 @@ describe("Session conversation document forks", () => {
       migrate: (value, fromVersion) => {
         expect(fromVersion).toBe(1);
         migrations++;
-        return { count: value.count as number, migrated: true };
+        return { count: value["count"] as number, migrated: true };
       },
     });
     const { session, storage } = openTestSession();
@@ -316,7 +316,7 @@ describe("Session conversation document forks", () => {
       history: "rewindable",
       fork: "asOf",
       initial: () => ({ count: 0, migrated: false }),
-      migrate: (value) => ({ count: value.count as number, migrated: true }),
+      migrate: (value) => ({ count: value["count"] as number, migrated: true }),
       checkpointWhen: () => {
         checkpoints++;
         return false;

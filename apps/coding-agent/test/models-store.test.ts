@@ -167,7 +167,7 @@ describe("FileModelsStore", () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
 
     const stored = JSON.parse(readFileSync(sharedModelsPath, "utf8")) as Record<string, unknown>;
-    expect(stored.one).toBeDefined();
-    expect(stored.two).toBeUndefined();
+    expect(stored["one"]).toBeDefined();
+    expect(stored["two"]).toBeUndefined();
   });
 });

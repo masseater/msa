@@ -22,7 +22,7 @@ const DEFAULT_POWERSHELL_TIMEOUT_MS = 5000;
 const IMAGE_COMMAND_TIMEOUT_MS = 20_000;
 
 export function isWaylandSession(env: NodeJS.ProcessEnv = process.env): boolean {
-  return Boolean(env.WAYLAND_DISPLAY) || env.XDG_SESSION_TYPE === "wayland";
+  return Boolean(env["WAYLAND_DISPLAY"]) || env["XDG_SESSION_TYPE"] === "wayland";
 }
 
 function baseMimeType(mimeType: string): string {
@@ -247,7 +247,7 @@ export async function readClipboardImage(options?: {
   const env = options?.env ?? process.env;
   const platform = options?.platform ?? process.platform;
 
-  if (env.TERMUX_VERSION) {
+  if (env["TERMUX_VERSION"]) {
     return null;
   }
 

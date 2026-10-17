@@ -57,18 +57,18 @@ const context = normalizeContext({
   messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
 });
 
-const originalGoogleCloudApiKey = process.env.GOOGLE_CLOUD_API_KEY;
+const originalGoogleCloudApiKey = process.env["GOOGLE_CLOUD_API_KEY"];
 
 beforeEach(() => {
   googleGenAiMock.constructorCalls.length = 0;
-  delete process.env.GOOGLE_CLOUD_API_KEY;
+  delete process.env["GOOGLE_CLOUD_API_KEY"];
 });
 
 afterEach(() => {
   if (originalGoogleCloudApiKey === undefined) {
-    delete process.env.GOOGLE_CLOUD_API_KEY;
+    delete process.env["GOOGLE_CLOUD_API_KEY"];
   } else {
-    process.env.GOOGLE_CLOUD_API_KEY = originalGoogleCloudApiKey;
+    process.env["GOOGLE_CLOUD_API_KEY"] = originalGoogleCloudApiKey;
   }
 });
 
@@ -112,7 +112,7 @@ describe("google-vertex api key resolution", () => {
   });
 
   it("falls back to ADC when GOOGLE_CLOUD_API_KEY is a placeholder marker", async () => {
-    process.env.GOOGLE_CLOUD_API_KEY = "<authenticated>";
+    process.env["GOOGLE_CLOUD_API_KEY"] = "<authenticated>";
 
     const stream = streamGoogleVertex(model, context, {
       project: "test-project",
@@ -157,7 +157,7 @@ describe("google-vertex api key resolution", () => {
     await stream.result();
 
     expect(googleGenAiMock.constructorCalls).toHaveLength(1);
-    expect(googleGenAiMock.constructorCalls[0]?.httpOptions).toEqual({
+    expect(googleGenAiMock.constructorCalls[0]?.["httpOptions"]).toEqual({
       headers: { "User-Agent": MSA_USER_AGENT },
     });
   });
@@ -172,7 +172,7 @@ describe("google-vertex api key resolution", () => {
     await stream.result();
 
     expect(googleGenAiMock.constructorCalls).toHaveLength(1);
-    expect(googleGenAiMock.constructorCalls[0]?.httpOptions).toEqual({
+    expect(googleGenAiMock.constructorCalls[0]?.["httpOptions"]).toEqual({
       headers: { "User-Agent": "custom-agent" },
     });
   });
