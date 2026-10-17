@@ -5047,21 +5047,17 @@ export class InteractiveMode {
         {
           orchestrator,
           onClose: () => {
-            clearInterval(tick);
             done();
             this.ui.requestRender();
           },
-          onPickModel: (id) => {
-            clearInterval(tick);
-            this.showSessionModelSelector(id);
-          },
+          onPickModel: (id) => this.showSessionModelSelector(id),
           onError: (message) => this.showError(message),
           requestRender: () => this.ui.requestRender(),
           maxHeight: () => this.ui.terminal.rows - 4,
         },
         initialId,
       );
-      return { component: view, focus: view };
+      return { component: view, focus: view, dispose: () => clearInterval(tick) };
     });
   }
 

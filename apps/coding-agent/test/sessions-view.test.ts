@@ -1,7 +1,9 @@
 import type { AgentMessage } from "@msa/agent-core";
 import { fauxAssistantMessage } from "@msa/ai";
+import { setKeybindings } from "@msa/tui";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
+import { KeybindingsManager } from "../src/core/keybindings.ts";
 import type { SessionNodeWithDependencies } from "../src/core/orchestrator/graph.ts";
 import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
 import {
@@ -80,6 +82,7 @@ const DOWN = "\x1b[B";
 
 beforeAll(() => {
   initTheme(undefined, false);
+  setKeybindings(new KeybindingsManager());
 });
 
 describe("SessionsView", () => {
@@ -98,7 +101,7 @@ describe("SessionsView", () => {
     ]);
     const text = lines.join("\n");
     expect(text).toContain("429 rate limited");
-    expect(text).toContain("write fizzbuzz.py");
+    expect(text).toContain('write path="fizzbuzz.py"');
     expect(text).toContain("after fizzbuzz");
     expect(text).not.toContain("after fizzbuzz, primes");
     expect(text).toContain("after readme");
@@ -138,7 +141,9 @@ describe("SessionsView", () => {
     expect(screen().join("\n")).toContain("1m 15s  retrying");
     view.handleInput(DOWN);
     view.handleInput(ENTER);
-    expect(screen().join("\n")).toMatch(/Activity\n {3}write fizzbuzz\.py\n {3}1m 15s {2}retrying/);
+    expect(screen().join("\n")).toMatch(
+      /Activity\n {3}write path="fizzbuzz\.py"\n {3}1m 15s {2}retrying/,
+    );
   });
 });
 
