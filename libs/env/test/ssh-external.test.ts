@@ -7,8 +7,9 @@ import { getOrThrow } from "@msa/durable/env";
 import { registerEnvConformance } from "@msa/durable/testing";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { type Connection, nodePlatform } from "../src/connection.ts";
+import type { Connection } from "../src/connection.ts";
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
+import { nodePlatform } from "../src/remote-info.ts";
 import {
   acceptHostKey,
   connectSsh,

@@ -6,8 +6,9 @@ import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
 import { getOrThrow, type ShellOutputInfo } from "@msa/durable/env";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { Connection, nodePlatform } from "../src/connection.ts";
+import { Connection } from "../src/connection.ts";
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
+import { nodePlatform } from "../src/remote-info.ts";
 import { daemon } from "./daemon.ts";
 
 const context = BACKGROUND_CONTEXT;
