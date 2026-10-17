@@ -71,6 +71,7 @@ catalog:
 catalogs:
   stack:
     "@effect/tsgo": 0.51.1
+    "@effect/vitest": 4.0.2
     effect: 4.0.2
     fallow: 3.32.0
     vite-plus: 1.1.0

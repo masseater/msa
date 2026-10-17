@@ -42,9 +42,11 @@
   },
   "dependencies": {
     "@msa/chord": "workspace:*",
-    "@msa/durable": "workspace:*"
+    "@msa/durable": "workspace:*",
+    "effect": "catalog:stack"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:stack",
     "shx": "catalog:",
     "vitest": "catalog:"
   },

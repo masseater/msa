@@ -342,6 +342,9 @@ catalogs:
     '@effect/tsgo':
       specifier: 0.51.1
       version: 0.51.1
+    '@effect/vitest':
+      specifier: 4.0.2
+      version: 4.0.2
     fallow:
       specifier: 3.32.0
       version: 3.32.0
@@ -509,6 +512,9 @@ importers:
         specifier: 'catalog:'
         version: 2.9.0
     devDependencies:
+      '@effect/vitest':
+        specifier: catalog:stack
+        version: 4.0.2(effect@4.0.2)(vitest@4.1.11)
       '@types/cross-spawn':
         specifier: 'catalog:'
         version: 6.0.6
@@ -565,7 +571,14 @@ importers:
         version: 2.1.0
 
   apps/evals:
+    dependencies:
+      effect:
+        specifier: 4.0.2
+        version: 4.0.2
     devDependencies:
+      '@effect/vitest':
+        specifier: catalog:stack
+        version: 4.0.2(effect@4.0.2)(vitest@4.1.11)
       '@msa/ai':
         specifier: workspace:*
         version: link:../../libs/ai
@@ -599,10 +612,16 @@ importers:
       '@msa/ai':
         specifier: workspace:*
         version: link:../ai
+      effect:
+        specifier: 4.0.2
+        version: 4.0.2
       typebox:
         specifier: 'catalog:'
         version: 1.3.27
     devDependencies:
+      '@effect/vitest':
+        specifier: catalog:stack
+        version: 4.0.2(effect@4.0.2)(vitest@4.1.11)
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.19
@@ -630,6 +649,9 @@ importers:
       '@smithy/types':
         specifier: 4.19.0
         version: 4.19.0
+      effect:
+        specifier: 4.0.2
+        version: 4.0.2
       http-proxy-agent:
         specifier: 'catalog:'
         version: 9.1.0
@@ -646,6 +668,9 @@ importers:
         specifier: 'catalog:'
         version: 1.3.27
     devDependencies:
+      '@effect/vitest':
+        specifier: catalog:stack
+        version: 4.0.2(effect@4.0.2)(vitest@4.1.11)
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.19
@@ -658,10 +683,16 @@ importers:
 
   libs/chord:
     dependencies:
+      effect:
+        specifier: 4.0.2
+        version: 4.0.2
       typebox:
         specifier: 'catalog:'
         version: 1.3.27
     devDependencies:
+      '@effect/vitest':
+        specifier: catalog:stack
+        version: 4.0.2(effect@4.0.2)(vitest@4.1.11)
       '@types/ws':
         specifier: 'catalog:'
         version: 8.18.2
@@ -677,10 +708,16 @@ importers:
 
   libs/codemode:
     dependencies:
+      effect:
+        specifier: 4.0.2
+        version: 4.0.2
       quickjs-wasi:
         specifier: 'catalog:'
         version: 3.6.2
     devDependencies:
+      '@effect/vitest':
+        specifier: catalog:stack
+        version: 4.0.2(effect@4.0.2)(vitest@4.1.11)
       shx:
         specifier: 'catalog:'
         version: 0.3.4
@@ -705,10 +742,16 @@ importers:
       diff:
         specifier: 'catalog:'
         version: 8.0.4
+      effect:
+        specifier: 4.0.2
+        version: 4.0.2
       typebox:
         specifier: 'catalog:'
         version: 1.3.27
     devDependencies:
+      '@effect/vitest':
+        specifier: catalog:stack
+        version: 4.0.2(effect@4.0.2)(vitest@4.1.11)
       shx:
         specifier: 'catalog:'
         version: 0.3.4
@@ -724,7 +767,13 @@ importers:
       '@msa/durable':
         specifier: workspace:*
         version: link:../durable
+      effect:
+        specifier: 4.0.2
+        version: 4.0.2
     devDependencies:
+      '@effect/vitest':
+        specifier: catalog:stack
+        version: 4.0.2(effect@4.0.2)(vitest@4.1.11)
       shx:
         specifier: 'catalog:'
         version: 0.3.4
@@ -737,7 +786,13 @@ importers:
       cross-spawn:
         specifier: 'catalog:'
         version: 7.0.6
+      effect:
+        specifier: 4.0.2
+        version: 4.0.2
     devDependencies:
+      '@effect/vitest':
+        specifier: catalog:stack
+        version: 4.0.2(effect@4.0.2)(vitest@4.1.11)
       '@types/cross-spawn':
         specifier: 'catalog:'
         version: 6.0.6
@@ -749,7 +804,14 @@ importers:
         version: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
 
   libs/telemetry:
+    dependencies:
+      effect:
+        specifier: 4.0.2
+        version: 4.0.2
     devDependencies:
+      '@effect/vitest':
+        specifier: catalog:stack
+        version: 4.0.2(effect@4.0.2)(vitest@4.1.11)
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.19
@@ -759,6 +821,9 @@ importers:
 
   libs/tui:
     dependencies:
+      effect:
+        specifier: 4.0.2
+        version: 4.0.2
       get-east-asian-width:
         specifier: 'catalog:'
         version: 1.6.0
@@ -1148,6 +1213,12 @@ packages:
   '@effect/tsgo@0.51.1':
     resolution: {integrity: sha512-i6mA6cNah+0mkPdu8qZILCO3Pnd9kWo03/s82Ju+1DFhdL28HFagi+1PRGxqgq1uMaHziWQ+ciKvOmIoks2RdA==}
     hasBin: true
+
+  '@effect/vitest@4.0.2':
+    resolution: {integrity: sha512-Zb72nu7iUy3rNdBp9J1Xu5oUQGwJ8cOYsUwmYgujj88aqyvASRDjOS01SjlcPViqf77csduetKdCJTVndMNfzw==}
+    peerDependencies:
+      effect: 4.0.2
+      vitest: '>=5.0.0 <6.0.0'
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -4776,6 +4847,11 @@ snapshots:
       '@effect/tsgo-linux-x64': 0.51.1
       '@effect/tsgo-win32-arm64': 0.51.1
       '@effect/tsgo-win32-x64': 0.51.1
+
+  '@effect/vitest@4.0.2(effect@4.0.2)(vitest@4.1.11)':
+    dependencies:
+      effect: 4.0.2
+      vitest: 4.1.11(@types/node@22.19.19)(@vitest/browser-preview@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.0))
 
   '@esbuild/aix-ppc64@0.28.2':
     optional: true

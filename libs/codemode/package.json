@@ -63,9 +63,11 @@
     "test": "vitest --run"
   },
   "dependencies": {
+    "effect": "catalog:stack",
     "quickjs-wasi": "catalog:"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:stack",
     "shx": "catalog:",
     "vitest": "catalog:"
   },
