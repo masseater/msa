@@ -1,113 +1,67 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { getOrThrow } from "@msa/durable/env";
 import { registerEnvConformance } from "@msa/durable/testing";
+import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import type { Connection } from "../src/connection.ts";
 import { RemoteExecutionEnv } from "../src/remote-env.ts";
 import { nodePlatform } from "../src/remote-info.ts";
-import {
-  acceptHostKey,
-  connectSsh,
-  deployDaemon,
-  detectPlatform,
-  type RemotePlatform,
-  type SshTarget,
-  scanHostKey,
-} from "../src/ssh.ts";
-import { daemon } from "./daemon.ts";
+import { optionalEnv, windows } from "./environment.ts";
+import { closeExternal, connectExternal, host } from "./external-ssh.ts";
+import { gitBash } from "./temp-dir.ts";
 
-/**
- * The conformance suite over a real SSH server on this machine, configured by CI: `MSA_ENV_SSH_HOST`, `MSA_ENV_SSH_USER`
- * `MSA_ENV_SSH_KEY` and `MSA_ENV_SSH_PROGRAM`. On Windows this covers deployment and the daemon's launch through the server's default shell.
- */
-const host = process.env["MSA_ENV_SSH_HOST"];
-const root = mkdtempSync(join(tmpdir(), "msa-env-ssh-external-"));
-let connected: Promise<{ connection: Connection; remote: RemotePlatform }> | undefined;
+afterAll(closeExternal);
 
-async function connect(): Promise<{ connection: Connection; remote: RemotePlatform }> {
-  connected ??= (async () => {
-    const target: SshTarget = {
-      host: host!,
-      ...(process.env["MSA_ENV_SSH_USER"] === undefined
-        ? {}
-        : { user: process.env["MSA_ENV_SSH_USER"] }),
-      ...(process.env["MSA_ENV_SSH_PORT"] === undefined
-        ? {}
-        : { port: Number(process.env["MSA_ENV_SSH_PORT"]) }),
-      ...(process.env["MSA_ENV_SSH_KEY"] === undefined
-        ? {}
-        : { identityFile: process.env["MSA_ENV_SSH_KEY"] }),
-      ...(process.env["MSA_ENV_SSH_PROGRAM"] === undefined
-        ? {}
-        : { ssh: process.env["MSA_ENV_SSH_PROGRAM"] }),
-      knownHostsFile: join(root, "known_hosts"),
-      hostKeyAlias: "msa-env-external",
-    };
-    // Each stage is logged, so a hang in CI shows where it is.
-    const log = (text: string) =>
-      process.stderr.write(`[ssh-external ${new Date().toISOString()}] ${text}\n`);
-    log("scanning the host key");
-    await acceptHostKey(target, (await scanHostKey(target)).lines);
-    log("detecting the platform");
-    const remote = await detectPlatform(target);
-    log(`detected ${JSON.stringify(remote)}; deploying`);
-    log(`deployed ${await deployDaemon(target, remote, daemon)}; connecting`);
-    const result = await connectSsh({
-      ...target,
-      binary: daemon,
-      onLog: (text) => log(`daemon: ${text.trim()}`),
-    });
-    log("connected; saying hello");
-    log(`hello ${JSON.stringify(await result.connection.info())}`);
-    return result;
-  })();
-  return connected;
-}
-
-afterAll(async () => {
-  if (connected) (await connected).connection.close();
-  rmSync(root, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
+const defaultShell = Effect.gen(function* () {
+  const { connection, remote } = yield* Effect.promise(connectExternal);
+  const info = yield* Effect.promise(() => connection.info());
+  expect(nodePlatform(info).platform).toBe(process.platform);
+  if (windows) expect(remote.shell).toBe(optionalEnv("MSA_ENV_SSH_SHELL") ?? "cmd");
 });
-
-const windows = process.platform === "win32";
-const gitBash = join(process.env["ProgramFiles"] ?? "C:\\Program Files", "Git", "bin", "bash.exe");
 
 describe.skipIf(host === undefined)("SSH to this machine's server", () => {
-  it("reaches the remote system through its default shell", async () => {
-    const { connection, remote } = await connect();
-    const info = await connection.info();
-    expect(nodePlatform(info).platform).toBe(process.platform);
-    if (windows) expect(remote.shell).toBe(process.env["MSA_ENV_SSH_SHELL"] ?? "cmd");
-  }, 120_000);
+  it(
+    "reaches the remote system through its default shell",
+    () => Effect.runPromise(defaultShell),
+    120_000,
+  );
 });
 
-if (host !== undefined) {
-  registerEnvConformance(
-    { describe, expect, it },
-    "RemoteExecutionEnv over SSH",
-    async (use) => {
-      const { connection } = await connect();
-      const info = await connection.info();
+const withExternalEnv = (use: (env: RemoteExecutionEnv) => Promise<void>): Promise<void> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { connection } = yield* Effect.promise(connectExternal);
+      const info = yield* Effect.promise(() => connection.info());
       const home = new RemoteExecutionEnv({ connection, id: "msa-env:external", cwd: info.home });
-      const cwd = getOrThrow(await home.createTempDir("msa-env-conformance-", BACKGROUND_CONTEXT));
-      try {
-        await use(
+      const cwd = getOrThrow(
+        yield* Effect.promise(() => home.createTempDir("msa-env-conformance-", BACKGROUND_CONTEXT)),
+      );
+      yield* Effect.promise(() =>
+        use(
           new RemoteExecutionEnv({
             connection,
             id: "msa-env:external",
             cwd,
             watch: { pollIntervalMs: 100 },
           }),
-        );
-      } finally {
-        await home.remove(cwd, { recursive: true, force: true }, BACKGROUND_CONTEXT);
-      }
-    },
-    windows ? { shell: [gitBash, "-c"], symlinks: false, listFiles: true } : { listFiles: true },
+        ),
+      ).pipe(
+        Effect.ensuring(
+          Effect.promise(() =>
+            home.remove(cwd, { recursive: true, force: true }, BACKGROUND_CONTEXT),
+          ),
+        ),
+      );
+    }),
+  );
+
+if (host !== undefined) {
+  registerEnvConformance(
+    { describe, expect, it },
+    "RemoteExecutionEnv over SSH",
+    withExternalEnv,
+    windows
+      ? { shell: [gitBash(optionalEnv("ProgramFiles")), "-c"], symlinks: false, listFiles: true }
+      : { listFiles: true },
   );
 }

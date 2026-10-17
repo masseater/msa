@@ -1,8 +1,3 @@
-/**
- * A stand-in for a daemon released before `hello.features`: it answers `hello` without `features` and refuses every
- * other operation as an unknown one, as such a daemon refuses `listFiles`. Started as `node old-daemon.ts serve --token
- * <hex>`.
- */
 const token = process.argv[process.argv.indexOf("--token") + 1];
 process.stdout.write(`MSA-ENV ${token}\n`);
 
