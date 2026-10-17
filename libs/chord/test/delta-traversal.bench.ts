@@ -6,19 +6,25 @@ import { performance } from "node:perf_hooks";
 import { setImmediate } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
+import { Effect } from "effect";
+
 import { track } from "../src/delta/index.ts";
 
 type Point = { x: number; y: number; pressure: number };
 type Drawing = { strokes: { id: number; color: string; width: number; points: Point[] }[] };
 type Mode = "raw" | "proxy" | "delta";
 const MiB = 1024 * 1024;
-async function gc(): Promise<void> {
-  if (!global.gc) throw new Error("run with --expose-gc");
-  for (let i = 0; i < 4; i++) {
-    await setImmediate();
-    global.gc();
-  }
-  await setImmediate();
+function gc(): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      if (!global.gc) throw new Error("run with --expose-gc");
+      for (let i = 0; i < 4; i++) {
+        yield* Effect.promise(() => setImmediate());
+        global.gc();
+      }
+      yield* Effect.promise(() => setImmediate());
+    }),
+  );
 }
 
 function fixture(strokes: number, points: number): Drawing {
@@ -110,51 +116,55 @@ function sources() {
     ]),
   );
 }
-async function measure(mode: Mode, strokes: number, points: number, trial: number) {
-  warm(mode);
-  await gc();
-  const empty = process.memoryUsage().heapUsed;
-  const t = prepare(mode, strokes, points);
-  await gc();
-  const ready = process.memoryUsage().heapUsed;
-  const start = performance.now();
-  const checksum = traverse(t.state);
-  const coldMs = performance.now() - start;
-  const afterColdBeforeGc = process.memoryUsage().heapUsed;
-  await gc();
-  const afterCold = process.memoryUsage().heapUsed;
-  const warmMs: number[] = [];
-  for (let i = 0; i < 3; i++) {
-    const begin = performance.now();
-    const check = traverse(t.state);
-    warmMs.push(performance.now() - begin);
-    assert.equal(check, checksum);
-  }
-  let expected = 0;
-  for (let s = 0; s < strokes; s++) {
-    for (let p = 0; p < points; p++) expected += p * 10 + (s % 127) + (s % 131) + (p % 10) / 10;
-  }
-  assert.ok(Math.abs(expected - checksum) < Math.max(1, Math.abs(expected)) * 1e-9);
-  await gc();
-  const retained = process.memoryUsage().heapUsed;
-  assert.equal(t.state.strokes.length, strokes);
-  t.finish();
-  return {
-    mode,
-    strokes,
-    points,
-    trial,
-    coldMs,
-    warmMs,
-    checksum,
-    readyMiB: (ready - empty) / MiB,
-    afterColdMiB: (afterCold - empty) / MiB,
-    retainedMiB: (retained - empty) / MiB,
-    lazyProxyMiB: (afterCold - ready) / MiB,
-    sampledColdPeakMiB: (afterColdBeforeGc - empty) / MiB,
-    maxRssMiB: process.resourceUsage().maxRSS / 1024,
-    sourceHashes: sources(),
-  };
+function measure(mode: Mode, strokes: number, points: number, trial: number) {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      warm(mode);
+      yield* Effect.promise(() => gc());
+      const empty = process.memoryUsage().heapUsed;
+      const t = prepare(mode, strokes, points);
+      yield* Effect.promise(() => gc());
+      const ready = process.memoryUsage().heapUsed;
+      const start = performance.now();
+      const checksum = traverse(t.state);
+      const coldMs = performance.now() - start;
+      const afterColdBeforeGc = process.memoryUsage().heapUsed;
+      yield* Effect.promise(() => gc());
+      const afterCold = process.memoryUsage().heapUsed;
+      const warmMs: number[] = [];
+      for (let i = 0; i < 3; i++) {
+        const begin = performance.now();
+        const check = traverse(t.state);
+        warmMs.push(performance.now() - begin);
+        assert.equal(check, checksum);
+      }
+      let expected = 0;
+      for (let s = 0; s < strokes; s++) {
+        for (let p = 0; p < points; p++) expected += p * 10 + (s % 127) + (s % 131) + (p % 10) / 10;
+      }
+      assert.ok(Math.abs(expected - checksum) < Math.max(1, Math.abs(expected)) * 1e-9);
+      yield* Effect.promise(() => gc());
+      const retained = process.memoryUsage().heapUsed;
+      assert.equal(t.state.strokes.length, strokes);
+      t.finish();
+      return {
+        mode,
+        strokes,
+        points,
+        trial,
+        coldMs,
+        warmMs,
+        checksum,
+        readyMiB: (ready - empty) / MiB,
+        afterColdMiB: (afterCold - empty) / MiB,
+        retainedMiB: (retained - empty) / MiB,
+        lazyProxyMiB: (afterCold - ready) / MiB,
+        sampledColdPeakMiB: (afterColdBeforeGc - empty) / MiB,
+        maxRssMiB: process.resourceUsage().maxRSS / 1024,
+        sourceHashes: sources(),
+      };
+    }),
+  );
 }
 if (process.argv.includes("--worker")) {
   const c = JSON.parse(process.argv.at(-1)!) as {

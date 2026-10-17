@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 
+import { Effect } from "effect";
+
 import { createHost, type IpcChannel, ipcLink } from "../../src/index.ts";
 import { childControl } from "../../src/manager.ts";
 import { Echo } from "./echo.ts";
@@ -33,10 +35,14 @@ if (mode === "fatal") {
     });
     writeFileSync(process.env["GRANDCHILD_FILE"], String(grandchild.pid));
   }
-  control.onShutdown(async () => {
-    if (mode === "ignore-shutdown") return;
-    await host.close();
-    process.exit(0);
-  });
+  control.onShutdown(() =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        if (mode === "ignore-shutdown") return;
+        yield* Effect.promise(() => host.close());
+        process.exit(0);
+      }),
+    ),
+  );
   control.ready();
 }

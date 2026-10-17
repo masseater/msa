@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { setImmediate } from "node:timers/promises";
 
+import { Effect } from "effect";
+
 import type { Draft } from "../../src/delta/draft.ts";
 import { applyImmutable, type Op, track } from "../../src/delta/index.ts";
 
@@ -114,12 +116,16 @@ function sum(document: Document | Draft<Document>): number {
   return checksum;
 }
 
-async function gc(): Promise<void> {
-  assert.ok(global.gc, "benchmark worker requires --expose-gc");
-  for (let index = 0; index < 3; index++) {
-    await setImmediate();
-    global.gc();
-  }
+function gc(): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      assert.ok(global.gc, "benchmark worker requires --expose-gc");
+      for (let index = 0; index < 3; index++) {
+        yield* Effect.promise(() => setImmediate());
+        global.gc();
+      }
+    }),
+  );
 }
 
 await gc();
@@ -158,10 +164,13 @@ const samplePeak = (): void => {
   peakHeap = Math.max(peakHeap, process.memoryUsage().heapUsed);
 };
 
-const retainedFromBaseline = async (): Promise<number> => {
-  await gc();
-  return (process.memoryUsage().heapUsed - baselineHeap) / MiB;
-};
+const retainedFromBaseline = (): Promise<number> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      yield* Effect.promise(() => gc());
+      return (process.memoryUsage().heapUsed - baselineHeap) / MiB;
+    }),
+  );
 
 const createWatch = (value: Document): WatchReplica => ({
   value,

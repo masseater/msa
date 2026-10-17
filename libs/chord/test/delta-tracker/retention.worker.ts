@@ -1,20 +1,26 @@
 import assert from "node:assert/strict";
 import { setImmediate } from "node:timers/promises";
 
+import { Effect } from "effect";
+
 import { type Tracker, track } from "../../src/delta/index.ts";
 
 const retainedSettledObjects: object[] = [];
 const retainedLargePrepared: object[] = [];
 const retainedSettledChanges: object[] = [];
 
-async function collect(ref: WeakRef<object>): Promise<void> {
-  assert.ok(global.gc, "worker requires --expose-gc");
-  for (let attempt = 0; attempt < 30; attempt++) {
-    await setImmediate();
-    global.gc();
-    if (ref.deref() === undefined) return;
-  }
-  assert.fail("released change data is still retained");
+function collect(ref: WeakRef<object>): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      assert.ok(global.gc, "worker requires --expose-gc");
+      for (let attempt = 0; attempt < 30; attempt++) {
+        yield* Effect.promise(() => setImmediate());
+        global.gc();
+        if (ref.deref() === undefined) return;
+      }
+      assert.fail("released change data is still retained");
+    }),
+  );
 }
 
 function abortedPayload(
@@ -46,16 +52,20 @@ function draftProxies(
   return reference;
 }
 
-async function assertRetained(reference: WeakRef<object>): Promise<void> {
-  assert.ok(global.gc, "worker requires --expose-gc");
-  for (let attempt = 0; attempt < 5; attempt++) {
-    await setImmediate();
-    global.gc();
-  }
-  assert.notEqual(
-    reference.deref(),
-    undefined,
-    "retained Prepared must retain its immutable revisions",
+function assertRetained(reference: WeakRef<object>): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      assert.ok(global.gc, "worker requires --expose-gc");
+      for (let attempt = 0; attempt < 5; attempt++) {
+        yield* Effect.promise(() => setImmediate());
+        global.gc();
+      }
+      assert.notEqual(
+        reference.deref(),
+        undefined,
+        "retained Prepared must retain its immutable revisions",
+      );
+    }),
   );
 }
 

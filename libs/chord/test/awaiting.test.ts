@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
@@ -15,9 +16,13 @@ import {
 import { CountingLink } from "./fixtures/counting.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-async function until(check: () => boolean, attempts = 200): Promise<void> {
-  for (let i = 0; i < attempts && !check(); i++) await sleep(2);
-  assert.ok(check(), "condition not reached");
+function until(check: () => boolean, attempts = 200): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      for (let i = 0; i < attempts && !check(); i++) yield* Effect.promise(() => sleep(2));
+      assert.ok(check(), "condition not reached");
+    }),
+  );
 }
 
 const Slow = remote("t.e8-slow", {
@@ -51,58 +56,92 @@ function setup(readyTimeout?: number) {
   return { server, browser, link, open };
 }
 
+const abortController = (): AbortController => new AbortController();
+
 describe("awaited gets", () => {
-  it("an aborted get rejects and releases only its reference; the binding stays for the others", async () => {
-    const { server, browser, link, open } = setup();
-    const abort = new AbortController();
-    const first = browser.get(Slow, {}, { signal: abort.signal });
-    const second = browser.get(Slow, {});
-    await sleep(5);
-    abort.abort();
-    await assert.rejects(first, (error) => isChordError(error, "aborted"));
-    await sleep(5);
-    assert.equal(link.count("sent", "release"), 0, "the other awaiting get keeps the hold");
-    open();
-    const ref = await second;
-    assert.equal(ref.n.value, 1);
-    assert.equal(link.count("sent", "hold"), 1);
-    ref.release();
-    await until(() => link.count("sent", "release") === 1);
-    await server.close();
-  });
+  it("an aborted get rejects and releases only its reference; the binding stays for the others", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { server, browser, link, open } = setup();
+        const abort = abortController();
+        const first = browser.get(Slow, {}, { signal: abort.signal });
+        const second = browser.get(Slow, {});
+        yield* Effect.promise(() => sleep(5));
+        abort.abort();
+        yield* Effect.promise(() =>
+          assert.rejects(first, (error) => isChordError(error, "aborted")),
+        );
+        yield* Effect.promise(() => sleep(5));
+        assert.equal(link.count("sent", "release"), 0, "the other awaiting get keeps the hold");
+        open();
+        const ref = yield* Effect.promise(() => second);
+        assert.equal(ref.n.value, 1);
+        assert.equal(link.count("sent", "hold"), 1);
+        ref.release();
+        yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+        yield* Effect.promise(() => server.close());
+      }),
+    ));
 
-  it("a ctx.get still waiting when its call settles rejects aborted and releases its reference", async () => {
-    const { server, browser, link, open } = setup();
-    let pending: Promise<unknown> | undefined;
-    await browser.root(async (ctx: Ctx) => {
-      pending = ctx.get(Slow, {});
-      pending.catch(() => {});
-    });
-    await assert.rejects(pending!, (error) => isChordError(error, "aborted"));
-    await until(() => link.count("sent", "release") === 1);
-    open();
-    await server.close();
-  });
+  it("a ctx.get still waiting when its call settles rejects aborted and releases its reference", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const services = yield* Effect.context<never>();
+        const { server, browser, link, open } = setup();
+        let pending: Promise<unknown> | undefined;
+        yield* Effect.promise(() =>
+          browser.root((ctx: Ctx) =>
+            Effect.runPromiseWith(services)(
+              Effect.sync(() => {
+                pending = ctx.get(Slow, {});
+                pending.catch(() => {});
+              }),
+            ),
+          ),
+        );
+        yield* Effect.promise(() =>
+          assert.rejects(pending!, (error) => isChordError(error, "aborted")),
+        );
+        yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+        open();
+        yield* Effect.promise(() => server.close());
+      }),
+    ));
 
-  it("a get times out after readyTimeout with ready_timeout and releases its hold", async () => {
-    const { server, browser, link } = setup(30);
-    await assert.rejects(
-      browser.get(Slow, {}),
-      (error) => isChordError(error, "unavailable") && error.reason === "ready_timeout",
-    );
-    await until(() => link.count("sent", "release") === 1);
-    await server.close();
-  });
+  it("a get times out after readyTimeout with ready_timeout and releases its hold", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { server, browser, link } = setup(30);
+        yield* Effect.promise(() =>
+          assert.rejects(
+            browser.get(Slow, {}),
+            (error) => isChordError(error, "unavailable") && error.reason === "ready_timeout",
+          ),
+        );
+        yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+        yield* Effect.promise(() => server.close());
+      }),
+    ));
 
-  it("ctx.get resolves hydrated; the call's reference is released when the call ends", async () => {
-    const { server, browser, link, open } = setup();
-    open();
-    const value = await browser.root(async (ctx: Ctx) => {
-      const slow = await ctx.get(Slow, {});
-      return slow.n.value;
-    });
-    assert.equal(value, 1);
-    await until(() => link.count("sent", "release") === 1);
-    await server.close();
-  });
+  it("ctx.get resolves hydrated; the call's reference is released when the call ends", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const services = yield* Effect.context<never>();
+        const { server, browser, link, open } = setup();
+        open();
+        const value = yield* Effect.promise(() =>
+          browser.root((ctx: Ctx) =>
+            Effect.runPromiseWith(services)(
+              Effect.gen(function* () {
+                const slow = yield* Effect.promise(() => ctx.get(Slow, {}));
+                return slow.n.value;
+              }),
+            ),
+          ),
+        );
+        assert.equal(value, 1);
+        yield* Effect.promise(() => until(() => link.count("sent", "release") === 1));
+        yield* Effect.promise(() => server.close());
+      }),
+    ));
 });

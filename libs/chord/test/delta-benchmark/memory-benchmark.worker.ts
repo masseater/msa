@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { PerformanceObserver, performance } from "node:perf_hooks";
 import { setImmediate } from "node:timers/promises";
 
+import { Effect } from "effect";
+
 import type { Draft } from "../../src/delta/draft.ts";
 import { type Op, track } from "../../src/delta/index.ts";
 
@@ -45,12 +47,16 @@ function fixture(count: number): Document {
   };
 }
 
-async function collect(): Promise<void> {
-  assert.ok(global.gc, "memory benchmark requires --expose-gc");
-  for (let attempt = 0; attempt < 3; attempt++) {
-    await setImmediate();
-    global.gc();
-  }
+function collect(): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      assert.ok(global.gc, "memory benchmark requires --expose-gc");
+      for (let attempt = 0; attempt < 3; attempt++) {
+        yield* Effect.promise(() => setImmediate());
+        global.gc();
+      }
+    }),
+  );
 }
 
 function createTracker(value: Document): TrackerLike {

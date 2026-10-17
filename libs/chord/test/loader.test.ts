@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { Effect } from "effect";
 import { describe, it } from "vite-plus/test";
 
 import { createHost } from "../src/index.ts";
@@ -20,8 +21,13 @@ describe("node loader", () => {
     assert.equal(child.status, 0, `${child.stdout}\n${child.stderr}`);
   });
 
-  it("needs a configured loader for modules", async () => {
-    const host = createHost({ self: { kind: "host" }, onError: () => {} });
-    await assert.rejects(host.load(["./facet.ts"]), /createHost\(\{ loader \}\)/u);
-  });
+  it("needs a configured loader for modules", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const host = createHost({ self: { kind: "host" }, onError: () => {} });
+        yield* Effect.promise(() =>
+          assert.rejects(host.load(["./facet.ts"]), /createHost\(\{ loader \}\)/u),
+        );
+      }),
+    ));
 });

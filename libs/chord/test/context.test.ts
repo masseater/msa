@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -10,6 +11,8 @@ import {
   withContextValue,
   withoutAbortSignal,
 } from "../src/context/index.ts";
+
+const abortController = (): AbortController => new AbortController();
 
 describe("Context", () => {
   it("provides distinct empty root contexts", () => {
@@ -42,7 +45,7 @@ describe("Context", () => {
   });
 
   it("inherits parent cancellation and isolates child cancellation", () => {
-    const parentController = new AbortController();
+    const parentController = abortController();
     const parent = withAbortSignal(parentController.signal, BACKGROUND_CONTEXT);
     const child = withCancel(parent);
     const sibling = withCancel(parent);
@@ -62,7 +65,7 @@ describe("Context", () => {
   });
 
   it("masks caller cancellation for mandatory cleanup", () => {
-    const controller = new AbortController();
+    const controller = abortController();
     const key = createContextKey<string>("value");
     const context = withContextValue(
       key,
@@ -77,22 +80,27 @@ describe("Context", () => {
     expect(cleanup.value(key)).toBe("preserved");
   });
 
-  it("stops waiting when the invocation is cancelled", async () => {
-    const controller = new AbortController();
-    const context = withAbortSignal(controller.signal, BACKGROUND_CONTEXT);
-    let resolveWork!: (value: string) => void;
-    const work = new Promise<string>((resolve) => {
-      resolveWork = resolve;
-    });
-    const waiting = awaitWithContext(work, context);
-    const cancellation = new Error("cancelled");
+  it("stops waiting when the invocation is cancelled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const controller = abortController();
+        const context = withAbortSignal(controller.signal, BACKGROUND_CONTEXT);
+        let resolveWork!: (value: string) => void;
+        const work = new Promise<string>((resolve) => {
+          resolveWork = resolve;
+        });
+        const waiting = awaitWithContext(work, context);
+        const cancellation = new Error("cancelled");
 
-    controller.abort(cancellation);
-    await expect(waiting).rejects.toBe(cancellation);
-    resolveWork("completed later");
-    await expect(work).resolves.toBe("completed later");
-    await expect(awaitWithContext(Promise.resolve("completed"), BACKGROUND_CONTEXT)).resolves.toBe(
-      "completed",
-    );
-  });
+        controller.abort(cancellation);
+        yield* Effect.promise(() => expect(waiting).rejects.toBe(cancellation));
+        resolveWork("completed later");
+        yield* Effect.promise(() => expect(work).resolves.toBe("completed later"));
+        yield* Effect.promise(() =>
+          expect(awaitWithContext(Promise.resolve("completed"), BACKGROUND_CONTEXT)).resolves.toBe(
+            "completed",
+          ),
+        );
+      }),
+    ));
 });

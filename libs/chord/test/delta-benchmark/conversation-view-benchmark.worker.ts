@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { setImmediate } from "node:timers/promises";
 
+import { Effect } from "effect";
+
 import type { Draft } from "../../src/delta/draft.ts";
 import {
   applyImmutable,
@@ -564,12 +566,16 @@ function samplePeak(): void {
   peakHeap = Math.max(peakHeap, process.memoryUsage().heapUsed);
 }
 
-async function collect(): Promise<void> {
-  assert.ok(global.gc, "benchmark worker requires --expose-gc");
-  for (let attempt = 0; attempt < 3; attempt++) {
-    await setImmediate();
-    global.gc();
-  }
+function collect(): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      assert.ok(global.gc, "benchmark worker requires --expose-gc");
+      for (let attempt = 0; attempt < 3; attempt++) {
+        yield* Effect.promise(() => setImmediate());
+        global.gc();
+      }
+    }),
+  );
 }
 
 function distribution(values: readonly number[]): Distribution {
@@ -938,142 +944,168 @@ function isResetJump(frame: DeltaFrame, previousSequence: number): boolean {
   );
 }
 
-async function forwardOpsOnly(frame: DeltaFrame): Promise<void> {
-  await Promise.resolve();
-  deliveryFrameReferences += 1;
-  deliveryOperationReferences += frame.ops.length;
+function forwardOpsOnly(frame: DeltaFrame): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      yield* Effect.promise(() => Promise.resolve());
+      deliveryFrameReferences += 1;
+      deliveryOperationReferences += frame.ops.length;
+    }),
+  );
 }
 
-async function drainStartedWatches(): Promise<void> {
-  const start = performance.now();
-  for (const watch of conversationWatches) {
-    if (!watch.started) continue;
-    for (const frame of watch.queue) {
-      assert.ok(
-        frame.sequence === watch.deliveredSequence + 1 ||
-          isResetJump(frame, watch.deliveredSequence),
-      );
-      await forwardOpsOnly(frame);
-      watch.deliveredSequence = frame.sequence;
-    }
-    clearWatchQueue(watch as unknown as Watch<object>);
-    assert.equal(watch.deliveredSequence, conversationSequence);
-  }
-  for (const watch of documentWatches) {
-    if (!watch.started) continue;
-    for (const frame of watch.queue) {
-      assert.ok(
-        frame.sequence === watch.deliveredSequence + 1 ||
-          isResetJump(frame, watch.deliveredSequence),
-      );
-      await forwardOpsOnly(frame);
-      watch.deliveredSequence = frame.sequence;
-    }
-    clearWatchQueue(watch);
-    assert.equal(watch.deliveredSequence, documentSequences[watch.key]);
-  }
-  phaseSamples.delivery.push(performance.now() - start);
+function drainStartedWatches(): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const start = performance.now();
+      for (const watch of conversationWatches) {
+        if (!watch.started) continue;
+        for (const frame of watch.queue) {
+          assert.ok(
+            frame.sequence === watch.deliveredSequence + 1 ||
+              isResetJump(frame, watch.deliveredSequence),
+          );
+          yield* Effect.promise(() => forwardOpsOnly(frame));
+          watch.deliveredSequence = frame.sequence;
+        }
+        clearWatchQueue(watch as unknown as Watch<object>);
+        assert.equal(watch.deliveredSequence, conversationSequence);
+      }
+      for (const watch of documentWatches) {
+        if (!watch.started) continue;
+        for (const frame of watch.queue) {
+          assert.ok(
+            frame.sequence === watch.deliveredSequence + 1 ||
+              isResetJump(frame, watch.deliveredSequence),
+          );
+          yield* Effect.promise(() => forwardOpsOnly(frame));
+          watch.deliveredSequence = frame.sequence;
+        }
+        clearWatchQueue(watch);
+        assert.equal(watch.deliveredSequence, documentSequences[watch.key]);
+      }
+      phaseSamples.delivery.push(performance.now() - start);
+    }),
+  );
 }
 
-async function commit(index: number): Promise<void> {
-  const plan = planCommit(index);
-  const conversationBefore = conversationSequence;
-  const queuedBefore = conversationWatches.reduce((total, watch) => total + watch.queue.length, 0);
-  const sessionStart = performance.now();
-  const mutationStart = performance.now();
-  const pending: Array<{ key: DocumentKey; change: ChangeLike<JsonObject> }> = [];
-  for (const mutation of plan.docs) {
-    const change = documentTrackers[mutation.key].beginChange();
-    mutation.mutate(change.state);
-    pending.push({ key: mutation.key, change });
-  }
-  if (plan.entryKind !== undefined) {
-    let parent = head;
-    if (plan.branch) {
-      const active = resolveActiveLineage(records, head);
-      parent = active[Math.max(0, active.length - 48)]?.id ?? null;
-    }
-    const entry = makeEntry(nextEntryId++, parent, plan.entryKind);
-    records.set(entry.id, entry);
-    head = entry.id;
-  }
-  phaseSamples.mutation.push(performance.now() - mutationStart);
+function commit(index: number): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const plan = planCommit(index);
+      const conversationBefore = conversationSequence;
+      const queuedBefore = conversationWatches.reduce(
+        (total, watch) => total + watch.queue.length,
+        0,
+      );
+      const sessionStart = performance.now();
+      const mutationStart = performance.now();
+      const pending: Array<{ key: DocumentKey; change: ChangeLike<JsonObject> }> = [];
+      for (const mutation of plan.docs) {
+        const change = documentTrackers[mutation.key].beginChange();
+        mutation.mutate(change.state);
+        pending.push({ key: mutation.key, change });
+      }
+      if (plan.entryKind !== undefined) {
+        let parent = head;
+        if (plan.branch) {
+          const active = resolveActiveLineage(records, head);
+          parent = active[Math.max(0, active.length - 48)]?.id ?? null;
+        }
+        const entry = makeEntry(nextEntryId++, parent, plan.entryKind);
+        records.set(entry.id, entry);
+        head = entry.id;
+      }
+      phaseSamples.mutation.push(performance.now() - mutationStart);
 
-  const prepareStart = performance.now();
-  const prepared = pending.map(({ key, change }) => ({ key, change, prepared: change.prepare() }));
-  phaseSamples.prepare.push(performance.now() - prepareStart);
+      const prepareStart = performance.now();
+      const prepared = pending.map(({ key, change }) => ({
+        key,
+        change,
+        prepared: change.prepare(),
+      }));
+      phaseSamples.prepare.push(performance.now() - prepareStart);
 
-  const adoptStart = performance.now();
-  for (const item of prepared) documentTrackers[item.key].adopt(item.prepared);
-  phaseSamples.adopt.push(performance.now() - adoptStart);
+      const adoptStart = performance.now();
+      for (const item of prepared) documentTrackers[item.key].adopt(item.prepared);
+      phaseSamples.adopt.push(performance.now() - adoptStart);
 
-  const projectStart = performance.now();
-  const synthesizeStart = performance.now();
-  const rawAggregateOperations: Op[] = [];
-  const documentFrames: DocumentWatchFrame[] = [];
-  for (const item of prepared) {
-    if (item.prepared.ops.length === 0) continue;
-    documentSequences[item.key] += 1;
-    const documentOps = item.prepared.ops;
-    documentOperationCount += documentOps.length;
-    publishedDocumentBatches += 1;
-    documentFrames.push({
-      key: item.key,
-      frame: { kind: "delta", sequence: documentSequences[item.key], ops: documentOps },
-    });
-    if (item.key !== "audit")
-      rawAggregateOperations.push(...prefixDocumentOperations(item.key, documentOps));
-  }
-  if (plan.entryKind !== undefined) {
-    const previousEntries = aggregate.entries;
-    const nextEntries = resolveActiveLineage(records, head);
-    const common = commonEntryPrefix(previousEntries, nextEntries);
-    if (common !== previousEntries.length || common !== nextEntries.length) {
-      rawAggregateOperations.push([
-        "p",
-        ["entries"],
-        common,
-        previousEntries.length - common,
-        cloneTrusted(nextEntries.slice(common)) as unknown as JsonValue[],
-      ]);
-      rawAggregateOperations.push(["s", ["conversation", "head"], head]);
-    }
-  }
-  let aggregateFrame: DeltaFrame | undefined;
-  if (rawAggregateOperations.length > 0) {
-    conversationSequence += 1;
-    aggregateOperationCount += rawAggregateOperations.length;
-    publishedAggregateBatches += 1;
-    aggregateFrame = { kind: "delta", sequence: conversationSequence, ops: rawAggregateOperations };
-  }
-  phaseSamples.synthesize.push(performance.now() - synthesizeStart);
+      const projectStart = performance.now();
+      const synthesizeStart = performance.now();
+      const rawAggregateOperations: Op[] = [];
+      const documentFrames: DocumentWatchFrame[] = [];
+      for (const item of prepared) {
+        if (item.prepared.ops.length === 0) continue;
+        documentSequences[item.key] += 1;
+        const documentOps = item.prepared.ops;
+        documentOperationCount += documentOps.length;
+        publishedDocumentBatches += 1;
+        documentFrames.push({
+          key: item.key,
+          frame: { kind: "delta", sequence: documentSequences[item.key], ops: documentOps },
+        });
+        if (item.key !== "audit")
+          rawAggregateOperations.push(...prefixDocumentOperations(item.key, documentOps));
+      }
+      if (plan.entryKind !== undefined) {
+        const previousEntries = aggregate.entries;
+        const nextEntries = resolveActiveLineage(records, head);
+        const common = commonEntryPrefix(previousEntries, nextEntries);
+        if (common !== previousEntries.length || common !== nextEntries.length) {
+          rawAggregateOperations.push([
+            "p",
+            ["entries"],
+            common,
+            previousEntries.length - common,
+            cloneTrusted(nextEntries.slice(common)) as unknown as JsonValue[],
+          ]);
+          rawAggregateOperations.push(["s", ["conversation", "head"], head]);
+        }
+      }
+      let aggregateFrame: DeltaFrame | undefined;
+      if (rawAggregateOperations.length > 0) {
+        conversationSequence += 1;
+        aggregateOperationCount += rawAggregateOperations.length;
+        publishedAggregateBatches += 1;
+        aggregateFrame = {
+          kind: "delta",
+          sequence: conversationSequence,
+          ops: rawAggregateOperations,
+        };
+      }
+      phaseSamples.synthesize.push(performance.now() - synthesizeStart);
 
-  const projectApplyStart = performance.now();
-  if (aggregateFrame !== undefined) {
-    applyProjectedBatch(aggregateFrame.ops);
-  }
-  phaseSamples.projectApply.push(performance.now() - projectApplyStart);
-  phaseSamples.project.push(performance.now() - projectStart);
+      const projectApplyStart = performance.now();
+      if (aggregateFrame !== undefined) {
+        applyProjectedBatch(aggregateFrame.ops);
+      }
+      phaseSamples.projectApply.push(performance.now() - projectApplyStart);
+      phaseSamples.project.push(performance.now() - projectStart);
 
-  enqueuePublishedBatches(aggregateFrame, documentFrames);
-  phaseSamples.sessionLine.push(performance.now() - sessionStart);
-  sessionCommitCount += 1;
-  samplePeak();
-  serializePublishedBatches(aggregateFrame, documentFrames);
-  finishResetSerialization();
-  await drainStartedWatches();
-  samplePeak();
+      enqueuePublishedBatches(aggregateFrame, documentFrames);
+      phaseSamples.sessionLine.push(performance.now() - sessionStart);
+      sessionCommitCount += 1;
+      samplePeak();
+      serializePublishedBatches(aggregateFrame, documentFrames);
+      finishResetSerialization();
+      yield* Effect.promise(() => drainStartedWatches());
+      samplePeak();
 
-  if (plan.expectedConversationNoop) {
-    noOpCommitCount += 1;
-    assert.equal(aggregateFrame, undefined);
-  }
-  if (plan.unmountedOnly) {
-    unmountedCommitCount += 1;
-    const queuedAfter = conversationWatches.reduce((total, watch) => total + watch.queue.length, 0);
-    if (conversationSequence !== conversationBefore || queuedAfter !== queuedBefore)
-      unmountedPublicationViolations += 1;
-  }
+      if (plan.expectedConversationNoop) {
+        noOpCommitCount += 1;
+        assert.equal(aggregateFrame, undefined);
+      }
+      if (plan.unmountedOnly) {
+        unmountedCommitCount += 1;
+        const queuedAfter = conversationWatches.reduce(
+          (total, watch) => total + watch.queue.length,
+          0,
+        );
+        if (conversationSequence !== conversationBefore || queuedAfter !== queuedBefore)
+          unmountedPublicationViolations += 1;
+      }
+    }),
+  );
 }
 
 function registerConversationWatch(started: boolean): void {

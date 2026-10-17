@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -17,34 +18,37 @@ import {
 } from "../src/delta/index.ts";
 
 describe("immutable tracker lifecycle", () => {
-  it("keeps a draft alive across await and adopts only a prepared change", async () => {
-    const input = { count: 1, nested: { text: "a" }, values: [1] };
-    const tracker = track(input);
-    expect(tracker.value).toBe(input);
-    expect(Object.isFrozen(tracker.value)).toBe(false);
-    expect(Object.isFrozen(tracker.value.nested)).toBe(false);
+  it("keeps a draft alive across await and adopts only a prepared change", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const input = { count: 1, nested: { text: "a" }, values: [1] };
+        const tracker = track(input);
+        expect(tracker.value).toBe(input);
+        expect(Object.isFrozen(tracker.value)).toBe(false);
+        expect(Object.isFrozen(tracker.value.nested)).toBe(false);
 
-    const change = tracker.beginChange();
-    change.state.count = 2;
-    await Promise.resolve();
-    change.state.nested.text += "b";
-    change.state.values.push(2);
-    expect(tracker.value).toEqual(input);
+        const change = tracker.beginChange();
+        change.state.count = 2;
+        yield* Effect.promise(() => Promise.resolve());
+        change.state.nested.text += "b";
+        change.state.values.push(2);
+        expect(tracker.value).toEqual(input);
 
-    const prepared = change.prepare();
-    expect(prepared.base).toBe(tracker.value);
-    expect(prepared.value).toEqual({ count: 2, nested: { text: "ab" }, values: [1, 2] });
-    expect(prepared.ops).toEqual([
-      ["s", ["count"], 2],
-      ["a", ["nested", "text"], "b"],
-      ["p", ["values"], 1, 0, [2]],
-    ]);
-    expect(() => change.state.count).toThrow(TypeError);
-    expect(tracker.value).toEqual(input);
+        const prepared = change.prepare();
+        expect(prepared.base).toBe(tracker.value);
+        expect(prepared.value).toEqual({ count: 2, nested: { text: "ab" }, values: [1, 2] });
+        expect(prepared.ops).toEqual([
+          ["s", ["count"], 2],
+          ["a", ["nested", "text"], "b"],
+          ["p", ["values"], 1, 0, [2]],
+        ]);
+        expect(() => change.state.count).toThrow(TypeError);
+        expect(tracker.value).toEqual(input);
 
-    tracker.adopt(prepared);
-    expect(tracker.value).toBe(prepared.value);
-  });
+        tracker.adopt(prepared);
+        expect(tracker.value).toBe(prepared.value);
+      }),
+    ));
 
   it("aborts and revokes without changing the committed value", () => {
     const tracker = track({ child: { value: 1 } });

@@ -1,5 +1,6 @@
 import { isProxy } from "node:util/types";
 
+import { Effect, Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -87,51 +88,61 @@ describe("delta tracker transactional overlay lifecycle", () => {
     expect(() => change.state.count).toThrow(TypeError);
   });
 
-  it("keeps a transaction live across await and seals it only at prepare", async () => {
-    const tracker = track({ left: 0, nested: { right: 0 } });
-    const change = tracker.beginChange();
-    change.state.left = 1;
-    await Promise.resolve();
-    change.state.nested.right = 2;
-    const prepared = change.prepare();
-    expect(prepared.value).toEqual({ left: 1, nested: { right: 2 } });
-    expect(() => {
-      change.state.left = 3;
-    }).toThrow(/settled/u);
-    tracker.adopt(prepared);
-  });
+  it("keeps a transaction live across await and seals it only at prepare", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const tracker = track({ left: 0, nested: { right: 0 } });
+        const change = tracker.beginChange();
+        change.state.left = 1;
+        yield* Effect.promise(() => Promise.resolve());
+        change.state.nested.right = 2;
+        const prepared = change.prepare();
+        expect(prepared.value).toEqual({ left: 1, nested: { right: 2 } });
+        expect(() => {
+          change.state.left = 3;
+        }).toThrow(/settled/u);
+        tracker.adopt(prepared);
+      }),
+    ));
 
-  it("allows Promise resolution to inspect a settled draft without reporting a false failure", async () => {
-    const initial = JSON.parse('{"then":"document-value","value":1}') as {
-      then: string;
-      value: number;
-    };
-    const tracker = track(initial);
-    const change = tracker.beginChange();
-    const draft = change.state;
-    expect(draft.then).toBe("document-value");
-    draft.value = 2;
-    const prepared = change.prepare();
+  it("allows Promise resolution to inspect a settled draft without reporting a false failure", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const initial = (yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(
+          '{"then":"document-value","value":1}',
+        )) as {
+          then: string;
+          value: number;
+        };
+        const tracker = track(initial);
+        const change = tracker.beginChange();
+        const draft = change.state;
+        expect(draft.then).toBe("document-value");
+        draft.value = 2;
+        const prepared = change.prepare();
 
-    const resolved = await Promise.resolve(draft);
-    expect(resolved).toBe(draft);
-    expect(resolved.then).toBeUndefined();
-    expect(() => resolved.value).toThrow(/settled/u);
+        const resolved = yield* Effect.promise(() => Promise.resolve(draft));
+        expect(resolved).toBe(draft);
+        expect(resolved.then).toBeUndefined();
+        expect(() => resolved.value).toThrow(/settled/u);
 
-    tracker.adopt(prepared);
-    expect(tracker.value.then).toBe("document-value");
-    expect(tracker.value.value).toBe(2);
+        tracker.adopt(prepared);
+        expect(tracker.value.then).toBe("document-value");
+        expect(tracker.value.value).toBe(2);
 
-    const largeTracker = track({ rows: Array.from({ length: 4_100 }, (_, value) => ({ value })) });
-    const largeChange = largeTracker.beginChange();
-    const largeDraft = largeChange.state;
-    for (const row of largeDraft.rows) expect(row.value).toBeGreaterThanOrEqual(0);
-    largeDraft.rows[0]!.value = -1;
-    const largePrepared = largeChange.prepare();
-    expect(await Promise.resolve(largeDraft)).toBe(largeDraft);
-    expect(() => largeDraft.rows).toThrow(/settled/u);
-    largeTracker.adopt(largePrepared);
-  });
+        const largeTracker = track({
+          rows: Array.from({ length: 4_100 }, (_, value) => ({ value })),
+        });
+        const largeChange = largeTracker.beginChange();
+        const largeDraft = largeChange.state;
+        for (const row of largeDraft.rows) expect(row.value).toBeGreaterThanOrEqual(0);
+        largeDraft.rows[0]!.value = -1;
+        const largePrepared = largeChange.prepare();
+        expect(yield* Effect.promise(() => Promise.resolve(largeDraft))).toBe(largeDraft);
+        expect(() => largeDraft.rows).toThrow(/settled/u);
+        largeTracker.adopt(largePrepared);
+      }),
+    ));
 
   it("aborts idempotently and revokes held descendants", () => {
     const tracker = track({ child: { value: 1 } });
