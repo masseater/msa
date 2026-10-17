@@ -111,6 +111,8 @@ jobs:
           fi
           gh auth setup-git
           git push --no-verify origin "HEAD:refs/heads/$BRANCH"
+          gh workflow run verify.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
+          gh workflow run up-to-date.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
           if [ "$BRANCH" != "$HEAD_BRANCH" ]; then
             gh pr create --base "$DEFAULT_BRANCH" --head "$BRANCH" --draft \
               --title "$(git log -1 --format=%s)" \
