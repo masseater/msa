@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 
-import { Effect, Filter, Schema, Stream } from "effect";
+import { DateTime, Effect, Filter, Option, Schema, Stream } from "effect";
 
 import type { HostShape } from "./host.ts";
 
@@ -62,6 +62,22 @@ const jsonlFiles = (options: { readonly directory: string; readonly host: HostSh
     [...names.filter((name) => name.endsWith(".jsonl"))].sort(),
   );
 
+const FILE_TIMESTAMP = /T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/u;
+
+const parseMillis = (value: string): number | null => {
+  const parsed = DateTime.make(value);
+  return Option.isSome(parsed) ? DateTime.toEpochMillis(parsed.value) : null;
+};
+
+const sessionFileMillis = (options: {
+  readonly file: string;
+  readonly host: HostShape;
+}): number | null => {
+  const raw = options.host.basename(options.file).split("_")[0];
+  if (raw === undefined || raw === "") return null;
+  return parseMillis(raw.replace(FILE_TIMESTAMP, "T$1:$2:$3.$4Z"));
+};
+
 const jsonlFilesRecursive = (options: {
   readonly directory: string;
   readonly host: HostShape;
@@ -81,4 +97,12 @@ const jsonlFilesRecursive = (options: {
   });
 
 export type { Cost, SessionEntry, Usage };
-export { defaultSessionsBase, encodeSessionDir, jsonlFiles, jsonlFilesRecursive, sessionEntries };
+export {
+  defaultSessionsBase,
+  encodeSessionDir,
+  jsonlFiles,
+  jsonlFilesRecursive,
+  parseMillis,
+  sessionEntries,
+  sessionFileMillis,
+};

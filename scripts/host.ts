@@ -17,6 +17,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { runMainWith } from "../tools/run-main.ts";
 
 interface FileInfo {
+  readonly birthtimeMs: number | undefined;
   readonly isDirectory: boolean;
   readonly isFile: boolean;
   readonly mtimeMs: number | undefined;
@@ -135,6 +136,7 @@ const makeFiles = Effect.gen(function* () {
     stat: (target: string) =>
       fs.stat(target).pipe(
         Effect.map((info): FileInfo => ({
+          birthtimeMs: Option.getOrUndefined(Option.map(info.birthtime, (date) => date.getTime())),
           isDirectory: info.type === "Directory",
           isFile: info.type === "File",
           mtimeMs: Option.getOrUndefined(Option.map(info.mtime, (date) => date.getTime())),

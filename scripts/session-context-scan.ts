@@ -1,12 +1,10 @@
-import { DateTime, Effect, Option, Result, Stream } from "effect";
+import { Effect, Result, Stream } from "effect";
 
 import type { HostShape } from "./host.ts";
 import { bashCommandsOf, contextTokens, decodeContextEntry } from "./session-context-entry.ts";
 import type { ContextEntry, ContextMessage } from "./session-context-entry.ts";
 import type { ContextWindows } from "./session-context-windows.ts";
-import { jsonlFilesRecursive } from "./sessions.ts";
-
-const FILE_TIMESTAMP = /T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/u;
+import { jsonlFilesRecursive, parseMillis, sessionFileMillis } from "./sessions.ts";
 
 interface SessionRecord {
   sessionFile: string;
@@ -36,17 +34,6 @@ interface ScanMeta {
   sessionFilesSkippedOlderThanSince: number;
   malformedLines: number;
 }
-
-const parseMillis = (value: string): number | null => {
-  const parsed = DateTime.make(value);
-  return Option.isSome(parsed) ? DateTime.toEpochMillis(parsed.value) : null;
-};
-
-const sessionFileMillis = (host: HostShape, sessionFile: string): number | null => {
-  const raw = host.basename(sessionFile).split("_")[0];
-  if (raw === undefined || raw === "") return null;
-  return parseMillis(raw.replace(FILE_TIMESTAMP, "T$1:$2:$3.$4Z"));
-};
 
 const emptySession = (sessionFile: string, fileMillis: number | null): SessionRecord => ({
   sessionFile,
@@ -135,7 +122,7 @@ const scanFile = (options: {
 }) =>
   Effect.gen(function* () {
     const { host, meta, sessionFile, windows } = options;
-    const session = emptySession(sessionFile, sessionFileMillis(host, sessionFile));
+    const session = emptySession(sessionFile, sessionFileMillis({ file: sessionFile, host }));
     yield* host.lines(sessionFile).pipe(
       Stream.filter((line) => line.trim() !== ""),
       Stream.runForEach((line) =>
@@ -175,7 +162,7 @@ const scanSessions = (options: {
     yield* Effect.forEach(files, (sessionFile) =>
       Effect.gen(function* () {
         meta.sessionFilesScanned += 1;
-        const fileMillis = sessionFileMillis(host, sessionFile);
+        const fileMillis = sessionFileMillis({ file: sessionFile, host });
         if (sinceMs !== null && fileMillis !== null && fileMillis < sinceMs) {
           meta.sessionFilesSkippedOlderThanSince += 1;
           return;

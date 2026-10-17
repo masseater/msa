@@ -5,12 +5,11 @@ import { Console, Data, DateTime, Effect, Option, Schema } from "effect";
 import { Host, runScript } from "./host.ts";
 import type { HostShape } from "./host.ts";
 import { IndentedJson } from "./json.ts";
+import { REPORT_TIME_ZONE, reportZone } from "./report-zone.ts";
 import { buildHtmlReport, buildTextReport } from "./session-context-report.ts";
 import { scanSessions } from "./session-context-scan.ts";
 import { buildSummary } from "./session-context-summary.ts";
 import { loadContextWindows } from "./session-context-windows.ts";
-
-const REPORT_TIME_ZONE = "Europe/Berlin";
 
 const HELP = `Usage: node scripts/session-context-stats.ts [options]
 
@@ -128,12 +127,6 @@ const sinceMillisOf = (since: string | undefined) =>
     return DateTime.toEpochMillis(parsed.value);
   });
 
-const dayFormatter = Effect.gen(function* () {
-  const zone = yield* DateTime.zoneMakeNamedEffect(REPORT_TIME_ZONE).pipe(Effect.orDie);
-  return (ms: number): string =>
-    DateTime.formatIsoDate(DateTime.setZone(DateTime.makeUnsafe(ms), zone));
-});
-
 const report = (options: {
   readonly args: Args;
   readonly summary: ReturnType<typeof buildSummary>;
@@ -147,7 +140,7 @@ const report = (options: {
 const program = Effect.gen(function* () {
   const host = yield* Host;
   const args = yield* parseArgs(host);
-  const day = yield* dayFormatter;
+  const { day } = yield* reportZone;
   const windows = yield* loadContextWindows(host);
   const cwdFilter = args.cwd === undefined ? undefined : host.resolve(args.cwd);
   const { meta, sessions } = yield* scanSessions({

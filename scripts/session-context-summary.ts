@@ -119,10 +119,10 @@ const byModelOrder = (sessions: ReadonlyArray<SessionRecord>): ReadonlyArray<Gro
     (left, right) => right.sessions - left.sessions || left.key.localeCompare(right.key),
   );
 
-const withByDay = (
-  model: GroupSummary,
-  byDay: ReadonlyArray<GroupSummary>,
-): ModelSummary => ({ ...model, byDay });
+const withByDay = (model: GroupSummary, byDay: ReadonlyArray<GroupSummary>): ModelSummary => ({
+  ...model,
+  byDay,
+});
 
 const matchesFilters = (
   session: SessionRecord,
