@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { type AutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { applyCompletion, createTestTUI, flushAutocomplete } from "./editor-helpers.ts";
+import { applyCompletion, createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
 
 describe("Editor component", () => {
@@ -34,10 +34,7 @@ describe("Editor component", () => {
 
       editor.setAutocompleteProvider(mockProvider);
 
-      editor.handleInput("@");
-      editor.handleInput("m");
-      editor.handleInput("a");
-      editor.handleInput("i");
+      typeText(editor, "@mai");
       await new Promise((resolve) => {
         setTimeout(resolve, 250);
       });
@@ -136,18 +133,7 @@ function autocompleteCases12(): void {
     editor.setAutocompleteProvider(mockProvider);
 
     // Type "/argtest two"
-    editor.handleInput("/");
-    editor.handleInput("a");
-    editor.handleInput("r");
-    editor.handleInput("g");
-    editor.handleInput("t");
-    editor.handleInput("e");
-    editor.handleInput("s");
-    editor.handleInput("t");
-    editor.handleInput(" ");
-    editor.handleInput("t");
-    editor.handleInput("w");
-    editor.handleInput("o");
+    typeText(editor, "/argtest two");
 
     assert.strictEqual(editor.getText(), "/argtest two");
     await flushAutocomplete();
@@ -200,16 +186,7 @@ function autocompleteCases13(): void {
     editor.setAutocompleteProvider(mockProvider);
 
     // Type "/argtest t" - filtered to [two, three, twelve], prefix "t" matches "two" first
-    editor.handleInput("/");
-    editor.handleInput("a");
-    editor.handleInput("r");
-    editor.handleInput("g");
-    editor.handleInput("t");
-    editor.handleInput("e");
-    editor.handleInput("s");
-    editor.handleInput("t");
-    editor.handleInput(" ");
-    editor.handleInput("t");
+    typeText(editor, "/argtest t");
 
     await flushAutocomplete();
     assert.strictEqual(editor.isShowingAutocomplete(), true);

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { type AutocompleteProvider, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { applyCompletion, createTestTUI, flushAutocomplete } from "./editor-helpers.ts";
+import { applyCompletion, createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
 
 describe("Editor component", () => {
@@ -12,35 +12,50 @@ describe("Editor component", () => {
   });
 });
 
+function cjkPathCompletion(
+  directory: string,
+  provider: CombinedAutocompleteProvider,
+): {
+  initial: string;
+  directoryValue: string;
+  fileValue: string;
+  autocomplete: AutocompleteProvider;
+} {
+  const quoted = directory !== "文档";
+  const initial = quoted ? `@"${directory.slice(0, 2)}` : "@文";
+  const directoryValue = quoted ? `@"${directory}/"` : `@${directory}/`;
+  const fileValue = quoted ? `@"${directory}/说明.md"` : `@${directory}/说明.md`;
+  const filePrefix = quoted ? `@"${directory}/说` : `@${directory}/说`;
+  const autocomplete: AutocompleteProvider = {
+    getSuggestions: (lines, cursorLine, cursorCol) => {
+      const before = lines[cursorLine]!.slice(0, cursorCol);
+      const prefix = before.slice(before.indexOf("@"));
+      if (prefix === initial) {
+        return Promise.resolve({
+          prefix,
+          items: [{ value: directoryValue, label: `${directory}/` }],
+        });
+      }
+      return Promise.resolve(
+        prefix === filePrefix ? { prefix, items: [{ value: fileValue, label: "说明.md" }] } : null,
+      );
+    },
+    applyCompletion: (...args) => provider.applyCompletion(...args),
+  };
+  return { initial, directoryValue, fileValue, autocomplete };
+}
+
 function autocompleteCases8(): void {
   it("re-triggers CJK path completion after accepting directories and deleting", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const provider = new CombinedAutocompleteProvider([], process.cwd());
     for await (const directory of ["文档", "我的 文档", "资料，归档"]) {
-      const quoted = directory !== "文档";
-      const initial = quoted ? `@"${directory.slice(0, 2)}` : "@文";
-      const directoryValue = quoted ? `@"${directory}/"` : `@${directory}/`;
-      const fileValue = quoted ? `@"${directory}/说明.md"` : `@${directory}/说明.md`;
-      const filePrefix = quoted ? `@"${directory}/说` : `@${directory}/说`;
+      const { initial, directoryValue, fileValue, autocomplete } = cjkPathCompletion(
+        directory,
+        provider,
+      );
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
-      editor.setAutocompleteProvider({
-        getSuggestions: (lines, cursorLine, cursorCol) => {
-          const before = lines[cursorLine]!.slice(0, cursorCol);
-          const prefix = before.slice(before.indexOf("@"));
-          if (prefix === initial) {
-            return Promise.resolve({
-              prefix,
-              items: [{ value: directoryValue, label: `${directory}/` }],
-            });
-          }
-          return Promise.resolve(
-            prefix === filePrefix
-              ? { prefix, items: [{ value: fileValue, label: "说明.md" }] }
-              : null,
-          );
-        },
-        applyCompletion: (...args) => provider.applyCompletion(...args),
-      });
+      editor.setAutocompleteProvider(autocomplete);
       editor.setText(`查看：${initial}`);
       editor.handleInput("\t");
       await flushAutocomplete();
@@ -97,10 +112,7 @@ describe("Editor component", () => {
       editor.setAutocompleteProvider(mockProvider);
 
       // Type "Work"
-      editor.handleInput("W");
-      editor.handleInput("o");
-      editor.handleInput("r");
-      editor.handleInput("k");
+      typeText(editor, "Work");
       assert.strictEqual(editor.getText(), "Work");
 
       // Press Tab - should auto-apply without showing menu
@@ -151,9 +163,7 @@ function autocompleteCases9(): void {
     editor.setAutocompleteProvider(mockProvider);
 
     // Type "src"
-    editor.handleInput("s");
-    editor.handleInput("r");
-    editor.handleInput("c");
+    typeText(editor, "src");
     assert.strictEqual(editor.getText(), "src");
 
     // Press Tab - should show menu because there are multiple suggestions
@@ -175,35 +185,38 @@ describe("Editor component", () => {
   });
 });
 
+function forceModeFileProvider(): AutocompleteProvider {
+  const allFiles = [
+    { value: "readme.md", label: "readme.md" },
+    { value: "package.json", label: "package.json" },
+    { value: "src/", label: "src/" },
+    { value: "dist/", label: "dist/" },
+  ];
+
+  return {
+    getSuggestions: (lines, _cursorLine, cursorCol, options) => {
+      const text = lines[0] || "";
+      const prefix = text.slice(0, cursorCol);
+      const shouldMatch = options.force || prefix.includes("/") || prefix.startsWith(".");
+      if (!shouldMatch) {
+        return Promise.resolve(null);
+      }
+      const filtered = allFiles.filter((f) =>
+        f.value.toLowerCase().startsWith(prefix.toLowerCase()),
+      );
+      if (filtered.length > 0) {
+        return Promise.resolve({ items: filtered, prefix });
+      }
+      return Promise.resolve(null);
+    },
+    applyCompletion,
+  };
+}
+
 function autocompleteCases10(): void {
   it("keeps suggestions open when typing in force mode (Tab-triggered)", async () => {
     const editor = new Editor(createTestTUI(), defaultEditorTheme);
-
-    const allFiles = [
-      { value: "readme.md", label: "readme.md" },
-      { value: "package.json", label: "package.json" },
-      { value: "src/", label: "src/" },
-      { value: "dist/", label: "dist/" },
-    ];
-
-    const mockProvider: AutocompleteProvider = {
-      getSuggestions: (lines, _cursorLine, cursorCol, options) => {
-        const text = lines[0] || "";
-        const prefix = text.slice(0, cursorCol);
-        const shouldMatch = options.force || prefix.includes("/") || prefix.startsWith(".");
-        if (!shouldMatch) {
-          return Promise.resolve(null);
-        }
-        const filtered = allFiles.filter((f) =>
-          f.value.toLowerCase().startsWith(prefix.toLowerCase()),
-        );
-        if (filtered.length > 0) {
-          return Promise.resolve({ items: filtered, prefix });
-        }
-        return Promise.resolve(null);
-      },
-      applyCompletion,
-    };
+    const mockProvider = forceModeFileProvider();
 
     editor.setAutocompleteProvider(mockProvider);
 

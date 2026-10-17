@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { Input } from "../src/components/input.ts";
 import { stripTerminalSequences, visibleWidth } from "../src/utils.ts";
+import { typeText } from "./editor-helpers.ts";
 
 describe("Input component", () => {
   it("submits value including backslash on Enter", () => {
@@ -14,11 +15,7 @@ describe("Input component", () => {
     };
 
     // Type hello, then backslash, then Enter
-    input.handleInput("h");
-    input.handleInput("e");
-    input.handleInput("l");
-    input.handleInput("l");
-    input.handleInput("o");
+    typeText(input, "hello");
     input.handleInput("\\");
     input.handleInput("\r");
 

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { type AutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { applyCompletion, createTestTUI } from "./editor-helpers.ts";
+import { applyCompletion, createTestTUI, typeText } from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
 
 describe("Editor component", () => {
@@ -11,12 +11,7 @@ describe("Editor component", () => {
     it("undoes yank", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      editor.handleInput("h");
-      editor.handleInput("e");
-      editor.handleInput("l");
-      editor.handleInput("l");
-      editor.handleInput("o");
-      editor.handleInput(" ");
+      typeText(editor, "hello ");
       // Ctrl+W - delete "hello "
       editor.handleInput("\x17");
       // Ctrl+Y - yank
@@ -190,17 +185,7 @@ describe("Editor component", () => {
     it("undoes setText to empty string", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      editor.handleInput("h");
-      editor.handleInput("e");
-      editor.handleInput("l");
-      editor.handleInput("l");
-      editor.handleInput("o");
-      editor.handleInput(" ");
-      editor.handleInput("w");
-      editor.handleInput("o");
-      editor.handleInput("r");
-      editor.handleInput("l");
-      editor.handleInput("d");
+      typeText(editor, "hello world");
       assert.strictEqual(editor.getText(), "hello world");
 
       editor.setText("");
@@ -222,11 +207,7 @@ describe("Editor component", () => {
         submitted = text;
       };
 
-      editor.handleInput("h");
-      editor.handleInput("e");
-      editor.handleInput("l");
-      editor.handleInput("l");
-      editor.handleInput("o");
+      typeText(editor, "hello");
       // Enter - submit
       editor.handleInput("\r");
 

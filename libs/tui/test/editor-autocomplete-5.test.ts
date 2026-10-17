@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { type AutocompleteProvider, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { applyCompletion, createTestTUI, flushAutocomplete } from "./editor-helpers.ts";
+import { applyCompletion, createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
 
 describe("Editor component", () => {
@@ -41,17 +41,7 @@ function autocompleteCases14(): void {
     editor.setAutocompleteProvider(mockProvider);
 
     // Type "/argtest tw" - "tw" is a prefix of only "two"
-    editor.handleInput("/");
-    editor.handleInput("a");
-    editor.handleInput("r");
-    editor.handleInput("g");
-    editor.handleInput("t");
-    editor.handleInput("e");
-    editor.handleInput("s");
-    editor.handleInput("t");
-    editor.handleInput(" ");
-    editor.handleInput("t");
-    editor.handleInput("w");
+    typeText(editor, "/argtest tw");
 
     assert.strictEqual(editor.getText(), "/argtest tw");
     await flushAutocomplete();
@@ -97,16 +87,7 @@ function autocompleteCases15(): void {
     editor.setAutocompleteProvider(mockProvider);
 
     // Type "/argtest t" - "t" is a prefix of both "two" and "three"
-    editor.handleInput("/");
-    editor.handleInput("a");
-    editor.handleInput("r");
-    editor.handleInput("g");
-    editor.handleInput("t");
-    editor.handleInput("e");
-    editor.handleInput("s");
-    editor.handleInput("t");
-    editor.handleInput(" ");
-    editor.handleInput("t");
+    typeText(editor, "/argtest t");
 
     await flushAutocomplete();
     assert.strictEqual(editor.isShowingAutocomplete(), true);
@@ -157,24 +138,7 @@ function autocompleteCases16(): void {
     editor.setAutocompleteProvider(mockProvider);
 
     // Type "/model gpt-4o-mini" - exact match for second item in list
-    editor.handleInput("/");
-    editor.handleInput("m");
-    editor.handleInput("o");
-    editor.handleInput("d");
-    editor.handleInput("e");
-    editor.handleInput("l");
-    editor.handleInput(" ");
-    editor.handleInput("g");
-    editor.handleInput("p");
-    editor.handleInput("t");
-    editor.handleInput("-");
-    editor.handleInput("4");
-    editor.handleInput("o");
-    editor.handleInput("-");
-    editor.handleInput("m");
-    editor.handleInput("i");
-    editor.handleInput("n");
-    editor.handleInput("i");
+    typeText(editor, "/model gpt-4o-mini");
 
     assert.strictEqual(editor.getText(), "/model gpt-4o-mini");
     await flushAutocomplete();

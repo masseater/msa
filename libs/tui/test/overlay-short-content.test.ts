@@ -2,28 +2,10 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { Component, TUI } from "../src/tui.ts";
+import type { TUI } from "../src/tui.ts";
+import { SimpleContent } from "./overlay-short-content-simple-content.ts";
+import { SimpleOverlay } from "./overlay-short-content-simple-overlay.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
-
-class SimpleContent implements Component {
-  private lines: string[];
-
-  constructor(lines: string[]) {
-    this.lines = lines;
-  }
-
-  render(): string[] {
-    return this.lines;
-  }
-  invalidate() {}
-}
-
-class SimpleOverlay implements Component {
-  render(): string[] {
-    return ["OVERLAY_TOP", "OVERLAY_MID", "OVERLAY_BOT"];
-  }
-  invalidate() {}
-}
 
 describe("TUI overlay with short content", () => {
   it("should render overlay when content is shorter than terminal height", async () => {

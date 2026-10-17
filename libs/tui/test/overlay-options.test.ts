@@ -2,10 +2,12 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { Component, TUI } from "../src/tui.ts";
+import type { TUI } from "../src/tui.ts";
 import { EmptyContent } from "./overlay-options-empty-content.ts";
 import { renderAndFlush } from "./overlay-options-helpers.ts";
+import { HyperlinkContent } from "./overlay-options-hyperlink-content.ts";
 import { StaticOverlay } from "./overlay-options-static-overlay.ts";
+import { StyledContent } from "./overlay-options-styled-content.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("TUI overlay options", () => {
@@ -59,15 +61,6 @@ describe("TUI overlay options", () => {
     it("should handle overlay composited on styled base content", async () => {
       const terminal = new VirtualTerminal(80, 24);
       const tui: TUI = new TuiMainScreen(terminal);
-
-      // Base content with styling
-      class StyledContent implements Component {
-        render(width: number): string[] {
-          const styledLine = `\x1b[1m\x1b[38;2;255;0;0m${"X".repeat(width)}\x1b[0m`;
-          return [styledLine, styledLine, styledLine];
-        }
-        invalidate(): void {}
-      }
 
       const overlay = new StaticOverlay(["OVERLAY"]);
 
@@ -132,16 +125,6 @@ describe("TUI overlay options", () => {
     it("should handle overlay on base content with OSC sequences", async () => {
       const terminal = new VirtualTerminal(80, 24);
       const tui: TUI = new TuiMainScreen(terminal);
-
-      // Base content with OSC 8 hyperlinks (like file paths in agent output)
-      class HyperlinkContent implements Component {
-        render(width: number): string[] {
-          const link = `\x1b]8;;file:///path/to/file.ts\x07file.ts\x1b]8;;\x07`;
-          const line = `See ${link} for details ${"X".repeat(width - 30)}`;
-          return [line, line, line];
-        }
-        invalidate(): void {}
-      }
 
       const overlay = new StaticOverlay(["OVERLAY-TEXT"]);
 

@@ -2,7 +2,7 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { Editor } from "../src/components/editor.ts";
-import { createTestTUI } from "./editor-helpers.ts";
+import { createTestTUI, typeText } from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
 
 describe("Editor component", () => {
@@ -10,12 +10,7 @@ describe("Editor component", () => {
     it("inserts mixed ASCII, umlauts, and emojis as literal text", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      editor.handleInput("H");
-      editor.handleInput("e");
-      editor.handleInput("l");
-      editor.handleInput("l");
-      editor.handleInput("o");
-      editor.handleInput(" ");
+      typeText(editor, "Hello ");
       editor.handleInput("ä");
       editor.handleInput("ö");
       editor.handleInput("ü");

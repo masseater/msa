@@ -4,7 +4,7 @@ import { stripVTControlCharacters } from "node:util";
 
 import { type AutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { applyCompletion, createTestTUI, flushAutocomplete } from "./editor-helpers.ts";
+import { applyCompletion, createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
 
 describe("Editor component", () => {
@@ -27,10 +27,7 @@ describe("Editor component", () => {
 
       editor.setAutocompleteProvider(mockProvider);
 
-      editor.handleInput("@");
-      editor.handleInput("m");
-      editor.handleInput("a");
-      editor.handleInput("i");
+      typeText(editor, "@mai");
 
       assert.strictEqual(suggestionCalls, 0);
       assert.strictEqual(editor.isShowingAutocomplete(), false);
@@ -52,6 +49,29 @@ describe("Editor component", () => {
   });
 });
 
+function commandArgumentProvider(): AutocompleteProvider {
+  return {
+    getSuggestions: (lines, _cursorLine, cursorCol) => {
+      const before = (lines[0] || "").slice(0, cursorCol);
+      if (!before.startsWith("/")) return Promise.resolve(null);
+      // Past the command name (a space before the cursor): offer arguments.
+      if (before.includes(" ")) {
+        return Promise.resolve({
+          items: [
+            { value: "repo", label: "repo" },
+            { value: "message", label: "message" },
+            { value: "help", label: "help" },
+          ],
+          prefix: before.slice(before.indexOf(" ") + 1),
+        });
+      }
+      // Inside the command name: offer the command name only.
+      return Promise.resolve({ items: [{ value: "cmd", label: "cmd" }], prefix: before });
+    },
+    applyCompletion,
+  };
+}
+
 function autocompleteCases11(): void {
   it("re-queries the autocomplete picker when the cursor moves back into the command name", async () => {
     // Regression for earendil-works/pi#5496: arrowing left out of a slash
@@ -61,29 +81,7 @@ function autocompleteCases11(): void {
     // displaying the arguments against a `/cmd` prefix — and a Tab there
     // would concatenate the stale suggestion onto the partial command name.
     const editor = new Editor(createTestTUI(), defaultEditorTheme);
-
-    const mockProvider: AutocompleteProvider = {
-      getSuggestions: (lines, _cursorLine, cursorCol) => {
-        const before = (lines[0] || "").slice(0, cursorCol);
-        if (!before.startsWith("/")) return Promise.resolve(null);
-        // Past the command name (a space before the cursor): offer arguments.
-        if (before.includes(" ")) {
-          return Promise.resolve({
-            items: [
-              { value: "repo", label: "repo" },
-              { value: "message", label: "message" },
-              { value: "help", label: "help" },
-            ],
-            prefix: before.slice(before.indexOf(" ") + 1),
-          });
-        }
-        // Inside the command name: offer the command name only.
-        return Promise.resolve({ items: [{ value: "cmd", label: "cmd" }], prefix: before });
-      },
-      applyCompletion,
-    };
-
-    editor.setAutocompleteProvider(mockProvider);
+    editor.setAutocompleteProvider(commandArgumentProvider());
 
     // Type `/cmd ` so the picker ends up showing the argument list.
     for await (const ch of "/cmd ") {
@@ -136,10 +134,7 @@ describe("Editor component", () => {
 
       editor.setAutocompleteProvider(mockProvider);
 
-      editor.handleInput("#");
-      editor.handleInput("2");
-      editor.handleInput("9");
-      editor.handleInput("8");
+      typeText(editor, "#298");
 
       assert.strictEqual(suggestionCalls, 0);
       assert.strictEqual(editor.isShowingAutocomplete(), false);
@@ -174,9 +169,7 @@ describe("Editor component", () => {
         applyCompletion,
       });
 
-      editor.handleInput("$");
-      editor.handleInput("s");
-      editor.handleInput("k");
+      typeText(editor, "$sk");
 
       assert.strictEqual(suggestionCalls, 0);
       await new Promise((resolve) => {

@@ -78,3 +78,8 @@ export function pasteWithMarker(editor: Editor): string {
 export function bigPaste(tag: string): string {
   return Array.from({ length: 12 }, (_, i) => `${tag}${i}`).join("\n");
 }
+
+// Sends each character as its own input event, like typing.
+export function typeText(target: { handleInput(data: string): void }, text: string): void {
+  for (const char of text) target.handleInput(char);
+}

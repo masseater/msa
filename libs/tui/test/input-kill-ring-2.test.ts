@@ -2,6 +2,7 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { Input } from "../src/components/input.ts";
+import { typeText } from "./editor-helpers.ts";
 
 describe("Input component", () => {
   describe("Kill ring", () => {
@@ -169,17 +170,7 @@ describe("Input component", () => {
     it("coalesces consecutive word characters into one undo unit", () => {
       const input = new Input();
 
-      input.handleInput("h");
-      input.handleInput("e");
-      input.handleInput("l");
-      input.handleInput("l");
-      input.handleInput("o");
-      input.handleInput(" ");
-      input.handleInput("w");
-      input.handleInput("o");
-      input.handleInput("r");
-      input.handleInput("l");
-      input.handleInput("d");
+      typeText(input, "hello world");
       assert.strictEqual(input.getValue(), "hello world");
 
       // Undo removes " world"
@@ -200,13 +191,7 @@ describe("Input component", () => {
     it("undoes spaces one at a time", () => {
       const input = new Input();
 
-      input.handleInput("h");
-      input.handleInput("e");
-      input.handleInput("l");
-      input.handleInput("l");
-      input.handleInput("o");
-      input.handleInput(" ");
-      input.handleInput(" ");
+      typeText(input, "hello  ");
       assert.strictEqual(input.getValue(), "hello  ");
 
       // Ctrl+- (undo) - removes second " "
@@ -225,11 +210,7 @@ describe("Input component", () => {
     it("undoes backspace", () => {
       const input = new Input();
 
-      input.handleInput("h");
-      input.handleInput("e");
-      input.handleInput("l");
-      input.handleInput("l");
-      input.handleInput("o");
+      typeText(input, "hello");
       // Backspace
       input.handleInput("\x7f");
       assert.strictEqual(input.getValue(), "hell");

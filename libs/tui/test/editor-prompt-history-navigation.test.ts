@@ -2,7 +2,7 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { Editor } from "../src/components/editor.ts";
-import { createTestTUI } from "./editor-helpers.ts";
+import { createTestTUI, typeText } from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
 
 describe("Editor component", () => {
@@ -106,9 +106,7 @@ describe("Editor component", () => {
 
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      editor.handleInput("a");
-      editor.handleInput("b");
-      editor.handleInput("c");
+      typeText(editor, "abc");
 
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
 

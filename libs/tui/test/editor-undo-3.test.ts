@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { type AutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { applyCompletion, createTestTUI, flushAutocomplete } from "./editor-helpers.ts";
+import { applyCompletion, createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
 
 describe("Editor component", () => {
@@ -16,11 +16,7 @@ describe("Editor component", () => {
       assert.strictEqual(editor.getText(), "");
 
       // Type "world"
-      editor.handleInput("w");
-      editor.handleInput("o");
-      editor.handleInput("r");
-      editor.handleInput("l");
-      editor.handleInput("d");
+      typeText(editor, "world");
       assert.strictEqual(editor.getText(), "world");
 
       // Ctrl+W - delete word
@@ -62,13 +58,7 @@ function undoCases5(): void {
     editor.addToHistory("third");
 
     // Type something
-    editor.handleInput("c");
-    editor.handleInput("u");
-    editor.handleInput("r");
-    editor.handleInput("r");
-    editor.handleInput("e");
-    editor.handleInput("n");
-    editor.handleInput("t");
+    typeText(editor, "current");
     assert.strictEqual(editor.getText(), "current");
 
     // Clear editor
@@ -104,26 +94,14 @@ describe("Editor component", () => {
     it("cursor movement starts new undo unit", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      editor.handleInput("h");
-      editor.handleInput("e");
-      editor.handleInput("l");
-      editor.handleInput("l");
-      editor.handleInput("o");
-      editor.handleInput(" ");
-      editor.handleInput("w");
-      editor.handleInput("o");
-      editor.handleInput("r");
-      editor.handleInput("l");
-      editor.handleInput("d");
+      typeText(editor, "hello world");
       assert.strictEqual(editor.getText(), "hello world");
 
       // Move cursor left 5 (to after "hello ")
       for (let i = 0; i < 5; i++) editor.handleInput("\x1b[D");
 
       // Type "lol" in the middle
-      editor.handleInput("l");
-      editor.handleInput("o");
-      editor.handleInput("l");
+      typeText(editor, "lol");
       assert.strictEqual(editor.getText(), "hello lolworld");
 
       // Undo should restore to "hello world" (before inserting "lol")
@@ -142,11 +120,7 @@ describe("Editor component", () => {
     it("no-op delete operations do not push undo snapshots", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      editor.handleInput("h");
-      editor.handleInput("e");
-      editor.handleInput("l");
-      editor.handleInput("l");
-      editor.handleInput("o");
+      typeText(editor, "hello");
       assert.strictEqual(editor.getText(), "hello");
 
       // Delete word on empty - multiple times (should be no-ops)

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { createTestTUI, flushAutocomplete } from "./editor-helpers.ts";
+import { createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
 
 describe("Editor component", () => {
@@ -23,9 +23,7 @@ describe("Editor component", () => {
       );
       editor.setAutocompleteProvider(provider);
 
-      editor.handleInput("/");
-      editor.handleInput("h");
-      editor.handleInput("e");
+      typeText(editor, "/he");
       await flushAutocomplete();
       assert.strictEqual(editor.isShowingAutocomplete(), true);
 

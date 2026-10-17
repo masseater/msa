@@ -22,44 +22,13 @@ import { performance } from "node:perf_hooks";
 import { ScrollView } from "../src/components/scroll-view.ts";
 import { Text } from "../src/components/text.ts";
 import { VStack } from "../src/components/v-stack.ts";
-import type { Terminal } from "../src/terminal.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
 import { type Component, Container, CURSOR_MARKER } from "../src/tui.ts";
+import { COLUMNS, NullTerminal, ROWS } from "./render-churn-null-terminal.ts";
 
-const COLUMNS = 100;
-const ROWS = 30;
 const WARMUP_FRAMES = 20;
 const FRAMES = 300;
 const SAMPLING_INTERVAL = 4096;
-
-/** Terminal that discards output; keeps xterm parsing out of the measurement. */
-class NullTerminal implements Terminal {
-  bytesWritten = 0;
-  start(_onInput: (data: string) => void, _onResize: () => void): void {}
-  stop(): void {}
-  async drainInput(): Promise<void> {}
-  write(data: string): void {
-    this.bytesWritten += data.length;
-  }
-  get columns(): number {
-    return COLUMNS;
-  }
-  get rows(): number {
-    return ROWS;
-  }
-  get kittyProtocolActive(): boolean {
-    return false;
-  }
-  moveBy(_lines: number): void {}
-  hideCursor(): void {}
-  showCursor(): void {}
-  clearLine(): void {}
-  clearFromCursor(): void {}
-  clearScreen(): void {}
-  setTitle(_title: string): void {}
-  setProgress(_active: boolean): void {}
-  setProgramStatus(): void {}
-}
 
 /** Editor stand-in: caches lines per (text, width), re-renders when text changes. */
 class EditorSim implements Component {

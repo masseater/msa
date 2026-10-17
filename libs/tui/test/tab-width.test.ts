@@ -2,43 +2,16 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { Component, TUI } from "../src/tui.ts";
+import type { TUI } from "../src/tui.ts";
 import {
   extractSegments,
   normalizeTerminalOutput,
   sliceWithWidth,
   visibleWidth,
 } from "../src/utils.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
-
-class FullViewportContent implements Component {
-  render(width: number): string[] {
-    return ["base 0", "base 1", "base 2"].map((line) => line.padEnd(width));
-  }
-
-  invalidate(): void {}
-}
-
-class CapturingVirtualTerminal extends VirtualTerminal {
-  private output = "";
-
-  override write(data: string): void {
-    this.output += data;
-    super.write(data);
-  }
-
-  getOutput(): string {
-    return this.output;
-  }
-}
-
-class TabStatusOverlay implements Component {
-  render(): string[] {
-    return ["\tX"];
-  }
-
-  invalidate(): void {}
-}
+import { CapturingVirtualTerminal } from "./tab-width-capturing-virtual-terminal.ts";
+import { FullViewportContent } from "./tab-width-full-viewport-content.ts";
+import { TabStatusOverlay } from "./tab-width-tab-status-overlay.ts";
 
 describe("tab width accounting", () => {
   it("keeps slice helper widths consistent with visible width", () => {

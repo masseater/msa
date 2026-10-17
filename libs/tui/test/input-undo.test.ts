@@ -2,17 +2,14 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { Input } from "../src/components/input.ts";
+import { typeText } from "./editor-helpers.ts";
 
 describe("Input component", () => {
   describe("Undo", () => {
     it("undoes forward delete", () => {
       const input = new Input();
 
-      input.handleInput("h");
-      input.handleInput("e");
-      input.handleInput("l");
-      input.handleInput("l");
-      input.handleInput("o");
+      typeText(input, "hello");
       // Ctrl+A - go to start
       input.handleInput("\x01");
       // Right arrow
@@ -33,17 +30,7 @@ describe("Input component", () => {
     it("undoes Ctrl+W (delete word backward)", () => {
       const input = new Input();
 
-      input.handleInput("h");
-      input.handleInput("e");
-      input.handleInput("l");
-      input.handleInput("l");
-      input.handleInput("o");
-      input.handleInput(" ");
-      input.handleInput("w");
-      input.handleInput("o");
-      input.handleInput("r");
-      input.handleInput("l");
-      input.handleInput("d");
+      typeText(input, "hello world");
       assert.strictEqual(input.getValue(), "hello world");
 
       // Ctrl+W
@@ -62,17 +49,7 @@ describe("Input component", () => {
     it("undoes Ctrl+K (delete to line end)", () => {
       const input = new Input();
 
-      input.handleInput("h");
-      input.handleInput("e");
-      input.handleInput("l");
-      input.handleInput("l");
-      input.handleInput("o");
-      input.handleInput(" ");
-      input.handleInput("w");
-      input.handleInput("o");
-      input.handleInput("r");
-      input.handleInput("l");
-      input.handleInput("d");
+      typeText(input, "hello world");
       // Ctrl+A
       input.handleInput("\x01");
       for (let i = 0; i < 6; i++) input.handleInput("\x1b[C");
@@ -93,17 +70,7 @@ describe("Input component", () => {
     it("undoes Ctrl+U (delete to line start)", () => {
       const input = new Input();
 
-      input.handleInput("h");
-      input.handleInput("e");
-      input.handleInput("l");
-      input.handleInput("l");
-      input.handleInput("o");
-      input.handleInput(" ");
-      input.handleInput("w");
-      input.handleInput("o");
-      input.handleInput("r");
-      input.handleInput("l");
-      input.handleInput("d");
+      typeText(input, "hello world");
       // Ctrl+A
       input.handleInput("\x01");
       for (let i = 0; i < 6; i++) input.handleInput("\x1b[C");
@@ -124,12 +91,7 @@ describe("Input component", () => {
     it("undoes yank", () => {
       const input = new Input();
 
-      input.handleInput("h");
-      input.handleInput("e");
-      input.handleInput("l");
-      input.handleInput("l");
-      input.handleInput("o");
-      input.handleInput(" ");
+      typeText(input, "hello ");
       // Ctrl+W - delete "hello "
       input.handleInput("\x17");
       // Ctrl+Y - yank
@@ -182,9 +144,7 @@ describe("Input component", () => {
     it("cursor movement starts new undo unit", () => {
       const input = new Input();
 
-      input.handleInput("a");
-      input.handleInput("b");
-      input.handleInput("c");
+      typeText(input, "abc");
       // Ctrl+A - movement breaks coalescing
       input.handleInput("\x01");
       // Ctrl+E
