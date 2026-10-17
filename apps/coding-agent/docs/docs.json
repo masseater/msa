@@ -44,6 +44,10 @@
               "path": "containerization.md"
             },
             {
+              "title": "Use Claude Code and OpenCode as Models",
+              "path": "cli-agents.md"
+            },
+            {
               "title": "Run Local Models",
               "path": "llama-cpp.md"
             },

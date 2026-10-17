@@ -24,7 +24,7 @@ function getBashShellConfig(shell: string): ShellConfig {
     : { shell, args: ["-c"] };
 }
 
-function findExecutableOnPath(executable: string): string | null {
+export function findExecutableOnPath(executable: string): string | null {
   if (process.platform === "win32") {
     // Windows: Use 'where' and verify file exists (where can return non-existent paths)
     try {

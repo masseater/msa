@@ -240,12 +240,17 @@ describe("FooterDataProvider reftable branch detection", () => {
       const onBranchChange = vi.fn();
       provider.onBranchChange(onBranchChange);
 
-      writeFileSync(join(reftableDir, "tables.list"), "1\n");
-      // Real fs watcher events can arrive late under full-suite load.
-      await waitFor(() => vi.mocked(execFile).mock.calls.length === 1, 10_000);
+      // FSEvents can drop a change made right after the watcher starts, so keep changing the
+      // directory until the watcher reacts.
+      let generation = 0;
+      await waitFor(() => {
+        if (vi.mocked(execFile).mock.calls.length > 0) return true;
+        generation += 1;
+        writeFileSync(join(reftableDir, "tables.list"), `${generation}\n`);
+        return false;
+      }, 10_000);
       await waitFor(() => provider.getGitBranch() === "foo", 10_000);
 
-      expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
       expect(provider.getGitBranch()).toBe("foo");
       expect(onBranchChange).toHaveBeenCalledTimes(1);
     } finally {
