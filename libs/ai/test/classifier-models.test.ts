@@ -17,6 +17,7 @@ import type {
   ClassifierResult,
   Model,
 } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 
 function classifierModel(provider: string, id: string): ClassifierModel<ClassifierApi> {
@@ -84,7 +85,7 @@ describe("Models with classifier models", () => {
                   model: model.id,
                   answers: { approved: { type: "bool", probability: 0.9 } },
                   stopReason: "stop",
-                  timestamp: Date.now(),
+                  timestamp: currentTimeMillis(),
                 }),
             },
           },
@@ -208,7 +209,7 @@ describe("Models with classifier models", () => {
             model: classifier.id,
             answers: {},
             stopReason: "stop",
-            timestamp: Date.now(),
+            timestamp: currentTimeMillis(),
           }),
         );
         const models = createModels();
@@ -290,7 +291,7 @@ describe("Models with classifier models", () => {
               type: "oauth",
               access: "access",
               refresh: "refresh",
-              expires: Date.now() + 3_600_000,
+              expires: currentTimeMillis() + 3_600_000,
             }),
           ),
         );

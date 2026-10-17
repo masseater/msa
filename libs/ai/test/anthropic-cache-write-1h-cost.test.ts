@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { encodeJson } from "./json-codec.ts";
 
 function createSseResponse(events: Array<{ event: string; data: string }>): Response {
@@ -70,7 +71,7 @@ function eventsWithCacheCreation(
 }
 
 const context = normalizeContext({
-  messages: [{ role: "user", content: "hi", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "hi", timestamp: currentTimeMillis() }],
 });
 
 describe("Anthropic 1h cache write cost", () => {

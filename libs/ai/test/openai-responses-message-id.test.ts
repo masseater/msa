@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { convertResponsesMessages } from "../src/api/openai-responses-shared.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { AssistantMessage, Usage } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const usage: Usage = {
   input: 0,
@@ -28,11 +29,14 @@ describe("OpenAI Responses message ID conversion", () => {
       model: "claude-opus-4-8",
       usage,
       stopReason: "stop",
-      timestamp: Date.now() - 1000,
+      timestamp: currentTimeMillis() - 1000,
     };
     const context = normalizeContext({
       systemPrompt: "You are concise.",
-      messages: [{ role: "user", content: "hello", timestamp: Date.now() - 2000 }, assistant],
+      messages: [
+        { role: "user", content: "hello", timestamp: currentTimeMillis() - 2000 },
+        assistant,
+      ],
     });
 
     const input = convertResponsesMessages(

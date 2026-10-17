@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { convertResponsesMessages } from "../src/api/openai-responses-shared.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { AssistantMessage, ToolResultMessage, Usage } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const usage: Usage = {
   input: 0,
@@ -27,7 +28,7 @@ function buildEmptyToolResult(toolCallId: string, timestamp: number): ToolResult
 describe("OpenAI Responses convertResponsesMessages empty tool result", () => {
   it("uses '(no tool output)' placeholder for empty tool results without images", () => {
     const model = getModel("openai", "gpt-4o-mini");
-    const now = Date.now();
+    const now = currentTimeMillis();
     const assistant: AssistantMessage = {
       role: "assistant",
       content: [{ type: "toolCall", id: "tool-1", name: "bash", arguments: { command: "true" } }],

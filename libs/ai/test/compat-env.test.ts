@@ -3,9 +3,12 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { complete, registerApiProvider, resetApiProviders } from "../src/compat.ts";
 import type { AssistantMessage, Context, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 
-const context: Context = { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] };
+const context: Context = {
+  messages: [{ role: "user", content: "hi", timestamp: currentTimeMillis() }],
+};
 
 const model: Model<"openai-responses"> = {
   id: "test-model",
@@ -36,7 +39,7 @@ function message(): AssistantMessage {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "stop",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 

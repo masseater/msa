@@ -18,6 +18,7 @@ import type {
   ProviderHeaders,
   TextContent,
 } from "../types.ts";
+import { currentTimeMillis } from "../utils/clock.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
 import { retryProviderRequest } from "../utils/provider-retry.ts";
@@ -50,7 +51,7 @@ export const generateImages: ImagesFunction<ImagesOptions> = async (
     model: model.id,
     output: [],
     stopReason: "stop",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 
   try {

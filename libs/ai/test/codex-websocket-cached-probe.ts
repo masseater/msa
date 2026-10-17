@@ -20,6 +20,7 @@ import type {
   ToolResultMessage,
   Transport,
 } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { encodeJson } from "./json-codec.ts";
 
 type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -40,7 +41,7 @@ function parseArgs(argv: string[]): Args {
   let transport: Transport = "websocket-cached";
   let maxTokens = DEFAULT_MAX_TOKENS;
   let reasoning: ThinkingLevel = "low";
-  let sessionId = `msa-ai-codex-ws-cached-probe-${Date.now()}`;
+  let sessionId = `msa-ai-codex-ws-cached-probe-${currentTimeMillis()}`;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -154,7 +155,7 @@ function executeTool(
     ],
     details: { fixed: "OK" },
     isError: false,
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 

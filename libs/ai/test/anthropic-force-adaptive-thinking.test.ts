@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { getModel, streamSimple } from "../src/compat.ts";
 import type { Context, Model, SimpleStreamOptions } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 interface AnthropicThinkingPayload {
   thinking?: { type: string; budget_tokens?: number; display?: string };
@@ -18,7 +19,7 @@ class PayloadCaptured extends Error {
 
 function makeContext(): Context {
   return {
-    messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+    messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
   };
 }
 

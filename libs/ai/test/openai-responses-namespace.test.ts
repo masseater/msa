@@ -7,6 +7,7 @@ import {
   processResponsesStream,
 } from "../src/api/openai-responses-shared.ts";
 import type { Api, AssistantMessage, Model, ToolCall } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
@@ -39,7 +40,7 @@ function createOutput(): AssistantMessage {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "pending",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 

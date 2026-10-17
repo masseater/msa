@@ -59,6 +59,7 @@ vi.mock("@aws-sdk/client-bedrock-runtime", () => {
 import { stream as streamBedrock } from "../src/api/bedrock-converse-stream.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { Api, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 beforeEach(() => {
   bedrockMock.streamEvents = undefined;
@@ -66,7 +67,7 @@ beforeEach(() => {
 
 const model = getModel("amazon-bedrock", "us.anthropic.claude-opus-4-8");
 const context = normalizeContext({
-  messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "hello", timestamp: currentTimeMillis() }],
 });
 
 describe("Bedrock provider stream events", () => {

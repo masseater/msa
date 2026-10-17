@@ -10,6 +10,7 @@ import type {
   StreamOptions,
   ThinkingLevel,
 } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 type DirectSamplingOptions = StreamOptions & {
   reasoningEffort?: ThinkingLevel;
@@ -33,7 +34,7 @@ class PayloadCaptured extends Error {
 
 function makeContext(): Context {
   return {
-    messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+    messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
   };
 }
 

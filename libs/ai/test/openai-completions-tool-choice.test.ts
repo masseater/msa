@@ -11,6 +11,7 @@ import type {
   Tool,
   ToolResultMessage,
 } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const mockState = vi.hoisted(() => ({
   lastParams: undefined as unknown,
@@ -565,7 +566,7 @@ describe("openai-completions tool_choice", () => {
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "toolUse",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
     const toolResult: ToolResultMessage = {
       role: "toolResult",
@@ -573,7 +574,7 @@ describe("openai-completions tool_choice", () => {
       toolName: "read",
       content: [{ type: "text", text: "contents" }],
       isError: false,
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
     let payload: unknown;
 
@@ -581,10 +582,10 @@ describe("openai-completions tool_choice", () => {
       model,
       {
         messages: [
-          { role: "user", content: "Read README.md", timestamp: Date.now() },
+          { role: "user", content: "Read README.md", timestamp: currentTimeMillis() },
           assistantMessage,
           toolResult,
-          { role: "user", content: "Continue", timestamp: Date.now() },
+          { role: "user", content: "Continue", timestamp: currentTimeMillis() },
         ],
       },
       {
@@ -920,7 +921,7 @@ describe("openai-completions tool_choice", () => {
     const response = await streamSimple(
       model,
       {
-        messages: [{ role: "user", content: "Read README.md", timestamp: Date.now() }],
+        messages: [{ role: "user", content: "Read README.md", timestamp: currentTimeMillis() }],
         tools: [tool],
       },
       { apiKey: "test" },
@@ -1016,7 +1017,7 @@ describe("openai-completions tool_choice", () => {
           {
             role: "user",
             content: "Read README.md",
-            timestamp: Date.now(),
+            timestamp: currentTimeMillis(),
           },
         ],
         tools: [tool],
@@ -1189,7 +1190,7 @@ describe("openai-completions tool_choice", () => {
           {
             role: "user",
             content: "Think, answer, and use tools.",
-            timestamp: Date.now(),
+            timestamp: currentTimeMillis(),
           },
         ],
         tools,
@@ -1447,7 +1448,7 @@ describe("openai-completions tool_choice", () => {
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "toolUse",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
     const toolResult: ToolResultMessage = {
       role: "toolResult",
@@ -1455,7 +1456,7 @@ describe("openai-completions tool_choice", () => {
       toolName: "read",
       content: [{ type: "text", text: "contents" }],
       isError: false,
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
     let payload: unknown;
 
@@ -1463,7 +1464,7 @@ describe("openai-completions tool_choice", () => {
       model,
       {
         messages: [
-          { role: "user", content: "Read README.md", timestamp: Date.now() },
+          { role: "user", content: "Read README.md", timestamp: currentTimeMillis() },
           assistantMessage,
           toolResult,
         ],
@@ -1579,7 +1580,7 @@ describe("openai-completions tool_choice", () => {
               cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
             },
             stopReason: "stop",
-            timestamp: Date.now(),
+            timestamp: currentTimeMillis(),
           },
         ],
       }),

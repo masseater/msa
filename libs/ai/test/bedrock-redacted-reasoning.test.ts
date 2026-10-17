@@ -57,6 +57,7 @@ vi.mock("@aws-sdk/client-bedrock-runtime", () => {
 
 import { stream as streamBedrock } from "../src/api/bedrock-converse-stream.ts";
 import type { Context, Message, Model, ThinkingContent } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 const gptModel: Model<"bedrock-converse-stream"> = {
@@ -98,7 +99,7 @@ function redactedReasoningEvents(): unknown[] {
 }
 
 const helloContext = normalizeContext({
-  messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "hello", timestamp: currentTimeMillis() }],
 });
 
 interface BedrockRequestPayload {
@@ -270,7 +271,7 @@ describe("Bedrock redacted reasoning", () => {
 
   it("replays redacted reasoning before the toolUse block it belongs to", async () => {
     const messages: Message[] = [
-      { role: "user", content: "read the file", timestamp: Date.now() },
+      { role: "user", content: "read the file", timestamp: currentTimeMillis() },
       {
         role: "assistant",
         content: [
@@ -287,7 +288,7 @@ describe("Bedrock redacted reasoning", () => {
         model: gptModel.id,
         usage: emptyUsage,
         stopReason: "toolUse",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
       {
         role: "toolResult",
@@ -295,7 +296,7 @@ describe("Bedrock redacted reasoning", () => {
         toolName: "read",
         content: [{ type: "text", text: "file body" }],
         isError: false,
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ];
 

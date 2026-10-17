@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { convertMessages, requiresToolCallId } from "../src/api/google-shared.ts";
 import type { Context, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 function makeGemini3Model<TApi extends "google-generative-ai" | "google-vertex">(
@@ -27,7 +28,7 @@ function makeContext(
   model: { api: string; provider: string; id: string },
   thoughtSignature?: string,
 ): Context {
-  const now = Date.now();
+  const now = currentTimeMillis();
   return {
     messages: [
       { role: "user", content: "Hi", timestamp: now },

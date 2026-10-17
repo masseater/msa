@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { stream as streamAzureOpenAIResponses } from "../src/api/azure-openai-responses.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { Api, Context, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { envValue } from "./env.ts";
 
 interface CapturedAzureClientOptions {
@@ -60,7 +61,7 @@ vi.mock("openai", () => {
 const MSA_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
 
 const context: Context = {
-  messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "hello", timestamp: currentTimeMillis() }],
 };
 
 const originalAzureOpenAIBaseUrl = envValue("AZURE_OPENAI_BASE_URL");

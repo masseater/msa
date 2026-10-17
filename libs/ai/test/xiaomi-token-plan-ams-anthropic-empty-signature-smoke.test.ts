@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { completeSimple, getEnvApiKey, streamSimple } from "../src/compat.ts";
 import type { AssistantMessage, Context, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const provider = "xiaomi-token-plan-ams";
 const apiKey = getEnvApiKey(provider);
@@ -43,7 +44,7 @@ function makeInitialContext(): Context {
         role: "user",
         content:
           "Think internally if you need to, then reply with exactly this text and nothing else: first-ok",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ],
   };

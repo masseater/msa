@@ -13,6 +13,7 @@ import {
   processResponsesStream,
 } from "../src/api/openai-responses-shared.ts";
 import type { AssistantMessage, Model, Tool, ToolCall } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
@@ -51,7 +52,7 @@ function makeOutput(): AssistantMessage {
     model: "gpt-test",
     usage: makeUsage(),
     stopReason: "pending",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -231,7 +232,7 @@ describe("constrained tool sampling", () => {
           content: [replayedToolCall],
           usage: makeUsage(),
           stopReason: "toolUse",
-          timestamp: Date.now(),
+          timestamp: currentTimeMillis(),
         },
         {
           role: "toolResult",
@@ -239,7 +240,7 @@ describe("constrained tool sampling", () => {
           toolName: "sample_tool",
           content: [{ type: "text", text: "done" }],
           isError: false,
-          timestamp: Date.now(),
+          timestamp: currentTimeMillis(),
         },
       ],
     });
@@ -290,7 +291,7 @@ describe("constrained tool sampling", () => {
           ],
           usage: makeUsage(),
           stopReason: "toolUse",
-          timestamp: Date.now(),
+          timestamp: currentTimeMillis(),
         },
         {
           role: "toolResult",
@@ -298,7 +299,7 @@ describe("constrained tool sampling", () => {
           toolName: "sample_tool",
           content: [{ type: "text", text: "done" }],
           isError: false,
-          timestamp: Date.now(),
+          timestamp: currentTimeMillis(),
         },
       ],
     });

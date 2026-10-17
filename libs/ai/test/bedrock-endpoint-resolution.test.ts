@@ -50,9 +50,10 @@ vi.mock("@aws-sdk/client-bedrock-runtime", () => {
 import type { BedrockOptions } from "../src/api/bedrock-converse-stream.ts";
 import { getModel, stream as streamBedrock } from "../src/compat.ts";
 import type { Context, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const context: Context = {
-  messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "hello", timestamp: currentTimeMillis() }],
 };
 
 const originalAwsRegion = envValue("AWS_REGION");

@@ -22,6 +22,7 @@ import type {
   Usage,
 } from "../types.ts";
 import { combineAbortSignals } from "../utils/abort-signals.ts";
+import { currentTimeMillis } from "../utils/clock.ts";
 import {
   appendAssistantMessageDiagnostic,
   createAssistantMessageDiagnostic,
@@ -158,7 +159,7 @@ function getRetryAfterDelayMs(headers: Headers): number | undefined {
 
   const date = Date.parse(retryAfter);
   if (!Number.isNaN(date)) {
-    return Math.max(0, date - Date.now());
+    return Math.max(0, date - currentTimeMillis());
   }
 
   return undefined;
@@ -251,7 +252,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "pending",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
 
     try {
@@ -1111,7 +1112,7 @@ function isWebSocketReusable(socket: WebSocketLike): boolean {
 }
 
 function isWebSocketSessionExpired(entry: CachedWebSocketConnection): boolean {
-  return Date.now() - entry.createdAt >= SESSION_WEBSOCKET_MAX_AGE_MS;
+  return currentTimeMillis() - entry.createdAt >= SESSION_WEBSOCKET_MAX_AGE_MS;
 }
 
 function closeWebSocketSilently(socket: WebSocketLike, code = 1000, reason = "done"): void {
@@ -1286,7 +1287,7 @@ async function acquireWebSocket(
   }
 
   const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env);
-  const entry: CachedWebSocketConnection = { socket, busy: true, createdAt: Date.now() };
+  const entry: CachedWebSocketConnection = { socket, busy: true, createdAt: currentTimeMillis() };
   accountEntries = websocketSessionCache.get(sessionId);
   if (accountEntries === undefined) {
     accountEntries = new Map();
@@ -1710,7 +1711,7 @@ async function parseErrorResponse(
             : "";
         const mins =
           err.resets_at !== undefined && err.resets_at !== 0 && !Number.isNaN(err.resets_at)
-            ? Math.max(0, Math.round((err.resets_at * 1000 - Date.now()) / 60000))
+            ? Math.max(0, Math.round((err.resets_at * 1000 - currentTimeMillis()) / 60000))
             : undefined;
         const when = mins === undefined ? "" : ` Try again in ~${mins} min.`;
         friendlyMessage = `You have hit your ChatGPT usage limit${plan}.${when}`.trim();

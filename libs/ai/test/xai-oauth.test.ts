@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { xaiOAuth } from "../src/auth/oauth/xai.ts";
 import type { AuthEvent, OAuthCredential } from "../src/auth/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const neverAbortedSignal = new AbortController().signal;
 
@@ -106,7 +107,7 @@ describe("xAI OAuth device flow", () => {
           }
 
           if (url === "https://auth.x.ai/oauth2/token") {
-            pollTimes.push(Date.now());
+            pollTimes.push(currentTimeMillis());
             const form = requestForm(init);
             expect(form.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
             expect(form.get("client_id")).toBe("b1a00492-073a-47ea-816f-4c329264a828");
@@ -165,7 +166,7 @@ describe("xAI OAuth device flow", () => {
             if (requestUrl(input) === "https://auth.x.ai/oauth2/device/code") {
               return Promise.resolve(jsonResponse(deviceCodeResponse({ interval: 0 })));
             }
-            pollTimes.push(Date.now());
+            pollTimes.push(currentTimeMillis());
             return Promise.resolve(jsonResponse(tokenResponse()));
           }),
         );

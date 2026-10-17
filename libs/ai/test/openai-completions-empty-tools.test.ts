@@ -2,6 +2,7 @@ import { Clock, Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { getModel, streamSimple } from "../src/compat.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const mockState = vi.hoisted(() => ({
   lastParams: undefined as unknown,
@@ -349,7 +350,7 @@ describe("openai-completions empty tools handling", () => {
       model,
       {
         messages: [
-          { role: "user", content: "use the tool", timestamp: Date.now() },
+          { role: "user", content: "use the tool", timestamp: currentTimeMillis() },
           {
             role: "assistant",
             content: [
@@ -372,7 +373,7 @@ describe("openai-completions empty tools handling", () => {
             api: "openai-completions",
             provider: "openai",
             model: "gpt-4o-mini",
-            timestamp: Date.now(),
+            timestamp: currentTimeMillis(),
           },
           {
             role: "toolResult",
@@ -380,7 +381,7 @@ describe("openai-completions empty tools handling", () => {
             toolName: "noop",
             content: [{ type: "text", text: "done" }],
             isError: false,
-            timestamp: Date.now(),
+            timestamp: currentTimeMillis(),
           },
         ],
         tools: [],

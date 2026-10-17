@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { getModel, stream } from "../src/compat.ts";
 import type { Context, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { envValue } from "./env.ts";
 
 function makeContext(): Context {
@@ -11,7 +12,7 @@ function makeContext(): Context {
       {
         role: "user",
         content: `What is ${(Math.random() * 100) | 0} + ${(Math.random() * 100) | 0}? Think step by step.`,
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ],
   };

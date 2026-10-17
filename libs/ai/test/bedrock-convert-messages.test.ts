@@ -58,6 +58,7 @@ vi.mock("@aws-sdk/client-bedrock-runtime", () => {
 
 import { stream as streamBedrock } from "../src/api/bedrock-converse-stream.ts";
 import type { Context, Message, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 const baseModel: Model<"bedrock-converse-stream"> = {
@@ -174,7 +175,7 @@ describe("Bedrock tool arguments", () => {
       const message = await streamBedrock(
         baseModel,
         normalizeContext({
-          messages: [{ role: "user", content: "Use the tool", timestamp: Date.now() }],
+          messages: [{ role: "user", content: "Use the tool", timestamp: currentTimeMillis() }],
         }),
         { cacheRetention: "none" },
       ).result();
@@ -443,7 +444,7 @@ describe("bedrock convertMessages skips unknown content types", () => {
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
         },
         stopReason: "toolUse",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
       {
         role: "toolResult",
@@ -451,9 +452,9 @@ describe("bedrock convertMessages skips unknown content types", () => {
         toolName: "edit",
         content: [{ type: "text", text: "done" }],
         isError: false,
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
-      { role: "user", content: "Continue", timestamp: Date.now() },
+      { role: "user", content: "Continue", timestamp: currentTimeMillis() },
     ];
 
     const payload = await capturePayload({ messages });

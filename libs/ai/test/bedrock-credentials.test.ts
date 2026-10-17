@@ -49,9 +49,10 @@ import type { BedrockOptions } from "../src/api/bedrock-converse-stream.ts";
 import { stream as streamBedrock } from "../src/compat.ts";
 import { getBuiltinModel } from "../src/providers/all.ts";
 import type { Context, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const context: Context = {
-  messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "hello", timestamp: currentTimeMillis() }],
 };
 
 const captureClientConfig = Effect.fn("captureClientConfig")(function* (

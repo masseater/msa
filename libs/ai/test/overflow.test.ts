@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { AssistantMessage } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { isContextOverflow, isRecoverableLength } from "../src/utils/overflow.ts";
 
 function createErrorMessage(errorMessage: string, provider = "ollama"): AssistantMessage {
@@ -26,7 +27,7 @@ function createErrorMessage(errorMessage: string, provider = "ollama"): Assistan
     },
     stopReason: "error",
     errorMessage,
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -154,7 +155,7 @@ describe("isContextOverflow", () => {
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "length",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
   }
 

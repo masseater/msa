@@ -7,6 +7,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import type { Context, Model, Tool } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 import { decodeJson } from "./json-codec.ts";
 
@@ -42,7 +43,7 @@ const tool: Tool = {
 
 function createContext(tools: Tool[] = [tool]): Context {
   return {
-    messages: [{ role: "user", content: "Use the tool", timestamp: Date.now() }],
+    messages: [{ role: "user", content: "Use the tool", timestamp: currentTimeMillis() }],
     ...(tools.length > 0 ? { tools } : {}),
   };
 }

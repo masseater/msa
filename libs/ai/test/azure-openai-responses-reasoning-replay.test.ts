@@ -10,6 +10,7 @@ import {
   processResponsesStream,
 } from "../src/api/openai-responses-shared.ts";
 import type { AssistantMessage, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
@@ -44,7 +45,7 @@ function createOutput(model: Model<"azure-openai-responses">): AssistantMessage 
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "pending",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -78,9 +79,9 @@ async function* createEvents(
 function getReplayedReasoning(model: Model<"azure-openai-responses">, assistant: AssistantMessage) {
   const context = normalizeContext({
     messages: [
-      { role: "user", content: "first", timestamp: Date.now() - 1 },
+      { role: "user", content: "first", timestamp: currentTimeMillis() - 1 },
       assistant,
-      { role: "user", content: "follow-up", timestamp: Date.now() },
+      { role: "user", content: "follow-up", timestamp: currentTimeMillis() },
     ],
   });
   const input = convertResponsesMessages(model, context, new Set(["azure"]));

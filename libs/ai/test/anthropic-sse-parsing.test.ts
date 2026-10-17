@@ -7,6 +7,7 @@ import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import { transformMessages } from "../src/api/transform-messages.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { Api, Model, ToolCall } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { decodeJson, encodeJson } from "./json-codec.ts";
 
 function createSseResponse(events: Array<{ event: string; data: string }>): Response {
@@ -434,7 +435,7 @@ describe("Anthropic raw SSE parsing", () => {
   it("repairs malformed SSE JSON and malformed streamed tool JSON", async () => {
     const model = getModel("anthropic", "claude-haiku-4-5");
     const context = normalizeContext({
-      messages: [{ role: "user", content: "Use the edit tool.", timestamp: Date.now() }],
+      messages: [{ role: "user", content: "Use the edit tool.", timestamp: currentTimeMillis() }],
       tools: [
         {
           name: "edit",

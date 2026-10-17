@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { convertMessages } from "../src/api/google-shared.ts";
 import type { AssistantMessage, Context, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 function makeModel(id = "gemini-3-pro-preview"): Model<"google-generative-ai"> {
@@ -25,7 +26,7 @@ function makeContext(
   model: { api: string; provider: string; id: string },
   content: AssistantMessage["content"],
 ): Context {
-  const now = Date.now();
+  const now = currentTimeMillis();
   return {
     messages: [
       { role: "user", content: "Hi", timestamp: now },

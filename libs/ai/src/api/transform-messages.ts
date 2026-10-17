@@ -8,6 +8,7 @@ import type {
   ToolCall,
   ToolResultMessage,
 } from "../types.ts";
+import { currentTimeMillis } from "../utils/clock.ts";
 
 const NON_VISION_USER_IMAGE_PLACEHOLDER = "(image omitted: model does not support images)";
 const NON_VISION_TOOL_IMAGE_PLACEHOLDER = "(tool image omitted: model does not support images)";
@@ -166,7 +167,7 @@ export function transformMessages<TApi extends Api>(
             toolName: tc.name,
             content: [{ type: "text", text: "No result provided" }],
             isError: true,
-            timestamp: Date.now(),
+            timestamp: currentTimeMillis(),
           } as ToolResultMessage);
         }
       }

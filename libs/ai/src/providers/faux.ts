@@ -18,6 +18,7 @@ import type {
   TranscriptContext,
   Usage,
 } from "../types.ts";
+import { currentTimeMillis } from "../utils/clock.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { createAssistantMessageEventStream } from "../utils/event-stream.ts";
 import { getSystemMessageText } from "../utils/text.ts";
@@ -103,7 +104,7 @@ export function fauxAssistantMessage(
     ...(options.deferred === undefined ? {} : { deferred: options.deferred }),
     ...(options.errorMessage === undefined ? {} : { errorMessage: options.errorMessage }),
     ...(options.responseId === undefined ? {} : { responseId: options.responseId }),
-    timestamp: options.timestamp ?? Date.now(),
+    timestamp: options.timestamp ?? currentTimeMillis(),
   };
 }
 
@@ -166,7 +167,7 @@ function estimateTokens(text: string): number {
 }
 
 function randomId(prefix: string): string {
-  return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  return `${prefix}:${currentTimeMillis()}:${Math.random().toString(36).slice(2)}`;
 }
 
 function contentToText(content: string | Array<TextContent | ImageContent>): string {
@@ -313,7 +314,7 @@ function cloneMessage(
     api,
     provider,
     model: modelId,
-    timestamp: cloned.timestamp ?? Date.now(),
+    timestamp: cloned.timestamp ?? currentTimeMillis(),
     usage: cloned.usage ?? DEFAULT_USAGE,
   };
 }
@@ -328,7 +329,7 @@ function createDeferredMessage(model: Model<string>, handle: DeferredHandle): As
     usage: DEFAULT_USAGE,
     stopReason: "deferred",
     deferred: handle,
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -347,7 +348,7 @@ function createErrorMessage(
     usage: DEFAULT_USAGE,
     stopReason: "error",
     errorMessage: toErrorMessage(error),
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -356,7 +357,7 @@ function createAbortedMessage(partial: AssistantMessage): AssistantMessage {
     ...partial,
     stopReason: "aborted",
     errorMessage: "Request was aborted",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 

@@ -6,6 +6,7 @@ import type {
   ClassifierQuestion,
   ClassifierResult,
 } from "../types.ts";
+import { currentTimeMillis } from "../utils/clock.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import {
   type ClassifierHttpError,
@@ -163,7 +164,7 @@ export const classify: ClassifierFunction<ClassifierOptions> = async (model, con
     model: model.id,
     answers: {},
     stopReason: "stop",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 
   try {

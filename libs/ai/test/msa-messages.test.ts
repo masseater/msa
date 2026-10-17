@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { type MsaMessagesOptions, stream, streamSimple } from "../src/api/msa-messages.ts";
 import type { Api, AssistantMessageEvent, Context, Model, StopReason } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 import { encodeJson } from "./json-codec.ts";
 
@@ -100,7 +101,7 @@ function createModel(baseUrl: string): Model<"msa-messages"> {
 }
 
 const context: Context = {
-  messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
 };
 
 const usage = {

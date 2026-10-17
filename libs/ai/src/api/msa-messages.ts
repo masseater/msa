@@ -13,6 +13,7 @@ import type {
   ToolCall,
   TranscriptContext,
 } from "../types.ts";
+import { currentTimeMillis } from "../utils/clock.ts";
 import {
   appendAssistantMessageDiagnostic,
   createAssistantMessageDiagnostic,
@@ -152,7 +153,7 @@ function createMsaMessagesResponseError(
       statusText: response.statusText,
       ...(errorBody?.error === undefined ? {} : { error: errorBody.error as JsonValue }),
       ...(errorBody === undefined ? { body: truncateDiagnosticString(body) } : {}),
-      timestampMs: Date.now(),
+      timestampMs: currentTimeMillis(),
     },
   );
 }
@@ -177,7 +178,7 @@ function appendRewriteDiagnostic(
   }
   appendAssistantMessageDiagnostic(message, {
     type: "pi_messages_rewrite",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
     details: { ...rewrite },
   });
 }
@@ -191,7 +192,7 @@ function createEventConverter(model: Model<"msa-messages">) {
     model: model.id,
     usage: createEmptyUsage(),
     stopReason: "pending",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
   const toolJson = new Map<number, string>();
 
@@ -344,7 +345,7 @@ function createErrorEvent(
     usage: createEmptyUsage(),
     stopReason: reason,
     errorMessage: toErrorMessage(error),
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 
   if (!aborted && error instanceof MsaMessagesResponseError) {

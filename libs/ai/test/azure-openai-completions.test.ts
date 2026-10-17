@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import { getModel, normalizeContext } from "../src/compat.ts";
 import { azureProvider } from "../src/providers/azure.ts";
 import type { AssistantMessage, Context } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { envValue } from "./env.ts";
 
 interface FakeOpenAIClientOptions {
@@ -105,7 +106,7 @@ afterEach(() => {
 
 const context = normalizeContext({
   systemPrompt: "sys",
-  messages: [{ role: "user", content: "hi", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "hi", timestamp: currentTimeMillis() }],
 });
 
 function deepSeekModel() {

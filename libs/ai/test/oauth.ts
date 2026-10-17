@@ -4,6 +4,7 @@ import { dirname, join } from "path";
 
 import type { OAuthCredentials } from "../src/auth/types.ts";
 import { builtinProviders } from "../src/providers/all.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const AUTH_PATH = join(homedir(), ".msa", "agent", "auth.json");
 
@@ -56,7 +57,7 @@ export async function resolveApiKey(provider: string): Promise<string | undefine
     if (oauth === undefined) return undefined;
     let credential = entry;
     try {
-      if (Date.now() >= credential.expires) {
+      if (currentTimeMillis() >= credential.expires) {
         credential = await oauth.refresh(credential, new AbortController().signal);
       }
     } catch (error) {

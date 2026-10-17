@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { getModel, getModels, streamSimple } from "../src/compat.ts";
 import type { AssistantMessage, Context, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 interface AnthropicPayload {
   messages?: Array<{
@@ -46,7 +47,7 @@ function makeContext(
     provider,
     api: "anthropic-messages",
     model,
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
     usage: {
       input: 0,
       output: 0,
@@ -59,9 +60,9 @@ function makeContext(
   };
   return {
     messages: [
-      { role: "user", content: "first", timestamp: Date.now() },
+      { role: "user", content: "first", timestamp: currentTimeMillis() },
       assistant,
-      { role: "user", content: "second", timestamp: Date.now() },
+      { role: "user", content: "second", timestamp: currentTimeMillis() },
     ],
   };
 }

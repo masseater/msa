@@ -5,6 +5,7 @@ import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import { createModels } from "../src/models.ts";
 import { anthropicProvider } from "../src/providers/anthropic.ts";
 import type { Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 const mockState = vi.hoisted(() => ({
@@ -73,7 +74,7 @@ const expectedConfig = {
 
 const context = normalizeContext({
   systemPrompt: "System prompt.",
-  messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
 });
 
 const anthropicModel: Model<"anthropic-messages"> = {

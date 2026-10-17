@@ -2,6 +2,7 @@ import { Clock, Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { AssistantMessage } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream, EventStream } from "../src/utils/event-stream.ts";
 
 describe("EventStream", () => {
@@ -192,15 +193,15 @@ describe("AssistantMessageEventStream timing", () => {
     ));
 
   it("leaves a message untimed when it started before the stream, such as a fetched deferred result", () => {
-    const fetched = message(Date.now() - 60_000);
+    const fetched = message(currentTimeMillis() - 60_000);
     new AssistantMessageEventStream().push({ type: "done", reason: "stop", message: fetched });
     expect(fetched.durationMs).toBeUndefined();
   });
 
   it("does not time a message pushed after the stream completed", () => {
     const stream = new AssistantMessageEventStream();
-    stream.push({ type: "done", reason: "stop", message: message(Date.now()) });
-    const late = message(Date.now());
+    stream.push({ type: "done", reason: "stop", message: message(currentTimeMillis()) });
+    const late = message(currentTimeMillis());
     stream.push({ type: "done", reason: "stop", message: late });
     expect(late.durationMs).toBeUndefined();
   });

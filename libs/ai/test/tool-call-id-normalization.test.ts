@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { completeSimple, getEnvApiKey, getModel } from "../src/compat.ts";
 import type { AssistantMessage, Message, Tool, ToolResultMessage } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 const openaiKey = getEnvApiKey("openai");
@@ -184,7 +185,7 @@ describe("Tool Call ID Normalization - Prefilled Context", () => {
     const userMessage: Message = {
       role: "user",
       content: "Use the echo tool to echo 'hello'",
-      timestamp: Date.now() - 2000,
+      timestamp: currentTimeMillis() - 2000,
     };
 
     const assistantMessage: AssistantMessage = {
@@ -209,7 +210,7 @@ describe("Tool Call ID Normalization - Prefilled Context", () => {
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "toolUse",
-      timestamp: Date.now() - 1500,
+      timestamp: currentTimeMillis() - 1500,
     };
 
     const toolResult: ToolResultMessage = {
@@ -218,13 +219,13 @@ describe("Tool Call ID Normalization - Prefilled Context", () => {
       toolName: "echo",
       content: [{ type: "text", text: "hello" }],
       isError: false,
-      timestamp: Date.now() - 1000,
+      timestamp: currentTimeMillis() - 1000,
     };
 
     const followUpUser: Message = {
       role: "user",
       content: "Say hi",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
 
     return [userMessage, assistantMessage, toolResult, followUpUser];

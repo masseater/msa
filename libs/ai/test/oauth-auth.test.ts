@@ -12,6 +12,7 @@ import { createModels } from "../src/models.ts";
 import * as extensionOAuthCompatibility from "../src/oauth.ts";
 import { anthropicProvider } from "../src/providers/anthropic.ts";
 import { openaiProvider } from "../src/providers/openai.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const neverAbortedSignal = new AbortController().signal;
 
@@ -159,7 +160,7 @@ describe("OAuth through Models.getAuth (lazy load chain)", () => {
               type: "oauth",
               access: "oauth-access-token",
               refresh: "r",
-              expires: Date.now() + 10 * 60_000,
+              expires: currentTimeMillis() + 10 * 60_000,
             }),
           ),
         );

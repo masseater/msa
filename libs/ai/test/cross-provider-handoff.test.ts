@@ -13,6 +13,7 @@ import type {
   Tool,
   ToolResultMessage,
 } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { hasAzureOpenAICredentials } from "./azure-utils.ts";
 import {
   hasCloudflareAiGatewayCredentials,
@@ -185,7 +186,7 @@ function dumpFailurePayload(params: {
   payload?: unknown;
   messages: Message[];
 }): void {
-  const filename = `/tmp/msa-handoff-${params.label}-${Date.now()}.json`;
+  const filename = `/tmp/msa-handoff-${params.label}-${currentTimeMillis()}.json`;
   const body = {
     label: params.label,
     error: params.error,
@@ -215,7 +216,7 @@ async function generateContext(
   const userMessage: Message = {
     role: "user",
     content: "Please double the number 21 using the double_number tool.",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 
   const supportsReasoning = model.reasoning === true;
@@ -279,7 +280,7 @@ async function generateContext(
     toolName: toolCall.name,
     content: [{ type: "text", text: "42" }],
     isError: false,
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 
   let finalResponse: AssistantMessage;
@@ -420,7 +421,7 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
             role: "user",
             content:
               "Great, thanks for all that help! Now just say 'Hello, handoff successful!' to confirm you received everything.",
-            timestamp: Date.now(),
+            timestamp: currentTimeMillis(),
           },
         ];
 

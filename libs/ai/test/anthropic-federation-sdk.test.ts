@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vite-p
 
 import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import type { Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 function sseResponse(): Response {
@@ -49,7 +50,7 @@ function createFetch(requests: RecordedRequest[]): typeof globalThis.fetch {
 
 const context = normalizeContext({
   systemPrompt: "System prompt.",
-  messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
 });
 
 const anthropicModel: Model<"anthropic-messages"> = {

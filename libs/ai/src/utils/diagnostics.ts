@@ -1,4 +1,5 @@
 import type { JsonObject } from "../types.ts";
+import { currentTimeMillis } from "./clock.ts";
 
 export interface DiagnosticErrorInfo {
   name?: string | undefined;
@@ -36,7 +37,7 @@ export function createAssistantMessageDiagnostic(
   error: unknown,
   details?: JsonObject,
 ): AssistantMessageDiagnostic {
-  return { type, timestamp: Date.now(), error: extractDiagnosticError(error), details };
+  return { type, timestamp: currentTimeMillis(), error: extractDiagnosticError(error), details };
 }
 
 export function appendAssistantMessageDiagnostic<

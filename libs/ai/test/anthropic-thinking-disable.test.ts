@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { getModel, streamSimple } from "../src/compat.ts";
 import type { Context, Model, SimpleStreamOptions } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { envValue } from "./env.ts";
 
 interface AnthropicThinkingPayload {
@@ -19,7 +20,7 @@ class PayloadCaptured extends Error {
 
 function makePayloadCaptureContext(): Context {
   return {
-    messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+    messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
   };
 }
 
@@ -66,7 +67,7 @@ function makeE2EContext(): Context {
         role: "user",
         content:
           "Before replying, carefully solve 36863 * 5279 internally. Then reply with the word pong repeated exactly 40 times, separated by single spaces. Do not add any other text.",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ],
   };

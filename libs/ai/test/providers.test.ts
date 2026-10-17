@@ -33,6 +33,7 @@ import type {
   Model,
   ProviderStreams,
 } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
@@ -46,7 +47,7 @@ function fakeAuthContext(env: Record<string, string>, files: string[] = []): Aut
 const neverAbortedSignal = new AbortController().signal;
 
 const context = normalizeContext({
-  messages: [{ role: "user", content: "hi", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "hi", timestamp: currentTimeMillis() }],
 });
 
 const DEFAULT_IMAGE_RESIZE = {

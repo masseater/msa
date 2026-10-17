@@ -8,6 +8,7 @@ import { envValue } from "./env.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import {
@@ -32,7 +33,7 @@ async function testEmojiInToolResults<TApi extends Api>(
       {
         role: "user",
         content: "Use the test tool",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
       {
         role: "assistant",
@@ -56,7 +57,7 @@ async function testEmojiInToolResults<TApi extends Api>(
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
         },
         stopReason: "toolUse",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ],
     tools: [
@@ -89,7 +90,7 @@ async function testEmojiInToolResults<TApi extends Api>(
       },
     ],
     isError: false,
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 
   context.messages.push(toolResult);
@@ -97,7 +98,7 @@ async function testEmojiInToolResults<TApi extends Api>(
   context.messages.push({
     role: "user",
     content: "Summarize the tool result briefly.",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   });
 
   const response = await complete(llm, context, options);
@@ -118,7 +119,7 @@ async function testRealWorldLinkedInData<TApi extends Api>(
       {
         role: "user",
         content: "Use the linkedin tool to get comments",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
       {
         role: "assistant",
@@ -142,7 +143,7 @@ async function testRealWorldLinkedInData<TApi extends Api>(
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
         },
         stopReason: "toolUse",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ],
     tools: [
@@ -179,7 +180,7 @@ Unanswered Comments: 2
       },
     ],
     isError: false,
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 
   context.messages.push(toolResult);
@@ -187,7 +188,7 @@ Unanswered Comments: 2
   context.messages.push({
     role: "user",
     content: "How many comments are there?",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   });
 
   const response = await complete(llm, context, options);
@@ -208,7 +209,7 @@ async function testUnpairedHighSurrogate<TApi extends Api>(
       {
         role: "user",
         content: "Use the test tool",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
       {
         role: "assistant",
@@ -232,7 +233,7 @@ async function testUnpairedHighSurrogate<TApi extends Api>(
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
         },
         stopReason: "toolUse",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ],
     tools: [
@@ -257,7 +258,7 @@ async function testUnpairedHighSurrogate<TApi extends Api>(
       },
     ],
     isError: false,
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 
   context.messages.push(toolResult);
@@ -265,7 +266,7 @@ async function testUnpairedHighSurrogate<TApi extends Api>(
   context.messages.push({
     role: "user",
     content: "What did the tool return?",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   });
 
   const response = await complete(llm, context, options);

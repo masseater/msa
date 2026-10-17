@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { getModel, streamSimple } from "../src/compat.ts";
 import type { Context } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { envValue } from "./env.ts";
 
 interface AnthropicThinkingPayload {
@@ -18,7 +19,7 @@ function makeContext(): Context {
         role: "user",
         content:
           "Compute 48291 * 7317 and 90844 - 17729, add the results, and determine whether the sum is divisible by 11. Reply with exactly this format and nothing else: sum=<sum>; divisibleBy11=<yes|no>",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ],
   };

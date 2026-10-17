@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { transformMessages } from "../src/api/transform-messages.ts";
 import type { Message, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 function makeTextOnlyModel(): Model<"openai-completions"> {
   return {
@@ -21,7 +22,7 @@ function makeTextOnlyModel(): Model<"openai-completions"> {
 describe("lax message content handling", () => {
   it("normalizes null/missing content to an empty array instead of crashing", () => {
     const messages = [
-      { role: "user", content: null, timestamp: Date.now() },
+      { role: "user", content: null, timestamp: currentTimeMillis() },
       {
         role: "assistant",
         content: null,
@@ -37,14 +38,14 @@ describe("lax message content handling", () => {
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
         },
         stopReason: "stop",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
       {
         role: "toolResult",
         toolCallId: "call_1",
         toolName: "web_search",
         isError: false,
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ] as unknown as Message[];
 

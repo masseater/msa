@@ -7,6 +7,7 @@ import {
 } from "../src/api/bedrock-converse-stream.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { Context, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
 
 interface BedrockThinkingPayload {
@@ -40,7 +41,7 @@ class PayloadCaptured extends Error {
 
 function makeContext(): Context {
   return {
-    messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+    messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
   };
 }
 

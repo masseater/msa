@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { streamSimple } from "../src/api/mistral-conversations.ts";
 import type { Context, Model, SimpleStreamOptions, ThinkingLevelMap } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 interface MistralPayload {
@@ -45,7 +46,7 @@ function makeModel(
 
 function makeContext(): Context {
   return {
-    messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+    messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
   };
 }
 

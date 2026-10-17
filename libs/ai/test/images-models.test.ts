@@ -31,6 +31,7 @@ import type {
   ImagesOptions,
   Model,
 } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 
 function fakeAuthContext(env: Record<string, string>): AuthContext {
@@ -76,7 +77,7 @@ function okResult(model: ImageModel<ImageApi>): AssistantImages {
     model: model.id,
     output: [{ type: "image", data: "aGk=", mimeType: "image/png" }],
     stopReason: "stop",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 

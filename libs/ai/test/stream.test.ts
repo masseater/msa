@@ -22,6 +22,7 @@ import { decodeJson } from "./json-codec.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { StringEnum } from "../src/utils/typebox-helpers.ts";
 import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
@@ -326,7 +327,7 @@ async function multiTurn<TApi extends Api>(model: Model<TApi>, options?: StreamO
         role: "user",
         content:
           "Think about this briefly, then calculate 42 * 17 and 453 + 434 using the math_operation tool.",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ],
     tools: [calculatorTool],
@@ -376,7 +377,7 @@ async function multiTurn<TApi extends Api>(model: Model<TApi>, options?: StreamO
           toolName: block.name,
           content: [{ type: "text", text: `${result}` }],
           isError: false,
-          timestamp: Date.now(),
+          timestamp: currentTimeMillis(),
         });
       }
     }

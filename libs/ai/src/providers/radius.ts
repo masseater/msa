@@ -3,6 +3,7 @@ import { envApiKeyAuth, lazyOAuth } from "../auth/helpers.ts";
 import { loadRadiusOAuth } from "../auth/oauth/load.ts";
 import type { Provider } from "../models.ts";
 import type { Model } from "../types.ts";
+import { currentTimeMillis } from "../utils/clock.ts";
 import {
   DEFAULT_RADIUS_GATEWAY,
   getRadiusModels,
@@ -59,7 +60,7 @@ export function radiusProvider(options: RadiusProviderOptions = {}): Provider<"m
         if (legacy.length > 0) {
           if (
             !(await context.publish({
-              persist: { models: legacy, checkedAt: Date.now() },
+              persist: { models: legacy, checkedAt: currentTimeMillis() },
               update: () => {
                 dynamicModels = legacy;
               },
@@ -77,7 +78,7 @@ export function radiusProvider(options: RadiusProviderOptions = {}): Provider<"m
       if (context.signal.aborted) return;
       const refreshed = getRadiusModelsFromConfig(id, config);
       await context.publish({
-        persist: { models: refreshed, checkedAt: Date.now() },
+        persist: { models: refreshed, checkedAt: currentTimeMillis() },
         update: () => {
           dynamicModels = refreshed;
         },

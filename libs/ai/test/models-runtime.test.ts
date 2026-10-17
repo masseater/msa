@@ -24,6 +24,7 @@ import type {
   StreamOptions,
   Usage,
 } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 
 function testModel(provider: string, id: string): Model<Api> {
@@ -57,7 +58,7 @@ function doneMessage(model: Model<Api>, text: string): AssistantMessage {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "stop",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 
@@ -101,7 +102,9 @@ function testProvider(input: {
   };
 }
 
-const context: Context = { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] };
+const context: Context = {
+  messages: [{ role: "user", content: "hi", timestamp: currentTimeMillis() }],
+};
 
 function envKeyAuth(key: string | undefined): ApiKeyAuth {
   return {
@@ -145,7 +148,7 @@ describe("Models runtime", () => {
               type: "oauth",
               access: "access",
               refresh: "refresh",
-              expires: Date.now() + 60_000,
+              expires: currentTimeMillis() + 60_000,
             }),
           ),
         );
@@ -597,7 +600,7 @@ describe("Models runtime", () => {
                     type: "oauth",
                     access: "fresh",
                     refresh: "rotated",
-                    expires: Date.now() + 60_000,
+                    expires: currentTimeMillis() + 60_000,
                   }),
               }),
             },
@@ -650,7 +653,7 @@ describe("Models runtime", () => {
                     ...credential,
                     access: "new",
                     refresh: "new-refresh",
-                    expires: Date.now() + 60_000,
+                    expires: currentTimeMillis() + 60_000,
                   });
                 },
               }),
@@ -1067,7 +1070,7 @@ describe("Models runtime", () => {
                     ...credential,
                     access: "new",
                     refresh: "new-refresh",
-                    expires: Date.now() + 60_000,
+                    expires: currentTimeMillis() + 60_000,
                   });
                 },
               }),
@@ -1120,7 +1123,7 @@ describe("Models runtime", () => {
               type: "oauth",
               access: "oauth-token",
               refresh: "r",
-              expires: Date.now() + 10 * 60_000,
+              expires: currentTimeMillis() + 10 * 60_000,
             }),
           ),
         );
@@ -1247,7 +1250,7 @@ describe("Models runtime", () => {
             Promise.resolve({
               ...credential,
               access: "new-token",
-              expires: Date.now() + 60 * 60_000,
+              expires: currentTimeMillis() + 60 * 60_000,
             }),
         });
         const models = createModels({ credentials });
@@ -1279,7 +1282,7 @@ describe("Models runtime", () => {
           Promise.resolve({
             ...credential,
             access: "new-token",
-            expires: Date.now() + 60 * 60_000,
+            expires: currentTimeMillis() + 60 * 60_000,
           }),
         );
         const models = createModels({ credentials });
@@ -1290,7 +1293,7 @@ describe("Models runtime", () => {
               type: "oauth",
               access: "old-token",
               refresh: "r",
-              expires: Date.now() + 60_000,
+              expires: currentTimeMillis() + 60_000,
             }),
           ),
         );
@@ -1308,7 +1311,7 @@ describe("Models runtime", () => {
           Promise.resolve({
             ...credential,
             access: "new-token",
-            expires: Date.now() + 60 * 60_000,
+            expires: currentTimeMillis() + 60 * 60_000,
           }),
         );
         const models = createModels({ credentials });
@@ -1319,7 +1322,7 @@ describe("Models runtime", () => {
               type: "oauth",
               access: "old-token",
               refresh: "r",
-              expires: Date.now() + 10 * 60_000,
+              expires: currentTimeMillis() + 10 * 60_000,
             }),
           ),
         );
@@ -1433,7 +1436,7 @@ describe("Models runtime", () => {
               type: "oauth",
               access: "valid",
               refresh: "r",
-              expires: Date.now() + 10 * 60_000,
+              expires: currentTimeMillis() + 10 * 60_000,
             }),
           ),
         );

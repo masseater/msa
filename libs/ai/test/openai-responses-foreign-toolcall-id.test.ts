@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { convertResponsesMessages } from "../src/api/openai-responses-shared.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { AssistantMessage, ToolResultMessage, Usage } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { shortHash } from "../src/utils/hash.ts";
 
 const FOREIGN_RAW_TOOL_CALL_ID =
@@ -35,7 +36,7 @@ describe("OpenAI Responses foreign tool call ID normalization", () => {
       model: "gpt-5.5",
       usage,
       stopReason: "toolUse",
-      timestamp: Date.now() - 2000,
+      timestamp: currentTimeMillis() - 2000,
     };
     const toolResult: ToolResultMessage = {
       role: "toolResult",
@@ -43,12 +44,12 @@ describe("OpenAI Responses foreign tool call ID normalization", () => {
       toolName: "edit",
       content: [{ type: "text", text: "ok" }],
       isError: false,
-      timestamp: Date.now() - 1000,
+      timestamp: currentTimeMillis() - 1000,
     };
     const context = normalizeContext({
       systemPrompt: "You are concise.",
       messages: [
-        { role: "user", content: "Use the tool.", timestamp: Date.now() - 3000 },
+        { role: "user", content: "Use the tool.", timestamp: currentTimeMillis() - 3000 },
         assistant,
         toolResult,
       ],

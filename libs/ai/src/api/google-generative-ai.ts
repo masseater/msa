@@ -20,6 +20,7 @@ import type {
   ToolCall,
   TranscriptContext,
 } from "../types.ts";
+import { currentTimeMillis } from "../utils/clock.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { providerHeadersToRecord } from "../utils/headers.ts";
@@ -84,7 +85,7 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "pending",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
 
     try {
@@ -207,7 +208,7 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
                 providedId === "" ||
                 output.content.some((b) => b.type === "toolCall" && b.id === providedId);
               const toolCallId = needsNewId
-                ? `${part.functionCall.name}_${Date.now()}_${++toolCallCounter}`
+                ? `${part.functionCall.name}_${currentTimeMillis()}_${++toolCallCounter}`
                 : providedId;
 
               const toolCall: ToolCall = {

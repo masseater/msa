@@ -38,6 +38,7 @@ import type {
   ToolCall,
   ToolResultMessage,
 } from "../types.ts";
+import { currentTimeMillis } from "../utils/clock.ts";
 import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
@@ -530,7 +531,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "pending",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
 
     try {
@@ -613,7 +614,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
           disablePreferredStrictTools = true;
           appendAssistantMessageDiagnostic(output, {
             type: "anthropic_strict_tools_fallback",
-            timestamp: Date.now(),
+            timestamp: currentTimeMillis(),
             error: { message: error.message },
             details: { reason: "strict_tool_limits_exceeded" },
           });
@@ -875,7 +876,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
       if (inputTransformations !== undefined && inputTransformations.length > 0) {
         appendAssistantMessageDiagnostic(output, {
           type: "anthropic_input_transformations",
-          timestamp: Date.now(),
+          timestamp: currentTimeMillis(),
           details: {
             transformations: inputTransformations.map((transformation) => ({
               type: transformation.type ?? undefined,

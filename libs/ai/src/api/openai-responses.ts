@@ -17,6 +17,7 @@ import type {
   TranscriptContext,
   Usage,
 } from "../types.ts";
+import { currentTimeMillis } from "../utils/clock.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
@@ -181,7 +182,7 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "pending",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
 
     try {

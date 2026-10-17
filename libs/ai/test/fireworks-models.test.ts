@@ -10,6 +10,7 @@ import { getModel, normalizeContext, streamSimple } from "../src/compat.ts";
 import { findEnvKeys, getEnvApiKey } from "../src/env-api-keys.ts";
 import { getSupportedThinkingLevels } from "../src/models.ts";
 import type { Context, Model, Tool } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { envValue } from "./env.ts";
 import { decodeJson } from "./json-codec.ts";
 
@@ -288,7 +289,7 @@ function createOpenRouterModel(): Model<"anthropic-messages"> {
 
 function createContext(tools: Tool[] = [tool]): Context {
   return {
-    messages: [{ role: "user", content: "Use the tool", timestamp: Date.now() }],
+    messages: [{ role: "user", content: "Use the tool", timestamp: currentTimeMillis() }],
     ...(tools.length > 0 ? { tools } : {}),
   };
 }

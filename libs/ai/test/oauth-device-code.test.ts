@@ -2,6 +2,7 @@ import { Clock, DateTime, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { pollOAuthDeviceCodeFlow } from "../src/auth/oauth/device-code.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const neverAbortedSignal = new AbortController().signal;
 
@@ -18,7 +19,7 @@ describe("OAuth device-code polling", () => {
 
         const pollTimes: number[] = [];
         const poll = vi.fn(() => {
-          pollTimes.push(Date.now());
+          pollTimes.push(currentTimeMillis());
           return Promise.resolve(
             pollTimes.length === 1
               ? { status: "pending" as const }
@@ -64,7 +65,7 @@ describe("OAuth device-code polling", () => {
           expiresInSeconds: 30,
           waitBeforeFirstPoll: true,
           poll: () => {
-            pollTimes.push(Date.now());
+            pollTimes.push(currentTimeMillis());
             return Promise.resolve({ status: "complete" as const, value: "token" });
           },
           signal: neverAbortedSignal,
@@ -97,7 +98,7 @@ describe("OAuth device-code polling", () => {
           intervalSeconds: 2,
           expiresInSeconds: 900,
           poll: () => {
-            pollTimes.push(Date.now());
+            pollTimes.push(currentTimeMillis());
             const result = results.shift();
             if (result === undefined) return Promise.reject(new Error("Unexpected extra poll"));
             return Promise.resolve(result);
@@ -133,7 +134,7 @@ describe("OAuth device-code polling", () => {
           intervalSeconds: 2,
           expiresInSeconds: 900,
           poll: () => {
-            pollTimes.push(Date.now());
+            pollTimes.push(currentTimeMillis());
             const result = results.shift();
             if (result === undefined) return Promise.reject(new Error("Unexpected extra poll"));
             return Promise.resolve(result);

@@ -6,6 +6,7 @@ import type {
   ClassifierOptions,
   ClassifierResult,
 } from "../types.ts";
+import { currentTimeMillis } from "../utils/clock.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import {
   isRecord,
@@ -110,7 +111,7 @@ export async function classifySystemOne(
     model: model.id,
     answers: {},
     stopReason: "stop",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 
   try {

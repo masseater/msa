@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { kimiCodingOAuth } from "../src/auth/oauth/kimi-coding.ts";
 import type { ProviderAuthInteraction } from "../src/auth/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const CLIENT_ID = "17e5f671-d194-4dfb-9706-5516cb48c098";
 const OAUTH_HOST = "https://auth.kimi.com";
@@ -85,7 +86,7 @@ describe("Kimi Code OAuth", () => {
               return Promise.resolve(deviceAuthorizationResponse());
             }
             if (url === `${OAUTH_HOST}/api/oauth/token`) {
-              pollTimes.push(Date.now());
+              pollTimes.push(currentTimeMillis());
               const params = new URLSearchParams(String(init?.body));
               expect(params.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:device_code");
               expect(params.get("client_id")).toBe(CLIENT_ID);

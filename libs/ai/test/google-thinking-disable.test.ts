@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { getModel, streamSimple } from "../src/compat.ts";
 import type { Api, Context, Model, SimpleStreamOptions } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { envValue } from "./env.ts";
 
 type SimpleOptionsWithExtras = SimpleStreamOptions & Record<string, unknown>;
@@ -29,7 +30,7 @@ function makeContext(): Context {
         role: "user",
         content:
           "Before replying, carefully solve 36863 * 5279 internally. Then reply with the word pong repeated exactly 40 times, separated by single spaces. Do not add any other text.",
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ],
   };

@@ -64,9 +64,10 @@ import {
 } from "../src/api/bedrock-converse-stream.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const context = normalizeContext({
-  messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "hello", timestamp: currentTimeMillis() }],
 });
 
 const MIDDLEWARE_NAME = "msa-ai-custom-headers";

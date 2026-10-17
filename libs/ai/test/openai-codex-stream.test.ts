@@ -15,6 +15,7 @@ import {
   streamSimple as streamSimpleOpenAICodexResponses,
 } from "../src/api/openai-codex-responses.ts";
 import type { Api, Context, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 import { envValue } from "./env.ts";
 import { decodeJson, encodeJson } from "./json-codec.ts";
@@ -2889,7 +2890,7 @@ describe("openai-codex streaming", () => {
       "retry-after HTTP date",
       () => ({
         "content-type": "application/json",
-        "retry-after": new Date(Date.now() + 45_000).toUTCString(),
+        "retry-after": new Date(currentTimeMillis() + 45_000).toUTCString(),
       }),
       45_000,
     ],

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { Message, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 interface CacheControl {
   type: "ephemeral";
@@ -181,7 +182,7 @@ describe("openai-completions cacheControlFormat", () => {
 
   it("moves the conversation cache marker to a tool result", async () => {
     const model = getModel("openrouter", "anthropic/claude-fable-5.1:batch");
-    const timestamp = Date.now();
+    const timestamp = currentTimeMillis();
     const params = await capturePayload(model, undefined, [
       { role: "user", content: "Read the file", timestamp },
       {

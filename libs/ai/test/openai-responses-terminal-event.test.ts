@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { processResponsesStream } from "../src/api/openai-responses-shared.ts";
 import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
 import type { Api, AssistantMessage, AssistantMessageEvent, Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
@@ -87,7 +88,7 @@ function createOutput(model: Model<"openai-responses">): AssistantMessage {
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: "pending",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 

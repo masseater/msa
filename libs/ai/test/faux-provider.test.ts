@@ -12,6 +12,7 @@ import {
   Type,
 } from "../src/compat.ts";
 import type { AssistantMessageEvent, Context } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { decodeJson, encodeJson } from "./json-codec.ts";
 
 function collectEvents(streamResult: ReturnType<typeof stream>): Promise<AssistantMessageEvent[]> {
@@ -76,7 +77,7 @@ describe("faux provider", () => {
     ]);
 
     const response = await complete(registration.getModel(), {
-      messages: [{ role: "user", content: "hi", timestamp: Date.now() }],
+      messages: [{ role: "user", content: "hi", timestamp: currentTimeMillis() }],
     });
 
     expect(response.content).toEqual([
@@ -834,7 +835,7 @@ describe("faux provider", () => {
     let toolCallDeltaCount = 0;
     const s = stream(
       registration.getModel(),
-      { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
+      { messages: [{ role: "user", content: "hi", timestamp: currentTimeMillis() }] },
       { signal: controller.signal },
     );
     await Effect.runPromise(

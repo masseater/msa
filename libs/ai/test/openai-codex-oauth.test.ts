@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { openaiCodexOAuth } from "../src/auth/oauth/openai-codex.ts";
 import type { AuthEvent } from "../src/auth/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const neverAbortedSignal = new AbortController().signal;
 
@@ -115,7 +116,7 @@ describe("OpenAI Codex OAuth", () => {
           }
 
           if (url === "https://auth.openai.com/api/accounts/deviceauth/token") {
-            pollTimes.push(Date.now());
+            pollTimes.push(currentTimeMillis());
             expect(init?.method).toBe("POST");
             expect(init?.headers).toMatchObject({ "content-type": "application/json" });
             expect(JSON.parse(String(init?.body))).toEqual({
@@ -317,7 +318,7 @@ describe("OpenAI Codex OAuth", () => {
               );
             }
             if (url === "https://auth.openai.com/api/accounts/deviceauth/token") {
-              pollTimes.push(Date.now());
+              pollTimes.push(currentTimeMillis());
               return Promise.resolve(deviceAuthPendingResponse());
             }
             return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
@@ -369,7 +370,7 @@ describe("OpenAI Codex OAuth", () => {
               );
             }
             if (url === "https://auth.openai.com/api/accounts/deviceauth/token") {
-              pollTimes.push(Date.now());
+              pollTimes.push(currentTimeMillis());
               return Promise.resolve(deviceAuthPendingResponse());
             }
             return Promise.reject(new Error(`Unexpected fetch URL: ${url}`));
@@ -426,7 +427,7 @@ describe("OpenAI Codex OAuth", () => {
               );
             }
             if (url === "https://auth.openai.com/api/accounts/deviceauth/token") {
-              pollTimes.push(Date.now());
+              pollTimes.push(currentTimeMillis());
               const response = pollResponses.shift();
               if (response === undefined) {
                 return Promise.reject(new Error("Unexpected extra device auth poll"));

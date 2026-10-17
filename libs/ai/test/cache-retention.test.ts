@@ -7,6 +7,7 @@ import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts"
 import { getModel, normalizeContext, stream } from "../src/compat.ts";
 import { MODELS } from "../src/models.generated.ts";
 import type { Model } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { envValue } from "./env.ts";
 
 class PayloadCaptured extends Error {
@@ -51,7 +52,7 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
 
   const context = normalizeContext({
     systemPrompt: "You are a helpful assistant.",
-    messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+    messages: [{ role: "user", content: "Hello", timestamp: currentTimeMillis() }],
   });
 
   describe("Anthropic Provider", () => {

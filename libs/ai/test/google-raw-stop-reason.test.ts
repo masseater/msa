@@ -96,6 +96,7 @@ import { stream as streamGoogleGenerativeAi } from "../src/api/google-generative
 import { stream as streamGoogleVertex } from "../src/api/google-vertex.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { Api, Model, StreamOptions } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 beforeEach(() => {
   googleGenAiMock.streamChunks = undefined;
@@ -104,7 +105,7 @@ beforeEach(() => {
 const MSA_USER_AGENT = `pi (${platform()} ${release()}; ${arch()})`;
 
 const context = normalizeContext({
-  messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "hello", timestamp: currentTimeMillis() }],
 });
 
 const captureGoogleHeaders = Effect.fn("captureGoogleHeaders")(function* (

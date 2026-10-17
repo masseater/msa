@@ -56,6 +56,7 @@ import type {
   Tool,
   ToolCall,
 } from "../types.ts";
+import { currentTimeMillis } from "../utils/clock.ts";
 import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.ts";
 import { normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
@@ -134,7 +135,7 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
       stopReason: "pending",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     };
 
     const blocks = output.content as Block[];
@@ -406,7 +407,7 @@ function appendBedrockFailureDiagnostic(
 
   appendAssistantMessageDiagnostic(output, {
     type: "bedrock_response_failure",
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
     details,
   });
 }

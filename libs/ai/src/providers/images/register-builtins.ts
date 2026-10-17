@@ -8,6 +8,7 @@ import type {
   ImagesFunction,
   ImagesOptions,
 } from "../../types.ts";
+import { currentTimeMillis } from "../../utils/clock.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 
 interface OpenRouterImagesProviderModule {
@@ -24,7 +25,7 @@ function createLazyLoadErrorImages(model: ImageModel<ImageApi>, error: unknown):
     output: [],
     stopReason: "error",
     errorMessage: toErrorMessage(error),
-    timestamp: Date.now(),
+    timestamp: currentTimeMillis(),
   };
 }
 

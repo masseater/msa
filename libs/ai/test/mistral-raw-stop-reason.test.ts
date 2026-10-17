@@ -4,11 +4,12 @@ import { describe, expect, it } from "vite-plus/test";
 import { stream as streamMistral } from "../src/api/mistral-conversations.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { FetchFunction } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 import { isRetryableAssistantError } from "../src/utils/retry.ts";
 
 const model = getModel("mistral", "devstral-medium-latest");
 const context = normalizeContext({
-  messages: [{ role: "user", content: "hello", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "hello", timestamp: currentTimeMillis() }],
 });
 
 function createFetch(finishReason: string): FetchFunction {

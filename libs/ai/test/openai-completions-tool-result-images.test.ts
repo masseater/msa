@@ -9,6 +9,7 @@ import type {
   ToolResultMessage,
   Usage,
 } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const emptyUsage: Usage = {
   input: 0,
@@ -94,7 +95,7 @@ describe("openai-completions convertMessages", () => {
             { type: "text", text: "" },
             { type: "image", data: "ZmFrZQ==", mimeType: "image/png" },
           ],
-          timestamp: Date.now(),
+          timestamp: currentTimeMillis(),
         },
       ],
     });
@@ -115,7 +116,7 @@ describe("openai-completions convertMessages", () => {
       input: ["text", "image"],
     };
 
-    const now = Date.now();
+    const now = currentTimeMillis();
     const assistantMessage: AssistantMessage = {
       role: "assistant",
       content: [
@@ -162,7 +163,7 @@ describe("openai-completions convertMessages", () => {
       input: ["text", "image"],
     };
 
-    const now = Date.now();
+    const now = currentTimeMillis();
     const assistantMessage: AssistantMessage = {
       role: "assistant",
       content: [{ type: "toolCall", id: "tool-1", name: "bash", arguments: { command: "true" } }],

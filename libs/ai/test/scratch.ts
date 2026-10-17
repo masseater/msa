@@ -3,6 +3,7 @@ import { Effect, Stream } from "effect";
 import { createModels } from "../src/models.ts";
 import { anthropicProvider } from "../src/providers/anthropic.ts";
 import type { Context } from "../src/types.ts";
+import { currentTimeMillis } from "../src/utils/clock.ts";
 
 const models = createModels();
 models.setProvider(anthropicProvider());
@@ -17,7 +18,7 @@ if (auth === undefined) process.exit(1);
 
 const context: Context = {
   systemPrompt: "You are terse.",
-  messages: [{ role: "user", content: "Say exactly: ok", timestamp: Date.now() }],
+  messages: [{ role: "user", content: "Say exactly: ok", timestamp: currentTimeMillis() }],
 };
 
 const message = await models.completeSimple(model, context);
@@ -26,7 +27,7 @@ console.log(`completeSimple -> [${message.stopReason}]`, message.content);
 context.messages.push(message, {
   role: "user",
   content: "Now count from 1 to 5, one number per line.",
-  timestamp: Date.now(),
+  timestamp: currentTimeMillis(),
 });
 
 process.stdout.write("streamSimple   -> ");
