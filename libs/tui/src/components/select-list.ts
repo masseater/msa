@@ -68,7 +68,6 @@ export class SelectList implements Component {
     this.filteredItems = this.items.filter((item) =>
       item.value.toLowerCase().startsWith(filter.toLowerCase()),
     );
-    // Reset selection when filter changes
     this.selectedIndex = 0;
   }
 
@@ -76,14 +75,11 @@ export class SelectList implements Component {
     this.selectedIndex = Math.max(0, Math.min(index, this.filteredItems.length - 1));
   }
 
-  invalidate(): void {
-    // No cached state to invalidate currently
-  }
+  invalidate(): void {}
 
   render(width: number): string[] {
     const lines: string[] = [];
 
-    // If no items match filter, show message
     if (this.filteredItems.length === 0) {
       lines.push(this.theme.noMatch("  No matching commands"));
       return lines;
@@ -91,10 +87,8 @@ export class SelectList implements Component {
 
     const primaryColumnWidth = this.getPrimaryColumnWidth();
 
-    // Calculate visible range with scrolling
     const { startIndex, endIndex } = this.getVisibleRange();
 
-    // Render visible items
     for (let i = startIndex; i < endIndex; i++) {
       const item = this.filteredItems[i];
       if (!item) continue;
@@ -108,10 +102,8 @@ export class SelectList implements Component {
       );
     }
 
-    // Add scroll indicators if needed
     if (startIndex > 0 || endIndex < this.filteredItems.length) {
       const scrollText = `  (${this.selectedIndex + 1}/${this.filteredItems.length})`;
-      // Truncate if too long for terminal
       lines.push(this.theme.scrollInfo(truncateToWidth(scrollText, width - 2, "")));
     }
 
@@ -130,7 +122,6 @@ export class SelectList implements Component {
       if (this.selectedIndex !== previousIndex) this.notifySelectionChange();
       return { handled: true, render: this.selectedIndex !== previousIndex };
     }
-    // Hover must not change selection: the visible range is centered on it.
     if (event.button !== "left" || (event.type !== "press" && event.type !== "click"))
       return undefined;
     const { startIndex, endIndex } = this.getVisibleRange();
@@ -160,27 +151,20 @@ export class SelectList implements Component {
 
   handleInput(keyData: string): void {
     const kb = getKeybindings();
-    // Up arrow - wrap to bottom when at top
     if (kb.matches(keyData, "tui.select.up")) {
       this.selectedIndex =
         this.selectedIndex === 0 ? this.filteredItems.length - 1 : this.selectedIndex - 1;
       this.notifySelectionChange();
-    }
-    // Down arrow - wrap to top when at bottom
-    else if (kb.matches(keyData, "tui.select.down")) {
+    } else if (kb.matches(keyData, "tui.select.down")) {
       this.selectedIndex =
         this.selectedIndex === this.filteredItems.length - 1 ? 0 : this.selectedIndex + 1;
       this.notifySelectionChange();
-    }
-    // Enter
-    else if (kb.matches(keyData, "tui.select.confirm")) {
+    } else if (kb.matches(keyData, "tui.select.confirm")) {
       const selectedItem = this.filteredItems[this.selectedIndex];
       if (selectedItem && this.onSelect) {
         this.onSelect(selectedItem);
       }
-    }
-    // Escape or Ctrl+C
-    else if (kb.matches(keyData, "tui.select.cancel")) {
+    } else if (kb.matches(keyData, "tui.select.cancel")) {
       if (this.onCancel) {
         this.onCancel();
       }
@@ -226,7 +210,6 @@ export class SelectList implements Component {
       const truncatedValueWidth = visibleWidth(truncatedValue);
       const spacing = " ".repeat(Math.max(1, effectivePrimaryColumnWidth - truncatedValueWidth));
       const descriptionStart = prefixWidth + truncatedValueWidth + spacing.length;
-      // -2 for safety
       const remainingWidth = width - descriptionStart - 2;
 
       if (remainingWidth > MIN_DESCRIPTION_WIDTH) {

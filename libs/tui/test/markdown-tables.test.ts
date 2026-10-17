@@ -25,11 +25,9 @@ describe("Markdown component", () => {
       const lines = markdown.render(80);
       const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
-      // Check headers
       assert.ok(plainLines.some((line) => line.includes("Left")));
       assert.ok(plainLines.some((line) => line.includes("Center")));
       assert.ok(plainLines.some((line) => line.includes("Right")));
-      // Check content
       assert.ok(plainLines.some((line) => line.includes("Long text")));
     });
   });
@@ -50,7 +48,6 @@ describe("Markdown component", () => {
 
       const lines = markdown.render(80);
 
-      // Should render without errors
       assert.ok(lines.length > 0);
 
       const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
@@ -73,16 +70,13 @@ describe("Markdown component", () => {
         defaultMarkdownTheme,
       );
 
-      // Render at narrow width that forces wrapping
       const lines = markdown.render(50);
       const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
 
-      // All lines should fit within width
       for (const line of plainLines) {
         assert.ok(line.length <= 50, `Line exceeds width 50: "${line}" (length: ${line.length})`);
       }
 
-      // Content should still be present (possibly wrapped across lines)
       const allText = plainLines.join(" ");
       assert.ok(allText.includes("Command"), "Should contain 'Command'");
       assert.ok(allText.includes("Description"), "Should contain 'Description'");
@@ -168,7 +162,6 @@ function tablesCases3(): void {
     const quoteColor = 0x123456;
     const theme: MarkdownTheme = {
       ...defaultMarkdownTheme,
-      // Use a basic wrapper that does not automatically reopen itself after nested resets.
       quote: (text) => `\x1b[38;2;18;52;86m${text}\x1b[39m`,
       link: (text) => `\x1b[38;2;129;162;190m${text}\x1b[39m`,
     };

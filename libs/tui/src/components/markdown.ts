@@ -158,8 +158,6 @@ function trimPartialClosingFences(tokens: readonly Token[]): void {
     return;
   }
 
-  // Trim streamed partial closing fences so code blocks do not shrink/flicker
-  // when the final fence character arrives. See https://github.com/earendil-works/pi/issues/5825.
   const marker = /^(`{3,}|~{3,})/u.exec(token.raw)?.[1];
   const lastLine = token.raw.split("\n").pop();
   if (
@@ -180,29 +178,15 @@ markdownParser.setOptions({
 });
 markdownParser.use({ extensions: [...LATEX_MARKDOWN_EXTENSIONS] });
 
-/**
- * Default text styling for markdown content.
- * Applied to all text unless overridden by markdown formatting.
- */
 export interface DefaultTextStyle {
-  /** Foreground color function */
   color?: (text: string) => string;
-  /** Background color function */
   bgColor?: (text: string) => string;
-  /** Bold text */
   bold?: boolean;
-  /** Italic text */
   italic?: boolean;
-  /** Strikethrough text */
   strikethrough?: boolean;
-  /** Underline text */
   underline?: boolean;
 }
 
-/**
- * Theme functions for markdown elements.
- * Each function takes text and returns styled text with ANSI codes.
- */
 export interface MarkdownTheme {
   heading: (text: string) => string;
   link: (text: string) => string;
@@ -219,18 +203,13 @@ export interface MarkdownTheme {
   strikethrough: (text: string) => string;
   underline: (text: string) => string;
   highlightCode?: (code: string, lang?: string) => string[];
-  /** Prefix applied to each rendered code block line (default: "  ") */
   codeBlockIndent?: string;
 }
 
 export interface MarkdownOptions {
-  /** Preserve source list markers instead of normalizing them. */
   preserveOrderedListMarkers?: boolean;
-  /** Preserve source backslash escapes instead of normalizing escaped punctuation. */
   preserveBackslashEscapes?: boolean;
-  /** Transform source Markdown before parsing, with the exact width available for content. */
   transform?: (markdown: string, availableWidth: number) => string;
-  /** Render supported LaTeX math expressions as Unicode text (default: true). */
   renderLatex?: boolean;
 }
 
@@ -241,22 +220,16 @@ interface InlineStyleContext {
 
 export class Markdown implements Component {
   private text: string;
-  // Left/right padding
   private paddingX: number;
-  // Top/bottom padding
   private paddingY: number;
   private defaultTextStyle?: DefaultTextStyle | undefined;
   private theme: MarkdownTheme;
   private options: MarkdownOptions;
   private defaultStylePrefix?: string;
 
-  // Cache for rendered output
   private cachedText?: string | undefined;
   private cachedWidth?: number | undefined;
   private cachedLines?: string[] | undefined;
-  // Parsed tokens depend only on the source, so they survive theme and width invalidation. Held weakly: a token tree is
-  // about ten times the size of its source, and every message of a long transcript keeps a Markdown component. The
-  // tokens survive a burst of re-renders, such as a theme preview, and are collected afterwards.
   private cachedTokens?: WeakRef<{ source: string; tokens: Token[] }>;
 
   constructor(
@@ -287,29 +260,23 @@ export class Markdown implements Component {
   }
 
   render(width: number): string[] {
-    // Check cache
     if (this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {
       return this.cachedLines;
     }
 
-    // Calculate available width for content (subtract horizontal padding)
     const contentWidth = Math.max(1, width - this.paddingX * 2);
     const text = this.options.transform?.(this.text, contentWidth) ?? this.text;
 
-    // Don't render anything if there's no actual text
     if (!text || text.trim() === "") {
       const result: string[] = [];
-      // Update cache
       this.cachedText = this.text;
       this.cachedWidth = width;
       this.cachedLines = result;
       return result;
     }
 
-    // Replace tabs with 3 spaces for consistent rendering
     const normalizedText = text.replace(/\t/gu, "   ");
 
-    // Parse markdown to HTML-like tokens
     const cached = this.cachedTokens?.deref();
     let tokens = cached?.source === normalizedText ? cached.tokens : undefined;
     if (!tokens) {
@@ -318,7 +285,6 @@ export class Markdown implements Component {
       this.cachedTokens = new WeakRef({ source: normalizedText, tokens });
     }
 
-    // Convert tokens to styled terminal output
     const renderedLines: string[] = [];
 
     for (const [i, token] of tokens.entries()) {
@@ -329,7 +295,6 @@ export class Markdown implements Component {
       }
     }
 
-    // Wrap lines (NO padding, NO background yet)
     const wrappedLines: string[] = [];
     for (const line of renderedLines) {
       if (isImageLine(line)) {
@@ -341,7 +306,6 @@ export class Markdown implements Component {
       }
     }
 
-    // Add margins and background to each wrapped line
     const leftMargin = " ".repeat(this.paddingX);
     const rightMargin = " ".repeat(this.paddingX);
     const bgFn = this.defaultTextStyle?.bgColor;
@@ -358,14 +322,12 @@ export class Markdown implements Component {
       if (bgFn) {
         contentLines.push(applyBackgroundToLine(lineWithMargins, width, bgFn));
       } else {
-        // No background - just pad to width
         const visibleLen = visibleWidth(lineWithMargins);
         const paddingNeeded = Math.max(0, width - visibleLen);
         contentLines.push(lineWithMargins + " ".repeat(paddingNeeded));
       }
     }
 
-    // Add top/bottom padding (empty lines)
     const emptyLine = " ".repeat(width);
     const emptyLines: string[] = [];
     for (let i = 0; i < this.paddingY; i++) {
@@ -373,11 +335,9 @@ export class Markdown implements Component {
       emptyLines.push(line);
     }
 
-    // Combine top padding, content, and bottom padding
     const result = emptyLines.concat(contentLines, emptyLines);
     flattenLines(result);
 
-    // Update cache
     this.cachedText = this.text;
     this.cachedWidth = width;
     this.cachedLines = result;
@@ -385,15 +345,6 @@ export class Markdown implements Component {
     return result.length > 0 ? result : [""];
   }
 
-  /**
-   * Apply default text style to a string.
-   * This is the base styling applied to all text content.
-   * NOTE: Background color is NOT applied here - it's applied at the padding stage
-   * to ensure it extends to the full line width.
-   *
-   * @param {string} text - The text to style.
-   * @returns {string} The styled text.
-   */
   private applyDefaultStyle(text: string): string {
     if (!this.defaultTextStyle) {
       return text;
@@ -401,12 +352,10 @@ export class Markdown implements Component {
 
     let styled = text;
 
-    // Apply foreground color (NOT background - that's applied at padding stage)
     if (this.defaultTextStyle.color) {
       styled = this.defaultTextStyle.color(styled);
     }
 
-    // Apply text decorations using this.theme
     if (this.defaultTextStyle.bold) {
       styled = this.theme.bold(styled);
     }
@@ -484,9 +433,6 @@ export class Markdown implements Component {
         const headingLevel = token.depth;
         const headingPrefix = `${"#".repeat(headingLevel)} `;
 
-        // Build a heading-specific style context so inline tokens (codespan, bold, etc.)
-        // restore heading styling after their own ANSI resets instead of falling back to
-        // the default text style.
         let headingStyleFn: (text: string) => string;
         if (headingLevel === 1) {
           headingStyleFn = (text: string) =>
@@ -505,7 +451,6 @@ export class Markdown implements Component {
           headingLevel >= 3 ? headingStyleFn(headingPrefix) + headingText : headingText;
         lines.push(styledHeading);
         if (nextTokenType && nextTokenType !== "space") {
-          // Add spacing after headings (unless space token follows)
           lines.push("");
         }
         break;
@@ -514,7 +459,6 @@ export class Markdown implements Component {
       case "paragraph": {
         const paragraphText = this.renderInlineTokens(token.tokens || [], styleContext);
         lines.push(paragraphText);
-        // Don't add spacing if next token is space or list
         if (nextTokenType && nextTokenType !== "list" && nextTokenType !== "space") {
           lines.push("");
         }
@@ -549,7 +493,6 @@ export class Markdown implements Component {
             lines.push(`${indent}${hlLine}`);
           }
         } else {
-          // Split code by newlines and style each line
           const codeLines = token.text.split("\n");
           for (const codeLine of codeLines) {
             lines.push(`${indent}${this.theme.codeBlock(codeLine)}`);
@@ -557,7 +500,6 @@ export class Markdown implements Component {
         }
         lines.push(this.theme.codeBlockBorder("```"));
         if (nextTokenType && nextTokenType !== "space") {
-          // Add spacing after code blocks (unless space token follows)
           lines.push("");
         }
         break;
@@ -566,8 +508,6 @@ export class Markdown implements Component {
       case "list": {
         const listLines = this.renderList(token as Tokens.List, 0, width, styleContext);
         lines.push(...listLines);
-        // Don't add spacing after lists if a space token follows
-        // (the space token will handle it)
         break;
       }
 
@@ -593,12 +533,8 @@ export class Markdown implements Component {
           return quoteStyle(lineWithReappliedStyle);
         };
 
-        // Calculate available width for quote content (subtract border "│ " = 2 chars)
         const quoteContentWidth = Math.max(1, width - 2);
 
-        // Blockquotes contain block-level tokens (paragraph, list, code, etc.), so render
-        // children with renderToken() instead of renderInlineTokens().
-        // Default message style should not apply inside blockquotes.
         const quoteInlineStyleContext: InlineStyleContext = {
           applyText: (text: string) => text,
           stylePrefix: quoteStylePrefix,
@@ -617,7 +553,6 @@ export class Markdown implements Component {
           );
         }
 
-        // Avoid rendering an extra empty quote line before the outer blockquote spacing.
         while (
           renderedQuoteLines.length > 0 &&
           renderedQuoteLines[renderedQuoteLines.length - 1] === ""
@@ -633,7 +568,6 @@ export class Markdown implements Component {
           }
         }
         if (nextTokenType && nextTokenType !== "space") {
-          // Add spacing after blockquotes (unless space token follows)
           lines.push("");
         }
         break;
@@ -642,25 +576,21 @@ export class Markdown implements Component {
       case "hr":
         lines.push(this.theme.hr("─".repeat(Math.min(width, 80))));
         if (nextTokenType && nextTokenType !== "space") {
-          // Add spacing after horizontal rules (unless space token follows)
           lines.push("");
         }
         break;
 
       case "html":
-        // Render HTML as plain text (escaped for terminal)
         if ("raw" in token && typeof token.raw === "string") {
           lines.push(this.applyDefaultStyle(token.raw.trim()));
         }
         break;
 
       case "space":
-        // Space tokens represent blank lines in markdown
         lines.push("");
         break;
 
       default:
-        // Handle any other token types as plain text
         if ("text" in token && typeof token.text === "string") {
           lines.push(token.text);
         }
@@ -697,7 +627,6 @@ export class Markdown implements Component {
           break;
 
         case "text":
-          // Text tokens in list items can have nested tokens for inline formatting
           if (token.tokens && token.tokens.length > 0) {
             result += this.renderInlineTokens(token.tokens, resolvedStyleContext);
           } else {
@@ -706,7 +635,6 @@ export class Markdown implements Component {
           break;
 
         case "paragraph":
-          // Paragraph tokens contain nested inline tokens
           result += this.renderInlineTokens(token.tokens || [], resolvedStyleContext);
           break;
 
@@ -730,14 +658,8 @@ export class Markdown implements Component {
           const linkText = this.renderInlineTokens(token.tokens || [], resolvedStyleContext);
           const styledLink = this.theme.link(this.theme.underline(linkText));
           if (getCapabilities().hyperlinks) {
-            // OSC 8: render as a clickable hyperlink. The URL is not printed inline,
-            // so we always show only the link text regardless of whether it matches href.
             result += hyperlink(styledLink, token.href) + stylePrefix;
           } else {
-            // Fallback: print URL in parentheses when text differs from href.
-            // Compare raw token.text (not styled) against href for the equality check.
-            // For mailto: links strip the prefix (autolinked emails use text="foo@bar.com"
-            // but href="mailto:foo@bar.com").
             const hrefForComparison = token.href.startsWith("mailto:")
               ? token.href.slice(7)
               : token.href;
@@ -761,14 +683,12 @@ export class Markdown implements Component {
         }
 
         case "html":
-          // Render inline HTML as plain text
           if ("raw" in token && typeof token.raw === "string") {
             result += applyTextWithNewlines(token.raw);
           }
           break;
 
         default:
-          // Handle any other inline token types as plain text
           if ("text" in token && typeof token.text === "string") {
             result += applyTextWithNewlines(token.text);
           }
@@ -792,15 +712,6 @@ export class Markdown implements Component {
     return match ? `${match[1]} ` : undefined;
   }
 
-  /**
-   * Render a list with proper nesting support
-   *
-   * @param {Tokens.List} token - The list token.
-   * @param {number} depth - Nesting depth, 0 for a top-level list.
-   * @param {number} width - Available width in columns.
-   * @param {InlineStyleContext} styleContext - Inline style of the enclosing block.
-   * @returns {string[]} The rendered lines.
-   */
   private renderList(
     token: Tokens.List,
     depth: number,
@@ -809,7 +720,6 @@ export class Markdown implements Component {
   ): string[] {
     const lines: string[] = [];
     const indent = "    ".repeat(depth);
-    // Use the list's start property (defaults to 1 for ordered lists)
     const startNumber = typeof token.start === "number" ? token.start : 1;
 
     for (const [i, item] of token.items.entries()) {
@@ -857,13 +767,6 @@ export class Markdown implements Component {
     return lines;
   }
 
-  /**
-   * Get the visible width of the longest word in a string.
-   *
-   * @param {string} text - The text to measure.
-   * @param {number} maxWidth - Upper bound for the result.
-   * @returns {number} The width in columns.
-   */
   private getLongestWordWidth(text: string, maxWidth?: number): number {
     const words = text.split(/\s+/u).filter((word) => word.length > 0);
     let longest = 0;
@@ -876,36 +779,14 @@ export class Markdown implements Component {
     return Math.min(longest, maxWidth);
   }
 
-  /**
-   * Wrap a table cell to fit into a column.
-   *
-   * Delegates to wrapTextWithAnsi() so ANSI codes + long tokens are handled
-   * consistently with the rest of the renderer.
-   *
-   * @param {string} text - The cell text.
-   * @param {number} maxWidth - The column width.
-   * @param {string} stylePrefix - ANSI codes to reapply at the start of each wrapped line.
-   * @returns {string[]} The wrapped lines.
-   */
   private wrapCellText(text: string, maxWidth: number, stylePrefix = ""): string[] {
     const lines = wrapTextWithAnsi(text, Math.max(1, maxWidth));
     return lines.map((line, index) => {
-      // Reset text styles after each non-final fragment, then restore the surrounding style before padding and borders.
       const styleReset = index < lines.length - 1 ? "\x1b[22;23;24;25;27;28;29;39m" : "";
       return `${line}${styleReset}${stylePrefix}`;
     });
   }
 
-  /**
-   * Render a table with width-aware cell wrapping.
-   * Cells that don't fit are wrapped to multiple lines.
-   *
-   * @param {Tokens.Table} token - The table token.
-   * @param {number} availableWidth - Available width in columns.
-   * @param {string} nextTokenType - Type of the token after the table, to decide on trailing spacing.
-   * @param {InlineStyleContext} styleContext - Inline style of the enclosing block.
-   * @returns {string[]} The rendered lines.
-   */
   private renderTable(
     token: Tokens.Table,
     availableWidth: number,
@@ -919,12 +800,9 @@ export class Markdown implements Component {
       return lines;
     }
 
-    // Calculate border overhead: "│ " + (n-1) * " │ " + " │"
-    // = 2 + (n-1) * 3 + 2 = 3n + 1
     const borderOverhead = 3 * numCols + 1;
     const availableForCells = availableWidth - borderOverhead;
     if (availableForCells < numCols) {
-      // Too narrow to render a stable table. Fall back to raw markdown.
       const fallbackLines = token.raw ? wrapTextWithAnsi(token.raw, availableWidth) : [];
       if (nextTokenType && nextTokenType !== "space") {
         fallbackLines.push("");
@@ -934,7 +812,6 @@ export class Markdown implements Component {
 
     const maxUnbrokenWordWidth = 30;
 
-    // Calculate natural column widths (what each column needs without constraints)
     const columns: { natural: number; minWord: number }[] = [];
     for (const cells of [token.header, ...token.rows]) {
       for (const [i, cell] of cells.entries()) {
@@ -981,16 +858,13 @@ export class Markdown implements Component {
       minCellsWidth = minColumns.reduce((total, column) => total + column.min, 0);
     }
 
-    // Calculate column widths that fit within available width
     const totalNaturalWidth =
       columns.reduce((total, column) => total + column.natural, 0) + borderOverhead;
     let columnWidths: number[];
 
     if (totalNaturalWidth <= availableWidth) {
-      // Everything fits naturally
       columnWidths = minColumns.map((column) => Math.max(column.natural, column.min));
     } else {
-      // Need to shrink columns to fit
       const totalGrowPotential = minColumns.reduce((total, column) => {
         return total + Math.max(0, column.natural - column.min);
       }, 0);
@@ -1004,7 +878,6 @@ export class Markdown implements Component {
         return { natural: column.natural, width: column.min + grow };
       });
 
-      // Adjust for rounding errors - distribute remaining space
       const allocated = sized.reduce((total, column) => total + column.width, 0);
       let remaining = availableForCells - allocated;
       while (remaining > 0) {
@@ -1026,7 +899,6 @@ export class Markdown implements Component {
       columnWidths = sized.map((column) => column.width);
     }
 
-    // Wrap each cell of a row into its column
     const wrapRowCells = (cells: Tokens.TableCell[]) =>
       cells.map((cell, i) => {
         const width = columnWidths[i];
@@ -1037,11 +909,9 @@ export class Markdown implements Component {
         return { width, lines: this.wrapCellText(text, width, styleContext?.stylePrefix) };
       });
 
-    // Render top border
     const topBorderCells = columnWidths.map((w) => "─".repeat(w));
     lines.push(`┌─${topBorderCells.join("─┬─")}─┐`);
 
-    // Render header with wrapping
     const headerCells = wrapRowCells(token.header);
     const headerLineCount = Math.max(...headerCells.map((c) => c.lines.length));
 
@@ -1054,12 +924,10 @@ export class Markdown implements Component {
       lines.push(`│ ${rowParts.join(" │ ")} │`);
     }
 
-    // Render separator
     const separatorCells = columnWidths.map((w) => "─".repeat(w));
     const separatorLine = `├─${separatorCells.join("─┼─")}─┤`;
     lines.push(separatorLine);
 
-    // Render rows with wrapping
     for (const [rowIndex, row] of token.rows.entries()) {
       const rowCells = wrapRowCells(row);
       const rowLineCount = Math.max(...rowCells.map((c) => c.lines.length));
@@ -1077,12 +945,10 @@ export class Markdown implements Component {
       }
     }
 
-    // Render bottom border
     const bottomBorderCells = columnWidths.map((w) => "─".repeat(w));
     lines.push(`└─${bottomBorderCells.join("─┴─")}─┘`);
 
     if (nextTokenType && nextTokenType !== "space") {
-      // Add spacing after table
       lines.push("");
     }
     return lines;

@@ -42,7 +42,6 @@ describe("detectCapabilities", () => {
 });
 
 describe("detectCapabilities", () => {
-  // #10573
   it("enables hyperlinks and Kitty images for Herdr", () => {
     withEnv(
       {

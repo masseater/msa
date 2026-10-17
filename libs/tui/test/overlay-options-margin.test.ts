@@ -16,7 +16,6 @@ describe("TUI overlay options", () => {
       const overlay = new StaticOverlay(["NEG-MARGIN"]);
 
       tui.addChild(new EmptyContent());
-      // Negative margins should be treated as 0
       tui.showOverlay(overlay, {
         anchor: "top-left",
         width: 12,
@@ -26,7 +25,6 @@ describe("TUI overlay options", () => {
       await renderAndFlush(tui, terminal);
 
       const viewport = terminal.getViewport();
-      // Should be at row 0, col 0 (negative margins clamped to 0)
       assert.ok(
         viewport[0]?.startsWith("NEG-MARGIN"),
         `Expected NEG-MARGIN at start of row 0, got: ${viewport[0]}`,
@@ -49,11 +47,9 @@ describe("TUI overlay options", () => {
       await renderAndFlush(tui, terminal);
 
       const viewport = terminal.getViewport();
-      // Should be on row 5 (not 0) due to margin
       assert.ok(!viewport[0]?.includes("MARGIN"), "Should not be on row 0");
       assert.ok(!viewport[4]?.includes("MARGIN"), "Should not be on row 4");
       assert.ok(viewport[5]?.includes("MARGIN"), `Expected MARGIN on row 5, got: ${viewport[5]}`);
-      // Should start at col 5 (not 0)
       const colIndex = viewport[5]?.indexOf("MARGIN") ?? -1;
       assert.strictEqual(colIndex, 5, `Expected col 5, got ${colIndex}`);
       tui.stop();
@@ -111,13 +107,11 @@ describe("TUI overlay options", () => {
       const overlay = new StaticOverlay(["PCT"]);
 
       tui.addChild(new EmptyContent());
-      // 50% should center both ways
       tui.showOverlay(overlay, { width: 10, row: "50%", col: "50%" });
       tui.start();
       await renderAndFlush(tui, terminal);
 
       const viewport = terminal.getViewport();
-      // Find the row with PCT
       let foundRow = -1;
       for (let i = 0; i < viewport.length; i++) {
         if (viewport[i]?.includes("PCT")) {
@@ -125,7 +119,6 @@ describe("TUI overlay options", () => {
           break;
         }
       }
-      // Should be roughly centered vertically (row ~11-12 for 24 row terminal)
       assert.ok(foundRow >= 10 && foundRow <= 13, `Expected centered row, got ${foundRow}`);
       tui.stop();
     });
@@ -198,7 +191,6 @@ describe("TUI overlay options", () => {
     it("should truncate overlay to maxHeightPercent", async () => {
       const terminal = new VirtualTerminal(80, 10);
       const tui: TUI = new TuiMainScreen(terminal);
-      // 10 lines in a 10 row terminal with 50% maxHeight should show 5 lines
       const overlay = new StaticOverlay([
         "L1",
         "L2",
@@ -235,7 +227,6 @@ describe("TUI overlay options", () => {
       const overlay = new StaticOverlay(["ABSOLUTE"]);
 
       tui.addChild(new EmptyContent());
-      // Even with bottom-right anchor, row/col should win
       tui.showOverlay(overlay, { anchor: "bottom-right", row: 3, col: 5, width: 10 });
       tui.start();
       await renderAndFlush(tui, terminal);

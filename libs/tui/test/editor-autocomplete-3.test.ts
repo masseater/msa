@@ -54,7 +54,6 @@ function commandArgumentProvider(): AutocompleteProvider {
     getSuggestions: (lines, _cursorLine, cursorCol) => {
       const before = (lines[0] || "").slice(0, cursorCol);
       if (!before.startsWith("/")) return Promise.resolve(null);
-      // Past the command name (a space before the cursor): offer arguments.
       if (before.includes(" ")) {
         return Promise.resolve({
           items: [
@@ -65,7 +64,6 @@ function commandArgumentProvider(): AutocompleteProvider {
           prefix: before.slice(before.indexOf(" ") + 1),
         });
       }
-      // Inside the command name: offer the command name only.
       return Promise.resolve({ items: [{ value: "cmd", label: "cmd" }], prefix: before });
     },
     applyCompletion,
@@ -74,16 +72,9 @@ function commandArgumentProvider(): AutocompleteProvider {
 
 function autocompleteCases11(): void {
   it("re-queries the autocomplete picker when the cursor moves back into the command name", async () => {
-    // Regression for earendil-works/pi#5496: arrowing left out of a slash
-    // command's argument region must re-query the picker, not leave the
-    // stale argument list showing. Before the fix, moveCursor() never
-    // called updateAutocomplete(), so `/cmd ` (argument menu) + Left kept
-    // displaying the arguments against a `/cmd` prefix — and a Tab there
-    // would concatenate the stale suggestion onto the partial command name.
     const editor = new Editor(createTestTUI(), defaultEditorTheme);
     editor.setAutocompleteProvider(commandArgumentProvider());
 
-    // Type `/cmd ` so the picker ends up showing the argument list.
     for await (const ch of "/cmd ") {
       editor.handleInput(ch);
       await flushAutocomplete();
@@ -96,12 +87,9 @@ function autocompleteCases11(): void {
       .join("\n");
     assert.ok(atArg.includes("repo"), "argument menu should be visible at `/cmd `");
 
-    // Arrow Left back into the command name (`/cmd`).
     editor.handleInput("\x1b[D");
     await flushAutocomplete();
 
-    // The picker must have re-queried: the stale argument items are gone
-    // (replaced by the command-name suggestion, or the picker closed).
     const afterMove = editor
       .render(80)
       .map((l) => stripVTControlCharacters(l))

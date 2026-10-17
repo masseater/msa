@@ -17,11 +17,9 @@ describe("TUI overlay options", () => {
 
       tui.addChild(new EmptyContent());
 
-      // First overlay at top-left
       const overlay1 = new StaticOverlay(["FIRST-OVERLAY"]);
       tui.showOverlay(overlay1, { anchor: "top-left", width: 20 });
 
-      // Second overlay at top-left (should cover part of first)
       const overlay2 = new StaticOverlay(["SECOND"]);
       tui.showOverlay(overlay2, { anchor: "top-left", width: 10 });
 
@@ -29,10 +27,7 @@ describe("TUI overlay options", () => {
       await renderAndFlush(tui, terminal);
 
       const viewport = terminal.getViewport();
-      // Second overlay should be visible (on top)
       assert.ok(viewport[0]?.includes("SECOND"), `Expected SECOND on row 0, got: ${viewport[0]}`);
-      // Part of first overlay might still be visible after SECOND
-      // FIRST-OVERLAY is 13 chars, SECOND is 6 chars, so "OVERLAY" part might show
       tui.stop();
     });
   });
@@ -46,11 +41,9 @@ describe("TUI overlay options", () => {
 
       tui.addChild(new EmptyContent());
 
-      // Overlay at top-left
       const overlay1 = new StaticOverlay(["TOP-LEFT"]);
       tui.showOverlay(overlay1, { anchor: "top-left", width: 15 });
 
-      // Overlay at bottom-right
       const overlay2 = new StaticOverlay(["BTM-RIGHT"]);
       tui.showOverlay(overlay2, { anchor: "bottom-right", width: 15 });
 
@@ -58,7 +51,6 @@ describe("TUI overlay options", () => {
       await renderAndFlush(tui, terminal);
 
       const viewport = terminal.getViewport();
-      // Both should be visible
       assert.ok(
         viewport[0]?.includes("TOP-LEFT"),
         `Expected TOP-LEFT on row 0, got: ${viewport[0]}`,
@@ -80,7 +72,6 @@ describe("TUI overlay options", () => {
 
       tui.addChild(new EmptyContent());
 
-      // Show two overlays
       const overlay1 = new StaticOverlay(["FIRST"]);
       tui.showOverlay(overlay1, { anchor: "top-left", width: 10 });
 
@@ -90,15 +81,12 @@ describe("TUI overlay options", () => {
       tui.start();
       await renderAndFlush(tui, terminal);
 
-      // Second should be visible
       let viewport = terminal.getViewport();
       assert.ok(viewport[0]?.includes("SECOND"), "SECOND should be visible initially");
 
-      // Hide top overlay
       tui.hideOverlay();
       await renderAndFlush(tui, terminal);
 
-      // First should now be visible
       viewport = terminal.getViewport();
       assert.ok(viewport[0]?.includes("FIRST"), "FIRST should be visible after hiding SECOND");
 

@@ -53,18 +53,15 @@ describe("Editor component", () => {
     it("hides autocomplete when backspacing slash command to empty", async () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      // Mock provider with slash commands
       const mockProvider: AutocompleteProvider = {
         getSuggestions: (lines, _cursorLine, cursorCol) => {
           const text = lines[0] || "";
           const prefix = text.slice(0, cursorCol);
-          // Only return slash command suggestions when line starts with /
           if (prefix.startsWith("/")) {
             const commands = [
               { value: "/model", label: "model", description: "Change model" },
               { value: "/help", label: "help", description: "Show help" },
             ];
-            // Remove leading /
             const query = prefix.slice(1);
             const filtered = commands.filter((c) => c.value.startsWith(query));
             if (filtered.length > 0) {
@@ -78,14 +75,11 @@ describe("Editor component", () => {
 
       editor.setAutocompleteProvider(mockProvider);
 
-      // Type "/" - should show slash command suggestions
       editor.handleInput("/");
       await flushAutocomplete();
       assert.strictEqual(editor.getText(), "/");
       assert.strictEqual(editor.isShowingAutocomplete(), true);
 
-      // Backspace to delete "/" - should hide autocomplete completely
-      // Backspace
       editor.handleInput("\x7f");
       await flushAutocomplete();
       assert.strictEqual(editor.getText(), "");
@@ -104,13 +98,11 @@ function autocompleteCases12(): void {
   it("applies exact typed slash-argument value on Enter even when first item is highlighted", async () => {
     const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-    // Mock provider for /argtest command with argument completions
     const mockProvider: AutocompleteProvider = {
       getSuggestions: (lines, _cursorLine, cursorCol) => {
         const text = lines[0] || "";
         const beforeCursor = text.slice(0, cursorCol);
 
-        // Check if we're in argument completion context: "/argtest <prefix>"
         const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/u);
         if (argtestMatch) {
           const argumentText = argtestMatch[1]!;
@@ -119,7 +111,6 @@ function autocompleteCases12(): void {
             { value: "two", label: "two" },
             { value: "three", label: "three" },
           ];
-          // Return all arguments that start with the typed prefix
           const filtered = allArguments.filter((arg) => arg.value.startsWith(argumentText));
           if (filtered.length > 0) {
             return Promise.resolve({ items: filtered, prefix: argumentText });
@@ -132,17 +123,14 @@ function autocompleteCases12(): void {
 
     editor.setAutocompleteProvider(mockProvider);
 
-    // Type "/argtest two"
     typeText(editor, "/argtest two");
 
     assert.strictEqual(editor.getText(), "/argtest two");
     await flushAutocomplete();
     assert.strictEqual(editor.isShowingAutocomplete(), true);
 
-    // Press Enter - should apply the exact typed value "two", not the first item
     editor.handleInput("\r");
 
-    // The exact typed value "two" should be retained
     assert.strictEqual(editor.getText(), "/argtest two");
   });
 }
@@ -157,13 +145,11 @@ function autocompleteCases13(): void {
   it("selects first prefix match on Enter when typed arg is not exact match", async () => {
     const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-    // Mock provider for /argtest command with argument completions
     const mockProvider: AutocompleteProvider = {
       getSuggestions: (lines, _cursorLine, cursorCol) => {
         const text = lines[0] || "";
         const beforeCursor = text.slice(0, cursorCol);
 
-        // Check if we're in argument completion context
         const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/u);
         if (argtestMatch) {
           const argumentText = argtestMatch[1]!;
@@ -172,7 +158,6 @@ function autocompleteCases13(): void {
             { value: "three", label: "three" },
             { value: "twelve", label: "twelve" },
           ];
-          // Return all items that start with the typed prefix
           const filtered = allArguments.filter((arg) => arg.value.startsWith(argumentText));
           if (filtered.length > 0) {
             return Promise.resolve({ items: filtered, prefix: argumentText });
@@ -185,13 +170,11 @@ function autocompleteCases13(): void {
 
     editor.setAutocompleteProvider(mockProvider);
 
-    // Type "/argtest t" - filtered to [two, three, twelve], prefix "t" matches "two" first
     typeText(editor, "/argtest t");
 
     await flushAutocomplete();
     assert.strictEqual(editor.isShowingAutocomplete(), true);
 
-    // Press Enter - "t" prefix matches "two" (first in list), so "two" is applied
     editor.handleInput("\r");
     assert.strictEqual(editor.getText(), "/argtest two");
   });

@@ -4,35 +4,15 @@ import { describe, it } from "node:test";
 describe("Bug regression: isImageLine() crash with image escape sequences", () => {
   describe("Bug scenario: Terminal without image support", () => {
     it("old implementation would return false, causing crash", () => {
-      /*
-       * OLD IMPLEMENTATION (buggy):
-       * ```typescript
-       * export function isImageLine(line: string): boolean {
-       *   const prefix = getImageEscapePrefix();
-       *   return prefix !== null && line.startsWith(prefix);
-       * }
-       * ```
-       *
-       * When terminal doesn't support images:
-       * - getImageEscapePrefix() returns null
-       * - isImageLine() returns false even for lines containing image sequences
-       * - TUI performs width check on line containing 300KB+ of base64 data
-       * - Crash: "Rendered line exceeds terminal width (304401 > 115)"
-       */
-
-      // Simulate old implementation behavior
       const oldIsImageLine = (line: string, imageEscapePrefix: string | null): boolean => {
         return imageEscapePrefix !== null && line.startsWith(imageEscapePrefix);
       };
 
-      // When terminal doesn't support images, prefix is null
       const terminalWithoutImageSupport = null;
 
-      // Line containing image escape sequence with text before it (common bug scenario)
       const lineWithImageSequence =
         "Read image file [image/jpeg]\x1b]1337;File=size=800,600;inline=1:base64data...\x07";
 
-      // Old implementation would return false (BUG!)
       const oldResult = oldIsImageLine(lineWithImageSequence, terminalWithoutImageSupport);
       assert.strictEqual(
         oldResult,
@@ -48,11 +28,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("new implementation returns true correctly", async () => {
       const { isImageLine } = await import("../src/terminal-image.ts");
 
-      // Line containing image escape sequence with text before it
       const lineWithImageSequence =
         "Read image file [image/jpeg]\x1b]1337;File=size=800,600;inline=1:base64data...\x07";
 
-      // New implementation should return true (FIX!)
       const newResult = isImageLine(lineWithImageSequence);
       assert.strictEqual(
         newResult,
@@ -69,7 +47,6 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
         "Prefix \x1b_Ga=T,data...\x1b\\",
         "Suffix text \x1b_Ga=T,data...\x1b\\ suffix",
         "Middle \x1b_Ga=T,data...\x1b\\ more text",
-        // Very long line (simulating 300KB+ crash scenario)
         `Text before \x1b_Ga=T,f=100${"A".repeat(300000)} text after`,
       ];
 
@@ -94,7 +71,6 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
         "Prefix \x1b]1337;File=inline=1:data==\x07",
         "Suffix text \x1b]1337;File=inline=1:data==\x07 suffix",
         "Middle \x1b]1337;File=inline=1:data==\x07 more text",
-        // Very long line (simulating 304KB crash scenario)
         `Text before \x1b]1337;File=size=800,600;inline=1:${"B".repeat(300000)} text after`,
       ];
 
@@ -111,28 +87,9 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
 
 describe("Bug regression: isImageLine() crash with image escape sequences", () => {
   describe("Integration: Tool execution scenario", () => {
-    /**
-     * This simulates what happens when the `read` tool reads an image file.
-     * The tool result contains both text and image content:
-     *
-     * ```typescript
-     * {
-     *   content: [
-     *     { type: "text", text: "Read image file [image/jpeg]\n800x600" },
-     *     { type: "image", data: "base64...", mimeType: "image/jpeg" }
-     *   ]
-     * }
-     * ```
-     *
-     * When this is rendered, the image component creates escape sequences.
-     * If isImageLine() doesn't detect them, TUI crashes.
-     */
-
     it("detects image sequences in read tool output", async () => {
       const { isImageLine } = await import("../src/terminal-image.ts");
 
-      // Simulate output when read tool processes an image
-      // The line might have text from the read result plus the image escape sequence
       const toolOutputLine =
         "Read image file [image/jpeg]\x1b]1337;File=size=800,600;inline=1:base64image...\x07";
 
@@ -150,7 +107,6 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("detects Kitty sequences from Image component", async () => {
       const { isImageLine } = await import("../src/terminal-image.ts");
 
-      // Kitty image component creates multi-line output with escape sequences
       const kittyLine = "\x1b_Ga=T,f=100,t=f,d=base64data...\x1b\\\x1b_Gm=i=1;\x1b\\";
 
       assert.strictEqual(
@@ -163,7 +119,6 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("handles ANSI codes before image sequences", async () => {
       const { isImageLine } = await import("../src/terminal-image.ts");
 
-      // Line might have styling (error, warning, etc.) before image data
       const lines = [
         "\x1b[31mError\x1b[0m: \x1b]1337;File=inline=1:base64==\x07",
         "\x1b[33mWarning\x1b[0m: \x1b_Ga=T,data...\x1b\\",
@@ -186,29 +141,13 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("does NOT crash on very long lines with image sequences", async () => {
       const { isImageLine } = await import("../src/terminal-image.ts");
 
-      /**
-       * Simulate the exact crash scenario:
-       * - Line is 304,401 characters (the crash log showed 58649 > 115)
-       * - Contains image escape sequence somewhere in the middle
-       * - Old implementation would return false, causing TUI to do width check
-       * - New implementation returns true, skipping width check (preventing crash)
-       */
-
       const base64Char = "A".repeat(100);
       const iterm2Sequence = "\x1b]1337;File=size=800,600;inline=1:";
 
-      // Build a line that would cause the crash
-      const crashLine =
-        "Output: " +
-        iterm2Sequence +
-        // ~304,000 chars
-        base64Char.repeat(3040) +
-        " end of output";
+      const crashLine = "Output: " + iterm2Sequence + base64Char.repeat(3040) + " end of output";
 
-      // Verify line is very long
       assert(crashLine.length > 300000, "Test line should be > 300KB");
 
-      // New implementation should detect it (prevents crash)
       const detected = isImageLine(crashLine);
       assert.strictEqual(
         detected,
@@ -223,11 +162,6 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
   describe("Crash scenario simulation", () => {
     it("handles lines exactly matching crash log dimensions", async () => {
       const { isImageLine } = await import("../src/terminal-image.ts");
-
-      /**
-       * Crash log showed: line 58649 chars wide, terminal width 115
-       * Let's create a line with similar characteristics
-       */
 
       const targetWidth = 58649;
       const prefix = "Text";

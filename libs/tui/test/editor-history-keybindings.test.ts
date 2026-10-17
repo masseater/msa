@@ -26,21 +26,17 @@ describe("Editor prompt history keybindings", () => {
     editor.handleInput("\x1b[D");
     editor.handleInput("\x1b[D");
 
-    // Ctrl+P
     editor.handleInput("\x10");
     assert.strictEqual(editor.getText(), "newer\nmultiline prompt");
     assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-    // Ctrl+P
     editor.handleInput("\x10");
     assert.strictEqual(editor.getText(), "older prompt");
 
-    // Ctrl+N
     editor.handleInput("\x0e");
     assert.strictEqual(editor.getText(), "newer\nmultiline prompt");
     assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 16 });
 
-    // Ctrl+N
     editor.handleInput("\x0e");
     assert.strictEqual(editor.getText(), "draft");
     assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });

@@ -99,7 +99,6 @@ describe("CombinedAutocompleteProvider slash-command filter", () => {
 });
 
 describe("CombinedAutocompleteProvider slash-command filter", () => {
-  // Regression test for #9944.
   it("lists skills while typing the skill prefix", async () => {
     const items = await suggestionsFor("skill");
     assert.deepStrictEqual(

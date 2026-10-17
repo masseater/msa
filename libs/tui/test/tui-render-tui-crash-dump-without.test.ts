@@ -20,10 +20,6 @@ import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("TUI crash dump without configured log directory", () => {
   it("writes the crash dump to the OS temp directory instead of a home-directory default", async () => {
-    // The TUI falls back to os.tmpdir() when no log directory is configured, so
-    // isolate the test by pointing the temp directory at a fresh directory rather
-    // than sharing the real one with concurrent test runs. os.tmpdir() reads
-    // TMPDIR on POSIX and TEMP/TMP on Windows, so override all three.
     const crashDir = mkdtempSync(join(tmpdir(), "msa-tui-crash-"));
     const crashLogPath = join(crashDir, "msa-tui-crash.log");
     const restoreTmpdirEnv = overrideEnv(["TMPDIR", "TEMP", "TMP"], crashDir);
@@ -36,7 +32,6 @@ describe("TUI crash dump without configured log directory", () => {
       tui.start();
       await terminal.waitForRender();
 
-      // Width overflow is detected in the differential render path
       component.lines = ["ok", "x".repeat(60)];
       assert.throws(
         () => tui.renderNow(),

@@ -65,11 +65,9 @@ describe("TUI resize handling", () => {
 
     const initialRedraws = tui.fullRedraws;
 
-    // Resize width
     terminal.resize(60, 10);
     await terminal.waitForRender();
 
-    // Should have triggered a full redraw
     assert.ok(tui.fullRedraws > initialRedraws, "Width change should trigger full redraw");
 
     tui.stop();
@@ -80,30 +78,25 @@ describe("TUI content shrinkage", () => {
   it("clears empty rows when content shrinks significantly", async () => {
     const terminal = new VirtualTerminal(40, 10);
     const tui: TUI = new TuiMainScreen(terminal);
-    // Explicitly enable (may be disabled via env var)
     tui.setClearOnShrink(true);
     const component = new TestComponent();
     tui.addChild(component);
 
-    // Start with many lines
     component.lines = ["Line 0", "Line 1", "Line 2", "Line 3", "Line 4", "Line 5"];
     tui.start();
     await terminal.waitForRender();
 
     const initialRedraws = tui.fullRedraws;
 
-    // Shrink to fewer lines
     component.lines = ["Line 0", "Line 1"];
     tui.requestRender();
     await terminal.waitForRender();
 
-    // Should have triggered a full redraw to clear empty rows
     assert.ok(tui.fullRedraws > initialRedraws, "Content shrinkage should trigger full redraw");
 
     const viewport = terminal.getViewport();
     assert.ok(viewport[0]?.includes("Line 0"), "First line preserved");
     assert.ok(viewport[1]?.includes("Line 1"), "Second line preserved");
-    // Lines below should be empty (cleared)
     assert.strictEqual(viewport[2]?.trim(), "", "Line 2 should be cleared");
     assert.strictEqual(viewport[3]?.trim(), "", "Line 3 should be cleared");
 
@@ -115,7 +108,6 @@ describe("TUI content shrinkage", () => {
   it("handles shrink to single line", async () => {
     const terminal = new VirtualTerminal(40, 10);
     const tui: TUI = new TuiMainScreen(terminal);
-    // Explicitly enable (may be disabled via env var)
     tui.setClearOnShrink(true);
     const component = new TestComponent();
     tui.addChild(component);
@@ -124,7 +116,6 @@ describe("TUI content shrinkage", () => {
     tui.start();
     await terminal.waitForRender();
 
-    // Shrink to single line
     component.lines = ["Only line"];
     tui.requestRender();
     await terminal.waitForRender();
@@ -141,7 +132,6 @@ describe("TUI content shrinkage", () => {
   it("handles shrink to empty", async () => {
     const terminal = new VirtualTerminal(40, 10);
     const tui: TUI = new TuiMainScreen(terminal);
-    // Explicitly enable (may be disabled via env var)
     tui.setClearOnShrink(true);
     const component = new TestComponent();
     tui.addChild(component);
@@ -150,13 +140,11 @@ describe("TUI content shrinkage", () => {
     tui.start();
     await terminal.waitForRender();
 
-    // Shrink to empty
     component.lines = [];
     tui.requestRender();
     await terminal.waitForRender();
 
     const viewport = terminal.getViewport();
-    // All lines should be empty
     assert.strictEqual(viewport[0]?.trim(), "", "Line 0 should be cleared");
     assert.strictEqual(viewport[1]?.trim(), "", "Line 1 should be cleared");
 
@@ -171,24 +159,19 @@ describe("TUI differential rendering", () => {
     const component = new TestComponent();
     tui.addChild(component);
 
-    // Initial render: 5 identical lines
     component.lines = ["Line 0", "Line 1", "Line 2", "Line 3", "Line 4"];
     tui.start();
     await terminal.waitForRender();
 
-    // Shrink to 3 lines, all identical to before (no content changes in remaining lines)
     component.lines = ["Line 0", "Line 1", "Line 2"];
     tui.requestRender();
     await terminal.waitForRender();
 
-    // cursorRow should be 2 (last line of new content)
-    // Verify by doing another render with a change on line 1
     component.lines = ["Line 0", "CHANGED", "Line 2"];
     tui.requestRender();
     await terminal.waitForRender();
 
     const viewport = terminal.getViewport();
-    // Line 1 should show "CHANGED", proving cursor tracking was correct
     assert.ok(
       viewport[1]?.includes("CHANGED"),
       `Expected "CHANGED" on line 1, got: ${viewport[1]}`,
@@ -205,12 +188,10 @@ describe("TUI differential rendering", () => {
     const component = new TestComponent();
     tui.addChild(component);
 
-    // Initial render
     component.lines = ["Header", "Working...", "Footer"];
     tui.start();
     await terminal.waitForRender();
 
-    // Simulate spinner animation - only middle line changes
     const spinnerFrames = ["|", "/", "-", "\\"];
     for await (const frame of spinnerFrames) {
       component.lines = ["Header", `Working ${frame}`, "Footer"];

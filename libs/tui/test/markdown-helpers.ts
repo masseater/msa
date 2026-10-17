@@ -5,7 +5,6 @@ import { Chalk } from "chalk";
 
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
-// Force full color in CI so ANSI assertions are deterministic
 export const chalk = new Chalk({ level: 3 });
 
 export function getCell(terminal: VirtualTerminal, row: number, col: number) {

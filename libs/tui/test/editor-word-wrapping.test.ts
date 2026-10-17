@@ -16,14 +16,11 @@ describe("Editor component", () => {
       editor.setText("Word1 Word2 Word3 Word4 Word5 Word6");
       const lines = editor.render(width);
 
-      // Get content lines (between borders)
       const contentLines = lines.slice(1, -1);
 
-      // No line should start with whitespace (except for padding at the end)
       for (let i = 0; i < contentLines.length; i++) {
         const line = stripVTControlCharacters(contentLines[i]!);
         const trimmedStart = line.trimStart();
-        // The line should either be all padding or start with a word character
         if (trimmedStart.length > 0) {
           assert.ok(
             !/^\s+\S/u.test(line.trimEnd()),
@@ -40,7 +37,6 @@ describe("Editor component", () => {
       editor.setText("Check https://example.com/very/long/path/that/exceeds/width here");
       const lines = editor.render(width);
 
-      // All lines should fit within width
       for (let i = 1; i < lines.length - 1; i++) {
         const lineWidth = visibleWidth(lines[i]!);
         assert.strictEqual(lineWidth, width, `Line ${i} has width ${lineWidth}, expected ${width}`);
@@ -59,7 +55,6 @@ describe("Editor component", () => {
       const lines = editor.render(width);
 
       const contentLine = stripVTControlCharacters(lines[1]!).trim();
-      // Multiple spaces should be preserved
       assert.ok(contentLine.includes("Word1   Word2"), "Multiple spaces should be preserved");
     });
 
@@ -70,19 +65,16 @@ describe("Editor component", () => {
       editor.setText("");
       const lines = editor.render(width);
 
-      // Should have border + empty content + border
       assert.strictEqual(lines.length, 3);
     });
 
     it("handles single word that fits exactly", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
-      // +1 col reserved for cursor
       const width = 10 + 1;
 
       editor.setText("1234567890");
       const lines = editor.render(width);
 
-      // Should have exactly 3 lines (top border, content, bottom border)
       assert.strictEqual(lines.length, 3);
       const contentLine = stripVTControlCharacters(lines[1]!);
       assert.ok(contentLine.includes("1234567890"), "Content should contain the word");
@@ -93,8 +85,6 @@ describe("Editor component", () => {
 describe("Editor component", () => {
   describe("Word wrapping", () => {
     it("wraps word to next line when it ends exactly at terminal width", () => {
-      // "hello " (6) + "world" (5) = 11, but "world" is non-whitespace ending at width.
-      // Thus, wrap it to next line. The trailing space stays with "hello" on line 1
       const chunks = wordWrapLine("hello world test", 11);
 
       assert.strictEqual(chunks.length, 2);
@@ -103,8 +93,6 @@ describe("Editor component", () => {
     });
 
     it("keeps whitespace at terminal width boundary on same line", () => {
-      // "hello world " is exactly 12 chars (including trailing space)
-      // The space at position 12 should stay on the first line
       const chunks = wordWrapLine("hello world test", 12);
 
       assert.strictEqual(chunks.length, 2);
@@ -198,9 +186,6 @@ describe("Editor component", () => {
     });
 
     it("force-breaks when wide char after word boundary wrap still overflows", () => {
-      // " " (1) + "a"*186 (186) + "你" (2) = 189 visible width
-      // maxWidth = 187: backtracking to the space would leave 186 + 2 = 188 > 187,
-      // so the algorithm must force-break before the wide char instead.
       const line = ` ${"a".repeat(186)}你`;
       const chunks = wordWrapLine(line, 187);
 
@@ -210,7 +195,6 @@ describe("Editor component", () => {
           `chunk "${chunk.text.slice(0, 20)}..." has visible width ${visibleWidth(chunk.text)}, expected <= 187`,
         );
       }
-      // Verify no content is lost
       const reconstructed = chunks.map((c) => line.slice(c.startIndex, c.endIndex)).join("");
       assert.strictEqual(reconstructed, line);
     });
@@ -220,8 +204,6 @@ describe("Editor component", () => {
 describe("Editor component", () => {
   describe("Word wrapping", () => {
     it("splits oversized atomic segment across multiple chunks", () => {
-      // Simulate a paste marker wider than maxWidth by passing pre-segmented data
-      // 21 chars
       const marker = "[paste #1 +20 lines]";
       const line = `A${marker}B`;
       const segments: Intl.SegmentData[] = [
@@ -232,7 +214,6 @@ describe("Editor component", () => {
 
       const chunks = wordWrapLine(line, 10, segments);
 
-      // Every chunk must fit within maxWidth
       for (const chunk of chunks) {
         assert.ok(
           visibleWidth(chunk.text) <= 10,
@@ -240,7 +221,6 @@ describe("Editor component", () => {
         );
       }
 
-      // Verify no content is lost
       const reconstructed = chunks.map((c) => line.slice(c.startIndex, c.endIndex)).join("");
       assert.strictEqual(reconstructed, line);
     });

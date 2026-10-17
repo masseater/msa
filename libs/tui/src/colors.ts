@@ -20,7 +20,6 @@ export interface OklchColorValue {
   readonly h: number;
 }
 
-/** A concrete color. Every color can be converted to sRGB, so color math never fails. */
 export type Color = IndexedColor | RgbColorValue | OklchColorValue;
 export type TerminalColorMode = "256color" | "truecolor";
 export type ColorMixSpace = "oklch" | "srgb";
@@ -31,10 +30,6 @@ export interface OklchChannels {
   h: number;
 }
 
-/**
- * OKHSL channels: hue in degrees, saturation and lightness 0-1. Saturation is relative to the most the
- * sRGB gamut allows at that hue and lightness, so every value is in gamut.
- */
 export interface OkhslChannels {
   h: number;
   s: number;
@@ -98,15 +93,6 @@ const OKHSL_PATTERN = new RegExp(
   "u",
 );
 
-/**
- * An OKHSL color, converted to sRGB. Saturation is relative to the sRGB gamut at the hue and lightness,
- * so equal saturation looks equally colorful across hues and lightness.
- *
- * @param {number} h - Hue in degrees.
- * @param {number} s - Saturation, 0-1.
- * @param {number} l - Lightness, 0-1.
- * @returns {RgbColorValue} The color as sRGB.
- */
 export function okhslColor(h: number, s: number, l: number): RgbColorValue {
   requireFinite(h, "h");
   requireFinite(s, "s");
@@ -201,7 +187,6 @@ function isInSrgbGamut(linear: number[]): boolean {
 }
 
 function oklchToRgb({ l, c, h }: OklchChannels): RgbColor {
-  // Gamut mapping keeps the hue fixed, so its direction is computed once and scaled by chroma.
   const radians = (h * Math.PI) / 180;
   const cos = Math.cos(radians);
   const sin = Math.sin(radians);
@@ -210,8 +195,6 @@ function oklchToRgb({ l, c, h }: OklchChannels): RgbColor {
   const direct = atChroma(c);
   if (isInSrgbGamut(direct)) return linearSrgbToRgb(direct);
 
-  // Reduce chroma until the color fits. The achromatic color is always in gamut, so it is the
-  // fallback when no bisection step fits, e.g. `oklch(100% 0.3 150)` must map to white.
   let linear = atChroma(0);
   let low = 0;
   let high = c;
@@ -348,23 +331,12 @@ export function styleText(text: string, options: TextStyle, mode: TerminalColorM
   );
 }
 
-/**
- * Like `styleText()`, but with precomputed color escape sequences, e.g. cached theme colors.
- * Colors in `options` are ignored.
- *
- * @param {string} text - The text to style.
- * @param {string | undefined} fgAnsi - Foreground color escape sequence.
- * @param {string | undefined} bgAnsi - Background color escape sequence.
- * @param {TextAttributes} options - Text attributes.
- * @returns {string} The styled text.
- */
 export function styleTextWithAnsi(
   text: string,
   fgAnsi: string | undefined,
   bgAnsi: string | undefined,
   options: TextAttributes,
 ): string {
-  // Resets are prepended so they close in reverse order of the opening sequences.
   let prefix = "";
   let suffix = "";
   if (fgAnsi) {

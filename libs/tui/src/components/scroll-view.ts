@@ -15,7 +15,6 @@ export interface ScrollViewOptions {
 }
 
 export interface ScrollViewScrollToOptions {
-  /** Keep follow-end disabled even when the target is the current content end. */
   disableFollow?: boolean;
 }
 

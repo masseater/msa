@@ -13,8 +13,6 @@ describe("Markdown component", () => {
 
 function listsCases1(): void {
   it("should maintain numbering when code blocks are not indented (LLM output)", () => {
-    // When code blocks aren't indented, marked parses each item as a separate list.
-    // We use token.start to preserve the original numbering.
     const markdown = new Markdown(
       `1. First item
 
@@ -37,17 +35,14 @@ function listsCases1(): void {
     const lines = markdown.render(80);
     const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trim());
 
-    // Find all lines that start with a number and period
     const numberedLines = plainLines.filter((line) => /^\d+\./u.test(line));
 
-    // Should have 3 numbered items
     assert.strictEqual(
       numberedLines.length,
       3,
       `Expected 3 numbered items, got: ${numberedLines.join(", ")}`,
     );
 
-    // Check the actual numbers
     assert.ok(
       numberedLines[0]?.startsWith("1."),
       `First item should be "1.", got: ${numberedLines[0]}`,
@@ -182,12 +177,10 @@ describe("Markdown component", () => {
       const lines = markdown.render(80);
       const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
-      // Check table structure
       assert.ok(plainLines.some((line) => line.includes("Name")));
       assert.ok(plainLines.some((line) => line.includes("Age")));
       assert.ok(plainLines.some((line) => line.includes("Alice")));
       assert.ok(plainLines.some((line) => line.includes("Bob")));
-      // Check for table borders
       assert.ok(plainLines.some((line) => line.includes("│")));
       assert.ok(plainLines.some((line) => line.includes("─")));
     });

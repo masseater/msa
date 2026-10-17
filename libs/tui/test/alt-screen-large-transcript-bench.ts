@@ -1,22 +1,3 @@
-/**
- * Alternate-screen large-transcript benchmark.
- *
- * Mirrors the fullscreen transcript shape used by the coding agent:
- *
- * ScrollView
- * └── document Container
- *     ├── header Container
- *     ├── resources Container
- *     └── chat Container
- *         └── 2,500 alternating user/assistant Markdown components
- *
- * Measures warm steady frames, one-line scrolling, streaming updates to the
- * final assistant message, and width changes that invalidate Markdown caches.
- *
- * Run from the repository root:
- *   node --experimental-strip-types libs/tui/test/alt-screen-large-transcript-bench.ts
- */
-
 import { performance } from "node:perf_hooks";
 
 import { Markdown, type MarkdownTheme } from "../src/components/markdown.ts";

@@ -10,14 +10,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -26,13 +24,11 @@ describe("StdinBuffer", () => {
     beforeEach(() => {
       buffer = new StdinBuffer({ timeout: 10 });
 
-      // Collect emitted sequences
       emittedSequences = [];
       buffer.on("data", (sequence) => {
         emittedSequences.push(sequence);
       });
 
-      // Collect paste events
       emittedPaste = [];
       buffer.on("paste", (data) => {
         emittedPaste.push(data);
@@ -53,14 +49,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -69,13 +63,11 @@ describe("StdinBuffer", () => {
     beforeEach(() => {
       buffer = new StdinBuffer({ timeout: 10 });
 
-      // Collect emitted sequences
       emittedSequences = [];
       buffer.on("data", (sequence) => {
         emittedSequences.push(sequence);
       });
 
-      // Collect paste events
       emittedPaste = [];
       buffer.on("paste", (data) => {
         emittedPaste.push(data);
@@ -96,14 +88,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -120,10 +110,8 @@ describe("StdinBuffer", () => {
       processInput("\x1b[<35");
       buffer.destroy();
 
-      // Wait longer than timeout
       await wait(15);
 
-      // Should not have emitted anything
       assert.deepStrictEqual(emittedSequences, []);
     });
   });

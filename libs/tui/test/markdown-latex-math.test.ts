@@ -88,7 +88,6 @@ describe("Markdown component", () => {
 describe("Markdown component", () => {
   describe("Pre-styled text (thinking traces)", () => {
     it("should preserve gray italic styling after inline code", () => {
-      // This replicates how thinking content is rendered in assistant-message.ts
       const markdown = new Markdown(
         "This is thinking with `inline code` and more text after",
         1,
@@ -103,14 +102,11 @@ describe("Markdown component", () => {
       const lines = markdown.render(80);
       const joinedOutput = lines.join("\n");
 
-      // Should contain the inline code block
       assert.ok(joinedOutput.includes("inline code"));
 
-      // The output should have ANSI codes for gray (90) and italic (3)
       assert.ok(joinedOutput.includes("\x1b[90m"), "Should have gray color code");
       assert.ok(joinedOutput.includes("\x1b[3m"), "Should have italic code");
 
-      // Verify that inline code is styled (theme uses yellow)
       const hasCodeColor = joinedOutput.includes("\x1b[33m");
       assert.ok(hasCodeColor, "Should style inline code");
     });
@@ -134,14 +130,11 @@ describe("Markdown component", () => {
       const lines = markdown.render(80);
       const joinedOutput = lines.join("\n");
 
-      // Should contain bold text
       assert.ok(joinedOutput.includes("bold text"));
 
-      // The output should have ANSI codes for gray (90) and italic (3)
       assert.ok(joinedOutput.includes("\x1b[90m"), "Should have gray color code");
       assert.ok(joinedOutput.includes("\x1b[3m"), "Should have italic code");
 
-      // Should have bold codes (1 or 22 for bold on/off)
       assert.ok(joinedOutput.includes("\x1b[1m"), "Should have bold code");
     });
   });

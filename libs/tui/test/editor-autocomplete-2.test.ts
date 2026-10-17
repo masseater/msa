@@ -111,18 +111,14 @@ describe("Editor component", () => {
 
       editor.setAutocompleteProvider(mockProvider);
 
-      // Type "Work"
       typeText(editor, "Work");
       assert.strictEqual(editor.getText(), "Work");
 
-      // Press Tab - should auto-apply without showing menu
       editor.handleInput("\t");
       await flushAutocomplete();
       assert.strictEqual(editor.getText(), "Workspace/");
       assert.strictEqual(editor.isShowingAutocomplete(), false);
 
-      // Undo should restore to "Work"
-      // Ctrl+- (undo)
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "Work");
     });
@@ -162,17 +158,14 @@ function autocompleteCases9(): void {
 
     editor.setAutocompleteProvider(mockProvider);
 
-    // Type "src"
     typeText(editor, "src");
     assert.strictEqual(editor.getText(), "src");
 
-    // Press Tab - should show menu because there are multiple suggestions
     editor.handleInput("\t");
     await flushAutocomplete();
     assert.strictEqual(editor.getText(), "src");
     assert.strictEqual(editor.isShowingAutocomplete(), true);
 
-    // Press Tab again to accept first suggestion
     editor.handleInput("\t");
     assert.strictEqual(editor.getText(), "src/");
     assert.strictEqual(editor.isShowingAutocomplete(), false);
@@ -220,24 +213,20 @@ function autocompleteCases10(): void {
 
     editor.setAutocompleteProvider(mockProvider);
 
-    // Press Tab on empty prompt - should show all files (force mode)
     editor.handleInput("\t");
     await flushAutocomplete();
     assert.strictEqual(editor.isShowingAutocomplete(), true);
 
-    // Type "r" - should narrow to "readme.md" (force mode keeps suggestions open)
     editor.handleInput("r");
     await flushAutocomplete();
     assert.strictEqual(editor.getText(), "r");
     assert.strictEqual(editor.isShowingAutocomplete(), true);
 
-    // Type "e" - should still show "readme.md"
     editor.handleInput("e");
     await flushAutocomplete();
     assert.strictEqual(editor.getText(), "re");
     assert.strictEqual(editor.isShowingAutocomplete(), true);
 
-    // Accept with Tab
     editor.handleInput("\t");
     assert.strictEqual(editor.getText(), "readme.md");
     assert.strictEqual(editor.isShowingAutocomplete(), false);

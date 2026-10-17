@@ -6,7 +6,6 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
     it("does not detect images in regular long text", async () => {
       const { isImageLine } = await import("../src/terminal-image.ts");
 
-      // Very long line WITHOUT image sequences
       const longText = "A".repeat(100000);
 
       assert.strictEqual(

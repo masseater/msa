@@ -39,9 +39,7 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
       ...flags,
       "-shared",
       "-fPIC",
-      // Match the prebuild's unversioned system-library imports.
       "-nostdlib",
-      // Inline the fixture's allocation counters.
       ...(process.arch === "arm64" ? ["-mno-outline-atomics"] : []),
       "-Wl,-z,nodelete",
       join(fixtures, "clipboard-worker-test.c"),
@@ -89,9 +87,7 @@ function nativeLinuxClipboardCases1(): void {
       ...flags,
       "-shared",
       "-fPIC",
-      // Match the prebuild's unversioned system-library imports.
       "-nostdlib",
-      // Inline the fixture's allocation counters.
       ...(process.arch === "arm64" ? ["-mno-outline-atomics"] : []),
       "-Wl,-z,nodelete",
       join(fixtures, "clipboard-worker-test.c"),
@@ -143,9 +139,7 @@ function nativeLinuxClipboardCases2(): void {
       ...flags,
       "-shared",
       "-fPIC",
-      // Match the prebuild's unversioned system-library imports.
       "-nostdlib",
-      // Inline the fixture's allocation counters.
       ...(process.arch === "arm64" ? ["-mno-outline-atomics"] : []),
       "-Wl,-z,nodelete",
       join(fixtures, "clipboard-worker-test.c"),
@@ -164,9 +158,7 @@ function nativeLinuxClipboardCases2(): void {
       const server = createServer((socket) => {
         connections++;
         sockets.add(socket);
-        // Accept setup bytes without replying.
         socket.on("data", () => {});
-        // libxcb owns setup blocking; release it after checking the JS timer.
         const timer = setTimeout(() => socket.destroy(), 300);
         t.after(() => clearTimeout(timer));
         socket.on("close", () => sockets.delete(socket));
@@ -223,9 +215,7 @@ function nativeLinuxClipboardCases3(): void {
       ...flags,
       "-shared",
       "-fPIC",
-      // Match the prebuild's unversioned system-library imports.
       "-nostdlib",
-      // Inline the fixture's allocation counters.
       ...(process.arch === "arm64" ? ["-mno-outline-atomics"] : []),
       "-Wl,-z,nodelete",
       join(fixtures, "clipboard-worker-test.c"),

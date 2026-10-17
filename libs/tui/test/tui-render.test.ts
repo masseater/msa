@@ -24,7 +24,6 @@ describe("TUI render scheduling", () => {
     tui.renderNow();
     const renderCountBeforeInput = component.renderCount;
 
-    // Queue a normal throttled render first. Keyboard input should preempt it.
     component.lines = ["pending"];
     tui.requestRender();
     terminal.sendInput("first");

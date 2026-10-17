@@ -16,20 +16,6 @@ function pasteMarkerAtomicBehaviorCases20(): void {
     const tui = createTestTUI(20, 24);
     const editor = new Editor(tui, defaultEditorTheme);
 
-    // Build:
-    // Logical line 0: "abcdefgh" + marker(21 chars) + "ijklmnopqr"
-    // Logical line 1: "123456789012345678"
-    //
-    // Marker "[paste #1 +100 lines]" (21 chars) is wider than the
-    // terminal (20). Word-wrap splits at the space before "lines",
-    // producing:
-    //   VL1: abcdefgh              (startCol 0,  len 8)
-    //   VL2: [paste #1 +100        (startCol 8,  len 15) <- marker head
-    //   VL3: lines]ijklmnopqr      (startCol 23, len 16) <- marker tail + content
-    //   VL4: 123456789012345678    (line 1)
-    //
-    // On VL3 the marker tail "lines]" occupies visual cols 0-5.
-    // Content ("i") starts at visual col 6 = logical col 29.
     for (const ch of "abcdefgh") editor.handleInput(ch);
     const bigContent = "line\n".repeat(100).trimEnd();
     editor.handleInput(`\x1b[200~${bigContent}\x1b[201~`);
@@ -41,40 +27,26 @@ function pasteMarkerAtomicBehaviorCases20(): void {
     const text = editor.getText();
     const markerMatch = text.match(/\[paste #\d+ \+\d+ lines\]/u);
     assert.ok(markerMatch, "paste marker should be created");
-    // 21
     const markerLen = markerMatch[0].length;
     assert.ok(markerLen > 20, "marker should be wider than terminal");
     const markerStart = 8;
-    // 29
     const markerEnd = markerStart + markerLen;
 
-    // Navigate to line 0, col 6 (on "g"). Preferred col 6 is past the
-    // marker tail on VL3, so the cursor should land on content ("i" at
-    // col 29) without snapping back.
-    // Up to line 0
     editor.handleInput("\x1b[A");
-    // Ctrl+A (start of line)
     editor.handleInput("\x01");
-    // Right to col 6
     for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C");
     assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 });
 
-    // Down: cursor lands on paste marker start
     editor.handleInput("\x1b[B");
     assert.deepStrictEqual(editor.getCursor(), { line: 0, col: markerStart });
 
-    // Down again: preferred col 6 lands at VL3 col 29 ("i"), which is
-    // past the marker. Cursor stays on line 0.
     editor.handleInput("\x1b[B");
     assert.strictEqual(editor.getCursor().line, 0);
-    // col 29 = "i"
     assert.strictEqual(editor.getCursor().col, markerEnd);
 
-    // Up: back to paste marker
     editor.handleInput("\x1b[A");
     assert.deepStrictEqual(editor.getCursor(), { line: 0, col: markerStart });
 
-    // Up again: back to col 6 ("g")
     editor.handleInput("\x1b[A");
     assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 });
   });
@@ -91,14 +63,6 @@ function pasteMarkerAtomicBehaviorCases21(): void {
     const tui = createTestTUI(20, 24);
     const editor = new Editor(tui, defaultEditorTheme);
 
-    // Same layout. Start at col 3 ("d"). Preferred col 3 maps to VL3
-    // visual col 3 which is inside the "lines]" marker tail.
-    // moveToVisualLine detects the continuation VL and skips to VL4
-    // (line 1).
-    //   VL1: abcdefgh              (startCol 0,  len 8)
-    //   VL2: [paste #1 +100        (startCol 8,  len 15) <- marker head
-    //   VL3: lines]ijklmnopqr      (startCol 23, len 16) <- marker tail + content
-    //   VL4: 123456789012345678    (line 1)
     for (const ch of "abcdefgh") editor.handleInput(ch);
     const bigContent = "line\n".repeat(100).trimEnd();
     editor.handleInput(`\x1b[200~${bigContent}\x1b[201~`);
@@ -107,25 +71,18 @@ function pasteMarkerAtomicBehaviorCases21(): void {
     for (const ch of "123456789012345678") editor.handleInput(ch);
     editor.render(20);
 
-    // Navigate to line 0, col 3 (on "d")
-    // Up to line 0
     editor.handleInput("\x1b[A");
-    // Ctrl+A
     editor.handleInput("\x01");
     for (let i = 0; i < 3; i++) editor.handleInput("\x1b[C");
     assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
 
-    // Down: marker
     editor.handleInput("\x1b[B");
     assert.strictEqual(editor.getCursor().col, 8);
 
-    // Down: skips VL3 (col 3 in marker tail) and lands on line 1
     editor.handleInput("\x1b[B");
     assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 3 });
 
-    // Round-trip back
     editor.handleInput("\x1b[A");
-    // marker
     assert.strictEqual(editor.getCursor().col, 8);
     editor.handleInput("\x1b[A");
     assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });

@@ -16,7 +16,6 @@ function autocompleteCases14(): void {
   it("highlights unique prefix match as user types (before full exact match)", async () => {
     const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-    // Mock provider that returns all items unfiltered (like real extensions do)
     const mockProvider: AutocompleteProvider = {
       getSuggestions: (lines, _cursorLine, cursorCol) => {
         const text = lines[0] || "";
@@ -25,7 +24,6 @@ function autocompleteCases14(): void {
         const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/u);
         if (argtestMatch) {
           const argumentText = argtestMatch[1]!;
-          // Return all items - provider does not filter
           const allArguments = [
             { value: "one", label: "one" },
             { value: "two", label: "two" },
@@ -40,14 +38,12 @@ function autocompleteCases14(): void {
 
     editor.setAutocompleteProvider(mockProvider);
 
-    // Type "/argtest tw" - "tw" is a prefix of only "two"
     typeText(editor, "/argtest tw");
 
     assert.strictEqual(editor.getText(), "/argtest tw");
     await flushAutocomplete();
     assert.strictEqual(editor.isShowingAutocomplete(), true);
 
-    // Press Enter - "tw" uniquely matches "two", so "two" should be applied
     editor.handleInput("\r");
     assert.strictEqual(editor.getText(), "/argtest two");
   });
@@ -63,7 +59,6 @@ function autocompleteCases15(): void {
   it("selects first prefix match when multiple items match", async () => {
     const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-    // Mock provider that returns all items unfiltered
     const mockProvider: AutocompleteProvider = {
       getSuggestions: (lines, _cursorLine, cursorCol) => {
         const text = lines[0] || "";
@@ -86,13 +81,11 @@ function autocompleteCases15(): void {
 
     editor.setAutocompleteProvider(mockProvider);
 
-    // Type "/argtest t" - "t" is a prefix of both "two" and "three"
     typeText(editor, "/argtest t");
 
     await flushAutocomplete();
     assert.strictEqual(editor.isShowingAutocomplete(), true);
 
-    // Press Enter - "t" matches "two" first, so "two" is selected
     editor.handleInput("\r");
     assert.strictEqual(editor.getText(), "/argtest two");
   });
@@ -108,14 +101,11 @@ function autocompleteCases16(): void {
   it("works for built-in-style command argument completion path (model-like)", async () => {
     const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-    // Mock provider for /model command with model completions
     const mockProvider: AutocompleteProvider = {
       getSuggestions: (lines, _cursorLine, cursorCol) => {
         const text = lines[0] || "";
         const beforeCursor = text.slice(0, cursorCol);
 
-        // Check if we're in /model argument completion context
-        // Use [^ ]+ to match any non-space characters (including hyphens)
         const modelMatch = beforeCursor.match(/^\/model\s+(\S+)$/u);
         if (modelMatch) {
           const modelText = modelMatch[1]!;
@@ -124,7 +114,6 @@ function autocompleteCases16(): void {
             { value: "gpt-4o-mini", label: "gpt-4o-mini" },
             { value: "claude-sonnet", label: "claude-sonnet" },
           ];
-          // Return all models that start with the typed prefix
           const filtered = allModels.filter((m) => m.value.startsWith(modelText));
           if (filtered.length > 0) {
             return Promise.resolve({ items: filtered, prefix: modelText });
@@ -137,17 +126,14 @@ function autocompleteCases16(): void {
 
     editor.setAutocompleteProvider(mockProvider);
 
-    // Type "/model gpt-4o-mini" - exact match for second item in list
     typeText(editor, "/model gpt-4o-mini");
 
     assert.strictEqual(editor.getText(), "/model gpt-4o-mini");
     await flushAutocomplete();
     assert.strictEqual(editor.isShowingAutocomplete(), true);
 
-    // Press Enter - should retain exact typed value, not apply first highlighted item
     editor.handleInput("\r");
 
-    // The exact typed value should be retained
     assert.strictEqual(editor.getText(), "/model gpt-4o-mini");
   });
 }

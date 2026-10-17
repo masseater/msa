@@ -1522,18 +1522,9 @@ class LatexParser {
 }
 
 export interface RenderLatexOptions {
-  /** Stack fractions and operator limits vertically for display math (default: false). */
   display?: boolean;
 }
 
-/**
- * Render a basic LaTeX math expression as terminal-friendly Unicode text.
- * Returns undefined when the expression contains unsupported or malformed syntax.
- *
- * @param {string} source - The LaTeX source.
- * @param {RenderLatexOptions} options - Rendering options.
- * @returns {string | undefined} The rendered text, or undefined.
- */
 export function renderLatex(source: string, options: RenderLatexOptions = {}): string | undefined {
   const layoutNodes: LayoutNode[] = [];
   const rendered = new LatexParser(source, layoutNodes, options.display === true).render();

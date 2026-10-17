@@ -17,7 +17,6 @@ describe("TUI differential rendering", () => {
     tui.start();
     await terminal.waitForRender();
 
-    // Change only first line
     component.lines = ["CHANGED", "Line 1", "Line 2", "Line 3"];
     tui.requestRender();
     await terminal.waitForRender();
@@ -43,7 +42,6 @@ describe("TUI differential rendering", () => {
     tui.start();
     await terminal.waitForRender();
 
-    // Change only last line
     component.lines = ["Line 0", "Line 1", "Line 2", "CHANGED"];
     tui.requestRender();
     await terminal.waitForRender();
@@ -69,7 +67,6 @@ describe("TUI differential rendering", () => {
     tui.start();
     await terminal.waitForRender();
 
-    // Change lines 1 and 3, keep 0, 2, 4 the same
     component.lines = ["Line 0", "CHANGED 1", "Line 2", "CHANGED 3", "Line 4"];
     tui.requestRender();
     await terminal.waitForRender();
@@ -92,7 +89,6 @@ describe("TUI differential rendering", () => {
     const component = new TestComponent();
     tui.addChild(component);
 
-    // Start with content
     component.lines = ["Line 0", "Line 1", "Line 2"];
     tui.start();
     await terminal.waitForRender();
@@ -100,12 +96,10 @@ describe("TUI differential rendering", () => {
     let viewport = terminal.getViewport();
     assert.ok(viewport[0]?.includes("Line 0"), "Initial content rendered");
 
-    // Clear to empty
     component.lines = [];
     tui.requestRender();
     await terminal.waitForRender();
 
-    // Add content back - this should work correctly even after empty state
     component.lines = ["New Line 0", "New Line 1"];
     tui.requestRender();
     await terminal.waitForRender();

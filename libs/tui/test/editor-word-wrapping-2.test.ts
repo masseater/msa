@@ -9,7 +9,6 @@ import { defaultEditorTheme } from "./test-themes.ts";
 describe("Editor component", () => {
   describe("Word wrapping", () => {
     it("splits oversized atomic segment at start of line", () => {
-      // 21 chars
       const marker = "[paste #1 +20 lines]";
       const line = `${marker}B`;
       const segments: Intl.SegmentData[] = [
@@ -22,7 +21,6 @@ describe("Editor component", () => {
       for (const chunk of chunks) {
         assert.ok(visibleWidth(chunk.text) <= 10);
       }
-      // "B" ends up on the last line (either alone or with the marker tail)
       assert.strictEqual(chunks[chunks.length - 1]!.text.includes("B"), true);
 
       const reconstructed = chunks.map((c) => line.slice(c.startIndex, c.endIndex)).join("");
@@ -30,7 +28,6 @@ describe("Editor component", () => {
     });
 
     it("splits oversized atomic segment at end of line", () => {
-      // 21 chars
       const marker = "[paste #1 +20 lines]";
       const line = `A${marker}`;
       const segments: Intl.SegmentData[] = [
@@ -54,9 +51,7 @@ describe("Editor component", () => {
 describe("Editor component", () => {
   describe("Word wrapping", () => {
     it("splits consecutive oversized atomic segments", () => {
-      // 21 chars
       const m1 = "[paste #1 +20 lines]";
-      // 21 chars
       const m2 = "[paste #2 +30 lines]";
       const line = `${m1}${m2}`;
       const segments: Intl.SegmentData[] = [
@@ -82,7 +77,6 @@ describe("Editor component", () => {
 describe("Editor component", () => {
   describe("Word wrapping", () => {
     it("wraps normally after oversized atomic segment", () => {
-      // 21 chars
       const marker = "[paste #1 +20 lines]";
       const line = `${marker} hello world`;
       const segments: Intl.SegmentData[] = [
@@ -103,7 +97,6 @@ describe("Editor component", () => {
 
       const chunks = wordWrapLine(line, 10, segments);
 
-      // All chunks must fit
       for (const chunk of chunks) {
         assert.ok(
           visibleWidth(chunk.text) <= 10,
@@ -111,7 +104,6 @@ describe("Editor component", () => {
         );
       }
 
-      // Last chunk should contain "world" (normal wrapping resumes)
       assert.strictEqual(chunks[chunks.length - 1]!.text, "world");
 
       const reconstructed = chunks.map((c) => line.slice(c.startIndex, c.endIndex)).join("");
@@ -126,14 +118,10 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("foo bar baz");
-      // Ctrl+W - deletes "baz"
       editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "foo bar ");
 
-      // Move to beginning and yank
-      // Ctrl+A
       editor.handleInput("\x01");
-      // Ctrl+Y
       editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "bazfoo bar ");
     });
@@ -142,23 +130,17 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      // Move cursor to middle
-      // Ctrl+A (start)
       editor.handleInput("\x01");
-      // Right 5 times
       editor.handleInput("\x1b[C");
       editor.handleInput("\x1b[C");
       editor.handleInput("\x1b[C");
       editor.handleInput("\x1b[C");
       editor.handleInput("\x1b[C");
-      // After "hello "
       editor.handleInput("\x1b[C");
 
-      // Ctrl+U - deletes "hello "
       editor.handleInput("\x15");
       assert.strictEqual(editor.getText(), "world");
 
-      // Ctrl+Y
       editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "hello world");
     });
@@ -171,14 +153,11 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      // Ctrl+A (start)
       editor.handleInput("\x01");
-      // Ctrl+K - deletes "hello world"
       editor.handleInput("\x0b");
 
       assert.strictEqual(editor.getText(), "");
 
-      // Ctrl+Y
       editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "hello world");
     });
@@ -187,7 +166,6 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("test");
-      // Ctrl+Y
       editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "test");
     });
@@ -199,33 +177,24 @@ describe("Editor component", () => {
     it("Alt+Y cycles through kill ring after Ctrl+Y", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      // Create kill ring with multiple entries
       editor.setText("first");
-      // Ctrl+W - deletes "first"
       editor.handleInput("\x17");
       editor.setText("second");
-      // Ctrl+W - deletes "second"
       editor.handleInput("\x17");
       editor.setText("third");
-      // Ctrl+W - deletes "third"
       editor.handleInput("\x17");
 
-      // Kill ring now has: [first, second, third]
       assert.strictEqual(editor.getText(), "");
 
-      // Ctrl+Y - yanks "third" (most recent)
       editor.handleInput("\x19");
       assert.strictEqual(editor.getText(), "third");
 
-      // Alt+Y - cycles to "second"
       editor.handleInput("\x1by");
       assert.strictEqual(editor.getText(), "second");
 
-      // Alt+Y - cycles to "first"
       editor.handleInput("\x1by");
       assert.strictEqual(editor.getText(), "first");
 
-      // Alt+Y - cycles back to "third"
       editor.handleInput("\x1by");
       assert.strictEqual(editor.getText(), "third");
     });

@@ -10,14 +10,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -38,7 +36,6 @@ describe("StdinBuffer", () => {
       processInput("\x1b[<35");
       assert.deepStrictEqual(emittedSequences, []);
 
-      // Wait for timeout to flush
       await wait(15);
 
       assert.deepStrictEqual(emittedSequences, ["\x1b[<35"]);
@@ -52,14 +49,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -87,14 +82,12 @@ function bracketedPasteCases2(): void {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -102,13 +95,11 @@ function bracketedPasteCases2(): void {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
 
-    // Collect paste events
     emittedPaste = [];
     buffer.on("paste", (data) => {
       emittedPaste.push(data);
@@ -122,7 +113,6 @@ function bracketedPasteCases2(): void {
     processInput(pasteStart + content + pasteEnd);
 
     assert.deepStrictEqual(emittedPaste, ["hello world"]);
-    // No data events during paste
     assert.deepStrictEqual(emittedSequences, []);
   });
 }
@@ -139,14 +129,12 @@ function bracketedPasteCases3(): void {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -154,13 +142,11 @@ function bracketedPasteCases3(): void {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
 
-    // Collect paste events
     emittedPaste = [];
     buffer.on("paste", (data) => {
       emittedPaste.push(data);
@@ -185,14 +171,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -201,13 +185,11 @@ describe("StdinBuffer", () => {
     beforeEach(() => {
       buffer = new StdinBuffer({ timeout: 10 });
 
-      // Collect emitted sequences
       emittedSequences = [];
       buffer.on("data", (sequence) => {
         emittedSequences.push(sequence);
       });
 
-      // Collect paste events
       emittedPaste = [];
       buffer.on("paste", (data) => {
         emittedPaste.push(data);

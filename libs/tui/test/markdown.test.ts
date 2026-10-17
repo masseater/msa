@@ -60,13 +60,10 @@ describe("Markdown component", () => {
 
       const lines = markdown.render(80);
 
-      // Check that we have content
       assert.ok(lines.length > 0);
 
-      // Strip ANSI codes for checking
       const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
-      // Check structure
       assert.ok(plainLines.some((line) => line.includes("- Item 1")));
       assert.ok(plainLines.some((line) => line.includes("    - Nested 1.1")));
       assert.ok(plainLines.some((line) => line.includes("    - Nested 1.2")));
@@ -91,7 +88,6 @@ describe("Markdown component", () => {
       const lines = markdown.render(80);
       const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
-      // Check proper indentation
       assert.ok(plainLines.some((line) => line.includes("- Level 1")));
       assert.ok(plainLines.some((line) => line.includes("    - Level 2")));
       assert.ok(plainLines.some((line) => line.includes("        - Level 3")));

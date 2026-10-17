@@ -208,7 +208,6 @@ describe("Markdown component", () => {
 
 function blockquotesWithMultilineContentCases5(): void {
   it("should apply consistent styling to all lines in lazy continuation blockquote", () => {
-    // Markdown "lazy continuation" - second line without > is still part of the quote
     const markdown = new Markdown(
       `>Foo
 bar`,
@@ -216,14 +215,12 @@ bar`,
       0,
       defaultMarkdownTheme,
       {
-        // This should NOT be applied to blockquotes
         color: (text) => chalk.magenta(text),
       },
     );
 
     const lines = markdown.render(80);
 
-    // Both lines should have the quote border
     const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
     const quotedLines = plainLines.filter((line) => line.startsWith("│ "));
     assert.strictEqual(
@@ -232,17 +229,14 @@ bar`,
       `Expected 2 quoted lines, got: ${JSON.stringify(plainLines)}`,
     );
 
-    // Both lines should have italic (from theme.quote styling)
     const fooLine = lines.find((line) => line.includes("Foo"));
     const barLine = lines.find((line) => line.includes("bar"));
     assert.ok(fooLine, "Should have Foo line");
     assert.ok(barLine, "Should have bar line");
 
-    // Check that both have italic (\x1b[3m) - blockquotes use theme styling, not default message color
     assert.ok(fooLine?.includes("\x1b[3m"), `Foo line should have italic: ${fooLine}`);
     assert.ok(barLine?.includes("\x1b[3m"), `bar line should have italic: ${barLine}`);
 
-    // Blockquotes should NOT have the default message color (magenta)
     assert.ok(!fooLine?.includes("\x1b[35m"), `Foo line should NOT have magenta color: ${fooLine}`);
     assert.ok(!barLine?.includes("\x1b[35m"), `bar line should NOT have magenta color: ${barLine}`);
   });

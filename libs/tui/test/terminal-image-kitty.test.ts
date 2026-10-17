@@ -223,7 +223,6 @@ describe("imageFallback", () => {
         result.includes(abs.replaceAll("\\", "/")) || result.includes(abs),
         "file URL should target absolute path",
       );
-      // Visible text must use ~/... not the expanded home path.
       const visible = result.replace(/\x1b\]8;;.*?\x1b\\/gu, "");
       assert.strictEqual(visible, "[Image: ~/.msa/agent/shot.png [image/png] 10x10]");
     } finally {

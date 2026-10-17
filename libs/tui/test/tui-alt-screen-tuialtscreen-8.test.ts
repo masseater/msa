@@ -215,7 +215,6 @@ describe("TuiAltScreen", () => {
 });
 
 describe("TuiAltScreen", () => {
-  // #10769
   it("scrolls the transcript on wheel input a focused overlay does not handle", async () => {
     const terminal = new VirtualTerminal(20, 6);
     const tui = new TuiAltScreen(terminal);

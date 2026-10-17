@@ -72,7 +72,6 @@ describe("TUI fake cursor", () => {
       const writes = terminal.getWrites();
       assert.ok(writes.includes("XXX"));
       assert.strictEqual(writes.includes("\x1b[7md"), !showHardwareCursor);
-      // The hardware cursor is positioned at column 4 in both modes
       assert.ok(writes.endsWith("\x1b[4G"));
       tui.stop();
     }

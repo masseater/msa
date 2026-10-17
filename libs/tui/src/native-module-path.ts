@@ -21,9 +21,7 @@ export function getNativeModuleCandidates(
   try {
     const packageEntry = (options.resolvePackage ?? moduleRequire.resolve)(TUI_PACKAGE_NAME);
     candidates.push(join(dirname(packageEntry), "..", nativePath));
-  } catch {
-    // Standalone binaries do not have an installed TUI package.
-  }
+  } catch {}
 
   candidates.push(
     join(moduleDir, "..", nativePath),

@@ -3,7 +3,6 @@ import type { Terminal } from "../src/terminal.ts";
 export const COLUMNS = 100;
 export const ROWS = 30;
 
-/** Terminal that discards output; keeps xterm parsing out of the measurement. */
 export class NullTerminal implements Terminal {
   bytesWritten = 0;
   start(_onInput: (data: string) => void, _onResize: () => void): void {}

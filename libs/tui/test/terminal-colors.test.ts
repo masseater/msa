@@ -57,7 +57,6 @@ describe("TUI.queryTerminalColors", () => {
       terminal.sendInput("\x1b]10;#ffffff\x07");
       terminal.sendInput("\x1b]11;rgb:0000/0000/0000\x1b\\");
       for (const reply of PALETTE_REPLIES) terminal.sendInput(reply);
-      // Resolves once every reply arrived, without waiting for DA1.
       assert.deepStrictEqual(await query, {
         foreground: WHITE,
         background: BLACK,
@@ -79,7 +78,6 @@ describe("TUI.queryTerminalColors", () => {
     buffer.on("data", (data) => terminal.sendInput(data));
     try {
       const query = tui.queryTerminalColors({ timeoutMs: 1000 });
-      // Captured from Ghostty 1.3.1 with Ayu Light, split at the reported tail.
       buffer.process("\x1b]4;1;rgb:eaea/6c");
       t.mock.timers.tick(100);
       buffer.process(`6c/6d6d\x07${DA1}`);
@@ -90,7 +88,6 @@ describe("TUI.queryTerminalColors", () => {
       });
       assert.deepStrictEqual(component.inputs, []);
 
-      // A real Ctrl+G must still reach the editor after the reply.
       buffer.process("\x07");
       assert.deepStrictEqual(component.inputs, ["\x07"]);
     } finally {
@@ -107,7 +104,6 @@ describe("TUI.queryTerminalColors", () => {
       const first = tui.queryTerminalColors({ timeoutMs: 1000 });
       const second = tui.queryTerminalColors({ timeoutMs: 1000 });
       terminal.sendInput("\x1b]11;#000000\x07");
-      // An incomplete palette is dropped.
       for (const reply of PALETTE_REPLIES.slice(0, 8)) terminal.sendInput(reply);
       terminal.sendInput(DA1);
       terminal.sendInput(DA1);
@@ -147,7 +143,6 @@ describe("TUI.queryTerminalColors", () => {
       ]);
       assert.deepStrictEqual(component.inputs, []);
 
-      // With no query pending, color replies are ordinary input again.
       terminal.sendInput("\x1b]11;#ffffff\x07");
       assert.deepStrictEqual(component.inputs, ["\x1b]11;#ffffff\x07"]);
     } finally {
