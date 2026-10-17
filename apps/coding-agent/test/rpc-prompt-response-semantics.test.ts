@@ -258,6 +258,7 @@ describe("RPC prompt response semantics", () => {
           msa.registerCommand("handled", { handler: async () => {} });
           msa.on("input", (event) => {
             if (event.text === "handled input") return { action: "handled" };
+            return undefined;
           });
         },
       ]),
@@ -340,6 +341,7 @@ describe("RPC prompt response semantics", () => {
                 msa.sendUserMessage("B", { deliverAs: type === "steer" ? "steer" : "followUp" });
                 return { action: "handled" };
               }
+              return undefined;
             });
           },
         ]),
@@ -389,6 +391,7 @@ describe("RPC prompt response semantics", () => {
           (msa) => {
             msa.on("input", (event) => {
               if (event.text === "A") return { action: "transform", text: "B" };
+              return undefined;
             });
           },
         ]),

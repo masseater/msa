@@ -28,7 +28,7 @@ const NORMAL_KEYS: Record<string, string | null> = {
 class ModalEditor extends CustomEditor {
   private mode: "normal" | "insert" = "insert";
 
-  handleInput(data: string): void {
+  override handleInput(data: string): void {
     // Escape toggles to normal mode, or passes through for app handling
     if (matchesKey(data, "escape")) {
       if (this.mode === "insert") {
@@ -64,7 +64,7 @@ class ModalEditor extends CustomEditor {
     super.handleInput(data);
   }
 
-  render(width: number): string[] {
+  override render(width: number): string[] {
     const lines = super.render(width);
     if (lines.length === 0) return lines;
 

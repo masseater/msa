@@ -634,7 +634,7 @@ class StreamingOverflowComponent extends BaseOverlay {
     return result;
   }
 
-  dispose(): void {
+  override dispose(): void {
     this.disposed = true;
     this.proc?.kill();
   }
@@ -906,7 +906,7 @@ class AnimationDemoComponent extends BaseOverlay {
     return lines;
   }
 
-  dispose(): void {
+  override dispose(): void {
     if (this.interval) {
       clearInterval(this.interval);
       this.interval = null;

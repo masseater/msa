@@ -45,6 +45,7 @@ export default function (msa: ExtensionAPI) {
         return { cancel: true };
       }
     }
+    return undefined;
   });
 
   msa.on("session_before_fork", async (event, ctx) => {
@@ -59,5 +60,6 @@ export default function (msa: ExtensionAPI) {
       ctx.ui.notify("Fork cancelled", "info");
       return { cancel: true };
     }
+    return undefined;
   });
 }

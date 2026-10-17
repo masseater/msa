@@ -678,8 +678,7 @@ export async function main(args: string[], options?: MainOptions) {
       // https://github.com/nodejs/node/issues/56645
       return;
     }
-    process.exit(exitCode);
-    return;
+    return process.exit(exitCode);
   }
 
   if (await handleConfigCommand(args, { extensionFactories })) {

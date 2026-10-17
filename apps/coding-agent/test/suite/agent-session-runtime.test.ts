@@ -316,6 +316,7 @@ describe("AgentSessionRuntime characterization", () => {
         if (event.reason === cancelReason) {
           return { cancel: true };
         }
+        return undefined;
       });
       msa.on("session_start", (event) => {
         events.push(event);
@@ -359,6 +360,7 @@ describe("AgentSessionRuntime characterization", () => {
           cancelNextFork = false;
           return { cancel: true };
         }
+        return undefined;
       });
       msa.on("session_shutdown", (event) => {
         events.push(event);
