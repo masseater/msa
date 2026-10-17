@@ -2,34 +2,26 @@ import { Effect, type Schema } from "effect";
 import { dual } from "effect/Function";
 
 import { LATEST_PROTOCOL_VERSION } from "../src/index.ts";
-import { encodeJson, type HttpRequest, type HttpResponse, listen, readMessage } from "./helpers.ts";
+import { encodeJson, headersOf, listen, readMessage } from "./helpers.ts";
 
 export interface RecordedRequest {
   method: string;
-  headers: HttpRequest["headers"];
+  headers: Record<string, string>;
   message?: Record<string, unknown>;
 }
 
-type FixtureEffect = Effect.Effect<void, Schema.SchemaError>;
+type FixtureEffect = Effect.Effect<Response, Schema.SchemaError>;
 
-export type FixtureHandler = (
-  request: HttpRequest,
-  response: HttpResponse,
-  requests: RecordedRequest[],
-) => FixtureEffect;
+export type FixtureHandler = (request: Request, requests: RecordedRequest[]) => FixtureEffect;
 
 export const startServer = Effect.fn("startServer")(function* (handler: FixtureHandler) {
   const requests: RecordedRequest[] = [];
-  const origin = yield* listen((request, response) => handler(request, response, requests));
+  const origin = yield* listen((request) => handler(request, requests));
   return { url: `${origin}/mcp`, requests };
 });
 
-const answer = (response: HttpResponse, value: unknown, headers: Record<string, string>) =>
-  Effect.gen(function* () {
-    const body = yield* encodeJson(value);
-    response.writeHead(200, headers);
-    response.end(body);
-  });
+const answer = (value: unknown, headers: Record<string, string>) =>
+  encodeJson(value).pipe(Effect.map((body) => new Response(body, { status: 200, headers })));
 
 const initializeResult = {
   protocolVersion: LATEST_PROTOCOL_VERSION,
@@ -37,18 +29,16 @@ const initializeResult = {
   serverInfo: { name: "http-fixture", version: "1.0.0" },
 };
 
-const respondTo = (response: HttpResponse, message: Record<string, unknown>) =>
+const respondTo = (message: Record<string, unknown>) =>
   Effect.gen(function* () {
     const id = message["id"];
     if (message["method"] === "initialize")
       return yield* answer(
-        response,
         { jsonrpc: "2.0", id, result: initializeResult },
         { "content-type": "application/json", "mcp-session-id": "session-1" },
       );
     if (message["method"] === "tools/list")
       return yield* answer(
-        response,
         {
           jsonrpc: "2.0",
           id,
@@ -61,57 +51,53 @@ const respondTo = (response: HttpResponse, message: Record<string, unknown>) =>
       id,
       result: { content: [{ type: "text", text: "hello" }] },
     });
-    response.writeHead(200, { "content-type": "text/event-stream" });
-    response.write("id: tool-result\n");
-    response.end(`data: ${data}\n\n`);
+    return new Response(`id: tool-result\ndata: ${data}\n\n`, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
   });
 
-const endWith = (response: HttpResponse, status: number) =>
-  Effect.sync(() => {
-    response.statusCode = status;
-    response.end();
-  });
+const emptyWith = (status: number) => Effect.succeed(new Response(null, { status }));
 
 const handleProtocol = (
-  request: HttpRequest,
-  response: HttpResponse,
+  request: Request,
   requests: RecordedRequest[],
   body: Record<string, unknown> | undefined,
 ): FixtureEffect =>
   Effect.gen(function* () {
     if (request.method === "GET") {
-      requests.push({ method: "GET", headers: request.headers });
-      return yield* endWith(response, 405);
+      requests.push({ method: "GET", headers: headersOf(request) });
+      return yield* emptyWith(405);
     }
     if (request.method === "DELETE") {
-      requests.push({ method: "DELETE", headers: request.headers });
-      return yield* endWith(response, 200);
+      requests.push({ method: "DELETE", headers: headersOf(request) });
+      return yield* emptyWith(200);
     }
     const message = body ?? (yield* readMessage(request));
-    requests.push({ method: request.method ?? "", headers: request.headers, message });
-    if (!("id" in message)) return yield* endWith(response, 202);
-    yield* respondTo(response, message);
+    requests.push({ method: request.method, headers: headersOf(request), message });
+    if (!("id" in message)) return yield* emptyWith(202);
+    return yield* respondTo(message);
   });
 
 export const protocolHandler: {
-  (response: HttpResponse, requests: RecordedRequest[]): (request: HttpRequest) => FixtureEffect;
-  (request: HttpRequest, response: HttpResponse, requests: RecordedRequest[]): FixtureEffect;
-} = dual(3, (request: HttpRequest, response: HttpResponse, requests: RecordedRequest[]) =>
-  handleProtocol(request, response, requests, undefined),
+  (requests: RecordedRequest[]): (request: Request) => FixtureEffect;
+  (request: Request, requests: RecordedRequest[]): FixtureEffect;
+} = dual(2, (request: Request, requests: RecordedRequest[]) =>
+  handleProtocol(request, requests, undefined),
 );
 
 export const protocolHandlerFor =
   (message: Record<string, unknown>): FixtureHandler =>
-  (request, response, requests) =>
-    handleProtocol(request, response, requests, message);
+  (request, requests) =>
+    handleProtocol(request, requests, message);
 
 export const toolsCallOnly =
-  (respond: (response: HttpResponse) => void): FixtureHandler =>
-  (request, response, requests) =>
+  (respond: () => Response): FixtureHandler =>
+  (request, requests) =>
     Effect.gen(function* () {
-      if (request.method !== "POST") return yield* protocolHandler(request, response, requests);
+      if (request.method !== "POST") return yield* protocolHandler(request, requests);
       const message = yield* readMessage(request);
       if (message["method"] !== "tools/call")
-        return yield* protocolHandlerFor(message)(request, response, requests);
-      respond(response);
+        return yield* protocolHandlerFor(message)(request, requests);
+      return respond();
     });

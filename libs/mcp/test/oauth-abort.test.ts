@@ -25,10 +25,10 @@ const runAborted = (origin: string, stalled: string[], provider: TestOAuthProvid
 
 const stopsOnAbort = Effect.gen(function* () {
   const stalled: string[] = [];
-  const origin = yield* listen((request, _response, serverOrigin) =>
+  const origin = yield* listen((request) =>
     Effect.sync(() => {
-      stalled.push(new URL(request.url ?? "/", serverOrigin).pathname);
-    }),
+      stalled.push(new URL(request.url).pathname);
+    }).pipe(Effect.andThen(Effect.never)),
   );
   expect(
     yield* runAborted(origin, stalled, new TestOAuthProvider("http://127.0.0.1/callback")),

@@ -8,7 +8,7 @@ import type {
   OAuthDiscoveryState,
   OAuthTokens,
 } from "../src/oauth/index.ts";
-import { encodeJson, type HttpResponse } from "./helpers.ts";
+import { encodeJson } from "./helpers.ts";
 import { MissingVerifierError } from "./missing-verifier-error.ts";
 
 export class TestOAuthProvider implements OAuthClientProvider {
@@ -81,28 +81,19 @@ export class TestOAuthProvider implements OAuthClientProvider {
   }
 }
 
-type Reply = Effect.Effect<void, Schema.SchemaError>;
-
 export const sendJson: {
-  (status: number, value: unknown): (response: HttpResponse) => Reply;
-  (response: HttpResponse, status: number, value: unknown): Reply;
-} = dual(3, (response: HttpResponse, status: number, value: unknown) =>
-  Effect.gen(function* () {
-    const body = yield* encodeJson(value);
-    response.writeHead(status, { "content-type": "application/json" });
-    response.end(body);
-  }),
+  (value: unknown): (status: number) => Effect.Effect<Response, Schema.SchemaError>;
+  (status: number, value: unknown): Effect.Effect<Response, Schema.SchemaError>;
+} = dual(2, (status: number, value: unknown) =>
+  encodeJson(value).pipe(
+    Effect.map(
+      (body) => new Response(body, { status, headers: { "content-type": "application/json" } }),
+    ),
+  ),
 );
 
-export const endWith: {
-  (status: number): (response: HttpResponse) => Effect.Effect<void>;
-  (response: HttpResponse, status: number): Effect.Effect<void>;
-} = dual(2, (response: HttpResponse, status: number) =>
-  Effect.sync(() => {
-    response.statusCode = status;
-    response.end();
-  }),
-);
+export const endWith = (status: number): Effect.Effect<Response> =>
+  Effect.succeed(new Response(null, { status }));
 
 export const authorizationServerMetadata = (origin: string) => ({
   issuer: origin,

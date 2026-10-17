@@ -8,8 +8,11 @@ import {
   McpSessionExpiredError,
   StreamableHttpTransport,
 } from "../src/index.ts";
-import { closeServers, encodeJson, readBody, readMessage } from "./helpers.ts";
+import { closeServers, encodeJson, openStream, readBody, readMessage } from "./helpers.ts";
 import { protocolHandler, protocolHandlerFor, startServer, toolsCallOnly } from "./http-fixture.ts";
+
+const eventStream = (body: string | ReadableStream<Uint8Array>) =>
+  new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
 
 const newClient = () => new McpClient({ name: "http-test", version: "1.0.0" });
 
@@ -37,14 +40,12 @@ const handlesJsonAndSse = Effect.gen(function* () {
 });
 
 const classifiesAuthFailures = Effect.gen(function* () {
-  const { url } = yield* startServer((request, response) =>
+  const { url } = yield* startServer((request) =>
     readBody(request).pipe(
-      Effect.andThen(
-        Effect.sync(() => {
-          response.writeHead(401, {
-            "www-authenticate": 'Bearer resource_metadata="https://example.com/meta"',
-          });
-          response.end("login required");
+      Effect.as(
+        new Response("login required", {
+          status: 401,
+          headers: { "www-authenticate": 'Bearer resource_metadata="https://example.com/meta"' },
         }),
       ),
     ),
@@ -62,18 +63,14 @@ const classifiesAuthFailures = Effect.gen(function* () {
 
 const failsOnlyBrokenStream = Effect.gen(function* () {
   const slowGate = Deferred.makeUnsafe<void>();
-  const { url } = yield* startServer((request, response, requests) =>
+  const { url } = yield* startServer((request, requests) =>
     Effect.gen(function* () {
-      if (request.method !== "POST") return yield* protocolHandler(request, response, requests);
+      if (request.method !== "POST") return yield* protocolHandler(request, requests);
       const message = yield* readMessage(request);
       const name = (message["params"] as { name?: string } | undefined)?.name;
-      if (name === "broken") {
-        response.writeHead(200, { "content-type": "text/event-stream" });
-        response.end("data: not json\n\n");
-        return;
-      }
+      if (name === "broken") return eventStream("data: not json\n\n");
       if (name === "slow") yield* Deferred.await(slowGate);
-      yield* protocolHandlerFor(message)(request, response, requests);
+      return yield* protocolHandlerFor(message)(request, requests);
     }),
   );
   const client = newClient();
@@ -92,15 +89,15 @@ const failsOnlyBrokenStream = Effect.gen(function* () {
 
 const opensGetStreamAfterInit = Effect.gen(function* () {
   const order: string[] = [];
-  const { url, requests } = yield* startServer((request, response, recorded) =>
+  const { url, requests } = yield* startServer((request, recorded) =>
     Effect.gen(function* () {
       if (request.method !== "POST") {
-        order.push(request.method ?? "");
-        return yield* protocolHandler(request, response, recorded);
+        order.push(request.method);
+        return yield* protocolHandler(request, recorded);
       }
       const message = yield* readMessage(request);
       order.push(String(message["method"]));
-      yield* protocolHandlerFor(message)(request, response, recorded);
+      return yield* protocolHandlerFor(message)(request, recorded);
     }),
   );
   const client = newClient();
@@ -119,18 +116,14 @@ const resumesClosedStream = Effect.gen(function* () {
     id: 2,
     result: { content: [{ type: "text", text: "resumed" }] },
   });
-  const respondToCall = toolsCallOnly((response) => {
-    response.writeHead(200, { "content-type": "text/event-stream" });
-    response.end("id: 1\nretry: 5\ndata:\n\n");
-  });
-  const { url } = yield* startServer((request, response, requests) => {
-    const lastEventId = request.headers["last-event-id"];
-    if (request.method !== "GET" || lastEventId === undefined || lastEventId === "")
-      return respondToCall(request, response, requests);
+  const respondToCall = toolsCallOnly(() => eventStream("id: 1\nretry: 5\ndata:\n\n"));
+  const { url } = yield* startServer((request, requests) => {
+    const lastEventId = request.headers.get("last-event-id");
+    if (request.method !== "GET" || lastEventId === null || lastEventId === "")
+      return respondToCall(request, requests);
     return Effect.sync(() => {
-      resumeHeaders.push(lastEventId as string);
-      response.writeHead(200, { "content-type": "text/event-stream" });
-      response.end(`id: 2\ndata: ${resumed}\n\n`);
+      resumeHeaders.push(lastEventId);
+      return eventStream(`id: 2\ndata: ${resumed}\n\n`);
     });
   });
   const client = newClient();
@@ -146,12 +139,7 @@ const resumesClosedStream = Effect.gen(function* () {
 });
 
 const failsUnansweredStream = Effect.gen(function* () {
-  const { url } = yield* startServer(
-    toolsCallOnly((response) => {
-      response.writeHead(200, { "content-type": "text/event-stream" });
-      response.end(": nothing here\n\n");
-    }),
-  );
+  const { url } = yield* startServer(toolsCallOnly(() => eventStream(": nothing here\n\n")));
   const client = newClient();
   yield* connectTo(client, new StreamableHttpTransport({ url, openGetStream: false }));
   yield* Effect.promise(() =>
@@ -169,14 +157,14 @@ const reconnectsGetStream = Effect.gen(function* () {
     jsonrpc: "2.0",
     method: "notifications/tools/list_changed",
   });
-  const { url } = yield* startServer((request, response, requests) => {
-    if (request.method !== "GET") return protocolHandler(request, response, requests);
+  const { url } = yield* startServer((request, requests) => {
+    if (request.method !== "GET") return protocolHandler(request, requests);
     return Effect.sync(() => {
       gets++;
-      lastEventIds.push(request.headers["last-event-id"] as string | undefined);
-      response.writeHead(200, { "content-type": "text/event-stream" });
-      if (gets === 1) response.end(`id: g1\ndata: ${notification}\n\n`);
-      else response.write(`id: g2\ndata: ${notification}\n\n`);
+      lastEventIds.push(request.headers.get("last-event-id") ?? undefined);
+      return gets === 1
+        ? eventStream(`id: g1\ndata: ${notification}\n\n`)
+        : eventStream(openStream(`id: g2\ndata: ${notification}\n\n`));
     });
   });
   const client = newClient();
@@ -192,12 +180,7 @@ const reconnectsGetStream = Effect.gen(function* () {
 });
 
 const rejectsAcceptedWithoutResponse = Effect.gen(function* () {
-  const { url } = yield* startServer(
-    toolsCallOnly((response) => {
-      response.statusCode = 202;
-      response.end();
-    }),
-  );
+  const { url } = yield* startServer(toolsCallOnly(() => new Response(null, { status: 202 })));
   const client = newClient();
   yield* connectTo(client, new StreamableHttpTransport({ url, openGetStream: false }));
   yield* Effect.promise(() =>
@@ -207,15 +190,8 @@ const rejectsAcceptedWithoutResponse = Effect.gen(function* () {
 });
 
 const includesBodyInErrors = Effect.gen(function* () {
-  const { url } = yield* startServer((request, response) =>
-    readBody(request).pipe(
-      Effect.andThen(
-        Effect.sync(() => {
-          response.statusCode = 400;
-          response.end("Invalid Accept header");
-        }),
-      ),
-    ),
+  const { url } = yield* startServer((request) =>
+    readBody(request).pipe(Effect.as(new Response("Invalid Accept header", { status: 400 }))),
   );
   yield* Effect.promise(() =>
     expect(newClient().connect(new StreamableHttpTransport({ url }))).rejects.toThrow(
@@ -226,17 +202,9 @@ const includesBodyInErrors = Effect.gen(function* () {
 
 const classifiesExpiredSession = Effect.gen(function* () {
   let posts = 0;
-  const { url } = yield* startServer((request, response, requests) => {
-    if (request.method !== "POST" || posts++ < 2)
-      return protocolHandler(request, response, requests);
-    return readBody(request).pipe(
-      Effect.andThen(
-        Effect.sync(() => {
-          response.statusCode = 404;
-          response.end("gone");
-        }),
-      ),
-    );
+  const { url } = yield* startServer((request, requests) => {
+    if (request.method !== "POST" || posts++ < 2) return protocolHandler(request, requests);
+    return readBody(request).pipe(Effect.as(new Response("gone", { status: 404 })));
   });
   const client = newClient();
   yield* connectTo(client, new StreamableHttpTransport({ url, openGetStream: false }));

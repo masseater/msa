@@ -7,13 +7,7 @@ import {
   type McpFetch,
   StreamableHttpTransport,
 } from "../src/index.ts";
-import {
-  closeServers,
-  type HttpRequest,
-  type HttpResponse,
-  readBody,
-  readMessage,
-} from "./helpers.ts";
+import { closeServers, readBody, readMessage } from "./helpers.ts";
 import {
   protocolHandler,
   protocolHandlerFor,
@@ -26,29 +20,28 @@ const newClient = () => new McpClient({ name: "http-test", version: "1.0.0" });
 
 const abortController = (): AbortController => new AbortController();
 
-const unauthorized = (response: HttpResponse, authenticate: string) =>
-  Effect.sync(() => {
-    response.writeHead(401, { "www-authenticate": authenticate }).end();
-  });
+const unauthorized = (authenticate: string) =>
+  Effect.succeed(
+    new Response(null, { status: 401, headers: { "www-authenticate": authenticate } }),
+  );
 
 const connectWith = (client: McpClient, url: string, authProvider: AuthProvider) =>
   Effect.promise(() =>
     client.connect(new StreamableHttpTransport({ url, openGetStream: false, authProvider })),
   );
 
-const scopeHandler = (request: HttpRequest, response: HttpResponse, requests: RecordedRequest[]) =>
+const scopeHandler = (request: Request, requests: RecordedRequest[]) =>
   Effect.gen(function* () {
-    if (request.method !== "POST") return yield* protocolHandler(request, response, requests);
+    if (request.method !== "POST") return yield* protocolHandler(request, requests);
     const message = yield* readMessage(request);
-    if (request.headers.authorization === "Bearer old")
-      return yield* unauthorized(response, "Bearer");
-    if (message["method"] === "tools/call" && request.headers.authorization === "Bearer new") {
-      response
-        .writeHead(403, { "www-authenticate": 'Bearer error="insufficient_scope", scope="admin"' })
-        .end();
-      return;
-    }
-    yield* protocolHandlerFor(message)(request, response, requests);
+    const authorization = request.headers.get("authorization");
+    if (authorization === "Bearer old") return yield* unauthorized("Bearer");
+    if (message["method"] === "tools/call" && authorization === "Bearer new")
+      return new Response(null, {
+        status: 403,
+        headers: { "www-authenticate": 'Bearer error="insufficient_scope", scope="admin"' },
+      });
+    return yield* protocolHandlerFor(message)(request, requests);
   });
 
 const handsFailuresToProvider = Effect.gen(function* () {
@@ -74,18 +67,16 @@ const handsFailuresToProvider = Effect.gen(function* () {
   yield* Effect.promise(() => client.close());
 });
 
-const recordingHandler =
-  (executed: unknown[]) =>
-  (request: HttpRequest, response: HttpResponse, requests: RecordedRequest[]) =>
-    Effect.gen(function* () {
-      if (request.method !== "POST") return yield* protocolHandler(request, response, requests);
-      const message = yield* readMessage(request);
-      const isCall = message["method"] === "tools/call";
-      if (isCall && request.headers.authorization === "Bearer old")
-        return yield* unauthorized(response, "Bearer");
-      if (isCall) executed.push((message["params"] as { name: string }).name);
-      yield* protocolHandlerFor(message)(request, response, requests);
-    });
+const recordingHandler = (executed: unknown[]) => (request: Request, requests: RecordedRequest[]) =>
+  Effect.gen(function* () {
+    if (request.method !== "POST") return yield* protocolHandler(request, requests);
+    const message = yield* readMessage(request);
+    const isCall = message["method"] === "tools/call";
+    if (isCall && request.headers.get("authorization") === "Bearer old")
+      return yield* unauthorized("Bearer");
+    if (isCall) executed.push((message["params"] as { name: string }).name);
+    return yield* protocolHandlerFor(message)(request, requests);
+  });
 
 const recoveringProvider = () => {
   const state = { token: "old", refreshes: 0, waiting: 0 };
@@ -144,7 +135,9 @@ const closesWithLastToken = Effect.gen(function* () {
   yield* Effect.promise(() => client.close());
   expect(calls).toBe(before);
   const deletes = requests.filter((entry) => entry.method === "DELETE");
-  expect(deletes.map((entry) => entry.headers.authorization)).toEqual([`Bearer token-${before}`]);
+  expect(deletes.map((entry) => entry.headers["authorization"])).toEqual([
+    `Bearer token-${before}`,
+  ]);
   expect(deletes[0]?.headers["mcp-session-id"]).toBe("session-1");
 });
 
@@ -184,10 +177,10 @@ const connectThrough = (url: string, fetch: McpFetch | undefined) =>
   });
 
 const callsFetchWithoutReceiver = Effect.gen(function* () {
-  const { url } = yield* startServer((request, response, requests) => {
-    if (request.method !== "POST" || request.headers.authorization !== undefined)
-      return protocolHandler(request, response, requests);
-    return readBody(request).pipe(Effect.andThen(unauthorized(response, "Bearer")));
+  const { url } = yield* startServer((request, requests) => {
+    if (request.method !== "POST" || request.headers.has("authorization"))
+      return protocolHandler(request, requests);
+    return readBody(request).pipe(Effect.andThen(unauthorized("Bearer")));
   });
   yield* connectThrough(url, strictFetch);
   vi.stubGlobal("fetch", strictFetch);

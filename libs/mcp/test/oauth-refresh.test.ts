@@ -7,7 +7,7 @@ import {
   McpOAuthProvider,
   MemoryOAuthStateStore,
 } from "../src/oauth/index.ts";
-import { closeServers, type HttpRequest, type HttpResponse, listen, readBody } from "./helpers.ts";
+import { closeServers, listen, readBody } from "./helpers.ts";
 import {
   authorizationServerMetadata,
   endWith,
@@ -15,14 +15,14 @@ import {
   TestOAuthProvider,
 } from "./oauth-support.ts";
 
-const rotateToken = (request: HttpRequest, response: HttpResponse, grants: string[]) =>
+const rotateToken = (request: Request, grants: string[]) =>
   Effect.gen(function* () {
     const params = new URLSearchParams(yield* readBody(request));
     const refreshToken = params.get("refresh_token") ?? "";
     grants.push(refreshToken);
-    if (refreshToken !== "r1") return yield* sendJson(response, 400, { error: "invalid_grant" });
+    if (refreshToken !== "r1") return yield* sendJson(400, { error: "invalid_grant" });
     yield* Effect.sleep("20 millis");
-    yield* sendJson(response, 200, {
+    return yield* sendJson(200, {
       access_token: "a2",
       refresh_token: "r2",
       token_type: "Bearer",
@@ -30,19 +30,18 @@ const rotateToken = (request: HttpRequest, response: HttpResponse, grants: strin
     });
   });
 
-const rotatingServer =
-  (grants: string[]) => (request: HttpRequest, response: HttpResponse, origin: string) => {
-    const url = new URL(request.url ?? "/", origin);
-    if (url.pathname === "/.well-known/oauth-protected-resource/mcp")
-      return sendJson(response, 200, {
-        resource: `${origin}/mcp`,
-        authorization_servers: ["not a url"],
-      });
-    if (url.pathname === "/.well-known/oauth-authorization-server")
-      return sendJson(response, 200, authorizationServerMetadata(origin));
-    if (url.pathname === "/token") return rotateToken(request, response, grants);
-    return endWith(response, 404);
-  };
+const rotatingServer = (grants: string[]) => (request: Request, origin: string) => {
+  const url = new URL(request.url);
+  if (url.pathname === "/.well-known/oauth-protected-resource/mcp")
+    return sendJson(200, {
+      resource: `${origin}/mcp`,
+      authorization_servers: ["not a url"],
+    });
+  if (url.pathname === "/.well-known/oauth-authorization-server")
+    return sendJson(200, authorizationServerMetadata(origin));
+  if (url.pathname === "/token") return rotateToken(request, grants);
+  return endWith(404);
+};
 
 const sharesOneRefresh = Effect.gen(function* () {
   const grants: string[] = [];
@@ -86,11 +85,11 @@ const asksForMoreScope = Effect.gen(function* () {
     token_type: "Bearer",
     scope: "repo read:org",
   };
-  const origin = yield* listen((request, response, serverOrigin) => {
-    const url = new URL(request.url ?? "/", serverOrigin);
+  const origin = yield* listen((request, serverOrigin) => {
+    const url = new URL(request.url);
     if (url.pathname === "/.well-known/oauth-authorization-server")
-      return sendJson(response, 200, authorizationServerMetadata(serverOrigin));
-    return endWith(response, url.pathname === "/token" ? 500 : 404);
+      return sendJson(200, authorizationServerMetadata(serverOrigin));
+    return endWith(url.pathname === "/token" ? 500 : 404);
   });
   const auth = adaptOAuthProvider(provider);
   yield* Effect.promise(() =>

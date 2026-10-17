@@ -18,11 +18,11 @@ import {
 
 const derivesApplicationType = Effect.gen(function* () {
   const bodies: Record<string, unknown>[] = [];
-  const origin = yield* listen((request, response) =>
+  const origin = yield* listen((request) =>
     readMessage(request).pipe(
       Effect.flatMap((metadata) => {
         bodies.push(metadata);
-        return sendJson(response, 201, { ...metadata, client_id: "client" });
+        return sendJson(201, { ...metadata, client_id: "client" });
       }),
     ),
   );
@@ -48,35 +48,35 @@ const derivesApplicationType = Effect.gen(function* () {
 });
 
 const rejectsIssuerMismatch = Effect.gen(function* () {
-  const origin = yield* listen((request, response, serverOrigin) => {
-    const url = new URL(request.url ?? "/", serverOrigin);
+  const origin = yield* listen((request, serverOrigin) => {
+    const url = new URL(request.url);
     if (url.pathname === "/.well-known/oauth-authorization-server")
-      return sendJson(response, 200, {
+      return sendJson(200, {
         ...authorizationServerMetadata(serverOrigin),
         issuer: "https://attacker.example",
       });
-    return endWith(response, 404);
+    return endWith(404);
   });
   const error = yield* Effect.flip(discoverAuthorizationServerMetadata(origin));
   expect(error).toBeInstanceOf(OAuthIssuerMismatchError);
 });
 
 const usesConfiguredMetadata = Effect.gen(function* () {
-  const origin = yield* listen((request, response, serverOrigin) => {
-    const url = new URL(request.url ?? "/", serverOrigin);
+  const origin = yield* listen((request, serverOrigin) => {
+    const url = new URL(request.url);
     if (url.pathname === "/.well-known/oauth-protected-resource/mcp")
-      return sendJson(response, 200, {
+      return sendJson(200, {
         resource: `${serverOrigin}/mcp`,
         authorization_servers: [serverOrigin],
       });
     if (url.pathname === "/idp/metadata.json")
-      return sendJson(response, 200, {
+      return sendJson(200, {
         issuer: "https://idp.example",
         authorization_endpoint: `${serverOrigin}/idp/authorize`,
         token_endpoint: `${serverOrigin}/idp/token`,
         response_types_supported: ["code"],
       });
-    return endWith(response, 404);
+    return endWith(404);
   });
   const provider = new TestOAuthProvider("http://127.0.0.1/callback");
   provider.client = { client_id: "client" };
@@ -123,12 +123,12 @@ const exchangeWith =
 
 const verifiesIss = Effect.gen(function* () {
   const codes: string[] = [];
-  const origin = yield* listen((request, response) => {
-    if (request.method !== "POST") return endWith(response, 404);
+  const origin = yield* listen((request) => {
+    if (request.method !== "POST") return endWith(404);
     return readBody(request).pipe(
       Effect.flatMap((body) => {
         codes.push(new URLSearchParams(body).get("code") ?? "");
-        return sendJson(response, 200, { access_token: "token", token_type: "Bearer" });
+        return sendJson(200, { access_token: "token", token_type: "Bearer" });
       }),
     );
   });
