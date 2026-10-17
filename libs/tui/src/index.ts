@@ -110,7 +110,8 @@ export { getNativeClipboard, type NativeClipboard } from "./native-platform.ts";
 export { oklabToOkhslLightness } from "./oklab.ts";
 export { formatProgramStatus, type ProgramStatus } from "./program-status.ts";
 export { StdinBuffer, type StdinBufferEventMap, type StdinBufferOptions } from "./stdin-buffer.ts";
-export { isAppleTerminalSession, ProcessTerminal, type Terminal } from "./terminal.ts";
+export { isAppleTerminalSession, type Terminal } from "./terminal-protocol.ts";
+export { ProcessTerminal } from "./terminal.ts";
 export {
   parseTerminalColorSchemeReport,
   type RgbColor,

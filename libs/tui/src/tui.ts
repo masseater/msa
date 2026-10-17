@@ -14,7 +14,7 @@ import {
   type TerminalColors,
 } from "./terminal-colors.ts";
 import { isImageLine } from "./terminal-image-kitty.ts";
-import type { Terminal } from "./terminal.ts";
+import type { Terminal } from "./terminal-protocol.ts";
 import { type OverlayOptions, resolveOverlayLayout } from "./tui-overlay-layout.ts";
 import {
   extractSegments,

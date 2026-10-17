@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 
-import type { Terminal } from "../src/terminal.ts";
+import type { Terminal } from "../src/terminal-protocol.ts";
 
 export class BoundedWriteTerminal implements Terminal {
   readonly writes: string[] = [];

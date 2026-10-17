@@ -5,7 +5,7 @@ import {
   normalizeAppleTerminalInput,
   normalizeNativeShiftEnterInput,
   resolveEscapeTimeoutMs,
-} from "../src/terminal.ts";
+} from "../src/terminal-protocol.ts";
 import { setupNegotiation, withOverride, working } from "./terminal-helpers.ts";
 
 describe("resolveEscapeTimeoutMs", () => {

@@ -41,7 +41,7 @@ import {
   getKittyImagePlacementRows,
   isImageLine,
 } from "./terminal-image-kitty.ts";
-import type { Terminal } from "./terminal.ts";
+import type { Terminal } from "./terminal-protocol.ts";
 import {
   type Component,
   Container,
