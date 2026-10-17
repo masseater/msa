@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { afterEach, describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { Markdown } from "../src/components/markdown.ts";
 import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
@@ -11,34 +13,37 @@ import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("Markdown component", () => {
   describe("Heading with inline code", () => {
-    it("should not leak h1 underline into padding when inline code is the last token", async () => {
-      const markdown = new Markdown(
-        "# Important distinction from `open()`",
-        0,
-        0,
-        defaultMarkdownTheme,
-      );
-      const terminal = new VirtualTerminal(80, 4);
-      const tui: TUI = new TuiMainScreen(terminal);
-      tui.addChild(markdown);
-      tui.start();
-      await terminal.waitForRender();
+    it("should not leak h1 underline into padding when inline code is the last token", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const markdown = new Markdown(
+            "# Important distinction from `open()`",
+            0,
+            0,
+            defaultMarkdownTheme,
+          );
+          const terminal = new VirtualTerminal(80, 4);
+          const tui: TUI = new TuiMainScreen(terminal);
+          tui.addChild(markdown);
+          tui.start();
+          yield* Effect.promise(() => terminal.waitForRender());
 
-      const renderedLine = markdown.render(80)[0];
-      assert.ok(renderedLine, "Should render heading line");
-      const contentWidth = renderedLine.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd().length;
-      assert.ok(contentWidth > 0, "Should have visible heading content");
+          const renderedLine = markdown.render(80)[0];
+          assert.ok(renderedLine, "Should render heading line");
+          const contentWidth = renderedLine.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd().length;
+          assert.ok(contentWidth > 0, "Should have visible heading content");
 
-      for (let col = contentWidth; col < 80; col++) {
-        assert.strictEqual(
-          getCell(terminal, 0, col).isUnderline(),
-          0,
-          `Expected no underline in padding at col ${col}`,
-        );
-      }
+          for (let col = contentWidth; col < 80; col++) {
+            assert.strictEqual(
+              getCell(terminal, 0, col).isUnderline(),
+              0,
+              `Expected no underline in padding at col ${col}`,
+            );
+          }
 
-      tui.stop();
-    });
+          tui.stop();
+        }),
+      ));
   });
 });
 

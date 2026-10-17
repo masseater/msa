@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { StdinBuffer } from "../src/stdin-buffer.ts";
 import { wait } from "./stdin-buffer-helpers.ts";
 
@@ -106,13 +108,16 @@ describe("StdinBuffer", () => {
       assert.strictEqual(buffer.getBuffer(), "");
     });
 
-    it("should clear pending timeouts on destroy", async () => {
-      processInput("\x1b[<35");
-      buffer.destroy();
+    it("should clear pending timeouts on destroy", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          processInput("\x1b[<35");
+          buffer.destroy();
 
-      await wait(15);
+          yield* wait(15);
 
-      assert.deepStrictEqual(emittedSequences, []);
-    });
+          assert.deepStrictEqual(emittedSequences, []);
+        }),
+      ));
   });
 });

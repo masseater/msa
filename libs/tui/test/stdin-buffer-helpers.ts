@@ -1,8 +1,6 @@
-export function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
+import { Effect } from "effect";
+
+export const wait = (ms: number): Effect.Effect<void> => Effect.sleep(ms);
 
 export const replies = [
   { header: "\x1b]4;1;", reply: "\x1b]4;1;rgb:eaea/6c6c/6d6d\x07" },

@@ -227,7 +227,7 @@ export class AltScreenSearchComponent implements Component, Focusable {
   private nextButtonStart = -1;
   private nextButtonEnd = -1;
   private hoveredNavigationDirection: -1 | 1 | undefined;
-  private _focused = false;
+  #focused = false;
 
   constructor(
     onQueryChange: (query: string) => void,
@@ -238,11 +238,11 @@ export class AltScreenSearchComponent implements Component, Focusable {
   }
 
   get focused(): boolean {
-    return this._focused;
+    return this.#focused;
   }
 
   set focused(value: boolean) {
-    this._focused = value;
+    this.#focused = value;
     this.input.focused = value;
   }
 

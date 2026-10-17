@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { overrideEnv } from "../src/env.ts";
 import {
   getCellDimensions,
   resetCapabilitiesCache,
@@ -25,24 +26,17 @@ class InputRecorder implements Component {
 }
 
 function withImageTerminal<T>(fn: () => T): T {
-  const prevTermProgram = process.env["TERM_PROGRAM"];
-  const prevTerm = process.env["TERM"];
-  const prevGhosttyResourcesDir = process.env["GHOSTTY_RESOURCES_DIR"];
-
-  process.env["TERM_PROGRAM"] = "ghostty";
-  delete process.env["TERM"];
-  delete process.env["GHOSTTY_RESOURCES_DIR"];
+  const restoreEnv = overrideEnv({
+    TERM_PROGRAM: "ghostty",
+    TERM: undefined,
+    GHOSTTY_RESOURCES_DIR: undefined,
+  });
   resetCapabilitiesCache();
 
   try {
     return fn();
   } finally {
-    if (prevTermProgram === undefined) delete process.env["TERM_PROGRAM"];
-    else process.env["TERM_PROGRAM"] = prevTermProgram;
-    if (prevTerm === undefined) delete process.env["TERM"];
-    else process.env["TERM"] = prevTerm;
-    if (prevGhosttyResourcesDir === undefined) delete process.env["GHOSTTY_RESOURCES_DIR"];
-    else process.env["GHOSTTY_RESOURCES_DIR"] = prevGhosttyResourcesDir;
+    restoreEnv();
     resetCapabilitiesCache();
   }
 }

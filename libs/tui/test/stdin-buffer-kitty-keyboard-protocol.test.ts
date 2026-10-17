@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { StdinBuffer } from "../src/stdin-buffer.ts";
 import { wait } from "./stdin-buffer-helpers.ts";
 
@@ -172,24 +174,30 @@ describe("StdinBuffer", () => {
       assert.deepStrictEqual(emittedSequences, [""]);
     });
 
-    it("should handle lone escape character with timeout", async () => {
-      processInput("\x1b");
-      assert.deepStrictEqual(emittedSequences, []);
+    it("should handle lone escape character with timeout", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          processInput("\x1b");
+          assert.deepStrictEqual(emittedSequences, []);
 
-      await wait(15);
-      assert.deepStrictEqual(emittedSequences, ["\x1b"]);
-    });
+          yield* wait(15);
+          assert.deepStrictEqual(emittedSequences, ["\x1b"]);
+        }),
+      ));
 
-    it("flushes a lone escape promptly with the longer default sequence timeout", async () => {
-      const defaultBuffer = new StdinBuffer();
-      const defaultSequences: string[] = [];
-      defaultBuffer.on("data", (sequence) => defaultSequences.push(sequence));
+    it("flushes a lone escape promptly with the longer default sequence timeout", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const defaultBuffer = new StdinBuffer();
+          const defaultSequences: string[] = [];
+          defaultBuffer.on("data", (sequence) => defaultSequences.push(sequence));
 
-      defaultBuffer.process("\x1b");
-      await wait(20);
-      assert.deepStrictEqual(defaultSequences, ["\x1b"]);
-      defaultBuffer.destroy();
-    });
+          defaultBuffer.process("\x1b");
+          yield* wait(20);
+          assert.deepStrictEqual(defaultSequences, ["\x1b"]);
+          defaultBuffer.destroy();
+        }),
+      ));
   });
 });
 

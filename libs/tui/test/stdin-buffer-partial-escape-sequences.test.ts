@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { matchesKey } from "../src/keys.ts";
 import { StdinBuffer } from "../src/stdin-buffer.ts";
 import { replies, wait } from "./stdin-buffer-helpers.ts";
@@ -21,20 +23,23 @@ describe("StdinBuffer", () => {
     buffer.process(data);
   }
   describe("Partial Escape Sequences", () => {
-    it("should merge ESC + CR split across chunks within a larger timeout", async () => {
-      buffer = new StdinBuffer({ escapeTimeout: 100 });
-      emittedSequences = [];
-      buffer.on("data", (sequence) => {
-        emittedSequences.push(sequence);
-      });
+    it("should merge ESC + CR split across chunks within a larger timeout", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          buffer = new StdinBuffer({ escapeTimeout: 100 });
+          emittedSequences = [];
+          buffer.on("data", (sequence) => {
+            emittedSequences.push(sequence);
+          });
 
-      processInput("\x1b");
-      await wait(20);
-      processInput("\r");
+          processInput("\x1b");
+          yield* wait(20);
+          processInput("\r");
 
-      assert.deepStrictEqual(emittedSequences, ["\x1b\r"]);
-      assert.equal(matchesKey(emittedSequences[0] ?? "", "alt+enter"), true);
-    });
+          assert.deepStrictEqual(emittedSequences, ["\x1b\r"]);
+          assert.equal(matchesKey(emittedSequences[0] ?? "", "alt+enter"), true);
+        }),
+      ));
   });
 });
 
@@ -54,20 +59,23 @@ describe("StdinBuffer", () => {
     buffer.process(data);
   }
   describe("Partial Escape Sequences", () => {
-    it("does not apply the sequence timeout to a lone ESC", async () => {
-      buffer = new StdinBuffer({ timeout: 100 });
-      emittedSequences = [];
-      buffer.on("data", (sequence) => {
-        emittedSequences.push(sequence);
-      });
+    it("does not apply the sequence timeout to a lone ESC", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          buffer = new StdinBuffer({ timeout: 100 });
+          emittedSequences = [];
+          buffer.on("data", (sequence) => {
+            emittedSequences.push(sequence);
+          });
 
-      processInput("\x1b");
-      await wait(20);
-      processInput("\r");
+          processInput("\x1b");
+          yield* wait(20);
+          processInput("\r");
 
-      assert.deepStrictEqual(emittedSequences, ["\x1b", "\r"]);
-      assert.equal(matchesKey(emittedSequences[0] ?? "", "escape"), true);
-    });
+          assert.deepStrictEqual(emittedSequences, ["\x1b", "\r"]);
+          assert.equal(matchesKey(emittedSequences[0] ?? "", "escape"), true);
+        }),
+      ));
   });
 });
 
@@ -84,18 +92,21 @@ describe("StdinBuffer", () => {
   });
   afterEach(() => buffer.destroy());
   describe("Partial Escape Sequences", () => {
-    it("keeps fragmented mouse sequences buffered across delayed chunks by default", async () => {
-      const delayedBuffer = new StdinBuffer();
-      const delayedSequences: string[] = [];
-      delayedBuffer.on("data", (sequence) => delayedSequences.push(sequence));
+    it("keeps fragmented mouse sequences buffered across delayed chunks by default", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const delayedBuffer = new StdinBuffer();
+          const delayedSequences: string[] = [];
+          delayedBuffer.on("data", (sequence) => delayedSequences.push(sequence));
 
-      delayedBuffer.process("\x1b[");
-      await wait(20);
-      assert.deepStrictEqual(delayedSequences, []);
-      delayedBuffer.process("<65;48;39M");
-      assert.deepStrictEqual(delayedSequences, ["\x1b[<65;48;39M"]);
-      delayedBuffer.destroy();
-    });
+          delayedBuffer.process("\x1b[");
+          yield* wait(20);
+          assert.deepStrictEqual(delayedSequences, []);
+          delayedBuffer.process("<65;48;39M");
+          assert.deepStrictEqual(delayedSequences, ["\x1b[<65;48;39M"]);
+          delayedBuffer.destroy();
+        }),
+      ));
   });
 });
 

@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import type { TUI } from "../src/tui.ts";
 import {
@@ -54,23 +56,30 @@ describe("tab width accounting", () => {
 });
 
 describe("tab width accounting", () => {
-  it("keeps tab-containing overlays on one physical terminal row", async () => {
-    const terminal = new CapturingVirtualTerminal(16, 3);
-    const tui: TUI = new TuiMainScreen(terminal);
-    tui.addChild(new FullViewportContent());
-    tui.showOverlay(new TabStatusOverlay(), { width: 4, row: 1, col: 4 });
-    tui.start();
+  it("keeps tab-containing overlays on one physical terminal row", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const terminal = new CapturingVirtualTerminal(16, 3);
+        const tui: TUI = new TuiMainScreen(terminal);
+        tui.addChild(new FullViewportContent());
+        tui.showOverlay(new TabStatusOverlay(), { width: 4, row: 1, col: 4 });
+        tui.start();
 
-    try {
-      await terminal.waitForRender();
-      assert.deepStrictEqual(terminal.getViewport(), [
-        "base 0          ",
-        "base   X        ",
-        "base 2          ",
-      ]);
-      assert.ok(!terminal.getOutput().includes("\t"));
-    } finally {
-      tui.stop();
-    }
-  });
+        yield* Effect.gen(function* () {
+          yield* Effect.promise(() => terminal.waitForRender());
+          assert.deepStrictEqual(terminal.getViewport(), [
+            "base 0          ",
+            "base   X        ",
+            "base 2          ",
+          ]);
+          assert.ok(!terminal.getOutput().includes("\t"));
+        }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              tui.stop();
+            }),
+          ),
+        );
+      }),
+    ));
 });

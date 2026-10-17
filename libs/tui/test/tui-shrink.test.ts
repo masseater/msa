@@ -1,6 +1,8 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { Effect } from "effect";
+
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import type { Component, TUI } from "../src/tui.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
@@ -20,27 +22,33 @@ class Lines implements Component {
 }
 
 describe("TUI shrinking content", () => {
-  it("clears all rendered lines when content shrinks to zero", async () => {
-    const terminal = new VirtualTerminal(40, 10);
-    const tui: TUI = new TuiMainScreen(terminal);
-    const content = new Lines(["first", "second", "third"]);
-    tui.addChild(content);
-    tui.start();
-    await terminal.waitForRender();
+  it("clears all rendered lines when content shrinks to zero", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const terminal = new VirtualTerminal(40, 10);
+        const tui: TUI = new TuiMainScreen(terminal);
+        const content = new Lines(["first", "second", "third"]);
+        tui.addChild(content);
+        tui.start();
+        yield* Effect.promise(() => terminal.waitForRender());
 
-    assert.ok(terminal.getViewport().some((line) => line.includes("first")));
-    assert.ok(terminal.getViewport().some((line) => line.includes("second")));
-    assert.ok(terminal.getViewport().some((line) => line.includes("third")));
+        assert.ok(terminal.getViewport().some((line) => line.includes("first")));
+        assert.ok(terminal.getViewport().some((line) => line.includes("second")));
+        assert.ok(terminal.getViewport().some((line) => line.includes("third")));
 
-    tui.clear();
-    tui.requestRender();
-    await terminal.waitForRender();
+        tui.clear();
+        tui.requestRender();
+        yield* Effect.promise(() => terminal.waitForRender());
 
-    const viewport = terminal.getViewport();
-    assert.ok(!viewport.some((line) => line.includes("first")), "first line should be cleared");
-    assert.ok(!viewport.some((line) => line.includes("second")), "second line should be cleared");
-    assert.ok(!viewport.some((line) => line.includes("third")), "third line should be cleared");
+        const viewport = terminal.getViewport();
+        assert.ok(!viewport.some((line) => line.includes("first")), "first line should be cleared");
+        assert.ok(
+          !viewport.some((line) => line.includes("second")),
+          "second line should be cleared",
+        );
+        assert.ok(!viewport.some((line) => line.includes("third")), "third line should be cleared");
 
-    tui.stop();
-  });
+        tui.stop();
+      }),
+    ));
 });

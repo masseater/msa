@@ -74,7 +74,7 @@ describe("Editor component", () => {
 describe("Editor component", () => {
   describe("Sticky column", () => {
     it("moves correctly through wrapped visual lines without getting stuck", () => {
-      const tui = createTestTUI(15, 24);
+      const tui = createTestTUI(15);
       const editor = new Editor(tui, defaultEditorTheme);
 
       editor.setText("short\n123456789012345678901234567890");
@@ -144,7 +144,7 @@ describe("Editor component", () => {
 describe("Editor component", () => {
   describe("Sticky column", () => {
     it("handles editor resizes when preferredVisualCol is on the same line", () => {
-      const tui = createTestTUI(80, 24);
+      const tui = createTestTUI(80);
       const editor = new Editor(tui, defaultEditorTheme);
 
       editor.setText("12345678901234567890\n\n12345678901234567890");

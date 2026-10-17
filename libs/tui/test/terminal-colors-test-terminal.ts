@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import { type Terminal } from "../src/index.ts";
 
 export class TestTerminal implements Terminal {
@@ -22,7 +24,9 @@ export class TestTerminal implements Terminal {
     this.resizeHandler = undefined;
   }
 
-  async drainInput(_maxMs?: number, _idleMs?: number): Promise<void> {}
+  drainInput(_maxMs?: number, _idleMs?: number): Promise<void> {
+    return Effect.runPromise(Effect.sync(() => {}));
+  }
 
   write(data: string): void {
     this.writes.push(data);

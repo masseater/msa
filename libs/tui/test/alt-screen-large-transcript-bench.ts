@@ -1,5 +1,7 @@
 import { performance } from "node:perf_hooks";
 
+import { Console, Effect } from "effect";
+
 import { Markdown, type MarkdownTheme } from "../src/components/markdown.ts";
 import { ScrollView } from "../src/components/scroll-view.ts";
 import { Text } from "../src/components/text.ts";
@@ -36,7 +38,9 @@ class NullTerminal implements Terminal {
 
   start(_onInput: (data: string) => void, _onResize: () => void): void {}
   stop(): void {}
-  async drainInput(): Promise<void> {}
+  drainInput(): Promise<void> {
+    return Effect.runPromise(Effect.sync(() => {}));
+  }
   write(_data: string): void {}
   get kittyProtocolActive(): boolean {
     return false;
@@ -133,11 +137,15 @@ function measure(name: string, frames: number, beforeFrame: (frame: number) => v
     tui.renderNow();
   }
   const millisecondsPerFrame = (performance.now() - start) / frames;
-  console.log(`${name}: ${millisecondsPerFrame.toFixed(3)} ms/frame (${frames} frames)`);
+  Effect.runSync(
+    Console.log(`${name}: ${millisecondsPerFrame.toFixed(3)} ms/frame (${frames} frames)`),
+  );
 }
 
-console.log(
-  `components=${COMPONENT_COUNT} lines=${totalLines} viewport=${terminal.columns}x${terminal.rows}`,
+Effect.runSync(
+  Console.log(
+    `components=${COMPONENT_COUNT} lines=${totalLines} viewport=${terminal.columns}x${terminal.rows}`,
+  ),
 );
 measure("steady", 200, () => {});
 transcript.scrollTo(Math.floor(totalLines / 2));

@@ -1,5 +1,7 @@
 import { readFileSync } from "fs";
 
+import { Console, Effect } from "effect";
+
 import { Image } from "../src/components/image.ts";
 import { Spacer } from "../src/components/spacer.ts";
 import { Text } from "../src/components/text.ts";
@@ -10,23 +12,23 @@ import type { TUI } from "../src/tui.ts";
 
 const testImagePath = process.argv[2] || "/tmp/test-image.png";
 
-console.log("Terminal capabilities:", getCapabilities());
-console.log("Loading image from:", testImagePath);
+Effect.runSync(Console.log("Terminal capabilities:", getCapabilities()));
+Effect.runSync(Console.log("Loading image from:", testImagePath));
 
 let imageBuffer: Buffer;
 try {
   imageBuffer = readFileSync(testImagePath);
 } catch {
-  console.error(`Failed to load image: ${testImagePath}`);
-  console.error("Usage: node test/image-test.ts [path-to-image.png]");
+  Effect.runSync(Console.error(`Failed to load image: ${testImagePath}`));
+  Effect.runSync(Console.error("Usage: node test/image-test.ts [path-to-image.png]"));
   process.exit(1);
 }
 
 const base64Data = imageBuffer.toString("base64");
 const dims = getImageDimensions(base64Data, "image/png");
 
-console.log("Image dimensions:", dims);
-console.log("");
+Effect.runSync(Console.log("Image dimensions:", dims));
+Effect.runSync(Console.log(""));
 
 const terminal = new ProcessTerminal();
 const tui: TUI = new TuiMainScreen(terminal);

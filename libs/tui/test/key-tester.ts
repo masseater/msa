@@ -1,3 +1,6 @@
+import { Console, Effect } from "effect";
+
+import { runEvery } from "../src/delay.ts";
 import { matchesKey } from "../src/keys.ts";
 import { ProcessTerminal } from "../src/terminal.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
@@ -18,7 +21,7 @@ class KeyLogger implements Component {
   handleInput(data: string): void {
     if (matchesKey(data, "ctrl+c")) {
       this.tui.stop();
-      console.log("\nExiting...");
+      Effect.runSync(Console.log("\nExiting..."));
       process.exit(0);
     }
 
@@ -96,10 +99,10 @@ tui.setFocus(logger);
 
 process.on("SIGINT", () => {
   tui.stop();
-  console.log("\nExiting...");
+  Effect.runSync(Console.log("\nExiting..."));
   process.exit(0);
 });
 
 tui.start();
 
-setInterval(() => tui.requestRender(), 100);
+runEvery(100, () => tui.requestRender());
