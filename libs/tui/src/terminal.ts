@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import { Clock, DateTime, Effect } from "effect";
 import { dual } from "effect/Function";
 
+import { CSI, matchCsiSequence } from "./ansi-sequences.ts";
 import { type CancelDelay, runAfter, runEvery } from "./delay.ts";
 import { readEnv } from "./env.ts";
 import { setKittyProtocolActive } from "./keys.ts";
@@ -16,6 +17,9 @@ import {
   type ProgramStatus,
 } from "./program-status.ts";
 import { StdinBuffer } from "./stdin-buffer.ts";
+
+const KITTY_FLAGS_BODY = /^\?(\d+)$/u;
+const PRIVATE_PARAMETERS_BODY = /^\?[\d;]*$/u;
 
 const TERMINAL_PROGRESS_KEEPALIVE_MS = 1000;
 const TERMINAL_PROGRESS_ACTIVE_SEQUENCE = "\x1b]9;4;3\x07";
@@ -33,18 +37,21 @@ export type KeyboardProtocolNegotiationSequence =
 export function parseKeyboardProtocolNegotiationSequence(
   sequence: string,
 ): KeyboardProtocolNegotiationSequence | undefined {
-  const kittyFlags = sequence.match(/^\x1b\[\?(\d+)u$/u);
+  const kittyFlags = matchCsiSequence({ data: sequence, finals: "u", body: KITTY_FLAGS_BODY });
   if (kittyFlags !== null) {
-    return { type: "kitty-flags", flags: Number.parseInt(kittyFlags[1]!, 10) };
+    return { type: "kitty-flags", flags: Number.parseInt(kittyFlags.groups[1]!, 10) };
   }
-  if (/^\x1b\[\?[\d;]*c$/u.test(sequence)) {
+  if (matchCsiSequence({ data: sequence, finals: "c", body: PRIVATE_PARAMETERS_BODY }) !== null) {
     return { type: "device-attributes" };
   }
   return undefined;
 }
 
 function isKeyboardProtocolNegotiationSequencePrefix(sequence: string): boolean {
-  return sequence === "\x1b[" || /^\x1b\[\?[\d;]*$/u.test(sequence);
+  return (
+    sequence === CSI ||
+    (sequence.startsWith(CSI) && PRIVATE_PARAMETERS_BODY.test(sequence.slice(CSI.length)))
+  );
 }
 
 export function isAppleTerminalSession(): boolean {

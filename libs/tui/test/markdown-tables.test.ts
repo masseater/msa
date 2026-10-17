@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
+import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown, type MarkdownTheme } from "../src/components/markdown.ts";
 import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
@@ -26,7 +27,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
 
       assert.ok(plainLines.some((line) => line.includes("Left")));
       assert.ok(plainLines.some((line) => line.includes("Center")));
@@ -53,7 +54,7 @@ describe("Markdown component", () => {
 
       assert.ok(lines.length > 0);
 
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       assert.ok(plainLines.some((line) => line.includes("Very long column header")));
       assert.ok(plainLines.some((line) => line.includes("This is a much longer cell content")));
     });
@@ -74,7 +75,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(50);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       for (const line of plainLines) {
         assert.ok(line.length <= 50, `Line exceeds width 50: "${line}" (length: ${line.length})`);

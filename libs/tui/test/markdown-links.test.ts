@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { afterEach, describe, it } from "node:test";
 
+import { stripHyperlinkSequences, stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
 import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
 import { stripAnsi } from "./markdown-helpers.ts";
@@ -53,9 +54,7 @@ describe("Markdown component", () => {
         joined.includes("\x1b]8;;https://example.com\x1b\\"),
         "Should contain OSC 8 hyperlink",
       );
-      const rawPlain = lines.map((line) =>
-        line.replace(/\x1b\]8;;[^\x1b]*\x1b\\/gu, "").replace(/\x1b\[[0-9;]*m/gu, ""),
-      );
+      const rawPlain = lines.map((line) => stripStyleSequences(stripHyperlinkSequences(line)));
       assert.ok(
         !rawPlain.join("").includes("(https://example.com)"),
         "URL should not appear twice",
@@ -75,7 +74,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const joinedPlain = plainLines.join(" ");
 
       assert.ok(
@@ -93,7 +92,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const joinedPlain = plainLines.join("\n");
 
       assert.ok(

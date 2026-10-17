@@ -1,3 +1,5 @@
+import { matchStringSequence, replaceControlRuns } from "./ansi-sequences.ts";
+
 export interface ProgramStatus {
   state: "idle" | "working" | "blocked" | "done" | "error" | "clear";
   app?: string;
@@ -8,11 +10,11 @@ export interface ProgramStatus {
 export const PROGRAM_STATUS_QUERY = "\x1b]7501;?\x1b\\";
 
 export function isProgramStatusReply(sequence: string): boolean {
-  return /^\x1b\]7501;\?[^\x07\x1b]*(?:\x07|\x1b\\)$/u.test(sequence);
+  return matchStringSequence({ data: sequence, kind: "osc", body: PROGRAM_STATUS_BODY }) !== null;
 }
 
 const APP_PATTERN = /^[A-Za-z0-9_.+-]{1,32}$/u;
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]+/gu;
+const PROGRAM_STATUS_BODY = /^7501;\?.*$/su;
 const MAX_MESSAGE_BYTES = 2048;
 
 function truncateUtf8(text: string, maxBytes: number): string {
@@ -33,7 +35,7 @@ export function formatProgramStatus(status: ProgramStatus): string {
   if (status.app !== undefined && APP_PATTERN.test(status.app)) pairs.push(`app=${status.app}`);
   if (status.state === "blocked" && status.kind !== undefined) pairs.push(`kind=${status.kind}`);
   const message = truncateUtf8(
-    (status.message ?? "").replace(CONTROL_CHARACTERS, " ").trim(),
+    replaceControlRuns(status.message ?? "", " ").trim(),
     MAX_MESSAGE_BYTES,
   );
   if (message !== "") pairs.push(`msg=${Buffer.from(message, "utf8").toString("base64")}`);

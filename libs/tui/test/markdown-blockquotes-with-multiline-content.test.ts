@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
 import { chalk } from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
@@ -21,7 +22,7 @@ describe("Markdown component", () => {
 
       const lines = markdown.render(80);
 
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const quotedLines = plainLines.filter((line) => line.startsWith("│ "));
       assert.strictEqual(
         quotedLines.length,
@@ -58,7 +59,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const quotedLines = plainLines.filter((line) => line.startsWith("│ "));
 
       assert.ok(
@@ -81,7 +82,7 @@ describe("Markdown component", () => {
       const markdown = new Markdown(`> ${longText}`, 0, 0, defaultMarkdownTheme);
 
       const lines = markdown.render(30);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       const contentLines = plainLines.filter((line) => line.length > 0);
 
@@ -117,7 +118,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(25);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       const contentLines = plainLines.filter((line) => line.length > 0);
 
@@ -139,7 +140,7 @@ describe("Markdown component", () => {
       const markdown = new Markdown("> Quote with **bold** and `code`", 0, 0, defaultMarkdownTheme);
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
 
       assert.ok(
         plainLines.some((line) => line.startsWith("│ ")),

@@ -4,6 +4,7 @@ import { renderLatex } from "../latex.ts";
 import { getCapabilities, hyperlink, isImageLine } from "../terminal-image.ts";
 import type { Component } from "../tui.ts";
 import { applyBackgroundToLine, flattenLines, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
+const RESET_STYLE = "\x1b[0m";
 
 const STRICT_STRIKETHROUGH_REGEX = /^(~~)(?=[^\s~])((?:\\.|[^\\])*?(?:\\.|[^\s~\\]))\1(?=[^~]|$)/u;
 
@@ -544,7 +545,9 @@ export class Markdown implements Component {
           if (quoteStylePrefix === "") {
             return quoteStyle(line);
           }
-          const lineWithReappliedStyle = line.replace(/\x1b\[0m/gu, `\x1b[0m${quoteStylePrefix}`);
+          const lineWithReappliedStyle = line
+            .split(RESET_STYLE)
+            .join(`${RESET_STYLE}${quoteStylePrefix}`);
           return quoteStyle(lineWithReappliedStyle);
         };
 

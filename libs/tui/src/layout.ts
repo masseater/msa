@@ -1,5 +1,6 @@
 import { dual } from "effect/Function";
 
+import { stripOsc133ZonePrefix } from "./ansi-sequences.ts";
 import type { ScrollView } from "./components/scroll-view.ts";
 import { allocateStackSizes, visibleStackEntries } from "./components/stack.ts";
 import { getLayoutNode } from "./layout-node.ts";
@@ -12,8 +13,6 @@ import {
   sliceByColumn,
   visibleWidth,
 } from "./utils.ts";
-
-const OSC133_ZONE_PREFIX = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/u;
 
 export interface LayoutRect {
   x: number;
@@ -376,7 +375,7 @@ function paintBox(box: LayoutBox, screen: string[], totalWidth: number): void {
     for (let row = firstRow; row < lastRow; row++) {
       const sourceLine = box.lines[offset + row - box.rect.y];
       if (sourceLine === undefined) continue;
-      let line = sourceLine.replace(OSC133_ZONE_PREFIX, "");
+      let line = stripOsc133ZonePrefix(sourceLine);
       const imageMetadata = getKittyImageMetadata(line);
       if (imageMetadata !== undefined) {
         const clipBottom = Math.min(screen.length, box.clip.y + box.clip.height);

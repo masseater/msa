@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { escapeSequences, stripStyleSequences } from "../src/ansi-sequences.ts";
 import {
   colorToHex,
   colorToOkhsl,
@@ -55,9 +56,10 @@ describe("colors", () => {
       ),
       "\x1b[38;2;18;52;86m\x1b[48;5;9m\x1b[1m\x1b[3mReady\x1b[23m\x1b[22m\x1b[49m\x1b[39m",
     );
-    assert.match(
-      styleText("Ready", { fg: rgbColor(18, 52, 86) }, "256color"),
-      /^\x1b\[38;5;\d+mReady\x1b\[39m$/u,
-    );
+    const styled = styleText("Ready", { fg: rgbColor(18, 52, 86) }, "256color");
+    const [open, close] = escapeSequences(styled);
+    assert.match(open?.body ?? "", /^38;5;\d+$/u);
+    assert.equal(close?.body, "39");
+    assert.equal(stripStyleSequences(styled), "Ready");
   });
 });

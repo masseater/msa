@@ -130,7 +130,8 @@ const TERMINAL_COLOR_QUERY = `\x1b]10;?\x07\x1b]11;?\x07${Array.from(
   { length: TERMINAL_PALETTE_SIZE },
   (_, index) => `\x1b]4;${index};?\x07`,
 ).join("")}\x1b[c`;
-const DEVICE_ATTRIBUTES_RESPONSE_PATTERN = /^\x1b\[\?[\d;]*c$/u;
+const DEVICE_ATTRIBUTES_BODY = /^\?[\d;]*$/u;
+const CELL_SIZE_BODY = /^6;(\d+);(\d+)$/u;
 
 export interface Focusable {
   focused: boolean;
@@ -144,7 +145,18 @@ export const CURSOR_MARKER = "\x1b_pi:c\x07";
 
 export const FAKE_CURSOR_START = "\x1b_pi:fc\x07";
 export const FAKE_CURSOR_END = "\x1b_pi:/fc\x07";
-const FOCUSED_FAKE_CURSOR = /(\x1b_pi:c\x07)\x1b_pi:fc\x07(.*?)(?:\x1b_pi:\/fc\x07|$)/su;
+
+function unwrapFocusedFakeCursor(line: string): string {
+  const marker = `${CURSOR_MARKER}${FAKE_CURSOR_START}`;
+  const markerStart = line.indexOf(marker);
+  if (markerStart === -1) return line;
+  const contentStart = markerStart + marker.length;
+  const contentEnd = line.indexOf(FAKE_CURSOR_END, contentStart);
+  const content =
+    contentEnd === -1 ? line.slice(contentStart) : line.slice(contentStart, contentEnd);
+  const rest = contentEnd === -1 ? "" : line.slice(contentEnd + FAKE_CURSOR_END.length);
+  return `${line.slice(0, markerStart)}${CURSOR_MARKER}${content}${rest}`;
+}
 
 export function renderFakeCursor(text: string): string {
   return `${FAKE_CURSOR_START}${text}${FAKE_CURSOR_END}`;
@@ -158,6 +170,7 @@ export type {
   OverlayOptions,
   SizeValue,
 } from "./tui-overlay-layout.ts";
+import { matchCsiSequence } from "./ansi-sequences.ts";
 
 export interface OverlayUnfocusOptions {
   target: Component | null;
@@ -1010,7 +1023,7 @@ export abstract class TuiBase extends Container implements TUI {
     if (query === undefined) {
       return false;
     }
-    if (DEVICE_ATTRIBUTES_RESPONSE_PATTERN.test(data)) {
+    if (matchCsiSequence({ data, finals: "c", body: DEVICE_ATTRIBUTES_BODY }) !== null) {
       this.pendingTerminalColorQueries.shift();
       this.completeTerminalColorQuery(query);
       return true;
@@ -1066,7 +1079,8 @@ export abstract class TuiBase extends Container implements TUI {
   }
 
   private consumeCellSizeResponse(data: string): boolean {
-    const [, height, width] = data.match(/^\x1b\[6;(\d+);(\d+)t$/u) ?? [];
+    const [, height, width] =
+      matchCsiSequence({ data, finals: "t", body: CELL_SIZE_BODY })?.groups ?? [];
     if (height === undefined || width === undefined) {
       return false;
     }
@@ -1200,7 +1214,7 @@ export abstract class TuiBase extends Container implements TUI {
   protected resolveFakeCursors(lines: string[]): string[] {
     return lines.map((line) => {
       if (!line.includes(FAKE_CURSOR_START)) return line;
-      const resolved = this.showHardwareCursor ? line.replace(FOCUSED_FAKE_CURSOR, "$1$2") : line;
+      const resolved = this.showHardwareCursor ? unwrapFocusedFakeCursor(line) : line;
       return resolved
         .replaceAll(FAKE_CURSOR_START, "\x1b[7m")
         .replaceAll(FAKE_CURSOR_END, "\x1b[27m");

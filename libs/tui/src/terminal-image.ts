@@ -381,8 +381,26 @@ function getRegisteredKittyImageMetadataFromControls(
   return imageId === undefined ? undefined : kittyImageMetadata.get(Number.parseInt(imageId, 10));
 }
 
+interface KittyCommand {
+  index: number;
+  controls: string;
+  length: number;
+}
+
+function findKittyCommand(line: string): KittyCommand | undefined {
+  const index = line.indexOf(KITTY_PREFIX);
+  if (index === -1) return undefined;
+  const controlsEnd = line.indexOf(";", index + KITTY_PREFIX.length);
+  if (controlsEnd === -1) return undefined;
+  return {
+    index,
+    controls: line.slice(index + KITTY_PREFIX.length, controlsEnd),
+    length: controlsEnd + 1 - index,
+  };
+}
+
 function getRegisteredKittyImageMetadata(line: string): RegisteredKittyImageMetadata | undefined {
-  const controls = /\x1b_G([^;]*);/u.exec(line)?.[1];
+  const controls = findKittyCommand(line)?.controls;
   return controls === undefined ? undefined : getRegisteredKittyImageMetadataFromControls(controls);
 }
 
@@ -430,7 +448,7 @@ const KITTY_PLACEMENT_CONTROL_KEYS = new Set([
 ]);
 
 export function getKittyImagePlacementRows(line: string): number | undefined {
-  const controls = /\x1b_G([^;]*);/u.exec(line)?.[1];
+  const controls = findKittyCommand(line)?.controls;
   if (controls === undefined) return undefined;
   const explicitRows = getExplicitKittyImageRows(controls);
   if (explicitRows !== undefined) return explicitRows;
@@ -438,9 +456,9 @@ export function getKittyImagePlacementRows(line: string): number | undefined {
 }
 
 export function getKittyImagePlacement(line: string): KittyImagePlacement | undefined {
-  const match = /\x1b_G([^;]*);/u.exec(line);
-  const imageControls = match?.[1];
-  if (match === null || imageControls === undefined) return undefined;
+  const match = findKittyCommand(line);
+  const imageControls = match?.controls;
+  if (match === undefined || imageControls === undefined) return undefined;
   const metadata = getRegisteredKittyImageMetadataFromControls(imageControls);
   if (metadata === undefined) return undefined;
 
@@ -479,11 +497,11 @@ export const cropKittyImageLine: {
   (hiddenRows: number, visibleRows: number): (line: string) => string;
 } = dual(3, (line: string, hiddenRows: number, visibleRows: number): string => {
   const metadata = getKittyImageMetadata(line);
-  const match = /\x1b_G([^;]*);/u.exec(line);
-  const imageControls = match?.[1];
+  const match = findKittyCommand(line);
+  const imageControls = match?.controls;
   if (
     metadata === undefined ||
-    match === null ||
+    match === undefined ||
     imageControls === undefined ||
     hiddenRows < 0 ||
     hiddenRows >= metadata.rows ||
@@ -497,7 +515,7 @@ export const cropKittyImageLine: {
   const sourceHeight = Math.max(1, Math.min(metadata.heightPx, sourceEnd) - sourceY);
   const controls = imageControls.split(",").filter((control) => !/^[yhr]=/u.test(control));
   controls.push(`y=${sourceY}`, `h=${sourceHeight}`, `r=${croppedRows}`);
-  return `${line.slice(0, match.index)}\x1b_G${controls.join(",")};${line.slice(match.index + match[0].length)}`;
+  return `${line.slice(0, match.index)}\x1b_G${controls.join(",")};${line.slice(match.index + match.length)}`;
 });
 
 function chooseLessDistortedCellCount(upperCount: number, idealCount: number): number {

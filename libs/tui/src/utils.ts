@@ -1,6 +1,10 @@
 import { dual } from "effect/Function";
 import { eastAsianWidth } from "get-east-asian-width";
 
+import { isStyleSequence, matchStringSequence, parseEscapeSequence } from "./ansi-sequences.ts";
+
+const OSC8_BODY = /^8;[^;]*;(.*)$/su;
+
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
 
@@ -326,8 +330,12 @@ export const getOsc8LinkAtColumn: {
   while (i < line.length) {
     const ansi = extractAnsiCode(line, i);
     if (ansi !== null) {
-      const hyperlink = /^\x1b\]8;[^;]*;([^\x07\x1b]*)(?:\x07|\x1b\\)$/u.exec(ansi.code);
-      if (hyperlink !== null) activeUrl = hyperlink[1] || undefined;
+      const hyperlink = matchStringSequence({
+        data: ansi.code,
+        kind: "osc",
+        body: OSC8_BODY,
+      });
+      if (hyperlink !== null) activeUrl = hyperlink.groups[1] || undefined;
       i += ansi.length;
       continue;
     }
@@ -507,7 +515,8 @@ class AnsiCodeTracker {
       return;
     }
 
-    const params = ansiCode.match(/\x1b\[([\d;]*)m/u)?.[1];
+    const style = parseEscapeSequence(ansiCode);
+    const params = style !== null && isStyleSequence(style) ? style.body : undefined;
     if (params === undefined) return;
 
     if (params === "" || params === "0") {

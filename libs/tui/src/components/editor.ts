@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
+import { replaceEscapeSequences } from "../ansi-sequences.ts";
 import type { AutocompleteProvider, AutocompleteSuggestions } from "../autocomplete.ts";
 import { type CancelDelay, runAfter } from "../delay.ts";
 import { getKeybindings } from "../keybindings.ts";
@@ -28,6 +29,8 @@ import {
 } from "../utils.ts";
 import { findWordBackward, findWordForward } from "../word-navigation.ts";
 import { SelectList, type SelectListLayoutOptions, type SelectListTheme } from "./select-list.ts";
+
+const CTRL_CSI_U_BODY = /^(\d+);5$/u;
 
 const graphemeSegmenter = getGraphemeSegmenter();
 const wordSegmenter = getWordSegmenter();
@@ -1129,11 +1132,15 @@ export class Editor implements Component, Focusable {
 
     this.pushUndoSnapshot();
 
-    const decodedText = pastedText.replace(/\x1b\[(\d+);5u/gu, (match, code) => {
-      const cp = Number(code);
-      if (cp >= 97 && cp <= 122) return String.fromCharCode(cp - 96);
-      if (cp >= 65 && cp <= 90) return String.fromCharCode(cp - 64);
-      return match;
+    const decodedText = replaceEscapeSequences(pastedText, (sequence) => {
+      const control =
+        sequence.kind === "csi" && sequence.final === "u"
+          ? CTRL_CSI_U_BODY.exec(sequence.body)
+          : null;
+      const codepoint = control === null ? Number.NaN : Number(control[1]);
+      if (codepoint >= 97 && codepoint <= 122) return String.fromCharCode(codepoint - 96);
+      if (codepoint >= 65 && codepoint <= 90) return String.fromCharCode(codepoint - 64);
+      return sequence.raw;
     });
 
     const cleanText = this.normalizeText(decodedText);

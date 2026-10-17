@@ -1,6 +1,11 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import {
+  escapeSequences,
+  stripHyperlinkSequences,
+  stripStyleSequences,
+} from "../src/ansi-sequences.ts";
 import { wrapTextWithAnsi } from "../src/utils.ts";
 
 describe("wrapTextWithAnsi with OSC 8 hyperlinks", () => {
@@ -10,9 +15,7 @@ describe("wrapTextWithAnsi with OSC 8 hyperlinks", () => {
     const lines = wrapTextWithAnsi(input, 6);
 
     for (const line of lines) {
-      const stripped = line
-        .replace(/\x1b\]8;;[^\x1b\x07]*\x1b\\/gu, "")
-        .replace(/\x1b\[[0-9;]*m/gu, "");
+      const stripped = stripStyleSequences(stripHyperlinkSequences(line));
       if (stripped.trim().length > 0) {
         assert.ok(
           line.startsWith(`\x1b]8;;${url}\x1b\\`) || line.includes(`\x1b]8;;${url}\x1b\\`),
@@ -73,8 +76,9 @@ describe("wrapTextWithAnsi with OSC 8 hyperlinks", () => {
     assert.strictEqual(lines.length, 1);
     const [line] = lines;
     assert.ok(line !== undefined);
-    const openCount = (line.match(/\x1b\]8;;https:[^\x1b]+\x1b\\/gu) ?? []).length;
-    const closeCount = (line.match(/\x1b\]8;;\x1b\\/gu) ?? []).length;
+    const hyperlinks = escapeSequences(line).filter((sequence) => sequence.kind === "osc");
+    const openCount = hyperlinks.filter((sequence) => sequence.body.startsWith("8;;https:")).length;
+    const closeCount = hyperlinks.filter((sequence) => sequence.body === "8;;").length;
     assert.strictEqual(openCount, 1);
     assert.strictEqual(closeCount, 1);
   });

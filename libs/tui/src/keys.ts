@@ -1,6 +1,12 @@
 import { dual } from "effect/Function";
 
+import { matchCsiSequence } from "./ansi-sequences.ts";
 import { isEnvSet } from "./env.ts";
+
+const KITTY_CSI_U_BODY = /^(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?$/u;
+const MODIFIED_KEY_BODY = /^1;(\d+)(?::(\d+))?$/u;
+const FUNCTION_KEY_BODY = /^(\d+)(?:;(\d+))?(?::(\d+))?$/u;
+const MODIFY_OTHER_KEYS_BODY = /^27;(\d+);(\d+)$/u;
 let kittyProtocolEnabled = false;
 
 export function setKittyProtocolActive(active: boolean): void {
@@ -526,8 +532,9 @@ function parseEventType(eventTypeStr: string | undefined): KeyEventType {
 }
 
 function parseKittySequence(data: string): ParsedKittySequence | null {
-  const csiUMatch = data.match(/^\x1b\[(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?u$/u);
-  if (csiUMatch !== null) {
+  const csiU = matchCsiSequence({ data, finals: "u", body: KITTY_CSI_U_BODY });
+  if (csiU !== null) {
+    const csiUMatch = csiU.groups;
     const codepoint = parseInt(csiUMatch[1]!, 10);
     const shiftedKey =
       csiUMatch[2] !== undefined && csiUMatch[2] !== "" && csiUMatch[2].length > 0
@@ -541,16 +548,17 @@ function parseKittySequence(data: string): ParsedKittySequence | null {
     return { codepoint, shiftedKey, baseLayoutKey, modifier: modValue - 1, eventType };
   }
 
-  const arrowMatch = data.match(/^\x1b\[1;(\d+)(?::(\d+))?([ABCD])$/u);
-  if (arrowMatch !== null) {
-    const modValue = parseInt(arrowMatch[1]!, 10);
-    const eventType = parseEventType(arrowMatch[2]);
+  const arrow = matchCsiSequence({ data, finals: "ABCD", body: MODIFIED_KEY_BODY });
+  if (arrow !== null) {
+    const modValue = parseInt(arrow.groups[1]!, 10);
+    const eventType = parseEventType(arrow.groups[2]);
     const arrowCodes: Record<string, number> = { A: -1, B: -2, C: -3, D: -4 };
-    return { codepoint: arrowCodes[arrowMatch[3]!]!, modifier: modValue - 1, eventType };
+    return { codepoint: arrowCodes[arrow.final]!, modifier: modValue - 1, eventType };
   }
 
-  const funcMatch = data.match(/^\x1b\[(\d+)(?:;(\d+))?(?::(\d+))?~$/u);
-  if (funcMatch !== null) {
+  const func = matchCsiSequence({ data, finals: "~", body: FUNCTION_KEY_BODY });
+  if (func !== null) {
+    const funcMatch = func.groups;
     const keyNum = parseInt(funcMatch[1]!, 10);
     const modValue =
       funcMatch[2] !== undefined && funcMatch[2] !== "" ? parseInt(funcMatch[2], 10) : 1;
@@ -569,12 +577,12 @@ function parseKittySequence(data: string): ParsedKittySequence | null {
     }
   }
 
-  const homeEndMatch = data.match(/^\x1b\[1;(\d+)(?::(\d+))?([HF])$/u);
-  if (homeEndMatch !== null) {
-    const modValue = parseInt(homeEndMatch[1]!, 10);
-    const eventType = parseEventType(homeEndMatch[2]);
+  const homeEnd = matchCsiSequence({ data, finals: "HF", body: MODIFIED_KEY_BODY });
+  if (homeEnd !== null) {
+    const modValue = parseInt(homeEnd.groups[1]!, 10);
+    const eventType = parseEventType(homeEnd.groups[2]);
     const codepoint =
-      homeEndMatch[3] === "H" ? FUNCTIONAL_CODEPOINTS.home : FUNCTIONAL_CODEPOINTS.end;
+      homeEnd.final === "H" ? FUNCTIONAL_CODEPOINTS.home : FUNCTIONAL_CODEPOINTS.end;
     return { codepoint, modifier: modValue - 1, eventType };
   }
 
@@ -628,8 +636,8 @@ function matchesKittySequence(
 }
 
 function parseModifyOtherKeysSequence(data: string): ParsedModifyOtherKeysSequence | null {
-  const match = data.match(/^\x1b\[27;(\d+);(\d+)~$/u);
-  if (match === null) return null;
+  const match = matchCsiSequence({ data, finals: "~", body: MODIFY_OTHER_KEYS_BODY })?.groups;
+  if (match === undefined || match === null) return null;
   const modValue = parseInt(match[1]!, 10);
   const codepoint = parseInt(match[2]!, 10);
   return { codepoint, modifier: modValue - 1 };
@@ -1258,12 +1266,11 @@ export function parseKey(data: string): string | undefined {
   return undefined;
 }
 
-const KITTY_CSI_U_REGEX = /^\x1b\[(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?u$/u;
 const KITTY_PRINTABLE_ALLOWED_MODIFIERS = MODIFIERS.shift | LOCK_MASK;
 
 export function decodeKittyPrintable(data: string): string | undefined {
-  const match = data.match(KITTY_CSI_U_REGEX);
-  if (match === null) return undefined;
+  const match = matchCsiSequence({ data, finals: "u", body: KITTY_CSI_U_BODY })?.groups;
+  if (match === undefined || match === null) return undefined;
 
   const codepoint = Number.parseInt(match[1] ?? "", 10);
   if (!Number.isFinite(codepoint)) return undefined;

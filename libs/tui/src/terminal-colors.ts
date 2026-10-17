@@ -1,3 +1,5 @@
+import { escapeSequences, matchStringSequence } from "./ansi-sequences.ts";
+
 export interface RgbColor {
   r: number;
   g: number;
@@ -33,14 +35,14 @@ function parseOscHexChannel(channel: string): number | undefined {
 
 export type OscColorTarget = "foreground" | "background" | number;
 
-const OSC_COLOR_RESPONSE_PATTERN =
-  /^\x1b\](?:(1[01])|4;(\d{1,3}));([^\x07\x1b]*)(?:\x07|\x1b\\)$/iu;
-const COLOR_SCHEME_REPORT_PATTERN = /^(?:\x1b\[\?997;(1|2)n)+$/u;
+const OSC_COLOR_RESPONSE_BODY = /^(?:(1[01])|4;(\d{1,3}));(.*)$/isu;
+const COLOR_SCHEME_BODY = /^\?997;(1|2)$/u;
 
 export function parseOscColorResponse(
   data: string,
 ): { target: OscColorTarget; rgb: RgbColor | undefined } | undefined {
-  const [, dynamicColor, paletteIndex, value] = data.match(OSC_COLOR_RESPONSE_PATTERN) ?? [];
+  const [, dynamicColor, paletteIndex, value] =
+    matchStringSequence({ data, kind: "osc", body: OSC_COLOR_RESPONSE_BODY })?.groups ?? [];
   if (value === undefined) {
     return undefined;
   }
@@ -85,9 +87,18 @@ function parseOscColorValue(rawValue: string): RgbColor | undefined {
 }
 
 export function parseTerminalColorSchemeReport(data: string): TerminalColorScheme | undefined {
-  const match = data.match(COLOR_SCHEME_REPORT_PATTERN);
-  if (match === null) {
+  const sequences = escapeSequences(data);
+  const consumed = sequences.reduce((total, sequence) => total + sequence.raw.length, 0);
+  if (sequences.length === 0 || consumed !== data.length) {
     return undefined;
   }
-  return match[1] === "2" ? "light" : "dark";
+  const reports = sequences.map((sequence) =>
+    sequence.kind === "csi" && sequence.final === "n"
+      ? COLOR_SCHEME_BODY.exec(sequence.body)
+      : null,
+  );
+  if (reports.includes(null)) {
+    return undefined;
+  }
+  return reports[reports.length - 1]?.[1] === "2" ? "light" : "dark";
 }

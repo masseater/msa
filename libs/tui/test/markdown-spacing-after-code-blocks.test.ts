@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
 import { chalk } from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
@@ -35,7 +36,7 @@ more text`,
       for (const text of cases) {
         const markdown = new Markdown(text, 0, 0, defaultMarkdownTheme);
         const lines = markdown.render(80);
-        const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+        const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
         assert.deepStrictEqual(
           plainLines,
@@ -58,7 +59,7 @@ describe("Markdown component", () => {
       for (const text of cases) {
         const markdown = new Markdown(text, 0, 0, defaultMarkdownTheme);
         const lines = markdown.render(80);
-        const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+        const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
         assert.notStrictEqual(
           plainLines.at(-1),
@@ -85,7 +86,7 @@ again, hello world`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       const dividerIndex = plainLines.findIndex((line) => line.includes("─"));
       assert.ok(dividerIndex !== -1, "Should have divider");
@@ -103,7 +104,7 @@ again, hello world`,
     it("should not add a trailing blank line when divider is the last rendered block", () => {
       const markdown = new Markdown("---", 0, 0, defaultMarkdownTheme);
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       assert.notStrictEqual(
         plainLines.at(-1),
@@ -127,7 +128,7 @@ This is a paragraph`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       const headingIndex = plainLines.findIndex((line) => line.includes("Hello"));
       assert.ok(headingIndex !== -1, "Should have heading");
@@ -145,7 +146,7 @@ This is a paragraph`,
     it("should not add a trailing blank line when heading is the last rendered block", () => {
       const markdown = new Markdown("# Hello", 0, 0, defaultMarkdownTheme);
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       assert.notStrictEqual(
         plainLines.at(-1),
@@ -171,7 +172,7 @@ again, hello world`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       const quoteIndex = plainLines.findIndex((line) => line.includes("This is a quote"));
       assert.ok(quoteIndex !== -1, "Should have blockquote");
@@ -189,7 +190,7 @@ again, hello world`,
     it("should not add a trailing blank line when blockquote is the last rendered block", () => {
       const markdown = new Markdown("> This is a quote", 0, 0, defaultMarkdownTheme);
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       assert.notStrictEqual(
         plainLines.at(-1),
@@ -221,7 +222,7 @@ bar`,
 
     const lines = markdown.render(80);
 
-    const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+    const plainLines = lines.map((line) => stripStyleSequences(line));
     const quotedLines = plainLines.filter((line) => line.startsWith("│ "));
     assert.strictEqual(
       quotedLines.length,

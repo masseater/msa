@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
+import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import type { Component, TUI } from "../src/tui.ts";
@@ -214,7 +215,7 @@ again, hello world`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       const closingBackticksIndex = plainLines.indexOf("```");
       assert.ok(closingBackticksIndex !== -1, "Should have closing backticks");
