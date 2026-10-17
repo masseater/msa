@@ -1,6 +1,8 @@
 import type { CodemodeJsonSchema } from "@msa/codemode";
 import { renderToolSample, toCodemodeIdentifier } from "@msa/codemode/declarations";
+import { Function } from "effect";
 
+import type { Dual2, Dual3 } from "../dual.ts";
 import type { ToolRegistration } from "../harness/types.ts";
 import { MODELS_DESCRIPTION } from "./models.ts";
 
@@ -55,21 +57,25 @@ export function sampleOf(tool: ToolRegistration): string {
   return renderToolSample(declarationOf(tool));
 }
 
-export function namespaceOf(
-  name: string,
-  namespaces: readonly CodemodeNamespace[],
-): CodemodeNamespace | undefined {
-  let found: CodemodeNamespace | undefined;
-  for (const namespace of namespaces) {
-    if (
-      name.startsWith(namespace.prefix) &&
-      (found === undefined || namespace.prefix.length > found.prefix.length)
-    ) {
-      found = namespace;
+export const namespaceOf: Dual2<
+  string,
+  readonly CodemodeNamespace[],
+  CodemodeNamespace | undefined
+> = Function.dual(
+  2,
+  (name: string, namespaces: readonly CodemodeNamespace[]): CodemodeNamespace | undefined => {
+    let found: CodemodeNamespace | undefined;
+    for (const namespace of namespaces) {
+      if (
+        name.startsWith(namespace.prefix) &&
+        (found === undefined || namespace.prefix.length > found.prefix.length)
+      ) {
+        found = namespace;
+      }
     }
-  }
-  return found;
-}
+    return found;
+  },
+);
 
 function renderToolSection(tool: ToolRegistration): string {
   const id = toCodemodeIdentifier(tool.name);
@@ -105,16 +111,14 @@ function placeRound(
   return { active: next, remaining };
 }
 
-export function codemodeSection(
+function catalogGroups(
   tools: readonly ToolRegistration[],
   namespaces: readonly CodemodeNamespace[],
-  budget: number,
-): string | undefined {
-  if (tools.length === 0) return undefined;
+): CatalogGroup[] {
   const groups = new Map<string, CatalogGroup>([["", { namespace: undefined, entries: [] }]]);
   for (const tool of tools) {
     const namespace = namespaceOf(tool.name, namespaces);
-    const key = namespace ? `ns:${namespace.name}` : "";
+    const key = namespace === undefined ? "" : `ns:${namespace.name}`;
     const group = groups.get(key) ?? { namespace, entries: [] };
     groups.set(key, group);
     const section = renderToolSection(tool);
@@ -124,20 +128,29 @@ export function codemodeSection(
       cost: Math.ceil(section.length / CHARS_PER_TOKEN),
     });
   }
-  const ordered = [...groups.values()].sort((a, b) =>
+  return [...groups.values()].sort((a, b) =>
     a.namespace === undefined
       ? -1
       : b.namespace === undefined
         ? 1
         : a.namespace.name.localeCompare(b.namespace.name),
   );
+}
+
+const sectionCode = (
+  tools: readonly ToolRegistration[],
+  namespaces: readonly CodemodeNamespace[],
+  budget: number,
+): string | undefined => {
+  if (tools.length === 0) return undefined;
+  const ordered = catalogGroups(tools, namespaces);
   const shown = selectCatalog(ordered, budget);
 
   const toolSections = ["Tools scripts can call (`await tools.<name>(args)`):"];
   for (const { namespace, entries } of ordered) {
     if (entries.length === 0) continue;
     const visible = entries.filter((entry) => shown.has(entry.name));
-    if (namespace) {
+    if (namespace !== undefined) {
       const listing =
         visible.length === entries.length
           ? ""
@@ -145,11 +158,19 @@ export function codemodeSection(
             ? " (tools not listed)"
             : " (some tools not listed)";
       const description = namespace.description?.trim();
-      toolSections.push(`## ${namespace.name}${listing}${description ? `\n${description}` : ""}`);
+      const described = description === undefined || description === "" ? "" : `\n${description}`;
+      toolSections.push(`## ${namespace.name}${listing}${described}`);
     } else if (visible.length < entries.length) {
       toolSections.push("Some tools are not listed: find them with `searchTools()`.");
     }
     for (const entry of visible) toolSections.push(entry.section);
   }
   return toolSections.join("\n\n");
-}
+};
+
+export const codemodeSection: Dual3<
+  readonly ToolRegistration[],
+  readonly CodemodeNamespace[],
+  number,
+  string | undefined
+> = Function.dual(3, sectionCode);

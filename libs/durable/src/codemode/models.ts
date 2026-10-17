@@ -1,17 +1,16 @@
-import type {
-  AnyModel,
-  ClassifierContext,
-  ImagesContext,
-  Models,
-  ModelType,
-  ModelTypeMap,
-  Usage,
-} from "@msa/ai";
+import type { AnyModel, Models, ModelType, ModelTypeMap, Usage } from "@msa/ai";
 import type { Context, JsonValue } from "@msa/chord";
+import { Effect } from "effect";
 import { Type } from "typebox";
 
 import { defineTool } from "../harness/define.ts";
 import type { ToolRegistration } from "../harness/types.ts";
+import {
+  checkClassifierContext,
+  checkImagesContext,
+  describeValue,
+  isRecord,
+} from "./model-inputs.ts";
 
 export const CODEMODE_INTERNAL_PREFIX = "msa.codemode.";
 export const CLASSIFY_TOOL = `${CODEMODE_INTERNAL_PREFIX}models.classify`;
@@ -40,21 +39,6 @@ export const MODELS_DESCRIPTION = [
   `At most ${MAX_CONCURRENT_MODEL_CALLS} classify/generateImages calls run at once; more wait.`,
 ].join("\n");
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function describeValue(value: unknown): string {
-  if (value === undefined || value === null) return String(value);
-  if (Array.isArray(value)) return value.length === 0 ? "an empty array" : "an array";
-  if (typeof value === "object") {
-    const keys = Object.keys(value);
-    if (keys.length === 0) return "{}";
-    return `{ ${keys.slice(0, 6).join(", ")}${keys.length > 6 ? ", ..." : ""} }`;
-  }
-  return typeof value === "string" ? "a string" : `a ${typeof value}`;
-}
-
 function withArticle(word: string): string {
   return `${/^[aeiou]/u.test(word) ? "an" : "a"} ${word}`;
 }
@@ -78,20 +62,24 @@ function toModelInfo(model: AnyModel): JsonValue {
   return JSON.parse(JSON.stringify(info)) as JsonValue;
 }
 
-export async function catalogCall(
+export const catalogCall = Effect.fnUntraced(function* (
   name: string,
   args: unknown,
   models: Models,
   context: Context,
-): Promise<JsonValue | undefined> {
+) {
   const list = Array.isArray(args) ? args : [];
   const [type, provider, id] = list;
   if (name === "models.getModelsOfType")
     return models.getModelsOfType(toModelType(type), toProvider(provider)).map(toModelInfo);
   if (name === "models.getAvailableOfType") {
-    const available = await models.getAvailableOfType(toModelType(type), toProvider(provider), {
-      ...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
-    });
+    const modelType = toModelType(type);
+    const providerName = toProvider(provider);
+    const available = yield* Effect.promise(() =>
+      models.getAvailableOfType(modelType, providerName, {
+        ...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
+      }),
+    );
     return available.map(toModelInfo);
   }
   if (typeof provider !== "string" || typeof id !== "string") {
@@ -101,103 +89,7 @@ export async function catalogCall(
   }
   const model = models.getModelOfType(toModelType(type), provider, id);
   return model === undefined ? undefined : toModelInfo(model);
-}
-
-const CLASSIFIER_CONTEXT_SHAPE =
-  '{ state: { ... }, images?: [{ type: "image", data: <base64>, mimeType }], questions: { <id>: { type: "choice", instructions, criteria: { <label>: <meaning> } } | { type: "score", instructions, criteria: [<lowest level>, ..., <highest level>] } | { type: "bool", instructions, criteria: { true: <meaning>, false: <meaning> } } } }';
-
-function checkClassifierContext(context: unknown): ClassifierContext {
-  const fail = (problem: string) =>
-    new Error(`models.classify() ${problem}. Expected context: ${CLASSIFIER_CONTEXT_SHAPE}.`);
-  if (!isRecord(context))
-    throw fail(`expects a context object as its second argument, got ${describeValue(context)}`);
-  if (!isRecord(context["state"]))
-    throw fail(`context.state must be an object, got ${describeValue(context["state"])}`);
-  const { images } = context;
-  if (images !== undefined) {
-    if (!Array.isArray(images))
-      throw fail(`context.images must be an array, got ${describeValue(images)}`);
-    images.forEach((image: unknown, index) => {
-      if (
-        !isRecord(image) ||
-        image["type"] !== "image" ||
-        typeof image["data"] !== "string" ||
-        typeof image["mimeType"] !== "string"
-      ) {
-        throw fail(`context.images[${index}] must be an image block, got ${describeValue(image)}`);
-      }
-    });
-  }
-  const { questions } = context;
-  if (!isRecord(questions) || Object.keys(questions).length === 0) {
-    throw fail(
-      `context.questions must map question IDs to questions, got ${describeValue(questions)}`,
-    );
-  }
-  const isStrings = (values: unknown[]) =>
-    values.length > 0 && values.every((value) => typeof value === "string");
-  for (const [id, question] of Object.entries(questions)) {
-    const at = `context.questions.${id}`;
-    if (!isRecord(question))
-      throw fail(`${at} must be a question object, got ${describeValue(question)}`);
-    if (typeof question["instructions"] !== "string")
-      throw fail(`${at}.instructions must be a string`);
-    const { criteria } = question;
-    if (question["type"] === "choice") {
-      if (!isRecord(criteria) || !isStrings(Object.values(criteria))) {
-        throw fail(`${at} is a "choice" question, so criteria must map each label to its meaning`);
-      }
-    } else if (question["type"] === "score") {
-      if (!Array.isArray(criteria) || !isStrings(criteria)) {
-        throw fail(
-          `${at} is a "score" question, so criteria must list the levels as strings, lowest first`,
-        );
-      }
-    } else if (question["type"] === "bool") {
-      if (
-        !isRecord(criteria) ||
-        typeof criteria["true"] !== "string" ||
-        typeof criteria["false"] !== "string"
-      ) {
-        throw fail(
-          `${at} is a "bool" question, so criteria must be { true: string, false: string }`,
-        );
-      }
-    } else {
-      throw fail(
-        `${at}.type must be "choice", "score", or "bool", got ${JSON.stringify(question["type"])}`,
-      );
-    }
-  }
-  return context as unknown as ClassifierContext;
-}
-
-function checkImagesContext(context: unknown): ImagesContext {
-  const fail = (problem: string) =>
-    new Error(
-      `models.generateImages() ${problem}. Expected context: { input: [{ type: "text", text: <prompt> }, ...optional { type: "image", data: <base64>, mimeType } references] }.`,
-    );
-  if (!isRecord(context))
-    throw fail(`expects a context object as its second argument, got ${describeValue(context)}`);
-  const { input } = context;
-  if (!Array.isArray(input) || input.length === 0) {
-    throw fail(`context.input must be a non-empty array of blocks, got ${describeValue(input)}`);
-  }
-  input.forEach((block: unknown, index) => {
-    if (isRecord(block) && block["type"] === "text" && typeof block["text"] === "string") return;
-    if (
-      isRecord(block) &&
-      block["type"] === "image" &&
-      typeof block["data"] === "string" &&
-      typeof block["mimeType"] === "string"
-    )
-      return;
-    throw fail(
-      `context.input[${index}] must be a text or image block, got ${describeValue(block)}`,
-    );
-  });
-  return context as unknown as ImagesContext;
-}
+});
 
 function resolveModel<TType extends "classifier" | "image">(
   name: string,
@@ -227,9 +119,9 @@ function resolveModel<TType extends "classifier" | "image">(
       other !== type && models.getModelOfType(other as ModelType, provider, id) !== undefined,
   );
   throw new Error(
-    actualType
-      ? `"${provider}/${id}" is ${withArticle(actualType)} model, not ${withArticle(type)} model. ${listHint}`
-      : `Unknown ${type} model "${provider}/${id}". ${listHint}`,
+    actualType === undefined
+      ? `Unknown ${type} model "${provider}/${id}". ${listHint}`
+      : `"${provider}/${id}" is ${withArticle(actualType)} model, not ${withArticle(type)} model. ${listHint}`,
   );
 }
 
@@ -261,14 +153,19 @@ export function createModelTools(): ToolRegistration[] {
     parameters: ModelCallParameters,
     structuredOutputSchema: Type.Unknown(),
     callers: ["tools"],
-    execute: async (args, api, context) => {
-      const model = resolveModel("models.classify", "classifier", args.model, api.models);
-      const checked = checkClassifierContext(args.context);
-      const result = await api.models.classify(model, checked, {
-        ...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
-      });
-      return modelResult(`classify ${model.provider}/${model.id}`, result, result);
-    },
+    execute: (args, api, context) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = resolveModel("models.classify", "classifier", args.model, api.models);
+          const checked = checkClassifierContext(args.context);
+          const result = yield* Effect.promise(() =>
+            api.models.classify(model, checked, {
+              ...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
+            }),
+          );
+          return modelResult(`classify ${model.provider}/${model.id}`, result, result);
+        }),
+      ),
   });
   const generateImages = defineTool({
     name: GENERATE_IMAGES_TOOL,
@@ -276,14 +173,19 @@ export function createModelTools(): ToolRegistration[] {
     parameters: ModelCallParameters,
     structuredOutputSchema: Type.Unknown(),
     callers: ["tools"],
-    execute: async (args, api, context) => {
-      const model = resolveModel("models.generateImages", "image", args.model, api.models);
-      const checked = checkImagesContext(args.context);
-      const result = await api.models.generateImages(model, checked, {
-        ...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
-      });
-      return modelResult(`generateImages ${model.provider}/${model.id}`, result, result);
-    },
+    execute: (args, api, context) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = resolveModel("models.generateImages", "image", args.model, api.models);
+          const checked = checkImagesContext(args.context);
+          const result = yield* Effect.promise(() =>
+            api.models.generateImages(model, checked, {
+              ...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
+            }),
+          );
+          return modelResult(`generateImages ${model.provider}/${model.id}`, result, result);
+        }),
+      ),
   });
   return [classify as unknown as ToolRegistration, generateImages as unknown as ToolRegistration];
 }

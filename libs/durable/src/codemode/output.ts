@@ -1,5 +1,6 @@
 import type { ImageContent, TextContent } from "@msa/ai";
 import type { CodemodeOutputItem, CodemodeResult } from "@msa/codemode/portable";
+import { Effect } from "effect";
 
 type Item = TextContent | ImageContent;
 
@@ -27,13 +28,13 @@ function valueText(value: unknown): string {
 }
 
 function formatItems(output: readonly CodemodeOutputItem[]): Item[] {
-  const total = output.filter((item) => item.type === "text" && !item.console).length;
+  const total = output.filter((item) => item.type === "text" && item.console !== true).length;
   const items: Item[] = [];
   const consoleLines: string[] = [];
   let index = 0;
   for (const item of output) {
     if (item.type === "image") items.push(item);
-    else if (item.console) consoleLines.push(item.text);
+    else if (item.console === true) consoleLines.push(item.text);
     else {
       index++;
       items.push({
@@ -77,12 +78,14 @@ function joinAdjacentText(items: readonly Item[]): Item[] {
   return joined;
 }
 
-async function truncate(
+type Truncated = { items: Item[]; fullOutputPath?: string };
+
+const truncate = Effect.fnUntraced(function* (
   items: readonly Item[],
   maxTokens: number,
   limits: Limits,
   write: OutputFile,
-): Promise<{ items: Item[]; fullOutputPath?: string }> {
+) {
   const texts = items
     .filter((item): item is TextContent => item.type === "text")
     .map((item) => item.text);
@@ -90,8 +93,10 @@ async function truncate(
   const budget = Math.min(maxTokens * CHARS_PER_TOKEN, Math.floor(limits.maxBytes / 4));
   const lineBudget = Math.floor((limits.maxLines - LINE_MARGIN) / 2);
   const lines = combined.split("\n").length;
-  if (texts.length === 0 || (combined.length <= budget && lines <= 2 * lineBudget))
-    return { items: [...items] };
+  if (texts.length === 0 || (combined.length <= budget && lines <= 2 * lineBudget)) {
+    const kept: Truncated = { items: [...items] };
+    return kept;
+  }
   const headChars = Math.floor(budget / 2);
   const tailChars = budget - headChars;
   const head = combined.slice(0, headChars).split("\n").slice(0, lineBudget).join("\n");
@@ -99,40 +104,47 @@ async function truncate(
     tailChars > 0 ? combined.slice(-tailChars).split("\n").slice(-lineBudget).join("\n") : "";
   const removed = combined.length - head.length - tail.length;
   let text = `Warning: truncated output (original token count: ${Math.ceil(combined.length / CHARS_PER_TOKEN)})\nTotal output lines: ${combined.split("\n").length}\n\n${head}…${Math.ceil(removed / CHARS_PER_TOKEN)} tokens truncated…${tail}`;
-  const spilled = await write("output.txt", combined);
+  const spilled = yield* Effect.promise(() => write("output.txt", combined));
   text +=
     "path" in spilled
       ? `\n\n[Full output: ${spilled.path} (read with offset/limit)]`
       : `\n\n[Could not save the full output: ${spilled.error}]`;
-  return {
+  const truncated: Truncated = {
     items: [{ type: "text", text }, ...items.filter((item) => item.type === "image")],
     ...("path" in spilled ? { fullOutputPath: spilled.path } : {}),
   };
-}
+  return truncated;
+});
 
-async function saveImages(items: readonly Item[], write: OutputFile): Promise<Item[]> {
-  const labels = new Map<string, Promise<string>>();
-  const label = async ({ data, mimeType }: ImageContent, index: number): Promise<string> => {
-    const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
-    const kind = `${mimeType}, ${bytes.length} bytes`;
-    const saved = await write(`image-${index}${IMAGE_EXTENSIONS[mimeType] ?? ".bin"}`, bytes);
-    return "path" in saved
-      ? `[Image saved to ${saved.path} (${kind})]`
-      : `[Image (${kind}) could not be saved: ${saved.error}]`;
-  };
-  const result = await Promise.all(
-    items.map(async (item): Promise<Item[]> => {
-      if (item.type !== "image") return [item];
-      let pending = labels.get(item.data);
-      if (pending === undefined) {
-        pending = label(item, labels.size + 1);
-        labels.set(item.data, pending);
-      }
-      return [{ type: "text", text: await pending }, item];
-    }),
+const imageLabel = Effect.fnUntraced(function* (
+  { data, mimeType }: ImageContent,
+  index: number,
+  write: OutputFile,
+) {
+  const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
+  const kind = `${mimeType}, ${bytes.length} bytes`;
+  const name = `image-${index}${IMAGE_EXTENSIONS[mimeType] ?? ".bin"}`;
+  const saved = yield* Effect.promise(() => write(name, bytes));
+  return "path" in saved
+    ? `[Image saved to ${saved.path} (${kind})]`
+    : `[Image (${kind}) could not be saved: ${saved.error}]`;
+});
+
+const saveImages = Effect.fnUntraced(function* (items: readonly Item[], write: OutputFile) {
+  const images = new Map<string, ImageContent>();
+  for (const item of items) {
+    if (item.type === "image" && !images.has(item.data)) images.set(item.data, item);
+  }
+  const labels = yield* Effect.forEach(
+    [...images.values()],
+    (image, index) => imageLabel(image, index + 1, write),
+    { concurrency: "unbounded" },
   );
-  return result.flat();
-}
+  const labelOf = new Map([...images.keys()].map((data, index) => [data, labels[index]!]));
+  return items.flatMap((item): Item[] =>
+    item.type === "image" ? [{ type: "text", text: labelOf.get(item.data)! }, item] : [item],
+  );
+});
 
 function formatError(
   result: Extract<CodemodeResult, { ok: false }>,
@@ -154,7 +166,7 @@ function formatError(
   return `${head}\n\n${summary}`;
 }
 
-export async function formatResult(
+export const formatResult = Effect.fnUntraced(function* (
   result: CodemodeResult,
   options: {
     readonly generatedImages: number;
@@ -164,7 +176,7 @@ export async function formatResult(
     readonly limits: Limits;
     readonly write: OutputFile;
   },
-): Promise<{ content: Item[]; fullOutputPath?: string }> {
+) {
   const output = [...result.output];
   if (result.ok && result.value !== undefined)
     output.push({ type: "text", text: valueText(result.value) });
@@ -178,16 +190,17 @@ export async function formatResult(
       text: `Note: models.generateImages() returned ${generated} image${generated === 1 ? "" : "s"} that the script did not show. Show each image block of result.output with image(block).`,
     });
   }
-  const truncated = await truncate(
+  const truncated = yield* truncate(
     joinAdjacentText(items),
     options.maxOutputTokens,
     options.limits,
     options.write,
   );
-  const content = joinAdjacentText(await saveImages(truncated.items, options.write));
+  const content = joinAdjacentText(yield* saveImages(truncated.items, options.write));
   const header = `${result.ok ? "Script completed" : "Script failed"}\nWall time ${(options.wallMs / 1000).toFixed(1)} seconds\nOutput:\n`;
-  return {
+  const formatted: { content: Item[]; fullOutputPath?: string } = {
     content: [{ type: "text", text: header }, ...content],
     ...(truncated.fullOutputPath === undefined ? {} : { fullOutputPath: truncated.fullOutputPath }),
   };
-}
+  return formatted;
+});
