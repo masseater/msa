@@ -38,7 +38,7 @@ export function resolveDeploymentName(
 }
 
 function normalizeAzureBaseUrl(baseUrl: string): string {
-  const trimmed = baseUrl.trim().replace(/\/+$/, "");
+  const trimmed = baseUrl.trim().replace(/\/+$/u, "");
   let url: URL;
   try {
     url = new URL(trimmed);
@@ -50,7 +50,7 @@ function normalizeAzureBaseUrl(baseUrl: string): string {
     url.hostname.endsWith(".openai.azure.com") ||
     url.hostname.endsWith(".cognitiveservices.azure.com") ||
     url.hostname.endsWith(".ai.azure.com");
-  const normalizedPath = url.pathname.replace(/\/+$/, "");
+  const normalizedPath = url.pathname.replace(/\/+$/u, "");
 
   // Ensure Azure hosts have /openai/v1 as base path so the AzureOpenAI SDK
   // can append /deployments/<model>/... and ?api-version=v1 correctly.
@@ -65,7 +65,7 @@ function normalizeAzureBaseUrl(baseUrl: string): string {
     url.search = "";
   }
 
-  return url.toString().replace(/\/+$/, "");
+  return url.toString().replace(/\/+$/u, "");
 }
 
 function buildDefaultBaseUrl(resourceName: string): string {

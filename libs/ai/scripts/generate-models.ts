@@ -617,11 +617,11 @@ const MID_CONVO_EFFORT_UNSUPPORTED_ANTHROPIC_MODELS = new Set([
 ]);
 
 function supportsAnthropicMidConvoEffort(modelId: string): boolean {
-  const id = modelId.toLowerCase().replace(/^~?anthropic\//, "");
+  const id = modelId.toLowerCase().replace(/^~?anthropic\//u, "");
   return (
-    /^claude-opus-(?:5|5[.-]5)(?:-\d{8})?$/.test(id) ||
-    /^claude-(?:sonnet|haiku)-5[.-]5(?:-\d{8})?$/.test(id) ||
-    /^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$/.test(id)
+    /^claude-opus-(?:5|5[.-]5)(?:-\d{8})?$/u.test(id) ||
+    /^claude-(?:sonnet|haiku)-5[.-]5(?:-\d{8})?$/u.test(id) ||
+    /^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$/u.test(id)
   );
 }
 
@@ -638,16 +638,16 @@ function supportsAnthropicDisabledThinkingWithMidConvoEffort(modelId: string): b
   // Strip OpenRouter's "anthropic/" or "~anthropic/" prefix and any dated snapshot suffix.
   const id = modelId
     .toLowerCase()
-    .replace(/^~?anthropic\//, "")
-    .replace(/-\d{8}$/, "");
+    .replace(/^~?anthropic\//u, "")
+    .replace(/-\d{8}$/u, "");
   return ANTHROPIC_DISABLED_THINKING_MODELS.has(id);
 }
 
 function supportsAnthropicMidConvoSystemMessages(modelId: string): boolean {
   return (
-    /^claude-opus-(?:4[.-]8|5(?:[.-]5)?)(?:-\d{8})?$/.test(modelId) ||
-    /^claude-(?:sonnet|haiku)-5[.-]5(?:-\d{8})?$/.test(modelId) ||
-    /^claude-(?:fable|mythos)-5(?:[.-]1)?(?:-\d{8})?$/.test(modelId)
+    /^claude-opus-(?:4[.-]8|5(?:[.-]5)?)(?:-\d{8})?$/u.test(modelId) ||
+    /^claude-(?:sonnet|haiku)-5[.-]5(?:-\d{8})?$/u.test(modelId) ||
+    /^claude-(?:fable|mythos)-5(?:[.-]1)?(?:-\d{8})?$/u.test(modelId)
   );
 }
 
@@ -788,7 +788,7 @@ function detectOpenAICompletionsCompat(
   const isOpenRouterDeveloperRoleModel =
     isOpenRouter && (model.id.startsWith("anthropic/") || model.id.startsWith("openai/"));
   const cacheControlFormat =
-    provider === "openrouter" && /^~?anthropic\//.test(model.id) ? "anthropic" : undefined;
+    provider === "openrouter" && /^~?anthropic\//u.test(model.id) ? "anthropic" : undefined;
 
   return {
     supportsStore: !isNonStandard,
@@ -960,7 +960,7 @@ function applyOpenAIGrammarToolCompatMetadata(model: Model<Api>): void {
     !OPENAI_GRAMMAR_TOOL_PROVIDERS.has(model.provider)
   )
     return;
-  const match = /^gpt-(\d+)/.exec(model.id);
+  const match = /^gpt-(\d+)/u.exec(model.id);
   if (!match || Number(match[1]) < 5) return;
   model.compat = {
     ...(model.compat as OpenAIResponsesCompat | undefined),
@@ -1105,7 +1105,7 @@ function applyImageInputMetadata(model: AnyModel): void {
 }
 
 function isGemma4Model(modelId: string): boolean {
-  return /gemma-?4/.test(modelId.toLowerCase());
+  return /gemma-?4/u.test(modelId.toLowerCase());
 }
 
 function getGoogleThinkingLevelMap(
@@ -3287,7 +3287,8 @@ async function generateModels() {
         cacheRead: 0,
         cacheWrite: 0,
       },
-      contextWindow: 262144, // 256k tokens
+      // 256k tokens
+      contextWindow: 262144,
       maxTokens: 262144,
     });
   }
@@ -3352,19 +3353,20 @@ async function generateModels() {
   };
   const azureOpenAiModels: Model<Api>[] = allModels
     .filter((model) => model.provider === "openai" && model.api === "openai-responses")
-    .map((model) => ({
-      ...model,
-      api: "azure-openai-responses",
-      provider: "azure",
-      baseUrl: "",
-      cost: {
-        input: model.cost.input,
-        output: model.cost.output,
-        cacheRead: model.cost.cacheRead,
-        cacheWrite: model.cost.cacheWrite,
-      },
-      contextWindow: AZURE_CONTEXT_WINDOW_OVERRIDES[model.id] ?? model.contextWindow,
-    }));
+    .map((model) =>
+      Object.assign({}, model, {
+        api: "azure-openai-responses" as const,
+        provider: "azure",
+        baseUrl: "",
+        cost: {
+          input: model.cost.input,
+          output: model.cost.output,
+          cacheRead: model.cost.cacheRead,
+          cacheWrite: model.cost.cacheWrite,
+        },
+        contextWindow: AZURE_CONTEXT_WINDOW_OVERRIDES[model.id] ?? model.contextWindow,
+      }),
+    );
   allModels.push(...azureOpenAiModels);
 
   // Azure resells DeepSeek at its own rates. US data zone, checked 2026-09-16.
@@ -3379,19 +3381,20 @@ async function generateModels() {
   // `developer` system message unbilled once reasoning_effort is set, and honours mid-convo ones (#9645).
   const azureDeepSeekModels: Model<Api>[] = allModels
     .filter((model) => model.provider === "deepseek" && model.id === "deepseek-v4-pro")
-    .map((model) => ({
-      ...model,
-      provider: "azure",
-      baseUrl: "",
-      cost: AZURE_DEEPSEEK_V4_PRO_COST,
-      compat: {
-        ...(model.compat as OpenAICompletionsCompat),
-        supportsDeveloperRole: false,
-        supportsMidConvoSystemMessages: true,
-        thinkingFormat: "openai",
-        supportsLongCacheRetention: false,
-      },
-    }));
+    .map((model) =>
+      Object.assign({}, model, {
+        provider: "azure",
+        baseUrl: "",
+        cost: AZURE_DEEPSEEK_V4_PRO_COST,
+        compat: {
+          ...(model.compat as OpenAICompletionsCompat),
+          supportsDeveloperRole: false,
+          supportsMidConvoSystemMessages: true,
+          thinkingFormat: "openai" as const,
+          supportsLongCacheRetention: false,
+        },
+      }),
+    );
   allModels.push(...azureDeepSeekModels);
 
   for (const model of allModels) {
@@ -3546,11 +3549,11 @@ async function generateModels() {
 
 `;
         const catalogConstName = (providerId: string) =>
-          `${providerId.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_MODELS`;
+          `${providerId.toUpperCase().replace(/[^A-Z0-9]+/gu, "_")}_MODELS`;
         const imageCatalogConstName = (providerId: string) =>
-          `${providerId.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_IMAGE_MODELS`;
+          `${providerId.toUpperCase().replace(/[^A-Z0-9]+/gu, "_")}_IMAGE_MODELS`;
         const classifierCatalogConstName = (providerId: string) =>
-          `${providerId.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_CLASSIFIER_MODELS`;
+          `${providerId.toUpperCase().replace(/[^A-Z0-9]+/gu, "_")}_CLASSIFIER_MODELS`;
         const generatedShardFiles = new Set<string>();
         for (const providerId of sortedProviderIds) {
           let output = generatedHeader;

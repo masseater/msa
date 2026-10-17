@@ -323,7 +323,8 @@ async function multiTurn<TApi extends Api>(model: Model<TApi>, options?: StreamO
   let allTextContent = "";
   let hasSeenThinking = false;
   let hasSeenToolCalls = false;
-  const maxTurns = 5; // Prevent infinite loops
+  // Prevent infinite loops
+  const maxTurns = 5;
 
   for (let turn = 0; turn < maxTurns; turn++) {
     const response = await complete(model, context, options);
@@ -1809,7 +1810,8 @@ describe("Generate E2E Tests", () => {
             setTimeout(checkServer, 500);
           }
         };
-        setTimeout(checkServer, 1000); // Initial delay
+        // Initial delay
+        setTimeout(checkServer, 1000);
       });
 
       llm = {
@@ -1829,7 +1831,8 @@ describe("Generate E2E Tests", () => {
         },
         name: "Ollama GPT-OSS 20B",
       };
-    }, 30000); // 30 second timeout for setup
+      // 30 second timeout for setup
+    }, 30000);
 
     afterAll(() => {
       // Kill ollama server

@@ -529,7 +529,9 @@ describe("Mistral HTTP transport", () => {
             async start(controller) {
               for (let i = 0; i < 5; i++) {
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify(thinkingEvent)}\n\n`));
-                await new Promise((resolve) => setTimeout(resolve, 10));
+                await new Promise((resolve) => {
+                  setTimeout(resolve, 10);
+                });
               }
               controller.enqueue(
                 encoder.encode(

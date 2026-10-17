@@ -165,7 +165,7 @@ describe("published model catalog hydration", () => {
     expect(readFileSync(join(dataDir, "test-provider.json"), "utf8")).toBe(original);
     writeFileSync(catalogPath, JSON.stringify({ "other-provider": [model] }));
     expect(() => hydrateModelCatalog(packageRoot, catalogPath, { validateOnly: true })).toThrow(
-      /missing provider/,
+      /missing provider/u,
     );
   });
 
@@ -354,7 +354,7 @@ describe("generated model data validation", () => {
     const fixture = createFixture();
     writeFileSync(join(fixture.dataDir, "test-provider.json"), "{}\n");
     expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).toThrow(
-      /manifest hash|model IDs/,
+      /manifest hash|model IDs/u,
     );
   });
 

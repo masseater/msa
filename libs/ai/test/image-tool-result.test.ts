@@ -201,7 +201,7 @@ async function handleToolWithTextAndImageResult<TApi extends Api>(
   if (textContent && textContent.type === "text") {
     const lowerContent = textContent.text.toLowerCase();
     // Should mention details from the text (diameter/pixels)
-    expect(lowerContent.match(/diameter|100|pixel/)).toBeTruthy();
+    expect(lowerContent.match(/diameter|100|pixel/u)).toBeTruthy();
     // Should also mention the visual properties (red and circle)
     expect(lowerContent).toContain("red");
     expect(lowerContent).toContain("circle");
@@ -356,7 +356,7 @@ describe("Tool Results with Images", () => {
         await handleToolWithImageResult(llm);
       });
 
-      // FIXME(xiaomi): when a tool_result contains both a descriptive text block
+      // Known xiaomi limitation: when a tool_result contains both a descriptive text block
       // and an image block, MiMo locks onto the text and ignores the image (it
       // reports the text-derived diameter but never mentions the image's color).
       // The image-only case above proves the image reaches the model, and the
@@ -382,7 +382,7 @@ describe("Tool Results with Images", () => {
         await handleToolWithImageResult(llm);
       });
 
-      // FIXME(xiaomi): see the API-billing block above — same multimodal-fusion
+      // Known xiaomi limitation, see the API-billing block above — same multimodal-fusion
       // limitation applies to Token Plan endpoints (same model behind both).
       it.skip(
         "should handle tool result with text and image",
@@ -403,7 +403,7 @@ describe("Tool Results with Images", () => {
         await handleToolWithImageResult(llm);
       });
 
-      // FIXME(xiaomi): see the API-billing block above — same multimodal-fusion
+      // Known xiaomi limitation, see the API-billing block above — same multimodal-fusion
       // limitation applies to Token Plan endpoints (same model behind both).
       it.skip(
         "should handle tool result with text and image",
@@ -424,7 +424,7 @@ describe("Tool Results with Images", () => {
         await handleToolWithImageResult(llm);
       });
 
-      // FIXME(xiaomi): see the API-billing block above — same multimodal-fusion
+      // Known xiaomi limitation, see the API-billing block above — same multimodal-fusion
       // limitation applies to Token Plan endpoints (same model behind both).
       it.skip(
         "should handle tool result with text and image",

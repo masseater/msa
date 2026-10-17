@@ -21,7 +21,7 @@ import { generatePKCE } from "./pkce.ts";
 // every login registers a new client with this ID; OpenAI returns the issued client ID in the callback
 const DYNAMIC_CLIENT_ID = "dynamic_agent_client";
 const AGENT_NAME_HINT = "msa";
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const AUTHORIZE_URL = "https://auth.openai.com/api/accounts/authorize";
 const TOKEN_URL = "https://auth.openai.com/api/accounts/oauth/token";
 const RESOURCE = "https://api.openai.com/v1";
@@ -189,7 +189,7 @@ function credentialFromTokenResponse(token: TokenResponse, clientId: string): OA
   ) {
     throw new Error("OpenAI OAuth token response has invalid expires_in");
   }
-  const scopes = scope.trim().split(/\s+/).filter(Boolean);
+  const scopes = scope.trim().split(/\s+/u).filter(Boolean);
   if (!scopes.includes(DIRECT_TOKEN_SCOPE)) {
     throw new Error(`OpenAI OAuth grant did not include ${DIRECT_TOKEN_SCOPE}`);
   }

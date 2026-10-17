@@ -37,7 +37,7 @@ type TokenResponse = {
 function getOauthHost(): string {
   const override =
     getProviderEnvValue("KIMI_CODE_OAUTH_HOST") || getProviderEnvValue("KIMI_OAUTH_HOST");
-  return (override || DEFAULT_OAUTH_HOST).replace(/\/+$/, "");
+  return (override || DEFAULT_OAUTH_HOST).replace(/\/+$/u, "");
 }
 
 function requestSignal(signal: AbortSignal): AbortSignal {

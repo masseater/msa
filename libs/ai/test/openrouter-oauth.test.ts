@@ -100,7 +100,7 @@ describe("OpenRouter OAuth", () => {
 
     const callbackUrl = new URL(authorizeUrl?.searchParams.get("callback_url") ?? "");
     expect(callbackUrl.hostname).toBe("127.0.0.1");
-    expect(callbackUrl.pathname).toMatch(/^\/oauth\/callback\/[0-9a-f-]+$/);
+    expect(callbackUrl.pathname).toMatch(/^\/oauth\/callback\/[0-9a-f-]+$/u);
 
     expect(exchangeBody).toMatchObject({
       code: "authorization-code",

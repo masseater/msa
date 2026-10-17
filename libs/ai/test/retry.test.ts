@@ -236,7 +236,8 @@ describe("retryAssistantCall", () => {
       onRetryFinished,
     });
     expect(res.stopReason).toBe("error");
-    expect(produce).toHaveBeenCalledTimes(4); // 1 initial + 3 retries
+    // 1 initial + 3 retries
+    expect(produce).toHaveBeenCalledTimes(4);
     expect(onRetryScheduled).toHaveBeenCalledTimes(3);
     expect(onRetryFinished).toHaveBeenCalledWith(false, 3, "terminated");
   });

@@ -42,7 +42,7 @@ describe("parseToolCallArguments", () => {
     const raw = '{"action":"apply","actions":[{"kind":"seek","time":.5}]}';
     const result = parseToolCallArguments(raw);
     expect(result.arguments).toEqual({});
-    expect(result.argumentsError).toMatch(/\n\nReceived arguments:\n/);
+    expect(result.argumentsError).toMatch(/\n\nReceived arguments:\n/u);
     expect(result.argumentsError?.endsWith(raw)).toBe(true);
   });
 

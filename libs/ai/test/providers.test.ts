@@ -785,7 +785,9 @@ describe("createProvider", () => {
     expect((await store.read("dynamic"))?.models.map((model) => model.id)).toEqual(["listed-2"]);
 
     finishFirst?.();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
     expect(provider.getModels().map((model) => model.id)).toEqual(["listed-2"]);
     expect((await store.read("dynamic"))?.models.map((model) => model.id)).toEqual(["listed-2"]);
   });

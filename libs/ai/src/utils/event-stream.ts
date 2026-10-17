@@ -76,9 +76,9 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
       } else if (this.done) {
         return;
       } else {
-        const result = await new Promise<IteratorResult<T>>((resolve) =>
-          this.waiting.enqueue(resolve),
-        );
+        const result = await new Promise<IteratorResult<T>>((resolve) => {
+          this.waiting.enqueue(resolve);
+        });
         if (result.done) return;
         yield result.value;
       }

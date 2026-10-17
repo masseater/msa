@@ -287,11 +287,11 @@ function formatValidationPath(error: TLocalizedValidationError): string {
       .requiredProperties;
     const requiredProperty = requiredProperties?.[0];
     if (requiredProperty) {
-      const basePath = error.instancePath.replace(/^\//, "").replace(/\//g, ".");
+      const basePath = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
       return basePath ? `${basePath}.${requiredProperty}` : requiredProperty;
     }
   }
-  const path = error.instancePath.replace(/^\//, "").replace(/\//g, ".");
+  const path = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
   return path || "root";
 }
 

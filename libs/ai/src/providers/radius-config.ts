@@ -45,7 +45,7 @@ function sanitizeRadiusGatewayConfig(config: unknown): RadiusGatewayConfig | und
   if (typeof baseUrl !== "string" || !Array.isArray(models)) return undefined;
   return {
     baseUrl,
-    models: models.filter(isRadiusGatewayModel).map((model) => ({ ...model })),
+    models: models.filter(isRadiusGatewayModel).map((model) => Object.assign({}, model)),
   };
 }
 

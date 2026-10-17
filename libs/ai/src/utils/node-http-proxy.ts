@@ -82,7 +82,7 @@ function shouldProxyHostname(hostname: string, port: number, env?: ProviderEnv):
 
   const normalizedTargetHost = stripBrackets(hostname.toLowerCase());
 
-  return noProxy.split(/[,\s]/).every((entry) => {
+  return noProxy.split(/[,\s]/u).every((entry) => {
     const parsed = parseNoProxyEntry(entry);
     if (!parsed) {
       return true;
@@ -122,7 +122,7 @@ function getProxyForUrl(targetUrl: string | URL, env?: ProviderEnv): string {
   }
 
   const protocol = parsedUrl.protocol.split(":", 1)[0]!;
-  const hostname = stripBrackets(parsedUrl.hostname || parsedUrl.host.replace(/:\d*$/, ""));
+  const hostname = stripBrackets(parsedUrl.hostname || parsedUrl.host.replace(/:\d*$/u, ""));
   const port = Number.parseInt(parsedUrl.port, 10) || DEFAULT_PROXY_PORTS[protocol] || 0;
   if (!shouldProxyHostname(hostname, port, env)) {
     return "";

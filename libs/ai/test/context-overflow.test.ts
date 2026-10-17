@@ -32,7 +32,8 @@ const LOREM_IPSUM = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Se
 // Generate a string that will exceed the context window
 // Using chars/4 as token estimate (works better with varied text than repeated chars)
 function generateOverflowContent(contextWindow: number): string {
-  const targetTokens = contextWindow + 10000; // Exceed by 10k tokens
+  // Exceed by 10k tokens
+  const targetTokens = contextWindow + 10000;
   const targetChars = targetTokens * 4 * 1.5;
   const repetitions = Math.ceil(targetChars / LOREM_IPSUM.length);
   return LOREM_IPSUM.repeat(repetitions);
@@ -101,7 +102,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/prompt is too long/i);
+      expect(result.errorMessage).toMatch(/prompt is too long/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -113,7 +114,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/prompt is too long/i);
+      expect(result.errorMessage).toMatch(/prompt is too long/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -131,7 +132,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/maximum context length/i);
+      expect(result.errorMessage).toMatch(/maximum context length/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -143,7 +144,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/exceeds the context window/i);
+      expect(result.errorMessage).toMatch(/exceeds the context window/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -155,7 +156,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/context|maximum/i);
+      expect(result.errorMessage).toMatch(/context|maximum/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -172,7 +173,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/input token count.*exceeds the maximum/i);
+      expect(result.errorMessage).toMatch(/input token count.*exceeds the maximum/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -232,7 +233,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/maximum prompt length is \d+/i);
+      expect(result.errorMessage).toMatch(/maximum prompt length is \d+/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -249,7 +250,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/reduce the length of the messages/i);
+      expect(result.errorMessage).toMatch(/reduce the length of the messages/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -275,7 +276,7 @@ describe("Context overflow error handling", () => {
 
       expect(result.stopReason).toBe("error");
       // Cerebras returns status code with no body (400, 413, or 429 for token rate limit)
-      expect(result.errorMessage).toMatch(/4(00|13|29).*\(no body\)/i);
+      expect(result.errorMessage).toMatch(/4(00|13|29).*\(no body\)/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -329,7 +330,7 @@ describe("Context overflow error handling", () => {
       // - Sometimes accepts overflow and returns successfully with usage.input > contextWindow
       // - Sometimes returns rate limit error
       if (result.stopReason === "error") {
-        if (result.errorMessage?.match(/model_context_window_exceeded/i)) {
+        if (result.errorMessage?.match(/model_context_window_exceeded/iu)) {
           expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
         } else {
           console.log(
@@ -359,7 +360,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/too large for model with \d+ maximum context length/i);
+      expect(result.errorMessage).toMatch(/too large for model with \d+ maximum context length/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -460,7 +461,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/input length/i);
+      expect(result.errorMessage).toMatch(/input length/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -472,7 +473,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/input length/i);
+      expect(result.errorMessage).toMatch(/input length/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -484,7 +485,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/input length/i);
+      expect(result.errorMessage).toMatch(/input length/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -532,7 +533,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
+      expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
 
@@ -543,7 +544,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
+      expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
 
@@ -554,7 +555,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
+      expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
 
@@ -565,7 +566,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
+      expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
 
@@ -576,7 +577,7 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/i);
+      expect(result.errorMessage).toMatch(/maximum context length is \d+ tokens/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });
@@ -673,7 +674,8 @@ describe("Context overflow error handling", () => {
       } else if (result.stopReason === "error") {
         expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
       }
-    }, 300000); // 5 min timeout for local model
+      // 5 min timeout for local model
+    }, 300000);
   });
 
   // =============================================================================

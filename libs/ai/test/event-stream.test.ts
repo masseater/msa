@@ -116,7 +116,10 @@ function message(timestamp: number, durationMs?: number): AssistantMessage {
   };
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 describe("AssistantMessageEventStream timing", () => {
   it("sets durationMs on the final done or error message of a response it saw start", async () => {

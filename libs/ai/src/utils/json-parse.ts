@@ -61,7 +61,7 @@ export function repairJson(json: string): string {
 
       if (nextChar === "u") {
         const unicodeDigits = json.slice(index + 2, index + 6);
-        if (/^[0-9a-fA-F]{4}$/.test(unicodeDigits)) {
+        if (/^[0-9a-fA-F]{4}$/u.test(unicodeDigits)) {
           repaired += `\\u${unicodeDigits}`;
           index += 5;
           continue;

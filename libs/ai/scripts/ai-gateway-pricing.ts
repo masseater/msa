@@ -53,7 +53,7 @@ export function getAiGatewayCost(pricing: AiGatewayPricing | undefined): ModelCo
   const tiers = [...starts]
     .sort((a, b) => a - b)
     .map((start): ModelCostTier => {
-      const tier: ModelCostTier = { inputTokensAbove: start - 1, ...base };
+      const tier: ModelCostTier = Object.assign({ inputTokensAbove: start - 1 }, base);
       for (const field of RATE_FIELDS) {
         const bracket = pricing?.[field.tiers]?.find(
           (candidate) =>

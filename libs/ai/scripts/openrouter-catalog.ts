@@ -52,7 +52,7 @@ export function buildOpenRouterCatalog(
     }
 
     const thinkingLevelMap = getOpenRouterThinkingLevelMap(model.reasoning);
-    const useAnthropicMessages = /^anthropic\//.test(model.id) && !model.id.endsWith(":batch");
+    const useAnthropicMessages = /^anthropic\//u.test(model.id) && !model.id.endsWith(":batch");
     chat.push({
       type: "chat",
       id: model.id,

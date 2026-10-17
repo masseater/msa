@@ -303,7 +303,7 @@ async function* readMsaMessagesEvents(
     while (true) {
       const { done, value } = await reader.read();
       buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
-      buffer = buffer.replace(/\r\n/g, "\n");
+      buffer = buffer.replace(/\r\n/gu, "\n");
 
       let split = buffer.indexOf("\n\n");
       while (split !== -1) {

@@ -903,16 +903,22 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
           // Only update usage fields if present (not null).
           // Preserves input_tokens from message_start when proxies omit it in message_delta.
           if (event.usage) {
-            if (event.usage.input_tokens != null) {
+            if (event.usage.input_tokens !== undefined && event.usage.input_tokens !== null) {
               output.usage.input = event.usage.input_tokens;
             }
-            if (event.usage.output_tokens != null) {
+            if (event.usage.output_tokens !== undefined && event.usage.output_tokens !== null) {
               output.usage.output = event.usage.output_tokens;
             }
-            if (event.usage.cache_read_input_tokens != null) {
+            if (
+              event.usage.cache_read_input_tokens !== undefined &&
+              event.usage.cache_read_input_tokens !== null
+            ) {
               output.usage.cacheRead = event.usage.cache_read_input_tokens;
             }
-            if (event.usage.cache_creation_input_tokens != null) {
+            if (
+              event.usage.cache_creation_input_tokens !== undefined &&
+              event.usage.cache_creation_input_tokens !== null
+            ) {
               output.usage.cacheWrite = event.usage.cache_creation_input_tokens;
             }
             // Vercel AI Gateway includes the TTL breakdown in deltas, though the SDK only types it on message_start.
@@ -921,12 +927,15 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
                 cache_creation?: { ephemeral_1h_input_tokens?: number };
               }
             ).cache_creation;
-            if (cacheCreation?.ephemeral_1h_input_tokens != null) {
+            if (
+              cacheCreation?.ephemeral_1h_input_tokens !== undefined &&
+              cacheCreation?.ephemeral_1h_input_tokens !== null
+            ) {
               output.usage.cacheWrite1h = cacheCreation.ephemeral_1h_input_tokens;
             }
             // Anthropic reports reasoning tokens as a subset of output tokens.
             const thinkingTokens = event.usage.output_tokens_details?.thinking_tokens;
-            if (thinkingTokens != null) {
+            if (thinkingTokens !== undefined && thinkingTokens !== null) {
               output.usage.reasoning = thinkingTokens;
             }
           }
@@ -1379,7 +1388,7 @@ function buildParams(
 
 // Normalize tool call IDs to match Anthropic's required pattern and length
 function normalizeToolCallId(id: string): string {
-  return id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+  return id.replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length)).slice(0, 64);
 }
 
 function convertToolResult(msg: ToolResultMessage): ContentBlockParam {
@@ -1755,11 +1764,14 @@ function mapStopReason(
         stopReason: "error",
         errorMessage: stopDetails?.explanation || `The model refused to complete the request`,
       };
-    case "pause_turn": // Stop is good enough -> resubmit
+    // Stop is good enough -> resubmit
+    case "pause_turn":
       return { stopReason: "stop" };
     case "stop_sequence":
-      return { stopReason: "stop" }; // We don't supply stop sequences, so this should never happen
-    case "sensitive": // Content flagged by safety filters (not yet in SDK types)
+      // We don't supply stop sequences, so this should never happen
+      return { stopReason: "stop" };
+    // Content flagged by safety filters (not yet in SDK types)
+    case "sensitive":
       return { stopReason: "error", errorMessage: "Provider stopped with: sensitive" };
     default:
       // Handle unknown stop reasons gracefully (API may add new values)

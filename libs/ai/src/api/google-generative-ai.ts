@@ -53,7 +53,8 @@ export interface GoogleOptions extends StreamOptions {
   toolChoice?: "auto" | "none" | "any" | undefined;
   thinking?: {
     enabled: boolean;
-    budgetTokens?: number; // -1 for dynamic, 0 to disable
+    // -1 for dynamic, 0 to disable
+    budgetTokens?: number;
     level?: GoogleApiThinkingLevel;
   };
 }
@@ -380,7 +381,8 @@ function createClient(
     {};
   if (model.baseUrl) {
     httpOptions.baseUrl = model.baseUrl;
-    httpOptions.apiVersion = ""; // baseUrl already includes version path, don't append
+    // baseUrl already includes version path, don't append
+    httpOptions.apiVersion = "";
   }
   const headers = providerHeadersToRecord({
     "User-Agent": getMsaUserAgent(),

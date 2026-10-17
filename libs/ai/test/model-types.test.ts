@@ -104,8 +104,10 @@ describe("built-in catalog getters", () => {
   it("return model shapes that can be reassigned within one api", () => {
     // Compile-time regression check: the return type must not carry literal model ids.
     let model = getBuiltinModel("openai", "gpt-4o-mini");
+    expect(model.id).toBe("gpt-4o-mini");
     model = getBuiltinModel("openai", "gpt-4o");
     let compat = getCompatModel("openai", "gpt-4o-mini");
+    expect(compat.id).toBe("gpt-4o-mini");
     compat = getCompatModel("openai", "gpt-4o");
 
     expect(model.id).toBe("gpt-4o");

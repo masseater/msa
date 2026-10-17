@@ -53,7 +53,7 @@ function runProbe(action: string): ProbeResult {
   }
 
   const stdoutLines = result.stdout
-    .split(/\r?\n/)
+    .split(/\r?\n/u)
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
   const lastLine = stdoutLines.at(-1);

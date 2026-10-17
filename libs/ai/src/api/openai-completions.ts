@@ -1299,8 +1299,12 @@ export function convertMessages(
     if (id.includes("|")) {
       // Sanitize to allowed chars and truncate to 40 chars (OpenAI limit)
       const separatorIndex = id.indexOf("|");
-      const callId = id.slice(0, separatorIndex).replace(/[^a-zA-Z0-9_-]/g, "_");
-      const itemId = id.slice(separatorIndex + 1).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const callId = id
+        .slice(0, separatorIndex)
+        .replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
+      const itemId = id
+        .slice(separatorIndex + 1)
+        .replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
       const combinedId = itemId.length > 0 ? `${callId}_${itemId}` : callId;
       if (combinedId.length <= 40) {
         return combinedId;

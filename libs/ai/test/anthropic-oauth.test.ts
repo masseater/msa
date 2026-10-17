@@ -250,7 +250,9 @@ describe("Anthropic OAuth", () => {
       expect(login.exchangedRedirectUri).toBe(login.redirectUri);
       expect(login.pageStatus).toBe(200);
     } finally {
-      await new Promise<void>((resolve) => blocker.close(() => resolve()));
+      await new Promise<void>((resolve) => {
+        blocker.close(() => resolve());
+      });
     }
   });
 });

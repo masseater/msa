@@ -704,7 +704,9 @@ describe("Models runtime", () => {
     expect(result.errors.size).toBe(0);
 
     rejectRefresh?.(new Error("late provider failure"));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
     expect(result.errors.size).toBe(0);
   });
 
@@ -749,7 +751,9 @@ describe("Models runtime", () => {
     await second;
     await first;
     finishFirst?.();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
 
     expect(state).toBe("generation-2");
     expect((await store.read("dynamic"))?.models[0]?.id).toBe("generation-2");
@@ -867,7 +871,9 @@ describe("Models runtime", () => {
     await expect(second).rejects.toMatchObject({ name: "AbortError" });
     finishFirst?.();
     await first;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
 
     expect(secondRan).toBe(false);
     expect(await credentials.read("p1")).toEqual({ type: "api_key", key: "first" });
@@ -1139,7 +1145,9 @@ describe("Models runtime", () => {
     const oauth = testOAuth({
       refresh: async () => {
         refreshes++;
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await new Promise((resolve) => {
+          setTimeout(resolve, 10);
+        });
         return {
           type: "oauth",
           access: `new-${refreshes}`,

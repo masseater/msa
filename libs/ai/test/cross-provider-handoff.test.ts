@@ -525,7 +525,7 @@ describe.skipIf(!hasAnyApiKey())("Cross-Provider Handoff", () => {
               .filter((c) => c.type === "text")
               .map((c) => c.text)
               .join(" ");
-            const preview = text.slice(0, 100).replace(/\n/g, " ");
+            const preview = text.slice(0, 100).replace(/\n/gu, " ");
             console.log(`[Target: ${targetPair.label}] SUCCESS: ${preview}...`);
             results.push({ target: targetPair.label, success: true });
           }

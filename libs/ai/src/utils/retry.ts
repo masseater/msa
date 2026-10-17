@@ -1,7 +1,7 @@
 import type { AssistantMessage } from "../types.ts";
 
 function buildProviderErrorPattern(patterns: readonly string[]): RegExp {
-  return new RegExp(patterns.join("|"), "i");
+  return new RegExp(patterns.join("|"), "iu");
 }
 
 const NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN = buildProviderErrorPattern([

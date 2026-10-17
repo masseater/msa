@@ -83,13 +83,13 @@ export function usesGoogleThinkingLevel<T extends GoogleApiType>(model: Model<T>
   return (
     // Match Gemini 3 Pro/Flash IDs with or without a minor version, such as
     // gemini-3-flash-preview, gemini-3.1-pro-preview, and gemini-3.8-flash.
-    /gemini-3(?:\.\d+)?-(?:pro|flash)/.test(id) ||
+    /gemini-3(?:\.\d+)?-(?:pro|flash)/u.test(id) ||
     // Match Gemini 4 and later, such as gemini-4-argon (#10890).
-    /gemini-(?:[4-9]|[1-9]\d)/.test(id) ||
+    /gemini-(?:[4-9]|[1-9]\d)/u.test(id) ||
     id === "gemini-flash-latest" ||
     id === "gemini-flash-lite-latest" ||
     // Match both hosted Gemma 4 naming forms: gemma-4-* and gemma4-*.
-    /gemma-?4/.test(id)
+    /gemma-?4/u.test(id)
   );
 }
 
@@ -160,7 +160,7 @@ export function retainThoughtSignature(
 }
 
 // Thought signatures must be base64 for Google APIs (TYPE_BYTES).
-const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/;
+const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/u;
 
 function isValidThoughtSignature(signature: string | undefined): boolean {
   if (!signature) return false;
@@ -191,7 +191,7 @@ export function requiresToolCallId(modelId: string): boolean {
 }
 
 function getGeminiMajorVersion(modelId: string): number | undefined {
-  const major = modelId.toLowerCase().match(/^gemini(?:-live)?-(\d+)/)?.[1];
+  const major = modelId.toLowerCase().match(/^gemini(?:-live)?-(\d+)/u)?.[1];
   if (major === undefined) return undefined;
   return Number.parseInt(major, 10);
 }
@@ -216,7 +216,7 @@ export function convertMessages<T extends GoogleApiType>(
   const contents: Content[] = [];
   const normalizeToolCallId = (id: string): string => {
     if (!requiresToolCallId(model.id)) return id;
-    return id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+    return id.replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length)).slice(0, 64);
   };
 
   const transformedMessages = transformMessages(conversation, model, normalizeToolCallId);
@@ -384,7 +384,8 @@ const JSON_SCHEMA_META_DECLARATIONS = new Set([
   "$vocabulary",
   "$comment",
   "$defs",
-  "definitions", // pre-draft-2019-09 equivalent of $defs
+  // pre-draft-2019-09 equivalent of $defs
+  "definitions",
 ]);
 
 /**

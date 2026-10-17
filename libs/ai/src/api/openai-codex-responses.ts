@@ -134,7 +134,7 @@ function assertSuccessfulOutput(
 // ============================================================================
 
 function isTerminalRateLimitError(errorText: string): boolean {
-  return /GoUsageLimitError|FreeUsageLimitError|Monthly usage limit reached|available balance|insufficient_quota|out of budget|quota exceeded|billing/i.test(
+  return /GoUsageLimitError|FreeUsageLimitError|Monthly usage limit reached|available balance|insufficient_quota|out of budget|quota exceeded|billing/iu.test(
     errorText,
   );
 }
@@ -146,7 +146,7 @@ function isRetryableError(status: number, errorText: string): boolean {
   if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {
     return true;
   }
-  return /rate.?limit|overloaded|service.?unavailable|upstream.?connect|connection.?refused/i.test(
+  return /rate.?limit|overloaded|service.?unavailable|upstream.?connect|connection.?refused/iu.test(
     errorText,
   );
 }
@@ -688,7 +688,7 @@ function resolveCodexServiceTier(
 
 function resolveCodexUrl(baseUrl?: string): string {
   const raw = baseUrl && baseUrl.trim().length > 0 ? baseUrl : DEFAULT_CODEX_BASE_URL;
-  const normalized = raw.replace(/\/+$/, "");
+  const normalized = raw.replace(/\/+$/u, "");
   if (normalized.endsWith("/codex/responses")) return normalized;
   if (normalized.endsWith("/codex")) return `${normalized}/responses`;
   return `${normalized}/codex/responses`;
@@ -1079,11 +1079,11 @@ function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketConstructo
   if (!env && _cachedWebsocket) return Promise.resolve(_cachedWebsocket);
 
   // bun doesn't respect http proxy envs, ref: https://github.com/oven-sh/bun/issues/15489
-  // TODO: remove this when bun supports proxy envs in websocket.
+  // Drop this branch once bun supports proxy envs in websocket.
   if (typeof process !== "undefined" && process.versions?.["bun"]) {
     const WebSocketWithProxy = class extends WebSocket {
       constructor(url: string | URL, options?: string | string[] | Record<string, unknown>) {
-        let _opts: Record<string, unknown> = {};
+        let _opts: Record<string, unknown>;
         if (Array.isArray(options) || typeof options === "string") {
           _opts = { protocols: options };
         } else {
@@ -1091,7 +1091,7 @@ function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketConstructo
         }
 
         const proxyUrl = resolveHttpProxyUrlForTarget(
-          url.toString().replace(/^wss:/, "https:").replace(/^ws:/, "http:"),
+          url.toString().replace(/^wss:/u, "https:").replace(/^ws:/u, "http:"),
           env,
         );
         super(url, { ..._opts, ...(proxyUrl ? { proxy: proxyUrl.toString() } : {}) } as any);
@@ -1727,7 +1727,7 @@ async function parseErrorResponse(
     if (err) {
       const code = err.code || err.type || "";
       if (
-        /usage_limit_reached|usage_not_included|rate_limit_exceeded/i.test(code) ||
+        /usage_limit_reached|usage_not_included|rate_limit_exceeded/iu.test(code) ||
         response.status === 429
       ) {
         const plan = err.plan_type ? ` (${err.plan_type.toLowerCase()} plan)` : "";

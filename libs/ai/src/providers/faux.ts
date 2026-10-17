@@ -369,10 +369,14 @@ function createAbortedMessage(partial: AssistantMessage): AssistantMessage {
 
 function scheduleChunk(chunk: string, tokensPerSecond: number | undefined): Promise<void> {
   if (!tokensPerSecond || tokensPerSecond <= 0) {
-    return new Promise((resolve) => queueMicrotask(resolve));
+    return new Promise((resolve) => {
+      queueMicrotask(resolve);
+    });
   }
   const delayMs = (estimateTokens(chunk) / tokensPerSecond) * 1000;
-  return new Promise((resolve) => setTimeout(resolve, delayMs));
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
 }
 
 async function streamWithDeltas(

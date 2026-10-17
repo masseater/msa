@@ -144,8 +144,10 @@ export async function refreshStoredOAuthCredential(
       async (current) => {
         signal.removeEventListener("abort", cancelLockWait);
         signal.throwIfAborted();
-        if (current?.type !== "oauth") return undefined; // logged out meanwhile
-        if (!needsRefresh(current)) return undefined; // another process/request refreshed
+        // logged out meanwhile
+        if (current?.type !== "oauth") return undefined;
+        // another process/request refreshed
+        if (!needsRefresh(current)) return undefined;
         try {
           return await oauth.refresh(
             current,
@@ -197,7 +199,8 @@ async function resolveStoredOAuth(
       expiresSoon,
       signal,
     );
-    if (!post) return undefined; // logged out meanwhile
+    // logged out meanwhile
+    if (!post) return undefined;
     credential = post;
     // The normal five-minute window triggers a refresh but does not impose a
     // provider contract. Explicit callers (such as bearer-token export) do

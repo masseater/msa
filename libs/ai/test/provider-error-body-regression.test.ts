@@ -164,7 +164,7 @@ describe("provider error body passthrough (per-tier regression)", () => {
     );
 
     expect(output.errorMessage).toContain("upstream WAF blocked policy XYZ");
-    const occurrences = output.errorMessage?.match(/upstream WAF blocked policy XYZ/g) ?? [];
+    const occurrences = output.errorMessage?.match(/upstream WAF blocked policy XYZ/gu) ?? [];
     expect(occurrences).toHaveLength(1);
   });
 

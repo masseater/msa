@@ -166,9 +166,9 @@ export function convertResponsesMessages<TApi extends Api>(
   const messages: ResponseInput = [];
 
   const normalizeIdPart = (part: string): string => {
-    const sanitized = part.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const sanitized = part.replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
     const normalized = sanitized.length > 64 ? sanitized.slice(0, 64) : sanitized;
-    return normalized.replace(/_+$/, "");
+    return normalized.replace(/_+$/u, "");
   };
 
   const buildForeignResponsesItemId = (itemId: string): string => {
@@ -345,7 +345,7 @@ export function convertResponsesMessages<TApi extends Api>(
           if (customInputProperty === undefined) {
             output.push({
               type: "function_call",
-              ...(itemId !== undefined ? { id: itemId } : {}),
+              ...(itemId === undefined ? {} : { id: itemId }),
               call_id: callId,
               name: toolCall.name,
               arguments: JSON.stringify(toolCall.arguments),
@@ -356,7 +356,7 @@ export function convertResponsesMessages<TApi extends Api>(
           } else {
             output.push({
               type: "custom_tool_call",
-              ...(itemId !== undefined ? { id: itemId } : {}),
+              ...(itemId === undefined ? {} : { id: itemId }),
               call_id: callId,
               name: toolCall.name,
               input: sanitizeSurrogates(
@@ -840,7 +840,6 @@ export async function processResponsesStream<TApi extends Api>(
     } else if (event.type === "error") {
       throw new Error(`Error Code ${event.code}: ${event.message}`);
     } else if (event.type === "response.failed") {
-      sawTerminalResponseEvent = true;
       output.rawStopReason = event.response?.status;
       const error = event.response?.error;
       const details = event.response?.incomplete_details;

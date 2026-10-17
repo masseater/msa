@@ -233,7 +233,8 @@ function createFireworksModel(
     name: "Kimi K2.6",
     api: "anthropic-messages",
     provider: "fireworks",
-    baseUrl: "http://127.0.0.1:0", // overridden by captureAnthropicRequest
+    // overridden by captureAnthropicRequest
+    baseUrl: "http://127.0.0.1:0",
     reasoning: true,
     input: ["text", "image"],
     cost: { input: 0.95, output: 4, cacheRead: 0.16, cacheWrite: 0 },
@@ -249,7 +250,8 @@ function createAnthropicModel(): Model<"anthropic-messages"> {
     name: "Claude Opus 4.8",
     api: "anthropic-messages",
     provider: "anthropic",
-    baseUrl: "http://127.0.0.1:0", // overridden by captureAnthropicRequest
+    // overridden by captureAnthropicRequest
+    baseUrl: "http://127.0.0.1:0",
     reasoning: true,
     input: ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -302,7 +304,9 @@ async function captureAnthropicRequest(
     writeEmptySseResponse(response);
   });
 
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
   const address = server.address() as AddressInfo;
 
   try {

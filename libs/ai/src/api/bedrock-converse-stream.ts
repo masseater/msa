@@ -204,7 +204,7 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
       // Region resolution: ARN-embedded > explicit option > env vars > SDK default chain.
       // When the model ID is an inference profile ARN, extract the region from it.
       // This avoids conflicts with AWS_REGION set for other services.
-      const arnRegion = model.id.match(/^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9-]+):/)?.[1];
+      const arnRegion = model.id.match(/^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9-]+):/u)?.[1];
       if (arnRegion) {
         config.region = arnRegion;
       } else if (configuredRegion) {
@@ -424,7 +424,7 @@ function formatBedrockError(error: unknown): string {
     !norm.messageCarriesBody && norm.status !== undefined && norm.body !== undefined
       ? `${norm.status}: ${norm.body}`
       : norm.message;
-  const dataRetentionHint = /data retention mode/i.test(core)
+  const dataRetentionHint = /data retention mode/iu.test(core)
     ? ` See ${BEDROCK_DATA_RETENTION_DOCS_URL} for supported data retention modes.`
     : "";
   if (error instanceof BedrockRuntimeServiceException) {
@@ -817,7 +817,7 @@ function getModelMatchCandidates(modelId: string, modelName?: string): string[] 
   const values = modelName ? [modelId, modelName] : [modelId];
   return values.flatMap((value) => {
     const lower = value.toLowerCase();
-    return [lower, lower.replace(/[\s_.:]+/g, "-")];
+    return [lower, lower.replace(/[\s_.:]+/gu, "-")];
   });
 }
 
@@ -1000,7 +1000,7 @@ function buildSystemPrompt(
 }
 
 function normalizeToolCallId(id: string): string {
-  const sanitized = id.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const sanitized = id.replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length));
   return sanitized.length > 64 ? sanitized.slice(0, 64) : sanitized;
 }
 
@@ -1311,7 +1311,7 @@ function getStandardBedrockEndpointRegion(baseUrl: string | undefined): string |
     const { hostname } = new URL(baseUrl);
     const match = hostname
       .toLowerCase()
-      .match(/^bedrock-runtime(?:-fips)?\.([a-z0-9-]+)\.amazonaws\.com(?:\.cn)?$/);
+      .match(/^bedrock-runtime(?:-fips)?\.([a-z0-9-]+)\.amazonaws\.com(?:\.cn)?$/u);
     return match?.[1];
   } catch {
     return undefined;
@@ -1379,7 +1379,8 @@ function buildAdditionalModelRequestFields(
             low: 2048,
             medium: 8192,
             high: 16384,
-            xhigh: 16384, // Budget-based Claude clamps extended levels to high
+            // Budget-based Claude clamps extended levels to high
+            xhigh: 16384,
             max: 16384,
           };
 

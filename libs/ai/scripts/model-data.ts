@@ -15,7 +15,7 @@ export interface ModelDataManifest {
 }
 
 const MODEL_DATA_IMPORT_PATTERN =
-  /^import \{ [A-Z][A-Z0-9_]*_CLASSIFIER_MODELS, [A-Z][A-Z0-9_]*_IMAGE_MODELS, [A-Z][A-Z0-9_]*_MODELS \} from "\.\/providers\/([^"/]+)\.models\.ts";$/gm;
+  /^import \{ [A-Z][A-Z0-9_]*_CLASSIFIER_MODELS, [A-Z][A-Z0-9_]*_IMAGE_MODELS, [A-Z][A-Z0-9_]*_MODELS \} from "\.\/providers\/([^"/]+)\.models\.ts";$/gmu;
 
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");

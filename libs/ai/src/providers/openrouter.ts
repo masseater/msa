@@ -33,7 +33,7 @@ export async function personalizeOpenRouterCatalog(
     context.credential?.type === "oauth" ? context.credential.access : context.credential?.key;
   if (!key) return catalog;
   const response = await fetch(
-    `${(context.baseUrl ?? OPENROUTER_BASE_URL).replace(/\/+$/, "")}/models/user`,
+    `${(context.baseUrl ?? OPENROUTER_BASE_URL).replace(/\/+$/u, "")}/models/user`,
     {
       headers: { accept: "application/json", authorization: `Bearer ${key}` },
       signal: AbortSignal.any([
