@@ -220,7 +220,13 @@ describe("TUI bounded render output", () => {
   });
 });
 
-/** Set each environment variable to `value`, returning a function that restores the previous state. */
+/**
+ * Set each environment variable to `value`, returning a function that restores the previous state.
+ *
+ * @param {readonly string[]} names - Variable names.
+ * @param {string} value - The value to set.
+ * @returns {() => void} Restores the previous values.
+ */
 function overrideEnv(names: readonly string[], value: string): () => void {
   const previousValues = names.map((name) => [name, process.env[name]] as const);
   for (const name of names) {

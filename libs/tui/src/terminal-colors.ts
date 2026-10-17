@@ -45,6 +45,9 @@ const COLOR_SCHEME_REPORT_PATTERN = /^(?:\x1b\[\?997;(1|2)n)+$/u;
 /**
  * Parse an OSC 10, 11, or 4 color reply. Returns undefined when `data` is not such a reply;
  * `rgb` is undefined when it is a reply with an unparseable color.
+ *
+ * @param {string} data - A sequence read from the terminal.
+ * @returns {{ target: OscColorTarget; rgb: RgbColor | undefined } | undefined} The color target and color, or undefined.
  */
 export function parseOscColorResponse(
   data: string,

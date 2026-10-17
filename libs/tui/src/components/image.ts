@@ -24,6 +24,8 @@ const pngCache = new Map<string, string | null>();
 /**
  * Register the converter used for non-PNG images on Kitty-protocol terminals, which only accept PNG.
  * Without one, such images render as text fallbacks.
+ *
+ * @param {ImageTranscoder | undefined} transcoder - The converter, or undefined to remove it.
  */
 export function setImageTranscoder(transcoder: ImageTranscoder | undefined): void {
   imageTranscoder = transcoder;
@@ -81,7 +83,11 @@ export class Image implements Component {
     this.imageId = options.imageId;
   }
 
-  /** Get the Kitty image ID used by this image (if any). */
+  /**
+   * Get the Kitty image ID used by this image (if any).
+   *
+   * @returns {number | undefined} The image ID, or undefined.
+   */
   getImageId(): number | undefined {
     return this.imageId;
   }

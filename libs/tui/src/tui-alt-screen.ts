@@ -307,12 +307,20 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     this.copyOnSelect = enabled;
   }
 
-  /** Whether the fullscreen viewport has a non-empty active text selection. */
+  /**
+   * Whether the fullscreen viewport has a non-empty active text selection.
+   *
+   * @returns {boolean} Whether a non-empty selection is active.
+   */
   hasActiveSelection(): boolean {
     return this.getActiveSelectionText() !== undefined;
   }
 
-  /** Copy the active fullscreen text selection, if any, using the configured selection clipboard path. */
+  /**
+   * Copy the active fullscreen text selection, if any, using the configured selection clipboard path.
+   *
+   * @returns {Promise<boolean>} Whether text was copied.
+   */
   async copyActiveSelectionToClipboard(): Promise<boolean> {
     const text = this.getActiveSelectionText();
     if (!text) return false;
@@ -325,7 +333,11 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     this.lastClick = undefined;
   }
 
-  /** The lines of the last rendered frame, one per terminal row, as written to the terminal. */
+  /**
+   * The lines of the last rendered frame, one per terminal row, as written to the terminal.
+   *
+   * @returns {string[]} The frame lines.
+   */
   getScreenLines(): string[] {
     return [...this.previousScreen];
   }
@@ -693,7 +705,12 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     return scrollView.scrollTop !== before;
   }
 
-  /** Show a transient message in the alternate-screen flash stack. */
+  /**
+   * Show a transient message in the alternate-screen flash stack.
+   *
+   * @param {string} message - The message to show.
+   * @param {number} durationMs - How long to show it, in milliseconds.
+   */
   flash(message: string, durationMs?: number): void {
     this.flashes.flash(message, durationMs);
   }

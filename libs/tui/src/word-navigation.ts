@@ -18,6 +18,11 @@ export interface WordNavigationOptions {
  * Skips trailing whitespace, then stops at the next word/punctuation boundary.
  *
  * Pure function - does not mutate any state.
+ *
+ * @param {string} text - The text to move in.
+ * @param {number} cursor - The cursor index.
+ * @param {WordNavigationOptions} options - Word boundary options.
+ * @returns {number} The new cursor index.
  */
 export function findWordBackward(
   text: string,
@@ -80,6 +85,11 @@ export function findWordBackward(
  * Skips leading whitespace, then stops at the next word/punctuation boundary.
  *
  * Pure function - does not mutate any state.
+ *
+ * @param {string} text - The text to move in.
+ * @param {number} cursor - The cursor index.
+ * @param {WordNavigationOptions} options - Word boundary options.
+ * @returns {number} The new cursor index.
  */
 export function findWordForward(
   text: string,

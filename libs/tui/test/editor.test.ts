@@ -13,12 +13,20 @@ import { stripTerminalSequences, visibleWidth } from "../src/utils.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
-/** Create a TUI with a virtual terminal for testing */
 function createTestTUI(cols = 80, rows = 24): TUI {
   return new TuiMainScreen(new VirtualTerminal(cols, rows));
 }
 
-/** Standard applyCompletion that replaces prefix with item.value */
+/**
+ * Standard applyCompletion that replaces prefix with item.value
+ *
+ * @param {string[]} lines - Editor lines.
+ * @param {number} cursorLine - Cursor line.
+ * @param {number} cursorCol - Cursor column.
+ * @param {{ value: string }} item - The selected item.
+ * @param {string} prefix - The typed prefix.
+ * @returns {{ lines: string[]; cursorLine: number; cursorCol: number }} The lines and cursor after completion.
+ */
 function applyCompletion(
   lines: string[],
   cursorLine: number,
@@ -4276,7 +4284,12 @@ describe("Editor component", () => {
   });
 
   describe("Paste marker atomic behavior", () => {
-    /** Helper: simulate a large paste that creates a marker */
+    /**
+     * Helper: simulate a large paste that creates a marker
+     *
+     * @param {Editor} editor - The editor to paste into.
+     * @returns {string} The marker text.
+     */
     function pasteWithMarker(editor: Editor): string {
       // 20 lines
       const bigContent = "line\n".repeat(20).trimEnd();
@@ -4285,7 +4298,12 @@ describe("Editor component", () => {
       return editor.getText();
     }
 
-    /** Helper: 12-line paste content with a distinguishing tag */
+    /**
+     * Helper: 12-line paste content with a distinguishing tag
+     *
+     * @param {string} tag - Text that tells the pastes apart.
+     * @returns {string} The paste content.
+     */
     function bigPaste(tag: string): string {
       return Array.from({ length: 12 }, (_, i) => `${tag}${i}`).join("\n");
     }

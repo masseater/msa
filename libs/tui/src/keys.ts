@@ -27,14 +27,13 @@ let _kittyProtocolActive = false;
 /**
  * Set the global Kitty keyboard protocol state.
  * Called by ProcessTerminal after detecting protocol support.
+ *
+ * @param {boolean} active - Whether the protocol is active.
  */
 export function setKittyProtocolActive(active: boolean): void {
   _kittyProtocolActive = active;
 }
 
-/**
- * Query whether Kitty keyboard protocol is currently active.
- */
 export function isKittyProtocolActive(): boolean {
   return _kittyProtocolActive;
 }
@@ -563,6 +562,9 @@ interface ParsedModifyOtherKeysSequence {
 /**
  * Check if the last parsed key event was a key release.
  * Only meaningful when Kitty keyboard protocol with flag 2 is active.
+ *
+ * @param {string} data - Raw input data from terminal
+ * @returns {boolean} Whether the event is a key release.
  */
 export function isKeyRelease(data: string): boolean {
   // Don't treat bracketed paste content as key release, even if it contains
@@ -593,6 +595,9 @@ export function isKeyRelease(data: string): boolean {
 /**
  * Check if the last parsed key event was a key repeat.
  * Only meaningful when Kitty keyboard protocol with flag 2 is active.
+ *
+ * @param {string} data - Raw input data from terminal
+ * @returns {boolean} Whether the event is a key repeat.
  */
 export function isKeyRepeat(data: string): boolean {
   // Don't treat bracketed paste content as key repeat, even if it contains
@@ -763,6 +768,11 @@ function parseModifyOtherKeysSequence(data: string): ParsedModifyOtherKeysSequen
  * Match xterm modifyOtherKeys format: CSI 27 ; modifiers ; keycode ~
  * This is used by terminals when Kitty protocol is not enabled.
  * Modifier values are 1-indexed: 2=shift, 3=alt, 5=ctrl, etc.
+ *
+ * @param {string} data - Raw input data from terminal
+ * @param {number} expectedKeycode - The keycode to match.
+ * @param {number} expectedModifier - Expected modifier bitmask (0 for none).
+ * @returns {boolean} Whether `data` is that key with that modifier.
  */
 function matchesModifyOtherKeys(
   data: string,
@@ -791,6 +801,10 @@ function isWindowsTerminalSession(): boolean {
  *
  * Prefer explicit Kitty / CSI-u / modifyOtherKeys sequences whenever they are
  * available. Fall back to a Windows Terminal heuristic only for raw BS bytes.
+ *
+ * @param {string} data - Raw input data from terminal
+ * @param {number} expectedModifier - Expected modifier bitmask (0 for none).
+ * @returns {boolean} Whether `data` is Backspace with that modifier.
  */
 function matchesRawBackspace(data: string, expectedModifier: number): boolean {
   if (data === "\x7f") return expectedModifier === 0;
@@ -810,6 +824,9 @@ function matchesRawBackspace(data: string, expectedModifier: number): boolean {
  * - Letters a-z → 1-26
  * - Symbols [\]_ → 27, 28, 29, 31
  * - Also maps - to same as _ (same physical key on US keyboards)
+ *
+ * @param {string} key - A single-character key name.
+ * @returns {string | null} The control character, or null when the key has none.
  */
 function rawCtrlChar(key: string): string | null {
   const char = key.toLowerCase();
@@ -906,8 +923,9 @@ function parseKeyId(
  *
  * Use the Key helper for autocomplete: Key.ctrl("c"), Key.escape, Key.ctrlShift("p"), Key.super("k")
  *
- * @param data - Raw input data from terminal
- * @param keyId - Key identifier (e.g., "ctrl+c", "escape", Key.ctrl("c"))
+ * @param {string} data - Raw input data from terminal
+ * @param {KeyId} keyId - Key identifier (e.g., "ctrl+c", "escape", Key.ctrl("c"))
+ * @returns {boolean} Whether `data` is the key `keyId` names.
  */
 export function matchesKey(data: string, keyId: KeyId): boolean {
   const parsed = parseKeyId(keyId);
@@ -1305,10 +1323,12 @@ export function matchesKey(data: string, keyId: KeyId): boolean {
 }
 
 /**
- * Parse input data and return the key identifier if recognized.
+ * Format a parsed key event as a key identifier.
  *
- * @param data - Raw input data from terminal
- * @returns Key identifier string (e.g., "ctrl+c") or undefined
+ * @param {number} codepoint - The key's codepoint.
+ * @param {number} modifier - Modifier bitmask (0 for none).
+ * @param {number} baseLayoutKey - Codepoint of the physical key on the base layout, used unless `codepoint` is a Latin letter, digit, or known symbol.
+ * @returns {string | undefined} Key identifier string (e.g., "ctrl+c") or undefined
  */
 function formatParsedKey(
   codepoint: number,
@@ -1475,8 +1495,8 @@ const KITTY_PRINTABLE_ALLOWED_MODIFIERS = MODIFIERS.shift | LOCK_MASK;
  * modifier combinations (those are handled by keybinding matching instead).
  * Prefers the shifted keycode when Shift is held and a shifted key is reported.
  *
- * @param data - Raw input data from terminal
- * @returns The printable character, or undefined if not a printable CSI-u sequence
+ * @param {string} data - Raw input data from terminal
+ * @returns {string | undefined} The printable character, or undefined if not a printable CSI-u sequence
  */
 export function decodeKittyPrintable(data: string): string | undefined {
   const match = data.match(KITTY_CSI_U_REGEX);

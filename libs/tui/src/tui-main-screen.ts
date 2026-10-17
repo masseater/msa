@@ -27,7 +27,8 @@ class BoundedTerminalWriter {
 
   /**
    * Append terminal data, flushing full chunks as needed. Callers must call `flush()` after the final append.
-   * @param value Terminal data to write in order; oversized values are split without splitting surrogate pairs.
+   *
+   * @param {string} value - Terminal data to write in order; oversized values are split without splitting surrogate pairs.
    */
   append(value: string): void {
     let offset = 0;
@@ -655,8 +656,9 @@ export class TuiMainScreen extends TuiBase implements TUI {
 
   /**
    * Position the hardware cursor for IME candidate window.
-   * @param cursorPos The cursor position extracted from rendered output, or null
-   * @param totalLines Total number of rendered lines
+   *
+   * @param {{ row: number; col: number } | null} cursorPos - The cursor position extracted from rendered output, or null
+   * @param {number} totalLines - Total number of rendered lines
    */
   private positionHardwareCursor(
     cursorPos: { row: number; col: number } | null,

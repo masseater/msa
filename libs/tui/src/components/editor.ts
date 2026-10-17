@@ -34,7 +34,12 @@ const PASTE_MARKER_REGEX = /\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]/gu;
 /** Non-global version for single-segment testing. */
 const PASTE_MARKER_SINGLE = /^\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]$/u;
 
-/** Check if a segment is a paste marker (i.e. was merged by segmentWithMarkers). */
+/**
+ * Check if a segment is a paste marker (i.e. was merged by segmentWithMarkers).
+ *
+ * @param {string} segment - A segment.
+ * @returns {boolean} Whether the segment is a paste marker.
+ */
 function isPasteMarker(segment: string): boolean {
   return segment.length >= 10 && PASTE_MARKER_SINGLE.test(segment);
 }
@@ -45,6 +50,11 @@ function isPasteMarker(segment: string): boolean {
  * movement, deletion, word-wrap, etc. treat paste markers as single units.
  *
  * Only markers whose numeric ID exists in `validIds` are merged.
+ *
+ * @param {string} text - The text to segment.
+ * @param {Intl.Segmenter} baseSegmenter - The segmenter to wrap.
+ * @param {Set<number>} validIds - Paste IDs whose markers are merged.
+ * @returns {Iterable<Intl.SegmentData>} The segments.
  */
 function segmentWithMarkers(
   text: string,
@@ -115,11 +125,10 @@ export interface TextChunk {
  * Wraps at word boundaries when possible, falling back to character-level
  * wrapping for words longer than the available width.
  *
- * @param line - The text line to wrap
- * @param maxWidth - Maximum visible width per chunk
- * @param preSegmented - Optional pre-segmented graphemes (e.g. with paste-marker awareness).
- *                       When omitted the default Intl.Segmenter is used.
- * @returns Array of chunks with text and position information
+ * @param {string} line - The text line to wrap
+ * @param {number} maxWidth - Maximum visible width per chunk
+ * @param {Intl.SegmentData[]} preSegmented - Optional pre-segmented graphemes (e.g. with paste-marker awareness). When omitted the default Intl.Segmenter is used.
+ * @returns {TextChunk[]} Array of chunks with text and position information
  */
 export function wordWrapLine(
   line: string,
@@ -405,12 +414,22 @@ export class Editor implements Component, Focusable {
       : 5;
   }
 
-  /** Set of currently valid paste IDs, for marker-aware segmentation. */
+  /**
+   * Set of currently valid paste IDs, for marker-aware segmentation.
+   *
+   * @returns {Set<number>} The paste IDs.
+   */
   private validPasteIds(): Set<number> {
     return new Set(this.pastes.keys());
   }
 
-  /** Segment text with paste-marker awareness, only merging markers with valid IDs. */
+  /**
+   * Segment text with paste-marker awareness, only merging markers with valid IDs.
+   *
+   * @param {string} text - The text to segment.
+   * @param {"word" | "grapheme"} mode - Segment by word or by grapheme.
+   * @returns {Iterable<Intl.SegmentData>} The segments.
+   */
   private segment(text: string, mode: "word" | "grapheme"): Iterable<Intl.SegmentData> {
     return segmentWithMarkers(
       text,
@@ -454,6 +473,8 @@ export class Editor implements Component, Focusable {
   /**
    * Add a prompt to history for up/down arrow navigation.
    * Called after successful submission.
+   *
+   * @param {string} text - The submitted prompt.
    */
   addToHistory(text: string): void {
     const trimmed = text.trim();
@@ -524,7 +545,12 @@ export class Editor implements Component, Focusable {
     this.historyDraft = null;
   }
 
-  /** Internal setText that doesn't reset history state - used by navigateHistory */
+  /**
+   * Internal setText that doesn't reset history state - used by navigateHistory
+   *
+   * @param {string} text - The new text.
+   * @param {"start" | "end"} cursorPlacement - Where to put the cursor.
+   */
   private setTextInternal(text: string, cursorPlacement: "start" | "end" = "end"): void {
     const lines = text.split("\n");
     this.state.lines = lines.length === 0 ? [""] : lines;
@@ -1145,6 +1171,8 @@ export class Editor implements Component, Focusable {
   /**
    * Get text with paste markers expanded to their actual content.
    * Use this when you need the full content (e.g., for external editor).
+   *
+   * @returns {string} The text with paste markers expanded.
    */
   getExpandedText(): string {
     return this.expandPasteMarkers(this.state.lines.join("\n"));
@@ -1176,6 +1204,8 @@ export class Editor implements Component, Focusable {
    * Insert text at the current cursor position.
    * Used for programmatic insertion (e.g., clipboard image markers).
    * This is atomic for undo - single undo restores entire pre-insert state.
+   *
+   * @param {string} text - The text to insert.
    */
   insertTextAtCursor(text: string): void {
     if (!text) return;
@@ -1190,6 +1220,9 @@ export class Editor implements Component, Focusable {
    * Normalize text for editor storage:
    * - Normalize line endings (\r\n and \r -> \n)
    * - Expand tabs to 4 spaces
+   *
+   * @param {string} text - The text to normalize.
+   * @returns {string} The normalized text.
    */
   private normalizeText(text: string): string {
     return text.replace(/\r\n/gu, "\n").replace(/\r/gu, "\n").replace(/\t/gu, "    ");
@@ -1199,6 +1232,8 @@ export class Editor implements Component, Focusable {
    * Internal text insertion at cursor. Handles single and multi-line text.
    * Does not push undo snapshots or trigger autocomplete - caller is responsible.
    * Normalizes line endings and calls onChange once at the end.
+   *
+   * @param {string} text - The text to insert.
    */
   private insertTextAtCursorInternal(text: string): void {
     if (!text) return;
@@ -1519,6 +1554,8 @@ export class Editor implements Component, Focusable {
   /**
    * Set cursor column and clear preferredVisualCol.
    * Use this for all non-vertical cursor movements to reset sticky column behavior.
+   *
+   * @param {number} col - The new cursor column.
    */
   private setCursorCol(col: number): void {
     this.state.cursorCol = col;
@@ -1529,6 +1566,10 @@ export class Editor implements Component, Focusable {
   /**
    * Move cursor to a target visual line, applying sticky column logic.
    * Shared by moveCursor() and pageScroll().
+   *
+   * @param {Array<{ logicalLine: number; startCol: number; length: number }>} visualLines - The visual line map.
+   * @param {number} currentVisualLine - Index of the cursor's visual line.
+   * @param {number} targetVisualLine - Index of the visual line to move to.
    */
   private moveToVisualLine(
     visualLines: Array<{ logicalLine: number; startCol: number; length: number }>,
@@ -1649,6 +1690,11 @@ export class Editor implements Component, Focusable {
    * - S = cursor in middle of source line (not clamped to end)
    * - T = target line shorter than current visual col
    * - U = target line shorter than preferred col
+   *
+   * @param {number} currentVisualCol - The cursor's visual column.
+   * @param {number} sourceMaxVisualCol - The last visual column of the source line.
+   * @param {number} targetMaxVisualCol - The last visual column of the target line.
+   * @returns {number} The visual column to move to.
    */
   private computeVerticalMoveColumn(
     currentVisualCol: number,
@@ -1908,6 +1954,9 @@ export class Editor implements Component, Focusable {
    * - logicalLine: index into this.state.lines
    * - startCol: starting column in the logical line
    * - length: length of this visual line segment
+   *
+   * @param {number} width - The wrap width in columns.
+   * @returns {Array<{ logicalLine: number; startCol: number; length: number }>} The visual lines.
    */
   private buildVisualLineMap(
     width: number,
@@ -1940,6 +1989,11 @@ export class Editor implements Component, Focusable {
 
   /**
    * Find the visual line index that contains the given logical position.
+   *
+   * @param {Array<{ logicalLine: number; startCol: number; length: number }>} visualLines - The visual line map.
+   * @param {number} line - The logical line.
+   * @param {number} col - The logical column.
+   * @returns {number} The visual line index.
    */
   private findVisualLineAt(
     visualLines: Array<{ logicalLine: number; startCol: number; length: number }>,
@@ -1963,6 +2017,9 @@ export class Editor implements Component, Focusable {
 
   /**
    * Find the visual line index for the current cursor position.
+   *
+   * @param {Array<{ logicalLine: number; startCol: number; length: number }>} visualLines - The visual line map.
+   * @returns {number} The visual line index.
    */
   private findCurrentVisualLine(
     visualLines: Array<{ logicalLine: number; startCol: number; length: number }>,
@@ -2040,6 +2097,8 @@ export class Editor implements Component, Focusable {
   /**
    * Scroll by a page (direction: -1 for up, 1 for down).
    * Moves cursor by the page size while keeping it in bounds.
+   *
+   * @param {-1 | 1} direction - -1 for up, 1 for down.
    */
   private pageScroll(direction: -1 | 1): void {
     this.lastAction = null;
@@ -2117,6 +2176,8 @@ export class Editor implements Component, Focusable {
 
   /**
    * Insert text at cursor position (used by yank operations).
+   *
+   * @param {string} text - The yanked text.
    */
   private insertYankedText(text: string): void {
     this.exitHistoryBrowsing();
@@ -2226,6 +2287,9 @@ export class Editor implements Component, Focusable {
   /**
    * Jump to the first occurrence of a character in the specified direction.
    * Multi-line search. Case-sensitive. Skips the current cursor position.
+   *
+   * @param {string} char - The character to jump to.
+   * @param {"forward" | "backward"} direction - The search direction.
    */
   private jumpToChar(char: string, direction: "forward" | "backward"): void {
     this.lastAction = null;
@@ -2306,6 +2370,10 @@ export class Editor implements Component, Focusable {
    * 3. No match -> -1 (keep default highlight)
    *
    * Matching is case-sensitive and checks item.value only.
+   *
+   * @param {Array<{ value: string; label: string }>} items - The autocomplete items.
+   * @param {string} prefix - The typed prefix.
+   * @returns {number} The item index, or -1.
    */
   private getBestAutocompleteMatchIndex(
     items: Array<{ value: string; label: string }>,

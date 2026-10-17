@@ -145,6 +145,9 @@ const DEFAULT_SSH_ESCAPE_TIMEOUT_MS = 100;
  * Resolve how long to wait for the rest of an escape sequence before
  * dispatching a lone ESC as the Escape key. Legacy Alt+key input is ESC plus
  * another byte, so high-latency transports need a longer reassembly window.
+ *
+ * @param {NodeJS.ProcessEnv} env - Environment to read the transport hints from.
+ * @returns {number} The timeout in milliseconds.
  */
 export function resolveEscapeTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const configured = Number(env["MSA_TUI_ESC_TIMEOUT"]);
@@ -346,7 +349,12 @@ export class ProcessTerminal implements Terminal {
     return true;
   }
 
-  /** Returns the parsed negotiation reply with its full (possibly reassembled) sequence. */
+  /**
+   * Returns the parsed negotiation reply with its full (possibly reassembled) sequence.
+   *
+   * @param {string} sequence - A sequence from the stdin buffer.
+   * @returns {{ parsed: KeyboardProtocolNegotiationSequence; sequence: string } | "pending" | undefined} The reply, "pending" while the reply is incomplete, or undefined when it is not a reply.
+   */
   private readKeyboardProtocolNegotiationSequence(
     sequence: string,
   ): { parsed: KeyboardProtocolNegotiationSequence; sequence: string } | "pending" | undefined {

@@ -7,12 +7,20 @@
 export class UndoStack<S> {
   private stack: S[] = [];
 
-  /** Push a deep clone of the given state onto the stack. */
+  /**
+   * Push a deep clone of the given state onto the stack.
+   *
+   * @param {S} state - The state to snapshot.
+   */
   push(state: S): void {
     this.stack.push(structuredClone(state));
   }
 
-  /** Pop and return the most recent snapshot, or undefined if empty. */
+  /**
+   * Pop and return the most recent snapshot, or undefined if empty.
+   *
+   * @returns {S | undefined} The snapshot, or undefined.
+   */
   pop(): S | undefined {
     return this.stack.pop();
   }

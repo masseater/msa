@@ -14,6 +14,8 @@ const MAX_AUTO_LINES = 6;
  * Local macOS terminals receive wheel and trackpad deltas that the OS has already accelerated,
  * and they emit one event per line. Other platforms, and SSH sessions where the client platform
  * is unknown, usually send one event per wheel notch.
+ *
+ * @returns {boolean} Whether wheel deltas arrive already accelerated.
  */
 function terminalAcceleratesWheel(): boolean {
   const env = process.env;
@@ -50,7 +52,13 @@ export class WheelScrollAccelerator {
     this.reset();
   }
 
-  /** Return the positive line count for a wheel event in `direction` at time `now` (milliseconds). */
+  /**
+   * Return the positive line count for a wheel event in `direction` at time `now` (milliseconds).
+   *
+   * @param {-1 | 1} direction - -1 for up, 1 for down.
+   * @param {number} now - Event time in milliseconds.
+   * @returns {number} The line count.
+   */
   next(direction: -1 | 1, now: number): number {
     if (this.lines !== "auto")
       return Number.isFinite(this.lines) ? Math.max(1, Math.floor(this.lines)) : 1;

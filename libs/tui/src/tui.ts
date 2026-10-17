@@ -84,6 +84,10 @@ export interface TuiMouseDispatchResult extends TuiMouseEventResult {
 /**
  * Dispatch an event to a component and retain the exact target and coordinate
  * transform. Containers use this when forwarding events to nested children.
+ *
+ * @param {Component} component - The component to receive the event.
+ * @param {TuiMouseEvent} event - The event in the component's parent coordinates.
+ * @returns {TuiMouseDispatchResult | undefined} The dispatch result, or undefined when the component did not handle the event.
  */
 export function dispatchMouseEvent(
   component: Component,
@@ -115,7 +119,13 @@ export function dispatchMouseEvent(
   };
 }
 
-/** Recreate local coordinates for a previously dispatched mouse target. */
+/**
+ * Recreate local coordinates for a previously dispatched mouse target.
+ *
+ * @param {TuiMouseEvent} event - The event in screen coordinates.
+ * @param {TuiMouseDispatchTarget} target - A target returned by an earlier dispatch.
+ * @returns {TuiMouseEvent} The event in the target's local coordinates.
+ */
 export function retargetMouseEvent(
   event: TuiMouseEvent,
   target: TuiMouseDispatchTarget,
@@ -197,7 +207,12 @@ export interface Focusable {
   focused: boolean;
 }
 
-/** Type guard to check if a component implements Focusable */
+/**
+ * Type guard to check if a component implements Focusable
+ *
+ * @param {Component | null} component - The component to check.
+ * @returns {boolean} Whether the component implements Focusable.
+ */
 export function isFocusable(component: Component | null): component is Component & Focusable {
   return component !== null && "focused" in component;
 }
@@ -216,7 +231,12 @@ export const FAKE_CURSOR_END = "\x1b_pi:/fc\x07";
 // CURSOR_MARKER + FAKE_CURSOR_START + text + FAKE_CURSOR_END. Truncating the line right after the cursor cell drops the end.
 const FOCUSED_FAKE_CURSOR = /(\x1b_pi:c\x07)\x1b_pi:fc\x07(.*?)(?:\x1b_pi:\/fc\x07|$)/su;
 
-/** Wrap text in fake cursor markers. */
+/**
+ * Wrap text in fake cursor markers.
+ *
+ * @param {string} text - The text under the cursor.
+ * @returns {string} The text between fake cursor markers.
+ */
 export function renderFakeCursor(text: string): string {
   return `${FAKE_CURSOR_START}${text}${FAKE_CURSOR_END}`;
 }
@@ -250,7 +270,13 @@ export interface OverlayMargin {
 /** Value that can be absolute (number) or percentage (string like "50%") */
 export type SizeValue = number | `${number}%`;
 
-/** Parse a SizeValue into absolute value given a reference size */
+/**
+ * Parse a SizeValue into absolute value given a reference size
+ *
+ * @param {SizeValue | undefined} value - An absolute size or a percentage.
+ * @param {number} referenceSize - The size a percentage refers to.
+ * @returns {number | undefined} The absolute size, or undefined when `value` is undefined.
+ */
 function parseSizeValue(value: SizeValue | undefined, referenceSize: number): number | undefined {
   if (value === undefined) return undefined;
   if (typeof value === "number") return value;
@@ -448,7 +474,16 @@ export class Container implements Component {
  */
 const SEGMENT_RESET = "\x1b[0m\x1b]8;;\x07";
 
-/** Composite overlay content into a terminal line at a fixed column. */
+/**
+ * Composite overlay content into a terminal line at a fixed column.
+ *
+ * @param {string} baseLine - The line under the overlay.
+ * @param {string} overlayLine - The overlay content.
+ * @param {number} startCol - Column where the overlay starts.
+ * @param {number} overlayWidth - Width of the overlay in columns.
+ * @param {number} totalWidth - Width of the terminal in columns.
+ * @returns {string} The composited line.
+ */
 export function compositeTuiLine(
   baseLine: string,
   overlayLine: string,
@@ -612,6 +647,8 @@ export abstract class TuiBase extends Container implements TUI {
    * Set whether to trigger full re-render when content shrinks.
    * When true, empty rows are cleared when content shrinks.
    * When false (default), empty rows remain (reduces redraws on slower terminals).
+   *
+   * @param {boolean} enabled - Whether to clear rows when content shrinks.
    */
   setClearOnShrink(enabled: boolean): void {
     this.clearOnShrink = enabled;
@@ -769,6 +806,10 @@ export abstract class TuiBase extends Container implements TUI {
   /**
    * Show an overlay component with configurable positioning and sizing.
    * Returns a handle to control the overlay's visibility.
+   *
+   * @param {Component} component - The overlay content.
+   * @param {OverlayOptions} options - Positioning and sizing.
+   * @returns {OverlayHandle} A handle to hide, show, or focus the overlay.
    */
   showOverlay(component: Component, options?: OverlayOptions): OverlayHandle {
     const entry: OverlayStackEntry = {
@@ -893,19 +934,22 @@ export abstract class TuiBase extends Container implements TUI {
     if (!this.stopped) this.terminal.hideCursor();
   }
 
-  /** Check if there are any visible overlays */
   hasOverlay(): boolean {
     return this.overlayStack.some((o) => this.isOverlayVisible(o));
   }
 
-  /** Check if the focused component is a visible overlay */
   protected isOverlayFocused(): boolean {
     return this.overlayStack.some(
       (entry) => entry.component === this.focusedComponent && this.isOverlayVisible(entry),
     );
   }
 
-  /** Keep overlay containers as keyboard focus owners when a nested control is clicked. */
+  /**
+   * Keep overlay containers as keyboard focus owners when a nested control is clicked.
+   *
+   * @param {Component} component - The clicked component.
+   * @returns {Component} The component that takes keyboard focus.
+   */
   protected resolveMouseFocusTarget(component: Component): Component {
     for (let index = this.overlayStack.length - 1; index >= 0; index--) {
       const overlay = this.overlayStack[index]!;
@@ -916,7 +960,12 @@ export abstract class TuiBase extends Container implements TUI {
     return component;
   }
 
-  /** Dispatch to the visually topmost overlay under the pointer. */
+  /**
+   * Dispatch to the visually topmost overlay under the pointer.
+   *
+   * @param {TuiMouseEvent} event - The event in screen coordinates.
+   * @returns {{ hit: boolean; result?: TuiMouseDispatchResult; }} Whether an overlay is under the pointer, and its dispatch result.
+   */
   protected dispatchMouseToOverlay(event: TuiMouseEvent): {
     hit: boolean;
     result?: TuiMouseDispatchResult;
@@ -948,7 +997,6 @@ export abstract class TuiBase extends Container implements TUI {
     return { hit: false };
   }
 
-  /** Check if an overlay entry is currently visible */
   private isOverlayVisible(entry: OverlayStackEntry): boolean {
     if (entry.hidden) return false;
     if (entry.options?.visible) {
@@ -957,7 +1005,11 @@ export abstract class TuiBase extends Container implements TUI {
     return true;
   }
 
-  /** Find the visual-frontmost visible capturing overlay, if any */
+  /**
+   * Find the visual-frontmost visible capturing overlay, if any
+   *
+   * @returns {OverlayStackEntry | undefined} The overlay entry, or undefined when none is visible and capturing.
+   */
   private getTopmostVisibleOverlay(): OverlayStackEntry | undefined {
     let topmost: OverlayStackEntry | undefined;
     for (const overlay of this.overlayStack) {
@@ -1269,6 +1321,12 @@ export abstract class TuiBase extends Container implements TUI {
   /**
    * Resolve overlay layout from options.
    * Returns { width, row, col, maxHeight } for rendering.
+   *
+   * @param {OverlayOptions | undefined} options - Overlay positioning and sizing options.
+   * @param {number} overlayHeight - Rendered height of the overlay in rows.
+   * @param {number} termWidth - Terminal width in columns.
+   * @param {number} termHeight - Terminal height in rows.
+   * @returns {{ width: number; row: number; col: number; maxHeight: number | undefined }} The overlay width, position, and maximum height.
    */
   private resolveOverlayLayout(
     options: OverlayOptions | undefined,
@@ -1415,7 +1473,14 @@ export abstract class TuiBase extends Container implements TUI {
     }
   }
 
-  /** Composite all overlays into content lines (sorted by focusOrder, higher = on top). */
+  /**
+   * Composite all overlays into content lines (sorted by focusOrder, higher = on top).
+   *
+   * @param {string[]} lines - Rendered content lines.
+   * @param {number} termWidth - Terminal width in columns.
+   * @param {number} termHeight - Terminal height in rows.
+   * @returns {string[]} The content lines with the overlays drawn over them.
+   */
   protected compositeOverlays(lines: string[], termWidth: number, termHeight: number): string[] {
     if (this.overlayStack.length === 0) {
       this.renderedOverlayLayouts = [];
@@ -1526,9 +1591,10 @@ export abstract class TuiBase extends Container implements TUI {
    * Find and extract cursor position from rendered lines.
    * Searches for CURSOR_MARKER, calculates its position, and strips it from the output.
    * Only scans the bottom terminal height lines (visible viewport).
-   * @param lines - Rendered lines to search
-   * @param height - Terminal height (visible viewport size)
-   * @returns Cursor position { row, col } or null if no marker found
+   *
+   * @param {string[]} lines - Rendered lines to search
+   * @param {number} height - Terminal height (visible viewport size)
+   * @returns {{ row: number; col: number } | null} Cursor position { row, col } or null if no marker found
    */
   protected extractCursorPosition(
     lines: string[],
@@ -1558,6 +1624,9 @@ export abstract class TuiBase extends Container implements TUI {
    * Resolve fake cursor markers to reverse video. When the hardware cursor is shown, a fake cursor
    * directly after CURSOR_MARKER is dropped because the terminal cursor is drawn there. Fake cursors
    * of components without focus have no CURSOR_MARKER and stay visible.
+   *
+   * @param {string[]} lines - Rendered lines.
+   * @returns {string[]} The lines with fake cursors drawn in reverse video.
    */
   protected resolveFakeCursors(lines: string[]): string[] {
     return lines.map((line) => {
@@ -1574,8 +1643,11 @@ export abstract class TuiBase extends Container implements TUI {
    * (OSC 11), and ANSI colors 0-15 (OSC 4), followed by a DA1 request that marks the end of the
    * replies. Resolves when the DA1 reply or all color replies arrive, or when the timeout expires.
    * Colors the terminal did not report are undefined; the palette is only set when all 16 arrived.
-   * @param timeoutMs Query timeout in milliseconds, for terminals that do not answer DA1 either.
-   * @param onLateReply Receives the replies if the query completes after the timeout, e.g. over slow links.
+   *
+   * @param {{ timeoutMs: number; onLateReply?: (colors: TerminalColors) => void }} options - Query options.
+   * @param {number} options.timeoutMs - Query timeout in milliseconds, for terminals that do not answer DA1 either.
+   * @param {(colors: TerminalColors) => void} [options.onLateReply] - Receives the replies if the query completes after the timeout, e.g. over slow links.
+   * @returns {Promise<TerminalColors>} The reported colors.
    */
   queryTerminalColors({
     timeoutMs,

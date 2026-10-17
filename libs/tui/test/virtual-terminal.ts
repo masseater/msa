@@ -107,18 +107,12 @@ export class VirtualTerminal implements Terminal {
 
   // Test-specific methods not in Terminal interface
 
-  /**
-   * Simulate keyboard input
-   */
   sendInput(data: string): void {
     if (this.inputHandler) {
       this.inputHandler(data);
     }
   }
 
-  /**
-   * Resize the terminal
-   */
   resize(columns: number, rows: number): void {
     this._columns = columns;
     this._rows = rows;
@@ -140,6 +134,8 @@ export class VirtualTerminal implements Terminal {
 
   /**
    * Flush and get viewport - convenience method for tests
+   *
+   * @returns {Promise<string[]>} The viewport lines after pending writes are applied.
    */
   async flushAndGetViewport(): Promise<string[]> {
     await this.flush();
@@ -149,6 +145,8 @@ export class VirtualTerminal implements Terminal {
   /**
    * Get the visible viewport (what's currently on screen)
    * Note: You should use getViewportAfterWrite() for testing after writing data
+   *
+   * @returns {string[]} One string per visible terminal row.
    */
   getViewport(): string[] {
     const lines: string[] = [];
@@ -167,9 +165,6 @@ export class VirtualTerminal implements Terminal {
     return lines;
   }
 
-  /**
-   * Get the entire scroll buffer
-   */
   getScrollBuffer(): string[] {
     const lines: string[] = [];
     const buffer = this.xterm.buffer.active;
@@ -201,9 +196,6 @@ export class VirtualTerminal implements Terminal {
     this.xterm.reset();
   }
 
-  /**
-   * Get cursor position
-   */
   getCursorPosition(): { x: number; y: number } {
     const buffer = this.xterm.buffer.active;
     return {

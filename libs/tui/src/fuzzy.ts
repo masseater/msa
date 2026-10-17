@@ -96,6 +96,11 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatch {
 /**
  * Filter and sort items by fuzzy match quality (best matches first).
  * Supports whitespace- and slash-separated tokens: all tokens must match.
+ *
+ * @param {T[]} items - Items to filter.
+ * @param {string} query - The query.
+ * @param {(item: T) => string} getText - Returns the text to match for an item.
+ * @returns {T[]} The matching items, best first.
  */
 export function fuzzyFilter<T>(items: T[], query: string, getText: (item: T) => string): T[] {
   if (!query.trim()) {

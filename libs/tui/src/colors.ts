@@ -101,9 +101,11 @@ const OKHSL_PATTERN = new RegExp(
 /**
  * An OKHSL color, converted to sRGB. Saturation is relative to the sRGB gamut at the hue and lightness,
  * so equal saturation looks equally colorful across hues and lightness.
- * @param h Hue in degrees.
- * @param s Saturation, 0-1.
- * @param l Lightness, 0-1.
+ *
+ * @param {number} h - Hue in degrees.
+ * @param {number} s - Saturation, 0-1.
+ * @param {number} l - Lightness, 0-1.
+ * @returns {RgbColorValue} The color as sRGB.
  */
 export function okhslColor(h: number, s: number, l: number): RgbColorValue {
   requireFinite(h, "h");
@@ -349,6 +351,12 @@ export function styleText(text: string, options: TextStyle, mode: TerminalColorM
 /**
  * Like `styleText()`, but with precomputed color escape sequences, e.g. cached theme colors.
  * Colors in `options` are ignored.
+ *
+ * @param {string} text - The text to style.
+ * @param {string | undefined} fgAnsi - Foreground color escape sequence.
+ * @param {string | undefined} bgAnsi - Background color escape sequence.
+ * @param {TextAttributes} options - Text attributes.
+ * @returns {string} The styled text.
  */
 export function styleTextWithAnsi(
   text: string,

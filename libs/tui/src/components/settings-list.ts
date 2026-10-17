@@ -72,7 +72,6 @@ export class SettingsList implements Component {
     }
   }
 
-  /** Update an item's currentValue */
   updateValue(id: string, newValue: string): void {
     const item = this.items.find((i) => i.id === id);
     if (item) {
@@ -80,7 +79,11 @@ export class SettingsList implements Component {
     }
   }
 
-  /** Move selection to the item with the given id (no-op if not found). */
+  /**
+   * Move selection to the item with the given id (no-op if not found).
+   *
+   * @param {string} id - The item id.
+   */
   selectItem(id: string): void {
     const items = this.searchEnabled ? this.filteredItems : this.items;
     const index = items.findIndex((i) => i.id === id);

@@ -1529,6 +1529,10 @@ export interface RenderLatexOptions {
 /**
  * Render a basic LaTeX math expression as terminal-friendly Unicode text.
  * Returns undefined when the expression contains unsupported or malformed syntax.
+ *
+ * @param {string} source - The LaTeX source.
+ * @param {RenderLatexOptions} options - Rendering options.
+ * @returns {string | undefined} The rendered text, or undefined.
  */
 export function renderLatex(source: string, options: RenderLatexOptions = {}): string | undefined {
   const layoutNodes: LayoutNode[] = [];

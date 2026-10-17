@@ -390,6 +390,9 @@ export class Markdown implements Component {
    * This is the base styling applied to all text content.
    * NOTE: Background color is NOT applied here - it's applied at the padding stage
    * to ensure it extends to the full line width.
+   *
+   * @param {string} text - The text to style.
+   * @returns {string} The styled text.
    */
   private applyDefaultStyle(text: string): string {
     if (!this.defaultTextStyle) {
@@ -791,6 +794,12 @@ export class Markdown implements Component {
 
   /**
    * Render a list with proper nesting support
+   *
+   * @param {Tokens.List} token - The list token.
+   * @param {number} depth - Nesting depth, 0 for a top-level list.
+   * @param {number} width - Available width in columns.
+   * @param {InlineStyleContext} styleContext - Inline style of the enclosing block.
+   * @returns {string[]} The rendered lines.
    */
   private renderList(
     token: Tokens.List,
@@ -850,6 +859,10 @@ export class Markdown implements Component {
 
   /**
    * Get the visible width of the longest word in a string.
+   *
+   * @param {string} text - The text to measure.
+   * @param {number} maxWidth - Upper bound for the result.
+   * @returns {number} The width in columns.
    */
   private getLongestWordWidth(text: string, maxWidth?: number): number {
     const words = text.split(/\s+/u).filter((word) => word.length > 0);
@@ -868,6 +881,11 @@ export class Markdown implements Component {
    *
    * Delegates to wrapTextWithAnsi() so ANSI codes + long tokens are handled
    * consistently with the rest of the renderer.
+   *
+   * @param {string} text - The cell text.
+   * @param {number} maxWidth - The column width.
+   * @param {string} stylePrefix - ANSI codes to reapply at the start of each wrapped line.
+   * @returns {string[]} The wrapped lines.
    */
   private wrapCellText(text: string, maxWidth: number, stylePrefix = ""): string[] {
     const lines = wrapTextWithAnsi(text, Math.max(1, maxWidth));
@@ -881,6 +899,12 @@ export class Markdown implements Component {
   /**
    * Render a table with width-aware cell wrapping.
    * Cells that don't fit are wrapped to multiple lines.
+   *
+   * @param {Tokens.Table} token - The table token.
+   * @param {number} availableWidth - Available width in columns.
+   * @param {string} nextTokenType - Type of the token after the table, to decide on trailing spacing.
+   * @param {InlineStyleContext} styleContext - Inline style of the enclosing block.
+   * @returns {string[]} The rendered lines.
    */
   private renderTable(
     token: Tokens.Table,
