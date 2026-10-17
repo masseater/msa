@@ -321,9 +321,9 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
    *
    * @returns {Promise<boolean>} Whether text was copied.
    */
-  async copyActiveSelectionToClipboard(): Promise<boolean> {
+  copyActiveSelectionToClipboard(): Promise<boolean> {
     const text = this.getActiveSelectionText();
-    if (!text) return false;
+    if (!text) return Promise.resolve(false);
     return this.copyTextToClipboard(text);
   }
 
@@ -759,7 +759,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
       // SGR mouse button codes use bit 3 (value 8) for the Alt modifier.
       const wheelDelta =
         wheelEvent.direction *
-        ((wheelEvent.button & 8) !== 0 ? lines * ALT_WHEEL_SCROLL_MULTIPLIER : lines);
+        ((wheelEvent.button & 8) === 0 ? lines : lines * ALT_WHEEL_SCROLL_MULTIPLIER);
       const event = this.createMouseEvent("wheel", wheelEvent.button, wheelEvent.x, wheelEvent.y, {
         wheelDelta,
       });
@@ -1008,13 +1008,13 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     if (this.handleSearchMouseEvent(raw)) return;
 
     const overlay = this.dispatchMouseToOverlay(event);
-    if (!overlay.hit) {
+    if (overlay.hit) {
+      this.stopScrollbarHover();
+    } else {
       if (this.handleScrollToEndIndicatorMouseEvent(raw)) return;
       const scrollbarHandled = this.handleScrollbarMouseEvent(raw);
       if (!this.scrollbarDrag) this.updateScrollbarHover(raw.x, raw.y);
       if (scrollbarHandled) return;
-    } else {
-      this.stopScrollbarHover();
     }
 
     const result = overlay.result ?? (overlay.hit ? undefined : this.dispatchMouseToLayout(event));
@@ -1462,7 +1462,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
           return;
         }
       }
-      if (this.copyOnSelect) void this.copySelectionToClipboard();
+      if (this.copyOnSelect) void this.copyActiveSelectionToClipboard();
       this.requestRender();
       return;
     }
@@ -1565,12 +1565,6 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     }
     const text = lines.join("\n");
     return text.length === 0 ? undefined : text;
-  }
-
-  private async copySelectionToClipboard(): Promise<boolean> {
-    const text = this.getActiveSelectionText();
-    if (!text) return false;
-    return this.copyTextToClipboard(text);
   }
 
   private async copyTextToClipboard(text: string): Promise<boolean> {

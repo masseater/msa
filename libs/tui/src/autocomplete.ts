@@ -378,11 +378,11 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
           prefix,
           (item) => item.name,
         );
-        const filtered = [...bareNameMatches, ...fullNameOnlyMatches].map((item) => ({
-          value: item.name,
-          label: item.label,
-          ...(item.description && { description: item.description }),
-        }));
+        const filtered = [...bareNameMatches, ...fullNameOnlyMatches].map((item) => {
+          const suggestion: AutocompleteItem = { value: item.name, label: item.label };
+          if (item.description) suggestion.description = item.description;
+          return suggestion;
+        });
 
         if (filtered.length === 0) return null;
 
@@ -834,7 +834,8 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 
       const scoredEntries = entries
         .map((entry) => ({
-          ...entry,
+          path: entry.path,
+          isDirectory: entry.isDirectory,
           score: fdQuery ? this.scoreEntry(entry.path, fdQuery, entry.isDirectory) : 1,
         }))
         .filter((entry) => entry.score > 0);

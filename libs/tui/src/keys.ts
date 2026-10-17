@@ -887,13 +887,17 @@ function formatKeyNameWithModifiers(keyName: string, modifier: number): string |
   return mods.length > 0 ? `${mods.join("+")}+${keyName}` : keyName;
 }
 
+function findModifierPrefix(key: string): (typeof MODIFIER_NAMES)[number] | undefined {
+  return MODIFIER_NAMES.find((name) => key.startsWith(`${name}+`));
+}
+
 function parseKeyId(
   keyId: string,
 ): { key: string; ctrl: boolean; shift: boolean; alt: boolean; super: boolean } | null {
   let key = keyId.toLowerCase();
   const modifiers = new Set<(typeof MODIFIER_NAMES)[number]>();
   while (true) {
-    const modifier = MODIFIER_NAMES.find((name) => key.startsWith(`${name}+`));
+    const modifier = findModifierPrefix(key);
     if (!modifier) break;
     if (modifiers.has(modifier)) return null;
     modifiers.add(modifier);

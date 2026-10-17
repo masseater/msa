@@ -159,12 +159,12 @@ describe("CombinedAutocompleteProvider", () => {
     test("recognizes @ after CJK punctuation without consuming the preceding text", async () => {
       setupFolder(baseDir, { files: { "README.md": "readme" } });
       const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
-      for (const before of [
+      for await (const before of [
         "查看，",
         "\u3000",
         ..."，．：；！？（）［］｛｝“”‘’…—。、「」『』《》【】",
       ]) {
-        for (const force of [false, true]) {
+        for await (const force of [false, true]) {
           const line = `${before}@REA`;
           const result = await getSuggestions(provider, [line], 0, line.length, force);
           assert.ok(result, line);
@@ -189,7 +189,7 @@ describe("CombinedAutocompleteProvider", () => {
     test("recognizes @ after opening wrappers like ( and backticks", async () => {
       setupFolder(baseDir, { files: { "README.md": "readme" } });
       const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
-      for (const before of ["(", "see (", "[", "`", "<", "{"]) {
+      for await (const before of ["(", "see (", "[", "`", "<", "{"]) {
         const line = `${before}@REA`;
         const result = await getSuggestions(provider, [line], 0, line.length);
         assert.ok(result, line);
@@ -212,8 +212,8 @@ describe("CombinedAutocompleteProvider", () => {
         files: { "文档/说明.md": "text", "文档@备份/说明.md": "backup" },
       });
       const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
-      for (const before of ["", "查看，"]) {
-        for (const directory of ["文档", "文档@备份"]) {
+      for await (const before of ["", "查看，"]) {
+        for await (const directory of ["文档", "文档@备份"]) {
           const prefix = `@${directory}/说`;
           const line = before + prefix;
           const result = await getSuggestions(provider, [line], 0, line.length);
@@ -229,7 +229,7 @@ describe("CombinedAutocompleteProvider", () => {
 
     test("completes quoted CJK attachments after prose without losing path segments or quotes", async () => {
       const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
-      for (const separator of [" ", "\u3000", "，", "。"]) {
+      for await (const separator of [" ", "\u3000", "，", "。"]) {
         const directory = `我的${separator}文档`;
         setupFolder(baseDir, {
           files: { [`${directory}/说明.md`]: "text", "文档/说明.md": "not the quoted path" },
@@ -258,7 +258,7 @@ describe("CombinedAutocompleteProvider", () => {
     test("does not interpret email addresses or @ after ASCII or CJK letters as attachment prefixes", async () => {
       setupFolder(baseDir, { files: { "README.md": "readme", "example.com": "text" } });
       const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
-      for (const before of [
+      for await (const before of [
         "user",
         "查看",
         "あ",
@@ -271,7 +271,7 @@ describe("CombinedAutocompleteProvider", () => {
         "々",
         "Ａ",
       ]) {
-        for (const name of ["REA", "example.com"]) {
+        for await (const name of ["REA", "example.com"]) {
           const line = `${before}@${name}`;
           assert.strictEqual(await getSuggestions(provider, [line], 0, line.length), null, line);
         }
@@ -433,7 +433,7 @@ describe("CombinedAutocompleteProvider", () => {
 
     test("quotes paths containing whitespace or CJK punctuation for @ suggestions", async () => {
       const provider = new CombinedAutocompleteProvider([], baseDir, requireFdPath());
-      for (const separator of [" ", "\u3000", "，", "。"]) {
+      for await (const separator of [" ", "\u3000", "，", "。"]) {
         const directory = `my${separator}folder`;
         setupFolder(baseDir, { files: { [`${directory}/test.txt`]: "content" } });
         const line = "@my";
@@ -624,8 +624,8 @@ describe("CombinedAutocompleteProvider", () => {
       if (process.platform !== "win32") {
         completions.push({ prefix: `${baseDir}/文档/说`, value: `${baseDir}/文档/说明.md` });
       }
-      for (const separator of " \t\u3000\u00a0，：；。！？（「《") {
-        for (const { prefix, value } of completions) {
+      for await (const separator of " \t\u3000\u00a0，：；。！？（「《") {
+        for await (const { prefix, value } of completions) {
           const before = `查看𠮷${separator}`;
           const line = `${before}${prefix} 后文`;
           const cursorCol = before.length + prefix.length;
@@ -652,10 +652,10 @@ describe("CombinedAutocompleteProvider", () => {
     test("treats unquoted separators as boundaries even when a matching literal path exists", async () => {
       setupFolder(baseDir, { files: { "归档/说明.md": "other" } });
       const provider = new CombinedAutocompleteProvider([], baseDir);
-      for (const separator of [" ", "\u3000", "，", "。"]) {
+      for await (const separator of [" ", "\u3000", "，", "。"]) {
         const directory = `资料${separator}归档`;
         setupFolder(baseDir, { files: { [`${directory}/说明.md`]: "archive" } });
-        for (const marker of ["", "@"]) {
+        for await (const marker of ["", "@"]) {
           const line = `${marker}${directory}/说`;
           const result = await getSuggestions(provider, [line], 0, line.length, true);
           assert.ok(result, line);
@@ -693,8 +693,8 @@ describe("CombinedAutocompleteProvider", () => {
     test("handles an empty prefix after whitespace or CJK punctuation consistently", async () => {
       setupFolder(baseDir, { files: { "说明.md": "text" } });
       const provider = new CombinedAutocompleteProvider([], baseDir);
-      for (const separator of [" ", "\t", "\u3000", "，", "。"]) {
-        for (const force of [false, true]) {
+      for await (const separator of [" ", "\t", "\u3000", "，", "。"]) {
+        for await (const force of [false, true]) {
           const line = `查看${separator}`;
           const result = await getSuggestions(provider, [line], 0, line.length, force);
           assert.ok(result, line);
@@ -711,8 +711,8 @@ describe("CombinedAutocompleteProvider", () => {
     test("completes paths after opening wrappers like ( [ { < and backticks", async () => {
       setupFolder(baseDir, { files: { "src/main.ts": "x" } });
       const provider = new CombinedAutocompleteProvider([], baseDir);
-      for (const wrapper of ["(", "[", "{", "<", "`", "((", "(`"]) {
-        for (const prefix of ["src/ma", "./src/ma"]) {
+      for await (const wrapper of ["(", "[", "{", "<", "`", "((", "(`"]) {
+        for await (const prefix of ["src/ma", "./src/ma"]) {
           const before = `see ${wrapper}`;
           const line = `${before}${prefix}`;
           const result = await getSuggestions(provider, [line], 0, line.length, true);
@@ -751,7 +751,7 @@ describe("CombinedAutocompleteProvider", () => {
     test("keeps wrappers that are closed inside the path", async () => {
       setupFolder(baseDir, { files: { "[slug]/page.tsx": "x", "(group)/layout.tsx": "x" } });
       const provider = new CombinedAutocompleteProvider([], baseDir);
-      for (const [prefix, value] of [
+      for await (const [prefix, value] of [
         ["[slug]/pa", "[slug]/page.tsx"],
         ["(group)/la", "(group)/layout.tsx"],
         ["./[slug]/pa", "./[slug]/page.tsx"],
@@ -831,7 +831,7 @@ describe("CombinedAutocompleteProvider", () => {
 
     test("quotes paths containing whitespace or CJK punctuation for direct completion", async () => {
       const provider = new CombinedAutocompleteProvider([], baseDir);
-      for (const separator of [" ", "\u3000", "，", "。"]) {
+      for await (const separator of [" ", "\u3000", "，", "。"]) {
         const directory = `my${separator}folder`;
         setupFolder(baseDir, { files: { [`${directory}/test.txt`]: "content" } });
         const line = "my";

@@ -125,7 +125,7 @@ export class VirtualTerminal implements Terminal {
   /**
    * Wait for all pending writes to complete. Viewport and scroll buffer will be updated.
    */
-  async flush(): Promise<void> {
+  flush(): Promise<void> {
     // Write an empty string to ensure all previous writes are flushed
     return new Promise<void>((resolve) => {
       this.xterm.write("", () => resolve());
@@ -206,8 +206,12 @@ export class VirtualTerminal implements Terminal {
 
   /** Wait for TUI's throttled render pipeline to settle. */
   async waitForRender(): Promise<void> {
-    await new Promise<void>((resolve) => process.nextTick(resolve));
-    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    await new Promise<void>((resolve) => {
+      process.nextTick(resolve);
+    });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 20);
+    });
     await this.flush();
   }
 }

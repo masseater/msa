@@ -22,7 +22,10 @@ import { ProcessTerminal } from "../src/terminal.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import type { Component, TUI } from "../src/tui.ts";
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 class Lines implements Component {
   private lines: string[] = [];
@@ -52,11 +55,14 @@ async function streamLines(
   delayMs: number,
   ui: TUI,
 ): Promise<void> {
-  for (let i = 1; i <= count; i += 1) {
+  const appendFrom = async (i: number): Promise<void> => {
+    if (i > count) return;
     buffer.append([`${label} ${String(i).padStart(2, "0")}`]);
     ui.requestRender();
     await sleep(delayMs);
-  }
+    await appendFrom(i + 1);
+  };
+  await appendFrom(1);
 }
 
 async function main(): Promise<void> {

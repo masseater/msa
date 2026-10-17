@@ -51,8 +51,8 @@ function looksLikePendingDollarMath(source: string): boolean {
 }
 
 function tokenizeInlineLatex(source: string): LatexToken | undefined {
-  let opening = "";
-  let closing = "";
+  let opening: string;
+  let closing: string;
   if (source.startsWith("$$")) {
     opening = "$$";
     closing = "$$";

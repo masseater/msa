@@ -302,9 +302,9 @@ describe("mouse-aware components", () => {
     const terminal = new VirtualTerminal(20, 6);
     const copied: string[] = [];
     const tui = new TuiAltScreen(terminal, undefined, undefined, {
-      copySelection: async (text) => {
+      copySelection: (text) => {
         copied.push(text);
-        return true;
+        return Promise.resolve(true);
       },
     });
     const editor = new Editor(tui, editorTheme);

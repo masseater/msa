@@ -1018,8 +1018,6 @@ function wrapSingleLine(line: string, width: number): string[] {
           currentLine += lineEndReset;
         }
         wrapped.push(currentLine);
-        currentLine = "";
-        currentVisibleLength = 0;
       }
 
       // Break long token - breakLongWord handles its own resets
@@ -1239,7 +1237,7 @@ export function truncateToWidth(
   let keptWidth = 0;
   let keepContiguousPrefix = true;
   let overflowed = false;
-  let exhaustedInput = false;
+  let exhaustedInput: boolean;
   const hasAnsi = text.includes("\x1b");
   const hasTabs = text.includes("\t");
 

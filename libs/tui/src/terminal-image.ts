@@ -174,9 +174,9 @@ export function detectCapabilities(
   const trueColor = parseBooleanCapabilityOverride(process.env["MSA_TRUE_COLOR"]);
   return {
     ...detected,
-    ...(images !== undefined ? { images } : {}),
-    ...(trueColor !== undefined ? { trueColor } : {}),
-    ...(hyperlinks !== undefined ? { hyperlinks } : {}),
+    ...(images === undefined ? {} : { images }),
+    ...(trueColor === undefined ? {} : { trueColor }),
+    ...(hyperlinks === undefined ? {} : { hyperlinks }),
   };
 }
 
@@ -338,7 +338,7 @@ export function encodeITerm2(
   } = {},
 ): string {
   const params: string[] = [
-    `inline=${options.inline !== false ? 1 : 0}`,
+    `inline=${options.inline === false ? 0 : 1}`,
     `size=${Buffer.byteLength(base64Data, "base64")}`,
   ];
 

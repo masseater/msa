@@ -139,7 +139,9 @@ describe("TUI render scheduling", () => {
     terminal.sendInput("first");
     terminal.sendInput("second");
     terminal.sendInput("typed");
-    await new Promise<void>((resolve) => process.nextTick(resolve));
+    await new Promise<void>((resolve) => {
+      process.nextTick(resolve);
+    });
 
     assert.strictEqual(component.renderCount, renderCountBeforeInput + 1);
     assert.deepStrictEqual(component.lines, ["typed"]);
@@ -590,7 +592,7 @@ describe("TUI resize handling", () => {
       terminal.clearWrites();
 
       const initialRedraws = tui.fullRedraws;
-      for (const height of [15, 8, 14, 11]) {
+      for await (const height of [15, 8, 14, 11]) {
         terminal.resize(40, height);
         await terminal.waitForRender();
       }
@@ -772,7 +774,7 @@ describe("TUI differential rendering", () => {
 
     // Simulate spinner animation - only middle line changes
     const spinnerFrames = ["|", "/", "-", "\\"];
-    for (const frame of spinnerFrames) {
+    for await (const frame of spinnerFrames) {
       component.lines = ["Header", `Working ${frame}`, "Footer"];
       tui.requestRender();
       await terminal.waitForRender();
@@ -1073,7 +1075,7 @@ describe("TUI fake cursor", () => {
   });
 
   it("keeps the cursor when an overlay ends directly left of it", async () => {
-    for (const showHardwareCursor of [false, true]) {
+    for await (const showHardwareCursor of [false, true]) {
       const terminal = new LoggingVirtualTerminal(20, 5);
       const tui: TUI = new TuiMainScreen(terminal, showHardwareCursor);
       const base = new TestComponent();

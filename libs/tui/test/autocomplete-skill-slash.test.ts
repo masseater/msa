@@ -35,7 +35,7 @@ describe("CombinedAutocompleteProvider slash-command filter", () => {
 
   it("completes commands after leading whitespace and preserves it", async () => {
     const provider = new CombinedAutocompleteProvider([{ name: "model" }], process.cwd());
-    for (const [line, expected] of [
+    for await (const [line, expected] of [
       [" /", " /model "],
       ["  /mod", "  /model "],
       ["\t/mod", "\t/model "],

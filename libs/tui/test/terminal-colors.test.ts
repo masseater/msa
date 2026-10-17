@@ -92,7 +92,10 @@ class InputRecorder implements Component {
   invalidate(): void {}
 }
 
-const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 describe("parseTerminalColorSchemeReport", () => {
   it("parses color scheme reports", () => {

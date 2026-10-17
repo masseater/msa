@@ -1027,7 +1027,7 @@ class LatexParser {
       return "";
     }
 
-    let command = "";
+    let command: string;
     const first = this.source[this.position] ?? "";
     if (first === "\n" || first === "\r") {
       this.position++;

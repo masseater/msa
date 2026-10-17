@@ -68,7 +68,7 @@ export class Loader extends Text {
 
   setIndicator(indicator?: LoaderIndicatorOptions): void {
     this.renderIndicatorVerbatim = indicator !== undefined;
-    this.frames = indicator?.frames !== undefined ? [...indicator.frames] : [...DEFAULT_FRAMES];
+    this.frames = indicator?.frames === undefined ? [...DEFAULT_FRAMES] : [...indicator.frames];
     this.intervalMs =
       indicator?.intervalMs && indicator.intervalMs > 0
         ? indicator.intervalMs

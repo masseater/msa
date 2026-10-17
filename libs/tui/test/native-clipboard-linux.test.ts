@@ -136,7 +136,7 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
     );
   });
 
-  for (const mode of ["concurrent", "process-exit", "worker-exit"]) {
+  ["concurrent", "process-exit", "worker-exit"].forEach((mode) => {
     it(`bounds private clipboard work and preserves cleanup: ${mode}`, async () => {
       const { stdout } = await exec(
         process.execPath,
@@ -145,7 +145,7 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
       );
       assert.equal(stdout.trim(), "passed");
     });
-  }
+  });
 
   for (const method of ["getText", "getImage"]) {
     it(`keeps JS responsive during stalled X11 connection setup: ${method}`, async (t) => {
@@ -163,9 +163,9 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
       });
       t.after(async () => {
         for (const socket of sockets) socket.destroy();
-        await new Promise<void>((resolve, reject) =>
-          server.close((error) => (error ? reject(error) : resolve())),
-        );
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()));
+        });
       });
       server.listen(0, "127.0.0.1");
       await once(server, "listening");
@@ -220,7 +220,7 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
 
   it("preserves X11 Unicode and incremental text/image transfers", async (t) => {
     const { env } = await startX11(t);
-    for (const [target, method, bytes] of [
+    for await (const [target, method, bytes] of [
       ["UTF8_STRING", "getText", Buffer.from("café 日本語")],
       ["UTF8_STRING", "getText", Buffer.alloc(4 * 1024 * 1024, 120)],
       ["image/png", "getImage", Buffer.alloc(4 * 1024 * 1024, 123)],
@@ -238,7 +238,7 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
     }
   });
 
-  for (const mode of ["disconnect", "timeout"]) {
+  ["disconnect", "timeout"].forEach((mode) => {
     it(`reports X11 transfer ${mode} as an exception, not an unavailable display`, async (t) => {
       const { child, env } = await startX11(t);
       const owner = await startServer(t, join(directory, "x11-test"), ["idle"], env);
@@ -255,9 +255,9 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
         "The transfer must share the 2-second deadline",
       );
     });
-  }
+  });
 
-  for (const content of ["text", "image"]) {
+  ["text", "image"].forEach((content) => {
     it(`frees partially received X11 ${content} after invalid metadata`, async (t) => {
       const { env } = await startX11(t);
       await startServer(t, join(directory, "x11-test"), ["invalid"], env);
@@ -274,5 +274,5 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
       assert.match(result.error ?? "", /X11 clipboard/u);
       assert.ok(performance.now() - started < 3500);
     });
-  }
+  });
 });

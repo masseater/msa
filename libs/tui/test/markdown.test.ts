@@ -520,7 +520,7 @@ describe("Markdown component", () => {
 | [**one two three four five six**](https://example.com) | normal text |`;
 
       try {
-        for (const hyperlinks of [true, false]) {
+        for await (const hyperlinks of [true, false]) {
           setCapabilities({ images: null, trueColor: false, hyperlinks });
           const terminal = new VirtualTerminal(24, 16);
           const tui: TUI = new TuiMainScreen(terminal);

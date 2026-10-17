@@ -61,10 +61,10 @@ export function parseOscColorResponse(
     target = "foreground";
   } else if (dynamicColor === "11") {
     target = "background";
-  } else if (paletteIndex !== undefined) {
-    target = Number.parseInt(paletteIndex, 10);
-  } else {
+  } else if (paletteIndex === undefined) {
     throw new Error(`OSC color response has no target: ${JSON.stringify(data)}`);
+  } else {
+    target = Number.parseInt(paletteIndex, 10);
   }
   return { target, rgb: parseOscColorValue(value) };
 }

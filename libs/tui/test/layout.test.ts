@@ -251,7 +251,9 @@ describe("viewport layout", () => {
     assert.ok(lines[1]!.lastIndexOf(contentBackground) < lines[1]!.lastIndexOf(thumbColor));
 
     scrollView.setScrollbarActive(false);
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 30);
+    });
     lines = render();
     assert.deepStrictEqual(visible(lines), sourceLines.slice(2, 6));
 

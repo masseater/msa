@@ -33,8 +33,10 @@ describe("StdinBuffer", () => {
   }
 
   // Helper to wait for async operations
-  async function wait(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+  function wait(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
   }
 
   describe("Regular Characters", () => {
@@ -87,7 +89,7 @@ describe("StdinBuffer", () => {
   });
 
   describe("Partial Escape Sequences", () => {
-    it("should buffer incomplete mouse SGR sequence", async () => {
+    it("should buffer incomplete mouse SGR sequence", () => {
       processInput("\x1b");
       assert.deepStrictEqual(emittedSequences, []);
       assert.strictEqual(buffer.getBuffer(), "\x1b");

@@ -1307,34 +1307,37 @@ export class Editor implements Component, Focusable {
     }
 
     // Check if we should trigger or update autocomplete
-    if (!this.autocompleteState) {
-      // Auto-trigger for "/" at the start of a line (slash commands)
-      if (char === "/" && this.isAtStartOfMessage()) {
+    if (this.autocompleteState) {
+      this.updateAutocomplete();
+    } else {
+      this.autoTriggerAutocomplete(char);
+    }
+  }
+
+  private autoTriggerAutocomplete(char: string): void {
+    // Auto-trigger for "/" at the start of a line (slash commands)
+    if (char === "/" && this.isAtStartOfMessage()) {
+      this.tryTriggerAutocomplete();
+      return;
+    }
+    const currentLine = this.state.lines[this.state.cursorLine] || "";
+    const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
+    // Auto-trigger for symbol-based completion like @, #, or provider triggers at token boundaries
+    if (this.autocompleteTriggerCharacters.includes(char)) {
+      if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
         this.tryTriggerAutocomplete();
       }
-      // Auto-trigger for symbol-based completion like @, #, or provider triggers at token boundaries
-      else if (this.autocompleteTriggerCharacters.includes(char)) {
-        const currentLine = this.state.lines[this.state.cursorLine] || "";
-        const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
-        if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
-          this.tryTriggerAutocomplete();
-        }
-      }
-      // Also auto-trigger when typing letters in a slash command or symbol completion context
-      else if (/[a-zA-Z0-9.\-_]/u.test(char) || cjkBreakRegex.test(char)) {
-        const currentLine = this.state.lines[this.state.cursorLine] || "";
-        const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
-        // Check if we're in a slash command (with or without space for arguments)
-        if (this.isInSlashCommandContext(textBeforeCursor)) {
-          this.tryTriggerAutocomplete();
-        }
-        // Check if we're in a symbol-based completion context like @, #, or provider triggers
-        else if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
-          this.tryTriggerAutocomplete();
-        }
-      }
-    } else {
-      this.updateAutocomplete();
+      return;
+    }
+    // Also auto-trigger when typing letters in a slash command or symbol completion context:
+    // a slash command (with or without space for arguments), or a symbol-based completion
+    // context like @, #, or provider triggers
+    if (
+      (/[a-zA-Z0-9.\-_]/u.test(char) || cjkBreakRegex.test(char)) &&
+      (this.isInSlashCommandContext(textBeforeCursor) ||
+        this.autocompleteTriggerPattern.test(textBeforeCursor))
+    ) {
+      this.tryTriggerAutocomplete();
     }
   }
 
@@ -1584,7 +1587,9 @@ export class Editor implements Component, Focusable {
     // position against the VL it belongs to. This gives the correct visual
     // column even after a resize reshuffles VLs.
     let currentVisualCol: number;
-    if (this.snappedFromCursorCol !== null) {
+    if (this.snappedFromCursorCol === null) {
+      currentVisualCol = this.state.cursorCol - currentVL.startCol;
+    } else {
       const vlIndex = this.findVisualLineAt(
         visualLines,
         currentVL.logicalLine,
@@ -1595,8 +1600,6 @@ export class Editor implements Component, Focusable {
         throw new Error(`Visual line ${vlIndex} does not exist`);
       }
       currentVisualCol = this.snappedFromCursorCol - snappedVL.startCol;
-    } else {
-      currentVisualCol = this.state.cursorCol - currentVL.startCol;
     }
 
     // For non-last segments, clamp to length-1 to stay within the segment
@@ -2027,6 +2030,40 @@ export class Editor implements Component, Focusable {
     return this.findVisualLineAt(visualLines, this.state.cursorLine, this.state.cursorCol);
   }
 
+  // Move right by one grapheme (handles emojis, combining characters, etc.)
+  private moveCursorRight(currentVL: { startCol: number } | undefined): void {
+    const currentLine = this.state.lines[this.state.cursorLine] || "";
+    if (this.state.cursorCol < currentLine.length) {
+      const afterCursor = currentLine.slice(this.state.cursorCol);
+      const graphemes = [...this.segment(afterCursor, "grapheme")];
+      const firstGrapheme = graphemes[0];
+      this.setCursorCol(this.state.cursorCol + (firstGrapheme ? firstGrapheme.segment.length : 1));
+    } else if (this.state.cursorLine < this.state.lines.length - 1) {
+      // Wrap to start of next logical line
+      this.state.cursorLine++;
+      this.setCursorCol(0);
+    } else if (currentVL) {
+      // At end of last line - can't move, but set preferredVisualCol for up/down navigation
+      this.preferredVisualCol = this.state.cursorCol - currentVL.startCol;
+    }
+  }
+
+  // Move left by one grapheme (handles emojis, combining characters, etc.)
+  private moveCursorLeft(): void {
+    const currentLine = this.state.lines[this.state.cursorLine] || "";
+    if (this.state.cursorCol > 0) {
+      const beforeCursor = currentLine.slice(0, this.state.cursorCol);
+      const graphemes = [...this.segment(beforeCursor, "grapheme")];
+      const lastGrapheme = graphemes[graphemes.length - 1];
+      this.setCursorCol(this.state.cursorCol - (lastGrapheme ? lastGrapheme.segment.length : 1));
+    } else if (this.state.cursorLine > 0) {
+      // Wrap to end of previous logical line
+      this.state.cursorLine--;
+      const prevLine = this.state.lines[this.state.cursorLine] || "";
+      this.setCursorCol(prevLine.length);
+    }
+  }
+
   private moveCursor(deltaLine: number, deltaCol: number): void {
     this.lastAction = null;
     const visualLines = this.buildVisualLineMap(this.lastWidth);
@@ -2040,45 +2077,10 @@ export class Editor implements Component, Focusable {
       }
     }
 
-    if (deltaCol !== 0) {
-      const currentLine = this.state.lines[this.state.cursorLine] || "";
-
-      if (deltaCol > 0) {
-        // Moving right - move by one grapheme (handles emojis, combining characters, etc.)
-        if (this.state.cursorCol < currentLine.length) {
-          const afterCursor = currentLine.slice(this.state.cursorCol);
-          const graphemes = [...this.segment(afterCursor, "grapheme")];
-          const firstGrapheme = graphemes[0];
-          this.setCursorCol(
-            this.state.cursorCol + (firstGrapheme ? firstGrapheme.segment.length : 1),
-          );
-        } else if (this.state.cursorLine < this.state.lines.length - 1) {
-          // Wrap to start of next logical line
-          this.state.cursorLine++;
-          this.setCursorCol(0);
-        } else {
-          // At end of last line - can't move, but set preferredVisualCol for up/down navigation
-          const currentVL = visualLines[currentVisualLine];
-          if (currentVL) {
-            this.preferredVisualCol = this.state.cursorCol - currentVL.startCol;
-          }
-        }
-      } else {
-        // Moving left - move by one grapheme (handles emojis, combining characters, etc.)
-        if (this.state.cursorCol > 0) {
-          const beforeCursor = currentLine.slice(0, this.state.cursorCol);
-          const graphemes = [...this.segment(beforeCursor, "grapheme")];
-          const lastGrapheme = graphemes[graphemes.length - 1];
-          this.setCursorCol(
-            this.state.cursorCol - (lastGrapheme ? lastGrapheme.segment.length : 1),
-          );
-        } else if (this.state.cursorLine > 0) {
-          // Wrap to end of previous logical line
-          this.state.cursorLine--;
-          const prevLine = this.state.lines[this.state.cursorLine] || "";
-          this.setCursorCol(prevLine.length);
-        }
-      }
+    if (deltaCol > 0) {
+      this.moveCursorRight(visualLines[currentVisualLine]);
+    } else if (deltaCol < 0) {
+      this.moveCursorLeft();
     }
 
     // Keep an open autocomplete picker in sync with the new cursor
@@ -2183,19 +2185,16 @@ export class Editor implements Component, Focusable {
     this.exitHistoryBrowsing();
     const lines = text.split("\n");
 
+    const currentLine = this.state.lines[this.state.cursorLine] || "";
+    const before = currentLine.slice(0, this.state.cursorCol);
+    const after = currentLine.slice(this.state.cursorCol);
+
     if (lines.length === 1) {
       // Single line - insert at cursor
-      const currentLine = this.state.lines[this.state.cursorLine] || "";
-      const before = currentLine.slice(0, this.state.cursorCol);
-      const after = currentLine.slice(this.state.cursorCol);
       this.state.lines[this.state.cursorLine] = before + text + after;
       this.setCursorCol(this.state.cursorCol + text.length);
     } else {
       // Multi-line insert
-      const currentLine = this.state.lines[this.state.cursorLine] || "";
-      const before = currentLine.slice(0, this.state.cursorCol);
-      const after = currentLine.slice(this.state.cursorCol);
-
       // First line merges with text before cursor
       this.state.lines[this.state.cursorLine] = before + (lines[0] || "");
 

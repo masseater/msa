@@ -4,12 +4,11 @@ const { readFile } = require("node:fs/promises");
 const { setTimeout: delay } = require("node:timers/promises");
 const { isMainThread, parentPort, Worker, workerData } = require("node:worker_threads");
 
-async function waitFor(predicate) {
-  const deadline = performance.now() + 5000;
-  while (!predicate()) {
-    assert.ok(performance.now() < deadline, "Timed out waiting for the private reader");
-    await delay(10);
-  }
+async function waitFor(predicate, deadline = performance.now() + 5000) {
+  if (predicate()) return;
+  assert.ok(performance.now() < deadline, "Timed out waiting for the private reader");
+  await delay(10);
+  await waitFor(predicate, deadline);
 }
 
 (async () => {

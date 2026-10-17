@@ -48,7 +48,9 @@ function applyCompletion(
 
 async function flushAutocomplete(): Promise<void> {
   await Promise.resolve();
-  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
 }
 
 describe("Editor component", () => {
@@ -2102,9 +2104,9 @@ describe("Editor component", () => {
       let suggestionCalls = 0;
 
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async () => {
+        getSuggestions: () => {
           suggestionCalls += 1;
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       };
@@ -2407,16 +2409,16 @@ describe("Editor component", () => {
 
       // Create a mock autocomplete provider
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol) => {
+        getSuggestions: (lines, _cursorLine, cursorCol) => {
           const text = lines[0] || "";
           const prefix = text.slice(0, cursorCol);
           if (prefix === "di") {
-            return {
+            return Promise.resolve({
               items: [{ value: "dist/", label: "dist/" }],
               prefix: "di",
-            };
+            });
           }
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       };
@@ -2444,7 +2446,7 @@ describe("Editor component", () => {
   describe("Autocomplete", () => {
     it("triggers and debounces symbol completion after CJK punctuation", async (t) => {
       t.mock.timers.enable({ apis: ["setTimeout"] });
-      for (const before of [
+      for await (const before of [
         "查看，",
         "\u3000",
         ..."，．：；！？（）［］｛｝“”‘’…—。、「」『』《》【】",
@@ -2453,14 +2455,14 @@ describe("Editor component", () => {
         "`",
         "[",
       ]) {
-        for (const trigger of ["@", "#", "$", "-"]) {
+        for await (const trigger of ["@", "#", "$", "-"]) {
           const editor = new Editor(createTestTUI(), defaultEditorTheme);
           const requests: string[] = [];
           editor.setAutocompleteProvider({
             triggerCharacters: ["$", "-"],
-            getSuggestions: async (lines, cursorLine, cursorCol) => {
+            getSuggestions: (lines, cursorLine, cursorCol) => {
               requests.push(lines[cursorLine]!.slice(0, cursorCol));
-              return null;
+              return Promise.resolve(null);
             },
             applyCompletion,
           });
@@ -2490,13 +2492,13 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
       let requests = 0;
       editor.setAutocompleteProvider({
-        getSuggestions: async () => {
+        getSuggestions: () => {
           requests++;
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       });
-      for (const text of [
+      for await (const text of [
         "user@example.com",
         "张三@example.com",
         "查看@src",
@@ -2533,9 +2535,9 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
       const requests: Array<{ text: string; force: boolean | undefined }> = [];
       editor.setAutocompleteProvider({
-        getSuggestions: async (lines, cursorLine, cursorCol, options) => {
+        getSuggestions: (lines, cursorLine, cursorCol, options) => {
           requests.push({ text: lines[cursorLine]!.slice(0, cursorCol), force: options.force });
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       });
@@ -2556,7 +2558,7 @@ describe("Editor component", () => {
       writeFileSync(join(baseDir, "文档", "说明.md"), "text");
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
       editor.setAutocompleteProvider(new CombinedAutocompleteProvider([], baseDir));
-      for (const separator of [" ", "\t", "\u3000", "\u00a0", "，", "。"]) {
+      for await (const separator of [" ", "\t", "\u3000", "\u00a0", "，", "。"]) {
         editor.setText(`查看${separator}`);
         const before = editor.getText();
         editor.handleInput("文");
@@ -2573,19 +2575,21 @@ describe("Editor component", () => {
 
     it("ends unquoted trigger and debounce contexts at whitespace or CJK punctuation", async (t) => {
       t.mock.timers.enable({ apis: ["setTimeout"] });
-      for (const separator of [" ", "\u3000", "，", "。"]) {
-        for (const trigger of ["@", "#", "$"]) {
+      for await (const separator of [" ", "\u3000", "，", "。"]) {
+        for await (const trigger of ["@", "#", "$"]) {
           const editor = new Editor(createTestTUI(), defaultEditorTheme);
           const requests: string[] = [];
           const prefix = `${trigger}src`;
           editor.setAutocompleteProvider({
             triggerCharacters: ["$"],
-            getSuggestions: async (lines, cursorLine, cursorCol) => {
+            getSuggestions: (lines, cursorLine, cursorCol) => {
               const text = lines[cursorLine]!.slice(0, cursorCol);
               requests.push(text);
-              return text === prefix
-                ? { prefix, items: [{ value: `${prefix}/`, label: "src/" }] }
-                : null;
+              return Promise.resolve(
+                text === prefix
+                  ? { prefix, items: [{ value: `${prefix}/`, label: "src/" }] }
+                  : null,
+              );
             },
             applyCompletion,
           });
@@ -2609,7 +2613,7 @@ describe("Editor component", () => {
     it("re-triggers CJK path completion after accepting directories and deleting", async (t) => {
       t.mock.timers.enable({ apis: ["setTimeout"] });
       const provider = new CombinedAutocompleteProvider([], process.cwd());
-      for (const directory of ["文档", "我的 文档", "资料，归档"]) {
+      for await (const directory of ["文档", "我的 文档", "资料，归档"]) {
         const quoted = directory !== "文档";
         const initial = quoted ? `@"${directory.slice(0, 2)}` : "@文";
         const directoryValue = quoted ? `@"${directory}/"` : `@${directory}/`;
@@ -2617,15 +2621,20 @@ describe("Editor component", () => {
         const filePrefix = quoted ? `@"${directory}/说` : `@${directory}/说`;
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
         editor.setAutocompleteProvider({
-          getSuggestions: async (lines, cursorLine, cursorCol) => {
+          getSuggestions: (lines, cursorLine, cursorCol) => {
             const before = lines[cursorLine]!.slice(0, cursorCol);
             const prefix = before.slice(before.indexOf("@"));
             if (prefix === initial) {
-              return { prefix, items: [{ value: directoryValue, label: `${directory}/` }] };
+              return Promise.resolve({
+                prefix,
+                items: [{ value: directoryValue, label: `${directory}/` }],
+              });
             }
-            return prefix === filePrefix
-              ? { prefix, items: [{ value: fileValue, label: "说明.md" }] }
-              : null;
+            return Promise.resolve(
+              prefix === filePrefix
+                ? { prefix, items: [{ value: fileValue, label: "说明.md" }] }
+                : null,
+            );
           },
           applyCompletion: (...args) => provider.applyCompletion(...args),
         });
@@ -2640,7 +2649,7 @@ describe("Editor component", () => {
         await flushAutocomplete();
         assert.strictEqual(editor.isShowingAutocomplete(), true);
 
-        for (const deletion of ["\x7f", "\x1b[3~"]) {
+        for await (const deletion of ["\x7f", "\x1b[3~"]) {
           editor.handleInput("错");
           t.mock.timers.tick(20);
           await flushAutocomplete();
@@ -2662,19 +2671,19 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol, options) => {
+        getSuggestions: (lines, _cursorLine, cursorCol, options) => {
           if (!options.force) {
-            return null;
+            return Promise.resolve(null);
           }
           const text = lines[0] || "";
           const prefix = text.slice(0, cursorCol);
           if (prefix === "Work") {
-            return {
+            return Promise.resolve({
               items: [{ value: "Workspace/", label: "Workspace/" }],
               prefix: "Work",
-            };
+            });
           }
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       };
@@ -2704,22 +2713,22 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol, options) => {
+        getSuggestions: (lines, _cursorLine, cursorCol, options) => {
           if (!options.force) {
-            return null;
+            return Promise.resolve(null);
           }
           const text = lines[0] || "";
           const prefix = text.slice(0, cursorCol);
           if (prefix === "src") {
-            return {
+            return Promise.resolve({
               items: [
                 { value: "src/", label: "src/" },
                 { value: "src.txt", label: "src.txt" },
               ],
               prefix: "src",
-            };
+            });
           }
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       };
@@ -2755,20 +2764,20 @@ describe("Editor component", () => {
       ];
 
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol, options) => {
+        getSuggestions: (lines, _cursorLine, cursorCol, options) => {
           const text = lines[0] || "";
           const prefix = text.slice(0, cursorCol);
           const shouldMatch = options.force || prefix.includes("/") || prefix.startsWith(".");
           if (!shouldMatch) {
-            return null;
+            return Promise.resolve(null);
           }
           const filtered = allFiles.filter((f) =>
             f.value.toLowerCase().startsWith(prefix.toLowerCase()),
           );
           if (filtered.length > 0) {
-            return { items: filtered, prefix };
+            return Promise.resolve({ items: filtered, prefix });
           }
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       };
@@ -2803,13 +2812,13 @@ describe("Editor component", () => {
       let suggestionCalls = 0;
 
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol) => {
+        getSuggestions: (lines, _cursorLine, cursorCol) => {
           suggestionCalls += 1;
           const text = (lines[0] || "").slice(0, cursorCol);
-          return {
+          return Promise.resolve({
             items: [{ value: "@main.ts", label: "main.ts" }],
             prefix: text,
-          };
+          });
         },
         applyCompletion,
       };
@@ -2824,7 +2833,9 @@ describe("Editor component", () => {
       assert.strictEqual(suggestionCalls, 0);
       assert.strictEqual(editor.isShowingAutocomplete(), false);
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
       await flushAutocomplete();
 
       assert.strictEqual(suggestionCalls, 1);
@@ -2841,22 +2852,22 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol) => {
+        getSuggestions: (lines, _cursorLine, cursorCol) => {
           const before = (lines[0] || "").slice(0, cursorCol);
-          if (!before.startsWith("/")) return null;
+          if (!before.startsWith("/")) return Promise.resolve(null);
           // Past the command name (a space before the cursor): offer arguments.
           if (before.includes(" ")) {
-            return {
+            return Promise.resolve({
               items: [
                 { value: "repo", label: "repo" },
                 { value: "message", label: "message" },
                 { value: "help", label: "help" },
               ],
               prefix: before.slice(before.indexOf(" ") + 1),
-            };
+            });
           }
           // Inside the command name: offer the command name only.
-          return { items: [{ value: "cmd", label: "cmd" }], prefix: before };
+          return Promise.resolve({ items: [{ value: "cmd", label: "cmd" }], prefix: before });
         },
         applyCompletion,
       };
@@ -2864,7 +2875,7 @@ describe("Editor component", () => {
       editor.setAutocompleteProvider(mockProvider);
 
       // Type `/cmd ` so the picker ends up showing the argument list.
-      for (const ch of "/cmd ") {
+      for await (const ch of "/cmd ") {
         editor.handleInput(ch);
         await flushAutocomplete();
       }
@@ -2901,13 +2912,13 @@ describe("Editor component", () => {
       let suggestionCalls = 0;
 
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol) => {
+        getSuggestions: (lines, _cursorLine, cursorCol) => {
           suggestionCalls += 1;
           const text = (lines[0] || "").slice(0, cursorCol);
-          return {
+          return Promise.resolve({
             items: [{ value: "#2983", label: "#2983" }],
             prefix: text,
-          };
+          });
         },
         applyCompletion,
       };
@@ -2922,7 +2933,9 @@ describe("Editor component", () => {
       assert.strictEqual(suggestionCalls, 0);
       assert.strictEqual(editor.isShowingAutocomplete(), false);
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
       await flushAutocomplete();
 
       assert.strictEqual(suggestionCalls, 1);
@@ -2935,10 +2948,13 @@ describe("Editor component", () => {
 
       editor.setAutocompleteProvider({
         triggerCharacters: ["$"],
-        getSuggestions: async (lines, _cursorLine, cursorCol) => {
+        getSuggestions: (lines, _cursorLine, cursorCol) => {
           suggestionCalls += 1;
           const prefix = (lines[0] || "").slice(0, cursorCol);
-          return { items: [{ value: "$skill-name", label: "skill-name" }], prefix };
+          return Promise.resolve({
+            items: [{ value: "$skill-name", label: "skill-name" }],
+            prefix,
+          });
         },
         applyCompletion,
       });
@@ -2948,7 +2964,9 @@ describe("Editor component", () => {
       editor.handleInput("k");
 
       assert.strictEqual(suggestionCalls, 0);
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
       await flushAutocomplete();
 
       assert.strictEqual(suggestionCalls, 1);
@@ -2961,23 +2979,29 @@ describe("Editor component", () => {
 
       editor.setAutocompleteProvider({
         triggerCharacters: ["$"],
-        getSuggestions: async () => ({
-          items: [{ value: "$skill-name", label: "skill-name" }],
-          prefix: "$",
-        }),
+        getSuggestions: () =>
+          Promise.resolve({
+            items: [{ value: "$skill-name", label: "skill-name" }],
+            prefix: "$",
+          }),
         applyCompletion,
       });
       editor.setAutocompleteProvider({
-        getSuggestions: async () => {
+        getSuggestions: () => {
           suggestionCalls += 1;
-          return { items: [{ value: "$skill-name", label: "skill-name" }], prefix: "$" };
+          return Promise.resolve({
+            items: [{ value: "$skill-name", label: "skill-name" }],
+            prefix: "$",
+          });
         },
         applyCompletion,
       });
 
       editor.handleInput("$");
       editor.handleInput("s");
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
       await flushAutocomplete();
 
       assert.strictEqual(suggestionCalls, 0);
@@ -3014,9 +3038,13 @@ describe("Editor component", () => {
       editor.handleInput("m");
       editor.handleInput("a");
       editor.handleInput("i");
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 250);
+      });
       editor.handleInput("n");
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
 
       assert.strictEqual(aborts, 1);
     });
@@ -3026,7 +3054,7 @@ describe("Editor component", () => {
 
       // Mock provider with slash commands
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol) => {
+        getSuggestions: (lines, _cursorLine, cursorCol) => {
           const text = lines[0] || "";
           const prefix = text.slice(0, cursorCol);
           // Only return slash command suggestions when line starts with /
@@ -3039,10 +3067,10 @@ describe("Editor component", () => {
             const query = prefix.slice(1);
             const filtered = commands.filter((c) => c.value.startsWith(query));
             if (filtered.length > 0) {
-              return { items: filtered, prefix };
+              return Promise.resolve({ items: filtered, prefix });
             }
           }
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       };
@@ -3068,7 +3096,7 @@ describe("Editor component", () => {
 
       // Mock provider for /argtest command with argument completions
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol) => {
+        getSuggestions: (lines, _cursorLine, cursorCol) => {
           const text = lines[0] || "";
           const beforeCursor = text.slice(0, cursorCol);
 
@@ -3084,10 +3112,10 @@ describe("Editor component", () => {
             // Return all arguments that start with the typed prefix
             const filtered = allArguments.filter((arg) => arg.value.startsWith(argumentText));
             if (filtered.length > 0) {
-              return { items: filtered, prefix: argumentText };
+              return Promise.resolve({ items: filtered, prefix: argumentText });
             }
           }
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       };
@@ -3124,7 +3152,7 @@ describe("Editor component", () => {
 
       // Mock provider for /argtest command with argument completions
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol) => {
+        getSuggestions: (lines, _cursorLine, cursorCol) => {
           const text = lines[0] || "";
           const beforeCursor = text.slice(0, cursorCol);
 
@@ -3140,10 +3168,10 @@ describe("Editor component", () => {
             // Return all items that start with the typed prefix
             const filtered = allArguments.filter((arg) => arg.value.startsWith(argumentText));
             if (filtered.length > 0) {
-              return { items: filtered, prefix: argumentText };
+              return Promise.resolve({ items: filtered, prefix: argumentText });
             }
           }
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       };
@@ -3175,7 +3203,7 @@ describe("Editor component", () => {
 
       // Mock provider that returns all items unfiltered (like real extensions do)
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol) => {
+        getSuggestions: (lines, _cursorLine, cursorCol) => {
           const text = lines[0] || "";
           const beforeCursor = text.slice(0, cursorCol);
 
@@ -3188,9 +3216,9 @@ describe("Editor component", () => {
               { value: "two", label: "two" },
               { value: "three", label: "three" },
             ];
-            return { items: allArguments, prefix: argumentText };
+            return Promise.resolve({ items: allArguments, prefix: argumentText });
           }
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       };
@@ -3224,7 +3252,7 @@ describe("Editor component", () => {
 
       // Mock provider that returns all items unfiltered
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol) => {
+        getSuggestions: (lines, _cursorLine, cursorCol) => {
           const text = lines[0] || "";
           const beforeCursor = text.slice(0, cursorCol);
 
@@ -3236,9 +3264,9 @@ describe("Editor component", () => {
               { value: "two", label: "two" },
               { value: "three", label: "three" },
             ];
-            return { items: allArguments, prefix: argumentText };
+            return Promise.resolve({ items: allArguments, prefix: argumentText });
           }
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       };
@@ -3270,7 +3298,7 @@ describe("Editor component", () => {
 
       // Mock provider for /model command with model completions
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (lines, _cursorLine, cursorCol) => {
+        getSuggestions: (lines, _cursorLine, cursorCol) => {
           const text = lines[0] || "";
           const beforeCursor = text.slice(0, cursorCol);
 
@@ -3287,10 +3315,10 @@ describe("Editor component", () => {
             // Return all models that start with the typed prefix
             const filtered = allModels.filter((m) => m.value.startsWith(modelText));
             if (filtered.length > 0) {
-              return { items: filtered, prefix: modelText };
+              return Promise.resolve({ items: filtered, prefix: modelText });
             }
           }
-          return null;
+          return Promise.resolve(null);
         },
         applyCompletion,
       };
@@ -3335,7 +3363,7 @@ describe("Editor component", () => {
           {
             name: "load-skills",
             description: "Load skills",
-            getArgumentCompletions: async (prefix) =>
+            getArgumentCompletions: (prefix) =>
               prefix.startsWith("s") ? [{ value: "skill-a", label: "skill-a" }] : null,
           },
         ],

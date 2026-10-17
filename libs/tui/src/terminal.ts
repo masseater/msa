@@ -331,14 +331,14 @@ export class ProcessTerminal implements Terminal {
         this.programStatusQueryPending = false;
     }
     if (negotiationSequence.type === "kitty-flags") {
-      if (negotiationSequence.flags !== 0) {
+      if (negotiationSequence.flags === 0) {
+        this.enableModifyOtherKeys();
+      } else {
         this.disableModifyOtherKeys();
         if (!this._kittyProtocolActive) {
           this._kittyProtocolActive = true;
           setKittyProtocolActive(true);
         }
-      } else {
-        this.enableModifyOtherKeys();
       }
       return true;
     }
@@ -475,14 +475,19 @@ export class ProcessTerminal implements Terminal {
     process.stdin.on("data", onData);
     const endTime = Date.now() + maxMs;
 
+    const waitUntilIdle = async (): Promise<void> => {
+      const now = Date.now();
+      const timeLeft = endTime - now;
+      if (timeLeft <= 0) return;
+      if (now - lastDataTime >= idleMs) return;
+      await new Promise((resolve) => {
+        setTimeout(resolve, Math.min(idleMs, timeLeft));
+      });
+      await waitUntilIdle();
+    };
+
     try {
-      while (true) {
-        const now = Date.now();
-        const timeLeft = endTime - now;
-        if (timeLeft <= 0) break;
-        if (now - lastDataTime >= idleMs) break;
-        await new Promise((resolve) => setTimeout(resolve, Math.min(idleMs, timeLeft)));
-      }
+      await waitUntilIdle();
     } finally {
       process.stdin.removeListener("data", onData);
       this.inputHandler = previousHandler;

@@ -450,7 +450,7 @@ export class Input implements Component, Focusable {
       return [this.prompt + textWithCursor + padding];
     }
 
-    let visibleText = "";
+    let visibleText: string;
     let cursorDisplay = this.cursor;
     this.renderedStartColumn = 0;
     const totalWidth = visibleWidth(this.value);
@@ -466,7 +466,7 @@ export class Input implements Component, Focusable {
 
       if (scrollWidth > 0) {
         const halfWidth = Math.floor(scrollWidth / 2);
-        let startCol = 0;
+        let startCol: number;
 
         if (cursorCol < halfWidth) {
           // Cursor near start

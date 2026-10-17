@@ -68,6 +68,17 @@ class RecordingTerminal extends VirtualTerminal {
   }
 }
 
+async function scrollLineByLine(
+  tui: TuiAltScreen,
+  terminal: VirtualTerminal,
+  steps: number,
+): Promise<void> {
+  if (steps <= 0) return;
+  tui.scrollBy(1);
+  await terminal.waitForRender();
+  await scrollLineByLine(tui, terminal, steps - 1);
+}
+
 describe("TuiAltScreen", () => {
   it("renders a terminal-height viewport and preserves manual scroll position", async () => {
     const terminal = new VirtualTerminal(20, 4);
@@ -495,7 +506,9 @@ describe("TuiAltScreen", () => {
     assert.ok(terminal.getViewport().some((line) => /[│█]/u.test(line)));
 
     terminal.sendInput("\x1b[<35;9;3M");
-    await new Promise((resolve) => setTimeout(resolve, 40));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
     await terminal.waitForRender();
     assert.strictEqual(scrollView.isScrollbarVisible, false);
     tui.stop();
@@ -1307,10 +1320,7 @@ describe("TuiAltScreen", () => {
       );
       tui.start();
       await terminal.waitForRender();
-      for (let index = 1; index < imageLines.length; index++) {
-        tui.scrollBy(1);
-        await terminal.waitForRender();
-      }
+      await scrollLineByLine(tui, terminal, imageLines.length - 1);
       assert.ok(
         terminal.events.some(
           (event) =>
@@ -1356,10 +1366,7 @@ describe("TuiAltScreen", () => {
       );
       tui.start();
       await terminal.waitForRender();
-      for (let index = 1; index < imageLines.length; index++) {
-        tui.scrollBy(1);
-        await terminal.waitForRender();
-      }
+      await scrollLineByLine(tui, terminal, imageLines.length - 1);
       assert.ok(
         terminal.events.some(
           (event) =>
@@ -1478,9 +1485,9 @@ describe("TuiAltScreen", () => {
     const terminal = new RecordingTerminal(20, 4);
     const copied: string[] = [];
     const tui = new TuiAltScreen(terminal, undefined, undefined, {
-      copySelection: async (text) => {
+      copySelection: (text) => {
         copied.push(text);
-        return true;
+        return Promise.resolve(true);
       },
     });
     tui.addChild(new Text("alpha\nbeta\ngamma\ndelta", 0, 0));
@@ -1509,9 +1516,9 @@ describe("TuiAltScreen", () => {
     const copied: string[] = [];
     const tui = new TuiAltScreen(terminal, undefined, undefined, {
       copyOnSelect: false,
-      copySelection: async (text) => {
+      copySelection: (text) => {
         copied.push(text);
-        return true;
+        return Promise.resolve(true);
       },
     });
     tui.addChild(new Text("alpha\nbeta\ngamma\ndelta", 0, 0));
@@ -1537,9 +1544,9 @@ describe("TuiAltScreen", () => {
     const terminal = new RecordingTerminal(20, 4);
     const copied: string[] = [];
     const tui = new TuiAltScreen(terminal, undefined, undefined, {
-      copySelection: async (text) => {
+      copySelection: (text) => {
         copied.push(text);
-        return true;
+        return Promise.resolve(true);
       },
     });
     tui.addChild(new Text("alpha\nbeta\ngamma\ndelta", 0, 0));
@@ -1570,7 +1577,7 @@ describe("TuiAltScreen", () => {
   it("flashes an error when the injected copySelection handler fails", async () => {
     const terminal = new RecordingTerminal(20, 4);
     const tui = new TuiAltScreen(terminal, undefined, undefined, {
-      copySelection: async () => false,
+      copySelection: () => Promise.resolve(false),
     });
     tui.addChild(new Text("alpha\nbeta\ngamma\ndelta", 0, 0));
     tui.start();
@@ -1597,7 +1604,7 @@ describe("TuiAltScreen", () => {
     const terminal = new RecordingTerminal(80, 4);
     const tui = new TuiAltScreen(terminal, undefined, undefined, {
       copyOnSelect: false,
-      copySelection: async () => "Clipboard unavailable: install wl-clipboard",
+      copySelection: () => Promise.resolve("Clipboard unavailable: install wl-clipboard"),
     });
     let flashDuration: number | undefined;
     const flash = tui.flash.bind(tui);
@@ -1645,16 +1652,16 @@ describe("TuiAltScreen", () => {
   });
 
   it("coalesces slash and hyphen separated segments for double-click word selection", async () => {
-    for (const { line, needle } of [
+    for await (const { line, needle } of [
       { line: "extensions/starline/fixed-editor/compositor.ts", needle: "starline" },
       { line: "earendil-works/pi-tui", needle: "works" },
     ]) {
       const copied: string[] = [];
       const terminal = new RecordingTerminal(80, 1);
       const tui = new TuiAltScreen(terminal, undefined, undefined, {
-        copySelection: async (text) => {
+        copySelection: (text) => {
           copied.push(text);
-          return true;
+          return Promise.resolve(true);
         },
       });
       tui.addChild(new Text(line, 0, 0));
@@ -1866,7 +1873,9 @@ describe("TuiAltScreen", () => {
     assert.ok(viewport[0]?.endsWith(" First "));
     assert.ok(viewport[1]?.endsWith(" Second "));
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 100);
+    });
     await terminal.waitForRender();
     viewport = terminal.getViewport();
     assert.ok(viewport[0]?.endsWith(" Second "));
@@ -1887,7 +1896,9 @@ describe("TuiAltScreen", () => {
 
     terminal.sendInput("\x1b[<0;1;3M");
     terminal.sendInput("\x1b[<32;1;1M");
-    await new Promise((resolve) => setTimeout(resolve, 130));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 130);
+    });
     await terminal.waitForRender();
 
     const selectionTop = tui.viewportTop;

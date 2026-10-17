@@ -46,7 +46,9 @@ class EmptyContent implements Component {
 
 async function renderAndFlush(tui: TUI, terminal: VirtualTerminal): Promise<void> {
   tui.requestRender(true);
-  await new Promise<void>((resolve) => process.nextTick(resolve));
+  await new Promise<void>((resolve) => {
+    process.nextTick(resolve);
+  });
   await terminal.waitForRender();
 }
 
