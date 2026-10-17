@@ -1,10 +1,6 @@
 import { dual } from "effect/Function";
 import { eastAsianWidth } from "get-east-asian-width";
 
-import { isStyleSequence, matchStringSequence, parseEscapeSequence } from "./ansi-sequences.ts";
-
-const OSC8_BODY = /^8;[^;]*;(.*)$/su;
-
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
 
@@ -42,20 +38,7 @@ const rgiEmojiRegex = /^\p{RGI_Emoji}$/v;
 const WIDTH_CACHE_SIZE = 512;
 const widthCache = new Map<string, number>();
 
-export const cjkBreakRegex =
-  /[\p{Script_Extensions=Han}\p{Script_Extensions=Hiragana}\p{Script_Extensions=Katakana}\p{Script_Extensions=Hangul}\p{Script_Extensions=Bopomofo}]/u;
-
-export const cjkPunctuationRegex = new RegExp(
-  `(?:(?=\\p{Punctuation})${cjkBreakRegex.source}|[，．：；！？（）［］｛｝“”‘’…—])`,
-  "u",
-);
-export const autocompleteSeparatorRegex = new RegExp(`(?:\\s|${cjkPunctuationRegex.source})`, "u");
-export const autocompleteBoundaryRegex = new RegExp(
-  `(?:^|${autocompleteSeparatorRegex.source})`,
-  "u",
-);
-
-function isPrintableAscii(str: string): boolean {
+export function isPrintableAscii(str: string): boolean {
   for (let i = 0; i < str.length; i++) {
     const code = str.charCodeAt(i);
     if (code < 0x20 || code > 0x7e) {
@@ -65,106 +48,26 @@ function isPrintableAscii(str: string): boolean {
   return true;
 }
 
-function truncateFragmentToWidth(text: string, maxWidth: number): { text: string; width: number } {
-  if (maxWidth <= 0 || text.length === 0) {
-    return { text: "", width: 0 };
-  }
-
-  if (isPrintableAscii(text)) {
-    const clipped = text.slice(0, maxWidth);
-    return { text: clipped, width: clipped.length };
-  }
-
-  const hasAnsi = text.includes("\x1b");
-  const hasTabs = text.includes("\t");
-  if (!hasAnsi && !hasTabs) {
-    let result = "";
-    let width = 0;
-    for (const { segment } of graphemeSegmenter.segment(text)) {
-      const w = graphemeWidth(segment);
-      if (width + w > maxWidth) {
-        break;
-      }
-      result += segment;
-      width += w;
-    }
-    return { text: result, width };
-  }
-
-  let result = "";
+function trailingCharsWidth(chars: readonly string[]): number {
   let width = 0;
-  let i = 0;
-  let pendingAnsi = "";
-
-  while (i < text.length) {
-    const ansi = extractAnsiCode(text, i);
-    if (ansi !== null) {
-      pendingAnsi += ansi.code;
-      i += ansi.length;
-      continue;
+  let followsMark = false;
+  for (const char of chars) {
+    if (terminalSpacingMarkRegex.test(char)) {
+      width += 1;
+      followsMark = false;
+    } else if (markCharRegex.test(char)) {
+      followsMark = true;
+    } else if (!nonPrintingCharRegex.test(char)) {
+      const c = char.codePointAt(0)!;
+      if (followsMark || (c >= 0xff00 && c <= 0xffef)) {
+        width += eastAsianWidth(c);
+      } else if (c === 0x0e33 || c === 0x0eb3) {
+        width += 1;
+      }
+      followsMark = false;
     }
-
-    if (text[i] === "\t") {
-      if (width + 3 > maxWidth) {
-        break;
-      }
-      if (pendingAnsi !== "") {
-        result += pendingAnsi;
-        pendingAnsi = "";
-      }
-      result += "\t";
-      width += 3;
-      i++;
-      continue;
-    }
-
-    let end = i;
-    while (end < text.length && text[end] !== "\t") {
-      const nextAnsi = extractAnsiCode(text, end);
-      if (nextAnsi !== null) {
-        break;
-      }
-      end++;
-    }
-
-    for (const { segment } of graphemeSegmenter.segment(text.slice(i, end))) {
-      const w = graphemeWidth(segment);
-      if (width + w > maxWidth) {
-        return { text: result, width };
-      }
-      if (pendingAnsi !== "") {
-        result += pendingAnsi;
-        pendingAnsi = "";
-      }
-      result += segment;
-      width += w;
-    }
-    i = end;
   }
-
-  return { text: result, width };
-}
-
-function finalizeTruncatedResult(
-  prefix: string,
-  prefixWidth: number,
-  ellipsis: string,
-  ellipsisWidth: number,
-  maxWidth: number,
-  pad: boolean,
-): string {
-  const reset = "\x1b[0m";
-  const hyperlinkClose = getActiveOsc8Close(prefix);
-  const contentWidth = prefixWidth + ellipsisWidth;
-  let result: string;
-
-  if (ellipsis.length > 0) {
-    result = `${prefix}${hyperlinkClose}${reset}${ellipsis}${reset}`;
-  } else {
-    result = `${prefix}${hyperlinkClose}${reset}`;
-  }
-
-  return pad ? result + " ".repeat(Math.max(0, maxWidth - contentWidth)) : result;
+  return width;
 }
 
 function graphemeWidth(segment: string): number {
@@ -196,28 +99,60 @@ function graphemeWidth(segment: string): number {
     return 2;
   }
 
-  let width = eastAsianWidth(cp);
+  return eastAsianWidth(cp) + trailingCharsWidth([...base].slice(1));
+}
 
-  let followsMark = false;
-  const chars = [...base];
-  for (const char of chars.slice(1)) {
-    if (terminalSpacingMarkRegex.test(char)) {
-      width += 1;
-      followsMark = false;
-    } else if (markCharRegex.test(char)) {
-      followsMark = true;
-    } else if (!nonPrintingCharRegex.test(char)) {
-      const c = char.codePointAt(0)!;
-      if (followsMark || (c >= 0xff00 && c <= 0xffef)) {
-        width += eastAsianWidth(c);
-      } else if (c === 0x0e33 || c === 0x0eb3) {
-        width += 1;
-      }
-      followsMark = false;
+export interface TextUnit {
+  readonly ansi: boolean;
+  readonly text: string;
+  readonly width: number;
+}
+
+export function* textUnits(text: string): Generator<TextUnit> {
+  let i = 0;
+  while (i < text.length) {
+    const ansi = extractAnsiCode(text, i);
+    if (ansi !== null) {
+      yield { ansi: true, text: ansi.code, width: 0 };
+      i += ansi.length;
+      continue;
+    }
+    let end = i;
+    while (end < text.length && extractAnsiCode(text, end) === null) end++;
+    for (const { segment } of graphemeSegmenter.segment(text.slice(i, end))) {
+      yield { ansi: false, text: segment, width: graphemeWidth(segment) };
+    }
+    i = end;
+  }
+}
+
+function stripAnsiCodes(text: string): string {
+  let escapeIndex = text.indexOf("\x1b");
+  if (escapeIndex === -1) return text;
+  let stripped = "";
+  let copyFrom = 0;
+  while (escapeIndex !== -1) {
+    const length = ansiCodeLength(text, escapeIndex);
+    if (length > 0) {
+      stripped += text.slice(copyFrom, escapeIndex);
+      escapeIndex += length;
+      copyFrom = escapeIndex;
+    } else {
+      escapeIndex++;
+    }
+    escapeIndex = text.indexOf("\x1b", escapeIndex);
+  }
+  return stripped + text.slice(copyFrom);
+}
+
+function rememberWidth(str: string, width: number): void {
+  if (widthCache.size >= WIDTH_CACHE_SIZE) {
+    const firstKey = widthCache.keys().next().value;
+    if (firstKey !== undefined) {
+      widthCache.delete(firstKey);
     }
   }
-
-  return width;
+  widthCache.set(str, width);
 }
 
 export function visibleWidth(str: string): number {
@@ -235,41 +170,12 @@ export function visibleWidth(str: string): number {
     return cached;
   }
 
-  let clean = str;
-  if (str.includes("\t")) {
-    clean = clean.replace(/\t/gu, "   ");
-  }
-  let escapeIndex = clean.indexOf("\x1b");
-  if (escapeIndex !== -1) {
-    let stripped = "";
-    let copyFrom = 0;
-    while (escapeIndex !== -1) {
-      const length = ansiCodeLength(clean, escapeIndex);
-      if (length > 0) {
-        stripped += clean.slice(copyFrom, escapeIndex);
-        escapeIndex += length;
-        copyFrom = escapeIndex;
-      } else {
-        escapeIndex++;
-      }
-      escapeIndex = clean.indexOf("\x1b", escapeIndex);
-    }
-    clean = stripped + clean.slice(copyFrom);
-  }
-
+  const clean = stripAnsiCodes(str.includes("\t") ? str.replace(/\t/gu, "   ") : str);
   let width = 0;
   for (const { segment } of graphemeSegmenter.segment(clean)) {
     width += graphemeWidth(segment);
   }
-
-  if (widthCache.size >= WIDTH_CACHE_SIZE) {
-    const firstKey = widthCache.keys().next().value;
-    if (firstKey !== undefined) {
-      widthCache.delete(firstKey);
-    }
-  }
-  widthCache.set(str, width);
-
+  rememberWidth(str, width);
   return width;
 }
 
@@ -288,68 +194,6 @@ export function stripTerminalSequences(str: string): string {
   }
   return result;
 }
-
-interface GraphemeCellRange {
-  start: number;
-  end: number;
-}
-
-export const getGraphemeCellRange: {
-  (line: string, column: number): GraphemeCellRange | undefined;
-  (column: number): (line: string) => GraphemeCellRange | undefined;
-} = dual(2, (line: string, column: number): GraphemeCellRange | undefined => {
-  let currentCol = 0;
-  let i = 0;
-  while (i < line.length) {
-    const ansi = extractAnsiCode(line, i);
-    if (ansi !== null) {
-      i += ansi.length;
-      continue;
-    }
-    let textEnd = i;
-    while (textEnd < line.length && extractAnsiCode(line, textEnd) === null) textEnd++;
-    for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
-      const width = graphemeWidth(segment);
-      if (width > 0 && column >= currentCol && column < currentCol + width) {
-        return { start: currentCol, end: currentCol + width };
-      }
-      currentCol += width;
-    }
-    i = textEnd;
-  }
-  return undefined;
-});
-
-export const getOsc8LinkAtColumn: {
-  (line: string, column: number): string | undefined;
-  (column: number): (line: string) => string | undefined;
-} = dual(2, (line: string, column: number): string | undefined => {
-  let activeUrl: string | undefined;
-  let currentCol = 0;
-  let i = 0;
-  while (i < line.length) {
-    const ansi = extractAnsiCode(line, i);
-    if (ansi !== null) {
-      const hyperlink = matchStringSequence({
-        data: ansi.code,
-        kind: "osc",
-        body: OSC8_BODY,
-      });
-      if (hyperlink !== null) activeUrl = hyperlink.groups[1] || undefined;
-      i += ansi.length;
-      continue;
-    }
-    let textEnd = i;
-    while (textEnd < line.length && extractAnsiCode(line, textEnd) === null) textEnd++;
-    for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
-      const width = segment === "\t" ? 3 : graphemeWidth(segment);
-      if (column >= currentCol && column < currentCol + width) return activeUrl;
-      currentCol += width;
-    }
-    i = textEnd;
-  }
-  return undefined;
-});
 
 const THAI_LAO_AM_REGEX = /[\u0e33\u0eb3]/u;
 const THAI_LAO_AM_GLOBAL_REGEX = /[\u0e33\u0eb3]/gu;
@@ -408,7 +252,10 @@ function asciiVisibleWidth(str: string): number {
   return width;
 }
 
-function ansiCodeLength(str: string, pos: number): number {
+export const ansiCodeLength: {
+  (str: string, pos: number): number;
+  (pos: number): (str: string) => number;
+} = dual(2, (str: string, pos: number): number => {
   if (pos >= str.length || str.charCodeAt(pos) !== 0x1b) return 0;
 
   const next = str[pos + 1];
@@ -431,862 +278,8 @@ function ansiCodeLength(str: string, pos: number): number {
   }
 
   return 0;
-}
-
-type Osc8Terminator = "\x07" | "\x1b\\";
-
-interface ActiveHyperlink {
-  params: string;
-  url: string;
-  terminator: Osc8Terminator;
-}
-
-function parseOsc8Hyperlink(ansiCode: string): ActiveHyperlink | null | undefined {
-  if (!ansiCode.startsWith("\x1b]8;")) {
-    return undefined;
-  }
-
-  const terminator: Osc8Terminator = ansiCode.endsWith("\x07") ? "\x07" : "\x1b\\";
-  const body = ansiCode.slice(4, terminator === "\x07" ? -1 : -2);
-  const separatorIndex = body.indexOf(";");
-  if (separatorIndex === -1) {
-    return undefined;
-  }
-
-  const params = body.slice(0, separatorIndex);
-  const url = body.slice(separatorIndex + 1);
-  if (url === "") {
-    return null;
-  }
-  return { params, url, terminator };
-}
-
-function formatOsc8Hyperlink(hyperlink: ActiveHyperlink): string {
-  return `\x1b]8;${hyperlink.params};${hyperlink.url}${hyperlink.terminator}`;
-}
-
-function formatOsc8Close(terminator: Osc8Terminator): string {
-  return `\x1b]8;;${terminator}`;
-}
-
-function getActiveOsc8Close(prefix: string): string {
-  if (!prefix.includes("\x1b]8;")) {
-    return "";
-  }
-
-  let activeHyperlink: ActiveHyperlink | null = null;
-  let i = 0;
-  while (i < prefix.length) {
-    const ansi = extractAnsiCode(prefix, i);
-    if (ansi === null) {
-      i++;
-    } else {
-      const hyperlink = parseOsc8Hyperlink(ansi.code);
-      if (hyperlink !== undefined) {
-        activeHyperlink = hyperlink;
-      }
-      i += ansi.length;
-    }
-  }
-  return activeHyperlink === null ? "" : formatOsc8Close(activeHyperlink.terminator);
-}
-
-class AnsiCodeTracker {
-  private bold = false;
-  private dim = false;
-  private italic = false;
-  private underline = false;
-  private blink = false;
-  private inverse = false;
-  private hidden = false;
-  private strikethrough = false;
-  private fgColor: string | null = null;
-  private bgColor: string | null = null;
-  private activeHyperlink: ActiveHyperlink | null = null;
-
-  process(ansiCode: string): void {
-    const hyperlink = parseOsc8Hyperlink(ansiCode);
-    if (hyperlink !== undefined) {
-      this.activeHyperlink = hyperlink;
-      return;
-    }
-
-    if (!ansiCode.endsWith("m")) {
-      return;
-    }
-
-    const style = parseEscapeSequence(ansiCode);
-    const params = style !== null && isStyleSequence(style) ? style.body : undefined;
-    if (params === undefined) return;
-
-    if (params === "" || params === "0") {
-      this.reset();
-      return;
-    }
-
-    const parts = params.split(";");
-    let i = 0;
-    while (i < parts.length) {
-      const part = parts[i];
-      if (part === undefined) break;
-      const code = Number.parseInt(part, 10);
-
-      if (code === 38 || code === 48) {
-        if (parts[i + 1] === "5" && parts[i + 2] !== undefined) {
-          const colorCode = `${parts[i]};${parts[i + 1]};${parts[i + 2]}`;
-          if (code === 38) {
-            this.fgColor = colorCode;
-          } else {
-            this.bgColor = colorCode;
-          }
-          i += 3;
-          continue;
-        } else if (parts[i + 1] === "2" && parts[i + 4] !== undefined) {
-          const colorCode = `${parts[i]};${parts[i + 1]};${parts[i + 2]};${parts[i + 3]};${parts[i + 4]}`;
-          if (code === 38) {
-            this.fgColor = colorCode;
-          } else {
-            this.bgColor = colorCode;
-          }
-          i += 5;
-          continue;
-        }
-      }
-
-      switch (code) {
-        case 0:
-          this.reset();
-          break;
-        case 1:
-          this.bold = true;
-          break;
-        case 2:
-          this.dim = true;
-          break;
-        case 3:
-          this.italic = true;
-          break;
-        case 4:
-          this.underline = true;
-          break;
-        case 5:
-          this.blink = true;
-          break;
-        case 7:
-          this.inverse = true;
-          break;
-        case 8:
-          this.hidden = true;
-          break;
-        case 9:
-          this.strikethrough = true;
-          break;
-        case 21:
-          this.bold = false;
-          break;
-        case 22:
-          this.bold = false;
-          this.dim = false;
-          break;
-        case 23:
-          this.italic = false;
-          break;
-        case 24:
-          this.underline = false;
-          break;
-        case 25:
-          this.blink = false;
-          break;
-        case 27:
-          this.inverse = false;
-          break;
-        case 28:
-          this.hidden = false;
-          break;
-        case 29:
-          this.strikethrough = false;
-          break;
-        case 39:
-          this.fgColor = null;
-          break;
-        case 49:
-          this.bgColor = null;
-          break;
-        default:
-          if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) {
-            this.fgColor = String(code);
-          } else if ((code >= 40 && code <= 47) || (code >= 100 && code <= 107)) {
-            this.bgColor = String(code);
-          }
-          break;
-      }
-      i++;
-    }
-  }
-
-  private reset(): void {
-    this.bold = false;
-    this.dim = false;
-    this.italic = false;
-    this.underline = false;
-    this.blink = false;
-    this.inverse = false;
-    this.hidden = false;
-    this.strikethrough = false;
-    this.fgColor = null;
-    this.bgColor = null;
-  }
-
-  clear(): void {
-    this.reset();
-    this.activeHyperlink = null;
-  }
-
-  getActiveCodes(): string {
-    const codes: string[] = [];
-    if (this.bold) codes.push("1");
-    if (this.dim) codes.push("2");
-    if (this.italic) codes.push("3");
-    if (this.underline) codes.push("4");
-    if (this.blink) codes.push("5");
-    if (this.inverse) codes.push("7");
-    if (this.hidden) codes.push("8");
-    if (this.strikethrough) codes.push("9");
-    if (this.fgColor !== null && this.fgColor !== "") codes.push(this.fgColor);
-    if (this.bgColor !== null && this.bgColor !== "") codes.push(this.bgColor);
-
-    let result = codes.length > 0 ? `\x1b[${codes.join(";")}m` : "";
-    if (this.activeHyperlink !== null) {
-      result += formatOsc8Hyperlink(this.activeHyperlink);
-    }
-    return result;
-  }
-
-  getActiveBackgroundCode(): string {
-    return this.bgColor !== null && this.bgColor !== "" ? `\x1b[${this.bgColor}m` : "";
-  }
-
-  hasActiveCodes(): boolean {
-    return (
-      this.bold ||
-      this.dim ||
-      this.italic ||
-      this.underline ||
-      this.blink ||
-      this.inverse ||
-      this.hidden ||
-      this.strikethrough ||
-      this.fgColor !== null ||
-      this.bgColor !== null ||
-      this.activeHyperlink !== null
-    );
-  }
-
-  getLineEndReset(): string {
-    let result = "";
-    if (this.underline) {
-      result += "\x1b[24m";
-    }
-    if (this.activeHyperlink !== null) {
-      result += formatOsc8Close(this.activeHyperlink.terminator);
-    }
-    return result;
-  }
-}
-
-function updateTrackerFromText(text: string, tracker: AnsiCodeTracker): void {
-  let i = text.indexOf("\x1b");
-  while (i !== -1) {
-    const length = ansiCodeLength(text, i);
-    if (length > 0) {
-      tracker.process(text.substring(i, i + length));
-      i += length;
-    } else {
-      i++;
-    }
-    i = text.indexOf("\x1b", i);
-  }
-}
-
-export function getActiveBackgroundAnsi(text: string): string {
-  const tracker = new AnsiCodeTracker();
-  updateTrackerFromText(text, tracker);
-  return tracker.getActiveBackgroundCode();
-}
-
-function* graphemeSegments(text: string): Generator<string> {
-  for (const { segment } of graphemeSegmenter.segment(text)) yield segment;
-}
-
-function splitIntoTokensWithAnsi(text: string): string[] {
-  const tokens: string[] = [];
-  let current = "";
-  let pendingAnsi = "";
-  let currentKind: "space" | "word" | null = null;
-  let i = 0;
-
-  const flushCurrent = (): void => {
-    if (current === "") {
-      return;
-    }
-    tokens.push(current);
-    current = "";
-    currentKind = null;
-  };
-
-  while (i < text.length) {
-    const ansiResult = extractAnsiCode(text, i);
-    if (ansiResult !== null) {
-      pendingAnsi += ansiResult.code;
-      i += ansiResult.length;
-      continue;
-    }
-
-    let end = text.indexOf("\x1b", i + 1);
-    while (end !== -1 && ansiCodeLength(text, end) === 0) {
-      end = text.indexOf("\x1b", end + 1);
-    }
-    if (end === -1) end = text.length;
-
-    const chunk = text.slice(i, end);
-    const ascii = isPrintableAscii(chunk);
-    for (const segment of ascii ? chunk : graphemeSegments(chunk)) {
-      const segmentIsSpace = segment === " ";
-      if (!ascii && !segmentIsSpace && cjkBreakRegex.test(segment)) {
-        flushCurrent();
-        const token = pendingAnsi + segment;
-        pendingAnsi = "";
-        tokens.push(token);
-        continue;
-      }
-
-      const segmentKind = segmentIsSpace ? "space" : "word";
-      if (current !== "" && currentKind !== segmentKind) {
-        flushCurrent();
-      }
-
-      if (pendingAnsi !== "") {
-        current += pendingAnsi;
-        pendingAnsi = "";
-      }
-
-      currentKind = segmentKind;
-      current += segment;
-    }
-
-    i = end;
-  }
-
-  if (pendingAnsi !== "") {
-    if (current !== "") {
-      current += pendingAnsi;
-    } else if (tokens.length > 0) {
-      tokens[tokens.length - 1] += pendingAnsi;
-    } else {
-      current = pendingAnsi;
-    }
-  }
-
-  if (current !== "") {
-    tokens.push(current);
-  }
-
-  return tokens;
-}
+});
 
 export function flattenLines(lines: readonly string[]): void {
   for (const line of lines) Number(line);
 }
-
-export const wrapTextWithAnsi: {
-  (text: string, width: number): string[];
-  (width: number): (text: string) => string[];
-} = dual(2, (text: string, width: number): string[] => {
-  if (text === "") {
-    return [""];
-  }
-
-  const inputLines = text.split(/\r\n|\r|\n/u);
-  const result: string[] = [];
-  const tracker = new AnsiCodeTracker();
-
-  for (const inputLine of inputLines) {
-    const prefix = result.length > 0 ? tracker.getActiveCodes() : "";
-    const wrappedLines = wrapSingleLine(prefix + inputLine, width);
-    for (const wrappedLine of wrappedLines) {
-      result.push(wrappedLine);
-    }
-    updateTrackerFromText(inputLine, tracker);
-  }
-
-  return result.length > 0 ? result : [""];
-});
-
-function wrapSingleLine(line: string, width: number): string[] {
-  if (line === "") {
-    return [""];
-  }
-
-  const visibleLength = visibleWidth(line);
-  if (visibleLength <= width) {
-    return [line];
-  }
-
-  const wrapped: string[] = [];
-  const tracker = new AnsiCodeTracker();
-  const tokens = splitIntoTokensWithAnsi(line);
-
-  let currentLine = "";
-  let currentVisibleLength = 0;
-
-  for (const token of tokens) {
-    const tokenVisibleLength = visibleWidth(token);
-    const isWhitespace = token.trim() === "";
-
-    if (tokenVisibleLength > width && !isWhitespace) {
-      if (currentLine !== "") {
-        const lineEndReset = tracker.getLineEndReset();
-        if (lineEndReset !== "") {
-          currentLine += lineEndReset;
-        }
-        wrapped.push(currentLine);
-      }
-
-      const broken = breakLongWord(token, width, tracker);
-      const lastBroken = broken.pop();
-      if (lastBroken === undefined) throw new Error("breakLongWord returned no lines");
-      wrapped.push(...broken);
-      currentLine = lastBroken;
-      currentVisibleLength = visibleWidth(currentLine);
-      continue;
-    }
-
-    const totalNeeded = currentVisibleLength + tokenVisibleLength;
-
-    if (totalNeeded > width && currentVisibleLength > 0) {
-      let lineToWrap = currentLine.trimEnd();
-      const lineEndReset = tracker.getLineEndReset();
-      if (lineEndReset !== "") {
-        lineToWrap += lineEndReset;
-      }
-      wrapped.push(lineToWrap);
-      if (isWhitespace) {
-        currentLine = tracker.getActiveCodes();
-        currentVisibleLength = 0;
-      } else {
-        currentLine = tracker.getActiveCodes() + token;
-        currentVisibleLength = tokenVisibleLength;
-      }
-    } else {
-      currentLine += token;
-      currentVisibleLength += tokenVisibleLength;
-    }
-
-    updateTrackerFromText(token, tracker);
-  }
-
-  if (currentLine !== "") {
-    wrapped.push(currentLine);
-  }
-
-  return wrapped.length > 0 ? wrapped.map((wrappedLine) => wrappedLine.trimEnd()) : [""];
-}
-
-export const PUNCTUATION_REGEX = /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/u;
-
-export function isWhitespaceChar(char: string): boolean {
-  return /\s/u.test(char);
-}
-
-export function isPunctuationChar(char: string): boolean {
-  return PUNCTUATION_REGEX.test(char);
-}
-
-function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): string[] {
-  const lines: string[] = [];
-  let currentLine = tracker.getActiveCodes();
-  let currentWidth = 0;
-
-  let i = 0;
-  const segments: Array<{ type: "ansi" | "grapheme"; value: string }> = [];
-
-  while (i < word.length) {
-    const ansiResult = extractAnsiCode(word, i);
-    if (ansiResult === null) {
-      let end = i;
-      while (end < word.length) {
-        const nextAnsi = extractAnsiCode(word, end);
-        if (nextAnsi !== null) break;
-        end++;
-      }
-      const textPortion = word.slice(i, end);
-      for (const seg of graphemeSegmenter.segment(textPortion)) {
-        segments.push({ type: "grapheme", value: seg.segment });
-      }
-      i = end;
-    } else {
-      segments.push({ type: "ansi", value: ansiResult.code });
-      i += ansiResult.length;
-    }
-  }
-
-  for (const seg of segments) {
-    if (seg.type === "ansi") {
-      currentLine += seg.value;
-      tracker.process(seg.value);
-      continue;
-    }
-
-    const grapheme = seg.value;
-    if (grapheme === "") continue;
-
-    const clusterWidth = visibleWidth(grapheme);
-
-    if (currentWidth + clusterWidth > width) {
-      const lineEndReset = tracker.getLineEndReset();
-      if (lineEndReset !== "") {
-        currentLine += lineEndReset;
-      }
-      lines.push(currentLine);
-      currentLine = tracker.getActiveCodes();
-      currentWidth = 0;
-    }
-
-    currentLine += grapheme;
-    currentWidth += clusterWidth;
-  }
-
-  if (currentLine !== "") {
-    lines.push(currentLine);
-  }
-
-  return lines.length > 0 ? lines : [""];
-}
-
-export const applyBackgroundToLine: {
-  (line: string, width: number, bgFn: (text: string) => string): string;
-  (width: number, bgFn: (text: string) => string): (line: string) => string;
-} = dual(3, (line: string, width: number, bgFn: (text: string) => string): string => {
-  const visibleLen = visibleWidth(line);
-  const paddingNeeded = Math.max(0, width - visibleLen);
-  const padding = " ".repeat(paddingNeeded);
-
-  const withPadding = line + padding;
-  return bgFn(withPadding);
-});
-
-export const truncateToWidth: {
-  (text: string, maxWidth: number, ellipsis?: string, pad?: boolean): string;
-  (maxWidth: number, ellipsis?: string, pad?: boolean): (text: string) => string;
-} = dual(
-  (args) => typeof args[0] === "string",
-  (text: string, maxWidth: number, ellipsis: string = "...", pad: boolean = false): string => {
-    if (maxWidth <= 0) {
-      return "";
-    }
-
-    if (text.length === 0) {
-      return pad ? " ".repeat(maxWidth) : "";
-    }
-
-    const ellipsisWidth = visibleWidth(ellipsis);
-    if (ellipsisWidth >= maxWidth) {
-      const textWidth = visibleWidth(text);
-      if (textWidth <= maxWidth) {
-        return pad ? text + " ".repeat(maxWidth - textWidth) : text;
-      }
-
-      const clippedEllipsis = truncateFragmentToWidth(ellipsis, maxWidth);
-      if (clippedEllipsis.width === 0) {
-        return pad ? " ".repeat(maxWidth) : "";
-      }
-      return finalizeTruncatedResult(
-        "",
-        0,
-        clippedEllipsis.text,
-        clippedEllipsis.width,
-        maxWidth,
-        pad,
-      );
-    }
-
-    if (isPrintableAscii(text)) {
-      if (text.length <= maxWidth) {
-        return pad ? text + " ".repeat(maxWidth - text.length) : text;
-      }
-      const targetWidth = maxWidth - ellipsisWidth;
-      return finalizeTruncatedResult(
-        text.slice(0, targetWidth),
-        targetWidth,
-        ellipsis,
-        ellipsisWidth,
-        maxWidth,
-        pad,
-      );
-    }
-
-    const targetWidth = maxWidth - ellipsisWidth;
-    let result = "";
-    let pendingAnsi = "";
-    let visibleSoFar = 0;
-    let keptWidth = 0;
-    let keepContiguousPrefix = true;
-    let overflowed = false;
-    let exhaustedInput: boolean;
-    const hasAnsi = text.includes("\x1b");
-    const hasTabs = text.includes("\t");
-
-    if (!hasAnsi && !hasTabs) {
-      for (const { segment } of graphemeSegmenter.segment(text)) {
-        const width = graphemeWidth(segment);
-        if (keepContiguousPrefix && keptWidth + width <= targetWidth) {
-          result += segment;
-          keptWidth += width;
-        } else {
-          keepContiguousPrefix = false;
-        }
-        visibleSoFar += width;
-        if (visibleSoFar > maxWidth) {
-          overflowed = true;
-          break;
-        }
-      }
-      exhaustedInput = !overflowed;
-    } else {
-      let i = 0;
-      while (i < text.length) {
-        const ansi = extractAnsiCode(text, i);
-        if (ansi !== null) {
-          pendingAnsi += ansi.code;
-          i += ansi.length;
-          continue;
-        }
-
-        if (text[i] === "\t") {
-          if (keepContiguousPrefix && keptWidth + 3 <= targetWidth) {
-            if (pendingAnsi !== "") {
-              result += pendingAnsi;
-              pendingAnsi = "";
-            }
-            result += "\t";
-            keptWidth += 3;
-          } else {
-            keepContiguousPrefix = false;
-            pendingAnsi = "";
-          }
-          visibleSoFar += 3;
-          if (visibleSoFar > maxWidth) {
-            overflowed = true;
-            break;
-          }
-          i++;
-          continue;
-        }
-
-        let end = i;
-        while (end < text.length && text[end] !== "\t") {
-          const nextAnsi = extractAnsiCode(text, end);
-          if (nextAnsi !== null) {
-            break;
-          }
-          end++;
-        }
-
-        for (const { segment } of graphemeSegmenter.segment(text.slice(i, end))) {
-          const width = graphemeWidth(segment);
-          if (keepContiguousPrefix && keptWidth + width <= targetWidth) {
-            if (pendingAnsi !== "") {
-              result += pendingAnsi;
-              pendingAnsi = "";
-            }
-            result += segment;
-            keptWidth += width;
-          } else {
-            keepContiguousPrefix = false;
-            pendingAnsi = "";
-          }
-
-          visibleSoFar += width;
-          if (visibleSoFar > maxWidth) {
-            overflowed = true;
-            break;
-          }
-        }
-        if (overflowed) {
-          break;
-        }
-        i = end;
-      }
-      exhaustedInput = i >= text.length;
-    }
-
-    if (!overflowed && exhaustedInput) {
-      return pad ? text + " ".repeat(Math.max(0, maxWidth - visibleSoFar)) : text;
-    }
-
-    return finalizeTruncatedResult(result, keptWidth, ellipsis, ellipsisWidth, maxWidth, pad);
-  },
-);
-
-export const sliceByColumn: {
-  (line: string, startCol: number, length: number, strict?: boolean): string;
-  (startCol: number, length: number, strict?: boolean): (line: string) => string;
-} = dual(
-  (args) => typeof args[0] === "string",
-  (line: string, startCol: number, length: number, strict: boolean = false): string =>
-    sliceWithWidth(line, startCol, length, strict).text,
-);
-
-export const sliceWithWidth: {
-  (
-    line: string,
-    startCol: number,
-    length: number,
-    strict?: boolean,
-  ): { text: string; width: number };
-  (
-    startCol: number,
-    length: number,
-    strict?: boolean,
-  ): (line: string) => { text: string; width: number };
-} = dual(
-  (args) => typeof args[0] === "string",
-  (
-    line: string,
-    startCol: number,
-    length: number,
-    strict: boolean = false,
-  ): { text: string; width: number } => {
-    if (length <= 0) return { text: "", width: 0 };
-    const endCol = startCol + length;
-    let result = "";
-    let resultWidth = 0;
-    let currentCol = 0;
-    let i = 0;
-    let pendingAnsi = "";
-
-    while (i < line.length) {
-      const ansi = extractAnsiCode(line, i);
-      if (ansi !== null) {
-        if (currentCol >= startCol && currentCol < endCol) {
-          result += pendingAnsi + ansi.code;
-          pendingAnsi = "";
-        } else if (currentCol < startCol) pendingAnsi += ansi.code;
-        i += ansi.length;
-        continue;
-      }
-
-      let textEnd = i;
-      while (textEnd < line.length && extractAnsiCode(line, textEnd) === null) textEnd++;
-
-      for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
-        const w = graphemeWidth(segment);
-        const inRange = currentCol >= startCol && currentCol < endCol;
-        const fits = !strict || currentCol + w <= endCol;
-        if (inRange && fits) {
-          if (pendingAnsi !== "") {
-            result += pendingAnsi;
-            pendingAnsi = "";
-          }
-          result += segment;
-          resultWidth += w;
-        }
-        currentCol += w;
-        if (currentCol >= endCol) break;
-      }
-      i = textEnd;
-      if (currentCol >= endCol) break;
-    }
-    return { text: result, width: resultWidth };
-  },
-);
-
-const pooledStyleTracker = new AnsiCodeTracker();
-
-export const extractSegments: {
-  (
-    line: string,
-    beforeEnd: number,
-    afterStart: number,
-    afterLen: number,
-    strictAfter?: boolean,
-  ): { before: string; beforeWidth: number; after: string; afterWidth: number };
-  (
-    beforeEnd: number,
-    afterStart: number,
-    afterLen: number,
-    strictAfter?: boolean,
-  ): (line: string) => { before: string; beforeWidth: number; after: string; afterWidth: number };
-} = dual(
-  (args) => typeof args[0] === "string",
-  (
-    line: string,
-    beforeEnd: number,
-    afterStart: number,
-    afterLen: number,
-    strictAfter: boolean = false,
-  ): { before: string; beforeWidth: number; after: string; afterWidth: number } => {
-    let before = "";
-    let beforeWidth = 0;
-    let after = "";
-    let afterWidth = 0;
-    let currentCol = 0;
-    let i = 0;
-    let pendingAnsiBefore = "";
-    let afterStarted = false;
-    const afterEnd = afterStart + afterLen;
-
-    pooledStyleTracker.clear();
-
-    while (i < line.length) {
-      const ansi = extractAnsiCode(line, i);
-      if (ansi !== null) {
-        pooledStyleTracker.process(ansi.code);
-        if (currentCol < beforeEnd) {
-          pendingAnsiBefore += ansi.code;
-        } else if (
-          currentCol >= afterStart &&
-          currentCol < afterEnd &&
-          (afterStarted || ansi.code.startsWith("\x1b_"))
-        ) {
-          after += ansi.code;
-        }
-        i += ansi.length;
-        continue;
-      }
-
-      let textEnd = i;
-      while (textEnd < line.length && extractAnsiCode(line, textEnd) === null) textEnd++;
-
-      for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
-        const w = graphemeWidth(segment);
-
-        if (currentCol < beforeEnd && currentCol + w <= beforeEnd) {
-          if (pendingAnsiBefore !== "") {
-            before += pendingAnsiBefore;
-            pendingAnsiBefore = "";
-          }
-          before += segment;
-          beforeWidth += w;
-        } else if (currentCol >= afterStart && currentCol < afterEnd) {
-          const fits = !strictAfter || currentCol + w <= afterEnd;
-          if (fits) {
-            if (!afterStarted) {
-              after += pooledStyleTracker.getActiveCodes();
-              afterStarted = true;
-            }
-            after += segment;
-            afterWidth += w;
-          }
-        }
-
-        currentCol += w;
-        if (afterLen <= 0 ? currentCol >= beforeEnd : currentCol >= afterEnd) break;
-      }
-      i = textEnd;
-      if (afterLen <= 0 ? currentCol >= beforeEnd : currentCol >= afterEnd) break;
-    }
-
-    return { before, beforeWidth, after, afterWidth };
-  },
-);

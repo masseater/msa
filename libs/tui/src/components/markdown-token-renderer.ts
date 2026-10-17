@@ -1,7 +1,8 @@
 import type { Token, Tokens } from "marked";
 
 import { renderLatex } from "../latex.ts";
-import { visibleWidth, wrapTextWithAnsi } from "../utils.ts";
+import { wrapTextWithAnsi } from "../text-wrap.ts";
+import { visibleWidth } from "../utils.ts";
 import { MarkdownTableRenderer } from "./markdown-table-renderer.ts";
 import type { InlineStyleContext } from "./markdown-theme.ts";
 import { type LatexToken, RESET_STYLE } from "./markdown-tokenizer.ts";

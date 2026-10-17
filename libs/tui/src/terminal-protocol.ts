@@ -133,12 +133,15 @@ export function resolveWriteLogPath(): string {
   return env;
 }
 
-export function appendWriteLog(path: string, data: string): void {
+export const appendWriteLog: {
+  (path: string, data: string): void;
+  (data: string): (path: string) => void;
+} = dual(2, (path: string, data: string): void => {
   if (path === "") return;
   try {
     fs.appendFileSync(path, data, { encoding: "utf8" });
   } catch {}
-}
+});
 
 type NegotiationRead =
   | { parsed: KeyboardProtocolNegotiationSequence; sequence: string }

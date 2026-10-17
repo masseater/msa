@@ -1,6 +1,6 @@
 import { type CancelDelay, runAfter } from "../delay.ts";
+import { truncateToWidth } from "../text-truncate.ts";
 import type { Component } from "../tui.ts";
-import { truncateToWidth } from "../utils.ts";
 
 const DEFAULT_DURATION_MS = 1000;
 

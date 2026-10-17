@@ -15,14 +15,9 @@ import {
 } from "./terminal-colors.ts";
 import { isImageLine } from "./terminal-image-kitty.ts";
 import type { Terminal } from "./terminal-protocol.ts";
+import { extractSegments, sliceByColumn, sliceWithWidth } from "./text-slice.ts";
 import { type OverlayOptions, resolveOverlayLayout } from "./tui-overlay-layout.ts";
-import {
-  extractSegments,
-  normalizeTerminalOutput,
-  sliceByColumn,
-  sliceWithWidth,
-  visibleWidth,
-} from "./utils.ts";
+import { normalizeTerminalOutput, visibleWidth } from "./utils.ts";
 
 export type TuiMouseEventType = "press" | "release" | "move" | "drag" | "click" | "wheel";
 export type TuiMouseButton = "left" | "middle" | "right" | "none";

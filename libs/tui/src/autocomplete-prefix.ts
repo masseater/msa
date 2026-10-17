@@ -1,4 +1,4 @@
-import { autocompleteBoundaryRegex, autocompleteSeparatorRegex } from "./utils.ts";
+import { autocompleteBoundaryRegex, autocompleteSeparatorRegex } from "./text-boundaries.ts";
 
 const PATH_DELIMITERS = new Set([" ", "\t", '"', "'", "="]);
 const tokenStartRegex = new RegExp(`${autocompleteBoundaryRegex.source}$`, "u");

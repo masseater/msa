@@ -182,12 +182,8 @@ export {
 } from "./tui.ts";
 export { TuiAltScreen, type TuiAltScreenOptions } from "./tui-alt-screen.ts";
 export { TuiMainScreen, type TuiMainScreenRenderState } from "./tui-main-screen.ts";
-export {
-  getOsc8LinkAtColumn,
-  sliceByColumn,
-  stripTerminalSequences,
-  truncateToWidth,
-  visibleWidth,
-  wrapTextWithAnsi,
-} from "./utils.ts";
+export { getOsc8LinkAtColumn, sliceByColumn } from "./text-slice.ts";
+export { stripTerminalSequences, visibleWidth } from "./utils.ts";
+export { truncateToWidth } from "./text-truncate.ts";
+export { wrapTextWithAnsi } from "./text-wrap.ts";
 export type { WheelScrollLines } from "./wheel-scroll.ts";

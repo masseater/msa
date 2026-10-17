@@ -8,6 +8,13 @@ import { getKeybindings } from "../keybindings.ts";
 import { decodePrintableKey, matchesKey } from "../keys.ts";
 import { KillRing } from "../kill-ring.ts";
 import {
+  autocompleteBoundaryRegex,
+  autocompleteSeparatorRegex,
+  cjkBreakRegex,
+  isWhitespaceChar,
+} from "../text-boundaries.ts";
+import { sliceByColumn } from "../text-slice.ts";
+import {
   type Component,
   CURSOR_MARKER,
   type Focusable,
@@ -17,16 +24,7 @@ import {
   type TuiMouseEventResult,
 } from "../tui.ts";
 import { UndoStack } from "../undo-stack.ts";
-import {
-  autocompleteBoundaryRegex,
-  autocompleteSeparatorRegex,
-  cjkBreakRegex,
-  getGraphemeSegmenter,
-  getWordSegmenter,
-  isWhitespaceChar,
-  sliceByColumn,
-  visibleWidth,
-} from "../utils.ts";
+import { getGraphemeSegmenter, getWordSegmenter, visibleWidth } from "../utils.ts";
 import { findWordBackward, findWordForward } from "../word-navigation.ts";
 import { SelectList, type SelectListLayoutOptions, type SelectListTheme } from "./select-list.ts";
 

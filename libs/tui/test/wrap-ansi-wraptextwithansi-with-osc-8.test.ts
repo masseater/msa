@@ -6,7 +6,7 @@ import {
   stripHyperlinkSequences,
   stripStyleSequences,
 } from "../src/ansi-sequences.ts";
-import { wrapTextWithAnsi } from "../src/utils.ts";
+import { wrapTextWithAnsi } from "../src/text-wrap.ts";
 
 describe("wrapTextWithAnsi with OSC 8 hyperlinks", () => {
   it("re-emits OSC 8 open at the start of continuation lines", () => {

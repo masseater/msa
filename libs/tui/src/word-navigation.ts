@@ -1,6 +1,7 @@
 import { dual } from "effect/Function";
 
-import { getWordSegmenter, isWhitespaceChar, PUNCTUATION_REGEX } from "./utils.ts";
+import { isWhitespaceChar, PUNCTUATION_REGEX } from "./text-boundaries.ts";
+import { getWordSegmenter } from "./utils.ts";
 
 const wordSegmenter = getWordSegmenter();
 
