@@ -7,40 +7,27 @@ import type {
   ModelTypeMap,
   Usage,
 } from "@msa/ai";
-/**
- * `models.*` for code mode scripts, copied from the coding agent's code mode: the model catalog, and classifier and
- * image model calls.
- *
- * The catalog functions are host globals, journaled like any global. `models.classify()` and `models.generateImages()`
- * are paid effects, so each runs as an internal tool (`callers: ["tools"]`, a reserved name, hidden from scripts'
- * tool listings): a nested durable call with its own task, live row, abort, usage accounting, and replay policy. The
- * code mode tool turns a script's call of the global into a call of that tool.
- */
 import type { Context, JsonValue } from "@msa/chord";
 import { Type } from "typebox";
 
 import { defineTool } from "../harness/define.ts";
 import type { ToolRegistration } from "../harness/types.ts";
 
-/** Reserved names of code mode's internal tools; they are never listed to scripts or the model. */
 export const CODEMODE_INTERNAL_PREFIX = "msa.codemode.";
 export const CLASSIFY_TOOL = `${CODEMODE_INTERNAL_PREFIX}models.classify`;
 export const GENERATE_IMAGES_TOOL = `${CODEMODE_INTERNAL_PREFIX}models.generateImages`;
 
-/** The global a script calls, by internal tool. */
 export const MODEL_CALLS: Readonly<Record<string, string>> = {
   "models.classify": CLASSIFY_TOOL,
   "models.generateImages": GENERATE_IMAGES_TOOL,
 };
 
-/** The catalog functions, host globals of the `models` namespace. */
 export const CATALOG_GLOBALS = [
   "models.getModelsOfType",
   "models.getAvailableOfType",
   "models.getModelOfType",
 ] as const;
 
-/** `models.classify()` and `models.generateImages()` calls one script may have in flight; the rest wait. */
 export const MAX_CONCURRENT_MODEL_CALLS = 4;
 
 const MODEL_TYPES: ReadonlySet<string> = new Set<ModelType>(["chat", "image", "classifier"]);
@@ -57,11 +44,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/**
- * A script value in an error message: `undefined`, `a string`, `an array`, or its keys (`{ prompt }`).
- * @param {unknown} value - The value.
- * @returns {string} The description.
- */
 function describeValue(value: unknown): string {
   if (value === undefined || value === null) return String(value);
   if (Array.isArray(value)) return value.length === 0 ? "an empty array" : "an array";
@@ -73,11 +55,6 @@ function describeValue(value: unknown): string {
   return typeof value === "string" ? "a string" : `a ${typeof value}`;
 }
 
-/**
- * `an image`, `a classifier`.
- * @param {string} word - The word.
- * @returns {string} The word with its article.
- */
 function withArticle(word: string): string {
   return `${/^[aeiou]/u.test(word) ? "an" : "a"} ${word}`;
 }
@@ -95,25 +72,12 @@ function toProvider(value: unknown): string | undefined {
   return value;
 }
 
-/**
- * Catalog entry for scripts. `headers` is dropped because configured headers can carry credentials.
- * @param {AnyModel} model - The model.
- * @returns {JsonValue} The entry.
- */
 function toModelInfo(model: AnyModel): JsonValue {
   const info: Record<string, unknown> = { ...model };
   delete info["headers"];
   return JSON.parse(JSON.stringify(info)) as JsonValue;
 }
 
-/**
- * The catalog functions: what a script's call of `name` with `args` (the argument list) resolves to.
- * @param {string} name - The function.
- * @param {unknown} args - The argument list.
- * @param {Models} models - The model registry.
- * @param {Context} context - The caller's context.
- * @returns {Promise<JsonValue | undefined>} The result.
- */
 export async function catalogCall(
   name: string,
   args: unknown,
@@ -142,11 +106,6 @@ export async function catalogCall(
 const CLASSIFIER_CONTEXT_SHAPE =
   '{ state: { ... }, images?: [{ type: "image", data: <base64>, mimeType }], questions: { <id>: { type: "choice", instructions, criteria: { <label>: <meaning> } } | { type: "score", instructions, criteria: [<lowest level>, ..., <highest level>] } | { type: "bool", instructions, criteria: { true: <meaning>, false: <meaning> } } } }';
 
-/**
- * Check a script's classifier context, so mistakes fail with the expected shape instead of a provider error.
- * @param {unknown} context - The script's value.
- * @returns {ClassifierContext} The context.
- */
 function checkClassifierContext(context: unknown): ClassifierContext {
   const fail = (problem: string) =>
     new Error(`models.classify() ${problem}. Expected context: ${CLASSIFIER_CONTEXT_SHAPE}.`);
@@ -213,11 +172,6 @@ function checkClassifierContext(context: unknown): ClassifierContext {
   return context as unknown as ClassifierContext;
 }
 
-/**
- * Check a script's image context, so mistakes such as `{ prompt }` fail with the expected shape.
- * @param {unknown} context - The script's value.
- * @returns {ImagesContext} The context.
- */
 function checkImagesContext(context: unknown): ImagesContext {
   const fail = (problem: string) =>
     new Error(
@@ -245,15 +199,6 @@ function checkImagesContext(context: unknown): ImagesContext {
   return context as unknown as ImagesContext;
 }
 
-/**
- * Resolve the script's model by provider and id only, so a script-supplied baseUrl or headers never receive the
- * credentials, with errors that say what to do.
- * @param {string} name - The function, for errors.
- * @param {TType} type - The model type.
- * @param {unknown} model - The script's model.
- * @param {Models} models - The model registry.
- * @returns {ModelTypeMap[TType]} The model.
- */
 function resolveModel<TType extends "classifier" | "image">(
   name: string,
   type: TType,
@@ -290,13 +235,6 @@ function resolveModel<TType extends "classifier" | "image">(
 
 const ModelCallParameters = Type.Object({ model: Type.Unknown(), context: Type.Unknown() });
 
-/**
- * The result of a model call as the tool returns it: the whole result for the script, usage counted by the Harness.
- * @param {string} label - The call, for errors.
- * @param {{ stopReason: string; errorMessage?: string; usage?: Usage }} result - The model's result.
- * @param {unknown} value - The value for the script.
- * @returns {ToolExecutionResult} The tool's result.
- */
 function modelResult(
   label: string,
   result: { stopReason: string; errorMessage?: string; usage?: Usage },
@@ -316,10 +254,6 @@ function modelResult(
   };
 }
 
-/**
- * The internal tools behind `models.classify()` and `models.generateImages()`.
- * @returns {ToolRegistration[]} The tools.
- */
 export function createModelTools(): ToolRegistration[] {
   const classify = defineTool({
     name: CLASSIFY_TOOL,

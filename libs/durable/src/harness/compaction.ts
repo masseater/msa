@@ -38,16 +38,13 @@ import { recordUsage } from "./usage.ts";
 
 export type CompactionInput = { reason: CompactionReason; instructions?: string };
 
-/** The pinned summarization request. */
 export type SummaryRequest = {
   attempt: number;
   model: ModelRef;
   thinkingLevel: ModelThinkingLevel;
   streamOptions: ConversationStreamOptions;
   maxTokens: number;
-  /** Newest entry of the context the range was selected from. */
   tail: EntryId;
-  /** First entry kept verbatim; the summary's `head`. */
   firstKept: EntryId;
 };
 
@@ -64,7 +61,6 @@ type Runtime = TaskRuntime<
 >;
 type Next = NextTaskState<CompactionCheckpoint, CompactionResult>;
 
-/** Longest tool result text a serialized summary source keeps. */
 const TOOL_RESULT_MAX_CHARS = 2000;
 
 const SUMMARY_PREFIX =
@@ -108,11 +104,6 @@ Use this EXACT format:
 
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
-/**
- * Built-in compaction task (spec §8.7): select an old prefix of the model context, summarize it, and place a summary
- * entry whose `head` is the first kept entry. A compaction the generation owns blocks it and appends directly; a
- * conversation-owned one places its summary through a write submission.
- */
 export const CompactionTask = defineTask<
   CompactionInput,
   CompactionCheckpoint,
@@ -180,7 +171,6 @@ export const CompactionTask = defineTask<
       } = request;
       const model = runtime.models.getModel(ref.provider, ref.modelId);
       if (model === undefined) return failNoModel(runtime, ref, context);
-      // The context at `tail` is immutable, so this is the range `select` chose.
       const view = await runtime.context(runtime.conversationId, context, { at: tail });
       const cut = view.entries.findIndex((entry) => entry.id === firstKept);
       const now = runtime.now();
@@ -207,7 +197,6 @@ export const CompactionTask = defineTask<
         ...(thinkingLevel === "off" ? {} : { reasoning: thinkingLevel }),
       };
       const message = await runtime.models.completeSimple(model, { messages }, options);
-      // An abort mark or close: the abort invocation or the reopened task handles the committed state.
       runtime.signal.throwIfAborted();
       const summary = summaryText(message);
       const policy = runtime.settings.retry;
@@ -269,15 +258,6 @@ export const CompactionTask = defineTask<
   },
 });
 
-/**
- * Create a compaction task with its status in this commit. `owner` is the generation that waits for it (a blocking
- * compaction); without one it is conversation-owned, and `background` unless it is manual.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- * @param {CompactionInput} input - The compaction's input.
- * @param {TaskId} owner - The waiting generation, if any.
- * @returns {Promise<TaskId<CompactionResult>>} The compaction task.
- */
 export async function createCompaction(
   tx: Tx,
   conversationId: ConversationId,
@@ -299,15 +279,6 @@ export async function createCompaction(
   return taskId;
 }
 
-/**
- * Index in `view.entries` of the first entry a summary keeps, or `undefined` when there is nothing to compact
- * (spec §8.7). Walks back from the tail until `keepRecentTokens` are kept, then cuts at the first candidate at or after
- * that entry: an entry whose contribution starts with a user or assistant message, never a tool result, and never a
- * user entry that a result of the preceding assistant's calls still follows.
- * @param {ContextView} view - The conversation's context view.
- * @param {number} keepRecentTokens - How many recent tokens to keep.
- * @returns {number | undefined} The index.
- */
 export function selectCut(view: ContextView, keepRecentTokens: number): number | undefined {
   const { contributions } = view;
   const start = view.head === undefined ? 0 : 1;
@@ -332,7 +303,6 @@ function isCandidate(contributions: ContextView["contributions"], index: number)
   const first = contributions[index]![0];
   if (first?.role === "assistant") return true;
   if (first?.role !== "user") return false;
-  // A result of the preceding assistant's calls that follows this entry, before the next assistant, belongs before it.
   let calls: ReadonlySet<string> = new Set();
   for (let before = index - 1; before >= 0; before--) {
     const assistant = contributions[before]!.findLast((message) => message.role === "assistant");
@@ -352,24 +322,10 @@ function isCandidate(contributions: ContextView["contributions"], index: number)
   return true;
 }
 
-/**
- * Model messages of the entries before `cut`: the head marker first, ordered like model context (spec §2.1).
- * @param {ContextView} view - The conversation's context view.
- * @param {number} cut - The first kept entry's index.
- * @returns {Message[]} The messages.
- */
 export function summarizedMessages(view: ContextView, cut: number): Message[] {
   return orderToolResults(view.contributions.slice(0, cut).flat());
 }
 
-/**
- * Size of a request over `view` followed by `extra` (spec §8.3): the usage of the newest assistant appended after the
- * head marker, whose request included the marker, plus estimates of the messages after it; without one, estimates of
- * every message.
- * @param {ContextView} view - The conversation's context view.
- * @param {readonly Message[]} extra - The messages after the view.
- * @returns {number} The estimated tokens.
- */
 export function estimateContext(view: ContextView, extra: readonly Message[]): number {
   let measured: AssistantMessage | undefined;
   const after = view.head?.id ?? Number.NEGATIVE_INFINITY;
@@ -387,11 +343,6 @@ export function estimateContext(view: ContextView, extra: readonly Message[]): n
   return tokens;
 }
 
-/**
- * The summary of a clean `stop` with text and no tool call; anything else is not a summary.
- * @param {AssistantMessage} message - The summarizer's answer.
- * @returns {string | undefined} The summary.
- */
 function summaryText(message: AssistantMessage): string | undefined {
   if (
     message.stopReason !== "stop" ||
@@ -416,25 +367,11 @@ function summaryFailure(message: AssistantMessage): string {
   return "Summarization produced no text";
 }
 
-/**
- * The summarizer's user message: the serialized conversation, the prompt, and any instructions.
- * @param {readonly Message[]} messages - The messages.
- * @param {string | undefined} instructions - Extra instructions, if any.
- * @returns {string} The message.
- */
 function summaryPrompt(messages: readonly Message[], instructions: string | undefined): string {
   const focus = instructions === undefined ? "" : `\n\nAdditional focus: ${instructions}`;
   return `<conversation>\n${serializeConversation(messages)}\n</conversation>\n\n${SUMMARIZATION_PROMPT}${focus}`;
 }
 
-/**
- * Messages as plain text, so the summarizer reads a transcript instead of continuing it. System messages are omitted.
- * Thinking is omitted too: providers return summaries of the real reasoning, and replayed thinking is often not part of
- * the live context (a block that does not match its request is dropped), so including it can make the request larger
- * than the context it summarizes. Visible text, tool calls, and tool results record what happened.
- * @param {readonly Message[]} messages - The messages.
- * @returns {string} The transcript.
- */
 export function serializeConversation(messages: readonly Message[]): string {
   const parts: string[] = [];
   for (const message of messages) {
@@ -478,13 +415,6 @@ function truncate(text: string, maxChars: number): string {
   return `${text.slice(0, maxChars)}\n\n[... ${text.length - maxChars} more characters truncated]`;
 }
 
-/**
- * Place a summary supplied by a hook in its own commit.
- * @param {Runtime} runtime - The task's runtime.
- * @param {EntryId} firstKept - The first kept entry.
- * @param {string} summary - The summary.
- * @param {Context} context - The caller's context.
- */
 async function place(
   runtime: Runtime,
   firstKept: EntryId,
@@ -505,19 +435,6 @@ async function place(
   );
 }
 
-/**
- * Place the summary entry and complete (spec §8.7). A blocking compaction, owned by its generation, appends it: the
- * generation holds the run and waits. A conversation-owned one admits it as a write submission, placed at once when
- * idle, otherwise at the next boundary, or settled `stale`.
- * REMINDER: nothing else may append to a busy conversation, so every non-blocking summary goes through admission.
- * @param {Tx} tx - The commit's transaction.
- * @param {Runtime} runtime - The task's runtime.
- * @param {RunningTask<CompactionInput, CompactionCheckpoint, CompactionResult>} current - The running compaction.
- * @param {Draft<LiveState>} live - The `msa.live` draft.
- * @param {EntryId} firstKept - The first kept entry.
- * @param {string} summary - The summary.
- * @returns {Promise<Next>} The next state.
- */
 async function placeSummary(
   tx: Tx,
   runtime: Runtime,
@@ -550,11 +467,6 @@ async function placeSummary(
   return { status: "terminal", outcome: { status: "completed", result } };
 }
 
-/**
- * Remove the status and complete without a summary.
- * @param {Runtime} runtime - The task's runtime.
- * @param {Context} context - The caller's context.
- */
 async function complete(runtime: Runtime, context: Context): Promise<void> {
   await runtime.commit(async (tx) => {
     removeCompactionStatus(await tx.doc(LiveDoc, runtime.conversationId), runtime.taskId);

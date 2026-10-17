@@ -38,7 +38,6 @@ import { type ConversationView, conversationViews } from "./view.ts";
 type Block = AssistantMessage["content"][number];
 type QueuedItem = { id: SubmissionId; mode: InboxItem["mode"] };
 
-/** One change to the in-flight assistant message, relative to that message. */
 export type MessageChange =
   | { type: "text_start" | "thinking_start" | "toolcall_start"; contentIndex: number; block: Block }
   | { type: "text_delta" | "thinking_delta"; contentIndex: number; delta: string }
@@ -55,7 +54,6 @@ export type SnapshotEvent = {
   type: "snapshot";
   entries: readonly EntryRecord[];
   run?: { inputs: readonly SubmissionId[] };
-  /** Current generation attempt: its in-flight partial, retry backoff, or deferred poll. */
   generation?: {
     attempt: number;
     message?: AssistantMessage;
@@ -63,19 +61,14 @@ export type SnapshotEvent = {
     deferred?: { pollAt: number };
   };
   tools: readonly ToolSlot[];
-  /** `msa.live.nestedTools`: nested calls of running tool calls. */
   nestedTools: readonly NestedToolSlot[];
-  /** `msa.live.compactions`: live compactions with their attempt and retry backoff. */
   compactions: readonly CompactionStatus[];
-  /** `msa.live.compactionFailure`: the newest compaction failure since a compaction last produced a summary. */
   compactionFailure?: CompactionFailure;
   inbox: readonly QueuedItem[];
-  /** `msa.agent`; `{}` when absent. */
   agent: AgentState;
   usage: UsageState;
 };
 
-/** Experimental agent event, shaped like the coding agent's session events (spec §9.4). */
 export type AgentEvent =
   | SnapshotEvent
   | { type: "run_start"; inputs: readonly SubmissionId[] }
@@ -83,22 +76,15 @@ export type AgentEvent =
   | { type: "turn_start" }
   | { type: "turn_end" }
   | { type: "message_start"; message: Message }
-  /** `usage` is the partial's current usage, as in the coding agent's JSON mode. */
   | { type: "message_update"; usage: Usage; changes: readonly MessageChange[] }
   | { type: "message_end"; entry: EntryRecord }
   | ({ type: "tool_execution_start"; args: JsonObject } & ToolEventCall)
   | ({
       type: "tool_execution_update";
-      /** A front trim and then an append of the retained window, or its replacement. */
       output?: { trimStart?: number; append?: string } | { set: string };
       details?: JsonValue;
       diagnostics?: readonly ToolDiagnostic[];
     } & ToolEventCall)
-  /**
-   * A model-issued call ends with its result `entry`, a nested call with its `result`. Both are absent when the tool
-   * task faulted or was orphaned, or when the call's slot left `msa.live` unfinished: its run ended, or its parent
-   * settled first.
-   */
   | ({
       type: "tool_execution_end";
       entry?: EntryRecord;
@@ -114,18 +100,8 @@ export type AgentEvent =
   | { type: "usage_changed"; usage: UsageState }
   | { type: "task_failed"; taskId: TaskId; kind: string; message: string }
   | { type: "compaction_start"; taskId: TaskId; reason: CompactionReason; blocking: boolean }
-  /**
-   * The task's receipt tells whether it produced a summary; the summary entry has its own events. `error` is set when
-   * the compaction failed, faulted, or was orphaned, as in `msa.live.compactionFailure`.
-   */
   | { type: "compaction_end"; taskId: TaskId; reason: CompactionReason; error?: string };
 
-/**
- * Which call a tool event is about. `toolCallId` is the call's ID in the transcript and in tool events: the provider's
- * ID for a model-issued call, `<parent call ID>/<key>` for a nested one. Match events by it; do not parse it. `taskId`
- * is the call's tool task, absent for a call that never got one (not offered, or not started in a sequential round).
- * A nested call also names the call that made it, by call ID and by tool task.
- */
 export type ToolEventCall = {
   toolCallId: string;
   toolName: string;
@@ -134,16 +110,13 @@ export type ToolEventCall = {
   parentTaskId?: TaskId;
 };
 
-/** Serialized stream of one conversation's event batches, one per commit. */
 export interface AgentEventStream {
-  /** The `snapshot` event at attachment. */
   readonly snapshot: SnapshotEvent;
   start(listener: (events: readonly AgentEvent[], context: Context) => Promise<void>): void;
   stop(): Promise<WatchEnd>;
   readonly closed: Promise<WatchEnd>;
 }
 
-/** The typed parts of a view the events read. */
 type Parts = {
   live: LiveState;
   inbox: InboxState | undefined;
@@ -183,14 +156,6 @@ function queued(inbox: InboxState | undefined): QueuedItem[] {
   return (inbox?.items ?? []).map((item) => ({ id: item.id, mode: item.mode }));
 }
 
-/**
- * Experimental: attach to one conversation's agent events (spec §9.4). The snapshot and the registration for later
- * commits are captured atomically on the Session line; overflow replaces undelivered batches with one snapshot.
- * @param {Harness} harness - The Harness.
- * @param {ConversationId} conversationId - The conversation.
- * @param {Context} context - The caller's context.
- * @returns {Promise<AgentEventStream>} The event stream.
- */
 export async function watchEvents(
   harness: Harness,
   conversationId: ConversationId,
@@ -202,13 +167,11 @@ export async function watchEvents(
   await views.attach(
     conversationId,
     async (initial, release, storage) => {
-      // Generations whose held outcome already ended their turn, read on the line with the snapshot.
       const query = { conversationId, kind: "msa.generation", status: "completing" } as const;
       const completing = await scanAll((cursor) => storage.scanTasks(query, 100, cursor, context));
       const held = new Set<TaskId>(completing.map((record) => record.id));
       let current = initial;
       snapshot = snapshotOf(initial);
-      // Batches are the watch's values; an overflow delivers a snapshot of the newest view instead.
       watch = new CommittedWatch<readonly AgentEvent[]>(
         [],
         release,
@@ -226,7 +189,6 @@ export async function watchEvents(
     },
     context,
   );
-  // Like a watch, the acquisition context governs the stream's lifetime.
   const signal = context.abortSignal;
   if (signal?.aborted) {
     watch.cancel();
@@ -244,12 +206,6 @@ export async function watchEvents(
 
 type TaskChange = Extract<CommitChange, { type: "task" }>;
 
-/**
- * The tool result for `callId` among `entries`.
- * @param {readonly EntryRecord[]} entries - The entries to search.
- * @param {string} callId - The tool call.
- * @returns {EntryRecord | undefined} The result entry.
- */
 function resultOf(entries: readonly EntryRecord[], callId: string): EntryRecord | undefined {
   return entries.find((entry) => {
     const message = entry.model?.[0];
@@ -257,16 +213,6 @@ function resultOf(entries: readonly EntryRecord[], callId: string): EntryRecord 
   });
 }
 
-/**
- * Every event one publication causes, in the order of spec §9.4.
- * @param {ConversationId} conversationId - The conversation.
- * @param {ConversationView} before - The view before the publication.
- * @param {ConversationView} after - The view after it.
- * @param {readonly Op[]} viewOps - The operations from `before` to `after`.
- * @param {CommitPublication} publication - The publication.
- * @param {Set<TaskId>} held - Tasks whose events are held back.
- * @returns {AgentEvent[]} The events.
- */
 function translate(
   conversationId: ConversationId,
   before: ConversationView,
@@ -278,7 +224,6 @@ function translate(
   const entries: EntryRecord[] = [];
   const tasks = new Map<TaskId, TaskChange["value"]>();
   const submissions: SubmissionRecord[] = [];
-  // Nested results this commit stored, by nested task ID; read now, since the caller's documents may retire next.
   const nestedResults = new Map<TaskId, NestedToolExecutionResult>();
   for (const change of publication.changes) {
     if (
@@ -302,13 +247,11 @@ function translate(
   }
   if (viewOps.length === 0 && entries.length === 0 && tasks.size === 0 && submissions.length === 0)
     return [];
-  // Entries are appended in ID order; submission records are published in the order the commit first touched them.
   submissions.sort((a, b) => a.id - b.id);
   const was = parts(before);
   const now = parts(after);
   const events: AgentEvent[] = [];
 
-  // Progress: tool starts, the in-flight message, tool updates, retry and deferred state.
   const slotsBefore = new Map((was.live.tools ?? []).map((slot) => [slot.callId, slot]));
   const slots = now.live.tools ?? [];
   const nestedBefore = new Map((was.live.nestedTools ?? []).map((slot) => [slot.taskId, slot]));
@@ -317,7 +260,6 @@ function translate(
     const previous =
       "parentCallId" in slot ? nestedBefore.get(slot.taskId) : slotsBefore.get(slot.callId);
     if (slot.status !== "running" || previous?.status === "running") continue;
-    // A nested slot carries the arguments the call runs with; a model-issued call's are in its intent checkpoint.
     const checkpoint =
       slot.taskId === undefined ? undefined : tasks.get(slot.taskId)?.state.checkpoint;
     const args =
@@ -367,8 +309,6 @@ function translate(
     events.push({ type: "deferred_poll", pollAt: generation.deferred.pollAt });
   }
 
-  // Tools that end in this commit: a slot that becomes done, one created done (a call not offered), or an unfinished
-  // one that vanishes because its run ended. A done slot that vanishes ended earlier.
   const toolEnds: Extract<AgentEvent, { type: "tool_execution_end" }>[] = [];
   const endTool = (slot: ToolSlot, entryId: number | undefined): void => {
     const entry = entries.find((candidate) => candidate.id === entryId);
@@ -382,14 +322,11 @@ function translate(
     if (previous.status === "done") continue;
     const slot = slots.find((candidate) => candidate.callId === previous.callId);
     if (slot?.status === "done") endTool(slot, slot.entry);
-    // A slot whose run ended in this commit may have had its result appended with it, as for unstarted calls.
     else if (slot === undefined) endTool(previous, resultOf(entries, previous.callId)?.id);
   }
   for (const slot of slots) {
     if (slot.status === "done" && !slotsBefore.has(slot.callId)) endTool(slot, slot.entry);
   }
-  // Nested calls that end in this commit, the same way, children before the calls that made them: the lists hold
-  // parents first, so walk them backwards.
   const endNested = (slot: NestedToolSlot): void => {
     const result = nestedResults.get(slot.taskId);
     events.push({
@@ -408,7 +345,6 @@ function translate(
     if (slot.status === "done" && !nestedBefore.has(slot.taskId)) endNested(slot);
   }
 
-  // Entries in append order; a tool's end directly precedes its result's message, as in the coding agent.
   let assistantAppended = false;
   for (const entry of entries) {
     events.push(...toolEnds.filter((end) => end.entry === entry));
@@ -417,17 +353,14 @@ function translate(
       events.push({ type: "entry_appended", entry });
       continue;
     }
-    // A streamed answer already started with its first partial.
     const streamed =
       message.role === "assistant" && partialBefore !== undefined && !assistantAppended;
     if (message.role === "assistant") assistantAppended = true;
     if (!streamed) events.push({ type: "message_start", message });
     events.push({ type: "message_end", entry });
   }
-  // Ends without a result entry: a faulted or orphaned tool, or one whose run ended.
   events.push(...toolEnds.filter((end) => end.entry === undefined));
 
-  // Compaction ends, task failures, then turn and run ends.
   const compactionsBefore = was.live.compactions ?? [];
   const compactions = now.live.compactions ?? [];
   const failure = now.live.compactionFailure;
@@ -442,8 +375,6 @@ function translate(
       });
     }
   }
-  // A generation's turn ends when its outcome is committed: at a `completing` hold or at terminal, whichever comes
-  // first, so a successor created at the hold starts after it.
   let turnEnded = false;
   for (const task of tasks.values()) {
     const status = task.state.status;
@@ -466,10 +397,8 @@ function translate(
   if (runBefore !== undefined && runChanged)
     events.push({ type: "run_end", inputs: runBefore.inputs });
 
-  // Submissions, document state, then what began.
   for (const record of submissions) events.push({ type: "submission", record });
   if (now.inbox !== was.inbox) events.push({ type: "inbox_update", items: queued(now.inbox) });
-  // A retired document reads as its initial value, as in a snapshot.
   if (now.agent !== was.agent) {
     events.push({ type: "agent_changed", agent: now.agent ?? AgentDoc.definition.initial() });
   }
@@ -493,21 +422,12 @@ function translate(
 
 const PARTIAL_PATH = ["docs", "msa.live", "generation", "message"];
 
-/**
- * Translate the view operations on the in-flight message into message changes (spec §9.4).
- * @param {readonly Op[]} viewOps - The view operations.
- * @param {AssistantMessage} message - The in-flight message after them.
- * @returns {MessageChange[]} The message changes.
- */
 function messageChanges(viewOps: readonly Op[], message: AssistantMessage): MessageChange[] {
   const changes: MessageChange[] = [];
-  // A block sent whole already holds every later change to it in this batch.
   const whole = new Set<number>();
   for (const op of viewOps) {
-    // View operations never replace the root.
     const path = op[1] as Path;
     if (!startsWith(path, PARTIAL_PATH)) {
-      // The whole message or generation was replaced.
       if (startsWith(PARTIAL_PATH, path)) return [{ type: "message", message }];
       continue;
     }
@@ -546,11 +466,6 @@ function messageChanges(viewOps: readonly Op[], message: AssistantMessage): Mess
   return changes;
 }
 
-/**
- * The identifying fields of a slot's tool events.
- * @param {ToolSlot | NestedToolSlot} slot - The slot.
- * @returns {ToolEventCall} The fields.
- */
 function callOf(slot: ToolSlot | NestedToolSlot): ToolEventCall {
   return {
     toolCallId: slot.callId,
@@ -562,14 +477,6 @@ function callOf(slot: ToolSlot | NestedToolSlot): ToolEventCall {
   };
 }
 
-/**
- * Output, details, and diagnostics changes of a running slot at `at` in `msa.live`, from the view operations on it.
- * @param {readonly Op[]} viewOps - The view operations.
- * @param {readonly ["tools" | "nestedTools", number]} at - Where the slot is in `msa.live`.
- * @param {ToolSlot | NestedToolSlot} slot - The slot after the operations.
- * @param {ToolSlot | NestedToolSlot} previous - The slot before them.
- * @returns {ToolExecutionUpdate | undefined} The update, or `undefined` when nothing changed.
- */
 function toolUpdate(
   viewOps: readonly Op[],
   at: readonly ["tools" | "nestedTools", number],
@@ -594,7 +501,6 @@ function toolUpdate(
   else if (trimStart > 0 || append !== "") {
     output = { ...(trimStart > 0 ? { trimStart } : {}), ...(append === "" ? {} : { append }) };
   }
-  // A safe replay clears a running slot's progress: removed details send `null`, removed diagnostics `[]`.
   const update = {
     ...(output === undefined ? {} : { output }),
     ...(slot.details === previous.details ? {} : { details: slot.details ?? null }),

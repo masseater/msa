@@ -8,26 +8,10 @@ import { createPhotonImages } from "./index.ts";
 import type { PrepareReply, PrepareRequest } from "./node-worker.ts";
 
 export type NodePhotonImagesOptions = {
-  /**
-   * Prepare images in a worker thread, so a large photo does not block the event loop for the second or two Photon
-   * takes. Default `true`; `false` prepares them on the calling thread.
-   */
   readonly worker?: boolean;
-  /**
-   * How long the worker stays after its last image before it exits, freeing Photon's WebAssembly memory, which never
-   * shrinks while it lives. The next image starts a new one. Default 30 s.
-   */
   readonly idleMs?: number;
 };
 
-/**
- * `createPhotonImages()` for Node and Bun, with Photon's WebAssembly read from the installed `@silvia-odwyer/photon`,
- * by default in a worker thread that keeps the process alive only while it prepares an image. A worker that cannot
- * start falls back to the calling thread. A single-file binary cannot resolve the package: read its own copy of
- * `photon_rs_bg.wasm` and call `createPhotonImages()`.
- * @param {NodePhotonImagesOptions} options - Whether and how to use a worker.
- * @returns {Promise<ImageProcessor>} The processor.
- */
 export function createNodePhotonImages(
   options: NodePhotonImagesOptions = {},
 ): Promise<ImageProcessor> {
@@ -48,7 +32,6 @@ function threaded(options: NodePhotonImagesOptions): ImageProcessor {
         return await thread.prepare(bytes, mimeType, limits);
       } catch (error) {
         if (!(error instanceof WorkerUnavailable)) throw error;
-        // No worker on this platform or build: prepare here from now on.
         fallback = inProcess();
         return (await fallback).prepare(bytes, mimeType, limits);
       }
@@ -61,10 +44,8 @@ async function inProcess(): Promise<ImageProcessor> {
   return createPhotonImages(await readFile(path));
 }
 
-/** The worker could not start, as opposed to failing on one image. */
 class WorkerUnavailable extends Error {}
 
-/** One worker thread and the requests it has not answered; it exits after `idleMs` without requests. */
 class PhotonThread {
   readonly #worker: Worker;
   readonly #pending = new Map<number, PromiseWithResolvers<PreparedImage | undefined>>();
@@ -72,13 +53,11 @@ class PhotonThread {
   readonly #onExit: () => void;
   #nextId = 0;
   #idle: ReturnType<typeof setTimeout> | undefined;
-  /** Whether the worker answered once: a failure before that means it is unavailable. */
   #started = false;
 
   constructor(idleMs: number, onExit: () => void) {
     this.#idleMs = idleMs;
     this.#onExit = onExit;
-    // Run from source under a TypeScript runtime, as in tests; built, the worker sits next to this file as JS.
     const file = import.meta.url.endsWith(".ts") ? "./node-worker.ts" : "./node-worker.js";
     try {
       this.#worker = new Worker(new URL(file, import.meta.url));
@@ -119,9 +98,7 @@ class PhotonThread {
     this.#pending.set(id, request);
     if (this.#idle !== undefined) clearTimeout(this.#idle);
     this.#idle = undefined;
-    // A pending image keeps the process alive, as one prepared on the calling thread would.
     this.#worker.ref();
-    // A copy, transferred: the caller keeps its bytes.
     const copy = bytes.slice();
     this.#worker.postMessage({ id, bytes: copy, mimeType, limits } satisfies PrepareRequest, [
       copy.buffer,

@@ -6,11 +6,6 @@ import { SystemEntry } from "../entries.ts";
 import type { ContextEdit, TypedEntryDraft } from "../types.ts";
 import type { ContextView, PromptInput, PromptSection, ToolRegistration } from "./types.ts";
 
-/**
- * Sections in effect after replaying system messages in order: set in place, `null` deletes, re-adding appends.
- * @param {readonly Message[]} messages - The messages.
- * @returns {Map<string, string>} The sections by key.
- */
 export function replaySections(messages: readonly Message[]): Map<string, string> {
   const shown = new Map<string, string>();
   for (const message of messages) {
@@ -23,16 +18,6 @@ export function replaySections(messages: readonly Message[]): Map<string, string
   return shown;
 }
 
-/**
- * Render the agent's sections in order. `undefined` omits a section; tagged text is wrapped as `<key>\n...\n</key>`. A
- * section that throws keeps its shown text, if any, and is reported; errors after `context` is aborted propagate.
- * @param {readonly PromptSection<Tool>[]} sections - The sections.
- * @param {PromptInput<Tool>} input - Their input.
- * @param {ReadonlyMap<string, string>} shown - The text shown so far.
- * @param {(error: unknown) => void} report - Receives errors that must not fail the caller.
- * @param {Context} context - The caller's context.
- * @returns {Promise<Map<string, string>>} The rendered sections by key.
- */
 export async function renderSections<Tool extends ToolRegistration>(
   sections: readonly PromptSection<Tool>[],
   input: PromptInput<Tool>,
@@ -65,23 +50,6 @@ type SystemDraft = TypedEntryDraft<never>;
 
 type ToolChanges = { readonly toolsRemoved: ToolReference[]; readonly toolsAdded: AiTool[] };
 
-/**
- * Plan the `msa.system` entries that make the replayed sections and tools of `view` equal `desired` and `tools` in values
- * and order.
- *
- * - A head marker with no later `msa.system` entry in context: one complete baseline that omits every retained earlier
- *   `msa.system` entry, written even when it restates the replayed values.
- * - Otherwise, when a minimal section patch would leave a different order: remove every shown section, then re-add
- *   every desired section in order.
- * - Otherwise the minimal patch of changed values and `null` removals, or nothing.
- *
- * Tool changes ride on the last planned entry, or on one entry of their own.
- * @param {ContextView} view - The conversation's context view.
- * @param {ReadonlyMap<string, string>} desired - The sections to show.
- * @param {readonly AiTool[]} tools - The tools to offer.
- * @param {number} timestamp - The entries' time.
- * @returns {SystemDraft[]} The entries.
- */
 export function planSystemEntries(
   view: ContextView,
   desired: ReadonlyMap<string, string>,
@@ -114,14 +82,6 @@ export function planSystemEntries(
   );
 }
 
-/**
- * Tool changes from `offered` to `desired`. A changed declaration is removed and re-added. Replay keeps retained tools
- * in place and appends additions; when that would not yield the desired order, every offered tool is removed and
- * every desired tool re-added in order.
- * @param {readonly AiTool[]} offered - The offered tools.
- * @param {readonly AiTool[]} desired - The tools to offer.
- * @returns {ToolChanges} The changes.
- */
 function planTools(offered: readonly AiTool[], desired: readonly AiTool[]): ToolChanges {
   const wanted = new Map(desired.map((tool) => [tool.name, tool]));
   const kept = offered.filter((tool) => {
@@ -145,12 +105,6 @@ function planTools(offered: readonly AiTool[], desired: readonly AiTool[]): Tool
   };
 }
 
-/**
- * Section patches: none, the minimal patch, or a remove-all/re-add-all pair when the order would differ.
- * @param {ReadonlyMap<string, string>} shown - The shown sections.
- * @param {ReadonlyMap<string, string>} desired - The sections to show.
- * @returns {Record<string, string | null>[]} The patches.
- */
 function planSections(
   shown: ReadonlyMap<string, string>,
   desired: ReadonlyMap<string, string>,

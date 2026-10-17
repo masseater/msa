@@ -21,7 +21,6 @@ import type {
 } from "../types.ts";
 import { closedError, scanAll } from "./util.ts";
 
-/** A live task's durable status without its checkpoint and outcome payloads (spec §9.5). */
 export type TaskGraphState =
   | { readonly status: "pending" | "running"; readonly phase: string }
   | {
@@ -30,25 +29,20 @@ export type TaskGraphState =
       readonly on: readonly TaskId[];
       readonly policy: JoinPolicy;
     }
-  /** Outcome held until its ordinary owned work drains. */
   | { readonly status: "completing"; readonly outcome: TaskOutcome<JsonValue>["status"] };
 
 export type TaskGraphNode = {
   readonly id: TaskId;
   readonly kind: string;
   readonly conversationId: ConversationId;
-  /** Owner task; absent for a conversation-owned task. */
   readonly owner?: TaskId;
   readonly background: boolean;
   readonly abortRequested: boolean;
   readonly state: TaskGraphState;
-  /** Conversations this task owns, in ID order. */
   readonly conversations: readonly ConversationId[];
 };
 
-/** Every live task of the Session (spec §9.5). */
 export type TaskGraph = {
-  /** Every live task, keyed by its decimal ID. */
   readonly tasks: Readonly<Record<string, TaskGraphNode>>;
 };
 
@@ -61,10 +55,6 @@ type Mount = { value: TaskGraph; readonly observers: Set<Observer> };
 const LIVE_STATUSES = ["pending", "running", "waiting", "completing"] as const;
 const SCAN_PAGE_SIZE = 256;
 
-/**
- * The Harness's task graph mount: built on the Session line by its first observer and dropped with its last. It
- * advances from the Session's commit publications, which are durable.
- */
 export class TaskGraphView {
   readonly #session: SessionImpl;
   readonly #storage: Storage;
@@ -90,11 +80,6 @@ export class TaskGraphView {
     });
   }
 
-  /**
-   * A disposable read-only Chord state of the graph.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<AttachedReplicatedState<TaskGraph>>} The state.
-   */
   async state(context: Context): Promise<AttachedReplicatedState<TaskGraph>> {
     const { observer, detach } = await this.#attach(
       (value, release) => new CommittedStateSource<TaskGraph>(value, release),
@@ -108,11 +93,6 @@ export class TaskGraphView {
     }
   }
 
-  /**
-   * A serialized exact-frame watch of the graph; cancelling `context` stops it.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<TaskGraphWatch>} The watch.
-   */
   async watch(context: Context): Promise<TaskGraphWatch> {
     const { observer } = await this.#attach(
       (value, release) =>
@@ -128,12 +108,6 @@ export class TaskGraphView {
     return observer;
   }
 
-  /**
-   * Register an observer created from the current revision, atomically on the Session line.
-   * @param {(value: TaskGraph, release: () => void) => O} create - Creates the observer.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<{ observer: O; detach: () => void }>} The observer and its detach.
-   */
   #attach<O extends Observer>(
     create: (value: TaskGraph, release: () => void) => O,
     context: Context,
@@ -148,7 +122,6 @@ export class TaskGraphView {
         if (mount.observers.size === 0 && this.#mount === mount) this.#mount = undefined;
       };
       const observer = create(mount.value, detach);
-      // Close or cancellation may begin while the mount builds; register nothing then.
       if (this.#closed) throw closedError(this.#session);
       context.abortSignal?.throwIfAborted();
       this.#mount = mount;
@@ -184,14 +157,6 @@ export class TaskGraphView {
   }
 }
 
-/**
- * Derive the mount's operations from one publication, apply them, and hand the revision to every observer; one that
- * throws is reported through `report`, and the others still get it.
- * @param {Mount} mount - The mount.
- * @param {CommitPublication} publication - The publication.
- * @param {Context} context - The caller's context.
- * @param {(error: unknown) => void} report - Receives errors that must not fail the caller.
- */
 function advance(
   mount: Mount,
   publication: CommitPublication,
@@ -199,7 +164,6 @@ function advance(
   report: (error: unknown) => void,
 ): void {
   const ops: Op[] = [];
-  // Nodes this publication set or deleted, over the mount's value.
   const changed = new Map<string, TaskGraphNode | undefined>();
   const node = (key: string): TaskGraphNode | undefined =>
     changed.has(key) ? changed.get(key) : mount.value.tasks[key];
@@ -219,8 +183,6 @@ function advance(
     ops.push(["s", ["tasks", key], next as unknown as JsonValue]);
     changed.set(key, next);
   }
-  // After the tasks, so a conversation created with its owner task in one commit finds the owner's node. Change order
-  // within a publication is unspecified, so each owner's list is sorted again.
   const created = new Map<string, ConversationId[]>();
   for (const change of publication.changes) {
     if (change.type !== "conversation" || change.value.owner === undefined) continue;
@@ -264,7 +226,6 @@ function stateOf(record: AnyTaskRecord): TaskGraphState {
         on: [...state.on],
         policy: state.policy,
       };
-    // Terminal records never reach here: they leave the graph.
     case "completing":
     case "terminal":
       return { status: "completing", outcome: state.outcome.status };

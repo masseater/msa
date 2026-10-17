@@ -36,14 +36,11 @@ import { closedError, Waiters } from "./util.ts";
 
 type AbortResult = "aborted" | "already_placed" | "settled";
 
-/** Admission, waits, and withdrawal of the durable submissions of one Harness. */
 export class Submissions {
   readonly #session: SessionImpl;
   readonly #storage: Storage;
   readonly #now: () => number;
-  /** Read at each admission, on the Session line. */
   readonly #queueModes: () => QueueModes;
-  /** Enable task scheduling; submitting or waiting asks for progress. */
   readonly #resume: () => void;
   readonly #waiters = new Waiters<SubmissionId, SettledSubmissionRecord>();
   #closed = false;
@@ -67,13 +64,6 @@ export class Submissions {
     });
   }
 
-  /**
-   * Admit a submission in one commit; see `admitSubmission()`.
-   * @param {ConversationId} conversationId - The conversation.
-   * @param {SubmissionDraft} draft - The submission to admit.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<Submission>} The admitted submission's handle.
-   */
   async submit(
     conversationId: ConversationId,
     draft: SubmissionDraft,
@@ -87,12 +77,6 @@ export class Submissions {
     return new SubmissionHandle(id, this);
   }
 
-  /**
-   * Handle for an existing submission, or `undefined`.
-   * @param {SubmissionId} id - The submission.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<Submission | undefined>} Its handle.
-   */
   async get(id: SubmissionId, context: Context): Promise<Submission | undefined> {
     const record = await this.#session.readOnLine(() => this.#storage.submission(id, context));
     return record === undefined ? undefined : new SubmissionHandle(record.id, this);
@@ -106,25 +90,16 @@ export class Submissions {
 
   async wait(id: SubmissionId, context: Context): Promise<SettledSubmissionRecord> {
     this.#resume();
-    // Check and register on the line so no settling publication falls between them.
     const found = await this.#session.readOnLine(async () => {
       const record = await this.#storage.submission(id, context);
       if (record === undefined) throw new Error(`Submission ${id} does not exist`);
       if (isSettled(record)) return { promise: Promise.resolve(record) };
-      // Close rejects registered waiters synchronously and may begin during the read.
       if (this.#closed) throw closedError(this.#session);
       return { promise: this.#waiters.add(id, context) };
     });
     return found.promise;
   }
 
-  /**
-   * Withdraw a queued submission and remove its inbox item; placed inputs and settled submissions are reported.
-   * @param {SubmissionId} id - The submission.
-   * @param {Context} context - The caller's context.
-   * @param {ConversationId} conversationId - Its conversation, when known.
-   * @returns {Promise<AbortResult | "not_found">} How the submission ended, or `not_found`.
-   */
   abort(
     id: SubmissionId,
     context: Context,
@@ -183,10 +158,6 @@ function isSettled(record: SubmissionRecord): record is SettledSubmissionRecord 
   return record.status === "done" || record.status === "unanswered";
 }
 
-/**
- * Reject an input entry an untyped caller got wrong: its kind must be a non-empty string outside the `msa.` prefix.
- * @param {InputEntry} entry - The input entry.
- */
 function checkInputEntry(entry: InputEntry): void {
   const { kind } = entry;
   if (typeof kind !== "string" || kind.length === 0 || kind.startsWith("msa.")) {
@@ -196,22 +167,6 @@ function checkInputEntry(entry: InputEntry): void {
   }
 }
 
-/**
- * Admit a submission inside a commit (spec §6); `Conversation.submit()` and conversation-owned compactions share it. A
- * known request ID returns its existing submission without writing. A display-only write (only `kind` and `data`) is
- * appended and settled `done` at once, busy or not, as it changes nothing the model sees; only behind a queued reset it
- * queues, so it lands after the reset instead of before it in the context the reset ends. A busy conversation queues anything else in
- * `msa.inbox`, or rejects `whenBusy: "reject"` input with `ConversationBusy`. An idle conversation with queued items
- * queues it behind them and runs a final boundary. Otherwise idle input places its entry (`msa.user`, or the input's
- * own) and starts a run, and an idle write appends its entry and settles `done`, or `stale` when its head reaches
- * before the active range.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- * @param {SubmissionDraft} draft - The submission to admit.
- * @param {number} now - The commit's time.
- * @param {QueueModes} queueModes - How queued items are placed.
- * @returns {Promise<SubmissionId>} The admitted or existing submission.
- */
 export async function admitSubmission(
   tx: Tx,
   conversationId: ConversationId,
@@ -251,7 +206,6 @@ export async function admitSubmission(
   const busy = live.run !== undefined;
   if (busy && draft.type === "input" && draft.whenBusy === "reject")
     throw new ConversationBusy(conversationId);
-  // A boundary reads the table, so it is prepared before the first table write; a busy one needs none.
   const boundary = busy ? undefined : await prepareBoundary(tx, conversationId, queueModes);
   if (boundary === undefined || boundary.inbox.items.length > 0) {
     const { id } = await tx.createSubmission({
@@ -260,7 +214,6 @@ export async function admitSubmission(
       type: draft.type,
       status: "queued",
     });
-    // Hosts may leave optional fields `undefined`; drafts take strict JSON.
     const value = copyJson(draft.type === "write" ? draft.entry : draft.content, {
       omitUndefinedProperties: true,
     });

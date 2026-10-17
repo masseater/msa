@@ -1,32 +1,19 @@
-/**
- * A script's result as the model reads it, copied from the coding agent's code mode: a "Script completed/failed"
- * header with the wall time, the script's text items (`==> text N/M <==` when there are several), its `console` lines
- * in one `<console_output>` block, the returned value, and on failure the error with the calls already made. Text past
- * the token budget is cut to its start and end, with the complete text in a temp file; images are saved to temp files
- * too, with their path next to them, because a script has no other way to hand their bytes on.
- */
 import type { ImageContent, TextContent } from "@msa/ai";
 import type { CodemodeOutputItem, CodemodeResult } from "@msa/codemode/portable";
 
 type Item = TextContent | ImageContent;
 
-/** Writes a file of the result under a fixed name; its path, or why it could not be written. */
 export type OutputFile = (
   name: string,
   data: string | Uint8Array,
 ) => Promise<{ path: string } | { error: string }>;
 
-/** The tool's output limits, which the Harness enforces by cutting without a spill file: results stay inside them. */
 type Limits = { readonly maxBytes: number; readonly maxLines: number };
-/** Lines of the result besides the script's text: the header, markers, notes. */
 const LINE_MARGIN = 100;
 
-/** Default token budget for script output. */
 export const DEFAULT_MAX_OUTPUT_TOKENS = 10_000;
-/** Characters per token when estimating. */
 const CHARS_PER_TOKEN = 4;
 
-/** File extensions of the image types `image()` accepts. */
 const IMAGE_EXTENSIONS: Record<string, string> = {
   "image/png": ".png",
   "image/jpeg": ".jpg",
@@ -34,22 +21,11 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
   "image/webp": ".webp",
 };
 
-/**
- * Like the script's `text()`: strings as is, other values as compact JSON.
- * @param {unknown} value - The value.
- * @returns {string} The text.
- */
 function valueText(value: unknown): string {
   if (typeof value === "string") return value;
   return JSON.stringify(value) ?? String(value);
 }
 
-/**
- * Lay out the script's output so the model can tell items apart: with more than one text item, each starts with a
- * `==> text N/M <==` line; `console` lines follow all other output in one `<console_output>` block.
- * @param {readonly CodemodeOutputItem[]} output - The script's output.
- * @returns {Item[]} The items.
- */
 function formatItems(output: readonly CodemodeOutputItem[]): Item[] {
   const total = output.filter((item) => item.type === "text" && !item.console).length;
   const items: Item[] = [];
@@ -75,13 +51,6 @@ function formatItems(output: readonly CodemodeOutputItem[]): Item[] {
   return items;
 }
 
-/**
- * Join adjacent text items into one, each part starting on its own line. The separator check looks at the last
- * non-empty part, not the joined text: reading the end of a growing concatenation makes V8 copy it on every item, which
- * is quadratic.
- * @param {readonly Item[]} items - The output items.
- * @returns {Item[]} The joined items.
- */
 function joinAdjacentText(items: readonly Item[]): Item[] {
   const joined: Item[] = [];
   let parts: string[] = [];
@@ -108,15 +77,6 @@ function joinAdjacentText(items: readonly Item[]): Item[] {
   return joined;
 }
 
-/**
- * Apply the token budget: when the combined text exceeds it, the text items become one item that keeps the start and
- * end of the text, and images follow it. The complete text is written to a temp file.
- * @param {readonly Item[]} items - The output items.
- * @param {number} maxTokens - The token budget.
- * @param {Limits} limits - The byte and line limits.
- * @param {OutputFile} write - Writes a file into the run's output directory.
- * @returns {Promise<{ items: Item[]; fullOutputPath?: string }>} The items and the full text's path.
- */
 async function truncate(
   items: readonly Item[],
   maxTokens: number,
@@ -127,7 +87,6 @@ async function truncate(
     .filter((item): item is TextContent => item.type === "text")
     .map((item) => item.text);
   const combined = texts.join("\n");
-  // Within the limits too: a UTF-16 unit is at most 3 UTF-8 bytes, and the rest of the result is a few short lines.
   const budget = Math.min(maxTokens * CHARS_PER_TOKEN, Math.floor(limits.maxBytes / 4));
   const lineBudget = Math.floor((limits.maxLines - LINE_MARGIN) / 2);
   const lines = combined.split("\n").length;
@@ -151,18 +110,11 @@ async function truncate(
   };
 }
 
-/**
- * Save each image to a file and put a text item with its path before it; an image shown twice is saved once.
- * @param {readonly Item[]} items - The output items.
- * @param {OutputFile} write - Writes a file into the run's output directory.
- * @returns {Promise<Item[]>} The items.
- */
 async function saveImages(items: readonly Item[], write: OutputFile): Promise<Item[]> {
   const labels = new Map<string, Promise<string>>();
   const label = async ({ data, mimeType }: ImageContent, index: number): Promise<string> => {
     const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
     const kind = `${mimeType}, ${bytes.length} bytes`;
-    // A failed write must not discard the result of a script whose calls already ran: it becomes part of the label.
     const saved = await write(`image-${index}${IMAGE_EXTENSIONS[mimeType] ?? ".bin"}`, bytes);
     return "path" in saved
       ? `[Image saved to ${saved.path} (${kind})]`
@@ -202,16 +154,9 @@ function formatError(
   return `${head}\n\n${summary}`;
 }
 
-/**
- * The tool result's content for a script's result, and the path of the complete text when it was cut.
- * @param {CodemodeResult} result - The script's result.
- * @param {FormatOptions} options - The run's images, time, budget, calls, limits, and writer.
- * @returns {Promise<{ content: Item[]; fullOutputPath?: string }>} The content and the full text's path.
- */
 export async function formatResult(
   result: CodemodeResult,
   options: {
-    /** Images `models.generateImages()` returned; when the script showed none, the result says so. */
     readonly generatedImages: number;
     readonly wallMs: number;
     readonly maxOutputTokens: number;
@@ -239,7 +184,6 @@ export async function formatResult(
     options.limits,
     options.write,
   );
-  // After truncation, which joins the text items and moves images after them, so each path stays next to its image.
   const content = joinAdjacentText(await saveImages(truncated.items, options.write));
   const header = `${result.ok ? "Script completed" : "Script failed"}\nWall time ${(options.wallMs / 1000).toFixed(1)} seconds\nOutput:\n`;
   return {

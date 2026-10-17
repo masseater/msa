@@ -2,13 +2,8 @@ import { promiseTry } from "../../promise-try.ts";
 import type { SqliteDatabase, SqliteExecutor, SqliteValue } from "./database.ts";
 import { SqliteStorage } from "./storage.ts";
 
-/** Values a Durable Object SQL binding accepts and returns. */
 type DurableObjectSqlValue = ArrayBuffer | string | number | null;
 
-/**
- * The parts of a SQLite-backed Durable Object's `ctx.storage` this adapter uses, typed structurally so the package
- * needs no Workers type dependency.
- */
 export type DurableObjectSqliteStorage = {
   readonly sql: {
     exec(
@@ -19,7 +14,6 @@ export type DurableObjectSqliteStorage = {
   transaction<T>(closure: () => Promise<T>): Promise<T>;
 };
 
-/** Runs operations one at a time in call order, so a transaction excludes every other operation. */
 class SerialQueue {
   private tail: Promise<unknown> = Promise.resolve();
 
@@ -30,11 +24,6 @@ class SerialQueue {
   }
 }
 
-/**
- * Durable Object SQL binds numbers as doubles: a `bigint` outside the safe integer range would lose precision.
- * @param {SqliteValue} value - The value to bind.
- * @returns {DurableObjectSqlValue} The bound value.
- */
 function bindValue(value: SqliteValue): DurableObjectSqlValue {
   if (value instanceof Uint8Array) return value.slice().buffer as ArrayBuffer;
   if (typeof value !== "bigint") return value;
@@ -46,11 +35,6 @@ function bindValue(value: SqliteValue): DurableObjectSqlValue {
 
 const bind = (params: readonly SqliteValue[]): DurableObjectSqlValue[] => params.map(bindValue);
 
-/**
- * Rows as returned, with `BLOB` columns converted to `Uint8Array` in place; no other copy is made.
- * @param {Record<string, DurableObjectSqlValue>[]} input - The rows a query returned.
- * @returns {T[]} The same rows.
- */
 function rows<T>(input: Record<string, DurableObjectSqlValue>[]): T[] {
   for (const row of input) {
     for (const key in row) {
@@ -62,7 +46,6 @@ function rows<T>(input: Record<string, DurableObjectSqlValue>[]): T[] {
   return input as T[];
 }
 
-/** Executes SQL through `ctx.storage.sql`, which has no separate prepare step. */
 class DurableObjectSqliteExecutor implements SqliteExecutor {
   protected readonly storage: DurableObjectSqliteStorage;
 
@@ -98,11 +81,9 @@ class DurableObjectSqliteExecutor implements SqliteExecutor {
     });
   }
 
-  /** Throws when this handle may no longer run SQL. */
   protected check(): void {}
 }
 
-/** The handle a transaction callback receives; invalid once the callback settles. */
 class DurableObjectSqliteTransaction extends DurableObjectSqliteExecutor {
   active = true;
 
@@ -111,10 +92,6 @@ class DurableObjectSqliteTransaction extends DurableObjectSqliteExecutor {
   }
 }
 
-/**
- * `SqliteDatabase` adapter for the SQLite storage of a Cloudflare Durable Object. Integers are JavaScript numbers;
- * binding a `bigint` outside the safe integer range throws.
- */
 export class DurableObjectSqliteDatabase
   extends DurableObjectSqliteExecutor
   implements SqliteDatabase
@@ -137,11 +114,6 @@ export class DurableObjectSqliteDatabase
     return this.queue.run(() => super.all<T>(sql, ...params));
   }
 
-  /**
-   * `ctx.storage.transaction()` commits when the callback resolves and rolls back when it rejects.
-   * @param {(transaction: SqliteExecutor) => Promise<T>} callback - The work to run in the transaction.
-   * @returns {Promise<T>} What `callback` resolves with.
-   */
   transaction<T>(callback: (transaction: SqliteExecutor) => Promise<T>): Promise<T> {
     return this.queue.run(() =>
       this.storage.transaction(async () => {
@@ -155,20 +127,11 @@ export class DurableObjectSqliteDatabase
     );
   }
 
-  /**
-   * Waits for queued work. The Durable Object owns its storage, so nothing else closes.
-   * @returns {Promise<void>} Settles once queued work is done.
-   */
   close(): Promise<void> {
     return this.queue.run(() => {});
   }
 }
 
-/**
- * Open durable storage on a SQLite-backed Durable Object's `ctx.storage`.
- * @param {DurableObjectSqliteStorage} storage - The Durable Object's `ctx.storage`.
- * @returns {Promise<SqliteStorage>} The opened storage.
- */
 export function openDurableObjectSqliteStorage(
   storage: DurableObjectSqliteStorage,
 ): Promise<SqliteStorage> {

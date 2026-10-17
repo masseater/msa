@@ -43,12 +43,6 @@ function isSingleEditInput(value: unknown): value is SingleEditInput {
   return typeof edit["oldText"] === "string" && typeof edit["newText"] === "string";
 }
 
-/**
- * Repair shapes models commonly send: `edits` as a JSON string or as a single edit object, and a top-level
- * `oldText`/`newText` pair. Works on a copy; the call's arguments stay unchanged.
- * @param {unknown} input - The call's arguments.
- * @returns {EditToolInput} The repaired arguments.
- */
 function prepareEditArguments(input: unknown): EditToolInput {
   if (!input || typeof input !== "object" || Array.isArray(input)) return input as EditToolInput;
   const args: Record<string, unknown> = { ...input };

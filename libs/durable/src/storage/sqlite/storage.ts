@@ -68,7 +68,6 @@ type ScopeColumns = {
 
 const parseJson = <T>(value: string): T => JSON.parse(value) as T;
 const encodeJson = (value: unknown): string => JSON.stringify(value) as string;
-// Some SQLite bindings replace lone UTF-16 surrogates. JSON encoding keeps indexed identities lossless.
 const encodeIndexedString = (value: string): string => JSON.stringify(value);
 
 const cursorId = <I extends Id<string>>(cursor: Cursor | undefined): I | undefined => {
@@ -89,11 +88,6 @@ const page = <T extends { readonly id: Id<string> }>(
   return { items, next: nextCursor(items.at(-1)!.id, order) };
 };
 
-/**
- * The ID condition, its parameter, and the `ORDER BY` direction of a table scan.
- * @param {ScanStart} start - The scan's order and position.
- * @returns {{ readonly clause: string; readonly param: number; readonly direction: string }} The SQL parts.
- */
 const scanSql = (
   start: ScanStart,
 ): { readonly clause: string; readonly param: number; readonly direction: string } =>
@@ -151,7 +145,6 @@ const writeId = (write: StorageWrite): Id<string> | undefined => {
   }
 };
 
-/** Portable SQLite implementation of the Pico storage contract. */
 export class SqliteStorage implements Storage {
   private readonly db: SqliteDatabase;
   private nextId: number;
@@ -165,11 +158,6 @@ export class SqliteStorage implements Storage {
     this.nextId = nextId;
   }
 
-  /**
-   * Initialize storage over an owned SQLite database facade.
-   * @param {SqliteDatabase} db - The database the storage owns.
-   * @returns {Promise<SqliteStorage>} The storage.
-   */
   static async open(db: SqliteDatabase): Promise<SqliteStorage> {
     try {
       await applySqliteMigrations(db);
@@ -181,9 +169,7 @@ export class SqliteStorage implements Storage {
     } catch (error) {
       try {
         await db.close();
-      } catch {
-        // Preserve the initialization failure.
-      }
+      } catch {}
       throw error;
     }
   }
@@ -422,13 +408,6 @@ export class SqliteStorage implements Storage {
     await this.collectDescending(query, limit, parent, nextUpper, values);
   }
 
-  /**
-   * Oldest first: the fork chain's segments from the root conversation forward, each up to its fork point.
-   * @param {EntryQuery} query - The entry query.
-   * @param {number} limit - The page size.
-   * @param {number | undefined} after - The cursor's entry ID.
-   * @returns {Promise<Page<EntryRecord, Cursor>>} One page of entries.
-   */
   private async readEntriesAscending(
     query: EntryQuery,
     limit: number,
@@ -614,7 +593,6 @@ export class SqliteStorage implements Storage {
   ): Promise<StoredDocument | undefined> {
     return promiseTry(() => {
       this.assertOpen();
-      // The record and revision queries must observe one committed state; a commit between them can replace the base.
       return this.db.transaction((transaction) => this.materializeDocument(transaction, id, at));
     });
   }
@@ -667,12 +645,6 @@ export class SqliteStorage implements Storage {
     await this.db.close();
   }
 
-  /**
-   * Run a read that issues several queries. Close waits for admitted reads, so their later queries never reach a
-   * closed database. Single-query reads and transactions are already ordered before close by the database.
-   * @param {() => Promise<T>} read - The read.
-   * @returns {Promise<T>} What `read` resolves with.
-   */
   private async admitRead<T>(read: () => Promise<T>): Promise<T> {
     this.assertOpen();
     this.admittedReads++;

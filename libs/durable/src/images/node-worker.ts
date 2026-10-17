@@ -1,4 +1,3 @@
-// The worker thread of `createNodePhotonImages()`: Photon prepares images here, off the caller's event loop.
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { parentPort } from "node:worker_threads";
@@ -6,7 +5,6 @@ import { parentPort } from "node:worker_threads";
 import type { ImageLimits, PreparedImage } from "../tools/image-processor.ts";
 import { createPhotonImages } from "./index.ts";
 
-/** One request: the image to prepare, and its ID for the reply. */
 export type PrepareRequest = {
   readonly id: number;
   readonly bytes: Uint8Array;
@@ -14,7 +12,6 @@ export type PrepareRequest = {
   readonly limits: ImageLimits;
 };
 
-/** The reply to a request: its result, or why it failed. */
 export type PrepareReply =
   | { readonly id: number; readonly result: PreparedImage | undefined }
   | { readonly id: number; readonly error: string };

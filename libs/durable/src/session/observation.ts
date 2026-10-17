@@ -13,20 +13,13 @@ import type { JsonObject, WatchEnd, WatchHandle } from "../types.ts";
 
 export type ObservedDocumentValue = Readonly<JsonObject> | null;
 
-/** Maximum exact committed frames retained behind one unavailable watch listener. */
 const MAX_PENDING_WATCH_FRAMES = 100;
 
-/** Canonical terminal update for a retired document incarnation. */
 export const RETIREMENT_OPERATIONS: readonly Op[] = [["r", null]];
 
-/**
- * Session-to-Chord bridge owned one-to-one by one attached state: a document, or a conversation view. A `null` value
- * retires it. @internal
- */
 export class CommittedStateSource<T = ObservedDocumentValue> implements ReplicatedStateSource<T> {
   readonly #attachments = new Set<SessionSourceAttachment<T>>();
   #release: (() => void) | undefined;
-  /** Released on disposal. */
   #value: T | undefined;
   #cursor = 0;
   #retired = false;
@@ -64,7 +57,6 @@ export class CommittedStateSource<T = ObservedDocumentValue> implements Replicat
     for (const attachment of [...this.#attachments]) attachment.publish(frame);
   }
 
-  /** Stop publishing; the attached states keep their last value. A failure ends them the same way. */
   closeSession(): void {
     if (this.#closed) return;
     for (const attachment of [...this.#attachments]) attachment.dispose();
@@ -115,8 +107,6 @@ class SessionSourceAttachment<T> implements ReplicatedStateSourceAttachment<T> {
       try {
         this.#drain();
       } catch {
-        // Chord's frame listener contains source-contract failures. Isolate an
-        // unexpected direct listener failure to this attachment as well.
         this.dispose();
       }
     });
@@ -154,10 +144,6 @@ type WatchFrame<T> = {
   readonly context: Context;
 };
 
-/**
- * Serialized exact-frame watch bound to one document incarnation or conversation view. A `null` value retires it.
- * @internal
- */
 export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T> {
   readonly #detach: () => void;
   readonly #report: (error: unknown) => void;
@@ -170,15 +156,10 @@ export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T>
   #scheduled = false;
   #running = false;
   #retired = false;
-  /** Set once, by `#terminate()`. */
   #end: WatchEnd | undefined;
   #cancellationSignal: AbortSignal | undefined;
   #cancellationListener: (() => void) | undefined;
 
-  /**
-   * `report` gets a listener's throw, which also ends the watch. `replace` gives the value an overflow delivers; by
-   * default the newest value.
-   */
   constructor(value: T, detach: () => void, report: (error: unknown) => void, replace?: () => T) {
     this.#value = value;
     this.#detach = detach;
@@ -221,10 +202,6 @@ export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T>
     this.#terminate({ reason: "cancelled" });
   }
 
-  /**
-   * End with `session_closed`, or with `session_failed` and the error when the Session failed.
-   * @param {{ readonly error: unknown }} failure - The Session's failure, if any.
-   */
   closeSession(failure?: { readonly error: unknown }): void {
     this.#terminate(
       failure === undefined
@@ -288,10 +265,6 @@ export class CommittedWatch<T = ObservedDocumentValue> implements WatchHandle<T>
     await this.#deliverNext();
   }
 
-  /**
-   * End the watch, once: detach, drop pending frames, and settle `closed`. A callback already running keeps running.
-   * @param {WatchEnd} end - How the watch ends.
-   */
   #terminate(end: WatchEnd): void {
     if (this.#end !== undefined) return;
     this.#end = end;

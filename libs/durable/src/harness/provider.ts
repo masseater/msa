@@ -4,12 +4,10 @@ import type { Context } from "@msa/chord";
 import { defineDoc } from "../documents.ts";
 import type { TaskRuntime } from "../types.ts";
 
-/** Stable provider-facing identity of one conversation. */
 export type ProviderState = {
   sessionId: string;
 };
 
-/** Built-in provider state; every fork starts with a fresh identity instead of copying its parent. */
 export const ProviderDoc = defineDoc<ProviderState>({
   kind: "msa.provider",
   version: 1,
@@ -20,13 +18,6 @@ export const ProviderDoc = defineDoc<ProviderState>({
   checkpointWhen: () => true,
 });
 
-/**
- * Return the persisted identity without writing in the normal path. A legacy conversation without `msa.provider` gets
- * one migration commit whose `tx.doc()` runs `initial()` before the provider request starts.
- * @param {TaskRuntime<I, S, R, H>} runtime - The task's runtime.
- * @param {Context} context - The caller's context.
- * @returns {Promise<string>} The identity.
- */
 export async function ensureProviderSessionId<I, S, R, H extends object>(
   runtime: TaskRuntime<I, S, R, H>,
   context: Context,

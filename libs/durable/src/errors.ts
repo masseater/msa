@@ -1,11 +1,5 @@
 import type { ConversationId } from "./types.ts";
 
-/**
- * The message of a thrown value, without throwing itself: `String()` throws for values such as `Object.create(null)`,
- * and code that formats an error must not fail for the value it formats.
- * @param {unknown} error - The thrown value.
- * @returns {string} Its message.
- */
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   try {
@@ -15,7 +9,6 @@ export function errorMessage(error: unknown): string {
   }
 }
 
-/** A transaction read a table after its first table write. Read every required row before writing. */
 export class ReadAfterWrite extends Error {
   constructor(method: string) {
     super(`Tx.${method}() cannot read tables after the first table write`);
@@ -23,11 +16,6 @@ export class ReadAfterWrite extends Error {
   }
 }
 
-/**
- * A Storage read rejected an invalid request, such as an unknown conversation or a cursor from another scan, with no
- * durable effect. Unlike any other error a Storage throws, it fails only that read, not the Session; from `commit()` it is
- * fatal like any other.
- */
 export class StorageRequestError extends Error {
   constructor(message: string) {
     super(message);
@@ -35,11 +23,6 @@ export class StorageRequestError extends Error {
   }
 }
 
-/**
- * The Session failed, so nothing runs or commits any more. It fails when a Storage method throws, a commit cannot be
- * adopted, or the Harness's own bookkeeping throws (a scheduler commit, an internal commit listener, a registry whose
- * `snapshot()` throws). `cause` is that first error. Reopen the Session; reopening recovers from what was committed.
- */
 export class SessionFailed extends Error {
   constructor(cause: unknown) {
     super("Session failed after a storage error; close and reopen it", { cause });
@@ -47,7 +30,6 @@ export class SessionFailed extends Error {
   }
 }
 
-/** A submission reached a busy conversation and was not admitted. */
 export class ConversationBusy extends Error {
   readonly conversationId: ConversationId;
 

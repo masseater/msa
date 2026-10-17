@@ -1,28 +1,17 @@
-/**
- * What the model reads about code mode, copied from the coding agent's code mode: the tool's fixed description (the
- * script environment and its globals), and the `codemode` prompt section, which lists the tools scripts can call as
- * TypeScript declarations, grouped by namespace and limited to a token budget. Tools that do not fit are found with
- * `searchTools()`. The section renders from the conversation's callable tools, so it changes with them; the tool's
- * description never does.
- */
 import type { CodemodeJsonSchema } from "@msa/codemode";
 import { renderToolSample, toCodemodeIdentifier } from "@msa/codemode/declarations";
 
 import type { ToolRegistration } from "../harness/types.ts";
 import { MODELS_DESCRIPTION } from "./models.ts";
 
-/** A group of tools named by a common prefix, such as an MCP server's `mcp__github__`. */
 export type CodemodeNamespace = {
   readonly name: string;
   readonly description?: string;
   readonly instructions?: string;
-  /** Tool names starting with it belong to the namespace; the longest matching prefix wins. */
   readonly prefix: string;
 };
 
-/** Default token budget of the tool declarations in the `codemode` section, as in the coding agent. */
 export const DEFAULT_CODEMODE_INLINE_BUDGET = 3000;
-/** Characters per token when estimating the cost of a tool section. */
 const CHARS_PER_TOKEN = 4;
 
 const TEXT_OUTPUT_SCHEMA: CodemodeJsonSchema = { type: "string" };
@@ -32,11 +21,6 @@ const DESCRIPTION_INTRO = `Run JavaScript that calls other tools. The input is r
 - The script survives a restart: it resumes where it was, without running finished calls again.
 - Optional first line: \`// @options: {"max_output_tokens": 10000, "timeout_ms": 60000}\``;
 
-/**
- * The code mode tool's description: the script environment and its globals, the same for every conversation.
- * @param {boolean} models - Whether scripts get `models`.
- * @returns {string} The description.
- */
 export function codemodeDescription(models: boolean): string {
   const globals = [
     "Globals:",
@@ -52,11 +36,6 @@ export function codemodeDescription(models: boolean): string {
   ].join("\n\n");
 }
 
-/**
- * What a script sees of a tool: its declaration. Tools without an output schema resolve to their text output.
- * @param {ToolRegistration} tool - The tool.
- * @returns {object} The declaration.
- */
 export function declarationOf(tool: ToolRegistration): {
   name: string;
   description: string;
@@ -72,21 +51,10 @@ export function declarationOf(tool: ToolRegistration): {
   };
 }
 
-/**
- * `toolSample` of a tool: its description and TypeScript declaration.
- * @param {ToolRegistration} tool - The tool.
- * @returns {string} The sample.
- */
 export function sampleOf(tool: ToolRegistration): string {
   return renderToolSample(declarationOf(tool));
 }
 
-/**
- * The namespace of a tool: the one with the longest prefix its name starts with.
- * @param {string} name - The tool name.
- * @param {readonly CodemodeNamespace[]} namespaces - The namespaces.
- * @returns {CodemodeNamespace | undefined} The namespace.
- */
 export function namespaceOf(
   name: string,
   namespaces: readonly CodemodeNamespace[],
@@ -103,11 +71,6 @@ export function namespaceOf(
   return found;
 }
 
-/**
- * `### \`id\` (\`raw name\`)` followed by the tool's description and declaration.
- * @param {ToolRegistration} tool - The tool.
- * @returns {string} The section.
- */
 function renderToolSection(tool: ToolRegistration): string {
   const id = toCodemodeIdentifier(tool.name);
   const heading = id === tool.name ? `### \`${id}\`` : `### \`${id}\` (\`${tool.name}\`)`;
@@ -117,14 +80,6 @@ function renderToolSection(tool: ToolRegistration): string {
 type CatalogEntry = { name: string; section: string; cost: number };
 type CatalogGroup = { namespace: CodemodeNamespace | undefined; entries: CatalogEntry[] };
 
-/**
- * Pick the tool sections that fit the budget: in each round every group (tools without a namespace first, then
- * namespaces by name) places its cheapest remaining tool; a group whose next tool does not fit drops out while the
- * others continue. Every namespace is represented before any namespace is complete.
- * @param {readonly CatalogGroup[]} groups - The tools by group.
- * @param {number} budget - The budget in tokens.
- * @returns {Set<string>} The names shown.
- */
 function selectCatalog(groups: readonly CatalogGroup[], budget: number): Set<string> {
   const queues = groups.map((group) => [...group.entries].sort((a, b) => a.cost - b.cost));
   const shown = new Set<string>();
@@ -150,14 +105,6 @@ function placeRound(
   return { active: next, remaining };
 }
 
-/**
- * The `codemode` section: the tools scripts can call, grouped by namespace, with their declarations as far as the
- * budget allows. `undefined` without callable tools.
- * @param {readonly ToolRegistration[]} tools - The callable tools.
- * @param {readonly CodemodeNamespace[]} namespaces - The namespaces.
- * @param {number} budget - The budget in tokens.
- * @returns {string | undefined} The section.
- */
 export function codemodeSection(
   tools: readonly ToolRegistration[],
   namespaces: readonly CodemodeNamespace[],

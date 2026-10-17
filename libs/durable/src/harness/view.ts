@@ -28,19 +28,14 @@ import { ProviderDoc } from "./provider.ts";
 import { UsageDoc } from "./usage.ts";
 import { closedError } from "./util.ts";
 
-/** Structural mount of one conversation's active transcript and built-in documents (spec §9.3). */
 export type ConversationView = {
   readonly conversation: ConversationRecord;
-  /** Raw active entries, as `ContextView.entries`: the head marker, then the non-head entries from its head. */
   readonly entries: readonly EntryRecord[];
-  /** Built-in conversation documents keyed by kind; absent documents are absent. */
   readonly docs: Readonly<Record<string, JsonObject>>;
 };
 
-/** Receives each next revision of a mount, and the Session's close. */
 export type ViewObserver = {
   advance?(value: ConversationView, ops: readonly Op[], context: Context): void;
-  /** Every publication, after the mount took it; `ops` are the mount's, possibly none. */
   publication?(
     before: ConversationView,
     after: ConversationView,
@@ -60,31 +55,20 @@ const MOUNTED = [
 ] as unknown as readonly ConversationDocToken<JsonObject>[];
 const MOUNTED_KINDS: ReadonlySet<string> = new Set(MOUNTED.map((token) => token.definition.kind));
 
-/** One conversation's mount: its current revision, the document incarnations it shows, and its observers. */
 type Mount = {
   value: ConversationView;
-  /** Mounted incarnation and definition version per kind; another incarnation or version is set whole. */
   readonly docs: Map<string, { id: DocumentId; version: number }>;
   readonly observers: Set<ViewObserver>;
 };
 
 const VIEWS = new WeakMap<object, ConversationViews>();
 
-/**
- * The view mounts of a Harness, for adapters built on them.
- * @param {object} harness - The Harness.
- * @returns {ConversationViews} The view mounts.
- */
 export function conversationViews(harness: object): ConversationViews {
   const views = VIEWS.get(harness);
   if (views === undefined) throw new Error("Not a Harness");
   return views;
 }
 
-/**
- * The Harness's conversation view mounts: at most one per conversation, built on the Session line by its first
- * observer and dropped with its last. Each mount advances from the Session's commit publications, which are durable.
- */
 export class ConversationViews {
   readonly #session: SessionImpl;
   readonly #storage: Storage;
@@ -112,20 +96,10 @@ export class ConversationViews {
     });
   }
 
-  /**
-   * Report an observer's listener error through the Harness.
-   * @param {unknown} error - The error.
-   */
   report(error: unknown): void {
     this.#session.report(error);
   }
 
-  /**
-   * A disposable read-only Chord state of the view.
-   * @param {ConversationId} id - The conversation.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<AttachedReplicatedState<ConversationView>>} The state.
-   */
   async state(
     id: ConversationId,
     context: Context,
@@ -143,12 +117,6 @@ export class ConversationViews {
     }
   }
 
-  /**
-   * A serialized exact-frame watch of the view; cancelling `context` stops it.
-   * @param {ConversationId} id - The conversation.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<WatchHandle<ConversationView>>} The watch.
-   */
   async watch(id: ConversationId, context: Context): Promise<WatchHandle<ConversationView>> {
     const { observer } = await this.attach(
       id,
@@ -167,15 +135,6 @@ export class ConversationViews {
     return observer;
   }
 
-  /**
-   * Register an observer created from the current revision, atomically on the Session line: it sees every later
-   * publication and nothing earlier. `create` may read committed Storage, still on the line. `release` drops it, and
-   * the mount with its last observer.
-   * @param {ConversationId} id - The conversation.
-   * @param {Function} create - Creates the observer.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<{ observer: O; detach: () => void }>} The observer and its detach.
-   */
   attach<O extends ViewObserver>(
     id: ConversationId,
     create: (value: ConversationView, release: () => void, storage: Storage) => O | Promise<O>,
@@ -188,7 +147,6 @@ export class ConversationViews {
         if (mount.observers.size === 0 && this.#mounts.get(id) === mount) this.#mounts.delete(id);
       };
       const observer = await create(mount.value, detach, this.#storage);
-      // Close or cancellation may begin while the mount hydrates; register nothing then.
       if (this.#closed) throw closedError(this.#session);
       context.abortSignal?.throwIfAborted();
       this.#mounts.set(id, mount);
@@ -214,15 +172,6 @@ export class ConversationViews {
   }
 }
 
-/**
- * Derive the mount's operations from one publication, apply them, and hand the revision to every observer; one that
- * throws is reported through `report`, and the others still get it.
- * @param {ConversationId} id - The conversation.
- * @param {Mount} mount - The mount.
- * @param {CommitPublication} publication - The publication.
- * @param {Context} context - The caller's context.
- * @param {(error: unknown) => void} report - Receives errors that must not fail the caller.
- */
 function advance(
   id: ConversationId,
   mount: Mount,
@@ -233,7 +182,6 @@ function advance(
   const docOps: Op[] = [];
   const entryOps: Op[] = [];
   const list: EntryList = { entries: mount.value.entries, owned: false };
-  // Entry writes are published in ID order.
   for (const change of publication.changes) {
     if (change.type === "entry" && change.value.conversationId === id) {
       addEntry(list, change.value, entryOps);
@@ -260,7 +208,6 @@ function advance(
   }
 }
 
-// `owned` once `entries` is a copy this publication may append to; until then it is the mount's own list.
 type EntryList = { entries: readonly EntryRecord[]; owned: boolean };
 
 function addEntry(list: EntryList, entry: EntryRecord, entryOps: Op[]): void {
@@ -273,7 +220,6 @@ function addEntry(list: EntryList, entry: EntryRecord, entryOps: Op[]): void {
     list.owned = true;
     return;
   }
-  // A head marker keeps the non-head entries from its head, which are always a suffix, and goes in front.
   const target = entry.head;
   let kept = list.entries.findIndex(
     (candidate) => candidate.head === undefined && candidate.id >= target,
@@ -305,12 +251,6 @@ function applyDocument(
   }
 }
 
-/**
- * `op` moved under `prefix`; a root replacement becomes a set of the prefix.
- * @param {Op} op - The operation.
- * @param {NonEmptyPath} prefix - The prefix.
- * @returns {Op} The moved operation.
- */
 function prefixed(op: Op, prefix: NonEmptyPath): Op {
   const at = (path: Path): NonEmptyPath => [...prefix, ...path] as unknown as NonEmptyPath;
   switch (op[0]) {

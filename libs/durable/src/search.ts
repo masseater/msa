@@ -1,8 +1,3 @@
-/**
- * BM25 tool search for code mode's `searchTools()` and the `tool_search` tool, a copy of the coding agent's tool search
- * ranking: durable keeps its own copy of what it needs from the coding agent.
- */
-
 export type SearchDocument = { readonly name: string; readonly text: string };
 
 const STOP_WORDS: ReadonlySet<string> = new Set([
@@ -29,11 +24,6 @@ const STOP_WORDS: ReadonlySet<string> = new Set([
   "with",
 ]);
 
-/**
- * Naive singular form, so `issues` matches `issue` and `searches` matches `search`.
- * @param {string} term - The term.
- * @returns {string} The singular form.
- */
 function stem(term: string): string {
   if (term.length > 4 && term.endsWith("ies")) return `${term.slice(0, -3)}y`;
   if (term.length > 4 && /(ches|shes|sses|xes|zes)$/u.test(term)) return term.slice(0, -2);
@@ -41,11 +31,6 @@ function stem(term: string): string {
   return term;
 }
 
-/**
- * Lowercase terms, split at camelCase boundaries and non-alphanumerics, without stop words.
- * @param {string} text - The text.
- * @returns {string[]} The terms.
- */
 export function tokenize(text: string): string[] {
   return text
     .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
@@ -56,13 +41,6 @@ export function tokenize(text: string): string[] {
     .map(stem);
 }
 
-/**
- * Okapi BM25 (k1 1.2, b 0.75): the names of the best matches, best first; ties keep document order.
- * @param {string} query - The query.
- * @param {readonly SearchDocument[]} documents - The documents.
- * @param {number} limit - How many names to return.
- * @returns {string[]} The names.
- */
 export function rankDocuments(
   query: string,
   documents: readonly SearchDocument[],

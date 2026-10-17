@@ -1,51 +1,27 @@
 import { utf8ByteLength } from "@msa/chord/output";
-/**
- * Shared truncation utilities for tool outputs.
- *
- * Truncation is based on two independent limits - whichever is hit first wins:
- * - Line limit (default: 2000 lines)
- * - Byte limit (default: 50KB)
- *
- * Never returns partial lines. Tool output streams are bounded by `OutputBuffer` from `@msa/chord/output` instead.
- */
 
 export const DEFAULT_MAX_LINES = 2000;
-// 50KB
 export const DEFAULT_MAX_BYTES = 50 * 1024;
 
 export interface TruncationResult {
-  /** The truncated content */
   content: string;
-  /** Whether truncation occurred */
   truncated: boolean;
-  /** Which limit was hit: "lines", "bytes", or null if not truncated */
   truncatedBy: "lines" | "bytes" | null;
-  /** Total number of lines in the original content */
   totalLines: number;
-  /** Total number of bytes in the original content */
   totalBytes: number;
-  /** Number of complete lines in the truncated output */
   outputLines: number;
-  /** Number of bytes in the truncated output */
   outputBytes: number;
-  /** Whether the last line was partially truncated (only for tail truncation edge case) */
   lastLinePartial: boolean;
-  /** Whether the first line exceeded the byte limit (for head truncation) */
   firstLineExceedsLimit: boolean;
-  /** The max lines limit that was applied */
   maxLines: number;
-  /** The max bytes limit that was applied */
   maxBytes: number;
 }
 
 export interface TruncationOptions {
-  /** Maximum number of lines (default: 2000) */
   maxLines?: number;
-  /** Maximum number of bytes (default: 50KB) */
   maxBytes?: number;
 }
 
-// One implementation, shared with the output buffer.
 export { utf8ByteLength };
 
 function splitLinesForCounting(content: string): string[] {
@@ -55,11 +31,6 @@ function splitLinesForCounting(content: string): string[] {
   return lines;
 }
 
-/**
- * Format bytes as human-readable size.
- * @param {number} bytes - The size in bytes.
- * @returns {string} The formatted size.
- */
 export function formatSize(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes}B`;
@@ -70,16 +41,6 @@ export function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-/**
- * Truncate content from the head (keep first N lines/bytes).
- * Suitable for file reads where you want to see the beginning.
- *
- * Never returns partial lines. If first line exceeds byte limit,
- * returns empty content with firstLineExceedsLimit=true.
- * @param {string} content - The text.
- * @param {TruncationOptions} options - The limits.
- * @returns {TruncationResult} The truncated text.
- */
 export function truncateHead(content: string, options: TruncationOptions = {}): TruncationResult {
   return truncateHeadOf(
     content,
@@ -88,15 +49,6 @@ export function truncateHead(content: string, options: TruncationOptions = {}): 
   );
 }
 
-/**
- * `truncateHead` of a text known by a prefix and its totals (`lines` counted like `truncateHead`, ignoring a trailing
- * newline). The prefix must be the whole text, or longer than `maxBytes + 1` UTF-8 bytes, or hold at least `maxLines`
- * newlines; then the result equals `truncateHead` of the whole text.
- * @param {string} prefix - The text's prefix.
- * @param {{ readonly lines: number; readonly bytes: number }} totals - The whole text's lines and bytes.
- * @param {TruncationOptions} options - The limits.
- * @returns {TruncationResult} The truncated text.
- */
 export function truncateHeadOf(
   prefix: string,
   totals: { readonly lines: number; readonly bytes: number },
@@ -109,7 +61,6 @@ export function truncateHeadOf(
   const lines = splitLinesForCounting(prefix);
   const totalLines = totals.lines;
 
-  // Check if no truncation needed
   if (totalLines <= maxLines && totalBytes <= maxBytes) {
     return {
       content: prefix,
@@ -126,7 +77,6 @@ export function truncateHeadOf(
     };
   }
 
-  // Check if first line alone exceeds byte limit
   const firstLine = lines[0];
   if (firstLine === undefined) {
     throw new Error("truncateHeadOf needs a non-empty prefix when the text exceeds the limits");
@@ -148,14 +98,12 @@ export function truncateHeadOf(
     };
   }
 
-  // Collect complete lines that fit
   const outputLinesArr: string[] = [];
   let outputBytesCount = 0;
   let truncatedBy: "lines" | "bytes" = "lines";
 
   for (const [i, line] of lines.entries()) {
     if (i >= maxLines) break;
-    // +1 for newline
     const lineBytes = utf8ByteLength(line) + (i > 0 ? 1 : 0);
 
     if (outputBytesCount + lineBytes > maxBytes) {
@@ -167,7 +115,6 @@ export function truncateHeadOf(
     outputBytesCount += lineBytes;
   }
 
-  // Without a byte break, only omitted lines prove the line limit was reached; otherwise a trailing newline exceeded bytes.
   if (truncatedBy !== "bytes") truncatedBy = outputLinesArr.length < totalLines ? "lines" : "bytes";
 
   const outputContent = outputLinesArr.join("\n");

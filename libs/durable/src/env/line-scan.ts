@@ -4,19 +4,10 @@ import type { LineScan } from "./index.ts";
 const NEWLINE = 0x0a;
 const encoder = new TextEncoder();
 
-/**
- * UTF-8 byte length of decoded text.
- * @param {string} text - The text.
- * @returns {number} The byte length.
- */
 function decodedBytes(text: string): number {
   return text === "" ? 0 : encoder.encode(text).length;
 }
 
-/**
- * Computes a `LineScan` from a file's bytes fed in order, so an environment can scan any size in bounded memory. Decoded
- * sizes use the same streaming WHATWG decoder as decoding the whole file at once.
- */
 export class LineScanner {
   readonly #startLine: number;
   readonly #endLine: number;
@@ -31,11 +22,9 @@ export class LineScanner {
   #firstLineBytes = 0;
   #selection: InstanceType<typeof TextDecoder> | undefined;
   #firstLine: InstanceType<typeof TextDecoder> | undefined;
-  /** The first bytes, held until it is known whether they are a byte-order mark. */
   #head: number[] | undefined = [];
   #bom = false;
 
-  /** `startLine` and `endLine` must be non-negative integers with `endLine > startLine`; `endLine` absent: to the end. */
   constructor(startLine: number, endLine = Number.POSITIVE_INFINITY) {
     if (!Number.isSafeInteger(startLine) || startLine < 0 || !(endLine > startLine)) {
       throw new RangeError("Invalid line range");
@@ -73,7 +62,6 @@ export class LineScanner {
       index !== -1;
       index = chunk.indexOf(NEWLINE, index + 1)
     ) {
-      // The newline ends line `this.#newlines`. It belongs to the selection between selected lines only.
       this.#feed(chunk, base, from, index);
       const line = this.#newlines;
       const position = base + index;
@@ -111,7 +99,6 @@ export class LineScanner {
       start: this.#start,
       end: this.#end ?? size,
       firstLineEnd: this.#firstLineEnd ?? size,
-      // A selection that reaches past the last line ends with the last line.
       lastLineStart: this.#lastLineStart ?? this.#lineStart,
       selectedBytes: this.#selectedBytes,
       firstLineBytes: this.#firstLineBytes,
@@ -139,15 +126,7 @@ export class LineScanner {
     this.#selection = undefined;
   }
 
-  /**
-   * Feed `chunk[from, to)`, which starts at file offset `base`, to the decoders of the ranges still open.
-   * @param {Uint8Array} chunk - The bytes read.
-   * @param {number} base - The chunk's file offset.
-   * @param {number} from - The first byte to feed.
-   * @param {number} to - The byte after the last.
-   */
   #feed(chunk: Uint8Array, base: number, from: number, to: number): void {
-    // Decoding the whole file drops a leading byte-order mark.
     if (this.#bom && base + from < 3) from = Math.min(to, 3 - base);
     if (to <= from) return;
     const bytes = chunk.subarray(from, to);

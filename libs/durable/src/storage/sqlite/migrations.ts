@@ -5,7 +5,6 @@ export type SqliteMigration = {
   readonly statements: readonly string[];
 };
 
-// next_id is TEXT because node:sqlite rejects INTEGER results outside JavaScript's safe integer range.
 const INITIAL_SCHEMA: readonly string[] = [
   `CREATE TABLE durable_metadata (
 		singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -84,7 +83,6 @@ const INITIAL_SCHEMA: readonly string[] = [
   "CREATE INDEX document_revisions_by_kind ON document_revisions (document_id, kind, seq DESC)",
 ];
 
-/** Immutable, ordered schema history. Append new migrations after the initial schema ships. */
 export const SQLITE_MIGRATIONS: readonly SqliteMigration[] = [
   { version: 1, statements: INITIAL_SCHEMA },
 ];
@@ -93,11 +91,6 @@ export const CURRENT_SQLITE_SCHEMA_VERSION = SQLITE_MIGRATIONS.at(-1)?.version ?
 
 type SchemaRow = { readonly version: number };
 
-/**
- * Apply all pending schema migrations atomically.
- * @param {SqliteDatabase} database - The database.
- * @param {readonly SqliteMigration[]} migrations - Every migration, in order.
- */
 export async function applySqliteMigrations(
   database: SqliteDatabase,
   migrations: readonly SqliteMigration[] = SQLITE_MIGRATIONS,

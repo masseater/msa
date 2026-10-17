@@ -17,21 +17,11 @@ const SCAN_PAGE_SIZE = 256;
 
 type ForkPolicy = "asOf" | "current";
 
-/** One definition-free document copy to create with a forked conversation. */
 export type ForkDocumentCopy = {
   readonly record: DocumentCreate;
   readonly source: DocumentCopySource;
 };
 
-/**
- * Select every persisted conversation document copied by one fork.
- * @param {Storage} storage - The storage backend.
- * @param {ConversationId} parentConversationId - The forked conversation.
- * @param {EntryId} at - The fork point.
- * @param {ConversationId} childConversationId - The fork.
- * @param {Context} context - The caller's context.
- * @returns {Promise<readonly ForkDocumentCopy[]>} The copies.
- */
 export async function prepareForkDocumentCopies(
   storage: Storage,
   parentConversationId: ConversationId,

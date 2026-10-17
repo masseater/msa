@@ -4,11 +4,8 @@ import { copyJson, type Draft, type JsonRepresentation } from "@msa/chord";
 import { defineDoc } from "../documents.ts";
 import type { ConversationId, Tx } from "../types.ts";
 
-/** Ledger of one conversation's own spend: its entries, and compaction summarization attempts, which have none. */
 export type UsageState = {
-  /** Assistant entries and summarization attempts, keyed `provider/modelId`. */
   models: Record<string, JsonRepresentation<Usage>>;
-  /** Tool results, keyed by tool name; their usage has no model identity. */
   tools: Record<string, JsonRepresentation<Usage>>;
 };
 
@@ -22,14 +19,6 @@ export const UsageDoc = defineDoc<UsageState>({
   checkpointWhen: () => true,
 });
 
-/**
- * Add `usage` to one bucket of the conversation's `msa.usage`, in the commit that records the response.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- * @param {keyof UsageState} bucket - The bucket.
- * @param {string} key - The model or tool.
- * @param {Usage} usage - The usage.
- */
 export async function recordUsage(
   tx: Tx,
   conversationId: ConversationId,
@@ -38,19 +27,12 @@ export async function recordUsage(
   usage: Usage,
 ): Promise<void> {
   const totals = (await tx.doc(UsageDoc, conversationId))[bucket];
-  // Own keys only: a tool may be called `toString`.
   const total = Object.hasOwn(totals, key) ? totals[key] : undefined;
-  // Providers may leave optional counters `undefined`; drafts take strict JSON.
   if (total === undefined)
     totals[key] = copyJson(usage, { omitUndefinedProperties: true }) as JsonRepresentation<Usage>;
   else addUsage(total, usage);
 }
 
-/**
- * Add every counter of `usage` to `total`; optional counters are added once either side reports them.
- * @param {Draft<Usage> | Usage} total - The total.
- * @param {Usage} usage - The usage to add.
- */
 export function addUsage(total: Draft<Usage> | Usage, usage: Usage): void {
   total.input += usage.input;
   total.output += usage.output;
@@ -67,16 +49,10 @@ export function addUsage(total: Draft<Usage> | Usage, usage: Usage): void {
   total.cost.total += usage.cost.total;
 }
 
-/**
- * Add every bucket of `state` into `sum`.
- * @param {UsageState} sum - The sum.
- * @param {Readonly<UsageState>} state - The state to add.
- */
 export function addUsageState(sum: UsageState, state: Readonly<UsageState>): void {
   for (const bucket of ["models", "tools"] as const) {
     for (const [key, usage] of Object.entries(state[bucket])) {
       const total = Object.hasOwn(sum[bucket], key) ? sum[bucket][key] : undefined;
-      // Define rather than assign: assigning a tool named `__proto__` would set the prototype.
       if (total === undefined)
         Object.defineProperty(sum[bucket], key, {
           value: structuredClone(usage),

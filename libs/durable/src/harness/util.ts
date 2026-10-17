@@ -3,7 +3,6 @@ import type { Context } from "@msa/chord";
 import { SessionFailed } from "../errors.ts";
 import type { Cursor, Page } from "../types.ts";
 
-/** Pending waits by key. Each settles once: through `resolve`, `rejectAll`, or cancellation of its context. */
 export class Waiters<K, T> {
   readonly #sets = new Map<K, Set<PromiseWithResolvers<T>>>();
 
@@ -43,11 +42,6 @@ export class Waiters<K, T> {
   }
 }
 
-/**
- * Every item of a paginated scan, in page order.
- * @param {(cursor: Cursor | undefined) => Promise<Page<T, Cursor>>} scan - Reads one page.
- * @returns {Promise<T[]>} The items.
- */
 export function scanAll<T>(
   scan: (cursor: Cursor | undefined) => Promise<Page<T, Cursor>>,
 ): Promise<T[]> {
@@ -60,11 +54,6 @@ export function scanAll<T>(
   return scanFrom(undefined);
 }
 
-/**
- * What a closed Harness rejects with: `SessionFailed` with the cause when it closed because the Session failed.
- * @param {{ readonly failure: { readonly error: unknown } | undefined; }} session - The Session.
- * @returns {Error} The error.
- */
 export function closedError(session: {
   readonly failure: { readonly error: unknown } | undefined;
 }): Error {

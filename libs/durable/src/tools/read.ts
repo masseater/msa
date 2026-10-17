@@ -48,31 +48,15 @@ const readSchema = Type.Object({
 export type ReadToolInput = Static<typeof readSchema>;
 
 export type ReadToolDetails = {
-  /** How the shown text was cut; the text itself is the result content. */
   truncation?: Omit<TruncationResult, "content">;
 };
 
 const READ_CHUNK = 64 * 1024;
 
-/**
- * `Array.prototype.slice`'s conversion of an index: NaN is 0, other values truncate toward zero.
- * @param {number} value - The index.
- * @returns {number} The converted index.
- */
 function sliceIndex(value: number): number {
   return Number.isNaN(value) ? 0 : Math.trunc(value);
 }
 
-/**
- * The decoded start of bytes `[start, end)` of the file, decoded as part of the whole file: all of it, or enough for
- * `truncateHeadOf` (more than `DEFAULT_MAX_BYTES + 1` bytes, or `DEFAULT_MAX_LINES` newlines).
- * @param {BinaryReader} reader - The open file.
- * @param {number} start - The first byte.
- * @param {number} end - The byte after the last.
- * @param {boolean} skipBom - Whether to drop a leading BOM.
- * @param {Context} context - The caller's context.
- * @returns {Promise<string>} The decoded text.
- */
 function readHead(
   reader: BinaryReader,
   start: number,
@@ -100,16 +84,9 @@ function readHead(
 }
 
 export type ReadToolOptions = {
-  /** Resizes and converts images; without one, images within `DEFAULT_IMAGE_LIMITS.maxBytes` pass through as they are. */
   readonly images?: ImageProcessor;
 };
 
-/**
- * Reads text files and images. Remarks about truncation, continuation, and image processing are diagnostics; the content
- * is only file text, or one image, which programs get as its `ImageContent`.
- * @param {ReadToolOptions} options - The tool's options.
- * @returns {ToolRegistration<typeof readSchema, ReadToolDetails>} The tool.
- */
 export function createReadTool(
   options: ReadToolOptions = {},
 ): ToolRegistration<typeof readSchema, ReadToolDetails> {
@@ -124,8 +101,6 @@ export function createReadTool(
       const absolutePath = await resolveReadToolPath(env, path, context);
       const reader = getOrThrow(await env.openBinaryReader(absolutePath, undefined, context));
       try {
-        // A concurrent writer can change the file between the scan and the reads. Appending (a growing log) leaves
-        // the scanned text as it was; an image must be whole. Otherwise the file is read again once.
         const attemptRead = async (
           attempt: number,
         ): Promise<ToolExecutionResult<ReadToolDetails>> => {
@@ -161,21 +136,6 @@ export function createReadTool(
   });
 }
 
-/**
- * One image block, prepared by `processor` or, without one, as it is when its format is inline and it fits the limits
- * (its size is checked before reading it, its dimensions from its header); otherwise an error result saying why. What happened to the image is an `info` diagnostic, so programs get the
- * bare `ImageContent`. A model without image input sees msa-ai's placeholder instead; a diagnostic says so.
- * @param {BinaryReader} reader - The open file.
- * @param {FileInfo} info - The file's info.
- * @param {string} path - The path the model gave.
- * @param {string} mimeType - The image's MIME type.
- * @param {ImageProcessor | undefined} processor - Prepares the image, if configured.
- * @param {ImageModel} model - What the model takes.
- * @param {boolean} model.vision - Whether it takes images.
- * @param {ImageLimits} model.limits - The image limits.
- * @param {Context} context - The caller's context.
- * @returns {Promise<ToolExecutionResult<ReadToolDetails>>} The tool's result.
- */
 async function readImage(
   reader: BinaryReader,
   info: FileInfo,
@@ -275,16 +235,8 @@ async function inlineImage(
   return { image: { data: toBase64(bytes), mimeType }, notes: [] };
 }
 
-/** What the conversation's model takes: whether images, and within which limits. */
 type ImageModel = { readonly vision: boolean; readonly limits: ImageLimits };
 
-/**
- * The conversation model's image input: `DEFAULT_IMAGE_LIMITS` overridden by its `inputLimits.images.resize`. Without
- * a resolvable model, it counts as one that takes images within the defaults.
- * @param {ToolExecutionApi} api - The tool call's API.
- * @param {Context} context - The caller's context.
- * @returns {Promise<ImageModel>} What the model takes.
- */
 async function imageModel(api: ToolExecutionApi, context: Context): Promise<ImageModel> {
   const ref = (await api.agent(context)).model;
   const model = ref === undefined ? undefined : api.models.getModel(ref.provider, ref.modelId);
@@ -307,16 +259,6 @@ function imageError(message: string): ToolExecutionResult<ReadToolDetails> {
   };
 }
 
-/**
- * The read result for the opened file. It equals decoding the whole file with `TextDecoder`, splitting it on `\n`,
- * and bounding the selected lines with `truncateHead`, while reading only one scan's worth of the file plus the head.
- * @param {BinaryReader} reader - The open file.
- * @param {string} path - The path the model gave.
- * @param {number | undefined} offset - The first line, 1-based.
- * @param {number | undefined} limit - How many lines.
- * @param {Context} context - The caller's context.
- * @returns {Promise<ToolExecutionResult<ReadToolDetails>>} The tool's result.
- */
 async function readText(
   reader: BinaryReader,
   path: string,
@@ -326,11 +268,7 @@ async function readText(
 ) {
   const startLine = offset ? Math.max(0, offset - 1) : 0;
   const startLineDisplay = startLine + 1;
-  // Lines are selected like `allLines.slice(startLine, endLine)`, which truncates fractional indices.
   const sliceStart = sliceIndex(startLine);
-  // One pass finds the line count and the selection; a selection past the last line ends with it, as `slice` does,
-  // and an empty one (a zero or negative limit) is scanned as one line and then ignored.
-  // A start beyond any file is scanned from 0 only to count lines; the offset check below then fails as before.
   const scanStart = Number.isSafeInteger(sliceStart) ? sliceStart : 0;
   const requestedEnd =
     limit === undefined ? undefined : Math.max(scanStart + 1, sliceIndex(startLine + limit));
@@ -354,14 +292,12 @@ async function readText(
   if (limit !== undefined) {
     const endLine = Math.min(startLine + limit, totalFileLines);
     userLimitedLines = endLine - startLine;
-    // `slice` counts a negative end from the end of the lines, which only the line count tells; scan again for it.
     const relativeEnd = sliceIndex(endLine);
     const sliceEnd = relativeEnd < 0 ? Math.max(totalFileLines + relativeEnd, 0) : relativeEnd;
     selectedLineCount = Math.max(0, sliceEnd - sliceStart);
     if (selectedLineCount > 0 && relativeEnd < 0) scan = await scanOf(sliceEnd);
   }
   const empty = selectedLineCount === 0;
-  // Counted like `truncateHead`: a trailing newline adds no line, and empty text has none.
   const endsWithNewline =
     !empty && scan.lastLineStart === scan.end && scan.lastLineStart > scan.start;
   const totals = {
@@ -378,8 +314,6 @@ async function readText(
   let outputText = headText;
   let details: ReadToolDetails | undefined;
   if (truncation.firstLineExceedsLimit) {
-    // Show the start of the line, cut at the byte limit on a character boundary. Like `allLines[startLine]`, a
-    // fractional start line names no line.
     const integral = Number.isInteger(startLine);
     const lineBytes = new TextEncoder().encode(integral ? (head.split("\n")[0] ?? "") : "");
     const lineSize = integral ? scan.firstLineBytes : 0;

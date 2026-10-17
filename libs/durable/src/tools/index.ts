@@ -29,12 +29,6 @@ export {
 } from "./read.ts";
 export { createWriteTool, type WriteToolInput } from "./write.ts";
 
-/**
- * The `coding-tools` extension: `read`, `write`, `edit`, and `bash`; nothing installs it automatically.
- * `createPowerShellTool()` adds `powershell`. `images` prepares the images `read` returns (see `ReadToolOptions`).
- * @param {ReadToolOptions} options - The tool's options.
- * @returns {Extension} The extension.
- */
 export function createCodingTools(options: ReadToolOptions = {}) {
   return defineExtension({
     name: "coding-tools",
@@ -42,5 +36,4 @@ export function createCodingTools(options: ReadToolOptions = {}) {
   });
 }
 
-/** `createCodingTools()` without an image processor. */
 export const CodingTools = createCodingTools();

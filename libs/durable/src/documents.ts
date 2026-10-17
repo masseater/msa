@@ -39,19 +39,15 @@ type FamilyInput<T extends JsonObject, I extends JsonValue> = Omit<
   initial(seed: I): T;
 };
 
-/** Define a Session-scoped singleton document. */
 export function defineDoc<T extends JsonObject>(
   definition: CommonDocDefinition<T> & { readonly scope: "session" },
 ): SessionDocToken<T>;
-/** Define a latest-only conversation singleton document. */
 export function defineDoc<T extends JsonObject>(
   definition: CommonDocDefinition<T> & LatestConversationSemantics,
 ): ConversationDocToken<T>;
-/** Define a rewindable conversation singleton document. */
 export function defineDoc<T extends JsonObject>(
   definition: CommonDocDefinition<T> & RewindableConversationSemantics,
 ): RewindableConversationDocToken<T>;
-/** Define a task-scoped singleton document. */
 export function defineDoc<T extends JsonObject>(
   definition: CommonDocDefinition<T> & { readonly scope: "task" },
 ): TaskDocToken<T>;
@@ -62,19 +58,15 @@ export function defineDoc<T extends JsonObject>(
   return { definition };
 }
 
-/** Define a Session-scoped document family. */
 export function defineDocFamily<T extends JsonObject, I extends JsonValue>(
   definition: FamilyInput<T, I> & { readonly scope: "session" },
 ): SessionDocFamilyToken<T, I>;
-/** Define a latest-only conversation document family. */
 export function defineDocFamily<T extends JsonObject, I extends JsonValue>(
   definition: FamilyInput<T, I> & LatestConversationSemantics,
 ): ConversationDocFamilyToken<T, I>;
-/** Define a rewindable conversation document family. */
 export function defineDocFamily<T extends JsonObject, I extends JsonValue>(
   definition: FamilyInput<T, I> & RewindableConversationSemantics,
 ): RewindableConversationDocFamilyToken<T, I>;
-/** Define a task-scoped document family. */
 export function defineDocFamily<T extends JsonObject, I extends JsonValue>(
   definition: FamilyInput<T, I> & { readonly scope: "task" },
 ): TaskDocFamilyToken<T, I>;
@@ -85,7 +77,6 @@ export function defineDocFamily<T extends JsonObject, I extends JsonValue>(
   return { definition };
 }
 
-/** Erased definition shape used by the Session after overload resolution. */
 export type AnyDocDefinition = DocumentSemantics & {
   readonly kind: string;
   readonly version: number;
@@ -95,7 +86,6 @@ export type AnyDocDefinition = DocumentSemantics & {
   checkpointWhen?(value: Readonly<JsonObject>, ops: readonly Op[], info: CheckpointInfo): boolean;
 };
 
-/** Erased singleton or family token. */
 export type AnyDocToken = { readonly definition: AnyDocDefinition };
 
 function validateDefinition(definition: AnyDocDefinition): void {
@@ -104,19 +94,12 @@ function validateDefinition(definition: AnyDocDefinition): void {
   }
 }
 
-/** Logical address plus its string identity for maps. */
 export type ResolvedAddress = {
   readonly address: DocumentAddress;
   readonly id: string;
   readonly nextArgument: number;
 };
 
-/**
- * Resolve an overloaded argument list and return the index after the owner and family key.
- * @param {AnyDocDefinition} definition - The document definition.
- * @param {readonly unknown[]} args - The arguments.
- * @returns {ResolvedAddress} The address and the next index.
- */
 export function resolveAddress(
   definition: AnyDocDefinition,
   args: readonly unknown[],
@@ -150,11 +133,6 @@ function ownerId<I extends Id<string>>(value: unknown, definition: AnyDocDefinit
   return idFromNumber<I>(value);
 }
 
-/**
- * Stable string identity of one logical address.
- * @param {DocumentAddress} address - The address.
- * @returns {string} The identity.
- */
 export function addressId(address: DocumentAddress): string {
   const owner =
     address.scope.kind === "session"
@@ -165,13 +143,6 @@ export function addressId(address: DocumentAddress): string {
   return JSON.stringify([address.kind, address.scope.kind, owner, address.key ?? null]);
 }
 
-/**
- * Build the storage create record for a new incarnation at an address.
- * @param {AnyDocDefinition} definition - The document definition.
- * @param {DocumentAddress} address - The address.
- * @param {DocumentId} id - The incarnation's ID.
- * @returns {DocumentCreate} The create record.
- */
 export function documentCreate(
   definition: AnyDocDefinition,
   address: DocumentAddress,
@@ -195,11 +166,6 @@ export function documentCreate(
   }
 }
 
-/**
- * Reject typed access whose token disagrees with the persisted scope, history, or fork semantics.
- * @param {AnyDocDefinition} definition - The document definition.
- * @param {DocumentCreate | DocumentRecord} record - The persisted record.
- */
 export function checkRecordScope(
   definition: AnyDocDefinition,
   record: DocumentCreate | DocumentRecord,
@@ -215,12 +181,6 @@ export function checkRecordScope(
   }
 }
 
-/**
- * Reject typed access to a stored version the supplied definition cannot use.
- * @param {AnyDocDefinition} definition - The document definition.
- * @param {DocumentCreate | DocumentRecord} record - The persisted record.
- * @param {number} version - The stored version.
- */
 export function checkRecordVersion(
   definition: AnyDocDefinition,
   record: DocumentCreate | DocumentRecord,
@@ -238,12 +198,6 @@ export function checkRecordVersion(
   }
 }
 
-/**
- * Validate and materialize a detached stored value for typed access.
- * @param {AnyDocDefinition} definition - The document definition.
- * @param {StoredDocument} stored - The stored document.
- * @returns {JsonObject} The value.
- */
 export function materializeDocument(
   definition: AnyDocDefinition,
   stored: StoredDocument,
@@ -251,14 +205,6 @@ export function materializeDocument(
   return materializeDocumentValue(definition, stored.record, stored.version, stored.value);
 }
 
-/**
- * Validate and materialize one detached value before its first persisted incarnation.
- * @param {AnyDocDefinition} definition - The document definition.
- * @param {DocumentCreate | DocumentRecord} record - The record.
- * @param {number} version - The value's version.
- * @param {JsonObject} value - The value.
- * @returns {JsonObject} The materialized value.
- */
 export function materializeDocumentValue(
   definition: AnyDocDefinition,
   record: DocumentCreate | DocumentRecord,

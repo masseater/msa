@@ -223,12 +223,6 @@ const page = <T extends { readonly id: Id<string> }>(
   return { items: clone(items), next: nextCursor(items.at(-1)!.id, order) };
 };
 
-/**
- * Indexes of sorted `ids` in scan order, after the cursor's ID when there is one.
- * @param {readonly Id<string>[]} ids - The sorted IDs.
- * @param {ScanStart} start - The scan's order and position.
- * @yields {number} Indexes of `ids` in scan order.
- */
 function* scanIndexes(ids: readonly Id<string>[], start: ScanStart): Generator<number> {
   if (start.order === "ascending") {
     const first = start.after === undefined ? 0 : upperBound(ids, start.after);
@@ -239,20 +233,12 @@ function* scanIndexes(ids: readonly Id<string>[], start: ScanStart): Generator<n
   }
 }
 
-/** A fully validated, detached state mutation whose application performs no fallible preparation. */
 export interface PreparedMemoryCommit {
   readonly seq: Seq;
-  /** Deeply frozen detached writes for persistence. */
   readonly writes: readonly StorageWrite[];
   apply(): Seq;
 }
 
-/**
- * Detached in-memory reference implementation of `Storage`.
- *
- * Reads and retained writes are cloned intentionally to match the ownership boundary
- * of serialization-backed stores. This is backend conformance, not validation.
- */
 export class MemoryStorage implements Storage {
   private readonly state: State = {
     recordTypes: new Map(),
@@ -283,12 +269,6 @@ export class MemoryStorage implements Storage {
     return promiseTry(() => this.prepareCommit(writes).apply());
   }
 
-  /**
-   * Validate and detach one commit without changing observable state.
-   * @param {readonly StorageWrite[]} writes - The batch.
-   * @param {Seq} seq - Its sequence number.
-   * @returns {PreparedMemoryCommit} The commit.
-   */
   prepareCommit(
     writes: readonly StorageWrite[],
     seq: Seq = seqFromNumber(this.nextSeq),
@@ -574,7 +554,6 @@ export class MemoryStorage implements Storage {
     return promiseTry(() => {
       this.assertOpen();
       const { order, after } = scanStart(query.order, cursor, "descending");
-      // The cursor narrows the bound on the side the scan moves away from.
       let minEntryId: number | undefined = query.minEntryId;
       let maxEntryId: number | undefined = query.maxEntryId;
       if (after !== undefined && order === "descending")
@@ -794,13 +773,6 @@ export class MemoryStorage implements Storage {
     }
   }
 
-  /**
-   * Visible entries oldest first: the fork chain's segments from the root conversation forward.
-   * @param {ConversationId} conversationId - The conversation.
-   * @param {number} minEntryId - The lowest entry ID.
-   * @param {number} maxEntryId - The highest entry ID.
-   * @yields {EntryRecord} Visible entries of the fork chain's segments, oldest first.
-   */
   private *visibleEntriesAscending(
     conversationId: ConversationId,
     minEntryId: number = Number.NEGATIVE_INFINITY,

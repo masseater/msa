@@ -102,11 +102,6 @@ function createCase(
   return { name, run: () => options.withStorage(test) };
 }
 
-/**
- * Creates runner-independent cases. `withStorage` must call and await its callback exactly once per case.
- * @param {StorageConformanceOptions} options - The storage under test.
- * @returns {readonly StorageConformanceCase[]} The cases.
- */
 export function createStorageConformance(
   options: StorageConformanceOptions,
 ): readonly StorageConformanceCase[] {
@@ -528,7 +523,6 @@ export function createStorageConformance(
         expect(third.items.map(({ id }) => id)).toEqual([rootFirst]);
         expect(third.next).toBeUndefined();
 
-        // Oldest first: the root's segment, then each fork's, each capped at the next fork point.
         const ascending = { conversationId: grandchildId, order: "ascending" } as const;
         const firstUp = await storage.scanEntries(ascending, 2, undefined, context);
         expect(firstUp.items.map(({ id }) => id)).toEqual([rootFirst, rootForkPoint]);
@@ -716,7 +710,6 @@ export function createStorageConformance(
           const collect = async (page: Page<Identified, Cursor>): Promise<void> => {
             found.push(...page.items.map(({ id }) => id));
             if (page.next === undefined) return;
-            // A cursor carries its order; the query may omit it.
             await collect(await scan(undefined, JSON.parse(JSON.stringify(page.next)) as Cursor));
           };
           await collect(await scan(order, undefined));
@@ -926,7 +919,6 @@ export function createStorageConformance(
         };
         expect(await ids({})).toEqual([firstId, secondId, otherConversationId]);
         expect(await ids({ conversationId: rootId })).toEqual([firstId, secondId]);
-        // A status change moves the record between status scans.
         expect(await ids({ status: "queued" })).toEqual([firstId, otherConversationId]);
         expect(await ids({ status: "placed" })).toEqual([secondId]);
         expect(await ids({ conversationId: secondConversationId, status: "queued" })).toEqual([
@@ -1420,7 +1412,6 @@ export function createStorageConformance(
         } catch (error) {
           conflictError = error;
         }
-        // Rejected without effect: the copy and the retirement in the same batch are both absent.
         expect(conflictError instanceof Error).toBe(true);
         expect(await storage.document(conflictId, "current", context)).toBeUndefined();
         expect((await storage.document(currentCopyId, "current", context))?.value).toEqual({

@@ -49,13 +49,6 @@ async function readAll(
   }
 }
 
-/**
- * A listing as `<kind letter> <path>` lines (`f`, `d`, `l`), with its truncation.
- * @param {ExecutionEnv} env - The execution environment.
- * @param {string} path - The directory to list.
- * @param {ListFilesOptions} options - The listing options.
- * @returns {Promise<{ entries: string[]; truncated: boolean }>} The listing's lines and truncation.
- */
 async function listed(
   env: ExecutionEnv,
   path: string,
@@ -70,12 +63,6 @@ async function listed(
   };
 }
 
-/**
- * Whether a change reports `path`: an overflow, or a reported path at or above it.
- * @param {WatchChange} change - The reported change.
- * @param {string} path - The path.
- * @returns {boolean} Whether `change` reports `path`.
- */
 function covers(change: WatchChange, path: string): boolean {
   if ("overflow" in change) return true;
   if (!("paths" in change)) return false;
@@ -85,18 +72,11 @@ function covers(change: WatchChange, path: string): boolean {
   );
 }
 
-/**
- * Watch `targets` while `run` changes files, with a helper that waits for a change reporting a path.
- * @param {ExecutionEnv} env - The execution environment.
- * @param {readonly WatchTarget[]} targets - What to watch.
- * @param {(helpers: WatchHelpers) => Promise<void>} run - Changes files and waits for their reports.
- */
 async function watching(
   env: ExecutionEnv,
   targets: readonly WatchTarget[],
   run: (helpers: {
     readonly changes: WatchChange[];
-    /** Wait up to three seconds for a change, after the call, that reports `path`. */
     expectChange(path: string, change: () => Promise<void>): Promise<void>;
     absolute(path: string): Promise<string>;
   }) => Promise<void>,
@@ -133,12 +113,6 @@ async function watching(
   }
 }
 
-/**
- * Creates runner-independent cases for an `ExecutionEnv`. `withEnv` must call and await its callback exactly once per
- * case with an environment whose `cwd` is a fresh, empty, writable directory.
- * @param {EnvConformanceOptions} options - The environment under test and its capabilities.
- * @returns {readonly EnvConformanceCase[]} The cases.
- */
 export function createEnvConformance(
   options: EnvConformanceOptions,
 ): readonly EnvConformanceCase[] {
@@ -150,7 +124,6 @@ export function createEnvConformance(
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
     run: () => options.withEnv(test),
   });
-  // Watch cases wait up to three seconds per step, longer than test runners allow by default.
   const watchCase = (name: string, test: EnvTest): EnvConformanceCase =>
     createCase(name, test, 30_000);
   const execCollect = async (
@@ -193,7 +166,6 @@ export function createEnvConformance(
     }),
 
     createCase("binary reader scans lines like decoding the whole file", async (env) => {
-      // A byte-order mark, an invalid sequence before a newline, an empty line, a later U+FEFF, and no final newline.
       const bytes = Uint8Array.from([
         0xef, 0xbb, 0xbf, 0x61, 0x0a, 0xe2, 0x82, 0x0a, 0x0a, 0xef, 0xbb, 0xbf, 0x62, 0x0a, 0xc3,
         0xa9,
@@ -338,7 +310,6 @@ export function createEnvConformance(
           await expectChange("AGENTS.md", async () => {
             getOrThrow(await env.writeFile("AGENTS.md", "two!", context));
           });
-          // Editors replace a file by renaming a new one over it.
           await expectChange("AGENTS.md", async () => {
             getOrThrow(await env.writeFile("AGENTS.md.tmp", "three", context));
             getOrThrow(await env.renameFile("AGENTS.md.tmp", "AGENTS.md", context));
@@ -364,7 +335,6 @@ export function createEnvConformance(
     watchCase("watch follows directories created together with their contents", async (env) => {
       getOrThrow(await env.createDir("skills", undefined, context));
       await watching(env, [{ path: "skills", recursive: true }], async ({ expectChange }) => {
-        // Written before any watcher on the new directories can exist.
         await expectChange("skills/a/b/SKILL.md", async () => {
           getOrThrow(await env.writeFile("skills/a/b/SKILL.md", "one", context));
         });
@@ -621,7 +591,6 @@ export function createEnvConformance(
           ]);
           getOrThrow(await env.writeFile(".gitignore", "out/\n*.log\n", context));
           getOrThrow(await env.writeFile("sub/.gitignore", "!keep.txt\n", context));
-          // Not a work tree yet: `.gitignore` files have no effect.
           assert.ok((await listed(env, ".")).entries.includes("f out/x.js"));
           getOrThrow(await env.writeFile(".git/HEAD", "ref: refs/heads/main\n", context));
           getOrThrow(await env.writeFile(".git/info/exclude", "keep.txt\n", context));
@@ -631,7 +600,6 @@ export function createEnvConformance(
             "f sub/.gitignore",
             "f sub/keep.txt",
           ]);
-          // A directory inside the work tree applies its parents' rules.
           assert.deepEqual((await listed(env, "sub")).entries, ["f .gitignore", "f keep.txt"]);
           const all = (await listed(env, ".", { gitignore: false })).entries;
           assert.ok(
@@ -653,7 +621,6 @@ export function createEnvConformance(
           entries: ["f a", "f b", "f c"],
           truncated: false,
         });
-        // Each entry counts its path plus two bytes.
         assert.deepEqual(await listed(env, ".", { maxBytes: 6 }), {
           entries: ["f a", "f b"],
           truncated: true,
@@ -707,7 +674,6 @@ export function createEnvConformance(
           "l dir/loop",
           "l link",
         ]);
-        // The listed directory itself may be a link.
         assert.deepEqual((await listed(env, "link")).entries, ["f inner.txt", "l loop"]);
       }),
     );
@@ -740,7 +706,6 @@ export function createEnvConformance(
             "invalid",
           );
 
-          // Only the final component is refused; earlier symlinked directories still resolve.
           const inner = getOrThrow(
             await env.openBinaryReader("dirlink/inner.txt", { noFollow: true }, context),
           );

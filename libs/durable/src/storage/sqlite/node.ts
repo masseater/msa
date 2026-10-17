@@ -7,11 +7,8 @@ import { promiseTry } from "../../promise-try.ts";
 import type { SqliteDatabase, SqliteExecutor, SqliteValue } from "./database.ts";
 import { SqliteStorage } from "./storage.ts";
 
-/** Node SQLite connection settings for a durable storage file. */
 export type NodeSqliteStorageOptions = {
-  /** SQLite WAL auto-checkpoint threshold. SQLite and this adapter default to 1,000 pages; 0 disables it. */
   readonly walAutoCheckpointPages?: number;
-  /** Time SQLite waits for a competing file lock. SQLite defaults to 0; this adapter defaults to 5,000 ms. */
   readonly busyTimeoutMs?: number;
 };
 
@@ -22,10 +19,6 @@ type TransactionScope = { active: boolean };
 
 const ignore = (): void => {};
 
-/**
- * Runs operations in call order. An operation starts immediately when nothing is running or waiting;
- * otherwise it waits for everything before it. An asynchronous operation holds the queue until it settles.
- */
 class SerialOperationQueue {
   private tail: Promise<void> = Promise.resolve();
   private pending = 0;
@@ -42,7 +35,6 @@ class SerialOperationQueue {
   runAsync<T>(operation: () => Promise<T>): Promise<T> {
     if (this.pending > 0) return this.enqueue(operation);
     this.pending++;
-    // Publish the barrier before the operation starts, so calls it makes synchronously wait behind it.
     const { promise: barrier, resolve: releaseBarrier } = Promise.withResolvers<void>();
     this.tail = barrier;
     let started: Promise<T>;
@@ -71,10 +63,6 @@ class SerialOperationQueue {
   }
 }
 
-/**
- * Executes SQL on one connection. Prepared statements are cached per connection by SQL text, so the
- * database and its transaction handles share them across transactions.
- */
 abstract class NodeSqliteExecutor implements SqliteExecutor {
   protected readonly database: DatabaseSync;
   protected readonly statements: Map<string, StatementSync>;
@@ -136,7 +124,6 @@ class NodeSqliteTransaction extends NodeSqliteExecutor {
   }
 }
 
-/** `SqliteDatabase` adapter backed by Node's built-in `node:sqlite`. */
 export class NodeSqliteDatabase extends NodeSqliteExecutor implements SqliteDatabase {
   private readonly access = new SerialOperationQueue();
   private closed = false;
@@ -190,12 +177,6 @@ export class NodeSqliteDatabase extends NodeSqliteExecutor implements SqliteData
   }
 }
 
-/**
- * Open and configure a Node-backed SQLite database facade.
- * @param {string} path - The database file.
- * @param {NodeSqliteStorageOptions} options - The storage options.
- * @returns {Promise<NodeSqliteDatabase>} The database.
- */
 export async function openNodeSqliteDatabase(
   path: string,
   options: NodeSqliteStorageOptions = {},
@@ -213,19 +194,11 @@ export async function openNodeSqliteDatabase(
   } catch (error) {
     try {
       await adapter.close();
-    } catch {
-      // Preserve the configuration failure.
-    }
+    } catch {}
     throw error;
   }
 }
 
-/**
- * Open or create file-backed durable storage using Node's built-in SQLite.
- * @param {string} path - The database file.
- * @param {NodeSqliteStorageOptions} options - The storage options.
- * @returns {Promise<SqliteStorage>} The storage.
- */
 export async function openNodeSqliteStorage(
   path: string,
   options: NodeSqliteStorageOptions = {},

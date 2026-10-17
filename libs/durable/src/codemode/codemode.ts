@@ -1,40 +1,4 @@
 import type { TextContent } from "@msa/ai";
-/**
- * Durable code mode: a tool that runs model-written JavaScript in a QuickJS sandbox, whose script survives a restart.
- *
- * Problem: a script is in-memory VM state. A restart while
- *
- *     const results = await Promise.all(paths.map((path) => tools.read({ path })));
- *
- * waits for the last of 200 reads would lose the script and every read it made.
- *
- * Solution: deterministic replay (`CodemodeSandboxBase.start()` in msa-codemode). The VM only runs when the host hands
- * it a result; given the same start data, clock, seed, and results in the same order, it makes the same calls with
- * the same arguments. The tool is replay-safe: after a restart, `execute()` runs again, starts the script again from
- * the stored start data, and hands it the results it got before, in the order it got them, from a journal written
- * before each delivery. Nested tool calls reattach to their tasks by key (`c<VM call id>`), so they never run twice
- * unless their own replay policy reruns them; their results come from `NestedCallDoc`. Then the script continues live.
- *
- * Documents, scoped to the code mode call's task and gone when it settles:
- * - `msa.codemode.run`: the start data, written once before the VM starts, and the outcome, written once when the call
- *   decides it (with the store writes, in one transaction), so a rerun after that returns it without a VM.
- * - `msa.codemode.journal`: one entry per delivered result, in delivery order: the VM call ID, the clock value, the
- *   calls the VM had issued after processing it (once acknowledged), and a global's outcome, which nothing else stores.
- *
- * Each result's acknowledged call count is recorded with the next journal commit, or at once when the VM has processed
- * everything delivered: a script waiting on a long call is where a restart usually finds it. A sequential script
- * therefore costs one journal commit and one count commit per result, on top of its nested calls' own; that is the
- * price of checking the most common crash point.
- *
- * A call is launched only once the count of calls issued in the drain that made it is committed. So every key an earlier
- * attempt admitted is at most its last recorded count; a replay checks every recorded count, so when it releases its
- * calls it has made every call an earlier attempt could have admitted, and later calls are new.
- *
- * A rerun refuses to replay (no new nested calls; nested calls admitted earlier may still resume on their own and are
- * aborted by the call's cleanup) when this module's version or the VM's fingerprint changed, when the deadline passed,
- * or when the script diverges: it makes another call, or calls in another order, than the journal says. Each ends the
- * call with an error result.
- */
 import { type Context, copyJson, type JsonValue } from "@msa/chord";
 import {
   type CodemodeHostCall,
@@ -80,20 +44,10 @@ import {
 } from "./models.ts";
 import { DEFAULT_MAX_OUTPUT_TOKENS, formatResult, type OutputFile } from "./output.ts";
 
-/**
- * Version of everything in this module that turns stored results into what a script sees: result mapping, globals,
- * start data. Bump it when that changes, so a call started before an upgrade is not replayed by different code.
- */
 export const CODEMODE_MODULE_VERSION = 2;
 
 export const CODEMODE_TOOL_NAME = "codemode";
 
-/** One tool as the script sees it: `tools.<jsName>`. */
-/**
- * `structured`: the tool declares `structuredOutputSchema`, so an error result with a value resolves with it.
- * `hidden`: an internal tool of this extension (`msa.codemode.*`), which scripts reach only through a global such as
- * `models.classify()`; never in `tools`, `ALL_TOOLS`, or tool search.
- */
 type DeclaredTool = {
   name: string;
   jsName: string;
@@ -102,29 +56,22 @@ type DeclaredTool = {
   hidden?: true;
 };
 
-/** What a call starts with; a rerun starts the VM from exactly this. */
 type Start = {
   version: number;
   startedAt: number;
   seed: number;
-  /** The VM's fingerprint, recorded by the first run before any call is admitted. */
   fingerprint?: string;
-  /** `startedAt + timeout_ms` when the script set one. */
   deadline?: number;
   tools: DeclaredTool[];
-  /** The namespaces of the tools, as `describeNamespace()` and `searchTools()` see them. */
   namespaces: { name: string; description?: string; instructions?: string; tools: string[] }[];
   globals: { name: string; spread: boolean }[];
-  /** `max_output_tokens` of the script's options line, or the default. */
   maxOutputTokens: number;
   store: Record<string, JsonValue>;
 };
 
 type RunState = {
   start?: Start;
-  /** Directory of the result's files (the full output, images), created once: a rerun writes the same files again. */
   outputDir?: string;
-  /** The outcome, decided once. */
   result?: JsonObject;
 };
 
@@ -136,19 +83,14 @@ export const CodemodeRunDoc = defineDoc<RunState>({
 });
 
 type JournalEntry = {
-  /** The VM's call ID. Its result is the entry's position + 1 (`seq`). */
   id: number;
-  /** The VM clock while it processes this result. */
   at: number;
-  /** Calls the VM had issued after processing this result; absent until acknowledged. */
   issuedAfter?: number;
-  /** A global's call and outcome; a tool's result is its nested call's. */
   global?: { name: string; args?: JsonValue; outcome: JsonObject };
 };
 
 type JournalState = {
   entries: JournalEntry[];
-  /** Calls the VM had issued after the script's first run, before any result; absent until acknowledged. */
   firstIssued?: number;
 };
 
@@ -159,10 +101,6 @@ export const CodemodeJournalDoc = defineDoc<JournalState>({
   initial: () => ({ entries: [] }),
 });
 
-/**
- * What scripts keep with `store()` and read with `load()`, per conversation. Rewindable and copied as of the fork
- * point, so a fork sees the values as they were when its entry was committed.
- */
 export const CodemodeStoreDoc = defineDoc<{ values: Record<string, JsonValue> }>({
   kind: "msa.codemode.store",
   version: 1,
@@ -172,27 +110,17 @@ export const CodemodeStoreDoc = defineDoc<{ values: Record<string, JsonValue> }>
   initial: () => ({ values: {} }),
 });
 
-/** One tool call a script made, as the code mode call's details show it. */
 export type CodemodeNestedCall = {
-  /** The VM's number for the call; its nested call ID is `<callId>/c<id>`. */
   id: number;
   name: string;
-  /** Compact JSON of the arguments, cut for display. */
   args: string;
   status: "running" | "ok" | "error" | "cancelled";
   durationMs?: number;
-  /** Error text, cut for display. */
   error?: string;
 };
 
-/**
- * The code mode call's details, in its result: its tool calls in the order it made them, with their status. Calls to
- * globals are not listed. While the script runs, UIs show its nested calls from `msa.live.nestedTools`, so the list is
- * written once, with the result.
- */
 export type CodemodeToolDetails = {
   calls: CodemodeNestedCall[];
-  /** Temp file with the complete text output, when the output was cut to its token budget. */
   fullOutputPath?: string;
 };
 
@@ -203,7 +131,6 @@ function cut(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 3)}...` : text;
 }
 
-/** A function scripts call as a top-level global; its result is journaled. */
 export type CodemodeGlobal = {
   readonly name: string;
   readonly spread?: boolean;
@@ -217,30 +144,18 @@ const codemodeSchema = Type.Object({
 export type CodemodeToolInput = Static<typeof codemodeSchema>;
 
 export type CodemodeToolOptions = {
-  /** Runs the scripts: `CodemodeSandbox` on Node, `RemoteCodemodeSandbox` on Cloudflare. */
   readonly sandbox: CodemodeSandboxBase;
-  /** Groups of tools by name prefix, such as MCP servers, for the `codemode` section and tool search. */
   readonly namespaces?: readonly CodemodeNamespace[];
-  /** Estimated tokens the tool declarations in the `codemode` section may use. Default 3000. */
   readonly inlineBudget?: number;
-  /** Give scripts `models.*`: the model catalog, classifiers, and image generation. Default true. */
   readonly models?: boolean;
-  /** @internal Host functions scripts call as globals. */
   readonly globals?: readonly CodemodeGlobal[];
 };
 
-/** Outputs bounded by the script's own token budget; the Harness's limits only stop a runaway. */
 const OUTPUT_LIMITS = { maxBytes: 4 * 1024 * 1024, maxLines: 100_000 } as const;
 
-/** Globals for finding tools, answered from the start data, so a replay sees what the first run saw. */
 const DISCOVERY_GLOBALS = ["searchTools", "describeTool", "describeNamespace"] as const;
 const DEFAULT_SEARCH_LIMIT = 8;
 
-/**
- * The code mode tool. Scripts call the conversation's callable tools as `tools.<name>(args)`.
- * @param {CodemodeToolOptions} options - The tool's options.
- * @returns {ToolRegistration<typeof codemodeSchema>} The tool.
- */
 export function createCodemodeTool(
   options: CodemodeToolOptions,
 ): ToolRegistration<typeof codemodeSchema> {
@@ -249,7 +164,6 @@ export function createCodemodeTool(
     description: codemodeDescription(options.models !== false),
     parameters: codemodeSchema,
     outputLimits: OUTPUT_LIMITS,
-    // Capable models write the script as raw text instead of a JSON-escaped string; msa-ai applies it only for them.
     constrainedSampling: { type: "grammar", variants: { openai_lark: CODEMODE_SOURCE_GRAMMAR } },
     callers: ["model"],
     replay: "safe",
@@ -257,11 +171,6 @@ export function createCodemodeTool(
   });
 }
 
-/**
- * The `codemode` extension: the code mode tool, and the `codemode` prompt section listing the tools scripts can call.
- * @param {CodemodeToolOptions} options - The tool's options.
- * @returns {Extension} The extension.
- */
 export function createCodemodeExtension(options: CodemodeToolOptions): Extension {
   return defineExtension({
     name: "codemode",
@@ -269,7 +178,6 @@ export function createCodemodeExtension(options: CodemodeToolOptions): Extension
     sections: [
       section("codemode", (input) =>
         codemodeSection(
-          // Deferred tools are found with `searchTools()`, as the coding agent leaves them out too.
           input.agent.callable.filter(
             (tool) => !tool.name.startsWith(CODEMODE_INTERNAL_PREFIX) && tool.deferred !== true,
           ),
@@ -281,16 +189,6 @@ export function createCodemodeExtension(options: CodemodeToolOptions): Extension
   });
 }
 
-/**
- * What a script gets for a nested call, as in the coding agent. A tool with a schema resolves with its value, also on
- * an error result that carries one (`bash`'s `{ output, exitCode }` for a nonzero exit); a schema-less tool
- * resolves with its text output, images left out, as its declaration says. Any other error rejects, with its text: a
- * schema-less tool's output, else its error diagnostics.
- * @param {string} name - The tool name.
- * @param {boolean} structured - Whether the tool has a schema.
- * @param {NestedToolExecutionResult} result - The result.
- * @returns {CodemodeOutcome} The outcome.
- */
 function outcomeOf(
   name: string,
   structured: boolean,
@@ -310,11 +208,6 @@ function outcomeOf(
   };
 }
 
-/**
- * The text of a schema-less tool's collapsed output: a string, one image, or an array of text and image blocks.
- * @param {JsonValue | undefined} value - The collapsed output.
- * @returns {string} The text.
- */
 function textOf(value: JsonValue | undefined): string {
   if (typeof value === "string") return value;
   if (!Array.isArray(value)) return "";
@@ -329,7 +222,6 @@ function errorResult(message: string): ToolExecutionResult {
   return { output: [{ type: "text", text: message }], isError: true };
 }
 
-/** One execution of the code mode tool: a first run, or a rerun after a restart that replays the journal. */
 class CodemodeCall {
   private readonly options: CodemodeToolOptions;
   private readonly api: ToolExecutionApi;
@@ -337,52 +229,33 @@ class CodemodeCall {
   private readonly controller = new AbortController();
   private run!: CodemodeRun;
   private start!: Start;
-  /** The journal as this attempt found it; replay delivers exactly these. */
   private replayed: JournalEntry[] = [];
-  /** Entries in the journal, replayed and live; the next delivery is `length + 1`. */
   private journalLength = 0;
-  /** Replayed entries delivered so far. */
   private nextReplayed = 0;
   private replaying = false;
-  /** Whether an earlier attempt ran this call: its nested call keys may already exist. */
   private rerun = false;
-  /** Whether live calls may launch; before, they are held (see `release()`). */
   private released = false;
-  /** The count an earlier attempt recorded after the script's first run. */
   private firstIssued: number | undefined;
-  /** The highest issued count known to be committed: calls up to it may launch. */
   private durableIssued = 0;
-  /** Live calls waiting for their issued count to be committed. */
   private waiting: CodemodeHostCall[] = [];
-  /** Journal index of each replayed call ID. */
   private replayIndex = new Map<number, number>();
-  /** Calls the VM issued so far; its call IDs are 1, 2, ... */
   private issued = 0;
-  /** Replay: results of journaled calls, ready to deliver in journal order. */
   private readonly ready = new Map<number, CodemodeOutcome>();
-  /** Replay: calls the journal does not have, admitted once replay is done. */
   private held: CodemodeHostCall[] = [];
-  /** Live: finished calls waiting for their journal commit. */
   private queue: {
     id: number;
     at: number;
     outcome: CodemodeOutcome;
     global?: JournalEntry["global"];
   }[] = [];
-  /** Acknowledged counts to record, by result number (0: the script's first run). */
   private readonly acks = new Map<number, number>();
   private committing = false;
-  /** Set once the call decided an outcome other than the script's own (divergence, mismatch) or failed. */
   private ended: ToolExecutionResult | undefined;
   private failure: unknown;
-  /** `models.classify()`/`generateImages()` calls in flight, and those waiting for a slot. */
   private modelCalls = 0;
   private readonly modelWaiters: (() => void)[] = [];
-  /** Images `models.generateImages()` returned, to notice a script that never shows them. */
   private generatedImages = 0;
-  /** The script's tool calls for `details`, by VM call ID. */
   private readonly rows = new Map<number, CodemodeNestedCall>();
-  /** Resolves once the VM's fingerprint is checked or recorded; nothing is delivered or admitted before. */
   private gate!: Promise<void>;
   private openGate!: () => void;
 
@@ -476,7 +349,6 @@ class CodemodeCall {
     this.replaying = found.journal.length > 0;
     this.rerun = found.rerun;
     this.firstIssued = found.firstIssued;
-    // A loop, not spread arguments: a journal can hold more entries than a call takes arguments.
     this.durableIssued = found.journal.reduce(
       (max, entry) => Math.max(max, entry.issuedAfter ?? 0),
       found.firstIssued ?? 0,
@@ -517,9 +389,6 @@ class CodemodeCall {
       if (this.failure !== undefined) throw this.failure;
       if (this.ended !== undefined) return this.ended;
       context.abortSignal?.throwIfAborted();
-      // Aborted, but not by this call: the host closed the sandbox, for example while shutting down before closing the
-      // Harness. That decides nothing about the script: store nothing and end with this invocation, so a later attempt
-      // replays it.
       if (!result.ok && result.error.kind === "aborted" && !this.controller.signal.aborted) {
         await new Promise<void>((resolve) => {
           if (context.abortSignal === undefined || context.abortSignal.aborted) resolve();
@@ -528,12 +397,8 @@ class CodemodeCall {
         context.abortSignal?.throwIfAborted();
         throw new Error("The code mode sandbox was closed while the script ran");
       }
-      // A replay that ends where the live run went on is a divergence (design §4.3).
       const during = result.during;
-      // Within the replayed part, the first run included: a rerun without journal entries replays that much too.
       if (this.rerun && during !== undefined && during.seq <= this.replayed.length) {
-        // The live run went on: it acknowledged that result, or it made a call that later results answer, which the
-        // replay never made.
         const continued =
           (during.seq === 0
             ? this.replayed.length > 0 || this.firstIssued !== undefined
@@ -553,11 +418,6 @@ class CodemodeCall {
     }
   }
 
-  /**
-   * Store an outcome the call decided, and end the VM if it runs; returns the outcome.
-   * @param {ToolExecutionResult} decided - The outcome.
-   * @returns {Promise<ToolExecutionResult>} The stored outcome.
-   */
   private async decide(decided: ToolExecutionResult): Promise<ToolExecutionResult> {
     const result = { ...decided, details: this.details() as unknown as JsonValue };
     await this.api.commit(async (tx) => {
@@ -569,10 +429,6 @@ class CodemodeCall {
     return result;
   }
 
-  /**
-   * End the call with `message`: store it as the outcome, then stop the VM with an error the script cannot catch.
-   * @param {string} message - Why the script diverged.
-   */
   private diverge(message: string): void {
     if (this.ended !== undefined || this.failure !== undefined) return;
     const result = errorResult(
@@ -585,10 +441,6 @@ class CodemodeCall {
     );
   }
 
-  /**
-   * Whether nothing more may happen: the run has its outcome, or the call decided or failed.
-   * @returns {boolean} Whether it stopped.
-   */
   private get stopped(): boolean {
     return this.ended !== undefined || this.failure !== undefined || this.run?.finished === true;
   }
@@ -599,11 +451,6 @@ class CodemodeCall {
     this.controller.abort(error);
   }
 
-  /**
-   * The script's own outcome, stored with its store writes in one transaction.
-   * @param {CodemodeResult} result - The script's outcome.
-   * @returns {Promise<ToolExecutionResult>} The tool's result.
-   */
   private async complete(result: CodemodeResult): Promise<ToolExecutionResult> {
     const details = this.details();
     const formatted = await formatResult(result, {
@@ -644,10 +491,6 @@ class CodemodeCall {
     }, this.context);
   }
 
-  /**
-   * Writes the result's files under fixed names into the run's output directory, so a rerun overwrites them.
-   * @returns {OutputFile} The writer.
-   */
   private outputFiles(): OutputFile {
     const env = this.api.env;
     let directory: Promise<string> | undefined;
@@ -664,11 +507,6 @@ class CodemodeCall {
     };
   }
 
-  /**
-   * The run's output directory: the recorded one, else a new temp directory, recorded before any file is written.
-   * @param {ExecutionEnv} env - The execution environment.
-   * @returns {Promise<string>} The directory.
-   */
   private async outputDir(env: ExecutionEnv): Promise<string> {
     const recorded = await this.api.commit(
       async (tx) => (await tx.doc(CodemodeRunDoc, this.api.taskId)).outputDir,
@@ -705,8 +543,6 @@ class CodemodeCall {
       return;
     }
     this.openGate();
-    // Nothing was delivered before the gate: start now. A rerun without a journal releases its calls at the
-    // script's first acknowledgment instead.
     if (this.replaying) this.deliverReplayed();
     else if (!this.rerun) void this.release();
   }
@@ -754,13 +590,11 @@ class CodemodeCall {
         (error: unknown) => {
           if (this.stopped) return;
           if (this.context.abortSignal?.aborted) this.fail(error);
-          // The key names another tool or other arguments.
           else this.diverge(`call ${call.id} is ${describe(call)}: ${errorMessage(error)}`);
         },
       );
   }
 
-  /** Replay: deliver journaled results in journal order, each once the VM has issued its call. */
   private deliverReplayed(): void {
     while (this.nextReplayed < this.replayed.length && !this.stopped) {
       const entry = this.replayed[this.nextReplayed]!;
@@ -774,7 +608,6 @@ class CodemodeCall {
 
   private onIdle(seq: number, issued: number): void {
     if (this.stopped) return;
-    // A count an earlier attempt recorded must match; a missing one is recorded now.
     if (this.rerun && seq <= this.replayed.length) {
       const recorded = seq === 0 ? this.firstIssued : this.replayed[seq - 1]!.issuedAfter;
       if (recorded !== undefined && recorded !== issued) {
@@ -788,15 +621,10 @@ class CodemodeCall {
     }
     this.acks.set(seq, issued);
     if (!this.replaying) {
-      // A rerun without a journal: every call an earlier attempt could have admitted is made by now.
       if (seq === 0 && this.rerun) void this.release();
-      // Committed at once when the script has processed everything delivered: calls it made wait for it, and a script
-      // waiting on a long call is where a restart usually finds it. Otherwise with the next commit; the VM catches up
-      // without waiting on anything.
       if (seq === this.journalLength) void this.pump();
       return;
     }
-    // Caught up: the VM processed everything delivered and waits.
     if (seq !== this.nextReplayed) return;
     const next = this.replayed[seq];
     if (next !== undefined) {
@@ -804,20 +632,11 @@ class CodemodeCall {
         this.diverge(`it waits without making call ${next.id}, which it made before`);
       return;
     }
-    // The last replayed result is acknowledged: continue live, admitting the calls the journal did not have once their
-    // count is committed.
     this.replaying = false;
     void this.pump();
     void this.release();
   }
 
-  /**
-   * Let the held calls launch, and later live calls, each once its issued count is committed. On a rerun, an earlier
-   * attempt may have admitted some of them under their keys, as other calls: when the replay releases (idle after the
-   * last journaled result, or after its first run without a journal) its counts matched every recorded one, so it has
-   * made every call an earlier attempt could have admitted. All held calls are checked first, whatever their target,
-   * and a divergence launches none. Calls made after this are new.
-   */
   private async release(): Promise<void> {
     await this.gate;
     if (this.stopped || this.released) return;
@@ -843,7 +662,6 @@ class CodemodeCall {
     this.launchCovered();
   }
 
-  /** Launch the waiting calls whose issued count is committed. */
   private launchCovered(): void {
     if (!this.released || this.stopped) return;
     const covered = this.waiting.filter((call) => call.id <= this.durableIssued);
@@ -852,11 +670,6 @@ class CodemodeCall {
     for (const call of covered) this.launch(call);
   }
 
-  /**
-   * The call an earlier attempt made under this call's key, when it is another one: another target, tool, or arguments.
-   * @param {CodemodeHostCall} call - The script's call.
-   * @returns {Promise<string | undefined>} The earlier call's description, if another.
-   */
   private async earlier(call: CodemodeHostCall): Promise<string | undefined> {
     const { api, context } = this;
     const taskId = (await api.snapshot(NestedCallDoc, api.taskId, `c${call.id}`, context))?.taskId;
@@ -873,10 +686,6 @@ class CodemodeCall {
     return `tools.${made.name}(${JSON.stringify(made.arguments)})`;
   }
 
-  /**
-   * Run one live call and journal its result.
-   * @param {CodemodeHostCall} call - The script's call.
-   */
   private launch(call: CodemodeHostCall): void {
     if (this.stopped) return;
     const running: Promise<{ outcome: CodemodeOutcome; global?: JournalEntry["global"] }> =
@@ -896,22 +705,18 @@ class CodemodeCall {
         void this.pump();
       },
       (error: unknown) => {
-        // Stopped meanwhile: the outcome is decided, or a waiting model call gave up.
         if (this.stopped) return;
         if (this.context.abortSignal?.aborted) this.fail(error);
-        // A key an earlier attempt admitted with another tool or other arguments: this attempt took another path.
         else this.diverge(`call ${call.id} is ${describe(call)}: ${errorMessage(error)}`);
       },
     );
   }
 
   private async callTool(call: CodemodeHostCall): Promise<CodemodeOutcome> {
-    // Passed as the script gave them; validation reports arguments that are not an object.
     const args = (call.args ?? {}) as JsonObject;
     const model = call.name.startsWith(CODEMODE_INTERNAL_PREFIX);
     if (model) {
       await this.modelSlot();
-      // The call may have stopped while this one waited: a finished script admits no new paid call.
       if (this.stopped) {
         this.releaseModelSlot();
         throw new Error("The script has ended");
@@ -932,10 +737,6 @@ class CodemodeCall {
     return outcome;
   }
 
-  /**
-   * The script made a tool call: its row appears, running, also while it waits to launch.
-   * @param {CodemodeHostCall} call - The script's call.
-   */
   private started(call: CodemodeHostCall): void {
     if (this.rows.has(call.id)) return;
     const args = call.args === undefined ? "" : (JSON.stringify(call.args) ?? "");
@@ -950,13 +751,6 @@ class CodemodeCall {
     });
   }
 
-  /** A tool call ended: its row gets its status, duration, and error. */
-  /**
-   * The call ended: an error result is an error row, also when the script got its value (bash's nonzero exit).
-   * @param {number} id - The call's row.
-   * @param {CodemodeOutcome} outcome - What the script got.
-   * @param {NestedToolExecutionResult} result - The result.
-   */
   private finishRow(id: number, outcome: CodemodeOutcome, result: NestedToolExecutionResult): void {
     const row = this.rows.get(id);
     if (row === undefined) return;
@@ -969,10 +763,6 @@ class CodemodeCall {
     if (result.isError && error !== "") row.error = cut(error, ERROR_PREVIEW_CHARS);
   }
 
-  /**
-   * The rows in call order; calls still running when the script ended were cancelled.
-   * @returns {CodemodeToolDetails} The details.
-   */
   private details(): CodemodeToolDetails {
     const calls = [...this.rows.values()]
       .sort((a, b) => a.id - b.id)
@@ -992,7 +782,6 @@ class CodemodeCall {
     if (!discovery && !catalog && global === undefined)
       return { ok: false, message: `Unknown global ${call.name}` };
     try {
-      // `undefined` stays undefined: the journal omits the value, and a replay resolves with undefined again.
       const value = discovery
         ? this.discover(call)
         : catalog
@@ -1019,11 +808,6 @@ class CodemodeCall {
     this.modelWaiters.shift()?.();
   }
 
-  /**
-   * `searchTools()`, `describeTool()`, `describeNamespace()`: answered from the start data.
-   * @param {CodemodeHostCall} call - The script's call.
-   * @returns {JsonValue | undefined} The answer.
-   */
   private discover(call: CodemodeHostCall): JsonValue | undefined {
     const args = Array.isArray(call.args) ? call.args : [];
     const { namespaces } = this.start;
@@ -1082,10 +866,6 @@ class CodemodeCall {
     });
   }
 
-  /**
-   * Journal finished calls and acknowledged counts in one commit, then deliver the calls and launch the calls the
-   * counts cover; one commit in flight at a time, so what arrives meanwhile goes into the next.
-   */
   private async pump(): Promise<void> {
     if (this.committing || this.stopped) return;
     if (this.queue.length === 0 && this.acks.size === 0) return;
@@ -1131,11 +911,6 @@ class CodemodeCall {
   }
 }
 
-/**
- * A script's call of `models.classify()` or `models.generateImages()` as the call of its internal tool.
- * @param {CodemodeHostCall} call - The script's call.
- * @returns {CodemodeHostCall} The tool call.
- */
 function asToolCall(call: CodemodeHostCall): CodemodeHostCall {
   const tool = call.target === "global" ? MODEL_CALLS[call.name] : undefined;
   if (tool === undefined) return call;
@@ -1148,11 +923,6 @@ function asToolCall(call: CodemodeHostCall): CodemodeHostCall {
   };
 }
 
-/**
- * Image blocks in a `models.generateImages()` result.
- * @param {unknown} value - The result.
- * @returns {number} The count.
- */
 function countImages(value: unknown): number {
   const output =
     typeof value === "object" && value !== null
@@ -1167,12 +937,6 @@ function describe(call: CodemodeHostCall): string {
   return `${call.target === "tool" ? "tools." : ""}${call.name}(${JSON.stringify(call.args) ?? ""})`;
 }
 
-/**
- * Structural JSON equality; key order does not matter.
- * @param {unknown} a - One value.
- * @param {unknown} b - The other.
- * @returns {boolean} Whether they are equal.
- */
 function sameJson(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;

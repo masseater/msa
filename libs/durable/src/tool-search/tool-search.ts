@@ -1,8 +1,3 @@
-/**
- * The `tool_search` tool, a copy of the coding agent's: the model searches the deferred tools it is not offered yet,
- * and the matches are loaded with `control.addTools`, so the next request offers them. Loading writes the
- * conversation's `modelTools` (its `add`), so loaded tools stay offered on that branch, also after a compaction.
- */
 import { Type } from "@msa/ai";
 
 import { defineExtension, defineTool } from "../harness/define.ts";
@@ -12,7 +7,6 @@ import { rankDocuments } from "../search.ts";
 export const TOOL_SEARCH_TOOL_NAME = "tool_search";
 export const DEFAULT_TOOL_SEARCH_LIMIT = 8;
 
-/** Fixed, so it does not change while deferred tools are registered, for example as MCP servers connect. */
 const TOOL_SEARCH_DESCRIPTION = `# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\n\nSome of the tools, such as tools of MCP servers, may not have been provided to you upfront, and you should use this tool (\`${TOOL_SEARCH_TOOL_NAME}\`) to search for the required tools. For MCP tool discovery, always use \`${TOOL_SEARCH_TOOL_NAME}\`.`;
 
 const toolSearchSchema = Type.Object({
@@ -24,18 +18,12 @@ const toolSearchSchema = Type.Object({
   ),
 });
 
-/** `tool_search` result details: the tools it loaded. */
 export type ToolSearchToolDetails = { loaded: string[] };
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/**
- * Schema descriptions and property names, recursively.
- * @param {unknown} schema - The schema.
- * @param {string[]} parts - Receives the text.
- */
 function schemaText(schema: unknown, parts: string[]): void {
   if (!isObject(schema)) return;
   if (typeof schema["description"] === "string") parts.push(schema["description"]);
@@ -52,11 +40,6 @@ function schemaText(schema: unknown, parts: string[]): void {
   }
 }
 
-/**
- * Search text of a tool: its name, the name with `_` as spaces, its description, and its parameters' text.
- * @param {ToolRegistration} tool - The tool.
- * @returns {string} The text.
- */
 function searchText(tool: ToolRegistration): string {
   const parts = [tool.name, tool.name.replaceAll("_", " "), tool.description];
   schemaText(tool.parameters, parts);
@@ -68,7 +51,6 @@ export function createToolSearchTool() {
     name: TOOL_SEARCH_TOOL_NAME,
     description: TOOL_SEARCH_DESCRIPTION,
     parameters: toolSearchSchema,
-    // Searching changes what the model is offered; scripts have their own `searchTools()`.
     callers: ["model"],
     replay: "safe",
     async execute({ query, limit }, api, context) {
@@ -98,10 +80,6 @@ export function createToolSearchTool() {
   });
 }
 
-/**
- * The `tool_search` extension: install it and select it where the model should find deferred tools.
- * @returns {Extension} The extension.
- */
 export function createToolSearchExtension() {
   return defineExtension({ name: "tool-search", tools: [createToolSearchTool()] });
 }

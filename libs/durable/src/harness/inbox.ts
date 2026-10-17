@@ -13,7 +13,6 @@ import type {
 } from "../types.ts";
 import type { InputEntry, QueueMode, Settings, UserInput } from "./types.ts";
 
-/** A queued submission: user input for a run, with the entry it is placed as when not `msa.user`, or an entry write. */
 export type InboxItem =
   | {
       id: SubmissionId;
@@ -21,10 +20,8 @@ export type InboxItem =
       content: JsonRepresentation<UserInput>;
       entry?: JsonRepresentation<InputEntry>;
     }
-  /** `entry` is an `EntryDraft`, stored as plain JSON. */
   | { id: SubmissionId; mode: "write"; entry: JsonObject };
 
-/** Built-in queue of one conversation's submissions waiting for a boundary, in ID order. */
 export type InboxState = { items: InboxItem[] };
 
 export const InboxDoc = defineDoc<InboxState>({
@@ -37,30 +34,18 @@ export const InboxDoc = defineDoc<InboxState>({
   checkpointWhen: (value) => value.items.length === 0,
 });
 
-/** The settings a boundary reads, on the Session line. */
 export type QueueModes = Pick<Settings, "steeringMode" | "followUpMode">;
 
-/** What a boundary reads before the commit's first table write, and the newest head it has seen so far. */
 export type Boundary = {
   readonly conversationId: ConversationId;
   readonly inbox: Draft<InboxState>;
   readonly steeringMode: QueueMode;
   readonly followUpMode: QueueMode;
-  /** Start of the active range, the newest head marker's `head`; advanced by heads written in this commit. */
   head: EntryId | undefined;
 };
 
-/** Selected user items, in ID order, and whether a `head: "self"` write (a reset) was placed. */
 export type BoundaryResult = { readonly users: SubmissionId[]; readonly reset: boolean };
 
-/**
- * Read what a boundary needs. Table reads must precede the commit's first table write, so callers prepare the
- * boundary at the start of their commit.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- * @param {QueueModes} modes - How queued items are placed.
- * @returns {Promise<Boundary>} The boundary.
- */
 export async function prepareBoundary(
   tx: Tx,
   conversationId: ConversationId,
@@ -77,18 +62,6 @@ export async function prepareBoundary(
   };
 }
 
-/**
- * Place the queued items a boundary selects (spec §6): every write, the first or all steers, and at `final` the first
- * or all follow-ups. A selected reset turns a `postTools` boundary into `final`. Writes are placed first and user
- * items after them, each in ID order, so user items queued before a reset run in the new context. A write whose head
- * targets an entry before the active range, including a range started earlier in this commit, is stale. Selected and
- * stale items are removed positionally.
- * @param {Tx} tx - The commit's transaction.
- * @param {Boundary} boundary - The prepared boundary.
- * @param {"postTools" | "final"} at - Which boundary.
- * @param {number} now - The commit's time.
- * @returns {Promise<BoundaryResult>} What was placed.
- */
 export async function applyBoundary(
   tx: Tx,
   boundary: Boundary,
@@ -110,7 +83,6 @@ export async function applyBoundary(
   ];
   users.sort((a, b) => a - b);
 
-  // `appendEntry()` copies the drafts' values; the items are removed only afterwards.
   for await (const index of writes) {
     const item = items[index] as Draft<Extract<InboxItem, { mode: "write" }>>;
     const draft = item.entry as unknown as EntryDraft;
@@ -140,15 +112,6 @@ export async function applyBoundary(
   return { users: placed, reset };
 }
 
-/**
- * Append the entry an input is placed as: `entry`'s kind and data, or `msa.user`, with the user message of `content`.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- * @param {UserInput} content - The input's content.
- * @param {InputEntry | undefined} entry - The input's entry, if given.
- * @param {number} now - The commit's time.
- * @returns {Promise<EntryRecord>} The appended entry.
- */
 export function appendInput(
   tx: Tx,
   conversationId: ConversationId,
@@ -161,55 +124,25 @@ export function appendInput(
   return tx.appendEntry(conversationId, { ...pickInputEntry(entry), model: [message] });
 }
 
-/**
- * The kind and data of an input's entry as strict JSON, without other fields an untyped caller might pass.
- * @param {InputEntry} entry - The input entry.
- * @param {string} entry.kind - Its kind.
- * @param {import("@msa/chord").JsonValue | undefined} entry.data - Its data.
- * @returns {JsonRepresentation<InputEntry>} The kind and data.
- */
 export function pickInputEntry({ kind, data }: InputEntry): JsonRepresentation<InputEntry> {
   const picked = data === undefined ? { kind } : { kind, data };
   return copyJson(picked, { omitUndefinedProperties: true }) as JsonRepresentation<InputEntry>;
 }
 
-/**
- * Whether a write is display-only: it has no `model`, `head`, or `edits` (present counts, even if empty), so it changes
- * nothing the model sees and needs no boundary.
- * @param {EntryDraft} entry - The write.
- * @returns {boolean} Whether it is display-only.
- */
 export function isDisplayOnly(entry: EntryDraft): boolean {
   return entry.model === undefined && entry.head === undefined && entry.edits === undefined;
 }
 
-/**
- * Whether a reset (`head: "self"` write) is queued; entries appended before it leave the active range when it lands.
- * @param {readonly InboxItem[]} items - The inbox items.
- * @returns {boolean} Whether a reset is queued.
- */
 export function hasQueuedReset(items: readonly InboxItem[]): boolean {
   return items.some((item) => item.mode === "write" && item.entry["head"] === "self");
 }
 
-/**
- * Whether a head write targets an entry before the active range, so placing it would bring back cut history.
- * @param {Boundary} boundary - The boundary.
- * @param {EntryDraft} entry - The write.
- * @returns {boolean} Whether it is stale.
- */
 export function isStale(boundary: Boundary, entry: EntryDraft): boolean {
   return (
     typeof entry.head === "number" && boundary.head !== undefined && entry.head < boundary.head
   );
 }
 
-/**
- * Remove a withdrawn submission's item; the caller settles the submission.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- * @param {SubmissionId} id - The submission.
- */
 export async function removeInboxItem(
   tx: Tx,
   conversationId: ConversationId,
@@ -220,12 +153,6 @@ export async function removeInboxItem(
   if (index >= 0) items.splice(index, 1);
 }
 
-/**
- * Withdraw every queued input of a conversation, as `Conversation.abort()` and abort cascades do: each settles
- * `unanswered` with `aborted` and leaves the inbox; queued writes stay for later placement.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- */
 export async function withdrawQueuedInputs(tx: Tx, conversationId: ConversationId): Promise<void> {
   const items = (await tx.doc(InboxDoc, conversationId)).items;
   for (let index = items.length - 1; index >= 0; index--) {

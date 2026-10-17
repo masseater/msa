@@ -22,7 +22,6 @@ const powershellSchema = Type.Object({
   ),
 });
 
-/** What a program that calls `bash` or `powershell` receives. */
 const shellStructuredOutputSchema = Type.Object({
   output: Type.String({
     description: "Combined stdout and stderr: the retained tail, as the model sees it",
@@ -38,7 +37,6 @@ export type BashToolInput = Static<typeof bashSchema>;
 export type PowerShellToolInput = Static<typeof powershellSchema>;
 export type ShellStructuredOutput = Static<typeof shellStructuredOutputSchema>;
 
-/** A command about to run, which `prepare` may change: the script, its working directory and environment. */
 export interface BashExecution {
   command: string;
   cwd: string;
@@ -58,10 +56,8 @@ export interface BashToolOptions {
 }
 
 export interface PowerShellToolOptions {
-  /** Lines run before each command. */
   commandPrefix?: string;
   prepare?: BashPrepare;
-  /** PowerShell programs to try in order; default `pwsh`, then `powershell`. A program that cannot start is skipped. */
   programs?: readonly string[];
 }
 
@@ -75,14 +71,6 @@ function validateTimeout(timeout: number | undefined): void {
   }
 }
 
-/**
- * The execution of one call: the command with its prefix, in the environment's working directory, then `prepare`.
- * @param {string} command - The model's command.
- * @param {{ commandPrefix?: string; prepare?: BashPrepare } | undefined} options - The tool's options.
- * @param {ToolExecutionApi} api - The tool call's API.
- * @param {Context} context - The caller's context.
- * @returns {Promise<BashExecution>} The execution.
- */
 async function prepareExecution(
   command: string,
   options: { commandPrefix?: string; prepare?: BashPrepare } | undefined,
@@ -99,17 +87,6 @@ async function prepareExecution(
   return execution;
 }
 
-/**
- * Run each command form in turn until one starts, streaming output to `api.output()` within the retained window, and
- * turn the result into the tool's result: a spill diagnostic, an error result for a nonzero exit, and a thrown error for
- * a failure such as a timeout. The structured output repeats the retained output with the exit code.
- * @param {readonly (string | readonly string[])[]} commands - The command forms to try.
- * @param {BashExecution} execution - The prepared execution.
- * @param {number | undefined} timeout - The timeout in seconds.
- * @param {ToolExecutionApi} api - The tool call's API.
- * @param {Context} context - The caller's context.
- * @returns {Promise<ToolExecutionResult>} The tool's result.
- */
 async function runCommand(
   commands: readonly (string | readonly string[])[],
   execution: BashExecution,
@@ -129,12 +106,10 @@ async function runCommand(
         ...(timeout === undefined ? {} : { timeout }),
         onOutput: (text, _context, info) => api.output(text, info.skipped),
         spill: { afterBytes: DEFAULT_MAX_BYTES, afterLines: DEFAULT_MAX_LINES },
-        // An environment may then omit output outside the retained tail and report the omission.
         ...(api.outputWindow === undefined ? {} : { window: api.outputWindow }),
       },
       context,
     );
-    // A program that could not start produced no output; the next form may.
     if (result.ok || result.error.code !== "spawn_error") break;
   }
   if (result === undefined) throw new Error("No command to run");
@@ -166,15 +141,6 @@ async function runCommand(
   return { structuredOutput, isError: true, diagnostics: [exited] };
 }
 
-/**
- * Runs a command through the environment's shell. Its output streams to `api.output()`, where the Harness keeps the
- * tail within the default limits; the result content is that retained output. The retained window goes to the
- * environment, which may omit output outside it and report how much it omitted, so dropped counts stay exact. Output
- * beyond the limits is spilled to a file whose path is reported as a diagnostic. A nonzero exit is an error result with
- * the exit code; a timeout throws, which makes an error result that still carries the output and diagnostics.
- * @param {BashToolOptions} options - The tool's options.
- * @returns {ToolRegistration<typeof bashSchema>} The tool.
- */
 export function createBashTool(options?: BashToolOptions): ToolRegistration<typeof bashSchema> {
   return defineTool({
     name: "bash",
@@ -190,7 +156,6 @@ export function createBashTool(options?: BashToolOptions): ToolRegistration<type
   });
 }
 
-/** Output in UTF-8 whatever the console's code page, as the coding agent's `powershell` tool does. */
 const UTF8_OUTPUT = "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}";
 const POWERSHELL_ARGS = [
   "-NoProfile",
@@ -200,12 +165,6 @@ const POWERSHELL_ARGS = [
   "-Command",
 ] as const;
 
-/**
- * Runs a PowerShell command, like `bash` but through PowerShell instead of the environment's shell: `pwsh` (PowerShell
- * 7), else Windows PowerShell, started directly with the command as an argument, so no other shell parses it.
- * @param {PowerShellToolOptions} options - The tool's options.
- * @returns {ToolRegistration<typeof powershellSchema>} The tool.
- */
 export function createPowerShellTool(
   options?: PowerShellToolOptions,
 ): ToolRegistration<typeof powershellSchema> {

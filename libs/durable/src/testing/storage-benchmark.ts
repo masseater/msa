@@ -85,12 +85,6 @@ function task(id: TaskId<JsonValue>, index: number): StoredTask {
   return { ...common, state: { status, checkpoint: { index, payload: "x".repeat(64) } } };
 }
 
-/**
- * Seed deterministic representative data through only the public `Storage` contract.
- * @param {Storage} storage - The storage to seed.
- * @param {StorageBenchmarkScale} scale - How much data to write.
- * @returns {Promise<StorageBenchmarkDataset>} What was written.
- */
 export async function seedStorageBenchmark(
   storage: Storage,
   scale: StorageBenchmarkScale = TIMING_SCALE,
@@ -417,10 +411,6 @@ export type StorageWriteBenchmark = {
   run(storage: Storage): Promise<number>;
 };
 
-/**
- * Seed the common state expected by every write benchmark sample.
- * @param {Storage} storage - The storage to seed.
- */
 export async function seedStorageWriteBenchmark(storage: Storage): Promise<void> {
   await storage.commit(
     [{ type: "conversation", value: { id: ROOT_CONVERSATION_ID } }],

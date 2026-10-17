@@ -80,7 +80,6 @@ type EncodedCommit = {
 };
 
 export type JsonlStorageOptions = {
-  /** Flush every affected sidecar before appending the main marker. Defaults to false. */
   readonly fsync?: boolean;
 };
 
@@ -251,7 +250,6 @@ const parseSidecarRecord = (text: string, file: string, line: number): SidecarRe
   return value as SidecarRecord;
 };
 
-/** Portable JSONL implementation of the storage contract. */
 export class JsonlStorage implements Storage {
   private readonly fs: FileSystem;
   private readonly directory: string;
@@ -275,14 +273,6 @@ export class JsonlStorage implements Storage {
     this.fsync = options.fsync ?? false;
   }
 
-  /**
-   * Open or create a JSONL storage directory using the supplied filesystem.
-   * @param {string} directory - The storage directory.
-   * @param {FileSystem} fs - The file system.
-   * @param {Context} context - The caller's context.
-   * @param {JsonlStorageOptions} options - The storage options.
-   * @returns {Promise<JsonlStorage>} The storage.
-   */
   static async open(
     directory: string,
     fs: FileSystem,
@@ -555,11 +545,6 @@ export class JsonlStorage implements Storage {
     }
   }
 
-  /**
-   * The marker already published this state, so reclamation is retryable best-effort maintenance.
-   * @param {ReadonlyMap<string, string>} replacements - New content by sidecar file.
-   * @param {Context} context - The caller's context.
-   */
   private async reclaimSidecars(
     replacements: ReadonlyMap<string, string>,
     context: Context,

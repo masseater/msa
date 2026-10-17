@@ -54,7 +54,6 @@ const MAX_TIMEOUT_MS = 2_147_483_647;
 const MAX_TIMEOUT_SECONDS = MAX_TIMEOUT_MS / 1000;
 const EXIT_STDIO_GRACE_MS = 100;
 const SPILL_HIGH_WATER_MARK = 1024 * 1024;
-/** Largest single read of a `BinaryReader`, so a huge `length` allocates only as much as the file yields. */
 const BINARY_READ_CHUNK = 1024 * 1024;
 
 type SpillChunk = string | Uint8Array;
@@ -88,9 +87,7 @@ function resolvePath(cwd: string, path: string): string {
   } else if (normalized.startsWith("file://")) {
     try {
       normalized = fileURLToPath(normalized);
-    } catch {
-      // Keep malformed URLs as ordinary paths so filesystem methods preserve their non-throwing contract.
-    }
+    } catch {}
   }
   return isAbsolute(normalized) ? resolve(normalized) : resolve(cwd, normalized);
 }
@@ -308,11 +305,8 @@ function killProcessTree(pid: number): void {
           windowsHide: true,
         },
       );
-      // A failed spawn emits "error" asynchronously; consume it to avoid crashing Node.
       child.once("error", () => {});
-    } catch {
-      // Ignore errors.
-    }
+    } catch {}
     return;
   }
 
@@ -321,9 +315,7 @@ function killProcessTree(pid: number): void {
   } catch {
     try {
       process.kill(pid, "SIGKILL");
-    } catch {
-      // Process already dead.
-    }
+    } catch {}
   }
 }
 
@@ -408,7 +400,6 @@ function waitForChildProcess(
   });
 }
 
-/** Strict LF reader; Node readline does not report whether its final line was newline-terminated. */
 class NodeTextLineReader implements TextLineReader {
   private readonly file: Awaited<ReturnType<typeof openFile>>;
   private readonly path: string;
@@ -450,7 +441,6 @@ class NodeTextLineReader implements TextLineReader {
       return ok({ text, terminated: false });
     }
 
-    // Explicit positions allow an aborted read to be retried without skipping bytes.
     const { bytesRead } = await this.file.read(this.chunk, 0, this.chunk.length, this.byteOffset);
     const afterReadAbort = abortResult<TextLine | undefined>(context.abortSignal, this.path);
     if (afterReadAbort) return afterReadAbort;
@@ -470,9 +460,7 @@ class NodeTextLineReader implements TextLineReader {
     this.buffered = "";
     try {
       await this.file.close();
-    } catch {
-      // Closing is best-effort, including after cancellation or an earlier I/O failure.
-    }
+    } catch {}
   }
 }
 
@@ -652,7 +640,6 @@ class NodeDirReader implements DirReader {
     try {
       stats = await lstat(entryPath);
     } catch (error) {
-      // Removed between enumeration and lstat: not part of the listing any more.
       if (!isNodeError(error) || error.code !== "ENOENT") return err(toFileError(error, entryPath));
     }
     if (stats !== undefined) {
@@ -674,7 +661,6 @@ function symlinkRefused(path: string, cause?: Error): FileError {
 }
 
 export class NodeExecutionEnv implements ExecutionEnv {
-  /** Every local environment sees the same files. */
   readonly id: string = "node:local";
   cwd: string;
   private shellPath?: string | undefined;
@@ -739,7 +725,6 @@ export class NodeExecutionEnv implements ExecutionEnv {
     const timeoutMs = timeoutMsResult.value;
 
     const cwd = options?.cwd ? resolvePath(this.cwd, options.cwd) : this.cwd;
-    // A string runs through the shell; an argv array runs its program directly, without shell parsing.
     let program: string;
     let args: readonly string[];
     let stdinCommand: string | undefined;
@@ -793,10 +778,8 @@ export class NodeExecutionEnv implements ExecutionEnv {
         callbackError = new ExecutionError("callback_error", cause.message, cause);
         onAbort();
       };
-      // One decoder per stream, so a character split across chunks of one stream survives interleaving.
       const stdoutDecoder = new StreamDecoder();
       const stderrDecoder = new StreamDecoder();
-      // No output reaches the caller after exec() settled, for example from a descendant holding stdio open.
       const emit = (text: string, stream: ShellOutputInfo["stream"]): void => {
         if (
           settled ||
@@ -811,7 +794,6 @@ export class NodeExecutionEnv implements ExecutionEnv {
           failCallback(error);
         }
       };
-      // Output seen before the spill starts: counted against the thresholds and kept for the spill's prefix.
       let seenBytes = 0;
       let seenNewlines = 0;
 
@@ -980,9 +962,6 @@ export class NodeExecutionEnv implements ExecutionEnv {
             settle(err(spillError));
             return;
           }
-          // A process killed by a signal (e.g. OOM killer) has no exit code; map it
-          // to the conventional 128 + signal number so callers do not mistake it
-          // for a successful exit.
           const exitCode = code ?? (exitSignal ? 128 + (osConstants.signals[exitSignal] ?? 0) : 1);
           settle(ok({ exitCode, ...(spillPath === undefined ? {} : { spillPath }) }));
         },
@@ -1073,11 +1052,9 @@ export class NodeExecutionEnv implements ExecutionEnv {
     try {
       let flags = constants.O_RDONLY;
       if (process.platform === "win32") {
-        // Windows has no O_NOFOLLOW; check the final component before opening (not race-free).
         if (noFollow && (await lstat(resolved)).isSymbolicLink())
           return err(symlinkRefused(resolved));
       } else {
-        // Nonblocking, so opening a FIFO does not wait for a writer.
         flags |= constants.O_NONBLOCK;
         if (noFollow) flags |= constants.O_NOFOLLOW;
       }
@@ -1103,7 +1080,6 @@ export class NodeExecutionEnv implements ExecutionEnv {
       return ok(new NodeBinaryReader(file, resolved));
     } catch (error) {
       await file?.close().catch(() => undefined);
-      // O_NOFOLLOW reports a final-component symlink as ELOOP (EMLINK on some BSDs).
       if (noFollow && isNodeError(error) && (error.code === "ELOOP" || error.code === "EMLINK")) {
         return err(symlinkRefused(resolved, toError(error)));
       }
@@ -1187,7 +1163,6 @@ export class NodeExecutionEnv implements ExecutionEnv {
     let file: Awaited<ReturnType<typeof openFile>> | undefined;
     try {
       file = await openFile(resolved, "r+");
-      // POSIX refuses to open a directory for writing; Windows opens it, so check explicitly.
       if ((await file.stat()).isDirectory())
         return err(new FileError("is_directory", "Is a directory", resolved));
       await file.sync();

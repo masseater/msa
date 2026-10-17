@@ -1,20 +1,12 @@
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-/** Bytes every check except the APNG chunk walk needs: BMP reads up to offset 29. */
 const HEADER_BYTES = 32;
 const BLOCK_BYTES = 64 * 1024;
 
-/** Positional reads of a file of `size` bytes. */
 export type ByteSource = {
   readonly size: number;
   read(offset: number, length: number): Promise<Uint8Array>;
 };
 
-/**
- * `detectSupportedImageMimeType` of a whole file, reading only its header and, for PNG, the chunk headers up to the
- * first `acTL` or `IDAT`.
- * @param {ByteSource} source - The file.
- * @returns {Promise<string | undefined>} The image MIME type, if supported.
- */
 export async function detectSupportedImageMimeTypeOf(
   source: ByteSource,
 ): Promise<string | undefined> {
@@ -23,11 +15,6 @@ export async function detectSupportedImageMimeTypeOf(
   return isPng(header) && !(await isAnimatedPngOf(source)) ? "image/png" : undefined;
 }
 
-/**
- * `isAnimatedPng` over a file read in blocks.
- * @param {ByteSource} source - The file.
- * @returns {Promise<boolean>} Whether it is an animated PNG.
- */
 function isAnimatedPngOf(source: ByteSource): Promise<boolean> {
   let block: Uint8Array = new Uint8Array(0);
   let blockStart = 0;
@@ -84,13 +71,6 @@ function isAnimatedPng(buffer: Uint8Array): boolean {
   return false;
 }
 
-/**
- * The width and height an image of `mimeType` declares in its header, without decoding it: PNG's IHDR, GIF's screen,
- * WebP's VP8, VP8L, or VP8X chunk, JPEG's first SOF segment. `undefined` when the header cannot be read.
- * @param {Uint8Array} bytes - The image bytes.
- * @param {string} mimeType - The image's MIME type.
- * @returns {{ readonly width: number; readonly height: number } | undefined} The size.
- */
 export function imageDimensions(
   bytes: Uint8Array,
   mimeType: string,
@@ -129,7 +109,6 @@ export function imageDimensions(
           offset++;
           continue;
         }
-        // SOF0 to SOF15, except DHT (C4), JPG (C8), and DAC (CC), which share the range.
         if (
           marker >= 0xc0 &&
           marker <= 0xcf &&
