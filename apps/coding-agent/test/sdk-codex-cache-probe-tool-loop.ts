@@ -217,7 +217,7 @@ function percentile(values: number[], percentileValue: number): number {
     sorted.length - 1,
     Math.max(0, Math.ceil((percentileValue / 100) * sorted.length) - 1),
   );
-  return sorted[index];
+  return sorted[index] ?? 0;
 }
 
 function getWebSocketStatsSnapshot(sessionId: string): WebSocketStatsSnapshot {
@@ -406,8 +406,7 @@ async function main(): Promise<void> {
     let turnCacheWrite = 0;
     let turnTotal = 0;
 
-    for (let i = 0; i < assistantMessages.length; i++) {
-      const assistant = assistantMessages[i];
+    for (const [i, assistant] of assistantMessages.entries()) {
       const record: SubrequestRecord = {
         turn,
         subrequest: i + 1,
@@ -472,8 +471,8 @@ async function main(): Promise<void> {
 
   const violations = records
     .map((record, index) => {
-      if (index === 0) return null;
       const previous = records[index - 1];
+      if (previous === undefined) return null;
       if (record.usage.cacheRead >= previous.usage.cacheRead) return null;
       return {
         turn: record.turn,

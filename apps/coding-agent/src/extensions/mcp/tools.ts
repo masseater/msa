@@ -235,7 +235,7 @@ function extensionOf(uri: string): string {
 /** Blobs of these types are shown as text. */
 function isTextMimeType(mimeType: string | undefined): boolean {
   if (!mimeType) return false;
-  const type = mimeType.split(";", 1)[0].trim().toLowerCase();
+  const type = (mimeType.split(";", 1)[0] ?? "").trim().toLowerCase();
   return (
     type.startsWith("text/") ||
     type === "application/json" ||

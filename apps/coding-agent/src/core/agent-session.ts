@@ -221,11 +221,13 @@ export function parseSkillBlock(text: string): ParsedSkillBlock | null {
     /^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/,
   );
   if (!match) return null;
+  const [, name, location, content, userMessage] = match;
+  if (name === undefined || location === undefined || content === undefined) return null;
   return {
-    name: match[1],
-    location: match[2],
-    content: match[3],
-    userMessage: match[4]?.trim() || undefined,
+    name,
+    location,
+    content,
+    userMessage: userMessage?.trim() || undefined,
   };
 }
 
@@ -1391,7 +1393,7 @@ export class AgentSession {
 
     for (let i = event.messages.length - 1; i >= 0; i--) {
       const message = event.messages[i];
-      if (message.role === "assistant") {
+      if (message?.role === "assistant") {
         return this._isRetryableError(message as AssistantMessage);
       }
     }
@@ -1447,7 +1449,7 @@ export class AgentSession {
     const messages = this.agent.state.messages;
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
-      if (msg.role === "assistant") {
+      if (msg?.role === "assistant") {
         return msg as AssistantMessage;
       }
     }
@@ -3011,6 +3013,7 @@ export class AgentSession {
     const nextIndex =
       direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
     const next = scopedModels[nextIndex];
+    if (next === undefined) return undefined;
     const thinkingLevel = this._getThinkingLevelForModelSwitch(next.model, next.thinkingLevel);
 
     // Apply model
@@ -3048,6 +3051,7 @@ export class AgentSession {
     const nextIndex =
       direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
     const nextModel = availableModels[nextIndex];
+    if (nextModel === undefined) return undefined;
 
     const thinkingLevel = this._getThinkingLevelForModelSwitch(nextModel);
     this.agent.state.model = nextModel;
@@ -3114,6 +3118,7 @@ export class AgentSession {
     const currentIndex = levels.indexOf(this.thinkingLevel);
     const nextIndex = (currentIndex + 1) % levels.length;
     const nextLevel = levels[nextIndex];
+    if (nextLevel === undefined) return undefined;
 
     this.setThinkingLevel(nextLevel, options);
     return nextLevel;
@@ -3570,7 +3575,7 @@ export class AgentSession {
         const usageMsg = messages[estimate.lastUsageIndex];
         if (
           compactionEntry &&
-          usageMsg.role === "assistant" &&
+          usageMsg?.role === "assistant" &&
           (usageMsg as AssistantMessage).timestamp <= new Date(compactionEntry.timestamp).getTime()
         ) {
           return false;

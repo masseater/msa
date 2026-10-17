@@ -135,7 +135,9 @@ const lowerBound = <I extends Id<string>>(ids: readonly I[], target: number): nu
   let high = ids.length;
   while (low < high) {
     const middle = (low + high) >>> 1;
-    if (ids[middle] < target) low = middle + 1;
+    const id = ids[middle];
+    if (id === undefined) throw new Error(`Sorted id index ${middle} is out of range`);
+    if (id < target) low = middle + 1;
     else high = middle;
   }
   return low;
@@ -146,14 +148,17 @@ const upperBound = <I extends Id<string>>(ids: readonly I[], target: number): nu
   let high = ids.length;
   while (low < high) {
     const middle = (low + high) >>> 1;
-    if (ids[middle] <= target) low = middle + 1;
+    const id = ids[middle];
+    if (id === undefined) throw new Error(`Sorted id index ${middle} is out of range`);
+    if (id <= target) low = middle + 1;
     else high = middle;
   }
   return low;
 };
 
 const insertSorted = <I extends Id<string>>(ids: I[], id: I): void => {
-  if (ids.length === 0 || ids[ids.length - 1] < id) ids.push(id);
+  const last = ids.at(-1);
+  if (last === undefined || last < id) ids.push(id);
   else ids.splice(lowerBound(ids, id), 0, id);
 };
 
@@ -530,9 +535,9 @@ export class MemoryStorage implements Storage {
     let upperEntryId = atOrBeforeEntryId ?? Number.POSITIVE_INFINITY;
     while (true) {
       const ids = this.state.headEntryIds.get(currentId) ?? [];
-      const index = upperBound(ids, upperEntryId) - 1;
-      if (index >= 0) {
-        const entry = this.state.entries.get(ids[index])!;
+      const id = ids[upperBound(ids, upperEntryId) - 1];
+      if (id !== undefined) {
+        const entry = this.state.entries.get(id)!;
         return clone({ ...entry, head: entry.head! });
       }
       const conversation = this.state.conversations.get(currentId)!;
@@ -740,7 +745,7 @@ export class MemoryStorage implements Storage {
       const ids = this.state.entryIds.get(currentId) ?? [];
       for (let index = upperBound(ids, upperEntryId) - 1; index >= 0; index--) {
         const id = ids[index];
-        if (id < minEntryId) break;
+        if (id === undefined || id < minEntryId) break;
         yield this.state.entries.get(id)!;
       }
       const conversation = this.state.conversations.get(currentId)!;

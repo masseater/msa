@@ -121,10 +121,9 @@ export function colorToOkhsl(color: Color): OkhslChannels {
 export function parseColor(value: string | number): Color {
   if (typeof value === "number") return indexedColor(value);
 
-  const hex = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(value);
-  if (hex) {
-    const digits =
-      hex[1].length === 3 ? [...hex[1]].map((digit) => digit + digit).join("") : hex[1];
+  const hex = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(value)?.[1];
+  if (hex !== undefined) {
+    const digits = hex.length === 3 ? [...hex].map((digit) => digit + digit).join("") : hex;
     return rgbColor(
       Number.parseInt(digits.slice(0, 2), 16),
       Number.parseInt(digits.slice(2, 4), 16),
@@ -132,17 +131,17 @@ export function parseColor(value: string | number): Color {
     );
   }
 
-  const oklch = OKLCH_PATTERN.exec(value);
-  if (oklch) {
-    const lightness = Number.parseFloat(oklch[1]) / (oklch[2] ? 100 : 1);
-    return oklchColor(lightness, Number.parseFloat(oklch[3]), Number.parseFloat(oklch[4]));
+  const [, oklchL, oklchLPercent, oklchC, oklchH] = OKLCH_PATTERN.exec(value) ?? [];
+  if (oklchL !== undefined && oklchC !== undefined && oklchH !== undefined) {
+    const lightness = Number.parseFloat(oklchL) / (oklchLPercent ? 100 : 1);
+    return oklchColor(lightness, Number.parseFloat(oklchC), Number.parseFloat(oklchH));
   }
 
-  const okhsl = OKHSL_PATTERN.exec(value);
-  if (okhsl) {
-    const saturation = Number.parseFloat(okhsl[2]) / (okhsl[3] ? 100 : 1);
-    const lightness = Number.parseFloat(okhsl[4]) / (okhsl[5] ? 100 : 1);
-    return okhslColor(Number.parseFloat(okhsl[1]), saturation, lightness);
+  const [, okhslH, okhslS, okhslSPercent, okhslL, okhslLPercent] = OKHSL_PATTERN.exec(value) ?? [];
+  if (okhslH !== undefined && okhslS !== undefined && okhslL !== undefined) {
+    const saturation = Number.parseFloat(okhslS) / (okhslSPercent ? 100 : 1);
+    const lightness = Number.parseFloat(okhslL) / (okhslLPercent ? 100 : 1);
+    return okhslColor(Number.parseFloat(okhslH), saturation, lightness);
   }
 
   throw new Error(`Invalid color value: ${value}`);
@@ -169,14 +168,24 @@ const BASIC_COLORS: readonly RgbColor[] = [
 const CUBE_VALUES = [0, 95, 135, 175, 215, 255] as const;
 const GRAY_VALUES = Array.from({ length: 24 }, (_, index) => 8 + index * 10);
 
+function cubeValue(index: number): number {
+  const value = CUBE_VALUES[index];
+  if (value === undefined) throw new Error(`ANSI color cube has no level ${index}`);
+  return value;
+}
+
 function indexedToRgb(index: number): RgbColor {
-  if (index < 16) return { ...BASIC_COLORS[index] };
+  if (index < 16) {
+    const basic = BASIC_COLORS[index];
+    if (basic === undefined) throw new Error(`ANSI basic color index out of range: ${index}`);
+    return { ...basic };
+  }
   if (index < 232) {
     const cubeIndex = index - 16;
     return {
-      r: CUBE_VALUES[Math.floor(cubeIndex / 36)],
-      g: CUBE_VALUES[Math.floor((cubeIndex % 36) / 6)],
-      b: CUBE_VALUES[cubeIndex % 6],
+      r: cubeValue(Math.floor(cubeIndex / 36)),
+      g: cubeValue(Math.floor((cubeIndex % 36) / 6)),
+      b: cubeValue(cubeIndex % 6),
     };
   }
   const gray = 8 + (index - 232) * 10;
@@ -270,17 +279,16 @@ export function mixColors(
   );
 }
 
-function findClosest(values: readonly number[], target: number): number {
-  let closestIndex = 0;
-  let closestDistance = Infinity;
-  for (let index = 0; index < values.length; index++) {
-    const distance = Math.abs(target - values[index]);
-    if (distance < closestDistance) {
-      closestIndex = index;
-      closestDistance = distance;
+function findClosest(values: readonly number[], target: number): { index: number; value: number } {
+  let closest: { index: number; value: number; distance: number } | undefined;
+  for (const [index, value] of values.entries()) {
+    const distance = Math.abs(target - value);
+    if (closest === undefined || distance < closest.distance) {
+      closest = { index, value, distance };
     }
   }
-  return closestIndex;
+  if (closest === undefined) throw new Error("findClosest needs at least one value");
+  return closest;
 }
 
 function colorDistance(first: RgbColor, second: RgbColor): number {
@@ -291,15 +299,14 @@ function colorDistance(first: RgbColor, second: RgbColor): number {
 }
 
 function rgbToAnsi256(color: RgbColor): number {
-  const rIndex = findClosest(CUBE_VALUES, color.r);
-  const gIndex = findClosest(CUBE_VALUES, color.g);
-  const bIndex = findClosest(CUBE_VALUES, color.b);
-  const cubeColor = { r: CUBE_VALUES[rIndex], g: CUBE_VALUES[gIndex], b: CUBE_VALUES[bIndex] };
-  const cubeIndex = 16 + 36 * rIndex + 6 * gIndex + bIndex;
+  const r = findClosest(CUBE_VALUES, color.r);
+  const g = findClosest(CUBE_VALUES, color.g);
+  const b = findClosest(CUBE_VALUES, color.b);
+  const cubeColor = { r: r.value, g: g.value, b: b.value };
+  const cubeIndex = 16 + 36 * r.index + 6 * g.index + b.index;
 
   const gray = Math.round(0.299 * color.r + 0.587 * color.g + 0.114 * color.b);
-  const grayOffset = findClosest(GRAY_VALUES, gray);
-  const grayValue = GRAY_VALUES[grayOffset];
+  const { index: grayOffset, value: grayValue } = findClosest(GRAY_VALUES, gray);
   const spread = Math.max(color.r, color.g, color.b) - Math.min(color.r, color.g, color.b);
   if (
     spread < 10 &&

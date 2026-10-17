@@ -171,7 +171,7 @@ describe("coding-agent documentation", () => {
       for (const href of markdownLinks(readFileSync(resolve(docsRoot, source), "utf8"))) {
         if (/^[a-z][a-z\d+.-]*:/i.test(href) || href.startsWith("//") || href.startsWith("/"))
           continue;
-        const linkedPath = href.split(/[?#]/, 1)[0];
+        const linkedPath = href.split(/[?#]/, 1)[0] ?? "";
         if (!linkedPath.endsWith(".md")) continue;
 
         const target = resolve(docsRoot, dirname(source), linkedPath);

@@ -88,10 +88,13 @@ export class BashExecutionComponent extends Container {
 
     // Append to output lines
     const newLines = clean.split("\n");
-    if (this.outputLines.length > 0 && newLines.length > 0) {
+    const lastIndex = this.outputLines.length - 1;
+    const lastLine = this.outputLines[lastIndex];
+    const [firstNewLine, ...moreNewLines] = newLines;
+    if (lastLine !== undefined && firstNewLine !== undefined) {
       // Append first chunk to last line (incomplete line continuation)
-      this.outputLines[this.outputLines.length - 1] += newLines[0];
-      this.outputLines.push(...newLines.slice(1));
+      this.outputLines[lastIndex] = lastLine + firstNewLine;
+      this.outputLines.push(...moreNewLines);
     } else {
       this.outputLines.push(...newLines);
     }

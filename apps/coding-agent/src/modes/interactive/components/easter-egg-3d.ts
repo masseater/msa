@@ -639,11 +639,14 @@ class BlockRaster {
         const cellX = dotX >> 1;
         const cellY = dotY >> 2;
         const cell = cellY * width + cellX;
-        bits[cell]! |= DOT_BITS[(dotY & 3) * 2 + (dotX & 1)];
+        bits[cell]! |= DOT_BITS[(dotY & 3) * 2 + (dotX & 1)] ?? 0;
         counts[cell]!++;
-        rgb[cell * 3] += face.red + (background[0] - face.red) * fog;
-        rgb[cell * 3 + 1] += face.green + (background[1] - face.green) * fog;
-        rgb[cell * 3 + 2] += face.blue + (background[2] - face.blue) * fog;
+        const rgbIndex = cell * 3;
+        rgb[rgbIndex] = (rgb[rgbIndex] ?? 0) + face.red + (background[0] - face.red) * fog;
+        rgb[rgbIndex + 1] =
+          (rgb[rgbIndex + 1] ?? 0) + face.green + (background[1] - face.green) * fog;
+        rgb[rgbIndex + 2] =
+          (rgb[rgbIndex + 2] ?? 0) + face.blue + (background[2] - face.blue) * fog;
         if (cellX < cellMinX) cellMinX = cellX;
         if (cellX > cellMaxX) cellMaxX = cellX;
         if (cellY < cellMinY) cellMinY = cellY;

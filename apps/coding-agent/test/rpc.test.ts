@@ -68,11 +68,15 @@ describe.skipIf(!process.env["ANTHROPIC_API_KEY"] && !process.env["ANTHROPIC_OAU
       const sessionDirs = readdirSync(sessionsPath);
       expect(sessionDirs.length).toBeGreaterThan(0);
 
-      const cwdSessionDir = join(sessionsPath, sessionDirs[0]);
+      const [sessionDirName] = sessionDirs;
+      if (sessionDirName === undefined) throw new Error("expected a session directory");
+      const cwdSessionDir = join(sessionsPath, sessionDirName);
       const sessionFiles = readdirSync(cwdSessionDir).filter((f) => f.endsWith(".jsonl"));
       expect(sessionFiles.length).toBe(1);
 
-      const sessionContent = readFileSync(join(cwdSessionDir, sessionFiles[0]), "utf8");
+      const [sessionFileName] = sessionFiles;
+      if (sessionFileName === undefined) throw new Error("expected a session file");
+      const sessionContent = readFileSync(join(cwdSessionDir, sessionFileName), "utf8");
       const entries = sessionContent
         .trim()
         .split("\n")
@@ -107,9 +111,13 @@ describe.skipIf(!process.env["ANTHROPIC_API_KEY"] && !process.env["ANTHROPIC_OAU
       // Verify compaction in session file
       const sessionsPath = join(sessionDir, "sessions");
       const sessionDirs = readdirSync(sessionsPath);
-      const cwdSessionDir = join(sessionsPath, sessionDirs[0]);
+      const [sessionDirName] = sessionDirs;
+      if (sessionDirName === undefined) throw new Error("expected a session directory");
+      const cwdSessionDir = join(sessionsPath, sessionDirName);
       const sessionFiles = readdirSync(cwdSessionDir).filter((f) => f.endsWith(".jsonl"));
-      const sessionContent = readFileSync(join(cwdSessionDir, sessionFiles[0]), "utf8");
+      const [sessionFileName] = sessionFiles;
+      if (sessionFileName === undefined) throw new Error("expected a session file");
+      const sessionContent = readFileSync(join(cwdSessionDir, sessionFileName), "utf8");
       const entries = sessionContent
         .trim()
         .split("\n")
@@ -145,9 +153,13 @@ describe.skipIf(!process.env["ANTHROPIC_API_KEY"] && !process.env["ANTHROPIC_OAU
       // Verify bash message in session
       const sessionsPath = join(sessionDir, "sessions");
       const sessionDirs = readdirSync(sessionsPath);
-      const cwdSessionDir = join(sessionsPath, sessionDirs[0]);
+      const [sessionDirName] = sessionDirs;
+      if (sessionDirName === undefined) throw new Error("expected a session directory");
+      const cwdSessionDir = join(sessionsPath, sessionDirName);
       const sessionFiles = readdirSync(cwdSessionDir).filter((f) => f.endsWith(".jsonl"));
-      const sessionContent = readFileSync(join(cwdSessionDir, sessionFiles[0]), "utf8");
+      const [sessionFileName] = sessionFiles;
+      if (sessionFileName === undefined) throw new Error("expected a session file");
+      const sessionContent = readFileSync(join(cwdSessionDir, sessionFileName), "utf8");
       const entries = sessionContent
         .trim()
         .split("\n")
@@ -319,10 +331,12 @@ describe.skipIf(!process.env["ANTHROPIC_API_KEY"] && !process.env["ANTHROPIC_OAU
       for (const entry of entries) {
         expect(entry.id).toBeDefined();
       }
-      expect(leafId).toBe(entries[entries.length - 1].id);
+      expect(leafId).toBe(entries[entries.length - 1]?.id);
 
       // since cursor returns only entries strictly after the given id
-      const since = await client.getEntries(entries[0].id);
+      const [firstEntry] = entries;
+      if (firstEntry === undefined) throw new Error("expected session entries");
+      const since = await client.getEntries(firstEntry.id);
       expect(since.entries.map((e) => e.id)).toEqual(entries.slice(1).map((e) => e.id));
       expect(since.leafId).toBe(leafId);
 
@@ -344,8 +358,10 @@ describe.skipIf(!process.env["ANTHROPIC_API_KEY"] && !process.env["ANTHROPIC_OAU
       const chainIds: string[] = [];
       let nodes = tree;
       while (nodes.length === 1) {
-        chainIds.push(nodes[0].entry.id);
-        nodes = nodes[0].children;
+        const [node] = nodes;
+        if (node === undefined) break;
+        chainIds.push(node.entry.id);
+        nodes = node.children;
       }
       expect(nodes.length).toBe(0);
       expect(chainIds).toEqual(entries.map((e) => e.id));
@@ -390,9 +406,13 @@ describe.skipIf(!process.env["ANTHROPIC_API_KEY"] && !process.env["ANTHROPIC_OAU
       // Verify session_info entry in session file
       const sessionsPath = join(sessionDir, "sessions");
       const sessionDirs = readdirSync(sessionsPath);
-      const cwdSessionDir = join(sessionsPath, sessionDirs[0]);
+      const [sessionDirName] = sessionDirs;
+      if (sessionDirName === undefined) throw new Error("expected a session directory");
+      const cwdSessionDir = join(sessionsPath, sessionDirName);
       const sessionFiles = readdirSync(cwdSessionDir).filter((f) => f.endsWith(".jsonl"));
-      const sessionContent = readFileSync(join(cwdSessionDir, sessionFiles[0]), "utf8");
+      const [sessionFileName] = sessionFiles;
+      if (sessionFileName === undefined) throw new Error("expected a session file");
+      const sessionContent = readFileSync(join(cwdSessionDir, sessionFileName), "utf8");
       const entries = sessionContent
         .trim()
         .split("\n")

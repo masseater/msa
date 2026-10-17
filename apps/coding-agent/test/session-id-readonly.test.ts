@@ -52,7 +52,7 @@ function hasSessionWithId(root: string, sessionId: string): boolean {
     if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
 
     try {
-      const firstLine = readFileSync(path, "utf8").split("\n", 1)[0];
+      const firstLine = readFileSync(path, "utf8").split("\n", 1)[0] ?? "";
       const header = JSON.parse(firstLine) as { type?: string; id?: string };
       if (header.type === "session" && header.id === sessionId) return true;
     } catch {

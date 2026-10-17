@@ -197,7 +197,7 @@ export default function (msa: ExtensionAPI) {
     const arg = msa.getFlag("ssh") as string | undefined;
     if (arg) {
       if (arg.includes(":")) {
-        const [remote, path] = arg.split(":");
+        const [remote = "", path = ""] = arg.split(":");
         resolvedSsh = { remote, remoteCwd: path };
       } else {
         // No path given, evaluate pwd on remote

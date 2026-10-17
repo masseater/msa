@@ -96,7 +96,7 @@ describe("AssistantMessageComponent", () => {
 
     expect(lines).not.toHaveLength(0);
     expect(lines[0]).toContain(OSC133_ZONE_START);
-    expect(lines[lines.length - 1].startsWith(OSC133_ZONE_END + OSC133_ZONE_FINAL)).toBe(true);
+    expect(lines[lines.length - 1]?.startsWith(OSC133_ZONE_END + OSC133_ZONE_FINAL)).toBe(true);
   });
 
   test("does not add OSC 133 zone markers when assistant message contains tool calls", () => {

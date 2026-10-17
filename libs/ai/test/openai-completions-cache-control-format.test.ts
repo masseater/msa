@@ -121,7 +121,8 @@ function expectAnthropicCacheMarkers(params: CapturedParams): void {
   expect(params.tools).toHaveLength(1);
   expect(params.tools?.[0]?.cache_control).toEqual({ type: "ephemeral" });
 
-  const lastMessage = params.messages[params.messages.length - 1];
+  const lastMessage = params.messages.at(-1);
+  if (!lastMessage) throw new Error("Expected a request message");
   expect(lastMessage.role).toBe("user");
   expect(Array.isArray(lastMessage.content)).toBe(true);
   expect((lastMessage.content as TextPart[])[0]?.cache_control).toEqual({ type: "ephemeral" });
@@ -201,7 +202,8 @@ describe("openai-completions cacheControlFormat", () => {
     const userMessage = params.messages.find((message) => message.role === "user");
     expect(userMessage?.content).toBe("Read the file");
 
-    const toolMessage = params.messages[params.messages.length - 1];
+    const toolMessage = params.messages.at(-1);
+    if (!toolMessage) throw new Error("Expected a request message");
     expect(toolMessage.role).toBe("tool");
     expect(Array.isArray(toolMessage.content)).toBe(true);
     expect((toolMessage.content as TextPart[])[0]?.cache_control).toEqual({ type: "ephemeral" });

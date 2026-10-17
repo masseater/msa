@@ -323,23 +323,14 @@ const PANELS: ThemeBg[] = [
   "searchMatchBg",
   "customMessageBg",
 ];
-const THINKING: ThemeColor[] = [
-  "thinkingOff",
-  "thinkingMinimal",
-  "thinkingLow",
-  "thinkingMedium",
-  "thinkingHigh",
-  "thinkingXhigh",
-  "thinkingMax",
-];
-const THINKING_LEVELS: Level[] = [
-  "thinking0",
-  "thinking1",
-  "thinking2",
-  "thinking3",
-  "thinking4",
-  "thinking5",
-  "thinking6",
+const THINKING: [ThemeColor, Level][] = [
+  ["thinkingOff", "thinking0"],
+  ["thinkingMinimal", "thinking1"],
+  ["thinkingLow", "thinking2"],
+  ["thinkingMedium", "thinking3"],
+  ["thinkingHigh", "thinking4"],
+  ["thinkingXhigh", "thinking5"],
+  ["thinkingMax", "thinking6"],
 ];
 
 const each = (tokens: ThemeToken[], on: Surface[], level: Level): Rule[] =>
@@ -410,10 +401,10 @@ const RULES: Rule[] = [
   ...each(["mdQuoteBorder", "mdHr"], ["background", ...MESSAGE_PANELS, ...TOOL_PANELS], "readable"),
   { token: "scrollbarTrack", on: ["background"], level: "track" },
   { token: "scrollbarThumb", on: ["scrollbarTrack"], level: "thumb" },
-  ...THINKING.map((token, index): Rule => ({
+  ...THINKING.map(([token, level]): Rule => ({
     token,
     on: ["background"],
-    level: THINKING_LEVELS[index],
+    level,
   })),
 ];
 
@@ -567,7 +558,8 @@ export function generateSystemThemeColors(input: SystemThemeInput): SystemThemeC
   const paint = (token: ThemeToken, oklabL: number): RgbColor => {
     const lightness = oklabToOkhslLightness(oklabL);
     const family: Family = FAMILIES[TOKEN_FAMILIES[token]];
-    if (!palette) {
+    const source = palette?.[TOKEN_SLOTS[token] ?? family.slot];
+    if (source === undefined) {
       const { min, max } = family.saturation;
       return okhslColor(
         family.hue,
@@ -575,7 +567,7 @@ export function generateSystemThemeColors(input: SystemThemeInput): SystemThemeC
         lightness,
       );
     }
-    return anchored(palette[TOKEN_SLOTS[token] ?? family.slot], family, lightness, saturation);
+    return anchored(source, family, lightness, saturation);
   };
 
   /**

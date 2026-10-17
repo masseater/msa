@@ -144,9 +144,9 @@ Plan:
 
     const items = extractTodoItems(message);
     expect(items).toHaveLength(3);
-    expect(items[0].step).toBe(1);
-    expect(items[0].text).toBe("First step here");
-    expect(items[0].completed).toBe(false);
+    expect(items[0]?.step).toBe(1);
+    expect(items[0]?.text).toBe("First step here");
+    expect(items[0]?.completed).toBe(false);
   });
 
   it("handles bold Plan header", () => {
@@ -182,7 +182,7 @@ Plan:
 
     const items = extractTodoItems(message);
     expect(items).toHaveLength(1);
-    expect(items[0].text).toContain("proper");
+    expect(items[0]?.text).toContain("proper");
   });
 
   it("filters out code-like items", () => {
@@ -233,9 +233,9 @@ describe("markCompletedSteps", () => {
     const count = markCompletedSteps("[DONE:1] [DONE:3]", items);
 
     expect(count).toBe(2);
-    expect(items[0].completed).toBe(true);
-    expect(items[1].completed).toBe(false);
-    expect(items[2].completed).toBe(true);
+    expect(items[0]?.completed).toBe(true);
+    expect(items[1]?.completed).toBe(false);
+    expect(items[2]?.completed).toBe(true);
   });
 
   it("returns count of completed items", () => {
@@ -251,13 +251,13 @@ describe("markCompletedSteps", () => {
     const count = markCompletedSteps("[DONE:99]", items);
 
     expect(count).toBe(1); // Still counts the marker found
-    expect(items[0].completed).toBe(false); // But doesn't mark anything
+    expect(items[0]?.completed).toBe(false); // But doesn't mark anything
   });
 
   it("doesn't double-complete already completed items", () => {
     const items: TodoItem[] = [{ step: 1, text: "First", completed: true }];
 
     markCompletedSteps("[DONE:1]", items);
-    expect(items[0].completed).toBe(true);
+    expect(items[0]?.completed).toBe(true);
   });
 });

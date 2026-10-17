@@ -179,7 +179,8 @@ export function createReadToolDefinition(
               const startLine = offset ? Math.max(0, offset - 1) : 0;
               const startLineDisplay = startLine + 1;
               // Check if offset is out of bounds.
-              if (startLine >= allLines.length) {
+              const firstLine = allLines[startLine];
+              if (firstLine === undefined) {
                 throw new Error(
                   `Offset ${offset} is beyond end of file (${allLines.length} lines total)`,
                 );
@@ -199,7 +200,7 @@ export function createReadToolDefinition(
               let outputText: string;
               if (truncation.firstLineExceedsLimit) {
                 // First line alone exceeds the byte limit. Point the model at a bash fallback.
-                const firstLineSize = formatSize(Buffer.byteLength(allLines[startLine], "utf-8"));
+                const firstLineSize = formatSize(Buffer.byteLength(firstLine, "utf-8"));
                 outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' ${path} | head -c ${DEFAULT_MAX_BYTES}]`;
                 details = { truncation };
               } else if (truncation.truncated) {

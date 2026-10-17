@@ -55,18 +55,12 @@ function entryToMessage(entry: SessionEntry): AgentMessage | undefined {
 }
 
 function getHandoffMessages(branch: SessionEntry[]): AgentMessage[] {
-  let compactionIndex = -1;
-  for (let i = branch.length - 1; i >= 0; i--) {
-    if (branch[i].type === "compaction") {
-      compactionIndex = i;
-      break;
-    }
-  }
-  if (compactionIndex < 0) {
+  const compactionIndex = branch.findLastIndex((entry) => entry.type === "compaction");
+  const compaction = branch[compactionIndex];
+  if (compaction === undefined) {
     return branch.map(entryToMessage).filter((message) => message !== undefined);
   }
 
-  const compaction = branch[compactionIndex];
   const firstKeptIndex =
     compaction.type === "compaction"
       ? branch.findIndex((entry) => entry.id === compaction.firstKeptEntryId)

@@ -81,6 +81,8 @@ export function parseArgs(args: string[]): Args {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
+    if (arg === undefined) break;
+    const nextArg = args[i + 1];
 
     if (arg === "--") {
       for (const positionalArg of args.slice(i + 1)) {
@@ -96,7 +98,7 @@ export function parseArgs(args: string[]): Args {
     } else if (arg === "--version" || arg === "-v") {
       result.version = true;
     } else if (arg === "--mode") {
-      const mode = args[i + 1];
+      const mode = nextArg;
       if (mode === undefined || mode.startsWith("-")) {
         result.diagnostics.push({ type: "error", message: "--mode requires text, json, or rpc" });
         continue;
@@ -114,35 +116,46 @@ export function parseArgs(args: string[]): Args {
       result.continue = true;
     } else if (arg === "--resume" || arg === "-r") {
       result.resume = true;
-    } else if (arg === "--provider" && i + 1 < args.length) {
-      result.provider = args[++i];
-    } else if (arg === "--model" && i + 1 < args.length) {
-      result.model = args[++i];
-    } else if (arg === "--api-key" && i + 1 < args.length) {
-      result.apiKey = args[++i];
-    } else if (arg === "--system-prompt" && i + 1 < args.length) {
-      result.systemPrompt = args[++i];
-    } else if (arg === "--append-system-prompt" && i + 1 < args.length) {
+    } else if (arg === "--provider" && nextArg !== undefined) {
+      i++;
+      result.provider = nextArg;
+    } else if (arg === "--model" && nextArg !== undefined) {
+      i++;
+      result.model = nextArg;
+    } else if (arg === "--api-key" && nextArg !== undefined) {
+      i++;
+      result.apiKey = nextArg;
+    } else if (arg === "--system-prompt" && nextArg !== undefined) {
+      i++;
+      result.systemPrompt = nextArg;
+    } else if (arg === "--append-system-prompt" && nextArg !== undefined) {
+      i++;
       result.appendSystemPrompt = result.appendSystemPrompt ?? [];
-      result.appendSystemPrompt.push(args[++i]);
+      result.appendSystemPrompt.push(nextArg);
     } else if (arg === "--name" || arg === "-n") {
-      if (i + 1 < args.length) {
-        result.name = args[++i];
+      if (nextArg !== undefined) {
+        result.name = nextArg;
+        i++;
       } else {
         result.diagnostics.push({ type: "error", message: "--name requires a value" });
       }
     } else if (arg === "--no-session") {
       result.noSession = true;
-    } else if (arg === "--session" && i + 1 < args.length) {
-      result.session = args[++i];
-    } else if (arg === "--session-id" && i + 1 < args.length) {
-      result.sessionId = args[++i];
-    } else if (arg === "--fork" && i + 1 < args.length) {
-      result.fork = args[++i];
-    } else if (arg === "--session-dir" && i + 1 < args.length) {
-      result.sessionDir = args[++i];
-    } else if (arg === "--models" && i + 1 < args.length) {
-      result.models = args[++i]
+    } else if (arg === "--session" && nextArg !== undefined) {
+      i++;
+      result.session = nextArg;
+    } else if (arg === "--session-id" && nextArg !== undefined) {
+      i++;
+      result.sessionId = nextArg;
+    } else if (arg === "--fork" && nextArg !== undefined) {
+      i++;
+      result.fork = nextArg;
+    } else if (arg === "--session-dir" && nextArg !== undefined) {
+      i++;
+      result.sessionDir = nextArg;
+    } else if (arg === "--models" && nextArg !== undefined) {
+      i++;
+      result.models = nextArg
         .split(",")
         .map((s) => s.trim())
         .filter((pattern) => pattern.length > 0);
@@ -152,8 +165,9 @@ export function parseArgs(args: string[]): Args {
       result.noBuiltinTools = true;
     } else if (arg === "--orchestrator") {
       result.orchestrator = true;
-    } else if ((arg === "--tools" || arg === "-t") && i + 1 < args.length) {
-      const tools = args[++i]
+    } else if ((arg === "--tools" || arg === "-t") && nextArg !== undefined) {
+      i++;
+      const tools = nextArg
         .split(",")
         .map((s) => s.trim())
         .filter((name) => name.length > 0);
@@ -163,13 +177,15 @@ export function parseArgs(args: string[]): Args {
       } else {
         result.tools = tools;
       }
-    } else if ((arg === "--exclude-tools" || arg === "-xt") && i + 1 < args.length) {
-      result.excludeTools = args[++i]
+    } else if ((arg === "--exclude-tools" || arg === "-xt") && nextArg !== undefined) {
+      i++;
+      result.excludeTools = nextArg
         .split(",")
         .map((s) => s.trim())
         .filter((name) => name.length > 0);
-    } else if (arg === "--thinking" && i + 1 < args.length) {
-      const level = args[++i];
+    } else if (arg === "--thinking" && nextArg !== undefined) {
+      i++;
+      const level = nextArg;
       if (isValidThinkingLevel(level)) {
         result.thinking = level;
       } else {
@@ -180,7 +196,7 @@ export function parseArgs(args: string[]): Args {
       }
     } else if (arg === "--print" || arg === "-p") {
       result.print = true;
-      const next = args[i + 1];
+      const next = nextArg;
       if (
         next !== undefined &&
         !next.startsWith("@") &&
@@ -189,26 +205,31 @@ export function parseArgs(args: string[]): Args {
         result.messages.push(next);
         i++;
       }
-    } else if (arg === "--export" && i + 1 < args.length) {
-      result.export = args[++i];
-    } else if ((arg === "--extension" || arg === "-e") && i + 1 < args.length) {
+    } else if (arg === "--export" && nextArg !== undefined) {
+      i++;
+      result.export = nextArg;
+    } else if ((arg === "--extension" || arg === "-e") && nextArg !== undefined) {
+      i++;
       result.extensions = result.extensions ?? [];
-      result.extensions.push(args[++i]);
+      result.extensions.push(nextArg);
     } else if (arg === "--no-extensions" || arg === "-ne") {
       result.noExtensions = true;
     } else if (arg === "--no-mcp") {
       result.noMcp = true;
-    } else if (arg === "--skill" && i + 1 < args.length) {
+    } else if (arg === "--skill" && nextArg !== undefined) {
+      i++;
       result.skills = result.skills ?? [];
-      result.skills.push(args[++i]);
-    } else if (arg === "--prompt-template" && i + 1 < args.length) {
+      result.skills.push(nextArg);
+    } else if (arg === "--prompt-template" && nextArg !== undefined) {
+      i++;
       result.promptTemplates = result.promptTemplates ?? [];
-      result.promptTemplates.push(args[++i]);
-    } else if (arg === "--theme" && i + 1 < args.length) {
+      result.promptTemplates.push(nextArg);
+    } else if (arg === "--theme" && nextArg !== undefined) {
+      i++;
       result.themes = result.themes ?? [];
-      result.themes.push(args[++i]);
+      result.themes.push(nextArg);
     } else if (arg === "--use-theme") {
-      const themeName = args[i + 1];
+      const themeName = nextArg;
       if (themeName === undefined || themeName.startsWith("-")) {
         result.diagnostics.push({ type: "error", message: "--use-theme requires a theme name" });
       } else {
@@ -225,13 +246,14 @@ export function parseArgs(args: string[]): Args {
       result.noContextFiles = true;
     } else if (arg === "--list-models") {
       // Check if next arg is a search pattern (not a flag or file arg)
-      if (i + 1 < args.length && !args[i + 1].startsWith("-") && !args[i + 1].startsWith("@")) {
-        result.listModels = args[++i];
+      if (nextArg !== undefined && !nextArg.startsWith("-") && !nextArg.startsWith("@")) {
+        result.listModels = nextArg;
+        i++;
       } else {
         result.listModels = true;
       }
     } else if (arg === "--tui-mode") {
-      const mode = args[i + 1];
+      const mode = nextArg;
       if (mode === "regular" || mode === "fullscreen") {
         result.tuiMode = mode;
         i++;
@@ -263,7 +285,7 @@ export function parseArgs(args: string[]): Args {
         result.unknownFlags.set(arg.slice(2, eqIndex), arg.slice(eqIndex + 1));
       } else {
         const flagName = arg.slice(2);
-        const next = args[i + 1];
+        const next = nextArg;
         if (next !== undefined && !next.startsWith("-") && !next.startsWith("@")) {
           result.unknownFlags.set(flagName, next);
           i++;

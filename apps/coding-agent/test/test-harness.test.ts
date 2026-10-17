@@ -87,8 +87,8 @@ describe("test harness", () => {
       (m): m is AssistantMessage => m.role === "assistant",
     );
     expect(assistantMessages).toHaveLength(1);
-    expect(assistantMessages[0].stopReason).toBe("error");
-    expect(assistantMessages[0].errorMessage).toBe("something broke");
+    expect(assistantMessages[0]?.stopReason).toBe("error");
+    expect(assistantMessages[0]?.errorMessage).toBe("something broke");
   });
 
   it("turns a pending terminal response into an error", async () => {
@@ -103,8 +103,8 @@ describe("test harness", () => {
       (m): m is AssistantMessage => m.role === "assistant",
     );
     expect(assistantMessages).toHaveLength(1);
-    expect(assistantMessages[0].stopReason).toBe("error");
-    expect(assistantMessages[0].errorMessage).toBe("Faux response ended without a stop reason");
+    expect(assistantMessages[0]?.stopReason).toBe("error");
+    expect(assistantMessages[0]?.errorMessage).toBe("Faux response ended without a stop reason");
   });
 
   it("retry on transient error", async () => {
@@ -122,7 +122,7 @@ describe("test harness", () => {
 
     const retryEnds = harness.eventsOfType("auto_retry_end");
     expect(retryEnds).toHaveLength(1);
-    expect(retryEnds[0].success).toBe(true);
+    expect(retryEnds[0]?.success).toBe(true);
   });
 
   it("custom usage numbers", async () => {
@@ -161,7 +161,7 @@ describe("test harness", () => {
 
     expect(harness.faux.contexts).toHaveLength(1);
     const ctx = harness.faux.contexts[0];
-    const userMsg = ctx.messages.find((m) => m.role === "user");
+    const userMsg = ctx?.messages.find((m) => m.role === "user");
     expect(userMsg).toBeDefined();
   });
 

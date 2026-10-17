@@ -90,7 +90,7 @@ describe("Fireworks model generation", () => {
       "deepseek-v4-flash-vision-exp",
       "deepseek-v4-pro-0813",
     ]) {
-      expect(models[`accounts/fireworks/models/${id}`].thinkingLevelMap).toEqual({
+      expect(models[`accounts/fireworks/models/${id}`]?.thinkingLevelMap).toEqual({
         off: "none",
         minimal: null,
         low: "low",
@@ -101,7 +101,7 @@ describe("Fireworks model generation", () => {
       });
     }
     for (const id of ["qwen3p8-max", "qwen3p8-2p4t-a95b"]) {
-      expect(models[`accounts/fireworks/models/${id}`].thinkingLevelMap).toEqual({
+      expect(models[`accounts/fireworks/models/${id}`]?.thinkingLevelMap).toEqual({
         off: "none",
         minimal: null,
         low: "low",
@@ -118,7 +118,7 @@ describe("Fireworks model generation", () => {
         model.id.endsWith("kimi-k2p6") ? undefined : true,
       );
     }
-    expect(models["accounts/fireworks/models/kimi-k2p6"].thinkingLevelMap).toBeUndefined();
+    expect(models["accounts/fireworks/models/kimi-k2p6"]?.thinkingLevelMap).toBeUndefined();
   });
 
   // Regression for #9323: new effort-capable models must not require an allowlist update.
@@ -127,7 +127,8 @@ describe("Fireworks model generation", () => {
       "new-reasoner": [{ type: "toggle" }, { type: "effort", values: ["low", "max"] }],
     });
     const model = models["accounts/fireworks/models/new-reasoner"];
-    if (!hasApi(model, "anthropic-messages")) throw new Error("Expected Messages model");
+    if (model === undefined || !hasApi(model, "anthropic-messages"))
+      throw new Error("Expected Messages model");
     expect(model.compat?.forceAdaptiveThinking).toBe(true);
     expect(getSupportedThinkingLevels(model)).toEqual(["off", "low", "max"]);
     let payload: Record<string, unknown> | undefined;
@@ -167,7 +168,7 @@ describe("Fireworks model generation", () => {
       "deepseek-v4-flash-0731": [{ type: "effort", values: ["high", "max"] }],
       "qwen3p8-max": [{ type: "toggle" }, { type: "effort", values: ["medium", "xhigh"] }],
     });
-    expect(models["accounts/fireworks/models/deepseek-v4-flash-0731"].thinkingLevelMap).toEqual({
+    expect(models["accounts/fireworks/models/deepseek-v4-flash-0731"]?.thinkingLevelMap).toEqual({
       off: null,
       minimal: null,
       low: null,
@@ -176,7 +177,7 @@ describe("Fireworks model generation", () => {
       xhigh: null,
       max: "max",
     });
-    expect(models["accounts/fireworks/models/qwen3p8-max"].thinkingLevelMap).toEqual({
+    expect(models["accounts/fireworks/models/qwen3p8-max"]?.thinkingLevelMap).toEqual({
       off: "none",
       minimal: null,
       low: null,

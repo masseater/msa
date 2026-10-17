@@ -117,7 +117,7 @@ async function listScenarios(mode: string, workDir: string): Promise<string[]> {
   );
   if (result.code !== 0)
     throw new Error(`Listing ${mode} scenarios failed:\n${result.stderr || result.stdout}`);
-  return [...result.stdout.matchAll(/^\s+- (\S+)/gm)].map((match) => match[1]);
+  return [...result.stdout.matchAll(/^\s+- (\S+)/gm)].flatMap((match) => match[1] ?? []);
 }
 
 function findFile(dir: string, name: string): string | undefined {
@@ -215,8 +215,8 @@ function toBaseline(results: ScenarioResult[]): Baseline {
   const baseline: Baseline = { conformance: CONFORMANCE_PACKAGE, modes: {} };
   for (const result of results) {
     const ids = [...result.checks.keys()].sort();
-    baseline.modes[result.mode] ??= {};
-    baseline.modes[result.mode][result.scenario] = {
+    const scenarios = (baseline.modes[result.mode] ??= {});
+    scenarios[result.scenario] = {
       passing: ids.filter((id) => result.checks.get(id) === "pass"),
       failing: ids.filter((id) => result.checks.get(id) === "fail"),
     };

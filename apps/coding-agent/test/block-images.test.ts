@@ -95,7 +95,7 @@ describe("blockImages setting", () => {
       const result = await tool.execute("test-2", { path: textPath });
 
       expect(result.content).toHaveLength(1);
-      expect(result.content[0].type).toBe("text");
+      expect(result.content[0]?.type).toBe("text");
       const textContent = result.content[0] as { type: "text"; text: string };
       expect(textContent.text).toContain("Hello, world!");
     });
@@ -121,7 +121,7 @@ describe("blockImages setting", () => {
       const result = await processFileArguments([imagePath]);
 
       expect(result.images).toHaveLength(1);
-      expect(result.images[0].type).toBe("image");
+      expect(result.images[0]?.type).toBe("image");
     });
 
     it("should process BMP images from disk as PNG attachments", async () => {
@@ -131,8 +131,8 @@ describe("blockImages setting", () => {
       const result = await processFileArguments([imagePath]);
 
       expect(result.images).toHaveLength(1);
-      expect(result.images[0].type).toBe("image");
-      expect(result.images[0].mimeType).toBe("image/png");
+      expect(result.images[0]?.type).toBe("image");
+      expect(result.images[0]?.mimeType).toBe("image/png");
       expect(result.text).toContain("[Image converted from image/bmp to image/png.]");
     });
 

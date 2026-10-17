@@ -102,11 +102,12 @@ function resolveVarRefs(
   if (visited.has(value)) {
     throw new Error(`Circular variable reference detected: ${value}`);
   }
-  if (!(value in vars)) {
+  const reference = vars[value];
+  if (reference === undefined) {
     throw new Error(`Variable reference not found: ${value}`);
   }
   visited.add(value);
-  return resolveVarRefs(vars[value], vars, visited);
+  return resolveVarRefs(reference, vars, visited);
 }
 
 function resolveThemeColors<T extends Record<string, ColorValue>>(
@@ -513,8 +514,9 @@ function parseThemeJsonContent(label: string, content: string): ThemeJson {
 
 function loadThemeJson(name: string): ThemeJson {
   const builtinThemes = getBuiltinThemes();
-  if (name in builtinThemes) {
-    return builtinThemes[name];
+  const builtinTheme = builtinThemes[name];
+  if (builtinTheme) {
+    return builtinTheme;
   }
   const registeredTheme = registeredThemes.get(name);
   if (registeredTheme?.sourcePath) {

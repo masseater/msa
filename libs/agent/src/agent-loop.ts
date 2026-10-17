@@ -75,11 +75,12 @@ export function agentLoopContinue(
   signal: AbortSignal | undefined,
   streamFn: StreamFn,
 ): EventStream<AgentEvent, AgentMessage[]> {
-  if (context.messages.length === 0) {
+  const lastMessage = context.messages.at(-1);
+  if (lastMessage === undefined) {
     throw new Error("Cannot continue: no messages in context");
   }
 
-  if (context.messages[context.messages.length - 1].role === "assistant") {
+  if (lastMessage.role === "assistant") {
     throw new Error("Cannot continue from message role: assistant");
   }
 
@@ -140,11 +141,12 @@ export async function runAgentLoopContinue(
   signal: AbortSignal | undefined,
   streamFn: StreamFn,
 ): Promise<AgentMessage[]> {
-  if (context.messages.length === 0) {
+  const lastMessage = context.messages.at(-1);
+  if (lastMessage === undefined) {
     throw new Error("Cannot continue: no messages in context");
   }
 
-  if (context.messages[context.messages.length - 1].role === "assistant") {
+  if (lastMessage.role === "assistant") {
     throw new Error("Cannot continue from message role: assistant");
   }
 
@@ -358,13 +360,7 @@ function declareToolChanges(
   context: AgentContext,
   pendingMessages: AgentMessage[],
 ): AgentMessage[] {
-  let systemIndex = -1;
-  for (let i = pendingMessages.length - 1; i >= 0; i--) {
-    if (pendingMessages[i].role === "system") {
-      systemIndex = i;
-      break;
-    }
-  }
+  const systemIndex = pendingMessages.findLastIndex((message) => message.role === "system");
   const pending = pendingMessages[systemIndex] as SystemMessage | undefined;
   const baseline = pending
     ? pendingMessages.map((message, index) =>

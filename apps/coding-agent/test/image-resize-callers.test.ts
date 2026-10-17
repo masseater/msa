@@ -40,7 +40,7 @@ describe("image resize callers", () => {
     const result = await tool.execute("test-read-image", { path: imagePath });
 
     expect(result.content).toHaveLength(1);
-    expect(result.content[0].type).toBe("text");
+    expect(result.content[0]?.type).toBe("text");
     expect((result.content[0] as { type: "text"; text: string }).text).toContain("Image omitted");
   });
 

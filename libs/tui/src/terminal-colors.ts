@@ -48,17 +48,21 @@ const COLOR_SCHEME_REPORT_PATTERN = /^(?:\x1b\[\?997;(1|2)n)+$/;
 export function parseOscColorResponse(
   data: string,
 ): { target: OscColorTarget; rgb: RgbColor | undefined } | undefined {
-  const match = data.match(OSC_COLOR_RESPONSE_PATTERN);
-  if (!match) {
+  const [, dynamicColor, paletteIndex, value] = data.match(OSC_COLOR_RESPONSE_PATTERN) ?? [];
+  if (value === undefined) {
     return undefined;
   }
-  const target: OscColorTarget =
-    match[1] === "10"
-      ? "foreground"
-      : match[1] === "11"
-        ? "background"
-        : Number.parseInt(match[2], 10);
-  return { target, rgb: parseOscColorValue(match[3]) };
+  let target: OscColorTarget;
+  if (dynamicColor === "10") {
+    target = "foreground";
+  } else if (dynamicColor === "11") {
+    target = "background";
+  } else if (paletteIndex !== undefined) {
+    target = Number.parseInt(paletteIndex, 10);
+  } else {
+    throw new Error(`OSC color response has no target: ${JSON.stringify(data)}`);
+  }
+  return { target, rgb: parseOscColorValue(value) };
 }
 
 function parseOscColorValue(rawValue: string): RgbColor | undefined {

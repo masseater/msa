@@ -82,8 +82,8 @@ describe("loadEntriesFromFile", () => {
     );
     const entries = loadEntriesFromFile(file);
     expect(entries).toHaveLength(2);
-    expect(entries[0].type).toBe("session");
-    expect(entries[1].type).toBe("message");
+    expect(entries[0]?.type).toBe("session");
+    expect(entries[1]?.type).toBe("message");
   });
 
   it("skips malformed lines but keeps valid ones", () => {
@@ -412,7 +412,9 @@ describe("SessionManager.setSessionFile with corrupted files", () => {
     const content = readFileSync(emptyFile, "utf-8");
     const lines = content.trim().split("\n").filter(Boolean);
     expect(lines.length).toBe(1);
-    const header = JSON.parse(lines[0]);
+    const [headerLine] = lines;
+    if (headerLine === undefined) throw new Error("expected a header line");
+    const header = JSON.parse(headerLine);
     expect(header.type).toBe("session");
     expect(header.id).toBe(sm.getSessionId());
   });

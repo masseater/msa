@@ -44,7 +44,8 @@ export default function (msa: ExtensionAPI) {
     const matches: Array<{ full: string; command: string }> = [];
     let match = PATTERN.exec(text);
     while (match) {
-      matches.push({ full: match[0], command: match[1] });
+      const [full, command] = match;
+      if (command !== undefined) matches.push({ full, command });
       match = PATTERN.exec(text);
     }
 

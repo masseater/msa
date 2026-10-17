@@ -118,8 +118,8 @@ describe("Anthropic preferred strict tool fallback", () => {
       expect(payloads).toHaveLength(2);
       expect(onPayload).toHaveBeenCalledTimes(2);
       expect(onResponse).toHaveBeenCalledTimes(1);
-      const first = payloads[0].tools as BetaTool[];
-      const second = payloads[1].tools as BetaTool[];
+      const first = payloads[0]?.tools as BetaTool[];
+      const second = payloads[1]?.tools as BetaTool[];
       expect(first[0]).toMatchObject({
         strict: true,
         input_schema: {
@@ -127,16 +127,16 @@ describe("Anthropic preferred strict tool fallback", () => {
           properties: { optional: { anyOf: [{ type: "number" }, { type: "null" }] } },
         },
       });
-      expect(second[0].strict).toBeUndefined();
-      expect(second[0].input_schema).toEqual({
+      expect(second[0]?.strict).toBeUndefined();
+      expect(second[0]?.input_schema).toEqual({
         type: "object",
         properties: { value: { type: "string" }, optional: { type: "number" } },
         required: ["value"],
       });
       expect(second[1]).toEqual(first[1]);
-      expect(second[1].strict).toBe(true);
+      expect(second[1]?.strict).toBe(true);
       expect(second[2]).toEqual(first[2]);
-      expect(second[2].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
+      expect(second[2]?.cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
       expect(payloads.map((payload) => payload.stream)).toEqual([true, true]);
       expect(payloads[1]).toMatchObject({ inference_geo: "us" });
       expect(JSON.stringify(transcript)).toBe(original);
@@ -170,7 +170,7 @@ describe("Anthropic preferred strict tool fallback", () => {
     ).result();
     expect(result.stopReason).toBe("stop");
     expect(payloads).toHaveLength(2);
-    expect(payloads[1].tools).toEqual(payloads[0].tools);
+    expect(payloads[1]?.tools).toEqual(payloads[0]?.tools);
     const additions = payloads.map((payload) =>
       payload.messages.flatMap((message) =>
         Array.isArray(message.content)
@@ -182,10 +182,12 @@ describe("Anthropic preferred strict tool fallback", () => {
           : [],
       ),
     );
-    expect(additions[0].map((definition) => definition.strict)).toEqual([true, true]);
-    expect(additions[1].map((definition) => definition.strict)).toEqual([undefined, true]);
-    expect(additions[1][0].input_schema.required).toEqual(["value"]);
-    expect(additions[1][1]).toEqual(additions[0][1]);
+    const [firstAdditions, secondAdditions] = additions;
+    if (!firstAdditions || !secondAdditions) throw new Error("Expected two tool additions");
+    expect(firstAdditions.map((definition) => definition.strict)).toEqual([true, true]);
+    expect(secondAdditions.map((definition) => definition.strict)).toEqual([undefined, true]);
+    expect(secondAdditions[0]?.input_schema.required).toEqual(["value"]);
+    expect(secondAdditions[1]).toEqual(firstAdditions[1]);
   });
 
   it.each([
@@ -235,7 +237,9 @@ describe("Anthropic preferred strict tool fallback", () => {
     expect(result.stopReason).toBe("error");
     expect(result.errorMessage).toContain("Required grammar is still too large");
     expect(payloads).toHaveLength(2);
-    expect((payloads[1].tools as BetaTool[])[1].strict).toBe(true);
+    const retriedPayload = payloads[1];
+    if (!retriedPayload) throw new Error("Expected a retried payload");
+    expect((retriedPayload.tools as BetaTool[])[1]?.strict).toBe(true);
   });
 
   it("does not downgrade a hook exception, even if it looks like the provider rejection", async () => {
@@ -294,7 +298,7 @@ describe("Anthropic preferred strict tool fallback", () => {
     const transcript = context([tool("lookup", "prefer")]);
     await streamAnthropic(model, transcript, options).result();
     await streamAnthropic(model, transcript, options).result();
-    expect(payloads.map((payload) => (payload.tools as BetaTool[])[0].strict)).toEqual([
+    expect(payloads.map((payload) => (payload.tools as BetaTool[])[0]?.strict)).toEqual([
       true,
       undefined,
       true,
@@ -326,7 +330,7 @@ describe("Anthropic preferred strict tool fallback", () => {
       },
     }).result();
     expect(result.stopReason).toBe("stop");
-    expect(payloads.map((payload) => (payload.tools as BetaTool[])[0].strict)).toEqual([
+    expect(payloads.map((payload) => (payload.tools as BetaTool[])[0]?.strict)).toEqual([
       true,
       undefined,
     ]);

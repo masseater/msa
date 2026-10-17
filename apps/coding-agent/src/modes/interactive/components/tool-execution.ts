@@ -391,16 +391,17 @@ export class ToolExecutionComponent extends Container {
           const index = this.imageComponents.length;
           const previous = previousSources[index];
           const imageComponent =
-            previous?.data === source.data &&
+            (previous?.data === source.data &&
             previous.mimeType === source.mimeType &&
             previous.widthCells === source.widthCells
               ? previousImages[index]
-              : new Image(
-                  source.data,
-                  source.mimeType,
-                  { fallbackColor: (s: string) => theme.fg("toolOutput", s) },
-                  { maxWidthCells: source.widthCells },
-                );
+              : undefined) ??
+            new Image(
+              source.data,
+              source.mimeType,
+              { fallbackColor: (s: string) => theme.fg("toolOutput", s) },
+              { maxWidthCells: source.widthCells },
+            );
           if (source.mimeType !== "image/png") {
             ensurePngTranscoder(() => {
               this.invalidate();

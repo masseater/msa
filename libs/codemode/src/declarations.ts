@@ -364,7 +364,9 @@ function objectType(schema: Record<string, unknown>, context: SchemaContext): st
   const lines = ["{"];
   comments.forEach((comment, index) => {
     for (const line of comment) lines.push(`${INDENT}// ${line}`);
-    lines.push(`${INDENT}${members[index].replaceAll("\n", `\n${INDENT}`)}`);
+    const member = members[index];
+    if (member === undefined) throw new Error(`Property ${names[index]} has no member`);
+    lines.push(`${INDENT}${member.replaceAll("\n", `\n${INDENT}`)}`);
   });
   for (const member of members.slice(names.length)) lines.push(`${INDENT}${member}`);
   lines.push("}");

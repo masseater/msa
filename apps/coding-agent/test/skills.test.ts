@@ -42,9 +42,9 @@ describe("skills", () => {
       });
 
       expect(skills).toHaveLength(1);
-      expect(skills[0].name).toBe("valid-skill");
-      expect(skills[0].description).toBe("A valid skill for testing purposes.");
-      expect(skills[0].sourceInfo.source).toBe("test");
+      expect(skills[0]?.name).toBe("valid-skill");
+      expect(skills[0]?.description).toBe("A valid skill for testing purposes.");
+      expect(skills[0]?.sourceInfo.source).toBe("test");
       expect(diagnostics).toHaveLength(0);
     });
 
@@ -55,7 +55,7 @@ describe("skills", () => {
       });
 
       expect(skills).toHaveLength(1);
-      expect(skills[0].name).toBe("different-name");
+      expect(skills[0]?.name).toBe("different-name");
       expect(
         diagnostics.some((d: ResourceDiagnostic) =>
           d.message.includes("does not match parent directory"),
@@ -116,7 +116,7 @@ describe("skills", () => {
       });
 
       expect(skills).toHaveLength(1);
-      expect(skills[0].name).toBe("child-skill");
+      expect(skills[0]?.name).toBe("child-skill");
       expect(diagnostics).toHaveLength(0);
     });
 
@@ -127,8 +127,8 @@ describe("skills", () => {
       });
 
       expect(skills).toHaveLength(1);
-      expect(skills[0].name).toBe("root-skill-preferred");
-      expect(skills[0].description).toBe("Root skill should win.");
+      expect(skills[0]?.name).toBe("root-skill-preferred");
+      expect(skills[0]?.description).toBe("Root skill should win.");
       expect(diagnostics).toHaveLength(0);
     });
 
@@ -162,8 +162,8 @@ describe("skills", () => {
       });
 
       expect(skills).toHaveLength(1);
-      expect(skills[0].description).toContain("\n");
-      expect(skills[0].description).toContain("This is a multiline description.");
+      expect(skills[0]?.description).toContain("\n");
+      expect(skills[0]?.description).toContain("This is a multiline description.");
       expect(diagnostics).toHaveLength(0);
     });
 
@@ -211,7 +211,7 @@ describe("skills", () => {
       });
 
       expect(skills).toHaveLength(1);
-      expect(skills[0].name).toBe("valid-skill");
+      expect(skills[0]?.name).toBe("valid-skill");
     });
 
     it("should parse disable-model-invocation frontmatter field", () => {
@@ -221,8 +221,8 @@ describe("skills", () => {
       });
 
       expect(skills).toHaveLength(1);
-      expect(skills[0].name).toBe("disable-model-invocation");
-      expect(skills[0].disableModelInvocation).toBe(true);
+      expect(skills[0]?.name).toBe("disable-model-invocation");
+      expect(skills[0]?.disableModelInvocation).toBe(true);
       // Should not warn about unknown field
       expect(
         diagnostics.some((d: ResourceDiagnostic) =>
@@ -238,7 +238,7 @@ describe("skills", () => {
       });
 
       expect(skills).toHaveLength(1);
-      expect(skills[0].disableModelInvocation).toBe(false);
+      expect(skills[0]?.disableModelInvocation).toBe(false);
     });
   });
 
@@ -378,7 +378,7 @@ describe("skills", () => {
         includeDefaults: true,
       });
       expect(skills).toHaveLength(1);
-      expect(skills[0].sourceInfo.scope).toBe("temporary");
+      expect(skills[0]?.sourceInfo.scope).toBe("temporary");
       expect(diagnostics).toHaveLength(0);
     });
 
@@ -449,7 +449,7 @@ describe("skills", () => {
       expect(skillMap.size).toBe(1);
       expect(skillMap.get("calendar")?.sourceInfo.source).toBe("first");
       expect(collisionWarnings).toHaveLength(1);
-      expect(collisionWarnings[0].message).toContain("name collision");
+      expect(collisionWarnings[0]?.message).toContain("name collision");
     });
   });
 });

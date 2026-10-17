@@ -97,7 +97,9 @@ describe("ModelRuntime image generation", () => {
     const images = runtime.getModelsOfType("image", "openrouter");
     expect(images.length).toBeGreaterThan(0);
     expect(runtime.getModels("openrouter").every((model) => isModelType(model, "chat"))).toBe(true);
-    expect(runtime.getModelOfType("image", "openrouter", images[0].id)).toBe(images[0]);
+    const [image] = images;
+    if (image === undefined) throw new Error("expected an OpenRouter image model");
+    expect(runtime.getModelOfType("image", "openrouter", image.id)).toBe(image);
     expect(runtime.getModel("openrouter", "google/gemini-3-pro-image")?.api).toBe(
       "openai-completions",
     );
@@ -251,7 +253,7 @@ describe("ModelRuntime image generation", () => {
     ]);
     const result = await runtime.generateImages(model, context);
     expect(result.stopReason).toBe("stop");
-    expect(calls[0].options?.apiKey).toBe("sk-pixels");
+    expect(calls[0]?.options?.apiKey).toBe("sk-pixels");
   });
 
   it("rejects image models at every chat entry point before provider dispatch", async () => {

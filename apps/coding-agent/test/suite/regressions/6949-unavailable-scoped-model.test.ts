@@ -148,6 +148,7 @@ describe("issue #6949 unavailable scoped models", () => {
     });
     harnesses.push(harness);
     const [one, two] = harness.models;
+    if (one === undefined || two === undefined) throw new Error("expected two harness models");
     const enabledIds = [one, two].map((model) => `${model.provider}/${model.id}`);
     const unavailableId = `${one.provider}/unavailable`;
     const { context, getSelector, setScopedModels } = createInteractiveContext({

@@ -1016,16 +1016,16 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
   }
 
   private parseWheelEvent(data: string): WheelEvent | undefined {
-    const sgr = /^\x1b\[<(\d+);(\d+);(\d+)[Mm]$/.exec(data);
-    if (sgr) {
-      const button = Number.parseInt(sgr[1], 10);
+    const [, sgrButton, sgrX, sgrY] = /^\x1b\[<(\d+);(\d+);(\d+)[Mm]$/.exec(data) ?? [];
+    if (sgrButton !== undefined && sgrX !== undefined && sgrY !== undefined) {
+      const button = Number.parseInt(sgrButton, 10);
       if ((button & 64) === 0) return undefined;
       const direction = button & 3;
       if (direction !== 0 && direction !== 1) return undefined;
       return {
         direction: direction === 0 ? -1 : 1,
-        x: Number.parseInt(sgr[2], 10) - 1,
-        y: Number.parseInt(sgr[3], 10) - 1,
+        x: Number.parseInt(sgrX, 10) - 1,
+        y: Number.parseInt(sgrY, 10) - 1,
         button,
       };
     }
@@ -1061,13 +1061,13 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
   }
 
   private parseSgrMouseEvent(data: string): SgrMouseEvent | undefined {
-    const match = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/.exec(data);
-    if (!match) return undefined;
+    const [, button, x, y, final] = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/.exec(data) ?? [];
+    if (button === undefined || x === undefined || y === undefined) return undefined;
     return {
-      button: Number.parseInt(match[1], 10),
-      x: Number.parseInt(match[2], 10) - 1,
-      y: Number.parseInt(match[3], 10) - 1,
-      release: match[4] === "m",
+      button: Number.parseInt(button, 10),
+      x: Number.parseInt(x, 10) - 1,
+      y: Number.parseInt(y, 10) - 1,
+      release: final === "m",
     };
   }
 
@@ -1261,27 +1261,26 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     const clickedSegmentIndex = segments.findIndex(
       (segment) => point.col >= segment.start && point.col < segment.end,
     );
-    if (clickedSegmentIndex < 0) return undefined;
+    const clicked = segments[clickedSegmentIndex];
+    if (clicked === undefined) return undefined;
 
     const canJoin = (
       left: { selectable: boolean; joiner: boolean },
       right: { selectable: boolean; joiner: boolean },
     ): boolean => left.selectable && right.selectable && (left.joiner || right.joiner);
-    let selectionStart = segments[clickedSegmentIndex].start;
-    let selectionEnd = segments[clickedSegmentIndex].end;
-    for (
-      let index = clickedSegmentIndex;
-      index > 0 && canJoin(segments[index - 1], segments[index]);
-      index--
-    ) {
-      selectionStart = segments[index - 1].start;
+    let selectionStart = clicked.start;
+    let selectionEnd = clicked.end;
+    let current = clicked;
+    for (const previous of segments.slice(0, clickedSegmentIndex).reverse()) {
+      if (!canJoin(previous, current)) break;
+      selectionStart = previous.start;
+      current = previous;
     }
-    for (
-      let index = clickedSegmentIndex;
-      index < segments.length - 1 && canJoin(segments[index], segments[index + 1]);
-      index++
-    ) {
-      selectionEnd = segments[index + 1].end;
+    current = clicked;
+    for (const next of segments.slice(clickedSegmentIndex + 1)) {
+      if (!canJoin(current, next)) break;
+      selectionEnd = next.end;
+      current = next;
     }
     return {
       start: { ...point, col: selectionStart },

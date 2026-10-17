@@ -35,12 +35,12 @@ const DRACULA: SystemThemeInput = {
 };
 
 /** Dark with a palette, light with an unreadable foreground, background only, and mid-gray. */
-const TERMINALS: Record<string, SystemThemeInput> = {
+const TERMINALS = {
   dracula: DRACULA,
   solarizedLight: { background: rgb("#fdf6e3"), foreground: rgb("#657b83") },
   backgroundOnly: { background: rgb("#1e1e1e") },
   midGray: { background: rgb("#808080"), foreground: rgb("#ffffff") },
-};
+} satisfies Record<string, SystemThemeInput>;
 
 const PANELS: ThemeToken[] = [
   "userMessageBg",
@@ -99,7 +99,9 @@ describe("generateSystemThemeColors", () => {
     // Solarized's foreground is below 4.5:1 on its own background, so text is darkened.
     expect(generateSystemThemeColors(TERMINALS["solarizedLight"]).colors.text).not.toBe("");
     const hue = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).h;
-    expect(Math.abs(hue(resolved(DRACULA, "error")) - hue(DRACULA.palette![1]))).toBeLessThan(8);
+    const red = DRACULA.palette?.[1];
+    if (red === undefined) throw new Error("expected Dracula's red palette entry");
+    expect(Math.abs(hue(resolved(DRACULA, "error")) - hue(red))).toBeLessThan(8);
   });
 
   // https://github.com/earendil-works/pi/issues/10255
@@ -130,7 +132,8 @@ describe("generateSystemThemeColors", () => {
         .map(rgb),
     };
     const chroma = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).c;
-    const pink = frappe.palette![5];
+    const pink = frappe.palette?.[5];
+    if (pink === undefined) throw new Error("expected Frappé's pink palette entry");
     const accent = resolved(frappe, "accent");
     // The accent is darker than the pink, but must not gain chroma (it was 2x before the cap).
     expect(lightness(accent)).toBeLessThan(lightness(pink) - 0.05);

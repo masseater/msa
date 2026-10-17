@@ -103,12 +103,12 @@ export const generateImages: ImagesFunction<ImagesOptions> = async (
         const imageUrl =
           typeof image.image_url === "string" ? image.image_url : image.image_url?.url;
         if (!imageUrl?.startsWith("data:")) continue;
-        const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
-        if (!matches) continue;
+        const [, mimeType, data] = imageUrl.match(/^data:([^;]+);base64,(.+)$/) ?? [];
+        if (mimeType === undefined || data === undefined) continue;
         output.output.push({
           type: "image",
-          mimeType: matches[1],
-          data: matches[2],
+          mimeType,
+          data,
         } satisfies ImageContent);
       }
     }

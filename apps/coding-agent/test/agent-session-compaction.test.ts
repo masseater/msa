@@ -105,7 +105,7 @@ describe.skipIf(!API_KEY)("AgentSession compaction e2e", () => {
 
     // First message should be the summary (a user message with summary content)
     const firstMsg = messages[0];
-    expect(firstMsg.role).toBe("compactionSummary");
+    expect(firstMsg?.role).toBe("compactionSummary");
   }, 120000);
 
   it("should maintain valid session state after compaction", async () => {
@@ -153,6 +153,7 @@ describe.skipIf(!API_KEY)("AgentSession compaction e2e", () => {
     expect(compactionEntries.length).toBe(1);
 
     const compaction = compactionEntries[0];
+    if (compaction === undefined) throw new Error("expected a compaction entry");
     expect(compaction.type).toBe("compaction");
     if (compaction.type === "compaction") {
       expect(compaction.summary.length).toBeGreaterThan(0);

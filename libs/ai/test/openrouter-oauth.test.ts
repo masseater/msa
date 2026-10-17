@@ -50,6 +50,7 @@ describe("OpenRouter OAuth", () => {
     const imageModel = models.getModelsOfType("image", "openrouter")[0];
     expect(chatModel).toBeDefined();
     expect(imageModel).toBeDefined();
+    if (!chatModel || !imageModel) throw new Error("Expected OpenRouter chat and image models");
 
     expect((await models.getAuth(chatModel))?.auth.apiKey).toBe("sk-or-stored");
     expect((await models.getAuth(imageModel))?.auth.apiKey).toBe("sk-or-stored");

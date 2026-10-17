@@ -167,7 +167,7 @@ function getAssistantUsage(msg: AgentMessage): Usage | undefined {
 export function getLastAssistantUsage(entries: SessionEntry[]): Usage | undefined {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
-    if (entry.type === "message") {
+    if (entry?.type === "message") {
       const usage = getAssistantUsage(entry.message);
       if (usage) return usage;
     }
@@ -186,7 +186,9 @@ function getLastAssistantUsageInfo(
   messages: AgentMessage[],
 ): { usage: Usage; index: number } | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
-    const usage = getAssistantUsage(messages[i]);
+    const message = messages[i];
+    if (message === undefined) continue;
+    const usage = getAssistantUsage(message);
     if (usage) return { usage, index: i };
   }
   return undefined;
@@ -214,8 +216,8 @@ export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEst
 
   const usageTokens = calculateContextTokens(usageInfo.usage);
   let trailingTokens = 0;
-  for (let i = usageInfo.index + 1; i < messages.length; i++) {
-    trailingTokens += estimateTokens(messages[i]);
+  for (const message of messages.slice(usageInfo.index + 1)) {
+    trailingTokens += estimateTokens(message);
   }
 
   return {
@@ -250,7 +252,7 @@ export function estimateProjectedContextTokens(
     let latestInvalidatingEntryIndex = -1;
     for (let i = branchEntries.length - 1; i >= 0; i--) {
       const entry = branchEntries[i];
-      if (entry.type === "context_edit" || entry.type === "compaction") {
+      if (entry?.type === "context_edit" || entry?.type === "compaction") {
         latestInvalidatingEntryIndex = i;
         break;
       }
@@ -408,7 +410,7 @@ function findValidCutPoints(
   const cutPoints: number[] = [];
   for (let i = startIndex; i < endIndex; i++) {
     const entry = entries[i];
-    if (entry.type === "compaction") {
+    if (entry === undefined || entry.type === "compaction") {
       continue;
     }
     if (sessionEntryToContextMessages(entry).some(isCutPointMessage)) {
@@ -428,7 +430,8 @@ export function findTurnStartIndex(
   startIndex: number,
 ): number {
   for (let i = entryIndex; i >= startIndex; i--) {
-    if (isTurnStartEntry(entries[i])) {
+    const entry = entries[i];
+    if (entry !== undefined && isTurnStartEntry(entry)) {
       return i;
     }
   }
@@ -467,17 +470,20 @@ export function findCutPoint(
   keepRecentTokens: number,
 ): CutPointResult {
   const cutPoints = findValidCutPoints(entries, startIndex, endIndex);
+  const firstCutPoint = cutPoints[0];
+  const lastCutPoint = cutPoints.at(-1);
 
-  if (cutPoints.length === 0) {
+  if (firstCutPoint === undefined || lastCutPoint === undefined) {
     return { firstKeptEntryIndex: startIndex, turnStartIndex: -1, isSplitTurn: false };
   }
 
   // Walk backwards from newest, accumulating estimated message sizes
   let accumulatedTokens = 0;
-  let cutIndex = cutPoints[0]; // Default: keep from first message (not header)
+  let cutIndex = firstCutPoint; // Default: keep from first message (not header)
 
   for (let i = endIndex - 1; i >= startIndex; i--) {
     const entry = entries[i];
+    if (entry === undefined) continue;
     const messageTokens = sessionEntryToContextMessages(entry).reduce(
       (sum, message) => sum + estimateTokens(message),
       0,
@@ -490,7 +496,7 @@ export function findCutPoint(
       // Prefer the closest valid cut point at or after this entry. If trailing
       // tool results exceed the budget by themselves, keep their preceding
       // assistant tool call instead of falling back to the first message.
-      cutIndex = cutPoints.find((candidate) => candidate >= i) ?? cutPoints[cutPoints.length - 1];
+      cutIndex = cutPoints.find((candidate) => candidate >= i) ?? lastCutPoint;
       break;
     }
   }
@@ -499,7 +505,11 @@ export function findCutPoint(
   while (cutIndex > startIndex) {
     const prevEntry = entries[cutIndex - 1];
     // Stop at compaction boundaries or context-visible entries.
-    if (prevEntry.type === "compaction" || sessionEntryToContextMessages(prevEntry).length > 0) {
+    if (
+      prevEntry === undefined ||
+      prevEntry.type === "compaction" ||
+      sessionEntryToContextMessages(prevEntry).length > 0
+    ) {
       break;
     }
     cutIndex--;
@@ -507,7 +517,7 @@ export function findCutPoint(
 
   // Determine if this is a split turn
   const cutEntry = entries[cutIndex];
-  const startsTurn = isTurnStartEntry(cutEntry);
+  const startsTurn = cutEntry !== undefined && isTurnStartEntry(cutEntry);
   const turnStartIndex = startsTurn ? -1 : findTurnStartIndex(entries, cutIndex, startIndex);
 
   return {
@@ -818,7 +828,8 @@ function findProjectedTurnStartIndex(
   startIndex: number,
 ): number {
   for (let i = entryIndex; i >= startIndex; i--) {
-    if (isProjectedTurnStart(entries[i])) return i;
+    const entry = entries[i];
+    if (entry !== undefined && isProjectedTurnStart(entry)) return i;
   }
   return -1;
 }
@@ -832,26 +843,31 @@ function findProjectedCutPoint(
   const cutPoints: number[] = [];
   for (let i = startIndex; i < endIndex; i++) {
     const entry = entries[i];
-    if (entry.sourceEntry.type !== "compaction" && entry.messages.some(isCutPointMessage))
+    if (
+      entry !== undefined &&
+      entry.sourceEntry.type !== "compaction" &&
+      entry.messages.some(isCutPointMessage)
+    )
       cutPoints.push(i);
   }
-  if (cutPoints.length === 0) {
+  const firstCutPoint = cutPoints[0];
+  const lastCutPoint = cutPoints.at(-1);
+  if (firstCutPoint === undefined || lastCutPoint === undefined) {
     return { firstKeptEntryIndex: startIndex, turnStartIndex: -1, isSplitTurn: false };
   }
 
   let accumulatedTokens = 0;
   let exceededBudget = false;
-  let cutIndex = cutPoints[0];
+  let cutIndex = firstCutPoint;
   for (let i = endIndex - 1; i >= startIndex; i--) {
-    const messageTokens = entries[i].messages.reduce(
-      (sum, message) => sum + estimateTokens(message),
-      0,
-    );
+    const entry = entries[i];
+    if (entry === undefined) continue;
+    const messageTokens = entry.messages.reduce((sum, message) => sum + estimateTokens(message), 0);
     if (messageTokens === 0) continue;
     accumulatedTokens += messageTokens;
     if (accumulatedTokens >= keepRecentTokens) {
       exceededBudget = true;
-      cutIndex = cutPoints.find((candidate) => candidate >= i) ?? cutPoints[cutPoints.length - 1];
+      cutIndex = cutPoints.find((candidate) => candidate >= i) ?? lastCutPoint;
       break;
     }
   }
@@ -890,10 +906,16 @@ function findProjectedCutPoint(
 
   while (cutIndex > startIndex) {
     const previous = entries[cutIndex - 1];
-    if (previous.sourceEntry.type === "compaction" || previous.messages.length > 0) break;
+    if (
+      previous === undefined ||
+      previous.sourceEntry.type === "compaction" ||
+      previous.messages.length > 0
+    )
+      break;
     cutIndex--;
   }
-  const startsTurn = isProjectedTurnStart(entries[cutIndex]);
+  const cutEntry = entries[cutIndex];
+  const startsTurn = cutEntry !== undefined && isProjectedTurnStart(cutEntry);
   const turnStartIndex = startsTurn
     ? -1
     : findProjectedTurnStartIndex(entries, cutIndex, startIndex);
@@ -908,7 +930,7 @@ export function prepareCompaction(
   pathEntries: SessionEntry[],
   settings: CompactionSettings,
 ): CompactionPreparation | undefined {
-  if (pathEntries.length > 0 && pathEntries[pathEntries.length - 1].type === "compaction") {
+  if (pathEntries.at(-1)?.type === "compaction") {
     return undefined;
   }
 
@@ -923,9 +945,9 @@ export function prepareCompaction(
 
   let previousSummary: string | undefined;
   let boundaryStart = 0;
-  if (prevCompactionIndex >= 0) {
-    previousSummary = (projectedEntries[prevCompactionIndex].sourceEntry as CompactionEntry)
-      .summary;
+  const prevCompaction = projectedEntries[prevCompactionIndex];
+  if (prevCompaction !== undefined) {
+    previousSummary = (prevCompaction.sourceEntry as CompactionEntry).summary;
     // The canonical projection has already selected the previous compaction's retained tail.
     boundaryStart = prevCompactionIndex + 1;
   }

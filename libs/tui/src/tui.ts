@@ -255,9 +255,9 @@ function parseSizeValue(value: SizeValue | undefined, referenceSize: number): nu
   if (value === undefined) return undefined;
   if (typeof value === "number") return value;
   // Parse percentage string like "50%"
-  const match = value.match(/^(\d+(?:\.\d+)?)%$/);
-  if (match) {
-    return Math.floor((referenceSize * parseFloat(match[1])) / 100);
+  const percent = value.match(/^(\d+(?:\.\d+)?)%$/)?.[1];
+  if (percent !== undefined) {
+    return Math.floor((referenceSize * parseFloat(percent)) / 100);
   }
   return undefined;
 }
@@ -1248,13 +1248,13 @@ export abstract class TuiBase extends Container implements TUI {
 
   private consumeCellSizeResponse(data: string): boolean {
     // Response format: ESC [ 6 ; height ; width t
-    const match = data.match(/^\x1b\[6;(\d+);(\d+)t$/);
-    if (!match) {
+    const [, height, width] = data.match(/^\x1b\[6;(\d+);(\d+)t$/) ?? [];
+    if (height === undefined || width === undefined) {
       return false;
     }
 
-    const heightPx = parseInt(match[1], 10);
-    const widthPx = parseInt(match[2], 10);
+    const heightPx = parseInt(height, 10);
+    const widthPx = parseInt(width, 10);
     if (heightPx <= 0 || widthPx <= 0) {
       return true;
     }
@@ -1319,10 +1319,10 @@ export abstract class TuiBase extends Container implements TUI {
     if (opt.row !== undefined) {
       if (typeof opt.row === "string") {
         // Percentage: 0% = top, 100% = bottom (overlay stays within bounds)
-        const match = opt.row.match(/^(\d+(?:\.\d+)?)%$/);
-        if (match) {
+        const rowPercent = opt.row.match(/^(\d+(?:\.\d+)?)%$/)?.[1];
+        if (rowPercent !== undefined) {
           const maxRow = Math.max(0, availHeight - effectiveHeight);
-          const percent = parseFloat(match[1]) / 100;
+          const percent = parseFloat(rowPercent) / 100;
           row = marginTop + Math.floor(maxRow * percent);
         } else {
           // Invalid format, fall back to center
@@ -1341,10 +1341,10 @@ export abstract class TuiBase extends Container implements TUI {
     if (opt.col !== undefined) {
       if (typeof opt.col === "string") {
         // Percentage: 0% = left, 100% = right (overlay stays within bounds)
-        const match = opt.col.match(/^(\d+(?:\.\d+)?)%$/);
-        if (match) {
+        const colPercent = opt.col.match(/^(\d+(?:\.\d+)?)%$/)?.[1];
+        if (colPercent !== undefined) {
           const maxCol = Math.max(0, availWidth - width);
-          const percent = parseFloat(match[1]) / 100;
+          const percent = parseFloat(colPercent) / 100;
           col = marginLeft + Math.floor(maxCol * percent);
         } else {
           // Invalid format, fall back to center
@@ -1486,16 +1486,15 @@ export abstract class TuiBase extends Container implements TUI {
 
     // Composite each overlay
     for (const { overlayLines, row, col, w } of rendered) {
-      for (let i = 0; i < overlayLines.length; i++) {
+      for (const [i, overlayLine] of overlayLines.entries()) {
         const idx = viewportStart + row + i;
-        if (idx >= 0 && idx < result.length) {
+        const baseLine = result[idx];
+        if (baseLine !== undefined) {
           // Defensive: truncate overlay line to declared width before compositing
           // (components should already respect width, but this ensures it)
           const truncatedOverlayLine =
-            visibleWidth(overlayLines[i]) > w
-              ? sliceByColumn(overlayLines[i], 0, w, true)
-              : overlayLines[i];
-          result[idx] = this.compositeLineAt(result[idx], truncatedOverlayLine, col, w, termWidth);
+            visibleWidth(overlayLine) > w ? sliceByColumn(overlayLine, 0, w, true) : overlayLine;
+          result[idx] = this.compositeLineAt(baseLine, truncatedOverlayLine, col, w, termWidth);
         }
       }
     }
@@ -1505,8 +1504,7 @@ export abstract class TuiBase extends Container implements TUI {
 
   protected applyLineResets(lines: string[]): string[] {
     const reset = SEGMENT_RESET;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+    for (const [i, line] of lines.entries()) {
       if (!isImageLine(line)) {
         lines[i] = normalizeTerminalOutput(line) + reset;
       }
@@ -1540,6 +1538,7 @@ export abstract class TuiBase extends Container implements TUI {
     const viewportTop = Math.max(0, lines.length - height);
     for (let row = lines.length - 1; row >= viewportTop; row--) {
       const line = lines[row];
+      if (line === undefined) continue;
       const markerIndex = line.indexOf(CURSOR_MARKER);
       if (markerIndex !== -1) {
         // Calculate visual column (width of text before marker)

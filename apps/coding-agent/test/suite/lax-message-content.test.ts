@@ -57,7 +57,7 @@ describe("lax message content handling", () => {
         (message) => message.role === "toolResult",
       );
       expect(toolResults).toHaveLength(1);
-      expect(toolResults[0].content).toEqual([]);
+      expect(toolResults[0]?.content).toEqual([]);
       // The follow-up turn consumed the normalized tool result without crashing.
       expect(harness.getPendingResponseCount()).toBe(0);
     } finally {
@@ -85,7 +85,7 @@ describe("lax message content handling", () => {
         (message) => message.role === "assistant",
       );
       expect(assistantMessages).toHaveLength(1);
-      expect(assistantMessages[0].content).toEqual([]);
+      expect(assistantMessages[0]?.content).toEqual([]);
     } finally {
       harness.cleanup();
     }
@@ -106,7 +106,7 @@ describe("lax message content handling", () => {
         (message) => message.role === "custom",
       );
       expect(customMessages).toHaveLength(1);
-      expect(customMessages[0].content).toEqual([]);
+      expect(customMessages[0]?.content).toEqual([]);
     } finally {
       harness.cleanup();
     }

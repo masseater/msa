@@ -384,8 +384,8 @@ describe("resolveModelScopeWithDiagnostics", () => {
         "claude-sonnet-4-5",
         "gpt-4o",
       ]);
-      expect(result.scopedModels[0].thinkingLevel).toBe("high");
-      expect(result.scopedModels[1].thinkingLevel).toBeUndefined();
+      expect(result.scopedModels[0]?.thinkingLevel).toBe("high");
+      expect(result.scopedModels[1]?.thinkingLevel).toBeUndefined();
       expect(result.diagnostics).toEqual([
         {
           type: "warning",
@@ -418,7 +418,7 @@ describe("resolveModelScopeWithDiagnostics", () => {
 
       expect(scopedModels).toEqual([]);
       expect(warn).toHaveBeenCalledOnce();
-      expect(warn.mock.calls[0][0]).toContain('Warning: No models match pattern "missing"');
+      expect(warn.mock.calls[0]?.[0]).toContain('Warning: No models match pattern "missing"');
     } finally {
       warn.mockRestore();
     }
@@ -508,7 +508,7 @@ describe("resolveModelScopeWithDiagnostics", () => {
     );
 
     expect(result.scopedModels.map((scoped) => scoped.model.id)).toEqual(["bracketed-model[1m]"]);
-    expect(result.scopedModels[0].thinkingLevel).toBe("high");
+    expect(result.scopedModels[0]?.thinkingLevel).toBe("high");
     expect(result.diagnostics).toEqual([]);
   });
 });

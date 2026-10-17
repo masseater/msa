@@ -565,9 +565,9 @@ async function main() {
         }
         const delta = evt["delta"] as string;
         const parts = delta.split("\n");
-        for (let i = 0; i < parts.length; i++) {
+        for (const [i, part] of parts.entries()) {
           if (i > 0) outputLog.append("");
-          if (parts[i]) outputLog.appendRaw(parts[i]);
+          if (part) outputLog.appendRaw(part);
         }
         tui.requestRender();
       }

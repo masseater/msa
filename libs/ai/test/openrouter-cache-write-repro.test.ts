@@ -44,8 +44,7 @@ describe.skipIf(!process.env["OPENROUTER_API_KEY"])("OpenRouter cache_write repr
           const messages = params.messages;
           if (!Array.isArray(messages)) return payload;
 
-          for (let i = messages.length - 1; i >= 0; i--) {
-            const msg = messages[i];
+          for (const msg of messages.toReversed()) {
             if (msg.role !== "user") continue;
             if (typeof msg.content === "string") {
               msg.content = [
@@ -54,8 +53,7 @@ describe.skipIf(!process.env["OPENROUTER_API_KEY"])("OpenRouter cache_write repr
               break;
             }
             if (!Array.isArray(msg.content)) continue;
-            for (let j = msg.content.length - 1; j >= 0; j--) {
-              const part = msg.content[j];
+            for (const part of msg.content.toReversed()) {
               if (part.type === "text") {
                 part.cache_control = { type: "ephemeral" };
                 break;

@@ -439,7 +439,9 @@ describe("AgentSession codemode tool", () => {
       "==> text 2/2 <==",
       "after",
     ]);
-    expect(checkSavedImages(lines[2])).toBe("<saved>");
+    const savedImageLine = lines[2];
+    if (savedImageLine === undefined) throw new Error("expected a saved image line");
+    expect(checkSavedImages(savedImageLine)).toBe("<saved>");
     expect(result.content[2]).toEqual({
       type: "image",
       data: TINY_PNG_BASE64,
@@ -989,7 +991,7 @@ describe("codemode models", () => {
       ["https://images.test/v1", "secret-key"],
       ["https://images.test/v1", "secret-key"],
     ]);
-    expect(imageRequests[0].input).toEqual([
+    expect(imageRequests[0]?.input).toEqual([
       { type: "text", text: "a fox" },
       { type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" },
     ]);

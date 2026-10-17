@@ -62,8 +62,12 @@ function move(enabledIds: EnabledIds, id: string, delta: number): EnabledIds {
   if (index < 0) return list;
   const newIndex = index + delta;
   if (newIndex < 0 || newIndex >= list.length) return list;
+  const moved = list[index];
+  const displaced = list[newIndex];
+  if (moved === undefined || displaced === undefined) return list;
   const result = [...list];
-  [result[index], result[newIndex]] = [result[newIndex], result[index]];
+  result[index] = displaced;
+  result[newIndex] = moved;
   return result;
 }
 
@@ -292,8 +296,8 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
       );
     }
 
-    if (this.filteredItems.length > 0) {
-      const selected = this.filteredItems[this.selectedIndex];
+    const selected = this.filteredItems[this.selectedIndex];
+    if (selected !== undefined) {
       this.listContainer.addChild(new Spacer(1));
       this.listContainer.addChild(
         new Text(

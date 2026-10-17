@@ -159,10 +159,10 @@ describe("msa-messages", () => {
 
     expect(requests).toHaveLength(1);
     const request = requests[0];
-    expect(request.url).toBe("/v1/messages");
-    expect(request.headers.authorization).toBe("Bearer test-key");
-    expect(request.headers["x-custom"]).toBe("1");
-    expect(request.body).toEqual({
+    expect(request?.url).toBe("/v1/messages");
+    expect(request?.headers.authorization).toBe("Bearer test-key");
+    expect(request?.headers["x-custom"]).toBe("1");
+    expect(request?.body).toEqual({
       model: "auto",
       context,
       options: { maxTokens: 100, sessionId: "session-1", toolChoice: "auto" },
@@ -215,7 +215,7 @@ describe("msa-messages", () => {
     const message = await streamSimple(model, normalizeContext(context), options).result();
 
     expect(message.stopReason).toBe("stop");
-    expect(requests[0].url).toBe("/v1/messages?debug=1");
+    expect(requests[0]?.url).toBe("/v1/messages?debug=1");
     expect(observedHeaders?.["x-msa-gateway-upstream-provider"]).toBe("anthropic");
   });
 

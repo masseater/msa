@@ -21,7 +21,7 @@ interface Bullet extends Point {
 }
 
 interface Alien extends Point {
-  type: number; // 0, 1, 2 for different alien types
+  type: 0 | 1 | 2; // different alien types
   alive: boolean;
 }
 
@@ -266,7 +266,7 @@ class SpaceInvadersComponent {
     const shooters = Array.from(columns.values());
     if (shooters.length > 0 && this.state.bullets.filter((b) => b.direction === 1).length < 3) {
       const shooter = shooters[Math.floor(Math.random() * shooters.length)];
-      this.state.bullets.push({ x: shooter.x, y: shooter.y + 1, direction: 1 });
+      if (shooter) this.state.bullets.push({ x: shooter.x, y: shooter.y + 1, direction: 1 });
     }
   }
 
@@ -280,7 +280,7 @@ class SpaceInvadersComponent {
           if (alien.alive && Math.abs(bullet.x - alien.x) <= 1 && bullet.y === alien.y) {
             alien.alive = false;
             bulletsToRemove.add(bullet);
-            const points = [10, 20, 30][alien.type];
+            const points = ([10, 20, 30] as const)[alien.type];
             this.state.score += points;
             if (this.state.score > this.state.highScore) {
               this.state.highScore = this.state.score;
@@ -306,8 +306,9 @@ class SpaceInvadersComponent {
         const relX = bullet.x - shield.x;
         const relY = bullet.y - (PLAYER_Y - 5);
         if (relX >= 0 && relX < 4 && relY >= 0 && relY < 3) {
-          if (shield.segments[relY][relX]) {
-            shield.segments[relY][relX] = false;
+          const segmentRow = shield.segments[relY];
+          if (segmentRow?.[relX]) {
+            segmentRow[relX] = false;
             bulletsToRemove.add(bullet);
           }
         }
@@ -436,11 +437,11 @@ class SpaceInvadersComponent {
         for (const alien of this.state.aliens) {
           if (alien.alive && alien.y === y && Math.abs(alien.x - x) <= 1) {
             const sprites = [
-              x === alien.x ? "▼" : "╲╱"[x < alien.x ? 0 : 1],
-              x === alien.x ? "◆" : "╱╲"[x < alien.x ? 0 : 1],
-              x === alien.x ? "☆" : "◄►"[x < alien.x ? 0 : 1],
-            ];
-            const colors = [green, cyan, magenta];
+              x === alien.x ? "▼" : x < alien.x ? "╲" : "╱",
+              x === alien.x ? "◆" : x < alien.x ? "╱" : "╲",
+              x === alien.x ? "☆" : x < alien.x ? "◄" : "►",
+            ] as const;
+            const colors = [green, cyan, magenta] as const;
             char = colors[alien.type](sprites[alien.type]);
             colored = true;
             break;
@@ -453,7 +454,7 @@ class SpaceInvadersComponent {
             const relX = x - shield.x;
             const relY = y - (PLAYER_Y - 5);
             if (relX >= 0 && relX < 4 && relY >= 0 && relY < 3) {
-              if (shield.segments[relY][relX]) {
+              if (shield.segments[relY]?.[relX]) {
                 char = dim("█");
                 colored = true;
               }
@@ -543,8 +544,7 @@ export default function (msa: ExtensionAPI) {
       // Load saved state from session
       const entries = ctx.sessionManager.getEntries();
       let savedState: GameState | undefined;
-      for (let i = entries.length - 1; i >= 0; i--) {
-        const entry = entries[i];
+      for (const entry of entries.toReversed()) {
         if (entry.type === "custom" && entry.customType === INVADERS_SAVE_TYPE) {
           savedState = entry.data as GameState;
           break;

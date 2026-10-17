@@ -123,8 +123,9 @@ export function collectEntriesForBranchSummary(
   // targetPath is root-first, so iterate backwards to find deepest common ancestor
   let commonAncestorId: string | null = null;
   for (let i = targetPath.length - 1; i >= 0; i--) {
-    if (oldPath.has(targetPath[i].id)) {
-      commonAncestorId = targetPath[i].id;
+    const node = targetPath[i];
+    if (node !== undefined && oldPath.has(node.id)) {
+      commonAncestorId = node.id;
       break;
     }
   }
@@ -230,6 +231,7 @@ export function prepareBranchEntries(
   // Second pass: walk from newest to oldest, adding messages until token budget
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
+    if (entry === undefined) continue;
     const message = getMessageFromEntry(entry);
     if (!message) continue;
 

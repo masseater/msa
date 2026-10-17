@@ -94,6 +94,18 @@ function createInitialState(): GameState {
   };
 }
 
+function getCell(board: Cell[][], row: number, col: number): Cell {
+  const cell = board[row]?.[col];
+  if (cell === undefined) throw new RangeError(`No cell at (${row},${col}).`);
+  return cell;
+}
+
+function setCell(board: Cell[][], row: number, col: number, mark: Cell): void {
+  const boardRow = board[row];
+  if (boardRow === undefined) throw new RangeError(`No row ${row}.`);
+  boardRow[col] = mark;
+}
+
 function getWinLine(board: Cell[][]): [number, number][] | null {
   const lines: [number, number][][] = [
     [
@@ -138,7 +150,7 @@ function getWinLine(board: Cell[][]): [number, number][] | null {
     ],
   ];
   for (const line of lines) {
-    const vals = line.map(([r, c]) => board[r][c]);
+    const vals = line.map(([r, c]) => getCell(board, r, c));
     if (vals[0] !== " " && vals[0] === vals[1] && vals[1] === vals[2]) {
       return line;
     }
@@ -147,10 +159,10 @@ function getWinLine(board: Cell[][]): [number, number][] | null {
 }
 
 function checkWin(board: Cell[][]): GameStatus {
-  const winLine = getWinLine(board);
-  if (winLine) {
-    const [r, c] = winLine[0];
-    return board[r][c] === "X" ? "win_X" : "win_O";
+  const winStart = getWinLine(board)?.[0];
+  if (winStart) {
+    const [r, c] = winStart;
+    return getCell(board, r, c) === "X" ? "win_X" : "win_O";
   }
   if (board.every((row) => row.every((c) => c !== " "))) {
     return "draw";
@@ -261,7 +273,7 @@ function renderBoard(opts: BoardRenderOpts): string[] {
   const winLine = getWinLine(board);
   const winCells = new Set((winLine ?? []).map(([r, c]) => `${r},${c}`));
   const cellAt = (r: number, c: number) => ({
-    cell: board[r][c],
+    cell: getCell(board, r, c),
     isWin: winCells.has(`${r},${c}`),
   });
 
@@ -297,7 +309,7 @@ function renderBoard(opts: BoardRenderOpts): string[] {
       [-1, 0],
       [0, -1],
       [0, 0],
-    ]) {
+    ] as const) {
       const r = gridR + dr;
       const c = gridC + dc;
       if (r >= 0 && r < 3 && c >= 0 && c < 3) out.push(cellAt(r, c));
@@ -335,7 +347,7 @@ function renderBoard(opts: BoardRenderOpts): string[] {
         contentRow += paintBorder("\u2502", isCursorVBorder(gridR, gridC), vColor);
         if (gridC < 3) {
           contentRow += buildCellContent(
-            board[gridR][gridC],
+            getCell(board, gridR, gridC),
             lineIdx,
             winCells.has(`${gridR},${gridC}`),
           );
@@ -431,7 +443,7 @@ class TicTacToeComponent implements Component {
       this.tui.requestRender();
     } else if (matchesKey(data, "return") || data === " ") {
       const { userCursorRow, userCursorCol } = this.state;
-      if (this.state.board[userCursorRow][userCursorCol] === " ") {
+      if (getCell(this.state.board, userCursorRow, userCursorCol) === " ") {
         this.onUserPlay(userCursorRow, userCursorCol);
       }
     }
@@ -818,7 +830,7 @@ Decide the target cell first, then dump every action for the turn in one go.
             done(undefined);
           },
           (row, col) => {
-            gameState.board[row][col] = gameState.userMark;
+            setCell(gameState.board, row, col, gameState.userMark);
             gameState.status = checkWin(gameState.board);
             if (gameState.status === "playing") {
               gameState.currentTurn = gameState.agentMark;
@@ -924,16 +936,17 @@ Decide the target cell first, then dump every action for the turn in one go.
           }
           const r = gameState.agentCursorRow;
           const c = gameState.agentCursorCol;
-          if (gameState.board[r][c] !== " ") {
+          const target = getCell(gameState.board, r, c);
+          if (target !== " ") {
             // Do NOT reset the cursor on failure. The agent can retry
             // from the cursor's current position.
             component?.updateState(gameState);
             msa.appendEntry(SAVE_TYPE, getBoardDetails());
             throw new TicTacToeError(
-              `Cell (${r},${c}) is already ${gameState.board[r][c]}. Your cursor is still at (${r},${c}). Move to an empty cell and retry play.`,
+              `Cell (${r},${c}) is already ${target}. Your cursor is still at (${r},${c}). Move to an empty cell and retry play.`,
             );
           }
-          gameState.board[r][c] = gameState.agentMark;
+          setCell(gameState.board, r, c, gameState.agentMark);
           gameState.status = checkWin(gameState.board);
           // Reset agent cursor to home ONLY on successful play.
           gameState.agentCursorRow = AGENT_CURSOR_HOME_ROW;

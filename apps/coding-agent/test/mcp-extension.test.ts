@@ -121,7 +121,7 @@ describe("MCP config", () => {
 
     writeFileSync(project, JSON.stringify({ mcpServers: { tools: { enabled: false } } }));
     const [tools] = loadMcpConfig({ ...paths, projectTrusted: true }).servers;
-    expect([tools.override, tools.config]).toEqual([
+    expect([tools?.override, tools?.config]).toEqual([
       project,
       { command: "x", env: { TOKEN: "secret" }, enabled: false },
     ]);
@@ -173,8 +173,8 @@ describe("MCP config", () => {
       ["off", "hidden"],
       ["described", undefined],
     ]);
-    expect(untrusted.servers[1].config.toolExposure).toEqual({ a: "codemode" });
-    expect(untrusted.servers[3].config.description).toBe("Docs search");
+    expect(untrusted.servers[1]?.config.toolExposure).toEqual({ a: "codemode" });
+    expect(untrusted.servers[3]?.config.description).toBe("Docs search");
     expect(untrusted.errors).toEqual([
       expect.stringContaining('server "wrong": exposure must be one of'),
       expect.stringContaining('server "badDescription": description must be a string'),
@@ -296,7 +296,9 @@ describe("MCP config", () => {
     expect(errors).toEqual([
       expect.stringContaining('server "bad": toolExposure "a" must be one of'),
     ]);
-    const config = servers[0].config;
+    const [server] = servers;
+    if (server === undefined) throw new Error("expected a loaded server");
+    const config = server.config;
     expect(getMcpToolExposure(config, "get_me")).toBe("direct");
     expect(getMcpToolExposure(config, "get_issue")).toBe("codemode");
     expect(getMcpToolExposure(config, "get_delete_hint")).toBe("codemode");
@@ -380,7 +382,7 @@ describe("MCP tools", () => {
       properties: { structuredContent: { $defs: Record<string, { default: unknown }> } };
     };
     // Data that looks like a reference is kept as is.
-    expect(schema.properties.structuredContent.$defs["Hit/v1"].default).toEqual({
+    expect(schema.properties.structuredContent.$defs["Hit/v1"]?.default).toEqual({
       $ref: "#/stays",
     });
     expect(renderToolOutputType(schema as never)).toBe(
@@ -537,6 +539,7 @@ describe("MCP tools", () => {
     expect(result.content).not.toContain("\uFFFD");
     expect(result.content.endsWith("end")).toBe(true);
     const [head, tail] = result.content.split(/…\d+ chars truncated…/);
+    if (head === undefined || tail === undefined) throw new Error("expected a truncation marker");
     expect(Buffer.byteLength(head)).toBeLessThanOrEqual(500);
     expect(Buffer.byteLength(tail)).toBeLessThanOrEqual(501);
     expect(Array.from(head).length + Array.from(tail).length + result.removedChars).toBe(
@@ -619,7 +622,11 @@ describe("MCP connections", () => {
     const connection = new McpServerConnection({
       entry,
       cwd: process.cwd(),
-      createTransport: () => transports[opened++](),
+      createTransport: () => {
+        const transport = transports[opened++];
+        if (transport === undefined) throw new Error(`no transport for connection ${opened}`);
+        return transport();
+      },
       credentials: new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()),
       log,
       onTools: () => {},

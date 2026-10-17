@@ -345,7 +345,7 @@ export async function createAgentSession(
                     c.type === "text" &&
                     c.text === "Image reading is disabled." &&
                     i > 0 &&
-                    arr[i - 1].type === "text" &&
+                    arr[i - 1]?.type === "text" &&
                     (arr[i - 1] as { type: "text"; text: string }).text ===
                       "Image reading is disabled."
                   ),

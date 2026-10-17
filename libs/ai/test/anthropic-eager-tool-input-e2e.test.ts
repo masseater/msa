@@ -64,13 +64,14 @@ function selectOneCasePerProvider(cases: AnthropicEagerE2ECase[]): AnthropicEage
     byProvider.set(testCase.provider, providerCases);
   }
 
-  return Array.from(byProvider.values()).map(
-    (providerCases) =>
-      providerCases.sort(
+  return Array.from(byProvider.values()).flatMap((providerCases) =>
+    providerCases
+      .sort(
         (a, b) =>
           getProbePriority(a.model) - getProbePriority(b.model) ||
           a.model.id.localeCompare(b.model.id),
-      )[0],
+      )
+      .slice(0, 1),
   );
 }
 

@@ -49,7 +49,9 @@ let backend = "worker";
 const sandboxes: CodemodeSandboxBase[] = [];
 
 function newSandbox(options: CodemodeSandboxBaseOptions = {}): CodemodeSandboxBase {
-  const sandbox = BACKENDS[backend](options);
+  const create = BACKENDS[backend];
+  if (create === undefined) throw new Error(`Unknown backend: ${backend}`);
+  const sandbox = create(options);
   sandboxes.push(sandbox);
   return sandbox;
 }

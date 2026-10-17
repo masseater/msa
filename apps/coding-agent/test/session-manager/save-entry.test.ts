@@ -45,9 +45,9 @@ describe("SessionManager.saveCustomEntry", () => {
     // Tree structure should be correct
     const path = session.getBranch();
     expect(path).toHaveLength(3);
-    expect(path[0].id).toBe(msgId);
-    expect(path[1].id).toBe(customId);
-    expect(path[2].id).toBe(msg2Id);
+    expect(path[0]?.id).toBe(msgId);
+    expect(path[1]?.id).toBe(customId);
+    expect(path[2]?.id).toBe(msg2Id);
 
     // buildSessionContext should work (custom entries skipped in messages)
     const ctx = session.buildSessionContext();

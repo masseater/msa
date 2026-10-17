@@ -47,17 +47,17 @@ function parseEvalCli(
   const requestedFiles: string[] = [];
   const discoveryArgs: string[] = [];
 
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
+  const remaining = args[Symbol.iterator]();
+  for (let next = remaining.next(); !next.done; next = remaining.next()) {
+    const argument = next.value;
     if (argument.endsWith(".docs.eval.ts")) {
       requestedFiles.push(argument);
       continue;
     }
     if (FILTER_OPTIONS.has(argument)) {
-      const value = args[index + 1];
+      const value = remaining.next().value;
       if (!value) throw new Error(`Missing value for ${argument}.`);
       discoveryArgs.push(argument, value);
-      index += 1;
       continue;
     }
     if (argument.startsWith("--testNamePattern=")) {
@@ -70,14 +70,13 @@ function parseEvalCli(
     const equals = argument.indexOf("=");
     const name = equals === -1 ? argument : argument.slice(0, equals);
     if (RUNNER_OPTIONS.has(name)) {
-      const value = equals === -1 ? args[index + 1] : argument.slice(equals + 1);
+      const value = equals === -1 ? remaining.next().value : argument.slice(equals + 1);
       if (!value || (equals === -1 && value.startsWith("-")))
         throw new Error(`Missing value for ${name}.`);
       if (name === "--provider") provider = value;
       else if (name === "--model") model = value;
       else runsText = value;
       if (name !== "--runs-per-variant") cliSelectedModel = true;
-      if (equals === -1) index += 1;
       continue;
     }
     throw new Error(`Unsupported eval argument: ${argument}`);
@@ -170,13 +169,15 @@ const docker = createDockerContext(
   cli.runsPerVariant,
 );
 
-const discoveries = [];
-for (const variant of DOCUMENTATION_VARIANTS) {
+const discoverVariant = async (variant: (typeof DOCUMENTATION_VARIANTS)[number]) => {
   const path = discoverCases(docker, variant, files, cli.discoveryArgs);
-  discoveries.push(parseDiscoveredCases(JSON.parse(await readFile(path, "utf8"))));
-}
-compareDiscovery(discoveries[0], discoveries[1]);
-const cases = discoveries[0].map((evalCase) => ({
+  return parseDiscoveredCases(JSON.parse(await readFile(path, "utf8")));
+};
+const [firstVariant, secondVariant] = DOCUMENTATION_VARIANTS;
+const firstDiscovery = await discoverVariant(firstVariant);
+const secondDiscovery = await discoverVariant(secondVariant);
+compareDiscovery(firstDiscovery, secondDiscovery);
+const cases = firstDiscovery.map((evalCase) => ({
   ...evalCase,
   file: normalizeDiscoveredFile(evalCase.file),
 }));

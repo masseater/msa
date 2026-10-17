@@ -392,8 +392,7 @@ After completing a step, include a [DONE:n] tag in your response.`;
 
       // Only scan messages after the execute marker
       const messages: AssistantMessage[] = [];
-      for (let i = executeIndex + 1; i < entries.length; i++) {
-        const entry = entries[i];
+      for (const entry of entries.slice(executeIndex + 1)) {
         if (
           entry.type === "message" &&
           "message" in entry &&

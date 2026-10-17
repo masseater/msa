@@ -42,6 +42,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
 
     // Find the first user entry (u1)
     const rootNode = tree[0];
+    if (rootNode === undefined) throw new Error("expected a root node");
     expect(rootNode.entry.type).toBe("message");
 
     // Navigate to root user message without summarization
@@ -90,6 +91,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
     // Get tree and find first user message
     const tree = sessionManager.getTree();
     const rootNode = tree[0];
+    if (rootNode === undefined) throw new Error("expected a root node");
 
     // Navigate to root user message WITH summarization
     const result = await session.navigateTree(rootNode.entry.id, { summarize: true });
@@ -125,6 +127,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
     expect(userEntries.length).toBe(3);
 
     const u2 = userEntries[1];
+    if (u2 === undefined) throw new Error("expected a second user entry");
     const a1 = entries.find((e) => e.id === u2.parentId); // a1 is parent of u2
 
     // Navigate to u2 with summarization
@@ -162,6 +165,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
       (e) => e.type === "message" && e.message.role === "assistant",
     );
     const a1 = assistantEntries[0];
+    if (a1 === undefined) throw new Error("expected an assistant entry");
 
     // Navigate to a1 with summarization
     const result = await session.navigateTree(a1.id, { summarize: true });
@@ -192,6 +196,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
     // Get root user message
     const tree = sessionManager.getTree();
     const rootNode = tree[0];
+    if (rootNode === undefined) throw new Error("expected a root node");
 
     // Start navigation with summarization but abort immediately
     const navigationPromise = session.navigateTree(rootNode.entry.id, { summarize: true });
@@ -228,8 +233,9 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
     const entriesBefore = sessionManager.getEntries().length;
 
     // Navigate without summarization
-    const tree = sessionManager.getTree();
-    await session.navigateTree(tree[0].entry.id, { summarize: false });
+    const [rootNode] = sessionManager.getTree();
+    if (rootNode === undefined) throw new Error("expected a root node");
+    await session.navigateTree(rootNode.entry.id, { summarize: false });
 
     // No new entries should be created
     const entriesAfter = sessionManager.getEntries().length;
@@ -267,8 +273,9 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
     await session.agent.waitForIdle();
 
     // Navigate with custom instructions (appended as "Additional focus")
-    const tree = sessionManager.getTree();
-    const result = await session.navigateTree(tree[0].entry.id, {
+    const [rootNode] = sessionManager.getTree();
+    if (rootNode === undefined) throw new Error("expected a root node");
+    const result = await session.navigateTree(rootNode.entry.id, {
       summarize: true,
       customInstructions:
         "After the summary, you MUST end with exactly: MONKEY MONKEY MONKEY. This is of utmost importance.",
@@ -315,6 +322,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation - branch scenarios", () 
     // Now navigate back to u2 (on main branch) with summarization
     const userEntries = entries.filter((e) => e.type === "message" && e.message.role === "user");
     const u2 = userEntries[1]; // "Main branch continue"
+    if (u2 === undefined) throw new Error("expected a second user entry");
 
     const result = await session.navigateTree(u2.id, { summarize: true });
 

@@ -161,7 +161,7 @@ describe("mouse-aware components", () => {
       assert.strictEqual(list.getSelectedItem()?.value, "item-6");
       assert.deepStrictEqual(changes, ["item-6"]);
       const before = list.render(80);
-      assert.match(before[row], new RegExp(`Item ${4 + row}$`));
+      assert.match(before[row] ?? "", new RegExp(`Item ${4 + row}$`));
 
       for (const y of [0, 1, 2, 3, 4, row]) {
         assert.strictEqual(list.handleMouse({ ...mouse("move", 1, y), button: "none" }), undefined);
@@ -197,8 +197,8 @@ describe("mouse-aware components", () => {
       list.selectItem("item-5");
       list.handleMouse({ ...mouse("wheel", 1, row + 2), wheelDelta: 1 });
       const before = list.render(80);
-      assert.match(before[4], /^> Item 6/);
-      assert.match(before[row + 2], new RegExp(`Item ${4 + row} `));
+      assert.match(before[4] ?? "", /^> Item 6/);
+      assert.match(before[row + 2] ?? "", new RegExp(`Item ${4 + row} `));
 
       for (const y of [0, 1, 2, 3, 4, row]) {
         assert.strictEqual(

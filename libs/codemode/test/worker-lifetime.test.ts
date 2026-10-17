@@ -146,9 +146,9 @@ describe("worker lifetime", () => {
         expect(terminateSpy).toHaveBeenCalledTimes(1);
         expect(unrefSpy).toHaveBeenCalledTimes(1);
         expect(refSpy).toHaveBeenCalledTimes(1);
-        expect(unrefSpy.mock.invocationCallOrder[0]).toBeGreaterThan(
-          refSpy.mock.invocationCallOrder[0],
-        );
+        const [refOrder] = refSpy.mock.invocationCallOrder;
+        if (refOrder === undefined) throw new Error("Expected ref() to be called");
+        expect(unrefSpy.mock.invocationCallOrder[0]).toBeGreaterThan(refOrder);
         expect(exited).toBeDefined();
         expect(didExit).toBe(false);
         if (how === "close") expect(didClose).toBe(true);
@@ -261,7 +261,9 @@ describe.each(runtimes)("$name process lifetime", ({ name, command, available })
     async (how) => {
       const fixture = fileURLToPath(new URL("./fixtures/worker-process-exit.ts", import.meta.url));
       const lines = await runFixture(command, [fixture, how], name === "Node");
-      const result = JSON.parse(lines[0]) as { type: string; kind: string; elapsedMs: number };
+      const [resultLine, exitLine] = lines;
+      if (resultLine === undefined) throw new Error("Expected a result line");
+      const result = JSON.parse(resultLine) as { type: string; kind: string; elapsedMs: number };
       expect(result).toMatchObject({
         type: "result",
         kind: how === "timeout" ? "timeout" : "aborted",
@@ -269,7 +271,8 @@ describe.each(runtimes)("$name process lifetime", ({ name, command, available })
       expect(result.elapsedMs).toBeLessThan(1000);
       if (name === "Node") {
         expect(lines).toHaveLength(2);
-        const exit = JSON.parse(lines[1]) as { type: string; elapsedMs: number };
+        if (exitLine === undefined) throw new Error("Expected an exit line");
+        const exit = JSON.parse(exitLine) as { type: string; elapsedMs: number };
         expect(exit.type).toBe("exit");
         expect(exit.elapsedMs - result.elapsedMs).toBeLessThan(1000);
       }

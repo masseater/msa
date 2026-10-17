@@ -225,7 +225,7 @@ function selectCatalog(groups: readonly CatalogGroup[], budget: number | undefin
   while (active.length > 0) {
     active = active.filter((queue) => {
       const next = queue[0];
-      if (next.cost > remaining) return false;
+      if (next === undefined || next.cost > remaining) return false;
       remaining -= next.cost;
       shown.add(next.name);
       queue.shift();

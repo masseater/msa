@@ -98,8 +98,8 @@ describe("AgentSession virtual models", () => {
     await harness.session.prompt("hello");
 
     expect(reasons()).toEqual(["user", "retry", "continuation"]);
-    expect(requests[1].failed?.message.errorMessage).toBe("overloaded_error");
-    expect(requests[2].previous?.model.id).toBe("large");
+    expect(requests[1]?.failed?.message.errorMessage).toBe("overloaded_error");
+    expect(requests[2]?.previous?.model.id).toBe("large");
     expect(dispatched()).toEqual(["faux/large:high", "faux/large:high"]);
     expect(harness.session.model).toMatchObject({ provider: "router", id: "auto" });
     expect(harness.session.thinkingLevel).toBe("high");
@@ -124,8 +124,8 @@ describe("AgentSession virtual models", () => {
 
     expect(reasons()).toEqual(["user", "user", "retry"]);
     // The retry reports the failed request on large next to the small response of the previous turn.
-    expect(requests[2].failed?.model.id).toBe("large");
-    expect(requests[2].previous?.model.id).toBe("small");
+    expect(requests[2]?.failed?.model.id).toBe("large");
+    expect(requests[2]?.previous?.model.id).toBe("small");
     expect(dispatched()).toEqual(["faux/small:off", "faux/large:high"]);
   });
 
@@ -159,8 +159,8 @@ describe("AgentSession virtual models", () => {
     ]);
     // Compaction may fold the prompt into the summary, so the retry is not a new user turn.
     expect(reasons()).toEqual(["user", "retry"]);
-    expect(requests[1].failed?.model.id).toBe("large");
-    expect(requests[1].failed?.message.stopReason).toBe("length");
+    expect(requests[1]?.failed?.model.id).toBe("large");
+    expect(requests[1]?.failed?.message.stopReason).toBe("length");
   });
 
   it("routes requests after extension messages as continuations", async () => {

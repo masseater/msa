@@ -114,16 +114,18 @@ describe("Bedrock constrained sampling", () => {
     const toolConfig = (
       payload as { toolConfig: { tools: Array<{ toolSpec: { strict?: boolean } }> } }
     ).toolConfig;
-    expect(toolConfig.tools[0].toolSpec.strict).toBe(true);
+    expect(toolConfig.tools[0]?.toolSpec.strict).toBe(true);
 
-    context.tools![0].constrainedSampling = { type: "json_schema", strict: "prefer" };
+    const [lookupTool] = context.tools ?? [];
+    if (!lookupTool) throw new Error("Expected the lookup tool");
+    lookupTool.constrainedSampling = { type: "json_schema", strict: "prefer" };
     const novaPayload = await capturePayload(context, novaModel);
     const novaToolConfig = (
       novaPayload as {
         toolConfig: { tools: Array<{ toolSpec: { strict?: boolean } }> };
       }
     ).toolConfig;
-    expect(novaToolConfig.tools[0].toolSpec.strict).toBeUndefined();
+    expect(novaToolConfig.tools[0]?.toolSpec.strict).toBeUndefined();
   });
 });
 
@@ -195,8 +197,8 @@ describe("bedrock convertMessages skips unknown content types", () => {
     expect(payload).toBeDefined();
     const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
     expect(p.messages).toHaveLength(1);
-    expect(p.messages[0].content).toHaveLength(1);
-    expect(p.messages[0].content[0]).toEqual({ text: "hello" });
+    expect(p.messages[0]?.content).toHaveLength(1);
+    expect(p.messages[0]?.content[0]).toEqual({ text: "hello" });
   });
 
   it("skips unknown assistant content blocks instead of throwing", async () => {
@@ -226,8 +228,8 @@ describe("bedrock convertMessages skips unknown content types", () => {
     expect(payload).toBeDefined();
     const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
     expect(p.messages).toHaveLength(1);
-    expect(p.messages[0].content).toHaveLength(1);
-    expect(p.messages[0].content[0]).toEqual({ text: "hello" });
+    expect(p.messages[0]?.content).toHaveLength(1);
+    expect(p.messages[0]?.content[0]).toEqual({ text: "hello" });
   });
 
   it("replaces user messages with only unknown content blocks with a placeholder", async () => {
@@ -242,7 +244,7 @@ describe("bedrock convertMessages skips unknown content types", () => {
     expect(payload).toBeDefined();
     const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
     expect(p.messages).toHaveLength(1);
-    expect(p.messages[0].content).toEqual([{ text: "<empty>" }]);
+    expect(p.messages[0]?.content).toEqual([{ text: "<empty>" }]);
   });
 
   it("replaces blank user string content with a placeholder", async () => {
@@ -252,7 +254,7 @@ describe("bedrock convertMessages skips unknown content types", () => {
     expect(payload).toBeDefined();
     const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
     expect(p.messages).toHaveLength(1);
-    expect(p.messages[0].content).toEqual([{ text: "<empty>" }]);
+    expect(p.messages[0]?.content).toEqual([{ text: "<empty>" }]);
   });
 
   it("filters blank user text blocks when other content remains", async () => {
@@ -271,7 +273,7 @@ describe("bedrock convertMessages skips unknown content types", () => {
     expect(payload).toBeDefined();
     const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
     expect(p.messages).toHaveLength(1);
-    expect(p.messages[0].content).toEqual([{ text: "hello" }]);
+    expect(p.messages[0]?.content).toEqual([{ text: "hello" }]);
   });
 
   it("replaces user content emptied by surrogate sanitization with a placeholder", async () => {
@@ -281,7 +283,7 @@ describe("bedrock convertMessages skips unknown content types", () => {
     expect(payload).toBeDefined();
     const p = payload as { messages: Array<{ role: string; content: unknown[] }> };
     expect(p.messages).toHaveLength(1);
-    expect(p.messages[0].content).toEqual([{ text: "<empty>" }]);
+    expect(p.messages[0]?.content).toEqual([{ text: "<empty>" }]);
   });
 
   it("skips assistant text blocks emptied by surrogate sanitization", async () => {
@@ -327,7 +329,7 @@ describe("bedrock convertMessages skips unknown content types", () => {
       messages: Array<{ role: string; content: Array<{ toolResult: { content: unknown[] } }> }>;
     };
     expect(p.messages).toHaveLength(1);
-    expect(p.messages[0].content[0].toolResult.content).toEqual([{ text: "<empty>" }]);
+    expect(p.messages[0]?.content[0]?.toolResult.content).toEqual([{ text: "<empty>" }]);
   });
 
   it("skips assistant messages with only unknown content blocks", async () => {
@@ -404,7 +406,7 @@ describe("bedrock convertMessages skips unknown content types", () => {
     const p = payload as {
       messages: Array<{ content: Array<{ toolUse?: { input: unknown } }> }>;
     };
-    expect(p.messages[0].content[0].toolUse?.input).toEqual({
+    expect(p.messages[0]?.content[0]?.toolUse?.input).toEqual({
       path: "/workspace/foobar/file.js",
       edits: [
         { oldText: "first", newText: "updated first" },

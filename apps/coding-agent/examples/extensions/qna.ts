@@ -45,8 +45,7 @@ export default function (msa: ExtensionAPI) {
       const branch = ctx.sessionManager.getBranch();
       let lastAssistantText: string | undefined;
 
-      for (let i = branch.length - 1; i >= 0; i--) {
-        const entry = branch[i];
+      for (const entry of branch.toReversed()) {
         if (entry.type === "message") {
           const msg = entry.message;
           if ("role" in msg && msg.role === "assistant") {

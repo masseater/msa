@@ -19,7 +19,10 @@ async function sourceGraph(entry: string): Promise<Set<string>> {
     for (const match of source.matchAll(
       /\b(import|export)(\s+type\b)?[^;"']*?(?:from\s*)?["'](\.[^"']+)["']/g,
     )) {
-      if (match[2] === undefined) pending.push(resolve(dirname(path), match[3]));
+      const [, , typeOnly, specifier] = match;
+      if (typeOnly === undefined && specifier !== undefined) {
+        pending.push(resolve(dirname(path), specifier));
+      }
     }
   }
   return visited;

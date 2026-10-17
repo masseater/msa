@@ -20,8 +20,7 @@ export default function (msa: ExtensionAPI) {
     // Find the last assistant message for commit context
     const entries = ctx.sessionManager.getEntries();
     let lastAssistantText = "";
-    for (let i = entries.length - 1; i >= 0; i--) {
-      const entry = entries[i];
+    for (const entry of entries.toReversed()) {
       if (entry.type === "message" && entry.message.role === "assistant") {
         const content = entry.message.content;
         if (Array.isArray(content)) {

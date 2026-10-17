@@ -297,6 +297,7 @@ describe("TUI Kitty image cleanup", () => {
       );
       const imageLines = image.render(40);
       const imageSequence = imageLines[0];
+      assert.ok(imageSequence !== undefined);
       component.lines = ["before", ...imageLines, "after"];
       tui.requestRender();
       await terminal.waitForRender();
@@ -381,6 +382,7 @@ describe("TUI Kitty image cleanup", () => {
       );
       const imageLines = image.render(40);
       const imageSequence = imageLines[0];
+      assert.ok(imageSequence !== undefined);
       component.lines = ["l0", "l1", "l2", "l3", "l4", ...imageLines, "after"];
       tui.requestRender();
       await terminal.waitForRender();
@@ -429,6 +431,7 @@ describe("TUI Kitty image cleanup", () => {
       );
       const imageLines = image.render(40);
       const imageSequence = imageLines[0];
+      assert.ok(imageSequence !== undefined);
       assert.ok(imageLines.length > terminal.rows, "test image should exceed the viewport height");
 
       component.lines = ["before", ...imageLines, "after"];

@@ -17,8 +17,7 @@ export default function (msa: ExtensionAPI) {
 
       // Find the last assistant message entry
       const entries = ctx.sessionManager.getEntries();
-      for (let i = entries.length - 1; i >= 0; i--) {
-        const entry = entries[i];
+      for (const entry of entries.toReversed()) {
         if (entry.type === "message" && entry.message.role === "assistant") {
           msa.setLabel(entry.id, label);
           ctx.ui.notify(`Bookmarked as: ${label}`, "info");
@@ -35,8 +34,7 @@ export default function (msa: ExtensionAPI) {
     description: "Remove bookmark from last labeled entry",
     handler: async (_args, ctx) => {
       const entries = ctx.sessionManager.getEntries();
-      for (let i = entries.length - 1; i >= 0; i--) {
-        const entry = entries[i];
+      for (const entry of entries.toReversed()) {
         const label = ctx.sessionManager.getLabel(entry.id);
         if (label) {
           msa.setLabel(entry.id, undefined);

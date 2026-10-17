@@ -110,10 +110,9 @@ function readProviderStructure(path: string, providerId: string): Record<string,
 export function readModelDataProviderIds(packageRoot: string): string[] {
   const aggregatorPath = join(packageRoot, "src", "models.generated.ts");
   const aggregator = readFileSync(aggregatorPath, "utf8");
-  const providerIds = Array.from(
-    aggregator.matchAll(MODEL_DATA_IMPORT_PATTERN),
-    (match) => match[1],
-  ).sort();
+  const providerIds = Array.from(aggregator.matchAll(MODEL_DATA_IMPORT_PATTERN))
+    .flatMap(([, providerId]) => (providerId === undefined ? [] : [providerId]))
+    .sort();
   if (providerIds.length === 0)
     throw new Error(`No generated provider imports found in ${aggregatorPath}`);
   if (new Set(providerIds).size !== providerIds.length) {

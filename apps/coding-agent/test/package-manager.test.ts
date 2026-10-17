@@ -301,10 +301,10 @@ Content`,
 
         // Project auto-discovered has higher precedence than user auto-discovered,
         // so the surviving entry should be scoped to project.
-        expect(result.extensions[0].metadata.scope).toBe("project");
-        expect(result.skills[0].metadata.scope).toBe("project");
-        expect(result.prompts[0].metadata.scope).toBe("project");
-        expect(result.themes[0].metadata.scope).toBe("project");
+        expect(result.extensions[0]?.metadata.scope).toBe("project");
+        expect(result.skills[0]?.metadata.scope).toBe("project");
+        expect(result.prompts[0]?.metadata.scope).toBe("project");
+        expect(result.themes[0]?.metadata.scope).toBe("project");
       } finally {
         if (previousHome === undefined) {
           delete process.env["HOME"];
@@ -2494,7 +2494,7 @@ Content`,
       // Should only appear once (deduped), with project scope
       const sharedPaths = result.extensions.filter((r) => r.path.includes("shared-pkg"));
       expect(sharedPaths.length).toBe(1);
-      expect(sharedPaths[0].metadata.scope).toBe("project");
+      expect(sharedPaths[0]?.metadata.scope).toBe("project");
     });
 
     it("should keep both if different packages", async () => {

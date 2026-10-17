@@ -544,7 +544,9 @@ describe("AgentSession MCP integration", () => {
       const reachable = () =>
         exposure === "direct" ? harness.session.getActiveToolNames() : nestedToolNames(harness);
       const listChanged = async () => {
-        await servers[0].send({ jsonrpc: "2.0", method: "notifications/tools/list_changed" });
+        const [server] = servers;
+        if (server === undefined) throw new Error("expected an MCP server");
+        await server.send({ jsonrpc: "2.0", method: "notifications/tools/list_changed" });
         await new Promise((resolve) => setTimeout(resolve, 10));
       };
       expect(reachable()).toContain("mcp__docs__fail");
@@ -606,7 +608,7 @@ describe("AgentSession MCP integration", () => {
         message.role === "toolResult" && message.toolName === "read_mcp_resource",
     );
     expect(getMessageText(results[0])).toBe("# docs://pages/setup");
-    expect(results[1].isError).toBe(true);
+    expect(results[1]?.isError).toBe(true);
     expect(getMessageText(results[1])).toBe(
       'MCP server "nope" has no resources. Servers with resources: docs',
     );
@@ -914,11 +916,15 @@ return { docs, sameForAliases: aliases.every((alias) => JSON.stringify(alias) ==
     );
     // The first request lists the server by name; its summary follows as an appended patch.
     expect(systemMessages).toHaveLength(2);
-    expect(systemMessages[0].sections?.[MCP_SERVERS_SECTION]).toContain("- mcp__slow (codemode)\n");
-    expect(systemMessages[1].sections).toEqual({
+    expect(systemMessages[0]?.sections?.[MCP_SERVERS_SECTION]).toContain(
+      "- mcp__slow (codemode)\n",
+    );
+    expect(systemMessages[1]?.sections).toEqual({
       [MCP_SERVERS_SECTION]: expect.stringContaining("- mcp__slow (codemode): Slow docs."),
     });
-    expect(harness.session.messages.indexOf(systemMessages[1])).toBeGreaterThan(
+    const summaryMessage = systemMessages[1];
+    if (summaryMessage === undefined) throw new Error("expected the summary system message");
+    expect(harness.session.messages.indexOf(summaryMessage)).toBeGreaterThan(
       harness.session.messages.findIndex((message) => message.role === "assistant"),
     );
   });
@@ -1134,7 +1140,7 @@ return [...new Set(await Promise.all(names.map(async (name) => (await describeNa
         (message.toolsAdded ?? []).some((tool) => tool.name === searchName),
     );
     expect(loadMessages).toHaveLength(1);
-    expect(loadMessages[0].toolsAdded?.map((tool) => tool.name)).toEqual([searchName]);
+    expect(loadMessages[0]?.toolsAdded?.map((tool) => tool.name)).toEqual([searchName]);
     expect(getMessageText(toolResult(harness, searchName))).toBe("loaded guide\nloaded faq");
     expect(calls).toEqual(['search:{"query":"loaded"}']);
 

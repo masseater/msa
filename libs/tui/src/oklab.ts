@@ -22,6 +22,15 @@ type Matrix = [Vector, Vector, Vector];
 const multiply = (m: Matrix, [x, y, z]: Vector): Vector =>
   m.map((row) => row[0] * x + row[1] * y + row[2] * z) as Vector;
 
+const mapVector = (vector: Vector, f: (value: number, index: 0 | 1 | 2) => number): Vector => [
+  f(vector[0], 0),
+  f(vector[1], 1),
+  f(vector[2], 2),
+];
+
+const dotVector = (row: Vector, values: Vector): number =>
+  row[0] * values[0] + row[1] * values[1] + row[2] * values[2];
+
 // ============================================================================
 // OKHSL <-> sRGB
 // ============================================================================
@@ -50,7 +59,8 @@ const LMS_TO_LINEAR_SRGB: Matrix = [
  * Per sRGB channel (red, green, blue): the (a, b) half-plane where that channel clips
  * first, and the polynomial approximating the maximum saturation there.
  */
-const SATURATION_FIT: [[number, number], number[]][] = [
+type SaturationFit = [[number, number], [number, number, number, number, number]];
+const SATURATION_FIT: [SaturationFit, SaturationFit, SaturationFit] = [
   [
     [-1.8817031, -0.80936501],
     [1.19086277, 1.76576728, 0.59662641, 0.75515197, 0.56771245],
@@ -101,7 +111,7 @@ export function rgbToOklab({ r, g, b }: RgbColor): Vector {
 
 /** Linear sRGB [r, g, b] to sRGB channels (0-255, rounded), clipping out-of-gamut channels. */
 export function linearSrgbToRgb(linear: Vector): RgbColor {
-  const [r, g, b] = linear.map((value) =>
+  const [r, g, b] = mapVector(linear, (value) =>
     Math.round(Math.min(1, Math.max(0, linearToSrgb(value))) * 255),
   );
   return { r, g, b };
@@ -117,17 +127,20 @@ function lmsSlopes(a: number, b: number): Vector {
 /** Largest saturation (C/L) inside sRGB for hue (a, b): polynomial fit plus one Halley step. */
 function maxSaturation(a: number, b: number): number {
   const channel = SATURATION_FIT.findIndex(([[x, y]], index) => index === 2 || x * a + y * b > 1);
-  const [k0, k1, k2, k3, k4] = SATURATION_FIT[channel][1];
+  const fit = SATURATION_FIT[channel];
   const weights = LMS_TO_LINEAR_SRGB[channel];
+  if (fit === undefined || weights === undefined) {
+    throw new Error(`No saturation fit for channel ${channel}`);
+  }
+  const [k0, k1, k2, k3, k4] = fit[1];
   const saturation = k0 + k1 * a + k2 * b + k3 * a * a + k4 * a * b;
 
   const slopes = lmsSlopes(a, b);
-  const base = slopes.map((k) => 1 + saturation * k);
-  const dot = (values: number[]) =>
-    values.reduce((sum, value, index) => sum + weights[index] * value, 0);
-  const f = dot(base.map((value) => value ** 3));
-  const f1 = dot(base.map((value, index) => 3 * slopes[index] * value ** 2));
-  const f2 = dot(base.map((value, index) => 6 * slopes[index] ** 2 * value));
+  const base = mapVector(slopes, (k) => 1 + saturation * k);
+  const dot = (values: Vector) => dotVector(weights, values);
+  const f = dot(mapVector(base, (value) => value ** 3));
+  const f1 = dot(mapVector(base, (value, index) => 3 * slopes[index] * value ** 2));
+  const f2 = dot(mapVector(base, (value, index) => 6 * slopes[index] ** 2 * value));
   return saturation - (f * f1) / (f1 * f1 - 0.5 * f * f2);
 }
 
@@ -151,16 +164,14 @@ function maxChroma(
   // Upper half: triangle edge, then one Halley step against each channel reaching 1.
   const t = (cuspC * (lightness - 1)) / (cuspL - 1);
   const slopes = lmsSlopes(a, b);
-  const lms = slopes.map((k) => lightness + t * k);
-  const cubes = lms.map((value) => value ** 3);
-  const first = lms.map((value, index) => 3 * slopes[index] * value ** 2);
-  const second = lms.map((value, index) => 6 * slopes[index] ** 2 * value);
-  const dot = (row: Vector, values: number[]) =>
-    row[0] * values[0] + row[1] * values[1] + row[2] * values[2];
+  const lms = mapVector(slopes, (k) => lightness + t * k);
+  const cubes = mapVector(lms, (value) => value ** 3);
+  const first = mapVector(lms, (value, index) => 3 * slopes[index] * value ** 2);
+  const second = mapVector(lms, (value, index) => 6 * slopes[index] ** 2 * value);
   const steps = LMS_TO_LINEAR_SRGB.map((row) => {
-    const f = dot(row, cubes) - 1;
-    const f1 = dot(row, first);
-    const f2 = dot(row, second);
+    const f = dotVector(row, cubes) - 1;
+    const f1 = dotVector(row, first);
+    const f2 = dotVector(row, second);
     const u = f1 / (f1 * f1 - 0.5 * f * f2);
     return u >= 0 ? -f * u : Number.MAX_VALUE;
   });

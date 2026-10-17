@@ -46,7 +46,6 @@ import {
   type ThinkingContent,
   type Tool,
   type ToolCall,
-  type ToolResultMessage,
   type TranscriptContext,
 } from "@msa/ai";
 import type { ExtensionAPI } from "@msa/coding-agent";
@@ -229,6 +228,7 @@ function convertMessages(messages: Message[], isOAuth: boolean, _tools?: Tool[])
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
+    if (msg === undefined) continue;
 
     if (msg.role === "user") {
       if (typeof msg.content === "string") {
@@ -289,8 +289,8 @@ function convertMessages(messages: Message[], isOAuth: boolean, _tools?: Tool[])
       });
 
       let j = i + 1;
-      while (j < messages.length && messages[j].role === "toolResult") {
-        const nextMsg = messages[j] as ToolResultMessage;
+      let nextMsg = messages[j];
+      while (nextMsg?.role === "toolResult") {
         toolResults.push({
           type: "tool_result",
           tool_use_id: nextMsg.toolCallId,
@@ -298,6 +298,7 @@ function convertMessages(messages: Message[], isOAuth: boolean, _tools?: Tool[])
           is_error: nextMsg.isError,
         });
         j++;
+        nextMsg = messages[j];
       }
       i = j - 1;
       params.push({ role: "user", content: toolResults });

@@ -117,7 +117,11 @@ export function truncateHeadOf(
   }
 
   // Check if first line alone exceeds byte limit
-  const firstLineBytes = utf8ByteLength(lines[0]);
+  const firstLine = lines[0];
+  if (firstLine === undefined) {
+    throw new Error("truncateHeadOf needs a non-empty prefix when the text exceeds the limits");
+  }
+  const firstLineBytes = utf8ByteLength(firstLine);
   if (firstLineBytes > maxBytes) {
     return {
       content: "",
@@ -139,8 +143,8 @@ export function truncateHeadOf(
   let outputBytesCount = 0;
   let truncatedBy: "lines" | "bytes" = "lines";
 
-  for (let i = 0; i < lines.length && i < maxLines; i++) {
-    const line = lines[i];
+  for (const [i, line] of lines.entries()) {
+    if (i >= maxLines) break;
     const lineBytes = utf8ByteLength(line) + (i > 0 ? 1 : 0); // +1 for newline
 
     if (outputBytesCount + lineBytes > maxBytes) {

@@ -2576,13 +2576,13 @@ describe("openai-codex streaming", () => {
       expect(connections).toBe(2);
       expect(sentBodies).toHaveLength(3);
       expect(sentBodies.map((body) => body.connectionId)).toEqual([1, 1, 2]);
-      expect(sentBodies[1].previous_response_id).toBe("resp_1");
-      expect(sentBodies[1].input).toEqual([
+      expect(sentBodies[1]?.previous_response_id).toBe("resp_1");
+      expect(sentBodies[1]?.input).toEqual([
         { role: "user", content: [{ type: "input_text", text: "Now finish" }] },
       ]);
-      expect(sentBodies[2].previous_response_id).toBeUndefined();
-      expect(sentBodies[2].input).toHaveLength(3);
-      expect(sentBodies[2].input.at(-1)).toEqual({
+      expect(sentBodies[2]?.previous_response_id).toBeUndefined();
+      expect(sentBodies[2]?.input).toHaveLength(3);
+      expect(sentBodies[2]?.input.at(-1)).toEqual({
         role: "user",
         content: [{ type: "input_text", text: "Now finish" }],
       });
@@ -2791,7 +2791,7 @@ describe("openai-codex streaming", () => {
     ) as {
       input: Array<{ content: Array<{ text: string }> }>;
     };
-    expect(decoded.input[0].content[0].text).toBe(largeText);
+    expect(decoded.input[0]?.content[0]?.text).toBe(largeText);
 
     capturedEncoding = null;
     capturedBody = undefined;

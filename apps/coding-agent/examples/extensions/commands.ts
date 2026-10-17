@@ -61,7 +61,7 @@ export default function commandsExtension(msa: ExtensionAPI) {
 
       // If user selected a command (not a header), offer to show its path
       if (selected && !selected.startsWith("---")) {
-        const cmdName = selected.split(" - ")[0].slice(1); // Remove leading /
+        const cmdName = (selected.split(" - ")[0] ?? "").slice(1); // Remove leading /
         const cmd = commands.find((c) => c.name === cmdName);
         if (cmd?.sourceInfo.path) {
           const showPath = await ctx.ui.confirm(

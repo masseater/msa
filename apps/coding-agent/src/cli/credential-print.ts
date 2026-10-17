@@ -90,7 +90,8 @@ export async function resolveCredentialForPrint(
     if (value) credentials.push({ providerId: provider.id, value });
   }
 
-  if (credentials.length === 1) return credentials[0].value;
+  const [onlyCredential] = credentials;
+  if (credentials.length === 1 && onlyCredential !== undefined) return onlyCredential.value;
   if (credentials.length === 0) {
     const providerId = providers[0]?.id;
     const type = providerId ? credentialTypes.get(providerId) : undefined;

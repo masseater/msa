@@ -68,8 +68,7 @@ export type StorageBenchmarkDataset = {
 };
 
 function task(id: TaskId<JsonValue>, index: number): StoredTask {
-  const statuses = ["pending", "running", "terminal"] as const;
-  const status = statuses[index % statuses.length];
+  const status = index % 3 === 0 ? "pending" : index % 3 === 1 ? "running" : "terminal";
   const common = {
     id,
     conversationId: ROOT_CONVERSATION_ID,

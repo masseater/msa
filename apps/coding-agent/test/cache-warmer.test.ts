@@ -177,14 +177,14 @@ describe("cache warming", () => {
       model: adaptiveModel,
       options: { reasoning: "high", sessionId: "s", transformHeaders, maxTokens: 1, maxRetries: 0 },
     });
-    expect(calls[0].options?.signal).not.toBe(signal);
+    expect(calls[0]?.options?.signal).not.toBe(signal);
     expect(events[0]).toMatchObject({
       type: "cache_warming_decision",
       continuationProbability: 1,
       action: "warm",
     });
-    expect(events[0].missCost).toBeCloseTo(0.575);
-    expect(events[0].warmCost).toBeCloseTo(0.050025);
+    expect(events[0]?.missCost).toBeCloseTo(0.575);
+    expect(events[0]?.warmCost).toBeCloseTo(0.050025);
     expect(appendUsage).toHaveBeenCalledWith(
       "cache_warm",
       adaptiveModel.provider,
@@ -326,7 +326,7 @@ describe("cache warming", () => {
     pending.warmer.start(request(), current);
     await vi.advanceTimersByTimeAsync(270_000);
     pending.warmer.start(request(), current);
-    expect(pending.calls[0].options?.signal?.aborted).toBe(true);
+    expect(pending.calls[0]?.options?.signal?.aborted).toBe(true);
     release();
     pending.warmer.cancel();
     await vi.advanceTimersByTimeAsync(600_000);

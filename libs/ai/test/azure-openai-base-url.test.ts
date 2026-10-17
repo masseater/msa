@@ -108,7 +108,9 @@ async function captureClientBaseUrl(baseUrl: string): Promise<string> {
     apiKey: "test-api-key",
   }).result();
   expect(azureMock.constructorCalls).toHaveLength(1);
-  return azureMock.constructorCalls[0].baseURL;
+  const [call] = azureMock.constructorCalls;
+  if (!call) throw new Error("Expected an AzureOpenAI constructor call");
+  return call.baseURL;
 }
 
 async function captureClientHeaders(
@@ -121,7 +123,9 @@ async function captureClientHeaders(
     headers,
   }).result();
   expect(azureMock.constructorCalls).toHaveLength(1);
-  return azureMock.constructorCalls[0].defaultHeaders ?? {};
+  const [call] = azureMock.constructorCalls;
+  if (!call) throw new Error("Expected an AzureOpenAI constructor call");
+  return call.defaultHeaders ?? {};
 }
 
 describe("azure base URL normalization", () => {
@@ -244,7 +248,7 @@ describe("azure base URL normalization", () => {
       apiKey: "test-api-key",
     }).result();
     expect(azureMock.constructorCalls).toHaveLength(1);
-    expect(azureMock.constructorCalls[0].baseURL).toBe(
+    expect(azureMock.constructorCalls[0]?.baseURL).toBe(
       "https://my-resource.openai.azure.com/openai/v1",
     );
   });

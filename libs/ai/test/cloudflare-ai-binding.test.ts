@@ -49,15 +49,17 @@ describe("createAiBindingFetch", () => {
       body,
     });
 
-    expect(requests[0].url).toBe(`${BINDING_PREFIX}/anthropic/v1/messages?beta=true`);
-    expect(requests[0].method).toBe("POST");
-    expect(Object.fromEntries(requests[0].headers)).toEqual({
+    const [request] = requests;
+    if (!request) throw new Error("Expected a binding request");
+    expect(request.url).toBe(`${BINDING_PREFIX}/anthropic/v1/messages?beta=true`);
+    expect(request.method).toBe("POST");
+    expect(Object.fromEntries(request.headers)).toEqual({
       "content-type": "application/json",
       // The gateway recognizes and strips the sentinel itself; nothing here touches headers.
       "cf-aig-authorization": `Bearer ${CLOUDFLARE_GATEWAY_BINDING_AUTH_SENTINEL}`,
       "anthropic-version": "2023-06-01",
     });
-    expect(await requests[0].text()).toBe(body);
+    expect(await request.text()).toBe(body);
     expect(response).toBe(bindingResponse);
     expect(await response.text()).toBe("data: {}\n\n");
   });
@@ -104,8 +106,10 @@ describe("createAiBindingFetch", () => {
 
     expect(result.stopReason).toBe("error");
     expect(requests).toHaveLength(1);
-    expect(requests[0].url).toBe(`${BINDING_PREFIX}/openai/chat/completions`);
-    const headerNames = Object.keys(Object.fromEntries(requests[0].headers));
+    const [request] = requests;
+    if (!request) throw new Error("Expected a binding request");
+    expect(request.url).toBe(`${BINDING_PREFIX}/openai/chat/completions`);
+    const headerNames = Object.keys(Object.fromEntries(request.headers));
     expect(headerNames).not.toContain("authorization");
     expect(headerNames).not.toContain("x-api-key");
   });

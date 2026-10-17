@@ -172,6 +172,7 @@ describe("ModelRegistry", () => {
     test("unconfigured compatibility auth includes static model headers", async () => {
       const registry = await createModelRegistry(authStorage, modelsJsonPath);
       const base = registry.getAll()[0];
+      if (base === undefined) throw new Error("expected a registered model");
       const model = {
         ...base,
         provider: "missing-provider",
@@ -193,7 +194,7 @@ describe("ModelRegistry", () => {
 
       // Google models should still have their original baseUrl
       expect(googleModels.length).toBeGreaterThan(0);
-      expect(googleModels[0].baseUrl).not.toBe("https://my-proxy.example.com/v1");
+      expect(googleModels[0]?.baseUrl).not.toBe("https://my-proxy.example.com/v1");
     });
 
     test("can mix baseUrl override and models merge", async () => {
@@ -213,7 +214,7 @@ describe("ModelRegistry", () => {
       // Anthropic: multiple built-in models with new baseUrl
       const anthropicModels = getModelsForProvider(registry, "anthropic");
       expect(anthropicModels.length).toBeGreaterThan(1);
-      expect(anthropicModels[0].baseUrl).toBe("https://anthropic-proxy.example.com/v1");
+      expect(anthropicModels[0]?.baseUrl).toBe("https://anthropic-proxy.example.com/v1");
 
       // Google: built-ins plus custom model
       const googleModels = getModelsForProvider(registry, "google");
@@ -227,7 +228,7 @@ describe("ModelRegistry", () => {
       });
       const registry = await createModelRegistry(authStorage, modelsJsonPath);
 
-      expect(getModelsForProvider(registry, "anthropic")[0].baseUrl).toBe(
+      expect(getModelsForProvider(registry, "anthropic")[0]?.baseUrl).toBe(
         "https://first-proxy.example.com/v1",
       );
 
@@ -237,7 +238,7 @@ describe("ModelRegistry", () => {
       });
       await registry.refresh();
 
-      expect(getModelsForProvider(registry, "anthropic")[0].baseUrl).toBe(
+      expect(getModelsForProvider(registry, "anthropic")[0]?.baseUrl).toBe(
         "https://second-proxy.example.com/v1",
       );
     });
@@ -328,7 +329,7 @@ describe("ModelRegistry", () => {
       const sonnetModels = models.filter((m) => m.id === "anthropic/claude-sonnet-4.5");
 
       expect(sonnetModels).toHaveLength(1);
-      expect(sonnetModels[0].baseUrl).toBe("https://my-proxy.example.com/v1");
+      expect(sonnetModels[0]?.baseUrl).toBe("https://my-proxy.example.com/v1");
     });
 
     test("custom provider with same name as built-in does not affect other built-in providers", async () => {
@@ -1616,7 +1617,9 @@ describe("ModelRegistry", () => {
         const models = getModelsForProvider(registry, "custom-provider");
         expect(models.map((m) => m.id)).toEqual(["custom-a", "custom-b"]);
         expect(models.every((m) => m.baseUrl === "https://custom.test/v1")).toBe(true);
-        expect(await registry.getApiKeyAndHeaders(models[0])).toMatchObject({
+        const [first] = models;
+        if (first === undefined) throw new Error("expected custom-provider models");
+        expect(await registry.getApiKeyAndHeaders(first)).toMatchObject({
           ok: true,
           headers: { "x-proxy": "enabled" },
         });

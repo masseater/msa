@@ -183,7 +183,7 @@ export function convertResponsesMessages<TApi extends Api>(
   ): string => {
     if (!allowedToolCallProviders.has(model.provider)) return normalizeIdPart(id);
     if (!id.includes("|")) return normalizeIdPart(id);
-    const [callId, itemId] = id.split("|");
+    const [callId = "", itemId = ""] = id.split("|");
     const normalizedCallId = normalizeIdPart(callId);
     const isForeignToolCall = source.provider !== model.provider || source.api !== model.api;
     let normalizedItemId = isForeignToolCall
@@ -327,7 +327,7 @@ export function convertResponsesMessages<TApi extends Api>(
           } satisfies ResponseOutputMessage);
         } else if (block.type === "toolCall") {
           const toolCall = block as ToolCall;
-          const [callId, itemIdRaw] = toolCall.id.split("|");
+          const [callId = "", itemIdRaw] = toolCall.id.split("|");
           const customInputProperty = options?.grammarToolInputProperties?.get(toolCall.name);
           let itemId: string | undefined = itemIdRaw;
 
@@ -379,7 +379,7 @@ export function convertResponsesMessages<TApi extends Api>(
       }
       messages.push(...output);
     } else if (msg.role === "toolResult") {
-      const [callId] = msg.toolCallId.split("|");
+      const [callId = ""] = msg.toolCallId.split("|");
       const output = convertToolResultOutput(model, msg.content);
 
       if (options?.grammarToolInputProperties?.has(msg.toolName)) {

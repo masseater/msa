@@ -40,7 +40,9 @@ describe("fetchWithRetry", () => {
     });
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       if (fetchMock.mock.calls.length === 1) {
-        controllers[0].abort();
+        const [controller] = controllers;
+        if (controller === undefined) throw new Error("expected a timeout controller");
+        controller.abort();
         init?.signal?.throwIfAborted();
       }
       return Response.json({ ok: true });

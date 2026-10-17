@@ -1221,7 +1221,7 @@ function buildParams(
     );
     if (
       definitions.some((definition, index) => {
-        const config = tools[index].constrainedSampling;
+        const config = tools[index]?.constrainedSampling;
         return (
           definition.strict === true &&
           config &&
@@ -1432,6 +1432,7 @@ function convertMessages(
 
   for (let i = 0; i < transformedMessages.length; i++) {
     const msg = transformedMessages[i];
+    if (msg === undefined) continue;
 
     if (msg.role === "system") {
       // Later system messages only reach this point when the model accepts them natively;
@@ -1573,9 +1574,10 @@ function convertMessages(
       // Collect all consecutive toolResult messages, needed for z.ai Anthropic endpoint.
       const toolResults: ContentBlockParam[] = [];
       let j = i;
-      while (j < transformedMessages.length && transformedMessages[j].role === "toolResult") {
-        toolResults.push(convertToolResult(transformedMessages[j] as ToolResultMessage));
-        j++;
+      let next = transformedMessages[j];
+      while (next?.role === "toolResult") {
+        toolResults.push(convertToolResult(next));
+        next = transformedMessages[++j];
       }
 
       // Skip the messages we've already processed.
@@ -1592,8 +1594,8 @@ function convertMessages(
 
   // Add cache_control to the last user or system message to cache conversation history
   if (cacheControl && params.length > 0) {
-    const lastMessage = params[params.length - 1];
-    if (lastMessage.role === "user" || lastMessage.role === "system") {
+    const lastMessage = params.at(-1);
+    if (lastMessage?.role === "user" || lastMessage?.role === "system") {
       if (Array.isArray(lastMessage.content)) {
         const lastBlock = lastMessage.content[lastMessage.content.length - 1];
         if (
@@ -1636,12 +1638,12 @@ function insertThinkingLevelMessages(
   activeEffort: AnthropicEffort,
 ): MessageParam[] {
   const messages: MessageParam[] = [];
-  for (let index = 0; index < converted.messages.length; index++) {
+  for (const [index, message] of converted.messages.entries()) {
     const historicalEffort = converted.assistantLevels.get(index);
     if (historicalEffort !== undefined) {
       messages.push({ role: "system", content: [], output_config: { effort: historicalEffort } });
     }
-    messages.push(converted.messages[index]);
+    messages.push(message);
   }
   messages.push({ role: "system", content: [], output_config: { effort: activeEffort } });
   return messages;

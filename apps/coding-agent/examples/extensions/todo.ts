@@ -273,7 +273,8 @@ export default function (msa: ExtensionAPI) {
         }
 
         case "add": {
-          const added = todoList[todoList.length - 1];
+          const added = todoList.at(-1);
+          if (added === undefined) return new Text(theme.fg("success", "✓ Added"), 0, 0);
           return new Text(
             theme.fg("success", "✓ Added ") +
               theme.fg("accent", `#${added.id}`) +

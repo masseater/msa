@@ -31,9 +31,10 @@ describe("SelectList", () => {
     const list = new SelectList(items, 5, testTheme);
     const rendered = list.render(100);
 
-    assert.ok(rendered.length > 0);
-    assert.ok(!rendered[0].includes("\n"));
-    assert.ok(rendered[0].includes("Line one Line two Line three"));
+    const [first] = rendered;
+    assert.ok(first !== undefined);
+    assert.ok(!first.includes("\n"));
+    assert.ok(first.includes("Line one Line two Line three"));
   });
 
   it("keeps descriptions aligned when the primary text is truncated", () => {
@@ -47,11 +48,12 @@ describe("SelectList", () => {
     ];
 
     const list = new SelectList(items, 5, testTheme);
-    const rendered = list.render(80);
+    const [first, second] = list.render(80);
+    assert.ok(first !== undefined && second !== undefined);
 
     assert.equal(
-      visibleIndexOf(rendered[0], "short description"),
-      visibleIndexOf(rendered[1], "long description"),
+      visibleIndexOf(first, "short description"),
+      visibleIndexOf(second, "long description"),
     );
   });
 
@@ -67,8 +69,8 @@ describe("SelectList", () => {
     });
     const rendered = list.render(80);
 
-    assert.equal(rendered[0].indexOf("first"), 14);
-    assert.equal(rendered[1].indexOf("second"), 14);
+    assert.equal(rendered[0]?.indexOf("first"), 14);
+    assert.equal(rendered[1]?.indexOf("second"), 14);
   });
 
   it("uses the configured maximum primary column width", () => {
@@ -85,10 +87,11 @@ describe("SelectList", () => {
       minPrimaryColumnWidth: 12,
       maxPrimaryColumnWidth: 20,
     });
-    const rendered = list.render(80);
+    const [first, second] = list.render(80);
+    assert.ok(first !== undefined && second !== undefined);
 
-    assert.equal(visibleIndexOf(rendered[0], "first"), 22);
-    assert.equal(visibleIndexOf(rendered[1], "second"), 22);
+    assert.equal(visibleIndexOf(first, "first"), 22);
+    assert.equal(visibleIndexOf(second, "second"), 22);
   });
 
   it("allows overriding primary truncation while preserving description alignment", () => {
@@ -112,9 +115,10 @@ describe("SelectList", () => {
         return `${text.slice(0, Math.max(0, maxWidth - 1))}…`;
       },
     });
-    const rendered = list.render(80);
+    const [first, second] = list.render(80);
+    assert.ok(first !== undefined && second !== undefined);
 
-    assert.ok(rendered[0].includes("…"));
-    assert.equal(visibleIndexOf(rendered[0], "first"), visibleIndexOf(rendered[1], "second"));
+    assert.ok(first.includes("…"));
+    assert.equal(visibleIndexOf(first, "first"), visibleIndexOf(second, "second"));
   });
 });

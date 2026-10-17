@@ -205,8 +205,8 @@ describe("faux provider", () => {
     );
 
     expect(events).toHaveLength(1);
-    expect(events[0].type).toBe("error");
-    if (events[0].type === "error") {
+    expect(events[0]?.type).toBe("error");
+    if (events[0]?.type === "error") {
       expect(events[0].error.stopReason).toBe("error");
       expect(events[0].error.errorMessage).toBe("boom");
     }
@@ -516,8 +516,8 @@ describe("faux provider", () => {
       "error",
     ]);
     const terminal = events[events.length - 1];
-    expect(terminal.type).toBe("error");
-    if (terminal.type === "error") {
+    expect(terminal?.type).toBe("error");
+    if (terminal?.type === "error") {
       expect(terminal.reason).toBe("error");
       expect(terminal.error.stopReason).toBe("error");
       expect(terminal.error.errorMessage).toBe("upstream failed");
@@ -549,8 +549,8 @@ describe("faux provider", () => {
       "error",
     ]);
     const terminal = events[events.length - 1];
-    expect(terminal.type).toBe("error");
-    if (terminal.type === "error") {
+    expect(terminal?.type).toBe("error");
+    if (terminal?.type === "error") {
       expect(terminal.reason).toBe("aborted");
       expect(terminal.error.stopReason).toBe("aborted");
       expect(terminal.error.errorMessage).toBe("Request was aborted");
@@ -576,8 +576,8 @@ describe("faux provider", () => {
     );
 
     expect(events).toHaveLength(1);
-    expect(events[0].type).toBe("error");
-    if (events[0].type === "error") {
+    expect(events[0]?.type).toBe("error");
+    if (events[0]?.type === "error") {
       expect(events[0].reason).toBe("aborted");
       expect(events[0].error.stopReason).toBe("aborted");
     }

@@ -20,6 +20,7 @@ export async function editInExternalEditor(
   try {
     writeFileSync(filePath, options.content, "utf-8");
     const [editor, ...editorArgs] = options.command.split(" ");
+    if (editor === undefined) return { status: "failed" };
     process.stdout.write(
       `Launching external editor: ${options.command}\nPi will resume when the editor exits.\n`,
     );

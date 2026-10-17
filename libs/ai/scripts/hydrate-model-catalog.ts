@@ -83,11 +83,9 @@ export function hydrateModelCatalog(
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  if (process.argv.length !== 3)
+const [, scriptPath, catalogPath, ...extraArgs] = process.argv;
+if (scriptPath && import.meta.url === pathToFileURL(resolve(scriptPath)).href) {
+  if (catalogPath === undefined || extraArgs.length > 0)
     throw new Error("Usage: node hydrate-model-catalog.ts <models.all.json>");
-  hydrateModelCatalog(
-    join(dirname(fileURLToPath(import.meta.url)), ".."),
-    resolve(process.argv[2]),
-  );
+  hydrateModelCatalog(join(dirname(fileURLToPath(import.meta.url)), ".."), resolve(catalogPath));
 }

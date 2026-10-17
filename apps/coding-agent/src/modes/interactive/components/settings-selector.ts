@@ -622,23 +622,26 @@ export class SettingsSelectorComponent extends Container {
             {
               key: "level",
               title: (ctx) => {
-                const m = defaultModelByValue.get(ctx["model"]);
+                const modelKey = ctx["model"];
+                const m = modelKey === undefined ? undefined : defaultModelByValue.get(modelKey);
                 return `Thinking Level for ${m ? modelDisplayLabel(m) : ctx["model"]}`;
               },
               description: "Select default thinking level for this model",
               options: (ctx) => {
-                const model = defaultModelByValue.get(ctx["model"]);
+                const modelKey = ctx["model"];
+                if (modelKey === undefined) return [];
+                const model = defaultModelByValue.get(modelKey);
                 if (!model) return [];
                 const levels = (
                   model.reasoning ? getSupportedThinkingLevels(model) : ["off"]
                 ) as ThinkingLevel[];
-                const activeLevel = currentModelThinkingLevels[ctx["model"]];
+                const activeLevel = currentModelThinkingLevels[modelKey];
                 const levelItems: SelectItem[] = levels.map((level) => ({
                   value: level,
                   label: `${level === activeLevel ? "✓ " : "  "}${level}`,
                   description: THINKING_DESCRIPTIONS[level],
                 }));
-                if (currentModelThinkingLevels[ctx["model"]] !== undefined) {
+                if (currentModelThinkingLevels[modelKey] !== undefined) {
                   levelItems.push({
                     value: CLEAR_OVERRIDE_VALUE,
                     label: "  (clear override)",
@@ -647,7 +650,10 @@ export class SettingsSelectorComponent extends Container {
                 }
                 return levelItems;
               },
-              preselect: (ctx) => currentModelThinkingLevels[ctx["model"]],
+              preselect: (ctx) => {
+                const modelKey = ctx["model"];
+                return modelKey === undefined ? undefined : currentModelThinkingLevels[modelKey];
+              },
             },
           ];
 
@@ -656,20 +662,20 @@ export class SettingsSelectorComponent extends Container {
           return new SteppedSubmenu(
             steps,
             (selections) => {
-              const model = defaultModelByValue.get(selections["model"]);
+              const modelKey = selections["model"];
+              if (modelKey === undefined) return;
+              const model = defaultModelByValue.get(modelKey);
               if (!model) return;
               if (selections["level"] === CLEAR_OVERRIDE_VALUE) {
                 callbacks.onModelThinkingLevelRemove(model.provider, model.id);
-                delete currentModelThinkingLevels[selections["model"]];
+                delete currentModelThinkingLevels[modelKey];
               } else {
                 callbacks.onModelThinkingLevelChange(
                   model.provider,
                   model.id,
                   selections["level"] as ThinkingLevel,
                 );
-                currentModelThinkingLevels[selections["model"]] = selections[
-                  "level"
-                ] as ThinkingLevel;
+                currentModelThinkingLevels[modelKey] = selections["level"] as ThinkingLevel;
               }
             },
             () => {

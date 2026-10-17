@@ -190,9 +190,7 @@ function streamWithDeltas(stream: AssistantMessageEventStream, message: Assistan
   const partial: AssistantMessage = { ...message, content: [], stopReason: "pending" };
   stream.push({ type: "start", partial: { ...partial } });
 
-  for (let i = 0; i < message.content.length; i++) {
-    const block = message.content[i];
-
+  for (const [i, block] of message.content.entries()) {
     if (block.type === "thinking") {
       partial.content = [...partial.content, { type: "thinking", thinking: "" }];
       stream.push({ type: "thinking_start", contentIndex: i, partial: { ...partial } });
@@ -313,7 +311,11 @@ export function createFauxStreamFn(responses: FauxResponseInput[]): {
     state.callCount++;
     state.contexts.push(context);
 
-    const resp = normalizeResponse(responses[index]);
+    const response = responses[index];
+    if (response === undefined) {
+      throw new Error("createFauxStreamFn requires at least one response");
+    }
+    const resp = normalizeResponse(response);
     const message = buildAssistantMessage(resp);
     const stream = createAssistantMessageEventStream();
 

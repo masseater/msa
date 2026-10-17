@@ -147,6 +147,7 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
     expect(compactEvents.length).toBe(1);
 
     const beforeEvent = beforeCompactEvents[0];
+    if (beforeEvent === undefined) throw new Error("expected a session_before_compact event");
     expect(beforeEvent.preparation).toBeDefined();
     expect(beforeEvent.preparation.messagesToSummarize).toBeDefined();
     expect(beforeEvent.preparation.turnPrefixMessages).toBeDefined();
@@ -156,6 +157,7 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
     // sessionManager, modelRegistry, and model are now on ctx, not event
 
     const afterEvent = compactEvents[0];
+    if (afterEvent === undefined) throw new Error("expected a session_compact event");
     expect(afterEvent.compactionEntry).toBeDefined();
     expect(afterEvent.compactionEntry.summary.length).toBeGreaterThan(0);
     expect(afterEvent.compactionEntry.tokensBefore).toBeGreaterThanOrEqual(0);
@@ -206,6 +208,7 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
     expect(compactEvents.length).toBe(1);
 
     const afterEvent = compactEvents[0];
+    if (afterEvent === undefined) throw new Error("expected a session_compact event");
     if (afterEvent.type === "session_compact") {
       expect(afterEvent.compactionEntry.summary).toBe(customSummary);
       expect(afterEvent.fromExtension).toBe(true);
@@ -225,6 +228,7 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
     expect(compactEvents.length).toBe(1);
 
     const afterEvent = compactEvents[0];
+    if (afterEvent === undefined) throw new Error("expected a session_compact event");
     if (afterEvent.type === "session_compact") {
       // sessionManager is now on ctx, use session.sessionManager directly
       const entries = session.sessionManager.getEntries();
@@ -279,7 +283,7 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
       (e): e is SessionCompactEvent => e.type === "session_compact",
     );
     expect(compactEvents.length).toBe(1);
-    expect(compactEvents[0].fromExtension).toBe(false);
+    expect(compactEvents[0]?.fromExtension).toBe(false);
   }, 120000);
 
   it("should call multiple extensions in order", async () => {

@@ -122,7 +122,7 @@ export function parseCodemodeSource(input: string): ParsedCodemodeSource {
     );
   }
   const newline = input.indexOf("\n");
-  const firstLine = lines[0].replace(/\r$/, "");
+  const firstLine = (newline === -1 ? input : input.slice(0, newline)).replace(/\r$/, "");
   const trimmed = firstLine.trimStart();
   if (!trimmed.startsWith(CODEMODE_OPTIONS_PREFIX)) return { code: input, options: {} };
   const code = newline === -1 ? "" : input.slice(newline);

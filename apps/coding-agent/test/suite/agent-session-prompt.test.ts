@@ -650,7 +650,7 @@ describe("AgentSession prompt characterization", () => {
       expect(new Set(prompts).size).toBe(1);
       expect(events.map((event) => event.messageType)).toEqual(["user", "custom"]);
       const customEvent = events[1];
-      expect(customEvent.messageType === "custom" && customEvent.message.customType).toBe(
+      expect(customEvent?.messageType === "custom" && customEvent.message.customType).toBe(
         "task-done",
       );
     });
@@ -694,7 +694,9 @@ describe("AgentSession prompt characterization", () => {
       await Promise.all([first, second]);
 
       expect(requests).toHaveLength(1);
-      const texts = requests[0].messages.flatMap((message) =>
+      const [request] = requests;
+      if (request === undefined) throw new Error("expected one request");
+      const texts = request.messages.flatMap((message) =>
         message.role === "user" && typeof message.content !== "string"
           ? message.content.flatMap((part) => (part.type === "text" ? [part.text] : []))
           : [],
@@ -727,7 +729,7 @@ describe("AgentSession prompt characterization", () => {
       await harness.session.prompt("hello");
 
       expect(requests).toHaveLength(1);
-      expect(JSON.stringify(requests[0].messages)).toContain("context from handler");
+      expect(JSON.stringify(requests[0]?.messages)).toContain("context from handler");
     });
 
     it("aborts a run when abort is requested while before_agent_start runs", async () => {

@@ -166,14 +166,14 @@ export async function readTaskObservation(
   const [{ workspace }, rawReport] = loaded;
   const reportedFullName = `${task.evalSet} ${task.caseId}`;
   const assertions = rawReport.testResults.flatMap(({ assertionResults }) => assertionResults);
-  if (assertions.length !== 1) return { ...identity, outcome: "errored" };
-  const assertion = assertions[0];
+  const assertion = assertions.length === 1 ? assertions[0] : undefined;
+  if (assertion === undefined) return { ...identity, outcome: "errored" };
   if (assertion.fullName !== reportedFullName) return { ...identity, outcome: "errored" };
   const statusOutcome = classifyCaseStatus(assertion.status);
   if (statusOutcome === "skipped" || statusOutcome === "pending")
     return { ...identity, outcome: statusOutcome };
-  if (workspace.cases.length !== 1) return { ...identity, outcome: "errored" };
-  const caseResult = workspace.cases[0];
+  const caseResult = workspace.cases.length === 1 ? workspace.cases[0] : undefined;
+  if (caseResult === undefined) return { ...identity, outcome: "errored" };
   if (caseResult.fullName !== reportedFullName) return { ...identity, outcome: "errored" };
   if (caseResult.status !== assertion.status) return { ...identity, outcome: "errored" };
   const run = caseResult.harness?.run;
@@ -291,8 +291,9 @@ function resolvePair(group: PairGroup): { pair?: Pair; blocked?: BlockedPair } {
         `${variant}: expected ${expected} observation${expected === 1 ? "" : "s"}, found ${observed.length}`,
       );
     }
-    if (expected === 1 && observed.length === 1 && observed[0].outcome !== "scored") {
-      reasons.push(`${variant}: ${observed[0].outcome}`);
+    const single = observed.length === 1 ? observed[0] : undefined;
+    if (expected === 1 && single !== undefined && single.outcome !== "scored") {
+      reasons.push(`${variant}: ${single.outcome}`);
     }
   }
   if (reasons.length > 0) {

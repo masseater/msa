@@ -35,9 +35,10 @@ for (const info of sessions.slice(0, 3)) {
   console.log(`  ${info.id.slice(0, 8)}... - "${info.firstMessage.slice(0, 30)}..."`);
 }
 
-if (sessions.length > 0) {
+const [latestSession] = sessions;
+if (latestSession) {
   const { session: opened } = await createAgentSession({
-    sessionManager: SessionManager.open(sessions[0].path),
+    sessionManager: SessionManager.open(latestSession.path),
   });
   console.log(`\nOpened: ${opened.sessionId}`);
   opened.dispose();
