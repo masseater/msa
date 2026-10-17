@@ -1,6 +1,6 @@
 import type * as NodeZlib from "node:zlib";
 
-import { Effect } from "effect";
+import { Cause, Effect, Fiber, Stream } from "effect";
 import type {
   Tool as OpenAITool,
   ResponseCreateParamsStreaming,
@@ -23,6 +23,7 @@ import type {
   Usage,
 } from "../types.ts";
 import { combineAbortSignals } from "../utils/abort-signals.ts";
+import { sleepUnlessAborted } from "../utils/abort.ts";
 import { currentTimeMillis } from "../utils/clock.ts";
 import {
   appendAssistantMessageDiagnostic,
@@ -32,6 +33,8 @@ import {
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
+import { callHook } from "../utils/hooks.ts";
+import { encodeJsonSync } from "../utils/json-codec.ts";
 import { resolveHttpProxyUrlForTarget } from "../utils/node-http-proxy.ts";
 import { isNodeRuntime } from "../utils/runtime.ts";
 import { getSystemMessageText } from "../utils/text.ts";
@@ -179,19 +182,10 @@ function validateRetryDelayMs(delayMs: number, options?: StreamOptions): number 
   return delayMs;
 }
 
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted === true) {
-      reject(new Error("Request was aborted"));
-      return;
-    }
-    const timeout = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => {
-      clearTimeout(timeout);
-      reject(new Error("Request was aborted"));
-    });
-  });
-}
+const requestAbortedError = (): Error => new Error("Request was aborted");
+
+const sleep = (ms: number, signal?: AbortSignal): Effect.Effect<void> =>
+  sleepUnlessAborted(ms, signal, requestAbortedError);
 
 function normalizeTimeoutMs(value: number | undefined): number | undefined {
   if (value === undefined) return undefined;
@@ -227,6 +221,342 @@ function compressRequestBodyZstd(bodyJson: string): Uint8Array<ArrayBuffer> | nu
   }
 }
 
+interface CodexStreamRun {
+  readonly model: Model<"openai-codex-responses">;
+  readonly output: AssistantMessage;
+  readonly events: AssistantMessageEventStream;
+  readonly options: OpenAICodexResponsesOptions | undefined;
+  readonly body: RequestBody;
+  readonly bodyJson: string;
+  readonly websocketHeaders: Headers;
+  readonly httpTimeoutMs: number | undefined;
+  readonly websocketConnectTimeoutMs: number | undefined;
+  readonly cacheSessionId: string | undefined;
+  readonly accountId: string;
+  readonly grammarToolInputProperties: ReadonlyMap<string, string>;
+  readonly transport: NonNullable<StreamOptions["transport"]>;
+  readonly emitStart: () => void;
+}
+
+interface WebSocketRetries {
+  readonly connectionLimit: boolean;
+  readonly missingContinuation: boolean;
+}
+
+const finishCodexOutput = (run: CodexStreamRun): void => {
+  if (run.options?.signal?.aborted === true) {
+    throw requestAbortedError();
+  }
+  assertSuccessfulOutput(run.output);
+  run.events.push({ type: "done", reason: run.output.stopReason, message: run.output });
+  run.events.end();
+};
+
+const failCodexOutput = (
+  output: AssistantMessage,
+  events: AssistantMessageEventStream,
+  options: OpenAICodexResponsesOptions | undefined,
+  error: unknown,
+): void => {
+  for (const block of output.content) {
+    delete (block as { partialJson?: string }).partialJson;
+    delete (block as { customInput?: unknown }).customInput;
+  }
+  output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+  output.errorMessage = formatProviderError(normalizeProviderError(error));
+  events.push({ type: "error", reason: output.stopReason, error: output });
+  events.end();
+};
+
+const handleWebSocketFailure = (
+  run: CodexStreamRun,
+  retries: WebSocketRetries,
+  websocketStarted: boolean,
+  error: unknown,
+): Effect.Effect<"done" | "fallback"> => {
+  const aborted = run.options?.signal?.aborted;
+  const connectionLimitBeforeStart =
+    !websocketStarted && isWebSocketConnectionLimitReachedError(error);
+  if (aborted !== true && isPreviousResponseNotFoundError(error) && !retries.missingContinuation) {
+    return runWebSocketAttempt(run, { ...retries, missingContinuation: true });
+  }
+  if (aborted !== true && connectionLimitBeforeStart && !retries.connectionLimit) {
+    return runWebSocketAttempt(run, { ...retries, connectionLimit: true });
+  }
+  if (aborted === true || (isCodexNonTransportError(error) && !connectionLimitBeforeStart)) {
+    return Effect.die(error);
+  }
+  appendAssistantMessageDiagnostic(
+    run.output,
+    createAssistantMessageDiagnostic("provider_transport_failure", error, {
+      configuredTransport: run.transport,
+      ...(websocketStarted ? {} : { fallbackTransport: "sse" }),
+      eventsEmitted: websocketStarted,
+      phase: websocketStarted ? "after_message_stream_start" : "before_message_stream_start",
+      requestBytes: new TextEncoder().encode(run.bodyJson).byteLength,
+    }),
+  );
+  recordWebSocketFailure(run.cacheSessionId, error);
+  if (websocketStarted) {
+    return Effect.die(error);
+  }
+  recordWebSocketSseFallback(run.cacheSessionId);
+  return Effect.succeed("fallback");
+};
+
+const runWebSocketAttempt = (
+  run: CodexStreamRun,
+  retries: WebSocketRetries,
+): Effect.Effect<"done" | "fallback"> => {
+  let websocketStarted = false;
+  return processWebSocketStream(
+    resolveCodexWebSocketUrl(run.model.baseUrl),
+    run.body,
+    run.websocketHeaders,
+    run.output,
+    run.events,
+    run.model,
+    () => {
+      websocketStarted = true;
+      run.emitStart();
+    },
+    run.httpTimeoutMs,
+    run.websocketConnectTimeoutMs,
+    run.cacheSessionId,
+    run.accountId,
+    run.grammarToolInputProperties,
+    run.options,
+  ).pipe(
+    Effect.andThen(
+      Effect.sync(() => {
+        finishCodexOutput(run);
+        return "done" as const;
+      }),
+    ),
+    Effect.catchDefect((error) => handleWebSocketFailure(run, retries, websocketStarted, error)),
+  );
+};
+
+interface CodexSseRequest {
+  readonly run: CodexStreamRun;
+  readonly headers: Headers;
+  readonly body: Uint8Array<ArrayBuffer> | string;
+  readonly maxRetries: number;
+}
+
+const fetchCodexSseResponse = (request: CodexSseRequest): Effect.Effect<Response> => {
+  const { run } = request;
+  const headerTimeoutSignal =
+    run.httpTimeoutMs !== undefined && run.httpTimeoutMs > 0
+      ? AbortSignal.timeout(run.httpTimeoutMs)
+      : undefined;
+  const combinedSignal = combineAbortSignals([run.options?.signal, headerTimeoutSignal]);
+  return Effect.promise(() =>
+    (run.options?.fetch ?? globalThis.fetch)(resolveCodexUrl(run.model.baseUrl), {
+      method: "POST",
+      headers: request.headers,
+      body: request.body,
+      signal: combinedSignal.signal ?? null,
+    }),
+  ).pipe(
+    Effect.catchDefect((error) =>
+      Effect.die(
+        headerTimeoutSignal?.aborted === true && !(run.options?.signal?.aborted ?? false)
+          ? new Error(`Codex SSE response headers timed out after ${run.httpTimeoutMs}ms`, {
+              cause: error,
+            })
+          : error,
+      ),
+    ),
+    Effect.ensuring(Effect.sync(() => combinedSignal.cleanup())),
+  );
+};
+
+const attemptCodexSse = Effect.fn("attemptCodexSse")(function* (
+  request: CodexSseRequest,
+  attempt: number,
+) {
+  const { run } = request;
+  const response = yield* fetchCodexSseResponse(request);
+  yield* callHook(() =>
+    run.options?.onResponse?.(
+      { status: response.status, headers: headersToRecord(response.headers) },
+      run.model,
+    ),
+  );
+  if (response.ok) {
+    return response;
+  }
+  const errorText = yield* Effect.promise(() => response.text());
+  if (attempt < request.maxRetries && isRetryableError(response.status, errorText)) {
+    const retryAfterDelayMs = getRetryAfterDelayMs(response.headers);
+    const delayMs =
+      retryAfterDelayMs === undefined
+        ? BASE_DELAY_MS * 2 ** attempt
+        : validateRetryDelayMs(retryAfterDelayMs, run.options);
+    yield* sleep(delayMs, run.options?.signal);
+    return undefined;
+  }
+  const info = yield* parseErrorResponse(
+    new Response(errorText, { status: response.status, statusText: response.statusText }),
+  );
+  throw new Error(info.friendlyMessage || info.message);
+});
+
+const retryCodexSseAttempt = (
+  request: CodexSseRequest,
+  attempt: number,
+  error: unknown,
+): Effect.Effect<Response | undefined> => {
+  if (
+    error instanceof Error &&
+    (error.name === "AbortError" || error.message === "Request was aborted")
+  ) {
+    return Effect.die(new Error("Request was aborted", { cause: error }));
+  }
+  const lastError = error instanceof Error ? error : new Error(String(error));
+  if (
+    attempt < request.maxRetries &&
+    !(lastError instanceof RetryDelayExceededError) &&
+    !lastError.message.includes("usage limit")
+  ) {
+    return sleep(BASE_DELAY_MS * 2 ** attempt, request.run.options?.signal).pipe(
+      Effect.as(undefined),
+    );
+  }
+  return Effect.die(lastError);
+};
+
+const requestCodexSse = (request: CodexSseRequest, attempt: number): Effect.Effect<Response> =>
+  attempt > request.maxRetries
+    ? Effect.die(new Error("Failed after retries"))
+    : Effect.suspend(() => {
+        if (request.run.options?.signal?.aborted === true) {
+          return Effect.die(requestAbortedError());
+        }
+        return attemptCodexSse(request, attempt).pipe(
+          Effect.catchDefect((error) => retryCodexSseAttempt(request, attempt, error)),
+          Effect.filterOrElse(
+            (response): response is Response => response !== undefined,
+            () => requestCodexSse(request, attempt + 1),
+          ),
+        );
+      });
+
+const streamCodexOverSse = Effect.fn("streamCodexOverSse")(function* (
+  run: CodexStreamRun,
+  sseHeaders: Headers,
+) {
+  const compressedBody = compressRequestBodyZstd(run.bodyJson);
+  if (compressedBody !== null) {
+    sseHeaders.set("content-encoding", "zstd");
+  }
+  const response = yield* requestCodexSse(
+    {
+      run,
+      headers: sseHeaders,
+      body: compressedBody ?? run.bodyJson,
+      maxRetries: run.options?.maxRetries ?? DEFAULT_MAX_RETRIES,
+    },
+    0,
+  );
+  if (response.body === null) {
+    throw new Error("No response body");
+  }
+  run.emitStart();
+  yield* processStream(
+    response,
+    run.output,
+    run.events,
+    run.model,
+    run.grammarToolInputProperties,
+    run.options,
+  );
+  finishCodexOutput(run);
+});
+
+const runCodexStream = Effect.fn("runCodexStream")(function* (
+  model: Model<"openai-codex-responses">,
+  normalizedContext: TranscriptContext,
+  output: AssistantMessage,
+  events: AssistantMessageEventStream,
+  options: OpenAICodexResponsesOptions | undefined,
+) {
+  const apiKey = options?.apiKey;
+  if (apiKey === undefined || apiKey === "") {
+    throw new Error(`No API key for provider: ${model.provider}`);
+  }
+
+  const accountId = extractAccountId(apiKey);
+  const grammarToolInputProperties = createGrammarToolInputProperties(
+    getDeclaredTools(normalizedContext.messages),
+    model.compat?.supportsOpenAIGrammarTools ?? false,
+  );
+  const cacheSessionId = options?.cacheRetention === "none" ? undefined : options?.sessionId;
+  const codexSessionId = clampOpenAIPromptCacheKey(cacheSessionId);
+  const builtBody = buildRequestBody(
+    model,
+    normalizedContext,
+    options,
+    codexSessionId,
+    grammarToolInputProperties,
+  );
+  const nextBody = yield* callHook(() => options?.onPayload?.(builtBody, model));
+  const body = nextBody === undefined ? builtBody : (nextBody as RequestBody);
+  const websocketRequestId = codexSessionId || uuidv7();
+  const sseHeaders = buildSSEHeaders(
+    model.headers,
+    options?.headers,
+    accountId,
+    apiKey,
+    codexSessionId,
+  );
+  const transport = options?.transport || "auto";
+  let startEmitted = false;
+  const run: CodexStreamRun = {
+    model,
+    output,
+    events,
+    options,
+    body,
+    bodyJson: encodeJsonSync(body),
+    websocketHeaders: buildWebSocketHeaders(
+      model.headers,
+      options?.headers,
+      accountId,
+      apiKey,
+      websocketRequestId,
+    ),
+    httpTimeoutMs: normalizeTimeoutMs(options?.timeoutMs),
+    websocketConnectTimeoutMs: normalizeTimeoutMs(options?.websocketConnectTimeoutMs),
+    cacheSessionId,
+    accountId,
+    grammarToolInputProperties,
+    transport,
+    emitStart: () => {
+      if (!startEmitted) {
+        startEmitted = true;
+        events.push({ type: "start", partial: output });
+      }
+    },
+  };
+  const websocketDisabledForSession =
+    transport !== "sse" && isWebSocketSseFallbackActive(cacheSessionId);
+  if (websocketDisabledForSession) {
+    recordWebSocketSseFallback(cacheSessionId);
+  }
+
+  if (transport !== "sse" && !websocketDisabledForSession) {
+    const outcome = yield* runWebSocketAttempt(run, {
+      connectionLimit: false,
+      missingContinuation: false,
+    });
+    if (outcome === "done") return;
+  }
+
+  yield* streamCodexOverSse(run, sseHeaders);
+});
+
 export const stream: StreamFunction<"openai-codex-responses", OpenAICodexResponsesOptions> = (
   model: Model<"openai-codex-responses">,
   context: TranscriptContext,
@@ -237,282 +567,31 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
     context,
     model.compat?.supportsMidConvoSystemMessages,
   );
+  const output: AssistantMessage = {
+    role: "assistant",
+    content: [],
+    api: "openai-codex-responses" as Api,
+    provider: model.provider,
+    model: model.id,
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: "pending",
+    timestamp: currentTimeMillis(),
+  };
 
-  (async () => {
-    const output: AssistantMessage = {
-      role: "assistant",
-      content: [],
-      api: "openai-codex-responses" as Api,
-      provider: model.provider,
-      model: model.id,
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
-      stopReason: "pending",
-      timestamp: currentTimeMillis(),
-    };
-
-    try {
-      const apiKey = options?.apiKey;
-      if (apiKey === undefined || apiKey === "") {
-        throw new Error(`No API key for provider: ${model.provider}`);
-      }
-
-      const accountId = extractAccountId(apiKey);
-      const grammarToolInputProperties = createGrammarToolInputProperties(
-        getDeclaredTools(normalizedContext.messages),
-        model.compat?.supportsOpenAIGrammarTools ?? false,
-      );
-      const cacheSessionId = options?.cacheRetention === "none" ? undefined : options?.sessionId;
-      const codexSessionId = clampOpenAIPromptCacheKey(cacheSessionId);
-      let body = buildRequestBody(
-        model,
-        normalizedContext,
-        options,
-        codexSessionId,
-        grammarToolInputProperties,
-      );
-      const nextBody = await options?.onPayload?.(body, model);
-      if (nextBody !== undefined) {
-        body = nextBody as RequestBody;
-      }
-      const websocketRequestId = codexSessionId || uuidv7();
-      const sseHeaders = buildSSEHeaders(
-        model.headers,
-        options?.headers,
-        accountId,
-        apiKey,
-        codexSessionId,
-      );
-      const websocketHeaders = buildWebSocketHeaders(
-        model.headers,
-        options?.headers,
-        accountId,
-        apiKey,
-        websocketRequestId,
-      );
-      const bodyJson = JSON.stringify(body);
-      const httpTimeoutMs = normalizeTimeoutMs(options?.timeoutMs);
-      const websocketConnectTimeoutMs = normalizeTimeoutMs(options?.websocketConnectTimeoutMs);
-      const transport = options?.transport || "auto";
-      let startEmitted = false;
-      const websocketDisabledForSession =
-        transport !== "sse" && isWebSocketSseFallbackActive(cacheSessionId);
-      if (websocketDisabledForSession) {
-        recordWebSocketSseFallback(cacheSessionId);
-      }
-
-      if (transport !== "sse" && !websocketDisabledForSession) {
-        let websocketStarted = false;
-        let retriedWebSocketConnectionLimit = false;
-        let retriedMissingWebSocketContinuation = false;
-        while (true) {
-          websocketStarted = false;
-          try {
-            await processWebSocketStream(
-              resolveCodexWebSocketUrl(model.baseUrl),
-              body,
-              websocketHeaders,
-              output,
-              events,
-              model,
-              () => {
-                websocketStarted = true;
-                if (!startEmitted) {
-                  startEmitted = true;
-                  events.push({ type: "start", partial: output });
-                }
-              },
-              httpTimeoutMs,
-              websocketConnectTimeoutMs,
-              cacheSessionId,
-              accountId,
-              grammarToolInputProperties,
-              options,
-            );
-
-            if (options?.signal?.aborted === true) {
-              throw new Error("Request was aborted");
-            }
-            assertSuccessfulOutput(output);
-            events.push({
-              type: "done",
-              reason: output.stopReason,
-              message: output,
-            });
-            events.end();
-            return;
-          } catch (error) {
-            const aborted = options?.signal?.aborted;
-            const connectionLimitBeforeStart =
-              !websocketStarted && isWebSocketConnectionLimitReachedError(error);
-            const previousResponseNotFound = isPreviousResponseNotFoundError(error);
-            if (
-              aborted !== true &&
-              previousResponseNotFound &&
-              !retriedMissingWebSocketContinuation
-            ) {
-              retriedMissingWebSocketContinuation = true;
-              continue;
-            }
-            if (
-              aborted !== true &&
-              connectionLimitBeforeStart &&
-              !retriedWebSocketConnectionLimit
-            ) {
-              retriedWebSocketConnectionLimit = true;
-              continue;
-            }
-            if (
-              aborted === true ||
-              (isCodexNonTransportError(error) && !connectionLimitBeforeStart)
-            ) {
-              throw error;
-            }
-            appendAssistantMessageDiagnostic(
-              output,
-              createAssistantMessageDiagnostic("provider_transport_failure", error, {
-                configuredTransport: transport,
-                ...(websocketStarted ? {} : { fallbackTransport: "sse" }),
-                eventsEmitted: websocketStarted,
-                phase: websocketStarted
-                  ? "after_message_stream_start"
-                  : "before_message_stream_start",
-                requestBytes: new TextEncoder().encode(bodyJson).byteLength,
-              }),
-            );
-            recordWebSocketFailure(cacheSessionId, error);
-            if (websocketStarted) {
-              throw error;
-            }
-            recordWebSocketSseFallback(cacheSessionId);
-            break;
-          }
-        }
-      }
-
-      const compressedBody = compressRequestBodyZstd(bodyJson);
-      if (compressedBody !== null) {
-        sseHeaders.set("content-encoding", "zstd");
-      }
-      const sseBody: Uint8Array<ArrayBuffer> | string = compressedBody ?? bodyJson;
-
-      let response: Response | undefined;
-      let lastError: Error | undefined;
-      const maxRetries = options?.maxRetries ?? DEFAULT_MAX_RETRIES;
-
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        if (options?.signal?.aborted === true) {
-          throw new Error("Request was aborted");
-        }
-
-        try {
-          const headerTimeoutSignal =
-            httpTimeoutMs !== undefined && httpTimeoutMs > 0
-              ? AbortSignal.timeout(httpTimeoutMs)
-              : undefined;
-          const combinedSignal = combineAbortSignals([options?.signal, headerTimeoutSignal]);
-          try {
-            response = await (options?.fetch ?? globalThis.fetch)(resolveCodexUrl(model.baseUrl), {
-              method: "POST",
-              headers: sseHeaders,
-              body: sseBody,
-              signal: combinedSignal.signal ?? null,
-            });
-          } catch (error) {
-            if (headerTimeoutSignal?.aborted === true && !(options?.signal?.aborted ?? false)) {
-              throw new Error(`Codex SSE response headers timed out after ${httpTimeoutMs}ms`, {
-                cause: error,
-              });
-            }
-            throw error;
-          } finally {
-            combinedSignal.cleanup();
-          }
-          await options?.onResponse?.(
-            { status: response.status, headers: headersToRecord(response.headers) },
-            model,
-          );
-
-          if (response.ok) {
-            break;
-          }
-
-          const errorText = await response.text();
-          if (attempt < maxRetries && isRetryableError(response.status, errorText)) {
-            const retryAfterDelayMs = getRetryAfterDelayMs(response.headers);
-            const delayMs =
-              retryAfterDelayMs === undefined
-                ? BASE_DELAY_MS * 2 ** attempt
-                : validateRetryDelayMs(retryAfterDelayMs, options);
-
-            await sleep(delayMs, options?.signal);
-            continue;
-          }
-
-          const fakeResponse = new Response(errorText, {
-            status: response.status,
-            statusText: response.statusText,
-          });
-          const info = await parseErrorResponse(fakeResponse);
-          throw new Error(info.friendlyMessage || info.message);
-        } catch (error) {
-          if (error instanceof Error) {
-            if (error.name === "AbortError" || error.message === "Request was aborted") {
-              throw new Error("Request was aborted", { cause: error });
-            }
-          }
-          lastError = error instanceof Error ? error : new Error(String(error));
-          if (
-            attempt < maxRetries &&
-            !(lastError instanceof RetryDelayExceededError) &&
-            !lastError.message.includes("usage limit")
-          ) {
-            const delayMs = BASE_DELAY_MS * 2 ** attempt;
-            await sleep(delayMs, options?.signal);
-            continue;
-          }
-          throw lastError;
-        }
-      }
-
-      if (response?.ok !== true) {
-        throw lastError ?? new Error("Failed after retries");
-      }
-
-      if (response.body === null) {
-        throw new Error("No response body");
-      }
-
-      if (!startEmitted) {
-        startEmitted = true;
-        events.push({ type: "start", partial: output });
-      }
-      await processStream(response, output, events, model, grammarToolInputProperties, options);
-
-      if (options?.signal?.aborted === true) {
-        throw new Error("Request was aborted");
-      }
-
-      assertSuccessfulOutput(output);
-      events.push({ type: "done", reason: output.stopReason, message: output });
-      events.end();
-    } catch (error) {
-      for (const block of output.content) {
-        delete (block as { partialJson?: string }).partialJson;
-        delete (block as { customInput?: unknown }).customInput;
-      }
-      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-      output.errorMessage = formatProviderError(normalizeProviderError(error));
-      events.push({ type: "error", reason: output.stopReason, error: output });
-      events.end();
-    }
-  })();
+  Effect.runFork(
+    runCodexStream(model, normalizedContext, output, events, options).pipe(
+      Effect.catchDefect((error) =>
+        Effect.sync(() => failCodexOutput(output, events, options, error)),
+      ),
+    ),
+  );
 
   return events;
 };
@@ -681,35 +760,32 @@ function resolveCodexWebSocketUrl(baseUrl?: string): string {
   return url.toString();
 }
 
-async function processStream(
+const processStream = (
   response: Response,
   output: AssistantMessage,
   events: AssistantMessageEventStream,
   model: Model<"openai-codex-responses">,
   grammarToolInputProperties: ReadonlyMap<string, string>,
   options?: OpenAICodexResponsesOptions,
-): Promise<void> {
-  await Effect.runPromise(
-    processResponsesStream(
-      mapCodexEvents(
-        parseSSE(response, options?.signal),
-        output,
-        model,
-        options?.onProviderStreamEvent,
-      ),
+): Effect.Effect<void> =>
+  processResponsesStream(
+    mapCodexEvents(
+      readCodexSseEvents(response, options?.signal),
       output,
-      events,
       model,
-      {
-        serviceTier: options?.serviceTier,
-        grammarToolInputProperties,
-        resolveServiceTier: resolveCodexServiceTier,
-        applyServiceTierPricing: (usage, serviceTier) =>
-          applyServiceTierPricing(usage, serviceTier, model),
-      },
+      options?.onProviderStreamEvent,
     ),
+    output,
+    events,
+    model,
+    {
+      serviceTier: options?.serviceTier,
+      grammarToolInputProperties,
+      resolveServiceTier: resolveCodexServiceTier,
+      applyServiceTierPricing: (usage, serviceTier) =>
+        applyServiceTierPricing(usage, serviceTier, model),
+    },
   );
-}
 
 class CodexApiError extends Error {
   readonly code?: string | undefined;
@@ -786,61 +862,64 @@ function extractCodexEventError(event: Record<string, unknown>): {
   };
 }
 
-async function* mapCodexEvents(
-  events: AsyncIterable<Record<string, unknown>>,
+function mapCodexEvent(
+  event: Record<string, unknown>,
+  output: AssistantMessage,
+): ResponseStreamEvent | undefined {
+  const type = typeof event["type"] === "string" ? event["type"] : undefined;
+  if (type === undefined || type === "") return undefined;
+
+  if (type === "error") {
+    const { code, message } = extractCodexEventError(event);
+    throw new CodexApiError(`Codex error: ${message || code || JSON.stringify(event)}`, {
+      code,
+      payload: event,
+    });
+  }
+
+  if (type === "response.failed") {
+    const response = (event as { response?: { error?: { code?: string; message?: string } } })
+      .response;
+    const code = response?.error?.code;
+    const message = response?.error?.message;
+    throw new CodexApiError(message || "Codex response failed", { code, payload: event });
+  }
+
+  if (type === "response.done" || type === "response.completed" || type === "response.incomplete") {
+    const response = (event as { response?: { status?: unknown; end_turn?: unknown } }).response;
+    if (typeof response?.end_turn === "boolean") {
+      output.endTurn = response.end_turn;
+    }
+    const normalizedResponse =
+      response === undefined
+        ? response
+        : { ...response, status: normalizeCodexStatus(response.status) };
+    return {
+      ...event,
+      type: "response.completed",
+      response: normalizedResponse,
+    } as ResponseStreamEvent;
+  }
+
+  return event as unknown as ResponseStreamEvent;
+}
+
+const mapCodexEvents = (
+  events: Stream.Stream<Record<string, unknown>>,
   output: AssistantMessage,
   model: Model<"openai-codex-responses">,
   onProviderStreamEvent: StreamOptions["onProviderStreamEvent"] | undefined,
-): AsyncGenerator<ResponseStreamEvent> {
-  for await (const event of events) {
-    try {
-      await onProviderStreamEvent?.(event, model);
-    } catch (error) {
-      throw new ProviderStreamEventCallbackError(error);
-    }
-    const type = typeof event["type"] === "string" ? event["type"] : undefined;
-    if (type === undefined || type === "") continue;
-
-    if (type === "error") {
-      const { code, message } = extractCodexEventError(event);
-      throw new CodexApiError(`Codex error: ${message || code || JSON.stringify(event)}`, {
-        code,
-        payload: event,
-      });
-    }
-
-    if (type === "response.failed") {
-      const response = (event as { response?: { error?: { code?: string; message?: string } } })
-        .response;
-      const code = response?.error?.code;
-      const message = response?.error?.message;
-      throw new CodexApiError(message || "Codex response failed", { code, payload: event });
-    }
-
-    if (
-      type === "response.done" ||
-      type === "response.completed" ||
-      type === "response.incomplete"
-    ) {
-      const response = (event as { response?: { status?: unknown; end_turn?: unknown } }).response;
-      if (typeof response?.end_turn === "boolean") {
-        output.endTurn = response.end_turn;
-      }
-      const normalizedResponse =
-        response === undefined
-          ? response
-          : { ...response, status: normalizeCodexStatus(response.status) };
-      yield {
-        ...event,
-        type: "response.completed",
-        response: normalizedResponse,
-      } as ResponseStreamEvent;
-      return;
-    }
-
-    yield event as unknown as ResponseStreamEvent;
-  }
-}
+): Stream.Stream<ResponseStreamEvent> =>
+  events.pipe(
+    Stream.mapEffect((event) =>
+      callHook(() => onProviderStreamEvent?.(event, model)).pipe(
+        Effect.catchDefect((error) => Effect.die(new ProviderStreamEventCallbackError(error))),
+        Effect.andThen(Effect.sync(() => mapCodexEvent(event, output))),
+      ),
+    ),
+    Stream.filter((event): event is ResponseStreamEvent => event !== undefined),
+    Stream.takeUntil((event) => event.type === "response.completed"),
+  );
 
 function normalizeCodexStatus(status: unknown): CodexResponseStatus | undefined {
   if (typeof status !== "string") return undefined;
@@ -849,69 +928,102 @@ function normalizeCodexStatus(status: unknown): CodexResponseStatus | undefined 
     : undefined;
 }
 
-async function* parseSSE(
-  response: Response,
-  signal?: AbortSignal,
-): AsyncGenerator<Record<string, unknown>> {
-  if (response.body === null) return;
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  const onAbort = () => {
-    void reader.cancel().catch(() => {});
-  };
-  signal?.addEventListener("abort", onAbort, { once: true });
-
+function parseCodexSseChunk(chunk: string): Record<string, unknown> | undefined {
+  const dataLines = chunk
+    .split("\n")
+    .filter((l) => l.startsWith("data:"))
+    .map((l) => l.slice(5).trim());
+  if (dataLines.length === 0) return undefined;
+  const data = dataLines.join("\n").trim();
+  if (data === "" || data === "[DONE]") return undefined;
   try {
-    while (true) {
-      if (signal?.aborted === true) {
-        throw new Error("Request was aborted");
-      }
-      const { done, value } = await reader.read();
-      if (signal?.aborted ?? false) {
-        throw new Error("Request was aborted");
-      }
-      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
-      if (done && buffer.trim() !== "") buffer += "\n\n";
-
-      let idx = buffer.indexOf("\n\n");
-      while (idx !== -1) {
-        const chunk = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + 2);
-
-        const dataLines = chunk
-          .split("\n")
-          .filter((l) => l.startsWith("data:"))
-          .map((l) => l.slice(5).trim());
-        if (dataLines.length > 0) {
-          const data = dataLines.join("\n").trim();
-          if (data !== "" && data !== "[DONE]") {
-            try {
-              yield JSON.parse(data) as Record<string, unknown>;
-            } catch (cause) {
-              throw new CodexProtocolError(`Invalid Codex SSE JSON: ${formatThrownValue(cause)}`, {
-                cause,
-                payload: data,
-              });
-            }
-          }
-        }
-        idx = buffer.indexOf("\n\n");
-      }
-
-      if (done) break;
-    }
-  } finally {
-    signal?.removeEventListener("abort", onAbort);
-    try {
-      await reader.cancel();
-    } catch {}
-    try {
-      reader.releaseLock();
-    } catch {}
+    return JSON.parse(data) as Record<string, unknown>;
+  } catch (cause) {
+    throw new CodexProtocolError(`Invalid Codex SSE JSON: ${formatThrownValue(cause)}`, {
+      cause,
+      payload: data,
+    });
   }
 }
+
+function splitCodexSseChunks(buffer: string): readonly [string, ReadonlyArray<string>] {
+  const chunks = buffer.split("\n\n");
+  const rest = chunks.pop() ?? "";
+  return [rest, chunks];
+}
+
+const throwIfRequestAborted = (signal: AbortSignal | undefined): void => {
+  if (signal?.aborted === true) {
+    throw requestAbortedError();
+  }
+};
+
+function releaseReaderLock(reader: ReadableStreamDefaultReader<Uint8Array>): void {
+  try {
+    reader.releaseLock();
+  } catch {
+    return;
+  }
+}
+
+const openCodexSseReader = (body: ReadableStream<Uint8Array>, signal: AbortSignal | undefined) =>
+  Effect.acquireRelease(
+    Effect.sync(() => {
+      const reader = body.getReader();
+      const onAbort = () => {
+        void reader.cancel().catch(() => undefined);
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      return { reader, onAbort };
+    }),
+    ({ reader, onAbort }) =>
+      Effect.sync(() => signal?.removeEventListener("abort", onAbort)).pipe(
+        Effect.andThen(Effect.promise(() => reader.cancel().catch(() => undefined))),
+        Effect.andThen(Effect.sync(() => releaseReaderLock(reader))),
+      ),
+  );
+
+const readCodexSseBytes = (
+  body: ReadableStream<Uint8Array>,
+  signal: AbortSignal | undefined,
+): Stream.Stream<Uint8Array> =>
+  Stream.unwrap(
+    openCodexSseReader(body, signal).pipe(
+      Effect.map(({ reader }) =>
+        Stream.fromEffectRepeat(
+          Effect.suspend(() => {
+            throwIfRequestAborted(signal);
+            return Effect.promise(() => reader.read());
+          }).pipe(
+            Effect.flatMap(({ done, value }) => {
+              throwIfRequestAborted(signal);
+              return done ? Cause.done() : Effect.succeed(value);
+            }),
+          ),
+        ),
+      ),
+    ),
+  );
+
+const readCodexSseEvents = (
+  response: Response,
+  signal?: AbortSignal,
+): Stream.Stream<Record<string, unknown>> => {
+  const body = response.body;
+  if (body === null) return Stream.empty;
+  const decoder = new TextDecoder();
+  return readCodexSseBytes(body, signal).pipe(
+    Stream.map((value) => decoder.decode(value, { stream: true })),
+    Stream.concat(Stream.sync(() => decoder.decode())),
+    Stream.mapAccum(
+      () => "",
+      (buffer, text: string) => splitCodexSseChunks(buffer + text),
+      { onHalt: (buffer) => (buffer.trim() === "" ? [] : [buffer]) },
+    ),
+    Stream.map(parseCodexSseChunk),
+    Stream.filter((event): event is Record<string, unknown> => event !== undefined),
+  );
+};
 
 const OPENAI_BETA_RESPONSES_WEBSOCKETS = "responses_websockets=2026-02-06";
 const SESSION_WEBSOCKET_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -937,7 +1049,7 @@ interface CachedWebSocketConnection {
   socket: WebSocketLike;
   busy: boolean;
   createdAt: number;
-  idleTimer?: ReturnType<typeof setTimeout> | undefined;
+  idleTimer?: Fiber.Fiber<void> | undefined;
   continuation?: CachedWebSocketContinuationState | undefined;
 }
 
@@ -1001,7 +1113,7 @@ export function resetOpenAICodexWebSocketDebugStats(sessionId?: string): void {
 
 export function closeOpenAICodexWebSocketSessions(sessionId?: string): void {
   const closeEntry = (entry: CachedWebSocketConnection) => {
-    if (entry.idleTimer !== undefined) clearTimeout(entry.idleTimer);
+    clearIdleTimer(entry);
     closeWebSocketSilently(entry.socket, 1000, "debug_close");
   };
   if (sessionId !== undefined && sessionId !== "") {
@@ -1125,31 +1237,41 @@ function closeWebSocketSilently(socket: WebSocketLike, code = 1000, reason = "do
   } catch {}
 }
 
+function clearIdleTimer(entry: CachedWebSocketConnection): void {
+  if (entry.idleTimer === undefined) return;
+  Effect.runFork(Fiber.interrupt(entry.idleTimer));
+  entry.idleTimer = undefined;
+}
+
 function scheduleSessionWebSocketExpiry(
   sessionId: string,
   accountId: string,
   entry: CachedWebSocketConnection,
 ): void {
-  if (entry.idleTimer !== undefined) {
-    clearTimeout(entry.idleTimer);
-  }
-  entry.idleTimer = setTimeout(() => {
-    if (entry.busy) return;
-    closeWebSocketSilently(entry.socket, 1000, "idle_timeout");
-    const accountEntries = websocketSessionCache.get(sessionId);
-    if (accountEntries?.get(accountId) === entry) accountEntries.delete(accountId);
-    if (accountEntries?.size === 0) websocketSessionCache.delete(sessionId);
-  }, SESSION_WEBSOCKET_CACHE_TTL_MS);
+  clearIdleTimer(entry);
+  entry.idleTimer = Effect.runFork(
+    Effect.sleep(SESSION_WEBSOCKET_CACHE_TTL_MS).pipe(
+      Effect.andThen(
+        Effect.sync(() => {
+          if (entry.busy) return;
+          closeWebSocketSilently(entry.socket, 1000, "idle_timeout");
+          const accountEntries = websocketSessionCache.get(sessionId);
+          if (accountEntries?.get(accountId) === entry) accountEntries.delete(accountId);
+          if (accountEntries?.size === 0) websocketSessionCache.delete(sessionId);
+        }),
+      ),
+    ),
+  );
 }
 
-async function connectWebSocket(
+const connectWebSocket = Effect.fn("connectWebSocket")(function* (
   url: string,
   headers: Headers,
   signal?: AbortSignal,
   connectTimeoutMs = DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS,
   env?: ProviderEnv,
-): Promise<WebSocketLike> {
-  const WebSocketCtor = await getWebSocketConstructor(env);
+) {
+  const WebSocketCtor = yield* Effect.promise(() => getWebSocketConstructor(env));
   if (WebSocketCtor === null) {
     throw new Error("WebSocket transport is not available in this runtime");
   }
@@ -1157,23 +1279,17 @@ async function connectWebSocket(
   const wsHeaders = headersToRecord(headers);
   delete wsHeaders["OpenAI-Beta"];
 
-  return new Promise<WebSocketLike>((resolve, reject) => {
-    let settled = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
+  const connect = Effect.callback<WebSocketLike>((resume) => {
     let socket: WebSocketLike;
-
     try {
       socket = new WebSocketCtor(url, { headers: wsHeaders });
     } catch (error) {
-      reject(error instanceof Error ? error : new Error(String(error)));
+      resume(Effect.die(error instanceof Error ? error : new Error(String(error))));
       return;
     }
 
+    let settled = false;
     const cleanup = () => {
-      if (timeout !== undefined) {
-        clearTimeout(timeout);
-        timeout = undefined;
-      }
       socket.removeEventListener("open", onOpen);
       socket.removeEventListener("error", onError);
       socket.removeEventListener("close", onClose);
@@ -1186,13 +1302,13 @@ async function connectWebSocket(
       if (closeReason !== undefined && closeReason !== "") {
         closeWebSocketSilently(socket, 1000, closeReason);
       }
-      reject(error);
+      resume(Effect.die(error));
     };
     const onOpen: WebSocketListener = () => {
       if (settled) return;
       settled = true;
       cleanup();
-      resolve(socket);
+      resume(Effect.succeed(socket));
     };
     const onError: WebSocketListener = (event) => {
       fail(extractWebSocketError(event));
@@ -1201,7 +1317,7 @@ async function connectWebSocket(
       fail(extractWebSocketCloseError(event));
     };
     const onAbort = () => {
-      fail(new Error("Request was aborted"), "aborted");
+      fail(requestAbortedError(), "aborted");
     };
 
     socket.addEventListener("open", onOpen);
@@ -1209,18 +1325,29 @@ async function connectWebSocket(
     socket.addEventListener("close", onClose);
     signal?.addEventListener("abort", onAbort);
 
-    if (connectTimeoutMs > 0) {
-      timeout = setTimeout(() => {
-        fail(new Error(`WebSocket connect timeout after ${connectTimeoutMs}ms`), "connect_timeout");
-      }, connectTimeoutMs);
-    }
     if (signal?.aborted === true) {
       onAbort();
     }
+    return Effect.sync(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      closeWebSocketSilently(socket, 1000, "connect_timeout");
+    });
   });
-}
 
-async function acquireWebSocket(
+  return yield* connectTimeoutMs > 0
+    ? connect.pipe(
+        Effect.timeoutOrElse({
+          duration: connectTimeoutMs,
+          orElse: () =>
+            Effect.die(new Error(`WebSocket connect timeout after ${connectTimeoutMs}ms`)),
+        }),
+      )
+    : connect;
+});
+
+const acquireWebSocket = Effect.fn("acquireWebSocket")(function* (
   url: string,
   headers: Headers,
   sessionId: string | undefined,
@@ -1228,28 +1355,19 @@ async function acquireWebSocket(
   signal?: AbortSignal,
   connectTimeoutMs?: number,
   env?: ProviderEnv,
-): Promise<{
-  socket: WebSocketLike;
-  entry?: CachedWebSocketConnection;
-  reused: boolean;
-  release: (options?: { keep?: boolean }) => void;
-}> {
+) {
   if (sessionId === undefined || sessionId === "") {
-    const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env);
+    const socket = yield* connectWebSocket(url, headers, signal, connectTimeoutMs, env);
     return {
       socket,
       reused: false,
       release: () => closeWebSocketSilently(socket),
     };
   }
-
   let accountEntries = websocketSessionCache.get(sessionId);
   const cached = accountEntries?.get(accountId);
   if (cached !== undefined) {
-    if (cached.idleTimer !== undefined) {
-      clearTimeout(cached.idleTimer);
-      cached.idleTimer = undefined;
-    }
+    clearIdleTimer(cached);
     if (!cached.busy && isWebSocketSessionExpired(cached)) {
       closeWebSocketSilently(cached.socket, 1000, "connection_age_limit");
       accountEntries?.delete(accountId);
@@ -1260,7 +1378,7 @@ async function acquireWebSocket(
         socket: cached.socket,
         entry: cached,
         reused: true,
-        release: ({ keep } = {}) => {
+        release: ({ keep }: { keep?: boolean } = {}) => {
           if (keep !== true || !isWebSocketReusable(cached.socket)) {
             closeWebSocketSilently(cached.socket);
             const currentEntries = websocketSessionCache.get(sessionId);
@@ -1274,7 +1392,7 @@ async function acquireWebSocket(
       };
     }
     if (cached.busy) {
-      const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env);
+      const socket = yield* connectWebSocket(url, headers, signal, connectTimeoutMs, env);
       return {
         socket,
         reused: false,
@@ -1289,8 +1407,7 @@ async function acquireWebSocket(
       if (accountEntries?.size === 0) websocketSessionCache.delete(sessionId);
     }
   }
-
-  const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env);
+  const socket = yield* connectWebSocket(url, headers, signal, connectTimeoutMs, env);
   const entry: CachedWebSocketConnection = { socket, busy: true, createdAt: currentTimeMillis() };
   accountEntries = websocketSessionCache.get(sessionId);
   if (accountEntries === undefined) {
@@ -1302,10 +1419,10 @@ async function acquireWebSocket(
     socket,
     entry,
     reused: false,
-    release: ({ keep } = {}) => {
+    release: ({ keep }: { keep?: boolean } = {}) => {
       if (keep !== true || !isWebSocketReusable(entry.socket)) {
         closeWebSocketSilently(entry.socket);
-        if (entry.idleTimer !== undefined) clearTimeout(entry.idleTimer);
+        clearIdleTimer(entry);
         const currentEntries = websocketSessionCache.get(sessionId);
         if (currentEntries?.get(accountId) === entry) currentEntries.delete(accountId);
         if (currentEntries?.size === 0) websocketSessionCache.delete(sessionId);
@@ -1315,7 +1432,7 @@ async function acquireWebSocket(
       scheduleSessionWebSocketExpiry(sessionId, accountId, entry);
     },
   };
-}
+});
 
 function extractWebSocketError(event: unknown): Error {
   if (typeof event === "object" && event !== null) {
@@ -1357,32 +1474,61 @@ function extractWebSocketCloseError(event: unknown): Error {
   return new Error("WebSocket closed");
 }
 
-async function decodeWebSocketData(data: unknown): Promise<string | null> {
+function decodeWebSocketText(data: ArrayBuffer | ArrayBufferView | string): string {
   if (typeof data === "string") return data;
   if (data instanceof ArrayBuffer) {
     return new TextDecoder().decode(new Uint8Array(data));
   }
-  if (ArrayBuffer.isView(data)) {
-    const view = data as ArrayBufferView;
-    return new TextDecoder().decode(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+  return new TextDecoder().decode(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+}
+
+const decodeWebSocketData = (data: unknown): Effect.Effect<string | null> => {
+  if (typeof data === "string" || data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
+    return Effect.succeed(decodeWebSocketText(data));
   }
   if (typeof data === "object" && data !== null && "arrayBuffer" in data) {
     const blobLike = data as { arrayBuffer: () => Promise<ArrayBuffer> };
-    const arrayBuffer = await blobLike.arrayBuffer();
-    return new TextDecoder().decode(new Uint8Array(arrayBuffer));
+    return Effect.promise(() => blobLike.arrayBuffer()).pipe(Effect.map(decodeWebSocketText));
   }
-  return null;
+  return Effect.succeed(null);
+};
+
+function parseCodexWebSocketMessage(text: string): Record<string, unknown> {
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch (cause) {
+    throw new CodexProtocolError(`Invalid Codex WebSocket JSON: ${formatThrownValue(cause)}`, {
+      cause,
+      payload: text,
+    });
+  }
 }
 
-async function* parseWebSocket(
+const CODEX_WEBSOCKET_COMPLETION_TYPES = new Set([
+  "response.completed",
+  "response.done",
+  "response.incomplete",
+]);
+
+interface CodexWebSocketInbox {
+  readonly take: Effect.Effect<Record<string, unknown>, Cause.Done>;
+  readonly close: () => void;
+}
+
+const interruptTimer = (timer: Fiber.Fiber<void> | undefined): void => {
+  if (timer !== undefined) Effect.runFork(Fiber.interrupt(timer));
+};
+
+function openCodexWebSocketInbox(
   socket: WebSocketLike,
-  signal?: AbortSignal,
-  idleTimeoutMs?: number,
-): AsyncGenerator<Record<string, unknown>> {
+  onListening: () => void,
+  signal: AbortSignal | undefined,
+  idleTimeoutMs: number | undefined,
+): CodexWebSocketInbox {
   const queue: Record<string, unknown>[] = [];
   let pending: (() => void) | null = null;
   let done = false;
-  let failed: Error | null = null;
+  let failed: unknown = null;
   let sawCompletion = false;
 
   const wake = () => {
@@ -1391,46 +1537,46 @@ async function* parseWebSocket(
     pending = null;
     resolve();
   };
-
-  const onMessage: WebSocketListener = (event) => {
-    void (async () => {
-      let text: string | null = null;
-      try {
-        if (typeof event !== "object" || event === null || !("data" in event)) return;
-        text = await decodeWebSocketData((event as { data?: unknown }).data);
-        if (text === null || text === "") return;
-        const parsed = JSON.parse(text) as Record<string, unknown>;
-        const type = typeof parsed["type"] === "string" ? parsed["type"] : "";
-        if (
-          type === "response.completed" ||
-          type === "response.done" ||
-          type === "response.incomplete"
-        ) {
-          sawCompletion = true;
-          done = true;
-        }
-        queue.push(parsed);
-        wake();
-      } catch (cause) {
-        failed = new CodexProtocolError(
-          `Invalid Codex WebSocket JSON: ${formatThrownValue(cause)}`,
-          {
-            cause,
-            payload: text,
-          },
-        );
-        done = true;
-        wake();
-      }
-    })();
-  };
-
-  const onError: WebSocketListener = (event) => {
-    failed = extractWebSocketError(event);
+  const fail = (error: unknown) => {
+    failed = error;
     done = true;
     wake();
   };
+  const accept = (text: string | null) => {
+    if (text === null || text === "") return;
+    const parsed = parseCodexWebSocketMessage(text);
+    const type = typeof parsed["type"] === "string" ? parsed["type"] : "";
+    if (CODEX_WEBSOCKET_COMPLETION_TYPES.has(type)) {
+      sawCompletion = true;
+      done = true;
+    }
+    queue.push(parsed);
+    wake();
+  };
 
+  const onMessage: WebSocketListener = (event) => {
+    if (typeof event !== "object" || event === null || !("data" in event)) return;
+    Effect.runFork(
+      decodeWebSocketData((event as { data?: unknown }).data).pipe(
+        Effect.map(accept),
+        Effect.catchDefect((cause) =>
+          Effect.sync(() =>
+            fail(
+              cause instanceof CodexProtocolError
+                ? cause
+                : new CodexProtocolError(
+                    `Invalid Codex WebSocket JSON: ${formatThrownValue(cause)}`,
+                    { cause, payload: null },
+                  ),
+            ),
+          ),
+        ),
+      ),
+    );
+  };
+  const onError: WebSocketListener = (event) => {
+    fail(extractWebSocketError(event));
+  };
   const onClose: WebSocketListener = (event) => {
     if (sawCompletion) {
       done = true;
@@ -1443,61 +1589,81 @@ async function* parseWebSocket(
     done = true;
     wake();
   };
-
   const onAbort = () => {
-    failed = new Error("Request was aborted");
-    done = true;
-    wake();
+    fail(requestAbortedError());
   };
 
   socket.addEventListener("message", onMessage);
   socket.addEventListener("error", onError);
   socket.addEventListener("close", onClose);
   signal?.addEventListener("abort", onAbort);
+  onListening();
 
-  try {
-    while (true) {
-      if (signal?.aborted === true) {
-        throw new Error("Request was aborted");
-      }
-      if (queue.length > 0) {
-        yield queue.shift()!;
-        continue;
-      }
-      if (done) break;
-      let timeout: ReturnType<typeof setTimeout> | undefined;
-      await new Promise<void>((resolve, reject) => {
-        pending = resolve;
-        if (idleTimeoutMs !== undefined && idleTimeoutMs > 0) {
-          timeout = setTimeout(() => {
-            const error = new Error(`WebSocket idle timeout after ${idleTimeoutMs}ms`);
-            failed = error;
-            done = true;
-            pending = null;
-            closeWebSocketSilently(socket, 1000, "idle_timeout");
-            reject(error);
-          }, idleTimeoutMs);
-        }
-      }).finally(() => {
-        if (timeout !== undefined) {
-          clearTimeout(timeout);
-        }
-      });
+  const waitForWake = Effect.callback<void>((resume) => {
+    let idleTimer: Fiber.Fiber<void> | undefined;
+    pending = () => {
+      interruptTimer(idleTimer);
+      resume(Effect.void);
+    };
+    if (idleTimeoutMs !== undefined && idleTimeoutMs > 0) {
+      idleTimer = Effect.runFork(
+        Effect.sleep(idleTimeoutMs).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              const error = new Error(`WebSocket idle timeout after ${idleTimeoutMs}ms`);
+              failed = error;
+              done = true;
+              pending = null;
+              closeWebSocketSilently(socket, 1000, "idle_timeout");
+              resume(Effect.die(error));
+            }),
+          ),
+        ),
+      );
     }
+    return Effect.sync(() => {
+      pending = null;
+      interruptTimer(idleTimer);
+    });
+  });
 
-    if (failed !== null) {
-      throw failed;
+  const take: Effect.Effect<Record<string, unknown>, Cause.Done> = Effect.suspend(() => {
+    if (signal?.aborted === true) {
+      return Effect.die(requestAbortedError());
     }
+    const next = queue.shift();
+    if (next !== undefined) return Effect.succeed(next);
+    if (!done) return waitForWake.pipe(Effect.andThen(take));
+    if (failed !== null) return Effect.die(failed);
     if (!sawCompletion) {
-      throw new Error("WebSocket stream closed before response.completed");
+      return Effect.die(new Error("WebSocket stream closed before response.completed"));
     }
-  } finally {
-    socket.removeEventListener("message", onMessage);
-    socket.removeEventListener("error", onError);
-    socket.removeEventListener("close", onClose);
-    signal?.removeEventListener("abort", onAbort);
-  }
+    return Cause.done();
+  });
+
+  return {
+    take,
+    close: () => {
+      socket.removeEventListener("message", onMessage);
+      socket.removeEventListener("error", onError);
+      socket.removeEventListener("close", onClose);
+      signal?.removeEventListener("abort", onAbort);
+    },
+  };
 }
+
+const readCodexWebSocketEvents = (
+  socket: WebSocketLike,
+  onListening: () => void,
+  signal?: AbortSignal,
+  idleTimeoutMs?: number,
+): Stream.Stream<Record<string, unknown>> =>
+  Stream.unwrap(
+    Effect.acquireRelease(
+      Effect.sync(() => openCodexWebSocketInbox(socket, onListening, signal, idleTimeoutMs)),
+      (inbox) => Effect.sync(inbox.close),
+    ).pipe(Effect.map((inbox) => Stream.fromEffectRepeat(inbox.take))),
+  );
 
 function requestBodyWithoutInput(body: RequestBody): RequestBody {
   const { input: _input, previous_response_id: _previousResponseId, ...rest } = body;
@@ -1559,21 +1725,7 @@ function buildCachedWebSocketRequestBody(
   };
 }
 
-async function* startWebSocketOutputOnFirstEvent(
-  events: AsyncIterable<ResponseStreamEvent>,
-  onStart: () => void,
-): AsyncGenerator<ResponseStreamEvent> {
-  let started = false;
-  for await (const event of events) {
-    if (!started) {
-      started = true;
-      onStart();
-    }
-    yield event;
-  }
-}
-
-async function processWebSocketStream(
+const processWebSocketStream = Effect.fn("processWebSocketStream")(function* (
   url: string,
   body: RequestBody,
   headers: Headers,
@@ -1587,8 +1739,8 @@ async function processWebSocketStream(
   accountId: string,
   grammarToolInputProperties: ReadonlyMap<string, string>,
   options?: OpenAICodexResponsesOptions,
-): Promise<void> {
-  const { socket, entry, reused, release } = await acquireWebSocket(
+) {
+  const { socket, entry, reused, release } = yield* acquireWebSocket(
     url,
     headers,
     cacheSessionId,
@@ -1605,51 +1757,30 @@ async function processWebSocketStream(
     useCachedContext && entry !== undefined
       ? buildCachedWebSocketRequestBody(entry, fullBody)
       : fullBody;
-  const stats =
-    cacheSessionId !== undefined && cacheSessionId !== ""
-      ? getOrCreateWebSocketDebugStats(cacheSessionId)
-      : undefined;
-  if (stats !== undefined) {
-    stats.requests++;
-    if (reused) stats.connectionsReused++;
-    else stats.connectionsCreated++;
-    if (useCachedContext) stats.cachedContextRequests++;
-    if (requestBody.store === true) stats.storeTrueRequests++;
-    stats.lastInputItems = requestBody.input?.length ?? 0;
-    if (requestBody.previous_response_id !== undefined && requestBody.previous_response_id !== "") {
-      stats.deltaRequests++;
-      stats.lastDeltaInputItems = requestBody.input?.length ?? 0;
-      stats.lastPreviousResponseId = requestBody.previous_response_id;
-    } else {
-      stats.fullContextRequests++;
-      stats.lastDeltaInputItems = undefined;
-      stats.lastPreviousResponseId = undefined;
-    }
-  }
-  try {
-    socket.send(JSON.stringify({ type: "response.create", ...requestBody }));
-    await Effect.runPromise(
-      processResponsesStream(
-        startWebSocketOutputOnFirstEvent(
-          mapCodexEvents(
-            parseWebSocket(socket, options?.signal, idleTimeoutMs),
-            output,
-            model,
-            options?.onProviderStreamEvent,
-          ),
-          onStart,
+  recordWebSocketRequestStats(cacheSessionId, requestBody, reused, useCachedContext);
+  yield* Effect.gen(function* () {
+    yield* processResponsesStream(
+      mapCodexEvents(
+        readCodexWebSocketEvents(
+          socket,
+          () => socket.send(encodeJsonSync({ type: "response.create", ...requestBody })),
+          options?.signal,
+          idleTimeoutMs,
         ),
         output,
-        events,
         model,
-        {
-          serviceTier: options?.serviceTier,
-          grammarToolInputProperties,
-          resolveServiceTier: resolveCodexServiceTier,
-          applyServiceTierPricing: (usage, serviceTier) =>
-            applyServiceTierPricing(usage, serviceTier, model),
-        },
-      ),
+        options?.onProviderStreamEvent,
+      ).pipe(Stream.onFirst(() => Effect.sync(onStart))),
+      output,
+      events,
+      model,
+      {
+        serviceTier: options?.serviceTier,
+        grammarToolInputProperties,
+        resolveServiceTier: resolveCodexServiceTier,
+        applyServiceTierPricing: (usage, serviceTier) =>
+          applyServiceTierPricing(usage, serviceTier, model),
+      },
     );
     if (options?.signal?.aborted === true) {
       keepConnection = false;
@@ -1659,39 +1790,81 @@ async function processWebSocketStream(
       output.responseId !== undefined &&
       output.responseId !== ""
     ) {
-      const responseItems = convertResponsesMessages(
-        model,
-        normalizeContext({ messages: [output] }),
-        CODEX_TOOL_CALL_PROVIDERS,
-        {
-          includeSystemPrompt: false,
-          grammarToolInputProperties,
-        },
-      ).filter(
-        (item) => item.type !== "function_call_output" && item.type !== "custom_tool_call_output",
-      );
       entry.continuation = {
         lastRequestBody: fullBody,
         lastResponseId: output.responseId,
-        lastResponseItems: responseItems,
+        lastResponseItems: collectWebSocketResponseItems(model, output, grammarToolInputProperties),
       };
     }
-  } catch (error) {
-    if (entry !== undefined) {
-      entry.continuation = undefined;
-    }
-    keepConnection = false;
-    throw error;
-  } finally {
-    release({ keep: keepConnection });
+  }).pipe(
+    Effect.catchDefect((error) =>
+      Effect.sync(() => {
+        if (entry !== undefined) {
+          entry.continuation = undefined;
+        }
+        keepConnection = false;
+      }).pipe(Effect.andThen(Effect.die(error))),
+    ),
+    Effect.ensuring(Effect.sync(() => release({ keep: keepConnection }))),
+  );
+});
+
+function collectWebSocketResponseItems(
+  model: Model<"openai-codex-responses">,
+  output: AssistantMessage,
+  grammarToolInputProperties: ReadonlyMap<string, string>,
+): ResponseInput {
+  return convertResponsesMessages(
+    model,
+    normalizeContext({ messages: [output] }),
+    CODEX_TOOL_CALL_PROVIDERS,
+    {
+      includeSystemPrompt: false,
+      grammarToolInputProperties,
+    },
+  ).filter(
+    (item) => item.type !== "function_call_output" && item.type !== "custom_tool_call_output",
+  );
+}
+
+function recordWebSocketRequestStats(
+  cacheSessionId: string | undefined,
+  requestBody: RequestBody,
+  reused: boolean,
+  useCachedContext: boolean,
+): void {
+  if (cacheSessionId === undefined || cacheSessionId === "") return;
+  const stats = getOrCreateWebSocketDebugStats(cacheSessionId);
+  stats.requests++;
+  if (reused) stats.connectionsReused++;
+  else stats.connectionsCreated++;
+  if (useCachedContext) stats.cachedContextRequests++;
+  if (requestBody.store === true) stats.storeTrueRequests++;
+  stats.lastInputItems = requestBody.input?.length ?? 0;
+  if (requestBody.previous_response_id !== undefined && requestBody.previous_response_id !== "") {
+    stats.deltaRequests++;
+    stats.lastDeltaInputItems = requestBody.input?.length ?? 0;
+    stats.lastPreviousResponseId = requestBody.previous_response_id;
+  } else {
+    stats.fullContextRequests++;
+    stats.lastDeltaInputItems = undefined;
+    stats.lastPreviousResponseId = undefined;
   }
 }
 
-async function parseErrorResponse(
+const parseErrorResponse = (
   response: Response,
-): Promise<{ message: string; friendlyMessage?: string | undefined }> {
-  const raw = await response.text();
-  let message = raw || response.statusText || "Request failed";
+): Effect.Effect<{ message: string; friendlyMessage?: string | undefined }> =>
+  Effect.promise(() => response.text()).pipe(
+    Effect.map((raw) => describeCodexErrorBody(raw, response.status, response.statusText)),
+  );
+
+function describeCodexErrorBody(
+  raw: string,
+  status: number,
+  statusText: string,
+): { message: string; friendlyMessage?: string | undefined } {
+  let message = raw || statusText || "Request failed";
   let friendlyMessage: string | undefined;
 
   try {
@@ -1709,7 +1882,7 @@ async function parseErrorResponse(
       const code = err.code || err.type || "";
       if (
         /usage_limit_reached|usage_not_included|rate_limit_exceeded/iu.test(code) ||
-        response.status === 429
+        status === 429
       ) {
         const plan =
           err.plan_type !== undefined && err.plan_type !== ""

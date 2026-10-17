@@ -459,7 +459,7 @@ type ResponsesOutputSlot =
 type ToolCallOutputSlot = Extract<ResponsesOutputSlot, { type: "toolCall" }>;
 
 export const processResponsesStream = <TApi extends Api>(
-  openaiStream: AsyncIterable<ResponseStreamEvent>,
+  openaiStream: AsyncIterable<ResponseStreamEvent> | Stream.Stream<ResponseStreamEvent>,
   output: AssistantMessage,
   stream: AssistantMessageEventStream,
   model: Model<TApi>,
@@ -827,8 +827,10 @@ export const processResponsesStream = <TApi extends Api>(
       }
     };
 
-    return Stream.fromAsyncIterable(openaiStream, (error) => error).pipe(
-      Stream.orDie,
+    const events = Stream.isStream(openaiStream)
+      ? openaiStream
+      : Stream.fromAsyncIterable(openaiStream, (error) => error).pipe(Stream.orDie);
+    return events.pipe(
       Stream.runForEach((event) =>
         Effect.promise(() => Promise.resolve(options?.onProviderStreamEvent?.(event, model))).pipe(
           Effect.andThen(Effect.sync(() => handleEvent(event))),
