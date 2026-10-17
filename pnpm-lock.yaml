@@ -212,6 +212,9 @@ catalogs:
     '@types/culori':
       specifier: 4.0.1
       version: 4.0.1
+    '@types/d3-array':
+      specifier: 3.2.2
+      version: 3.2.2
     '@types/hosted-git-info':
       specifier: 3.0.5
       version: 3.0.5
@@ -257,6 +260,9 @@ catalogs:
     culori:
       specifier: 4.0.2
       version: 4.0.2
+    d3-array:
+      specifier: 3.2.4
+      version: 3.2.4
     diff:
       specifier: 8.0.4
       version: 8.0.4
@@ -389,9 +395,15 @@ importers:
       '@effect/tsgo':
         specifier: catalog:stack
         version: 0.51.1
+      '@types/d3-array':
+        specifier: 'catalog:'
+        version: 3.2.2
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.19
+      d3-array:
+        specifier: 'catalog:'
+        version: 3.2.4
       effect:
         specifier: 4.0.2
         version: 4.0.2
@@ -1963,6 +1975,9 @@ packages:
   '@types/culori@4.0.1':
     resolution: {integrity: sha512-43M51r/22CjhbOXyGT361GZ9vncSVQ39u62x5eJdBQFviI8zWp2X5jzqg7k4M6PVgDQAClpy2bUe2dtwEgEDVQ==}
 
+  '@types/d3-array@3.2.2':
+    resolution: {integrity: sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw==}
+
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
 
@@ -2706,6 +2721,10 @@ packages:
     resolution: {integrity: sha512-1+BhOB8ahCn4O0cep0Sh2l9KCOfOdY+BXJnKMHFFzDEouSr/el18QwXEMRlOj9UY5nCeA8UN3a/82rUWRBeyBw==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
+  d3-array@3.2.4:
+    resolution: {integrity: sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg==}
+    engines: {node: '>=12'}
+
   data-uri-to-buffer@4.0.1:
     resolution: {integrity: sha512-0R9ikRb668HB7QDxT1vkpuUBtqc53YyAwMwGeUFKRojY/NWKvdZ+9UYtRfGmhqNbRkTSVpMbmyhXipFFv2cb/A==}
     engines: {node: '>= 12'}
@@ -3123,6 +3142,10 @@ packages:
   ini@6.0.0:
     resolution: {integrity: sha512-IBTdIkzZNOpqm7q3dRqJvMaldXjDHWkEDfrwGEQTs5eaQMWV+djAhR+wahyNNMAa+qpbDUhBMVt4ZKNwpPm7xQ==}
     engines: {node: ^20.17.0 || >=22.9.0}
+
+  internmap@2.0.3:
+    resolution: {integrity: sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==}
+    engines: {node: '>=12'}
 
   interpret@1.4.0:
     resolution: {integrity: sha512-agE4QfB2Lkp9uICn7BAqoscw4SZP9kTE2hxiFI3jBPmXJfdqiahTbUuKGsMoN2GtqL9AxhYioAcVvgsb1HvRbA==}
@@ -5115,6 +5138,8 @@ snapshots:
 
   '@types/culori@4.0.1': {}
 
+  '@types/d3-array@3.2.2': {}
+
   '@types/deep-eql@4.0.2': {}
 
   '@types/esrecurse@4.3.1': {}
@@ -5737,6 +5762,10 @@ snapshots:
 
   culori@4.0.2: {}
 
+  d3-array@3.2.4:
+    dependencies:
+      internmap: 2.0.3
+
   data-uri-to-buffer@4.0.1: {}
 
   debug@4.4.3:
@@ -6210,6 +6239,8 @@ snapshots:
   ini@1.3.8: {}
 
   ini@6.0.0: {}
+
+  internmap@2.0.3: {}
 
   interpret@1.4.0: {}
 
