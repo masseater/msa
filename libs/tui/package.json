@@ -50,11 +50,13 @@
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
+    "culori": "catalog:",
     "effect": "catalog:stack",
     "get-east-asian-width": "catalog:",
     "marked": "catalog:"
   },
   "devDependencies": {
+    "@types/culori": "catalog:",
     "@xterm/headless": "catalog:",
     "chalk": "catalog:"
   },

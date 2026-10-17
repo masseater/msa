@@ -1,3 +1,10 @@
+The following files of @msa/tui contain code derived from Björn Ottosson's reference
+implementation of Oklab and OKHSL (https://bottosson.github.io/posts/colorpicker/):
+
+- src/oklab.ts: the OKHSL lightness toe, sRGB gamut cusp, maximum saturation and chroma
+  estimation, and the OKHSL <-> Oklab conversion. The Oklab <-> sRGB conversion uses the
+  culori package.
+
 MIT License
 
 Copyright (c) 2021 Björn Ottosson

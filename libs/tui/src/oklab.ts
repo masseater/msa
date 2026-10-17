@@ -1,12 +1,10 @@
+import { convertLrgbToRgb, convertOklabToLrgb, convertRgbToOklab } from "culori";
 import { dual } from "effect/Function";
 
 import type { RgbColor } from "./terminal-colors.ts";
 
 type Vector = [number, number, number];
 type Matrix = [Vector, Vector, Vector];
-
-const multiply = (m: Matrix, [x, y, z]: Vector): Vector =>
-  m.map((row) => row[0] * x + row[1] * y + row[2] * z) as Vector;
 
 const mapVector = (vector: Vector, f: (value: number, index: 0 | 1 | 2) => number): Vector => [
   f(vector[0], 0),
@@ -17,16 +15,6 @@ const mapVector = (vector: Vector, f: (value: number, index: 0 | 1 | 2) => numbe
 const dotVector = (row: Vector, values: Vector): number =>
   row[0] * values[0] + row[1] * values[1] + row[2] * values[2];
 
-const LINEAR_SRGB_TO_LMS: Matrix = [
-  [0.4122214694707629, 0.5363325372617349, 0.0514459932675022],
-  [0.2119034958178251, 0.6806995506452344, 0.1073969535369405],
-  [0.0883024591900564, 0.2817188391361215, 0.6299787016738222],
-];
-const LMS_TO_LAB: Matrix = [
-  [0.210454268309314, 0.793617774702305, -0.0040720430116193],
-  [1.9779985324311684, -2.42859224204858, 0.450593709617411],
-  [0.0259040424655478, 0.7827717124575296, -0.8086757549230774],
-];
 const LAB_TO_LMS: Matrix = [
   [1, 0.3963377773761749, 0.2158037573099136],
   [1, -0.1055613458156586, -0.0638541728258133],
@@ -60,31 +48,22 @@ export const oklabToOkhslLightness = (x: number): number =>
   0.5 * (K3 * x - K1 + Math.sqrt((K3 * x - K1) ** 2 + 4 * K2 * K3 * x));
 const okhslToOklabLightness = (x: number): number => (x * x + K1 * x) / (K3 * (x + K2));
 
-const linearToSrgb = (value: number): number =>
-  value > 0.0031308 ? 1.055 * value ** (1 / 2.4) - 0.055 : 12.92 * value;
-const srgbToLinear = (value: number): number =>
-  value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-
-export function oklabToLinearSrgb(lab: Vector): Vector {
-  return multiply(
-    LMS_TO_LINEAR_SRGB,
-    multiply(LAB_TO_LMS, lab).map((value) => value ** 3) as Vector,
-  );
-}
-
-function linearSrgbToOklab(rgb: Vector): Vector {
-  return multiply(LMS_TO_LAB, multiply(LINEAR_SRGB_TO_LMS, rgb).map(Math.cbrt) as Vector);
+export function oklabToLinearSrgb([l, a, b]: Vector): Vector {
+  const linear = convertOklabToLrgb({ l, a, b });
+  return [linear.r, linear.g, linear.b];
 }
 
 export function rgbToOklab(rgb: RgbColor): Vector {
-  return linearSrgbToOklab([rgb.r / 255, rgb.g / 255, rgb.b / 255].map(srgbToLinear) as Vector);
+  const lab = convertRgbToOklab({ r: rgb.r / 255, g: rgb.g / 255, b: rgb.b / 255 });
+  return [lab.l, lab.a, lab.b];
 }
 
-export function linearSrgbToRgb(linear: Vector): RgbColor {
-  const [r, g, b] = mapVector(linear, (value) =>
-    Math.round(Math.min(1, Math.max(0, linearToSrgb(value))) * 255),
+export function linearSrgbToRgb([r, g, b]: Vector): RgbColor {
+  const srgb = convertLrgbToRgb({ r, g, b });
+  const [red, green, blue] = mapVector([srgb.r, srgb.g, srgb.b], (value) =>
+    Math.round(Math.min(1, Math.max(0, value)) * 255),
   );
-  return { r, g, b };
+  return { r: red, g: green, b: blue };
 }
 
 function lmsSlopes(a: number, b: number): Vector {
