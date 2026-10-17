@@ -37,7 +37,6 @@ describe("colors", () => {
   });
 
   it("parses OKHSL colors and round-trips them", () => {
-    // Full saturation at the red cusp is pure sRGB red.
     assert.deepStrictEqual(parseColor("okhsl(29.23 100% 56.8%)"), rgbColor(255, 0, 0));
     assert.deepStrictEqual(parseColor("OKHSL(250deg 60% 55%)"), okhslColor(250, 0.6, 0.55));
     assert.throws(() => parseColor("okhsl(250 160% 55%)"), /s must be between 0 and 1/u);

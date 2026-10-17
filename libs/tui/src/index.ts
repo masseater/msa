@@ -1,7 +1,4 @@
-// Core TUI interfaces and classes
-
 export { Marked, type Token, type Tokens } from "marked";
-// Autocomplete support
 export {
   type AutocompleteItem,
   type AutocompleteProvider,
@@ -9,7 +6,6 @@ export {
   CombinedAutocompleteProvider,
   type SlashCommand,
 } from "./autocomplete.ts";
-// Colors and styling
 export {
   backgroundAnsi,
   type Color,
@@ -36,7 +32,6 @@ export {
   type TextAttributes,
   type TextStyle,
 } from "./colors.ts";
-// Components
 export { Box } from "./components/box.ts";
 export { CancellableLoader } from "./components/cancellable-loader.ts";
 export { Editor, type EditorOptions, type EditorTheme } from "./components/editor.ts";
@@ -85,11 +80,8 @@ export {
   type StackOptions,
   VStack,
 } from "./components/v-stack.ts";
-// Editor component interface (for custom editors)
 export type { EditorComponent } from "./editor-component.ts";
-// Fuzzy matching
 export { type FuzzyMatch, fuzzyFilter, fuzzyMatch } from "./fuzzy.ts";
-// Keybindings
 export {
   getKeybindings,
   type Keybinding,
@@ -102,7 +94,6 @@ export {
   setKeybindings,
   TUI_KEYBINDINGS,
 } from "./keybindings.ts";
-// Keyboard input handling
 export {
   decodeKittyPrintable,
   isKeyRelease,
@@ -115,25 +106,18 @@ export {
   parseKey,
   setKittyProtocolActive,
 } from "./keys.ts";
-// LaTeX rendering
 export { type RenderLatexOptions, renderLatex } from "./latex.ts";
-// Native platform integration
 export { getNativeClipboard, type NativeClipboard } from "./native-platform.ts";
 export { oklabToOkhslLightness } from "./oklab.ts";
-// Program status reporting (OSC 7501)
 export { formatProgramStatus, type ProgramStatus } from "./program-status.ts";
-// Input buffering for batch splitting
 export { StdinBuffer, type StdinBufferEventMap, type StdinBufferOptions } from "./stdin-buffer.ts";
-// Terminal interface and implementations
 export { isAppleTerminalSession, ProcessTerminal, type Terminal } from "./terminal.ts";
-// Terminal colors
 export {
   parseTerminalColorSchemeReport,
   type RgbColor,
   type TerminalColorScheme,
   type TerminalColors,
 } from "./terminal-colors.ts";
-// Terminal image support
 export {
   allocateImageId,
   type CellDimensions,
@@ -192,7 +176,6 @@ export {
 } from "./tui.ts";
 export { TuiAltScreen, type TuiAltScreenOptions } from "./tui-alt-screen.ts";
 export { TuiMainScreen, type TuiMainScreenRenderState } from "./tui-main-screen.ts";
-// Utilities
 export {
   getOsc8LinkAtColumn,
   sliceByColumn,

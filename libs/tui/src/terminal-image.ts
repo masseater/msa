@@ -27,16 +27,13 @@ export interface ImageRenderOptions {
   maxWidthCells?: number;
   maxHeightCells?: number;
   preserveAspectRatio?: boolean;
-  /** Kitty image ID. If provided, reuses/replaces existing image with this ID. */
   imageId?: number | undefined;
-  /** Whether Kitty should apply its default cursor movement after placement. */
   moveCursor?: boolean | undefined;
 }
 
 let cachedCapabilities: TerminalCapabilities | null = null;
 let capabilityOverrides: Partial<TerminalCapabilities> = {};
 
-// Default cell dimensions - updated by TUI when terminal responds to query
 let cellDimensions: CellDimensions = { widthPx: 9, heightPx: 18 };
 
 export function getCellDimensions(): CellDimensions {
@@ -47,13 +44,6 @@ export function setCellDimensions(dims: CellDimensions): void {
   cellDimensions = dims;
 }
 
-/**
- * Checks whether the attached tmux client forwards OSC 8 hyperlinks to the
- * outer terminal. tmux only re-emits them when its `client_termfeatures` lists
- * `hyperlinks`, and strips them otherwise. On any error fallbacks `false`.
- *
- * @returns {boolean} Whether tmux forwards OSC 8 hyperlinks.
- */
 function probeTmuxHyperlinks(): boolean {
   try {
     const termfeatures = execSync("tmux display-message -p '#{client_termfeatures}'", {
@@ -81,19 +71,14 @@ function detectCapabilitiesFromEnvironment(
     colorTerm === "truecolor" || colorTerm === "24bit" || term.endsWith("-direct");
   const isWindowsConsole = process.platform === "win32";
 
-  // Emit OSC 8 hyperlinks only when tmux confirms it forwards.
-  // Image protocols are unreliable under tmux, so leave `images: null`.
   if (process.env["TMUX"] || term.startsWith("tmux")) {
     return { images: null, trueColor: hasTrueColorHint, hyperlinks: tmuxForwardsHyperlink() };
   }
 
-  // screen does not forward OSC 8 hyperlinks, so keep them off there.
   if (term.startsWith("screen")) {
     return { images: null, trueColor: hasTrueColorHint, hyperlinks: false };
   }
 
-  // Herdr forwards OSC 8 hyperlinks and supports the Kitty graphics protocol. Check it before
-  // outer-terminal detection because variables like KITTY_WINDOW_ID can leak into its panes.
   if (termProgram === "herdr") {
     return { images: "kitty", trueColor: hasTrueColorHint, hyperlinks: true };
   }
@@ -114,7 +99,6 @@ function detectCapabilitiesFromEnvironment(
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
-  // Warp supports the Kitty graphics protocol and OSC 8 hyperlinks.
   if (
     termProgram === "warpterminal" ||
     process.env["WARP_SESSION_ID"] ||
@@ -139,17 +123,10 @@ function detectCapabilitiesFromEnvironment(
     return { images: null, trueColor: true, hyperlinks: false };
   }
 
-  // Windows Terminal does not always set WT_SESSION, for example when it hosts
-  // a cmd.exe launched directly from Win+R. Modern Windows consoles support
-  // truecolor; keep hyperlinks off unless we positively detected support above.
   if (isWindowsConsole) {
     return { images: null, trueColor: true, hyperlinks: false };
   }
 
-  // Unknown terminal: be conservative. OSC 8 is rendered invisibly as "just
-  // text" on terminals that swallow it, which means the URL disappears from
-  // the rendered output. Default to the legacy `text (url)` behavior unless we
-  // have positively identified a hyperlink-capable terminal above.
   return { images: null, trueColor: hasTrueColorHint, hyperlinks: false };
 }
 
@@ -201,11 +178,6 @@ export function resetCapabilitiesCache(): void {
   cachedCapabilities = null;
 }
 
-/**
- * Override selected auto-detected capabilities.
- *
- * @param {Partial<TerminalCapabilities>} overrides - Capabilities to force.
- */
 export function setCapabilityOverrides(overrides: Partial<TerminalCapabilities>): void {
   if (
     capabilityOverrides.images === overrides.images &&
@@ -218,11 +190,6 @@ export function setCapabilityOverrides(overrides: Partial<TerminalCapabilities>)
   cachedCapabilities = null;
 }
 
-/**
- * Override the cached capabilities. Useful in tests to exercise both code paths.
- *
- * @param {TerminalCapabilities} caps - The capabilities to use.
- */
 export function setCapabilities(caps: TerminalCapabilities): void {
   cachedCapabilities = caps;
 }
@@ -231,23 +198,13 @@ const KITTY_PREFIX = "\x1b_G";
 const ITERM2_PREFIX = "\x1b]1337;File=";
 
 export function isImageLine(line: string): boolean {
-  // Fast path: sequence at line start (single-row images)
   if (line.startsWith(KITTY_PREFIX) || line.startsWith(ITERM2_PREFIX)) {
     return true;
   }
-  // Slow path: sequence elsewhere (multi-row images have cursor-up prefix)
   return line.includes(KITTY_PREFIX) || line.includes(ITERM2_PREFIX);
 }
 
-/**
- * Generate a random image ID for Kitty graphics protocol.
- * Uses random IDs to avoid collisions between different module instances
- * (e.g., main app vs extensions).
- *
- * @returns {number} An image ID in the protocol's 32-bit range.
- */
 export function allocateImageId(): number {
-  // Use random ID in range [1, 0xffffffff] to avoid collisions
   return Math.floor(Math.random() * 0xfffffffe) + 1;
 }
 
@@ -257,7 +214,6 @@ export function encodeKitty(
     columns?: number;
     rows?: number;
     imageId?: number | undefined;
-    /** Whether Kitty should apply its default cursor movement after placement. Default: true. */
     moveCursor?: boolean | undefined;
   } = {},
 ): string {
@@ -297,32 +253,14 @@ export function encodeKitty(
   return chunks.join("");
 }
 
-/**
- * Delete a Kitty graphics image by ID.
- * Uses uppercase 'I' to also free the image data.
- *
- * @param {number} imageId - The image to delete.
- * @returns {string} The escape sequence to write to the terminal.
- */
 export function deleteKittyImage(imageId: number): string {
   return `\x1b_Ga=d,d=I,i=${imageId},q=2\x1b\\`;
 }
 
-/**
- * Delete all visible Kitty graphics images.
- * Uses uppercase 'A' to also free the image data.
- *
- * @returns {string} The escape sequence to write to the terminal.
- */
 export function deleteAllKittyImages(): string {
   return "\x1b_Ga=d,d=A,q=2\x1b\\";
 }
 
-/**
- * Delete all visible Kitty placements while retaining their uploaded image data.
- *
- * @returns {string} The escape sequence to write to the terminal.
- */
 export function deleteAllKittyPlacements(): string {
   return "\x1b_Ga=d,d=a,q=2\x1b\\";
 }
@@ -451,12 +389,6 @@ const KITTY_PLACEMENT_CONTROL_KEYS = new Set([
   "V",
 ]);
 
-/**
- * Read the number of rows covered by an image placement without scanning its payload.
- *
- * @param {string} line - A rendered line.
- * @returns {number | undefined} The row count, or undefined when the line has no placement.
- */
 export function getKittyImagePlacementRows(line: string): number | undefined {
   const controls = /\x1b_G([^;]*);/u.exec(line)?.[1];
   if (controls === undefined) return undefined;
@@ -465,12 +397,6 @@ export function getKittyImagePlacementRows(line: string): number | undefined {
   return getRegisteredKittyImageMetadataFromControls(controls)?.rows;
 }
 
-/**
- * Build a placement-only command for an image line emitted by {@link renderImage}.
- *
- * @param {string} line - A rendered line.
- * @returns {KittyImagePlacement | undefined} The placement, or undefined when the line has no image.
- */
 export function getKittyImagePlacement(line: string): KittyImagePlacement | undefined {
   const match = /\x1b_G([^;]*);/u.exec(line);
   const imageControls = match?.[1];
@@ -745,7 +671,6 @@ export function renderImage(
   }
 
   const maxWidth = options.maxWidthCells ?? 80;
-  // Reduce Kitty's cell-aligned distortion without shrinking iTerm2 reservations.
   const size = calculateImageCellSize(
     imageDimensions,
     maxWidth,
@@ -785,27 +710,10 @@ export function renderImage(
   return null;
 }
 
-/**
- * Wrap text in an OSC 8 hyperlink sequence.
- * The text is rendered as a clickable hyperlink in terminals that support OSC 8
- * (Ghostty, Kitty, WezTerm, iTerm2, VSCode, and others).
- * In terminals that do not support OSC 8, the escape sequences are ignored
- * and only the plain text is displayed.
- *
- * @param {string} text - The visible text to display
- * @param {string} url - The URL to link to
- * @returns {string} The text wrapped in OSC 8 sequences.
- */
 export function hyperlink(text: string, url: string): string {
   return `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
 }
 
-/**
- * Shorten home-prefixed absolute paths to ~/... for compact display.
- *
- * @param {string} filename - A file path.
- * @returns {string} The path with the home directory replaced by ~.
- */
 function shortenImagePath(filename: string): string {
   const home = homedir();
   if (
@@ -817,16 +725,6 @@ function shortenImagePath(filename: string): string {
   return filename;
 }
 
-/**
- * Text fallback when the terminal cannot render inline images.
- * Absolute paths are shown shortened (~/...) and, when OSC 8 hyperlinks are
- * available, linked to file:// so the full path remains openable.
- *
- * @param {string} mimeType - The image MIME type.
- * @param {ImageDimensions} dimensions - The image size in pixels.
- * @param {string} filename - The image file path.
- * @returns {string} The fallback text.
- */
 export function imageFallback(
   mimeType: string,
   dimensions?: ImageDimensions,

@@ -15,7 +15,6 @@ describe("TUI overlay options", () => {
     it("should truncate overlay lines that exceed declared width", async () => {
       const terminal = new VirtualTerminal(80, 24);
       const tui: TUI = new TuiMainScreen(terminal);
-      // Overlay declares width 20 but renders lines much wider
       const overlay = new StaticOverlay(["X".repeat(100)]);
 
       tui.addChild(new EmptyContent());
@@ -23,11 +22,8 @@ describe("TUI overlay options", () => {
       tui.start();
       await renderAndFlush(tui, terminal);
 
-      // Should not crash, and no line should exceed terminal width
       const viewport = terminal.getViewport();
       for (const line of viewport) {
-        // visibleWidth not available here, but line length is a rough check
-        // The important thing is it didn't crash
         assert.ok(line !== undefined);
       }
       tui.stop();
@@ -36,7 +32,6 @@ describe("TUI overlay options", () => {
     it("should handle overlay with complex ANSI sequences without crashing", async () => {
       const terminal = new VirtualTerminal(80, 24);
       const tui: TUI = new TuiMainScreen(terminal);
-      // Simulate complex ANSI content like the crash log showed
       const complexLine =
         "\x1b[48;2;40;50;40m \x1b[38;2;128;128;128mSome styled content\x1b[39m\x1b[49m" +
         "\x1b]8;;http://example.com\x07link\x1b]8;;\x07" +
@@ -48,7 +43,6 @@ describe("TUI overlay options", () => {
       tui.start();
       await renderAndFlush(tui, terminal);
 
-      // Should not crash
       const viewport = terminal.getViewport();
       assert.ok(viewport.length > 0);
       tui.stop();
@@ -69,7 +63,6 @@ describe("TUI overlay options", () => {
       tui.start();
       await renderAndFlush(tui, terminal);
 
-      // Should not crash and overlay should be visible
       const viewport = terminal.getViewport();
       const hasOverlay = viewport.some((line) => line?.includes("OVERLAY"));
       assert.ok(hasOverlay, "Overlay should be visible");
@@ -83,18 +76,14 @@ describe("TUI overlay options", () => {
     it("should handle wide characters at overlay boundary", async () => {
       const terminal = new VirtualTerminal(80, 24);
       const tui: TUI = new TuiMainScreen(terminal);
-      // Wide chars (each takes 2 columns) at the edge of declared width
-      // Mix of CJK chars
       const wideCharLine = "中文日本語한글テスト漢字";
       const overlay = new StaticOverlay([wideCharLine]);
 
       tui.addChild(new EmptyContent());
-      // Odd width to potentially hit boundary
       tui.showOverlay(overlay, { width: 15 });
       tui.start();
       await renderAndFlush(tui, terminal);
 
-      // Should not crash
       const viewport = terminal.getViewport();
       assert.ok(viewport.length > 0);
       tui.stop();
@@ -103,16 +92,13 @@ describe("TUI overlay options", () => {
     it("should handle overlay positioned at terminal edge", async () => {
       const terminal = new VirtualTerminal(80, 24);
       const tui: TUI = new TuiMainScreen(terminal);
-      // Overlay positioned at right edge with content that exceeds declared width
       const overlay = new StaticOverlay(["X".repeat(50)]);
 
       tui.addChild(new EmptyContent());
-      // Position at col 60 with width 20 - should fit exactly at right edge
       tui.showOverlay(overlay, { col: 60, width: 20 });
       tui.start();
       await renderAndFlush(tui, terminal);
 
-      // Should not crash
       const viewport = terminal.getViewport();
       assert.ok(viewport.length > 0);
       tui.stop();
@@ -133,7 +119,6 @@ describe("TUI overlay options", () => {
       tui.start();
       await renderAndFlush(tui, terminal);
 
-      // Should not crash - this was the original bug scenario
       const viewport = terminal.getViewport();
       assert.ok(viewport.length > 0);
       tui.stop();
@@ -204,7 +189,6 @@ describe("TUI overlay options", () => {
       await renderAndFlush(tui, terminal);
 
       const viewport = terminal.getViewport();
-      // Should be on last row, ending at last column
       const lastRow = viewport[23];
       assert.ok(lastRow?.includes("BTM-RIGHT"), `Expected BTM-RIGHT on last row, got: ${lastRow}`);
       assert.ok(
@@ -229,10 +213,8 @@ describe("TUI overlay options", () => {
       await renderAndFlush(tui, terminal);
 
       const viewport = terminal.getViewport();
-      // Should be on first row, centered horizontally
       const firstRow = viewport[0];
       assert.ok(firstRow?.includes("CENTERED"), `Expected CENTERED on first row, got: ${firstRow}`);
-      // Check it's roughly centered (col 35 for width 10 in 80 col terminal)
       const colIndex = firstRow?.indexOf("CENTERED") ?? -1;
       assert.ok(colIndex >= 30 && colIndex <= 40, `Expected centered, got col ${colIndex}`);
       tui.stop();

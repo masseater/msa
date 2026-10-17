@@ -40,16 +40,12 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      // Ctrl+A - go to start
       editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      // Ctrl+] (legacy sequence for ctrl+])
       editor.handleInput("\x1d");
-      // Jump to first 'o'
       editor.handleInput("o");
 
-      // 'o' in "hello"
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 });
     });
 
@@ -57,18 +53,13 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      // Ctrl+A - go to start
       editor.handleInput("\x01");
-      // Move cursor to the 'o' in "hello" (col 4)
       for (let i = 0; i < 4; i++) editor.handleInput("\x1b[C");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 });
 
-      // Ctrl+]
       editor.handleInput("\x1d");
-      // Jump to next 'o' (in "world")
       editor.handleInput("o");
 
-      // 'o' in "world"
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
     });
   });
@@ -80,18 +71,12 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("abc\ndef\nghi");
-      // Cursor is at end (line 2, col 3). Move to line 0 via up arrows, then Ctrl+A
-      // Up
       editor.handleInput("\x1b[A");
-      // Up - now on line 0
       editor.handleInput("\x1b[A");
-      // Ctrl+A - go to start of line
       editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      // Ctrl+]
       editor.handleInput("\x1d");
-      // Jump to 'g' on line 3
       editor.handleInput("g");
 
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 0 });
@@ -101,15 +86,11 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      // Cursor at end (col 11)
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 });
 
-      // Ctrl+Alt+] (ESC followed by Ctrl+])
       editor.handleInput("\x1b\x1d");
-      // Jump to last 'o' before cursor
       editor.handleInput("o");
 
-      // 'o' in "world"
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
     });
   });
@@ -121,12 +102,9 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("abc\ndef\nghi");
-      // Cursor at end of line 3
       assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 3 });
 
-      // Ctrl+Alt+]
       editor.handleInput("\x1b\x1d");
-      // Jump to 'a' on line 1
       editor.handleInput("a");
 
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
@@ -136,16 +114,12 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      // Ctrl+A - go to start
       editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      // Ctrl+]
       editor.handleInput("\x1d");
-      // 'z' doesn't exist
       editor.handleInput("z");
 
-      // Cursor unchanged
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
     });
   });
@@ -157,15 +131,11 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      // Cursor at end
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 });
 
-      // Ctrl+Alt+]
       editor.handleInput("\x1b\x1d");
-      // 'z' doesn't exist
       editor.handleInput("z");
 
-      // Cursor unchanged
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 });
     });
 
@@ -173,24 +143,17 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("Hello World");
-      // Ctrl+A - go to start
       editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      // Search for lowercase 'h' - should not find it (only 'H' exists)
-      // Ctrl+]
       editor.handleInput("\x1d");
       editor.handleInput("h");
 
-      // Cursor unchanged
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      // Search for uppercase 'W' - should find it
-      // Ctrl+]
       editor.handleInput("\x1d");
       editor.handleInput("W");
 
-      // 'W' in "World"
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 });
     });
   });
@@ -202,16 +165,12 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      // Ctrl+A - go to start
       editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      // Ctrl+] - enter jump mode
       editor.handleInput("\x1d");
-      // Ctrl+] again - cancel
       editor.handleInput("\x1d");
 
-      // Type 'o' normally - should insert, not jump
       editor.handleInput("o");
       assert.strictEqual(editor.getText(), "ohello world");
     });
@@ -220,19 +179,14 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       editor.setText("hello world");
-      // Ctrl+A - go to start
       editor.handleInput("\x01");
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      // Ctrl+] - enter jump mode
       editor.handleInput("\x1d");
-      // Escape - cancel jump mode
       editor.handleInput("\x1b");
 
-      // Cursor should be unchanged (Escape itself doesn't move cursor in editor)
       assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
 
-      // Type 'o' normally - should insert, not jump
       editor.handleInput("o");
       assert.strictEqual(editor.getText(), "ohello world");
     });

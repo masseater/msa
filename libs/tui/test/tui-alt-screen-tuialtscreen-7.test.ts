@@ -7,7 +7,6 @@ import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
 
 describe("TuiAltScreen", () => {
   it("flashes a specific error returned by the injected copySelection handler", async () => {
-    // Regression test for #9618.
     const terminal = new RecordingTerminal(80, 4);
     const tui = new TuiAltScreen(terminal, undefined, undefined, {
       copyOnSelect: false,
@@ -123,7 +122,6 @@ describe("TuiAltScreen", () => {
     tui.start();
     await terminal.waitForRender();
 
-    // The second click lands on a different character in alpha.
     terminal.sendInput("\x1b[<0;6;1M");
     terminal.sendInput("\x1b[<0;6;1m");
     terminal.sendInput("\x1b[<0;10;1M");
@@ -134,7 +132,6 @@ describe("TuiAltScreen", () => {
       terminal.events.some((event) => event.type === "write" && event.data.includes(alpha)),
     );
 
-    // A double-click drag includes each word touched, rather than partial words.
     terminal.sendInput("\x1b[<0;12;1M");
     terminal.sendInput("\x1b[<0;12;1m");
     terminal.sendInput("\x1b[<0;14;1M");
@@ -183,7 +180,6 @@ function tuialtscreenCases8(): void {
     await terminal.waitForRender();
     assert.strictEqual(writeCount(), idleWriteCount);
 
-    // A completed click leaves a zero-width anchor, but later orphaned drag/release events must not extend it.
     terminal.sendInput("\x1b[<0;1;1M");
     terminal.sendInput("\x1b[<0;1;1m");
     terminal.sendInput("\x1b[<32;4;2M");
@@ -191,7 +187,6 @@ function tuialtscreenCases8(): void {
     await terminal.waitForRender();
     assert.strictEqual(clipboardWriteCount(), 0);
 
-    // Losing focus after a press without a drag cancels the press without repainting.
     terminal.sendInput("\x1b[<0;1;3M");
     await terminal.waitForRender();
     const pressedWriteCount = writeCount();

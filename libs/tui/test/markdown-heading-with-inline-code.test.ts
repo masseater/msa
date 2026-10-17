@@ -110,7 +110,6 @@ describe("Markdown component", () => {
       resetCapabilitiesCache();
     });
     it("should not duplicate URL for autolinked emails", () => {
-      // Hyperlinks capability does not affect the mailto: display check.
       setCapabilities({ images: null, trueColor: false, hyperlinks: false });
       const markdown = new Markdown(
         "Contact user@example.com for help",
@@ -123,7 +122,6 @@ describe("Markdown component", () => {
       const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const joinedPlain = plainLines.join(" ");
 
-      // Should contain the email once, not duplicated with mailto:
       assert.ok(joinedPlain.includes("user@example.com"), "Should contain email");
       assert.ok(
         !joinedPlain.includes("mailto:"),
@@ -151,7 +149,6 @@ describe("Markdown component", () => {
       const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
       const joinedPlain = plainLines.join(" ");
 
-      // URL should appear only once
       const urlCount = (joinedPlain.match(/https:\/\/example\.com/gu) || []).length;
       assert.strictEqual(urlCount, 1, "URL should appear exactly once");
     });
@@ -219,19 +216,15 @@ describe("Markdown component", () => {
       const lines = markdown.render(80);
       const joined = lines.join("");
 
-      // OSC 8 open: ESC ] 8 ; ; <url> ESC \
       assert.ok(
         joined.includes("\x1b]8;;https://example.com\x1b\\"),
         "Should contain OSC 8 open sequence",
       );
-      // OSC 8 close: ESC ] 8 ; ; ESC \
       assert.ok(joined.includes("\x1b]8;;\x1b\\"), "Should contain OSC 8 close sequence");
-      // Visible text is present
       const plainLines = lines.map((line) =>
         line.replace(/\x1b[^a-zA-Z]*[a-zA-Z]|\x1b\].*?\x1b\\/gu, ""),
       );
       assert.ok(plainLines.join("").includes("click here"), "Should contain link text");
-      // URL is NOT printed inline as plain text
       const rawPlain = lines.map((line) =>
         line.replace(/\x1b\]8;;[^\x1b]*\x1b\\/gu, "").replace(/\x1b\[[0-9;]*m/gu, ""),
       );

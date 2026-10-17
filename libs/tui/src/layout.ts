@@ -376,11 +376,6 @@ function paintBox(box: LayoutBox, screen: string[], totalWidth: number): void {
         const visibleRows = Math.min(imageMetadata.rows, clipBottom - row);
         if (visibleRows < imageMetadata.rows) line = cropKittyImageLine(line, 0, visibleRows);
       }
-      // Fast path: a full-width box painting onto an untouched row can use the
-      // source line reference directly. Compositing here would rebuild the row
-      // string through ANSI/grapheme segmentation every frame; padding is
-      // unnecessary because rows are written with erase-line and the final
-      // width clamp still truncates over-wide lines.
       if (box.rect.x === 0 && box.rect.width >= totalWidth && (isImageLine(line) || !screen[row])) {
         screen[row] = line;
       } else {
@@ -458,14 +453,6 @@ function containsPoint(rect: LayoutRect, x: number, y: number): boolean {
   return x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
 }
 
-/**
- * Return the visual hit path from the deepest component to the layout root.
- *
- * @param {LayoutFrame} frame - The laid-out frame.
- * @param {number} x - Column, 0-based.
- * @param {number} y - Row, 0-based.
- * @returns {LayoutBox[]} The boxes under the point, deepest first.
- */
 export function getLayoutBoxesAt(frame: LayoutFrame, x: number, y: number): LayoutBox[] {
   const result: Array<{ box: LayoutBox; depth: number }> = [];
   const visit = (box: LayoutBox, depth: number): void => {

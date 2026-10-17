@@ -41,7 +41,6 @@ export function withEnv<T>(overrides: Record<string, string | undefined>, fn: ()
 
 export const jpeg = Buffer.from("jpeg").toString("base64");
 
-// Minimal PNG header (signature + IHDR) for a 40x10 image. Enough for getPngDimensions.
 export const png = Buffer.from("89504e470d0a1a0a0000000d49484452000000280000000a", "hex").toString(
   "base64",
 );

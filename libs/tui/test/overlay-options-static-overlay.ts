@@ -10,7 +10,6 @@ export class StaticOverlay implements Component {
   }
 
   render(width: number): string[] {
-    // Store the width we were asked to render at for verification
     this.requestedWidth = width;
     return this.lines;
   }

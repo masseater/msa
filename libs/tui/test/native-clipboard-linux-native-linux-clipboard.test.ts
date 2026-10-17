@@ -43,9 +43,7 @@ function nativeLinuxClipboardCases4(): void {
       ...flags,
       "-shared",
       "-fPIC",
-      // Match the prebuild's unversioned system-library imports.
       "-nostdlib",
-      // Inline the fixture's allocation counters.
       ...(process.arch === "arm64" ? ["-mno-outline-atomics"] : []),
       "-Wl,-z,nodelete",
       join(fixtures, "clipboard-worker-test.c"),
@@ -94,9 +92,7 @@ function nativeLinuxClipboardCases5(): void {
       ...flags,
       "-shared",
       "-fPIC",
-      // Match the prebuild's unversioned system-library imports.
       "-nostdlib",
-      // Inline the fixture's allocation counters.
       ...(process.arch === "arm64" ? ["-mno-outline-atomics"] : []),
       "-Wl,-z,nodelete",
       join(fixtures, "clipboard-worker-test.c"),
@@ -150,9 +146,7 @@ function nativeLinuxClipboardCases6(): void {
       ...flags,
       "-shared",
       "-fPIC",
-      // Match the prebuild's unversioned system-library imports.
       "-nostdlib",
-      // Inline the fixture's allocation counters.
       ...(process.arch === "arm64" ? ["-mno-outline-atomics"] : []),
       "-Wl,-z,nodelete",
       join(fixtures, "clipboard-worker-test.c"),
@@ -213,9 +207,7 @@ function nativeLinuxClipboardCases7(): void {
       ...flags,
       "-shared",
       "-fPIC",
-      // Match the prebuild's unversioned system-library imports.
       "-nostdlib",
-      // Inline the fixture's allocation counters.
       ...(process.arch === "arm64" ? ["-mno-outline-atomics"] : []),
       "-Wl,-z,nodelete",
       join(fixtures, "clipboard-worker-test.c"),

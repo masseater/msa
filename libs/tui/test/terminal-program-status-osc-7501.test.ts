@@ -16,7 +16,6 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
             harness.terminal as unknown as { queryAndEnableKittyProtocol(): void }
           ).queryAndEnableKittyProtocol();
 
-          // The first start's replies arrive late: its DA, then the second start's reply and DA.
           harness.send("\x1b[?62;4;52c");
           harness.send("\x1b]7501;?\x1b\\");
           harness.send("\x1b[?62;4;52c");
@@ -41,7 +40,6 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
           harness.terminal.stop();
           assert.ok(harness.writes.includes(clear));
 
-          // Stopped: nothing is written until the restarted terminal confirms support again.
           const writesBeforeRestart = harness.writes.length;
           harness.terminal.setProgramStatus({ state: "working", app: "msa" });
           assert.equal(harness.writes.length, writesBeforeRestart);
@@ -65,7 +63,6 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
     const harness = setupNegotiation();
     try {
       harness.send("\x1b[");
-      // StdinBuffer sequence timeout, not the lone-ESC timeout
       mock.timers.tick(50);
 
       assert.equal(harness.getInput(), undefined);

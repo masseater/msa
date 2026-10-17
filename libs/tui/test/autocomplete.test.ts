@@ -18,7 +18,6 @@ describe("CombinedAutocompleteProvider", () => {
       const provider = new CombinedAutocompleteProvider([], "/tmp");
       const lines = ["hey /"];
       const cursorLine = 0;
-      // After the "/"
       const cursorCol = 5;
 
       const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
@@ -33,14 +32,11 @@ describe("CombinedAutocompleteProvider", () => {
       const provider = new CombinedAutocompleteProvider([], "/tmp");
       const lines = ["/A"];
       const cursorLine = 0;
-      // After the "A"
       const cursorCol = 2;
 
       const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
 
       console.log("Result:", result);
-      // This might return null if /A doesn't match anything, which is fine
-      // We're mainly testing that the prefix extraction works
       if (result) {
         assert.strictEqual(result.prefix, "/A", "Prefix should be '/A'");
       }
@@ -54,7 +50,6 @@ describe("CombinedAutocompleteProvider", () => {
       const provider = new CombinedAutocompleteProvider([], "/tmp");
       const lines = ["/model"];
       const cursorLine = 0;
-      // After "model"
       const cursorCol = 6;
 
       const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
@@ -67,7 +62,6 @@ describe("CombinedAutocompleteProvider", () => {
       const provider = new CombinedAutocompleteProvider([], "/tmp");
       const lines = ["/command /"];
       const cursorLine = 0;
-      // After the second "/"
       const cursorCol = 10;
 
       const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);

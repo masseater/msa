@@ -35,7 +35,6 @@ export function tuialtscreenCases5(): void {
     const bottom = transcript.scrollTop;
     assert.ok(bottom > 0);
 
-    // #10314: unmodified Home/End belong to the editor in every UI mode.
     const editorKeys = ["\x1bOH", "\x1b[F", "\x1b[57423u", "\x1b[5;5~", "\x1b[6;5~"];
     for (const input of editorKeys) terminal.sendInput(input);
     await terminal.waitForRender();

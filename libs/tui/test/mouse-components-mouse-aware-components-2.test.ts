@@ -35,14 +35,12 @@ describe("mouse-aware components", () => {
 
     terminal.sendInput("\r");
     await terminal.waitForRender();
-    // Press and release on the submenu's second row selects it and closes the submenu.
     terminal.sendInput("\x1b[<0;3;2M");
     terminal.sendInput("\x1b[<0;3;2m");
     await terminal.waitForRender();
     assert.deepStrictEqual(changes, [{ id: "theme", value: "second" }]);
     assert.strictEqual(tui.getFocusedComponent(), list);
 
-    // Keys reach the visible list again instead of the closed submenu.
     terminal.sendInput("\x1b[B");
     terminal.sendInput("\r");
     await terminal.waitForRender();

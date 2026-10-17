@@ -73,7 +73,6 @@ describe("TuiAltScreen", () => {
     assert.strictEqual(terminal.getViewport()[3], "line 7  ↓ Jump to end         ");
     assert.strictEqual(terminal.getViewport()[4]?.trimEnd(), "editor");
 
-    // Pressing next to the label starts a selection instead of jumping.
     terminal.sendInput("\x1b[<0;2;4M");
     terminal.sendInput("\x1b[<0;2;4m");
     await terminal.waitForRender();
@@ -93,7 +92,6 @@ describe("TuiAltScreen", () => {
 
 describe("TuiAltScreen", () => {
   it("keeps the jump-to-end indicator centered as the auto scrollbar hides and reappears", async () => {
-    // Regression test for #9136: auto scrollbar visibility must not move the indicator.
     const terminal = new VirtualTerminal(80, 6);
     const label = " ↓ Jump to latest message · End ";
     const tui = new TuiAltScreen(terminal, undefined, undefined, {
@@ -108,7 +106,6 @@ describe("TuiAltScreen", () => {
     try {
       await terminal.waitForRender();
 
-      // Scrolling over the track keeps the scrollbar visible until the pointer leaves.
       terminal.sendInput("\x1b[<64;80;1M");
       await terminal.waitForRender();
       assert.strictEqual(transcript.isScrollbarVisible, true);
@@ -116,7 +113,6 @@ describe("TuiAltScreen", () => {
       const scrollTop = transcript.scrollTop;
       const visibleColumn = terminal.getViewport()[5]?.indexOf(label);
 
-      // Leaving the track lets the auto-hide timer expire without changing the content.
       terminal.sendInput("\x1b[<35;79;1M");
       await terminal.waitForRender();
       assert.strictEqual(transcript.isScrollbarVisible, false);
@@ -138,7 +134,6 @@ describe("TuiAltScreen", () => {
 
 describe("TuiAltScreen", () => {
   it("leaves the scrollbar visible and clickable when the jump-to-end indicator spans the transcript", async () => {
-    // Regression coverage for #9136: centering must not paint or capture clicks over the scrollbar.
     const terminal = new VirtualTerminal(30, 6);
     const tui = new TuiAltScreen(terminal, undefined, undefined, {
       scrollToEndIndicator: () => "↓".repeat(30),
@@ -160,7 +155,6 @@ describe("TuiAltScreen", () => {
     await terminal.waitForRender();
     assert.strictEqual(transcript.isFollowingEnd, false);
 
-    // The indicator must not intercept a press on the scrollbar's last column.
     assert.strictEqual(terminal.getViewport()[3], `${"↓".repeat(29)}┃`);
     terminal.sendInput("\x1b[<0;30;4M");
     terminal.sendInput("\x1b[<0;30;4m");
@@ -218,7 +212,6 @@ function tuialtscreenCases1(): void {
       ["line 5", "line 6", "line 7", "line 8", "editor", "footer"],
     );
 
-    // Wheel over the dock falls back to the primary transcript scroll view.
     terminal.sendInput("\x1b[<64;1;6M");
     await terminal.waitForRender();
     assert.deepStrictEqual(

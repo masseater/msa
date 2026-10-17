@@ -1,11 +1,6 @@
 import { type KeyId, matchesKey } from "./keys.ts";
 
-/**
- * Global keybinding registry.
- * Downstream packages can add keybindings via declaration merging.
- */
 export interface Keybindings {
-  // Editor navigation and editing
   "tui.editor.cursorUp": true;
   "tui.editor.cursorDown": true;
   "tui.editor.historyPrevious": true;
@@ -29,19 +24,16 @@ export interface Keybindings {
   "tui.editor.yank": true;
   "tui.editor.yankPop": true;
   "tui.editor.undo": true;
-  // Generic input actions
   "tui.input.newLine": true;
   "tui.input.submit": true;
   "tui.input.tab": true;
   "tui.input.copy": true;
-  // Generic selection actions
   "tui.select.up": true;
   "tui.select.down": true;
   "tui.select.pageUp": true;
   "tui.select.pageDown": true;
   "tui.select.confirm": true;
   "tui.select.cancel": true;
-  // Alternate-screen viewport navigation
   "tui.altScreen.pageUp": true;
   "tui.altScreen.pageDown": true;
   "tui.altScreen.halfPageUp": true;
@@ -156,7 +148,6 @@ export const TUI_KEYBINDINGS = {
     defaultKeys: ["escape", "ctrl+c"],
     description: "Cancel selection",
   },
-  // These intentionally shadow the unmodified editor bindings in fullscreen mode.
   "tui.altScreen.pageUp": {
     defaultKeys: "pageUp",
     description: "Scroll viewport up one page",

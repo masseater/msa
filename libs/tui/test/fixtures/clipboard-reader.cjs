@@ -29,7 +29,6 @@ const { readFileSync } = require("node:fs");
     clearInterval(timer);
     if (performance.now() - started > 200)
       assert.ok(ticks > 5, "Clipboard I/O must not block the JS event loop");
-    // Check before Node exits: process exit must not hide a leaked child or zombie.
     assert.equal(readFileSync(`/proc/self/task/${process.pid}/children`, "utf8").trim(), "");
   }
 })().catch((error) => {

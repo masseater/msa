@@ -42,7 +42,6 @@ describe("TuiAltScreen", () => {
 });
 
 describe("TuiAltScreen", () => {
-  // #9758: wheel line counts can change at runtime; Alt keeps its multiplier.
   it("applies runtime wheel line count updates", async () => {
     const terminal = new VirtualTerminal(20, 4);
     const tui = new TuiAltScreen(terminal, undefined, undefined, { wheelScrollLines: 3 });

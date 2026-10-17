@@ -14,12 +14,10 @@ describe("Input component", () => {
       submitted = value;
     };
 
-    // Type hello, then backslash, then Enter
     typeText(input, "hello");
     input.handleInput("\\");
     input.handleInput("\r");
 
-    // Input is single-line, no backslash+Enter workaround
     assert.strictEqual(submitted, "hello\\");
   });
 
@@ -118,18 +116,12 @@ describe("Input component", () => {
       const input = new Input();
 
       input.setValue("foo bar baz");
-      // Move cursor to end
-      // Ctrl+E
       input.handleInput("\x05");
 
-      // Ctrl+W - deletes "baz"
       input.handleInput("\x17");
       assert.strictEqual(input.getValue(), "foo bar ");
 
-      // Move to beginning and yank
-      // Ctrl+A
       input.handleInput("\x01");
-      // Ctrl+Y
       input.handleInput("\x19");
       assert.strictEqual(input.getValue(), "bazfoo bar ");
     });
@@ -138,16 +130,12 @@ describe("Input component", () => {
       const input = new Input();
 
       input.setValue("foo.bar");
-      // Ctrl+E
       input.handleInput("\x05");
-      // Ctrl+W - deletes "bar"
       input.handleInput("\x17");
       assert.strictEqual(input.getValue(), "foo.");
 
       input.setValue("foo:bar");
-      // Ctrl+E
       input.handleInput("\x05");
-      // Ctrl+W - deletes "bar"
       input.handleInput("\x17");
       assert.strictEqual(input.getValue(), "foo:");
     });
@@ -159,26 +147,18 @@ describe("Input component", () => {
     it("Ctrl+W handles Unicode word boundaries", () => {
       const input = new Input();
 
-      // "你好世界。你好，世界" segments as: 你好|世界|。|你好|，|世界
       input.setValue("你好世界。你好，世界");
-      // Ctrl+E
       input.handleInput("\x05");
-      // Ctrl+W - deletes "世界"
       input.handleInput("\x17");
       assert.strictEqual(input.getValue(), "你好世界。你好，");
-      // Ctrl+W - deletes "，"
       input.handleInput("\x17");
       assert.strictEqual(input.getValue(), "你好世界。你好");
-      // Ctrl+W - deletes "你好"
       input.handleInput("\x17");
       assert.strictEqual(input.getValue(), "你好世界。");
-      // Ctrl+W - deletes "。"
       input.handleInput("\x17");
       assert.strictEqual(input.getValue(), "你好世界");
-      // Ctrl+W - deletes "世界"
       input.handleInput("\x17");
       assert.strictEqual(input.getValue(), "你好");
-      // Ctrl+W - deletes "你好"
       input.handleInput("\x17");
       assert.strictEqual(input.getValue(), "");
     });
@@ -191,16 +171,12 @@ describe("Input component", () => {
       const input = new Input();
 
       input.setValue("hello world");
-      // Move cursor to after "hello "
-      // Ctrl+A
       input.handleInput("\x01");
       for (let i = 0; i < 6; i++) input.handleInput("\x1b[C");
 
-      // Ctrl+U - deletes "hello "
       input.handleInput("\x15");
       assert.strictEqual(input.getValue(), "world");
 
-      // Ctrl+Y
       input.handleInput("\x19");
       assert.strictEqual(input.getValue(), "hello world");
     });
@@ -209,14 +185,11 @@ describe("Input component", () => {
       const input = new Input();
 
       input.setValue("hello world");
-      // Ctrl+A
       input.handleInput("\x01");
-      // Ctrl+K - deletes "hello world"
       input.handleInput("\x0b");
 
       assert.strictEqual(input.getValue(), "");
 
-      // Ctrl+Y
       input.handleInput("\x19");
       assert.strictEqual(input.getValue(), "hello world");
     });
@@ -229,9 +202,7 @@ describe("Input component", () => {
       const input = new Input();
 
       input.setValue("test");
-      // Ctrl+E
       input.handleInput("\x05");
-      // Ctrl+Y
       input.handleInput("\x19");
       assert.strictEqual(input.getValue(), "test");
     });

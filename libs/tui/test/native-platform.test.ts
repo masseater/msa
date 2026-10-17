@@ -27,7 +27,6 @@ test("Linux ARM64 prebuild supports 64 KB system pages", () => {
   assert.ok(loadSegments > 0);
 });
 
-// Opt in on a Windows test desktop: this replaces the system clipboard contents.
 test(
   "writes Windows clipboard text through the native helper without command fallbacks",
   { skip: process.platform !== "win32" || process.env["MSA_TEST_NATIVE_CLIPBOARD"] !== "1" },
@@ -86,7 +85,6 @@ test(
     Object.defineProperty(process, "platform", { value: "linux" });
     delete process.env["DISPLAY"];
     process.env["WAYLAND_DISPLAY"] = "wayland-0";
-    // Wayland paste uses wl-paste.
     assert.equal(getNativeClipboard(), undefined);
     let available = false;
     const helper = {

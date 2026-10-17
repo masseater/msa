@@ -6,13 +6,9 @@ export interface RgbColor {
 
 export type TerminalColorScheme = "dark" | "light";
 
-/** Colors the terminal reports for its current theme. */
 export interface TerminalColors {
-  /** Default foreground (OSC 10). */
   foreground?: RgbColor | undefined;
-  /** Default background (OSC 11). */
   background?: RgbColor | undefined;
-  /** ANSI colors 0-15 (OSC 4). Only set when the terminal reported all 16. */
   palette?: RgbColor[] | undefined;
 }
 
@@ -35,20 +31,12 @@ function parseOscHexChannel(channel: string): number | undefined {
   return Math.round((parseInt(channel, 16) / max) * 255);
 }
 
-/** What an OSC color reply reports: the default foreground (OSC 10), background (OSC 11), or a palette index (OSC 4). */
 export type OscColorTarget = "foreground" | "background" | number;
 
 const OSC_COLOR_RESPONSE_PATTERN =
   /^\x1b\](?:(1[01])|4;(\d{1,3}));([^\x07\x1b]*)(?:\x07|\x1b\\)$/iu;
 const COLOR_SCHEME_REPORT_PATTERN = /^(?:\x1b\[\?997;(1|2)n)+$/u;
 
-/**
- * Parse an OSC 10, 11, or 4 color reply. Returns undefined when `data` is not such a reply;
- * `rgb` is undefined when it is a reply with an unparseable color.
- *
- * @param {string} data - A sequence read from the terminal.
- * @returns {{ target: OscColorTarget; rgb: RgbColor | undefined } | undefined} The color target and color, or undefined.
- */
 export function parseOscColorResponse(
   data: string,
 ): { target: OscColorTarget; rgb: RgbColor | undefined } | undefined {

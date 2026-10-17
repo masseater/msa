@@ -46,18 +46,11 @@ export function isAppleTerminalSession(): boolean {
   return process.platform === "darwin" && process.env["TERM_PROGRAM"] === "Apple_Terminal";
 }
 
-/**
- * Refresh terminal dimensions on POSIX platforms by sending SIGWINCH to this process.
- * Best-effort: some environments (restricted seccomp or LSM policies) return EACCES
- * for `kill(2)`; in that case the dimensions refresh is skipped rather than crashing.
- */
 export function refreshTerminalDimensions(): void {
   if (process.platform === "win32" || process.pid <= 0) return;
   try {
     process.kill(process.pid, "SIGWINCH");
-  } catch {
-    // Signal delivery not permitted in this environment; ignore.
-  }
+  } catch {}
 }
 
 export function normalizeNativeShiftEnterInput(
@@ -78,77 +71,39 @@ export function normalizeAppleTerminalInput(
   return normalizeNativeShiftEnterInput(data, isAppleTerminal, isShiftPressed);
 }
 
-/**
- * Minimal terminal interface for TUI
- */
 export interface Terminal {
-  // Start the terminal with input and resize handlers
   start(onInput: (data: string) => void, onResize: () => void): void;
 
-  // Stop the terminal and restore state
   stop(): void;
 
-  /**
-   * Drain stdin before exiting to prevent Kitty key release events from
-   * leaking to the parent shell over slow SSH connections.
-   * @param maxMs - Maximum time to drain (default: 1000ms)
-   * @param idleMs - Exit early if no input arrives within this time (default: 50ms)
-   */
   drainInput(maxMs?: number, idleMs?: number): Promise<void>;
 
-  // Write output to terminal
   write(data: string): void;
 
-  // Get terminal dimensions
   get columns(): number;
   get rows(): number;
 
-  // Whether Kitty keyboard protocol is active
   get kittyProtocolActive(): boolean;
 
-  // Cursor positioning (relative to current position)
-  // Move cursor up (negative) or down (positive) by N lines
   moveBy(lines: number): void;
 
-  // Cursor visibility
-  // Hide the cursor
   hideCursor(): void;
-  // Show the cursor
   showCursor(): void;
 
-  // Clear operations
-  // Clear current line
   clearLine(): void;
-  // Clear from cursor to end of screen
   clearFromCursor(): void;
-  // Clear entire screen and move cursor to (0,0)
   clearScreen(): void;
 
-  // Title operations
-  // Set terminal window title
   setTitle(title: string): void;
 
-  // Progress indicator (OSC 9;4)
   setProgress(active: boolean): void;
 
-  /**
-   * Report what the program is doing (OSC 7501). Sent only to terminals that support it; the latest
-   * status is re-sent when support is confirmed or the terminal restarts.
-   */
   setProgramStatus(status: ProgramStatus): void;
 }
 
 const DEFAULT_ESCAPE_TIMEOUT_MS = 10;
 const DEFAULT_SSH_ESCAPE_TIMEOUT_MS = 100;
 
-/**
- * Resolve how long to wait for the rest of an escape sequence before
- * dispatching a lone ESC as the Escape key. Legacy Alt+key input is ESC plus
- * another byte, so high-latency transports need a longer reassembly window.
- *
- * @param {NodeJS.ProcessEnv} env - Environment to read the transport hints from.
- * @returns {number} The timeout in milliseconds.
- */
 export function resolveEscapeTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const configured = Number(env["MSA_TUI_ESC_TIMEOUT"]);
   if (Number.isFinite(configured) && configured > 0) {
@@ -160,9 +115,6 @@ export function resolveEscapeTimeoutMs(env: NodeJS.ProcessEnv = process.env): nu
   return DEFAULT_ESCAPE_TIMEOUT_MS;
 }
 
-/**
- * Real terminal using process.stdin/stdout
- */
 export class ProcessTerminal implements Terminal {
   private wasRaw = false;
   private inputHandler?: ((data: string) => void) | undefined;
@@ -170,18 +122,14 @@ export class ProcessTerminal implements Terminal {
   private _kittyProtocolActive = false;
   private _modifyOtherKeysActive = false;
   private keyboardProtocolPushed = false;
-  /** DA1 replies owed to keyboard protocol queries. Later DA1 replies answer other queries and are forwarded. */
   private pendingKeyboardProtocolDeviceAttributes = 0;
   private keyboardProtocolNegotiationBuffer = "";
   private keyboardProtocolBufferFlushTimer?: ReturnType<typeof setTimeout> | undefined;
   private stdinBuffer?: StdinBuffer | undefined;
   private stdinDataHandler?: ((data: string) => void) | undefined;
   private progressInterval?: ReturnType<typeof setInterval> | undefined;
-  /** Latest program status, kept across stop() so start() can report it again. */
   private programStatus?: ProgramStatus | undefined;
-  /** Whether the terminal confirmed OSC 7501 support since the last start(), or `MSA_PROGRAM_STATUS=1`. */
   private programStatusSupported = false;
-  /** The support query was sent and its DA1 sentinel has not arrived yet. */
   private programStatusQueryPending = false;
   private writeLogPath = (() => {
     const env = process.env["MSA_TUI_WRITE_LOG"] || "";
@@ -192,9 +140,7 @@ export class ProcessTerminal implements Terminal {
         const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}`;
         return path.join(env, `tui-${ts}-${process.pid}.log`);
       }
-    } catch {
-      // Not an existing directory - use as-is (file path)
-    }
+    } catch {}
     return env;
   })();
 
@@ -210,7 +156,6 @@ export class ProcessTerminal implements Terminal {
     this.inputHandler = onInput;
     this.resizeHandler = onResize;
 
-    // Save previous state and enable raw mode
     this.wasRaw = process.stdin.isRaw || false;
     if (process.stdin.setRawMode) {
       process.stdin.setRawMode(true);
@@ -218,39 +163,20 @@ export class ProcessTerminal implements Terminal {
     process.stdin.setEncoding("utf8");
     process.stdin.resume();
 
-    // Enable bracketed paste mode - terminal will wrap pastes in \x1b[200~ ... \x1b[201~
     process.stdout.write("\x1b[?2004h");
 
-    // Set up resize handler immediately
     process.stdout.on("resize", this.resizeHandler);
 
-    // Refresh terminal dimensions - they may be stale after suspend/resume
-    // (SIGWINCH is lost while process is stopped). Unix only, best-effort.
     refreshTerminalDimensions();
 
-    // On Windows, enable ENABLE_VIRTUAL_TERMINAL_INPUT so the console sends
-    // VT escape sequences (e.g. \x1b[Z for Shift+Tab) instead of raw console
-    // events that lose modifier information. Must run AFTER setRawMode(true)
-    // since that resets console mode flags.
     this.enableWindowsVTInput();
 
-    // Query Kitty keyboard protocol and fall back to modifyOtherKeys when DA confirms no Kitty response.
-    // See: https://sw.kovidgoyal.net/kitty/keyboard-protocol/
     this.queryAndEnableKittyProtocol();
   }
 
-  /**
-   * Set up StdinBuffer to split batched input into individual sequences.
-   * This ensures components receive single events, making matchesKey/isKeyRelease work correctly.
-   *
-   * Also watches for Kitty protocol response and enables it when detected.
-   * This is done here (after stdinBuffer parsing) rather than on raw stdin
-   * to handle the case where the response arrives split across multiple events.
-   */
   private setupStdinBuffer(): void {
     this.stdinBuffer = new StdinBuffer({ escapeTimeout: resolveEscapeTimeoutMs() });
 
-    // Forward individual sequences to the input handler
     this.stdinBuffer.on("data", (sequence) => {
       if (isProgramStatusReply(sequence)) {
         if (this.programStatusQueryPending) {
@@ -263,7 +189,6 @@ export class ProcessTerminal implements Terminal {
       const negotiation = this.readKeyboardProtocolNegotiationSequence(sequence);
       if (negotiation === "pending") {
         this.scheduleKeyboardProtocolNegotiationBufferFlush();
-        // Wait briefly for the rest of a split Kitty response.
         return;
       }
       if (negotiation && this.handleKeyboardProtocolNegotiationSequence(negotiation.parsed)) {
@@ -273,35 +198,17 @@ export class ProcessTerminal implements Terminal {
       this.forwardInputSequence(negotiation?.sequence ?? sequence);
     });
 
-    // Re-wrap paste content with bracketed paste markers for existing editor handling
     this.stdinBuffer.on("paste", (content) => {
       if (this.inputHandler) {
         this.inputHandler(`\x1b[200~${content}\x1b[201~`);
       }
     });
 
-    // Handler that pipes stdin data through the buffer
     this.stdinDataHandler = (data: string) => {
       this.stdinBuffer!.process(data);
     };
   }
 
-  /**
-   * Query terminal for Kitty keyboard protocol support and enable it if available.
-   *
-   * Kitty's progressive enhancement detection requires requesting the desired
-   * flags before querying them. The trailing DA query is a sentinel supported by
-   * terminals that do not know Kitty keyboard protocol; receiving DA before a
-   * Kitty response enables modifyOtherKeys fallback without a startup timeout.
-   *
-   * The requested flags are:
-   * - 1 = disambiguate escape codes
-   * - 2 = report event types (press/repeat/release)
-   * - 4 = report alternate keys (shifted key, base layout key)
-   *
-   * The OSC 7501 program status query shares the DA sentinel: a terminal that supports it replies
-   * before DA. `MSA_PROGRAM_STATUS=1` or `0` skips the query.
-   */
   private queryAndEnableKittyProtocol(): void {
     this.setupStdinBuffer();
     process.stdin.on("data", this.stdinDataHandler!);
@@ -325,8 +232,6 @@ export class ProcessTerminal implements Terminal {
     if (negotiationSequence.type === "device-attributes") {
       if (this.pendingKeyboardProtocolDeviceAttributes === 0) return false;
       this.pendingKeyboardProtocolDeviceAttributes -= 1;
-      // The last owed DA answers the latest query, which got no program status reply first. Earlier DA
-      // replies belong to queries from before a restart.
       if (this.pendingKeyboardProtocolDeviceAttributes === 0)
         this.programStatusQueryPending = false;
     }
@@ -349,12 +254,6 @@ export class ProcessTerminal implements Terminal {
     return true;
   }
 
-  /**
-   * Returns the parsed negotiation reply with its full (possibly reassembled) sequence.
-   *
-   * @param {string} sequence - A sequence from the stdin buffer.
-   * @returns {{ parsed: KeyboardProtocolNegotiationSequence; sequence: string } | "pending" | undefined} The reply, "pending" while the reply is incomplete, or undefined when it is not a reply.
-   */
   private readKeyboardProtocolNegotiationSequence(
     sequence: string,
   ): { parsed: KeyboardProtocolNegotiationSequence; sequence: string } | "pending" | undefined {
@@ -436,27 +335,17 @@ export class ProcessTerminal implements Terminal {
     this._modifyOtherKeysActive = false;
   }
 
-  /**
-   * On Windows, add ENABLE_VIRTUAL_TERMINAL_INPUT (0x0200) to the stdin
-   * console handle so the terminal sends VT sequences for modified keys
-   * (e.g. \x1b[Z for Shift+Tab). Without this, libuv's ReadConsoleInputW
-   * discards modifier state and Shift+Tab arrives as plain \t.
-   */
   private enableWindowsVTInput(): void {
     if (process.platform !== "win32") return;
     try {
       getNativePlatformHelper()?.enableVirtualTerminalInput?.();
-    } catch {
-      // Native helper not available — Shift+Tab won't be distinguishable from Tab.
-    }
+    } catch {}
   }
 
   async drainInput(maxMs = 1000, idleMs = 50): Promise<void> {
     const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this._kittyProtocolActive;
     this.clearKeyboardProtocolNegotiationBuffer();
     if (shouldDisableKittyProtocol) {
-      // Disable Kitty keyboard protocol first so any late key releases
-      // do not generate new Kitty escape sequences.
       process.stdout.write("\x1b[<u");
       this.keyboardProtocolPushed = false;
       this._kittyProtocolActive = false;
@@ -498,20 +387,17 @@ export class ProcessTerminal implements Terminal {
     if (this.clearProgressInterval()) {
       process.stdout.write(TERMINAL_PROGRESS_CLEAR_SEQUENCE);
     }
-    // Remove the status while stopped, for example after exit or while suspended. start() reports it again.
     if (this.programStatusSupported && this.programStatus) {
       process.stdout.write(formatProgramStatus({ state: "clear" }));
     }
     this.programStatusSupported = false;
     this.programStatusQueryPending = false;
 
-    // Disable bracketed paste mode
     process.stdout.write("\x1b[?2004l");
 
     const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this._kittyProtocolActive;
     this.clearKeyboardProtocolNegotiationBuffer();
 
-    // Disable Kitty keyboard protocol if not already done by drainInput()
     if (shouldDisableKittyProtocol) {
       process.stdout.write("\x1b[<u");
       this.keyboardProtocolPushed = false;
@@ -520,13 +406,11 @@ export class ProcessTerminal implements Terminal {
     }
     this.disableModifyOtherKeys();
 
-    // Clean up StdinBuffer
     if (this.stdinBuffer) {
       this.stdinBuffer.destroy();
       this.stdinBuffer = undefined;
     }
 
-    // Remove event handlers
     if (this.stdinDataHandler) {
       process.stdin.removeListener("data", this.stdinDataHandler);
       this.stdinDataHandler = undefined;
@@ -537,12 +421,8 @@ export class ProcessTerminal implements Terminal {
       this.resizeHandler = undefined;
     }
 
-    // Pause stdin to prevent any buffered input (e.g., Ctrl+D) from being
-    // re-interpreted after raw mode is disabled. This fixes a race condition
-    // where Ctrl+D could close the parent shell over SSH.
     process.stdin.pause();
 
-    // Restore raw mode state
     if (process.stdin.setRawMode) {
       process.stdin.setRawMode(this.wasRaw);
     }
@@ -553,9 +433,7 @@ export class ProcessTerminal implements Terminal {
     if (this.writeLogPath) {
       try {
         fs.appendFileSync(this.writeLogPath, data, { encoding: "utf8" });
-      } catch {
-        // Ignore logging errors
-      }
+      } catch {}
     }
   }
 
@@ -569,13 +447,10 @@ export class ProcessTerminal implements Terminal {
 
   moveBy(lines: number): void {
     if (lines > 0) {
-      // Move down
       process.stdout.write(`\x1b[${lines}B`);
     } else if (lines < 0) {
-      // Move up
       process.stdout.write(`\x1b[${-lines}A`);
     }
-    // lines === 0: no movement
   }
 
   hideCursor(): void {
@@ -595,12 +470,10 @@ export class ProcessTerminal implements Terminal {
   }
 
   clearScreen(): void {
-    // Clear screen and move to home (1,1)
     process.stdout.write("\x1b[2J\x1b[H");
   }
 
   setTitle(title: string): void {
-    // OSC 0;title BEL - set terminal window title
     process.stdout.write(`\x1b]0;${title}\x07`);
   }
 
@@ -617,7 +490,6 @@ export class ProcessTerminal implements Terminal {
 
   setProgress(active: boolean): void {
     if (active) {
-      // OSC 9;4;3 - indeterminate progress
       process.stdout.write(TERMINAL_PROGRESS_ACTIVE_SEQUENCE);
       if (!this.progressInterval) {
         this.progressInterval = setInterval(() => {
@@ -626,7 +498,6 @@ export class ProcessTerminal implements Terminal {
       }
     } else {
       this.clearProgressInterval();
-      // OSC 9;4;0 - clear progress
       process.stdout.write(TERMINAL_PROGRESS_CLEAR_SEQUENCE);
     }
   }

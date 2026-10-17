@@ -17,7 +17,6 @@ import {
 
 describe("TuiAltScreen", () => {
   it("redraws WezTerm Kitty images after writes to covered rows", async () => {
-    // Regression test for #10319: a scrollbar update below an unchanged image anchor erased its cells.
     const weztermPane = process.env["WEZTERM_PANE"];
     let tui: TuiAltScreen | undefined;
     process.env["WEZTERM_PANE"] = "1";

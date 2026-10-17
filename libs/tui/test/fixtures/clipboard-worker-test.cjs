@@ -21,7 +21,6 @@ async function waitFor(predicate, deadline = performance.now() + 5000) {
   }
   const [addon, mode] = process.argv.slice(2);
   if (mode === "worker-exit") {
-    // The originating environment unloads while its private callback still waits.
     const worker = new Worker(__filename, { workerData: addon });
     await once(worker, "message");
     await worker.terminate();
@@ -40,14 +39,12 @@ async function waitFor(predicate, deadline = performance.now() + 5000) {
   if (mode === "process-exit") {
     assert.equal(await pending, undefined);
     console.log("passed");
-    // The private callback never finishes; Node must still exit naturally.
     return;
   }
   const concurrentStarted = performance.now();
   const concurrent = Array.from({ length: 20 }, (_, index) =>
     helper[index % 2 ? "getText" : "getImage"](),
   );
-  // With UV_THREADPOOL_SIZE=2, a second blocked native task would delay this read.
   await readFile(__filename);
   assert.deepEqual(await Promise.all(concurrent), Array(20).fill(undefined));
   assert.ok(

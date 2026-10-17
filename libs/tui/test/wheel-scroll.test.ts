@@ -11,7 +11,6 @@ function scroll(
   return times.map((time) => accelerator.next(direction, time));
 }
 
-// #9758: fullscreen wheel scrolling was one line per notch on terminals that do not accelerate wheels.
 describe("WheelScrollAccelerator", () => {
   it("uses fixed line counts regardless of timing", () => {
     const accelerator = new WheelScrollAccelerator(3, true);

@@ -1,21 +1,3 @@
-/**
- * Alt-screen render churn benchmark.
- *
- * Measures cumulative JS allocation and wall time for repeated TuiAltScreen
- * frames on a layout mirroring msa's fullscreen interactive mode:
- * VStack [ ScrollView(transcript), dock VStack [status, editor, footer] ].
- *
- * Two scenarios:
- * - static: nothing changes between frames (pure recomposite churn)
- * - editor: one character appended to the editor per frame (doc scenario
- *   "30 editor updates")
- *
- * Allocation is estimated with the V8 sampling heap profiler including
- * objects collected by minor/major GC, i.e. it measures churn, not retention.
- *
- * Run from libs/tui: node test/render-churn-bench.ts
- */
-
 import { Session } from "node:inspector/promises";
 import { performance } from "node:perf_hooks";
 
@@ -30,7 +12,6 @@ const WARMUP_FRAMES = 20;
 const FRAMES = 300;
 const SAMPLING_INTERVAL = 4096;
 
-/** Editor stand-in: caches lines per (text, width), re-renders when text changes. */
 class EditorSim implements Component {
   private text = "";
   private cachedText?: string | undefined;

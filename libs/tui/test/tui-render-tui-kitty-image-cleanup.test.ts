@@ -228,11 +228,9 @@ describe("TUI resize handling", () => {
 
       const initialRedraws = tui.fullRedraws;
 
-      // Resize height
       terminal.resize(40, 15);
       await terminal.waitForRender();
 
-      // Should have triggered a full redraw
       assert.ok(tui.fullRedraws > initialRedraws, "Height change should trigger full redraw");
 
       const viewport = terminal.getViewport();

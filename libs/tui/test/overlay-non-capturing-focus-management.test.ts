@@ -25,8 +25,6 @@ function focusManagementCases1(): void {
     tui.setFocus(editor);
     tui.start();
     try {
-      // Simulate showExtensionCustom: factory creates timer synchronously,
-      // then .then() pushes controller as a microtask
       let timerHandle: ReturnType<typeof tui.showOverlay> | null = null;
       let doneFn: () => void = () => {
         throw new Error("doneFn was not initialized");
@@ -40,7 +38,6 @@ function focusManagementCases1(): void {
           resolve();
         };
         timerHandle = tui.showOverlay(timer, { nonCapturing: true });
-        // .then() runs as microtask — same as showExtensionCustom
         Promise.resolve(controller).then((c) => {
           tui.showOverlay(c);
         });
@@ -52,9 +49,7 @@ function focusManagementCases1(): void {
       assert.strictEqual(controller.focused, true);
       assert.strictEqual(editor.focused, false);
 
-      // Simulate Esc: cleanup + close (from inside handleInput)
       doneFn();
-      // Now await the promise (simulating showExtensionCustom resolving)
       await overlayPromise;
       await renderAndFlush(tui, terminal);
 

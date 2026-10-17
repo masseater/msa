@@ -10,7 +10,6 @@ describe("Editor component", () => {
     it("does nothing when undo stack is empty", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      // Ctrl+- (undo)
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
     });
@@ -21,13 +20,9 @@ describe("Editor component", () => {
       typeText(editor, "hello world");
       assert.strictEqual(editor.getText(), "hello world");
 
-      // Undo removes " world" (space captured state before it, so we restore to "hello")
-      // Ctrl+- (undo)
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello");
 
-      // Undo removes "hello"
-      // Ctrl+- (undo)
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
     });
@@ -42,15 +37,12 @@ describe("Editor component", () => {
       typeText(editor, "hello  ");
       assert.strictEqual(editor.getText(), "hello  ");
 
-      // Ctrl+- (undo) - removes second " "
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello ");
 
-      // Ctrl+- (undo) - removes first " "
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello");
 
-      // Ctrl+- (undo) - removes "hello"
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
     });
@@ -67,15 +59,12 @@ describe("Editor component", () => {
       typeText(editor, "world");
       assert.strictEqual(editor.getText(), "hello\nworld");
 
-      // Ctrl+- (undo)
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello\n");
 
-      // Ctrl+- (undo)
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello");
 
-      // Ctrl+- (undo)
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "");
     });
@@ -88,11 +77,9 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       typeText(editor, "hello");
-      // Backspace
       editor.handleInput("\x7f");
       assert.strictEqual(editor.getText(), "hell");
 
-      // Ctrl+- (undo)
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello");
     });
@@ -101,15 +88,11 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       typeText(editor, "hello");
-      // Ctrl+A - go to start
       editor.handleInput("\x01");
-      // Right arrow
       editor.handleInput("\x1b[C");
-      // Delete key
       editor.handleInput("\x1b[3~");
       assert.strictEqual(editor.getText(), "hllo");
 
-      // Ctrl+- (undo)
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello");
     });
@@ -124,11 +107,9 @@ describe("Editor component", () => {
       typeText(editor, "hello world");
       assert.strictEqual(editor.getText(), "hello world");
 
-      // Ctrl+W
       editor.handleInput("\x17");
       assert.strictEqual(editor.getText(), "hello ");
 
-      // Ctrl+- (undo)
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello world");
     });
@@ -141,16 +122,12 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       typeText(editor, "hello world");
-      // Ctrl+A - go to start
       editor.handleInput("\x01");
-      // Move right 6 times
       for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C");
 
-      // Ctrl+K
       editor.handleInput("\x0b");
       assert.strictEqual(editor.getText(), "hello ");
 
-      // Ctrl+- (undo)
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello world");
 
@@ -166,16 +143,12 @@ describe("Editor component", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
       typeText(editor, "hello world");
-      // Ctrl+A - go to start
       editor.handleInput("\x01");
-      // Move right 6 times
       for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C");
 
-      // Ctrl+U
       editor.handleInput("\x15");
       assert.strictEqual(editor.getText(), "world");
 
-      // Ctrl+- (undo)
       editor.handleInput("\x1b[45;5u");
       assert.strictEqual(editor.getText(), "hello world");
     });

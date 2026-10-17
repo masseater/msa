@@ -10,14 +10,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -51,20 +49,17 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
   describe("Kitty Keyboard Protocol", () => {
     it("should handle rapid typing simulation with Kitty protocol", () => {
-      // Simulates typing "hi" quickly with releases interleaved
       processInput("\x1b[104u\x1b[104;1:3u\x1b[105u\x1b[105;1:3u");
       assert.deepStrictEqual(emittedSequences, [
         "\x1b[104u",
@@ -82,14 +77,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -125,14 +118,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -166,21 +157,18 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
   describe("Edge Cases", () => {
     it("should handle empty input", () => {
       processInput("");
-      // Empty string emits an empty data event
       assert.deepStrictEqual(emittedSequences, [""]);
     });
 
@@ -188,7 +176,6 @@ describe("StdinBuffer", () => {
       processInput("\x1b");
       assert.deepStrictEqual(emittedSequences, []);
 
-      // After timeout, should emit
       await wait(15);
       assert.deepStrictEqual(emittedSequences, ["\x1b"]);
     });
@@ -212,14 +199,12 @@ describe("StdinBuffer", () => {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }

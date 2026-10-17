@@ -80,8 +80,6 @@ const MAX_CACHED_OFFSCREEN_KITTY_TRANSMISSION_BYTES = 32 * 1024 * 1024;
 const MAX_CACHED_OFFSCREEN_KITTY_DECODED_BYTES = 64 * 1024 * 1024;
 const DOUBLE_CLICK_INTERVAL_MS = 500;
 const COPY_ERROR_FLASH_DURATION_MS = 5000;
-// Regular mode delegates double-click selection to the terminal emulator. Fullscreen owns mouse selection,
-// so mirror common terminal word-selection behavior by keeping paths and kebab-case tokens whole.
 const TERMINAL_WORD_SELECTION_JOINERS = new Set(["/", "-"]);
 const wordSegmenter = getWordSegmenter();
 
@@ -95,7 +93,6 @@ interface SelectionPoint {
   row: number;
   col: number;
   scrollView?: ScrollView;
-  /** Whether this point lies between terminal cells rather than on a cell. */
   boundary?: boolean;
 }
 
@@ -166,39 +163,18 @@ interface SearchHighlightRange {
 }
 
 export interface TuiAltScreenOptions {
-  /**
-   * Logical lines moved for each mouse-wheel event (default: 1). `"auto"` accelerates fast wheel
-   * spins on terminals that send one event per notch. Alt+wheel moves five times as far.
-   */
   wheelScrollLines?: WheelScrollLines;
-  /** Capture mouse events for viewport scrolling and application-owned text selection. */
   mouse?: boolean;
-  /** Style a non-current transcript search match. */
   searchMatchStyle?: (text: string) => string;
-  /** Style the current transcript search match. */
   searchCurrentMatchStyle?: (text: string) => string;
-  /** Style a transcript search navigation button. */
   searchNavigationButtonStyle?: (text: string, hovered: boolean) => string;
-  /**
-   * Render a clickable jump-to-end label. It is centered on the last row of a follow-end
-   * primary scroll view while that view is scrolled away from its end.
-   */
   scrollToEndIndicator?: () => string;
-  /** Open an OSC 8 hyperlink activated with a primary-button click. */
   openUrl?: (url: string) => void;
-  /** Handle an unmodified secondary-button press for clipboard paste. Currently enabled on Windows only. */
   onRightClickPaste?: () => void;
-  /** Automatically copy selected text to the clipboard on mouse release (default: true). */
   copyOnSelect?: boolean;
-  /**
-   * Copy selected text to the system clipboard. Return `true` on success, an error message to
-   * display on failure, or `false` for a generic error. When omitted, the selection is copied
-   * via an OSC 52 write.
-   */
   copySelection?: (text: string) => Promise<boolean | string>;
 }
 
-/** Alternate-screen TUI with a scrollable, application-owned viewport. */
 export class TuiAltScreen extends TuiBase implements ViewportTUI {
   readonly mode = "fullscreen" as const;
   readonly [VIEWPORT_TUI] = true as const;
@@ -307,37 +283,21 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     this.copyOnSelect = enabled;
   }
 
-  /**
-   * Whether the fullscreen viewport has a non-empty active text selection.
-   *
-   * @returns {boolean} Whether a non-empty selection is active.
-   */
   hasActiveSelection(): boolean {
     return this.getActiveSelectionText() !== undefined;
   }
 
-  /**
-   * Copy the active fullscreen text selection, if any, using the configured selection clipboard path.
-   *
-   * @returns {Promise<boolean>} Whether text was copied.
-   */
   copyActiveSelectionToClipboard(): Promise<boolean> {
     const text = this.getActiveSelectionText();
     if (!text) return Promise.resolve(false);
     return this.copyTextToClipboard(text);
   }
 
-  /** Drop the text selection and multi-click history, e.g. before the host replaces the transcript. */
   resetTextSelection(): void {
     this.clearTextSelection();
     this.lastClick = undefined;
   }
 
-  /**
-   * The lines of the last rendered frame, one per terminal row, as written to the terminal.
-   *
-   * @returns {string[]} The frame lines.
-   */
   getScreenLines(): string[] {
     return [...this.previousScreen];
   }
@@ -388,8 +348,6 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     this.lastComponentClick = undefined;
     this.resetRenderState();
     const term = process.env["TERM"]?.toLowerCase() ?? "";
-    // Multiplexers can lag when every pointer movement is forwarded. Button-motion
-    // tracking preserves clicks, wheel events, selections, and scrollbar dragging.
     const mouseSequence =
       process.env["TMUX"] !== undefined ||
       process.env["ZELLIJ"] !== undefined ||
@@ -705,12 +663,6 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     return scrollView.scrollTop !== before;
   }
 
-  /**
-   * Show a transient message in the alternate-screen flash stack.
-   *
-   * @param {string} message - The message to show.
-   * @param {number} durationMs - How long to show it, in milliseconds.
-   */
   flash(message: string, durationMs?: number): void {
     this.flashes.flash(message, durationMs);
   }
@@ -756,7 +708,6 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     const wheelEvent = this.parseWheelEvent(data);
     if (wheelEvent) {
       const lines = this.wheelScroll.next(wheelEvent.direction, performance.now());
-      // SGR mouse button codes use bit 3 (value 8) for the Alt modifier.
       const wheelDelta =
         wheelEvent.direction *
         ((wheelEvent.button & 8) === 0 ? lines : lines * ALT_WHEEL_SCROLL_MULTIPLIER);
@@ -1102,9 +1053,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     }
     try {
       this.onRightClickPaste();
-    } catch {
-      // Clipboard paste is best-effort.
-    }
+    } catch {}
     return true;
   }
 
@@ -1442,9 +1391,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
         this.selectionFocus = undefined;
         try {
           this.openUrl(clickedUrl);
-        } catch {
-          // URL activation is best-effort.
-        }
+        } catch {}
         this.requestRender();
         return;
       }
@@ -1568,10 +1515,6 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
   }
 
   private async copyTextToClipboard(text: string): Promise<boolean> {
-    // Prefer an injected clipboard implementation (native clipboard + platform tools with a
-    // verified success path) when the host app provides one. A bare OSC 52 write can show
-    // "Copied!" while leaving the system clipboard untouched (e.g. macOS Terminal.app, tmux
-    // without OSC 52 clipboard passthrough), so only report success when it actually copies.
     if (this.copySelection) {
       const result = await this.copySelection(text);
       const ok = result === true;
@@ -1811,7 +1754,6 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     if (this.refreshSearch(nextLayout)) {
       nextLayout = renderLayoutFrame(root, width, height, () => this.requestRender());
     }
-    // Resolve fake cursors before highlighting and compositing, which only track SGR codes
     let screen = this.resolveFakeCursors(
       nextLayout.lines.map((line) => line.replace(OSC133_ZONE_PREFIX, "")),
     );
@@ -1875,9 +1817,6 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
     }
     buffer += preparedKittyScreen.evictedImageDeletion;
 
-    // WezTerm erases intersecting Kitty image cells when a later row write touches a covered row.
-    // Draw image placements after every clear and text write so nothing later intersects them; preserve
-    // the existing interleaved output for text-only frames and every other terminal.
     const drawKittyImagesLast =
       redrawImages && this.imageProtocol === "kitty" && screen.some(isImageLine) && isWezTerm;
     if (drawKittyImagesLast) {

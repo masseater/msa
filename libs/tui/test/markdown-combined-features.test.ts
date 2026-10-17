@@ -26,12 +26,9 @@ describe("Markdown component", () => {
       const lines = markdown.render(80);
       const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
 
-      // Check heading
       assert.ok(plainLines.some((line) => line.includes("Test Document")));
-      // Check list
       assert.ok(plainLines.some((line) => line.includes("- Item 1")));
       assert.ok(plainLines.some((line) => line.includes("    - Nested item")));
-      // Check table
       assert.ok(plainLines.some((line) => line.includes("Col1")));
       assert.ok(plainLines.some((line) => line.includes("│")));
     });

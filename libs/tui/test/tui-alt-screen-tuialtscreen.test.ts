@@ -69,7 +69,6 @@ describe("TuiAltScreen", () => {
     await terminal.waitForRender();
     assert.strictEqual(tui.viewportTop, 8);
 
-    // Alt modifier sets bit 8 on the wheel button (72 = 64 + 8).
     terminal.sendInput("\x1b[<72;1;1M");
     await terminal.waitForRender();
     assert.strictEqual(tui.viewportTop, 3);

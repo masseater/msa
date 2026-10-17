@@ -76,13 +76,11 @@ describe("matchesKey", () => {
   describe("Legacy key matching", () => {
     it("should match legacy Ctrl+c", () => {
       setKittyProtocolActive(false);
-      // Ctrl+c sends ASCII 3 (ETX)
       assert.strictEqual(matchesKey("\x03", "ctrl+c"), true);
     });
 
     it("should match legacy Ctrl+d", () => {
       setKittyProtocolActive(false);
-      // Ctrl+d sends ASCII 4 (EOT)
       assert.strictEqual(matchesKey("\x04", "ctrl+d"), true);
     });
 
@@ -116,14 +114,10 @@ describe("matchesKey", () => {
   describe("Legacy key matching", () => {
     it("should match legacy Ctrl+symbol", () => {
       setKittyProtocolActive(false);
-      // Ctrl+\ sends ASCII 28 (File Separator) in legacy terminals
       assert.strictEqual(matchesKey("\x1c", "ctrl+\\"), true);
       assert.strictEqual(parseKey("\x1c"), "ctrl+\\");
-      // Ctrl+] sends ASCII 29 (Group Separator) in legacy terminals
       assert.strictEqual(matchesKey("\x1d", "ctrl+]"), true);
       assert.strictEqual(parseKey("\x1d"), "ctrl+]");
-      // Ctrl+_ sends ASCII 31 (Unit Separator) in legacy terminals
-      // Ctrl+- is on the same physical key on US keyboards
       assert.strictEqual(matchesKey("\x1f", "ctrl+_"), true);
       assert.strictEqual(matchesKey("\x1f", "ctrl+-"), true);
       assert.strictEqual(parseKey("\x1f"), "ctrl+-");
@@ -131,17 +125,12 @@ describe("matchesKey", () => {
 
     it("should match legacy Ctrl+Alt+symbol", () => {
       setKittyProtocolActive(false);
-      // Ctrl+Alt+[ sends ESC followed by ESC (Ctrl+[ = ESC)
       assert.strictEqual(matchesKey("\x1b\x1b", "ctrl+alt+["), true);
       assert.strictEqual(parseKey("\x1b\x1b"), "ctrl+alt+[");
-      // Ctrl+Alt+\ sends ESC followed by ASCII 28
       assert.strictEqual(matchesKey("\x1b\x1c", "ctrl+alt+\\"), true);
       assert.strictEqual(parseKey("\x1b\x1c"), "ctrl+alt+\\");
-      // Ctrl+Alt+] sends ESC followed by ASCII 29
       assert.strictEqual(matchesKey("\x1b\x1d", "ctrl+alt+]"), true);
       assert.strictEqual(parseKey("\x1b\x1d"), "ctrl+alt+]");
-      // Ctrl+_ sends ASCII 31 (Unit Separator) in legacy terminals
-      // Ctrl+- is on the same physical key on US keyboards
       assert.strictEqual(matchesKey("\x1b\x1f", "ctrl+alt+_"), true);
       assert.strictEqual(matchesKey("\x1b\x1f", "ctrl+alt+-"), true);
       assert.strictEqual(parseKey("\x1b\x1f"), "ctrl+alt+-");
