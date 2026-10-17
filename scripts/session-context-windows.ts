@@ -50,7 +50,7 @@ const overrideWindows = (
   });
   const models = (config.models ?? []).flatMap((model) => {
     const found = contextWindowOf(model);
-    const id = model.id;
+    const id = model["id"];
     return found === undefined || !Predicate.isString(id)
       ? []
       : [[`${provider}/${id}`, found] as const];

@@ -4,7 +4,11 @@ import { Console, Data, Effect } from "effect";
 import { build } from "esbuild";
 import type { Metafile } from "esbuild";
 
-import { ALLOWED_EXTERNAL_PACKAGES, commonBuildOptions } from "./coding-agent-bundle-options.ts";
+import {
+  ALLOWED_EXTERNAL_PACKAGES,
+  commonBuildOptions,
+  unbannedBuildOptions,
+} from "./coding-agent-bundle-options.ts";
 import { Host, runScript } from "./host.ts";
 import type { HostShape } from "./host.ts";
 
@@ -212,8 +216,7 @@ const buildCodemodeWorker = (host: HostShape, layout: Layout, lazyDir: string) =
   Effect.gen(function* () {
     const metafile = yield* metafileOf(
       yield* runBuild({
-        ...commonBuildOptions(layout.repoRoot),
-        banner: undefined,
+        ...unbannedBuildOptions(layout.repoRoot),
         entryNames: "[name]",
         entryPoints: {
           "codemode-worker": host.join(

@@ -45,12 +45,8 @@
   "include": [
     "*.ts",
     "tools/**/*.ts",
+    "scripts/**/*.ts",
     ".msa/extensions/**/*.ts",
-    "scripts/model-catalog-protocol.ts",
-    "scripts/model-catalog-protocol.test.ts",
-    "scripts/agent-treeshake-smoke-entry.ts",
-    "scripts/browser-smoke-entry.ts",
-    "scripts/durable-browser-smoke-entry.ts",
     "apps/*/src/**/*",
     "apps/*/test/**/*",
     "apps/coding-agent/scripts/**/*.ts",
