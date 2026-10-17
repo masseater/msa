@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import type { AuthContext } from "./types.ts";
 
 interface NodeFsModule {
@@ -10,33 +12,36 @@ interface NodeOsModule {
 
 const importNodeModule = (specifier: string): Promise<unknown> => import(specifier);
 
-function getProcessEnv(): Record<string, string | undefined> | undefined {
+const getProcessEnv = (): Record<string, string | undefined> | undefined => {
   const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
   return proc?.env;
-}
+};
 
-export function defaultProviderAuthContext(): AuthContext {
-  return {
-    env(name: string): Promise<string | undefined> {
-      const value = getProcessEnv()?.[name];
-      return Promise.resolve(
-        typeof value === "string" && value.trim().length > 0 ? value : undefined,
-      );
-    },
+const expandHome = (path: string): Effect.Effect<string> =>
+  Effect.gen(function* () {
+    if (!path.startsWith("~")) return path;
+    const os = (yield* Effect.promise(() => importNodeModule("node:os"))) as NodeOsModule;
+    return os.homedir() + path.slice(1);
+  });
 
-    async fileExists(path: string): Promise<boolean> {
-      try {
-        const fs = (await importNodeModule("node:fs/promises")) as NodeFsModule;
-        let resolved = path;
-        if (resolved.startsWith("~")) {
-          const os = (await importNodeModule("node:os")) as NodeOsModule;
-          resolved = os.homedir() + resolved.slice(1);
-        }
-        await fs.access(resolved);
+export const defaultProviderAuthContext = (): AuthContext => ({
+  env(name: string): Promise<string | undefined> {
+    const value = getProcessEnv()?.[name];
+    return Promise.resolve(
+      typeof value === "string" && value.trim().length > 0 ? value : undefined,
+    );
+  },
+
+  fileExists(path: string): Promise<boolean> {
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        const fs = (yield* Effect.promise(() =>
+          importNodeModule("node:fs/promises"),
+        )) as NodeFsModule;
+        const resolved = yield* expandHome(path);
+        yield* Effect.promise(() => fs.access(resolved));
         return true;
-      } catch {
-        return false;
-      }
-    },
-  };
-}
+      }).pipe(Effect.catchDefect(() => Effect.succeed(false))),
+    );
+  },
+});

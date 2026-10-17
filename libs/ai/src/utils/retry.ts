@@ -1,4 +1,7 @@
+import { Effect, Function } from "effect";
+
 import type { AssistantMessage } from "../types.ts";
+import { waitForAbort } from "./abort.ts";
 
 function buildProviderErrorPattern(patterns: readonly string[]): RegExp {
   return new RegExp(patterns.join("|"), "iu");
@@ -89,14 +92,17 @@ export interface RetryPolicy {
 
 export const DEFAULT_MAX_AGENT_RETRY_DELAY_MS = 60_000;
 
-export function retryDelayMs(
-  policy: Pick<RetryPolicy, "baseDelayMs" | "maxAgentDelayMs">,
-  attempt: number,
-): number {
-  const delay = policy.baseDelayMs * 2 ** Math.max(0, attempt - 1);
-  const safeDelay = Number.isSafeInteger(delay) ? delay : Number.MAX_SAFE_INTEGER;
-  return Math.min(safeDelay, policy.maxAgentDelayMs ?? DEFAULT_MAX_AGENT_RETRY_DELAY_MS);
-}
+export const retryDelayMs: {
+  (attempt: number): (policy: Pick<RetryPolicy, "baseDelayMs" | "maxAgentDelayMs">) => number;
+  (policy: Pick<RetryPolicy, "baseDelayMs" | "maxAgentDelayMs">, attempt: number): number;
+} = Function.dual(
+  2,
+  (policy: Pick<RetryPolicy, "baseDelayMs" | "maxAgentDelayMs">, attempt: number): number => {
+    const delay = policy.baseDelayMs * 2 ** Math.max(0, attempt - 1);
+    const safeDelay = Number.isSafeInteger(delay) ? delay : Number.MAX_SAFE_INTEGER;
+    return Math.min(safeDelay, policy.maxAgentDelayMs ?? DEFAULT_MAX_AGENT_RETRY_DELAY_MS);
+  },
+);
 
 export interface RetryCallbacks {
   onRetryScheduled?: (
@@ -113,79 +119,115 @@ export interface RetryCallbacks {
   ) => void | Promise<void>;
 }
 
-class RetrySleepAbortError extends Error {
-  constructor() {
-    super("Aborted");
-  }
+interface RetryRun {
+  readonly produce: () => Promise<AssistantMessage>;
+  readonly policy: RetryPolicy | undefined;
+  readonly signal: AbortSignal | undefined;
+  readonly callbacks: RetryCallbacks | undefined;
+  readonly maxAttempts: number;
 }
 
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted === true) {
-      reject(new RetrySleepAbortError());
-      return;
-    }
-    const timeout = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timeout);
-        reject(new RetrySleepAbortError());
-      },
-      { once: true },
+interface LastRetry {
+  readonly attempt: number;
+  readonly errorMessage: string;
+}
+
+const awaitHook = (run: () => void | Promise<void> | undefined): Effect.Effect<void> =>
+  Effect.promise(() => Promise.resolve(run()));
+
+const sleepOrAbort = (delayMs: number, signal: AbortSignal | undefined): Effect.Effect<boolean> =>
+  signal === undefined
+    ? Effect.sleep(delayMs).pipe(Effect.as(false))
+    : waitForAbort(signal).pipe(
+        Effect.as(true),
+        Effect.timeoutOrElse({ duration: delayMs, orElse: () => Effect.succeed(false) }),
+      );
+
+const settle = (
+  run: RetryRun,
+  response: AssistantMessage,
+  lastRetry: LastRetry | undefined,
+): Effect.Effect<AssistantMessage> => {
+  if (lastRetry === undefined) return Effect.succeed(response);
+  const finished = run.callbacks?.onRetryFinished;
+  if (response.stopReason === "aborted")
+    return awaitHook(() => finished?.(false, lastRetry.attempt)).pipe(Effect.as(response));
+  if (response.stopReason !== "error")
+    return awaitHook(() => finished?.(true, lastRetry.attempt)).pipe(Effect.as(response));
+  return awaitHook(() => finished?.(false, lastRetry.attempt, response.errorMessage)).pipe(
+    Effect.as(response),
+  );
+};
+
+const attemptAssistantCall = (
+  run: RetryRun,
+  attempt: number,
+  lastRetry: LastRetry | undefined,
+): Effect.Effect<AssistantMessage> =>
+  Effect.gen(function* () {
+    const response = yield* Effect.promise(() => run.produce());
+    if (
+      response.stopReason !== "error" ||
+      attempt >= run.maxAttempts ||
+      !isRetryableAssistantError(response)
+    )
+      return yield* settle(run, response, lastRetry);
+
+    const nextAttempt = attempt + 1;
+    const errorMessage =
+      response.errorMessage === undefined || response.errorMessage === ""
+        ? "Unknown error"
+        : response.errorMessage;
+    const delayMs = retryDelayMs(run.policy!, nextAttempt);
+    yield* awaitHook(() =>
+      run.callbacks?.onRetryScheduled?.(nextAttempt, run.maxAttempts, delayMs, errorMessage),
     );
+
+    if (yield* sleepOrAbort(delayMs, run.signal)) {
+      yield* awaitHook(() => run.callbacks?.onRetryFinished?.(false, nextAttempt, errorMessage));
+      const { errorMessage: _errorMessage, ...rest } = response;
+      return { ...rest, stopReason: "aborted" as const };
+    }
+    yield* awaitHook(() => run.callbacks?.onRetryAttemptStart?.());
+    return yield* attemptAssistantCall(run, nextAttempt, { attempt: nextAttempt, errorMessage });
   });
-}
 
-export async function retryAssistantCall(
-  produce: () => Promise<AssistantMessage>,
-  policy: RetryPolicy | undefined,
-  signal: AbortSignal | undefined,
-  callbacks?: RetryCallbacks,
-): Promise<AssistantMessage> {
-  const maxAttempts = policy?.enabled === true ? policy.maxRetries : 0;
+export const retryAssistantCall: {
+  (
+    policy: RetryPolicy | undefined,
+    signal: AbortSignal | undefined,
+    callbacks?: RetryCallbacks,
+  ): (produce: () => Promise<AssistantMessage>) => Promise<AssistantMessage>;
+  (
+    produce: () => Promise<AssistantMessage>,
+    policy: RetryPolicy | undefined,
+    signal: AbortSignal | undefined,
+    callbacks?: RetryCallbacks,
+  ): Promise<AssistantMessage>;
+} = Function.dual(
+  (args) => typeof args[0] === "function",
+  (
+    produce: () => Promise<AssistantMessage>,
+    policy: RetryPolicy | undefined,
+    signal: AbortSignal | undefined,
+    callbacks?: RetryCallbacks,
+  ): Promise<AssistantMessage> =>
+    Effect.runPromise(
+      attemptAssistantCall(
+        {
+          produce,
+          policy,
+          signal,
+          callbacks,
+          maxAttempts: policy?.enabled === true ? policy.maxRetries : 0,
+        },
+        0,
+        undefined,
+      ),
+    ),
+);
 
-  let attempt = 0;
-  let lastRetry: { attempt: number; errorMessage: string } | undefined;
-  for (;;) {
-    const response = await produce();
-
-    if (response.stopReason === "aborted") {
-      if (lastRetry !== undefined) await callbacks?.onRetryFinished?.(false, lastRetry.attempt);
-      return response;
-    }
-
-    if (response.stopReason !== "error") {
-      if (lastRetry !== undefined) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);
-      return response;
-    }
-
-    if (attempt >= maxAttempts || !isRetryableAssistantError(response)) {
-      if (lastRetry !== undefined)
-        await callbacks?.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);
-      return response;
-    }
-
-    attempt++;
-    lastRetry = { attempt, errorMessage: response.errorMessage || "Unknown error" };
-    const delayMs = retryDelayMs(policy!, attempt);
-    await callbacks?.onRetryScheduled?.(attempt, maxAttempts, delayMs, lastRetry.errorMessage);
-
-    try {
-      await sleep(delayMs, signal);
-    } catch (error) {
-      await callbacks?.onRetryFinished?.(false, attempt, lastRetry.errorMessage);
-      if (error instanceof RetrySleepAbortError) {
-        const { errorMessage: _errorMessage, ...rest } = response;
-        return { ...rest, stopReason: "aborted" };
-      }
-      throw error;
-    }
-    await callbacks?.onRetryAttemptStart?.();
-  }
-}
-
-export function isRetryableAssistantError(message: AssistantMessage): boolean {
+export const isRetryableAssistantError = (message: AssistantMessage): boolean => {
   if (
     message.stopReason !== "error" ||
     message.errorMessage === undefined ||
@@ -195,4 +237,4 @@ export function isRetryableAssistantError(message: AssistantMessage): boolean {
   const errorMessage = message.errorMessage;
   if (NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(errorMessage)) return false;
   return RETRYABLE_PROVIDER_ERROR_PATTERN.test(errorMessage);
-}
+};

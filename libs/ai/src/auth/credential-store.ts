@@ -1,4 +1,7 @@
+import { Effect } from "effect";
+
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
+import { runAfterPrevious } from "../utils/serial-chain.ts";
 import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "./types.ts";
 
 export class InMemoryCredentialStore implements CredentialStore {
@@ -11,16 +14,13 @@ export class InMemoryCredentialStore implements CredentialStore {
     options?: AuthOperationOptions,
   ): Promise<T> {
     const signal = operationSignal(options?.signal);
-    const previous = this.chains.get(providerId) ?? Promise.resolve();
-    const queued = (async () => {
-      await previous.catch(() => {});
-      signal.throwIfAborted();
-      return task();
-    })();
-    const tail = queued.catch(() => {});
-    this.chains.set(providerId, tail);
-    void tail.then(() => {
-      if (this.chains.get(providerId) === tail) this.chains.delete(providerId);
+    const queued = runAfterPrevious({
+      chains: this.chains,
+      key: providerId,
+      task: Effect.gen(function* () {
+        signal.throwIfAborted();
+        return yield* Effect.promise(() => task());
+      }),
     });
     return raceWithAbortSignal(queued, signal);
   }
@@ -55,12 +55,17 @@ export class InMemoryCredentialStore implements CredentialStore {
   ): Promise<Credential | undefined> {
     return this.enqueue(
       providerId,
-      async () => {
-        const current = this.credentials.get(providerId);
-        const next = await fn(current);
-        options?.signal?.throwIfAborted();
-        if (next !== undefined) this.credentials.set(providerId, next);
-        return next ?? current;
+      () => {
+        const credentials = this.credentials;
+        return Effect.runPromise(
+          Effect.gen(function* () {
+            const current = credentials.get(providerId);
+            const next = yield* Effect.promise(() => fn(current));
+            options?.signal?.throwIfAborted();
+            if (next !== undefined) credentials.set(providerId, next);
+            return next ?? current;
+          }),
+        );
       },
       options,
     );

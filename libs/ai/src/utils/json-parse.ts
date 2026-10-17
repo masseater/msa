@@ -26,7 +26,21 @@ function escapeControlCharacter(char: string): string {
   }
 }
 
-export function repairJson(json: string): string {
+const repairEscape = (json: string, index: number): { text: string; skip: number } => {
+  const nextChar = json[index + 1];
+  if (nextChar === undefined) return { text: "\\\\", skip: 0 };
+
+  if (nextChar === "u") {
+    const unicodeDigits = json.slice(index + 2, index + 6);
+    if (/^[0-9a-fA-F]{4}$/u.test(unicodeDigits)) return { text: `\\u${unicodeDigits}`, skip: 5 };
+  }
+
+  if (VALID_JSON_ESCAPES.has(nextChar)) return { text: `\\${nextChar}`, skip: 1 };
+
+  return { text: "\\\\", skip: 0 };
+};
+
+export const repairJson = (json: string): string => {
   let repaired = "";
   let inString = false;
 
@@ -48,28 +62,9 @@ export function repairJson(json: string): string {
     }
 
     if (char === "\\") {
-      const nextChar = json[index + 1];
-      if (nextChar === undefined) {
-        repaired += "\\\\";
-        continue;
-      }
-
-      if (nextChar === "u") {
-        const unicodeDigits = json.slice(index + 2, index + 6);
-        if (/^[0-9a-fA-F]{4}$/u.test(unicodeDigits)) {
-          repaired += `\\u${unicodeDigits}`;
-          index += 5;
-          continue;
-        }
-      }
-
-      if (VALID_JSON_ESCAPES.has(nextChar)) {
-        repaired += `\\${nextChar}`;
-        index += 1;
-        continue;
-      }
-
-      repaired += "\\\\";
+      const escape = repairEscape(json, index);
+      repaired += escape.text;
+      index += escape.skip;
       continue;
     }
 
@@ -77,7 +72,7 @@ export function repairJson(json: string): string {
   }
 
   return repaired;
-}
+};
 
 export function parseJsonWithRepair<T>(json: string): T {
   try {
@@ -94,7 +89,7 @@ export function parseJsonWithRepair<T>(json: string): T {
 export function parseToolCallArguments(
   json: string | undefined,
 ): Pick<ToolCall, "arguments" | "argumentsError"> {
-  if (!json?.trim()) return { arguments: {} };
+  if (json === undefined || json.trim() === "") return { arguments: {} };
   try {
     const parsed = parseJsonWithRepair<ToolCall["arguments"] | null>(json);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {

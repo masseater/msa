@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import type { OAuthAuth } from "../types.ts";
 
 const importOAuthModule = (specifier: string): Promise<unknown> => {
@@ -20,58 +22,83 @@ type OAuthFlowLoaders = {
 
 let bundledLoaders: OAuthFlowLoaders | undefined;
 
-export function registerBundledOAuthFlowLoaders(loaders: OAuthFlowLoaders): void {
+export const registerBundledOAuthFlowLoaders = (loaders: OAuthFlowLoaders): void => {
   bundledLoaders = loaders;
+};
+
+interface OAuthModuleSource {
+  readonly bundled: (loaders: OAuthFlowLoaders) => OAuthAuth | Promise<OAuthAuth>;
+  readonly specifier: string;
+  readonly fromModule: (module: unknown) => OAuthAuth;
 }
 
-export const loadAnthropicOAuth = async (): Promise<OAuthAuth> => {
-  if (bundledLoaders !== undefined) return bundledLoaders.anthropic();
-  return ((await importOAuthModule("./anthropic.ts")) as { anthropicOAuth: OAuthAuth })
-    .anthropicOAuth;
-};
+const loadOAuth = (source: OAuthModuleSource): Promise<OAuthAuth> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const loaders = bundledLoaders;
+      if (loaders !== undefined)
+        return yield* Effect.promise(() => Promise.resolve(source.bundled(loaders)));
+      return source.fromModule(yield* Effect.promise(() => importOAuthModule(source.specifier)));
+    }),
+  );
 
-export const loadOpenAICodexOAuth = async (): Promise<OAuthAuth> => {
-  if (bundledLoaders !== undefined) return bundledLoaders.openaiCodex();
-  return ((await importOAuthModule("./openai-codex.ts")) as { openaiCodexOAuth: OAuthAuth })
-    .openaiCodexOAuth;
-};
+export const loadAnthropicOAuth = (): Promise<OAuthAuth> =>
+  loadOAuth({
+    bundled: (loaders) => loaders.anthropic(),
+    specifier: "./anthropic.ts",
+    fromModule: (module) => (module as { anthropicOAuth: OAuthAuth }).anthropicOAuth,
+  });
 
-export const loadOpenAIChatGPTOAuth = async (): Promise<OAuthAuth> => {
-  if (bundledLoaders !== undefined) return bundledLoaders.openaiChatGPT();
-  return ((await importOAuthModule("./openai-chatgpt.ts")) as { openaiChatGPTOAuth: OAuthAuth })
-    .openaiChatGPTOAuth;
-};
+export const loadOpenAICodexOAuth = (): Promise<OAuthAuth> =>
+  loadOAuth({
+    bundled: (loaders) => loaders.openaiCodex(),
+    specifier: "./openai-codex.ts",
+    fromModule: (module) => (module as { openaiCodexOAuth: OAuthAuth }).openaiCodexOAuth,
+  });
 
-export const loadOpenRouterOAuth = async (): Promise<OAuthAuth> => {
-  if (bundledLoaders !== undefined) return bundledLoaders.openrouter();
-  return ((await importOAuthModule("./openrouter.ts")) as { openRouterOAuth: OAuthAuth })
-    .openRouterOAuth;
-};
+export const loadOpenAIChatGPTOAuth = (): Promise<OAuthAuth> =>
+  loadOAuth({
+    bundled: (loaders) => loaders.openaiChatGPT(),
+    specifier: "./openai-chatgpt.ts",
+    fromModule: (module) => (module as { openaiChatGPTOAuth: OAuthAuth }).openaiChatGPTOAuth,
+  });
 
-export const loadKimiCodingOAuth = async (): Promise<OAuthAuth> => {
-  if (bundledLoaders !== undefined) return bundledLoaders.kimiCoding();
-  return ((await importOAuthModule("./kimi-coding.ts")) as { kimiCodingOAuth: OAuthAuth })
-    .kimiCodingOAuth;
-};
+export const loadOpenRouterOAuth = (): Promise<OAuthAuth> =>
+  loadOAuth({
+    bundled: (loaders) => loaders.openrouter(),
+    specifier: "./openrouter.ts",
+    fromModule: (module) => (module as { openRouterOAuth: OAuthAuth }).openRouterOAuth,
+  });
 
-export const loadMetaOAuth = async (): Promise<OAuthAuth> => {
-  if (bundledLoaders !== undefined) return bundledLoaders.meta();
-  return ((await importOAuthModule("./meta.ts")) as { metaOAuth: OAuthAuth }).metaOAuth;
-};
+export const loadKimiCodingOAuth = (): Promise<OAuthAuth> =>
+  loadOAuth({
+    bundled: (loaders) => loaders.kimiCoding(),
+    specifier: "./kimi-coding.ts",
+    fromModule: (module) => (module as { kimiCodingOAuth: OAuthAuth }).kimiCodingOAuth,
+  });
 
-export const loadXaiOAuth = async (): Promise<OAuthAuth> => {
-  if (bundledLoaders !== undefined) return bundledLoaders.xai();
-  return ((await importOAuthModule("./xai.ts")) as { xaiOAuth: OAuthAuth }).xaiOAuth;
-};
+export const loadMetaOAuth = (): Promise<OAuthAuth> =>
+  loadOAuth({
+    bundled: (loaders) => loaders.meta(),
+    specifier: "./meta.ts",
+    fromModule: (module) => (module as { metaOAuth: OAuthAuth }).metaOAuth,
+  });
 
-export const loadRadiusOAuth = async (options: {
-  name: string;
-  gateway: string;
-}): Promise<OAuthAuth> => {
-  if (bundledLoaders !== undefined) return bundledLoaders.radius(options);
-  return (
-    (await importOAuthModule("./radius.ts")) as {
-      createRadiusOAuth: (input: { name: string; gateway: string }) => OAuthAuth;
-    }
-  ).createRadiusOAuth(options);
-};
+export const loadXaiOAuth = (): Promise<OAuthAuth> =>
+  loadOAuth({
+    bundled: (loaders) => loaders.xai(),
+    specifier: "./xai.ts",
+    fromModule: (module) => (module as { xaiOAuth: OAuthAuth }).xaiOAuth,
+  });
+
+export const loadRadiusOAuth = (options: { name: string; gateway: string }): Promise<OAuthAuth> =>
+  loadOAuth({
+    bundled: (loaders) => loaders.radius(options),
+    specifier: "./radius.ts",
+    fromModule: (module) =>
+      (
+        module as {
+          createRadiusOAuth: (input: { name: string; gateway: string }) => OAuthAuth;
+        }
+      ).createRadiusOAuth(options),
+  });

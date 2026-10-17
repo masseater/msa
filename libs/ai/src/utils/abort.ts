@@ -1,45 +1,77 @@
-function abortReason(signal: AbortSignal): unknown {
+import { Effect, Fiber, Function } from "effect";
+
+const abortReason = (signal: AbortSignal): unknown => {
   if (signal.reason !== undefined) return signal.reason;
   const error = new Error("The operation was aborted");
   error.name = "AbortError";
   return error;
-}
+};
 
-export function operationSignal(signal?: AbortSignal): AbortSignal {
-  return signal ?? new AbortController().signal;
-}
-
-export function raceWithAbortSignal<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) {
-    void operation.catch(() => {});
-    return Promise.reject(abortReason(signal));
-  }
-
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const cleanup = () => signal.removeEventListener("abort", onAbort);
-    const onAbort = () => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(abortReason(signal));
-    };
-
+export const waitForAbort = (signal: AbortSignal): Effect.Effect<void> =>
+  Effect.callback<void>((resume) => {
+    const onAbort = () => resume(Effect.void);
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
     signal.addEventListener("abort", onAbort, { once: true });
-    void operation.then(
-      (value) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        resolve(value);
-      },
-      (error: unknown) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(error);
-      },
-    );
-    if (signal.aborted) onAbort();
+    return Effect.sync(() => signal.removeEventListener("abort", onAbort));
   });
-}
+
+export const dieOnAbort: {
+  (reason: (signal: AbortSignal) => unknown): (signal: AbortSignal) => Effect.Effect<never>;
+  (signal: AbortSignal, reason: (signal: AbortSignal) => unknown): Effect.Effect<never>;
+} = Function.dual(
+  2,
+  (signal: AbortSignal, reason: (signal: AbortSignal) => unknown): Effect.Effect<never> =>
+    waitForAbort(signal).pipe(Effect.flatMap(() => Effect.die(reason(signal)))),
+);
+
+export const sleepUnlessAborted: {
+  (
+    signal: AbortSignal | undefined,
+    reason: (signal: AbortSignal) => unknown,
+  ): (ms: number) => Effect.Effect<void>;
+  (
+    ms: number,
+    signal: AbortSignal | undefined,
+    reason: (signal: AbortSignal) => unknown,
+  ): Effect.Effect<void>;
+} = Function.dual(
+  3,
+  (
+    ms: number,
+    signal: AbortSignal | undefined,
+    reason: (signal: AbortSignal) => unknown,
+  ): Effect.Effect<void> =>
+    signal === undefined
+      ? Effect.sleep(ms)
+      : dieOnAbort(signal, reason).pipe(
+          Effect.timeoutOrElse({ duration: ms, orElse: () => Effect.void }),
+        ),
+);
+
+export const operationSignal = (signal?: AbortSignal): AbortSignal =>
+  signal ?? new AbortController().signal;
+
+export const abortable: {
+  (signal: AbortSignal): <A>(effect: Effect.Effect<A>) => Effect.Effect<A>;
+  <A>(effect: Effect.Effect<A>, signal: AbortSignal): Effect.Effect<A>;
+} = Function.dual(2, <A>(effect: Effect.Effect<A>, signal: AbortSignal): Effect.Effect<A> =>
+  Effect.gen(function* () {
+    const fiber = yield* Effect.forkDetach(effect, { startImmediately: true });
+    return yield* Effect.raceFirst(Fiber.join(fiber), dieOnAbort(signal, abortReason));
+  }),
+);
+
+export const raceWithAbortSignal: {
+  (signal: AbortSignal): <T>(operation: Promise<T>) => Promise<T>;
+  <T>(operation: Promise<T>, signal: AbortSignal): Promise<T>;
+} = Function.dual(2, <T>(operation: Promise<T>, signal: AbortSignal): Promise<T> =>
+  Effect.runPromise(
+    Effect.raceFirst(
+      Effect.promise(() => operation),
+      dieOnAbort(signal, abortReason),
+    ),
+  ),
+);
