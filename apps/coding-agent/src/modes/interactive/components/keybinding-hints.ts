@@ -47,6 +47,14 @@ export function keyHint(keybinding: Keybinding, description: string): string {
   return theme.fg("dim", keyText(keybinding)) + theme.fg("muted", ` ${description}`);
 }
 
+/**
+ * The line a collapsed tool shows in place of its output: what is hidden, and the key that shows
+ * it. Clicking the tool shows it too.
+ */
+export function expandHint(summary: string): string {
+  return `${theme.fg("muted", `${summary} (`)}${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`;
+}
+
 export function rawKeyHint(key: string, description: string): string {
   return theme.fg("dim", formatKeyText(key)) + theme.fg("muted", ` ${description}`);
 }

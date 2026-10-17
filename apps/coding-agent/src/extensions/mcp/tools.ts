@@ -38,8 +38,7 @@ import {
   replaceTabs,
 } from "../../core/tools/render-utils.ts";
 import { formatSize, truncateMiddle } from "../../core/tools/truncate.ts";
-import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
-import { VisualLinePreview } from "../../modes/interactive/components/visual-truncate.ts";
+import { collapsedOutput } from "../../modes/interactive/components/visual-truncate.ts";
 import { toErrorMessage } from "../../utils/errors.ts";
 import { writeOutputFile } from "../../utils/output-files.ts";
 import type { McpExposure } from "./config.ts";
@@ -57,7 +56,6 @@ const MAX_TOOL_NAME_LENGTH = 64;
 /** Model-facing text of an MCP result beyond this is cut in the middle. */
 export const MCP_OUTPUT_MAX_BYTES = 20 * 1024;
 /** Visual (wrapped) result lines shown before the output is expanded. */
-const OUTPUT_PREVIEW_LINES = 5;
 /** Tool that reads the resources named by resource links. */
 export { READ_MCP_RESOURCE_TOOL };
 
@@ -415,23 +413,14 @@ export function createMcpToolRenderers(label: string): ToolRenderers {
         .map((line) => theme.fg(color, line))
         .join("\n");
       component.addChild(new Spacer(1));
-      if (options.expanded) {
-        component.addChild(new Text(styled, 0, 0));
-      } else {
-        // Limit wrapped lines, not logical ones: MCP results are often one long JSON line.
-        component.addChild(
-          new VisualLinePreview({
-            text: styled,
-            maxVisualLines: OUTPUT_PREVIEW_LINES,
-            keep: "start",
-            formatHint: (hidden) =>
-              `${theme.fg("muted", `... (${hidden} more lines,`)} ${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`,
-          }),
-        );
-        const fullOutputPath = (result.details as McpToolDetails | undefined)?.fullOutputPath;
-        if (fullOutputPath)
-          component.addChild(new Text(theme.fg("muted", `Full output: ${fullOutputPath}`), 0, 0));
+      if (!options.expanded) {
+        component.addChild(collapsedOutput(output, "first"));
+        return component;
       }
+      component.addChild(new Text(styled, 0, 0));
+      const fullOutputPath = (result.details as McpToolDetails | undefined)?.fullOutputPath;
+      if (fullOutputPath)
+        component.addChild(new Text(theme.fg("muted", `Full output: ${fullOutputPath}`), 0, 0));
       return component;
     },
   };

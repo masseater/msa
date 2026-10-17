@@ -5,6 +5,9 @@
 
 import { type Component, Text, truncateToWidth } from "@msa/tui";
 
+import { theme } from "../theme/theme.ts";
+import { expandHint } from "./keybinding-hints.ts";
+
 export interface VisualTruncateResult {
   /** The visual lines to display */
   visualLines: string[];
@@ -51,6 +54,42 @@ export function truncateToVisualLines(
   const skippedCount = allVisualLines.length - maxVisualLines;
 
   return { visualLines: truncatedLines, skippedCount };
+}
+
+/**
+ * A collapsed tool's output as one row: how many lines are hidden, then the line that says the
+ * most, the last one for commands (how they ended) and the first one otherwise.
+ */
+export function collapsedOutput(
+  output: string,
+  pick: "first" | "last",
+  extra?: string,
+): SingleLine {
+  const lines = output ? output.split("\n") : [];
+  const summary = [`${lines.length} ${lines.length === 1 ? "line" : "lines"}`, extra]
+    .filter(Boolean)
+    .join(", ");
+  const shown =
+    (pick === "last" ? lines.findLast((line) => line.trim()) : lines.find((line) => line.trim())) ??
+    "";
+  return new SingleLine(
+    `${expandHint(summary)}${shown ? `  ${theme.fg("toolOutput", shown.trim())}` : ""}`,
+  );
+}
+
+/** One styled line cut to the render width, for the one-line summary of a collapsed tool. */
+export class SingleLine implements Component {
+  private text: string;
+
+  constructor(text: string) {
+    this.text = text;
+  }
+
+  render(width: number): string[] {
+    return [truncateToWidth(this.text, width, "...")];
+  }
+
+  invalidate(): void {}
 }
 
 export interface VisualLinePreviewOptions {
