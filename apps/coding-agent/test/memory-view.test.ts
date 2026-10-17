@@ -4,7 +4,12 @@ import { join } from "node:path";
 
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { MemoryService, type ResolvedMemorySettings } from "../src/core/memory/memory.ts";
+import {
+  MemoryService,
+  resolveProjectName,
+  type ResolvedMemorySettings,
+} from "../src/core/memory/memory.ts";
+import { MemoryStore } from "../src/core/memory/store.ts";
 import { MemoryView } from "../src/modes/interactive/components/memory-view.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
@@ -46,11 +51,32 @@ afterEach(() => {
 async function setup() {
   const settings = settingsForView();
   const dir = tempDirs[tempDirs.length - 1] ?? "";
+  const store = new MemoryStore(settings.database);
+  const base = 1_700_000_000_000;
+  store.save({
+    content: "prefer pnpm over npm",
+    kind: "preference",
+    scope: "project",
+    project: resolveProjectName(dir),
+    now: base + 2_000,
+  });
+  store.save({
+    content: "the release goes to the Homebrew tap",
+    kind: "fact",
+    scope: "project",
+    project: resolveProjectName(dir),
+    now: base + 1_000,
+  });
+  store.save({
+    content: "answer in Japanese",
+    kind: "preference",
+    scope: "global",
+    project: null,
+    now: base + 3_000,
+  });
+  store.close();
   const service = new MemoryService({ settings, cwd: dir });
   services.push(service);
-  await service.save({ content: "the release goes to the Homebrew tap", kind: "fact" });
-  await service.save({ content: "prefer pnpm over npm", kind: "preference" });
-  await service.save({ content: "answer in Japanese", kind: "preference", scope: "global" });
 
   const onClose = vi.fn();
   const onError = vi.fn();
@@ -98,10 +124,8 @@ describe("MemoryView", () => {
     const { view, screen, onClose, confirm } = await setup();
     view.handleInput("d");
     await vi.waitFor(() => expect(confirm).toHaveBeenCalled());
-    expect(String(confirm.mock.calls[0]?.[0])).toContain("the release goes to the Homebrew tap");
-    await vi.waitFor(() =>
-      expect(screen().join("\n")).not.toContain("the release goes to the Homebrew tap"),
-    );
+    expect(String(confirm.mock.calls[0]?.[0])).toContain("prefer pnpm over npm");
+    await vi.waitFor(() => expect(screen().join("\n")).not.toContain("prefer pnpm over npm"));
     view.handleInput(ESC);
     expect(onClose).toHaveBeenCalled();
   });
@@ -111,7 +135,7 @@ describe("MemoryView", () => {
     confirm.mockResolvedValueOnce(false);
     view.handleInput("d");
     await vi.waitFor(() => expect(confirm).toHaveBeenCalled());
-    expect(screen().join("\n")).toContain("the release goes to the Homebrew tap");
+    expect(screen().join("\n")).toContain("prefer pnpm over npm");
   });
 
   it("searches with / and returns to the full list with escape", async () => {
@@ -139,9 +163,10 @@ describe("MemoryView", () => {
 
   it("moves the selection with the arrow keys", async () => {
     const { view, screen } = await setup();
+    expect(screen().join("\n")).toContain("prefer pnpm over npm");
     view.handleInput(DOWN);
     view.handleInput(ENTER);
-    expect(screen().join("\n")).toContain("prefer pnpm over npm");
-    expect(screen().join("\n")).not.toContain("the release goes to the Homebrew tap");
+    expect(screen().join("\n")).toContain("the release goes to the Homebrew tap");
+    expect(screen().join("\n")).not.toContain("prefer pnpm over npm");
   });
 });
