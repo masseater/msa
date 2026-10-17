@@ -1,4 +1,4 @@
-import { Console, Effect, Random } from "effect";
+import { Console, Effect, Random, Scope } from "effect";
 
 import type { Connection } from "./connection.ts";
 import type { HostCore } from "./core.ts";
@@ -37,7 +37,8 @@ export abstract class HostBase implements HostCore {
   reloading = false;
   readonly taskStopDeadline: number;
   readonly readyTimeout: number;
-  readonly timers = new HostTimers();
+  readonly scope = Scope.makeUnsafe();
+  readonly timers = new HostTimers(this.scope);
   protected readonly options: HostOptions;
   readonly #principalKey: (principal: unknown) => string;
   readonly #selfKey: string;

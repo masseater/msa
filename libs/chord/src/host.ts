@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Exit, Scope } from "effect";
 
 import { runClusterReload } from "./cluster.ts";
 import { ChordError } from "./errors.ts";
@@ -45,7 +45,7 @@ export class HostImpl extends HostLinks implements Host {
               for (const connection of [...this.connections]) connection.link.close("host closed");
             }),
           ),
-          Effect.ensuring(this.timers.close()),
+          Effect.ensuring(Scope.close(this.scope, Exit.void)),
         );
       }),
     );
