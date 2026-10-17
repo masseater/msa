@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 
-import { DateTime, Effect, Filter, Option, Schema, Stream } from "effect";
+import { DateTime, Effect, Filter, Option, Result, Schema, Stream } from "effect";
 
 import type { HostShape } from "./host.ts";
 
@@ -38,6 +38,18 @@ type Cost = typeof CostSchema.Type;
 type Usage = typeof UsageSchema.Type;
 type SessionEntry = typeof SessionEntrySchema.Type;
 
+const messageOf = <M>(entry: {
+  readonly message?: M | undefined;
+  readonly type?: string | undefined;
+}): M | undefined => (entry.type === "message" ? entry.message : undefined);
+
+const assistantMessageOf = (
+  entry: SessionEntry,
+): NonNullable<SessionEntry["message"]> | undefined => {
+  const message = messageOf(entry);
+  return message?.role === "assistant" ? message : undefined;
+};
+
 const decodeSessionEntry = Schema.decodeUnknownEffect(Schema.fromJsonString(SessionEntrySchema));
 
 const sessionEntryOf = Filter.makeEffect((line: string) => Effect.result(decodeSessionEntry(line)));
@@ -69,6 +81,22 @@ const parseMillis = (value: string): number | null => {
   return Option.isSome(parsed) ? DateTime.toEpochMillis(parsed.value) : null;
 };
 
+const forEachDecodedLine = <A, E>(options: {
+  readonly decode: (line: string) => Effect.Effect<A, E>;
+  readonly file: string;
+  readonly host: HostShape;
+  readonly onEntry: (entry: A) => void;
+  readonly onMalformed: () => void;
+}): Effect.Effect<void> =>
+  options.host.lines(options.file).pipe(
+    Stream.filter((line) => line.trim() !== ""),
+    Stream.runForEach((line) =>
+      Effect.result(options.decode(line)).pipe(
+        Effect.map(Result.match({ onFailure: options.onMalformed, onSuccess: options.onEntry })),
+      ),
+    ),
+  );
+
 const sessionFileMillis = (options: {
   readonly file: string;
   readonly host: HostShape;
@@ -97,10 +125,13 @@ const jsonlFilesRecursive = (options: {
 
 export type { Cost, SessionEntry, Usage };
 export {
+  assistantMessageOf,
   defaultSessionsBase,
   encodeSessionDir,
+  forEachDecodedLine,
   jsonlFiles,
   jsonlFilesRecursive,
+  messageOf,
   parseMillis,
   sessionEntries,
   sessionFileMillis,

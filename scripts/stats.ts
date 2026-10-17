@@ -1,9 +1,18 @@
 import { Console, Data, DateTime, Effect, Option, Stream } from "effect";
 
+import { helpOptions, ignoreUnknown, parseOptions, valueOption } from "./cli-options.ts";
+import type { CliOption } from "./cli-options.ts";
 import { Host, runScript } from "./host.ts";
 import type { HostShape } from "./host.ts";
-import { defaultSessionsBase, encodeSessionDir, jsonlFiles, sessionEntries } from "./sessions.ts";
-import type { SessionEntry, Usage } from "./sessions.ts";
+import { getOrCreate } from "./maps.ts";
+import {
+  assistantMessageOf,
+  defaultSessionsBase,
+  encodeSessionDir,
+  jsonlFiles,
+  sessionEntries,
+} from "./sessions.ts";
+import type { Cost, SessionEntry, Usage } from "./sessions.ts";
 
 interface Totals {
   input: number;
@@ -60,47 +69,69 @@ const createDayStats = (): DayStats => ({
   providers: new Map<string, Totals>(),
 });
 
+const TOKEN_FIELDS = ["input", "output", "cacheRead", "cacheWrite", "totalTokens"] as const;
+
+const COST_FIELDS = [
+  ["costInput", "input"],
+  ["costOutput", "output"],
+  ["costCacheRead", "cacheRead"],
+  ["costCacheWrite", "cacheWrite"],
+  ["costTotal", "total"],
+] as const;
+
+const addTokens = (totals: Totals, usage: Usage): void => {
+  for (const field of TOKEN_FIELDS) totals[field] += usage[field] ?? 0;
+};
+
+const addCosts = (totals: Totals, cost: Cost): void => {
+  for (const [target, source] of COST_FIELDS) totals[target] += cost[source] ?? 0;
+};
+
 const addUsage = (totals: Totals, usage: Usage, sessionFile: string): void => {
-  const cost = usage.cost ?? {};
-  totals.input += usage.input ?? 0;
-  totals.output += usage.output ?? 0;
-  totals.cacheRead += usage.cacheRead ?? 0;
-  totals.cacheWrite += usage.cacheWrite ?? 0;
-  totals.totalTokens += usage.totalTokens ?? 0;
-  totals.costInput += cost.input ?? 0;
-  totals.costOutput += cost.output ?? 0;
-  totals.costCacheRead += cost.cacheRead ?? 0;
-  totals.costCacheWrite += cost.cacheWrite ?? 0;
-  totals.costTotal += cost.total ?? 0;
+  addTokens(totals, usage);
+  addCosts(totals, usage.cost ?? {});
   totals.assistantMessages += 1;
   totals.sessions.add(sessionFile);
 };
 
+const presentValue = (set: (parsed: Args, value: string) => void): CliOption<Args, never> =>
+  valueOption((parsed, value) =>
+    Effect.sync(() => {
+      if (value !== undefined) set(parsed, value);
+    }),
+  );
+
+const statsOptions = (host: HostShape): ReadonlyMap<string, CliOption<Args, never>> => {
+  const days = presentValue((parsed, value) => {
+    parsed.days = Number.parseInt(value, 10);
+  });
+  const cwd = presentValue((parsed, value) => {
+    parsed.cwd = host.resolve(value);
+  });
+  return new Map<string, CliOption<Args, never>>([
+    ["--days", days],
+    ["-n", days],
+    ["--cwd", cwd],
+    ["--dir", cwd],
+    ["-d", cwd],
+    [
+      "--sessions-base",
+      presentValue((parsed, value) => {
+        parsed.sessionsBase = host.resolve(value);
+      }),
+    ],
+    ...helpOptions(HELP),
+  ]);
+};
+
 const parseArgs = (host: HostShape) =>
   Effect.gen(function* () {
-    const args = process.argv.slice(2);
-    const parsed: Args = {
-      days: 7,
-      cwd: process.cwd(),
-      sessionsBase: defaultSessionsBase(host),
-    };
-    for (let index = 0; index < args.length; index++) {
-      const arg = args[index];
-      const value = args[index + 1];
-      if ((arg === "--days" || arg === "-n") && value !== undefined) {
-        parsed.days = Number.parseInt(value, 10);
-        index += 1;
-      } else if ((arg === "--cwd" || arg === "--dir" || arg === "-d") && value !== undefined) {
-        parsed.cwd = host.resolve(value);
-        index += 1;
-      } else if (arg === "--sessions-base" && value !== undefined) {
-        parsed.sessionsBase = host.resolve(value);
-        index += 1;
-      } else if (arg === "--help" || arg === "-h") {
-        yield* Console.log(HELP);
-        return yield* Effect.sync(() => process.exit(0));
-      }
-    }
+    const parsed = yield* parseOptions({
+      args: process.argv.slice(2),
+      options: statsOptions(host),
+      parsed: { days: 7, cwd: process.cwd(), sessionsBase: defaultSessionsBase(host) },
+      unknown: ignoreUnknown,
+    });
     if (!Number.isInteger(parsed.days) || parsed.days <= 0) {
       return yield* new StatsError({ message: "--days must be a positive integer" });
     }
@@ -130,15 +161,19 @@ const accumulate = (
   file: string,
   usage: Usage,
 ): void => {
-  const dayStats = stats.get(dayKey) ?? createDayStats();
-  stats.set(dayKey, dayStats);
+  const dayStats = getOrCreate(stats, dayKey, createDayStats);
   const provider = entry.message?.provider ?? "unknown";
-  const providerStats = dayStats.providers.get(provider) ?? createTotals();
-  dayStats.providers.set(provider, providerStats);
+  const providerStats = getOrCreate(dayStats.providers, provider, createTotals);
   addUsage(dayStats, usage, file);
   addUsage(providerStats, usage, file);
   addUsage(grandTotal, usage, file);
 };
+
+const instantWithin = (entry: SessionEntry, startMillis: number, endMillis: number) =>
+  Option.filter(entryInstant(entry), (instant) => {
+    const millis = DateTime.toEpochMillis(instant);
+    return millis >= startMillis && millis < endMillis;
+  });
 
 const collect = (
   host: HostShape,
@@ -156,18 +191,10 @@ const collect = (
       sessionEntries({ file: host.join(sessionsDir, file), host }).pipe(
         Stream.runForEach((entry) =>
           Effect.gen(function* () {
-            const usage = entry.message?.usage;
-            if (
-              entry.type !== "message" ||
-              entry.message?.role !== "assistant" ||
-              usage === undefined
-            ) {
-              return;
-            }
-            const instant = entryInstant(entry);
+            const usage = assistantMessageOf(entry)?.usage;
+            if (usage === undefined) return;
+            const instant = instantWithin(entry, startMillis, endMillis);
             if (Option.isNone(instant)) return;
-            const millis = DateTime.toEpochMillis(instant.value);
-            if (millis < startMillis || millis >= endMillis) return;
             const zoned = yield* DateTime.setZoneCurrent(instant.value);
             accumulate(stats, grandTotal, entry, DateTime.formatIsoDate(zoned), file, usage);
           }),

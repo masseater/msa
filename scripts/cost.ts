@@ -1,9 +1,18 @@
 import { Console, DateTime, Effect, Option, Stream } from "effect";
 
+import { helpOptions, ignoreUnknown, parseOptions, valueOption } from "./cli-options.ts";
+import type { CliOption } from "./cli-options.ts";
 import { Host, runScript } from "./host.ts";
 import type { HostShape } from "./host.ts";
-import { defaultSessionsBase, encodeSessionDir, jsonlFiles, sessionEntries } from "./sessions.ts";
-import type { Cost } from "./sessions.ts";
+import { getOrCreate } from "./maps.ts";
+import {
+  assistantMessageOf,
+  defaultSessionsBase,
+  encodeSessionDir,
+  jsonlFiles,
+  sessionEntries,
+} from "./sessions.ts";
+import type { Cost, SessionEntry } from "./sessions.ts";
 
 interface DayCost {
   total: number;
@@ -17,6 +26,11 @@ interface DayCost {
 interface Args {
   readonly days: number;
   readonly directory: string;
+}
+
+interface RawArgs {
+  days: number | undefined;
+  directory: string | undefined;
 }
 
 const HELP = `Usage: cost.ts -d <path> -n <days>
@@ -35,12 +49,10 @@ const createDayCost = (): DayCost => ({
   requests: 0,
 });
 
+const COST_FIELDS = ["total", "input", "output", "cacheRead", "cacheWrite"] as const;
+
 const addCost = (target: DayCost, cost: Cost): void => {
-  target.total += cost.total ?? 0;
-  target.input += cost.input ?? 0;
-  target.output += cost.output ?? 0;
-  target.cacheRead += cost.cacheRead ?? 0;
-  target.cacheWrite += cost.cacheWrite ?? 0;
+  for (const field of COST_FIELDS) target[field] += cost[field] ?? 0;
   target.requests += 1;
 };
 
@@ -53,27 +65,47 @@ const mergeCost = (target: DayCost, source: DayCost): void => {
   target.requests += source.requests;
 };
 
+const directoryOption = valueOption<RawArgs>((parsed, value) =>
+  Effect.sync(() => {
+    parsed.directory = value;
+  }),
+);
+
+const daysOption = valueOption<RawArgs>((parsed, value) =>
+  Effect.sync(() => {
+    parsed.days = Number.parseInt(value ?? "", 10);
+  }),
+);
+
+const OPTIONS = new Map<string, CliOption<RawArgs, never>>([
+  ["--dir", directoryOption],
+  ["-d", directoryOption],
+  ["--days", daysOption],
+  ["-n", daysOption],
+  ...helpOptions(HELP),
+]);
+
+const isTrackedDays = (days: number | undefined): days is number =>
+  days !== undefined && !Number.isNaN(days) && days !== 0;
+
+const completeArgs = ({ days, directory }: RawArgs): Args | undefined =>
+  directory !== undefined && isTrackedDays(days) ? { days, directory } : undefined;
+
 const parseArgs = Effect.gen(function* () {
-  const args = process.argv.slice(2);
-  let directory: string | undefined;
-  let days: number | undefined;
-  for (let index = 0; index < args.length; index++) {
-    const arg = args[index];
-    if (arg === "--dir" || arg === "-d") {
-      directory = args[++index];
-    } else if (arg === "--days" || arg === "-n") {
-      days = Number.parseInt(args[++index] ?? "", 10);
-    } else if (arg === "--help" || arg === "-h") {
-      yield* Console.log(HELP);
-      return yield* Effect.sync(() => process.exit(0));
-    }
-  }
-  if (directory === undefined || days === undefined || Number.isNaN(days) || days === 0) {
+  const args = completeArgs(
+    yield* parseOptions({
+      args: process.argv.slice(2),
+      options: OPTIONS,
+      parsed: { days: undefined, directory: undefined },
+      unknown: ignoreUnknown,
+    }),
+  );
+  if (args === undefined) {
     yield* Console.error("Error: both --dir and --days are required");
     yield* Console.error("Run with --help for usage");
     return yield* Effect.sync(() => process.exit(1));
   }
-  return { days, directory } satisfies Args;
+  return args;
 });
 
 const fileInstant = (file: string): Option.Option<DateTime.Utc> => {
@@ -86,6 +118,26 @@ const fileInstant = (file: string): Option.Option<DateTime.Utc> => {
 
 const describeCost = (label: string, cost: DayCost): string =>
   `  ${label.padEnd(15)} $${cost.total.toFixed(4).padStart(8)}  (${cost.requests} reqs, in: $${cost.input.toFixed(4)}, out: $${cost.output.toFixed(4)}, cache: $${(cost.cacheRead + cost.cacheWrite).toFixed(4)})`;
+
+const entryCost = (entry: SessionEntry): Cost | undefined => assistantMessageOf(entry)?.usage?.cost;
+
+const entryInstant = (entry: SessionEntry) => DateTime.make(entry.timestamp ?? 0);
+
+const providerOf = (entry: SessionEntry): string => entry.message?.provider ?? "undefined";
+
+const dayCostOf = (stats: Map<string, Map<string, DayCost>>, day: string, provider: string) =>
+  getOrCreate(
+    getOrCreate(stats, day, () => new Map<string, DayCost>()),
+    provider,
+    createDayCost,
+  );
+
+const recordEntryCost = (stats: Map<string, Map<string, DayCost>>, entry: SessionEntry): void => {
+  const cost = entryCost(entry);
+  const instant = entryInstant(entry);
+  if (cost === undefined || Option.isNone(instant)) return;
+  addCost(dayCostOf(stats, DateTime.formatIsoDateUtc(instant.value), providerOf(entry)), cost);
+};
 
 const collect = (host: HostShape, sessionsDir: string, cutoff: DateTime.Zoned) =>
   Effect.gen(function* () {
@@ -100,29 +152,29 @@ const collect = (host: HostShape, sessionsDir: string, cutoff: DateTime.Zoned) =
     );
     yield* Effect.forEach(fresh, (file) =>
       sessionEntries({ file: host.join(sessionsDir, file), host }).pipe(
-        Stream.runForEach((entry) => {
-          const cost = entry.message?.usage?.cost;
-          if (
-            entry.type !== "message" ||
-            entry.message?.role !== "assistant" ||
-            cost === undefined
-          ) {
-            return Effect.void;
-          }
-          const instant = DateTime.make(entry.timestamp ?? 0);
-          if (Option.isNone(instant)) return Effect.void;
-          const day = DateTime.formatIsoDateUtc(instant.value);
-          const providers = stats.get(day) ?? new Map<string, DayCost>();
-          stats.set(day, providers);
-          const provider = entry.message.provider ?? "undefined";
-          const dayCost = providers.get(provider) ?? createDayCost();
-          providers.set(provider, dayCost);
-          addCost(dayCost, cost);
-          return Effect.void;
-        }),
+        Stream.runForEach((entry) => Effect.sync(() => recordEntryCost(stats, entry))),
       ),
     );
     return stats;
+  });
+
+const reportDay = (
+  day: string,
+  providers: Map<string, DayCost>,
+  providerTotals: Map<string, DayCost>,
+) =>
+  Effect.gen(function* () {
+    yield* Console.log(`\n${day}`);
+    yield* Console.log("-".repeat(40));
+    let dayTotal = 0;
+    for (const provider of [...providers.keys()].sort()) {
+      const cost = providers.get(provider) ?? createDayCost();
+      dayTotal += cost.total;
+      mergeCost(getOrCreate(providerTotals, provider, createDayCost), cost);
+      yield* Console.log(describeCost(provider, cost));
+    }
+    yield* Console.log(`  ${"Day total:".padEnd(15)} $${dayTotal.toFixed(4).padStart(8)}`);
+    return dayTotal;
   });
 
 const reportDays = (
@@ -131,22 +183,8 @@ const reportDays = (
 ) =>
   Effect.gen(function* () {
     let grandTotal = 0;
-    const days = [...stats.keys()].sort();
-    for (const day of days) {
-      yield* Console.log(`\n${day}`);
-      yield* Console.log("-".repeat(40));
-      const providers = stats.get(day) ?? new Map<string, DayCost>();
-      let dayTotal = 0;
-      for (const provider of [...providers.keys()].sort()) {
-        const cost = providers.get(provider) ?? createDayCost();
-        dayTotal += cost.total;
-        const totals = providerTotals.get(provider) ?? createDayCost();
-        providerTotals.set(provider, totals);
-        mergeCost(totals, cost);
-        yield* Console.log(describeCost(provider, cost));
-      }
-      yield* Console.log(`  ${"Day total:".padEnd(15)} $${dayTotal.toFixed(4).padStart(8)}`);
-      grandTotal += dayTotal;
+    for (const day of [...stats.keys()].sort()) {
+      grandTotal += yield* reportDay(day, stats.get(day) ?? new Map(), providerTotals);
     }
     return grandTotal;
   });
