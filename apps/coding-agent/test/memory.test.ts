@@ -188,9 +188,27 @@ describe("MemoryStore", () => {
   it("keeps project memories separate and global memories shared", () => {
     const store = new MemoryStore(":memory:");
     try {
-      store.save({ content: "project a only", kind: "fact", scope: "project", project: "a" });
-      store.save({ content: "project b only", kind: "fact", scope: "project", project: "b" });
-      store.save({ content: "everywhere", kind: "preference", scope: "global", project: null });
+      store.save({
+        content: "project a only",
+        kind: "fact",
+        scope: "project",
+        project: "a",
+        now: 1,
+      });
+      store.save({
+        content: "project b only",
+        kind: "fact",
+        scope: "project",
+        project: "b",
+        now: 2,
+      });
+      store.save({
+        content: "everywhere",
+        kind: "preference",
+        scope: "global",
+        project: null,
+        now: 3,
+      });
       expect(store.list({ project: "a", limit: 10 }).map((record) => record.content)).toEqual([
         "everywhere",
         "project a only",
