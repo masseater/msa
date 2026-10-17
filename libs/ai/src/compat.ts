@@ -108,7 +108,7 @@ interface ApiProviderInternal {
 
 type RegisteredApiProvider = {
   provider: ApiProviderInternal;
-  sourceId?: string;
+  sourceId?: string | undefined;
 };
 
 const apiProviderRegistry = new Map<string, RegisteredApiProvider>();

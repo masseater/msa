@@ -94,7 +94,10 @@ export async function loadRadiusGatewayConfig(
 ): Promise<RadiusGatewayConfig> {
   const headers: Record<string, string> = { accept: "application/json" };
   if (apiKey) headers["authorization"] = `Bearer ${apiKey}`;
-  const response = await fetch(new URL("/v1/config", gateway), { headers, signal });
+  const response = await fetch(new URL("/v1/config", gateway), {
+    headers,
+    signal: signal ?? null,
+  });
   if (!response.ok) {
     throw new Error(
       `Could not load Radius config from ${gateway}: ${response.status}: ${truncateHttpBody(await response.text())}`,

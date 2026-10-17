@@ -5,10 +5,10 @@ const DEFAULT_AZURE_API_VERSION = "v1";
 
 /** Azure models ship without a baseUrl: one resource per user, resolved per request. */
 export interface AzureEndpointOptions extends StreamOptions {
-  azureApiVersion?: string;
-  azureResourceName?: string;
-  azureBaseUrl?: string;
-  azureDeploymentName?: string;
+  azureApiVersion?: string | undefined;
+  azureResourceName?: string | undefined;
+  azureBaseUrl?: string | undefined;
+  azureDeploymentName?: string | undefined;
 }
 
 function parseDeploymentNameMap(value: string | undefined): Map<string, string> {

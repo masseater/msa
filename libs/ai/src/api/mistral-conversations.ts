@@ -43,9 +43,10 @@ export interface MistralOptions extends StreamOptions {
     | "none"
     | "any"
     | "required"
-    | { type: "function"; function: { name: string } };
-  promptMode?: "reasoning";
-  reasoningEffort?: MistralReasoningEffort;
+    | { type: "function"; function: { name: string } }
+    | undefined;
+  promptMode?: "reasoning" | undefined;
+  reasoningEffort?: MistralReasoningEffort | undefined;
 }
 
 type MistralContentChunk =
@@ -329,7 +330,7 @@ async function requestMistralStream(
       method: "POST",
       headers,
       body: JSON.stringify(toMistralWirePayload(payload)),
-      signal: combinedSignal.signal,
+      signal: combinedSignal.signal ?? null,
     });
   } catch (error) {
     if (headerTimeoutSignal.aborted && !options?.signal?.aborted) {
@@ -970,15 +971,8 @@ function buildToolResultText(
 }
 
 function mapToolChoice(
-  choice: MistralOptions["toolChoice"],
-):
-  | "auto"
-  | "none"
-  | "any"
-  | "required"
-  | { type: "function"; function: { name: string } }
-  | undefined {
-  if (!choice) return undefined;
+  choice: NonNullable<MistralOptions["toolChoice"]>,
+): "auto" | "none" | "any" | "required" | { type: "function"; function: { name: string } } {
   if (choice === "auto" || choice === "none" || choice === "any" || choice === "required") {
     return choice;
   }

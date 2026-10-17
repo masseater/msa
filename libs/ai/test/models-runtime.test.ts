@@ -94,7 +94,7 @@ function testProvider(input: {
     name: input.id,
     auth: input.auth ?? { apiKey: ambientAuth },
     getModels: input.getModels ?? (() => models),
-    refreshModels: input.refreshModels,
+    ...(input.refreshModels !== undefined ? { refreshModels: input.refreshModels } : {}),
     stream: (model, _context, options) => respond(model, options as StreamOptions | undefined),
     streamSimple: (model, _context, options) =>
       respond(model, options as SimpleStreamOptions | undefined),

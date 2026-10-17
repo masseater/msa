@@ -90,7 +90,7 @@ export async function postClassifierRequest(
           method: "POST",
           headers: requestHeaders(model, apiKey, options.headers),
           body: JSON.stringify(payload),
-          signal,
+          signal: signal ?? null,
         });
         if (!next.ok) throw httpError(label, next, await next.text());
         return { response: next, json: (await next.json()) as unknown };

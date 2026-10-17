@@ -13,7 +13,7 @@ function renderPage(options: {
   title: string;
   heading: string;
   message: string;
-  details?: string;
+  details?: string | undefined;
 }): string {
   const title = escapeHtml(options.title);
   const heading = escapeHtml(options.heading);

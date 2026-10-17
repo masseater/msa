@@ -1,17 +1,17 @@
 import type { JsonObject } from "../types.ts";
 
 export interface DiagnosticErrorInfo {
-  name?: string;
+  name?: string | undefined;
   message: string;
-  stack?: string;
-  code?: string | number;
+  stack?: string | undefined;
+  code?: string | number | undefined;
 }
 
 export interface AssistantMessageDiagnostic {
   type: string;
   timestamp: number;
-  error?: DiagnosticErrorInfo;
-  details?: JsonObject;
+  error?: DiagnosticErrorInfo | undefined;
+  details?: JsonObject | undefined;
 }
 
 export function formatThrownValue(value: unknown): string {

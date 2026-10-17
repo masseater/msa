@@ -35,7 +35,7 @@ type DeviceAuthorizationResponse = {
   user_code: string;
   verification_uri: string;
   expires_in: number;
-  interval?: number;
+  interval?: number | undefined;
 };
 
 async function loadRadiusOAuthDiscovery(
@@ -62,7 +62,7 @@ async function loadRadiusOAuthDiscovery(
 
 class OAuthResponseError extends Error {
   readonly status: number;
-  readonly oauthError?: string;
+  readonly oauthError?: string | undefined;
 
   constructor(
     status: number,

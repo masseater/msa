@@ -112,9 +112,9 @@ function convertToolResultOutput<TApi extends Api>(
 }
 
 export interface OpenAIResponsesStreamOptions {
-  onProviderStreamEvent?: StreamOptions["onProviderStreamEvent"];
-  serviceTier?: ResponseCreateParamsStreaming["service_tier"];
-  grammarToolInputProperties?: ReadonlyMap<string, string>;
+  onProviderStreamEvent?: StreamOptions["onProviderStreamEvent"] | undefined;
+  serviceTier?: ResponseCreateParamsStreaming["service_tier"] | undefined;
+  grammarToolInputProperties?: ReadonlyMap<string, string> | undefined;
   resolveServiceTier?: (
     responseServiceTier: ResponseCreateParamsStreaming["service_tier"] | undefined,
     requestServiceTier: ResponseCreateParamsStreaming["service_tier"] | undefined,
@@ -126,13 +126,13 @@ export interface OpenAIResponsesStreamOptions {
 }
 
 export interface ConvertResponsesMessagesOptions {
-  includeSystemPrompt?: boolean;
-  grammarToolInputProperties?: ReadonlyMap<string, string>;
+  includeSystemPrompt?: boolean | undefined;
+  grammarToolInputProperties?: ReadonlyMap<string, string> | undefined;
   /** Whether later system messages are sent in place; otherwise they are folded into the leading prompt. */
-  supportsMidConvoSystemMessages?: boolean;
-  supportsAdditionalTools?: boolean;
-  supportsToolSearch?: boolean;
-  toolOptions?: ConvertResponsesToolsOptions;
+  supportsMidConvoSystemMessages?: boolean | undefined;
+  supportsAdditionalTools?: boolean | undefined;
+  supportsToolSearch?: boolean | undefined;
+  toolOptions?: ConvertResponsesToolsOptions | undefined;
   /**
    * Effort for the reply being generated. When set, the thinking level is sent as
    * configuration_update items instead of a changing reasoning.effort, which would invalidate the
@@ -142,14 +142,14 @@ export interface ConvertResponsesMessagesOptions {
    * messages only. After tool results it was verified on gpt-6-luna (October 2026) to be accepted
    * and to apply to the next reply.
    */
-  configurationUpdateEffort?: string;
+  configurationUpdateEffort?: string | undefined;
 }
 
 export interface ConvertResponsesToolsOptions {
-  strict?: boolean | null;
-  supportsStrictMode?: boolean;
-  supportsOpenAIGrammarTools?: boolean;
-  toolSearchResult?: boolean;
+  strict?: boolean | null | undefined;
+  supportsStrictMode?: boolean | undefined;
+  supportsOpenAIGrammarTools?: boolean | undefined;
+  toolSearchResult?: boolean | undefined;
 }
 
 // =============================================================================
@@ -323,7 +323,7 @@ export function convertResponsesMessages<TApi extends Api>(
             ],
             status: "completed",
             id: msgId,
-            phase: parsedSignature?.phase,
+            ...(parsedSignature?.phase !== undefined ? { phase: parsedSignature.phase } : {}),
           } satisfies ResponseOutputMessage);
         } else if (block.type === "toolCall") {
           const toolCall = block as ToolCall;
@@ -345,7 +345,7 @@ export function convertResponsesMessages<TApi extends Api>(
           if (customInputProperty !== undefined) {
             output.push({
               type: "custom_tool_call",
-              id: itemId,
+              ...(itemId !== undefined ? { id: itemId } : {}),
               call_id: callId,
               name: toolCall.name,
               input: sanitizeSurrogates(
@@ -358,7 +358,7 @@ export function convertResponsesMessages<TApi extends Api>(
           } else {
             output.push({
               type: "function_call",
-              id: itemId,
+              ...(itemId !== undefined ? { id: itemId } : {}),
               call_id: callId,
               name: toolCall.name,
               arguments: JSON.stringify(toolCall.arguments),

@@ -538,7 +538,7 @@ export function retryGoogleRequest<T>(
         return await request();
       } catch (error) {
         if (error instanceof Error && "status" in error && !("headers" in error)) {
-          (error as { headers?: Headers }).headers = undefined;
+          (error as { headers?: Headers | undefined }).headers = undefined;
         }
         throw error;
       }

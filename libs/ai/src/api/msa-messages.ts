@@ -35,10 +35,15 @@ import { parseStreamingJson } from "../utils/json-parse.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 
 export interface MsaMessagesOptions extends StreamOptions {
-  reasoning?: ThinkingLevel;
-  toolChoice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } };
+  reasoning?: ThinkingLevel | undefined;
+  toolChoice?:
+    | "auto"
+    | "none"
+    | "required"
+    | { type: "function"; function: { name: string } }
+    | undefined;
   /** Ask the backend for debug metadata (e.g. routing response headers). */
-  debug?: boolean;
+  debug?: boolean | undefined;
 }
 
 type MsaMessagesUsage = AssistantMessage["usage"];
@@ -100,7 +105,7 @@ type MsaMessagesErrorBody = {
 };
 
 export class MsaMessagesResponseError extends Error {
-  code?: string;
+  code?: string | undefined;
   readonly diagnosticDetails: JsonObject;
 
   constructor(message: string, code: string | undefined, diagnosticDetails: JsonObject) {
@@ -425,7 +430,7 @@ export const stream: StreamFunction<"msa-messages", MsaMessagesOptions> = (
           ...providerHeadersToRecord(options?.headers),
         },
         body: JSON.stringify(payload),
-        signal: options?.signal,
+        signal: options?.signal ?? null,
       });
 
       await options?.onResponse?.(

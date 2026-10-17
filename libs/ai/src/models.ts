@@ -79,9 +79,9 @@ export interface ModelsPublication {
 
 export interface RefreshModelsContext {
   /** Effective configured credential. OAuth credentials are refreshed before network access. */
-  credential?: Credential;
+  credential?: Credential | undefined;
   /** Immutable provider-scoped catalog snapshot captured before this refresh phase. */
-  stored?: Readonly<ModelsStoreEntry>;
+  stored?: Readonly<ModelsStoreEntry> | undefined;
   /**
    * Generation-checked publication. Persistence policy remains provider-owned;
    * the update runs synchronously only after the selected persistence mutation.
@@ -90,14 +90,14 @@ export interface RefreshModelsContext {
   /** False during offline/cache-only initialization. */
   allowNetwork: boolean;
   /** Bypass provider freshness checks and fetch immediately when network access is allowed. */
-  force?: boolean;
+  force?: boolean | undefined;
   /** Always present, including when the public refresh caller omits its optional signal. */
   signal: AbortSignal;
   /**
    * Base URL of the registered provider, including configuration overrides that wrappers apply
    * outside the provider receiving this context.
    */
-  baseUrl?: string;
+  baseUrl?: string | undefined;
 }
 
 export interface ModelsRefreshOptions {
@@ -160,8 +160,8 @@ export interface Provider<TApi extends Api = Api> {
   readonly id: string;
   readonly name: string;
 
-  readonly baseUrl?: string;
-  readonly headers?: ProviderHeaders;
+  readonly baseUrl?: string | undefined;
+  readonly headers?: ProviderHeaders | undefined;
 
   /**
    * Required: at least one of `apiKey`/`oauth`. Every provider has auth
@@ -1129,9 +1129,9 @@ export function createModels(options?: CreateModelsOptions): MutableModels {
 export interface CreateProviderOptions<TApi extends Api = Api> {
   id: string;
   /** Display name. Default: `id`. */
-  name?: string;
-  baseUrl?: string;
-  headers?: ProviderHeaders;
+  name?: string | undefined;
+  baseUrl?: string | undefined;
+  headers?: ProviderHeaders | undefined;
   /** Required — every provider has auth semantics, even ambient/keyless ones. */
   auth: ProviderAuth;
   /**
@@ -1143,7 +1143,9 @@ export interface CreateProviderOptions<TApi extends Api = Api> {
    * Fetch a dynamic model overlay of every type. createProvider restores and
    * publishes it transactionally and drops models of unknown types.
    */
-  fetchModels?: (context: RefreshModelsContext) => Promise<readonly ProviderModel<TApi>[]>;
+  fetchModels?:
+    | ((context: RefreshModelsContext) => Promise<readonly ProviderModel<TApi>[]>)
+    | undefined;
   /** Credential-specific chat model availability. See `Provider.filterModels`. */
   filterModels?: (
     models: readonly Model<TApi>[],
@@ -1159,11 +1161,11 @@ export interface CreateProviderOptions<TApi extends Api = Api> {
    * `model.api` for mixed-API providers. Optional when `images` or
    * `classifiers` is given.
    */
-  api?: ProviderStreams | Partial<Record<TApi, ProviderStreams>>;
+  api?: ProviderStreams | Partial<Record<TApi, ProviderStreams>> | undefined;
   /** Image-generation implementations keyed by `model.api`. */
-  images?: Partial<Record<ImageApi, ProviderImages>>;
+  images?: Partial<Record<ImageApi, ProviderImages>> | undefined;
   /** Classifier implementations keyed by `model.api`. */
-  classifiers?: Partial<Record<ClassifierApi, ProviderClassifier>>;
+  classifiers?: Partial<Record<ClassifierApi, ProviderClassifier>> | undefined;
 }
 
 /**
@@ -1243,42 +1245,42 @@ export function createProvider<TApi extends Api = Api>(
     getModels: () =>
       currentModels().filter((model): model is Model<TApi> => isModelType(model, "chat")),
     getAllModels: currentModels,
-    refreshModels: fetchModels
-      ? async (context) => {
-          if (context.stored) {
-            const restored = context.stored.models
-              .filter((model) => model.provider === input.id)
-              .map((model) => model as ProviderModel<TApi>);
-            if (
-              !(await context.publish({
-                update: () => {
-                  dynamicModels = restored;
-                },
-              }))
-            ) {
-              return;
-            }
-          }
-          if (!context.allowNetwork || context.signal.aborted) return;
-          const fetched = await fetchModels(context);
-          if (context.signal.aborted) return;
-          const refreshed = fetched.filter(hasKnownModelType);
-          await context.publish({
-            persist: { models: refreshed, checkedAt: Date.now() },
-            update: () => {
-              dynamicModels = refreshed;
-            },
-          });
-        }
-      : undefined,
-    filterModels: input.filterModels,
-    filterAllModels: input.filterAllModels,
+    ...(input.filterModels !== undefined ? { filterModels: input.filterModels } : {}),
+    ...(input.filterAllModels !== undefined ? { filterAllModels: input.filterAllModels } : {}),
     stream: (model, context, options) =>
       dispatch(model, (providerStreams) => providerStreams.stream(model, context, options)),
     streamSimple: (model, context, options) =>
       dispatch(model, (providerStreams) => providerStreams.streamSimple(model, context, options)),
   };
 
+  if (fetchModels) {
+    provider.refreshModels = async (context) => {
+      if (context.stored) {
+        const restored = context.stored.models
+          .filter((model) => model.provider === input.id)
+          .map((model) => model as ProviderModel<TApi>);
+        if (
+          !(await context.publish({
+            update: () => {
+              dynamicModels = restored;
+            },
+          }))
+        ) {
+          return;
+        }
+      }
+      if (!context.allowNetwork || context.signal.aborted) return;
+      const fetched = await fetchModels(context);
+      if (context.signal.aborted) return;
+      const refreshed = fetched.filter(hasKnownModelType);
+      await context.publish({
+        persist: { models: refreshed, checkedAt: Date.now() },
+        update: () => {
+          dynamicModels = refreshed;
+        },
+      });
+    };
+  }
   if (streams.some((entry) => entry.fetchDeferred !== undefined)) {
     provider.fetchDeferred = (model, handle, options) =>
       lazyStream(model, async () => {

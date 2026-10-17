@@ -5,9 +5,9 @@ import type { ProviderEnv, ProviderHeaders } from "../types.ts";
  * `apiKey`, `headers`, or `baseUrl`, it is provider config, not auth.
  */
 export interface ModelAuth {
-  apiKey?: string;
-  headers?: ProviderHeaders;
-  baseUrl?: string;
+  apiKey?: string | undefined;
+  headers?: ProviderHeaders | undefined;
+  baseUrl?: string | undefined;
 }
 
 /**
@@ -16,8 +16,8 @@ export interface ModelAuth {
  */
 export interface ApiKeyCredential {
   type: "api_key";
-  key?: string;
-  env?: ProviderEnv;
+  key?: string | undefined;
+  env?: ProviderEnv | undefined;
 }
 
 /** OAuth token data returned by extension compatibility flows. */
@@ -104,13 +104,13 @@ export interface AuthContext {
 export interface AuthResult {
   auth: ModelAuth;
   /** Provider-scoped environment/config values resolved from credentials and ambient context. */
-  env?: ProviderEnv;
+  env?: ProviderEnv | undefined;
   /** Human-readable label for status UI: "ANTHROPIC_API_KEY", "OAuth", "~/.aws/credentials". */
-  source?: string;
+  source?: string | undefined;
 }
 
 export interface AuthCheck {
-  source?: string;
+  source?: string | undefined;
   type: "api_key" | "oauth";
 }
 
@@ -145,8 +145,8 @@ export type AuthEvent =
       type: "device_code";
       userCode: string;
       verificationUri: string;
-      intervalSeconds?: number;
-      expiresInSeconds?: number;
+      intervalSeconds?: number | undefined;
+      expiresInSeconds?: number | undefined;
     }
   | { type: "progress"; message: string };
 
@@ -185,7 +185,7 @@ export interface ApiKeyAuth {
    */
   check?(input: {
     ctx: AuthContext;
-    credential?: ApiKeyCredential;
+    credential?: ApiKeyCredential | undefined;
     signal: AbortSignal;
   }): Promise<AuthCheck | undefined>;
 
@@ -197,7 +197,7 @@ export interface ApiKeyAuth {
    */
   resolve(input: {
     ctx: AuthContext;
-    credential?: ApiKeyCredential;
+    credential?: ApiKeyCredential | undefined;
     signal: AbortSignal;
   }): Promise<AuthResult | undefined>;
 }
@@ -227,10 +227,10 @@ export interface OAuthAuth {
   name: string;
 
   /** Whether access through this auth method is backed by a provider subscription. */
-  isSubscription?: boolean;
+  isSubscription?: boolean | undefined;
 
   /** Selector label for the OAuth login option, e.g. "Sign in with SuperGrok or X Premium". */
-  loginLabel?: string;
+  loginLabel?: string | undefined;
 
   login(interaction: ProviderAuthInteraction, options?: LoginOptions): Promise<OAuthCredential>;
 
