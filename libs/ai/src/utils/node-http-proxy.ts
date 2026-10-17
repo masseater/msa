@@ -1,3 +1,5 @@
+import { Function } from "effect";
+
 import type { ProviderEnv } from "../types.ts";
 import { getProviderEnvValue } from "./provider-env.ts";
 
@@ -138,28 +140,31 @@ function getProxyForUrl(targetUrl: string | URL, env?: ProviderEnv): string {
 export const UNSUPPORTED_PROXY_PROTOCOL_MESSAGE =
   "Unsupported proxy protocol. SOCKS and PAC proxy URLs are not supported; use an HTTP or HTTPS proxy URL.";
 
-export function resolveHttpProxyUrlForTarget(
-  targetUrl: string | URL,
-  env?: ProviderEnv,
-): URL | undefined {
-  const proxy = getProxyForUrl(targetUrl, env);
-  if (proxy === "") {
-    return undefined;
-  }
+export const resolveHttpProxyUrlForTarget: {
+  (env?: ProviderEnv): (targetUrl: string | URL) => URL | undefined;
+  (targetUrl: string | URL, env?: ProviderEnv): URL | undefined;
+} = Function.dual(
+  (args) => typeof args[0] === "string" || args[0] instanceof URL,
+  function (targetUrl: string | URL, env?: ProviderEnv): URL | undefined {
+    const proxy = getProxyForUrl(targetUrl, env);
+    if (proxy === "") {
+      return undefined;
+    }
 
-  let proxyUrl: URL;
-  try {
-    proxyUrl = new URL(proxy);
-  } catch (error) {
-    throw new Error(
-      `Invalid proxy URL ${JSON.stringify(proxy)}: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
-  }
+    let proxyUrl: URL;
+    try {
+      proxyUrl = new URL(proxy);
+    } catch (error) {
+      throw new Error(
+        `Invalid proxy URL ${JSON.stringify(proxy)}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
 
-  if (proxyUrl.protocol !== "http:" && proxyUrl.protocol !== "https:") {
-    throw new Error(`${UNSUPPORTED_PROXY_PROTOCOL_MESSAGE} Got ${proxyUrl.protocol}`);
-  }
+    if (proxyUrl.protocol !== "http:" && proxyUrl.protocol !== "https:") {
+      throw new Error(`${UNSUPPORTED_PROXY_PROTOCOL_MESSAGE} Got ${proxyUrl.protocol}`);
+    }
 
-  return proxyUrl;
-}
+    return proxyUrl;
+  },
+);

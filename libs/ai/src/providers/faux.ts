@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Function } from "effect";
 
 import { createProvider, type Provider } from "../models.ts";
 import type {
@@ -66,18 +66,24 @@ export function fauxThinking(thinking: string): ThinkingContent {
   return { type: "thinking", thinking };
 }
 
-export function fauxToolCall(
-  name: string,
-  arguments_: ToolCall["arguments"],
-  options: { id?: string } = {},
-): ToolCall {
-  return {
-    type: "toolCall",
-    id: options.id ?? randomId("tool"),
-    name,
-    arguments: arguments_,
-  };
-}
+export const fauxToolCall: {
+  (arguments_: ToolCall["arguments"], options?: { id?: string }): (name: string) => ToolCall;
+  (name: string, arguments_: ToolCall["arguments"], options?: { id?: string }): ToolCall;
+} = Function.dual(
+  (args) => typeof args[0] === "string",
+  function (
+    name: string,
+    arguments_: ToolCall["arguments"],
+    options: { id?: string } = {},
+  ): ToolCall {
+    return {
+      type: "toolCall",
+      id: options.id ?? randomId("tool"),
+      name,
+      arguments: arguments_,
+    };
+  },
+);
 
 function normalizeFauxAssistantContent(
   content: string | FauxContentBlock | FauxContentBlock[],
@@ -88,30 +94,54 @@ function normalizeFauxAssistantContent(
   return Array.isArray(content) ? content : [content];
 }
 
-export function fauxAssistantMessage(
-  content: string | FauxContentBlock | FauxContentBlock[],
-  options: {
+export const fauxAssistantMessage: {
+  (options?: {
     stopReason?: AssistantMessage["stopReason"];
     deferred?: DeferredHandle;
     errorMessage?: string;
     responseId?: string;
     timestamp?: number;
-  } = {},
-): AssistantMessage {
-  return {
-    role: "assistant",
-    content: normalizeFauxAssistantContent(content),
-    api: DEFAULT_API,
-    provider: DEFAULT_PROVIDER,
-    model: DEFAULT_MODEL_ID,
-    usage: DEFAULT_USAGE,
-    stopReason: options.stopReason ?? "stop",
-    ...(options.deferred === undefined ? {} : { deferred: options.deferred }),
-    ...(options.errorMessage === undefined ? {} : { errorMessage: options.errorMessage }),
-    ...(options.responseId === undefined ? {} : { responseId: options.responseId }),
-    timestamp: options.timestamp ?? currentTimeMillis(),
-  };
-}
+  }): (content: string | FauxContentBlock | FauxContentBlock[]) => AssistantMessage;
+  (
+    content: string | FauxContentBlock | FauxContentBlock[],
+    options?: {
+      stopReason?: AssistantMessage["stopReason"];
+      deferred?: DeferredHandle;
+      errorMessage?: string;
+      responseId?: string;
+      timestamp?: number;
+    },
+  ): AssistantMessage;
+} = Function.dual(
+  (args) =>
+    typeof args[0] === "string" ||
+    Array.isArray(args[0]) ||
+    (typeof args[0] === "object" && args[0] !== null && "type" in args[0]),
+  function (
+    content: string | FauxContentBlock | FauxContentBlock[],
+    options: {
+      stopReason?: AssistantMessage["stopReason"];
+      deferred?: DeferredHandle;
+      errorMessage?: string;
+      responseId?: string;
+      timestamp?: number;
+    } = {},
+  ): AssistantMessage {
+    return {
+      role: "assistant",
+      content: normalizeFauxAssistantContent(content),
+      api: DEFAULT_API,
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL_ID,
+      usage: DEFAULT_USAGE,
+      stopReason: options.stopReason ?? "stop",
+      ...(options.deferred === undefined ? {} : { deferred: options.deferred }),
+      ...(options.errorMessage === undefined ? {} : { errorMessage: options.errorMessage }),
+      ...(options.responseId === undefined ? {} : { responseId: options.responseId }),
+      timestamp: options.timestamp ?? currentTimeMillis(),
+    };
+  },
+);
 
 export interface FauxProviderState {
   callCount: number;

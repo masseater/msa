@@ -30,54 +30,82 @@ export const clampMaxTokensToContext: {
   },
 );
 
-export function resolveSamplingParams(
-  model: Model<Api>,
-  thinkingLevel: ModelThinkingLevel,
-  requestParams?: SamplingParams,
-): SamplingParams | undefined {
-  const effectiveThinkingLevel = clampThinkingLevel(model, thinkingLevel);
-  const thinkingLevelParams = model.samplingParamsByThinkingLevel?.[effectiveThinkingLevel];
-  return model.samplingParams !== undefined ||
-    thinkingLevelParams !== undefined ||
-    requestParams !== undefined
-    ? { ...model.samplingParams, ...thinkingLevelParams, ...requestParams }
-    : undefined;
-}
+export const resolveSamplingParams: {
+  (
+    thinkingLevel: ModelThinkingLevel,
+    requestParams?: SamplingParams,
+  ): (model: Model<Api>) => SamplingParams | undefined;
+  (
+    model: Model<Api>,
+    thinkingLevel: ModelThinkingLevel,
+    requestParams?: SamplingParams,
+  ): SamplingParams | undefined;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && "api" in args[0],
+  function (
+    model: Model<Api>,
+    thinkingLevel: ModelThinkingLevel,
+    requestParams?: SamplingParams,
+  ): SamplingParams | undefined {
+    const effectiveThinkingLevel = clampThinkingLevel(model, thinkingLevel);
+    const thinkingLevelParams = model.samplingParamsByThinkingLevel?.[effectiveThinkingLevel];
+    return model.samplingParams !== undefined ||
+      thinkingLevelParams !== undefined ||
+      requestParams !== undefined
+      ? { ...model.samplingParams, ...thinkingLevelParams, ...requestParams }
+      : undefined;
+  },
+);
 
-export function buildBaseOptions(
-  model: Model<Api>,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-  apiKey?: string,
-): StreamOptions {
-  const samplingParams = resolveSamplingParams(
-    model,
-    options?.reasoning ?? "off",
-    options?.samplingParams,
-  );
-  return {
-    temperature: options?.temperature,
-    samplingParams,
-    maxTokens: clampMaxTokensToContext(model, context, options?.maxTokens ?? model.maxTokens),
-    signal: options?.signal,
-    telemetryContext: options?.telemetryContext,
-    apiKey: apiKey || options?.apiKey,
-    fetch: options?.fetch,
-    transport: options?.transport,
-    cacheRetention: options?.cacheRetention,
-    sessionId: options?.sessionId,
-    headers: options?.headers,
-    onPayload: options?.onPayload,
-    onResponse: options?.onResponse,
-    onProviderStreamEvent: options?.onProviderStreamEvent,
-    timeoutMs: options?.timeoutMs,
-    websocketConnectTimeoutMs: options?.websocketConnectTimeoutMs,
-    maxRetries: options?.maxRetries,
-    maxRetryDelayMs: options?.maxRetryDelayMs,
-    metadata: options?.metadata,
-    env: options?.env,
-  };
-}
+export const buildBaseOptions: {
+  (
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+    apiKey?: string,
+  ): (model: Model<Api>) => StreamOptions;
+  (
+    model: Model<Api>,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+    apiKey?: string,
+  ): StreamOptions;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && "api" in args[0],
+  function (
+    model: Model<Api>,
+    context: TranscriptContext,
+    options?: SimpleStreamOptions,
+    apiKey?: string,
+  ): StreamOptions {
+    const samplingParams = resolveSamplingParams(
+      model,
+      options?.reasoning ?? "off",
+      options?.samplingParams,
+    );
+    return {
+      temperature: options?.temperature,
+      samplingParams,
+      maxTokens: clampMaxTokensToContext(model, context, options?.maxTokens ?? model.maxTokens),
+      signal: options?.signal,
+      telemetryContext: options?.telemetryContext,
+      apiKey: apiKey || options?.apiKey,
+      fetch: options?.fetch,
+      transport: options?.transport,
+      cacheRetention: options?.cacheRetention,
+      sessionId: options?.sessionId,
+      headers: options?.headers,
+      onPayload: options?.onPayload,
+      onResponse: options?.onResponse,
+      onProviderStreamEvent: options?.onProviderStreamEvent,
+      timeoutMs: options?.timeoutMs,
+      websocketConnectTimeoutMs: options?.websocketConnectTimeoutMs,
+      maxRetries: options?.maxRetries,
+      maxRetryDelayMs: options?.maxRetryDelayMs,
+      metadata: options?.metadata,
+      env: options?.env,
+    };
+  },
+);
 
 export const MIN_ANSWER_TOKENS = 1024;
 
@@ -94,14 +122,17 @@ export function clampReasoning(
   return effort === "xhigh" || effort === "max" ? "high" : effort;
 }
 
-export function thinkingBudgetForLevel(
-  reasoningLevel: ThinkingLevel,
-  customBudgets?: ThinkingBudgets,
-): number {
-  const budgets = { ...DEFAULT_THINKING_BUDGETS, ...customBudgets };
-  const level = clampReasoning(reasoningLevel)!;
-  return budgets[level]!;
-}
+export const thinkingBudgetForLevel: {
+  (customBudgets?: ThinkingBudgets): (reasoningLevel: ThinkingLevel) => number;
+  (reasoningLevel: ThinkingLevel, customBudgets?: ThinkingBudgets): number;
+} = Function.dual(
+  (args) => typeof args[0] === "string",
+  function (reasoningLevel: ThinkingLevel, customBudgets?: ThinkingBudgets): number {
+    const budgets = { ...DEFAULT_THINKING_BUDGETS, ...customBudgets };
+    const level = clampReasoning(reasoningLevel)!;
+    return budgets[level]!;
+  },
+);
 
 export const clampThinkingBudgetToAnswerRoom: {
   (ceiling: number): (thinkingBudget: number) => number;
@@ -110,21 +141,36 @@ export const clampThinkingBudgetToAnswerRoom: {
   return Math.min(thinkingBudget, Math.max(0, ceiling - MIN_ANSWER_TOKENS));
 });
 
-export function adjustMaxTokensForThinking(
-  baseMaxTokens: number | undefined,
-  modelMaxTokens: number,
-  reasoningLevel: ThinkingLevel,
-  customBudgets?: ThinkingBudgets,
-): { maxTokens: number; thinkingBudget: number } {
-  let thinkingBudget = thinkingBudgetForLevel(reasoningLevel, customBudgets);
-  const maxTokens =
-    baseMaxTokens === undefined
-      ? modelMaxTokens
-      : Math.min(baseMaxTokens + thinkingBudget, modelMaxTokens);
+export const adjustMaxTokensForThinking: {
+  (
+    modelMaxTokens: number,
+    reasoningLevel: ThinkingLevel,
+    customBudgets?: ThinkingBudgets,
+  ): (baseMaxTokens: number | undefined) => { maxTokens: number; thinkingBudget: number };
+  (
+    baseMaxTokens: number | undefined,
+    modelMaxTokens: number,
+    reasoningLevel: ThinkingLevel,
+    customBudgets?: ThinkingBudgets,
+  ): { maxTokens: number; thinkingBudget: number };
+} = Function.dual(
+  (args) => typeof args[1] === "number",
+  function (
+    baseMaxTokens: number | undefined,
+    modelMaxTokens: number,
+    reasoningLevel: ThinkingLevel,
+    customBudgets?: ThinkingBudgets,
+  ): { maxTokens: number; thinkingBudget: number } {
+    let thinkingBudget = thinkingBudgetForLevel(reasoningLevel, customBudgets);
+    const maxTokens =
+      baseMaxTokens === undefined
+        ? modelMaxTokens
+        : Math.min(baseMaxTokens + thinkingBudget, modelMaxTokens);
 
-  if (maxTokens <= thinkingBudget) {
-    thinkingBudget = clampThinkingBudgetToAnswerRoom(thinkingBudget, maxTokens);
-  }
+    if (maxTokens <= thinkingBudget) {
+      thinkingBudget = clampThinkingBudgetToAnswerRoom(thinkingBudget, maxTokens);
+    }
 
-  return { maxTokens, thinkingBudget };
-}
+    return { maxTokens, thinkingBudget };
+  },
+);

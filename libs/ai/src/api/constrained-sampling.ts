@@ -149,20 +149,31 @@ function makeJsonSchemaNodeStrict(
   schema["additionalProperties"] = false;
 }
 
-export function makeStrictJsonSchema(
-  schema: Tool["parameters"],
-  isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
-): Record<string, unknown> {
-  const cloned: unknown = structuredClone(schema);
-  if (!isJsonSchemaObject(cloned)) {
-    throw new UnsupportedStrictJsonSchemaError({ message: "root schema must have type object" });
-  }
-  makeJsonSchemaNodeStrict(cloned, isUnsupportedKeyword);
-  if (cloned.type !== "object") {
-    throw new UnsupportedStrictJsonSchemaError({ message: "root schema must have type object" });
-  }
-  return cloned;
-}
+export const makeStrictJsonSchema: {
+  (
+    isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
+  ): (schema: Tool["parameters"]) => Record<string, unknown>;
+  (
+    schema: Tool["parameters"],
+    isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
+  ): Record<string, unknown>;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null,
+  function (
+    schema: Tool["parameters"],
+    isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
+  ): Record<string, unknown> {
+    const cloned: unknown = structuredClone(schema);
+    if (!isJsonSchemaObject(cloned)) {
+      throw new UnsupportedStrictJsonSchemaError({ message: "root schema must have type object" });
+    }
+    makeJsonSchemaNodeStrict(cloned, isUnsupportedKeyword);
+    if (cloned.type !== "object") {
+      throw new UnsupportedStrictJsonSchemaError({ message: "root schema must have type object" });
+    }
+    return cloned;
+  },
+);
 
 export const getJsonSchemaToolParameters: {
   (strict: boolean | undefined): (tool: Tool) => Tool["parameters"];
@@ -277,34 +288,47 @@ function inferGrammarInputProperty(tool: Tool): string {
   return inputProperty;
 }
 
-export function resolveJsonSchemaStrictSampling(
-  tool: Tool,
-  supportsStrictMode: boolean,
-  isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
-): boolean | undefined {
-  const config = tool.constrainedSampling;
-  if (config === undefined || config === false || config.type !== "json_schema") return undefined;
+export const resolveJsonSchemaStrictSampling: {
+  (
+    supportsStrictMode: boolean,
+    isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
+  ): (tool: Tool) => boolean | undefined;
+  (
+    tool: Tool,
+    supportsStrictMode: boolean,
+    isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
+  ): boolean | undefined;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null,
+  function (
+    tool: Tool,
+    supportsStrictMode: boolean,
+    isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
+  ): boolean | undefined {
+    const config = tool.constrainedSampling;
+    if (config === undefined || config === false || config.type !== "json_schema") return undefined;
 
-  if (supportsStrictMode) {
-    try {
-      makeStrictJsonSchema(tool.parameters, isUnsupportedKeyword);
-      return true;
-    } catch (error) {
-      if (!(error instanceof UnsupportedStrictJsonSchemaError)) throw error;
-      if (config.strict !== "require") return undefined;
+    if (supportsStrictMode) {
+      try {
+        makeStrictJsonSchema(tool.parameters, isUnsupportedKeyword);
+        return true;
+      } catch (error) {
+        if (!(error instanceof UnsupportedStrictJsonSchemaError)) throw error;
+        if (config.strict !== "require") return undefined;
+        throw new Error(
+          `Tool "${tool.name}" requires JSON-schema constrained sampling, but ${error.message}.`,
+          { cause: error },
+        );
+      }
+    }
+    if (config.strict === "require") {
       throw new Error(
-        `Tool "${tool.name}" requires JSON-schema constrained sampling, but ${error.message}.`,
-        { cause: error },
+        `Tool "${tool.name}" requires JSON-schema constrained sampling, but strict tools are unsupported.`,
       );
     }
-  }
-  if (config.strict === "require") {
-    throw new Error(
-      `Tool "${tool.name}" requires JSON-schema constrained sampling, but strict tools are unsupported.`,
-    );
-  }
-  return undefined;
-}
+    return undefined;
+  },
+);
 
 export const resolveGrammarConstrainedSampling: {
   (supportsOpenAIGrammarTools: boolean): (tool: Tool) => GrammarConstrainedSampling | undefined;

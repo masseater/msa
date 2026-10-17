@@ -1,3 +1,5 @@
+import { Function } from "effect";
+
 import type {
   AssistantImages,
   ImageApi,
@@ -45,18 +47,29 @@ function wrapGenerateImages<TOptions extends ImagesOptions>(
   };
 }
 
-export function registerImagesApiProvider<TApi extends ImageApi, TOptions extends ImagesOptions>(
-  provider: ImagesApiProvider<TApi, TOptions>,
-  sourceId?: string,
-): void {
-  imagesApiProviderRegistry.set(provider.api, {
-    provider: {
-      api: provider.api,
-      generateImages: wrapGenerateImages(provider.api, provider.generateImages),
-    },
-    sourceId,
-  });
-}
+export const registerImagesApiProvider: {
+  <TApi extends ImageApi, TOptions extends ImagesOptions>(
+    sourceId?: string,
+  ): (provider: ImagesApiProvider<TApi, TOptions>) => void;
+  <TApi extends ImageApi, TOptions extends ImagesOptions>(
+    provider: ImagesApiProvider<TApi, TOptions>,
+    sourceId?: string,
+  ): void;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null,
+  function <TApi extends ImageApi, TOptions extends ImagesOptions>(
+    provider: ImagesApiProvider<TApi, TOptions>,
+    sourceId?: string,
+  ): void {
+    imagesApiProviderRegistry.set(provider.api, {
+      provider: {
+        api: provider.api,
+        generateImages: wrapGenerateImages(provider.api, provider.generateImages),
+      },
+      sourceId,
+    });
+  },
+);
 
 export function getImagesApiProvider(api: ImageApi): ImagesApiProviderInternal | undefined {
   return imagesApiProviderRegistry.get(api)?.provider;

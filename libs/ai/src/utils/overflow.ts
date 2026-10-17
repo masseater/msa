@@ -37,53 +37,59 @@ const NON_OVERFLOW_PATTERNS = [
   /too many requests/iu,
 ];
 
-export function isContextOverflow(message: AssistantMessage, contextWindow?: number): boolean {
-  if (
-    message.stopReason === "error" &&
-    message.errorMessage !== undefined &&
-    message.errorMessage !== ""
-  ) {
-    const isNonOverflow = NON_OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!));
-    if (!isNonOverflow) {
-      if (OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!))) {
+export const isContextOverflow: {
+  (contextWindow?: number): (message: AssistantMessage) => boolean;
+  (message: AssistantMessage, contextWindow?: number): boolean;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null,
+  function (message: AssistantMessage, contextWindow?: number): boolean {
+    if (
+      message.stopReason === "error" &&
+      message.errorMessage !== undefined &&
+      message.errorMessage !== ""
+    ) {
+      const isNonOverflow = NON_OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!));
+      if (!isNonOverflow) {
+        if (OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!))) {
+          return true;
+        }
+        if (
+          message.provider === "cerebras" &&
+          CEREBRAS_BODYLESS_OVERFLOW_PATTERN.test(message.errorMessage)
+        ) {
+          return true;
+        }
+      }
+    }
+
+    if (
+      contextWindow !== undefined &&
+      contextWindow !== 0 &&
+      !Number.isNaN(contextWindow) &&
+      message.stopReason === "stop"
+    ) {
+      const inputTokens = message.usage.input + message.usage.cacheRead;
+      if (inputTokens > contextWindow) {
         return true;
       }
-      if (
-        message.provider === "cerebras" &&
-        CEREBRAS_BODYLESS_OVERFLOW_PATTERN.test(message.errorMessage)
-      ) {
+    }
+
+    if (
+      contextWindow !== undefined &&
+      contextWindow !== 0 &&
+      !Number.isNaN(contextWindow) &&
+      message.stopReason === "length" &&
+      message.usage.output === 0
+    ) {
+      const inputTokens = message.usage.input + message.usage.cacheRead;
+      if (inputTokens >= contextWindow * 0.99) {
         return true;
       }
     }
-  }
 
-  if (
-    contextWindow !== undefined &&
-    contextWindow !== 0 &&
-    !Number.isNaN(contextWindow) &&
-    message.stopReason === "stop"
-  ) {
-    const inputTokens = message.usage.input + message.usage.cacheRead;
-    if (inputTokens > contextWindow) {
-      return true;
-    }
-  }
-
-  if (
-    contextWindow !== undefined &&
-    contextWindow !== 0 &&
-    !Number.isNaN(contextWindow) &&
-    message.stopReason === "length" &&
-    message.usage.output === 0
-  ) {
-    const inputTokens = message.usage.input + message.usage.cacheRead;
-    if (inputTokens >= contextWindow * 0.99) {
-      return true;
-    }
-  }
-
-  return false;
-}
+    return false;
+  },
+);
 
 export const isRecoverableLength: {
   (desiredMaxOutput: number): (message: AssistantMessage) => boolean;

@@ -347,28 +347,41 @@ function sanitizeForOpenApi(schema: unknown): unknown {
   return result;
 }
 
-export function convertTools(
-  tools: Tool[],
-  useParameters = false,
-  supportsStrictMode = true,
-): { functionDeclarations: Record<string, unknown>[] }[] | undefined {
-  if (tools.length === 0) return undefined;
-  return [
-    {
-      functionDeclarations: tools.map((tool) => {
-        const strict = resolveJsonSchemaStrictSampling(tool, supportsStrictMode);
-        const parameters = getJsonSchemaToolParameters(tool, strict);
-        return {
-          name: tool.name,
-          description: tool.description,
-          ...(useParameters
-            ? { parameters: sanitizeForOpenApi(parameters as unknown) }
-            : { parametersJsonSchema: parameters }),
-        };
-      }),
-    },
-  ];
-}
+export const convertTools: {
+  (
+    useParameters?: boolean,
+    supportsStrictMode?: boolean,
+  ): (tools: Tool[]) => { functionDeclarations: Record<string, unknown>[] }[] | undefined;
+  (
+    tools: Tool[],
+    useParameters?: boolean,
+    supportsStrictMode?: boolean,
+  ): { functionDeclarations: Record<string, unknown>[] }[] | undefined;
+} = Function.dual(
+  (args) => Array.isArray(args[0]),
+  function (
+    tools: Tool[],
+    useParameters: boolean = false,
+    supportsStrictMode: boolean = true,
+  ): { functionDeclarations: Record<string, unknown>[] }[] | undefined {
+    if (tools.length === 0) return undefined;
+    return [
+      {
+        functionDeclarations: tools.map((tool) => {
+          const strict = resolveJsonSchemaStrictSampling(tool, supportsStrictMode);
+          const parameters = getJsonSchemaToolParameters(tool, strict);
+          return {
+            name: tool.name,
+            description: tool.description,
+            ...(useParameters
+              ? { parameters: sanitizeForOpenApi(parameters as unknown) }
+              : { parametersJsonSchema: parameters }),
+          };
+        }),
+      },
+    ];
+  },
+);
 
 export function supportsGoogleStrictToolSampling(modelId: string): boolean {
   const majorVersion = getGeminiMajorVersion(modelId);
@@ -466,17 +479,28 @@ const withHeadersField = (error: unknown): unknown => {
   return error;
 };
 
-export const retryGoogleRequest = <T>(
-  request: () => Promise<T>,
-  options?: Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
-): Effect.Effect<T> =>
-  retryProviderEffect(
-    Effect.promise(() => Promise.resolve(request())).pipe(
-      Effect.catchDefect((error) => Effect.die(withHeadersField(error))),
+export const retryGoogleRequest: {
+  <T>(
+    options?: Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
+  ): (request: () => Promise<T>) => Effect.Effect<T>;
+  <T>(
+    request: () => Promise<T>,
+    options?: Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
+  ): Effect.Effect<T>;
+} = Function.dual(
+  (args) => typeof args[0] === "function",
+  <T>(
+    request: () => Promise<T>,
+    options?: Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
+  ): Effect.Effect<T> =>
+    retryProviderEffect(
+      Effect.promise(() => Promise.resolve(request())).pipe(
+        Effect.catchDefect((error) => Effect.die(withHeadersField(error))),
+      ),
+      {
+        maxRetries: options?.maxRetries,
+        maxRetryDelayMs: options?.maxRetryDelayMs,
+        signal: options?.signal,
+      },
     ),
-    {
-      maxRetries: options?.maxRetries,
-      maxRetryDelayMs: options?.maxRetryDelayMs,
-      signal: options?.signal,
-    },
-  );
+);

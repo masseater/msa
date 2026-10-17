@@ -77,16 +77,22 @@ function isPlainNonEmptyObject(value: unknown): boolean {
   return Object.keys(value).length > 0;
 }
 
-export function formatProviderError(norm: NormalizedProviderError, prefix?: string): string {
-  if (norm.messageCarriesBody || norm.status === undefined || norm.body === undefined) {
-    return prefix !== undefined && norm.status !== undefined
-      ? `${prefix} (${norm.status}): ${norm.message}`
-      : norm.message;
-  }
-  return prefix === undefined
-    ? `${norm.status}: ${norm.body}`
-    : `${prefix} (${norm.status}): ${norm.body}`;
-}
+export const formatProviderError: {
+  (prefix?: string): (norm: NormalizedProviderError) => string;
+  (norm: NormalizedProviderError, prefix?: string): string;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null,
+  function (norm: NormalizedProviderError, prefix?: string): string {
+    if (norm.messageCarriesBody || norm.status === undefined || norm.body === undefined) {
+      return prefix !== undefined && norm.status !== undefined
+        ? `${prefix} (${norm.status}): ${norm.message}`
+        : norm.message;
+    }
+    return prefix === undefined
+      ? `${norm.status}: ${norm.body}`
+      : `${prefix} (${norm.status}): ${norm.body}`;
+  },
+);
 
 export const truncateErrorText: {
   (maxChars: number): (text: string) => string;

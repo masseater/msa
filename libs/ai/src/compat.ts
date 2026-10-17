@@ -1,3 +1,4 @@
+import { Function } from "effect";
 export * from "./api/anthropic-messages.lazy.ts";
 export * from "./api/azure-openai-responses.lazy.ts";
 export * from "./api/bedrock-converse-stream.lazy.ts";
@@ -123,19 +124,30 @@ function wrapStreamSimple<TApi extends Api>(
   };
 }
 
-export function registerApiProvider<TApi extends Api, TOptions extends StreamOptions>(
-  provider: ApiProvider<TApi, TOptions>,
-  sourceId?: string,
-): void {
-  apiProviderRegistry.set(provider.api, {
-    provider: {
-      api: provider.api,
-      stream: wrapStream(provider.api, provider.stream),
-      streamSimple: wrapStreamSimple(provider.api, provider.streamSimple),
-    },
-    sourceId,
-  });
-}
+export const registerApiProvider: {
+  <TApi extends Api, TOptions extends StreamOptions>(
+    sourceId?: string,
+  ): (provider: ApiProvider<TApi, TOptions>) => void;
+  <TApi extends Api, TOptions extends StreamOptions>(
+    provider: ApiProvider<TApi, TOptions>,
+    sourceId?: string,
+  ): void;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null,
+  function <TApi extends Api, TOptions extends StreamOptions>(
+    provider: ApiProvider<TApi, TOptions>,
+    sourceId?: string,
+  ): void {
+    apiProviderRegistry.set(provider.api, {
+      provider: {
+        api: provider.api,
+        stream: wrapStream(provider.api, provider.stream),
+        streamSimple: wrapStreamSimple(provider.api, provider.streamSimple),
+      },
+      sourceId,
+    });
+  },
+);
 
 export function getApiProvider(api: Api): ApiProviderInternal | undefined {
   return apiProviderRegistry.get(api)?.provider;
@@ -252,68 +264,120 @@ function resolveApiProvider(api: Api) {
   return provider;
 }
 
-export function stream<TApi extends Api>(
-  model: Model<TApi>,
-  context: Context,
-  options?: ProviderStreamOptions,
-): AssistantMessageEventStream {
-  const transcript = normalizeContext(context);
-  const builtinProvider = getBuiltinProviderForModel(model);
-  if (builtinProvider !== undefined) {
-    if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
-      return compatModels.stream(
+export const stream: {
+  <TApi extends Api>(
+    context: Context,
+    options?: ProviderStreamOptions,
+  ): (model: Model<TApi>) => AssistantMessageEventStream;
+  <TApi extends Api>(
+    model: Model<TApi>,
+    context: Context,
+    options?: ProviderStreamOptions,
+  ): AssistantMessageEventStream;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && "api" in args[0],
+  function <TApi extends Api>(
+    model: Model<TApi>,
+    context: Context,
+    options?: ProviderStreamOptions,
+  ): AssistantMessageEventStream {
+    const transcript = normalizeContext(context);
+    const builtinProvider = getBuiltinProviderForModel(model);
+    if (builtinProvider !== undefined) {
+      if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
+        return compatModels.stream(
+          model,
+          transcript,
+          options as ModelsApiStreamOptions<TApi> | undefined,
+        );
+      }
+      return builtinProvider.stream(
         model,
         transcript,
-        options as ModelsApiStreamOptions<TApi> | undefined,
+        withEnvApiKey(model, options) as ApiStreamOptions<TApi>,
       );
     }
-    return builtinProvider.stream(
-      model,
-      transcript,
-      withEnvApiKey(model, options) as ApiStreamOptions<TApi>,
-    );
-  }
-  const provider = resolveApiProvider(model.api);
-  return provider.stream(model, transcript, withEnvApiKey(model, options) as StreamOptions);
-}
+    const provider = resolveApiProvider(model.api);
+    return provider.stream(model, transcript, withEnvApiKey(model, options) as StreamOptions);
+  },
+);
 
-export function complete<TApi extends Api>(
-  model: Model<TApi>,
-  context: Context,
-  options?: ProviderStreamOptions,
-): Promise<AssistantMessage> {
-  try {
-    return stream(model, context, options).result();
-  } catch (error) {
-    return Promise.reject(error);
-  }
-}
-
-export function streamSimple<TApi extends Api>(
-  model: Model<TApi>,
-  context: Context,
-  options?: SimpleStreamOptions,
-): AssistantMessageEventStream {
-  const transcript = normalizeContext(context);
-  const builtinProvider = getBuiltinProviderForModel(model);
-  if (builtinProvider !== undefined) {
-    if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
-      return compatModels.streamSimple(model, transcript, options);
+export const complete: {
+  <TApi extends Api>(
+    context: Context,
+    options?: ProviderStreamOptions,
+  ): (model: Model<TApi>) => Promise<AssistantMessage>;
+  <TApi extends Api>(
+    model: Model<TApi>,
+    context: Context,
+    options?: ProviderStreamOptions,
+  ): Promise<AssistantMessage>;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && "api" in args[0],
+  function <TApi extends Api>(
+    model: Model<TApi>,
+    context: Context,
+    options?: ProviderStreamOptions,
+  ): Promise<AssistantMessage> {
+    try {
+      return stream(model, context, options).result();
+    } catch (error) {
+      return Promise.reject(error);
     }
-    return builtinProvider.streamSimple(model, transcript, withEnvApiKey(model, options));
-  }
-  const provider = resolveApiProvider(model.api);
-  return provider.streamSimple(model, transcript, withEnvApiKey(model, options));
-}
+  },
+);
 
-export function completeSimple<TApi extends Api>(
-  model: Model<TApi>,
-  context: Context,
-  options?: SimpleStreamOptions,
-): Promise<AssistantMessage> {
-  try {
-    return streamSimple(model, context, options).result();
-  } catch (error) {
-    return Promise.reject(error);
-  }
-}
+export const streamSimple: {
+  <TApi extends Api>(
+    context: Context,
+    options?: SimpleStreamOptions,
+  ): (model: Model<TApi>) => AssistantMessageEventStream;
+  <TApi extends Api>(
+    model: Model<TApi>,
+    context: Context,
+    options?: SimpleStreamOptions,
+  ): AssistantMessageEventStream;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && "api" in args[0],
+  function <TApi extends Api>(
+    model: Model<TApi>,
+    context: Context,
+    options?: SimpleStreamOptions,
+  ): AssistantMessageEventStream {
+    const transcript = normalizeContext(context);
+    const builtinProvider = getBuiltinProviderForModel(model);
+    if (builtinProvider !== undefined) {
+      if (model.provider.startsWith("cloudflare-") && !hasResolvedCloudflareAuth(options)) {
+        return compatModels.streamSimple(model, transcript, options);
+      }
+      return builtinProvider.streamSimple(model, transcript, withEnvApiKey(model, options));
+    }
+    const provider = resolveApiProvider(model.api);
+    return provider.streamSimple(model, transcript, withEnvApiKey(model, options));
+  },
+);
+
+export const completeSimple: {
+  <TApi extends Api>(
+    context: Context,
+    options?: SimpleStreamOptions,
+  ): (model: Model<TApi>) => Promise<AssistantMessage>;
+  <TApi extends Api>(
+    model: Model<TApi>,
+    context: Context,
+    options?: SimpleStreamOptions,
+  ): Promise<AssistantMessage>;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && "api" in args[0],
+  function <TApi extends Api>(
+    model: Model<TApi>,
+    context: Context,
+    options?: SimpleStreamOptions,
+  ): Promise<AssistantMessage> {
+    try {
+      return streamSimple(model, context, options).result();
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  },
+);

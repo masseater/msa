@@ -1,3 +1,5 @@
+import { Function } from "effect";
+
 import type { Api, Model, StreamOptions } from "../types.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 
@@ -29,18 +31,21 @@ function parseDeploymentNameMap(value: string | undefined): Map<string, string> 
   return map;
 }
 
-export function resolveDeploymentName(
-  model: Pick<Model<Api>, "id">,
-  options?: AzureEndpointOptions,
-): string {
-  if (options?.azureDeploymentName !== undefined && options?.azureDeploymentName !== "") {
-    return options.azureDeploymentName;
-  }
-  const mappedDeployment = parseDeploymentNameMap(
-    getProviderEnvValue("AZURE_OPENAI_DEPLOYMENT_NAME_MAP", options?.env),
-  ).get(model.id);
-  return mappedDeployment || model.id;
-}
+export const resolveDeploymentName: {
+  (options?: AzureEndpointOptions): (model: Pick<Model<Api>, "id">) => string;
+  (model: Pick<Model<Api>, "id">, options?: AzureEndpointOptions): string;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && "id" in args[0],
+  function (model: Pick<Model<Api>, "id">, options?: AzureEndpointOptions): string {
+    if (options?.azureDeploymentName !== undefined && options?.azureDeploymentName !== "") {
+      return options.azureDeploymentName;
+    }
+    const mappedDeployment = parseDeploymentNameMap(
+      getProviderEnvValue("AZURE_OPENAI_DEPLOYMENT_NAME_MAP", options?.env),
+    ).get(model.id);
+    return mappedDeployment || model.id;
+  },
+);
 
 function normalizeAzureBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.trim().replace(/\/+$/u, "");
@@ -75,49 +80,63 @@ function buildDefaultBaseUrl(resourceName: string): string {
   return `https://${resourceName}.openai.azure.com/openai/v1`;
 }
 
-export function resolveAzureBaseUrl(
-  model: Pick<Model<Api>, "baseUrl">,
-  options?: AzureEndpointOptions,
-): string {
-  const baseUrl =
-    options?.azureBaseUrl?.trim() ||
-    getProviderEnvValue("AZURE_OPENAI_BASE_URL", options?.env)?.trim() ||
-    undefined;
-  const resourceName =
-    options?.azureResourceName || getProviderEnvValue("AZURE_OPENAI_RESOURCE_NAME", options?.env);
+export const resolveAzureBaseUrl: {
+  (options?: AzureEndpointOptions): (model: Pick<Model<Api>, "baseUrl">) => string;
+  (model: Pick<Model<Api>, "baseUrl">, options?: AzureEndpointOptions): string;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && "baseUrl" in args[0],
+  function (model: Pick<Model<Api>, "baseUrl">, options?: AzureEndpointOptions): string {
+    const baseUrl =
+      options?.azureBaseUrl?.trim() ||
+      getProviderEnvValue("AZURE_OPENAI_BASE_URL", options?.env)?.trim() ||
+      undefined;
+    const resourceName =
+      options?.azureResourceName || getProviderEnvValue("AZURE_OPENAI_RESOURCE_NAME", options?.env);
 
-  let resolvedBaseUrl = baseUrl;
+    let resolvedBaseUrl = baseUrl;
 
-  if (
-    (resolvedBaseUrl === undefined || resolvedBaseUrl === "") &&
-    resourceName !== undefined &&
-    resourceName !== ""
-  ) {
-    resolvedBaseUrl = buildDefaultBaseUrl(resourceName);
-  }
+    if (
+      (resolvedBaseUrl === undefined || resolvedBaseUrl === "") &&
+      resourceName !== undefined &&
+      resourceName !== ""
+    ) {
+      resolvedBaseUrl = buildDefaultBaseUrl(resourceName);
+    }
 
-  if ((resolvedBaseUrl === undefined || resolvedBaseUrl === "") && model.baseUrl !== "") {
-    resolvedBaseUrl = model.baseUrl;
-  }
+    if ((resolvedBaseUrl === undefined || resolvedBaseUrl === "") && model.baseUrl !== "") {
+      resolvedBaseUrl = model.baseUrl;
+    }
 
-  if (resolvedBaseUrl === undefined || resolvedBaseUrl === "") {
-    throw new Error(
-      "Azure OpenAI base URL is required. Set AZURE_OPENAI_BASE_URL or AZURE_OPENAI_RESOURCE_NAME, or pass azureBaseUrl, azureResourceName, or model.baseUrl.",
-    );
-  }
+    if (resolvedBaseUrl === undefined || resolvedBaseUrl === "") {
+      throw new Error(
+        "Azure OpenAI base URL is required. Set AZURE_OPENAI_BASE_URL or AZURE_OPENAI_RESOURCE_NAME, or pass azureBaseUrl, azureResourceName, or model.baseUrl.",
+      );
+    }
 
-  return normalizeAzureBaseUrl(resolvedBaseUrl);
-}
+    return normalizeAzureBaseUrl(resolvedBaseUrl);
+  },
+);
 
-export function resolveAzureConfig(
-  model: Pick<Model<Api>, "baseUrl">,
-  options?: AzureEndpointOptions,
-): { baseUrl: string; apiVersion: string } {
-  return {
-    baseUrl: resolveAzureBaseUrl(model, options),
-    apiVersion:
-      options?.azureApiVersion ||
-      getProviderEnvValue("AZURE_OPENAI_API_VERSION", options?.env) ||
-      DEFAULT_AZURE_API_VERSION,
-  };
-}
+export const resolveAzureConfig: {
+  (
+    options?: AzureEndpointOptions,
+  ): (model: Pick<Model<Api>, "baseUrl">) => { baseUrl: string; apiVersion: string };
+  (
+    model: Pick<Model<Api>, "baseUrl">,
+    options?: AzureEndpointOptions,
+  ): { baseUrl: string; apiVersion: string };
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && "baseUrl" in args[0],
+  function (
+    model: Pick<Model<Api>, "baseUrl">,
+    options?: AzureEndpointOptions,
+  ): { baseUrl: string; apiVersion: string } {
+    return {
+      baseUrl: resolveAzureBaseUrl(model, options),
+      apiVersion:
+        options?.azureApiVersion ||
+        getProviderEnvValue("AZURE_OPENAI_API_VERSION", options?.env) ||
+        DEFAULT_AZURE_API_VERSION,
+    };
+  },
+);

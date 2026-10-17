@@ -1,3 +1,5 @@
+import { Function } from "effect";
+
 import { getImagesApiProvider } from "./images-api-registry.ts";
 import { registerBuiltInImagesApiProviders } from "./providers/images/register-builtins.ts";
 import type {
@@ -18,14 +20,27 @@ function resolveImagesApiProvider(api: ImageApi) {
   return provider;
 }
 
-export function generateImages(
-  model: ImageModel<ImageApi>,
-  context: ImagesContext,
-  options?: ProviderImagesOptions,
-): Promise<AssistantImages> {
-  try {
-    return resolveImagesApiProvider(model.api).generateImages(model, context, options);
-  } catch (error) {
-    return Promise.reject(error);
-  }
-}
+export const generateImages: {
+  (
+    context: ImagesContext,
+    options?: ProviderImagesOptions,
+  ): (model: ImageModel<ImageApi>) => Promise<AssistantImages>;
+  (
+    model: ImageModel<ImageApi>,
+    context: ImagesContext,
+    options?: ProviderImagesOptions,
+  ): Promise<AssistantImages>;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null && "api" in args[0],
+  function (
+    model: ImageModel<ImageApi>,
+    context: ImagesContext,
+    options?: ProviderImagesOptions,
+  ): Promise<AssistantImages> {
+    try {
+      return resolveImagesApiProvider(model.api).generateImages(model, context, options);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  },
+);

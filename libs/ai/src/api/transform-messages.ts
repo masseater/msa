@@ -1,3 +1,5 @@
+import { Function } from "effect";
+
 import type {
   Api,
   AssistantMessage,
@@ -63,155 +65,168 @@ function downgradeUnsupportedImages<TApi extends Api>(
   });
 }
 
-export function transformMessages<TApi extends Api>(
-  messages: Message[],
-  model: Model<TApi>,
-  normalizeToolCallId?: (id: string, model: Model<TApi>, source: AssistantMessage) => string,
-): Message[] {
-  const toolCallIdMap = new Map<string, string>();
-  const normalizedMessages = messages.map((msg) =>
-    msg.content === undefined || msg.content === null ? { ...msg, content: [] } : msg,
-  );
-  const imageAwareMessages = downgradeUnsupportedImages(normalizedMessages, model);
+export const transformMessages: {
+  <TApi extends Api>(
+    model: Model<TApi>,
+    normalizeToolCallId?: (id: string, model: Model<TApi>, source: AssistantMessage) => string,
+  ): (messages: Message[]) => Message[];
+  <TApi extends Api>(
+    messages: Message[],
+    model: Model<TApi>,
+    normalizeToolCallId?: (id: string, model: Model<TApi>, source: AssistantMessage) => string,
+  ): Message[];
+} = Function.dual(
+  (args) => Array.isArray(args[0]),
+  function <TApi extends Api>(
+    messages: Message[],
+    model: Model<TApi>,
+    normalizeToolCallId?: (id: string, model: Model<TApi>, source: AssistantMessage) => string,
+  ): Message[] {
+    const toolCallIdMap = new Map<string, string>();
+    const normalizedMessages = messages.map((msg) =>
+      msg.content === undefined || msg.content === null ? { ...msg, content: [] } : msg,
+    );
+    const imageAwareMessages = downgradeUnsupportedImages(normalizedMessages, model);
 
-  const transformed = imageAwareMessages.map((msg) => {
-    if (msg.role === "system" || msg.role === "user") {
-      return msg;
-    }
-
-    if (msg.role === "toolResult") {
-      const normalizedId = toolCallIdMap.get(msg.toolCallId);
-      if (normalizedId !== undefined && normalizedId !== "" && normalizedId !== msg.toolCallId) {
-        return Object.assign({}, msg, { toolCallId: normalizedId });
+    const transformed = imageAwareMessages.map((msg) => {
+      if (msg.role === "system" || msg.role === "user") {
+        return msg;
       }
-      return msg;
-    }
 
-    if (msg.role === "assistant") {
-      const assistantMsg = msg as AssistantMessage;
-      const isSameModel =
-        assistantMsg.provider === model.provider &&
-        assistantMsg.api === model.api &&
-        assistantMsg.model === model.id;
-
-      const transformedContent = assistantMsg.content.flatMap((block) => {
-        if (block.type === "thinking") {
-          if (block.redacted === true) {
-            return isSameModel ? block : [];
-          }
-          if (
-            isSameModel &&
-            block.thinkingSignature !== undefined &&
-            block.thinkingSignature !== ""
-          )
-            return block;
-          if (block.thinking === "" || block.thinking.trim() === "") return [];
-          if (isSameModel) return block;
-          return {
-            type: "text" as const,
-            text: block.thinking,
-          };
+      if (msg.role === "toolResult") {
+        const normalizedId = toolCallIdMap.get(msg.toolCallId);
+        if (normalizedId !== undefined && normalizedId !== "" && normalizedId !== msg.toolCallId) {
+          return Object.assign({}, msg, { toolCallId: normalizedId });
         }
+        return msg;
+      }
 
-        if (block.type === "text") {
-          if (isSameModel) return block;
-          return {
-            type: "text" as const,
-            text: block.text,
-          };
-        }
+      if (msg.role === "assistant") {
+        const assistantMsg = msg as AssistantMessage;
+        const isSameModel =
+          assistantMsg.provider === model.provider &&
+          assistantMsg.api === model.api &&
+          assistantMsg.model === model.id;
 
-        if (block.type === "toolCall") {
-          const toolCall = block as ToolCall;
-          let normalizedToolCall: ToolCall = toolCall;
-
-          if (
-            !isSameModel &&
-            toolCall.thoughtSignature !== undefined &&
-            toolCall.thoughtSignature !== ""
-          ) {
-            normalizedToolCall = { ...toolCall };
-            delete (normalizedToolCall as { thoughtSignature?: string }).thoughtSignature;
-          }
-
-          if (!isSameModel && normalizeToolCallId !== undefined) {
-            const normalizedId = normalizeToolCallId(toolCall.id, model, assistantMsg);
-            if (normalizedId !== toolCall.id) {
-              toolCallIdMap.set(toolCall.id, normalizedId);
-              normalizedToolCall = { ...normalizedToolCall, id: normalizedId };
+        const transformedContent = assistantMsg.content.flatMap((block) => {
+          if (block.type === "thinking") {
+            if (block.redacted === true) {
+              return isSameModel ? block : [];
             }
+            if (
+              isSameModel &&
+              block.thinkingSignature !== undefined &&
+              block.thinkingSignature !== ""
+            )
+              return block;
+            if (block.thinking === "" || block.thinking.trim() === "") return [];
+            if (isSameModel) return block;
+            return {
+              type: "text" as const,
+              text: block.thinking,
+            };
           }
 
-          return normalizedToolCall;
-        }
+          if (block.type === "text") {
+            if (isSameModel) return block;
+            return {
+              type: "text" as const,
+              text: block.text,
+            };
+          }
 
-        return block;
-      });
+          if (block.type === "toolCall") {
+            const toolCall = block as ToolCall;
+            let normalizedToolCall: ToolCall = toolCall;
 
-      return Object.assign({}, assistantMsg, { content: transformedContent });
-    }
-    return msg;
-  });
+            if (
+              !isSameModel &&
+              toolCall.thoughtSignature !== undefined &&
+              toolCall.thoughtSignature !== ""
+            ) {
+              normalizedToolCall = { ...toolCall };
+              delete (normalizedToolCall as { thoughtSignature?: string }).thoughtSignature;
+            }
 
-  const result: Message[] = [];
-  let pendingToolCalls: ToolCall[] = [];
-  let existingToolResultIds = new Set<string>();
-  const heldSystemMessages: Message[] = [];
-  const closePendingToolCalls = () => {
-    if (pendingToolCalls.length > 0) {
-      for (const tc of pendingToolCalls) {
-        if (!existingToolResultIds.has(tc.id)) {
-          result.push({
-            role: "toolResult",
-            toolCallId: tc.id,
-            toolName: tc.name,
-            content: [{ type: "text", text: "No result provided" }],
-            isError: true,
-            timestamp: currentTimeMillis(),
-          } as ToolResultMessage);
-        }
+            if (!isSameModel && normalizeToolCallId !== undefined) {
+              const normalizedId = normalizeToolCallId(toolCall.id, model, assistantMsg);
+              if (normalizedId !== toolCall.id) {
+                toolCallIdMap.set(toolCall.id, normalizedId);
+                normalizedToolCall = { ...normalizedToolCall, id: normalizedId };
+              }
+            }
+
+            return normalizedToolCall;
+          }
+
+          return block;
+        });
+
+        return Object.assign({}, assistantMsg, { content: transformedContent });
       }
-      pendingToolCalls = [];
-      existingToolResultIds = new Set();
-    }
-    result.push(...heldSystemMessages);
-    heldSystemMessages.length = 0;
-  };
+      return msg;
+    });
 
-  for (const msg of transformed) {
-    if (msg.role === "assistant") {
-      closePendingToolCalls();
-
-      const assistantMsg = msg as AssistantMessage;
-      if (assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted") {
-        continue;
-      }
-
-      const toolCalls = assistantMsg.content.filter((b) => b.type === "toolCall") as ToolCall[];
-      if (toolCalls.length > 0) {
-        pendingToolCalls = toolCalls;
+    const result: Message[] = [];
+    let pendingToolCalls: ToolCall[] = [];
+    let existingToolResultIds = new Set<string>();
+    const heldSystemMessages: Message[] = [];
+    const closePendingToolCalls = () => {
+      if (pendingToolCalls.length > 0) {
+        for (const tc of pendingToolCalls) {
+          if (!existingToolResultIds.has(tc.id)) {
+            result.push({
+              role: "toolResult",
+              toolCallId: tc.id,
+              toolName: tc.name,
+              content: [{ type: "text", text: "No result provided" }],
+              isError: true,
+              timestamp: currentTimeMillis(),
+            } as ToolResultMessage);
+          }
+        }
+        pendingToolCalls = [];
         existingToolResultIds = new Set();
       }
+      result.push(...heldSystemMessages);
+      heldSystemMessages.length = 0;
+    };
 
-      result.push(msg);
-    } else if (msg.role === "toolResult") {
-      existingToolResultIds.add(msg.toolCallId);
-      result.push(msg);
-    } else if (msg.role === "system") {
-      if (pendingToolCalls.length > 0) {
-        heldSystemMessages.push(msg);
+    for (const msg of transformed) {
+      if (msg.role === "assistant") {
+        closePendingToolCalls();
+
+        const assistantMsg = msg as AssistantMessage;
+        if (assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted") {
+          continue;
+        }
+
+        const toolCalls = assistantMsg.content.filter((b) => b.type === "toolCall") as ToolCall[];
+        if (toolCalls.length > 0) {
+          pendingToolCalls = toolCalls;
+          existingToolResultIds = new Set();
+        }
+
+        result.push(msg);
+      } else if (msg.role === "toolResult") {
+        existingToolResultIds.add(msg.toolCallId);
+        result.push(msg);
+      } else if (msg.role === "system") {
+        if (pendingToolCalls.length > 0) {
+          heldSystemMessages.push(msg);
+        } else {
+          result.push(msg);
+        }
+      } else if (msg.role === "user") {
+        closePendingToolCalls();
+        result.push(msg);
       } else {
         result.push(msg);
       }
-    } else if (msg.role === "user") {
-      closePendingToolCalls();
-      result.push(msg);
-    } else {
-      result.push(msg);
     }
-  }
 
-  closePendingToolCalls();
+    closePendingToolCalls();
 
-  return result;
-}
+    return result;
+  },
+);
