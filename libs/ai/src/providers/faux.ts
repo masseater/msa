@@ -1,3 +1,5 @@
+import { Effect } from "effect";
+
 import { createProvider, type Provider } from "../models.ts";
 import type {
   AssistantMessage,
@@ -21,6 +23,8 @@ import type {
 import { currentTimeMillis } from "../utils/clock.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { createAssistantMessageEventStream } from "../utils/event-stream.ts";
+import { callHook } from "../utils/hooks.ts";
+import { encodeJsonSync } from "../utils/json-codec.ts";
 import { nextRandom } from "../utils/random.ts";
 import { getSystemMessageText } from "../utils/text.ts";
 
@@ -362,31 +366,26 @@ function createAbortedMessage(partial: AssistantMessage): AssistantMessage {
   };
 }
 
-function scheduleChunk(chunk: string, tokensPerSecond: number | undefined): Promise<void> {
+function scheduleChunk(chunk: string, tokensPerSecond: number | undefined): Effect.Effect<void> {
   if (
     tokensPerSecond === undefined ||
     tokensPerSecond === 0 ||
     Number.isNaN(tokensPerSecond) ||
     tokensPerSecond <= 0
   ) {
-    return new Promise((resolve) => {
-      queueMicrotask(resolve);
-    });
+    return Effect.promise(() => Promise.resolve());
   }
-  const delayMs = (estimateTokens(chunk) / tokensPerSecond) * 1000;
-  return new Promise((resolve) => {
-    setTimeout(resolve, delayMs);
-  });
+  return Effect.sleep((estimateTokens(chunk) / tokensPerSecond) * 1000);
 }
 
-async function streamWithDeltas(
+const streamWithDeltas = Effect.fn("streamWithDeltas")(function* (
   stream: AssistantMessageEventStream,
   message: AssistantMessage,
   minTokenSize: number,
   maxTokenSize: number,
   tokensPerSecond: number | undefined,
   signal: AbortSignal | undefined,
-): Promise<void> {
+) {
   const partial: AssistantMessage = { ...message, content: [], stopReason: "pending" };
   if (signal?.aborted === true) {
     const aborted = createAbortedMessage(partial);
@@ -394,9 +393,7 @@ async function streamWithDeltas(
     stream.end(aborted);
     return;
   }
-
   stream.push({ type: "start", partial: { ...partial } });
-
   for (const [index, block] of message.content.entries()) {
     if (signal?.aborted ?? false) {
       const aborted = createAbortedMessage(partial);
@@ -409,7 +406,7 @@ async function streamWithDeltas(
       partial.content = [...partial.content, { type: "thinking", thinking: "" }];
       stream.push({ type: "thinking_start", contentIndex: index, partial: { ...partial } });
       for (const chunk of splitStringByTokenSize(block.thinking, minTokenSize, maxTokenSize)) {
-        await scheduleChunk(chunk, tokensPerSecond);
+        yield* scheduleChunk(chunk, tokensPerSecond);
         if (signal?.aborted ?? false) {
           const aborted = createAbortedMessage(partial);
           stream.push({ type: "error", reason: "aborted", error: aborted });
@@ -437,7 +434,7 @@ async function streamWithDeltas(
       partial.content = [...partial.content, { type: "text", text: "" }];
       stream.push({ type: "text_start", contentIndex: index, partial: { ...partial } });
       for (const chunk of splitStringByTokenSize(block.text, minTokenSize, maxTokenSize)) {
-        await scheduleChunk(chunk, tokensPerSecond);
+        yield* scheduleChunk(chunk, tokensPerSecond);
         if (signal?.aborted ?? false) {
           const aborted = createAbortedMessage(partial);
           stream.push({ type: "error", reason: "aborted", error: aborted });
@@ -467,11 +464,11 @@ async function streamWithDeltas(
     ];
     stream.push({ type: "toolcall_start", contentIndex: index, partial: { ...partial } });
     for (const chunk of splitStringByTokenSize(
-      JSON.stringify(block.arguments),
+      encodeJsonSync(block.arguments),
       minTokenSize,
       maxTokenSize,
     )) {
-      await scheduleChunk(chunk, tokensPerSecond);
+      yield* scheduleChunk(chunk, tokensPerSecond);
       if (signal?.aborted ?? false) {
         const aborted = createAbortedMessage(partial);
         stream.push({ type: "error", reason: "aborted", error: aborted });
@@ -493,7 +490,6 @@ async function streamWithDeltas(
       partial: { ...partial },
     });
   }
-
   if (message.stopReason === "pending") {
     throw new Error("Faux response ended without a stop reason");
   }
@@ -502,10 +498,9 @@ async function streamWithDeltas(
     stream.end(message);
     return;
   }
-
   stream.push({ type: "done", reason: message.stopReason, message });
   stream.end(message);
-}
+});
 
 export function createFauxCore(options: RegisterFauxProviderOptions) {
   const api = options.api ?? randomId(DEFAULT_API);
@@ -564,21 +559,25 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
     maxTokens: definition.maxTokens ?? 16384,
   })) as [Model<string>, ...Model<string>[]];
 
-  const resolveResponse = async (
+  const resolveResponse = Effect.fn("resolveResponse")(function* (
     step: FauxResponseStep,
     context: TranscriptContext,
     streamOptions: SimpleStreamOptions | undefined,
     requestModel: Model<string>,
-  ): Promise<AssistantMessage> => {
+  ) {
     const resolved =
-      typeof step === "function" ? await step(context, streamOptions, state, requestModel) : step;
+      typeof step === "function"
+        ? yield* Effect.promise(() =>
+            Promise.resolve(step(context, streamOptions, state, requestModel)),
+          )
+        : step;
     return withUsageEstimate(
       cloneMessage(resolved, api, provider, requestModel.id),
       context,
       streamOptions,
       promptCache,
     );
-  };
+  });
 
   const stream: StreamFunction<string, SimpleStreamOptions> = (
     requestModel,
@@ -589,66 +588,72 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
     const step = pendingResponses.shift();
     state.callCount++;
 
-    queueMicrotask(async () => {
-      try {
-        await streamOptions?.onResponse?.({ status: 200, headers: {} }, requestModel);
-        if (step === undefined) {
-          let message = createErrorMessage(
-            new Error("No more faux responses queued"),
-            api,
-            provider,
-            requestModel.id,
+    queueMicrotask(() => {
+      Effect.runFork(
+        Effect.gen(function* () {
+          yield* callHook(() =>
+            streamOptions?.onResponse?.({ status: 200, headers: {} }, requestModel),
           );
-          message = withUsageEstimate(message, context, streamOptions, promptCache);
-          outer.push({ type: "error", reason: "error", error: message });
-          outer.end(message);
-          return;
-        }
-
-        if (streamOptions?.deferred !== undefined && streamOptions?.deferred !== false) {
-          const handle: DeferredHandle = {
-            provider: requestModel.provider,
-            modelId: requestModel.id,
-            api: requestModel.api,
-            id: randomId("deferred"),
-            ...(options.deferred?.pollAfterMs === undefined
-              ? {}
-              : { pollAfterMs: options.deferred.pollAfterMs }),
-          };
-          deferredResponses.set(handle.id, {
-            handle,
-            step,
-            context,
-            options: streamOptions,
-            model: requestModel,
-            pendingFetches: Math.max(0, Math.floor(options.deferred?.pendingFetches ?? 0)),
-            cancelled: false,
-          });
-          await streamWithDeltas(
+          if (step === undefined) {
+            let message = createErrorMessage(
+              new Error("No more faux responses queued"),
+              api,
+              provider,
+              requestModel.id,
+            );
+            message = withUsageEstimate(message, context, streamOptions, promptCache);
+            outer.push({ type: "error", reason: "error", error: message });
+            outer.end(message);
+            return;
+          }
+          if (streamOptions?.deferred !== undefined && streamOptions?.deferred !== false) {
+            const handle: DeferredHandle = {
+              provider: requestModel.provider,
+              modelId: requestModel.id,
+              api: requestModel.api,
+              id: randomId("deferred"),
+              ...(options.deferred?.pollAfterMs === undefined
+                ? {}
+                : { pollAfterMs: options.deferred.pollAfterMs }),
+            };
+            deferredResponses.set(handle.id, {
+              handle,
+              step,
+              context,
+              options: streamOptions,
+              model: requestModel,
+              pendingFetches: Math.max(0, Math.floor(options.deferred?.pendingFetches ?? 0)),
+              cancelled: false,
+            });
+            yield* streamWithDeltas(
+              outer,
+              createDeferredMessage(requestModel, handle),
+              minTokenSize,
+              maxTokenSize,
+              tokensPerSecond,
+              streamOptions.signal,
+            );
+            return;
+          }
+          const message = yield* resolveResponse(step, context, streamOptions, requestModel);
+          yield* streamWithDeltas(
             outer,
-            createDeferredMessage(requestModel, handle),
+            message,
             minTokenSize,
             maxTokenSize,
             tokensPerSecond,
-            streamOptions.signal,
+            streamOptions?.signal,
           );
-          return;
-        }
-
-        const message = await resolveResponse(step, context, streamOptions, requestModel);
-        await streamWithDeltas(
-          outer,
-          message,
-          minTokenSize,
-          maxTokenSize,
-          tokensPerSecond,
-          streamOptions?.signal,
-        );
-      } catch (error) {
-        const message = createErrorMessage(error, api, provider, requestModel.id);
-        outer.push({ type: "error", reason: "error", error: message });
-        outer.end(message);
-      }
+        }).pipe(
+          Effect.catchDefect((error) =>
+            Effect.sync(() => {
+              const message = createErrorMessage(error, api, provider, requestModel.id);
+              outer.push({ type: "error", reason: "error", error: message });
+              outer.end(message);
+            }),
+          ),
+        ),
+      );
     });
 
     return outer;
@@ -668,79 +673,91 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
     const outer = createAssistantMessageEventStream();
     state.deferredFetchCount++;
 
-    queueMicrotask(async () => {
-      try {
-        await fetchOptions?.onResponse?.({ status: 200, headers: {} }, requestModel);
-        const entry = deferredResponses.get(handle.id);
-        if (
-          entry === undefined ||
-          entry.handle.provider !== handle.provider ||
-          entry.handle.modelId !== handle.modelId ||
-          entry.handle.api !== handle.api
-        ) {
-          throw new Error(`Unknown faux deferred response: ${handle.id}`);
-        }
-        if (entry.cancelled) throw new Error(`Faux deferred response was cancelled: ${handle.id}`);
-
-        if (entry.pendingFetches > 0) {
-          entry.pendingFetches--;
-          await streamWithDeltas(
+    queueMicrotask(() => {
+      Effect.runFork(
+        Effect.gen(function* () {
+          yield* callHook(() =>
+            fetchOptions?.onResponse?.({ status: 200, headers: {} }, requestModel),
+          );
+          const entry = deferredResponses.get(handle.id);
+          if (
+            entry === undefined ||
+            entry.handle.provider !== handle.provider ||
+            entry.handle.modelId !== handle.modelId ||
+            entry.handle.api !== handle.api
+          ) {
+            throw new Error(`Unknown faux deferred response: ${handle.id}`);
+          }
+          if (entry.cancelled)
+            throw new Error(`Faux deferred response was cancelled: ${handle.id}`);
+          if (entry.pendingFetches > 0) {
+            entry.pendingFetches--;
+            yield* streamWithDeltas(
+              outer,
+              createDeferredMessage(requestModel, entry.handle),
+              minTokenSize,
+              maxTokenSize,
+              tokensPerSecond,
+              fetchOptions?.signal,
+            );
+            return;
+          }
+          if (entry.final === undefined) {
+            const {
+              deferred: _deferred,
+              signal: _submissionSignal,
+              onResponse: _submissionOnResponse,
+              ...submissionOptions
+            } = entry.options ?? {};
+            entry.final = yield* resolveResponse(
+              entry.step,
+              entry.context,
+              submissionOptions,
+              entry.model,
+            ).pipe(
+              Effect.catchDefect((error) =>
+                Effect.succeed(createErrorMessage(error, api, provider, entry.model.id)),
+              ),
+            );
+          }
+          yield* streamWithDeltas(
             outer,
-            createDeferredMessage(requestModel, entry.handle),
+            entry.final,
             minTokenSize,
             maxTokenSize,
             tokensPerSecond,
             fetchOptions?.signal,
           );
-          return;
-        }
-
-        if (entry.final === undefined) {
-          const {
-            deferred: _deferred,
-            signal: _submissionSignal,
-            onResponse: _submissionOnResponse,
-            ...submissionOptions
-          } = entry.options ?? {};
-          try {
-            entry.final = await resolveResponse(
-              entry.step,
-              entry.context,
-              submissionOptions,
-              entry.model,
-            );
-          } catch (error) {
-            entry.final = createErrorMessage(error, api, provider, entry.model.id);
-          }
-        }
-        await streamWithDeltas(
-          outer,
-          entry.final,
-          minTokenSize,
-          maxTokenSize,
-          tokensPerSecond,
-          fetchOptions?.signal,
-        );
-      } catch (error) {
-        const message = createErrorMessage(error, api, provider, requestModel.id);
-        outer.push({ type: "error", reason: "error", error: message });
-        outer.end(message);
-      }
+        }).pipe(
+          Effect.catchDefect((error) =>
+            Effect.sync(() => {
+              const message = createErrorMessage(error, api, provider, requestModel.id);
+              outer.push({ type: "error", reason: "error", error: message });
+              outer.end(message);
+            }),
+          ),
+        ),
+      );
     });
 
     return outer;
   };
 
-  const cancelDeferred = async (
+  const cancelDeferred = (
     requestModel: Model<string>,
     handle: DeferredHandle,
     cancelOptions?: DeferredCancelOptions,
-  ): Promise<void> => {
-    state.cancelledDeferred.push(structuredClone(handle));
-    const entry = deferredResponses.get(handle.id);
-    if (entry !== undefined) entry.cancelled = true;
-    await cancelOptions?.onResponse?.({ status: 200, headers: {} }, requestModel);
-  };
+  ): Promise<void> =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        state.cancelledDeferred.push(structuredClone(handle));
+        const entry = deferredResponses.get(handle.id);
+        if (entry !== undefined) entry.cancelled = true;
+        yield* callHook(() =>
+          cancelOptions?.onResponse?.({ status: 200, headers: {} }, requestModel),
+        );
+      }),
+    );
 
   function getModel(): Model<string>;
   function getModel(requestedModelId: string): Model<string> | undefined;
