@@ -15,6 +15,7 @@ import {
   type MemorySaveResult,
   type MemoryScope,
   type MemoryScore,
+  type MemoryStoreStats,
 } from "./store.ts";
 
 /** Custom message type of the recalled memory block added to a run. */
@@ -102,7 +103,8 @@ function truncate(text: string, max = 160): string {
   return line.length > max ? `${line.slice(0, max)}…` : line;
 }
 
-function formatAge(timestamp: number, now: number): string {
+/** How long ago `timestamp` was, in the largest unit that fits. */
+export function formatAge(timestamp: number, now = Date.now()): string {
   const seconds = Math.max(0, Math.floor((now - timestamp) / 1000));
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
@@ -272,6 +274,11 @@ export class MemoryService {
 
   list(limit = 20): MemoryRecord[] {
     return this.ensureStore().list({ project: this.project, limit });
+  }
+
+  /** Counts of the whole store, for the `/memory` view and status text. */
+  stats(): MemoryStoreStats {
+    return this.ensureStore().stats();
   }
 
   forget(id: string): boolean {

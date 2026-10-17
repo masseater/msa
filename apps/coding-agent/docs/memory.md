@@ -31,13 +31,25 @@ Changing the embedding model changes the vector width; memories saved with anoth
 
 ## Manage memories
 
-| Command                  | Description                                      |
-| ------------------------ | ------------------------------------------------ |
-| `/memory`                | Show status, store location, and embedding state |
-| `/memory list`           | List the newest memories of this project         |
-| `/memory search <query>` | Search memories by meaning and keywords          |
-| `/memory forget <id>`    | Delete one memory                                |
-| `/memory stats`          | Show counts by kind and project                  |
+Type `/memory` in the interactive TUI to open the memory view: every memory grouped by scope, one memory in detail, and keys to browse, search, add, and forget without leaving the screen.
+
+| Key     | Action                                                   |
+| ------- | -------------------------------------------------------- |
+| `↑` `↓` | Select a memory                                          |
+| `enter` | Open the selected memory with its full text and metadata |
+| `/`     | Search memories by meaning and keywords                  |
+| `a`     | Add a memory by hand (kind `fact`, scope `project`)      |
+| `d`     | Forget the selected memory, after a confirmation         |
+| `esc`   | Back from a memory or a search, or close the view        |
+
+The same store works from the command line:
+
+| Command                  | Description                              |
+| ------------------------ | ---------------------------------------- |
+| `/memory list`           | List the newest memories of this project |
+| `/memory search <query>` | Search memories by meaning and keywords  |
+| `/memory forget <id>`    | Delete one memory                        |
+| `/memory stats`          | Show counts by kind and project          |
 
 The model manages the same store through the `memory` tool, with `save`, `search`, `list`, and `forget` actions.
 

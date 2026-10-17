@@ -2738,6 +2738,11 @@ export class AgentSession {
     return this._orchestrator;
   }
 
+  /** Long-term memory for this session; undefined when memory is disabled. */
+  get memory(): MemoryService | undefined {
+    return this._memory;
+  }
+
   get goal(): GoalSnapshot | undefined {
     return this._goal.snapshot;
   }

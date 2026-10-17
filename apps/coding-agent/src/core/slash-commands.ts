@@ -49,7 +49,7 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
   },
   {
     name: "memory",
-    description: "Manage long-term memory: status, list, search, forget",
+    description: "Open the memory view, or manage long-term memory with an argument",
     argumentHint: "[list|search <query>|forget <id>|stats]",
   },
   { name: "resume", description: "Resume a different session" },

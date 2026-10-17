@@ -29,7 +29,7 @@ Extensions, prompt templates, and skills can add commands. The command menu in m
 | `/clone`                                             | Duplicate the current session at its current position                                                                                                             |
 | `/compact [instructions]`                            | Compact the current context, optionally with custom instructions                                                                                                  |
 | `/goal [condition\|clear]`                           | Keep working across turns until an evaluator model judges the condition met; without an argument, show the goal's elapsed time, turns, tokens, and latest verdict |
-| `/memory [list\|search <query>\|forget <id>\|stats]` | Manage long-term memories; see [Long-Term Memory](memory.md)                                                                                                      |
+| `/memory [list\|search <query>\|forget <id>\|stats]` | Open the memory view, or manage long-term memories; see [Long-Term Memory](memory.md)                                                                             |
 | `/import <path>`                                     | Import and resume a JSONL session                                                                                                                                 |
 
 ## Export and share
