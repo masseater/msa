@@ -56,6 +56,7 @@ type RenderSessionContextThis = {
   getRegisteredToolDefinition(toolName: string): undefined;
   maybeShowAssistantDiagnostics(message: AssistantMessage): void;
   addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void;
+  addToolExecution(component: ToolExecutionComponent): void;
   renderSessionItems: RenderSessionItems;
 };
 
@@ -90,6 +91,7 @@ function createFakeInteractiveModeThis(): RenderSessionContextThis {
     renderSessionItems: (
       InteractiveMode.prototype as unknown as { renderSessionItems: RenderSessionItems }
     ).renderSessionItems,
+    addToolExecution: Reflect.get(InteractiveMode.prototype, "addToolExecution"),
     addMessageToChat(message: AgentMessage) {
       chatContainer.addChild(new Text(message.role, 0, 0));
     },

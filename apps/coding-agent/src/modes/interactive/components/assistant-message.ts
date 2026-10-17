@@ -78,6 +78,16 @@ export class AssistantMessageComponent extends Container {
     }
   }
 
+  /** Whether the message shows anything besides thinking, so a tool group must not fold it away. */
+  hasVisibleText(): boolean {
+    const message = this.lastMessage;
+    if (!message) return false;
+    return (
+      message.stopReason === "length" ||
+      message.content.some((c) => c.type === "text" && c.text.trim().length > 0)
+    );
+  }
+
   override render(width: number): string[] {
     const lines = super.render(width);
     if (this.hasToolCalls || lines.length === 0) {

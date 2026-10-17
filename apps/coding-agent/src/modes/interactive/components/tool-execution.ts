@@ -34,6 +34,14 @@ export interface ToolExecutionOptions {
   outputPad?: number;
 }
 
+export interface ToolCallSummary {
+  toolName: string;
+  args: any;
+  done: boolean;
+  isError: boolean;
+  details: any;
+}
+
 export class ToolExecutionComponent extends Container {
   private contentBox: Box;
   private contentText: Text;
@@ -166,6 +174,17 @@ export class ToolExecutionComponent extends Container {
       this.setExpanded(!this.expanded);
       return { handled: true };
     });
+  }
+
+  /** What a tool group needs to summarize this call in its one-line header. */
+  getCallSummary(): ToolCallSummary {
+    return {
+      toolName: this.toolName,
+      args: this.args,
+      done: this.result !== undefined && !this.isPartial,
+      isError: this.result?.isError ?? false,
+      details: this.result?.details,
+    };
   }
 
   updateArgs(args: any): void {

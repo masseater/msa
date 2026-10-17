@@ -1,0 +1,197 @@
+import {
+  type Component,
+  Container,
+  MouseRegion,
+  Spacer,
+  truncateToWidth,
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
+} from "@msa/tui";
+
+import { stripAnsi } from "../../../utils/ansi.ts";
+import { theme } from "../theme/theme.ts";
+import { type ToolCallSummary, ToolExecutionComponent } from "./tool-execution.ts";
+
+const FILE_VERBS: Record<string, string> = { read: "read", edit: "edited", write: "wrote" };
+const SEARCH_TOOLS = new Set(["grep", "find", "ls"]);
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+function countDiffLines(diff: string): { added: number; removed: number } {
+  let added = 0;
+  let removed = 0;
+  for (const line of diff.split("\n")) {
+    if (/^\+\s*\d/.test(line)) added++;
+    else if (/^-\s*\d/.test(line)) removed++;
+  }
+  return { added, removed };
+}
+
+function summarize(calls: readonly ToolCallSummary[]): string {
+  const files = new Map<string, Set<string>>();
+  const counts = new Map<string, number>();
+  let added = 0;
+  let removed = 0;
+  let failed = 0;
+  let running = 0;
+
+  for (const call of calls) {
+    if (!call.done) running++;
+    else if (call.isError) failed++;
+    const verb = FILE_VERBS[call.toolName];
+    if (verb) {
+      const path = call.args?.path ?? call.args?.file_path ?? "";
+      const paths = files.get(verb) ?? new Set<string>();
+      paths.add(String(path));
+      files.set(verb, paths);
+    } else {
+      const key = SEARCH_TOOLS.has(call.toolName) ? "search" : call.toolName;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    if (call.toolName === "edit" && typeof call.details?.diff === "string") {
+      const diff = countDiffLines(call.details.diff);
+      added += diff.added;
+      removed += diff.removed;
+    } else if (call.toolName === "write" && call.done && !call.isError) {
+      const content = call.args?.content;
+      if (typeof content === "string" && content.length > 0) added += content.split("\n").length;
+    }
+  }
+
+  const parts: string[] = [];
+  for (const [verb, paths] of files) parts.push(`${verb} ${plural(paths.size, "file")}`);
+  for (const [key, count] of counts) {
+    if (key === "bash") parts.push(`ran ${plural(count, "command")}`);
+    else if (key === "search") parts.push(`searched ${plural(count, "time")}`);
+    else parts.push(count === 1 ? `called ${key}` : `called ${key} ×${count}`);
+  }
+  const text = parts.join(", ");
+  let line = theme.fg("toolTitle", text.charAt(0).toUpperCase() + text.slice(1));
+  if (added > 0 || removed > 0) {
+    line += ` ${theme.fg("toolDiffAdded", `+${added}`)} ${theme.fg("toolDiffRemoved", `-${removed}`)}`;
+  }
+  if (failed > 0) line += theme.fg("error", `, ${failed} failed`);
+  if (running > 0) line += theme.fg("muted", " …");
+  return line;
+}
+
+/**
+ * One tool call in an open group: the call's first line, until clicked to show the call as it
+ * shows outside a group.
+ */
+class ToolRow implements Component {
+  open = false;
+  readonly tool: ToolExecutionComponent;
+  private readonly outputPad: () => number;
+
+  constructor(tool: ToolExecutionComponent, outputPad: () => number) {
+    this.tool = tool;
+    this.outputPad = outputPad;
+  }
+
+  render(width: number): string[] {
+    if (this.open) return this.tool.render(width);
+    const callLine = this.tool
+      .render(width)
+      .map((line) => stripAnsi(line).trim())
+      .find((line) => line.length > 0);
+    if (callLine === undefined) return [];
+    const { done, isError } = this.tool.getCallSummary();
+    const color = isError ? "error" : done ? "toolOutput" : "muted";
+    const pad = " ".repeat(this.outputPad());
+    return [
+      truncateToWidth(`${pad}${theme.fg(color, callLine)}${theme.fg("muted", " ›")}`, width, "..."),
+    ];
+  }
+
+  invalidate(): void {
+    this.tool.invalidate();
+  }
+
+  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    if (this.open) return this.tool.handleMouse(event);
+    if (event.type !== "click" || event.button !== "left") return undefined;
+    this.open = true;
+    return { handled: true };
+  }
+}
+
+/**
+ * Consecutive tool calls, folded into one line that says what they did. Clicking the line lists
+ * the calls one line each. Thinking between the calls is folded in with them.
+ */
+export class ToolGroupComponent extends Container {
+  /** The tool calls and the thinking between them. */
+  readonly items = new Container();
+  private expanded = false;
+  /** Set by the expand-all key: every call shows in full, including calls added later. */
+  private showAll = false;
+  private outputPad: number;
+  private readonly rows = new Map<ToolExecutionComponent, ToolRow>();
+  private readonly spacer = new Spacer(1);
+  private readonly headerRegion = new MouseRegion(
+    { render: (width) => [this.header(width)], invalidate: () => {} },
+    (event) => {
+      if (event.type !== "click" || event.button !== "left") return undefined;
+      this.expanded = !this.expanded;
+      return { handled: true };
+    },
+  );
+  private readonly body = new Container();
+
+  constructor(outputPad: number) {
+    super();
+    this.outputPad = outputPad;
+  }
+
+  setExpanded(expanded: boolean): void {
+    this.expanded = expanded;
+    this.showAll = expanded;
+    for (const tool of this.tools()) {
+      tool.setExpanded(expanded);
+      this.row(tool).open = expanded;
+    }
+  }
+
+  setOutputPad(outputPad: number): void {
+    this.outputPad = outputPad;
+  }
+
+  private tools(): ToolExecutionComponent[] {
+    return this.items.children.filter((item) => item instanceof ToolExecutionComponent);
+  }
+
+  private row(tool: ToolExecutionComponent): ToolRow {
+    let row = this.rows.get(tool);
+    if (!row) {
+      row = new ToolRow(tool, () => this.outputPad);
+      row.open = this.showAll;
+      this.rows.set(tool, row);
+    }
+    return row;
+  }
+
+  private header(width: number): string {
+    const pad = " ".repeat(this.outputPad);
+    const marker = theme.fg("muted", this.expanded ? " ⌄" : " ›");
+    const summary = summarize(this.tools().map((tool) => tool.getCallSummary()));
+    return truncateToWidth(`${pad}${summary}${marker}`, width, "...");
+  }
+
+  override render(width: number): string[] {
+    // A single call has nothing to fold, so it shows as itself.
+    if (this.tools().length <= 1) {
+      this.children = [this.items];
+    } else {
+      this.body.children = this.expanded
+        ? this.items.children.map((item) =>
+            item instanceof ToolExecutionComponent ? this.row(item) : item,
+          )
+        : [];
+      this.children = [this.spacer, this.headerRegion, this.body];
+    }
+    return super.render(width);
+  }
+}
