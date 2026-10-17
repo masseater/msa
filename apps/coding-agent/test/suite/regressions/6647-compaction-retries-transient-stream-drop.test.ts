@@ -4,7 +4,7 @@ import {
   createAssistantMessageEventStream,
   fauxAssistantMessage,
 } from "@msa/ai";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createHarness, type Harness } from "../harness.ts";
 

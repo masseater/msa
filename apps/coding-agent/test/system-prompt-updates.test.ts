@@ -13,7 +13,7 @@ import {
 } from "@msa/ai";
 import { getModel } from "@msa/ai/compat";
 import { Type } from "typebox";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -54,7 +54,13 @@ describe("system prompt updates", () => {
         "docs",
         "cwd",
       ]);
-      expect(head.toolsAdded?.map((tool) => tool.name)).toEqual(["read", "bash", "edit", "write"]);
+      expect(head.toolsAdded?.map((tool) => tool.name)).toEqual([
+        "read",
+        "bash",
+        "edit",
+        "write",
+        "memory",
+      ]);
       expect(getSystemMessageText(head)).toBe(harness.session.systemPrompt);
     } finally {
       harness.cleanup();

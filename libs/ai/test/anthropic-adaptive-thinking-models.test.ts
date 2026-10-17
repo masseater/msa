@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { getModels, getProviders } from "../src/compat.ts";
 import type { Api, Model } from "../src/types.ts";

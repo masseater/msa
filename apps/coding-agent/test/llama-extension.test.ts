@@ -3,7 +3,7 @@ import { createServer, type RequestListener, type Server, type ServerResponse } 
 import type { AddressInfo } from "node:net";
 
 import type { AuthContext, AuthPrompt, ModelsPublication, ModelsStoreEntry } from "@msa/ai";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createEventBus } from "../src/core/event-bus.ts";
 import { createExtensionRuntime, loadExtensionFromFactory } from "../src/core/extensions/loader.ts";

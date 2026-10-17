@@ -1,7 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 
 import { setKeybindings, visibleWidth } from "@msa/tui";
-import { beforeAll, beforeEach, describe, expect, test } from "vitest";
+import { beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import type {

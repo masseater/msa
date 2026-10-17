@@ -10,6 +10,7 @@ import {
   seedStorageBenchmark,
   seedStorageWriteBenchmark,
 } from "@msa/durable/testing";
+// oxlint-disable-next-line vite-plus/prefer-vite-plus-imports -- vite-plus/test（vitest 5）に bench API が無いため、bench を使うこのファイルは vitest から import する
 import { afterAll, bench, describe } from "vitest";
 
 import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";

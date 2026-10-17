@@ -115,25 +115,25 @@ const apiProviderRegistry = new Map<string, RegisteredApiProvider>();
 
 function wrapStream<TApi extends Api, TOptions extends StreamOptions>(
   api: TApi,
-  stream: StreamFunction<TApi, TOptions>,
+  streamFn: StreamFunction<TApi, TOptions>,
 ): ApiStreamFunction {
   return (model, context, options) => {
     if (model.api !== api) {
       throw new Error(`Mismatched api: ${model.api} expected ${api}`);
     }
-    return stream(model as Model<TApi>, context, options as TOptions);
+    return streamFn(model as Model<TApi>, context, options as TOptions);
   };
 }
 
 function wrapStreamSimple<TApi extends Api>(
   api: TApi,
-  streamSimple: StreamFunction<TApi, SimpleStreamOptions>,
+  streamSimpleFn: StreamFunction<TApi, SimpleStreamOptions>,
 ): ApiStreamSimpleFunction {
   return (model, context, options) => {
     if (model.api !== api) {
       throw new Error(`Mismatched api: ${model.api} expected ${api}`);
     }
-    return streamSimple(model as Model<TApi>, context, options);
+    return streamSimpleFn(model as Model<TApi>, context, options);
   };
 }
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { getModel as getCompatModel } from "../src/compat.ts";
 import { InMemoryModelsStore, type ModelsStoreEntry } from "../src/models-store.ts";

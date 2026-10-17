@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import * as path from "node:path";
 
 import { type AutocompleteProvider, CombinedAutocompleteProvider } from "@msa/tui";
-import { beforeAll, describe, expect, test, vi } from "vitest";
+import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
 import { TuiMainScreen } from "../../../libs/tui/src/tui-main-screen.ts";
 import { type Component, Container, type Focusable, type TUI } from "../../../libs/tui/src/tui.ts";

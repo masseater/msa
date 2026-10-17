@@ -5,7 +5,7 @@ import {
   normalizeContext,
   type TranscriptContext,
 } from "@msa/ai";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   type CompactionPreparation,

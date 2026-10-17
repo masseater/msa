@@ -119,8 +119,8 @@ export async function startOAuthCallbackServer<T>(
           oauthSuccessHtml(`Signed in to ${providerName}. You may now close this page.`),
         );
         finish({ value });
-      } catch (error) {
-        const failure = error instanceof Error ? error : new Error(String(error));
+      } catch (cause) {
+        const failure = cause instanceof Error ? cause : new Error(String(cause));
         sendPage(response, 502, oauthErrorHtml(`${providerName} sign-in failed.`, failure.message));
         finish({ error: failure });
       }

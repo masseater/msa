@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { getModels, streamSimple } from "../src/compat.ts";
 import { findEnvKeys } from "../src/env-api-keys.ts";

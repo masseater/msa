@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { applyImmutable, type Draft, type JsonValue, track } from "../src/delta/index.ts";
 

@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import type { SessionHeader } from "../src/core/session-manager.ts";
 import { SessionManager } from "../src/core/session-manager.ts";

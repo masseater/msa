@@ -4,7 +4,7 @@ import { join, parse } from "node:path";
 
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider } from "@msa/ai/compat";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
   type CreateAgentSessionRuntimeFactory,

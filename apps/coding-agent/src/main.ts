@@ -816,16 +816,16 @@ export async function main(args: string[], options?: MainOptions) {
   const resolvedPromptTemplatePaths = resolveCliPaths(cwd, parsed.promptTemplates);
   const resolvedThemePaths = resolveCliPaths(cwd, parsed.themes);
   const createRuntime: CreateAgentSessionRuntimeFactory = async ({
-    cwd,
-    agentDir,
-    sessionManager,
+    cwd: runtimeCwd,
+    agentDir: runtimeAgentDir,
+    sessionManager: runtimeSessionManager,
     sessionStartEvent,
     projectTrustContext,
   }) => {
     const isInitialRuntime = sessionStartEvent === undefined;
     const projectTrustDiagnostics: AgentSessionRuntimeDiagnostic[] = [];
-    const cachedProjectTrust = projectTrustByCwd.get(cwd);
-    const hasTrustRequiringResources = hasTrustRequiringProjectResources(cwd);
+    const cachedProjectTrust = projectTrustByCwd.get(runtimeCwd);
+    const hasTrustRequiringResources = hasTrustRequiringProjectResources(runtimeCwd);
     const shouldResolveProjectTrust =
       parsed.projectTrustOverride === undefined &&
       cachedProjectTrust === undefined &&
@@ -834,11 +834,13 @@ export async function main(args: string[], options?: MainOptions) {
       ? false
       : (cachedProjectTrust ??
         parsed.projectTrustOverride ??
-        (!hasTrustRequiringResources || trustStore.get(cwd) === true));
-    const runtimeSettingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
+        (!hasTrustRequiringResources || trustStore.get(runtimeCwd) === true));
+    const runtimeSettingsManager = SettingsManager.create(runtimeCwd, runtimeAgentDir, {
+      projectTrusted,
+    });
     const services = await createAgentSessionServices({
-      cwd,
-      agentDir,
+      cwd: runtimeCwd,
+      agentDir: runtimeAgentDir,
       settingsManager: runtimeSettingsManager,
       modelRuntimeSignal: AbortSignal.timeout(15_000),
       extensionFlagValues: parsed.unknownFlags,
@@ -846,7 +848,7 @@ export async function main(args: string[], options?: MainOptions) {
         ? {
             resolveProjectTrust: async ({ extensionsResult }) => {
               const trusted = await resolveProjectTrusted({
-                cwd,
+                cwd: runtimeCwd,
                 trustStore,
                 trustOverride: parsed.projectTrustOverride,
                 defaultProjectTrust: startupSettingsManager.getDefaultProjectTrust(),
@@ -854,7 +856,7 @@ export async function main(args: string[], options?: MainOptions) {
                 projectTrustContext:
                   projectTrustContext ??
                   createProjectTrustContext({
-                    cwd,
+                    cwd: runtimeCwd,
                     mode: isInitialRuntime ? trustPromptMode : appMode,
                     settingsManager: startupSettingsManager,
                     hasUI: isInitialRuntime && trustPromptMode === "interactive",
@@ -862,7 +864,7 @@ export async function main(args: string[], options?: MainOptions) {
                 onExtensionError: (message) =>
                   projectTrustDiagnostics.push({ type: "warning", message }),
               });
-              projectTrustByCwd.set(cwd, trusted);
+              projectTrustByCwd.set(runtimeCwd, trusted);
               return trusted;
             },
           }
@@ -912,7 +914,7 @@ export async function main(args: string[], options?: MainOptions) {
     } = buildSessionOptions(
       parsed,
       scopedModels,
-      sessionManager.buildSessionContext().messages.length > 0,
+      runtimeSessionManager.buildSessionContext().messages.length > 0,
       modelRuntime,
       settingsManager,
     );
@@ -932,7 +934,7 @@ export async function main(args: string[], options?: MainOptions) {
 
     const created = await createAgentSessionFromServices({
       services,
-      sessionManager,
+      sessionManager: runtimeSessionManager,
       sessionStartEvent,
       model: sessionOptions.model,
       thinkingLevel: sessionOptions.thinkingLevel,

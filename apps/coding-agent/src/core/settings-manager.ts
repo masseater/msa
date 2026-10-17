@@ -11,6 +11,7 @@ import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
+import type { ResolvedMemorySettings } from "./memory/memory.ts";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 import type {
   CacheWarmingMode,
@@ -39,6 +40,7 @@ export type {
   FullscreenExitOutput,
   ImageSettings,
   MarkdownSettings,
+  MemorySettings,
   MermaidRenderingMode,
   PackageSource,
   ProviderRetrySettings,
@@ -99,6 +101,7 @@ export const DEFAULT_TOOL_NAMES: readonly string[] = [
   "bash",
   "edit",
   "write",
+  "memory",
   "web_search",
   "web_fetch",
 ];
@@ -1388,6 +1391,46 @@ export class SettingsManager {
 
   setBlockImages(blocked: boolean): void {
     this.setNestedGlobalSetting("images", "blockImages", blocked);
+  }
+
+  /** Memory settings with defaults applied and the database path resolved. */
+  getMemorySettings(): ResolvedMemorySettings {
+    const memory = this.settings.memory;
+    const defaults = SETTINGS_DEFAULTS.memory;
+    const apiKeyEnv = memory?.embedding?.apiKeyEnv?.trim();
+    const apiKey = apiKeyEnv ? process.env[apiKeyEnv]?.trim() : undefined;
+    const database = memory?.database?.trim();
+    const timeoutMs = memory?.embedding?.timeoutMs;
+    const limit = memory?.recall?.limit;
+    const minScore = memory?.recall?.minScore;
+    const agentDir = this.settingsPaths.global ? dirname(this.settingsPaths.global) : getAgentDir();
+    return {
+      enabled: memory?.enabled ?? defaults.enabled,
+      database: database ? resolvePath(database, agentDir) : join(agentDir, "memory.db"),
+      embedding: {
+        enabled: memory?.embedding?.enabled ?? defaults.embedding.enabled,
+        baseUrl: memory?.embedding?.baseUrl?.trim() || defaults.embedding.baseUrl,
+        model: memory?.embedding?.model?.trim() || defaults.embedding.model,
+        queryPrefix: memory?.embedding?.queryPrefix ?? defaults.embedding.queryPrefix,
+        documentPrefix: memory?.embedding?.documentPrefix ?? defaults.embedding.documentPrefix,
+        ...(apiKey ? { apiKey } : {}),
+        timeoutMs:
+          typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs >= 0
+            ? timeoutMs
+            : defaults.embedding.timeoutMs,
+      },
+      recall: {
+        enabled: memory?.recall?.enabled ?? defaults.recall.enabled,
+        limit:
+          typeof limit === "number" && Number.isFinite(limit) && limit >= 1
+            ? Math.floor(limit)
+            : defaults.recall.limit,
+        minScore:
+          typeof minScore === "number" && Number.isFinite(minScore)
+            ? Math.min(1, Math.max(0, minScore))
+            : defaults.recall.minScore,
+      },
+    };
   }
 
   getEnabledModels(): string[] | undefined {

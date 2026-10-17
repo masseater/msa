@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { anthropicOAuth } from "../src/auth/oauth/anthropic.ts";
 import type { AuthEvent, AuthPrompt } from "../src/auth/types.ts";
@@ -37,7 +37,7 @@ function getJsonBody(init?: RequestInit): Record<string, string> {
   return JSON.parse(init.body) as Record<string, string>;
 }
 
-describe.sequential("Anthropic OAuth", () => {
+describe("Anthropic OAuth", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });

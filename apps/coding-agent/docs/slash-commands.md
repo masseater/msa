@@ -18,18 +18,19 @@ Extensions, prompt templates, and skills can add commands. The command menu in m
 
 ## Sessions and context
 
-| Command                    | Description                                                                                                                                                       |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/new`                     | Start a new session                                                                                                                                               |
-| `/resume`                  | Switch to another saved session                                                                                                                                   |
-| `/name [name]`             | Set the session display name, or show the current name when omitted                                                                                               |
-| `/session`                 | Show current session information and statistics                                                                                                                   |
-| `/tree`                    | Navigate the session tree                                                                                                                                         |
-| `/fork`                    | Create a new session from an earlier user message                                                                                                                 |
-| `/clone`                   | Duplicate the current session at its current position                                                                                                             |
-| `/compact [instructions]`  | Compact the current context, optionally with custom instructions                                                                                                  |
-| `/goal [condition\|clear]` | Keep working across turns until an evaluator model judges the condition met; without an argument, show the goal's elapsed time, turns, tokens, and latest verdict |
-| `/import <path>`           | Import and resume a JSONL session                                                                                                                                 |
+| Command                                              | Description                                                                                                                                                       |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/new`                                               | Start a new session                                                                                                                                               |
+| `/resume`                                            | Switch to another saved session                                                                                                                                   |
+| `/name [name]`                                       | Set the session display name, or show the current name when omitted                                                                                               |
+| `/session`                                           | Show current session information and statistics                                                                                                                   |
+| `/tree`                                              | Navigate the session tree                                                                                                                                         |
+| `/fork`                                              | Create a new session from an earlier user message                                                                                                                 |
+| `/clone`                                             | Duplicate the current session at its current position                                                                                                             |
+| `/compact [instructions]`                            | Compact the current context, optionally with custom instructions                                                                                                  |
+| `/goal [condition\|clear]`                           | Keep working across turns until an evaluator model judges the condition met; without an argument, show the goal's elapsed time, turns, tokens, and latest verdict |
+| `/memory [list\|search <query>\|forget <id>\|stats]` | Open the memory view, or manage long-term memories; see [Long-Term Memory](memory.md)                                                                             |
+| `/import <path>`                                     | Import and resume a JSONL session                                                                                                                                 |
 
 ## Export and share
 

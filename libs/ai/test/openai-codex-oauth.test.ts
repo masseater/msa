@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { openaiCodexOAuth } from "../src/auth/oauth/openai-codex.ts";
 

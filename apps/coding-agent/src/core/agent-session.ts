@@ -130,6 +130,15 @@ import {
   pickEvaluatorModel,
 } from "./goal.ts";
 import { createToolNameMatcher, isMcpToolName } from "./mcp-servers.ts";
+import {
+  formatMemoryList,
+  formatRecallBlock,
+  formatSearchResults,
+  MEMORY_RECALL_MESSAGE_TYPE,
+  type MemoryCommand,
+  MemoryService,
+  parseMemoryCommand,
+} from "./memory/memory.ts";
 import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
 import { resolveModelReference } from "./model-resolver.ts";
@@ -178,6 +187,7 @@ import {
 } from "./system-prompt.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
+import { createMemoryToolDefinition } from "./tools/memory.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { createWebFetchToolDefinition } from "./tools/web-fetch.ts";
 import { createWebSearchToolDefinition } from "./tools/web-search.ts";
@@ -282,7 +292,9 @@ export type AgentSessionEvent =
   /** A session the orchestrator started changed state or streamed. */
   | { type: "orchestrator_changed" }
   /** `/goal` without arguments, or `/goal clear` without an active goal. */
-  | { type: "goal_status"; goal: GoalSnapshot | undefined };
+  | { type: "goal_status"; goal: GoalSnapshot | undefined }
+  /** The answer to a `/memory` command. */
+  | { type: "memory_status"; text: string };
 
 /** Listener function for agent session events */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
@@ -530,6 +542,8 @@ export class AgentSession {
   private _extensionErrorUnsubscriber?: () => void;
 
   private _modelRuntime: ModelRuntime;
+  /** Long-term memory for this session; replaced when settings reload. */
+  private _memory: MemoryService | undefined;
   private _cacheWarmer?: Pick<
     CacheWarmer,
     "cancel" | "status" | "onAgentSettled" | "onModeChanged" | "onWarmed"
@@ -672,7 +686,7 @@ export class AgentSession {
     } catch (error) {
       const cause = error instanceof Error ? error.cause : undefined;
       if (cause instanceof Error && cause.message === "authHeader requires a resolved API key") {
-        throw new Error(formatNoApiKeyFoundMessage(model.provider));
+        throw new Error(formatNoApiKeyFoundMessage(model.provider), { cause: error });
       }
       throw error;
     }
@@ -807,7 +821,7 @@ export class AgentSession {
       if (err instanceof Error) {
         throw err;
       }
-      throw new Error(`Extension failed, blocking execution: ${String(err)}`);
+      throw new Error(`Extension failed, blocking execution: ${String(err)}`, { cause: err });
     }
   }
 
@@ -1583,6 +1597,8 @@ export class AgentSession {
       // Dispose must succeed even if an abort hook throws.
     }
     void this._orchestrator?.dispose().catch(() => undefined);
+    this._memory?.close();
+    this._memory = undefined;
 
     this._extensionRunner.invalidate(
       "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
@@ -2123,6 +2139,18 @@ export class AgentSession {
         content: [{ type: "text", text }, ...normalized.images],
         timestamp: Date.now(),
       });
+      if (this._memory) {
+        const recalled = await this._memory.recall(trigger.prompt);
+        if (recalled.length > 0) {
+          messages.unshift({
+            role: "custom",
+            customType: MEMORY_RECALL_MESSAGE_TYPE,
+            content: formatRecallBlock(recalled),
+            display: false,
+            timestamp: Date.now(),
+          });
+        }
+      }
     }
     // Inject any pending "nextTurn" messages as context alongside the starting message
     messages.push(...this._pendingNextTurnMessages);
@@ -2275,6 +2303,11 @@ export class AgentSession {
     const goalCommand = expandPromptTemplates ? parseGoalCommand(text) : undefined;
     if (goalCommand) {
       await this._runGoalCommand(goalCommand, options);
+      return;
+    }
+    const memoryCommand = expandPromptTemplates ? parseMemoryCommand(text) : undefined;
+    if (memoryCommand) {
+      await this._runMemoryCommand(memoryCommand, options);
       return;
     }
     // Handle extension commands first (execute immediately, even during streaming)
@@ -2708,6 +2741,11 @@ export class AgentSession {
     return this._orchestrator;
   }
 
+  /** Long-term memory for this session; undefined when memory is disabled. */
+  get memory(): MemoryService | undefined {
+    return this._memory;
+  }
+
   get goal(): GoalSnapshot | undefined {
     return this._goal.snapshot;
   }
@@ -2748,6 +2786,36 @@ export class AgentSession {
       this.sessionManager.appendCustomEntry(GOAL_ENTRY_TYPE, data),
     );
     if (entry) this._emit({ type: "entry_appended", entry });
+  }
+
+  private async _runMemoryCommand(command: MemoryCommand, options?: PromptOptions): Promise<void> {
+    const memory = this._memory;
+    let text: string;
+    if (!memory) {
+      text = "Memory is disabled (settings: memory.enabled).";
+    } else {
+      switch (command.kind) {
+        case "status":
+          text = memory.describeStatus();
+          break;
+        case "stats":
+          text = memory.describeStats();
+          break;
+        case "list":
+          text = formatMemoryList(memory.list(20));
+          break;
+        case "search":
+          text = formatSearchResults(await memory.search(command.query, 10));
+          break;
+        case "forget":
+          text = memory.forget(command.id)
+            ? `Forgot memory ${command.id}.`
+            : `No memory with id ${command.id}.`;
+          break;
+      }
+    }
+    this._emit({ type: "memory_status", text });
+    options?.preflightResult?.("handled");
   }
 
   /** Tokens billed across the whole session; cached because goal snapshots ask on every render. */
@@ -4070,6 +4138,12 @@ export class AgentSession {
     const autoResizeImages = this.settingsManager.getImageAutoResize();
     const shellCommandPrefix = this.settingsManager.getShellCommandPrefix();
     const shellPath = this.settingsManager.getShellPath();
+    const memorySettings = this.settingsManager.getMemorySettings();
+    this._memory?.close();
+    this._memory = memorySettings.enabled
+      ? new MemoryService({ settings: memorySettings, cwd: this._cwd })
+      : undefined;
+    this._memory?.warm();
     const baseToolDefinitions = this._baseToolsOverride
       ? Object.fromEntries(
           Object.entries(this._baseToolsOverride).map(([name, tool]) => [
@@ -4077,10 +4151,13 @@ export class AgentSession {
             createToolDefinitionFromAgentTool(tool),
           ]),
         )
-      : createAllToolDefinitions(this._cwd, {
-          read: { autoResizeImages },
-          bash: { commandPrefix: shellCommandPrefix, shellPath },
-        });
+      : {
+          ...createAllToolDefinitions(this._cwd, {
+            read: { autoResizeImages },
+            bash: { commandPrefix: shellCommandPrefix, shellPath },
+          }),
+          ...(this._memory ? { memory: createMemoryToolDefinition(this._memory) } : {}),
+        };
 
     this._baseToolDefinitions = new Map(
       Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),

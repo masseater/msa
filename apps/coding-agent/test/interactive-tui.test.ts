@@ -7,7 +7,7 @@ import {
   setKeybindings,
   Text,
 } from "@msa/tui";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";
 import { KeybindingsManager } from "../src/core/keybindings.ts";

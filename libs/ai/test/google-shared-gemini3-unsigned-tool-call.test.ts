@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { convertMessages, requiresToolCallId } from "../src/api/google-shared.ts";
 import type { Context, Model } from "../src/types.ts";

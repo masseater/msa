@@ -245,7 +245,9 @@ function remoteLauncher(
     try {
       target = remote();
     } catch (error) {
-      throw new Error(`Failed to reach the remote sandbox: ${errorMessage(error)}`);
+      throw new Error(`Failed to reach the remote sandbox: ${errorMessage(error)}`, {
+        cause: error,
+      });
     }
     const request: CodemodeRemoteRequest =
       interruptBudget === undefined ? { data } : { data, interruptBudget };

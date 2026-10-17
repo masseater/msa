@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { kimiCodingOAuth } from "../src/auth/oauth/kimi-coding.ts";
 import type { ProviderAuthInteraction } from "../src/auth/types.ts";

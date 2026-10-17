@@ -233,6 +233,7 @@ export default function promptUrlWidgetExtension(msa: ExtensionAPI) {
 
   msa.on("before_agent_start", async (event, ctx) => {
     if (!ctx.hasUI) return;
+    if (event.messageType !== "user") return;
     const match = extractPromptMatch(event.prompt);
     if (!match) {
       return;
@@ -241,7 +242,7 @@ export default function promptUrlWidgetExtension(msa: ExtensionAPI) {
     updatePromptContext(ctx, match);
   });
 
-  msa.on("session_switch", async (_event, ctx) => {
+  msa.on("session_start", async (_event, ctx) => {
     rebuildFromSession(ctx);
   });
 

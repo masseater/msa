@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 
 import { createPhotonImages } from "@msa/durable/images";
 import { DEFAULT_IMAGE_LIMITS } from "@msa/durable/tools";
-import { expect, it } from "vitest";
+import { expect, it } from "vite-plus/test";
 
 it("createPhotonImages takes a compiled WebAssembly module, as Cloudflare Workers pass it", async () => {
   const path = createRequire(import.meta.url).resolve("@silvia-odwyer/photon/photon_rs_bg.wasm");

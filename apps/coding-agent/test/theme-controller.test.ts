@@ -1,5 +1,5 @@
 import type { TerminalColors, TUI } from "@msa/tui";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { InteractiveThemeController } from "../src/modes/interactive/theme/theme-controller.ts";

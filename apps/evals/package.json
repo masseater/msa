@@ -13,6 +13,7 @@
   "devDependencies": {
     "@msa/ai": "workspace:*",
     "@msa/coding-agent": "workspace:*",
+    "@msa/tui": "workspace:*",
     "@types/node": "catalog:",
     "@vitest-evals/core": "catalog:",
     "autoevals": "catalog:",

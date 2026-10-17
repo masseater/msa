@@ -291,7 +291,9 @@ export const GenerationTask = defineTask<
       await runtime.commit(async (tx): Promise<Next> => {
         const live = await tx.doc(LiveDoc, runtime.conversationId);
         const taskId = await createToolTask(tx, runtime, assistant, next);
-        const slot = live.tools?.find((slot) => slot.callId === next && slot.taskId === undefined);
+        const slot = live.tools?.find(
+          (toolSlot) => toolSlot.callId === next && toolSlot.taskId === undefined,
+        );
         if (slot !== undefined) slot.taskId = taskId;
         const checkpoint: GenerationCheckpoint = {
           phase: "tools",
@@ -685,7 +687,7 @@ async function startToolRound(
     const live = await tx.doc(LiveDoc, conversationId);
     const entry = await appendAssistant(tx, conversationId, message);
     const slots: ToolSlot[] = [];
-    const tools: TaskId<ToolTaskResult>[] = [];
+    const started: TaskId<ToolTaskResult>[] = [];
     const pending: string[] = [];
     for (const call of calls) {
       if (!offered.has(call.name)) {
@@ -696,19 +698,19 @@ async function startToolRound(
         slots.push({ callId: call.id, name: call.name, status: "done", entry: result.id });
         continue;
       }
-      if (sequential && tools.length > 0) {
+      if (sequential && started.length > 0) {
         pending.push(call.id);
         slots.push({ callId: call.id, name: call.name, status: "pending" });
         continue;
       }
       const taskId = await createToolTask(tx, runtime, entry.id, call.id);
-      tools.push(taskId);
+      started.push(taskId);
       slots.push({ callId: call.id, name: call.name, taskId, status: "pending" });
     }
     delete live.generation;
     live.tools = slots;
-    const checkpoint = { phase: "tools", assistant: entry.id, tools, pending } as const;
-    return { status: "waiting", checkpoint, on: tools, policy: "allSettled" };
+    const checkpoint = { phase: "tools", assistant: entry.id, tools: started, pending } as const;
+    return { status: "waiting", checkpoint, on: started, policy: "allSettled" };
   }, context);
 }
 

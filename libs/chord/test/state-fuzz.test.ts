@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it } from "vite-plus/test";
 
 import { applyImmutable, type Draft, type Op, track } from "../src/delta/index.ts";
 

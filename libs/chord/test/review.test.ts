@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { Type } from "typebox";
 import { Value } from "typebox/value";
-import { describe, it } from "vitest";
+import { describe, it } from "vite-plus/test";
 
 import {
   type Ctx,

@@ -1,6 +1,6 @@
 import { posix, win32 } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   createFindToolDefinition,

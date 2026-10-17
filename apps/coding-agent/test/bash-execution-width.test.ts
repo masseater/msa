@@ -3,7 +3,7 @@
  * not a stale captured width. Regression test for #2569.
  */
 import { visibleWidth } from "@msa/tui";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { BashExecutionComponent } from "../src/modes/interactive/components/bash-execution.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";

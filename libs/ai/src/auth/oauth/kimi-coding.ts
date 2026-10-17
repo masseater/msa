@@ -129,13 +129,13 @@ function parseTokenResponse(
   operation: string,
 ): TokenResponse {
   const accessToken = json?.access_token;
-  const refreshToken = json?.refresh_token;
+  const refreshValue = json?.refresh_token;
   const expiresIn = json?.expires_in;
   if (
     typeof accessToken !== "string" ||
     !accessToken ||
-    typeof refreshToken !== "string" ||
-    !refreshToken ||
+    typeof refreshValue !== "string" ||
+    !refreshValue ||
     typeof expiresIn !== "number" ||
     !Number.isFinite(expiresIn) ||
     expiresIn <= 0
@@ -146,7 +146,7 @@ function parseTokenResponse(
   }
   return {
     access: accessToken,
-    refresh: refreshToken,
+    refresh: refreshValue,
     expires: Date.now() + expiresIn * 1000,
   };
 }

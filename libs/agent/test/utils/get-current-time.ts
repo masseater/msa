@@ -18,7 +18,9 @@ export async function getCurrentTime(timezone?: string): Promise<GetCurrentTimeR
         details: { utcTimestamp: date.getTime() },
       };
     } catch (_e) {
-      throw new Error(`Invalid timezone: ${timezone}. Current UTC time: ${date.toISOString()}`);
+      throw new Error(`Invalid timezone: ${timezone}. Current UTC time: ${date.toISOString()}`, {
+        cause: _e,
+      });
     }
   }
   const timeStr = date.toLocaleString("en-US", { dateStyle: "full", timeStyle: "long" });

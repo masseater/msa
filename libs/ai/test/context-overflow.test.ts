@@ -14,7 +14,7 @@
 import type { ChildProcess } from "child_process";
 import { execSync, spawn } from "child_process";
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { complete, getModel, getModels } from "../src/compat.ts";
 import type { AssistantMessage, Context, Model, Usage } from "../src/types.ts";
@@ -596,7 +596,7 @@ describe("Context overflow error handling", () => {
         console.log("Pulling gpt-oss:20b model for Ollama overflow tests...");
         try {
           execSync("ollama pull gpt-oss:20b", { stdio: "inherit" });
-        } catch (_e) {
+        } catch {
           console.warn("Failed to pull gpt-oss:20b model, tests will be skipped");
           return;
         }

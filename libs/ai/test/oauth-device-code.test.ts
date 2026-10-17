@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { pollOAuthDeviceCodeFlow } from "../src/auth/oauth/device-code.ts";
 

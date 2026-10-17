@@ -31,12 +31,12 @@ function renderHalfBlock(
       const srcX = Math.floor(col * scaleX);
       const idx1 = (srcY1 * width + srcX) * 4;
       const idx2 = (srcY2 * width + srcX) * 4;
-      const r1 = rgba[idx1] ?? 0,
-        g1 = rgba[idx1 + 1] ?? 0,
-        b1 = rgba[idx1 + 2] ?? 0;
-      const r2 = rgba[idx2] ?? 0,
-        g2 = rgba[idx2 + 1] ?? 0,
-        b2 = rgba[idx2 + 2] ?? 0;
+      const r1 = rgba[idx1] ?? 0;
+      const g1 = rgba[idx1 + 1] ?? 0;
+      const b1 = rgba[idx1 + 2] ?? 0;
+      const r2 = rgba[idx2] ?? 0;
+      const g2 = rgba[idx2 + 1] ?? 0;
+      const b2 = rgba[idx2 + 2] ?? 0;
       line += `\x1b[38;2;${r1};${g1};${b1}m\x1b[48;2;${r2};${g2};${b2}m▀`;
     }
     line += "\x1b[0m";

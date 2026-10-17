@@ -22,7 +22,7 @@ import {
   ROOT_CONVERSATION_ID,
   type ScanOrder,
 } from "@msa/durable";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
 import { addTool, openHarness, tool, user } from "./harness-support.ts";
@@ -70,7 +70,10 @@ async function allEntries(conversation: Conversation, order?: ScanOrder): Promis
       cursor,
       context,
     );
-    for (const entry of page.items) texts.push((entry.model?.[0] as { content: string }).content);
+    for (const entry of page.items) {
+      const firstModel = entry.model?.[0] as { content: string } | undefined;
+      if (firstModel !== undefined) texts.push(firstModel.content);
+    }
     cursor = page.next;
   } while (cursor !== undefined);
   return texts;

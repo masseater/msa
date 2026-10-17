@@ -572,6 +572,9 @@ importers:
       '@msa/coding-agent':
         specifier: workspace:*
         version: link:../coding-agent
+      '@msa/tui':
+        specifier: workspace:*
+        version: link:../../libs/tui
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.19

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createProvider, normalizeContext } from "@msa/ai";
 import type { AnthropicMessagesCompat, Api, Model, OpenAICompletionsCompat } from "@msa/ai/compat";
 import { getApiProvider, getSupportedThinkingLevels } from "@msa/ai/compat";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import type { ModelsJsonProvider } from "../src/core/model-config.ts";
@@ -1736,7 +1736,7 @@ describe("ModelRegistry", () => {
     test("apiKey with braced env syntax resolves to env value", async () => {
       const originalEnv = process.env.TEST_BRACED_API_KEY_12345;
       process.env.TEST_BRACED_API_KEY_12345 = "braced-env-api-key-value";
-      const bracedKey = "$" + "{TEST_BRACED_API_KEY_12345}";
+      const bracedKey = "${TEST_BRACED_API_KEY_12345}";
 
       try {
         writeRawModelsJson({

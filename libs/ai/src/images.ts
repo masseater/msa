@@ -1,3 +1,4 @@
+// oxlint-disable-next-line import/no-unassigned-import -- 画像プロバイダをレジストリへ登録する副作用 import
 import "./providers/images/register-builtins.ts";
 import { getImagesApiProvider } from "./images-api-registry.ts";
 import type {

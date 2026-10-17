@@ -153,6 +153,7 @@ export function resolveHttpProxyUrlForTarget(
   } catch (error) {
     throw new Error(
       `Invalid proxy URL ${JSON.stringify(proxy)}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
   }
 

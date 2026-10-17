@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { Context, JsonValue } from "@msa/chord";
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { registerStorageConformance } from "@msa/durable/testing";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { idFromNumber } from "../src/ids.ts";
 import type { SqliteStorage } from "../src/storage/sqlite/index.ts";

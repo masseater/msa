@@ -10,6 +10,7 @@ import {
   SessionManager,
   createAgentSessionFromServices,
 } from "@msa/coding-agent";
+import type { ProgramStatus } from "@msa/tui";
 import { Levenshtein } from "autoevals";
 import { createJudge, describeEval } from "vitest-evals";
 
@@ -52,6 +53,7 @@ class RecordingTerminal {
   clearScreen(): void {}
   setTitle(_title: string): void {}
   setProgress(_active: boolean): void {}
+  setProgramStatus(_status: ProgramStatus): void {}
 
   requestResize(): void {
     this.resizeHandler?.();

@@ -69,13 +69,13 @@ export function boundOutput(text: string, limits: OutputLimits): OutputSlice {
 function headRange(bytes: Uint8Array, limits: OutputLimits): [number, number] {
   if (limits.maxLines === 0 || limits.maxBytes === 0) return [0, 0];
   let end = bytes.length;
-  let lines = 0;
+  let newlines = 0;
   for (
     let index = bytes.indexOf(NEWLINE);
     index !== -1;
     index = bytes.indexOf(NEWLINE, index + 1)
   ) {
-    if (++lines === limits.maxLines) {
+    if (++newlines === limits.maxLines) {
       end = index + 1;
       break;
     }
@@ -92,13 +92,13 @@ function tailRange(bytes: Uint8Array, limits: OutputLimits): [number, number] {
   // A trailing newline ends the last line rather than starting another.
   const last = bytes[bytes.length - 1] === NEWLINE ? bytes.length - 2 : bytes.length - 1;
   let start = 0;
-  let lines = 1;
+  let newlines = 1;
   for (let index = last < 0 ? -1 : bytes.lastIndexOf(NEWLINE, last); index !== -1;) {
-    if (lines === limits.maxLines) {
+    if (newlines === limits.maxLines) {
       start = index + 1;
       break;
     }
-    lines++;
+    newlines++;
     index = index === 0 ? -1 : bytes.lastIndexOf(NEWLINE, index - 1);
   }
   if (bytes.length - start > limits.maxBytes) {

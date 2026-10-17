@@ -9,7 +9,7 @@ import {
   fauxAssistantMessage,
 } from "@msa/ai";
 import { getModel, streamSimple } from "@msa/ai/compat";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";

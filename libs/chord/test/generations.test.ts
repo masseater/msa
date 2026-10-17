@@ -6,7 +6,7 @@ import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 
 import { Type } from "typebox";
-import { describe, it } from "vitest";
+import { describe, it } from "vite-plus/test";
 
 import { createHost, defineRegistry, type Facet, local, method } from "../src/index.ts";
 

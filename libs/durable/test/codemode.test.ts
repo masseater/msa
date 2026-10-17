@@ -14,7 +14,7 @@ import {
   ToolTask,
   type ToolTaskInput,
 } from "@msa/durable";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import {
   type CodemodeGlobal,

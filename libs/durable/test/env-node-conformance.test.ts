@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { getOrThrow, type WatchChange } from "../src/env/index.ts";
 import { NodeExecutionEnv } from "../src/env/node.ts";

@@ -1,6 +1,6 @@
 import { fauxAssistantMessage } from "@msa/ai";
 import { Container, Text } from "@msa/tui";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import type { AgentSessionEvent } from "../../../src/core/agent-session.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";

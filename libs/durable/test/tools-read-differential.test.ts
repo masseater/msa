@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT } from "@msa/chord/context";
 import { characterEnd } from "@msa/chord/output";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import { NodeExecutionEnv } from "../src/env/node.ts";
 import type { ToolDiagnostic, ToolExecutionApi } from "../src/harness/types.ts";

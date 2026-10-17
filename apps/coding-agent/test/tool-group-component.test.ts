@@ -1,5 +1,5 @@
 import type { TUI, TuiMouseEvent } from "@msa/tui";
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vite-plus/test";
 
 import { createReadToolDefinition } from "../src/core/tools/read.ts";
 import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";

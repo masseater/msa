@@ -57,7 +57,7 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
   context: TranscriptContext,
   options?: AzureOpenAIResponsesOptions,
 ): AssistantMessageEventStream => {
-  const stream = new AssistantMessageEventStream();
+  const events = new AssistantMessageEventStream();
   const normalizedContext = resolveTranscript(
     context,
     model.compat?.supportsMidConvoSystemMessages,
@@ -124,9 +124,9 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
         { status: response.status, headers: headersToRecord(response.headers) },
         model,
       );
-      stream.push({ type: "start", partial: output });
+      events.push({ type: "start", partial: output });
 
-      await processResponsesStream(openaiStream, output, stream, model, {
+      await processResponsesStream(openaiStream, output, events, model, {
         onProviderStreamEvent: options?.onProviderStreamEvent,
         grammarToolInputProperties,
       });
@@ -142,8 +142,8 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
         throw new Error(output.errorMessage || "An unknown error occurred");
       }
 
-      stream.push({ type: "done", reason: output.stopReason, message: output });
-      stream.end();
+      events.push({ type: "done", reason: output.stopReason, message: output });
+      events.end();
     } catch (error) {
       for (const block of output.content) {
         delete (block as { index?: number }).index;
@@ -153,12 +153,12 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
       }
       output.stopReason = options?.signal?.aborted ? "aborted" : "error";
       output.errorMessage = formatAzureOpenAIError(error);
-      stream.push({ type: "error", reason: output.stopReason, error: output });
-      stream.end();
+      events.push({ type: "error", reason: output.stopReason, error: output });
+      events.end();
     }
   })();
 
-  return stream;
+  return events;
 };
 
 export const streamSimple: StreamFunction<"azure-openai-responses", SimpleStreamOptions> = (

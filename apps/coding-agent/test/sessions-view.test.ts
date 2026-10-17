@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@msa/agent-core";
 import { fauxAssistantMessage } from "@msa/ai";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import type { SessionNodeWithDependencies } from "../src/core/orchestrator/graph.ts";
 import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";

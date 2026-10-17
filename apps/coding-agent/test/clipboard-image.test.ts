@@ -1,7 +1,7 @@
 import { writeFileSync } from "fs";
 
 import type { NativeClipboard } from "@msa/tui";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { readClipboardImage } from "../src/utils/clipboard-image.ts";
 

@@ -9,7 +9,7 @@
  * - Abort handling during summarization
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { API_KEY, createTestSession, type TestSessionContext } from "./utilities.ts";
 

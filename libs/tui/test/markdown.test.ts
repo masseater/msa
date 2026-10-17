@@ -976,14 +976,12 @@ A=
     });
 
     it("does not treat currency, shell variables, or code spans as math", () => {
-      const source = "Costs $5 and $10 or $8k–$12k; use `$x$`, $HOME, and $" + "{PATH}.";
+      const source = "Costs $5 and $10 or $8k–$12k; use `$x$`, $HOME, and ${PATH}.";
       const markdown = new Markdown(source, 0, 0, defaultMarkdownTheme);
 
       const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
 
-      assert.deepStrictEqual(lines, [
-        "Costs $5 and $10 or $8k–$12k; use $x$, $HOME, and $" + "{PATH}.",
-      ]);
+      assert.deepStrictEqual(lines, ["Costs $5 and $10 or $8k–$12k; use $x$, $HOME, and ${PATH}."]);
 
       const shellVariables = "Paths: $HOME/$USER and $XDG_CONFIG_HOME/$APP_CONFIG";
       const shellLines = new Markdown(shellVariables, 0, 0, defaultMarkdownTheme)

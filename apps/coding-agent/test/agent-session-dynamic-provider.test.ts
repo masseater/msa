@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import type { Provider } from "@msa/ai";
 import { getModel } from "@msa/ai/compat";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";

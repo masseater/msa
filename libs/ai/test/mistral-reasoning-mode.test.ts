@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { streamSimple } from "../src/api/mistral-conversations.ts";
 import type { Context, Model, SimpleStreamOptions, ThinkingLevelMap } from "../src/types.ts";

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import { createReadStream } from "node:fs";
-import { promises as fs } from "node:fs";
+import { createReadStream, promises as fs } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";

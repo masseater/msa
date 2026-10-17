@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "vite-plus/test";
 
 const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const sourceDirectory = resolve(packageDirectory, "src");

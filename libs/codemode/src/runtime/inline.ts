@@ -66,7 +66,7 @@ export function inlineLauncher(
     try {
       module = await wasm;
     } catch (error) {
-      throw new Error(`Failed to load QuickJS: ${errorMessage(error)}`);
+      throw new Error(`Failed to load QuickJS: ${errorMessage(error)}`, { cause: error });
     }
     const deadline = data.timeoutMs === undefined ? undefined : performance.now() + data.timeoutMs;
     let stopped = false;

@@ -6,7 +6,7 @@ import {
 } from "@msa/ai";
 import type { ToolResultMessage } from "@msa/ai/compat";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type { ExtensionAPI } from "../../src/core/extensions/types.ts";
 import { createCodemodeExtension } from "../../src/extensions/codemode/index.ts";
@@ -133,7 +133,7 @@ describe("AgentSession tool orchestration", () => {
     expect(plain.session.getAllTools().map((tool) => tool.name)).toEqual(
       expect.arrayContaining(["codemode", "tool_search"]),
     );
-    expect(plain.session.getActiveToolNames()).toEqual(["read", "bash", "edit", "write"]);
+    expect(plain.session.getActiveToolNames()).toEqual(["read", "bash", "edit", "write", "memory"]);
 
     // --tools and the defaultTools setting name them explicitly.
     const allowed = await createHarness({

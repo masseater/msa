@@ -5,7 +5,7 @@ import { stripVTControlCharacters } from "node:util";
 import { runInNewContext } from "node:vm";
 
 import type { TUI } from "@msa/tui";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { exportFromFile } from "../src/core/export-html/index.ts";
 import {

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
 
 import { Type } from "typebox";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import {
   closeOpenAICodexWebSocketSessions,

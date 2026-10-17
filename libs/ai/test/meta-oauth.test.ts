@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { metaOAuth } from "../src/auth/oauth/meta.ts";
 import type { ProviderAuthInteraction } from "../src/auth/types.ts";

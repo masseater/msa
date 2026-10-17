@@ -24,7 +24,7 @@ function workerLauncher(options: CodemodeSandboxOptions): VmLauncher {
     try {
       module = await (options.wasm ?? loadQuickJSWasm());
     } catch (error) {
-      throw new Error(`Failed to load QuickJS: ${errorMessage(error)}`);
+      throw new Error(`Failed to load QuickJS: ${errorMessage(error)}`, { cause: error });
     }
     const interrupt = new SharedArrayBuffer(4);
     const workerData: WorkerData = { ...data, wasm: module, interrupt };
@@ -34,7 +34,7 @@ function workerLauncher(options: CodemodeSandboxOptions): VmLauncher {
       worker = new Worker(options.workerUrl ?? defaultWorkerUrl(), { workerData });
     } catch (error) {
       releaseWorker?.();
-      throw new Error(`Failed to start worker: ${errorMessage(error)}`);
+      throw new Error(`Failed to start worker: ${errorMessage(error)}`, { cause: error });
     }
     if (releaseWorker) worker.once("exit", releaseWorker);
     worker.on("message", (message: unknown) => {

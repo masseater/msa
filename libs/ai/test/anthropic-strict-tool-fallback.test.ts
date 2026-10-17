@@ -1,10 +1,10 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { APIError } from "@anthropic-ai/sdk";
 import type {
   BetaTool,
   MessageCreateParamsStreaming,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 import { Type } from "typebox";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import { type AnthropicOptions, stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
 import { stream as streamMsaMessages } from "../src/api/msa-messages.ts";
@@ -243,7 +243,7 @@ describe("Anthropic preferred strict tool fallback", () => {
     const result = await streamAnthropic(model, context([tool("lookup", "prefer")]), {
       ...options,
       onPayload: () => {
-        throw Anthropic.APIError.generate(
+        throw APIError.generate(
           400,
           { error: { type: "invalid_request_error", message: grammarError } },
           grammarError,

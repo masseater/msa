@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
 import { Container, type Terminal, Text, type TUI, TuiMainScreen } from "@msa/tui";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import { computeEditsDiff, type Edit } from "../src/core/tools/edit-diff.ts";
 import { createEditToolDefinition } from "../src/core/tools/edit.ts";

@@ -8,7 +8,7 @@ import {
 } from "@msa/chord/context";
 import { applyImmutable } from "@msa/chord/delta";
 import { defineDoc } from "@msa/durable";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { context, documentChanges, flush, openTestSession } from "./session-support.ts";
 

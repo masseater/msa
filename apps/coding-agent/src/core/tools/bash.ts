@@ -401,11 +401,13 @@ export function createShellToolDefinition(
           const snapshot = await finishOutput();
           const { text } = formatOutput(snapshot, "");
           if (err instanceof Error && err.message === "aborted") {
-            throw new Error(appendStatus(text, "Command aborted"));
+            throw new Error(appendStatus(text, "Command aborted"), { cause: err });
           }
           if (err instanceof Error && err.message.startsWith("timeout:")) {
             const timeoutSecs = err.message.split(":")[1];
-            throw new Error(appendStatus(text, `Command timed out after ${timeoutSecs} seconds`));
+            throw new Error(appendStatus(text, `Command timed out after ${timeoutSecs} seconds`), {
+              cause: err,
+            });
           }
           throw err;
         }

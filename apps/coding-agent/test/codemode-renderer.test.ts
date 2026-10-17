@@ -2,7 +2,7 @@ import { stripVTControlCharacters } from "node:util";
 
 import type { AgentToolResult } from "@msa/agent-core";
 import type { Component, TUI } from "@msa/tui";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import type { ToolRenderContext } from "../src/core/extensions/types.ts";
 import { codemodeRenderers } from "../src/extensions/codemode/renderer.ts";

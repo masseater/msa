@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { convertMessages } from "../src/api/openai-completions.ts";
 import { getModel, normalizeContext, stream, streamSimple } from "../src/compat.ts";

@@ -7,7 +7,7 @@ import {
   type NestedToolExecutionResult,
   type ToolRegistration,
 } from "@msa/durable";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { type ChatSetup, chatSetup, openChat } from "./chat-support.ts";
 import { addTool } from "./harness-support.ts";

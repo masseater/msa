@@ -42,15 +42,15 @@ function bindValue(value: SqliteValue): DurableObjectSqlValue {
 const bind = (params: readonly SqliteValue[]): DurableObjectSqlValue[] => params.map(bindValue);
 
 /** Rows as returned, with `BLOB` columns converted to `Uint8Array` in place; no other copy is made. */
-function rows<T>(rows: Record<string, DurableObjectSqlValue>[]): T[] {
-  for (const row of rows) {
+function rows<T>(input: Record<string, DurableObjectSqlValue>[]): T[] {
+  for (const row of input) {
     for (const key in row) {
       const value = row[key];
       if (value instanceof ArrayBuffer)
         (row as Record<string, unknown>)[key] = new Uint8Array(value);
     }
   }
-  return rows as T[];
+  return input as T[];
 }
 
 /** Executes SQL through `ctx.storage.sql`, which has no separate prepare step. */

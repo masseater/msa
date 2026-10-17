@@ -31,7 +31,7 @@ import {
   type UserInput,
   wrapTool,
 } from "@msa/durable";
-import { expect, expectTypeOf, it } from "vitest";
+import { expect, expectTypeOf, it } from "vite-plus/test";
 
 import type { ExecutionEnv } from "../src/env/index.ts";
 import { CodingTools, createBashTool, createEditTool, createReadTool } from "../src/tools/index.ts";

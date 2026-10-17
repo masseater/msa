@@ -280,9 +280,11 @@ export async function showMcpManager(
   await ctx.ui.custom<void>((tui, theme, keybindings, done) => {
     const view = new McpManagerView(tui, theme, keybindings);
     void manage(view).then(
+      // oxlint-disable-next-line promise/no-callback-in-promise -- UI の完了コールバックを promise の完了で呼ぶブリッジ
       () => done(),
       (error: unknown) => {
         ctx.ui.notify(toErrorMessage(error), "error");
+        // oxlint-disable-next-line promise/no-callback-in-promise -- UI の完了コールバックを promise の完了で呼ぶブリッジ
         done();
       },
     );

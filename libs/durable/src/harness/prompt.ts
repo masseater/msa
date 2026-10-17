@@ -1,4 +1,4 @@
-import type { Message, SystemMessage, Tool, ToolReference } from "@msa/ai";
+import type { Message, SystemMessage, Tool as AiTool, ToolReference } from "@msa/ai";
 import { declarationsEqual, getCurrentTools, toToolDeclaration } from "@msa/ai/utils/transcript";
 import type { Context } from "@msa/chord";
 
@@ -53,7 +53,7 @@ export async function renderSections<Tool extends ToolRegistration>(
 
 type SystemDraft = TypedEntryDraft<never>;
 
-type ToolChanges = { readonly toolsRemoved: ToolReference[]; readonly toolsAdded: Tool[] };
+type ToolChanges = { readonly toolsRemoved: ToolReference[]; readonly toolsAdded: AiTool[] };
 
 /**
  * Plan the `msa.system` entries that make the replayed sections and tools of `view` equal `desired` and `tools` in values
@@ -70,7 +70,7 @@ type ToolChanges = { readonly toolsRemoved: ToolReference[]; readonly toolsAdded
 export function planSystemEntries(
   view: ContextView,
   desired: ReadonlyMap<string, string>,
-  tools: readonly Tool[],
+  tools: readonly AiTool[],
   timestamp: number,
 ): SystemDraft[] {
   const head = view.head;
@@ -104,7 +104,7 @@ export function planSystemEntries(
  * in place and appends additions; when that would not yield the desired order, every offered tool is removed and
  * every desired tool re-added in order.
  */
-function planTools(offered: readonly Tool[], desired: readonly Tool[]): ToolChanges {
+function planTools(offered: readonly AiTool[], desired: readonly AiTool[]): ToolChanges {
   const wanted = new Map(desired.map((tool) => [tool.name, tool]));
   const kept = offered.filter((tool) => {
     const next = wanted.get(tool.name);

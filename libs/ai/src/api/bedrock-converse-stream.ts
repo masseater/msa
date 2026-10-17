@@ -140,7 +140,7 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
   context: TranscriptContext,
   options: BedrockOptions = {},
 ): AssistantMessageEventStream => {
-  const stream = new AssistantMessageEventStream();
+  const events = new AssistantMessageEventStream();
   // Bedrock has no mid-conversation system messages; fold them into the leading prompt.
   const normalizedContext = collapseSystemMessages(context);
 
@@ -322,13 +322,13 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
               "Unexpected assistant message start but got user message start instead",
             );
           }
-          stream.push({ type: "start", partial: output });
+          events.push({ type: "start", partial: output });
         } else if (item.contentBlockStart) {
-          handleContentBlockStart(item.contentBlockStart, blocks, output, stream);
+          handleContentBlockStart(item.contentBlockStart, blocks, output, events);
         } else if (item.contentBlockDelta) {
-          handleContentBlockDelta(item.contentBlockDelta, blocks, output, stream);
+          handleContentBlockDelta(item.contentBlockDelta, blocks, output, events);
         } else if (item.contentBlockStop) {
-          handleContentBlockStop(item.contentBlockStop, blocks, output, stream);
+          handleContentBlockStop(item.contentBlockStop, blocks, output, events);
         } else if (item.messageStop) {
           output.rawStopReason = item.messageStop.stopReason;
           const { stopReason, errorMessage } = mapStopReason(item.messageStop.stopReason);
@@ -364,8 +364,8 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
 
       // A stream can settle without stopping every block, so finalize here too.
       for (const block of output.content) finalizeStreamingBlock(block as Block);
-      stream.push({ type: "done", reason: output.stopReason, message: output });
-      stream.end();
+      events.push({ type: "done", reason: output.stopReason, message: output });
+      events.end();
     } catch (error) {
       for (const block of output.content) {
         finalizeStreamingBlock(block as Block);
@@ -375,12 +375,12 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
       if (output.stopReason === "error") {
         appendBedrockFailureDiagnostic(output, error, responseRequestId);
       }
-      stream.push({ type: "error", reason: output.stopReason, error: output });
-      stream.end();
+      events.push({ type: "error", reason: output.stopReason, error: output });
+      events.end();
     }
   })();
 
-  return stream;
+  return events;
 };
 
 /**
@@ -623,7 +623,7 @@ function handleContentBlockStart(
   event: ContentBlockStartEvent,
   blocks: Block[],
   output: AssistantMessage,
-  stream: AssistantMessageEventStream,
+  events: AssistantMessageEventStream,
 ): void {
   const index = event.contentBlockIndex!;
   const start = event.start;
@@ -638,7 +638,7 @@ function handleContentBlockStart(
       index,
     };
     output.content.push(block);
-    stream.push({ type: "toolcall_start", contentIndex: blocks.length - 1, partial: output });
+    events.push({ type: "toolcall_start", contentIndex: blocks.length - 1, partial: output });
   }
 }
 
@@ -646,7 +646,7 @@ function handleContentBlockDelta(
   event: ContentBlockDeltaEvent,
   blocks: Block[],
   output: AssistantMessage,
-  stream: AssistantMessageEventStream,
+  events: AssistantMessageEventStream,
 ): void {
   const contentBlockIndex = event.contentBlockIndex!;
   const delta = event.delta;
@@ -660,16 +660,16 @@ function handleContentBlockDelta(
       output.content.push(newBlock);
       index = blocks.length - 1;
       block = blocks[index];
-      stream.push({ type: "text_start", contentIndex: index, partial: output });
+      events.push({ type: "text_start", contentIndex: index, partial: output });
     }
     if (block.type === "text") {
       block.text += delta.text;
-      stream.push({ type: "text_delta", contentIndex: index, delta: delta.text, partial: output });
+      events.push({ type: "text_delta", contentIndex: index, delta: delta.text, partial: output });
     }
   } else if (delta?.toolUse && block?.type === "toolCall") {
     block.partialJson = (block.partialJson || "") + (delta.toolUse.input || "");
     block.arguments = parseStreamingJson(block.partialJson);
-    stream.push({
+    events.push({
       type: "toolcall_delta",
       contentIndex: index,
       delta: delta.toolUse.input || "",
@@ -689,13 +689,13 @@ function handleContentBlockDelta(
       output.content.push(newBlock);
       thinkingIndex = blocks.length - 1;
       thinkingBlock = blocks[thinkingIndex];
-      stream.push({ type: "thinking_start", contentIndex: thinkingIndex, partial: output });
+      events.push({ type: "thinking_start", contentIndex: thinkingIndex, partial: output });
     }
 
     if (thinkingBlock?.type === "thinking") {
       if (delta.reasoningContent.text) {
         thinkingBlock.thinking += delta.reasoningContent.text;
-        stream.push({
+        events.push({
           type: "thinking_delta",
           contentIndex: thinkingIndex,
           delta: delta.reasoningContent.text,
@@ -716,7 +716,7 @@ function handleContentBlockDelta(
           thinkingBlock.redacted = true;
           thinkingBlock.thinkingSignature = "";
           thinkingBlock.thinking += REDACTED_THINKING_PLACEHOLDER;
-          stream.push({
+          events.push({
             type: "thinking_delta",
             contentIndex: thinkingIndex,
             delta: REDACTED_THINKING_PLACEHOLDER,
@@ -775,7 +775,7 @@ function handleContentBlockStop(
   event: ContentBlockStopEvent,
   blocks: Block[],
   output: AssistantMessage,
-  stream: AssistantMessageEventStream,
+  events: AssistantMessageEventStream,
 ): void {
   const index = blocks.findIndex((b) => b.index === event.contentBlockIndex);
   const block = blocks[index];
@@ -784,11 +784,11 @@ function handleContentBlockStop(
 
   switch (block.type) {
     case "text":
-      stream.push({ type: "text_end", contentIndex: index, content: block.text, partial: output });
+      events.push({ type: "text_end", contentIndex: index, content: block.text, partial: output });
       break;
     case "thinking":
       flushRedactedContent(block);
-      stream.push({
+      events.push({
         type: "thinking_end",
         contentIndex: index,
         content: block.thinking,
@@ -800,7 +800,7 @@ function handleContentBlockStop(
       // Finalize in-place and strip the scratch buffer so replay only
       // carries parsed arguments.
       delete (block as Block).partialJson;
-      stream.push({ type: "toolcall_end", contentIndex: index, toolCall: block, partial: output });
+      events.push({ type: "toolcall_end", contentIndex: index, toolCall: block, partial: output });
       break;
   }
 }

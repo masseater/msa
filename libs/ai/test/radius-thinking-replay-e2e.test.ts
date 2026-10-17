@@ -28,7 +28,7 @@
  * Credentials: RADIUS_API_KEY or a `radius` entry in ~/.msa/agent/auth.json; ANTHROPIC_API_KEY, ANTHROPIC_OAUTH_TOKEN or
  * an `anthropic` entry for the control. Each test makes three paid requests.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { completeSimple, getModel } from "../src/compat.ts";
 import { getEnvApiKey } from "../src/env-api-keys.ts";

@@ -1,5 +1,5 @@
 import type { Context } from "@msa/chord";
-import { expect, expectTypeOf, it } from "vitest";
+import { expect, expectTypeOf, it } from "vite-plus/test";
 
 import { idFromNumber, seqFromNumber } from "../src/ids.ts";
 import type {

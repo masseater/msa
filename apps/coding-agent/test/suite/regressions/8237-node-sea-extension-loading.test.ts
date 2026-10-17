@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vite-plus/test";
 
 const state = vi.hoisted(() => {
   const originalGetBuiltinModule = Object.getOwnPropertyDescriptor(process, "getBuiltinModule");

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { complete, registerApiProvider, resetApiProviders } from "../src/compat.ts";
 import type { AssistantMessage, Context, Model } from "../src/types.ts";
