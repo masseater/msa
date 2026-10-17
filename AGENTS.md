@@ -36,7 +36,7 @@ release. Add a tool name to select part of the graph. For example, run
 
 ## pi との関係
 
-- このリポジトリは pi（https://github.com/earendil-works/pi）から fork したもので、pi とは完全に切り離されている。pi 側に変更があっても、都度ユーザーの判断で pick して取り込むだけにする。
+- このリポジトリは pi（https://github.com/earendil-works/pi）の fork から始まったが、pi とは完全に分離した別プロジェクトで、pi は upstream ではない。pi の取り込みは、原則として機能単位で、必要と判断したときだけ行う。取り込むときは msa のコードとして実装し直し、pi のコードをそのまま取り込まない（merge・cherry-pick・コピーをしない）。
 
 ## 環境変数
 
