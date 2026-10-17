@@ -13,8 +13,8 @@ describe("Editor component", () => {
       let aborts = 0;
 
       const mockProvider: AutocompleteProvider = {
-        getSuggestions: async (_lines, _cursorLine, _cursorCol, options) => {
-          return await new Promise((resolve) => {
+        getSuggestions: async (_lines, _cursorLine, _cursorCol, options) =>
+          await new Promise((resolve) => {
             const timeout = setTimeout(() => {
               resolve({ items: [{ value: "@main.ts", label: "main.ts" }], prefix: "@main" });
             }, 500);
@@ -27,8 +27,7 @@ describe("Editor component", () => {
               },
               { once: true },
             );
-          });
-        },
+          }),
         applyCompletion,
       };
 
@@ -104,7 +103,7 @@ function autocompleteCases12(): void {
         const beforeCursor = text.slice(0, cursorCol);
 
         const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/u);
-        if (argtestMatch) {
+        if (argtestMatch !== null) {
           const argumentText = argtestMatch[1]!;
           const allArguments = [
             { value: "one", label: "one" },
@@ -151,7 +150,7 @@ function autocompleteCases13(): void {
         const beforeCursor = text.slice(0, cursorCol);
 
         const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/u);
-        if (argtestMatch) {
+        if (argtestMatch !== null) {
           const argumentText = argtestMatch[1]!;
           const allArguments = [
             { value: "two", label: "two" },

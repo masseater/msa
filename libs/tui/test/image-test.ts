@@ -34,7 +34,9 @@ const tui: TUI = new TuiMainScreen(terminal);
 tui.addChild(new Text("Image Rendering Test", 1, 1));
 tui.addChild(new Spacer(1));
 
-if (dims) {
+if (dims === null) {
+  tui.addChild(new Text("Could not parse image dimensions", 1, 0));
+} else {
   tui.addChild(
     new Image(
       base64Data,
@@ -44,8 +46,6 @@ if (dims) {
       dims,
     ),
   );
-} else {
-  tui.addChild(new Text("Could not parse image dimensions", 1, 0));
 }
 
 tui.addChild(new Spacer(1));

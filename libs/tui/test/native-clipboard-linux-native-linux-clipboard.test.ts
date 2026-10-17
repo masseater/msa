@@ -53,7 +53,7 @@ function nativeLinuxClipboardCases4(): void {
     ]);
   });
   after(() => {
-    if (directory) rmSync(directory, { recursive: true, force: true });
+    if (directory !== "") rmSync(directory, { recursive: true, force: true });
   });
   it("reads UTF8_STRING when X11 TARGETS is refused", async (t) => {
     const { env } = await startX11(t);
@@ -102,7 +102,7 @@ function nativeLinuxClipboardCases5(): void {
     ]);
   });
   after(() => {
-    if (directory) rmSync(directory, { recursive: true, force: true });
+    if (directory !== "") rmSync(directory, { recursive: true, force: true });
   });
   it("returns null for empty X11 clipboards and text-only selections", async (t) => {
     const { env } = await startX11(t);
@@ -156,7 +156,7 @@ function nativeLinuxClipboardCases6(): void {
     ]);
   });
   after(() => {
-    if (directory) rmSync(directory, { recursive: true, force: true });
+    if (directory !== "") rmSync(directory, { recursive: true, force: true });
   });
   it("preserves X11 Unicode and incremental text/image transfers", async (t) => {
     const { env } = await startX11(t);
@@ -217,7 +217,7 @@ function nativeLinuxClipboardCases7(): void {
     ]);
   });
   after(() => {
-    if (directory) rmSync(directory, { recursive: true, force: true });
+    if (directory !== "") rmSync(directory, { recursive: true, force: true });
   });
   ["disconnect", "timeout"].forEach((mode) => {
     it(`reports X11 transfer ${mode} as an exception, not an unavailable display`, async (t) => {

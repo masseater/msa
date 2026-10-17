@@ -60,7 +60,7 @@ editor.onSubmit = (value: string) => {
     return;
   }
 
-  if (trimmed) {
+  if (trimmed !== "") {
     isResponding = true;
     editor.disableSubmit = true;
 

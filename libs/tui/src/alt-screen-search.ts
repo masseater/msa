@@ -120,7 +120,7 @@ function findSearchCorpusMatches(
   corpus: SearchCorpus,
   normalizedQuery: string,
 ): AltScreenSearchMatch[] {
-  if (!normalizedQuery) return [];
+  if (normalizedQuery === "") return [];
   const expression = new RegExp(escapeRegExp(normalizedQuery), "giu");
   const matches: AltScreenSearchMatch[] = [];
   let spanIndex = 0;
@@ -143,7 +143,7 @@ function findSearchCorpusMatches(
         ? span.startCol + Math.min(end, span.textEnd) - span.textStart
         : span.endCol;
       const previous = segments[segments.length - 1];
-      if (previous && previous.row === span.row && startCol <= previous.endCol) {
+      if (previous !== undefined && previous.row === span.row && startCol <= previous.endCol) {
         previous.endCol = Math.max(previous.endCol, endCol);
       } else {
         segments.push({ row: span.row, startCol, endCol });
@@ -170,14 +170,14 @@ export class AltScreenSearchIndex {
 
   search(lines: readonly string[], query: string): AltScreenSearchResult {
     let sourceChanged = this.sourceLines?.length !== lines.length;
-    if (!sourceChanged && this.sourceLines) {
+    if (!sourceChanged && this.sourceLines !== undefined) {
       for (let index = 0; index < lines.length; index++) {
         if (this.sourceLines[index] === lines[index]) continue;
         sourceChanged = true;
         break;
       }
     }
-    if (sourceChanged || !this.corpus) {
+    if (sourceChanged || this.corpus === undefined) {
       this.sourceLines = Array.from(lines);
       this.corpus = buildSearchCorpus(lines);
     }
@@ -197,13 +197,17 @@ export function findAltScreenSearchMatches(
   query: string,
 ): AltScreenSearchMatch[] {
   const normalizedQuery = normalizeQuery(query);
-  return normalizedQuery ? findSearchCorpusMatches(buildSearchCorpus(lines), normalizedQuery) : [];
+  return normalizedQuery === ""
+    ? []
+    : findSearchCorpusMatches(buildSearchCorpus(lines), normalizedQuery);
 }
 
 export function getAltScreenSearchMatchKey(match: AltScreenSearchMatch): string {
   const first = match.segments[0];
   const last = match.segments[match.segments.length - 1];
-  return first && last ? `${first.row}:${first.startCol}:${last.row}:${last.endCol}` : "";
+  return first !== undefined && last !== undefined
+    ? `${first.row}:${first.startCol}:${last.row}:${last.endCol}`
+    : "";
 }
 
 export class AltScreenSearchComponent implements Component, Focusable {
@@ -273,7 +277,7 @@ export class AltScreenSearchComponent implements Component, Focusable {
     const safeWidth = Math.max(1, width);
     const innerWidth = Math.max(0, safeWidth - 2);
     const formatKey = (key: string | undefined): string =>
-      key
+      key !== undefined && key !== ""
         ? key
             .split("+")
             .map((part) => {
@@ -286,14 +290,15 @@ export class AltScreenSearchComponent implements Component, Focusable {
     const previousKey = formatKey(keybindings.getKeys("tui.altScreen.searchPrevious")[0]);
     const nextKey = formatKey(keybindings.getKeys("tui.altScreen.searchNext")[0]);
     const query = this.input.getValue();
-    const result = query
-      ? this.resultCount === 0
-        ? "No matches"
-        : `${this.resultIndex + 1}/${this.resultCount}`
-      : "";
+    const result =
+      query === ""
+        ? ""
+        : this.resultCount === 0
+          ? "No matches"
+          : `${this.resultIndex + 1}/${this.resultCount}`;
     const resultSpace = Math.max(0, innerWidth - 3);
     const visibleResult = truncateToWidth(result, resultSpace, "");
-    const resultText = visibleResult ? `\x1b[2m ${visibleResult} \x1b[22m` : "";
+    const resultText = visibleResult === "" ? "" : `\x1b[2m ${visibleResult} \x1b[22m`;
     const inputWidth = Math.max(0, innerWidth - visibleWidth(resultText));
     const inputLine = truncateToWidth(
       this.input.render(Math.max(1, inputWidth))[0] ?? "",
@@ -324,7 +329,8 @@ export class AltScreenSearchComponent implements Component, Focusable {
         this.navigationButtonStyle(nextButton, this.hoveredNavigationDirection === 1)
       : "";
     const outerGapsWidth = showButtons ? outerGapWidth * 2 : 0;
-    const rightRuleWidth = renderedButtons && innerWidth > controlsWidth + outerGapsWidth ? 1 : 0;
+    const rightRuleWidth =
+      renderedButtons !== "" && innerWidth > controlsWidth + outerGapsWidth ? 1 : 0;
     const leftRuleWidth = Math.max(
       0,
       innerWidth - (showButtons ? controlsWidth : 0) - outerGapsWidth - rightRuleWidth,
@@ -339,7 +345,7 @@ export class AltScreenSearchComponent implements Component, Focusable {
     return [
       `┌${"─".repeat(innerWidth)}┐`,
       `│${content}│`,
-      `└${"─".repeat(leftRuleWidth)}${renderedButtons ? " " : ""}${renderedButtons}${renderedButtons ? " " : ""}${"─".repeat(rightRuleWidth)}┘`,
+      `└${"─".repeat(leftRuleWidth)}${renderedButtons === "" ? "" : " "}${renderedButtons}${renderedButtons === "" ? "" : " "}${"─".repeat(rightRuleWidth)}┘`,
     ];
   }
 }

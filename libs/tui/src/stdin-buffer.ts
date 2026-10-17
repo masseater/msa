@@ -127,7 +127,7 @@ function isCompleteApcSequence(data: string): "complete" | "incomplete" {
 
 function parseUnmodifiedKittyPrintableCodepoint(sequence: string): number | undefined {
   const match = sequence.match(/^\x1b\[(\d+)(?::\d*)?(?::\d+)?u$/u);
-  if (!match) return undefined;
+  if (match === null) return undefined;
 
   const codepoint = parseInt(match[1]!, 10);
   return codepoint >= 32 ? codepoint : undefined;
@@ -224,7 +224,7 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
   }
 
   public process(data: string | Buffer): void {
-    if (this.timeout) {
+    if (this.timeout !== null) {
       clearTimeout(this.timeout);
       this.timeout = null;
     }
@@ -341,7 +341,7 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
   }
 
   flush(): string[] {
-    if (this.timeout) {
+    if (this.timeout !== null) {
       clearTimeout(this.timeout);
       this.timeout = null;
     }
@@ -357,7 +357,7 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
   }
 
   clear(): void {
-    if (this.timeout) {
+    if (this.timeout !== null) {
       clearTimeout(this.timeout);
       this.timeout = null;
     }

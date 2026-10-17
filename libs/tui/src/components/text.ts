@@ -49,11 +49,15 @@ export class Text implements Component {
   }
 
   render(width: number): string[] {
-    if (this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {
+    if (
+      this.cachedLines !== undefined &&
+      this.cachedText === this.text &&
+      this.cachedWidth === width
+    ) {
       return this.cachedLines;
     }
 
-    if (!this.text || this.text.trim() === "") {
+    if (this.text === "" || this.text.trim() === "") {
       const result: string[] = [];
       this.cachedText = this.text;
       this.cachedWidth = width;
@@ -75,21 +79,22 @@ export class Text implements Component {
     for (const line of wrappedLines) {
       const lineWithMargins = leftMargin + line + rightMargin;
 
-      if (this.customBgFn) {
-        contentLines.push(applyBackgroundToLine(lineWithMargins, width, this.customBgFn));
-      } else {
+      if (this.customBgFn === undefined) {
         const visibleLen = visibleWidth(lineWithMargins);
         const paddingNeeded = Math.max(0, width - visibleLen);
         contentLines.push(lineWithMargins + " ".repeat(paddingNeeded));
+      } else {
+        contentLines.push(applyBackgroundToLine(lineWithMargins, width, this.customBgFn));
       }
     }
 
     const emptyLine = " ".repeat(width);
     const emptyLines: string[] = [];
     for (let i = 0; i < this.paddingY; i++) {
-      const line = this.customBgFn
-        ? applyBackgroundToLine(emptyLine, width, this.customBgFn)
-        : emptyLine;
+      const line =
+        this.customBgFn === undefined
+          ? emptyLine
+          : applyBackgroundToLine(emptyLine, width, this.customBgFn);
       emptyLines.push(line);
     }
 

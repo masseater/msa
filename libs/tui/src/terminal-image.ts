@@ -71,7 +71,10 @@ function detectCapabilitiesFromEnvironment(
     colorTerm === "truecolor" || colorTerm === "24bit" || term.endsWith("-direct");
   const isWindowsConsole = process.platform === "win32";
 
-  if (process.env["TMUX"] || term.startsWith("tmux")) {
+  if (
+    (process.env["TMUX"] !== undefined && process.env["TMUX"] !== "") ||
+    term.startsWith("tmux")
+  ) {
     return { images: null, trueColor: hasTrueColorHint, hyperlinks: tmuxForwardsHyperlink() };
   }
 
@@ -83,35 +86,46 @@ function detectCapabilitiesFromEnvironment(
     return { images: "kitty", trueColor: hasTrueColorHint, hyperlinks: true };
   }
 
-  if (process.env["KITTY_WINDOW_ID"] || termProgram === "kitty") {
+  if (
+    (process.env["KITTY_WINDOW_ID"] !== undefined && process.env["KITTY_WINDOW_ID"] !== "") ||
+    termProgram === "kitty"
+  ) {
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
   if (
     termProgram === "ghostty" ||
     term.includes("ghostty") ||
-    process.env["GHOSTTY_RESOURCES_DIR"]
+    (process.env["GHOSTTY_RESOURCES_DIR"] !== undefined &&
+      process.env["GHOSTTY_RESOURCES_DIR"] !== "")
   ) {
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
-  if (process.env["WEZTERM_PANE"] || termProgram === "wezterm") {
+  if (
+    (process.env["WEZTERM_PANE"] !== undefined && process.env["WEZTERM_PANE"] !== "") ||
+    termProgram === "wezterm"
+  ) {
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
   if (
     termProgram === "warpterminal" ||
-    process.env["WARP_SESSION_ID"] ||
-    process.env["WARP_TERMINAL_SESSION_UUID"]
+    (process.env["WARP_SESSION_ID"] !== undefined && process.env["WARP_SESSION_ID"] !== "") ||
+    (process.env["WARP_TERMINAL_SESSION_UUID"] !== undefined &&
+      process.env["WARP_TERMINAL_SESSION_UUID"] !== "")
   ) {
     return { images: "kitty", trueColor: true, hyperlinks: true };
   }
 
-  if (process.env["ITERM_SESSION_ID"] || termProgram === "iterm.app") {
+  if (
+    (process.env["ITERM_SESSION_ID"] !== undefined && process.env["ITERM_SESSION_ID"] !== "") ||
+    termProgram === "iterm.app"
+  ) {
     return { images: "iterm2", trueColor: true, hyperlinks: true };
   }
 
-  if (process.env["WT_SESSION"]) {
+  if (process.env["WT_SESSION"] !== undefined && process.env["WT_SESSION"] !== "") {
     return { images: null, trueColor: true, hyperlinks: true };
   }
 
@@ -158,7 +172,7 @@ export function detectCapabilities(
 }
 
 export function getCapabilities(): TerminalCapabilities {
-  if (!cachedCapabilities) {
+  if (cachedCapabilities === null) {
     const hyperlinks = capabilityOverrides.hyperlinks;
     cachedCapabilities = {
       ...detectCapabilities(hyperlinks === undefined ? undefined : () => hyperlinks),
@@ -222,9 +236,9 @@ export function encodeKitty(
   const params: string[] = ["a=T", "f=100", "q=2"];
 
   if (options.moveCursor === false) params.push("C=1");
-  if (options.columns) params.push(`c=${options.columns}`);
-  if (options.rows) params.push(`r=${options.rows}`);
-  if (options.imageId) params.push(`i=${options.imageId}`);
+  if (options.columns !== undefined && options.columns !== 0) params.push(`c=${options.columns}`);
+  if (options.rows !== undefined && options.rows !== 0) params.push(`r=${options.rows}`);
+  if (options.imageId !== undefined && options.imageId !== 0) params.push(`i=${options.imageId}`);
 
   if (base64Data.length <= CHUNK_SIZE) {
     return `\x1b_G${params.join(",")};${base64Data}\x1b\\`;
@@ -282,7 +296,7 @@ export function encodeITerm2(
 
   if (options.width !== undefined) params.push(`width=${options.width}`);
   if (options.height !== undefined) params.push(`height=${options.height}`);
-  if (options.name) {
+  if (options.name !== undefined && options.name !== "") {
     const nameBase64 = Buffer.from(options.name).toString("base64");
     params.push(`name=${nameBase64}`);
   }
@@ -359,7 +373,7 @@ function getKittyImageRowsFromControls(controls: string, fallbackRows: number): 
 
 export function getKittyImageMetadata(line: string): KittyImageMetadata | undefined {
   const metadata = getRegisteredKittyImageMetadata(line);
-  if (!metadata) return undefined;
+  if (metadata === undefined) return undefined;
   return {
     imageId: metadata.imageId,
     columns: metadata.columns,
@@ -400,9 +414,9 @@ export function getKittyImagePlacementRows(line: string): number | undefined {
 export function getKittyImagePlacement(line: string): KittyImagePlacement | undefined {
   const match = /\x1b_G([^;]*);/u.exec(line);
   const imageControls = match?.[1];
-  if (!match || imageControls === undefined) return undefined;
+  if (match === null || imageControls === undefined) return undefined;
   const metadata = getRegisteredKittyImageMetadataFromControls(imageControls);
-  if (!metadata) return undefined;
+  if (metadata === undefined) return undefined;
 
   let commandStart = match.index;
   let commandControls = imageControls;
@@ -439,8 +453,8 @@ export function cropKittyImageLine(line: string, hiddenRows: number, visibleRows
   const match = /\x1b_G([^;]*);/u.exec(line);
   const imageControls = match?.[1];
   if (
-    !metadata ||
-    !match ||
+    metadata === undefined ||
+    match === null ||
     imageControls === undefined ||
     hiddenRows < 0 ||
     hiddenRows >= metadata.rows ||
@@ -666,7 +680,7 @@ export function renderImage(
 ): { sequence: string; columns: number; rows: number; imageId?: number | undefined } | null {
   const caps = getCapabilities();
 
-  if (!caps.images) {
+  if (caps.images === null) {
     return null;
   }
 
@@ -717,7 +731,7 @@ export function hyperlink(text: string, url: string): string {
 function shortenImagePath(filename: string): string {
   const home = homedir();
   if (
-    home &&
+    home !== "" &&
     (filename === home || filename.startsWith(`${home}/`) || filename.startsWith(`${home}\\`))
   ) {
     return `~${filename.slice(home.length)}`;
@@ -731,7 +745,7 @@ export function imageFallback(
   filename?: string,
 ): string {
   const parts: string[] = [];
-  if (filename) {
+  if (filename !== undefined && filename !== "") {
     const display = shortenImagePath(filename);
     if (getCapabilities().hyperlinks && isAbsolute(filename)) {
       parts.push(hyperlink(display, pathToFileURL(filename).href));
@@ -740,6 +754,6 @@ export function imageFallback(
     }
   }
   parts.push(`[${mimeType}]`);
-  if (dimensions) parts.push(`${dimensions.widthPx}x${dimensions.heightPx}`);
+  if (dimensions !== undefined) parts.push(`${dimensions.widthPx}x${dimensions.heightPx}`);
   return `[Image: ${parts.join(" ")}]`;
 }

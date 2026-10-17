@@ -91,12 +91,13 @@ export class SelectList implements Component {
 
     for (let i = startIndex; i < endIndex; i++) {
       const item = this.filteredItems[i];
-      if (!item) continue;
+      if (item === undefined) continue;
 
       const isSelected = i === this.selectedIndex;
-      const descriptionSingleLine = item.description
-        ? normalizeToSingleLine(item.description)
-        : undefined;
+      const descriptionSingleLine =
+        item.description !== undefined && item.description !== ""
+          ? normalizeToSingleLine(item.description)
+          : undefined;
       lines.push(
         this.renderItem(item, isSelected, width, descriptionSingleLine, primaryColumnWidth),
       );
@@ -112,7 +113,7 @@ export class SelectList implements Component {
 
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
     if (this.filteredItems.length === 0) return undefined;
-    if (event.type === "wheel" && event.wheelDelta) {
+    if (event.type === "wheel" && event.wheelDelta !== undefined && event.wheelDelta !== 0) {
       const delta = event.wheelDelta < 0 ? -1 : 1;
       const previousIndex = this.selectedIndex;
       this.selectedIndex = Math.max(
@@ -143,7 +144,7 @@ export class SelectList implements Component {
       this.selectedIndex = clickedIndex;
       if (changed) this.notifySelectionChange();
       const selectedItem = this.filteredItems[this.selectedIndex];
-      if (selectedItem) this.onSelect?.(selectedItem);
+      if (selectedItem !== undefined) this.onSelect?.(selectedItem);
       return { handled: true };
     }
     return undefined;
@@ -161,11 +162,11 @@ export class SelectList implements Component {
       this.notifySelectionChange();
     } else if (kb.matches(keyData, "tui.select.confirm")) {
       const selectedItem = this.filteredItems[this.selectedIndex];
-      if (selectedItem && this.onSelect) {
+      if (selectedItem !== undefined && this.onSelect !== undefined) {
         this.onSelect(selectedItem);
       }
     } else if (kb.matches(keyData, "tui.select.cancel")) {
-      if (this.onCancel) {
+      if (this.onCancel !== undefined) {
         this.onCancel();
       }
     }
@@ -195,7 +196,7 @@ export class SelectList implements Component {
     const prefix = isSelected ? "→ " : "  ";
     const prefixWidth = visibleWidth(prefix);
 
-    if (descriptionSingleLine && width > 40) {
+    if (descriptionSingleLine !== undefined && descriptionSingleLine !== "" && width > 40) {
       const effectivePrimaryColumnWidth = Math.max(
         1,
         Math.min(primaryColumnWidth, width - prefixWidth - 4),
@@ -234,9 +235,11 @@ export class SelectList implements Component {
 
   private getPrimaryColumnWidth(): number {
     const { min, max } = this.getPrimaryColumnBounds();
-    const widestPrimary = this.filteredItems.reduce((widest, item) => {
-      return Math.max(widest, visibleWidth(this.getDisplayValue(item)) + PRIMARY_COLUMN_GAP);
-    }, 0);
+    const widestPrimary = this.filteredItems.reduce(
+      (widest, item) =>
+        Math.max(widest, visibleWidth(this.getDisplayValue(item)) + PRIMARY_COLUMN_GAP),
+      0,
+    );
 
     return clamp(widestPrimary, min, max);
   }
@@ -264,15 +267,16 @@ export class SelectList implements Component {
     columnWidth: number,
   ): string {
     const displayValue = this.getDisplayValue(item);
-    const truncatedValue = this.layout.truncatePrimary
-      ? this.layout.truncatePrimary({
-          text: displayValue,
-          maxWidth,
-          columnWidth,
-          item,
-          isSelected,
-        })
-      : truncateToWidth(displayValue, maxWidth, "");
+    const truncatedValue =
+      this.layout.truncatePrimary === undefined
+        ? truncateToWidth(displayValue, maxWidth, "")
+        : this.layout.truncatePrimary({
+            text: displayValue,
+            maxWidth,
+            columnWidth,
+            item,
+            isSelected,
+          });
 
     return truncateToWidth(truncatedValue, maxWidth, "");
   }
@@ -283,7 +287,7 @@ export class SelectList implements Component {
 
   private notifySelectionChange(): void {
     const selectedItem = this.filteredItems[this.selectedIndex];
-    if (selectedItem && this.onSelectionChange) {
+    if (selectedItem !== undefined && this.onSelectionChange !== undefined) {
       this.onSelectionChange(selectedItem);
     }
   }

@@ -79,8 +79,11 @@ test(
       else process.env["DISPLAY"] = display;
       if (waylandDisplay === undefined) delete process.env["WAYLAND_DISPLAY"];
       else process.env["WAYLAND_DISPLAY"] = waylandDisplay;
-      if (previous) require.cache[modulePath] = previous;
-      else delete require.cache[modulePath];
+      if (previous === undefined) {
+        delete require.cache[modulePath];
+      } else {
+        require.cache[modulePath] = previous;
+      }
     });
     Object.defineProperty(process, "platform", { value: "linux" });
     delete process.env["DISPLAY"];

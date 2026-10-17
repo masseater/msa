@@ -53,6 +53,6 @@ export function getNativePlatformHelper(): NativePlatformHelper | undefined {
 
 export function getNativeClipboard(): NativeClipboard | undefined {
   if (process.platform !== "linux") return getNativePlatformHelper();
-  if (!process.env["DISPLAY"]) return undefined;
+  if (process.env["DISPLAY"] === undefined || process.env["DISPLAY"] === "") return undefined;
   return loadNativePlatformHelper("linux", "-x11");
 }

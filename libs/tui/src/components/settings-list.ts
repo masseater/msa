@@ -66,7 +66,7 @@ export class SettingsList implements Component {
 
   updateValue(id: string, newValue: string): void {
     const item = this.items.find((i) => i.id === id);
-    if (item) {
+    if (item !== undefined) {
       item.currentValue = newValue;
     }
   }
@@ -84,7 +84,7 @@ export class SettingsList implements Component {
   }
 
   render(width: number): string[] {
-    if (this.submenuComponent) {
+    if (this.submenuComponent !== null) {
       return this.submenuComponent.render(width);
     }
 
@@ -94,7 +94,7 @@ export class SettingsList implements Component {
   private renderMainList(width: number): string[] {
     const lines: string[] = [];
 
-    if (this.searchEnabled && this.searchInput) {
+    if (this.searchEnabled && this.searchInput !== undefined) {
       lines.push(...this.searchInput.render(width));
       lines.push("");
     }
@@ -123,7 +123,7 @@ export class SettingsList implements Component {
 
     for (let i = startIndex; i < endIndex; i++) {
       const item = displayItems[i];
-      if (!item) continue;
+      if (item === undefined) continue;
 
       const isSelected = i === this.selectedIndex;
       const prefix = isSelected ? this.theme.cursor : "  ";
@@ -151,7 +151,7 @@ export class SettingsList implements Component {
     }
 
     const selectedItem = displayItems[this.selectedIndex];
-    if (selectedItem?.description) {
+    if (selectedItem?.description !== undefined && selectedItem?.description !== "") {
       lines.push("");
       const wrappedDesc = wrapTextWithAnsi(selectedItem.description, width - 4);
       for (const line of wrappedDesc) {
@@ -165,22 +165,22 @@ export class SettingsList implements Component {
   }
 
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-    if (this.submenuComponent) {
+    if (this.submenuComponent !== null) {
       const result = this.submenuComponent.handleMouse?.(event);
-      return result ? { ...result, focus: true } : undefined;
+      return result === undefined ? undefined : { ...result, focus: true };
     }
 
-    if (this.searchEnabled && this.searchInput) {
+    if (this.searchEnabled && this.searchInput !== undefined) {
       if (event.y === 0) {
         const result = this.searchInput.handleMouse?.(event);
-        return result ? { ...result, focus: true } : undefined;
+        return result === undefined ? undefined : { ...result, focus: true };
       }
       if (event.y === 1) return undefined;
     }
 
     const displayItems = this.getDisplayItems();
     if (displayItems.length === 0) return undefined;
-    if (event.type === "wheel" && event.wheelDelta) {
+    if (event.type === "wheel" && event.wheelDelta !== undefined && event.wheelDelta !== 0) {
       const delta = event.wheelDelta < 0 ? -1 : 1;
       const previousIndex = this.selectedIndex;
       this.selectedIndex = Math.max(
@@ -211,7 +211,7 @@ export class SettingsList implements Component {
   }
 
   handleInput(data: string): void {
-    if (this.submenuComponent) {
+    if (this.submenuComponent !== null) {
       this.submenuComponent.handleInput?.(data);
       return;
     }
@@ -233,7 +233,7 @@ export class SettingsList implements Component {
       this.activateItem();
     } else if (kb.matches(data, "tui.select.cancel")) {
       this.onCancel();
-    } else if (this.searchEnabled && this.searchInput) {
+    } else if (this.searchEnabled && this.searchInput !== undefined) {
       this.searchInput.handleInput(data);
       this.applyFilter(this.searchInput.getValue());
     }
@@ -259,9 +259,9 @@ export class SettingsList implements Component {
 
   private activateItem(): void {
     const item = this.getDisplayItems()[this.selectedIndex];
-    if (!item) return;
+    if (item === undefined) return;
 
-    if (item.submenu) {
+    if (item.submenu !== undefined) {
       this.submenuItemIndex = this.selectedIndex;
       this.submenuComponent = item.submenu(
         item.currentValue,
@@ -270,13 +270,13 @@ export class SettingsList implements Component {
             item.currentValue = selectedValue;
             this.onChange(item.id, selectedValue);
           }
-          if (options?.navigateTo) {
+          if (options?.navigateTo !== undefined && options?.navigateTo !== "") {
             this.navigateAfterClose = options.navigateTo;
           }
           this.closeSubmenu();
         },
       );
-    } else if (item.values && item.values.length > 0) {
+    } else if (item.values !== undefined && item.values.length > 0) {
       const currentIndex = item.values.indexOf(item.currentValue);
       const nextIndex = (currentIndex + 1) % item.values.length;
       const newValue = item.values[nextIndex];

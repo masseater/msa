@@ -12,7 +12,7 @@ const { readFileSync } = require("node:fs");
     assert.ok(pending instanceof Promise, "Native reads must return promises");
     const value = await pending;
     const bytes =
-      typeof value === "string" || Buffer.isBuffer(value) ? Buffer.from(value) : undefined;
+      typeof value === "string" || Buffer.isBuffer(value) === true ? Buffer.from(value) : undefined;
     console.log(
       JSON.stringify({
         ok: true,

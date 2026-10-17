@@ -23,7 +23,7 @@ describe("CombinedAutocompleteProvider", () => {
       const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
 
       assert.notEqual(result, null, "Should return suggestions for root directory");
-      if (result) {
+      if (result !== null) {
         assert.strictEqual(result.prefix, "/", "Prefix should be '/'");
       }
     });
@@ -37,7 +37,7 @@ describe("CombinedAutocompleteProvider", () => {
       const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
 
       console.log("Result:", result);
-      if (result) {
+      if (result !== null) {
         assert.strictEqual(result.prefix, "/A", "Prefix should be '/A'");
       }
     });
@@ -68,7 +68,7 @@ describe("CombinedAutocompleteProvider", () => {
 
       console.log("Result:", result);
       assert.notEqual(result, null, "Should trigger for absolute paths in command arguments");
-      if (result) {
+      if (result !== null) {
         assert.strictEqual(result.prefix, "/", "Prefix should be '/'");
       }
     });

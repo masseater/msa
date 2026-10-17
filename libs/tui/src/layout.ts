@@ -68,12 +68,12 @@ function intersect(a: LayoutRect, b: LayoutRect): LayoutRect {
 function renderCached(context: LayoutContext, component: Component, width: number): string[] {
   const safeWidth = Math.max(1, Math.floor(width));
   let widths = context.renderCache.get(component);
-  if (!widths) {
+  if (widths === undefined) {
     widths = new Map<number, string[]>();
     context.renderCache.set(component, widths);
   }
   let lines = widths.get(safeWidth);
-  if (!lines) {
+  if (lines === undefined) {
     lines = component.render(safeWidth);
     widths.set(safeWidth, lines);
   }
@@ -117,7 +117,7 @@ function layoutComponent(
 ): LayoutBox {
   const safeWidth = Math.max(1, Math.floor(width));
   const node = getLayoutNode(component);
-  if (!node) {
+  if (node === undefined) {
     const lines = renderCached(context, component, safeWidth);
     const allocatedHeight = height === undefined ? lines.length : Math.max(0, Math.floor(height));
     let lineOffset = 0;
@@ -153,7 +153,8 @@ function layoutComponent(
     node.state.updateLayout(contentHeight, viewportHeight, context.requestRender);
     translateBox(childBox, previousScrollTop - node.state.scrollTop);
     const scrollView = node.state as ScrollView;
-    if (node.state.primary || !context.primaryScrollView) context.primaryScrollView = scrollView;
+    if (node.state.primary || context.primaryScrollView === undefined)
+      context.primaryScrollView = scrollView;
     const rect = { x, y, width: safeWidth, height: viewportHeight };
     const childClip = intersect(clip, rect);
     const box: LayoutBox = {
@@ -290,7 +291,7 @@ function replaceScrollbarCell(
   let targetIndex = 0;
   while (targetIndex < target.length) {
     const ansi = extractAnsiCode(target, targetIndex);
-    if (!ansi) break;
+    if (ansi === null) break;
     targetPrefix += ansi.code;
     targetIndex += ansi.length;
   }
@@ -305,7 +306,7 @@ export function getScrollbarGeometry(
   box: LayoutBox,
   includeHiddenAuto = false,
 ): ScrollbarGeometry | undefined {
-  if (!box.scrollView || box.rect.width <= 0 || box.rect.height <= 0) return undefined;
+  if (box.scrollView === undefined || box.rect.width <= 0 || box.rect.height <= 0) return undefined;
 
   const contentHeight = box.children[0]?.rect.height ?? box.scrollContentLines?.length ?? 0;
   const trackHeight = box.rect.height;
@@ -337,7 +338,7 @@ export function getScrollbarGeometry(
 
 function paintScrollbar(box: LayoutBox, screen: string[], totalWidth: number): void {
   const geometry = getScrollbarGeometry(box);
-  if (!geometry || !box.scrollView) return;
+  if (geometry === undefined || box.scrollView === undefined) return;
 
   for (let offset = 0; offset < geometry.trackHeight; offset++) {
     const row = geometry.trackTop + offset;
@@ -358,7 +359,7 @@ function paintScrollbar(box: LayoutBox, screen: string[], totalWidth: number): v
 }
 
 function paintBox(box: LayoutBox, screen: string[], totalWidth: number): void {
-  if (box.lines) {
+  if (box.lines !== undefined) {
     const offset = box.lineOffset ?? 0;
     const firstRow = Math.max(box.rect.y, box.clip.y, 0);
     const lastRow = Math.min(
@@ -371,12 +372,16 @@ function paintBox(box: LayoutBox, screen: string[], totalWidth: number): void {
       if (sourceLine === undefined) continue;
       let line = sourceLine.replace(OSC133_ZONE_PREFIX, "");
       const imageMetadata = getKittyImageMetadata(line);
-      if (imageMetadata) {
+      if (imageMetadata !== undefined) {
         const clipBottom = Math.min(screen.length, box.clip.y + box.clip.height);
         const visibleRows = Math.min(imageMetadata.rows, clipBottom - row);
         if (visibleRows < imageMetadata.rows) line = cropKittyImageLine(line, 0, visibleRows);
       }
-      if (box.rect.x === 0 && box.rect.width >= totalWidth && (isImageLine(line) || !screen[row])) {
+      if (
+        box.rect.x === 0 &&
+        box.rect.width >= totalWidth &&
+        (isImageLine(line) || screen[row] === undefined || screen[row] === "")
+      ) {
         screen[row] = line;
       } else {
         screen[row] = compositeTuiLine(
@@ -392,15 +397,15 @@ function paintBox(box: LayoutBox, screen: string[], totalWidth: number): void {
   for (const child of box.children) paintBox(child, screen, totalWidth);
 
   if (
-    box.scrollView &&
-    box.scrollContentLines &&
+    box.scrollView !== undefined &&
+    box.scrollContentLines !== undefined &&
     box.scrollView.scrollTop > 0 &&
     box.rect.height > 0
   ) {
     for (let imageRow = box.scrollView.scrollTop - 1; imageRow >= 0; imageRow--) {
       const imageLine = box.scrollContentLines[imageRow] ?? "";
       const metadata = getKittyImageMetadata(imageLine);
-      if (metadata) {
+      if (metadata !== undefined) {
         const hiddenRows = box.scrollView.scrollTop - imageRow;
         if (hiddenRows < metadata.rows) {
           const visibleRows = Math.min(box.rect.height, metadata.rows - hiddenRows);
@@ -473,7 +478,7 @@ export function getScrollViewBox(
     if (box.scrollView === scrollView) return box;
     for (const child of box.children) {
       const match = visit(child);
-      if (match) return match;
+      if (match !== undefined) return match;
     }
     return undefined;
   };
@@ -484,7 +489,7 @@ export function getScrollViewsAt(frame: LayoutFrame, x: number, y: number): Scro
   const result: Array<{ scrollView: ScrollView; depth: number }> = [];
   const visit = (box: LayoutBox, depth: number): void => {
     if (!containsPoint(box.clip, x, y)) return;
-    if (box.scrollView && containsPoint(box.rect, x, y))
+    if (box.scrollView !== undefined && containsPoint(box.rect, x, y))
       result.push({ scrollView: box.scrollView, depth });
     for (const child of box.children) visit(child, depth + 1);
   };

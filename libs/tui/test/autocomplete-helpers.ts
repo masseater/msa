@@ -7,12 +7,12 @@ import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 export const resolveFdPath = (): string | null => {
   const command = process.platform === "win32" ? "where" : "which";
   const result = spawnSync(command, ["fd"], { encoding: "utf-8" });
-  if (result.status !== 0 || !result.stdout) {
+  if (result.status !== 0 || result.stdout === "") {
     return null;
   }
 
   const firstLine = result.stdout.split(/\r?\n/u).find(Boolean);
-  return firstLine ? firstLine.trim() : null;
+  return firstLine !== undefined && firstLine !== "" ? firstLine.trim() : null;
 };
 
 export type FolderStructure = {
@@ -39,7 +39,7 @@ export const fdPath = resolveFdPath();
 export const isFdInstalled = Boolean(fdPath);
 
 export const requireFdPath = (): string => {
-  if (!fdPath) {
+  if (fdPath === null || fdPath === "") {
     throw new Error("fd is not available");
   }
   return fdPath;

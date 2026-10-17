@@ -47,8 +47,8 @@ describe("TUI overlay options", () => {
       await renderAndFlush(tui, terminal);
 
       const viewport = terminal.getViewport();
-      assert.ok(!viewport[0]?.includes("MARGIN"), "Should not be on row 0");
-      assert.ok(!viewport[4]?.includes("MARGIN"), "Should not be on row 4");
+      assert.ok(viewport[0]?.includes("MARGIN") !== true, "Should not be on row 0");
+      assert.ok(viewport[4]?.includes("MARGIN") !== true, "Should not be on row 4");
       assert.ok(viewport[5]?.includes("MARGIN"), `Expected MARGIN on row 5, got: ${viewport[5]}`);
       const colIndex = viewport[5]?.indexOf("MARGIN") ?? -1;
       assert.strictEqual(colIndex, 5, `Expected col 5, got ${colIndex}`);
@@ -114,7 +114,7 @@ describe("TUI overlay options", () => {
       const viewport = terminal.getViewport();
       let foundRow = -1;
       for (let i = 0; i < viewport.length; i++) {
-        if (viewport[i]?.includes("PCT")) {
+        if (viewport[i]?.includes("PCT") === true) {
           foundRow = i;
           break;
         }

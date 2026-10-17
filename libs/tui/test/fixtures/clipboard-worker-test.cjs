@@ -5,14 +5,14 @@ const { setTimeout: delay } = require("node:timers/promises");
 const { isMainThread, parentPort, Worker, workerData } = require("node:worker_threads");
 
 async function waitFor(predicate, deadline = performance.now() + 5000) {
-  if (predicate()) return;
+  if (predicate() === true) return;
   assert.ok(performance.now() < deadline, "Timed out waiting for the private reader");
   await delay(10);
   await waitFor(predicate, deadline);
 }
 
 (async () => {
-  if (!isMainThread) {
+  if (isMainThread !== true) {
     const helper = require(workerData);
     void helper.getText();
     await waitFor(() => helper.state().startsWith("1,"));
@@ -43,7 +43,7 @@ async function waitFor(predicate, deadline = performance.now() + 5000) {
   }
   const concurrentStarted = performance.now();
   const concurrent = Array.from({ length: 20 }, (_, index) =>
-    helper[index % 2 ? "getText" : "getImage"](),
+    helper[index % 2 === 1 ? "getText" : "getImage"](),
   );
   await readFile(__filename);
   assert.deepEqual(await Promise.all(concurrent), Array(20).fill(undefined));

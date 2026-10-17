@@ -93,7 +93,7 @@ describe("Editor component", () => {
 
       const mockProvider: AutocompleteProvider = {
         getSuggestions: (lines, _cursorLine, cursorCol, options) => {
-          if (!options.force) {
+          if (options.force !== true) {
             return Promise.resolve(null);
           }
           const text = lines[0] || "";
@@ -137,7 +137,7 @@ function autocompleteCases9(): void {
 
     const mockProvider: AutocompleteProvider = {
       getSuggestions: (lines, _cursorLine, cursorCol, options) => {
-        if (!options.force) {
+        if (options.force !== true) {
           return Promise.resolve(null);
         }
         const text = lines[0] || "";

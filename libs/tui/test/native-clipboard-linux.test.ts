@@ -49,7 +49,7 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
     ]);
   });
   after(() => {
-    if (directory) rmSync(directory, { recursive: true, force: true });
+    if (directory !== "") rmSync(directory, { recursive: true, force: true });
   });
   it("validates X11 incremental property metadata before accumulating bytes", () => {
     assert.equal(
@@ -97,7 +97,7 @@ function nativeLinuxClipboardCases1(): void {
     ]);
   });
   after(() => {
-    if (directory) rmSync(directory, { recursive: true, force: true });
+    if (directory !== "") rmSync(directory, { recursive: true, force: true });
   });
   ["concurrent", "process-exit", "worker-exit"].forEach((mode) => {
     it(`bounds private clipboard work and preserves cleanup: ${mode}`, async () => {
@@ -149,7 +149,7 @@ function nativeLinuxClipboardCases2(): void {
     ]);
   });
   after(() => {
-    if (directory) rmSync(directory, { recursive: true, force: true });
+    if (directory !== "") rmSync(directory, { recursive: true, force: true });
   });
   for (const method of ["getText", "getImage"]) {
     it(`keeps JS responsive during stalled X11 connection setup: ${method}`, async (t) => {
@@ -166,7 +166,7 @@ function nativeLinuxClipboardCases2(): void {
       t.after(async () => {
         for (const socket of sockets) socket.destroy();
         await new Promise<void>((resolve, reject) => {
-          server.close((error) => (error ? reject(error) : resolve()));
+          server.close((error) => (error === undefined ? resolve() : reject(error)));
         });
       });
       server.listen(0, "127.0.0.1");
@@ -225,7 +225,7 @@ function nativeLinuxClipboardCases3(): void {
     ]);
   });
   after(() => {
-    if (directory) rmSync(directory, { recursive: true, force: true });
+    if (directory !== "") rmSync(directory, { recursive: true, force: true });
   });
   it("decodes X11 STRING as Latin-1", async (t) => {
     const { env } = await startX11(t);

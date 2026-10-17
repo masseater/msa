@@ -29,7 +29,7 @@ export function parseKeyboardProtocolNegotiationSequence(
   sequence: string,
 ): KeyboardProtocolNegotiationSequence | undefined {
   const kittyFlags = sequence.match(/^\x1b\[\?(\d+)u$/u);
-  if (kittyFlags) {
+  if (kittyFlags !== null) {
     return { type: "kitty-flags", flags: Number.parseInt(kittyFlags[1]!, 10) };
   }
   if (/^\x1b\[\?[\d;]*c$/u.test(sequence)) {
@@ -109,7 +109,10 @@ export function resolveEscapeTimeoutMs(env: NodeJS.ProcessEnv = process.env): nu
   if (Number.isFinite(configured) && configured > 0) {
     return configured;
   }
-  if (env["SSH_CONNECTION"] || env["SSH_TTY"]) {
+  if (
+    (env["SSH_CONNECTION"] !== undefined && env["SSH_CONNECTION"] !== "") ||
+    (env["SSH_TTY"] !== undefined && env["SSH_TTY"] !== "")
+  ) {
     return DEFAULT_SSH_ESCAPE_TIMEOUT_MS;
   }
   return DEFAULT_ESCAPE_TIMEOUT_MS;
@@ -133,7 +136,7 @@ export class ProcessTerminal implements Terminal {
   private programStatusQueryPending = false;
   private writeLogPath = (() => {
     const env = process.env["MSA_TUI_WRITE_LOG"] || "";
-    if (!env) return "";
+    if (env === "") return "";
     try {
       if (fs.statSync(env).isDirectory()) {
         const now = new Date();
@@ -157,7 +160,7 @@ export class ProcessTerminal implements Terminal {
     this.resizeHandler = onResize;
 
     this.wasRaw = process.stdin.isRaw || false;
-    if (process.stdin.setRawMode) {
+    if (typeof process.stdin.setRawMode === "function") {
       process.stdin.setRawMode(true);
     }
     process.stdin.setEncoding("utf8");
@@ -191,7 +194,10 @@ export class ProcessTerminal implements Terminal {
         this.scheduleKeyboardProtocolNegotiationBufferFlush();
         return;
       }
-      if (negotiation && this.handleKeyboardProtocolNegotiationSequence(negotiation.parsed)) {
+      if (
+        negotiation !== undefined &&
+        this.handleKeyboardProtocolNegotiationSequence(negotiation.parsed)
+      ) {
         return;
       }
 
@@ -199,7 +205,7 @@ export class ProcessTerminal implements Terminal {
     });
 
     this.stdinBuffer.on("paste", (content) => {
-      if (this.inputHandler) {
+      if (this.inputHandler !== undefined) {
         this.inputHandler(`\x1b[200~${content}\x1b[201~`);
       }
     });
@@ -257,10 +263,10 @@ export class ProcessTerminal implements Terminal {
   private readKeyboardProtocolNegotiationSequence(
     sequence: string,
   ): { parsed: KeyboardProtocolNegotiationSequence; sequence: string } | "pending" | undefined {
-    if (this.keyboardProtocolNegotiationBuffer) {
+    if (this.keyboardProtocolNegotiationBuffer !== "") {
       const bufferedSequence = this.keyboardProtocolNegotiationBuffer + sequence;
       const negotiationSequence = parseKeyboardProtocolNegotiationSequence(bufferedSequence);
-      if (negotiationSequence) {
+      if (negotiationSequence !== undefined) {
         this.clearKeyboardProtocolNegotiationBuffer();
         return { parsed: negotiationSequence, sequence: bufferedSequence };
       }
@@ -272,7 +278,7 @@ export class ProcessTerminal implements Terminal {
     }
 
     const negotiationSequence = parseKeyboardProtocolNegotiationSequence(sequence);
-    if (negotiationSequence) return { parsed: negotiationSequence, sequence };
+    if (negotiationSequence !== undefined) return { parsed: negotiationSequence, sequence };
     if (isKeyboardProtocolNegotiationSequencePrefix(sequence)) {
       this.setKeyboardProtocolNegotiationBuffer(sequence);
       return "pending";
@@ -291,14 +297,18 @@ export class ProcessTerminal implements Terminal {
   }
 
   private flushKeyboardProtocolNegotiationBufferAsInput(): void {
-    if (!this.keyboardProtocolNegotiationBuffer) return;
+    if (this.keyboardProtocolNegotiationBuffer === "") return;
     const sequence = this.keyboardProtocolNegotiationBuffer;
     this.clearKeyboardProtocolNegotiationBuffer();
     this.forwardInputSequence(sequence);
   }
 
   private scheduleKeyboardProtocolNegotiationBufferFlush(): void {
-    if (!this.keyboardProtocolNegotiationBuffer || this.keyboardProtocolBufferFlushTimer) return;
+    if (
+      this.keyboardProtocolNegotiationBuffer === "" ||
+      this.keyboardProtocolBufferFlushTimer !== undefined
+    )
+      return;
     this.keyboardProtocolBufferFlushTimer = setTimeout(() => {
       this.keyboardProtocolBufferFlushTimer = undefined;
       this.flushKeyboardProtocolNegotiationBufferAsInput();
@@ -306,13 +316,13 @@ export class ProcessTerminal implements Terminal {
   }
 
   private clearKeyboardProtocolNegotiationBufferFlushTimer(): void {
-    if (!this.keyboardProtocolBufferFlushTimer) return;
+    if (this.keyboardProtocolBufferFlushTimer === undefined) return;
     clearTimeout(this.keyboardProtocolBufferFlushTimer);
     this.keyboardProtocolBufferFlushTimer = undefined;
   }
 
   private forwardInputSequence(sequence: string): void {
-    if (!this.inputHandler) return;
+    if (this.inputHandler === undefined) return;
     const shouldDetectNativeShiftEnter =
       sequence === "\r" && (isAppleTerminalSession() || process.platform === "win32");
     const input = normalizeNativeShiftEnterInput(
@@ -387,7 +397,7 @@ export class ProcessTerminal implements Terminal {
     if (this.clearProgressInterval()) {
       process.stdout.write(TERMINAL_PROGRESS_CLEAR_SEQUENCE);
     }
-    if (this.programStatusSupported && this.programStatus) {
+    if (this.programStatusSupported && this.programStatus !== undefined) {
       process.stdout.write(formatProgramStatus({ state: "clear" }));
     }
     this.programStatusSupported = false;
@@ -406,31 +416,31 @@ export class ProcessTerminal implements Terminal {
     }
     this.disableModifyOtherKeys();
 
-    if (this.stdinBuffer) {
+    if (this.stdinBuffer !== undefined) {
       this.stdinBuffer.destroy();
       this.stdinBuffer = undefined;
     }
 
-    if (this.stdinDataHandler) {
+    if (this.stdinDataHandler !== undefined) {
       process.stdin.removeListener("data", this.stdinDataHandler);
       this.stdinDataHandler = undefined;
     }
     this.inputHandler = undefined;
-    if (this.resizeHandler) {
+    if (this.resizeHandler !== undefined) {
       process.stdout.removeListener("resize", this.resizeHandler);
       this.resizeHandler = undefined;
     }
 
     process.stdin.pause();
 
-    if (process.stdin.setRawMode) {
+    if (typeof process.stdin.setRawMode === "function") {
       process.stdin.setRawMode(this.wasRaw);
     }
   }
 
   write(data: string): void {
     process.stdout.write(data);
-    if (this.writeLogPath) {
+    if (this.writeLogPath !== "") {
       try {
         fs.appendFileSync(this.writeLogPath, data, { encoding: "utf8" });
       } catch {}
@@ -483,7 +493,7 @@ export class ProcessTerminal implements Terminal {
   }
 
   private writeProgramStatus(): void {
-    if (this.programStatusSupported && this.programStatus) {
+    if (this.programStatusSupported && this.programStatus !== undefined) {
       process.stdout.write(formatProgramStatus(this.programStatus));
     }
   }
@@ -491,7 +501,7 @@ export class ProcessTerminal implements Terminal {
   setProgress(active: boolean): void {
     if (active) {
       process.stdout.write(TERMINAL_PROGRESS_ACTIVE_SEQUENCE);
-      if (!this.progressInterval) {
+      if (this.progressInterval === undefined) {
         this.progressInterval = setInterval(() => {
           process.stdout.write(TERMINAL_PROGRESS_ACTIVE_SEQUENCE);
         }, TERMINAL_PROGRESS_KEEPALIVE_MS);
@@ -503,7 +513,7 @@ export class ProcessTerminal implements Terminal {
   }
 
   private clearProgressInterval(): boolean {
-    if (!this.progressInterval) return false;
+    if (this.progressInterval === undefined) return false;
     clearInterval(this.progressInterval);
     this.progressInterval = undefined;
     return true;

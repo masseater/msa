@@ -115,15 +115,15 @@ describe("ProcessTerminal dimensions", () => {
       assert.equal(terminal.columns, 123);
       assert.equal(terminal.rows, 45);
     } finally {
-      if (previousColumnsDescriptor) {
-        Object.defineProperty(process.stdout, "columns", previousColumnsDescriptor);
-      } else {
+      if (previousColumnsDescriptor === undefined) {
         Reflect.deleteProperty(process.stdout, "columns");
-      }
-      if (previousRowsDescriptor) {
-        Object.defineProperty(process.stdout, "rows", previousRowsDescriptor);
       } else {
+        Object.defineProperty(process.stdout, "columns", previousColumnsDescriptor);
+      }
+      if (previousRowsDescriptor === undefined) {
         Reflect.deleteProperty(process.stdout, "rows");
+      } else {
+        Object.defineProperty(process.stdout, "rows", previousRowsDescriptor);
       }
       if (previousColumns === undefined) {
         delete process.env["COLUMNS"];

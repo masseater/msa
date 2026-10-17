@@ -22,7 +22,7 @@ function autocompleteCases14(): void {
         const beforeCursor = text.slice(0, cursorCol);
 
         const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/u);
-        if (argtestMatch) {
+        if (argtestMatch !== null) {
           const argumentText = argtestMatch[1]!;
           const allArguments = [
             { value: "one", label: "one" },
@@ -65,7 +65,7 @@ function autocompleteCases15(): void {
         const beforeCursor = text.slice(0, cursorCol);
 
         const argtestMatch = beforeCursor.match(/^\/argtest\s+(\S+)$/u);
-        if (argtestMatch) {
+        if (argtestMatch !== null) {
           const argumentText = argtestMatch[1]!;
           const allArguments = [
             { value: "one", label: "one" },
@@ -107,7 +107,7 @@ function autocompleteCases16(): void {
         const beforeCursor = text.slice(0, cursorCol);
 
         const modelMatch = beforeCursor.match(/^\/model\s+(\S+)$/u);
-        if (modelMatch) {
+        if (modelMatch !== null) {
           const modelText = modelMatch[1]!;
           const allModels = [
             { value: "gpt-4o", label: "gpt-4o" },

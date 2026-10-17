@@ -4,9 +4,8 @@ import { describe, it } from "node:test";
 describe("Bug regression: isImageLine() crash with image escape sequences", () => {
   describe("Bug scenario: Terminal without image support", () => {
     it("old implementation would return false, causing crash", () => {
-      const oldIsImageLine = (line: string, imageEscapePrefix: string | null): boolean => {
-        return imageEscapePrefix !== null && line.startsWith(imageEscapePrefix);
-      };
+      const oldIsImageLine = (line: string, imageEscapePrefix: string | null): boolean =>
+        imageEscapePrefix !== null && line.startsWith(imageEscapePrefix);
 
       const terminalWithoutImageSupport = null;
 

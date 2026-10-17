@@ -515,7 +515,7 @@ export function isKeyRepeat(data: string): boolean {
 }
 
 function parseEventType(eventTypeStr: string | undefined): KeyEventType {
-  if (!eventTypeStr) return "press";
+  if (eventTypeStr === undefined || eventTypeStr === "") return "press";
   const eventType = parseInt(eventTypeStr, 10);
   if (eventType === 2) return "repeat";
   if (eventType === 3) return "release";
@@ -524,18 +524,22 @@ function parseEventType(eventTypeStr: string | undefined): KeyEventType {
 
 function parseKittySequence(data: string): ParsedKittySequence | null {
   const csiUMatch = data.match(/^\x1b\[(\d+)(?::(\d*))?(?::(\d+))?(?:;(\d+))?(?::(\d+))?u$/u);
-  if (csiUMatch) {
+  if (csiUMatch !== null) {
     const codepoint = parseInt(csiUMatch[1]!, 10);
     const shiftedKey =
-      csiUMatch[2] && csiUMatch[2].length > 0 ? parseInt(csiUMatch[2], 10) : undefined;
-    const baseLayoutKey = csiUMatch[3] ? parseInt(csiUMatch[3], 10) : undefined;
-    const modValue = csiUMatch[4] ? parseInt(csiUMatch[4], 10) : 1;
+      csiUMatch[2] !== undefined && csiUMatch[2] !== "" && csiUMatch[2].length > 0
+        ? parseInt(csiUMatch[2], 10)
+        : undefined;
+    const baseLayoutKey =
+      csiUMatch[3] !== undefined && csiUMatch[3] !== "" ? parseInt(csiUMatch[3], 10) : undefined;
+    const modValue =
+      csiUMatch[4] !== undefined && csiUMatch[4] !== "" ? parseInt(csiUMatch[4], 10) : 1;
     const eventType = parseEventType(csiUMatch[5]);
     return { codepoint, shiftedKey, baseLayoutKey, modifier: modValue - 1, eventType };
   }
 
   const arrowMatch = data.match(/^\x1b\[1;(\d+)(?::(\d+))?([ABCD])$/u);
-  if (arrowMatch) {
+  if (arrowMatch !== null) {
     const modValue = parseInt(arrowMatch[1]!, 10);
     const eventType = parseEventType(arrowMatch[2]);
     const arrowCodes: Record<string, number> = { A: -1, B: -2, C: -3, D: -4 };
@@ -543,9 +547,10 @@ function parseKittySequence(data: string): ParsedKittySequence | null {
   }
 
   const funcMatch = data.match(/^\x1b\[(\d+)(?:;(\d+))?(?::(\d+))?~$/u);
-  if (funcMatch) {
+  if (funcMatch !== null) {
     const keyNum = parseInt(funcMatch[1]!, 10);
-    const modValue = funcMatch[2] ? parseInt(funcMatch[2], 10) : 1;
+    const modValue =
+      funcMatch[2] !== undefined && funcMatch[2] !== "" ? parseInt(funcMatch[2], 10) : 1;
     const eventType = parseEventType(funcMatch[3]);
     const funcCodes: Record<number, number> = {
       2: FUNCTIONAL_CODEPOINTS.insert,
@@ -562,7 +567,7 @@ function parseKittySequence(data: string): ParsedKittySequence | null {
   }
 
   const homeEndMatch = data.match(/^\x1b\[1;(\d+)(?::(\d+))?([HF])$/u);
-  if (homeEndMatch) {
+  if (homeEndMatch !== null) {
     const modValue = parseInt(homeEndMatch[1]!, 10);
     const eventType = parseEventType(homeEndMatch[2]);
     const codepoint =
@@ -579,7 +584,7 @@ function matchesKittySequence(
   expectedModifier: number,
 ): boolean {
   const parsed = parseKittySequence(data);
-  if (!parsed) return false;
+  if (parsed === null) return false;
   const actualMod = parsed.modifier & ~LOCK_MASK;
   const expectedMod = expectedModifier & ~LOCK_MASK;
 
@@ -600,7 +605,7 @@ function matchesKittySequence(
     SYMBOL_KEYS,
   );
   if (
-    logicalShiftedSymbol &&
+    logicalShiftedSymbol !== undefined &&
     (logicalShiftedSymbol.modifier & ~LOCK_MASK) === expectedMod &&
     logicalShiftedSymbol.codepoint === normalizeKittyFunctionalCodepoint(expectedCodepoint)
   ) {
@@ -621,7 +626,7 @@ function matchesKittySequence(
 
 function parseModifyOtherKeysSequence(data: string): ParsedModifyOtherKeysSequence | null {
   const match = data.match(/^\x1b\[27;(\d+);(\d+)~$/u);
-  if (!match) return null;
+  if (match === null) return null;
   const modValue = parseInt(match[1]!, 10);
   const codepoint = parseInt(match[2]!, 10);
   return { codepoint, modifier: modValue - 1 };
@@ -633,16 +638,16 @@ function matchesModifyOtherKeys(
   expectedModifier: number,
 ): boolean {
   const parsed = parseModifyOtherKeysSequence(data);
-  if (!parsed) return false;
+  if (parsed === null) return false;
   return parsed.codepoint === expectedKeycode && parsed.modifier === expectedModifier;
 }
 
 function isWindowsTerminalSession(): boolean {
   return (
     Boolean(process.env["WT_SESSION"]) &&
-    !process.env["SSH_CONNECTION"] &&
-    !process.env["SSH_CLIENT"] &&
-    !process.env["SSH_TTY"]
+    (process.env["SSH_CONNECTION"] === undefined || process.env["SSH_CONNECTION"] === "") &&
+    (process.env["SSH_CLIENT"] === undefined || process.env["SSH_CLIENT"] === "") &&
+    (process.env["SSH_TTY"] === undefined || process.env["SSH_TTY"] === "")
   );
 }
 
@@ -680,7 +685,7 @@ function matchesPrintableModifyOtherKeys(
   expectedModifier: number,
 ): boolean {
   const parsed = parseModifyOtherKeysSequence(data);
-  if (!parsed) return false;
+  if (parsed === null) return false;
   const physicalMatch =
     parsed.modifier === expectedModifier &&
     normalizeShiftedLetterIdentityCodepoint(parsed.codepoint, parsed.modifier) ===
@@ -702,10 +707,10 @@ function formatKeyNameWithModifiers(keyName: string, modifier: number): string |
   const effectiveMod = modifier & ~LOCK_MASK;
   const supportedModifierMask = MODIFIERS.shift | MODIFIERS.ctrl | MODIFIERS.alt | MODIFIERS.super;
   if ((effectiveMod & ~supportedModifierMask) !== 0) return undefined;
-  if (effectiveMod & MODIFIERS.shift) mods.push("shift");
-  if (effectiveMod & MODIFIERS.ctrl) mods.push("ctrl");
-  if (effectiveMod & MODIFIERS.alt) mods.push("alt");
-  if (effectiveMod & MODIFIERS.super) mods.push("super");
+  if ((effectiveMod & MODIFIERS.shift) !== 0) mods.push("shift");
+  if ((effectiveMod & MODIFIERS.ctrl) !== 0) mods.push("ctrl");
+  if ((effectiveMod & MODIFIERS.alt) !== 0) mods.push("alt");
+  if ((effectiveMod & MODIFIERS.super) !== 0) mods.push("super");
   return mods.length > 0 ? `${mods.join("+")}+${keyName}` : keyName;
 }
 
@@ -720,12 +725,12 @@ function parseKeyId(
   const modifiers = new Set<(typeof MODIFIER_NAMES)[number]>();
   while (true) {
     const modifier = findModifierPrefix(key);
-    if (!modifier) break;
+    if (modifier === undefined) break;
     if (modifiers.has(modifier)) return null;
     modifiers.add(modifier);
     key = key.slice(modifier.length + 1);
   }
-  if (!key || (key.includes("+") && key !== "+")) return null;
+  if (key === "" || (key.includes("+") && key !== "+")) return null;
   return {
     key,
     ctrl: modifiers.has("ctrl"),
@@ -737,7 +742,7 @@ function parseKeyId(
 
 export function matchesKey(data: string, keyId: KeyId): boolean {
   const parsed = parseKeyId(keyId);
-  if (!parsed) return false;
+  if (parsed === null) return false;
 
   const { key, ctrl, shift, alt, super: superModifier } = parsed;
   let modifier = 0;
@@ -1057,7 +1062,12 @@ export function matchesKey(data: string, keyId: KeyId): boolean {
     const isLetter = key >= "a" && key <= "z";
     const isDigit = isDigitKey(key);
 
-    if (modifier === MODIFIERS.ctrl + MODIFIERS.alt && !_kittyProtocolActive && rawCtrl) {
+    if (
+      modifier === MODIFIERS.ctrl + MODIFIERS.alt &&
+      !_kittyProtocolActive &&
+      rawCtrl !== null &&
+      rawCtrl !== ""
+    ) {
       if (data === `\x1b${rawCtrl}`) return true;
     }
 
@@ -1070,7 +1080,7 @@ export function matchesKey(data: string, keyId: KeyId): boolean {
     }
 
     if (modifier === MODIFIERS.ctrl) {
-      if (rawCtrl && data === rawCtrl) return true;
+      if (rawCtrl !== null && rawCtrl !== "" && data === rawCtrl) return true;
       return (
         matchesKittySequence(data, codepoint, MODIFIERS.ctrl) ||
         matchesPrintableModifyOtherKeys(data, codepoint, MODIFIERS.ctrl)
@@ -1149,13 +1159,13 @@ function formatParsedKey(
   else if (SYMBOL_KEYS.has(String.fromCharCode(effectiveCodepoint)))
     keyName = String.fromCharCode(effectiveCodepoint);
 
-  if (!keyName) return undefined;
+  if (keyName === undefined || keyName === "") return undefined;
   return formatKeyNameWithModifiers(keyName, modifier);
 }
 
 export function parseKey(data: string): string | undefined {
   const kitty = parseKittySequence(data);
-  if (kitty) {
+  if (kitty !== null) {
     const logicalShiftedSymbol = getLogicalShiftedSymbolCandidate(
       kitty.shiftedKey,
       kitty.modifier,
@@ -1169,7 +1179,7 @@ export function parseKey(data: string): string | undefined {
   }
 
   const modifyOtherKeys = parseModifyOtherKeysSequence(data);
-  if (modifyOtherKeys) {
+  if (modifyOtherKeys !== null) {
     const logicalShiftedSymbol = getLogicalShiftedSymbolCandidate(
       modifyOtherKeys.codepoint,
       modifyOtherKeys.modifier,
@@ -1186,7 +1196,7 @@ export function parseKey(data: string): string | undefined {
   }
 
   const legacySequenceKeyId = LEGACY_SEQUENCE_KEY_IDS[data];
-  if (legacySequenceKeyId) return legacySequenceKeyId;
+  if (legacySequenceKeyId !== undefined) return legacySequenceKeyId;
 
   if (data === "\x1b") return "escape";
   if (data === "\x1c") return "ctrl+\\";
@@ -1247,20 +1257,23 @@ const KITTY_PRINTABLE_ALLOWED_MODIFIERS = MODIFIERS.shift | LOCK_MASK;
 
 export function decodeKittyPrintable(data: string): string | undefined {
   const match = data.match(KITTY_CSI_U_REGEX);
-  if (!match) return undefined;
+  if (match === null) return undefined;
 
   const codepoint = Number.parseInt(match[1] ?? "", 10);
   if (!Number.isFinite(codepoint)) return undefined;
 
-  const shiftedKey = match[2] && match[2].length > 0 ? Number.parseInt(match[2], 10) : undefined;
-  const modValue = match[4] ? Number.parseInt(match[4], 10) : 1;
+  const shiftedKey =
+    match[2] !== undefined && match[2] !== "" && match[2].length > 0
+      ? Number.parseInt(match[2], 10)
+      : undefined;
+  const modValue = match[4] !== undefined && match[4] !== "" ? Number.parseInt(match[4], 10) : 1;
   const modifier = Number.isFinite(modValue) ? modValue - 1 : 0;
 
   if ((modifier & ~KITTY_PRINTABLE_ALLOWED_MODIFIERS) !== 0) return undefined;
-  if (modifier & (MODIFIERS.alt | MODIFIERS.ctrl)) return undefined;
+  if ((modifier & (MODIFIERS.alt | MODIFIERS.ctrl)) !== 0) return undefined;
 
   let effectiveCodepoint = codepoint;
-  if (modifier & MODIFIERS.shift && typeof shiftedKey === "number") {
+  if ((modifier & MODIFIERS.shift) !== 0 && typeof shiftedKey === "number") {
     effectiveCodepoint = shiftedKey;
   }
   effectiveCodepoint = normalizeKittyFunctionalCodepoint(effectiveCodepoint);
@@ -1275,7 +1288,7 @@ export function decodeKittyPrintable(data: string): string | undefined {
 
 function decodeModifyOtherKeysPrintable(data: string): string | undefined {
   const parsed = parseModifyOtherKeysSequence(data);
-  if (!parsed) return undefined;
+  if (parsed === null) return undefined;
   const modifier = parsed.modifier & ~LOCK_MASK;
   if ((modifier & ~MODIFIERS.shift) !== 0) return undefined;
   if (!Number.isFinite(parsed.codepoint) || parsed.codepoint < 32) return undefined;

@@ -66,7 +66,7 @@ function segmentWithMarkers(
 
     const marker = markerIdx < markers.length ? markers[markerIdx]! : null;
 
-    if (marker && seg.index >= marker.start && seg.index < marker.end) {
+    if (marker !== null && seg.index >= marker.start && seg.index < marker.end) {
       if (seg.index === marker.start) {
         const markerText = text.slice(marker.start, marker.end);
         result.push({
@@ -94,7 +94,7 @@ export function wordWrapLine(
   maxWidth: number,
   preSegmented?: Intl.SegmentData[],
 ): TextChunk[] {
-  if (!line || maxWidth <= 0) {
+  if (line === "" || maxWidth <= 0) {
     return [{ text: "", startIndex: 0, endIndex: 0 }];
   }
 
@@ -160,10 +160,14 @@ export function wordWrapLine(
     currentWidth += gWidth;
 
     const next = segments[i + 1];
-    if (isWs && next && (isPasteMarker(next.segment) || !isWhitespaceChar(next.segment))) {
+    if (
+      isWs &&
+      next !== undefined &&
+      (isPasteMarker(next.segment) || !isWhitespaceChar(next.segment))
+    ) {
       wrapOppIndex = next.index;
       wrapOppWidth = currentWidth;
-    } else if (!isWs && next && !isWhitespaceChar(next.segment)) {
+    } else if (!isWs && next !== undefined && !isWhitespaceChar(next.segment)) {
       const isCjk = !isPasteMarker(grapheme) && cjkBreakRegex.test(grapheme);
       const nextIsCjk = !isPasteMarker(next.segment) && cjkBreakRegex.test(next.segment);
       if (isCjk || nextIsCjk) {
@@ -376,7 +380,7 @@ export class Editor implements Component, Focusable {
 
   addToHistory(text: string): void {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (trimmed === "") return;
     if (this.history.length > 0 && this.history[0] === trimmed) return;
     this.history.unshift(trimmed);
     if (this.history.length > 100) {
@@ -417,14 +421,14 @@ export class Editor implements Component, Focusable {
     if (this.historyIndex === -1) {
       const draft = this.historyDraft;
       this.historyDraft = null;
-      if (draft) {
+      if (draft === null) {
+        this.setTextInternal("");
+      } else {
         this.state = draft;
         this.preferredVisualCol = null;
         this.snappedFromCursorCol = null;
         this.scrollOffset = 0;
-        if (this.onChange) this.onChange(this.getText());
-      } else {
-        this.setTextInternal("");
+        if (this.onChange !== undefined) this.onChange(this.getText());
       }
     } else {
       this.setTextInternal(
@@ -444,11 +448,11 @@ export class Editor implements Component, Focusable {
     this.state.lines = lines.length === 0 ? [""] : lines;
     this.state.cursorLine = cursorPlacement === "start" ? 0 : this.state.lines.length - 1;
     this.setCursorCol(
-      cursorPlacement === "start" ? 0 : this.state.lines[this.state.cursorLine]?.length || 0,
+      cursorPlacement === "start" ? 0 : (this.state.lines[this.state.cursorLine]?.length ?? 0),
     );
     this.scrollOffset = 0;
 
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
   }
@@ -472,7 +476,7 @@ export class Editor implements Component, Focusable {
     const paddingX = Math.min(this.paddingX, maxPadding);
     const contentWidth = Math.max(1, width - paddingX * 2);
 
-    const layoutWidth = Math.max(1, contentWidth - (paddingX ? 0 : 1));
+    const layoutWidth = Math.max(1, contentWidth - (paddingX === 0 ? 1 : 0));
 
     this.lastWidth = layoutWidth;
 
@@ -541,7 +545,7 @@ export class Editor implements Component, Focusable {
     result.push(this.renderBottomBorder(width, linesBelow));
 
     this.renderedAutocompleteHeight = 0;
-    if (this.autocompleteState && this.autocompleteList) {
+    if (this.autocompleteState !== null && this.autocompleteList !== undefined) {
       const autocompleteResult = this.autocompleteList.render(contentWidth);
       this.renderedAutocompleteHeight = autocompleteResult.length;
       for (const line of autocompleteResult) {
@@ -557,8 +561,8 @@ export class Editor implements Component, Focusable {
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
     const autocompleteStartRow = this.renderedVisibleLineCount + 2;
     if (
-      this.autocompleteState &&
-      this.autocompleteList &&
+      this.autocompleteState !== null &&
+      this.autocompleteList !== undefined &&
       event.y >= autocompleteStartRow &&
       event.y < autocompleteStartRow + this.renderedAutocompleteHeight
     ) {
@@ -572,7 +576,7 @@ export class Editor implements Component, Focusable {
         width: contentWidth,
         height: this.renderedAutocompleteHeight,
       });
-      return result ? { ...result, focus: true } : undefined;
+      return result === undefined ? undefined : { ...result, focus: true };
     }
 
     if (event.type !== "click" || event.button !== "left") return undefined;
@@ -582,7 +586,7 @@ export class Editor implements Component, Focusable {
     const visualLines = this.buildVisualLineMap(this.lastWidth);
     const visualLineIndex = this.scrollOffset + event.y - 1;
     const visualLine = visualLines[visualLineIndex];
-    if (!visualLine) return { handled: true, focus: true };
+    if (visualLine === undefined) return { handled: true, focus: true };
     const logicalLine = this.state.lines[visualLine.logicalLine] ?? "";
     const chunkEnd = visualLine.startCol + visualLine.length;
     const chunk = logicalLine.slice(visualLine.startCol, chunkEnd);
@@ -611,7 +615,7 @@ export class Editor implements Component, Focusable {
     this.setCursorCol(visualLine.startCol + targetIndex);
     this.lastAction = null;
     this.exitHistoryBrowsing();
-    if (this.autocompleteState) this.updateAutocomplete();
+    if (this.autocompleteState !== null) this.updateAutocomplete();
     return { handled: true, focus: true };
   }
 
@@ -672,7 +676,7 @@ export class Editor implements Component, Focusable {
       return;
     }
 
-    if (this.autocompleteState && this.autocompleteList) {
+    if (this.autocompleteState !== null && this.autocompleteList !== undefined) {
       if (kb.matches(data, "tui.select.cancel")) {
         this.cancelAutocomplete();
         return;
@@ -685,7 +689,7 @@ export class Editor implements Component, Focusable {
 
       if (kb.matches(data, "tui.input.tab")) {
         const selected = this.autocompleteList.getSelectedItem();
-        if (selected && this.autocompleteProvider) {
+        if (selected !== null && this.autocompleteProvider !== undefined) {
           this.pushUndoSnapshot();
           this.lastAction = null;
           const result = this.autocompleteProvider.applyCompletion(
@@ -699,14 +703,14 @@ export class Editor implements Component, Focusable {
           this.state.cursorLine = result.cursorLine;
           this.setCursorCol(result.cursorCol);
           this.cancelAutocomplete();
-          if (this.onChange) this.onChange(this.getText());
+          if (this.onChange !== undefined) this.onChange(this.getText());
         }
         return;
       }
 
       if (kb.matches(data, "tui.select.confirm")) {
         const selected = this.autocompleteList.getSelectedItem();
-        if (selected && this.autocompleteProvider) {
+        if (selected !== null && this.autocompleteProvider !== undefined) {
           this.pushUndoSnapshot();
           this.lastAction = null;
           const result = this.autocompleteProvider.applyCompletion(
@@ -724,14 +728,14 @@ export class Editor implements Component, Focusable {
             this.cancelAutocomplete();
           } else {
             this.cancelAutocomplete();
-            if (this.onChange) this.onChange(this.getText());
+            if (this.onChange !== undefined) this.onChange(this.getText());
             return;
           }
         }
       }
     }
 
-    if (kb.matches(data, "tui.input.tab") && !this.autocompleteState) {
+    if (kb.matches(data, "tui.input.tab") && this.autocompleteState === null) {
       this.handleTabCompletion();
       return;
     }
@@ -933,7 +937,7 @@ export class Editor implements Component, Focusable {
 
         for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
           const chunk = chunks[chunkIndex];
-          if (!chunk) continue;
+          if (chunk === undefined) continue;
 
           const cursorPos = this.state.cursorCol;
           const isLastChunk = chunkIndex === chunks.length - 1;
@@ -1014,7 +1018,7 @@ export class Editor implements Component, Focusable {
   }
 
   insertTextAtCursor(text: string): void {
-    if (!text) return;
+    if (text === "") return;
     this.cancelAutocomplete();
     this.pushUndoSnapshot();
     this.lastAction = null;
@@ -1027,7 +1031,7 @@ export class Editor implements Component, Focusable {
   }
 
   private insertTextAtCursorInternal(text: string): void {
-    if (!text) return;
+    if (text === "") return;
 
     const normalized = this.normalizeText(text);
     const insertedLines = normalized.split("\n");
@@ -1056,7 +1060,7 @@ export class Editor implements Component, Focusable {
       this.setCursorCol((insertedLines[insertedLines.length - 1] || "").length);
     }
 
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
   }
@@ -1064,7 +1068,7 @@ export class Editor implements Component, Focusable {
   private insertCharacter(char: string, skipUndoCoalescing?: boolean): void {
     this.exitHistoryBrowsing();
 
-    if (!skipUndoCoalescing) {
+    if (skipUndoCoalescing !== true) {
       if (isWhitespaceChar(char) || this.lastAction !== "type-word") {
         this.pushUndoSnapshot();
       }
@@ -1079,14 +1083,14 @@ export class Editor implements Component, Focusable {
     this.state.lines[this.state.cursorLine] = before + char + after;
     this.setCursorCol(this.state.cursorCol + char.length);
 
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
 
-    if (this.autocompleteState) {
-      this.updateAutocomplete();
-    } else {
+    if (this.autocompleteState === null) {
       this.autoTriggerAutocomplete(char);
+    } else {
+      this.updateAutocomplete();
     }
   }
 
@@ -1137,7 +1141,11 @@ export class Editor implements Component, Focusable {
       const currentLine = this.state.lines[this.state.cursorLine] || "";
       const charBeforeCursor =
         this.state.cursorCol > 0 ? currentLine[this.state.cursorCol - 1] : "";
-      if (charBeforeCursor && /\w/u.test(charBeforeCursor)) {
+      if (
+        charBeforeCursor !== undefined &&
+        charBeforeCursor !== "" &&
+        /\w/u.test(charBeforeCursor)
+      ) {
         filteredText = ` ${filteredText}`;
       }
     }
@@ -1184,7 +1192,7 @@ export class Editor implements Component, Focusable {
     this.state.cursorLine++;
     this.setCursorCol(0);
 
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
   }
@@ -1215,8 +1223,8 @@ export class Editor implements Component, Focusable {
     this.undoStack.clear();
     this.lastAction = null;
 
-    if (this.onChange) this.onChange("");
-    if (this.onSubmit) this.onSubmit(result);
+    if (this.onChange !== undefined) this.onChange("");
+    if (this.onSubmit !== undefined) this.onSubmit(result);
   }
 
   private handleBackspace(): void {
@@ -1231,12 +1239,11 @@ export class Editor implements Component, Focusable {
 
       const graphemes = [...this.segment(beforeCursor, "grapheme")];
       const lastGrapheme = graphemes[graphemes.length - 1];
-      const graphemeLength = lastGrapheme ? lastGrapheme.segment.length : 1;
-      const isPastedSegmented = lastGrapheme
-        ? PASTE_MARKER_SINGLE.exec(lastGrapheme.segment)
-        : null;
+      const graphemeLength = lastGrapheme === undefined ? 1 : lastGrapheme.segment.length;
+      const isPastedSegmented =
+        lastGrapheme === undefined ? null : PASTE_MARKER_SINGLE.exec(lastGrapheme.segment);
 
-      if (isPastedSegmented) {
+      if (isPastedSegmented !== null) {
         const targetId = Number(isPastedSegmented[1]);
         this.pastes.delete(targetId);
         this.pasteCounter--;
@@ -1278,13 +1285,11 @@ export class Editor implements Component, Focusable {
       this.setCursorCol(previousLine.length);
     }
 
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
 
-    if (this.autocompleteState) {
-      this.updateAutocomplete();
-    } else {
+    if (this.autocompleteState === null) {
       const currentLine = this.state.lines[this.state.cursorLine] || "";
       const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
       if (this.isInSlashCommandContext(textBeforeCursor)) {
@@ -1292,6 +1297,8 @@ export class Editor implements Component, Focusable {
       } else if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
         this.tryTriggerAutocomplete();
       }
+    } else {
+      this.updateAutocomplete();
     }
   }
 
@@ -1308,7 +1315,7 @@ export class Editor implements Component, Focusable {
   ): void {
     const currentVL = visualLines[currentVisualLine];
     const targetVL = visualLines[targetVisualLine];
-    if (!(currentVL && targetVL)) return;
+    if (currentVL === undefined || targetVL === undefined) return;
 
     let currentVisualCol: number;
     if (this.snappedFromCursorCol === null) {
@@ -1453,7 +1460,7 @@ export class Editor implements Component, Focusable {
       this.setCursorCol(previousLine.length);
     }
 
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
   }
@@ -1482,7 +1489,7 @@ export class Editor implements Component, Focusable {
       this.state.lines.splice(this.state.cursorLine + 1, 1);
     }
 
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
   }
@@ -1524,7 +1531,7 @@ export class Editor implements Component, Focusable {
       this.setCursorCol(deleteFrom);
     }
 
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
   }
@@ -1563,7 +1570,7 @@ export class Editor implements Component, Focusable {
         currentLine.slice(0, this.state.cursorCol) + currentLine.slice(deleteTo);
     }
 
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
   }
@@ -1581,7 +1588,7 @@ export class Editor implements Component, Focusable {
 
       const graphemes = [...this.segment(afterCursor, "grapheme")];
       const firstGrapheme = graphemes[0];
-      const graphemeLength = firstGrapheme ? firstGrapheme.segment.length : 1;
+      const graphemeLength = firstGrapheme === undefined ? 1 : firstGrapheme.segment.length;
 
       const before = currentLine.slice(0, this.state.cursorCol);
       const after = currentLine.slice(this.state.cursorCol + graphemeLength);
@@ -1594,13 +1601,11 @@ export class Editor implements Component, Focusable {
       this.state.lines.splice(this.state.cursorLine + 1, 1);
     }
 
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
 
-    if (this.autocompleteState) {
-      this.updateAutocomplete();
-    } else {
+    if (this.autocompleteState === null) {
       const cursorText = this.state.lines[this.state.cursorLine] || "";
       const textBeforeCursor = cursorText.slice(0, this.state.cursorCol);
       if (this.isInSlashCommandContext(textBeforeCursor)) {
@@ -1608,6 +1613,8 @@ export class Editor implements Component, Focusable {
       } else if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
         this.tryTriggerAutocomplete();
       }
+    } else {
+      this.updateAutocomplete();
     }
   }
 
@@ -1645,7 +1652,7 @@ export class Editor implements Component, Focusable {
   ): number {
     for (let i = 0; i < visualLines.length; i++) {
       const vl = visualLines[i];
-      if (!vl || vl.logicalLine !== line) continue;
+      if (vl === undefined || vl.logicalLine !== line) continue;
       const offset = col - vl.startCol;
       const isLastSegmentOfLine =
         i === visualLines.length - 1 || visualLines[i + 1]?.logicalLine !== vl.logicalLine;
@@ -1668,11 +1675,13 @@ export class Editor implements Component, Focusable {
       const afterCursor = currentLine.slice(this.state.cursorCol);
       const graphemes = [...this.segment(afterCursor, "grapheme")];
       const firstGrapheme = graphemes[0];
-      this.setCursorCol(this.state.cursorCol + (firstGrapheme ? firstGrapheme.segment.length : 1));
+      this.setCursorCol(
+        this.state.cursorCol + (firstGrapheme === undefined ? 1 : firstGrapheme.segment.length),
+      );
     } else if (this.state.cursorLine < this.state.lines.length - 1) {
       this.state.cursorLine++;
       this.setCursorCol(0);
-    } else if (currentVL) {
+    } else if (currentVL !== undefined) {
       this.preferredVisualCol = this.state.cursorCol - currentVL.startCol;
     }
   }
@@ -1683,7 +1692,9 @@ export class Editor implements Component, Focusable {
       const beforeCursor = currentLine.slice(0, this.state.cursorCol);
       const graphemes = [...this.segment(beforeCursor, "grapheme")];
       const lastGrapheme = graphemes[graphemes.length - 1];
-      this.setCursorCol(this.state.cursorCol - (lastGrapheme ? lastGrapheme.segment.length : 1));
+      this.setCursorCol(
+        this.state.cursorCol - (lastGrapheme === undefined ? 1 : lastGrapheme.segment.length),
+      );
     } else if (this.state.cursorLine > 0) {
       this.state.cursorLine--;
       const prevLine = this.state.lines[this.state.cursorLine] || "";
@@ -1710,7 +1721,7 @@ export class Editor implements Component, Focusable {
       this.moveCursorLeft();
     }
 
-    if (this.autocompleteState) {
+    if (this.autocompleteState !== null) {
       this.updateAutocomplete();
     }
   }
@@ -1802,14 +1813,14 @@ export class Editor implements Component, Focusable {
       this.setCursorCol((lines[lines.length - 1] || "").length);
     }
 
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
   }
 
   private deleteYankedText(): void {
     const yankedText = this.killRing.peek();
-    if (!yankedText) return;
+    if (yankedText === undefined || yankedText === "") return;
 
     const yankLines = yankedText.split("\n");
 
@@ -1836,7 +1847,7 @@ export class Editor implements Component, Focusable {
       this.setCursorCol(startCol);
     }
 
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
   }
@@ -1852,13 +1863,13 @@ export class Editor implements Component, Focusable {
   private undo(): void {
     this.exitHistoryBrowsing();
     const snapshot = this.undoStack.pop();
-    if (!snapshot) return;
+    if (snapshot === undefined) return;
     Object.assign(this.state, snapshot.state);
     this.pastes = snapshot.pastes;
     this.pasteCounter = snapshot.pasteCounter;
     this.lastAction = null;
     this.preferredVisualCol = null;
-    if (this.onChange) {
+    if (this.onChange !== undefined) {
       this.onChange(this.getText());
     }
   }
@@ -1930,7 +1941,7 @@ export class Editor implements Component, Focusable {
     items: Array<{ value: string; label: string }>,
     prefix: string,
   ): number {
-    if (!prefix) return -1;
+    if (prefix === "") return -1;
 
     let firstPrefixIndex = -1;
 
@@ -1954,7 +1965,7 @@ export class Editor implements Component, Focusable {
     const layout = prefix.startsWith("/") ? SLASH_COMMAND_SELECT_LIST_LAYOUT : undefined;
     const list = new SelectList(items, this.autocompleteMaxVisible, this.theme.selectList, layout);
     list.onSelect = (selected) => {
-      if (!this.autocompleteProvider) return;
+      if (this.autocompleteProvider === undefined) return;
       this.pushUndoSnapshot();
       this.lastAction = null;
       const result = this.autocompleteProvider.applyCompletion(
@@ -1978,7 +1989,7 @@ export class Editor implements Component, Focusable {
   }
 
   private handleTabCompletion(): void {
-    if (!this.autocompleteProvider) return;
+    if (this.autocompleteProvider === undefined) return;
 
     const currentLine = this.state.lines[this.state.cursorLine] || "";
     const beforeCursor = currentLine.slice(0, this.state.cursorCol);
@@ -1999,11 +2010,11 @@ export class Editor implements Component, Focusable {
   }
 
   private requestAutocomplete(options: { force: boolean; explicitTab: boolean }): void {
-    if (!this.autocompleteProvider) return;
+    if (this.autocompleteProvider === undefined) return;
 
     if (options.force) {
       const shouldTrigger =
-        !this.autocompleteProvider.shouldTriggerFileCompletion ||
+        this.autocompleteProvider.shouldTriggerFileCompletion === undefined ||
         this.autocompleteProvider.shouldTriggerFileCompletion(
           this.state.lines,
           this.state.cursorLine,
@@ -2036,7 +2047,7 @@ export class Editor implements Component, Focusable {
     const previousTask = this.autocompleteRequestTask;
     this.autocompleteRequestTask = (async () => {
       await previousTask;
-      if (startToken !== this.autocompleteStartToken || !this.autocompleteProvider) {
+      if (startToken !== this.autocompleteStartToken || this.autocompleteProvider === undefined) {
         return;
       }
 
@@ -2097,7 +2108,7 @@ export class Editor implements Component, Focusable {
     snapshotCol: number,
     options: { force: boolean; explicitTab: boolean },
   ): Promise<void> {
-    if (!this.autocompleteProvider) return;
+    if (this.autocompleteProvider === undefined) return;
 
     const suggestions = await this.autocompleteProvider.getSuggestions(
       this.state.lines,
@@ -2120,7 +2131,11 @@ export class Editor implements Component, Focusable {
 
     this.autocompleteAbort = undefined;
 
-    if (!suggestions || !Array.isArray(suggestions.items) || suggestions.items.length === 0) {
+    if (
+      suggestions === null ||
+      !Array.isArray(suggestions.items) ||
+      suggestions.items.length === 0
+    ) {
       this.cancelAutocomplete();
       this.tui.requestRender();
       return;
@@ -2140,7 +2155,7 @@ export class Editor implements Component, Focusable {
       this.state.lines = result.lines;
       this.state.cursorLine = result.cursorLine;
       this.setCursorCol(result.cursorCol);
-      if (this.onChange) this.onChange(this.getText());
+      if (this.onChange !== undefined) this.onChange(this.getText());
       this.tui.requestRender();
       return;
     }
@@ -2185,7 +2200,7 @@ export class Editor implements Component, Focusable {
 
   private cancelAutocompleteRequest(): void {
     this.autocompleteStartToken += 1;
-    if (this.autocompleteDebounceTimer) {
+    if (this.autocompleteDebounceTimer !== undefined) {
       clearTimeout(this.autocompleteDebounceTimer);
       this.autocompleteDebounceTimer = undefined;
     }
@@ -2209,7 +2224,7 @@ export class Editor implements Component, Focusable {
   }
 
   private updateAutocomplete(): void {
-    if (!this.autocompleteState || !this.autocompleteProvider) return;
+    if (this.autocompleteState === null || this.autocompleteProvider === undefined) return;
     this.requestAutocomplete({ force: this.autocompleteState === "force", explicitTab: false });
   }
 }

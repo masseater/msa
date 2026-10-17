@@ -14,15 +14,13 @@ describe("refreshTerminalDimensions", () => {
   });
   it("does not throw when kill(2) returns EACCES for self-signal", () => {
     Object.defineProperty(process, "platform", { value: "linux" });
-    process.kill = ((): typeof process.kill => {
-      return (pid, _signal) => {
-        if (pid === process.pid) {
-          const err = new Error("kill EACCES") as NodeJS.ErrnoException;
-          err.code = "EACCES";
-          throw err;
-        }
-        return originalKill.call(process, pid, _signal);
-      };
+    process.kill = ((): typeof process.kill => (pid, _signal) => {
+      if (pid === process.pid) {
+        const err = new Error("kill EACCES") as NodeJS.ErrnoException;
+        err.code = "EACCES";
+        throw err;
+      }
+      return originalKill.call(process, pid, _signal);
     })();
 
     assert.doesNotThrow(() => {
@@ -33,11 +31,9 @@ describe("refreshTerminalDimensions", () => {
   it("does not call kill on win32", () => {
     Object.defineProperty(process, "platform", { value: "win32" });
     let killCalled = false;
-    process.kill = ((): typeof process.kill => {
-      return () => {
-        killCalled = true;
-        return true;
-      };
+    process.kill = ((): typeof process.kill => () => {
+      killCalled = true;
+      return true;
     })();
 
     refreshTerminalDimensions();
@@ -53,12 +49,10 @@ describe("refreshTerminalDimensions", () => {
   });
   it("preserves other error codes", () => {
     Object.defineProperty(process, "platform", { value: "linux" });
-    process.kill = ((): typeof process.kill => {
-      return () => {
-        const err = new Error("kill EPERM") as NodeJS.ErrnoException;
-        err.code = "EPERM";
-        throw err;
-      };
+    process.kill = ((): typeof process.kill => () => {
+      const err = new Error("kill EPERM") as NodeJS.ErrnoException;
+      err.code = "EPERM";
+      throw err;
     })();
 
     assert.doesNotThrow(() => {

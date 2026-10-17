@@ -86,7 +86,7 @@ function parseOscColorValue(rawValue: string): RgbColor | undefined {
 
 export function parseTerminalColorSchemeReport(data: string): TerminalColorScheme | undefined {
   const match = data.match(COLOR_SCHEME_REPORT_PATTERN);
-  if (!match) {
+  if (match === null) {
     return undefined;
   }
   return match[1] === "2" ? "light" : "dark";
