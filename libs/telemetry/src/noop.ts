@@ -1,4 +1,4 @@
-import type { SpanOptions, TelemetryContext, TelemetrySpan } from "./index.ts";
+import type { SpanOptions, TelemetryContext, TelemetrySpan } from "./context.ts";
 
 function startNoopSpan<T>(
   _options: SpanOptions,
@@ -19,5 +19,4 @@ const noopTelemetrySpan: TelemetrySpan = {
 };
 Object.freeze(noopTelemetrySpan);
 
-/** Shared telemetry context used when an application does not provide one. */
 export const NOOP_TELEMETRY_CONTEXT: TelemetryContext = noopTelemetrySpan;
