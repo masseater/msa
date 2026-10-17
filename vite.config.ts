@@ -211,7 +211,7 @@ export default defineConfig({
       },
       "engine-checks": {
         command:
-          "node scripts/check-ts-relative-imports.mjs && node scripts/check-entry-graphs.mjs && node scripts/check-browser-smoke.mjs",
+          "node scripts/check-ts-relative-imports.ts && node scripts/check-entry-graphs.ts && node scripts/check-browser-smoke.ts",
       },
       "workspace-layout": "node tools/workspace-layout.ts",
       "lint-categories": "node tools/lint-categories.ts",
