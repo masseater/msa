@@ -74,6 +74,7 @@ const loadSdk = (() => {
   let loaded:
     | Promise<{
         query: typeof import("@anthropic-ai/claude-agent-sdk").query;
+        usageLimitPrefixes: typeof import("@anthropic-ai/claude-agent-sdk").USAGE_LIMIT_ERROR_PREFIXES;
         McpServer: typeof import("@modelcontextprotocol/sdk/server/mcp.js").McpServer;
         CallToolRequestSchema: typeof import("@modelcontextprotocol/sdk/types.js").CallToolRequestSchema;
         ListToolsRequestSchema: typeof import("@modelcontextprotocol/sdk/types.js").ListToolsRequestSchema;
@@ -86,6 +87,7 @@ const loadSdk = (() => {
       import("@modelcontextprotocol/sdk/types.js"),
     ]).then(([agent, mcp, types]) => ({
       query: agent.query,
+      usageLimitPrefixes: agent.USAGE_LIMIT_ERROR_PREFIXES,
       McpServer: mcp.McpServer,
       CallToolRequestSchema: types.CallToolRequestSchema,
       ListToolsRequestSchema: types.ListToolsRequestSchema,
@@ -433,11 +435,6 @@ async function attach(messages: readonly Message[], config: SessionConfig): Prom
   return session;
 }
 
-/** Claude Code reports a usage limit as `api_error`, a field the SDK's types do not declare. */
-function hitUsageLimit(event: object): boolean {
-  return "api_error" in event && event.api_error === "usage_limit_reached";
-}
-
 /**
  * Read the session's events into one msa reply, ending at a tool call or a
  * finished turn. A failed run is returned rather than written to the reply, so
@@ -521,7 +518,10 @@ async function pump(
     } else if (event.type === "result") {
       if (event.is_error) {
         const error = event.subtype === "success" ? event.result : event.errors.join("\n");
-        const limited = hitUsageLimit(event) || rejectedResetsAt !== undefined;
+        const { usageLimitPrefixes } = await loadSdk();
+        const limited =
+          rejectedResetsAt !== undefined ||
+          usageLimitPrefixes.some((prefix) => error.startsWith(prefix));
         return {
           error: error || "Claude Code run failed",
           ...(limited ? { cause: "usage_limit" } : apiError ? { cause: apiError } : {}),

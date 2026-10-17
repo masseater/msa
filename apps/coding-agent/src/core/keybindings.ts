@@ -123,6 +123,14 @@ const APP_KEYBINDINGS = {
     defaultKeys: "ctrl+backspace",
     description: "Delete session when query is empty",
   },
+  "app.orchestrator.stop": {
+    defaultKeys: "s",
+    description: "Stop the selected orchestrated session",
+  },
+  "app.orchestrator.model": {
+    defaultKeys: "m",
+    description: "Switch the selected orchestrated session's model",
+  },
   "app.models.save": {
     defaultKeys: "ctrl+s",
     description: "Save model selection",

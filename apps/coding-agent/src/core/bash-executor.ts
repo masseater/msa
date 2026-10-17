@@ -7,6 +7,7 @@
  */
 
 import type { WriteStream } from "node:fs";
+import { finished } from "node:stream/promises";
 
 import { splitIncompleteAnsiSuffix, stripAnsi } from "../utils/ansi.ts";
 import { createOutputFileStream } from "../utils/output-files.ts";
@@ -136,7 +137,8 @@ export async function executeBashWithOperations(
   if (truncationResult.truncated) {
     ensureTempFile();
   }
-  tempFileStream?.end();
+  // Callers read the full output file as soon as this returns.
+  if (tempFileStream) await finished(tempFileStream.end());
   const cancelled = options?.signal?.aborted ?? false;
 
   return {

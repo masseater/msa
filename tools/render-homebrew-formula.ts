@@ -1,3 +1,5 @@
+import { parseArgs } from "node:util";
+
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Console, Data, Effect, FileSystem, Layer, Path, Schema } from "effect";
 
@@ -9,7 +11,6 @@ const DEFAULT_OUT = [".artifacts", "homebrew", "msa.rb"];
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/u;
 const SUMS_LINE_PATTERN = /^([0-9a-f]{64}) {2}(\S+)$/u;
 const HOMEPAGE = "https://github.com/masseater/msa";
-const KNOWN_FLAGS = new Set(["--version", "--sums", "--out"]);
 const PLATFORM_NAMES = ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"] as const;
 
 class RenderHomebrewFormulaError extends Data.TaggedError("RenderHomebrewFormulaError")<{
@@ -23,30 +24,23 @@ const packageJsonJson = Schema.fromJsonString(
   }),
 );
 
-type ArgumentPair = readonly [flag: string | undefined, value: string | undefined];
+type Flags = Readonly<{ out?: string; sums?: string; version?: string }>;
 
-const pairArguments = (args: ReadonlyArray<string>): ReadonlyArray<ArgumentPair> => {
-  const pairs: ArgumentPair[] = [];
-  for (let index = 0; index < args.length; index += 2) {
-    pairs.push([args[index], args[index + 1]] as const);
-  }
-  return pairs;
-};
-
-const isKnownPair = (pair: ArgumentPair): boolean =>
-  pair[0] !== undefined && pair[1] !== undefined && KNOWN_FLAGS.has(pair[0]);
-
-const valueFor = (pairs: ReadonlyArray<ArgumentPair>, flag: string): string | undefined =>
-  pairs.find(([candidate]) => candidate === flag)?.[1];
-
-const parseArguments = () => {
-  const pairs = pairArguments(process.argv.slice(2));
-  const invalid = pairs.find((pair) => !isKnownPair(pair));
-  if (invalid !== undefined) {
-    return { argument: invalid[0] ?? "", kind: "invalid" } as const;
-  }
-  return { kind: "parsed", pairs } as const;
-};
+const parseFlags = () =>
+  Effect.try({
+    try: (): Flags =>
+      parseArgs({
+        options: {
+          out: { type: "string" },
+          sums: { type: "string" },
+          version: { type: "string" },
+        },
+      }).values,
+    catch: (error) =>
+      new RenderHomebrewFormulaError({
+        message: `usage: render-homebrew-formula.ts [--version <x.y.z>] [--sums <SHA256SUMS>] [--out <path>] (${String(error)})`,
+      }),
+  });
 
 const requireVersion = (candidate: string) =>
   VERSION_PATTERN.test(candidate)
@@ -62,7 +56,7 @@ const requireShortDescription = (description: string) =>
       )
     : Effect.succeed(description);
 
-const makeContext = (pairs: ReadonlyArray<ArgumentPair>) =>
+const makeContext = (flags: Flags) =>
   Effect.gen(function* () {
     const workspace = yield* Workspace;
     const {
@@ -75,7 +69,7 @@ const makeContext = (pairs: ReadonlyArray<ArgumentPair>) =>
     // oxlint-disable-next-line effecttsgo/unstable-api-usage -- v4 platform services are pre-GA
     const path = yield* Path.Path;
     const { description, license } = yield* Schema.decodeEffect(packageJsonJson)(packageJsonText);
-    const version = yield* requireVersion(valueFor(pairs, "--version") ?? packageVersion);
+    const version = yield* requireVersion(flags.version ?? packageVersion);
     const shortDescription = yield* requireShortDescription(description);
     return {
       fs,
@@ -84,8 +78,8 @@ const makeContext = (pairs: ReadonlyArray<ArgumentPair>) =>
       version,
       description: shortDescription,
       license,
-      sumsPath: path.resolve(repoRoot, valueFor(pairs, "--sums") ?? path.join(...DEFAULT_SUMS)),
-      outPath: path.resolve(repoRoot, valueFor(pairs, "--out") ?? path.join(...DEFAULT_OUT)),
+      sumsPath: path.resolve(repoRoot, flags.sums ?? path.join(...DEFAULT_SUMS)),
+      outPath: path.resolve(repoRoot, flags.out ?? path.join(...DEFAULT_OUT)),
     };
   });
 
@@ -190,13 +184,7 @@ const renderFormula = (
   ].join("\n");
 
 const program = Effect.gen(function* () {
-  const parsed = parseArguments();
-  if (parsed.kind === "invalid") {
-    return yield* new RenderHomebrewFormulaError({
-      message: `usage: render-homebrew-formula.ts [--version <x.y.z>] [--sums <SHA256SUMS>] [--out <path>] (unknown argument: ${parsed.argument})`,
-    });
-  }
-  const context = yield* makeContext(parsed.pairs);
+  const context = yield* makeContext(yield* parseFlags());
   const checksums = yield* readChecksums(context);
   const entries = [];
   for (const platformName of PLATFORM_NAMES) {

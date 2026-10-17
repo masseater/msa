@@ -18,7 +18,7 @@
  * `/accounts claude` edits the file; an account added there without a
  * tokenCommand gets its own config dir under <agent dir>/claude-accounts.
  */
-import { execFile, spawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -26,6 +26,7 @@ import { promisify } from "node:util";
 import type { SDKAssistantMessageError } from "@anthropic-ai/claude-agent-sdk";
 
 import { expandTildePath, getAgentDir } from "../../config.ts";
+import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
 import { findExecutableOnPath } from "../../utils/shell.ts";
 
 const configFile = () => join(getAgentDir(), "claude-code-accounts.json");
@@ -183,12 +184,12 @@ export interface AuthStatus {
   detail?: string;
 }
 
-/** `claude auth status` under this account. */
+/** `claude auth status` (JSON, exit 1 when logged out) under this account. */
 export async function authStatus(account: Account): Promise<AuthStatus> {
   try {
     const { stdout } = await promisify(execFile)(
       claudeExecutable() ?? "claude",
-      ["auth", "status", "--json"],
+      ["auth", "status"],
       { env: await accountEnv(account), timeout: 15_000 },
     );
     const status = JSON.parse(stdout) as { loggedIn?: boolean; email?: string };
@@ -221,7 +222,7 @@ export async function loginAccount(account: Account, prompts: LoginPrompts): Pro
     throw new Error(`"${account.name}" signs in with its tokenCommand, not a Claude login`);
   }
   if (account.configDir) mkdirSync(account.configDir, { recursive: true });
-  const child = spawn(claudeExecutable() ?? "claude", ["auth", "login"], {
+  const child = spawnProcess(claudeExecutable() ?? "claude", ["auth", "login"], {
     env: await accountEnv(account),
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -245,10 +246,7 @@ export async function loginAccount(account: Account, prompts: LoginPrompts): Pro
   };
   child.stdout.on("data", onOutput);
   child.stderr.on("data", onOutput);
-  const code = await new Promise<number | null>((resolve, reject) => {
-    child.on("error", reject);
-    child.on("close", resolve);
-  });
+  const code = await waitForChildProcess(child);
   exited.abort();
   if (cancelled) throw new Error(`Login for "${account.name}" cancelled`);
   if (code !== 0) {
