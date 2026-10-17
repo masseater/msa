@@ -1,15 +1,17 @@
 import chalk from "chalk";
 import { Effect, Random } from "effect";
 
-import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import { Editor } from "../src/components/editor.ts";
-import { Loader } from "../src/components/loader.ts";
-import { Markdown } from "../src/components/markdown.ts";
-import { Text } from "../src/components/text.ts";
 import { runAfter } from "../src/delay.ts";
-import { ProcessTerminal } from "../src/terminal.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { TUI } from "../src/tui.ts";
+import {
+  CombinedAutocompleteProvider,
+  Editor,
+  Loader,
+  Markdown,
+  ProcessTerminal,
+  Text,
+  type TUI,
+  TuiMainScreen,
+} from "../src/index.ts";
 import { defaultEditorTheme, defaultMarkdownTheme } from "./test-themes.ts";
 
 const terminal = new ProcessTerminal();
@@ -39,72 +41,81 @@ tui.setFocus(editor);
 
 let isResponding = false;
 
-editor.onSubmit = (value: string) => {
-  if (isResponding) {
-    return;
-  }
+const responses = [
+  "That's interesting! Tell me more.",
+  "I see what you mean.",
+  "Fascinating perspective!",
+  "Could you elaborate on that?",
+  "That makes sense to me.",
+  "I hadn't thought of it that way.",
+  "Great point!",
+  "Thanks for sharing that.",
+];
 
-  const trimmed = value.trim();
-
+function runCommand(trimmed: string): boolean {
+  const children = tui.children;
   if (trimmed === "/delete") {
-    const children = tui.children;
     if (children.length > 3) {
       children.splice(children.length - 2, 1);
     }
     tui.requestRender();
-    return;
+    return true;
   }
-
   if (trimmed === "/clear") {
-    const children = tui.children;
     children.splice(2, children.length - 3);
     tui.requestRender();
+    return true;
+  }
+  return false;
+}
+
+function respond(loader: Loader): void {
+  const children = tui.children;
+  tui.removeChild(loader);
+  const randomResponse = responses[Math.floor(Effect.runSync(Random.next) * responses.length)];
+  if (randomResponse === undefined) throw new Error("No response was picked");
+
+  const botMessage = new Markdown(randomResponse, 1, 1, defaultMarkdownTheme);
+  children.splice(children.length - 1, 0, botMessage);
+
+  isResponding = false;
+  editor.disableSubmit = false;
+
+  tui.requestRender();
+}
+
+function submitMessage(value: string): void {
+  isResponding = true;
+  editor.disableSubmit = true;
+
+  const userMessage = new Markdown(value, 1, 1, defaultMarkdownTheme);
+
+  const children = tui.children;
+  children.splice(children.length - 1, 0, userMessage);
+
+  const loader = new Loader(
+    tui,
+    (s) => chalk.cyan(s),
+    (s) => chalk.dim(s),
+    "Thinking...",
+  );
+  children.splice(children.length - 1, 0, loader);
+
+  tui.requestRender();
+
+  runAfter(1000, () => respond(loader));
+}
+
+editor.onSubmit = (value: string) => {
+  if (isResponding) {
     return;
   }
-
+  const trimmed = value.trim();
+  if (runCommand(trimmed)) {
+    return;
+  }
   if (trimmed !== "") {
-    isResponding = true;
-    editor.disableSubmit = true;
-
-    const userMessage = new Markdown(value, 1, 1, defaultMarkdownTheme);
-
-    const children = tui.children;
-    children.splice(children.length - 1, 0, userMessage);
-
-    const loader = new Loader(
-      tui,
-      (s) => chalk.cyan(s),
-      (s) => chalk.dim(s),
-      "Thinking...",
-    );
-    children.splice(children.length - 1, 0, loader);
-
-    tui.requestRender();
-
-    runAfter(1000, () => {
-      tui.removeChild(loader);
-
-      const responses = [
-        "That's interesting! Tell me more.",
-        "I see what you mean.",
-        "Fascinating perspective!",
-        "Could you elaborate on that?",
-        "That makes sense to me.",
-        "I hadn't thought of it that way.",
-        "Great point!",
-        "Thanks for sharing that.",
-      ];
-      const randomResponse = responses[Math.floor(Effect.runSync(Random.next) * responses.length)];
-      if (randomResponse === undefined) throw new Error("No response was picked");
-
-      const botMessage = new Markdown(randomResponse, 1, 1, defaultMarkdownTheme);
-      children.splice(children.length - 1, 0, botMessage);
-
-      isResponding = false;
-      editor.disableSubmit = false;
-
-      tui.requestRender();
-    });
+    submitMessage(value);
   }
 };
 

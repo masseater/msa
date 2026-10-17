@@ -65,7 +65,11 @@ describe("TUI overlay options", () => {
           tui.stop();
         }),
       ));
+  });
+});
 
+describe("TUI overlay options", () => {
+  describe("margin", () => {
     it("should respect margin object", () =>
       Effect.runPromise(
         Effect.gen(function* () {

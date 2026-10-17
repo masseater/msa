@@ -3,12 +3,8 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { HStack } from "../src/components/h-stack.ts";
-import { ScrollView } from "../src/components/scroll-view.ts";
-import { SelectList } from "../src/components/select-list.ts";
-import { Text } from "../src/components/text.ts";
 import { overrideEnv } from "../src/env.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
+import { HStack, ScrollView, SelectList, Text, TuiAltScreen } from "../src/index.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 

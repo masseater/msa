@@ -3,16 +3,16 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { Image } from "../src/components/image.ts";
 import {
   deleteKittyImage,
   encodeKitty,
+  Image,
   resetCapabilitiesCache,
   setCapabilities,
   setCellDimensions,
-} from "../src/terminal-image.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { type TUI } from "../src/tui.ts";
+  type TUI,
+  TuiMainScreen,
+} from "../src/index.ts";
 import { withEnv } from "./tui-render-helpers.ts";
 import { LoggingVirtualTerminal } from "./tui-render-logging-virtual-terminal.ts";
 import { TestComponent } from "./tui-render-test-component.ts";

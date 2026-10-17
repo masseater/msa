@@ -46,7 +46,9 @@ describe("CombinedAutocompleteProvider slash-command filter", () => {
         assert.ok(items.includes("model"));
       }),
     ));
+});
 
+describe("CombinedAutocompleteProvider slash-command filter", () => {
   it("completes commands after leading whitespace and preserves it", () =>
     Effect.runPromise(
       Effect.gen(function* () {

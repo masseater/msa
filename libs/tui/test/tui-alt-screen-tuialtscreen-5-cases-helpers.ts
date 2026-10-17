@@ -3,18 +3,13 @@ import { it } from "node:test";
 
 import { Effect } from "effect";
 
-import { HStack } from "../src/components/h-stack.ts";
-import { Image } from "../src/components/image.ts";
-import { ScrollView } from "../src/components/scroll-view.ts";
-import { Text } from "../src/components/text.ts";
-import { VStack } from "../src/components/v-stack.ts";
+import { HStack, Image, ScrollView, Text, TuiAltScreen, VStack } from "../src/index.ts";
 import {
   encodeKitty,
   registerKittyImageMetadata,
   resetCapabilitiesCache,
   setCapabilities,
 } from "../src/terminal-image.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
 import { scrollLineByLine } from "./tui-alt-screen-helpers.ts";
 import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
 
