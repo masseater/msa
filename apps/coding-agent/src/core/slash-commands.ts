@@ -47,6 +47,11 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
     description: "Keep working until a condition is met; no argument shows status",
     argumentHint: "<condition>|clear",
   },
+  {
+    name: "memory",
+    description: "Manage long-term memory: status, list, search, forget",
+    argumentHint: "[list|search <query>|forget <id>|stats]",
+  },
   { name: "resume", description: "Resume a different session" },
   { name: "sessions", description: "Show the sessions the orchestrator started" },
   {

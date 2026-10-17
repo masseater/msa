@@ -3023,6 +3023,23 @@ export class InteractiveMode {
         this.ui.requestRender();
         break;
       }
+
+      case "memory_status": {
+        this.chatContainer.addChild(new Spacer(1));
+        this.chatContainer.addChild(
+          new ThemedText(
+            () =>
+              event.text
+                .split("\n")
+                .map((line) => theme.fg("muted", line))
+                .join("\n"),
+            this.outputPad,
+            0,
+          ),
+        );
+        this.ui.requestRender();
+        break;
+      }
     }
   }
 

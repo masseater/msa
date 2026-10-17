@@ -45,6 +45,20 @@ export const SETTINGS_DEFAULTS = {
     autoResize: true,
     blockImages: false,
   },
+  memory: {
+    enabled: true,
+    embedding: {
+      enabled: true,
+      baseUrl: "http://127.0.0.1:11434/v1",
+      model: "bge-m3",
+      timeoutMs: 5000,
+    },
+    recall: {
+      enabled: true,
+      limit: 5,
+      minScore: 0.35,
+    },
+  },
   doubleEscapeAction: "tree",
   treeFilterMode: "default",
   editorPaddingX: 0,

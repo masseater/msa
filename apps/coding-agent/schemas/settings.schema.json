@@ -498,6 +498,73 @@
         }
       }
     },
+    "memory": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Long-term memory: the memory tool, recall, and the /memory command.",
+          "default": true
+        },
+        "database": {
+          "type": "string",
+          "description": "SQLite file holding memories. Default: <agent dir>/memory.db."
+        },
+        "embedding": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Compute embeddings so memories are searchable by meaning, not only keywords.",
+              "default": true
+            },
+            "baseUrl": {
+              "type": "string",
+              "description": "OpenAI-compatible base URL such as http://127.0.0.1:11434/v1 (Ollama) or https://api.openai.com/v1. /embeddings is appended.",
+              "default": "http://127.0.0.1:11434/v1"
+            },
+            "model": {
+              "type": "string",
+              "description": "Embedding model name at that endpoint.",
+              "default": "bge-m3"
+            },
+            "apiKeyEnv": {
+              "type": "string",
+              "description": "Environment variable holding the API key, for endpoints that need one."
+            },
+            "timeoutMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Embedding request timeout in milliseconds.",
+              "default": 5000
+            }
+          }
+        },
+        "recall": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Recall memories relevant to each user prompt and add them to the run.",
+              "default": true
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Maximum memories added to a run.",
+              "default": 5
+            },
+            "minScore": {
+              "type": "number",
+              "description": "Minimum hybrid score (0-1) for a memory to be recalled.",
+              "default": 0.35
+            }
+          }
+        }
+      }
+    },
     "enabledModels": {
       "type": "array",
       "items": {

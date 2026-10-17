@@ -54,7 +54,13 @@ describe("system prompt updates", () => {
         "docs",
         "cwd",
       ]);
-      expect(head.toolsAdded?.map((tool) => tool.name)).toEqual(["read", "bash", "edit", "write"]);
+      expect(head.toolsAdded?.map((tool) => tool.name)).toEqual([
+        "read",
+        "bash",
+        "edit",
+        "write",
+        "memory",
+      ]);
       expect(getSystemMessageText(head)).toBe(harness.session.systemPrompt);
     } finally {
       harness.cleanup();
