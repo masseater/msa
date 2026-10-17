@@ -1,38 +1,13 @@
-/**
- * Model catalog protocol shared by pi and pi.dev.
- *
- * This file is copied verbatim into two repositories. Change both copies in
- * the same pair of pull requests and keep them byte for byte identical:
- *
- *   earendil-works/pi      scripts/model-catalog-protocol.ts
- *   earendil-works/pi.dev  src/shared/models/protocol.ts
- *
- * pi uses it to publish catalog revisions and to test clients against the
- * catalog selection pi.dev performs. pi.dev uses it to serve catalog requests.
- * Keep it free of imports and runtime specific APIs so it runs unchanged in
- * Node.js and Cloudflare Workers.
- *
- * Storage layout under `MODEL_CATALOG_PREFIX`:
- *
- *   index.json                                    revision index (`ModelCatalogIndex`)
- *   revisions/<revision>/models.json              chat models by provider and id
- *   revisions/<revision>/models.all.json          models of every type by provider
- *   revisions/<revision>/providers.json           sorted provider ids
- *   revisions/<revision>/providers/<id>.json      chat models of one provider by id
- *   revisions/<revision>/providers/<id>.all.json  models of every type of one provider
- *
- * Clients that send `?types=` receive the typed `.all.json` variant. Older
- * clients receive the legacy chat-only variant.
- */
+import { Function } from "effect";
 
 export const MODEL_CATALOG_SCHEMA_VERSION = 1;
 export const MODEL_CATALOG_PREFIX = `models/v${MODEL_CATALOG_SCHEMA_VERSION}`;
 export const MODEL_CATALOG_INDEX_KEY = `${MODEL_CATALOG_PREFIX}/index.json`;
-export const MODEL_CATALOG_REVISION_RE = /^sha256-[0-9a-f]{64}$/;
+export const MODEL_CATALOG_REVISION_RE = /^sha256-[0-9a-f]{64}$/u;
 
-const PI_VERSION_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/;
-const PI_USER_AGENT_RE = /^pi\/([^\s()]+)(?: \([^;()]+(?:;\s*[^;()]+(?:;\s*[^()]+)?)?\))?$/i;
-const MODEL_TYPE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const PI_VERSION_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/u;
+const PI_USER_AGENT_RE = /^pi\/([^\s()]+)(?: \([^;()]+(?:;\s*[^;()]+(?:;\s*[^()]+)?)?\))?$/iu;
+const MODEL_TYPE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 
 type ParsedPiVersion = readonly [major: number, minor: number, patch: number, prerelease: string];
 
@@ -56,35 +31,37 @@ export type ModelCatalogRequest =
   | { kind: "redirect"; location: string }
   | { kind: "invalid"; error: string };
 
-export function getModelCatalogArtifactKey(
-  revision: string,
-  artifact: ModelCatalogArtifact,
-): string {
-  return `${MODEL_CATALOG_PREFIX}/revisions/${revision}/${artifact}`;
-}
+export const getModelCatalogArtifactKey: {
+  (artifact: ModelCatalogArtifact): (revision: string) => string;
+  (revision: string, artifact: ModelCatalogArtifact): string;
+} = Function.dual(
+  2,
+  (revision: string, artifact: ModelCatalogArtifact): string =>
+    `${MODEL_CATALOG_PREFIX}/revisions/${revision}/${artifact}`,
+);
 
-export function getModelCatalogProviderKey(
-  revision: string,
-  provider: string,
-  representation: ModelCatalogRepresentation,
-): string {
-  const suffix = representation === "typed" ? ".all.json" : ".json";
-  return `${MODEL_CATALOG_PREFIX}/revisions/${revision}/providers/${provider}${suffix}`;
-}
+export const getModelCatalogProviderKey: {
+  (provider: string, representation: ModelCatalogRepresentation): (revision: string) => string;
+  (revision: string, provider: string, representation: ModelCatalogRepresentation): string;
+} = Function.dual(
+  3,
+  (revision: string, provider: string, representation: ModelCatalogRepresentation): string => {
+    const suffix = representation === "typed" ? ".all.json" : ".json";
+    return `${MODEL_CATALOG_PREFIX}/revisions/${revision}/providers/${provider}${suffix}`;
+  },
+);
 
 export function isValidModelCatalogPiVersion(version: string): boolean {
   return parsePiVersion(version) !== undefined;
 }
 
-/** Compare two Pi versions with semver precedence. Throws for invalid versions. */
-export function compareModelCatalogPiVersions(left: string, right: string): number {
-  return comparePiVersions(requirePiVersion(left), requirePiVersion(right));
-}
+export const compareModelCatalogPiVersions: {
+  (right: string): (left: string) => number;
+  (left: string, right: string): number;
+} = Function.dual(2, (left: string, right: string): number =>
+  comparePiVersions(requirePiVersion(left), requirePiVersion(right)),
+);
 
-/**
- * Parse the `types` query parameter. Returns undefined when it is present but
- * invalid. Clients that do not send it predate model types.
- */
 export function parseModelCatalogRepresentation(
   types: string | null | undefined,
 ): ModelCatalogRepresentation | undefined {
@@ -97,18 +74,10 @@ export function parseModelCatalogRepresentation(
   return "typed";
 }
 
-/**
- * Decide how to answer a catalog request from its URL and User-Agent.
- *
- * Released clients do not send `pi-version`. Responses are cached by URL, so
- * instead of varying the response on the User-Agent, clients that identify
- * as Pi are redirected to the equivalent URL with an explicit `pi-version`.
- * Requests without a Pi User-Agent receive the default catalog.
- */
-export function parseModelCatalogRequest(
+const parseRequest = (
   url: string | URL,
   userAgent: string | null | undefined,
-): ModelCatalogRequest {
+): ModelCatalogRequest => {
   const requestUrl = new URL(url);
   const representation = parseModelCatalogRepresentation(requestUrl.searchParams.get("types"));
   if (representation === undefined) {
@@ -128,23 +97,23 @@ export function parseModelCatalogRequest(
     return { kind: "invalid", error: "Invalid Pi version." };
   }
   return { kind: "catalog", piVersion, representation };
-}
+};
 
-/**
- * Select the catalog revision for a Pi version: the entry with the highest
- * minimum version that does not exceed it. Requests without a version receive
- * the default revision. Returns undefined when no entry is compatible.
- */
-export function selectModelCatalog(
+export const parseModelCatalogRequest: {
+  (userAgent: string | null | undefined): (url: string | URL) => ModelCatalogRequest;
+  (url: string | URL, userAgent: string | null | undefined): ModelCatalogRequest;
+} = Function.dual(2, parseRequest);
+
+const selectCatalog = (
   index: ModelCatalogIndex,
   piVersion: string | undefined,
-): ModelCatalogIndexEntry | undefined {
+): ModelCatalogIndexEntry | undefined => {
   if (piVersion === undefined) {
     return index.catalogs.find((catalog) => catalog.revision === index.defaultRevision);
   }
 
   const requestedVersion = parsePiVersion(piVersion);
-  if (!requestedVersion) {
+  if (requestedVersion === undefined) {
     return undefined;
   }
 
@@ -154,19 +123,20 @@ export function selectModelCatalog(
     const minimumVersion = requirePiVersion(catalog.minimumPiVersion);
     if (
       comparePiVersions(minimumVersion, requestedVersion) <= 0 &&
-      (!selectedVersion || comparePiVersions(minimumVersion, selectedVersion) > 0)
+      (selectedVersion === undefined || comparePiVersions(minimumVersion, selectedVersion) > 0)
     ) {
       selected = catalog;
       selectedVersion = minimumVersion;
     }
   }
   return selected;
-}
+};
 
-/**
- * Validate an index read from storage. Returns only the protocol fields;
- * publishers may store additional metadata on each entry.
- */
+export const selectModelCatalog: {
+  (piVersion: string | undefined): (index: ModelCatalogIndex) => ModelCatalogIndexEntry | undefined;
+  (index: ModelCatalogIndex, piVersion: string | undefined): ModelCatalogIndexEntry | undefined;
+} = Function.dual(2, selectCatalog);
+
 export function parseModelCatalogIndex(value: unknown): ModelCatalogIndex {
   if (
     typeof value !== "object" ||
@@ -185,7 +155,7 @@ export function parseModelCatalogIndex(value: unknown): ModelCatalogIndex {
         typeof catalog !== "object" ||
         catalog === null ||
         typeof catalog.minimumPiVersion !== "string" ||
-        !parsePiVersion(catalog.minimumPiVersion) ||
+        parsePiVersion(catalog.minimumPiVersion) === undefined ||
         typeof catalog.revision !== "string" ||
         !MODEL_CATALOG_REVISION_RE.test(catalog.revision),
     ) ||
@@ -206,7 +176,7 @@ export function parseModelCatalogIndex(value: unknown): ModelCatalogIndex {
 
 function requirePiVersion(version: string): ParsedPiVersion {
   const parsed = parsePiVersion(version);
-  if (!parsed) {
+  if (parsed === undefined) {
     throw new Error(`Invalid Pi version: ${version}`);
   }
   return parsed;
@@ -214,7 +184,7 @@ function requirePiVersion(version: string): ParsedPiVersion {
 
 function parsePiVersion(version: string): ParsedPiVersion | undefined {
   const match = PI_VERSION_RE.exec(version.trim());
-  if (!match) {
+  if (match === null) {
     return undefined;
   }
   const parsed = [Number(match[1]), Number(match[2]), Number(match[3])] as const;
@@ -237,10 +207,10 @@ function comparePiVersions(left: ParsedPiVersion, right: ParsedPiVersion): numbe
   if (leftPrerelease === rightPrerelease) {
     return 0;
   }
-  if (!leftPrerelease) {
+  if (leftPrerelease === "") {
     return 1;
   }
-  if (!rightPrerelease) {
+  if (rightPrerelease === "") {
     return -1;
   }
 
@@ -253,8 +223,8 @@ function comparePiVersions(left: ParsedPiVersion, right: ParsedPiVersion): numbe
     if (rightPart === undefined) return 1;
     if (leftPart === rightPart) continue;
 
-    const leftNumber = /^\d+$/.test(leftPart) ? Number(leftPart) : undefined;
-    const rightNumber = /^\d+$/.test(rightPart) ? Number(rightPart) : undefined;
+    const leftNumber = /^\d+$/u.test(leftPart) ? Number(leftPart) : undefined;
+    const rightNumber = /^\d+$/u.test(rightPart) ? Number(rightPart) : undefined;
     if (leftNumber !== undefined && rightNumber !== undefined) {
       return leftNumber - rightNumber;
     }

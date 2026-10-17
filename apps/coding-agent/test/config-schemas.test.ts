@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Effect } from "effect";
 import { Compile } from "typebox/compile";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
@@ -15,7 +16,7 @@ import { validateThemeJson } from "../src/modes/interactive/theme/theme-schema.t
 const schemaBaseUrl =
   "https://raw.githubusercontent.com/masseater/msa/main/apps/coding-agent/schemas";
 const temporaryDirectories: string[] = [];
-const renderedSchemas = await renderConfigSchemas();
+const renderedSchemas = await Effect.runPromise(renderConfigSchemas);
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
