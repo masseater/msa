@@ -1,8 +1,10 @@
+import { Cause, Effect } from "effect";
+
 import { contractFromDescription, LOCAL_VARIANT, resolveHost } from "./contract.ts";
 import type { CtxImpl } from "./ctx.ts";
 import { type Encoder, encoder } from "./delta/index.ts";
 import { ChordError, invalid } from "./errors.ts";
-import type { HostImpl } from "./host.ts";
+import type { HostLinks } from "./host-links.ts";
 import { type Link, Packed, unpack } from "./link.ts";
 import { RefImpl } from "./ref.ts";
 import type { RemoteBinding, RemoteChannel } from "./remote.ts";
@@ -254,7 +256,7 @@ export class RelayCall {
 }
 
 export class Connection implements RemoteChannel {
-  readonly host: HostImpl;
+  readonly host: HostLinks;
   readonly link: Link;
   readonly role: "upstream" | "downstream";
   readonly peer: Peer;
@@ -294,7 +296,7 @@ export class Connection implements RemoteChannel {
   readonly votes = new Map<number, Pending>();
 
   constructor(
-    host: HostImpl,
+    host: HostLinks,
     link: Link,
     config: {
       readonly role: "upstream" | "downstream";
@@ -773,9 +775,17 @@ export class Connection implements RemoteChannel {
       }
       const relay = new RelayRef(this, frame, principal, origin);
       this.served.set(frame.id, { kind: "relay", relay });
-      this.host
-        .relay(relay)
-        .catch((error: unknown) => relay.close(error, { releaseDown: true, notify: true }));
+      Effect.runFork(
+        this.host
+          .relay(relay)
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.sync(() =>
+                relay.close(Cause.squash(cause), { releaseDown: true, notify: true }),
+              ),
+            ),
+          ),
+      );
       return;
     }
     let ref: RefImpl;
@@ -1158,7 +1168,7 @@ async function relayCall(
   frame: Extract<Frame, { t: "call" }>,
   root: RootRef,
   signal: AbortSignal,
-  host: HostImpl,
+  host: HostLinks,
 ): Promise<unknown> {
   const abortError = (): ChordError =>
     new ChordError("aborted", "call cancelled", { cause: signal.reason });

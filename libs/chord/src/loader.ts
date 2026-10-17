@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 
 import { Effect } from "effect";
 
-import type { Facet, FacetDefinition, FacetLoader } from "./host.ts";
+import type { Facet, FacetDefinition, FacetLoader } from "./host-types.ts";
 
 const PARAM = "chord2-reload";
 

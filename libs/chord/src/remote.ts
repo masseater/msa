@@ -84,7 +84,7 @@ export class RemoteBinding {
   stateOn = false;
   readonly views = new Set<RemoteRef>();
   readonly members = new Map<string, MemberState>();
-  lingerTimer: ReturnType<typeof setTimeout> | undefined;
+  lingerTimer: (() => void) | undefined;
   readonly #listeners = new Map<string, Set<ViewReadable>>();
   #pending:
     | { shape: Shape; readonly missing: Set<string>; readonly values: Map<string, MemberState> }
@@ -132,7 +132,7 @@ export class RemoteBinding {
   addView(view: RemoteRef): void {
     this.views.add(view);
     if (this.lingerTimer !== undefined) {
-      clearTimeout(this.lingerTimer);
+      this.lingerTimer();
       this.lingerTimer = undefined;
     }
     this.#syncState();
@@ -292,7 +292,7 @@ export class RemoteBinding {
   }
 
   close(): void {
-    if (this.lingerTimer !== undefined) clearTimeout(this.lingerTimer);
+    this.lingerTimer?.();
     this.lingerTimer = undefined;
     if (this.hold !== undefined) this.hold.channel.release(this.hold.id);
     this.hold = undefined;

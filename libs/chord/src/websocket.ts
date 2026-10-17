@@ -1,5 +1,5 @@
 import type { AcceptOptions } from "./connection.ts";
-import type { Host } from "./host.ts";
+import type { Host } from "./host-types.ts";
 import { type WebSocketLike, webSocketLink } from "./link.ts";
 
 export interface WebSocketServerLike<Request> {
