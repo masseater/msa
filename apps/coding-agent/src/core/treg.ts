@@ -1,45 +1,48 @@
 /**
- * Calls treg (https://treg.to) routed jobs, which try web vendors in order until one answers.
- *
- * treg's OpenAPI document declares `/call/{rest}` with no request body and an untyped response, so
- * a generated client cannot send a job; this is a thin Effect HTTP call instead.
+ * Runs treg (https://treg.to) routed jobs through the official `treg` CLI, which tries web vendors
+ * in order until one answers. The CLI owns sign-in (`treg login`, or `TREG_TOKEN`), and
+ * `treg --json call` prints one `{result, _treg}` line per call.
  */
 
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-
-import * as Effect from "effect/Effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Option from "effect/Option";
-import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 
-const TREG_URL = "https://treg.to";
+import { spawnProcess, spawnProcessSync, waitForChildProcess } from "../utils/child-process.ts";
+import { findExecutableOnPath } from "../utils/shell.ts";
+
 /** TinyFish answers web search and page reads for free; treg falls back to paid vendors after it. */
 const PREFERRED_VENDOR = "tinyfish";
 /** Caps what one call may spend walking paid vendors after a miss. treg's own default is $1. */
 const MAX_COST_USD = "0.05";
 
-const TregResponse = Schema.Struct({
+const CliEnvelope = Schema.fromJsonString(
+  Schema.Struct({
+    result: Schema.Unknown,
+    _treg: Schema.Struct({
+      http_status: Schema.Number,
+      charged_micro: Schema.optionalKey(Schema.Number),
+    }),
+  }),
+);
+
+const RoutedResult = Schema.Struct({
   output: Schema.optionalKey(Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown))),
   _treg: Schema.optionalKey(
-    Schema.Struct({
-      served_by: Schema.optionalKey(Schema.NullOr(Schema.String)),
-      charged_micro: Schema.optionalKey(Schema.NullOr(Schema.Number)),
-    }),
+    Schema.Struct({ served_by: Schema.optionalKey(Schema.NullOr(Schema.String)) }),
   ),
 });
 
+export interface TregRun {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+}
+
+export type TregRunner = (args: string[], signal?: AbortSignal) => Promise<TregRun>;
+
 export interface TregOptions {
-  token: Redacted.Redacted<string>;
-  /** The team an identity token from `treg login` acts for, sent as `X-Treg-Org`. */
-  org?: string;
-  /** Replaces `globalThis.fetch`, for tests. */
-  fetch?: typeof globalThis.fetch;
+  /** Runs the `treg` CLI with these arguments. */
+  run: TregRunner;
 }
 
 export interface TregResult {
@@ -48,79 +51,91 @@ export interface TregResult {
   costMicro?: number;
 }
 
-const TregCliConfig = Schema.fromJsonString(
-  Schema.Struct({
-    token: Schema.optionalKey(Schema.NullOr(Schema.String)),
-    active_org: Schema.optionalKey(Schema.NullOr(Schema.String)),
-  }),
-);
+function spawnRunner(command: string): TregRunner {
+  return async (args, signal) => {
+    const child = spawnProcess(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      ...(signal ? { signal } : {}),
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
+    child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
+    const exitCode = await waitForChildProcess(child);
+    signal?.throwIfAborted();
+    return { stdout, stderr, exitCode };
+  };
+}
 
-/**
- * The treg credentials: `TREG_TOKEN`, else the login `treg login` saved in `~/.treg/config.json`.
- * Undefined when neither exists, which leaves the web tools out.
- */
-export function getTregCredentials(
-  env: NodeJS.ProcessEnv = process.env,
-  home: string = homedir(),
-): Pick<TregOptions, "token" | "org"> | undefined {
-  const token = env["TREG_TOKEN"]?.trim();
-  if (token) return { token: Redacted.make(token) };
-  let config: string;
-  try {
-    config = readFileSync(join(home, ".treg", "config.json"), "utf8");
-  } catch {
-    return undefined;
-  }
-  return Option.match(Schema.decodeUnknownOption(TregCliConfig)(config), {
-    onNone: () => undefined,
-    onSome: ({ token: saved, active_org: org }) =>
-      saved?.trim() ? { token: Redacted.make(saved.trim()), ...(org ? { org } : {}) } : undefined,
+const CliConfig = Schema.fromJsonString(Schema.Struct({ logged_in: Schema.Boolean }));
+
+/** Whether the CLI has a login to call with: `TREG_TOKEN`, or what `treg config` reports. */
+function isSignedIn(command: string, env: NodeJS.ProcessEnv): boolean {
+  if (env["TREG_TOKEN"]?.trim()) return true;
+  const { stdout } = spawnProcessSync(command, ["config"], {
+    encoding: "utf8",
+    timeout: 10_000,
+    windowsHide: true,
   });
+  return Option.match(Schema.decodeUnknownOption(CliConfig)(stdout ?? ""), {
+    onNone: () => false,
+    onSome: (config) => config.logged_in,
+  });
+}
+
+/** The installed and signed-in `treg` CLI, or undefined when the web tools are unavailable. */
+export function findTreg(
+  find: (executable: string) => string | null = findExecutableOnPath,
+  env: NodeJS.ProcessEnv = process.env,
+): TregOptions | undefined {
+  const command = find("treg");
+  return command && isSignedIn(command, env) ? { run: spawnRunner(command) } : undefined;
 }
 
 function describeFailure(status: number, body: unknown): string {
   const detail = typeof body === "object" && body !== null && "detail" in body ? body.detail : body;
-  return `treg returned ${status}: ${typeof detail === "string" ? detail : JSON.stringify(detail)}`;
+  const message = `treg returned ${status}: ${typeof detail === "string" ? detail : JSON.stringify(detail)}`;
+  return status === 401 ? `${message}. Sign in with \`treg login\` or set TREG_TOKEN.` : message;
 }
 
 /** Run a treg routed job such as `treg.web.search` and return its normalized `output`. */
-export function callTreg(
+export async function callTreg(
   options: TregOptions,
   job: string,
   body: Readonly<Record<string, unknown>>,
   signal?: AbortSignal,
 ): Promise<TregResult> {
-  const program = Effect.gen(function* () {
-    const client = yield* HttpClient.HttpClient;
-    const response = yield* client.execute(
-      HttpClientRequest.post(`${TREG_URL}/call/${job}`).pipe(
-        HttpClientRequest.setHeaders({
-          "X-Treg-Token": Redacted.value(options.token),
-          "X-Treg-Route-Prefer": PREFERRED_VENDOR,
-          "X-Treg-Route-Max-Cost": MAX_COST_USD,
-          ...(options.org ? { "X-Treg-Org": options.org } : {}),
-        }),
-        HttpClientRequest.bodyJsonUnsafe(body),
-      ),
-    );
-    if (response.status >= 400) {
-      const failure = yield* Effect.orElseSucceed(response.json, () => null);
-      return yield* Effect.fail(new Error(describeFailure(response.status, failure)));
-    }
-    const decoded = yield* HttpClientResponse.schemaBodyJson(TregResponse)(response);
-    const result: TregResult = { output: decoded.output ?? {} };
-    if (decoded._treg?.served_by) result.servedBy = decoded._treg.served_by;
-    if (typeof decoded._treg?.charged_micro === "number") {
-      result.costMicro = decoded._treg.charged_micro;
-    }
-    return result;
-  }).pipe(Effect.provide(FetchHttpClient.layer));
-  return Effect.runPromise(
-    options.fetch
-      ? program.pipe(Effect.provideService(FetchHttpClient.Fetch, options.fetch))
-      : program,
-    { signal },
+  const { stdout, stderr, exitCode } = await options.run(
+    [
+      "--json",
+      "call",
+      job,
+      "--method",
+      "POST",
+      "--data",
+      JSON.stringify(body),
+      "--header",
+      `X-Treg-Route-Prefer: ${PREFERRED_VENDOR}`,
+      "--header",
+      `X-Treg-Route-Max-Cost: ${MAX_COST_USD}`,
+    ],
+    signal,
   );
+  const line = stdout.trim().split("\n").at(-1) ?? "";
+  const envelope = Schema.decodeUnknownOption(CliEnvelope)(line);
+  if (envelope._tag === "None") {
+    throw new Error(
+      `treg exited ${exitCode} without a result: ${(stderr || stdout).trim().slice(0, 2000)}`,
+    );
+  }
+  const { result, _treg: meta } = envelope.value;
+  if (meta.http_status >= 400) throw new Error(describeFailure(meta.http_status, result));
+  const routed = Schema.decodeUnknownSync(RoutedResult)(result);
+  const tregResult: TregResult = { output: routed.output ?? {} };
+  if (routed._treg?.served_by) tregResult.servedBy = routed._treg.served_by;
+  if (meta.charged_micro !== undefined) tregResult.costMicro = meta.charged_micro;
+  return tregResult;
 }
 
 /** A string field of a vendor's row, trying the names vendors use for it in order. */

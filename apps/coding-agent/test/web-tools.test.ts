@@ -1,9 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { getModel } from "@msa/ai/compat";
-import * as Redacted from "effect/Redacted";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
@@ -13,11 +12,11 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import { webFetchRenderers, webSearchRenderers } from "../src/core/tools/renderers/web.ts";
 import { createWebFetchToolDefinition } from "../src/core/tools/web-fetch.ts";
 import { createWebSearchToolDefinition } from "../src/core/tools/web-search.ts";
-import { getTregCredentials } from "../src/core/treg.ts";
+import { findTreg, type TregRunner } from "../src/core/treg.ts";
 import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
-const searchResponse = {
+const searchResult = {
   output: {
     results: [
       {
@@ -35,7 +34,7 @@ const searchResponse = {
   _treg: { served_by: "tinyfish.web.search", tried: [], charged_micro: 0 },
 };
 
-const fetchResponse = {
+const fetchResult = {
   output: {
     pages: [
       {
@@ -48,17 +47,35 @@ const fetchResponse = {
     count: 1,
   },
   raw: {},
-  _treg: { served_by: "crawl4ai.web.scrape", tried: [], charged_micro: 150 },
+  _treg: { served_by: "crawl4ai.web.scrape", tried: [] },
 };
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
+/** A `treg` whose `treg config` reports this login state. */
+function fakeTreg(bin: string, loggedIn: boolean): string {
+  const path = join(bin, "treg");
+  writeFileSync(
+    path,
+    `#!/bin/sh\necho '{"base_url": "https://treg.to", "logged_in": ${loggedIn}}'\n`,
+  );
+  chmodSync(path, 0o755);
+  return path;
 }
 
-const token = Redacted.make("treg-test-token");
+/** What `treg --json call` prints for a response with this status and body. */
+function cli(result: unknown, status = 200, chargedMicro?: number) {
+  return vi.fn<TregRunner>(async () => ({
+    stdout: `${JSON.stringify({
+      result,
+      _treg: {
+        http_status: status,
+        call_id: "call-1",
+        ...(chargedMicro === undefined ? {} : { charged_micro: chargedMicro }),
+      },
+    })}\n`,
+    stderr: "",
+    exitCode: status >= 400 ? 1 : 0,
+  }));
+}
 
 async function run(
   tool: { execute: (...args: any[]) => Promise<any> },
@@ -73,25 +90,28 @@ function text(result: { content: { type: string; text?: string }[] }): string {
 }
 
 describe("web_search tool", () => {
-  it("runs treg.web.search, free vendor first, with a cost cap", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>(async () => jsonResponse(searchResponse));
-    const tool = createWebSearchToolDefinition({ token, fetch });
+  it("runs treg.web.search through the CLI, free vendor first, with a cost cap", async () => {
+    const runner = cli(searchResult, 200, 0);
+    const tool = createWebSearchToolDefinition({ run: runner });
 
     const result = await run(tool, { query: "effect 4 release", limit: 3 });
 
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = fetch.mock.calls[0]!;
-    expect(String(url)).toBe("https://treg.to/call/treg.web.search");
-    expect(init?.method).toBe("POST");
-    const headers = new Headers(init?.headers);
-    expect(headers.get("x-treg-token")).toBe("treg-test-token");
-    expect(headers.get("x-treg-route-prefer")).toBe("tinyfish");
-    expect(headers.get("x-treg-route-max-cost")).toBe("0.05");
-    expect(JSON.parse(new TextDecoder().decode(init?.body as Uint8Array))).toEqual({
-      q: "effect 4 release",
-      limit: 3,
-    });
-
+    expect(runner).toHaveBeenCalledWith(
+      [
+        "--json",
+        "call",
+        "treg.web.search",
+        "--method",
+        "POST",
+        "--data",
+        '{"q":"effect 4 release","limit":3}',
+        "--header",
+        "X-Treg-Route-Prefer: tinyfish",
+        "--header",
+        "X-Treg-Route-Max-Cost: 0.05",
+      ],
+      undefined,
+    );
     expect(text(result)).toBe(
       [
         "1. Effect 4.0 released\n   https://effect.website/blog/effect-4\n   Effect 4.0 ships a smaller core.",
@@ -112,9 +132,7 @@ describe("web_search tool", () => {
 
   it("reports a miss, where treg leaves the results null", async () => {
     const tool = createWebSearchToolDefinition({
-      token,
-      fetch: async () =>
-        jsonResponse({ output: { results: null }, raw: null, _treg: { served_by: null } }),
+      run: cli({ output: { results: null }, raw: null, _treg: { served_by: null } }),
     });
 
     const result = await run(tool, { query: "nothing" });
@@ -123,46 +141,50 @@ describe("web_search tool", () => {
     expect(result.details).toEqual({ results: [] });
   });
 
-  it("fails with treg's detail when the call is refused", async () => {
-    const tool = createWebSearchToolDefinition({
-      token,
-      fetch: async () => jsonResponse({ detail: "not authenticated" }, 401),
-    });
+  it("tells the model how to sign in when treg refuses the call", async () => {
+    const tool = createWebSearchToolDefinition({ run: cli({ detail: "not authenticated" }, 401) });
 
     await expect(run(tool, { query: "anything" })).rejects.toThrow(
-      "treg returned 401: not authenticated",
+      "treg returned 401: not authenticated. Sign in with `treg login` or set TREG_TOKEN.",
     );
   });
 
-  it("stops the request when the call is aborted", async () => {
+  it("reports what the CLI said when it printed no result", async () => {
     const tool = createWebSearchToolDefinition({
-      token,
-      fetch: (_url, init) =>
-        new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
-        }),
+      run: async () => ({ stdout: "", stderr: "treg: unknown command", exitCode: 2 }),
     });
+
+    await expect(run(tool, { query: "anything" })).rejects.toThrow(
+      "treg exited 2 without a result: treg: unknown command",
+    );
+  });
+
+  it("passes the abort signal to the CLI", async () => {
+    const runner = cli(searchResult);
     const controller = new AbortController();
 
-    const pending = run(tool, { query: "slow" }, controller.signal);
-    controller.abort();
+    await run(createWebSearchToolDefinition({ run: runner }), { query: "q" }, controller.signal);
 
-    await expect(pending).rejects.toThrow();
+    expect(runner.mock.calls[0]![1]).toBe(controller.signal);
   });
 });
 
 describe("web_fetch tool", () => {
   it("runs treg.web.extract and returns the page as Markdown", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>(async () => jsonResponse(fetchResponse));
-    const tool = createWebFetchToolDefinition({ token, fetch });
+    const runner = cli(fetchResult, 200, 150);
+    const tool = createWebFetchToolDefinition({ run: runner });
 
     const result = await run(tool, { url: "https://example.com" });
 
-    const [url, init] = fetch.mock.calls[0]!;
-    expect(String(url)).toBe("https://treg.to/call/treg.web.extract");
-    expect(JSON.parse(new TextDecoder().decode(init?.body as Uint8Array))).toEqual({
-      url: "https://example.com",
-    });
+    expect(runner.mock.calls[0]![0].slice(0, 7)).toEqual([
+      "--json",
+      "call",
+      "treg.web.extract",
+      "--method",
+      "POST",
+      "--data",
+      '{"url":"https://example.com"}',
+    ]);
     expect(text(result)).toBe(
       "# Example Domain\nhttps://example.com/\n\nThis domain is for use in documentation examples.",
     );
@@ -176,11 +198,9 @@ describe("web_fetch tool", () => {
 
   it("reads the content field other vendors use", async () => {
     const tool = createWebFetchToolDefinition({
-      token,
-      fetch: async () =>
-        jsonResponse({
-          output: { pages: [{ url: "https://docs.keenable.ai/", content: "Quickstart" }] },
-        }),
+      run: cli({
+        output: { pages: [{ url: "https://docs.keenable.ai/", content: "Quickstart" }] },
+      }),
     });
 
     const result = await run(tool, { url: "https://docs.keenable.ai/" });
@@ -190,8 +210,7 @@ describe("web_fetch tool", () => {
 
   it("fails when no vendor could read the page", async () => {
     const tool = createWebFetchToolDefinition({
-      token,
-      fetch: async () => jsonResponse({ output: { pages: null }, _treg: { served_by: null } }),
+      run: cli({ output: { pages: null }, _treg: { served_by: null } }),
     });
 
     await expect(run(tool, { url: "https://blocked.example" })).rejects.toThrow(
@@ -200,47 +219,41 @@ describe("web_fetch tool", () => {
   });
 });
 
-describe("getTregCredentials", () => {
-  let home: string;
+describe("findTreg", () => {
+  let bin: string;
 
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), "msa-treg-home-"));
+    bin = join(tmpdir(), `msa-treg-bin-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(bin);
   });
 
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    rmSync(bin, { recursive: true, force: true });
   });
 
-  function saveLogin(config: unknown) {
-    mkdirSync(join(home, ".treg"));
-    writeFileSync(join(home, ".treg", "config.json"), JSON.stringify(config));
-  }
-
-  it("prefers TREG_TOKEN and ignores a blank value", () => {
-    saveLogin({ token: "saved", active_org: "team" });
-    const fromEnv = getTregCredentials({ TREG_TOKEN: " token " }, home)!;
-    expect(Redacted.value(fromEnv.token)).toBe("token");
-    expect(fromEnv.org).toBeUndefined();
-    expect(Redacted.value(getTregCredentials({ TREG_TOKEN: " " }, home)!.token)).toBe("saved");
+  it("needs the CLI on PATH", () => {
+    expect(findTreg(() => null, { TREG_TOKEN: "token" })).toBeUndefined();
+    expect(findTreg(() => "/usr/local/bin/treg", { TREG_TOKEN: "token" })).toBeDefined();
   });
 
-  it("uses the login treg login saved, with its active team", () => {
-    saveLogin({ base_url: "https://treg.to", token: "saved", active_org: "team", identity: true });
-    const credentials = getTregCredentials({}, home)!;
-    expect(Redacted.value(credentials.token)).toBe("saved");
-    expect(credentials.org).toBe("team");
+  it("asks treg config whether the CLI is signed in", () => {
+    expect(findTreg(() => fakeTreg(bin, true), {})).toBeDefined();
+    expect(findTreg(() => fakeTreg(bin, false), {})).toBeUndefined();
+    expect(findTreg(() => fakeTreg(bin, false), { TREG_TOKEN: " " })).toBeUndefined();
   });
 
-  it("finds nothing without a token or a saved login", () => {
-    expect(getTregCredentials({}, home)).toBeUndefined();
-    saveLogin({ email: "someone@example.com" });
-    expect(getTregCredentials({}, home)).toBeUndefined();
+  it("runs the CLI and returns its output", async () => {
+    const options = findTreg(() => process.execPath, { TREG_TOKEN: "token" })!;
+    const output = await options.run(["-e", "console.log('ok'); console.error('note')"]);
+    expect(output).toEqual({ stdout: "ok\n", stderr: "note\n", exitCode: 0 });
   });
 
-  it("sends the saved team as X-Treg-Org", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>(async () => jsonResponse(searchResponse));
-    await run(createWebSearchToolDefinition({ token, org: "team", fetch }), { query: "q" });
-    expect(new Headers(fetch.mock.calls[0]![1]?.headers).get("x-treg-org")).toBe("team");
+  it("stops the CLI when the call is aborted", async () => {
+    const options = findTreg(() => process.execPath, { TREG_TOKEN: "token" })!;
+    const controller = new AbortController();
+    const pending = options.run(["-e", "setTimeout(() => {}, 60_000)"], controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toThrow();
   });
 });
 
@@ -314,6 +327,7 @@ describe("web tool registration", () => {
   beforeEach(() => {
     tempDir = join(tmpdir(), `msa-web-tools-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(join(tempDir, "agent"), { recursive: true });
+    mkdirSync(join(tempDir, "bin"));
   });
 
   afterEach(() => {
@@ -337,16 +351,18 @@ describe("web tool registration", () => {
     return session.getActiveToolNames();
   }
 
-  it("activates web_search and web_fetch by default when TREG_TOKEN is set", async () => {
-    vi.stubEnv("TREG_TOKEN", "treg-test-token");
+  it("activates web_search and web_fetch by default when treg is signed in", async () => {
+    fakeTreg(join(tempDir, "bin"), true);
+    vi.stubEnv("PATH", `${join(tempDir, "bin")}:${process.env["PATH"]}`);
     expect(await activeTools()).toEqual(
       expect.arrayContaining(["read", "bash", "edit", "write", "web_search", "web_fetch"]),
     );
   });
 
-  it("leaves them out without TREG_TOKEN or a treg login", async () => {
+  it("leaves them out when treg is not signed in", async () => {
+    fakeTreg(join(tempDir, "bin"), false);
+    vi.stubEnv("PATH", `${join(tempDir, "bin")}:${process.env["PATH"]}`);
     vi.stubEnv("TREG_TOKEN", "");
-    vi.stubEnv("HOME", tempDir);
     const tools = await activeTools();
     expect(tools).not.toContain("web_search");
     expect(tools).not.toContain("web_fetch");
