@@ -1,10 +1,13 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { StatementSync } from "node:sqlite";
 import { DatabaseSync } from "node:sqlite";
 
-import { promiseTry } from "../../promise-try.ts";
-import type { SqliteDatabase, SqliteExecutor, SqliteValue } from "./database.ts";
+import { Cause, Effect, Exit, Function } from "effect";
+
+import type { SqliteDatabase, SqliteExecutor } from "./database.ts";
+import { NodeSqliteExecutor } from "./node-executor.ts";
+import { SerialOperationQueue } from "./node-queue.ts";
+import { NodeSqliteTransaction } from "./node-transaction.ts";
 import { SqliteStorage } from "./storage.ts";
 
 export type NodeSqliteStorageOptions = {
@@ -15,114 +18,17 @@ export type NodeSqliteStorageOptions = {
 const DEFAULT_WAL_AUTO_CHECKPOINT_PAGES = 1_000;
 const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
 
-type TransactionScope = { active: boolean };
-
-const ignore = (): void => {};
-
-class SerialOperationQueue {
-  private tail: Promise<void> = Promise.resolve();
-  private pending = 0;
-
-  run<T>(operation: () => T): Promise<T> {
-    if (this.pending > 0) return this.enqueue(operation);
-    try {
-      return Promise.resolve(operation());
-    } catch (error) {
-      return Promise.reject(error);
-    }
+const rollback = (database: DatabaseSync, error: unknown): void => {
+  try {
+    database.exec("ROLLBACK");
+  } catch (rollbackError) {
+    throw new AggregateError(
+      [error, rollbackError],
+      "SQLite transaction failed and rollback failed",
+      { cause: rollbackError },
+    );
   }
-
-  runAsync<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.pending > 0) return this.enqueue(operation);
-    this.pending++;
-    const { promise: barrier, resolve: releaseBarrier } = Promise.withResolvers<void>();
-    this.tail = barrier;
-    let started: Promise<T>;
-    try {
-      started = operation();
-    } catch (error) {
-      started = Promise.reject(error);
-    }
-    return started.finally(() => {
-      this.pending--;
-      releaseBarrier();
-    });
-  }
-
-  private enqueue<T>(operation: () => T | Promise<T>): Promise<T> {
-    this.pending++;
-    return this.release(this.tail.then(operation));
-  }
-
-  private release<T>(operation: Promise<T>): Promise<T> {
-    const settled = operation.finally(() => {
-      this.pending--;
-    });
-    this.tail = settled.then(ignore, ignore);
-    return settled;
-  }
-}
-
-abstract class NodeSqliteExecutor implements SqliteExecutor {
-  protected readonly database: DatabaseSync;
-  protected readonly statements: Map<string, StatementSync>;
-
-  constructor(database: DatabaseSync, statements: Map<string, StatementSync>) {
-    this.database = database;
-    this.statements = statements;
-  }
-
-  exec(sql: string): Promise<void> {
-    return this.runOperation(() => {
-      this.database.exec(sql);
-    });
-  }
-
-  run(sql: string, ...params: SqliteValue[]): Promise<void> {
-    return this.runOperation(() => {
-      this.statement(sql).run(...params);
-    });
-  }
-
-  get<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T | undefined> {
-    return this.runOperation(() => this.statement(sql).get(...params) as T | undefined);
-  }
-
-  all<T extends object>(sql: string, ...params: SqliteValue[]): Promise<T[]> {
-    return this.runOperation(() => this.statement(sql).all(...params) as T[]);
-  }
-
-  protected abstract runOperation<T>(operation: () => T): Promise<T>;
-
-  private statement(sql: string): StatementSync {
-    let statement = this.statements.get(sql);
-    if (statement === undefined) {
-      statement = this.database.prepare(sql);
-      this.statements.set(sql, statement);
-    }
-    return statement;
-  }
-}
-
-class NodeSqliteTransaction extends NodeSqliteExecutor {
-  private readonly scope: TransactionScope;
-
-  constructor(
-    database: DatabaseSync,
-    statements: Map<string, StatementSync>,
-    scope: TransactionScope,
-  ) {
-    super(database, statements);
-    this.scope = scope;
-  }
-
-  protected runOperation<T>(operation: () => T): Promise<T> {
-    return promiseTry(() => {
-      if (!this.scope.active) throw new Error("SQLite transaction handle is no longer active");
-      return operation();
-    });
-  }
-}
+};
 
 export class NodeSqliteDatabase extends NodeSqliteExecutor implements SqliteDatabase {
   private readonly access = new SerialOperationQueue();
@@ -133,30 +39,32 @@ export class NodeSqliteDatabase extends NodeSqliteExecutor implements SqliteData
   }
 
   transaction<T>(callback: (transaction: SqliteExecutor) => Promise<T>): Promise<T> {
-    return this.access.runAsync(async () => {
-      this.database.exec("BEGIN IMMEDIATE");
-      const scope = { active: true };
-      try {
-        const result = await callback(
-          new NodeSqliteTransaction(this.database, this.statements, scope),
-        );
-        scope.active = false;
-        this.database.exec("COMMIT");
-        return result;
-      } catch (error) {
-        scope.active = false;
-        try {
-          this.database.exec("ROLLBACK");
-        } catch (rollbackError) {
-          throw new AggregateError(
-            [error, rollbackError],
-            "SQLite transaction failed and rollback failed",
-            { cause: rollbackError },
+    const { database, statements } = this;
+    return this.access.runAsync(() =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          database.exec("BEGIN IMMEDIATE");
+          const scope = { active: true };
+          const exit = yield* Effect.exit(
+            Effect.promise(() =>
+              callback(new NodeSqliteTransaction(database, statements, scope)),
+            ).pipe(
+              Effect.tap(() =>
+                Effect.sync(() => {
+                  scope.active = false;
+                  database.exec("COMMIT");
+                }),
+              ),
+            ),
           );
-        }
-        throw error;
-      }
-    });
+          if (Exit.isSuccess(exit)) return exit.value;
+          scope.active = false;
+          const error = Cause.squash(exit.cause);
+          rollback(database, error);
+          return yield* Effect.die(error);
+        }),
+      ),
+    );
   }
 
   close(): Promise<void> {
@@ -177,31 +85,53 @@ export class NodeSqliteDatabase extends NodeSqliteExecutor implements SqliteData
   }
 }
 
-export async function openNodeSqliteDatabase(
+const prepareDirectory = (path: string): Effect.Effect<void> =>
+  path === ":memory:"
+    ? Effect.void
+    : Effect.asVoid(Effect.promise(() => mkdir(dirname(path), { recursive: true })));
+
+const configure = Effect.fn("configure")(function* (
+  adapter: NodeSqliteDatabase,
+  checkpointPages: number,
+) {
+  yield* Effect.promise(() => adapter.exec("PRAGMA journal_mode = WAL"));
+  yield* Effect.promise(() => adapter.exec("PRAGMA synchronous = NORMAL"));
+  yield* Effect.promise(() => adapter.exec(`PRAGMA wal_autocheckpoint = ${checkpointPages}`));
+});
+
+const openDatabase = Effect.fn("openDatabase")(function* (
   path: string,
-  options: NodeSqliteStorageOptions = {},
-): Promise<NodeSqliteDatabase> {
+  options: NodeSqliteStorageOptions,
+) {
   const checkpointPages = options.walAutoCheckpointPages ?? DEFAULT_WAL_AUTO_CHECKPOINT_PAGES;
   const timeout = options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS;
-  if (path !== ":memory:") await mkdir(dirname(path), { recursive: true });
-  const database = new DatabaseSync(path, { timeout });
-  const adapter = new NodeSqliteDatabase(database);
-  try {
-    await adapter.exec("PRAGMA journal_mode = WAL");
-    await adapter.exec("PRAGMA synchronous = NORMAL");
-    await adapter.exec(`PRAGMA wal_autocheckpoint = ${checkpointPages}`);
-    return adapter;
-  } catch (error) {
-    try {
-      await adapter.close();
-    } catch {}
-    throw error;
-  }
-}
+  yield* prepareDirectory(path);
+  const adapter = new NodeSqliteDatabase(new DatabaseSync(path, { timeout }));
+  yield* configure(adapter, checkpointPages).pipe(
+    Effect.onError(() => Effect.ignoreCause(Effect.promise(() => adapter.close()))),
+  );
+  return adapter;
+});
 
-export async function openNodeSqliteStorage(
-  path: string,
-  options: NodeSqliteStorageOptions = {},
-): Promise<SqliteStorage> {
-  return SqliteStorage.open(await openNodeSqliteDatabase(path, options));
-}
+type Open<T> = {
+  (options?: NodeSqliteStorageOptions): (path: string) => Promise<T>;
+  (path: string, options?: NodeSqliteStorageOptions): Promise<T>;
+};
+
+const isPath = (args: IArguments): boolean => typeof args[0] === "string";
+
+export const openNodeSqliteDatabase: Open<NodeSqliteDatabase> = Function.dual(
+  isPath,
+  (path: string, options: NodeSqliteStorageOptions = {}): Promise<NodeSqliteDatabase> =>
+    Effect.runPromise(openDatabase(path, options)),
+);
+
+export const openNodeSqliteStorage: Open<SqliteStorage> = Function.dual(
+  isPath,
+  (path: string, options: NodeSqliteStorageOptions = {}): Promise<SqliteStorage> =>
+    Effect.runPromise(
+      openDatabase(path, options).pipe(
+        Effect.flatMap((database) => Effect.promise(() => SqliteStorage.open(database))),
+      ),
+    ),
+);

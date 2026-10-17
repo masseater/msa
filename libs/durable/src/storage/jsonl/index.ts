@@ -1,6 +1,3 @@
-export {
-  JsonlCorruptionError,
-  JsonlStorage,
-  type JsonlStorageOptions,
-  JsonlStoragePoisonedError,
-} from "./storage.ts";
+export { JsonlCorruptionError } from "./corruption-error.ts";
+export { JsonlStoragePoisonedError } from "./poisoned-error.ts";
+export { JsonlStorage, type JsonlStorageOptions } from "./storage.ts";

@@ -888,7 +888,7 @@ export class NodeExecutionEnv implements ExecutionEnv {
         }
       } catch (error) {
         const cause = toError(error);
-        settle(err(new ExecutionError("spawn_error", cause.message, cause)));
+        new ExecutionError("spawn_error", cause.message, cause).pipe(err, settle);
         return;
       }
 
@@ -945,7 +945,7 @@ export class NodeExecutionEnv implements ExecutionEnv {
           emit(stdoutDecoder.decode(), "stdout");
           emit(stderrDecoder.decode(), "stderr");
           if (callbackError) {
-            settle(err(callbackError));
+            callbackError.pipe(err, settle);
             return;
           }
           const interrupted = timedOut
@@ -955,17 +955,17 @@ export class NodeExecutionEnv implements ExecutionEnv {
               : undefined;
           if (interrupted !== undefined) {
             if (spillPath !== undefined) interrupted.spillPath = spillPath;
-            settle(err(interrupted));
+            interrupted.pipe(err, settle);
             return;
           }
           if (spillError) {
-            settle(err(spillError));
+            spillError.pipe(err, settle);
             return;
           }
           const exitCode = code ?? (exitSignal ? 128 + (osConstants.signals[exitSignal] ?? 0) : 1);
           settle(ok({ exitCode, ...(spillPath === undefined ? {} : { spillPath }) }));
         },
-        (error: Error) => settle(err(new ExecutionError("spawn_error", error.message, error))),
+        (error: Error) => new ExecutionError("spawn_error", error.message, error).pipe(err, settle),
       );
     });
   }
