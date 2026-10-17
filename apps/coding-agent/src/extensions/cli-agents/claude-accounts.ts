@@ -15,7 +15,7 @@
  * account out of the `claude-code` rotation; it is used only through its own
  * provider.
  *
- * `/claude-accounts` edits the file; an account added there without a
+ * `/accounts claude` edits the file; an account added there without a
  * tokenCommand gets its own config dir under <agent dir>/claude-accounts.
  */
 import { execFile, spawn } from "node:child_process";
@@ -131,12 +131,12 @@ export function setAutoRotation(name: string, auto: boolean): void {
 }
 
 /**
- * The user's installed `claude`. msa ships as a bundle or a compiled binary,
- * where the SDK cannot find the Claude Code binary it carries; without `claude`
- * on PATH the SDK's own lookup is the only option left.
+ * The user's installed `claude` (CLAUDE_BIN, else PATH). msa ships as a bundle
+ * or a compiled binary, where the SDK cannot find the Claude Code binary it
+ * carries; without `claude` the SDK's own lookup is the only option left.
  */
 export function claudeExecutable(): string | undefined {
-  return findExecutableOnPath("claude") ?? undefined;
+  return process.env["CLAUDE_BIN"]?.trim() || findExecutableOnPath("claude") || undefined;
 }
 
 const tokens = new Map<string, Promise<string>>();

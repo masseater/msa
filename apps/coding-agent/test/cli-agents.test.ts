@@ -14,7 +14,13 @@ import type { AssistantMessageEvent, Model, TranscriptContext } from "@msa/ai/co
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ENV_AGENT_DIR } from "../src/config.ts";
-import type { ExtensionAPI, ProviderConfig } from "../src/core/extensions/types.ts";
+import type {
+  ExtensionAPI,
+  ExtensionCommandContext,
+  ProviderConfig,
+  RegisteredCommand,
+} from "../src/core/extensions/types.ts";
+import accountsExtension from "../src/extensions/accounts/index.ts";
 import {
   accountEnv,
   addAccount,
@@ -168,7 +174,7 @@ describe("managing Claude Code accounts", () => {
     mkdirSync(bin, { recursive: true });
     writeFileSync(join(bin, "claude"), `#!/bin/sh\n${script}\n`);
     chmodSync(join(bin, "claude"), 0o755);
-    process.env["PATH"] = `${bin}:${process.env["PATH"]}`;
+    process.env["CLAUDE_BIN"] = join(bin, "claude");
   }
 
   it("signs an account in with the code the user pastes", async () => {
@@ -207,6 +213,55 @@ describe("managing Claude Code accounts", () => {
     await expect(loginAccount(account, { askCode: async () => undefined })).rejects.toThrow(
       /cancelled/,
     );
+  });
+});
+
+describe("/accounts", () => {
+  function command(): RegisteredCommand {
+    let registered: RegisteredCommand | undefined;
+    accountsExtension({
+      registerCommand: (name: string, options: Omit<RegisteredCommand, "name" | "sourceInfo">) => {
+        if (name === "accounts") registered = options as RegisteredCommand;
+      },
+    } as unknown as ExtensionAPI);
+    if (!registered) throw new Error("command not registered");
+    return registered;
+  }
+
+  function context() {
+    const notes: string[] = [];
+    let reloads = 0;
+    const ctx = {
+      hasUI: false,
+      ui: { notify: (message: string) => notes.push(message) },
+      reload: async () => {
+        reloads += 1;
+      },
+    } as unknown as ExtensionCommandContext;
+    return { ctx, notes, reloads: () => reloads };
+  }
+
+  it("completes kinds, then the kind's actions and account names", async () => {
+    writeAccounts([{ name: "main" }, { name: "sub" }]);
+    const complete = command().getArgumentCompletions!;
+    expect((await complete("cl"))?.map((item) => item.value)).toEqual(["claude "]);
+    expect((await complete("claude lo"))?.map((item) => item.value)).toEqual([
+      "claude login ",
+      "claude logout ",
+    ]);
+    expect((await complete("claude use s"))?.map((item) => item.value)).toEqual(["claude use sub"]);
+  });
+
+  it("routes to the kind and reloads when the account list changes", async () => {
+    process.env["CLAUDE_BIN"] = "/bin/false";
+    const { ctx, notes, reloads } = context();
+    await command().handler("claude add token printf tok", ctx);
+    expect(loadAccounts().map((account) => account.name)).toEqual(["default", "token"]);
+    expect(reloads()).toBe(1);
+    await command().handler("", ctx);
+    expect(notes.at(-1)).toMatch(/^claude:\n1\. default .*\n2\. token /);
+    await command().handler("nope", ctx);
+    expect(notes.at(-1)).toMatch(/Unknown account kind "nope"/);
   });
 });
 

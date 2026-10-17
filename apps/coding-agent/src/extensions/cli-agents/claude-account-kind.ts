@@ -1,11 +1,12 @@
 /**
- * `/claude-accounts`: list the Claude accounts the claude-code provider rotates
+ * `/accounts claude`: list the Claude accounts the claude-code provider rotates
  * through, add and remove them, sign them in and out, and pick their order.
  * Changes that add or drop a `claude-code-<account>` provider reload msa.
  */
 import type { AutocompleteItem } from "@msa/tui";
 
-import type { ExtensionAPI, ExtensionCommandContext } from "../../core/extensions/types.ts";
+import type { ExtensionCommandContext } from "../../core/extensions/types.ts";
+import type { AccountKind } from "../accounts/kind.ts";
 import {
   addAccount,
   authStatus,
@@ -83,7 +84,7 @@ async function run(args: string, ctx: ExtensionCommandContext): Promise<void> {
     case "":
       break;
     case "add": {
-      if (!name) throw new Error(`Usage: /claude-accounts ${ACTIONS["add"]}`);
+      if (!name) throw new Error(`Usage: /accounts claude ${ACTIONS["add"]}`);
       const account = addAccount(name, rest.join(" ") || undefined);
       // The account stays when signing in fails; `login` retries it.
       if (!account.tokenCommand)
@@ -137,16 +138,10 @@ function completions(prefix: string): AutocompleteItem[] | null {
     .map((account) => ({ value: `${action} ${account.name}`, label: account.name }));
 }
 
-export function registerClaudeAccountsCommand(msa: ExtensionAPI): void {
-  msa.registerCommand("claude-accounts", {
-    description: "Manage Claude Code accounts: add, login, logout, remove, use, enable, disable",
-    getArgumentCompletions: completions,
-    handler: async (args, ctx) => {
-      try {
-        await run(args, ctx);
-      } catch (error) {
-        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
-      }
-    },
-  });
-}
+export const claudeAccounts: AccountKind = {
+  name: "claude",
+  description: "Claude Code accounts the claude-code provider rotates through",
+  describe: describeAccounts,
+  run,
+  complete: completions,
+};
