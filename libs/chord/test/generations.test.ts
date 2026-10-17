@@ -7,6 +7,7 @@ import { Type } from "typebox";
 import { describe, it } from "vite-plus/test";
 
 import { createHost, defineRegistry, type Facet, local, method } from "../src/index.ts";
+import { abortOf } from "./fixtures/timing.ts";
 
 setFlagsFromString("--expose-gc");
 const gc = runInNewContext("gc") as () => void;
@@ -93,12 +94,7 @@ const aLifetimeHostObjectWithState = Effect.gen(function* () {
             self.task((ctx) =>
               Effect.runPromiseWith(services)(
                 Effect.gen(function* () {
-                  yield* Effect.promise(
-                    () =>
-                      new Promise<void>((resolve) =>
-                        ctx.signal.addEventListener("abort", () => resolve()),
-                      ),
-                  );
+                  yield* abortOf(ctx.signal);
                   void sentinel.generation;
                 }),
               ),
@@ -135,12 +131,7 @@ const abortListenersThatCallsAndTasks = Effect.gen(function* () {
             self.task((ctx) =>
               Effect.runPromiseWith(services)(
                 Effect.gen(function* () {
-                  yield* Effect.promise(
-                    () =>
-                      new Promise<void>((resolve) =>
-                        ctx.signal.addEventListener("abort", () => resolve()),
-                      ),
-                  );
+                  yield* abortOf(ctx.signal);
                   void sentinel.generation;
                 }),
               ),

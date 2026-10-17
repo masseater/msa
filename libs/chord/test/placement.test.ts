@@ -66,12 +66,7 @@ function cluster() {
     );
   server.route("session:", {
     authorize: () => true,
-    resolve: (name) =>
-      Effect.runPromise(
-        Effect.sync(() => {
-          return links.get(name)!;
-        }),
-      ),
+    resolve: (name) => Effect.runPromise(Effect.sync(() => links.get(name)!)),
     principal: (name) => name,
   });
   return { server, s1: s1.host, s2: s2.host, close };

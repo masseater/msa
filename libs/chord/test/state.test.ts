@@ -13,7 +13,7 @@ import {
   method,
   type StateEvent,
 } from "../src/index.ts";
-import { tick } from "./fixtures/timing.ts";
+import { abortOf, tick } from "./fixtures/timing.ts";
 
 function emitter<E>() {
   const listeners = new Set<(event: E) => void>();
@@ -217,10 +217,7 @@ const listenersRunEachEventInA = Effect.gen(function* () {
     self.task((ctx) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
-          yield* Effect.promise(
-            () =>
-              new Promise<void>((resolve) => ctx.signal.addEventListener("abort", () => resolve())),
-          );
+          yield* abortOf(ctx.signal);
           taskAborted = true;
         }),
       ),
@@ -273,7 +270,7 @@ const reEntrantWritesPublishInAdoption = Effect.gen(function* () {
   const doubled: unknown[] = [];
   ref.d.subscribe((value) => doubled.push(value));
   yield* Effect.promise(() => ref.set(1));
-  yield* Effect.promise(() => new Promise<void>((resolve) => setImmediate(resolve)));
+  yield* tick;
   assert.deepEqual(values, [0, 1, 2]);
   assert.equal(ref.d.value, 4);
   assert.deepEqual(doubled, [0, 2, 4]);

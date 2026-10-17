@@ -17,7 +17,7 @@ import {
   PROTOCOL_VERSION,
   remote,
 } from "../src/index.ts";
-import { pollUntil } from "./fixtures/timing.ts";
+import { latch, pollUntil } from "./fixtures/timing.ts";
 
 const until = (check: () => boolean, attempts = 200) => pollUntil(check, attempts, Effect.sleep(2));
 
@@ -74,14 +74,15 @@ const Counter = counterOn("t.flow-counter", "server");
 const WorkerCounter = counterOn("t.flow-worker-counter", "w");
 
 let release = () => {};
-const waiting = () =>
-  new Promise<void>((resolve) => {
-    const previous = release;
-    release = () => {
-      previous();
-      resolve();
-    };
-  });
+const waiting = () => {
+  const gate = latch();
+  const previous = release;
+  release = () => {
+    previous();
+    gate.open();
+  };
+  return gate.promise;
+};
 
 function serveCounter(host: Host, type = Counter): void {
   host.serve(type, (_input, _principal, self) => {

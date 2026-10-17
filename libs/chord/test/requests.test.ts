@@ -117,8 +117,8 @@ const case2FacetsReachTheirOwnHost = Effect.gen(function* () {
       api.root((ctx) =>
         Effect.runPromiseWith(services)(
           Effect.gen(function* () {
-            const remote = yield* Effect.promise(() => ctx.get(Reader, {}));
-            return yield* Effect.promise(() => remote.read(ctx));
+            const peer = yield* Effect.promise(() => ctx.get(Reader, {}));
+            return yield* Effect.promise(() => peer.read(ctx));
           }),
         ),
       ),
@@ -133,8 +133,8 @@ const case2FacetsReachTheirOwnHost = Effect.gen(function* () {
       api.root((ctx) =>
         Effect.runPromiseWith(services)(
           Effect.gen(function* () {
-            const remote = yield* Effect.promise(() => ctx.get(Reader, {}));
-            return yield* Effect.promise(() => remote.read(ctx));
+            const peer = yield* Effect.promise(() => ctx.get(Reader, {}));
+            return yield* Effect.promise(() => peer.read(ctx));
           }),
         ),
       ),
@@ -281,12 +281,7 @@ const case5RootsOfAChildThat = Effect.gen(function* () {
   yield* Effect.promise(() => server.reload([echoFacet]));
   assert.equal(server.codeVersion, 2);
   assert.equal(server.previousCodeVersion, undefined);
-  const loader: FacetLoader = () =>
-    Effect.runPromiseWith(services)(
-      Effect.sync(() => {
-        return [];
-      }),
-    );
+  const loader: FacetLoader = () => Effect.runPromiseWith(services)(Effect.sync(() => []));
   const worker = createHost({
     self: { kind: "host" },
     name: "session:S1",
@@ -298,8 +293,8 @@ const case5RootsOfAChildThat = Effect.gen(function* () {
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
         yield* go.wait;
-        const remote = yield* Effect.promise(() => ctx.get(Echo, {}));
-        return yield* Effect.promise(() => remote.codeVersion(ctx));
+        const peer = yield* Effect.promise(() => ctx.get(Echo, {}));
+        return yield* Effect.promise(() => peer.codeVersion(ctx));
       }),
     ),
   );
@@ -336,9 +331,7 @@ const case7AClusterReloadReportsWhat = Effect.gen(function* () {
   const modules = new Map([["greeter", greeter("v1")]]);
   const loader: FacetLoader = (names) =>
     Effect.runPromiseWith(services)(
-      Effect.sync(() => {
-        return names.map((name) => modules.get(String(name))!);
-      }),
+      Effect.sync(() => names.map((name) => modules.get(String(name))!)),
     );
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
   const [down, up] = memoryLinkPair();

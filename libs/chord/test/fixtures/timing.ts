@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import { Deferred, Effect } from "effect";
+import { dual } from "effect/Function";
 
 export const tick: Effect.Effect<void> = Effect.callback<void>((resume) => {
   setImmediate(() => resume(Effect.void));
@@ -11,15 +12,17 @@ export const ticks = (count = 10): Effect.Effect<void> =>
     for (let index = 0; index < count; index++) yield* tick;
   });
 
-export const pollUntil = (
-  check: () => boolean,
-  attempts: number,
-  step: Effect.Effect<void>,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    for (let attempt = 0; attempt < attempts && !check(); attempt++) yield* step;
-    assert.ok(check(), "condition not reached");
-  });
+export const pollUntil: {
+  (attempts: number, step: Effect.Effect<void>): (check: () => boolean) => Effect.Effect<void>;
+  (check: () => boolean, attempts: number, step: Effect.Effect<void>): Effect.Effect<void>;
+} = dual(
+  3,
+  (check: () => boolean, attempts: number, step: Effect.Effect<void>): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      for (let attempt = 0; attempt < attempts && !check(); attempt++) yield* step;
+      assert.ok(check(), "condition not reached");
+    }),
+);
 
 export interface Latch<T = void> {
   readonly promise: Promise<T>;
@@ -37,3 +40,8 @@ export const latch = <T = void>(): Latch<T> => {
     },
   };
 };
+
+export const abortOf = (signal: AbortSignal): Effect.Effect<void> =>
+  Effect.callback<void>((resume) => {
+    signal.addEventListener("abort", () => resume(Effect.void));
+  });

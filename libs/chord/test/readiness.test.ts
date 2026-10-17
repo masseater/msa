@@ -15,7 +15,7 @@ import {
   memoryLinkPair,
   remote,
 } from "../src/index.ts";
-import { tick } from "./fixtures/timing.ts";
+import { latch, tick } from "./fixtures/timing.ts";
 
 const unexpectedError = (error: unknown) => assert.fail(String(error));
 const Eager = local("ready.eager", { version: 1, input: Type.Object({}) });
@@ -86,10 +86,11 @@ describe("host: eager readiness", () => {
                 (_input, _principal, self) => {
                   self.resource("r", {
                     version: 1,
-                    open: () =>
-                      new Promise<void>((resolve) => {
-                        opened = resolve;
-                      }),
+                    open: () => {
+                      const gate = latch();
+                      opened = gate.open;
+                      return gate.promise;
+                    },
                   });
                   self.register(entries, { eager: "live" });
                   return {};

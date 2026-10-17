@@ -21,7 +21,7 @@ import {
   remote,
 } from "../src/index.ts";
 import { CountingLink, stateFrames } from "./fixtures/counting.ts";
-import { pollUntil, tick } from "./fixtures/timing.ts";
+import { latch, pollUntil, tick } from "./fixtures/timing.ts";
 
 const until = (check: () => boolean, attempts = 200) => pollUntil(check, attempts, Effect.sleep(2));
 
@@ -527,10 +527,11 @@ const aVersion3PeerIsRefused = Effect.gen(function* () {
 
   const [down, raw] = memoryLinkPair();
   server.accept(down, { principal: { user: "old" } });
-  const closed = new Promise<string>((resolve) => (raw as Link).onClose(resolve));
+  const closed = latch<string>();
+  (raw as Link).onClose(closed.open);
   raw.receive(() => {});
   raw.send({ t: "hello", protocol: 3, name: "old", kind: "client", codeVersion: 0 });
-  assert.equal(yield* Effect.promise(() => closed), `protocol-version ${PROTOCOL_VERSION}`);
+  assert.equal(yield* closed.wait, `protocol-version ${PROTOCOL_VERSION}`);
   assert.equal(PROTOCOL_VERSION, 4);
   yield* Effect.promise(() => browser.close());
   yield* Effect.promise(() => server.close());

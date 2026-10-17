@@ -108,11 +108,7 @@ const Ping = remote("t.cluster-ping", {
 function setup() {
   const modules = new Map<string, Facet>([["greeter", greeterFacet("v1")]]);
   const loader: FacetLoader = (names) =>
-    Effect.runPromise(
-      Effect.sync(() => {
-        return names.map((name) => modules.get(String(name))!);
-      }),
-    );
+    Effect.runPromise(Effect.sync(() => names.map((name) => modules.get(String(name))!)));
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
   const [down, up] = memoryLinkPair();
   server.accept(down, { principal: { worker: "w" }, kind: "host", name: "session:S1" });
@@ -272,9 +268,7 @@ const removesFacetsFromServerAndWorkers = Effect.gen(function* () {
     name: "session:fresh",
     loader: (names) =>
       Effect.runPromiseWith(services)(
-        Effect.sync(() => {
-          return names.map((name) => modules.get(String(name))!);
-        }),
+        Effect.sync(() => names.map((name) => modules.get(String(name))!)),
       ),
     onError: () => {},
   });
@@ -306,12 +300,7 @@ const browsersAreNotParticipantsTheySee = Effect.gen(function* () {
   const { server, modules, down: workerLink } = setup();
   server.route("session:", {
     authorize: () => true,
-    resolve: () =>
-      Effect.runPromiseWith(services)(
-        Effect.sync(() => {
-          return workerLink;
-        }),
-      ),
+    resolve: () => Effect.runPromiseWith(services)(Effect.sync(() => workerLink)),
     principal: (name) => ({ host: name }),
   });
   const [down, up] = memoryLinkPair();
@@ -417,9 +406,7 @@ const aChildThatSaysHelloWhile = Effect.gen(function* () {
     upstream: { link: up, principal: { kind: "server" } },
     loader: (names) =>
       Effect.runPromiseWith(services)(
-        Effect.sync(() => {
-          return names.map((name) => modules.get(String(name))!);
-        }),
+        Effect.sync(() => names.map((name) => modules.get(String(name))!)),
       ),
     onError: () => {},
   });
@@ -482,9 +469,7 @@ const aChildReconciledAfterItsParent = Effect.gen(function* () {
     upstream: { link: up, principal: { kind: "server" } },
     loader: (names) =>
       Effect.runPromiseWith(services)(
-        Effect.sync(() => {
-          return names.map((name) => modules.get(String(name))!);
-        }),
+        Effect.sync(() => names.map((name) => modules.get(String(name))!)),
       ),
     onError: () => {},
   });
@@ -596,8 +581,8 @@ const aChildBehindWhoseHelloWaits = Effect.gen(function* () {
     worker.root((ctx) =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
-          const remote = yield* Effect.promise(() => ctx.get(Ping, {}));
-          return yield* Effect.promise(() => remote.ping(ctx));
+          const peer = yield* Effect.promise(() => ctx.get(Ping, {}));
+          return yield* Effect.promise(() => peer.ping(ctx));
         }),
       ),
     ),
@@ -614,9 +599,7 @@ const aReconnectingChildBehindItsParent = Effect.gen(function* () {
   const modules = new Map<string, Facet>([["greeter", greeterFacet("v1")]]);
   const loader: FacetLoader = (names) =>
     Effect.runPromiseWith(services)(
-      Effect.sync(() => {
-        return names.map((name) => modules.get(String(name))!);
-      }),
+      Effect.sync(() => names.map((name) => modules.get(String(name))!)),
     );
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
   onTestFinished(() => server.close());
@@ -727,14 +710,11 @@ const forcedRetirementCancelsABrowserCall = Effect.gen(function* () {
   yield* Effect.promise(() => server.reload([storeFacet(2)]));
   yield* Effect.promise(() => server.reload([storeFacet(3)], { retireDeadline: 20 }));
   const settled = yield* Effect.promise(() =>
-    Promise.race([
-      call.then(
-        () => "resolved",
-        () => "rejected",
-      ),
-      new Promise((resolve) => setTimeout(() => resolve("pending"), 2000)),
-    ]),
-  );
+    call.then(
+      () => "resolved",
+      () => "rejected",
+    ),
+  ).pipe(Effect.timeoutOrElse({ duration: 2000, orElse: () => Effect.succeed("pending") }));
   assert.equal(settled, "rejected", "the browser's call is cancelled with its root");
   for (let i = 0; i < 50 && !log.includes("worker aborted"); i++) yield* tick;
   assert.deepEqual(

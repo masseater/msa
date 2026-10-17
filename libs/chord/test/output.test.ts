@@ -8,6 +8,7 @@ import {
   Progress,
   sanitizeOutput,
 } from "../src/output.ts";
+import { latch } from "./fixtures/timing.ts";
 
 const head = (maxLines: number, maxBytes = 1000): OutputLimits => ({
   maxBytes,
@@ -390,15 +391,13 @@ const rejectsTheWaitersOfAFailed = Effect.gen(function* () {
 const stopsWaitsForTheCommitIn = Effect.gen(function* () {
   const services = yield* Effect.context<never>();
   vi.useFakeTimers({ now: 0 });
-  let release!: () => void;
-  const inFlight = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const inFlight = latch();
+  const release = inFlight.open;
   const progress = new Progress(
     () =>
       Effect.runPromiseWith(services)(
         Effect.gen(function* () {
-          yield* Effect.promise(() => inFlight);
+          yield* inFlight.wait;
           return 0;
         }),
       ),

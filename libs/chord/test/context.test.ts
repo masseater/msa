@@ -11,6 +11,7 @@ import {
   withContextValue,
   withoutAbortSignal,
 } from "../src/context/index.ts";
+import { latch } from "./fixtures/timing.ts";
 
 const abortController = (): AbortController => new AbortController();
 
@@ -82,17 +83,14 @@ const masksCallerCancellationForMandatoryCleanup = (): void => {
 const stopsWaitingWhenTheInvocationIs = Effect.gen(function* () {
   const controller = abortController();
   const context = withAbortSignal(controller.signal, BACKGROUND_CONTEXT);
-  let resolveWork!: (value: string) => void;
-  const work = new Promise<string>((resolve) => {
-    resolveWork = resolve;
-  });
-  const waiting = awaitWithContext(work, context);
+  const work = latch<string>();
+  const waiting = awaitWithContext(work.promise, context);
   const cancellation = new Error("cancelled");
 
   controller.abort(cancellation);
   yield* Effect.promise(() => expect(waiting).rejects.toBe(cancellation));
-  resolveWork("completed later");
-  yield* Effect.promise(() => expect(work).resolves.toBe("completed later"));
+  work.open("completed later");
+  yield* Effect.promise(() => expect(work.promise).resolves.toBe("completed later"));
   yield* Effect.promise(() =>
     expect(awaitWithContext(Promise.resolve("completed"), BACKGROUND_CONTEXT)).resolves.toBe(
       "completed",

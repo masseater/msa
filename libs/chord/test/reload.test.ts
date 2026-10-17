@@ -19,7 +19,7 @@ import {
   type StateEvent,
   type StateOptions,
 } from "../src/index.ts";
-import { latch, tick } from "./fixtures/timing.ts";
+import { abortOf, latch, tick } from "./fixtures/timing.ts";
 
 const quiet = () => createHost({ self: { kind: "host" }, onError: () => {} });
 
@@ -318,12 +318,7 @@ const gateDeadlineReloadAbortsReportsBlocking = Effect.gen(function* () {
           Effect.runPromiseWith(services)(
             Effect.gen(function* () {
               log.push(`start ${greeting}`);
-              yield* Effect.promise(
-                () =>
-                  new Promise<void>((resolve) =>
-                    ctx.signal.addEventListener("abort", () => resolve()),
-                  ),
-              );
+              yield* abortOf(ctx.signal);
               log.push(`stop ${greeting}`);
             }),
           ),
@@ -456,12 +451,7 @@ const forcedRetirementAbortsTheLeftoverRoots = Effect.gen(function* () {
                   return `held on ${conn.value.version}, aborted ${ctx.signal.aborted}`;
                 }
                 if (name !== "wait") return name;
-                yield* Effect.promise(
-                  () =>
-                    new Promise<void>((resolve) =>
-                      ctx.signal.addEventListener("abort", () => resolve()),
-                    ),
-                );
+                yield* abortOf(ctx.signal);
                 log.push(`aborted, conn ${conn.value.version}`);
                 return name;
               }),
@@ -701,12 +691,7 @@ const rebindsListenersToTheNewCode = Effect.gen(function* () {
           Effect.runPromiseWith(services)(
             Effect.gen(function* () {
               log.push(`start ${factor}`);
-              yield* Effect.promise(
-                () =>
-                  new Promise<void>((resolve) =>
-                    ctx.signal.addEventListener("abort", () => resolve()),
-                  ),
-              );
+              yield* abortOf(ctx.signal);
               log.push(`stop ${factor}`);
             }),
           ),

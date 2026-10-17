@@ -144,12 +144,7 @@ const aChildSParentActsAs = Effect.gen(function* () {
   assert.equal(yield* Effect.promise(() => server.hold(Echo, {}).who()), "server");
   server.route("worker", {
     authorize: () => true,
-    resolve: () =>
-      Effect.runPromiseWith(services)(
-        Effect.sync(() => {
-          return down;
-        }),
-      ),
+    resolve: () => Effect.runPromiseWith(services)(Effect.sync(() => down)),
     principal: () => ({ kind: "host" }),
   });
   assert.equal(yield* Effect.promise(() => browser.hold(Echo, {}).who()), "guest:g1");
@@ -172,12 +167,7 @@ const refusesAHostAParentLink = (): void => {
         "w:",
         {
           authorize: () => true,
-          resolve: () =>
-            Effect.runPromise(
-              Effect.sync(() => {
-                return up;
-              }),
-            ),
+          resolve: () => Effect.runPromise(Effect.sync(() => up)),
         },
       ]),
     /needs `principal`/u,

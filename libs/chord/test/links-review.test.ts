@@ -219,8 +219,8 @@ const case1RootEndIsHonoredOnly = Effect.gen(function* () {
   const pinned = worker.root((ctx) =>
     Effect.runPromiseWith(services)(
       Effect.gen(function* () {
-        const echo = yield* Effect.promise(() => ctx.get(Echo, {}));
-        rootId = (yield* Effect.promise(() => echo.root(ctx))) as string;
+        const echoRef = yield* Effect.promise(() => ctx.get(Echo, {}));
+        rootId = (yield* Effect.promise(() => echoRef.root(ctx))) as string;
         yield* go.wait;
       }),
     ),
@@ -648,8 +648,8 @@ describe("links review: cross-host reload", () => {
           bounce: (ctx: Ctx) =>
             Effect.runPromiseWith(services)(
               Effect.gen(function* () {
-                const echo = yield* Effect.promise(() => ctx.get(Echo, {}));
-                yield* Effect.promise(() => echo.ping(ctx));
+                const echoRef = yield* Effect.promise(() => ctx.get(Echo, {}));
+                yield* Effect.promise(() => echoRef.ping(ctx));
               }),
             ),
         }));

@@ -15,6 +15,7 @@ import {
   method,
   type Self,
 } from "../src/index.ts";
+import { tick } from "./fixtures/timing.ts";
 
 const input = Type.Object({});
 const flags = Type.Record(Type.String(), Type.Boolean());
@@ -321,12 +322,7 @@ test("a cluster contract upgrade retokens the server's and worker's references t
         self: { kind: "host" },
         name: "worker",
         onError: () => {},
-        loader: () =>
-          Effect.runPromiseWith(services)(
-            Effect.sync(() => {
-              return [facets.v2(valid)];
-            }),
-          ),
+        loader: () => Effect.runPromiseWith(services)(Effect.sync(() => [facets.v2(valid)])),
       });
       onTestFinished(() =>
         Effect.runPromiseWith(services)(
@@ -341,7 +337,7 @@ test("a cluster contract upgrade retokens the server's and worker's references t
       const [down, up] = memoryLinkPair();
       server.accept(down, { kind: "host", name: "worker", principal: { worker: true } });
       worker.connect(up, { principal: { kind: "server" } });
-      yield* Effect.promise(() => new Promise((resolve) => setImmediate(resolve)));
+      yield* tick;
       const serverOwn = server.hostObjects.get(SwitchV1.name);
       const workerOwn = worker.hostObjects.get(SwitchV1.name);
       yield* Effect.promise(() =>
@@ -356,7 +352,7 @@ test("a cluster contract upgrade retokens the server's and worker's references t
       yield* Effect.promise(() =>
         server.reload([facets.v2(true)], { remote: { worker: ["switch"] } }),
       );
-      yield* Effect.promise(() => new Promise((resolve) => setImmediate(resolve)));
+      yield* tick;
       assert.equal(server.hostObjects.get(SwitchV2.name)?.contract, SwitchV2);
       assert.equal(worker.hostObjects.get(SwitchV2.name)?.contract, SwitchV2);
       assert.deepEqual(server.registry(Read).get("current")!(), { 1: false });

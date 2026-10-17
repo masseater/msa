@@ -17,6 +17,7 @@ import {
   type WebSocketLike,
   webSocketLink,
 } from "../src/index.ts";
+import { latch } from "./fixtures/timing.ts";
 
 const Board = remote("t.board", {
   version: 1,
@@ -46,9 +47,9 @@ const servesABrowserStyleClientOver = Effect.gen(function* () {
     };
   });
   const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
-  yield* Effect.promise(
-    () => new Promise<void>((resolve) => wss.once("listening", () => resolve())),
-  );
+  yield* Effect.callback<void>((resume) => {
+    wss.once("listening", () => resume(Effect.void));
+  });
   acceptWebSockets(wss as never, server, {
     principal: (request: IncomingMessage) => {
       const token = new URL(request.url ?? "/", "http://x").searchParams.get("token");
@@ -133,9 +134,9 @@ const largeSnapshotsAndResultsReachThe = Effect.gen(function* () {
     return { variant: "main", notes: state, add: () => {}, who: () => notes };
   });
   const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
-  yield* Effect.promise(
-    () => new Promise<void>((resolve) => wss.once("listening", () => resolve())),
-  );
+  yield* Effect.callback<void>((resume) => {
+    wss.once("listening", () => resume(Effect.void));
+  });
   acceptWebSockets(wss as never, server, { principal: () => ({ guest: "web" }) });
   const url = `ws://127.0.0.1:${(wss.address() as { port: number }).port}/`;
   yield* Effect.gen(function* () {
@@ -179,12 +180,13 @@ const largeSnapshotsAndResultsReachThe = Effect.gen(function* () {
 
     const raw = new WebSocket(url);
     raw.binaryType = "arraybuffer";
-    yield* Effect.promise(
-      () => new Promise<void>((resolve) => raw.addEventListener("open", () => resolve())),
-    );
-    const closed = new Promise<void>((resolve) => raw.addEventListener("close", () => resolve()));
+    yield* Effect.callback<void>((resume) => {
+      raw.addEventListener("open", () => resume(Effect.void));
+    });
+    const closed = latch();
+    raw.addEventListener("close", () => closed.open());
     raw.send(new Uint8Array([0, 0, 0, 2, 123, 125]));
-    yield* Effect.promise(() => closed);
+    yield* closed.wait;
   }).pipe(
     Effect.ensuring(
       Effect.callback<void>((resume) => {

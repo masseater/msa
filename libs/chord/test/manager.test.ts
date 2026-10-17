@@ -12,10 +12,12 @@ import {
   type ControlMessage,
   createHostManager,
   type Driver,
+  type Exit,
   forkDriver,
   processLock,
 } from "../src/manager.ts";
 import { Echo } from "./fixtures/echo.ts";
+import { latch, tick } from "./fixtures/timing.ts";
 
 const entry = fileURLToPath(new URL("./fixtures/worker.ts", import.meta.url));
 const scratch = (name: string) => join(tmpdir(), `chord2-${process.pid}-${name}`);
@@ -149,7 +151,7 @@ const idleforCountsFromTheBusyIdle = Effect.gen(function* () {
         on: () => undefined,
         off: () => undefined,
       }),
-      exited: new Promise(() => {}),
+      exited: latch<Exit>().promise,
       send: () => {},
       killTree: () => {},
       onControl: (listener) => listeners.add(listener),
@@ -160,8 +162,7 @@ const idleforCountsFromTheBusyIdle = Effect.gen(function* () {
   };
   const manager = createHostManager({ driver: fake });
   const started = manager.start();
-  for (let i = 0; i < 20 && listeners.size === 0; i++)
-    yield* Effect.promise(() => new Promise((resolve) => setImmediate(resolve)));
+  for (let i = 0; i < 20 && listeners.size === 0; i++) yield* tick;
   emit({ type: "ready" });
   yield* Effect.promise(() => started);
   emit({ type: "status", activeCalls: 1 });

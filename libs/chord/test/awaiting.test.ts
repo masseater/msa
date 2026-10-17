@@ -14,7 +14,7 @@ import {
   remote,
 } from "../src/index.ts";
 import { CountingLink } from "./fixtures/counting.ts";
-import { pollUntil } from "./fixtures/timing.ts";
+import { latch, pollUntil } from "./fixtures/timing.ts";
 
 const until = (check: () => boolean, attempts = 200) => pollUntil(check, attempts, Effect.sleep(2));
 
@@ -26,13 +26,11 @@ const Slow = remote("t.e8-slow", {
 });
 
 function setup(readyTimeout?: number) {
-  let open = () => {};
-  const opened = new Promise<void>((resolve) => {
-    open = resolve;
-  });
+  const gate = latch();
+  const open = gate.open;
   const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
   server.serve(Slow, (_input, _principal, self) => {
-    self.resource("gate", { version: 1, open: () => opened });
+    self.resource("gate", { version: 1, open: () => gate.promise });
     return { variant: "main", n: self.state("n", Type.Number(), 1) };
   });
   const [down, up] = memoryLinkPair();

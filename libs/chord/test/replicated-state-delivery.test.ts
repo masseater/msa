@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 import { BACKGROUND_CONTEXT, withCancel } from "../src/context/index.ts";
@@ -14,13 +14,16 @@ type Value = { value: number };
 type Kind = "mutable" | "attached";
 
 function deferred() {
-  let resolve!: () => void;
-  let reject!: (error: Error) => void;
-  const promise = new Promise<void>((accept, fail) => {
-    resolve = accept;
-    reject = fail;
-  });
-  return { promise, resolve, reject };
+  const gate = Deferred.makeUnsafe<void, Error>();
+  return {
+    promise: Effect.runPromise(Deferred.await(gate)),
+    resolve: () => {
+      Deferred.doneUnsafe(gate, Effect.void);
+    },
+    reject: (error: Error) => {
+      Deferred.doneUnsafe(gate, Effect.fail(error));
+    },
+  };
 }
 
 function fixture(kind: Kind, onError: (error: Error) => void = () => {}) {

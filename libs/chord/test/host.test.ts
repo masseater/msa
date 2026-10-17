@@ -20,7 +20,7 @@ import {
   remote,
   type ServeOptionsFor,
 } from "../src/index.ts";
-import { pollUntil, tick } from "./fixtures/timing.ts";
+import { latch, pollUntil, tick } from "./fixtures/timing.ts";
 
 const quiet = (errors: unknown[] = []) =>
   createHost({ self: { kind: "host" }, onError: (error) => errors.push(error) });
@@ -132,11 +132,12 @@ const disposesAnAbandonedActivationOnceIt = Effect.gen(function* () {
   host.serve(Slow, (_input, _principal, self) => {
     self.resource("r", {
       version: 1,
-      open: ({ signal }) =>
-        new Promise<string>((resolve) => {
-          release = () => resolve("r");
-          signal.addEventListener("abort", () => log.push("abort seen"));
-        }),
+      open: ({ signal }) => {
+        const gate = latch<string>();
+        release = () => gate.open("r");
+        signal.addEventListener("abort", () => log.push("abort seen"));
+        return gate.promise;
+      },
       close: () => {
         log.push("closed");
       },
@@ -782,8 +783,8 @@ const ctxGetActsAsTheRoot = Effect.gen(function* () {
       relay: (ctx: Ctx) =>
         Effect.runPromiseWith(services)(
           Effect.gen(function* () {
-            const remote = yield* Effect.promise(() => ctx.get(Who, {}));
-            return yield* Effect.promise(() => remote.ping(ctx));
+            const peer = yield* Effect.promise(() => ctx.get(Who, {}));
+            return yield* Effect.promise(() => peer.ping(ctx));
           }),
         ),
     };
@@ -793,8 +794,8 @@ const ctxGetActsAsTheRoot = Effect.gen(function* () {
       (ctx) =>
         Effect.runPromiseWith(services)(
           Effect.gen(function* () {
-            const remote = yield* Effect.promise(() => ctx.get(Front, {}));
-            return yield* Effect.promise(() => remote.relay(ctx));
+            const peer = yield* Effect.promise(() => ctx.get(Front, {}));
+            return yield* Effect.promise(() => peer.relay(ctx));
           }),
         ),
       {
