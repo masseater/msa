@@ -1,4 +1,4 @@
-import { envValue } from "./env.ts";
+import { envValue, hasEnv } from "./env.ts";
 function parseDeploymentNameMap(value: string | undefined): Map<string, string> {
   const map = new Map<string, string>();
   if (value === undefined || value === "") return map;
@@ -19,11 +19,8 @@ function parseDeploymentNameMap(value: string | undefined): Map<string, string> 
 }
 
 export function hasAzureOpenAICredentials(): boolean {
-  const hasKey =
-    envValue("AZURE_OPENAI_API_KEY") !== undefined && envValue("AZURE_OPENAI_API_KEY") !== "";
-  const hasBaseUrl = !!(
-    envValue("AZURE_OPENAI_BASE_URL") || envValue("AZURE_OPENAI_RESOURCE_NAME")
-  );
+  const hasKey = hasEnv("AZURE_OPENAI_API_KEY");
+  const hasBaseUrl = hasEnv("AZURE_OPENAI_BASE_URL") || hasEnv("AZURE_OPENAI_RESOURCE_NAME");
   return hasKey && hasBaseUrl;
 }
 

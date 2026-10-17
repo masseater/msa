@@ -833,7 +833,7 @@ function stripSymbolKeys(value: unknown): unknown {
     return value.map((item) => stripSymbolKeys(item));
   }
 
-  if (value && typeof value === "object") {
+  if (typeof value === "object" && value !== null) {
     const result: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
       result[key] = stripSymbolKeys(entry);

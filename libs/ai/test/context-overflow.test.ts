@@ -403,7 +403,7 @@ describe("Context overflow error handling", () => {
               logResult(result);
 
               if (result.stopReason === "error") {
-                if (result.errorMessage?.match(/model_context_window_exceeded/iu)) {
+                if (/model_context_window_exceeded/iu.test(result.errorMessage ?? "")) {
                   expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
                 } else {
                   yield* Console.log(

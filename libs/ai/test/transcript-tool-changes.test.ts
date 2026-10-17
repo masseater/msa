@@ -24,7 +24,7 @@ const capturePayload = Effect.fn("capturePayload")(function* <T>(
     },
   });
   yield* Effect.promise(() => stream.result());
-  if (!captured) throw new Error("Expected payload capture");
+  if (captured === undefined) throw new Error("Expected payload capture");
   return captured;
 });
 

@@ -1,8 +1,8 @@
-import { envValue } from "./env.ts";
+import { hasEnv } from "./env.ts";
 export function hasBedrockCredentials(): boolean {
-  return !!(
-    envValue("AWS_PROFILE") ||
-    (envValue("AWS_ACCESS_KEY_ID") && envValue("AWS_SECRET_ACCESS_KEY")) ||
-    envValue("AWS_BEARER_TOKEN_BEDROCK")
+  return (
+    hasEnv("AWS_PROFILE") ||
+    (hasEnv("AWS_ACCESS_KEY_ID") && hasEnv("AWS_SECRET_ACCESS_KEY")) ||
+    hasEnv("AWS_BEARER_TOKEN_BEDROCK")
   );
 }

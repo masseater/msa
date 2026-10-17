@@ -15,6 +15,7 @@ import type {
 } from "../src/types.ts";
 import { StringEnum } from "../src/utils/typebox-helpers.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
+import { hasValue } from "./env.ts";
 
 const calculatorSchema = Type.Object({
   a: Type.Number({ description: "First number" }),
@@ -133,7 +134,7 @@ const assertSecondToolCallWithInterleavedThinking = Effect.fn(
   expect(secondResponse.content.some((block) => block.type === "text")).toBe(true);
 });
 
-const hasAnthropicCredentials = !!getEnvApiKey("anthropic");
+const hasAnthropicCredentials = hasValue(getEnvApiKey("anthropic"));
 
 describe.skipIf(!hasBedrockCredentials())("Amazon Bedrock interleaved thinking", () => {
   it("should do interleaved thinking on Claude Opus 4.5", { retry: 3 }, () =>

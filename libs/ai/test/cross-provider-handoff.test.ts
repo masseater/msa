@@ -19,7 +19,7 @@ import {
   hasCloudflareAiGatewayCredentials,
   hasCloudflareWorkersAICredentials,
 } from "./cloudflare-utils.ts";
-import { envValue } from "./env.ts";
+import { envValue, hasEnv, hasValue } from "./env.ts";
 import { resolveApiKey } from "./oauth.ts";
 
 const testToolSchema = Type.Object({
@@ -162,10 +162,10 @@ function hasApiKey(pair: ProviderModelPair): boolean {
   if (pair.provider === "cloudflare-ai-gateway") {
     if (!hasCloudflareAiGatewayCredentials()) return false;
     return pair.upstreamApiKeyEnv !== undefined && pair.upstreamApiKeyEnv !== ""
-      ? !!envValue(pair.upstreamApiKeyEnv)
+      ? hasEnv(pair.upstreamApiKeyEnv)
       : true;
   }
-  return !!getEnvApiKey(pair.provider);
+  return hasValue(getEnvApiKey(pair.provider));
 }
 
 function getHeaders(pair: ProviderModelPair): Record<string, string> | undefined {

@@ -2,6 +2,7 @@ import { Function } from "effect";
 
 import type { ProviderEnv } from "./types.ts";
 import { getProviderEnvValue } from "./utils/provider-env.ts";
+import { isNodeRuntime } from "./utils/runtime.ts";
 
 let nodeExistsSync: typeof import("node:fs").existsSync | null = null;
 let nodeHomedir: typeof import("node:os").homedir | null = null;
@@ -12,12 +13,7 @@ type DynamicImport = (specifier: string) => Promise<unknown>;
 const dynamicImport: DynamicImport = (specifier) => import(specifier);
 const nodeSpecifier = (name: string): string => ["node", name].join(":");
 
-const isNodeLike = (): boolean =>
-  typeof process !== "undefined" &&
-  ((process.versions?.node !== undefined && process.versions.node !== "") ||
-    (process.versions?.["bun"] !== undefined && process.versions["bun"] !== ""));
-
-if (isNodeLike()) {
+if (isNodeRuntime()) {
   void dynamicImport(nodeSpecifier("fs")).then((m) => {
     nodeExistsSync = (m as typeof import("node:fs")).existsSync;
     return nodeExistsSync;
@@ -51,7 +47,7 @@ function hasVertexAdcCredentials(env?: ProviderEnv): boolean {
 
   if (cachedVertexAdcCredentialsExists === null) {
     if (nodeExistsSync === null || nodeHomedir === null || nodeJoin === null) {
-      if (!isNodeLike()) cachedVertexAdcCredentialsExists = false;
+      if (!isNodeRuntime()) cachedVertexAdcCredentialsExists = false;
       return false;
     }
 

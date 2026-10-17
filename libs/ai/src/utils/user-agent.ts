@@ -1,18 +1,13 @@
 import type * as NodeOs from "node:os";
 
+import { isNodeRuntime } from "./runtime.ts";
+
 type ProcessWithOsBuiltinModule = typeof process & {
   getBuiltinModule?: (id: "node:os") => typeof NodeOs;
 };
 
-const isPresent = (value: string | undefined): boolean => value !== undefined && value !== "";
-
 function loadNodeOs(): typeof NodeOs | null {
-  if (
-    typeof process === "undefined" ||
-    (!isPresent(process.versions?.node) && !isPresent(process.versions?.["bun"]))
-  ) {
-    return null;
-  }
+  if (!isNodeRuntime()) return null;
   return (process as ProcessWithOsBuiltinModule).getBuiltinModule?.("node:os") ?? null;
 }
 

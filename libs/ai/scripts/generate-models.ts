@@ -58,6 +58,9 @@ import {
   type OpenRouterModelListItem,
 } from "./openrouter-catalog.ts";
 
+const orZero = (value: number | undefined): number =>
+  value === undefined || Number.isNaN(value) ? 0 : value;
+
 const packageRoot = join(import.meta.dirname, "..");
 
 function readGeneratorOptions(args: string[]): {
@@ -103,7 +106,7 @@ function readGeneratorOptions(args: string[]): {
 
   if (jsonOnly && (jsonOutputDir === undefined || jsonOutputDir === ""))
     throw new Error("--json-only requires --json-output");
-  if (dataOnly && (jsonOnly || jsonOutputDir))
+  if (dataOnly && (jsonOnly || (jsonOutputDir !== undefined && jsonOutputDir !== "")))
     throw new Error("--data-only cannot be combined with JSON catalog output");
   return { strict, dataOnly, jsonOnly, jsonOutputDir, pretty };
 }
@@ -1284,7 +1287,7 @@ function getModelsDevCost(cost: ModelsDevModel["cost"]): ModelCost {
   const base = {
     input: cost?.input || 0,
     output: cost?.output || 0,
-    cacheRead: cost?.cache_read || 0,
+    cacheRead: orZero(cost?.cache_read),
     cacheWrite: cost?.cache_write || 0,
   };
   const tiers = cost?.tiers?.flatMap((tier) => {
@@ -1634,7 +1637,7 @@ function processGoogleModels(data: ModelsDevCatalog): Model<Api>[] {
             ? (vertexModels["gemini-3.1-flash-lite"] ?? model)
             : model;
       const thinkingLevelMap = getGoogleThinkingLevelMap(modelId, source.reasoning_options ?? []);
-      const cacheRead = modelId === "gemini-2.5-flash" ? 0.03 : source.cost?.cache_read || 0;
+      const cacheRead = modelId === "gemini-2.5-flash" ? 0.03 : orZero(source.cost?.cache_read);
 
       models.push({
         id: modelId,

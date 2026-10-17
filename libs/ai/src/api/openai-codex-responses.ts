@@ -32,6 +32,7 @@ import { formatProviderError, normalizeProviderError } from "../utils/error-body
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import { resolveHttpProxyUrlForTarget } from "../utils/node-http-proxy.ts";
+import { isNodeRuntime } from "../utils/runtime.ts";
 import { getSystemMessageText } from "../utils/text.ts";
 import {
   getDeclaredTools,
@@ -204,7 +205,7 @@ type ProcessWithBuiltinModule = typeof process & {
 };
 
 function loadNodeZlib(): typeof NodeZlib | null {
-  if (typeof process === "undefined" || !(process.versions?.node || process.versions?.["bun"])) {
+  if (!isNodeRuntime()) {
     return null;
   }
   return (process as ProcessWithBuiltinModule).getBuiltinModule?.("node:zlib") ?? null;
@@ -763,7 +764,7 @@ function extractCodexEventError(event: Record<string, unknown>): {
   message?: string | undefined;
 } {
   const nested =
-    event["error"] && typeof event["error"] === "object"
+    typeof event["error"] === "object" && event["error"] !== null
       ? (event["error"] as Record<string, unknown>)
       : undefined;
   return {
@@ -1314,7 +1315,7 @@ async function acquireWebSocket(
 }
 
 function extractWebSocketError(event: unknown): Error {
-  if (event && typeof event === "object") {
+  if (typeof event === "object" && event !== null) {
     const message = "message" in event ? (event as { message?: unknown }).message : undefined;
     if (typeof message === "string" && message.length > 0) {
       return new Error(message);
@@ -1324,7 +1325,7 @@ function extractWebSocketError(event: unknown): Error {
     if (nestedError instanceof Error && nestedError.message.length > 0) {
       return nestedError;
     }
-    if (nestedError && typeof nestedError === "object" && "message" in nestedError) {
+    if (typeof nestedError === "object" && nestedError !== null && "message" in nestedError) {
       const nestedMessage = (nestedError as { message?: unknown }).message;
       if (typeof nestedMessage === "string" && nestedMessage.length > 0) {
         return new Error(nestedMessage);
@@ -1335,7 +1336,7 @@ function extractWebSocketError(event: unknown): Error {
 }
 
 function extractWebSocketCloseError(event: unknown): Error {
-  if (event && typeof event === "object") {
+  if (typeof event === "object" && event !== null) {
     const code = "code" in event ? (event as { code?: unknown }).code : undefined;
     const reason = "reason" in event ? (event as { reason?: unknown }).reason : undefined;
     const wasClean = "wasClean" in event ? (event as { wasClean?: unknown }).wasClean : undefined;
@@ -1362,7 +1363,7 @@ async function decodeWebSocketData(data: unknown): Promise<string | null> {
     const view = data as ArrayBufferView;
     return new TextDecoder().decode(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
   }
-  if (data && typeof data === "object" && "arrayBuffer" in data) {
+  if (typeof data === "object" && data !== null && "arrayBuffer" in data) {
     const blobLike = data as { arrayBuffer: () => Promise<ArrayBuffer> };
     const arrayBuffer = await blobLike.arrayBuffer();
     return new TextDecoder().decode(new Uint8Array(arrayBuffer));
@@ -1392,7 +1393,7 @@ async function* parseWebSocket(
     void (async () => {
       let text: string | null = null;
       try {
-        if (!event || typeof event !== "object" || !("data" in event)) return;
+        if (typeof event !== "object" || event === null || !("data" in event)) return;
         text = await decodeWebSocketData((event as { data?: unknown }).data);
         if (text === null || text === "") return;
         const parsed = JSON.parse(text) as Record<string, unknown>;

@@ -612,7 +612,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 
       for await (const chunk of openaiStream) {
         await options?.onProviderStreamEvent?.(chunk, model);
-        if (!chunk || typeof chunk !== "object") continue;
+        if (typeof chunk !== "object" || chunk === null) continue;
 
         output.responseId ||= chunk.id;
         if (typeof chunk.model === "string" && chunk.model.length > 0 && chunk.model !== model.id) {
@@ -625,7 +625,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
         const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined;
         if (choice === undefined) continue;
 
-        if ((chunk.usage === undefined || chunk.usage === null) && (choice as any).usage) {
+        if ((chunk.usage === undefined || chunk.usage === null) && Boolean((choice as any).usage)) {
           output.usage = parseChunkUsage((choice as any).usage, model);
         }
 
@@ -770,7 +770,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
       output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
       output.errorMessage = formatProviderError(normalizeProviderError(error));
       const rawMetadata = (error as any)?.error?.metadata?.raw;
-      if (rawMetadata && !output.errorMessage.includes(String(rawMetadata))) {
+      if (Boolean(rawMetadata) && !output.errorMessage.includes(String(rawMetadata))) {
         output.errorMessage += `\n${rawMetadata}`;
       }
       events.push({ type: "error", reason: output.stopReason, error: output });

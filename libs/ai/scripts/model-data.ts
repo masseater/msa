@@ -377,7 +377,7 @@ export function groupProviderModelData<T extends ModelCatalogEntry>(
     for (const model of models) {
       if (model.api !== api) continue;
       const identity = `${model.type}:${model.id}`;
-      if (group[identity])
+      if (group[identity] !== undefined)
         throw new Error(`${providerId}/${identity} has duplicate ${api} catalog entries`);
       group[identity] = model;
       structure[identity] = api;

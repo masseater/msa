@@ -819,7 +819,7 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
               output.errorMessage = stopReasonResult.errorMessage;
             }
           }
-          if (event.usage) {
+          if (event.usage !== undefined && event.usage !== null) {
             if (event.usage.input_tokens !== undefined && event.usage.input_tokens !== null) {
               output.usage.input = event.usage.input_tokens;
             }
@@ -1572,7 +1572,7 @@ function convertTools(
   cacheControl?: CacheControlEphemeral,
   disablePreferredStrictTools = false,
 ): BetaTool[] {
-  if (!tools) return [];
+  if (tools === undefined) return [];
 
   return tools.map((tool, index) => {
     const config = tool.constrainedSampling;

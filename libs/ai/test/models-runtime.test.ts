@@ -730,7 +730,9 @@ describe("Models runtime", () => {
                   providerSignal = refreshContext.signal;
                   if (!refreshContext.allowNetwork) return;
                   yield* Effect.promise(() =>
-                    refreshContext.publish({ persist: { models: [testModel("dynamic", "fresh")] } }),
+                    refreshContext.publish({
+                      persist: { models: [testModel("dynamic", "fresh")] },
+                    }),
                   );
                 }),
               ),

@@ -64,6 +64,7 @@ import { providerHeadersToRecord } from "../utils/headers.ts";
 import { parseStreamingJson, parseToolCallArguments } from "../utils/json-parse.ts";
 import { resolveHttpProxyUrlForTarget } from "../utils/node-http-proxy.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
+import { isNodeRuntime } from "../utils/runtime.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { getSystemMessageText } from "../utils/text.ts";
 import {
@@ -166,7 +167,7 @@ export const stream: StreamFunction<"bedrock-converse-stream", BedrockOptions> =
       undefined;
     const useBearerToken = bearerToken !== undefined && !skipAuth;
 
-    if (typeof process !== "undefined" && (process.versions?.node || process.versions?.["bun"])) {
+    if (isNodeRuntime()) {
       const arnRegion = model.id.match(/^arn:aws(?:-[a-z0-9-]+)?:bedrock:([a-z0-9-]+):/u)?.[1];
       if (arnRegion !== undefined && arnRegion !== "") {
         config.region = arnRegion;
@@ -425,7 +426,7 @@ function addCustomHeadersMiddleware(
 ): void {
   const middleware: BuildMiddleware<object, MetadataBearer> = (next) => (args) => {
     const request = args.request;
-    if (request && typeof request === "object" && "headers" in request) {
+    if (typeof request === "object" && request !== null && "headers" in request) {
       const requestHeaders = (request as { headers: Record<string, string> }).headers;
       for (const [key, value] of Object.entries(headers)) {
         if (!isReservedHeader(key)) {
@@ -443,7 +444,7 @@ function addCustomHeadersMiddleware(
 }
 
 function isSmithyHttpResponse(response: unknown): response is HttpResponse {
-  if (!response || typeof response !== "object") return false;
+  if (typeof response !== "object" || response === null) return false;
   const candidate = response as Partial<HttpResponse>;
   return (
     typeof candidate.statusCode === "number" &&
