@@ -10,6 +10,7 @@ import type {
   BetaRawMessageStreamEvent as RawMessageStreamEvent,
   BetaRefusalStopDetails as RefusalStopDetails,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
+import { Effect, Stream } from "effect";
 
 import {
   ANTHROPIC_FEDERATION_RULE_ID_ENV,
@@ -43,13 +44,14 @@ import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.ts";
 import { toErrorMessage } from "../utils/errors.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
+import { callHook } from "../utils/hooks.ts";
 import {
   parseJsonWithRepair,
   parseStreamingJson,
   parseToolCallArguments,
 } from "../utils/json-parse.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
-import { retryProviderRequest } from "../utils/provider-retry.ts";
+import { providerRequestWithRetry } from "../utils/provider-retry.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { getSystemMessageText, renderSystemMessageUpdate } from "../utils/text.ts";
 import {
@@ -402,106 +404,124 @@ function consumeLine(text: string): { line: string; rest: string } | null {
   };
 }
 
-async function* iterateSseMessages(
+interface SseAccumulator {
+  readonly buffer: string;
+  readonly state: SseDecoderState;
+}
+
+const consumeSseLines = (
+  { buffer, state }: SseAccumulator,
+  text: string,
+): readonly [SseAccumulator, ReadonlyArray<ServerSentEvent>] => {
+  const events: ServerSentEvent[] = [];
+  let rest = buffer + text;
+  let consumed = consumeLine(rest);
+  while (consumed !== null) {
+    rest = consumed.rest;
+    const event = decodeSseLine(consumed.line, state);
+    if (event !== null) events.push(event);
+    consumed = consumeLine(rest);
+  }
+  return [{ buffer: rest, state }, events];
+};
+
+const finishSseLines = ({ buffer, state }: SseAccumulator): ReadonlyArray<ServerSentEvent> => {
+  const events: ServerSentEvent[] = [];
+  if (buffer.length > 0) {
+    const event = decodeSseLine(buffer, state);
+    if (event !== null) events.push(event);
+  }
+  const trailingEvent = flushSseEvent(state);
+  if (trailingEvent !== null) events.push(trailingEvent);
+  return events;
+};
+
+function iterateSseMessages(
   body: ReadableStream<Uint8Array>,
   signal?: AbortSignal,
-): AsyncGenerator<ServerSentEvent> {
-  const reader = body.getReader();
+): Stream.Stream<ServerSentEvent> {
   const decoder = new TextDecoder();
-  const state: SseDecoderState = { event: null, data: [], raw: [] };
-  let buffer = "";
-
-  try {
-    while (true) {
-      if (signal?.aborted === true) {
-        throw new Error("Request was aborted");
-      }
-
-      const { value, done } = await reader.read();
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-      let consumed = consumeLine(buffer);
-      while (consumed !== null) {
-        buffer = consumed.rest;
-        const event = decodeSseLine(consumed.line, state);
-        if (event !== null) {
-          yield event;
-        }
-        consumed = consumeLine(buffer);
-      }
-    }
-
-    buffer += decoder.decode();
-    let consumed = consumeLine(buffer);
-    while (consumed !== null) {
-      buffer = consumed.rest;
-      const event = decodeSseLine(consumed.line, state);
-      if (event !== null) {
-        yield event;
-      }
-      consumed = consumeLine(buffer);
-    }
-
-    if (buffer.length > 0) {
-      const event = decodeSseLine(buffer, state);
-      if (event !== null) {
-        yield event;
-      }
-    }
-
-    const trailingEvent = flushSseEvent(state);
-    if (trailingEvent !== null) {
-      yield trailingEvent;
-    }
-  } finally {
-    reader.releaseLock();
-  }
+  const throwIfAborted = Effect.sync(() => {
+    if (signal?.aborted === true) throw new Error("Request was aborted");
+  });
+  const chunks = Stream.fromReadableStream({
+    evaluate: () => body,
+    onError: (error) => error,
+    releaseLockOnEnd: true,
+  }).pipe(
+    Stream.orDie,
+    Stream.mapEffect((value) => Effect.as(throwIfAborted, decoder.decode(value, { stream: true }))),
+  );
+  return Stream.fromEffect(throwIfAborted).pipe(
+    Stream.drain,
+    Stream.concat(chunks),
+    Stream.concat(Stream.sync(() => decoder.decode())),
+    Stream.mapAccum(
+      (): SseAccumulator => ({ buffer: "", state: { event: null, data: [], raw: [] } }),
+      consumeSseLines,
+      { onHalt: finishSseLines },
+    ),
+  );
 }
 
-async function* iterateAnthropicEvents(
+const parseAnthropicEvent = (sse: ServerSentEvent): RawMessageStreamEvent | undefined => {
+  if (sse.event === "error") {
+    throw new Error(sse.data);
+  }
+  if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) return undefined;
+  try {
+    return parseJsonWithRepair<RawMessageStreamEvent>(sse.data);
+  } catch (error) {
+    const message = toErrorMessage(error);
+    throw new Error(
+      `Could not parse Anthropic SSE event ${sse.event}: ${message}; data=${sse.data}; raw=${sse.raw.join("\\n")}`,
+      { cause: error },
+    );
+  }
+};
+
+function iterateAnthropicEvents(
   response: Response,
   signal?: AbortSignal,
-): AsyncGenerator<RawMessageStreamEvent> {
-  if (response.body === null) {
-    throw new Error("Attempted to iterate over an Anthropic response with no body");
+): Stream.Stream<RawMessageStreamEvent> {
+  const body = response.body;
+  if (body === null) {
+    return Stream.die(new Error("Attempted to iterate over an Anthropic response with no body"));
   }
-
-  let sawMessageStart = false;
-  let sawMessageEnd = false;
-
-  for await (const sse of iterateSseMessages(response.body, signal)) {
-    if (sse.event === "error") {
-      throw new Error(sse.data);
-    }
-
-    if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
-      continue;
-    }
-
-    try {
-      const event = parseJsonWithRepair<RawMessageStreamEvent>(sse.data);
-      if (event.type === "message_start") {
-        sawMessageStart = true;
-      } else if (event.type === "message_stop") {
-        sawMessageEnd = true;
-      }
-      yield event;
-    } catch (error) {
-      const message = toErrorMessage(error);
-      throw new Error(
-        `Could not parse Anthropic SSE event ${sse.event}: ${message}; data=${sse.data}; raw=${sse.raw.join("\\n")}`,
-        { cause: error },
-      );
-    }
-  }
-
-  if (sawMessageStart && !sawMessageEnd) {
-    throw new Error("Anthropic stream ended before message_stop");
-  }
+  return Stream.suspend(() => {
+    let sawMessageStart = false;
+    let sawMessageEnd = false;
+    return iterateSseMessages(body, signal).pipe(
+      Stream.map(parseAnthropicEvent),
+      Stream.filter((event) => event !== undefined),
+      Stream.tap((event) =>
+        Effect.sync(() => {
+          if (event.type === "message_start") sawMessageStart = true;
+          else if (event.type === "message_stop") sawMessageEnd = true;
+        }),
+      ),
+      Stream.concat(
+        Stream.fromEffect(
+          Effect.sync(() => {
+            if (sawMessageStart && !sawMessageEnd) {
+              throw new Error("Anthropic stream ended before message_stop");
+            }
+          }),
+        ).pipe(Stream.drain),
+      ),
+    );
+  });
 }
+
+function describeThrown(error: unknown): string {
+  return error instanceof Error ? error.message : JSON.stringify(error);
+}
+
+const STRICT_TOOL_LIMIT_MESSAGES = [
+  "The compiled grammar is too large",
+  "Too many strict tools (",
+  "Schemas contains too many parameters with union types (",
+];
 
 export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
   model: Model<"anthropic-messages">,
@@ -515,391 +535,394 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
   );
   const currentTools = getCurrentTools(normalizedContext.messages);
 
-  (async () => {
-    const output: AssistantMessage = {
-      role: "assistant",
-      content: [],
-      api: model.api as Api,
-      provider: model.provider,
-      model: model.id,
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
-      stopReason: "pending",
-      timestamp: currentTimeMillis(),
-    };
-
-    try {
-      let client: Anthropic;
-      let isOAuth: boolean;
-      let usageModel = model;
-      let inputTransformations: BetaInputTransformation[] | undefined;
-
-      if (options?.client === undefined) {
-        const apiKey = options?.apiKey;
-        const federation = getAnthropicFederation(model, apiKey, options?.headers, options?.env);
-        if (federation === undefined) assertRequestAuth(model.provider, apiKey, options?.headers);
-
-        const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
-        const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
-
-        const created = createClient(
-          model,
-          apiKey,
-          options?.headers,
-          options?.fetch,
-          cacheSessionId,
-          federation,
-        );
-        client = created.client;
-        isOAuth = created.isOAuthToken;
-      } else {
-        client = options.client;
-        isOAuth = false;
-      }
-      const requestOptions = {
-        ...(options?.signal === undefined ? {} : { signal: options.signal }),
-        ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
-        maxRetries: 0,
+  Effect.runFork(
+    Effect.gen(function* () {
+      const output: AssistantMessage = {
+        role: "assistant",
+        content: [],
+        api: model.api as Api,
+        provider: model.provider,
+        model: model.id,
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "pending",
+        timestamp: currentTimeMillis(),
       };
-      let disablePreferredStrictTools = false;
-      let response: Response;
-      for (;;) {
-        options?.signal?.throwIfAborted();
-        const built = buildParams(
-          model,
-          normalizedContext,
-          isOAuth,
-          options,
-          disablePreferredStrictTools,
-        );
-        if (built.providerThinkingLevel !== undefined)
-          output.providerThinkingLevel = built.providerThinkingLevel;
-        let params = built.params;
-        const nextParams = await options?.onPayload?.(params, model);
-        if (nextParams !== undefined) {
-          params = { ...(nextParams as MessageCreateParamsStreaming), stream: true };
-        }
-        try {
-          response = await retryProviderRequest(
-            () => client.beta.messages.create(params, requestOptions).asResponse(),
-            {
-              maxRetries: options?.maxRetries,
-              maxRetryDelayMs: options?.maxRetryDelayMs,
-              signal: options?.signal,
-            },
+      yield* Effect.gen(function* () {
+        let client: Anthropic;
+        let isOAuth: boolean;
+        let usageModel = model;
+        let inputTransformations: BetaInputTransformation[] | undefined;
+        if (options?.client === undefined) {
+          const apiKey = options?.apiKey;
+          const federation = getAnthropicFederation(model, apiKey, options?.headers, options?.env);
+          if (federation === undefined) assertRequestAuth(model.provider, apiKey, options?.headers);
+
+          const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
+          const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
+
+          const created = createClient(
+            model,
+            apiKey,
+            options?.headers,
+            options?.fetch,
+            cacheSessionId,
+            federation,
           );
-          break;
-        } catch (error) {
-          if (
-            options?.signal?.aborted === true ||
-            disablePreferredStrictTools ||
-            !built.hasPreferredStrictTools ||
-            !(error instanceof APIError) ||
-            error.status !== 400 ||
-            error.type !== "invalid_request_error" ||
-            ![
-              "The compiled grammar is too large",
-              "Too many strict tools (",
-              "Schemas contains too many parameters with union types (",
-            ].some((message) => error.message.includes(message))
-          ) {
-            throw error;
-          }
-          disablePreferredStrictTools = true;
+          client = created.client;
+          isOAuth = created.isOAuthToken;
+        } else {
+          client = options.client;
+          isOAuth = false;
+        }
+        const requestOptions = {
+          ...(options?.signal === undefined ? {} : { signal: options.signal }),
+          ...(options?.timeoutMs === undefined ? {} : { timeout: options.timeoutMs }),
+          maxRetries: 0,
+        };
+        const send = (disablePreferredStrictTools: boolean): Effect.Effect<Response> =>
+          Effect.gen(function* () {
+            options?.signal?.throwIfAborted();
+            const built = buildParams(
+              model,
+              normalizedContext,
+              isOAuth,
+              options,
+              disablePreferredStrictTools,
+            );
+            if (built.providerThinkingLevel !== undefined)
+              output.providerThinkingLevel = built.providerThinkingLevel;
+            let params = built.params;
+            const nextParams = yield* callHook(() => options?.onPayload?.(params, model));
+            if (nextParams !== undefined) {
+              params = { ...(nextParams as MessageCreateParamsStreaming), stream: true };
+            }
+            return yield* providerRequestWithRetry(
+              () => client.beta.messages.create(params, requestOptions).asResponse(),
+              {
+                maxRetries: options?.maxRetries,
+                maxRetryDelayMs: options?.maxRetryDelayMs,
+                signal: options?.signal,
+              },
+            ).pipe(
+              Effect.catchDefect((error) => {
+                if (
+                  options?.signal?.aborted === true ||
+                  disablePreferredStrictTools ||
+                  !built.hasPreferredStrictTools ||
+                  !(error instanceof APIError) ||
+                  error.status !== 400 ||
+                  error.type !== "invalid_request_error" ||
+                  !STRICT_TOOL_LIMIT_MESSAGES.some((message) => error.message.includes(message))
+                ) {
+                  return Effect.die(error);
+                }
+                appendAssistantMessageDiagnostic(output, {
+                  type: "anthropic_strict_tools_fallback",
+                  timestamp: currentTimeMillis(),
+                  error: { message: error.message },
+                  details: { reason: "strict_tool_limits_exceeded" },
+                });
+                return send(true);
+              }),
+            );
+          });
+        const response = yield* send(false);
+        yield* callHook(() =>
+          options?.onResponse?.(
+            { status: response.status, headers: headersToRecord(response.headers) },
+            model,
+          ),
+        );
+        events.push({ type: "start", partial: output });
+        type Block = (ThinkingContent | TextContent | (ToolCall & { partialJson: string })) & {
+          index: number;
+        };
+        const blocks = output.content as Block[];
+        yield* iterateAnthropicEvents(response, options?.signal).pipe(
+          Stream.runForEach((event) =>
+            Effect.gen(function* () {
+              yield* callHook(() => options?.onProviderStreamEvent?.(event, model));
+              if (event.type === "message_start") {
+                output.responseId = event.message.id;
+                const transformations = event.message.input_transformations;
+                if (Array.isArray(transformations)) inputTransformations = transformations;
+                const responseModel = event.message.model;
+                if (responseModel !== model.id) output.responseModel = responseModel;
+                const fallbackCost =
+                  responseModel === model.id
+                    ? undefined
+                    : model.compat?.allowedFallbackModels?.find(
+                        (fallback) =>
+                          fallback.provider === model.provider && fallback.model === responseModel,
+                      )?.cost;
+                usageModel =
+                  fallbackCost === undefined
+                    ? model
+                    : { ...model, id: responseModel, cost: fallbackCost };
+                output.usage.input = event.message.usage.input_tokens || 0;
+                output.usage.output = event.message.usage.output_tokens || 0;
+                output.usage.cacheRead = event.message.usage.cache_read_input_tokens || 0;
+                output.usage.cacheWrite = event.message.usage.cache_creation_input_tokens || 0;
+                output.usage.cacheWrite1h =
+                  event.message.usage.cache_creation?.ephemeral_1h_input_tokens || 0;
+                output.usage.totalTokens =
+                  output.usage.input +
+                  output.usage.output +
+                  output.usage.cacheRead +
+                  output.usage.cacheWrite;
+                calculateCost(usageModel, output.usage);
+              } else if (event.type === "content_block_start") {
+                if (event.content_block.type === "fallback") {
+                  if (output.content.length > 0) {
+                    throw new Error("Anthropic performed an unsupported mid-output model fallback");
+                  }
+                  return;
+                }
+                if (event.content_block.type === "text") {
+                  const block: Block = {
+                    type: "text",
+                    text: event.content_block.text ?? "",
+                    index: event.index,
+                  };
+                  output.content.push(block);
+                  events.push({
+                    type: "text_start",
+                    contentIndex: output.content.length - 1,
+                    partial: output,
+                  });
+                } else if (event.content_block.type === "thinking") {
+                  const block: Block = {
+                    type: "thinking",
+                    thinking: event.content_block.thinking ?? "",
+                    thinkingSignature: event.content_block.signature ?? "",
+                    index: event.index,
+                  };
+                  output.content.push(block);
+                  events.push({
+                    type: "thinking_start",
+                    contentIndex: output.content.length - 1,
+                    partial: output,
+                  });
+                } else if (event.content_block.type === "redacted_thinking") {
+                  const block: Block = {
+                    type: "thinking",
+                    thinking: "[Reasoning redacted]",
+                    thinkingSignature: event.content_block.data,
+                    redacted: true,
+                    index: event.index,
+                  };
+                  output.content.push(block);
+                  events.push({
+                    type: "thinking_start",
+                    contentIndex: output.content.length - 1,
+                    partial: output,
+                  });
+                } else if (event.content_block.type === "tool_use") {
+                  const block: Block = {
+                    type: "toolCall",
+                    id: event.content_block.id,
+                    name: isOAuth
+                      ? fromClaudeCodeName(event.content_block.name, currentTools)
+                      : event.content_block.name,
+                    arguments: (event.content_block.input as Record<string, any>) ?? {},
+                    partialJson: "",
+                    index: event.index,
+                  };
+                  output.content.push(block);
+                  events.push({
+                    type: "toolcall_start",
+                    contentIndex: output.content.length - 1,
+                    partial: output,
+                  });
+                }
+              } else if (event.type === "content_block_delta") {
+                if (event.delta.type === "text_delta") {
+                  const index = blocks.findIndex((b) => b.index === event.index);
+                  const block = blocks[index];
+                  if (block !== undefined && block.type === "text") {
+                    block.text += event.delta.text;
+                    events.push({
+                      type: "text_delta",
+                      contentIndex: index,
+                      delta: event.delta.text,
+                      partial: output,
+                    });
+                  }
+                } else if (event.delta.type === "thinking_delta") {
+                  const index = blocks.findIndex((b) => b.index === event.index);
+                  const block = blocks[index];
+                  if (block !== undefined && block.type === "thinking") {
+                    block.thinking += event.delta.thinking;
+                    events.push({
+                      type: "thinking_delta",
+                      contentIndex: index,
+                      delta: event.delta.thinking,
+                      partial: output,
+                    });
+                  }
+                } else if (event.delta.type === "input_json_delta") {
+                  const index = blocks.findIndex((b) => b.index === event.index);
+                  const block = blocks[index];
+                  if (block !== undefined && block.type === "toolCall") {
+                    block.partialJson += event.delta.partial_json;
+                    block.arguments = parseStreamingJson(block.partialJson);
+                    events.push({
+                      type: "toolcall_delta",
+                      contentIndex: index,
+                      delta: event.delta.partial_json,
+                      partial: output,
+                    });
+                  }
+                } else if (event.delta.type === "signature_delta") {
+                  const index = blocks.findIndex((b) => b.index === event.index);
+                  const block = blocks[index];
+                  if (block !== undefined && block.type === "thinking") {
+                    block.thinkingSignature = block.thinkingSignature || "";
+                    block.thinkingSignature += event.delta.signature;
+                  }
+                }
+              } else if (event.type === "content_block_stop") {
+                const index = blocks.findIndex((b) => b.index === event.index);
+                const block = blocks[index];
+                if (block !== undefined) {
+                  delete (block as any).index;
+                  if (block.type === "text") {
+                    events.push({
+                      type: "text_end",
+                      contentIndex: index,
+                      content: block.text,
+                      partial: output,
+                    });
+                  } else if (block.type === "thinking") {
+                    events.push({
+                      type: "thinking_end",
+                      contentIndex: index,
+                      content: block.thinking,
+                      partial: output,
+                    });
+                  } else if (block.type === "toolCall") {
+                    Object.assign(block, parseToolCallArguments(block.partialJson));
+                    delete (block as { partialJson?: string }).partialJson;
+                    events.push({
+                      type: "toolcall_end",
+                      contentIndex: index,
+                      toolCall: block,
+                      partial: output,
+                    });
+                  }
+                }
+              } else if (event.type === "message_delta") {
+                const transformations = event.input_transformations;
+                if (Array.isArray(transformations)) inputTransformations = transformations;
+                if (event.delta.stop_reason !== null) {
+                  output.rawStopReason = event.delta.stop_reason;
+                  const stopReasonResult = mapStopReason(
+                    event.delta.stop_reason,
+                    event.delta.stop_details,
+                  );
+                  output.stopReason = stopReasonResult.stopReason;
+                  if (
+                    stopReasonResult.errorMessage !== undefined &&
+                    stopReasonResult.errorMessage !== ""
+                  ) {
+                    output.errorMessage = stopReasonResult.errorMessage;
+                  }
+                }
+                if (event.usage !== undefined && event.usage !== null) {
+                  if (event.usage.input_tokens !== undefined && event.usage.input_tokens !== null) {
+                    output.usage.input = event.usage.input_tokens;
+                  }
+                  if (
+                    event.usage.output_tokens !== undefined &&
+                    event.usage.output_tokens !== null
+                  ) {
+                    output.usage.output = event.usage.output_tokens;
+                  }
+                  if (
+                    event.usage.cache_read_input_tokens !== undefined &&
+                    event.usage.cache_read_input_tokens !== null
+                  ) {
+                    output.usage.cacheRead = event.usage.cache_read_input_tokens;
+                  }
+                  if (
+                    event.usage.cache_creation_input_tokens !== undefined &&
+                    event.usage.cache_creation_input_tokens !== null
+                  ) {
+                    output.usage.cacheWrite = event.usage.cache_creation_input_tokens;
+                  }
+                  const cacheCreation = (
+                    event.usage as typeof event.usage & {
+                      cache_creation?: { ephemeral_1h_input_tokens?: number };
+                    }
+                  ).cache_creation;
+                  if (
+                    cacheCreation?.ephemeral_1h_input_tokens !== undefined &&
+                    cacheCreation?.ephemeral_1h_input_tokens !== null
+                  ) {
+                    output.usage.cacheWrite1h = cacheCreation.ephemeral_1h_input_tokens;
+                  }
+                  const thinkingTokens = event.usage.output_tokens_details?.thinking_tokens;
+                  if (thinkingTokens !== undefined && thinkingTokens !== null) {
+                    output.usage.reasoning = thinkingTokens;
+                  }
+                }
+                output.usage.totalTokens =
+                  output.usage.input +
+                  output.usage.output +
+                  output.usage.cacheRead +
+                  output.usage.cacheWrite;
+                calculateCost(usageModel, output.usage);
+              }
+            }),
+          ),
+        );
+        if (options?.signal?.aborted === true) {
+          throw new Error("Request was aborted");
+        }
+        if (output.stopReason === "pending") {
+          throw new Error("Anthropic stream ended without a stop reason");
+        }
+        if (output.stopReason === "aborted" || output.stopReason === "error") {
+          throw new Error(output.errorMessage || "An unknown error occurred");
+        }
+        if (inputTransformations !== undefined && inputTransformations.length > 0) {
           appendAssistantMessageDiagnostic(output, {
-            type: "anthropic_strict_tools_fallback",
+            type: "anthropic_input_transformations",
             timestamp: currentTimeMillis(),
-            error: { message: error.message },
-            details: { reason: "strict_tool_limits_exceeded" },
+            details: {
+              transformations: inputTransformations.map((transformation) => ({
+                type: transformation.type ?? undefined,
+                path: transformation.path ?? undefined,
+                reason: transformation.reason ?? undefined,
+              })),
+            },
           });
         }
-      }
-      await options?.onResponse?.(
-        { status: response.status, headers: headersToRecord(response.headers) },
-        model,
-      );
-      events.push({ type: "start", partial: output });
-
-      type Block = (ThinkingContent | TextContent | (ToolCall & { partialJson: string })) & {
-        index: number;
-      };
-      const blocks = output.content as Block[];
-
-      for await (const event of iterateAnthropicEvents(response, options?.signal)) {
-        await options?.onProviderStreamEvent?.(event, model);
-        if (event.type === "message_start") {
-          output.responseId = event.message.id;
-          const transformations = event.message.input_transformations;
-          if (Array.isArray(transformations)) inputTransformations = transformations;
-          const responseModel = event.message.model;
-          if (responseModel !== model.id) output.responseModel = responseModel;
-          const fallbackCost =
-            responseModel === model.id
-              ? undefined
-              : model.compat?.allowedFallbackModels?.find(
-                  (fallback) =>
-                    fallback.provider === model.provider && fallback.model === responseModel,
-                )?.cost;
-          usageModel =
-            fallbackCost === undefined
-              ? model
-              : { ...model, id: responseModel, cost: fallbackCost };
-          output.usage.input = event.message.usage.input_tokens || 0;
-          output.usage.output = event.message.usage.output_tokens || 0;
-          output.usage.cacheRead = event.message.usage.cache_read_input_tokens || 0;
-          output.usage.cacheWrite = event.message.usage.cache_creation_input_tokens || 0;
-          output.usage.cacheWrite1h =
-            event.message.usage.cache_creation?.ephemeral_1h_input_tokens || 0;
-          output.usage.totalTokens =
-            output.usage.input +
-            output.usage.output +
-            output.usage.cacheRead +
-            output.usage.cacheWrite;
-          calculateCost(usageModel, output.usage);
-        } else if (event.type === "content_block_start") {
-          if (event.content_block.type === "fallback") {
-            if (output.content.length > 0) {
-              throw new Error("Anthropic performed an unsupported mid-output model fallback");
-            }
-            continue;
-          }
-          if (event.content_block.type === "text") {
-            const block: Block = {
-              type: "text",
-              text: event.content_block.text ?? "",
-              index: event.index,
-            };
-            output.content.push(block);
-            events.push({
-              type: "text_start",
-              contentIndex: output.content.length - 1,
-              partial: output,
-            });
-          } else if (event.content_block.type === "thinking") {
-            const block: Block = {
-              type: "thinking",
-              thinking: event.content_block.thinking ?? "",
-              thinkingSignature: event.content_block.signature ?? "",
-              index: event.index,
-            };
-            output.content.push(block);
-            events.push({
-              type: "thinking_start",
-              contentIndex: output.content.length - 1,
-              partial: output,
-            });
-          } else if (event.content_block.type === "redacted_thinking") {
-            const block: Block = {
-              type: "thinking",
-              thinking: "[Reasoning redacted]",
-              thinkingSignature: event.content_block.data,
-              redacted: true,
-              index: event.index,
-            };
-            output.content.push(block);
-            events.push({
-              type: "thinking_start",
-              contentIndex: output.content.length - 1,
-              partial: output,
-            });
-          } else if (event.content_block.type === "tool_use") {
-            const block: Block = {
-              type: "toolCall",
-              id: event.content_block.id,
-              name: isOAuth
-                ? fromClaudeCodeName(event.content_block.name, currentTools)
-                : event.content_block.name,
-              arguments: (event.content_block.input as Record<string, any>) ?? {},
-              partialJson: "",
-              index: event.index,
-            };
-            output.content.push(block);
-            events.push({
-              type: "toolcall_start",
-              contentIndex: output.content.length - 1,
-              partial: output,
-            });
-          }
-        } else if (event.type === "content_block_delta") {
-          if (event.delta.type === "text_delta") {
-            const index = blocks.findIndex((b) => b.index === event.index);
-            const block = blocks[index];
-            if (block !== undefined && block.type === "text") {
-              block.text += event.delta.text;
-              events.push({
-                type: "text_delta",
-                contentIndex: index,
-                delta: event.delta.text,
-                partial: output,
-              });
-            }
-          } else if (event.delta.type === "thinking_delta") {
-            const index = blocks.findIndex((b) => b.index === event.index);
-            const block = blocks[index];
-            if (block !== undefined && block.type === "thinking") {
-              block.thinking += event.delta.thinking;
-              events.push({
-                type: "thinking_delta",
-                contentIndex: index,
-                delta: event.delta.thinking,
-                partial: output,
-              });
-            }
-          } else if (event.delta.type === "input_json_delta") {
-            const index = blocks.findIndex((b) => b.index === event.index);
-            const block = blocks[index];
-            if (block !== undefined && block.type === "toolCall") {
-              block.partialJson += event.delta.partial_json;
-              block.arguments = parseStreamingJson(block.partialJson);
-              events.push({
-                type: "toolcall_delta",
-                contentIndex: index,
-                delta: event.delta.partial_json,
-                partial: output,
-              });
-            }
-          } else if (event.delta.type === "signature_delta") {
-            const index = blocks.findIndex((b) => b.index === event.index);
-            const block = blocks[index];
-            if (block !== undefined && block.type === "thinking") {
-              block.thinkingSignature = block.thinkingSignature || "";
-              block.thinkingSignature += event.delta.signature;
-            }
-          }
-        } else if (event.type === "content_block_stop") {
-          const index = blocks.findIndex((b) => b.index === event.index);
-          const block = blocks[index];
-          if (block !== undefined) {
-            delete (block as any).index;
-            if (block.type === "text") {
-              events.push({
-                type: "text_end",
-                contentIndex: index,
-                content: block.text,
-                partial: output,
-              });
-            } else if (block.type === "thinking") {
-              events.push({
-                type: "thinking_end",
-                contentIndex: index,
-                content: block.thinking,
-                partial: output,
-              });
-            } else if (block.type === "toolCall") {
-              Object.assign(block, parseToolCallArguments(block.partialJson));
+        events.push({ type: "done", reason: output.stopReason, message: output });
+        events.end();
+      }).pipe(
+        Effect.catchDefect((error) =>
+          Effect.sync(() => {
+            for (const block of output.content) {
+              delete (block as { index?: number }).index;
               delete (block as { partialJson?: string }).partialJson;
-              events.push({
-                type: "toolcall_end",
-                contentIndex: index,
-                toolCall: block,
-                partial: output,
-              });
             }
-          }
-        } else if (event.type === "message_delta") {
-          const transformations = event.input_transformations;
-          if (Array.isArray(transformations)) inputTransformations = transformations;
-          if (event.delta.stop_reason !== null) {
-            output.rawStopReason = event.delta.stop_reason;
-            const stopReasonResult = mapStopReason(
-              event.delta.stop_reason,
-              event.delta.stop_details,
-            );
-            output.stopReason = stopReasonResult.stopReason;
-            if (
-              stopReasonResult.errorMessage !== undefined &&
-              stopReasonResult.errorMessage !== ""
-            ) {
-              output.errorMessage = stopReasonResult.errorMessage;
-            }
-          }
-          if (event.usage !== undefined && event.usage !== null) {
-            if (event.usage.input_tokens !== undefined && event.usage.input_tokens !== null) {
-              output.usage.input = event.usage.input_tokens;
-            }
-            if (event.usage.output_tokens !== undefined && event.usage.output_tokens !== null) {
-              output.usage.output = event.usage.output_tokens;
-            }
-            if (
-              event.usage.cache_read_input_tokens !== undefined &&
-              event.usage.cache_read_input_tokens !== null
-            ) {
-              output.usage.cacheRead = event.usage.cache_read_input_tokens;
-            }
-            if (
-              event.usage.cache_creation_input_tokens !== undefined &&
-              event.usage.cache_creation_input_tokens !== null
-            ) {
-              output.usage.cacheWrite = event.usage.cache_creation_input_tokens;
-            }
-            const cacheCreation = (
-              event.usage as typeof event.usage & {
-                cache_creation?: { ephemeral_1h_input_tokens?: number };
-              }
-            ).cache_creation;
-            if (
-              cacheCreation?.ephemeral_1h_input_tokens !== undefined &&
-              cacheCreation?.ephemeral_1h_input_tokens !== null
-            ) {
-              output.usage.cacheWrite1h = cacheCreation.ephemeral_1h_input_tokens;
-            }
-            const thinkingTokens = event.usage.output_tokens_details?.thinking_tokens;
-            if (thinkingTokens !== undefined && thinkingTokens !== null) {
-              output.usage.reasoning = thinkingTokens;
-            }
-          }
-          output.usage.totalTokens =
-            output.usage.input +
-            output.usage.output +
-            output.usage.cacheRead +
-            output.usage.cacheWrite;
-          calculateCost(usageModel, output.usage);
-        }
-      }
-
-      if (options?.signal?.aborted === true) {
-        throw new Error("Request was aborted");
-      }
-
-      if (output.stopReason === "pending") {
-        throw new Error("Anthropic stream ended without a stop reason");
-      }
-      if (output.stopReason === "aborted" || output.stopReason === "error") {
-        throw new Error(output.errorMessage || "An unknown error occurred");
-      }
-      if (inputTransformations !== undefined && inputTransformations.length > 0) {
-        appendAssistantMessageDiagnostic(output, {
-          type: "anthropic_input_transformations",
-          timestamp: currentTimeMillis(),
-          details: {
-            transformations: inputTransformations.map((transformation) => ({
-              type: transformation.type ?? undefined,
-              path: transformation.path ?? undefined,
-              reason: transformation.reason ?? undefined,
-            })),
-          },
-        });
-      }
-
-      events.push({ type: "done", reason: output.stopReason, message: output });
-      events.end();
-    } catch (error) {
-      for (const block of output.content) {
-        delete (block as { index?: number }).index;
-        delete (block as { partialJson?: string }).partialJson;
-      }
-      output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-      output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
-      events.push({ type: "error", reason: output.stopReason, error: output });
-      events.end();
-    }
-  })();
+            output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
+            output.errorMessage = describeThrown(error);
+            events.push({ type: "error", reason: output.stopReason, error: output });
+            events.end();
+          }),
+        ),
+      );
+    }),
+  );
 
   return events;
 };
