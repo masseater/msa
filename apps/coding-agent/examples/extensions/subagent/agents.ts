@@ -1,8 +1,11 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
-
+import { NodeServices } from "@effect/platform-node";
 import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@msa/coding-agent";
+import { Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
 import { dual } from "effect/Function";
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
+const pathService = runtime.runSync(Path.Path);
+const fsService = runtime.runSync(FileSystem.FileSystem);
 
 export type AgentScope = "user" | "project" | "both";
 
@@ -40,25 +43,24 @@ function parseToolList(value: unknown): string[] | undefined {
 function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig[] {
   const agents: AgentConfig[] = [];
 
-  if (!fs.existsSync(dir)) {
+  if (!runtime.runSync(fsService.exists(dir))) {
     return agents;
   }
 
-  let entries: fs.Dirent[];
+  let names: string[];
   try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
+    names = runtime.runSync(fsService.readDirectory(dir));
   } catch {
     return agents;
   }
 
-  for (const entry of entries) {
-    if (!entry.name.endsWith(".md")) continue;
-    if (!entry.isFile() && !entry.isSymbolicLink()) continue;
+  for (const name of names) {
+    if (!name.endsWith(".md")) continue;
 
-    const filePath = path.join(dir, entry.name);
+    const filePath = pathService.join(dir, name);
     let content: string;
     try {
-      content = fs.readFileSync(filePath, "utf-8");
+      content = runtime.runSync(fsService.readFileString(filePath));
     } catch {
       continue;
     }
@@ -84,27 +86,24 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 }
 
 function isDirectory(p: string): boolean {
-  try {
-    return fs.statSync(p).isDirectory();
-  } catch {
-    return false;
-  }
+  const info = runtime.runSync(fsService.stat(p).pipe(Effect.option));
+  return Option.isSome(info) && info.value.type === "Directory";
 }
 
 function findNearestProjectAgentsDir(cwd: string): string | null {
   let currentDir = cwd;
   while (true) {
-    const candidate = path.join(currentDir, CONFIG_DIR_NAME, "agents");
+    const candidate = pathService.join(currentDir, CONFIG_DIR_NAME, "agents");
     if (isDirectory(candidate)) return candidate;
 
-    const parentDir = path.dirname(currentDir);
+    const parentDir = pathService.dirname(currentDir);
     if (parentDir === currentDir) return null;
     currentDir = parentDir;
   }
 }
 
 function discoverAgentsImpl(cwd: string, scope: AgentScope): AgentDiscoveryResult {
-  const userDir = path.join(getAgentDir(), "agents");
+  const userDir = pathService.join(getAgentDir(), "agents");
   const projectAgentsDir = findNearestProjectAgentsDir(cwd);
 
   const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
