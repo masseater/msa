@@ -65,7 +65,7 @@ function downgradeUnsupportedImages<TApi extends Api>(
   });
 }
 
-type ToolCallIdNormalizer<TApi extends Api> = (
+export type ToolCallIdNormalizer<TApi extends Api> = (
   id: string,
   model: Model<TApi>,
   source: AssistantMessage,

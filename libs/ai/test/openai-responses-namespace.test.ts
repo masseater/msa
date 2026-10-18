@@ -2,10 +2,8 @@ import { Effect } from "effect";
 import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  convertResponsesMessages,
-  processResponsesStream,
-} from "../src/api/openai-responses-shared.ts";
+import { convertResponsesMessages } from "../src/api/openai-responses-messages.ts";
+import { processResponsesStream } from "../src/api/openai-responses-stream.ts";
 import type { Api, AssistantMessage, Model, ToolCall } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";

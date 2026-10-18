@@ -8,11 +8,9 @@ import {
   makeStrictJsonSchema,
   resolveJsonSchemaStrictSampling,
 } from "../src/api/constrained-sampling.ts";
-import {
-  convertResponsesMessages,
-  convertResponsesTools,
-  processResponsesStream,
-} from "../src/api/openai-responses-shared.ts";
+import { convertResponsesMessages } from "../src/api/openai-responses-messages.ts";
+import { processResponsesStream } from "../src/api/openai-responses-stream.ts";
+import { convertResponsesTools } from "../src/api/openai-responses-tools.ts";
 import type { AssistantMessage, Model, Tool, ToolCall } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";

@@ -34,11 +34,9 @@ import {
 import { getMsaUserAgent } from "../utils/user-agent.ts";
 import { createGrammarToolInputProperties } from "./constrained-sampling.ts";
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
-import {
-  convertResponsesMessages,
-  convertResponsesTools,
-  processResponsesStream,
-} from "./openai-responses-shared.ts";
+import { convertResponsesMessages } from "./openai-responses-messages.ts";
+import { processResponsesStream } from "./openai-responses-stream.ts";
+import { convertResponsesTools } from "./openai-responses-tools.ts";
 import { buildBaseOptions, resolveSamplingParams } from "./simple-options.ts";
 
 const OPENAI_TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode"]);

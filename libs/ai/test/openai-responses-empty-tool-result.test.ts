@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { convertResponsesMessages } from "../src/api/openai-responses-shared.ts";
+import { convertResponsesMessages } from "../src/api/openai-responses-messages.ts";
 import { getModel, normalizeContext } from "../src/compat.ts";
 import type { AssistantMessage, ToolResultMessage, Usage } from "../src/types.ts";
 import { currentTimeMillis } from "../src/utils/clock.ts";

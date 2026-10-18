@@ -50,11 +50,9 @@ import { getMsaUserAgent } from "../utils/user-agent.ts";
 import { uuidv7 } from "../utils/uuid.ts";
 import { createGrammarToolInputProperties } from "./constrained-sampling.ts";
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
-import {
-  convertResponsesMessages,
-  convertResponsesTools,
-  processResponsesStream,
-} from "./openai-responses-shared.ts";
+import { convertResponsesMessages } from "./openai-responses-messages.ts";
+import { processResponsesStream } from "./openai-responses-stream.ts";
+import { convertResponsesTools } from "./openai-responses-tools.ts";
 import { buildBaseOptions } from "./simple-options.ts";
 
 const DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api";
