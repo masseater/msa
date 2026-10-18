@@ -1,11 +1,11 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Effect, Schema } from "effect";
 
-import { codingAgentName } from "../../../scripts/coding-agent-smoke.ts";
 import { installConsumer } from "../../../scripts/local-package-install.mjs";
 import { produceArtifactSet } from "../../../scripts/package-artifacts.mjs";
 import { files, pathOperations, runCommand } from "../src/platform.ts";
 
+const codingAgentName = "@msa/coding-agent";
 const repositoryRoot = pathOperations.resolve(import.meta.dirname, "../../..");
 const VISIBLE_DIRECTORIES = ["docs", "examples", "src", "test", "tests"];
 const VISIBLE_FILES = /^(?:readme|changelog)(?:\..+)?$/iu;
