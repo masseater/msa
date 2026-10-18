@@ -1,10 +1,8 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type OpenAIResponsesOptions,
-  stream as streamOpenAIResponses,
-} from "../src/api/openai-responses.ts";
+import type { OpenAIResponsesOptions } from "../src/api/openai-responses-config.ts";
+import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
 import type { AssistantMessage, Message, Model, ToolResultMessage } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 

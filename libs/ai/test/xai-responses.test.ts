@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import type { OpenAIResponsesOptions } from "../src/api/openai-responses.ts";
+import type { OpenAIResponsesOptions } from "../src/api/openai-responses-config.ts";
 import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
 import { getSupportedThinkingLevels } from "../src/models.ts";
 import { XAI_MODELS } from "../src/providers/xai.models.ts";

@@ -1,11 +1,11 @@
+import type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses-params.ts";
 import { azureOpenAIResponsesApi } from "./api/azure-openai-responses.lazy.ts";
-import type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses.ts";
 import { openAICodexResponsesApi } from "./api/openai-codex-responses.lazy.ts";
 import type { OpenAICodexResponsesOptions } from "./api/openai-codex-responses.ts";
 import { openAICompletionsApi } from "./api/openai-completions.lazy.ts";
 import type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
+import type { OpenAIResponsesOptions } from "./api/openai-responses-config.ts";
 import { openAIResponsesApi } from "./api/openai-responses.lazy.ts";
-import type { OpenAIResponsesOptions } from "./api/openai-responses.ts";
 import type { SimpleStreamOptions, StreamFunction } from "./types.ts";
 import { modelCall } from "./utils/model-call.ts";
 

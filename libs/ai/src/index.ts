@@ -6,7 +6,7 @@ export type {
   AnthropicOptions,
   AnthropicThinkingDisplay,
 } from "./api/anthropic-messages.ts";
-export type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses.ts";
+export type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses-params.ts";
 export type { BedrockOptions, BedrockThinkingDisplay } from "./api/bedrock-converse-stream.ts";
 export type { GoogleOptions } from "./api/google-generative-ai.ts";
 export type { GoogleApiThinkingLevel, ResolvedGoogleThinkingLevel } from "./api/google-thinking.ts";
@@ -18,7 +18,7 @@ export type {
   OpenAICodexWebSocketDebugStats,
 } from "./api/openai-codex-responses.ts";
 export type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
-export type { OpenAIResponsesOptions } from "./api/openai-responses.ts";
+export type { OpenAIResponsesOptions } from "./api/openai-responses-config.ts";
 export type {
   MsaMessagesEvent,
   MsaMessagesOptions,
