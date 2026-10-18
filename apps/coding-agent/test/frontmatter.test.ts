@@ -21,7 +21,7 @@ describe("parseFrontmatter", () => {
 
   it("throws on invalid YAML frontmatter", () => {
     const input = "---\nfoo: [bar\n---\nBody";
-    expect(() => parseFrontmatter<Record<string, string>>(input)).toThrow(/at line 1, column 10/);
+    expect(() => parseFrontmatter<Record<string, string>>(input)).toThrow(/at line 1, column 10/u);
   });
 
   it("parses | multiline yaml syntax", () => {
@@ -38,7 +38,7 @@ describe("parseFrontmatter", () => {
     const resultMissingEnd = parseFrontmatter<Record<string, string>>(missingEnd);
     expect(resultNoFrontmatter.body).toBe("Just text\nsecond line");
     expect(resultMissingEnd.body).toBe(
-      "---\nname: test\nBody without terminator".replace(/\r\n/g, "\n").replace(/\r/g, "\n"),
+      "---\nname: test\nBody without terminator".replace(/\r\n/gu, "\n").replace(/\r/gu, "\n"),
     );
   });
 

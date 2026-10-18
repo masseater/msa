@@ -1,3 +1,5 @@
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
 import { readClipboardImage } from "../src/utils/clipboard-image.ts";
@@ -32,27 +34,35 @@ function createTinyBmp1x1Red24bpp(): Uint8Array {
 }
 
 vi.mock("../src/utils/clipboard-command.ts", () => ({
-  runClipboardCommand: vi.fn(async (command: string, args: string[]) => {
-    if (command === "wl-paste" && args.includes("--list-types")) return Buffer.from("image/bmp\n");
-    if (command === "wl-paste" && args.includes("image/bmp"))
-      return Buffer.from(createTinyBmp1x1Red24bpp());
-    return undefined;
-  }),
+  runClipboardCommand: vi.fn((command: string, args: string[]) =>
+    runTest(
+      Effect.gen(function* () {
+        if (command === "wl-paste" && args.includes("--list-types"))
+          return yield* awaited(Buffer.from("image/bmp\n"));
+        if (command === "wl-paste" && args.includes("image/bmp"))
+          return yield* awaited(Buffer.from(createTinyBmp1x1Red24bpp()));
+        return yield* awaited(undefined);
+      }),
+    ),
+  ),
 }));
 
 vi.mock("@msa/tui", () => ({
-  getNativeClipboard: () => ({ getImage: async () => createTinyBmp1x1Red24bpp() }),
+  getNativeClipboard: () => ({ getImage: () => runTest(awaited(createTinyBmp1x1Red24bpp())) }),
 }));
 
 describe("readClipboardImage BMP conversion", () => {
-  test.each(["linux", "win32"] as const)(
-    "%s: converts command/native BMP to PNG",
-    async (platform) => {
-      const image = await readClipboardImage({ env: { WAYLAND_DISPLAY: "wayland-0" }, platform });
+  test.each(["linux", "win32"] as const)("%s: converts command/native BMP to PNG", (platform) =>
+    runTest(
+      Effect.gen(function* () {
+        const image = yield* awaited(
+          readClipboardImage({ env: { WAYLAND_DISPLAY: "wayland-0" }, platform }),
+        );
 
-      expect(image).not.toBeNull();
-      expect(image!.mimeType).toBe("image/png");
-      expect(Array.from(image!.bytes.slice(0, 4))).toEqual([0x89, 0x50, 0x4e, 0x47]);
-    },
+        expect(image).not.toBeNull();
+        expect(image!.mimeType).toBe("image/png");
+        expect(Array.from(image!.bytes.slice(0, 4))).toEqual([0x89, 0x50, 0x4e, 0x47]);
+      }),
+    ),
   );
 });

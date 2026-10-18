@@ -1,3 +1,4 @@
+import { currentTimeMillis } from "@msa/testing";
 import type { Box, TuiMouseEvent } from "@msa/tui";
 import { beforeAll, describe, expect, test } from "vite-plus/test";
 
@@ -42,7 +43,7 @@ describe("collapsible message components", () => {
       role: "compactionSummary",
       summary: "compaction details",
       tokensBefore: 1234,
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
 
     expect(renderText(component)).not.toContain("compaction details");
@@ -57,7 +58,7 @@ describe("collapsible message components", () => {
       role: "branchSummary",
       summary: "branch details",
       fromId: "entry-1",
-      timestamp: Date.now(),
+      timestamp: currentTimeMillis(),
     });
 
     expect(renderText(component)).not.toContain("branch details");

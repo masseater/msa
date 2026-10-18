@@ -1,3 +1,5 @@
+import { awaited, runTest } from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import { createPowerShellTool } from "../src/core/tools/powershell.ts";
@@ -21,20 +23,23 @@ describe("powershell tool", () => {
     ]);
   });
 
-  it.skipIf(process.platform !== "win32")(
-    "executes PowerShell commands with UTF-8 output",
-    async () => {
-      const config = getPowerShellConfig();
-      expect(config.args).toEqual(POWERSHELL_ARGS);
+  it.skipIf(process.platform !== "win32")("executes PowerShell commands with UTF-8 output", () =>
+    runTest(
+      Effect.gen(function* () {
+        const config = getPowerShellConfig();
+        expect(config.args).toEqual(POWERSHELL_ARGS);
 
-      const tool = createPowerShellTool(process.cwd());
-      const result = await tool.execute("powershell-test", {
-        command: "Write-Output 'héllo €'; Get-ExecutionPolicy -Scope Process",
-      });
-      const output = getTextOutput(result);
+        const tool = createPowerShellTool(process.cwd());
+        const result = yield* awaited(
+          tool.execute("powershell-test", {
+            command: "Write-Output 'héllo €'; Get-ExecutionPolicy -Scope Process",
+          }),
+        );
+        const output = getTextOutput(result);
 
-      expect(output).toContain("héllo €");
-      expect(output).toContain("Bypass");
-    },
+        expect(output).toContain("héllo €");
+        expect(output).toContain("Bypass");
+      }),
+    ),
   );
 });
