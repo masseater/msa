@@ -3,7 +3,7 @@ import { createAssistantMessageEventStream, Type } from "@msa/ai";
 import { complete, getModel, getProviders, streamSimple } from "@msa/ai/compat";
 import { createHost, memoryLinkPair, replicatedState } from "@msa/chord";
 
-const model = getModel("google", "gemini-2.5-flash");
+const model = getModel("openai", "gpt-5.5");
 const schema = Type.Object({ prompt: Type.String() });
 const stream = createAssistantMessageEventStream();
 

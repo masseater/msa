@@ -5,7 +5,7 @@ Most hosted providers support one or both of these authentication methods:
 - Sign in through a browser or device flow backed by OAuth.
 - Provide an API key.
 
-Use `/login [provider]` to see the methods supported by a provider. Amazon Bedrock and Google Vertex AI can also use ambient cloud credentials.
+Use `/login [provider]` to see the methods supported by a provider. Amazon Bedrock can also use ambient cloud credentials.
 
 ## Authenticate interactively
 
@@ -32,8 +32,6 @@ This table covers providers with a single primary API-key variable. Providers th
 | ------------------- | -------------------- |
 | Anthropic           | `ANTHROPIC_API_KEY`  |
 | OpenAI              | `OPENAI_API_KEY`     |
-| Google Gemini       | `GEMINI_API_KEY`     |
-| Mistral             | `MISTRAL_API_KEY`    |
 | OpenRouter          | `OPENROUTER_API_KEY` |
 | OpenCode Zen and Go | `OPENCODE_API_KEY`   |
 | Radius              | `RADIUS_API_KEY`     |
@@ -106,44 +104,6 @@ Regional endpoints filter models to their region. To use one, set the base URL i
 
 If the base URL rejects the key at `/models/user` or does not have that endpoint, for example a proxy configured as the OpenRouter base URL, msa lists every OpenRouter model.
 
-### Azure OpenAI
-
-The provider ID is `azure` (formerly `azure-openai-responses`). Use it as the key in `auth.json`, `models.json`, and `settings.json`, and in model references such as `--model azure/gpt-5.4`.
-
-The `azure` provider serves OpenAI models through the Responses API and Microsoft Foundry models through Chat Completions, such as `azure/deepseek-v4-pro`.
-
-Set an API key plus either a base URL or resource name:
-
-```bash
-export AZURE_OPENAI_API_KEY=...
-export AZURE_OPENAI_BASE_URL=https://your-resource.ai.azure.com
-# Or:
-export AZURE_OPENAI_RESOURCE_NAME=your-resource
-```
-
-Resource root URLs under `ai.azure.com`, `cognitiveservices.azure.com`, and `openai.azure.com` are normalized to the OpenAI API path.
-
-msa sends the model ID as the deployment name. If a deployment has a different name, map it with `AZURE_OPENAI_DEPLOYMENT_NAME_MAP`:
-
-```bash
-export AZURE_OPENAI_DEPLOYMENT_NAME_MAP=gpt-5.4=my-gpt-deployment,deepseek-v4-pro=my-deepseek
-```
-
-`AZURE_OPENAI_API_VERSION` overrides the API version for OpenAI models (default `v1`).
-
-To use a Foundry model that msa does not include, add it under `azure` in [`models.json`](models.md#configure-a-compatible-endpoint) with `api: "openai-completions"`. Custom models require a `baseUrl`; `AZURE_OPENAI_BASE_URL` and `AZURE_OPENAI_RESOURCE_NAME` take priority over it when set:
-
-```json
-{
-  "providers": {
-    "azure": {
-      "baseUrl": "https://your-resource.services.ai.azure.com",
-      "models": [{ "id": "your-deployment", "api": "openai-completions" }]
-    }
-  }
-}
-```
-
 ### Amazon Bedrock
 
 Bedrock can use a bearer token or an ambient AWS credential source:
@@ -167,27 +127,3 @@ export AWS_REGION=us-west-2
 ```
 
 msa also supports ECS task credentials and IRSA through the standard `AWS_CONTAINER_CREDENTIALS_*` and `AWS_WEB_IDENTITY_TOKEN_FILE` variables.
-
-### Google Vertex AI
-
-Use a Google Cloud API key:
-
-```bash
-export GOOGLE_CLOUD_API_KEY=...
-```
-
-To use Application Default Credentials, configure a project and location:
-
-```bash
-export GOOGLE_CLOUD_PROJECT=your-project
-# GCLOUD_PROJECT is also supported
-export GOOGLE_CLOUD_LOCATION=us-central1
-```
-
-Then authenticate:
-
-```bash
-gcloud auth application-default login
-```
-
-To use a service-account key file instead, set `GOOGLE_APPLICATION_CREDENTIALS` along with the project and location.

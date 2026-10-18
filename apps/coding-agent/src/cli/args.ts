@@ -454,14 +454,7 @@ ${chalk.bold("Environment Variables:")}
   ANTHROPIC_API_KEY                - Anthropic Claude API key
   ANTHROPIC_OAUTH_TOKEN            - Anthropic OAuth token (alternative to API key)
   OPENAI_API_KEY                   - OpenAI GPT API key
-  AZURE_OPENAI_API_KEY             - Azure OpenAI API key
-  AZURE_OPENAI_BASE_URL            - Azure OpenAI/Cognitive Services base URL (e.g. https://{resource}.openai.azure.com)
-  AZURE_OPENAI_RESOURCE_NAME       - Azure OpenAI resource name (alternative to base URL)
-  AZURE_OPENAI_API_VERSION         - Azure OpenAI API version (default: v1)
-  AZURE_OPENAI_DEPLOYMENT_NAME_MAP - Azure OpenAI model=deployment map (comma-separated)
-  GEMINI_API_KEY                   - Google Gemini API key
   OPENROUTER_API_KEY               - OpenRouter API key
-  MISTRAL_API_KEY                  - Mistral API key
   OPENCODE_API_KEY                 - OpenCode Zen/OpenCode Go API key
   AWS_PROFILE                      - AWS profile for Amazon Bedrock
   AWS_ACCESS_KEY_ID                - AWS access key for Amazon Bedrock

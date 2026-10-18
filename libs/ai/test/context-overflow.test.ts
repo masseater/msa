@@ -19,7 +19,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 import { complete, getModel } from "../src/compat.ts";
 import type { AssistantMessage, Context, Model, Usage } from "../src/types.ts";
 import { isContextOverflow } from "../src/utils/overflow.ts";
-import { hasAzureOpenAICredentials } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
@@ -149,35 +148,6 @@ describe("Context overflow error handling", () => {
     }, 120000);
   });
 
-  describe.skipIf(!hasAzureOpenAICredentials())("Azure OpenAI Responses", () => {
-    it("gpt-4o-mini - should detect overflow via isContextOverflow", async () => {
-      const model = getModel("azure", "gpt-4o-mini");
-      const result = await testContextOverflow(model, process.env["AZURE_OPENAI_API_KEY"]!);
-      logResult(result);
-
-      expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/context|maximum/iu);
-      expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-    }, 120000);
-  });
-
-  // =============================================================================
-  // Google
-  // Expected pattern: "input token count (X) exceeds the maximum"
-  // =============================================================================
-
-  describe.skipIf(!process.env["GEMINI_API_KEY"])("Google", () => {
-    it("gemini-2.5-flash - should detect overflow via isContextOverflow", async () => {
-      const model = getModel("google", "gemini-2.5-flash");
-      const result = await testContextOverflow(model, process.env["GEMINI_API_KEY"]!);
-      logResult(result);
-
-      expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/input token count.*exceeds the maximum/iu);
-      expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-    }, 120000);
-  });
-
   // =============================================================================
   // OpenAI Codex (OAuth)
   // Uses ChatGPT Plus/Pro subscription via OAuth
@@ -210,22 +180,6 @@ describe("Context overflow error handling", () => {
       logResult(result);
 
       expect(result.stopReason).toBe("error");
-      expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
-    }, 120000);
-  });
-
-  // =============================================================================
-  // Mistral
-  // =============================================================================
-
-  describe.skipIf(!process.env["MISTRAL_API_KEY"])("Mistral", () => {
-    it("devstral-medium-latest - should detect overflow via isContextOverflow", async () => {
-      const model = getModel("mistral", "devstral-medium-latest");
-      const result = await testContextOverflow(model, process.env["MISTRAL_API_KEY"]!);
-      logResult(result);
-
-      expect(result.stopReason).toBe("error");
-      expect(result.errorMessage).toMatch(/too large for model with \d+ maximum context length/iu);
       expect(isContextOverflow(result.response, model.contextWindow)).toBe(true);
     }, 120000);
   });

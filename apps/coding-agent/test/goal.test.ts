@@ -78,12 +78,14 @@ describe("pickEvaluatorModel", () => {
   });
 
   it("falls back to the working model", () => {
-    const gemini = model("google", "gemini-3.1-pro", 2, 12);
+    const gemini = model("opencode", "gemini-3.1-pro", 2, 12);
     expect(pickEvaluatorModel(gemini, [gemini, model("openai", "gpt-5-mini", 0.25, 2)])).toBe(
       gemini,
     );
     // "gemini" is not a small-tier name, and pricier models are never picked.
-    expect(pickEvaluatorModel(gemini, [model("google", "gemini-ultra-lite", 9, 90)])).toBe(gemini);
+    expect(pickEvaluatorModel(gemini, [model("opencode", "gemini-ultra-lite", 9, 90)])).toBe(
+      gemini,
+    );
   });
 });
 

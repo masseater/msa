@@ -20,7 +20,6 @@ import type {
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
 import { StringEnum } from "../src/utils/typebox-helpers.ts";
-import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
@@ -388,91 +387,6 @@ async function multiTurn<TApi extends Api>(model: Model<TApi>, options?: StreamO
 }
 
 describe("Generate E2E Tests", () => {
-  describe.skipIf(!process.env["GEMINI_API_KEY"])("Gemini Provider (gemini-2.5-flash)", () => {
-    const llm = getModel("google", "gemini-2.5-flash");
-
-    it("should complete basic text generation", { retry: 3 }, async () => {
-      await basicTextGeneration(llm);
-    });
-
-    it("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(llm);
-    });
-
-    it("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(llm);
-    });
-
-    it("should handle thinking", { retry: 3 }, async () => {
-      await handleThinking(llm, { thinking: { enabled: true, budgetTokens: 1024 } });
-    });
-
-    it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-      await multiTurn(llm, { thinking: { enabled: true, budgetTokens: 2048 } });
-    });
-
-    it("should handle image input", { retry: 3 }, async () => {
-      await handleImage(llm);
-    });
-  });
-
-  describe("Google Vertex Provider (gemini-3-flash-preview)", () => {
-    const vertexProject = process.env["GOOGLE_CLOUD_PROJECT"] || process.env["GCLOUD_PROJECT"];
-    const vertexLocation = process.env["GOOGLE_CLOUD_LOCATION"];
-    const vertexApiKey = process.env["GOOGLE_CLOUD_API_KEY"];
-    const isVertexConfigured = Boolean(vertexProject && vertexLocation);
-    const vertexOptions = { project: vertexProject, location: vertexLocation } as const;
-    const llm = getModel("google-vertex", "gemini-3-flash-preview");
-
-    it.skipIf(!isVertexConfigured)(
-      "should complete basic text generation",
-      { retry: 3 },
-      async () => {
-        await basicTextGeneration(llm, vertexOptions);
-      },
-    );
-
-    it.skipIf(!vertexApiKey)(
-      "should complete basic text generation with Vertex API key",
-      { retry: 3 },
-      async () => {
-        await basicTextGeneration(llm, { apiKey: vertexApiKey! });
-      },
-    );
-
-    it.skipIf(!isVertexConfigured)("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(llm, vertexOptions);
-    });
-
-    it.skipIf(!isVertexConfigured)("should handle thinking", { retry: 3 }, async () => {
-      const { ThinkingLevel } = await import("@google/genai");
-      await handleThinking(llm, {
-        ...vertexOptions,
-        thinking: { enabled: true, budgetTokens: 1024, level: ThinkingLevel.LOW },
-      });
-    });
-
-    it.skipIf(!isVertexConfigured)("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(llm, vertexOptions);
-    });
-
-    it.skipIf(!isVertexConfigured)(
-      "should handle multi-turn with thinking and tools",
-      { retry: 3 },
-      async () => {
-        const { ThinkingLevel } = await import("@google/genai");
-        await multiTurn(llm, {
-          ...vertexOptions,
-          thinking: { enabled: true, budgetTokens: 1024, level: ThinkingLevel.MEDIUM },
-        });
-      },
-    );
-
-    it.skipIf(!isVertexConfigured)("should handle image input", { retry: 3 }, async () => {
-      await handleImage(llm, vertexOptions);
-    });
-  });
-
   describe.skipIf(!process.env["OPENAI_API_KEY"])(
     "OpenAI Completions Provider (gpt-4o-mini)",
     () => {
@@ -552,31 +466,6 @@ describe("Generate E2E Tests", () => {
     },
   );
 
-  describe.skipIf(!hasAzureOpenAICredentials())(
-    "Azure OpenAI Responses Provider (gpt-4o-mini)",
-    () => {
-      const llm = getModel("azure", "gpt-4o-mini");
-      const azureDeploymentName = resolveAzureDeploymentName(llm.id);
-      const azureOptions = azureDeploymentName ? { azureDeploymentName } : {};
-
-      it("should complete basic text generation", { retry: 3 }, async () => {
-        await basicTextGeneration(llm, azureOptions);
-      });
-
-      it("should handle tool calling", { retry: 3 }, async () => {
-        await handleToolCall(llm, azureOptions);
-      });
-
-      it("should handle streaming", { retry: 3 }, async () => {
-        await handleStreaming(llm, azureOptions);
-      });
-
-      it("should handle image input", { retry: 3 }, async () => {
-        await handleImage(llm, azureOptions);
-      });
-    },
-  );
-
   describe.skipIf(!process.env["OPENROUTER_API_KEY"])(
     "OpenRouter Provider (glm-4.5v via OpenAI Completions)",
     () => {
@@ -600,58 +489,6 @@ describe("Generate E2E Tests", () => {
 
       it("should handle multi-turn with thinking and tools", { retry: 2 }, async () => {
         await multiTurn(llm, { reasoningEffort: "medium" });
-      });
-
-      it("should handle image input", { retry: 3 }, async () => {
-        await handleImage(llm);
-      });
-    },
-  );
-
-  describe.skipIf(!process.env["MISTRAL_API_KEY"])(
-    "Mistral Provider (devstral-medium-latest)",
-    () => {
-      const llm = getModel("mistral", "devstral-medium-latest");
-
-      it("should complete basic text generation", { retry: 3 }, async () => {
-        await basicTextGeneration(llm);
-      });
-
-      it("should handle tool calling", { retry: 3 }, async () => {
-        await handleToolCall(llm);
-      });
-
-      it("should handle streaming", { retry: 3 }, async () => {
-        await handleStreaming(llm);
-      });
-
-      it("should handle thinking mode", { retry: 3 }, async () => {
-        const llm = getModel("mistral", "mistral-small-2603");
-        await handleThinking(llm, { reasoningEffort: "high" });
-      });
-
-      it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-        const llm = getModel("mistral", "mistral-small-2603");
-        await multiTurn(llm, { reasoningEffort: "high" });
-      });
-    },
-  );
-
-  describe.skipIf(!process.env["MISTRAL_API_KEY"])(
-    "Mistral Provider (pixtral-12b with image support)",
-    () => {
-      const llm = getModel("mistral", "pixtral-12b");
-
-      it("should complete basic text generation", { retry: 3 }, async () => {
-        await basicTextGeneration(llm);
-      });
-
-      it("should handle tool calling", { retry: 3 }, async () => {
-        await handleToolCall(llm);
-      });
-
-      it("should handle streaming", { retry: 3 }, async () => {
-        await handleStreaming(llm);
       });
 
       it("should handle image input", { retry: 3 }, async () => {

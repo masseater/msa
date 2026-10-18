@@ -31,7 +31,7 @@ export default function (msa: ExtensionAPI) {
     } = preparation;
 
     // Use Gemini Flash for summarization (cheaper/faster than most conversation models)
-    const model = ctx.modelRegistry.find("google", "gemini-2.5-flash");
+    const model = ctx.modelRegistry.find("opencode", "gemini-3.5-flash");
     if (!model) {
       ctx.ui.notify(`Could not find Gemini Flash model, using default compaction`, "warning");
       return;

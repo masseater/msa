@@ -3,10 +3,6 @@
 
 import { AMAZON_BEDROCK_CLASSIFIER_MODELS, AMAZON_BEDROCK_IMAGE_MODELS, AMAZON_BEDROCK_MODELS } from "./providers/amazon-bedrock.models.ts";
 import { ANTHROPIC_CLASSIFIER_MODELS, ANTHROPIC_IMAGE_MODELS, ANTHROPIC_MODELS } from "./providers/anthropic.models.ts";
-import { AZURE_CLASSIFIER_MODELS, AZURE_IMAGE_MODELS, AZURE_MODELS } from "./providers/azure.models.ts";
-import { GOOGLE_CLASSIFIER_MODELS, GOOGLE_IMAGE_MODELS, GOOGLE_MODELS } from "./providers/google.models.ts";
-import { GOOGLE_VERTEX_CLASSIFIER_MODELS, GOOGLE_VERTEX_IMAGE_MODELS, GOOGLE_VERTEX_MODELS } from "./providers/google-vertex.models.ts";
-import { MISTRAL_CLASSIFIER_MODELS, MISTRAL_IMAGE_MODELS, MISTRAL_MODELS } from "./providers/mistral.models.ts";
 import { OPENAI_CLASSIFIER_MODELS, OPENAI_IMAGE_MODELS, OPENAI_MODELS } from "./providers/openai.models.ts";
 import { OPENAI_CODEX_CLASSIFIER_MODELS, OPENAI_CODEX_IMAGE_MODELS, OPENAI_CODEX_MODELS } from "./providers/openai-codex.models.ts";
 import { OPENCODE_CLASSIFIER_MODELS, OPENCODE_IMAGE_MODELS, OPENCODE_MODELS } from "./providers/opencode.models.ts";
@@ -17,10 +13,6 @@ import { RADIUS_CLASSIFIER_MODELS, RADIUS_IMAGE_MODELS, RADIUS_MODELS } from "./
 export const MODELS: {
 	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_MODELS;
 	readonly "anthropic": typeof ANTHROPIC_MODELS;
-	readonly "azure": typeof AZURE_MODELS;
-	readonly "google": typeof GOOGLE_MODELS;
-	readonly "google-vertex": typeof GOOGLE_VERTEX_MODELS;
-	readonly "mistral": typeof MISTRAL_MODELS;
 	readonly "openai": typeof OPENAI_MODELS;
 	readonly "openai-codex": typeof OPENAI_CODEX_MODELS;
 	readonly "opencode": typeof OPENCODE_MODELS;
@@ -30,10 +22,6 @@ export const MODELS: {
 } = {
 	"amazon-bedrock": AMAZON_BEDROCK_MODELS,
 	"anthropic": ANTHROPIC_MODELS,
-	"azure": AZURE_MODELS,
-	"google": GOOGLE_MODELS,
-	"google-vertex": GOOGLE_VERTEX_MODELS,
-	"mistral": MISTRAL_MODELS,
 	"openai": OPENAI_MODELS,
 	"openai-codex": OPENAI_CODEX_MODELS,
 	"opencode": OPENCODE_MODELS,
@@ -45,10 +33,6 @@ export const MODELS: {
 export const IMAGE_MODELS: {
 	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_IMAGE_MODELS;
 	readonly "anthropic": typeof ANTHROPIC_IMAGE_MODELS;
-	readonly "azure": typeof AZURE_IMAGE_MODELS;
-	readonly "google": typeof GOOGLE_IMAGE_MODELS;
-	readonly "google-vertex": typeof GOOGLE_VERTEX_IMAGE_MODELS;
-	readonly "mistral": typeof MISTRAL_IMAGE_MODELS;
 	readonly "openai": typeof OPENAI_IMAGE_MODELS;
 	readonly "openai-codex": typeof OPENAI_CODEX_IMAGE_MODELS;
 	readonly "opencode": typeof OPENCODE_IMAGE_MODELS;
@@ -58,10 +42,6 @@ export const IMAGE_MODELS: {
 } = {
 	"amazon-bedrock": AMAZON_BEDROCK_IMAGE_MODELS,
 	"anthropic": ANTHROPIC_IMAGE_MODELS,
-	"azure": AZURE_IMAGE_MODELS,
-	"google": GOOGLE_IMAGE_MODELS,
-	"google-vertex": GOOGLE_VERTEX_IMAGE_MODELS,
-	"mistral": MISTRAL_IMAGE_MODELS,
 	"openai": OPENAI_IMAGE_MODELS,
 	"openai-codex": OPENAI_CODEX_IMAGE_MODELS,
 	"opencode": OPENCODE_IMAGE_MODELS,
@@ -73,10 +53,6 @@ export const IMAGE_MODELS: {
 export const CLASSIFIER_MODELS: {
 	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_CLASSIFIER_MODELS;
 	readonly "anthropic": typeof ANTHROPIC_CLASSIFIER_MODELS;
-	readonly "azure": typeof AZURE_CLASSIFIER_MODELS;
-	readonly "google": typeof GOOGLE_CLASSIFIER_MODELS;
-	readonly "google-vertex": typeof GOOGLE_VERTEX_CLASSIFIER_MODELS;
-	readonly "mistral": typeof MISTRAL_CLASSIFIER_MODELS;
 	readonly "openai": typeof OPENAI_CLASSIFIER_MODELS;
 	readonly "openai-codex": typeof OPENAI_CODEX_CLASSIFIER_MODELS;
 	readonly "opencode": typeof OPENCODE_CLASSIFIER_MODELS;
@@ -86,10 +62,6 @@ export const CLASSIFIER_MODELS: {
 } = {
 	"amazon-bedrock": AMAZON_BEDROCK_CLASSIFIER_MODELS,
 	"anthropic": ANTHROPIC_CLASSIFIER_MODELS,
-	"azure": AZURE_CLASSIFIER_MODELS,
-	"google": GOOGLE_CLASSIFIER_MODELS,
-	"google-vertex": GOOGLE_VERTEX_CLASSIFIER_MODELS,
-	"mistral": MISTRAL_CLASSIFIER_MODELS,
 	"openai": OPENAI_CLASSIFIER_MODELS,
 	"openai-codex": OPENAI_CODEX_CLASSIFIER_MODELS,
 	"opencode": OPENCODE_CLASSIFIER_MODELS,

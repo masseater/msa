@@ -260,7 +260,6 @@ const referenceCases: ReferenceCase[] = [
   },
 
   {
-    // Like `mistral/codestral` -> mistral/codestral-latest despite gateway id `mistral/codestral`
     name: "named provider's usable fuzzy match beats a raw id elsewhere",
     text: "anthropic/claude-opus",
     usable: ["anthropic"],
@@ -428,7 +427,7 @@ describe("resolveModelScopeWithDiagnostics", () => {
     const registry = {
       getAvailable: () => [
         ...allModels,
-        { ...mockModels[1], provider: "azure" },
+        { ...mockModels[1], provider: "opencode" },
         { ...mockModels[1], provider: "openai-codex", id: "gpt-4o-mini" },
       ],
     } as unknown as Parameters<typeof resolveModelScopeWithDiagnostics>[1];
@@ -446,7 +445,7 @@ describe("resolveModelScopeWithDiagnostics", () => {
         ]),
       ).toEqual(
         expect.arrayContaining([
-          ["azure/gpt-4o", thinkingLevel],
+          ["opencode/gpt-4o", thinkingLevel],
           ["openai/gpt-4o", thinkingLevel],
         ]),
       );
@@ -455,7 +454,7 @@ describe("resolveModelScopeWithDiagnostics", () => {
         {
           type: "warning",
           code: "ambiguous",
-          message: `Pattern "${pattern}" matches several providers: azure, openai. Use provider/id to choose one.`,
+          message: `Pattern "${pattern}" matches several providers: openai, opencode. Use provider/id to choose one.`,
           pattern,
         },
       ]);

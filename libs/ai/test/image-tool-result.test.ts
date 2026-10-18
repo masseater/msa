@@ -10,7 +10,6 @@ import type { StreamOptions } from "../src/types.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
@@ -215,18 +214,6 @@ async function handleToolWithTextAndImageResult<TApi extends Api>(
 }
 
 describe("Tool Results with Images", () => {
-  describe.skipIf(!process.env["GEMINI_API_KEY"])("Google Provider (gemini-2.5-flash)", () => {
-    const llm = getModel("google", "gemini-2.5-flash");
-
-    it("should handle tool result with only image", { retry: 3, timeout: 30000 }, async () => {
-      await handleToolWithImageResult(llm);
-    });
-
-    it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, async () => {
-      await handleToolWithTextAndImageResult(llm);
-    });
-  });
-
   describe.skipIf(!process.env["OPENAI_API_KEY"])(
     "OpenAI Completions Provider (gpt-4o-mini)",
     () => {
@@ -263,27 +250,6 @@ describe("Tool Results with Images", () => {
     });
   });
 
-  describe.skipIf(!hasAzureOpenAICredentials())(
-    "Azure OpenAI Responses Provider (gpt-4o-mini)",
-    () => {
-      const llm = getModel("azure", "gpt-4o-mini");
-      const azureDeploymentName = resolveAzureDeploymentName(llm.id);
-      const azureOptions = azureDeploymentName ? { azureDeploymentName } : {};
-
-      it("should handle tool result with only image", { retry: 3, timeout: 30000 }, async () => {
-        await handleToolWithImageResult(llm, azureOptions);
-      });
-
-      it(
-        "should handle tool result with text and image",
-        { retry: 3, timeout: 30000 },
-        async () => {
-          await handleToolWithTextAndImageResult(llm, azureOptions);
-        },
-      );
-    },
-  );
-
   describe.skipIf(!process.env["ANTHROPIC_API_KEY"])(
     "Anthropic Provider (claude-haiku-4-5)",
     () => {
@@ -311,18 +277,6 @@ describe("Tool Results with Images", () => {
     });
 
     it("should handle tool result with text and image", { retry: 3, timeout: 30000 }, async () => {
-      await handleToolWithTextAndImageResult(llm);
-    });
-  });
-
-  describe.skipIf(!process.env["MISTRAL_API_KEY"])("Mistral Provider (pixtral-12b)", () => {
-    const llm = getModel("mistral", "pixtral-12b");
-
-    it("should handle tool result with only image", { retry: 5, timeout: 30000 }, async () => {
-      await handleToolWithImageResult(llm);
-    });
-
-    it("should handle tool result with text and image", { retry: 5, timeout: 30000 }, async () => {
       await handleToolWithTextAndImageResult(llm);
     });
   });

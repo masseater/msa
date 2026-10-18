@@ -16,11 +16,7 @@ import type {
 } from "../types.ts";
 import { amazonBedrockProvider } from "./amazon-bedrock.ts";
 import { anthropicProvider } from "./anthropic.ts";
-import { azureProvider } from "./azure.ts";
 import modelDataManifest from "./data/.manifest.json" with { type: "json" };
-import { googleVertexProvider } from "./google-vertex.ts";
-import { googleProvider } from "./google.ts";
-import { mistralProvider } from "./mistral.ts";
 import { openaiCodexProvider } from "./openai-codex.ts";
 import { openaiProvider } from "./openai.ts";
 import { opencodeGoProvider } from "./opencode-go.ts";
@@ -144,10 +140,6 @@ export function builtinProviders(): Provider[] {
   return [
     amazonBedrockProvider(),
     anthropicProvider(),
-    azureProvider(),
-    googleProvider(),
-    googleVertexProvider(),
-    mistralProvider(),
     openaiProvider(),
     openaiCodexProvider(),
     opencodeProvider(),

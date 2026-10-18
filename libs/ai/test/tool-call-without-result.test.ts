@@ -6,7 +6,6 @@ import type { Api, Context, Model, StreamOptions, Tool } from "../src/types.ts";
 
 type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
 
-import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
 
@@ -95,18 +94,6 @@ describe("Tool Call Without Result Tests", () => {
   // API Key-based providers
   // =========================================================================
 
-  describe.skipIf(!process.env["GEMINI_API_KEY"])("Google Provider", () => {
-    const model = getModel("google", "gemini-2.5-flash");
-
-    it(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testToolCallWithoutResult(model);
-      },
-    );
-  });
-
   describe.skipIf(!process.env["OPENAI_API_KEY"])("OpenAI Completions Provider", () => {
     const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
     void _compat;
@@ -136,34 +123,8 @@ describe("Tool Call Without Result Tests", () => {
     );
   });
 
-  describe.skipIf(!hasAzureOpenAICredentials())("Azure OpenAI Responses Provider", () => {
-    const model = getModel("azure", "gpt-4o-mini");
-    const azureDeploymentName = resolveAzureDeploymentName(model.id);
-    const azureOptions = azureDeploymentName ? { azureDeploymentName } : {};
-
-    it(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testToolCallWithoutResult(model, azureOptions);
-      },
-    );
-  });
-
   describe.skipIf(!process.env["ANTHROPIC_API_KEY"])("Anthropic Provider", () => {
     const model = getModel("anthropic", "claude-haiku-4-5");
-
-    it(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testToolCallWithoutResult(model);
-      },
-    );
-  });
-
-  describe.skipIf(!process.env["MISTRAL_API_KEY"])("Mistral Provider", () => {
-    const model = getModel("mistral", "devstral-medium-latest");
 
     it(
       "should filter out tool calls without corresponding tool results",

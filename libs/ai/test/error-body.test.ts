@@ -1,7 +1,7 @@
 // Unit tests for the shared provider error-body normalizer.
 //
 // See issues/provider-error-body-passthrough. These cover one synthesized error
-// object per SDK shape (Mistral, openai APIError, @google/genai ApiError, AWS
+// object per SDK shape (msa HTTP error, openai APIError, @google/genai ApiError, AWS
 // Bedrock ServiceException), plus the non-Error fallback, truncation, the empty
 // parsed-body edge case, and the formatProviderError compose helper.
 
@@ -14,9 +14,9 @@ import {
 } from "../src/utils/error-body.ts";
 
 describe("normalizeProviderError", () => {
-  it("extracts status and body from a Mistral-shaped error", () => {
-    const error = Object.assign(new Error("Mistral request failed"), {
-      statusCode: 403,
+  it("extracts status and body from a string-body HTTP error", () => {
+    const error = Object.assign(new Error("Classifier returned 403"), {
+      status: 403,
       body: '{"error":"blocked by gateway WAF"}',
     });
 
@@ -167,7 +167,7 @@ describe("normalizeProviderError", () => {
   it("truncates the body at the cap", () => {
     const longBody = "x".repeat(MAX_PROVIDER_ERROR_BODY_CHARS + 50);
     const error = Object.assign(new Error("failed"), {
-      statusCode: 500,
+      status: 500,
       body: longBody,
     });
 
@@ -179,7 +179,7 @@ describe("normalizeProviderError", () => {
 
   it("sets messageCarriesBody when the message already contains the extracted body", () => {
     const error = Object.assign(new Error("500: upstream exploded"), {
-      statusCode: 500,
+      status: 500,
       body: "upstream exploded",
     });
 

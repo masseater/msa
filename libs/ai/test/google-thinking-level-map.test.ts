@@ -3,7 +3,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { streamSimple as streamSimpleGoogle } from "../src/api/google-generative-ai.ts";
 import { resolveGoogleThinkingLevel } from "../src/api/google-shared.ts";
-import { streamSimple as streamSimpleVertex } from "../src/api/google-vertex.ts";
 import type { Model, ThinkingBudgets, ThinkingLevel, ThinkingLevelMap } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
@@ -21,22 +20,6 @@ function googleModel(
     api: "google-generative-ai",
     provider: "test-google",
     baseUrl: "https://example.invalid/v1beta",
-    reasoning: true,
-    thinkingLevelMap,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128000,
-    maxTokens: 4096,
-  };
-}
-
-function vertexModel(id: string, thinkingLevelMap: ThinkingLevelMap): Model<"google-vertex"> {
-  return {
-    id,
-    name: id,
-    api: "google-vertex",
-    provider: "test-vertex",
-    baseUrl: "https://example.invalid/v1",
     reasoning: true,
     thinkingLevelMap,
     input: ["text"],
@@ -67,37 +50,11 @@ async function captureGooglePayload(
   return payload;
 }
 
-async function captureVertexPayload(
-  model: Model<"google-vertex">,
-  reasoning?: ThinkingLevel,
-  thinkingBudgets?: ThinkingBudgets,
-): Promise<GenerateContentParameters> {
-  let payload: GenerateContentParameters | undefined;
-  const result = await streamSimpleVertex(model, context, {
-    apiKey: "test",
-    reasoning,
-    thinkingBudgets,
-    onPayload: (request) => {
-      payload = request as GenerateContentParameters;
-      throw new Error("payload captured");
-    },
-  }).result();
-
-  expect(result.errorMessage).toContain("payload captured");
-  if (!payload) throw new Error("Vertex payload was not captured");
-  return payload;
-}
-
 const googleAdapters = [
   {
     name: "Google Generative AI",
     capture: (id: string, thinkingLevelMap: ThinkingLevelMap, reasoning?: ThinkingLevel) =>
       captureGooglePayload(googleModel(id, thinkingLevelMap), reasoning),
-  },
-  {
-    name: "Google Vertex",
-    capture: (id: string, thinkingLevelMap: ThinkingLevelMap, reasoning?: ThinkingLevel) =>
-      captureVertexPayload(vertexModel(id, thinkingLevelMap), reasoning),
   },
 ] as const;
 
@@ -238,28 +195,5 @@ describe("Google thinking level maps", () => {
     );
 
     expect(payload).toMatchObject({ config: { thinkingConfig: { thinkingBudget: 1234 } } });
-  });
-
-  it("maps Google Vertex extended levels", async () => {
-    const payload = await captureVertexPayload(
-      vertexModel("gemini-3.7-flash", { xhigh: "high" }),
-      "xhigh",
-    );
-
-    expect(payload).toMatchObject({
-      config: { thinkingConfig: { includeThoughts: true, thinkingLevel: "HIGH" } },
-    });
-  });
-
-  it("uses mapped Google Vertex levels for token budgets", async () => {
-    const payload = await captureVertexPayload(
-      vertexModel("gemini-2.5-flash", { max: "high" }),
-      "max",
-      {
-        high: 4321,
-      },
-    );
-
-    expect(payload).toMatchObject({ config: { thinkingConfig: { thinkingBudget: 4321 } } });
   });
 });

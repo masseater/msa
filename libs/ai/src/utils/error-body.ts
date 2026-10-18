@@ -7,8 +7,8 @@
 // the body and surface opaque messages like `"403 status code (no body)"` or
 // collapse to `"Unknown: UnknownError"`.
 //
-// `normalizeProviderError` probes the known SDK field shapes (Mistral,
-// `openai`, `@google/genai`, AWS Bedrock) and returns a struct each provider
+// `normalizeProviderError` probes the known SDK field shapes (`openai`,
+// `@google/genai`, AWS Bedrock, msa's own HTTP errors) and returns a struct each provider
 // composes into its display string. The `messageCarriesBody` flag captures the
 // Anthropic / `@google/genai` happy path where the SDK already folded the body
 // into the message, so providers can preserve it without double-printing.
@@ -27,7 +27,6 @@ export interface NormalizedProviderError {
 }
 
 type SdkErrorShape = Error & {
-  statusCode?: unknown;
   status?: unknown;
   body?: unknown;
   error?: unknown;
@@ -55,14 +54,13 @@ export function normalizeProviderError(error: unknown): NormalizedProviderError 
 
 /**
  * Probe the HTTP status, first numeric hit wins, in SDK-field order:
- * `statusCode` (Mistral) → `status` (`openai`, `@google/genai`) →
+ * `status` (`openai`, `@google/genai`) →
  * `$metadata.httpStatusCode` (Bedrock) → `$response.statusCode` (Bedrock).
  *
  * @param {SdkErrorShape} error - thrown value
  * @returns {number | undefined} the HTTP status, or undefined
  */
 function extractStatus(error: SdkErrorShape): number | undefined {
-  if (typeof error.statusCode === "number") return error.statusCode;
   if (typeof error.status === "number") return error.status;
   if (typeof error.$metadata?.httpStatusCode === "number") return error.$metadata.httpStatusCode;
   if (typeof error.$response?.statusCode === "number") return error.$response.statusCode;
@@ -71,7 +69,7 @@ function extractStatus(error: SdkErrorShape): number | undefined {
 
 /**
  * Probe the raw body reason, first usable hit wins, in SDK-field order:
- * `body` string (Mistral) → `error` parsed JSON body object (`openai` SDK's
+ * `body` string (msa's own HTTP errors) → `error` parsed JSON body object (`openai` SDK's
  * `this.error`) → `$response.body` (Bedrock). Empty objects and unread response
  * streams are treated as no body so they do not surface as `"{}"` or serialized
  * stream internals. The chosen body is truncated to the cap.

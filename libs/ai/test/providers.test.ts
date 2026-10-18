@@ -21,7 +21,6 @@ import {
 import { amazonBedrockProvider } from "../src/providers/amazon-bedrock.ts";
 import { anthropicProvider } from "../src/providers/anthropic.ts";
 import { fauxAssistantMessage, fauxProvider } from "../src/providers/faux.ts";
-import { googleVertexProvider } from "../src/providers/google-vertex.ts";
 import type {
   Api,
   DeferredCancelOptions,
@@ -33,10 +32,10 @@ import type {
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
-function fakeAuthContext(env: Record<string, string>, files: string[] = []): AuthContext {
+function fakeAuthContext(env: Record<string, string>): AuthContext {
   return {
     env: (name) => Promise.resolve(env[name]),
-    fileExists: (path) => Promise.resolve(files.includes(path)),
+    fileExists: () => Promise.resolve(false),
   };
 }
 
@@ -132,10 +131,6 @@ describe("builtin providers", () => {
       maxRequestBytes: 512 * 1024 * 1024,
       images: { maxPerRequest: 1500 },
     });
-    expect(getBuiltinModel("google", "gemini-2.5-flash").inputLimits).toMatchObject({
-      maxRequestBytes: 20 * 1024 * 1024,
-      images: { maxPerRequest: 3600 },
-    });
   });
 
   it("does not infer image limits from gateway API compatibility", () => {
@@ -147,26 +142,9 @@ describe("builtin providers", () => {
 
   it("uses models.dev effort levels for Google thinking models", () => {
     // Regression test for https://github.com/earendil-works/pi/issues/9455
-    for (const provider of ["google", "google-vertex"] as const) {
-      expect(getSupportedThinkingLevels(getBuiltinModel(provider, "gemini-3.6-flash"))).toContain(
-        "minimal",
-      );
-      expect(getSupportedThinkingLevels(getBuiltinModel(provider, "gemini-3.8-flash"))).toEqual([
-        "low",
-        "medium",
-        "high",
-      ]);
-      expect(
-        getSupportedThinkingLevels(getBuiltinModel(provider, "gemini-3.1-pro-preview")),
-      ).toEqual(["low", "medium", "high"]);
-    }
     expect(getSupportedThinkingLevels(getBuiltinModel("opencode", "gemini-3.8-flash"))).toEqual([
       "low",
       "medium",
-      "high",
-    ]);
-    expect(getSupportedThinkingLevels(getBuiltinModel("google", "gemma-4-31b-it"))).toEqual([
-      "minimal",
       "high",
     ]);
   });
@@ -192,7 +170,7 @@ describe("builtin providers", () => {
       ["openai", "gpt-4.1"],
       ["openai", "gpt-5.2"],
       ["anthropic", "claude-sonnet-4-5"],
-      ["google", "gemini-2.5-pro"],
+      ["opencode", "gemini-3.1-pro"],
       ["opencode", "gpt-5.2"],
       ["opencode", "claude-sonnet-4-5"],
       ["openrouter", "anthropic/claude-opus-5"],
@@ -320,81 +298,6 @@ describe("builtin providers", () => {
     const unconfigured = createModels({ authContext: fakeAuthContext({}) });
     unconfigured.setProvider(amazonBedrockProvider());
     expect(await unconfigured.getAuth(model.provider)).toBeUndefined();
-  });
-
-  it("runs provider-owned Vertex API key and ADC login flows", async () => {
-    const auth = googleVertexProvider().auth.apiKey!;
-    const keyAnswers = ["api-key", "vertex-key"];
-    expect(
-      await auth.login?.({
-        signal: neverAbortedSignal,
-        prompt: () => Promise.resolve(keyAnswers.shift()!),
-        notify: () => {},
-      }),
-    ).toEqual({ type: "api_key", key: "vertex-key" });
-
-    const adcAnswers = ["adc", "project-id", "us-central1"];
-    const events: AuthEvent[] = [];
-    expect(
-      await auth.login?.({
-        signal: neverAbortedSignal,
-        prompt: () => Promise.resolve(adcAnswers.shift()!),
-        notify: (event) => events.push(event),
-      }),
-    ).toEqual({
-      type: "api_key",
-      env: { GOOGLE_CLOUD_PROJECT: "project-id", GOOGLE_CLOUD_LOCATION: "us-central1" },
-    });
-    expect(events).toEqual([
-      expect.objectContaining({
-        type: "info",
-        links: [expect.objectContaining({ label: "Application Default Credentials" })],
-      }),
-    ]);
-    expect(
-      await auth.resolve({
-        ctx: fakeAuthContext({}, ["~/.config/gcloud/application_default_credentials.json"]),
-        credential: {
-          type: "api_key",
-          env: { GOOGLE_CLOUD_PROJECT: "project-id", GOOGLE_CLOUD_LOCATION: "us-central1" },
-        },
-        signal: neverAbortedSignal,
-      }),
-    ).toMatchObject({
-      auth: {},
-      env: { GOOGLE_CLOUD_PROJECT: "project-id", GOOGLE_CLOUD_LOCATION: "us-central1" },
-    });
-  });
-
-  it("resolves vertex via ADC file plus project and location", async () => {
-    const adc = "~/.config/gcloud/application_default_credentials.json";
-    const configured = createModels({
-      authContext: fakeAuthContext(
-        { GOOGLE_CLOUD_PROJECT: "proj", GOOGLE_CLOUD_LOCATION: "us-central1" },
-        [adc],
-      ),
-    });
-    configured.setProvider(googleVertexProvider());
-    const model = configured.getModels("google-vertex")[0];
-    if (!model) throw new Error("Expected a model");
-
-    const result = await configured.getAuth(model.provider);
-    expect(result?.auth).toEqual({});
-    expect(result?.source).toContain("application default");
-
-    // ADC without project/location is not configured
-    const partial = createModels({
-      authContext: fakeAuthContext({ GOOGLE_CLOUD_PROJECT: "proj" }, [adc]),
-    });
-    partial.setProvider(googleVertexProvider());
-    expect(await partial.getAuth(model.provider)).toBeUndefined();
-
-    // explicit key wins over ADC
-    const keyed = createModels({
-      authContext: fakeAuthContext({ GOOGLE_CLOUD_API_KEY: "vertex-key" }),
-    });
-    keyed.setProvider(googleVertexProvider());
-    expect((await keyed.getAuth(model.provider))?.auth.apiKey).toBe("vertex-key");
   });
 });
 

@@ -90,11 +90,6 @@ describe("ModelRuntime auth options", () => {
           method: expect.objectContaining({ name: "AWS credentials or bearer token" }),
         }),
         expect.objectContaining({
-          type: "api_key",
-          provider: expect.objectContaining({ id: "google-vertex", name: "Google Vertex AI" }),
-          method: expect.objectContaining({ name: "Google Cloud credentials" }),
-        }),
-        expect.objectContaining({
           type: "oauth",
           provider: expect.objectContaining({ id: "anthropic", name: "Anthropic" }),
         }),

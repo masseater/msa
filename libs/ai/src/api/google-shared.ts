@@ -1,5 +1,5 @@
 /**
- * Shared utilities for Google Generative AI and Google Vertex providers.
+ * Shared utilities for the Google Generative AI API.
  */
 
 import {
@@ -31,7 +31,7 @@ import {
 } from "./constrained-sampling.ts";
 import { transformMessages } from "./transform-messages.ts";
 
-type GoogleApiType = "google-generative-ai" | "google-vertex";
+type GoogleApiType = "google-generative-ai";
 
 /**
  * Thinking level for Gemini 3 models.

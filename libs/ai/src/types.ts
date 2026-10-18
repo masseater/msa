@@ -1,11 +1,8 @@
 import type { TelemetryContext } from "@msa/telemetry";
 
 import type { AnthropicOptions } from "./api/anthropic-messages.ts";
-import type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses.ts";
 import type { BedrockOptions } from "./api/bedrock-converse-stream.ts";
 import type { GoogleOptions } from "./api/google-generative-ai.ts";
-import type { GoogleVertexOptions } from "./api/google-vertex.ts";
-import type { MistralOptions } from "./api/mistral-conversations.ts";
 import type { MsaMessagesOptions } from "./api/msa-messages.ts";
 import type { OpenAICodexResponsesOptions } from "./api/openai-codex-responses.ts";
 import type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
@@ -13,7 +10,6 @@ import type { OpenAIResponsesOptions } from "./api/openai-responses.ts";
 import type {
   AnthropicMessagesCompat,
   BedrockCompat,
-  MistralConversationsCompat,
   OpenAICompletionsCompat,
   OpenAIResponsesCompat,
 } from "./providers/compat-schema.ts";
@@ -35,7 +31,6 @@ export type {
   AnthropicMessagesCompat,
   BedrockCompat,
   ChatTemplateKwargValue,
-  MistralConversationsCompat,
   OpenAICompletionsCompat,
   OpenAIResponsesCompat,
   OpenRouterRouting,
@@ -60,14 +55,11 @@ export type { AssistantMessageEventStream } from "./utils/event-stream.ts";
 
 export type KnownApi =
   | "openai-completions"
-  | "mistral-conversations"
   | "openai-responses"
-  | "azure-openai-responses"
   | "openai-codex-responses"
   | "anthropic-messages"
   | "bedrock-converse-stream"
   | "google-generative-ai"
-  | "google-vertex"
   | "msa-messages";
 
 export type Api = KnownApi | (string & {});
@@ -83,14 +75,10 @@ export type ClassifierApi = KnownClassifierApi | (string & {});
 export type KnownProvider =
   | "amazon-bedrock"
   | "anthropic"
-  | "google"
-  | "google-vertex"
   | "openai"
-  | "azure"
   | "openai-codex"
   | "radius"
   | "openrouter"
-  | "mistral"
   | "opencode"
   | "opencode-go";
 export type ProviderId = KnownProvider | string;
@@ -254,10 +242,7 @@ export interface ApiOptionsMap {
   "openai-completions": OpenAICompletionsOptions;
   "openai-responses": OpenAIResponsesOptions;
   "openai-codex-responses": OpenAICodexResponsesOptions;
-  "azure-openai-responses": AzureOpenAIResponsesOptions;
   "google-generative-ai": GoogleOptions;
-  "google-vertex": GoogleVertexOptions;
-  "mistral-conversations": MistralOptions;
   "bedrock-converse-stream": BedrockOptions;
   "msa-messages": MsaMessagesOptions;
 }
@@ -880,15 +865,13 @@ export interface Model<TApi extends Api> extends BaseModel<TApi> {
   compat?:
     | (TApi extends "openai-completions"
         ? OpenAICompletionsCompat
-        : TApi extends "openai-responses" | "azure-openai-responses" | "openai-codex-responses"
+        : TApi extends "openai-responses" | "openai-codex-responses"
           ? OpenAIResponsesCompat
           : TApi extends "anthropic-messages"
             ? AnthropicMessagesCompat
             : TApi extends "bedrock-converse-stream"
               ? BedrockCompat
-              : TApi extends "mistral-conversations"
-                ? MistralConversationsCompat
-                : never)
+              : never)
     | undefined;
 }
 
