@@ -9,24 +9,28 @@ export * from "./api/openai-codex-responses.lazy.ts";
 export * from "./api/openai-completions.lazy.ts";
 export * from "./api/openai-responses.lazy.ts";
 export * from "./api/msa-messages.lazy.ts";
+export {
+  type ApiProvider,
+  type ApiStreamFunction,
+  type ApiStreamSimpleFunction,
+  getApiProvider,
+  getApiProviders,
+  registerApiProvider,
+  registerFauxProvider,
+  unregisterApiProviders,
+} from "./api-provider-registry.ts";
+export { registerBuiltInApiProviders, resetApiProviders } from "./builtin-api-providers.ts";
 export * from "./env-api-keys.ts";
 export * from "./image-models.ts";
 export * from "./images.ts";
 export * from "./images-api-registry.ts";
 export * from "./index.ts";
 export * from "./legacy-api-aliases.ts";
+export * from "./legacy-openai-api-aliases.ts";
 export * from "./providers/images/register-builtins.ts";
 
-import { anthropicMessagesApi } from "./api/anthropic-messages.lazy.ts";
-import { azureOpenAIResponsesApi } from "./api/azure-openai-responses.lazy.ts";
-import { bedrockConverseStreamApi } from "./api/bedrock-converse-stream.lazy.ts";
-import { googleGenerativeAIApi } from "./api/google-generative-ai.lazy.ts";
-import { googleVertexApi } from "./api/google-vertex.lazy.ts";
-import { mistralConversationsApi } from "./api/mistral-conversations.lazy.ts";
-import { msaMessagesApi } from "./api/msa-messages.lazy.ts";
-import { openAICodexResponsesApi } from "./api/openai-codex-responses.lazy.ts";
-import { openAICompletionsApi } from "./api/openai-completions.lazy.ts";
-import { openAIResponsesApi } from "./api/openai-responses.lazy.ts";
+import { getApiProvider } from "./api-provider-registry.ts";
+import { isBuiltinApiProvider, registerBuiltInApiProviders } from "./builtin-api-providers.ts";
 import { getEnvApiKey } from "./env-api-keys.ts";
 import type { ModelsApiStreamOptions } from "./models.ts";
 import {
@@ -38,11 +42,6 @@ import {
 
 export type { BuiltinProvider } from "./providers/all.ts";
 
-import {
-  createFauxCore,
-  type FauxProviderRegistration,
-  type RegisterFauxProviderOptions,
-} from "./providers/faux.ts";
 import type {
   Api,
   ApiStreamOptions,
@@ -51,13 +50,9 @@ import type {
   Context,
   Model,
   ProviderStreamOptions,
-  ProviderStreams,
   SimpleStreamOptions,
-  StreamFunction,
   StreamOptions,
-  TranscriptContext,
 } from "./types.ts";
-import { nextRandom } from "./utils/random.ts";
 import { normalizeContext } from "./utils/transcript.ts";
 
 export const getModel = getBuiltinModel;
@@ -65,162 +60,6 @@ export const getModel = getBuiltinModel;
 export const getModels = getBuiltinModels;
 
 export const getProviders = getBuiltinProviders;
-
-export type ApiStreamFunction = (
-  model: Model<Api>,
-  context: TranscriptContext,
-  options?: StreamOptions,
-) => AssistantMessageEventStream;
-
-export type ApiStreamSimpleFunction = (
-  model: Model<Api>,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-) => AssistantMessageEventStream;
-
-export interface ApiProvider<
-  TApi extends Api = Api,
-  TOptions extends StreamOptions = StreamOptions,
-> {
-  api: TApi;
-  stream: StreamFunction<TApi, TOptions>;
-  streamSimple: StreamFunction<TApi, SimpleStreamOptions>;
-}
-
-interface ApiProviderInternal {
-  api: Api;
-  stream: ApiStreamFunction;
-  streamSimple: ApiStreamSimpleFunction;
-}
-
-type RegisteredApiProvider = {
-  provider: ApiProviderInternal;
-  sourceId?: string | undefined;
-};
-
-const apiProviderRegistry = new Map<string, RegisteredApiProvider>();
-
-function wrapStream<TApi extends Api, TOptions extends StreamOptions>(
-  api: TApi,
-  streamFn: StreamFunction<TApi, TOptions>,
-): ApiStreamFunction {
-  return (model, context, options) => {
-    if (model.api !== api) {
-      throw new Error(`Mismatched api: ${model.api} expected ${api}`);
-    }
-    return streamFn(model as Model<TApi>, context, options as TOptions);
-  };
-}
-
-function wrapStreamSimple<TApi extends Api>(
-  api: TApi,
-  streamSimpleFn: StreamFunction<TApi, SimpleStreamOptions>,
-): ApiStreamSimpleFunction {
-  return (model, context, options) => {
-    if (model.api !== api) {
-      throw new Error(`Mismatched api: ${model.api} expected ${api}`);
-    }
-    return streamSimpleFn(model as Model<TApi>, context, options);
-  };
-}
-
-export const registerApiProvider: {
-  <TApi extends Api, TOptions extends StreamOptions>(
-    sourceId?: string,
-  ): (provider: ApiProvider<TApi, TOptions>) => void;
-  <TApi extends Api, TOptions extends StreamOptions>(
-    provider: ApiProvider<TApi, TOptions>,
-    sourceId?: string,
-  ): void;
-} = Function.dual(
-  (args) => typeof args[0] === "object" && args[0] !== null,
-  function <TApi extends Api, TOptions extends StreamOptions>(
-    provider: ApiProvider<TApi, TOptions>,
-    sourceId?: string,
-  ): void {
-    apiProviderRegistry.set(provider.api, {
-      provider: {
-        api: provider.api,
-        stream: wrapStream(provider.api, provider.stream),
-        streamSimple: wrapStreamSimple(provider.api, provider.streamSimple),
-      },
-      sourceId,
-    });
-  },
-);
-
-export function getApiProvider(api: Api): ApiProviderInternal | undefined {
-  return apiProviderRegistry.get(api)?.provider;
-}
-
-export function getApiProviders(): ApiProviderInternal[] {
-  return Array.from(apiProviderRegistry.values(), (entry) => entry.provider);
-}
-
-export function unregisterApiProviders(sourceId: string): void {
-  for (const [api, entry] of apiProviderRegistry.entries()) {
-    if (entry.sourceId === sourceId) {
-      apiProviderRegistry.delete(api);
-    }
-  }
-}
-
-function clearApiProviders(): void {
-  apiProviderRegistry.clear();
-}
-
-export function registerFauxProvider(
-  options: RegisterFauxProviderOptions = {},
-): FauxProviderRegistration {
-  const core = createFauxCore(options);
-  const sourceId = `faux-provider-${nextRandom().toString(36).slice(2, 10)}`;
-  registerApiProvider(
-    { api: core.api, stream: core.stream, streamSimple: core.streamSimple },
-    sourceId,
-  );
-  return {
-    api: core.api,
-    models: core.models,
-    getModel: core.getModel,
-    state: core.state,
-    setResponses: core.setResponses,
-    appendResponses: core.appendResponses,
-    getPendingResponseCount: core.getPendingResponseCount,
-    unregister() {
-      unregisterApiProviders(sourceId);
-    },
-  };
-}
-
-const BUILTIN_APIS: [Api, ProviderStreams][] = [
-  ["anthropic-messages", anthropicMessagesApi()],
-  ["openai-completions", openAICompletionsApi()],
-  ["openai-responses", openAIResponsesApi()],
-  ["openai-codex-responses", openAICodexResponsesApi()],
-  ["azure-openai-responses", azureOpenAIResponsesApi()],
-  ["google-generative-ai", googleGenerativeAIApi()],
-  ["google-vertex", googleVertexApi()],
-  ["mistral-conversations", mistralConversationsApi()],
-  ["bedrock-converse-stream", bedrockConverseStreamApi()],
-  ["msa-messages", msaMessagesApi()],
-];
-
-const builtinApiProviderInstances = new Map<Api, ReturnType<typeof getApiProvider>>();
-
-export function registerBuiltInApiProviders(): void {
-  for (const [api, streams] of BUILTIN_APIS) {
-    if (getApiProvider(api) === undefined) {
-      registerApiProvider({ api, stream: streams.stream, streamSimple: streams.streamSimple });
-    }
-    builtinApiProviderInstances.set(api, getApiProvider(api));
-  }
-}
-
-export function resetApiProviders(): void {
-  clearApiProviders();
-  builtinApiProviderInstances.clear();
-  registerBuiltInApiProviders();
-}
 
 registerBuiltInApiProviders();
 
@@ -249,7 +88,7 @@ function hasResolvedCloudflareAuth(options: StreamOptions | undefined): boolean 
 }
 
 function getBuiltinProviderForModel(model: Model<Api>) {
-  if (getApiProvider(model.api) !== builtinApiProviderInstances.get(model.api)) return undefined;
+  if (!isBuiltinApiProvider(model.api)) return undefined;
   const provider = compatModels.getProvider(model.provider);
   return provider?.getModels().some((candidate) => candidate.api === model.api) === true
     ? provider
