@@ -12,7 +12,8 @@ import {
   sortedRecord,
   structureFromGroups,
 } from "./model-data-checks.ts";
-import { type ScriptFileError, ScriptFiles } from "./script-files.ts";
+import type { ScriptFileError } from "./script-file-error.ts";
+import { ScriptFiles } from "./script-files.ts";
 
 export const MODEL_DATA_SCHEMA_VERSION = 6;
 export const MODEL_DATA_MANIFEST_FILE = ".manifest.json";

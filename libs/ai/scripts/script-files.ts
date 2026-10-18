@@ -1,9 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Context, Data, Effect, FileSystem, Layer, Path } from "effect";
+import { Context, Effect, FileSystem, Layer, Path } from "effect";
 
-export class ScriptFileError extends Data.TaggedError("ScriptFileError")<{
-  readonly message: string;
-}> {}
+import { ScriptFileError } from "./script-file-error.ts";
 
 export interface TempDirectoryOptions {
   readonly directory?: string | undefined;

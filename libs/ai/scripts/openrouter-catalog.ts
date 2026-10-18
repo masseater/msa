@@ -30,6 +30,88 @@ function modalities(values: string[] | undefined): ("text" | "image")[] {
   );
 }
 
+function openRouterInput(values: string[] | undefined): ("text" | "image")[] {
+  const input = modalities(values);
+  return input.length > 0 ? input : ["text"];
+}
+
+function openRouterChatModel(model: OpenRouterModelListItem): OpenRouterCatalog["chat"][number] {
+  const thinkingLevelMap = getOpenRouterThinkingLevelMap(model.reasoning);
+  const useAnthropicMessages = /^anthropic\//u.test(model.id) && !model.id.endsWith(":batch");
+  return {
+    type: "chat",
+    id: model.id,
+    name: model.name,
+    api: useAnthropicMessages ? "anthropic-messages" : "openai-completions",
+    baseUrl: useAnthropicMessages ? "https://openrouter.ai/api" : "https://openrouter.ai/api/v1",
+    provider: "openrouter",
+    reasoning: model.supported_parameters?.includes("reasoning") || false,
+    ...(thinkingLevelMap && { thinkingLevelMap }),
+    input: model.architecture?.modality?.includes("image") === true ? ["text", "image"] : ["text"],
+    cost: openRouterCost(model.pricing),
+    contextWindow: model.top_provider?.context_length || model.context_length || 4096,
+    maxTokens: model.top_provider?.max_completion_tokens || 4096,
+  };
+}
+
+function openRouterChatModels(
+  listed: readonly OpenRouterModelListItem[],
+): OpenRouterCatalog["chat"] {
+  return listed
+    .filter((model) => model.supported_parameters?.includes("tools") === true)
+    .map(openRouterChatModel);
+}
+
+function firstById<A extends { readonly id: string }>(models: readonly A[]): A[] {
+  return models.filter(
+    (model, index) => models.findIndex((entry) => entry.id === model.id) === index,
+  );
+}
+
+function openRouterImageModels(
+  imageListed: readonly OpenRouterModelListItem[],
+): OpenRouterCatalog["images"] {
+  return firstById(
+    imageListed.flatMap((model): OpenRouterCatalog["images"] => {
+      const output = modalities(model.architecture?.output_modalities);
+      if (!output.includes("image")) return [];
+      return [
+        {
+          type: "image",
+          id: model.id,
+          name: model.name,
+          api: "openrouter-images",
+          provider: "openrouter",
+          baseUrl: "https://openrouter.ai/api/v1",
+          input: openRouterInput(model.architecture?.input_modalities),
+          output,
+          cost: openRouterCost(model.pricing),
+        },
+      ];
+    }),
+  );
+}
+
+function openRouterClassifierModels(
+  decisionListed: readonly OpenRouterModelListItem[],
+): OpenRouterCatalog["classifiers"] {
+  return firstById(
+    decisionListed.filter(
+      (model) => model.architecture?.output_modalities?.includes("decisions") === true,
+    ),
+  ).map((model) => ({
+    type: "classifier",
+    id: model.id,
+    name: model.name,
+    api: "typesafe-system-one",
+    provider: "openrouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+    input: openRouterInput(model.architecture?.input_modalities),
+    cost: openRouterCost(model.pricing),
+    contextWindow: model.top_provider?.context_length || model.context_length || 4096,
+  }));
+}
+
 export const buildOpenRouterCatalog: {
   (
     imageListed: readonly OpenRouterModelListItem[],
@@ -42,77 +124,13 @@ export const buildOpenRouterCatalog: {
   ): OpenRouterCatalog;
 } = Function.dual(
   3,
-  function (
+  (
     listed: readonly OpenRouterModelListItem[],
     imageListed: readonly OpenRouterModelListItem[],
     decisionListed: readonly OpenRouterModelListItem[],
-  ): OpenRouterCatalog {
-    const chat: OpenRouterCatalog["chat"] = [];
-
-    for (const model of listed) {
-      if (model.supported_parameters?.includes("tools") !== true) continue;
-      const input: ("text" | "image")[] = ["text"];
-      if (model.architecture?.modality?.includes("image") === true) {
-        input.push("image");
-      }
-
-      const thinkingLevelMap = getOpenRouterThinkingLevelMap(model.reasoning);
-      const useAnthropicMessages = /^anthropic\//u.test(model.id) && !model.id.endsWith(":batch");
-      chat.push({
-        type: "chat",
-        id: model.id,
-        name: model.name,
-        api: useAnthropicMessages ? "anthropic-messages" : "openai-completions",
-        baseUrl: useAnthropicMessages
-          ? "https://openrouter.ai/api"
-          : "https://openrouter.ai/api/v1",
-        provider: "openrouter",
-        reasoning: model.supported_parameters?.includes("reasoning") || false,
-        ...(thinkingLevelMap && { thinkingLevelMap }),
-        input,
-        cost: openRouterCost(model.pricing),
-        contextWindow: model.top_provider?.context_length || model.context_length || 4096,
-        maxTokens: model.top_provider?.max_completion_tokens || 4096,
-      });
-    }
-
-    const images: OpenRouterCatalog["images"] = [];
-    for (const model of imageListed) {
-      if (images.some((entry) => entry.id === model.id)) continue;
-      const output = modalities(model.architecture?.output_modalities);
-      if (!output.includes("image")) continue;
-      const input = modalities(model.architecture?.input_modalities);
-      images.push({
-        type: "image",
-        id: model.id,
-        name: model.name,
-        api: "openrouter-images",
-        provider: "openrouter",
-        baseUrl: "https://openrouter.ai/api/v1",
-        input: input.length > 0 ? input : ["text"],
-        output,
-        cost: openRouterCost(model.pricing),
-      });
-    }
-
-    const classifiers: OpenRouterCatalog["classifiers"] = [];
-    for (const model of decisionListed) {
-      if (classifiers.some((entry) => entry.id === model.id)) continue;
-      if (model.architecture?.output_modalities?.includes("decisions") !== true) continue;
-      const input = modalities(model.architecture.input_modalities);
-      classifiers.push({
-        type: "classifier",
-        id: model.id,
-        name: model.name,
-        api: "typesafe-system-one",
-        provider: "openrouter",
-        baseUrl: "https://openrouter.ai/api/v1",
-        input: input.length > 0 ? input : ["text"],
-        cost: openRouterCost(model.pricing),
-        contextWindow: model.top_provider?.context_length || model.context_length || 4096,
-      });
-    }
-
-    return { chat, images, classifiers };
-  },
+  ): OpenRouterCatalog => ({
+    chat: openRouterChatModels(listed),
+    images: openRouterImageModels(imageListed),
+    classifiers: openRouterClassifierModels(decisionListed),
+  }),
 );

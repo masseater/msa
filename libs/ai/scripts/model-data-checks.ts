@@ -71,7 +71,7 @@ function identityErrors(model: ModelRecord, expectation: ModelValueExpectation):
     ...(typeof model["name"] !== "string" || model["name"].length === 0
       ? [`${label} has no model name`]
       : []),
-    ...(typeof model["baseUrl"] !== "string" ? [`${label} has no baseUrl string`] : []),
+    ...(typeof model["baseUrl"] === "string" ? [] : [`${label} has no baseUrl string`]),
   ];
 }
 
