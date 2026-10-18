@@ -1,7 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
+import {
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  removePath,
+  runTest,
+  writeTextFile,
+} from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -11,23 +16,24 @@ import {
 import { SettingsManager, type SettingsStorage } from "../src/core/settings-manager.ts";
 
 describe("settings diagnostics", () => {
-  it("includes the settings file path for file-backed storage", () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "msa-settings-diagnostics-"));
-    const agentDir = join(tempDir, "agent");
-    const settingsPath = join(agentDir, "settings.json");
-    mkdirSync(agentDir);
-    writeFileSync(settingsPath, "{");
+  it("includes the settings file path for file-backed storage", () =>
+    runTest(
+      Effect.gen(function* () {
+        const tempDir = yield* makeTempDir("msa-settings-diagnostics-");
+        const agentDir = joinPath(tempDir, "agent");
+        const settingsPath = joinPath(agentDir, "settings.json");
+        yield* makeDirectory(agentDir);
+        yield* writeTextFile(settingsPath, "{");
 
-    try {
-      const diagnostics = collectSettingsDiagnostics(SettingsManager.create(tempDir, agentDir));
+        yield* Effect.sync(() => {
+          const diagnostics = collectSettingsDiagnostics(SettingsManager.create(tempDir, agentDir));
 
-      expect(diagnostics).toHaveLength(1);
-      expect(diagnostics[0]?.type).toBe("warning");
-      expect(diagnostics[0]?.message).toContain(`Invalid settings file ${settingsPath}:`);
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+          expect(diagnostics).toHaveLength(1);
+          expect(diagnostics[0]?.type).toBe("warning");
+          expect(diagnostics[0]?.message).toContain(`Invalid settings file ${settingsPath}:`);
+        }).pipe(Effect.ensuring(removePath(tempDir)));
+      }),
+    ));
 
   it("falls back to the settings scope for storage without file paths", () => {
     const storage: SettingsStorage = {

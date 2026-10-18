@@ -1,4 +1,5 @@
 import type { AssistantMessage } from "@msa/ai";
+import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -51,7 +52,7 @@ function usageEntry(kind: string, timestamp: number): SessionEntry {
     type: "usage",
     id: `usage-${kind}`,
     parentId: null,
-    timestamp: new Date(timestamp).toISOString(),
+    timestamp: DateTime.formatIso(DateTime.makeUnsafe(timestamp)),
     kind,
     provider: "test",
     model: "test-model",
