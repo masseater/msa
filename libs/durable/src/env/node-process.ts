@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 
 import { Config, ConfigProvider, Effect, Function, Option } from "effect";
 
@@ -40,3 +40,28 @@ export const killProcessTree = (pid: number): void => {
     } catch {}
   }
 };
+
+export type OsProcess = ChildProcess;
+
+export interface SpawnRequest {
+  readonly program: string;
+  readonly args: readonly string[];
+  readonly cwd: string;
+  readonly env: NodeJS.ProcessEnv;
+  readonly pipeStdin: boolean;
+}
+
+export const spawnProcessGroup = ({
+  program,
+  args,
+  cwd,
+  env,
+  pipeStdin,
+}: SpawnRequest): OsProcess =>
+  spawn(program, args, {
+    cwd,
+    detached: process.platform !== "win32",
+    env,
+    stdio: [pipeStdin ? "pipe" : "ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });

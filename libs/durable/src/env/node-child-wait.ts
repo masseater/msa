@@ -1,9 +1,9 @@
-import type { ChildProcess } from "node:child_process";
 import { constants as osConstants } from "node:os";
 
 import { Effect, Function } from "effect";
 
 import type { Dual2 } from "../dual.ts";
+import type { OsProcess } from "./node-process.ts";
 import { cancelTimer, startTimer, type Timer } from "./node-timer.ts";
 
 const EXIT_STDIO_GRACE_MS = 100;
@@ -13,7 +13,7 @@ export type ChildExit = { code: number | null; signal: NodeJS.Signals | null };
 type Resume = (effect: Effect.Effect<ChildExit, Error>) => void;
 
 class ChildWaiter {
-  readonly #child: ChildProcess;
+  readonly #child: OsProcess;
   readonly #spillIsDraining: () => boolean;
   readonly #resume: Resume;
   #settled = false;
@@ -24,7 +24,7 @@ class ChildWaiter {
   #stdoutEnded: boolean;
   #stderrEnded: boolean;
 
-  constructor(child: ChildProcess, spillIsDraining: () => boolean, resume: Resume) {
+  constructor(child: OsProcess, spillIsDraining: () => boolean, resume: Resume) {
     this.#child = child;
     this.#spillIsDraining = spillIsDraining;
     this.#resume = resume;
@@ -113,10 +113,10 @@ class ChildWaiter {
 }
 
 export const waitForChildProcess: Dual2<
-  ChildProcess,
+  OsProcess,
   () => boolean,
   Effect.Effect<ChildExit, Error>
-> = Function.dual(2, (child: ChildProcess, spillIsDraining: () => boolean) =>
+> = Function.dual(2, (child: OsProcess, spillIsDraining: () => boolean) =>
   Effect.callback<ChildExit, Error>((resume) => {
     new ChildWaiter(child, spillIsDraining, resume).listen();
   }),

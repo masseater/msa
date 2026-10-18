@@ -1,4 +1,4 @@
-import { constants } from "node:fs";
+import { constants, createWriteStream, type WriteStream } from "node:fs";
 import { type FileHandle, lstat, opendir, open as openFile } from "node:fs/promises";
 
 import { Cause, Effect } from "effect";
@@ -187,3 +187,13 @@ export const listDir = (request: FileRequest): Promise<Result<FileInfo[], FileEr
       return yield* entryInfos(request, names.value);
     }),
   );
+
+export type AppendStream = WriteStream;
+
+export interface AppendStreamRequest {
+  readonly path: string;
+  readonly highWaterMark: number;
+}
+
+export const openAppendStream = ({ path, highWaterMark }: AppendStreamRequest): AppendStream =>
+  createWriteStream(path, { flags: "a", highWaterMark });

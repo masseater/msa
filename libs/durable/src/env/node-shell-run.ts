@@ -1,11 +1,9 @@
-import { type ChildProcess, spawn } from "node:child_process";
-
 import { Effect } from "effect";
 
 import { StreamDecoder } from "./decode.ts";
 import { ExecutionError } from "./execution-error.ts";
 import { type ChildExit, exitCodeOf, waitForChildProcess } from "./node-child-wait.ts";
-import { killProcessTree } from "./node-process.ts";
+import { killProcessTree, type OsProcess, spawnProcessGroup } from "./node-process.ts";
 import { OutputSpill, type SpillHooks, type SpillThreshold } from "./node-spill.ts";
 import { cancelTimer, startTimer, type Timer } from "./node-timer.ts";
 import { err, ok, type Result, toError } from "./result.ts";
@@ -38,7 +36,7 @@ export class ShellRun {
     stdout: new StreamDecoder(),
     stderr: new StreamDecoder(),
   };
-  #child: ChildProcess | undefined;
+  #child: OsProcess | undefined;
   #timer: Timer | undefined;
   #callbackError: ExecutionError | undefined;
   #settled = false;
@@ -103,15 +101,15 @@ export class ShellRun {
     this.#child?.stderr?.resume();
   };
 
-  #spawn(): ChildProcess | ExecutionError {
+  #spawn(): OsProcess | ExecutionError {
     const request = this.#request;
     try {
-      const child = spawn(request.program, request.args, {
+      const child = spawnProcessGroup({
+        program: request.program,
+        args: request.args,
         cwd: request.cwd,
-        detached: process.platform !== "win32",
         env: request.env,
-        stdio: [request.stdinCommand === undefined ? "ignore" : "pipe", "pipe", "pipe"],
-        windowsHide: true,
+        pipeStdin: request.stdinCommand !== undefined,
       });
       this.#child = child;
       if (child.pid !== undefined) request.activeChildPids.add(child.pid);
@@ -126,7 +124,7 @@ export class ShellRun {
     }
   }
 
-  #watch(child: ChildProcess): void {
+  #watch(child: OsProcess): void {
     const { timeoutMs } = this.#request;
     if (timeoutMs !== undefined) {
       this.#timer = startTimer(timeoutMs, () => {

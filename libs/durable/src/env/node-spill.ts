@@ -1,9 +1,8 @@
-import { createWriteStream, type WriteStream } from "node:fs";
-
 import { Cause, Effect } from "effect";
 
 import { ExecutionError } from "./execution-error.ts";
 import type { FileError } from "./file-error.ts";
+import { type AppendStream, openAppendStream } from "./node-handles.ts";
 import { type Result, toError } from "./result.ts";
 
 const SPILL_HIGH_WATER_MARK = 1024 * 1024;
@@ -35,7 +34,7 @@ export class OutputSpill {
   readonly #prefix: SpillChunk[] = [];
   readonly #queue: SpillChunk[] = [];
   #start: Promise<void> | undefined;
-  #stream: WriteStream | undefined;
+  #stream: AppendStream | undefined;
   #backpressured = false;
   #seenBytes = 0;
   #seenNewlines = 0;
@@ -121,8 +120,8 @@ export class OutputSpill {
       const created = yield* this.#hooks.createTempFile;
       if (!created.ok) return yield* created.error;
       this.path = created.value;
-      this.#stream = createWriteStream(this.path, {
-        flags: "a",
+      this.#stream = openAppendStream({
+        path: this.path,
         highWaterMark: SPILL_HIGH_WATER_MARK,
       });
       this.#stream.on("error", this.fail);
