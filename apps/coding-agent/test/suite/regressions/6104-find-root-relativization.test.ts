@@ -1,5 +1,3 @@
-import { posix, win32 } from "node:path";
-
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -7,6 +5,45 @@ import {
   createFindToolDefinition,
   relativizeFindResultPath,
 } from "../../../src/core/tools/find.ts";
+
+interface PathFns {
+  readonly sep: string;
+  readonly isAbsolute: (value: string) => boolean;
+  readonly relative: (from: string, to: string) => string;
+}
+
+const makePathFns = (sep: string, caseInsensitive: boolean): PathFns => {
+  const split = (value: string): string[] =>
+    value.split(sep === "\\" ? /[\\/]+/u : "/").filter((segment) => segment !== "");
+  const fold = (value: string): string => (caseInsensitive ? value.toLowerCase() : value);
+  return {
+    sep,
+    isAbsolute: (value) =>
+      sep === "\\"
+        ? /^[A-Za-z]:[\\/]/u.test(value) || value.startsWith("\\")
+        : value.startsWith("/"),
+    relative: (from, to) => {
+      const fromParts = split(from);
+      const toParts = split(to);
+      let shared = 0;
+      while (
+        shared < fromParts.length &&
+        shared < toParts.length &&
+        fold(fromParts[shared] ?? "") === fold(toParts[shared] ?? "")
+      ) {
+        shared += 1;
+      }
+      const up = Array.from({ length: fromParts.length - shared }, () => "..");
+      return [...up, ...toParts.slice(shared)].join(sep);
+    },
+  };
+};
+
+const asPlatformPath = (fns: PathFns): Parameters<typeof relativizeFindResultPath>[2] =>
+  fns as unknown as Parameters<typeof relativizeFindResultPath>[2];
+
+const win32 = asPlatformPath(makePathFns("\\", true));
+const posix = asPlatformPath(makePathFns("/", false));
 
 const searchRoot = "I:\\";
 
